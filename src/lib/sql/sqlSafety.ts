@@ -63,6 +63,19 @@ export type StatementKind =
   | "ddl-alter-add"
   | "ddl-alter-rename"
   | "ddl-other"
+  // Sprint 395 — misc grammar classifications.
+  // - `permission-change` (warn): GRANT / REVOKE.
+  // - `config-read` (info): SHOW.
+  // - `config-write` (info): SET.
+  // - `data-movement` (warn): COPY (both FROM and TO).
+  // - `metadata` (info): COMMENT.
+  // EXPLAIN does NOT introduce its own kind — it inherits the inner
+  // statement's classification per D1.
+  | "permission-change"
+  | "config-read"
+  | "config-write"
+  | "data-movement"
+  | "metadata"
   // Mongo variants share this union so `useSafeModeGate` is
   // paradigm-agnostic. `*-all` (empty filter) is danger; `*-many`
   // (non-empty filter) is `warn` (Sprint 254); `mongo-drop` / `mongo-out`
@@ -132,6 +145,55 @@ function statementAnalysisFromAst(
       if (innerAnalysis === null) return null;
       return innerAnalysis;
     }
+    // Sprint-395 — EXPLAIN wrap inherits the inner statement's
+    // classification verbatim per D1. The outer EXPLAIN does not add a
+    // reason or escalate severity. If the inner statement is itself
+    // unclassifiable (returns null), fall through so the regex fallback
+    // takes over on the original SQL string.
+    case "explain": {
+      const inner = ast.inner_statement;
+      const innerAnalysis = statementAnalysisFromAst(inner);
+      if (innerAnalysis === null) return null;
+      return innerAnalysis;
+    }
+    // Sprint-395 — GRANT / REVOKE → permission-change / warn / pinned
+    // reason. The reason strings are pinned per D5 — exact-string
+    // verification in AC-395-X01 / X02.
+    case "grant":
+      return {
+        kind: "permission-change",
+        severity: "warn",
+        reasons: ["GRANT — 권한 변경"],
+      };
+    case "revoke":
+      return {
+        kind: "permission-change",
+        severity: "warn",
+        reasons: ["REVOKE — 권한 변경"],
+      };
+    // Sprint-395 — SHOW → config-read / info / empty reasons. D4: the
+    // classifier does not distinguish between target variants.
+    case "show":
+      return { kind: "config-read", severity: "info", reasons: [] };
+    // Sprint-395 — SET → config-write / info / empty reasons. D3: SET's
+    // severity is info, not warn (per-session config change, no row
+    // impact).
+    case "set-stmt":
+      return { kind: "config-write", severity: "info", reasons: [] };
+    // Sprint-395 — COPY → data-movement / warn / direction-specific
+    // pinned reason. D2: direction does not escalate severity.
+    case "copy":
+      return {
+        kind: "data-movement",
+        severity: "warn",
+        reasons:
+          ast.direction === "from"
+            ? ["COPY FROM — 대량 import"]
+            : ["COPY TO — 대량 export"],
+      };
+    // Sprint-395 — COMMENT → metadata / info / empty reasons.
+    case "comment":
+      return { kind: "metadata", severity: "info", reasons: [] };
     case "drop": {
       // Reason string format matches the prior regex output —
       // `DROP TABLE` / `DROP INDEX` / `DROP VIEW` / … The AST object_type
@@ -344,8 +406,12 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   // the regex path classifies anyway; for inputs the AST cannot parse
   // (CTE / subquery / set ops / aggregate — deferred to sprint-393b), the
   // `error` variant lets the regex SELECT branch below handle them.
+  // Sprint 395 — extended to GRANT / REVOKE / EXPLAIN / SHOW / SET / COPY /
+  // COMMENT. EXPLAIN inherits the inner statement's classification (D1);
+  // COPY / GRANT / REVOKE classify per the misc-grammar table; SHOW / SET /
+  // COMMENT classify as info-tier metadata-like reads/writes.
   if (
-    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|UPDATE|DELETE|SELECT|WITH)\b/.test(
+    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|UPDATE|DELETE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT)\b/.test(
       upper,
     )
   ) {
@@ -458,14 +524,25 @@ export function analyzeStatement(sql: string): StatementAnalysis {
     }
   }
 
-  // Sprint 254 — GRANT / REVOKE are privilege mutations; classify as
-  // STOP (`danger`) since they cannot be safely auto-applied. Master
-  // spec §Sprint 254 + ADR 0023 grill Q2-(a).
+  // Sprint 395 — GRANT / REVOKE classify as `permission-change` / warn
+  // with pinned reasons per D5. Pre-sprint-395 the regex branch classified
+  // these as `ddl-other` / danger (sprint 254 baseline); sprint-395 moves
+  // them to warn-tier so SafeMode `confirm` happens at the QueryTab dialog
+  // (not the STOP gate). Reason strings are pinned verbatim — reviewers
+  // must reject silent rewording.
   if (/^GRANT\b/.test(upper)) {
-    return { kind: "ddl-other", severity: "danger", reasons: ["GRANT"] };
+    return {
+      kind: "permission-change",
+      severity: "warn",
+      reasons: ["GRANT — 권한 변경"],
+    };
   }
   if (/^REVOKE\b/.test(upper)) {
-    return { kind: "ddl-other", severity: "danger", reasons: ["REVOKE"] };
+    return {
+      kind: "permission-change",
+      severity: "warn",
+      reasons: ["REVOKE — 권한 변경"],
+    };
   }
 
   // Sprint-394 — CREATE TABLE / INDEX / VIEW / MATERIALIZED VIEW classify
@@ -502,10 +579,51 @@ export function analyzeStatement(sql: string): StatementAnalysis {
     return { kind: "select", severity: "info", reasons: [] };
   }
 
+  // Sprint 395 — COPY classifies as data-movement / warn (regex fallback
+  // when AST is not preloaded). Direction-specific reason string is
+  // pinned per D5.
+  if (/^COPY\b/.test(upper)) {
+    // Direction-sniff via regex — `\bFROM\b` between table and source.
+    // Both FROM and TO classifications are warn-level (D2 — direction
+    // does not escalate severity).
+    if (/\bTO\b/.test(upper)) {
+      return {
+        kind: "data-movement",
+        severity: "warn",
+        reasons: ["COPY TO — 대량 export"],
+      };
+    }
+    return {
+      kind: "data-movement",
+      severity: "warn",
+      reasons: ["COPY FROM — 대량 import"],
+    };
+  }
+
+  // Sprint 395 — COMMENT classifies as metadata / info / empty reasons.
+  if (/^COMMENT\b/.test(upper)) {
+    return { kind: "metadata", severity: "info", reasons: [] };
+  }
+
+  // Sprint 395 — SET classifies as config-write / info / empty reasons.
+  // Match `^SET\b` early (before falling through to "other" defaults).
+  if (/^SET\b/.test(upper)) {
+    return { kind: "config-write", severity: "info", reasons: [] };
+  }
+
   // Sprint 255 — read-only / metadata introspection 의 INFO tier. EXPLAIN /
   // SHOW / DESCRIBE / DESC.
   // Sprint 254 — severity 가 명시적으로 "info" 로 정렬됨.
-  if (/^(EXPLAIN|SHOW|DESCRIBE|DESC)\b/.test(upper)) {
+  // Sprint 395 (D4) — SHOW (regex fallback) maps to `config-read`, distinct
+  // from the EXPLAIN/DESCRIBE/DESC `info` kind. EXPLAIN remains in the
+  // legacy `info` bucket via this regex branch because the regex path
+  // cannot identify the inner statement to inherit from (D1's "inherit
+  // inner" rule is AST-only).
+  if (/^SHOW\b/.test(upper)) {
+    return { kind: "config-read", severity: "info", reasons: [] };
+  }
+
+  if (/^(EXPLAIN|DESCRIBE|DESC)\b/.test(upper)) {
     return { kind: "info", severity: "info", reasons: [] };
   }
 

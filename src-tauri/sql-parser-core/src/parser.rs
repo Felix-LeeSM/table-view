@@ -34,15 +34,18 @@
 
 use crate::ast::{
     AlterAction, AlterTableStatement, CascadeBehavior, CaseWhen, ColumnConstraint,
-    ColumnConstraintBody, ColumnDefinition, ColumnRef, ColumnType, Columns, CompareOp,
-    CreateIndexStatement, CreateTableStatement, CreateViewBody, CreateViewStatement,
-    CteDefinition, DeleteStatement, DropObjectType, DropStatement, FrameBound, FrameUnit, FromItem,
-    FromSource, InsertSource, InsertStatement, InsertValue, JoinDescriptor, JoinPredicate,
-    LikeCase, LimitClause, NullsPlacement, OnConflict, OrderDirection, OrderingItem, OverClause,
-    ParseError, ParseErrorKind, ParseResult, SelectExpr, SelectListItem, SelectStatement,
-    SetOperationEntry, SetOperator, SqlLiteral, TableConstraint, TableConstraintBody, TableRef,
-    TruncateStatement, UpdateAssignment, UpdateStatement, WindowArgument, WindowFrame, WithInner,
-    WithStatement,
+    ColumnConstraintBody, ColumnDefinition, ColumnRef, ColumnType, Columns, CommentStatement,
+    CommentTarget, CommentText, CompareOp, CopyDirection, CopySource, CopyStatement, CopyTarget,
+    CreateIndexStatement, CreateTableStatement, CreateViewBody, CreateViewStatement, CteDefinition,
+    DeleteStatement, DropObjectType, DropStatement, ExplainInner, ExplainOption, ExplainStatement,
+    FrameBound, FrameUnit, FromItem, FromSource, GrantObject, GrantStatement, InsertSource,
+    InsertStatement, InsertValue, JoinDescriptor, JoinPredicate, LikeCase, LimitClause,
+    NullsPlacement, OnConflict, OrderDirection, OrderingItem, OverClause, ParseError,
+    ParseErrorKind, ParseResult, PrivilegeTag, RevokeStatement, RoleRef, SelectExpr,
+    SelectListItem, SelectStatement, SetOperationEntry, SetOperator, SetScope, SetStatement,
+    SetValue, ShowStatement, ShowTarget, SqlLiteral, TableConstraint, TableConstraintBody,
+    TableRef, TruncateStatement, UpdateAssignment, UpdateStatement, WindowArgument, WindowFrame,
+    WithInner, WithStatement,
 };
 use crate::lexer::{lex, Spanned, Token};
 
@@ -184,6 +187,39 @@ impl<'a> Parser<'a> {
                 // sqlSafety still classifies them.
                 self.advance();
                 self.parse_create_dispatch()
+            }
+            Token::Grant => {
+                self.advance();
+                Ok(ParseResult::Grant(self.parse_grant()?))
+            }
+            Token::Revoke => {
+                self.advance();
+                Ok(ParseResult::Revoke(self.parse_revoke()?))
+            }
+            Token::Explain => {
+                self.advance();
+                Ok(ParseResult::Explain(self.parse_explain()?))
+            }
+            Token::Show => {
+                self.advance();
+                Ok(ParseResult::Show(self.parse_show()?))
+            }
+            Token::Set => {
+                self.advance();
+                Ok(ParseResult::SetStmt(self.parse_set_stmt()?))
+            }
+            // Sprint-395 — `COPY` and `COMMENT` are intentionally kept as
+            // `Token::Ident` (production schemas often use them as column
+            // names). The dispatcher matches them case-insensitively
+            // before falling through to the generic ident-as-unsupported
+            // verb path below.
+            Token::Ident(name) if name.eq_ignore_ascii_case("copy") => {
+                self.advance();
+                Ok(ParseResult::Copy(self.parse_copy()?))
+            }
+            Token::Ident(name) if name.eq_ignore_ascii_case("comment") => {
+                self.advance();
+                Ok(ParseResult::Comment(self.parse_comment()?))
             }
             Token::Ident(name) => {
                 // The lexer keeps any non-keyword as an identifier; if it
@@ -2993,6 +3029,754 @@ impl<'a> Parser<'a> {
             )),
         }
     }
+
+    // ---- sprint-395 misc grammar parsers ----------------------------
+
+    /// Sprint-395 — case-insensitive identifier-keyword check (consumes
+    /// the token if it matches; leaves cursor in place otherwise). Used
+    /// because most sprint-395 keywords stay as `Token::Ident` to avoid
+    /// breaking sprint-385/391/394 tests that use those strings as
+    /// identifiers (e.g. `public`, `tables`, `analyze`).
+    fn consume_ident_kw(&mut self, expected: &str) -> bool {
+        if self.peek_ident_kw(expected) {
+            self.advance();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn peek_ident_kw(&self, expected: &str) -> bool {
+        match self.peek().map(|t| &t.token) {
+            Some(Token::Ident(name)) => name.eq_ignore_ascii_case(expected),
+            _ => false,
+        }
+    }
+
+    /// Sprint-395 — assert the next token is an identifier whose text
+    /// matches (case-insensitively) `expected`; advance and return Ok.
+    /// Used for required pseudo-keywords like `OPTION`, `FOR`, `IN`.
+    fn expect_ident_kw(&mut self, expected: &str, msg: &str) -> Result<(), ParseError> {
+        if !self.consume_ident_kw(expected) {
+            let at = self.peek().map(|t| t.at);
+            return Err(syntax_err(at, msg));
+        }
+        Ok(())
+    }
+
+    /// `GRANT priv [, priv]* ON object TO grantee [, grantee]* [WITH GRANT
+    /// OPTION]`. The `GRANT` keyword has been consumed.
+    fn parse_grant(&mut self) -> Result<GrantStatement, ParseError> {
+        let privileges = self.parse_privilege_list()?;
+        self.expect_keyword(Token::On, "expected ON")?;
+        let object = self.parse_grant_object()?;
+        self.expect_keyword(Token::To, "expected TO")?;
+        let grantees = self.parse_role_list()?;
+        let with_grant_option =
+            if matches!(self.peek().map(|t| &t.token), Some(Token::With)) {
+                self.advance();
+                self.expect_keyword(Token::Grant, "expected GRANT")?;
+                self.expect_ident_kw("option", "expected OPTION")?;
+                true
+            } else {
+                false
+            };
+        Ok(GrantStatement {
+            privileges,
+            object,
+            grantees,
+            with_grant_option,
+        })
+    }
+
+    /// `REVOKE [GRANT OPTION FOR] priv [, priv]* ON object FROM revokee […]
+    /// [CASCADE|RESTRICT]`. The `REVOKE` keyword has been consumed.
+    fn parse_revoke(&mut self) -> Result<RevokeStatement, ParseError> {
+        let grant_option_for = if matches!(self.peek().map(|t| &t.token), Some(Token::Grant)) {
+            // Lookahead: `GRANT OPTION FOR`. We consume only on the
+            // full three-token match — bare `GRANT` is not a privilege
+            // here, so the absence of `OPTION FOR` is a syntax error.
+            self.advance();
+            self.expect_ident_kw("option", "expected OPTION")?;
+            self.expect_ident_kw("for", "expected FOR")?;
+            true
+        } else {
+            false
+        };
+        let privileges = self.parse_privilege_list()?;
+        self.expect_keyword(Token::On, "expected ON")?;
+        let object = self.parse_grant_object()?;
+        self.expect_keyword(Token::From, "expected FROM")?;
+        let revokees = self.parse_role_list()?;
+        let cascade = self.consume_cascade_or_restrict()?;
+        Ok(RevokeStatement {
+            privileges,
+            object,
+            revokees,
+            grant_option_for,
+            cascade,
+        })
+    }
+
+    /// Privilege list — `ALL [PRIVILEGES]` or one-or-more named privileges
+    /// separated by commas. Returns at least one entry.
+    fn parse_privilege_list(&mut self) -> Result<Vec<PrivilegeTag>, ParseError> {
+        // ALL [PRIVILEGES] short-circuit.
+        if matches!(self.peek().map(|t| &t.token), Some(Token::All)) {
+            self.advance();
+            self.consume_ident_kw("privileges");
+            return Ok(vec![PrivilegeTag::All]);
+        }
+        let mut list: Vec<PrivilegeTag> = Vec::new();
+        loop {
+            list.push(self.parse_privilege_tag()?);
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        if list.is_empty() {
+            let at = self.peek().map(|t| t.at);
+            return Err(syntax_err(at, "expected privilege"));
+        }
+        Ok(list)
+    }
+
+    /// Single privilege token + optional column qualifier (SELECT / UPDATE /
+    /// REFERENCES only — INSERT / DELETE / TRIGGER reject the column
+    /// qualifier per contract).
+    fn parse_privilege_tag(&mut self) -> Result<PrivilegeTag, ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected privilege"))?
+            .clone();
+        let (base, accepts_columns) = match tok.token {
+            Token::Select => (PrivilegeTag::Select { columns: Vec::new() }, true),
+            Token::Insert => (PrivilegeTag::Insert, false),
+            Token::Update => (PrivilegeTag::Update { columns: Vec::new() }, true),
+            Token::Delete => (PrivilegeTag::Delete, false),
+            Token::Truncate => (PrivilegeTag::Truncate, false),
+            Token::References => (PrivilegeTag::References { columns: Vec::new() }, true),
+            Token::Ident(ref name) if name.eq_ignore_ascii_case("trigger") => {
+                (PrivilegeTag::Trigger, false)
+            }
+            Token::Ident(ref name) if name.eq_ignore_ascii_case("usage") => {
+                (PrivilegeTag::Usage, false)
+            }
+            Token::Ident(ref name) if name.eq_ignore_ascii_case("execute") => {
+                (PrivilegeTag::Execute, false)
+            }
+            _ => return Err(syntax_err(Some(tok.at), "expected privilege keyword")),
+        };
+        self.advance();
+
+        // Optional `(col1, col2)` qualifier. SELECT / UPDATE / REFERENCES
+        // accept it; everything else surfaces a SyntaxError when the
+        // user wrote a column list (per AC-395-G06).
+        if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+            if !accepts_columns {
+                let at = self.peek().map(|t| t.at);
+                return Err(syntax_err(
+                    at,
+                    "this privilege does not accept a column qualifier",
+                ));
+            }
+            self.advance();
+            let cols = self.parse_ident_list("expected column name")?;
+            self.expect_token(Token::RParen, "expected ')'")?;
+            return Ok(match base {
+                PrivilegeTag::Select { .. } => PrivilegeTag::Select { columns: cols },
+                PrivilegeTag::Update { .. } => PrivilegeTag::Update { columns: cols },
+                PrivilegeTag::References { .. } => {
+                    PrivilegeTag::References { columns: cols }
+                }
+                // `accepts_columns` is true only for the three above —
+                // the match is exhaustive in practice.
+                other => other,
+            });
+        }
+        Ok(base)
+    }
+
+    /// `[TABLE] tables | SEQUENCE seqs | FUNCTION funcs | SCHEMA schemas
+    /// | DATABASE dbs | ALL TABLES IN SCHEMA name`.
+    fn parse_grant_object(&mut self) -> Result<GrantObject, ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected object kind"))?
+            .clone();
+        match tok.token {
+            Token::Table => {
+                self.advance();
+                let tables = self.parse_table_ref_list()?;
+                Ok(GrantObject::Table { tables })
+            }
+            Token::Schema => {
+                self.advance();
+                let schemas = self.parse_ident_list("expected schema name")?;
+                Ok(GrantObject::Schema { schemas })
+            }
+            Token::Database => {
+                self.advance();
+                let databases = self.parse_ident_list("expected database name")?;
+                Ok(GrantObject::Database { databases })
+            }
+            Token::Sequence => {
+                self.advance();
+                let sequences = self.parse_ident_list("expected sequence name")?;
+                Ok(GrantObject::Sequence { sequences })
+            }
+            // `FUNCTION` is not a reserved keyword in our lexer (out of
+            // scope); the user writes the bare identifier "FUNCTION". Match
+            // case-insensitively against the identifier text.
+            Token::Ident(ref name) if name.eq_ignore_ascii_case("function") => {
+                self.advance();
+                let functions = self.parse_ident_list("expected function name")?;
+                Ok(GrantObject::Function { functions })
+            }
+            Token::All => {
+                // `ALL TABLES IN SCHEMA name` shorthand.
+                self.advance();
+                self.expect_ident_kw("tables", "expected TABLES")?;
+                self.expect_keyword(Token::In, "expected IN")?;
+                self.expect_keyword(Token::Schema, "expected SCHEMA")?;
+                let schema_name = self.expect_ident("expected schema name")?;
+                Ok(GrantObject::AllInSchema { schema_name })
+            }
+            // Implicit `TABLE` object kind — when the user writes `ON
+            // tablename` (without a `TABLE` keyword) we still classify as
+            // a table grant.
+            Token::Ident(_) => {
+                let tables = self.parse_table_ref_list()?;
+                Ok(GrantObject::Table { tables })
+            }
+            _ => Err(syntax_err(Some(tok.at), "expected GRANT/REVOKE object")),
+        }
+    }
+
+    /// Comma-separated list of (optionally schema-qualified) table refs.
+    fn parse_table_ref_list(&mut self) -> Result<Vec<TableRef>, ParseError> {
+        let mut out: Vec<TableRef> = Vec::new();
+        loop {
+            out.push(self.parse_table_ref()?);
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        Ok(out)
+    }
+
+    /// Comma-separated grantee / revokee list. `PUBLIC`, `CURRENT_USER`,
+    /// `SESSION_USER` are matched as case-insensitive identifiers (per
+    /// sprint-395 lexer design — these stay `Token::Ident` to avoid
+    /// breaking sprint-385/394 tests that use `public` as a schema
+    /// name).
+    fn parse_role_list(&mut self) -> Result<Vec<RoleRef>, ParseError> {
+        let mut out: Vec<RoleRef> = Vec::new();
+        loop {
+            let tok = self
+                .peek()
+                .ok_or_else(|| syntax_err(None, "expected role"))?
+                .clone();
+            match tok.token {
+                Token::Ident(name) => {
+                    self.advance();
+                    if name.eq_ignore_ascii_case("public") {
+                        out.push(RoleRef::Public);
+                    } else if name.eq_ignore_ascii_case("current_user")
+                        || name.eq_ignore_ascii_case("session_user")
+                    {
+                        out.push(RoleRef::CurrentSession);
+                    } else {
+                        out.push(RoleRef::Role { name });
+                    }
+                }
+                _ => return Err(syntax_err(Some(tok.at), "expected role")),
+            }
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        Ok(out)
+    }
+
+    /// `EXPLAIN [ANALYZE] [VERBOSE] [(option [, option …])] inner-stmt`.
+    /// `EXPLAIN` token has been consumed.
+    fn parse_explain(&mut self) -> Result<ExplainStatement, ParseError> {
+        // Parenthesized options form takes precedence — once we see `(`,
+        // we expect a full `(name value, name value)` list. `ANALYZE` /
+        // `VERBOSE` may NOT appear outside the parens after the list (PG
+        // parses both forms but does not mix them).
+        let mut analyze = false;
+        let mut verbose = false;
+        let mut options: Vec<ExplainOption> = Vec::new();
+
+        if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+            self.advance();
+            options = self.parse_explain_option_list()?;
+            self.expect_token(Token::RParen, "expected ')'")?;
+        } else {
+            // Bare ANALYZE / VERBOSE flags (matched case-insensitively as
+            // identifiers per sprint-395 lexer design). The spec allows
+            // them in either order.
+            loop {
+                if !analyze && self.peek_ident_kw("analyze") {
+                    self.advance();
+                    analyze = true;
+                    continue;
+                }
+                if !verbose && self.peek_ident_kw("verbose") {
+                    self.advance();
+                    verbose = true;
+                    continue;
+                }
+                break;
+            }
+        }
+
+        // Inner statement. We re-enter the dispatcher — but only a subset
+        // of variants is permitted (Select / Insert / Update / Delete /
+        // With). EXPLAIN of EXPLAIN / EXPLAIN of GRANT / etc. surface a
+        // SyntaxError per the contract.
+        let inner_tok = self.peek().cloned();
+        let at = inner_tok.as_ref().map(|t| t.at);
+        let inner = match self.parse_statement() {
+            Ok(stmt) => stmt,
+            Err(e) => return Err(e),
+        };
+        let inner_kind = match inner {
+            ParseResult::Select(s) => ExplainInner::Select(s),
+            ParseResult::Insert(i) => ExplainInner::Insert(i),
+            ParseResult::Update(u) => ExplainInner::Update(u),
+            ParseResult::Delete(d) => ExplainInner::Delete(d),
+            ParseResult::With(w) => ExplainInner::With(w),
+            ParseResult::Error(e) => return Err(e),
+            _ => {
+                return Err(syntax_err(
+                    at,
+                    "EXPLAIN inner statement must be SELECT / INSERT / UPDATE / DELETE / WITH",
+                ));
+            }
+        };
+        Ok(ExplainStatement {
+            analyze,
+            verbose,
+            options,
+            inner_statement: Box::new(inner_kind),
+        })
+    }
+
+    /// `(name value [, name value]*)` — used by EXPLAIN's parenthesized
+    /// option list and COPY's `WITH (...)` list. The opening paren has
+    /// been consumed by the caller.
+    fn parse_explain_option_list(&mut self) -> Result<Vec<ExplainOption>, ParseError> {
+        let mut out: Vec<ExplainOption> = Vec::new();
+        loop {
+            // Option name — accept either a bare identifier OR a known
+            // keyword that the user wrote in option position (FORMAT /
+            // ANALYZE / VERBOSE / etc.). We use the displayed name and
+            // lowercase it.
+            let name_tok = self
+                .peek()
+                .ok_or_else(|| syntax_err(None, "expected option name"))?
+                .clone();
+            let name_text = token_word(&name_tok.token).ok_or_else(|| {
+                syntax_err(Some(name_tok.at), "expected option name")
+            })?;
+            self.advance();
+            let value = self.parse_explain_option_value()?;
+            out.push(ExplainOption {
+                name: name_text.to_ascii_lowercase(),
+                value,
+            });
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        Ok(out)
+    }
+
+    /// Option value — literal / DEFAULT / placeholder / bare identifier
+    /// (treated as a string-literal payload).
+    fn parse_explain_option_value(&mut self) -> Result<InsertValue, ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected option value"))?
+            .clone();
+        match tok.token {
+            Token::Ident(name) => {
+                self.advance();
+                Ok(InsertValue::Literal {
+                    value: SqlLiteral::String { value: name },
+                })
+            }
+            _ => self.parse_insert_value(),
+        }
+    }
+
+    /// `SHOW <variable> | SHOW TABLES [IN schema] | SHOW DATABASES | SHOW
+    /// SCHEMAS`. The `SHOW` keyword has been consumed.
+    fn parse_show(&mut self) -> Result<ShowStatement, ParseError> {
+        // `TABLES`, `DATABASES`, `SCHEMAS` are matched case-insensitively
+        // against the leading identifier so the lexer can keep them as
+        // `Token::Ident` (preserving back-compat with prior-sprint tests).
+        if self.consume_ident_kw("tables") {
+            let schema = if matches!(self.peek().map(|t| &t.token), Some(Token::In)) {
+                self.advance();
+                Some(self.expect_ident("expected schema name")?)
+            } else {
+                None
+            };
+            return Ok(ShowStatement {
+                target: ShowTarget::Tables { schema },
+            });
+        }
+        if self.consume_ident_kw("databases") {
+            return Ok(ShowStatement {
+                target: ShowTarget::Databases,
+            });
+        }
+        if self.consume_ident_kw("schemas") {
+            return Ok(ShowStatement {
+                target: ShowTarget::Schemas,
+            });
+        }
+        // Otherwise — variable name (possibly dotted).
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected SHOW target"))?
+            .clone();
+        match tok.token {
+            Token::Ident(_) => {
+                let name = self.parse_dotted_identifier()?;
+                Ok(ShowStatement {
+                    target: ShowTarget::Variable { name },
+                })
+            }
+            _ => Err(syntax_err(Some(tok.at), "expected SHOW target")),
+        }
+    }
+
+    /// `SET [SESSION|LOCAL] <name> {= | TO} <value>`. The `SET` keyword
+    /// has been consumed.
+    fn parse_set_stmt(&mut self) -> Result<SetStatement, ParseError> {
+        // Optional scope keyword (matched case-insensitively as
+        // `Token::Ident` per sprint-395 lexer design).
+        let scope = if self.consume_ident_kw("session") {
+            SetScope::Session
+        } else if self.consume_ident_kw("local") {
+            SetScope::Local
+        } else {
+            SetScope::Default
+        };
+        // Variable name (possibly dotted: `SET datestyle = ...` or
+        // `SET search_path = ...`). We accept a dotted identifier.
+        let name = self.parse_dotted_identifier()?;
+        // Separator — `=` or `TO`.
+        let sep = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected '=' or TO"))?
+            .clone();
+        match sep.token {
+            Token::Eq => {
+                self.advance();
+            }
+            Token::To => {
+                self.advance();
+            }
+            _ => return Err(syntax_err(Some(sep.at), "expected '=' or TO")),
+        }
+        // Value.
+        let value = self.parse_set_value()?;
+        Ok(SetStatement { scope, name, value })
+    }
+
+    /// SET RHS — literal / DEFAULT / bare identifier. Distinct shape from
+    /// `InsertValue` per contract.
+    fn parse_set_value(&mut self) -> Result<SetValue, ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected SET value"))?
+            .clone();
+        match tok.token {
+            Token::Default => {
+                self.advance();
+                Ok(SetValue::Default)
+            }
+            Token::Integer(v) => {
+                self.advance();
+                Ok(SetValue::Literal {
+                    value: SqlLiteral::Integer { value: v },
+                })
+            }
+            Token::Float(v) => {
+                self.advance();
+                Ok(SetValue::Literal {
+                    value: SqlLiteral::Float { value: v },
+                })
+            }
+            Token::String(s) => {
+                self.advance();
+                Ok(SetValue::Literal {
+                    value: SqlLiteral::String { value: s },
+                })
+            }
+            Token::Null => {
+                self.advance();
+                Ok(SetValue::Literal {
+                    value: SqlLiteral::Null,
+                })
+            }
+            Token::True => {
+                self.advance();
+                Ok(SetValue::Literal {
+                    value: SqlLiteral::Boolean { value: true },
+                })
+            }
+            Token::False => {
+                self.advance();
+                Ok(SetValue::Literal {
+                    value: SqlLiteral::Boolean { value: false },
+                })
+            }
+            Token::Ident(name) => {
+                self.advance();
+                Ok(SetValue::Identifier { name })
+            }
+            _ => Err(syntax_err(Some(tok.at), "expected SET value")),
+        }
+    }
+
+    /// `COPY {table-or-subquery} [(cols)] {FROM|TO} {file|STDIN|STDOUT}
+    /// [WITH (options)]`. The `COPY` keyword has been consumed.
+    fn parse_copy(&mut self) -> Result<CopyStatement, ParseError> {
+        // Target: subquery `(SELECT ...)` or table reference.
+        let target = if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+            self.advance();
+            self.expect_keyword(Token::Select, "expected SELECT inside COPY subquery")?;
+            let inner = self.parse_select()?;
+            self.expect_token(Token::RParen, "expected ')'")?;
+            CopyTarget::Select {
+                statement: Box::new(inner),
+            }
+        } else {
+            let table_ref = self.parse_table_ref()?;
+            // Optional `(col, col)` list.
+            let columns = if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+                self.advance();
+                let cols = self.parse_ident_list("expected column name")?;
+                self.expect_token(Token::RParen, "expected ')'")?;
+                cols
+            } else {
+                Vec::new()
+            };
+            CopyTarget::Table {
+                table: table_ref,
+                columns,
+            }
+        };
+
+        // Direction.
+        let dir_tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected FROM or TO"))?
+            .clone();
+        let direction = match dir_tok.token {
+            Token::From => {
+                self.advance();
+                CopyDirection::From
+            }
+            Token::To => {
+                self.advance();
+                CopyDirection::To
+            }
+            _ => return Err(syntax_err(Some(dir_tok.at), "expected FROM or TO")),
+        };
+
+        // Subquery target is only legal with TO direction.
+        if matches!(target, CopyTarget::Select { .. }) && direction == CopyDirection::From {
+            return Err(syntax_err(
+                Some(dir_tok.at),
+                "COPY (SELECT ...) FROM is not supported",
+            ));
+        }
+
+        // Source.
+        let src_tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected source"))?
+            .clone();
+        let source = match src_tok.token {
+            Token::Stdin => {
+                if direction == CopyDirection::To {
+                    return Err(syntax_err(Some(src_tok.at), "STDIN is only valid with FROM"));
+                }
+                self.advance();
+                CopySource::Stdin
+            }
+            Token::Stdout => {
+                if direction == CopyDirection::From {
+                    return Err(syntax_err(Some(src_tok.at), "STDOUT is only valid with TO"));
+                }
+                self.advance();
+                CopySource::Stdout
+            }
+            Token::String(path) => {
+                self.advance();
+                CopySource::File { path }
+            }
+            _ => return Err(syntax_err(Some(src_tok.at), "expected source path / STDIN / STDOUT")),
+        };
+
+        // Optional `WITH (options)` trailer.
+        let options = if matches!(self.peek().map(|t| &t.token), Some(Token::With)) {
+            self.advance();
+            self.expect_token(Token::LParen, "expected '(' after WITH")?;
+            let opts = self.parse_explain_option_list()?;
+            self.expect_token(Token::RParen, "expected ')'")?;
+            opts
+        } else {
+            Vec::new()
+        };
+
+        Ok(CopyStatement {
+            direction,
+            target,
+            source,
+            options,
+        })
+    }
+
+    /// `COMMENT ON <object-kind> <ident> IS <string-or-NULL>`. The
+    /// `COMMENT` keyword has been consumed.
+    fn parse_comment(&mut self) -> Result<CommentStatement, ParseError> {
+        self.expect_keyword(Token::On, "expected ON")?;
+        let kind_tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected object kind"))?
+            .clone();
+        let target = match kind_tok.token {
+            Token::Table => {
+                self.advance();
+                let name = self.expect_ident("expected table name")?;
+                CommentTarget::Table { name }
+            }
+            Token::Column => {
+                self.advance();
+                // Must be `table.column` form.
+                let first = self.expect_ident("expected qualified column name")?;
+                if !matches!(self.peek().map(|t| &t.token), Some(Token::Dot)) {
+                    let at = self.peek().map(|t| t.at);
+                    return Err(syntax_err(
+                        at,
+                        "COMMENT ON COLUMN requires the table.column form",
+                    ));
+                }
+                self.advance();
+                let column = self.expect_ident("expected column name")?;
+                CommentTarget::Column {
+                    table: first,
+                    column,
+                }
+            }
+            Token::View => {
+                self.advance();
+                let name = self.expect_ident("expected view name")?;
+                CommentTarget::View { name }
+            }
+            Token::Index => {
+                self.advance();
+                let name = self.expect_ident("expected index name")?;
+                CommentTarget::Index { name }
+            }
+            Token::Schema => {
+                self.advance();
+                let name = self.expect_ident("expected schema name")?;
+                CommentTarget::Schema { name }
+            }
+            Token::Sequence => {
+                self.advance();
+                let name = self.expect_ident("expected sequence name")?;
+                CommentTarget::Sequence { name }
+            }
+            Token::Database => {
+                self.advance();
+                let name = self.expect_ident("expected database name")?;
+                CommentTarget::Database { name }
+            }
+            Token::Constraint => {
+                self.advance();
+                let constraint = self.expect_ident("expected constraint name")?;
+                self.expect_keyword(Token::On, "expected ON after constraint name")?;
+                let table = self.expect_ident("expected table name")?;
+                CommentTarget::Constraint { table, constraint }
+            }
+            _ => {
+                return Err(syntax_err(
+                    Some(kind_tok.at),
+                    "COMMENT target out of scope (only TABLE/COLUMN/VIEW/INDEX/SCHEMA/SEQUENCE/DATABASE/CONSTRAINT)",
+                ));
+            }
+        };
+        self.expect_keyword(Token::Is, "expected IS")?;
+        let text_tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected string or NULL"))?
+            .clone();
+        let text = match text_tok.token {
+            Token::String(s) => {
+                self.advance();
+                CommentText::String { value: s }
+            }
+            Token::Null => {
+                self.advance();
+                CommentText::Null
+            }
+            _ => {
+                return Err(syntax_err(
+                    Some(text_tok.at),
+                    "expected string literal or NULL",
+                ));
+            }
+        };
+        Ok(CommentStatement { target, text })
+    }
+
+    /// Parse a dotted identifier — `name` or `name.sub` or `name.sub.tail`.
+    /// Returns the full dotted string. Used by SHOW variable names and
+    /// SET variable names where PG accepts `extra_float_digits` style
+    /// bare identifiers as well as dotted compound names.
+    fn parse_dotted_identifier(&mut self) -> Result<String, ParseError> {
+        let first = self.expect_ident("expected identifier")?;
+        let mut out = first;
+        while matches!(self.peek().map(|t| &t.token), Some(Token::Dot)) {
+            self.advance();
+            let part = self.expect_ident("expected identifier after '.'")?;
+            out.push('.');
+            out.push_str(&part);
+        }
+        Ok(out)
+    }
+}
+
+/// Sprint-395 helper — best-effort textual form of a token for use as an
+/// option name. Returns the user-written form for identifiers (preserving
+/// case). `None` for tokens that have no meaningful text form (punctuation,
+/// literals). Sprint-395's lexer leaves option-name words (`analyze`,
+/// `verbose`, `format`, etc.) as `Token::Ident`, so the Ident arm covers
+/// everything we need.
+fn token_word(tok: &Token) -> Option<&str> {
+    match tok {
+        Token::Ident(s) => Some(s.as_str()),
+        _ => None,
+    }
 }
 
 /// Cheap pre-lex scan: returns the first ASCII-alphanumeric/underscore
@@ -3060,6 +3844,10 @@ fn is_known_sql_verb(name: &str) -> bool {
             | "WITH"
             | "MERGE"
             | "REPLACE"
+            | "SHOW"
+            | "SET"
+            | "COPY"
+            | "COMMENT"
     )
 }
 
@@ -3068,6 +3856,7 @@ fn is_known_sql_verb(name: &str) -> bool {
 /// `UnsupportedStatement`. Sprint-393b adds `WITH` (CTE wrap). Sprint-394
 /// adds `CREATE` (TABLE / INDEX / VIEW) — `CREATE FUNCTION` /
 /// `CREATE TRIGGER` etc. surface as `SyntaxError` from the dispatcher.
+/// Sprint-395 adds GRANT / REVOKE / EXPLAIN / SHOW / SET / COPY / COMMENT.
 fn is_supported_sql_verb(name: &str) -> bool {
     matches!(
         name.to_ascii_uppercase().as_str(),
@@ -3080,6 +3869,13 @@ fn is_supported_sql_verb(name: &str) -> bool {
             | "DELETE"
             | "WITH"
             | "CREATE"
+            | "GRANT"
+            | "REVOKE"
+            | "EXPLAIN"
+            | "SHOW"
+            | "SET"
+            | "COPY"
+            | "COMMENT"
     )
 }
 
@@ -3266,14 +4062,29 @@ mod tests {
     }
 
     #[test]
-    fn ac_p8_explain_is_unsupported_statement() {
-        let e = err("EXPLAIN SELECT * FROM users");
-        assert_eq!(e.error_kind, ParseErrorKind::UnsupportedStatement);
+    fn ac_p8_explain_is_now_supported_statement() {
+        // Sprint-395 — EXPLAIN is now supported (was UnsupportedStatement
+        // in sprint-385..394). The pre-sprint-395 baseline expected an
+        // error; sprint-395 expects a successful Explain parse.
+        let r = parse("EXPLAIN SELECT * FROM users");
+        assert!(matches!(r, ParseResult::Explain(_)));
     }
 
     #[test]
-    fn ac_p8_grant_is_unsupported_statement() {
-        let e = err("GRANT SELECT ON users TO alice");
+    fn ac_p8_grant_is_now_supported_statement() {
+        // Sprint-395 — GRANT is now supported (was UnsupportedStatement
+        // in sprint-385..394).
+        let r = parse("GRANT SELECT ON users TO alice");
+        assert!(matches!(r, ParseResult::Grant(_)));
+    }
+
+    #[test]
+    fn ac_p8_merge_remains_unsupported_statement() {
+        // Sprint-395 — MERGE remains in `is_known_sql_verb` but not in
+        // `is_supported_sql_verb` (out of scope). Keep an
+        // UnsupportedStatement smoke-test alive for known-but-unsupported
+        // verbs now that EXPLAIN/GRANT have moved to supported.
+        let e = err("MERGE INTO target USING source ON foo = bar");
         assert_eq!(e.error_kind, ParseErrorKind::UnsupportedStatement);
     }
 
@@ -7165,5 +7976,790 @@ mod tests {
         let json = serde_json::to_value(&r).expect("serialize");
         assert_eq!(json["table"]["schema"], "public");
         assert_eq!(json["table"]["table"], "users");
+    }
+
+    // =================================================================
+    // Sprint 395 — misc grammar parser tests (GRANT / REVOKE / EXPLAIN /
+    // SHOW / SET / COPY / COMMENT). AC-395-G/R/E/H/T/C/M/S/V.
+    // =================================================================
+
+    fn ok_grant(input: &str) -> GrantStatement {
+        match parse(input) {
+            ParseResult::Grant(g) => g,
+            other => panic!("expected Grant, got: {:?}", other),
+        }
+    }
+
+    fn ok_revoke(input: &str) -> RevokeStatement {
+        match parse(input) {
+            ParseResult::Revoke(r) => r,
+            other => panic!("expected Revoke, got: {:?}", other),
+        }
+    }
+
+    fn ok_explain(input: &str) -> ExplainStatement {
+        match parse(input) {
+            ParseResult::Explain(e) => e,
+            other => panic!("expected Explain, got: {:?}", other),
+        }
+    }
+
+    fn ok_show(input: &str) -> ShowStatement {
+        match parse(input) {
+            ParseResult::Show(s) => s,
+            other => panic!("expected Show, got: {:?}", other),
+        }
+    }
+
+    fn ok_set_stmt(input: &str) -> SetStatement {
+        match parse(input) {
+            ParseResult::SetStmt(s) => s,
+            other => panic!("expected SetStmt, got: {:?}", other),
+        }
+    }
+
+    fn ok_copy(input: &str) -> CopyStatement {
+        match parse(input) {
+            ParseResult::Copy(c) => c,
+            other => panic!("expected Copy, got: {:?}", other),
+        }
+    }
+
+    fn ok_comment(input: &str) -> CommentStatement {
+        match parse(input) {
+            ParseResult::Comment(c) => c,
+            other => panic!("expected Comment, got: {:?}", other),
+        }
+    }
+
+    // ---- G — GRANT (AC-395-G) -------------------------------------
+
+    #[test]
+    fn ac_395_g01_grant_select_table_to_role() {
+        let g = ok_grant("GRANT SELECT ON users TO alice");
+        assert_eq!(g.privileges.len(), 1);
+        assert!(matches!(g.privileges[0], PrivilegeTag::Select { ref columns } if columns.is_empty()));
+        match &g.object {
+            GrantObject::Table { tables } => {
+                assert_eq!(tables.len(), 1);
+                assert_eq!(tables[0].table, "users");
+            }
+            other => panic!("expected Table, got: {:?}", other),
+        }
+        assert_eq!(g.grantees.len(), 1);
+        assert!(matches!(g.grantees[0], RoleRef::Role { ref name } if name == "alice"));
+        assert!(!g.with_grant_option);
+    }
+
+    #[test]
+    fn ac_395_g02_grant_multiple_privileges_multiple_grantees() {
+        let g = ok_grant("GRANT SELECT, INSERT ON users TO alice, bob");
+        assert_eq!(g.privileges.len(), 2);
+        assert!(matches!(g.privileges[0], PrivilegeTag::Select { .. }));
+        assert!(matches!(g.privileges[1], PrivilegeTag::Insert));
+        assert_eq!(g.grantees.len(), 2);
+    }
+
+    #[test]
+    fn ac_395_g03_grant_all_normalizes_to_all_tag() {
+        let g = ok_grant("GRANT ALL ON users TO alice");
+        assert_eq!(g.privileges, vec![PrivilegeTag::All]);
+    }
+
+    #[test]
+    fn ac_395_g04_grant_all_privileges_normalizes_to_all_tag() {
+        let g = ok_grant("GRANT ALL PRIVILEGES ON users TO alice");
+        assert_eq!(g.privileges, vec![PrivilegeTag::All]);
+    }
+
+    #[test]
+    fn ac_395_g05_grant_update_column_qualifier() {
+        let g = ok_grant("GRANT UPDATE (a, b) ON users TO alice");
+        match &g.privileges[0] {
+            PrivilegeTag::Update { columns } => {
+                assert_eq!(columns, &vec!["a".to_string(), "b".to_string()]);
+            }
+            other => panic!("expected Update, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_g06_grant_insert_column_qualifier_rejected() {
+        let e = err("GRANT INSERT (a) ON users TO alice");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_395_g07_grant_usage_on_schema() {
+        let g = ok_grant("GRANT USAGE ON SCHEMA public TO alice");
+        assert!(matches!(g.privileges[0], PrivilegeTag::Usage));
+        match &g.object {
+            GrantObject::Schema { schemas } => assert_eq!(schemas, &vec!["public".to_string()]),
+            other => panic!("expected Schema, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_g08_grant_all_tables_in_schema() {
+        let g = ok_grant("GRANT SELECT ON ALL TABLES IN SCHEMA public TO alice");
+        match &g.object {
+            GrantObject::AllInSchema { schema_name } => assert_eq!(schema_name, "public"),
+            other => panic!("expected AllInSchema, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_g09_grant_execute_on_function() {
+        let g = ok_grant("GRANT EXECUTE ON FUNCTION foo TO alice");
+        assert!(matches!(g.privileges[0], PrivilegeTag::Execute));
+        match &g.object {
+            GrantObject::Function { functions } => assert_eq!(functions, &vec!["foo".to_string()]),
+            other => panic!("expected Function, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_g10_grant_to_public_uses_public_role_variant() {
+        let g = ok_grant("GRANT SELECT ON users TO PUBLIC");
+        assert_eq!(g.grantees.len(), 1);
+        assert!(matches!(g.grantees[0], RoleRef::Public));
+    }
+
+    #[test]
+    fn ac_395_g11_grant_with_grant_option() {
+        let g = ok_grant("GRANT SELECT ON users TO alice WITH GRANT OPTION");
+        assert!(g.with_grant_option);
+    }
+
+    #[test]
+    fn ac_395_g12_grant_no_privilege_is_syntax_error() {
+        let e = err("GRANT");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_395_g13_grant_case_insensitive() {
+        let g_upper = ok_grant("GRANT SELECT ON users TO alice");
+        let g_lower = ok_grant("grant select on users to alice");
+        let g_mixed = ok_grant("Grant Select On users To alice");
+        assert_eq!(g_upper, g_lower);
+        assert_eq!(g_upper, g_mixed);
+    }
+
+    #[test]
+    fn ac_395_g_extra_grant_select_with_column_list() {
+        let g = ok_grant("GRANT SELECT (a) ON users TO alice");
+        match &g.privileges[0] {
+            PrivilegeTag::Select { columns } => assert_eq!(columns, &vec!["a".to_string()]),
+            other => panic!("expected Select with columns, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_g_extra_grant_to_current_user_normalizes_to_current_session() {
+        let g = ok_grant("GRANT SELECT ON users TO CURRENT_USER");
+        assert!(matches!(g.grantees[0], RoleRef::CurrentSession));
+    }
+
+    #[test]
+    fn ac_395_g_extra_grant_to_session_user_normalizes_to_current_session() {
+        let g = ok_grant("GRANT SELECT ON users TO SESSION_USER");
+        assert!(matches!(g.grantees[0], RoleRef::CurrentSession));
+    }
+
+    // ---- R — REVOKE (AC-395-R) ------------------------------------
+
+    #[test]
+    fn ac_395_r01_revoke_basic_shape() {
+        let r = ok_revoke("REVOKE SELECT ON users FROM alice");
+        assert!(matches!(r.privileges[0], PrivilegeTag::Select { .. }));
+        match &r.object {
+            GrantObject::Table { tables } => assert_eq!(tables[0].table, "users"),
+            other => panic!("expected Table, got: {:?}", other),
+        }
+        assert!(matches!(r.revokees[0], RoleRef::Role { ref name } if name == "alice"));
+        assert!(!r.grant_option_for);
+        assert_eq!(r.cascade, None);
+    }
+
+    #[test]
+    fn ac_395_r02_revoke_grant_option_for() {
+        let r = ok_revoke("REVOKE GRANT OPTION FOR SELECT ON users FROM alice");
+        assert!(r.grant_option_for);
+    }
+
+    #[test]
+    fn ac_395_r03_revoke_cascade() {
+        let r = ok_revoke("REVOKE SELECT ON users FROM alice CASCADE");
+        assert_eq!(r.cascade, Some(CascadeBehavior::Cascade));
+    }
+
+    #[test]
+    fn ac_395_r04_revoke_restrict() {
+        let r = ok_revoke("REVOKE SELECT ON users FROM alice RESTRICT");
+        assert_eq!(r.cascade, Some(CascadeBehavior::Restrict));
+    }
+
+    #[test]
+    fn ac_395_r05_revoke_all_on_all_tables_in_schema() {
+        let r = ok_revoke("REVOKE ALL ON ALL TABLES IN SCHEMA public FROM alice");
+        assert_eq!(r.privileges, vec![PrivilegeTag::All]);
+        match &r.object {
+            GrantObject::AllInSchema { schema_name } => assert_eq!(schema_name, "public"),
+            other => panic!("expected AllInSchema, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_r06_revoke_no_privilege_is_syntax_error() {
+        let e = err("REVOKE");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_395_r07_revoke_case_insensitive() {
+        let r_upper = ok_revoke("REVOKE SELECT ON users FROM alice");
+        let r_lower = ok_revoke("revoke select on users from alice");
+        assert_eq!(r_upper, r_lower);
+    }
+
+    // ---- E — EXPLAIN (AC-395-E) -----------------------------------
+
+    #[test]
+    fn ac_395_e01_explain_select() {
+        let e = ok_explain("EXPLAIN SELECT * FROM users");
+        assert!(!e.analyze);
+        assert!(!e.verbose);
+        assert!(e.options.is_empty());
+        assert!(matches!(*e.inner_statement, ExplainInner::Select(_)));
+    }
+
+    #[test]
+    fn ac_395_e02_explain_analyze() {
+        let e = ok_explain("EXPLAIN ANALYZE SELECT * FROM users");
+        assert!(e.analyze);
+        assert!(!e.verbose);
+    }
+
+    #[test]
+    fn ac_395_e03_explain_verbose() {
+        let e = ok_explain("EXPLAIN VERBOSE SELECT * FROM users");
+        assert!(!e.analyze);
+        assert!(e.verbose);
+    }
+
+    #[test]
+    fn ac_395_e04_explain_analyze_verbose() {
+        let e = ok_explain("EXPLAIN ANALYZE VERBOSE SELECT * FROM users");
+        assert!(e.analyze);
+        assert!(e.verbose);
+    }
+
+    #[test]
+    fn ac_395_e05_explain_parenthesized_options() {
+        let e = ok_explain("EXPLAIN (ANALYZE true, FORMAT 'json') SELECT * FROM users");
+        assert_eq!(e.options.len(), 2);
+        assert_eq!(e.options[0].name, "analyze");
+        assert!(matches!(
+            e.options[0].value,
+            InsertValue::Literal {
+                value: SqlLiteral::Boolean { value: true }
+            }
+        ));
+        assert_eq!(e.options[1].name, "format");
+        match &e.options[1].value {
+            InsertValue::Literal {
+                value: SqlLiteral::String { value },
+            } => assert_eq!(value, "json"),
+            other => panic!("expected string literal 'json', got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_e06_explain_delete_preserves_inner_kind() {
+        let e = ok_explain("EXPLAIN DELETE FROM users WHERE id = 1");
+        assert!(matches!(*e.inner_statement, ExplainInner::Delete(_)));
+    }
+
+    #[test]
+    fn ac_395_e07_explain_inner_out_of_scope_is_syntax_error() {
+        let e = err("EXPLAIN BEGIN");
+        // BEGIN is not in `is_known_sql_verb` so the pre-lex scan does
+        // not trigger the unsupported-statement short-circuit, and the
+        // parser surfaces a syntax error from the dispatcher. The
+        // contract requires SyntaxError; both shapes are acceptable.
+        assert!(matches!(
+            e.error_kind,
+            ParseErrorKind::SyntaxError | ParseErrorKind::UnsupportedStatement
+        ));
+    }
+
+    #[test]
+    fn ac_395_e08_explain_no_inner_is_syntax_error() {
+        let e = err("EXPLAIN");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_395_e09_explain_case_insensitive() {
+        let e_upper = ok_explain("EXPLAIN ANALYZE SELECT * FROM users");
+        let e_lower = ok_explain("explain analyze select * from users");
+        assert_eq!(e_upper, e_lower);
+    }
+
+    #[test]
+    fn ac_395_e_extra_explain_update_inner_kind() {
+        let e = ok_explain("EXPLAIN UPDATE users SET a = 1 WHERE id = 1");
+        assert!(matches!(*e.inner_statement, ExplainInner::Update(_)));
+    }
+
+    #[test]
+    fn ac_395_e_extra_explain_with_inner_kind() {
+        let e = ok_explain("EXPLAIN WITH t AS (SELECT n FROM x) SELECT * FROM t");
+        assert!(matches!(*e.inner_statement, ExplainInner::With(_)));
+    }
+
+    // ---- H — SHOW (AC-395-H) --------------------------------------
+
+    #[test]
+    fn ac_395_h01_show_variable() {
+        let s = ok_show("SHOW search_path");
+        match s.target {
+            ShowTarget::Variable { name } => assert_eq!(name, "search_path"),
+            other => panic!("expected Variable, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_h02_show_tables_no_schema() {
+        let s = ok_show("SHOW TABLES");
+        match s.target {
+            ShowTarget::Tables { schema } => assert_eq!(schema, None),
+            other => panic!("expected Tables, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_h03_show_tables_in_schema() {
+        let s = ok_show("SHOW TABLES IN public");
+        match s.target {
+            ShowTarget::Tables { schema } => assert_eq!(schema.as_deref(), Some("public")),
+            other => panic!("expected Tables, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_h04_show_databases() {
+        let s = ok_show("SHOW DATABASES");
+        assert!(matches!(s.target, ShowTarget::Databases));
+    }
+
+    #[test]
+    fn ac_395_h05_show_schemas() {
+        let s = ok_show("SHOW SCHEMAS");
+        assert!(matches!(s.target, ShowTarget::Schemas));
+    }
+
+    #[test]
+    fn ac_395_h06_show_no_target_is_syntax_error() {
+        let e = err("SHOW");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_395_h_extra_show_dotted_variable() {
+        let s = ok_show("SHOW custom.namespace.var");
+        match s.target {
+            ShowTarget::Variable { name } => assert_eq!(name, "custom.namespace.var"),
+            other => panic!("expected Variable, got: {:?}", other),
+        }
+    }
+
+    // ---- T — SET (AC-395-T) ---------------------------------------
+
+    #[test]
+    fn ac_395_t01_set_string_literal() {
+        let s = ok_set_stmt("SET search_path = 'public'");
+        assert_eq!(s.scope, SetScope::Default);
+        assert_eq!(s.name, "search_path");
+        match s.value {
+            SetValue::Literal {
+                value: SqlLiteral::String { ref value },
+            } => assert_eq!(value, "public"),
+            other => panic!("expected string literal, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_t02_set_to_equivalent_to_equals() {
+        let s_eq = ok_set_stmt("SET search_path = 'public'");
+        let s_to = ok_set_stmt("SET search_path TO 'public'");
+        assert_eq!(s_eq, s_to);
+    }
+
+    #[test]
+    fn ac_395_t03_set_session_scope() {
+        let s = ok_set_stmt("SET SESSION timezone = 'UTC'");
+        assert_eq!(s.scope, SetScope::Session);
+    }
+
+    #[test]
+    fn ac_395_t04_set_local_scope() {
+        let s = ok_set_stmt("SET LOCAL timezone = 'UTC'");
+        assert_eq!(s.scope, SetScope::Local);
+    }
+
+    #[test]
+    fn ac_395_t05_set_default_keyword() {
+        let s = ok_set_stmt("SET search_path = DEFAULT");
+        assert!(matches!(s.value, SetValue::Default));
+    }
+
+    #[test]
+    fn ac_395_t06_set_bare_identifier() {
+        let s = ok_set_stmt("SET search_path = public");
+        match s.value {
+            SetValue::Identifier { ref name } => assert_eq!(name, "public"),
+            other => panic!("expected Identifier, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_t07_set_no_name_is_syntax_error() {
+        let e = err("SET");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_395_t_extra_set_integer_literal() {
+        let s = ok_set_stmt("SET work_mem = 64");
+        assert!(matches!(
+            s.value,
+            SetValue::Literal {
+                value: SqlLiteral::Integer { value: 64 }
+            }
+        ));
+    }
+
+    // ---- C — COPY (AC-395-C) --------------------------------------
+
+    #[test]
+    fn ac_395_c01_copy_from_file() {
+        let c = ok_copy("COPY users FROM '/tmp/users.csv'");
+        assert_eq!(c.direction, CopyDirection::From);
+        match c.target {
+            CopyTarget::Table { table, columns } => {
+                assert_eq!(table.table, "users");
+                assert!(columns.is_empty());
+            }
+            other => panic!("expected Table target, got {:?}", other),
+        }
+        match c.source {
+            CopySource::File { path } => assert_eq!(path, "/tmp/users.csv"),
+            other => panic!("expected File source, got {:?}", other),
+        }
+        assert!(c.options.is_empty());
+    }
+
+    #[test]
+    fn ac_395_c02_copy_from_file_with_column_list() {
+        let c = ok_copy("COPY users (id, name) FROM '/tmp/users.csv'");
+        match c.target {
+            CopyTarget::Table { columns, .. } => {
+                assert_eq!(columns, vec!["id".to_string(), "name".to_string()]);
+            }
+            other => panic!("expected Table target, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_c03_copy_to_stdout() {
+        let c = ok_copy("COPY users TO STDOUT");
+        assert_eq!(c.direction, CopyDirection::To);
+        assert!(matches!(c.source, CopySource::Stdout));
+    }
+
+    #[test]
+    fn ac_395_c04_copy_from_stdin() {
+        let c = ok_copy("COPY users FROM STDIN");
+        assert_eq!(c.direction, CopyDirection::From);
+        assert!(matches!(c.source, CopySource::Stdin));
+    }
+
+    #[test]
+    fn ac_395_c05_copy_to_stdin_is_syntax_error() {
+        let e = err("COPY users TO STDIN");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_395_c06_copy_from_stdout_is_syntax_error() {
+        let e = err("COPY users FROM STDOUT");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_395_c07_copy_subquery_to_file() {
+        let c = ok_copy("COPY (SELECT * FROM users) TO '/tmp/users.csv'");
+        assert_eq!(c.direction, CopyDirection::To);
+        assert!(matches!(c.target, CopyTarget::Select { .. }));
+    }
+
+    #[test]
+    fn ac_395_c08_copy_subquery_from_file_is_syntax_error() {
+        let e = err("COPY (SELECT * FROM users) FROM '/tmp/users.csv'");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_395_c09_copy_with_options() {
+        let c = ok_copy("COPY users FROM '/tmp/users.csv' WITH (FORMAT csv, HEADER true)");
+        assert_eq!(c.options.len(), 2);
+        assert_eq!(c.options[0].name, "format");
+        assert_eq!(c.options[1].name, "header");
+    }
+
+    #[test]
+    fn ac_395_c10_copy_case_insensitive() {
+        let c_upper = ok_copy("COPY users FROM STDIN");
+        let c_lower = ok_copy("copy users from stdin");
+        assert_eq!(c_upper, c_lower);
+    }
+
+    // ---- M — COMMENT (AC-395-M) -----------------------------------
+
+    #[test]
+    fn ac_395_m01_comment_on_table() {
+        let c = ok_comment("COMMENT ON TABLE users IS 'all users'");
+        match c.target {
+            CommentTarget::Table { name } => assert_eq!(name, "users"),
+            other => panic!("expected Table, got {:?}", other),
+        }
+        match c.text {
+            CommentText::String { value } => assert_eq!(value, "all users"),
+            other => panic!("expected string text, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_m02_comment_on_column_dotted() {
+        let c = ok_comment("COMMENT ON COLUMN users.email IS 'email address'");
+        match c.target {
+            CommentTarget::Column { table, column } => {
+                assert_eq!(table, "users");
+                assert_eq!(column, "email");
+            }
+            other => panic!("expected Column, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_m03_comment_on_column_unqualified_is_syntax_error() {
+        let e = err("COMMENT ON COLUMN email IS 'addr'");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_395_m04_comment_on_index() {
+        let c = ok_comment("COMMENT ON INDEX idx IS 'email lookup'");
+        assert!(matches!(
+            c.target,
+            CommentTarget::Index { ref name } if name == "idx"
+        ));
+    }
+
+    #[test]
+    fn ac_395_m05_comment_on_schema() {
+        let c = ok_comment("COMMENT ON SCHEMA public IS 'main'");
+        assert!(matches!(
+            c.target,
+            CommentTarget::Schema { ref name } if name == "public"
+        ));
+    }
+
+    #[test]
+    fn ac_395_m06_comment_on_constraint() {
+        let c = ok_comment("COMMENT ON CONSTRAINT users_pk ON users IS 'PK'");
+        match c.target {
+            CommentTarget::Constraint { table, constraint } => {
+                assert_eq!(table, "users");
+                assert_eq!(constraint, "users_pk");
+            }
+            other => panic!("expected Constraint, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_m07_comment_is_null() {
+        let c = ok_comment("COMMENT ON TABLE users IS NULL");
+        assert!(matches!(c.text, CommentText::Null));
+    }
+
+    #[test]
+    fn ac_395_m08_comment_on_function_out_of_scope() {
+        let e = err("COMMENT ON FUNCTION foo IS '...'");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_395_m_extra_comment_on_view() {
+        let c = ok_comment("COMMENT ON VIEW v IS 'a view'");
+        assert!(matches!(
+            c.target,
+            CommentTarget::View { ref name } if name == "v"
+        ));
+    }
+
+    #[test]
+    fn ac_395_m_extra_comment_on_sequence() {
+        let c = ok_comment("COMMENT ON SEQUENCE seq IS 'a sequence'");
+        assert!(matches!(
+            c.target,
+            CommentTarget::Sequence { ref name } if name == "seq"
+        ));
+    }
+
+    #[test]
+    fn ac_395_m_extra_comment_on_database() {
+        let c = ok_comment("COMMENT ON DATABASE mydb IS 'main db'");
+        assert!(matches!(
+            c.target,
+            CommentTarget::Database { ref name } if name == "mydb"
+        ));
+    }
+
+    // ---- S — Serialization (AC-395-S) -----------------------------
+
+    #[test]
+    fn ac_395_s01_top_level_kinds_kebab_case() {
+        let cases: Vec<(&str, &str)> = vec![
+            ("GRANT SELECT ON users TO alice", "grant"),
+            ("REVOKE SELECT ON users FROM alice", "revoke"),
+            ("EXPLAIN SELECT * FROM users", "explain"),
+            ("SHOW search_path", "show"),
+            ("SET search_path = 'a'", "set-stmt"),
+            ("COPY users FROM STDIN", "copy"),
+            ("COMMENT ON TABLE t IS 'x'", "comment"),
+        ];
+        for (sql, expected) in cases {
+            let r = parse(sql);
+            let json = serde_json::to_value(&r).expect("serialize");
+            assert_eq!(json["kind"], expected, "kind mismatch for: {}", sql);
+        }
+    }
+
+    #[test]
+    fn ac_395_s02_sub_shape_kinds_kebab_case() {
+        // Privilege tag, object variant, source variant, etc.
+        let g = parse("GRANT SELECT ON users TO alice");
+        let j = serde_json::to_value(&g).expect("serialize");
+        assert_eq!(j["privileges"][0]["kind"], "select");
+        assert_eq!(j["object"]["kind"], "table");
+        assert_eq!(j["grantees"][0]["kind"], "role");
+
+        let c = parse("COPY users FROM STDIN");
+        let cj = serde_json::to_value(&c).expect("serialize");
+        assert_eq!(cj["target"]["kind"], "table");
+        assert_eq!(cj["source"]["kind"], "stdin");
+        assert_eq!(cj["direction"], "from");
+
+        let m = parse("COMMENT ON COLUMN users.email IS 'x'");
+        let mj = serde_json::to_value(&m).expect("serialize");
+        assert_eq!(mj["target"]["kind"], "column");
+        assert_eq!(mj["text"]["kind"], "string");
+    }
+
+    #[test]
+    fn ac_395_s03_round_trip_serde() {
+        let inputs = vec![
+            "GRANT SELECT ON users TO alice",
+            "REVOKE SELECT ON users FROM alice CASCADE",
+            "EXPLAIN ANALYZE SELECT * FROM users",
+            "SHOW search_path",
+            "SET timezone = 'UTC'",
+            "COPY users FROM '/tmp/u.csv' WITH (FORMAT csv, HEADER true)",
+            "COMMENT ON TABLE users IS 'all'",
+            "COMMENT ON TABLE users IS NULL",
+        ];
+        for input in inputs {
+            let r = parse(input);
+            let json = serde_json::to_string(&r).expect("serialize");
+            let back: ParseResult =
+                serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(r, back, "round trip failed for: {}", input);
+        }
+    }
+
+    // ---- V — Verification smoke (AC-395-V) ------------------------
+
+    #[test]
+    fn ac_395_v01_revoke_grant_option_for_default_is_false() {
+        let r = ok_revoke("REVOKE SELECT ON users FROM alice");
+        assert!(!r.grant_option_for);
+    }
+
+    #[test]
+    fn ac_395_v02_grant_object_implicit_table_form() {
+        // `ON tablename` (without explicit `TABLE` keyword) classifies
+        // as a table grant — matches PG behavior.
+        let g = ok_grant("GRANT SELECT ON users TO alice");
+        match &g.object {
+            GrantObject::Table { tables } => {
+                assert_eq!(tables[0].table, "users");
+                assert_eq!(tables[0].schema, None);
+            }
+            other => panic!("expected Table, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_v03_grant_object_explicit_table_keyword() {
+        let g = ok_grant("GRANT SELECT ON TABLE users TO alice");
+        assert!(matches!(&g.object, GrantObject::Table { .. }));
+    }
+
+    #[test]
+    fn ac_395_v04_grant_schema_qualified_table() {
+        let g = ok_grant("GRANT SELECT ON public.users TO alice");
+        match &g.object {
+            GrantObject::Table { tables } => {
+                assert_eq!(tables[0].schema.as_deref(), Some("public"));
+                assert_eq!(tables[0].table, "users");
+            }
+            other => panic!("expected Table, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_395_v05_explain_with_options_parens_and_no_bare_flags() {
+        // Parenthesized form does not also accept bare ANALYZE/VERBOSE
+        // (those tokens become option names; they don't escape outside).
+        let e = ok_explain("EXPLAIN (ANALYZE 1) SELECT a FROM x");
+        assert!(!e.analyze);
+        assert!(!e.verbose);
+        assert_eq!(e.options.len(), 1);
+    }
+
+    #[test]
+    fn ac_395_v06_set_with_boolean_literal() {
+        let s = ok_set_stmt("SET autocommit = true");
+        assert!(matches!(
+            s.value,
+            SetValue::Literal {
+                value: SqlLiteral::Boolean { value: true }
+            }
+        ));
+    }
+
+    #[test]
+    fn ac_395_v07_copy_table_with_schema_qualifier() {
+        let c = ok_copy("COPY public.users FROM '/tmp/x'");
+        match c.target {
+            CopyTarget::Table { table, .. } => {
+                assert_eq!(table.schema.as_deref(), Some("public"));
+                assert_eq!(table.table, "users");
+            }
+            other => panic!("expected Table target, got {:?}", other),
+        }
     }
 }

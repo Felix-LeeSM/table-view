@@ -671,6 +671,97 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           returning: [],
         } satisfies SqlParseResult;
       }
+      // ── sprint-395 misc grammar stubs ─────────────────────────────
+      if (sql === "GRANT SELECT ON users TO alice") {
+        return {
+          kind: "grant",
+          privileges: [{ kind: "select", columns: [] }],
+          object: {
+            kind: "table",
+            tables: [{ schema: null, table: "users" }],
+          },
+          grantees: [{ kind: "role", name: "alice" }],
+          with_grant_option: false,
+        } satisfies SqlParseResult;
+      }
+      if (sql === "REVOKE SELECT ON users FROM alice CASCADE") {
+        return {
+          kind: "revoke",
+          privileges: [{ kind: "select", columns: [] }],
+          object: {
+            kind: "table",
+            tables: [{ schema: null, table: "users" }],
+          },
+          revokees: [{ kind: "role", name: "alice" }],
+          grant_option_for: false,
+          cascade: "cascade",
+        } satisfies SqlParseResult;
+      }
+      if (sql === "EXPLAIN ANALYZE SELECT * FROM users") {
+        const inner: SqlParseResult = {
+          kind: "select",
+          columns: { kind: "star" },
+          from: [
+            {
+              schema: null,
+              table: "users",
+              alias: null,
+              join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "users" },
+            },
+          ],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [],
+        };
+        return {
+          kind: "explain",
+          analyze: true,
+          verbose: false,
+          options: [],
+          inner_statement: inner,
+        } satisfies SqlParseResult;
+      }
+      if (sql === "SHOW search_path") {
+        return {
+          kind: "show",
+          target: { kind: "variable", name: "search_path" },
+        } satisfies SqlParseResult;
+      }
+      if (sql === "SET timezone = 'UTC'") {
+        return {
+          kind: "set-stmt",
+          scope: "default",
+          name: "timezone",
+          value: {
+            kind: "literal",
+            value: { kind: "string", value: "UTC" },
+          },
+        } satisfies SqlParseResult;
+      }
+      if (sql === "COPY users FROM '/tmp/users.csv'") {
+        return {
+          kind: "copy",
+          direction: "from",
+          target: {
+            kind: "table",
+            table: { schema: null, table: "users" },
+            columns: [],
+          },
+          source: { kind: "file", path: "/tmp/users.csv" },
+          options: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "COMMENT ON TABLE users IS 'all'") {
+        return {
+          kind: "comment",
+          target: { kind: "table", name: "users" },
+          text: { kind: "string", value: "all" },
+        } satisfies SqlParseResult;
+      }
       return null;
     }),
   };
@@ -1173,5 +1264,120 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(ac.kind).toBe("alter-table");
     const rn = await parseSql("ALTER TABLE users RENAME TO members");
     expect(rn.kind).toBe("alter-table");
+  });
+
+  // ── sprint-395 misc facade tests (AC-395-F) ──────────────────────
+
+  it("[AC-395-F01] parses `GRANT SELECT ON users TO alice` into a kind:'grant' variant", async () => {
+    const result = await parseSql("GRANT SELECT ON users TO alice");
+    expect(result.kind).toBe("grant");
+    if (result.kind !== "grant") return;
+    expect(result.privileges).toHaveLength(1);
+    expect(result.privileges[0]?.kind).toBe("select");
+    expect(result.object.kind).toBe("table");
+    expect(result.grantees).toHaveLength(1);
+    expect(result.with_grant_option).toBe(false);
+  });
+
+  it("[AC-395-F02] parses `REVOKE SELECT ON users FROM alice CASCADE` with cascade", async () => {
+    const result = await parseSql("REVOKE SELECT ON users FROM alice CASCADE");
+    expect(result.kind).toBe("revoke");
+    if (result.kind !== "revoke") return;
+    expect(result.cascade).toBe("cascade");
+    expect(result.grant_option_for).toBe(false);
+  });
+
+  it("[AC-395-F03] parses `EXPLAIN ANALYZE SELECT * FROM users` with analyze=true and inner SELECT", async () => {
+    const result = await parseSql("EXPLAIN ANALYZE SELECT * FROM users");
+    expect(result.kind).toBe("explain");
+    if (result.kind !== "explain") return;
+    expect(result.analyze).toBe(true);
+    expect(result.verbose).toBe(false);
+    expect(result.inner_statement.kind).toBe("select");
+  });
+
+  it("[AC-395-F04] parses `SHOW search_path` into a kind:'show' variant", async () => {
+    const result = await parseSql("SHOW search_path");
+    expect(result.kind).toBe("show");
+    if (result.kind !== "show") return;
+    expect(result.target.kind).toBe("variable");
+    if (result.target.kind !== "variable") return;
+    expect(result.target.name).toBe("search_path");
+  });
+
+  it("[AC-395-F05] parses `SET timezone = 'UTC'` into a kind:'set-stmt' variant", async () => {
+    const result = await parseSql("SET timezone = 'UTC'");
+    expect(result.kind).toBe("set-stmt");
+    if (result.kind !== "set-stmt") return;
+    expect(result.scope).toBe("default");
+    expect(result.name).toBe("timezone");
+    expect(result.value.kind).toBe("literal");
+  });
+
+  it("[AC-395-F06] parses `COPY users FROM '/tmp/users.csv'` with direction 'from'", async () => {
+    const result = await parseSql("COPY users FROM '/tmp/users.csv'");
+    expect(result.kind).toBe("copy");
+    if (result.kind !== "copy") return;
+    expect(result.direction).toBe("from");
+    expect(result.source.kind).toBe("file");
+    if (result.source.kind !== "file") return;
+    expect(result.source.path).toBe("/tmp/users.csv");
+  });
+
+  it("[AC-395-F07] parses `COMMENT ON TABLE users IS 'all'` into a kind:'comment' variant", async () => {
+    const result = await parseSql("COMMENT ON TABLE users IS 'all'");
+    expect(result.kind).toBe("comment");
+    if (result.kind !== "comment") return;
+    expect(result.target.kind).toBe("table");
+    if (result.target.kind !== "table") return;
+    expect(result.target.name).toBe("users");
+    expect(result.text.kind).toBe("string");
+  });
+
+  it("[AC-395-F08] parseSqlPreloaded returns each new sprint-395 top-level shape synchronously after preload", async () => {
+    await preloadSqlWasm();
+    const grant = parseSqlPreloaded("GRANT SELECT ON users TO alice");
+    expect(grant).not.toBeNull();
+    expect(grant?.kind).toBe("grant");
+
+    const explain = parseSqlPreloaded("EXPLAIN ANALYZE SELECT * FROM users");
+    expect(explain?.kind).toBe("explain");
+
+    const show = parseSqlPreloaded("SHOW search_path");
+    expect(show?.kind).toBe("show");
+
+    const setStmt = parseSqlPreloaded("SET timezone = 'UTC'");
+    expect(setStmt?.kind).toBe("set-stmt");
+
+    const copy = parseSqlPreloaded("COPY users FROM '/tmp/users.csv'");
+    expect(copy?.kind).toBe("copy");
+
+    const comment = parseSqlPreloaded("COMMENT ON TABLE users IS 'all'");
+    expect(comment?.kind).toBe("comment");
+
+    // Null contract — untouched module returns null.
+    __resetSqlWasmModuleForTests();
+    expect(parseSqlPreloaded("GRANT SELECT ON users TO alice")).toBeNull();
+    // Re-prime for any later tests.
+    await preloadSqlWasm();
+  });
+
+  it("[AC-395-F09] runtime guard accepts every sprint-395 widened shape (GRANT / REVOKE / EXPLAIN / SHOW / SET / COPY / COMMENT)", async () => {
+    // Every new statement should round-trip through `parseSql` without
+    // the runtime guard substituting the synthetic `lex-error`.
+    const g = await parseSql("GRANT SELECT ON users TO alice");
+    expect(g.kind).toBe("grant");
+    const r = await parseSql("REVOKE SELECT ON users FROM alice CASCADE");
+    expect(r.kind).toBe("revoke");
+    const e = await parseSql("EXPLAIN ANALYZE SELECT * FROM users");
+    expect(e.kind).toBe("explain");
+    const h = await parseSql("SHOW search_path");
+    expect(h.kind).toBe("show");
+    const s = await parseSql("SET timezone = 'UTC'");
+    expect(s.kind).toBe("set-stmt");
+    const c = await parseSql("COPY users FROM '/tmp/users.csv'");
+    expect(c.kind).toBe("copy");
+    const m = await parseSql("COMMENT ON TABLE users IS 'all'");
+    expect(m.kind).toBe("comment");
   });
 });

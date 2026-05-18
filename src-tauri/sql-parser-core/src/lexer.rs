@@ -132,6 +132,26 @@ pub enum Token {
     Check,
     Time,
     Zone,
+
+    // --- keywords (sprint-395 misc grammar — GRANT / REVOKE / EXPLAIN /
+    //     SHOW / SET / COPY / COMMENT) ---
+    //
+    // Design note (sprint-395): only the *top-level dispatch verbs* and the
+    // truly-reserved tokens (`STDIN`/`STDOUT` — distinguishing source
+    // variants) are lexed as keywords. Words that frequently appear as
+    // identifiers in production schemas (`public`, `tables`, `databases`,
+    // `analyze`, `verbose`, `format`, `usage`, `execute`, `trigger`,
+    // `option`, `session`, `local`, `comment`, `copy`, `privileges`,
+    // `for`, `current_user`, `session_user`) stay as `Token::Ident` and
+    // are matched case-insensitively in the parser. This preserves
+    // backward compatibility with sprint-385/391/393a tests that use
+    // these strings as plain identifiers (e.g. `DROP SCHEMA public`).
+    Grant,
+    Revoke,
+    Explain,
+    Show,
+    Stdin,
+    Stdout,
     // Column type-name keywords (lexed so the parser can distinguish type
     // position from identifier position). Distinct prefix `Kw` avoids
     // collision with the existing literal tokens (`Integer(i64)`,
@@ -588,6 +608,23 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "numeric" => Token::KwNumeric,
                 "serial" => Token::KwSerial,
                 "uuid" => Token::KwUuid,
+                // sprint-395 misc grammar — only top-level verbs are
+                // promoted to keywords. STDIN/STDOUT must be keywords so
+                // the COPY source variant is unambiguous (a column named
+                // "stdin" in a SELECT would also be a regression risk, but
+                // STDIN/STDOUT are PG-reserved enough that we accept the
+                // breakage if any test names a column that). Other words
+                // (`public`, `tables`, `databases`, `analyze`, `verbose`,
+                // `format`, `usage`, `execute`, `trigger`, `option`,
+                // `session`, `local`, `privileges`, `for`, `current_user`,
+                // `session_user`, `schemas`) stay as `Token::Ident` and
+                // are matched case-insensitively by the parser.
+                "grant" => Token::Grant,
+                "revoke" => Token::Revoke,
+                "explain" => Token::Explain,
+                "show" => Token::Show,
+                "stdin" => Token::Stdin,
+                "stdout" => Token::Stdout,
                 _ => Token::Ident(slice.to_string()),
             };
             tokens.push(Spanned { token, at: start });

@@ -61,6 +61,28 @@ pub enum ParseResult {
     /// `inner_statement` slot is one of SELECT / INSERT / UPDATE / DELETE —
     /// nested `WITH` is rejected at parse time (out of scope this sprint).
     With(WithStatement),
+    /// Sprint-395 — `GRANT priv ON object TO role [WITH GRANT OPTION]`. Maps
+    /// to the `permission-change` sqlSafety classification.
+    Grant(GrantStatement),
+    /// Sprint-395 — `REVOKE [GRANT OPTION FOR] priv ON object FROM role
+    /// [CASCADE|RESTRICT]`.
+    Revoke(RevokeStatement),
+    /// Sprint-395 — `EXPLAIN [ANALYZE] [VERBOSE] [(option …)] inner-stmt`.
+    /// The `inner_statement` slot carries the wrapped statement; the safety
+    /// classifier inherits the inner statement's `kind` / `severity` /
+    /// `reasons` (decision D1).
+    Explain(ExplainStatement),
+    /// Sprint-395 — `SHOW <variable> | SHOW TABLES [IN schema] | SHOW
+    /// DATABASES | SHOW SCHEMAS`.
+    Show(ShowStatement),
+    /// Sprint-395 — `SET [SESSION|LOCAL] <name> {TO|=} <value>` where value
+    /// is literal / DEFAULT / bare identifier.
+    SetStmt(SetStatement),
+    /// Sprint-395 — `COPY {table | (SELECT …)} [(cols)] FROM/TO {file |
+    /// STDIN | STDOUT} [WITH (option …)]`.
+    Copy(CopyStatement),
+    /// Sprint-395 — `COMMENT ON <object-kind> <ident> IS <string-or-NULL>`.
+    Comment(CommentStatement),
     /// A parse / lex error. `kind` discriminator is one of:
     /// `"lex-error"`, `"unsupported-statement"`, `"syntax-error"`,
     /// `"empty-input"`, `"unsupported-expression"` — see `ParseErrorKind`.
@@ -980,4 +1002,225 @@ pub enum CompareOp {
     Le,
     Gt,
     Ge,
+}
+
+// ---- sprint-395 misc AST nodes ---------------------------------------
+
+/// Sprint-395 — `GRANT priv ON object TO role [WITH GRANT OPTION]`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GrantStatement {
+    pub privileges: Vec<PrivilegeTag>,
+    pub object: GrantObject,
+    pub grantees: Vec<RoleRef>,
+    pub with_grant_option: bool,
+}
+
+/// Sprint-395 — `REVOKE [GRANT OPTION FOR] priv ON object FROM role
+/// [CASCADE|RESTRICT]`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RevokeStatement {
+    pub privileges: Vec<PrivilegeTag>,
+    pub object: GrantObject,
+    pub revokees: Vec<RoleRef>,
+    pub grant_option_for: bool,
+    pub cascade: Option<CascadeBehavior>,
+}
+
+/// Sprint-395 — One privilege tag in a GRANT/REVOKE statement. The `kind`
+/// discriminator (`all`, `select`, `insert`, `update`, `delete`, …) is the
+/// kebab-case form of the SQL keyword. `UPDATE` / `SELECT` / `REFERENCES`
+/// can carry a column-list qualifier (`columns` slot, empty for non-column
+/// invocations).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum PrivilegeTag {
+    All,
+    Select { columns: Vec<String> },
+    Insert,
+    Update { columns: Vec<String> },
+    Delete,
+    Truncate,
+    References { columns: Vec<String> },
+    Trigger,
+    Usage,
+    Execute,
+}
+
+/// Sprint-395 — GRANT/REVOKE object. The `kind` tag narrows to the object
+/// kind keyword that followed `ON`. `all-in-schema` represents the PG
+/// `ALL TABLES IN SCHEMA name` shorthand.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum GrantObject {
+    Table { tables: Vec<TableRef> },
+    Schema { schemas: Vec<String> },
+    Database { databases: Vec<String> },
+    Sequence { sequences: Vec<String> },
+    Function { functions: Vec<String> },
+    AllInSchema { schema_name: String },
+}
+
+/// Sprint-395 — grantee / revokee reference. Plain identifier roles get
+/// `kind="role"`. The `PUBLIC` pseudo-role gets `kind="public"`. Both
+/// `CURRENT_USER` and `SESSION_USER` normalize to `kind="current-session"`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum RoleRef {
+    Role { name: String },
+    Public,
+    CurrentSession,
+}
+
+/// Sprint-395 — `EXPLAIN [ANALYZE] [VERBOSE] [(option …)] inner-stmt`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExplainStatement {
+    pub analyze: bool,
+    pub verbose: bool,
+    pub options: Vec<ExplainOption>,
+    pub inner_statement: Box<ExplainInner>,
+}
+
+/// Sprint-395 — one option pair inside `EXPLAIN (name value, …)` or
+/// `COPY … WITH (name value, …)`. The `name` slot is normalized to
+/// lowercase by the parser. The `value` slot uses the sprint-392
+/// `InsertValue` shape.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExplainOption {
+    pub name: String,
+    pub value: InsertValue,
+}
+
+/// Sprint-395 — the statement variants accepted as the inner body of an
+/// EXPLAIN. Mirrors the `WithInner` shape but additionally permits the
+/// other DML/DDL kinds that EXPLAIN can wrap on the supported backends.
+/// The dispatcher rejects nested EXPLAIN and out-of-scope inner kinds at
+/// parse time.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[allow(clippy::large_enum_variant)]
+pub enum ExplainInner {
+    Select(SelectStatement),
+    Insert(InsertStatement),
+    Update(UpdateStatement),
+    Delete(DeleteStatement),
+    With(WithStatement),
+}
+
+/// Sprint-395 — `SHOW <target>`. The `target` discriminator narrows to the
+/// SHOW variant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ShowStatement {
+    pub target: ShowTarget,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ShowTarget {
+    Variable { name: String },
+    Tables { schema: Option<String> },
+    Databases,
+    Schemas,
+}
+
+/// Sprint-395 — `SET [SESSION|LOCAL] <name> {TO|=} <value>`. The `scope`
+/// slot defaults to `default` when neither `SESSION` nor `LOCAL` was
+/// specified.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SetStatement {
+    pub scope: SetScope,
+    pub name: String,
+    pub value: SetValue,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SetScope {
+    Session,
+    Local,
+    Default,
+}
+
+/// Sprint-395 — SET RHS. Distinct from `InsertValue` so bare-identifier
+/// SET targets (`SET search_path = public`) do not pollute the
+/// placeholder surface used by DML / SELECT.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum SetValue {
+    Literal { value: SqlLiteral },
+    Default,
+    Identifier { name: String },
+}
+
+/// Sprint-395 — `COPY { table | (SELECT …) } [(cols)] FROM/TO source
+/// [WITH (options)]`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CopyStatement {
+    pub direction: CopyDirection,
+    pub target: CopyTarget,
+    pub source: CopySource,
+    pub options: Vec<ExplainOption>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CopyDirection {
+    From,
+    To,
+}
+
+/// Sprint-395 — COPY target. Either a (schema-qualified) table with an
+/// optional column list, or a parenthesized SELECT.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum CopyTarget {
+    Table {
+        table: TableRef,
+        columns: Vec<String>,
+    },
+    Select {
+        statement: Box<SelectStatement>,
+    },
+}
+
+/// Sprint-395 — COPY source. STDIN is only valid with `FROM`; STDOUT is
+/// only valid with `TO` (the parser enforces).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum CopySource {
+    File { path: String },
+    Stdin,
+    Stdout,
+}
+
+/// Sprint-395 — `COMMENT ON <object-kind> <ident> IS <string-or-NULL>`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CommentStatement {
+    pub target: CommentTarget,
+    pub text: CommentText,
+}
+
+/// Sprint-395 — COMMENT object target. Each variant carries the relevant
+/// identifier slots — `column` carries `table` + `column`, `constraint`
+/// carries `table` + `constraint`, the rest carry a single `name` slot.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum CommentTarget {
+    Table { name: String },
+    Column { table: String, column: String },
+    View { name: String },
+    Index { name: String },
+    Schema { name: String },
+    Sequence { name: String },
+    Database { name: String },
+    Constraint { table: String, constraint: String },
+}
+
+/// Sprint-395 — COMMENT text payload. The `null` variant captures the
+/// literal `IS NULL` form (clearing the comment); the `string` variant
+/// carries the string literal payload.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum CommentText {
+    String { value: String },
+    Null,
 }
