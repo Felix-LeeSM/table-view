@@ -1,6 +1,35 @@
 import "@testing-library/jest-dom/vitest";
-import { beforeEach, vi } from "vitest";
+import { beforeAll, beforeEach, vi } from "vitest";
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
+
+// Sprint 401 (2026-05-17) — eager WASM bootstrap for the mongosh parser.
+// `parseMongoshStatement` 의 *모든* 호출부 (Toolbar render, useQueryExecution
+// dispatch, runCommandParser classify) 가 sync 시그니처를 기대하므로,
+// vitest 전체 프로세스 시작 시점에 WASM 모듈을 1회 instantiate 해서 facade
+// 의 `wasmModule` 슬롯을 채워둔다. jsdom 에는 `fetch()` 도 없으므로
+// wasm-pack 의 default `__wbg_init` 가 fetch fallback 으로 떨어진다 —
+// `initMongoshWasm(bytes)` overload 로 Node `fs.readFileSync` 결과를 직접
+// 전달해 `initSync` 코드패스를 탄다.
+beforeAll(async () => {
+  const { initMongoshWasm } = await import("@lib/mongo/mongoshAst");
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const { resolve, dirname } = await import("node:path");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const wasmPath = resolve(
+    here,
+    "lib",
+    "mongo",
+    "wasm",
+    "mongosh_parser_core_bg.wasm",
+  );
+  // Slice the Buffer to a fresh ArrayBuffer so `new WebAssembly.Module(...)`
+  // sees a BufferSource it accepts (Node Buffer extends Uint8Array but
+  // some bundler glue does an instanceof check that fails on Buffer).
+  const buf = readFileSync(wasmPath);
+  const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  await initMongoshWasm(ab);
+});
 
 // sprint-366 (2026-05-16, Phase 4 Q15) — workspace tree components read
 // their connection identity from `useCurrentWindowConnectionId()` which

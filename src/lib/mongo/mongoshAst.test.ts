@@ -489,3 +489,48 @@ describe("parseMongoshStatement — differentiated rejection (AC-383-R1..R3)", (
     expect(result.errorKind).toBe("non-db-statement");
   });
 });
+
+// Sprint 401 (2026-05-17) — WASM facade smoke tests. The `mongoshAst` impl
+// now lives in `src-tauri/mongosh-parser-core/` (Rust → wasm-pack); the TS
+// surface is a thin lazy-load wrapper. The 47 grammar tests above already
+// run against the WASM module via the `test-setup.ts` eager bootstrap —
+// these three additions explicitly cover the facade's pre/post-init
+// surface and the public `initMongoshWasm` export.
+describe("parseMongoshStatement — WASM facade (AC-401-W1..W3)", () => {
+  // The other 47 tests in this file have already implicitly exercised
+  // initMongoshWasm via test-setup.ts. Re-asserting here documents the
+  // public surface explicitly and locks the boot signature.
+  it("AC-401-W1 — initMongoshWasm resolves without throwing (re-callable, idempotent)", async () => {
+    const { initMongoshWasm } = await import("./mongoshAst");
+    // After the global beforeAll bootstrap, subsequent calls are a no-op
+    // (memoized) and must still resolve.
+    await expect(initMongoshWasm()).resolves.toBeUndefined();
+  });
+
+  it("AC-401-W2 — non-string input returns a typed error, never throws", () => {
+    // The facade's runtime guard converts a pathological non-string caller
+    // into a tagged error rather than letting the WASM bridge see a
+    // non-utf-8 pointer. Mirrors the legacy TS contract from sprint-382.
+    const result = parseMongoshStatement(
+      123 as unknown as string,
+    ) as MongoshParseError;
+    expect(result.kind).toBe("error");
+    expect(result.errorKind).toBe("unsupported-syntax");
+  });
+
+  it("AC-401-W3 — WASM round-trip preserves the discriminated-union shape", () => {
+    // A representative admin command + collection command + error — all
+    // three variants must surface with their TS-side discriminant intact.
+    const admin = parseMongoshStatement("db.runCommand({ping: 1})");
+    expect(admin.kind).toBe("admin-command");
+
+    const coll = parseMongoshStatement("db.users.find({_id: 1})");
+    expect(coll.kind).toBe("collection-command");
+
+    const errResult = parseMongoshStatement("let x = 1");
+    expect(errResult.kind).toBe("error");
+    if (errResult.kind === "error") {
+      expect(errResult.errorKind).toBe("variable-declaration");
+    }
+  });
+});
