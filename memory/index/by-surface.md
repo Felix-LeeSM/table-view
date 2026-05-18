@@ -31,6 +31,14 @@ generator: scripts/regenerate-indexes.sh
 
 - [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
 
+### `.claude/skills`
+
+- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
+
+### `memory/workflow/review`
+
+- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
+
 ### `scripts/hooks/check-dangerous-bash.sh`
 
 - [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)

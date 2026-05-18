@@ -12,14 +12,23 @@ trigger:
 
 작업 종료 시 agent 가 다음 pipeline 을 자율 실행. 사용자에게 "이제 커밋해 주세요" 안내 금지.
 
-## Pipeline
+## Pipeline (T0~T6)
 
-1. **Commit** — `git add <specific files>` + `git commit -m "..."` 실행. pre-commit hook 통과까지 책임.
-2. **Push** — `git push`. pre-push hook 통과.
-3. **PR** — `gh pr create` (또는 `create-pr` skill).
-4. **Review** — self review 편향 우려 → `code-reviewer` agent spawn (독립 평가) 또는 `codex exec` 외부 리뷰 옵션 사용자에게 제시.
-5. **반영** — 리뷰 피드백 → 코드 수정 → 추가 commit + push.
-6. **Merge** — `gh pr merge` (정책에 맞는 방식).
+1. **T1 Commit** — `git add <specific files>` + `git commit -m "..."`. pre-commit hook 통과 책임 (포맷 / lint / no-secrets / ADR 동결).
+2. **T2 Push** — `git push`. pre-push hook 통과 (7 stage + TDD 사이클 8 stage — code profile 만).
+3. **T3 PR** — `gh pr create`. body 는 sprint contract 의 요약 view (Summary / Changes / Invariants / Test plan / Deferred / Links).
+4. **T4 Review** — `evaluator` agent spawn (1회, default 자동):
+   - 정량은 자동 layer (hook / lint / pre-push / scripts/review/run-checks.sh) 가 이미 함
+   - evaluator 는 정성 3 차원 (Mock 범위 / 정합성 / Sprint contract scope) + profile 별 추가 차원
+   - 출력: scorecard PR comment (`memory/workflow/review/memory.md` 형식)
+   - **외부 옵션**: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가
+5. **T5 반영** — 결함 발견 시 fix commit + push → T1~T4 재시작
+6. **T6 Merge** — 자율 머지 조건:
+   - 정성 모든 차원 ≥ 7/10
+   - `gh pr checks` SUCCESS (CI green)
+   - 사용자 명시 거부 없음
+   → `gh pr merge --squash --delete-branch` 자율 실행
+   조건 미달 시 사용자 확인 (예: 일부 결함 ack 후 머지 강행)
 
 ## Why
 
@@ -40,7 +49,8 @@ trigger:
 
 ## Agent spawn 권장
 
-- 리뷰: orchestrator 자기 리뷰 = 편향. `code-reviewer` agent (`.claude/agents/`) spawn 으로 독립 평가.
+- 리뷰: orchestrator 자기 리뷰 = 편향. `evaluator` agent (`.claude/agents/evaluator.md`) spawn 으로 독립 평가. [review](../review/memory.md) 룰 적용.
+- 외부 시각 필요 시 `codex-reviewer` (사용자 명시 시만, 자동 호출 X).
 - Multi-worktree 병렬 시 각 worktree 의 delivery 도 sub-agent 자율 (subagent 권한 약한 해석 — `delivery` agent type 이어야 write 가능).
 
 ## Sync 책임
@@ -51,6 +61,7 @@ trigger:
 
 - `.claude/rules/git-policy.md` — `--no-verify` / `LEFTHOOK=0` 금지 + hook 강제
 - `.claude/agents/delivery.md` — 본 룰 enforce agent
-- `.claude/agents/code-reviewer.md` — 리뷰 spawn 대상
+- `.claude/agents/evaluator.md` — T4 review spawn 대상
+- [review](../review/memory.md) — T4 review 룰 (3 정성 + profile)
 - [implementation](../implementation/memory.md) — 직전 phase
 - [conventions](../../conventions/memory.md) — Conventional Commits 형식 (`feat(scope): description`)
