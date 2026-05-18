@@ -95,6 +95,11 @@ pre-commit:
           echo "WARNING: Possible hardcoded secrets detected in staged files"
           exit 1
         fi
+    adr-frozen:
+      # Sprint 388 — memory/decisions/*/memory.md 의 frontmatter 외 hunk 차단.
+      # 새 ADR (untracked → added) 은 OK. 결정 뒤집기는 새 ADR + supersedes.
+      glob: "memory/decisions/**/*.md"
+      run: bash scripts/check-adr-frozen.sh
 
 pre-push:
   # ADR 0019 (2026-05-01) — E2E를 CI에서 떼고 host-native pre-push 게이트로
@@ -170,6 +175,12 @@ pre-push:
     7_ts-test:
       tags: test frontend
       run: npm run test -- --run --coverage
+    8_check-tdd-cycle:
+      # Sprint 388 — code profile sprint 의 RED commit 강제. infra / docs /
+      # security profile sprint 는 자동 skip. SKIP_TDD_CYCLE=1 강제 우회 가능
+      # (사용자 명시 시 한정, git-policy.md 회피 금지 룰의 예외).
+      tags: review
+      run: bash scripts/check-tdd-cycle.sh
 
 commit-msg:
   commands:

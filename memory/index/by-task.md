@@ -121,6 +121,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
 
+### plugin
+
+- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
+
 ### pr
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
@@ -128,6 +132,14 @@ generator: scripts/regenerate-indexes.sh
 ### pr-close
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
+
+### pr-reviewer
+
+- [PR Review](../../memory/workflow/review/memory.md)
+
+### profile
+
+- [PR Review](../../memory/workflow/review/memory.md)
 
 ### push
 
@@ -167,20 +179,34 @@ generator: scripts/regenerate-indexes.sh
 
 ### review
 
+- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [PR Review](../../memory/workflow/review/memory.md)
 
 ### rust-impl
 
 - [Rust 컨벤션](../../memory/conventions/rust/memory.md)
+
+### scorecard
+
+- [PR Review](../../memory/workflow/review/memory.md)
 
 ### security
 
 - [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
 - [보안 grill — threat-model 핸드오프 먼저](../../memory/workflow/grill/security-handoff/memory.md)
 
+### skill
+
+- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
+
 ### split
 
 - [/split-memory skill](../../memory/skills/split-memory/memory.md)
+
+### sprint-388
+
+- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
 
 ### test-writing
 

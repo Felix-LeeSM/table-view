@@ -39,4 +39,23 @@ if [ "$violations" -gt 0 ] && [ "$STRICT" = "1" ]; then
 	exit 1
 fi
 
+# Sprint 388 — 자식 디렉토리 있는데 본 dir 에 memory.md 없으면 위반 (index 누락).
+# sprint-387 에서 memory/skills/ 가 sub-room (remember, split-memory) 가졌는데
+# memory.md 없이 silent fail 한 결함 재발 방지.
+while IFS= read -r dir; do
+	case "$dir" in
+		memory|memory/index) continue ;;
+	esac
+	if [ -n "$(find "$dir" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)" ] && \
+	   [ ! -f "$dir/memory.md" ]; then
+		echo "⚠️  memory structure: $dir — 자식 디렉토리는 있는데 index 'memory.md' 없습니다."
+		echo "    이 디렉토리에 index memory.md 를 추가하세요 (방 지도 + 진입 규칙)."
+		violations=$((violations + 1))
+	fi
+done < <(find memory -mindepth 1 -type d)
+
+if [ "$violations" -gt 0 ] && [ "$STRICT" = "1" ]; then
+	exit 1
+fi
+
 exit 0
