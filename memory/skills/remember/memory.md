@@ -23,6 +23,7 @@ trigger:
 | 사용자 협업 phase 행동 룰 (grill / bug-fix / commit / cleanup) | `workflow-rule` | `memory/workflow/<phase>/memory.md` 또는 sub-room |
 | 제품 UX 머지 기준 (영속 reset 등) | `ux-rule` | `memory/ux/memory.md` 또는 sub-room |
 | 실행 절차 (cold-boot 측정 등) | `runbook` | `memory/runbook/<topic>/memory.md` |
+| Slash command / skill body (`/remember`, `/split-memory` 등) | `skill` | `memory/skills/<name>/memory.md` (wrapper: `.claude/commands/<name>.md`) |
 | 외부 도구 사용법 | `reference` | `memory/reference/<tool>/memory.md` 또는 **미이동** + 사용자 질의 옵션 |
 | 트레이드오프 있는 결정 | `ADR` | `memory/decisions/NNNN-<slug>/memory.md` |
 | 실패·성공·재발 방지 | `lesson` | `memory/lessons/<domain>/YYYY-MM-DD-<slug>/memory.md` |
@@ -63,7 +64,7 @@ trigger:
 ---
 name: <한 줄 제목>
 description: <한 줄 설명 — 미래 재방문 시 trigger 신호>
-type: convention | workflow-rule | ux-rule | runbook | reference | ADR | lesson | topic
+type: convention | workflow-rule | ux-rule | runbook | skill | reference | ADR | lesson | topic
 updated: YYYY-MM-DD
 trigger:  # 선택 — 인지 layer 자동화 input
   signal: <어떤 상황에서 룰 발동되는가>

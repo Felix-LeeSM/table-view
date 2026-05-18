@@ -69,6 +69,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### hook
 
+- [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 
 ### implementation
@@ -140,6 +141,10 @@ generator: scripts/regenerate-indexes.sh
 - [Rust 컨벤션](../../memory/conventions/rust/memory.md)
 - [Implementation — agent 자율성 + noise 차단](../../memory/workflow/implementation/memory.md)
 
+### regex
+
+- [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
+
 ### regression-guard
 
 - [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/conventions/testing-scenarios/mock-scope/memory.md)
@@ -162,6 +167,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### security
 
+- [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
 - [보안 grill — threat-model 핸드오프 먼저](../../memory/workflow/grill/security-handoff/memory.md)
 
 ### split

@@ -35,6 +35,35 @@ Code / Codex / Cursor) 에 같은 룰 적용.
    (`check_git_hooks`).
 2. **본 정책 문서** — 사람 / agent 모두 명문화 룰.
 
+## Hook 한계 (sprint-387 명시)
+
+본 hook 은 **부주의 방지** layer. 의도적 우회는 **차단 불가능**:
+
+- 변수 substitution: `CMD="git push --force"; $CMD` — 호출 부에 패턴 없음.
+- 문자열 concat: `python -c "import os; os.system('git ' + 'push --force')"`.
+- bin alias: `cp $(which git) /tmp/g; /tmp/g push --force`.
+- eval split: `eval "git $(printf 'push --force')"`.
+- PATH override: `PATH=. fakegit push origin main --force`.
+
+차단 가능:
+
+- 평문 명령 / `bash -c "..."` 안의 평문 / `$(echo ...)` 안의 평문 / alias 정의
+  본문 / heredoc / nohup / background.
+
+따라서 hook 통과 = 안전 보장이 아니라 "agent 가 *자기도 모르게* 위반하지
+않는다" 보장. 정책 (본 문서) + 사람 / agent 의 commit 메시지 + git log 가
+최종 source of truth.
+
+## Worktree 동작 (sprint-387 검증)
+
+- `.claude/settings.json` 의 hook command: `"$CLAUDE_PROJECT_DIR"/.claude/hooks/pre-bash.sh`
+- `$CLAUDE_PROJECT_DIR` 는 worktree root 의 절대 경로 → worktree 사본의
+  hook 호출 → worktree 사본의 `scripts/hooks/check-dangerous-bash.sh` 실행.
+- worktree 는 git checkout 으로 두 파일 모두 보유 → 격리된 worktree 에서도
+  동일 차단.
+- `.claude/settings.local.json` 만 worktree 별 다를 수 있음 (gitignored).
+  hook 정의는 tracked `settings.json` 이라 worktree 간 drift 없음.
+
 ## Hook 실패 시 — 회피 X, 근본 fix
 
 - **포맷 실패** → `cargo fmt` / `npx prettier --write` 재실행

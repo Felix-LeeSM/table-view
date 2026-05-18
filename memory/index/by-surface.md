@@ -31,6 +31,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
 
+### `scripts/hooks/check-dangerous-bash.sh`
+
+- [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
+
 ### `src-tauri/**/*.rs`
 
 - [Rust 컨벤션](../../memory/conventions/rust/memory.md)

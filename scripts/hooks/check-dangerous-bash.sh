@@ -50,24 +50,28 @@ if [ -z "$CMD" ]; then
   exit 0
 fi
 
-# ERE 패턴. 토큰 경계 — substring inside unrelated tokens 차단.
+# ERE 패턴. 토큰 경계 — `bash -c "git push --force"` 같이 quote / paren 으로
+# 감싼 호출도 차단되도록 앞/뒤 anchor 를 [^a-zA-Z0-9_] 로 완화.
+# (sprint-387 의 bash -c bypass 결함 fix — string concat / variable
+# substitution / PATH override 같은 의도적 우회는 여전히 차단 불가, 본
+# hook 은 부주의 방지 layer 한정.)
 DANGEROUS_PATTERNS=(
   # Destructive rm against root/home/wildcard/cwd/critical dirs.
-  '(^|[[:space:]])rm[[:space:]]+-[rRfF]*[rR][rRfF]*[[:space:]]+(/|~|\*|\.|src|node_modules|target)([[:space:]/]|$)'
+  '(^|[^a-zA-Z0-9_])rm[[:space:]]+-[rRfF]*[rR][rRfF]*[[:space:]]+(/|~|\*|\.|src|node_modules|target)([[:space:]/]|$)'
   # SQL destructive DDL/DML.
-  '(^|[[:space:]])DROP[[:space:]]+(DATABASE|TABLE)([[:space:]]|$)'
-  '(^|[[:space:]])TRUNCATE([[:space:]]|$)'
+  '(^|[^a-zA-Z0-9_])DROP[[:space:]]+(DATABASE|TABLE)([^a-zA-Z0-9_]|$)'
+  '(^|[^a-zA-Z0-9_])TRUNCATE([^a-zA-Z0-9_]|$)'
   # Git destructive ops.
-  '(^|[[:space:]])git[[:space:]]+push[[:space:]]+.*--force'
-  '(^|[[:space:]])git[[:space:]]+reset[[:space:]]+--hard'
+  '(^|[^a-zA-Z0-9_])git[[:space:]]+push[[:space:]]+.*--force'
+  '(^|[^a-zA-Z0-9_])git[[:space:]]+reset[[:space:]]+--hard'
   # Hook-bypass flags / env (git-policy.md).
-  '--no-verify([[:space:]=]|$)'
-  '(^|[[:space:]])LEFTHOOK=0([[:space:]]|$)'
-  '(^|[[:space:]])LEFTHOOK_SKIP='
-  '(^|[[:space:]])HUSKY=0([[:space:]]|$)'
+  '--no-verify([^a-zA-Z0-9_]|$)'
+  '(^|[^a-zA-Z0-9_])LEFTHOOK=0([^a-zA-Z0-9_]|$)'
+  '(^|[^a-zA-Z0-9_])LEFTHOOK_SKIP='
+  '(^|[^a-zA-Z0-9_])HUSKY=0([^a-zA-Z0-9_]|$)'
   # Disk wipe / raw device write.
-  '(^|[[:space:]])dd[[:space:]]+if='
-  '(^|[[:space:]])mkfs(\.|[[:space:]])'
+  '(^|[^a-zA-Z0-9_])dd[[:space:]]+if='
+  '(^|[^a-zA-Z0-9_])mkfs(\.|[[:space:]])'
   '>[[:space:]]*/dev/(sd[a-z]|nvme[0-9]|disk[0-9])'
 )
 

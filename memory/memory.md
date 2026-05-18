@@ -37,7 +37,9 @@ updated: 2026-05-17
 - [ux](./ux/memory.md) — UX 머지 기준 (영속 상태 reset 등)
 - [runbook](./runbook/memory.md) — 절차 (cold-boot 측정, multi-agent worktree 등)
   - [runbook/worktree](./runbook/worktree/memory.md) — git worktree 다중 agent 격리 룰
-- [skills](./skills/remember/memory.md) — slash command source: [remember](./skills/remember/memory.md), [split-memory](./skills/split-memory/memory.md)
+- [skills](./skills/memory.md) — slash command / skill body source
+  - [skills/remember](./skills/remember/memory.md) — `/remember` (8 type 매트릭스)
+  - [skills/split-memory](./skills/split-memory/memory.md) — `/split-memory` (200줄 분할)
 - [roadmap](./roadmap/memory.md) — 현재 Phase 상태, 진행 중 스프린트
 - [decisions](./decisions/memory.md) — ADR 이력 (과거 결정, 대체 관계)
 - [lessons](./lessons/memory.md) — 실패·성공 교훈
