@@ -5252,6 +5252,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sql-parser-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "sqlx"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5644,6 +5651,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "sql-parser-core",
  "sqlx",
  "tauri",
  "tauri-build",
