@@ -182,15 +182,27 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           returning: [],
         };
       }
-      // SELECT — return a `select` AST stub for completeness; non-DDL
-      // paths in sqlSafety still go through the regex matcher because
-      // `ddlDestructiveAnalysisFromAst` returns null for `select`.
+      // SELECT — sprint-393a routes SELECT through the AST. Return the
+      // widened SELECT shape (FROM list, optional clause slots all null /
+      // empty) so the runtime guard accepts the value and
+      // `statementAnalysisFromAst` returns `kind: "select"` / `info`.
       if (/^SELECT\b/.test(upper)) {
         return {
           kind: "select",
           columns: { kind: "star" },
-          table: "stub",
+          from: [
+            {
+              schema: null,
+              table: "stub",
+              alias: null,
+              join: { kind: "comma" },
+            },
+          ],
           where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
         };
       }
       // Anything else → error variant; sqlSafety's AST callsite then
@@ -721,10 +733,10 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(a.reasons).toEqual(["ALTER TABLE DROP INDEX"]);
     });
 
-    it("[AC-391-X07] SELECT regression — AST path returns null, regex path handles SELECT", () => {
-      // With WASM preloaded the AST returns kind:'select'; sqlSafety's
-      // `ddlDestructiveAnalysisFromAst` returns null for `select`, so
-      // the regex matcher classifies it as INFO. Same result either way.
+    it("[AC-391-X07] SELECT regression — AST path classifies SELECT as info (sprint-393a)", () => {
+      // Sprint-393a — SELECT routes through the AST. The widened shape
+      // (FROM list, etc.) maps to `kind:'select'` / `severity:'info'` —
+      // same result as the pre-sprint-393a regex path.
       const a = analyzeStatement("SELECT * FROM users");
       expect(a.kind).toBe("select");
       expect(a.severity).toBe("info");
@@ -845,6 +857,72 @@ describe("sqlSafety.analyzeStatement", () => {
       // `warn` severity → not dangerous, not info.
       expect(isDangerous(a)).toBe(false);
       expect(isInfoStatement(a)).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Sprint 393a (2026-05-18) — AST-based SELECT classifier callsite.
+  // SELECT widening (FROM-list / JOIN family / WHERE expression widening /
+  // GROUP BY / HAVING / ORDER BY / LIMIT) routes through the AST and is
+  // classified as `kind:'select'` / `severity:'info'` / `reasons:[]`. The
+  // sprint-393a contract pins severity NOT to escalate for read-only joins /
+  // aggregations / paging — that decision is deferred to a later sprint.
+  // -------------------------------------------------------------------------
+  describe("Sprint 393a — AST-based SELECT widening classifier (AC-393a-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-393a-X01] SELECT with JOIN + WHERE → select / info / [] via AST", () => {
+      const a = analyzeStatement(
+        "SELECT a FROM x JOIN y ON x.id = y.x_id WHERE x.flag = 1",
+      );
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-393a-X02] SELECT with ORDER BY + LIMIT OFFSET → select / info / []", () => {
+      const a = analyzeStatement(
+        "SELECT a FROM x ORDER BY a LIMIT 10 OFFSET 5",
+      );
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-393a-X03] every widened SELECT clause populated → still select / info / []", () => {
+      // AC-393a-F01's full-clause-chain input — exercises FROM + WHERE +
+      // GROUP BY + HAVING + ORDER BY + LIMIT + OFFSET in one statement.
+      const a = analyzeStatement(
+        "SELECT a FROM x WHERE x.a > 1 GROUP BY a HAVING a > 0 ORDER BY a LIMIT 5 OFFSET 1",
+      );
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-393a-X04] existing sqlSafety tests regress to zero — SELECT path stays info", () => {
+      // Spot-check the pre-sprint-393a SELECT inputs route through AST
+      // and stay classified the same way as the regex path did. The full
+      // regression-zero guarantee is pinned by the other AC-185 / AC-254
+      // cases above (which run without preload).
+      expect(analyzeStatement("SELECT * FROM users").severity).toBe("info");
+      expect(
+        analyzeStatement("SELECT id, name FROM users WHERE id = 1").severity,
+      ).toBe("info");
+    });
+
+    it("[AC-393a-X05] StatementAnalysis return shape unchanged (kind / severity / reasons only)", () => {
+      const a = analyzeStatement("SELECT a FROM x JOIN y ON x.id = y.x_id");
+      expect(Object.keys(a).sort()).toEqual(["kind", "reasons", "severity"]);
+      expect(isInfoStatement(a)).toBe(true);
+      expect(isDangerous(a)).toBe(false);
     });
   });
 });

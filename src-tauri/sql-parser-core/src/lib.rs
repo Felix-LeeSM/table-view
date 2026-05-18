@@ -25,10 +25,11 @@ pub mod lexer;
 pub mod parser;
 
 pub use ast::{
-    AlterAction, AlterTableStatement, BinaryOp, CascadeBehavior, Columns, CompareOp,
-    DeleteStatement, DropObjectType, DropStatement, InsertSource, InsertStatement, InsertValue,
-    Literal, OnConflict, ParseError, ParseErrorKind, ParseResult, SelectStatement, SqlLiteral,
-    TruncateStatement, UpdateAssignment, UpdateStatement, WhereClause, WhereExpr,
+    AlterAction, AlterTableStatement, CascadeBehavior, ColumnRef, Columns, CompareOp,
+    DeleteStatement, DropObjectType, DropStatement, FromItem, InsertSource, InsertStatement,
+    InsertValue, JoinDescriptor, JoinPredicate, LikeCase, LimitClause, NullsPlacement, OnConflict,
+    OrderDirection, OrderingItem, ParseError, ParseErrorKind, ParseResult, SelectExpr,
+    SelectStatement, SqlLiteral, TruncateStatement, UpdateAssignment, UpdateStatement, WhereExpr,
 };
 pub use parser::parse;
 
@@ -88,7 +89,13 @@ mod tests {
         let result = parse_sql("SELECT * FROM users");
         let json = serde_json::to_value(&result).expect("serialize");
         assert_eq!(json["kind"], "select");
-        assert_eq!(json["table"], "users");
+        // Sprint-393a — `table` is no longer a top-level slot; the FROM
+        // list is the source of truth. The first item's `table` field
+        // holds what used to live on the SelectStatement root.
+        assert_eq!(json["from"][0]["table"], "users");
+        assert_eq!(json["from"][0]["schema"], serde_json::Value::Null);
+        assert_eq!(json["from"][0]["alias"], serde_json::Value::Null);
+        assert_eq!(json["from"][0]["join"]["kind"], "comma");
         assert_eq!(json["columns"]["kind"], "star");
     }
 

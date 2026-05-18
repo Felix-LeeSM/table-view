@@ -44,20 +44,135 @@ vi.mock("./wasm/sql_parser_core.js", () => {
         return {
           kind: "select",
           columns: { kind: "named", names: ["id"] },
-          table: "users",
+          from: [
+            {
+              schema: null,
+              table: "users",
+              alias: null,
+              join: { kind: "comma" },
+            },
+          ],
           where: {
-            column: "name",
-            op: "=",
-            literal: { kind: "string", value: "felix" },
+            kind: "comparison",
+            left: { table: null, column: "name" },
+            op: "eq",
+            value: {
+              kind: "literal",
+              value: { kind: "string", value: "felix" },
+            },
           },
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
         } satisfies SqlParseResult;
       }
       if (sql === "SELECT * FROM users") {
         return {
           kind: "select",
           columns: { kind: "star" },
-          table: "users",
+          from: [
+            {
+              schema: null,
+              table: "users",
+              alias: null,
+              join: { kind: "comma" },
+            },
+          ],
           where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+        } satisfies SqlParseResult;
+      }
+      // ── sprint-393a SELECT widening ────────────────────────────────
+      if (sql === "SELECT a FROM x JOIN y ON x.id = y.x_id") {
+        return {
+          kind: "select",
+          columns: { kind: "named", names: ["a"] },
+          from: [
+            {
+              schema: null,
+              table: "x",
+              alias: null,
+              join: { kind: "comma" },
+            },
+            {
+              schema: null,
+              table: "y",
+              alias: null,
+              join: {
+                kind: "inner-join",
+                predicate: {
+                  kind: "on",
+                  expression: {
+                    kind: "column-comparison",
+                    left: { table: "x", column: "id" },
+                    op: "eq",
+                    right: { table: "y", column: "x_id" },
+                  },
+                },
+              },
+            },
+          ],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+        } satisfies SqlParseResult;
+      }
+      if (sql === "SELECT a FROM x WHERE x.a BETWEEN 1 AND 10") {
+        return {
+          kind: "select",
+          columns: { kind: "named", names: ["a"] },
+          from: [
+            {
+              schema: null,
+              table: "x",
+              alias: null,
+              join: { kind: "comma" },
+            },
+          ],
+          where: {
+            kind: "between",
+            column: { table: "x", column: "a" },
+            low: { kind: "literal", value: { kind: "integer", value: 1 } },
+            high: { kind: "literal", value: { kind: "integer", value: 10 } },
+          },
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+        } satisfies SqlParseResult;
+      }
+      if (sql === "SELECT a FROM x ORDER BY a DESC NULLS FIRST LIMIT 5") {
+        return {
+          kind: "select",
+          columns: { kind: "named", names: ["a"] },
+          from: [
+            {
+              schema: null,
+              table: "x",
+              alias: null,
+              join: { kind: "comma" },
+            },
+          ],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [
+            {
+              column: { table: null, column: "a" },
+              direction: "desc",
+              nulls: "first",
+            },
+          ],
+          limit: {
+            count: { kind: "literal", value: { kind: "integer", value: 5 } },
+            offset: null,
+          },
         } satisfies SqlParseResult;
       }
       if (sql === "INSERT INTO x VALUES (1)") {
@@ -266,13 +381,19 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(result.kind).toBe("select");
     if (result.kind !== "select") return; // narrow for the rest of the assertions
 
-    expect(result.table).toBe("users");
+    expect(result.from).toHaveLength(1);
+    const fromItem = result.from[0];
+    expect(fromItem).toBeDefined();
+    if (fromItem === undefined) return;
+    expect(fromItem.table).toBe("users");
+    expect(fromItem.join.kind).toBe("comma");
     expect(result.columns).toEqual({ kind: "named", names: ["id"] });
     expect(result.where).not.toBeNull();
     expect(result.where).toEqual({
-      column: "name",
-      op: "=",
-      literal: { kind: "string", value: "felix" },
+      kind: "comparison",
+      left: { table: null, column: "name" },
+      op: "eq",
+      value: { kind: "literal", value: { kind: "string", value: "felix" } },
     });
   });
 
@@ -490,5 +611,82 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(update.kind).toBe("update");
     const del = await parseSql("DELETE FROM users");
     expect(del.kind).toBe("delete");
+  });
+
+  // ── sprint-393a SELECT widening facade tests (AC-393a-Fc) ──────────
+
+  it("[AC-393a-Fc01] parses a SELECT with INNER JOIN into a kind:'select' variant with a 2-item FROM list", async () => {
+    const result = await parseSql("SELECT a FROM x JOIN y ON x.id = y.x_id");
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.from).toHaveLength(2);
+    const second = result.from[1];
+    expect(second).toBeDefined();
+    if (second === undefined) return;
+    expect(second.join.kind).toBe("inner-join");
+    if (second.join.kind !== "inner-join") return;
+    expect(second.join.predicate.kind).toBe("on");
+  });
+
+  it('[AC-393a-Fc02] parses BETWEEN in WHERE into a `kind: "between"` primary', async () => {
+    const result = await parseSql("SELECT a FROM x WHERE x.a BETWEEN 1 AND 10");
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.where).not.toBeNull();
+    if (result.where === null) return;
+    expect(result.where.kind).toBe("between");
+    if (result.where.kind !== "between") return;
+    expect(result.where.column).toEqual({ table: "x", column: "a" });
+    expect(result.where.low).toEqual({
+      kind: "literal",
+      value: { kind: "integer", value: 1 },
+    });
+  });
+
+  it("[AC-393a-Fc03] parses ORDER BY a DESC NULLS FIRST LIMIT 5 into ordering + limit slots", async () => {
+    const result = await parseSql(
+      "SELECT a FROM x ORDER BY a DESC NULLS FIRST LIMIT 5",
+    );
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.order_by).toHaveLength(1);
+    const first = result.order_by[0];
+    expect(first).toBeDefined();
+    if (first === undefined) return;
+    expect(first.direction).toBe("desc");
+    expect(first.nulls).toBe("first");
+    expect(result.limit).not.toBeNull();
+    if (result.limit === null) return;
+    expect(result.limit.count).toEqual({
+      kind: "literal",
+      value: { kind: "integer", value: 5 },
+    });
+    expect(result.limit.offset).toBeNull();
+  });
+
+  it("[AC-393a-Fc04] parseSqlPreloaded returns the widened SELECT shape synchronously after preload", async () => {
+    await preloadSqlWasm();
+    const r = parseSqlPreloaded("SELECT a FROM x JOIN y ON x.id = y.x_id");
+    // The default jsdom mock returns the mocked SELECT-widening shape;
+    // the contract under test is that the runtime guard accepts the
+    // wider FROM-list and the call resolves synchronously.
+    expect(r).not.toBeNull();
+    if (r === null) return;
+    expect(r.kind).toBe("select");
+  });
+
+  it("[AC-393a-Fc05] runtime guard accepts every widened SELECT shape (BETWEEN / JOIN / ORDER LIMIT)", async () => {
+    // All three statements should round-trip through `parseSql` without
+    // the runtime guard substituting the synthetic `lex-error`.
+    const join = await parseSql("SELECT a FROM x JOIN y ON x.id = y.x_id");
+    expect(join.kind).toBe("select");
+    const between = await parseSql(
+      "SELECT a FROM x WHERE x.a BETWEEN 1 AND 10",
+    );
+    expect(between.kind).toBe("select");
+    const ordered = await parseSql(
+      "SELECT a FROM x ORDER BY a DESC NULLS FIRST LIMIT 5",
+    );
+    expect(ordered.kind).toBe("select");
   });
 });

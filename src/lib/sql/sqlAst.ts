@@ -1,5 +1,5 @@
 /**
- * Sprint 385 / 391 / 392 — SQL parser frontend facade.
+ * Sprint 385 / 391 / 392 / 393a — SQL parser frontend facade.
  *
  * Bridges the WASM module emitted by `wasm-pack build --target web`
  * (`src/lib/sql/wasm/`) to the rest of the TS codebase. The WASM module
@@ -16,9 +16,18 @@
  * `DELETE FROM <table> [USING] [WHERE] [RETURNING]`. WHERE is the narrow
  * `column-op-literal + AND/OR/NOT/IS NULL` slice; richer expressions
  * surface as `error-kind:'unsupported-expression'` so callers can fall
- * back to regex heuristics. Anything else returns a `SqlParseError`
- * variant. Further widening (SELECT JOIN / IN-list / functions /
- * CREATE / GRANT) is sprint-393+.
+ * back to regex heuristics.
+ *
+ * Sprint-393a widens the **SELECT** grammar with FROM-list (commas /
+ * schema qualifiers / aliases), the JOIN family (INNER/LEFT/RIGHT/FULL/
+ * CROSS + ON/USING), WHERE expression widening (column-column /
+ * BETWEEN / LIKE / ILIKE), GROUP BY, HAVING, ORDER BY [ASC|DESC]
+ * [NULLS FIRST|LAST], and LIMIT [OFFSET]. The new SELECT WHERE / HAVING
+ * / JOIN-ON expression shape is `SqlSelectExpr`; the DML (UPDATE /
+ * DELETE) WHERE continues to use the sprint-392 narrow `SqlWhereExpr`
+ * until sprint-393b unifies the two. The top-level `kind` discriminator
+ * stays `"select"` — downstream consumers that only branched on top-
+ * level kind need no code change.
  *
  * The TS types mirror the Rust `serde::Serialize` output one-for-one —
  * see `src-tauri/sql-parser-core/src/ast.rs`. The tagged-union shape
@@ -27,25 +36,127 @@
 
 // ---- public types ----------------------------------------------------
 
-export type SqlBinaryOp = "=" | "<>" | "!=" | "<" | ">" | "<=" | ">=";
+export type SqlColumns = { kind: "star" } | { kind: "named"; names: string[] };
 
-export type SqlLiteral =
-  | { kind: "integer"; value: number }
-  | { kind: "string"; value: string };
+// ---- sprint-393a SELECT widening types -------------------------------
 
-export interface SqlWhereClause {
+/**
+ * A column reference — `column` (unqualified) or `table.column`
+ * (qualified). `table` is `null` for unqualified references; the parser
+ * does not resolve aliases or schema scopes, it only records what the
+ * input wrote.
+ */
+export interface SqlColumnRef {
+  table: string | null;
   column: string;
-  op: SqlBinaryOp;
-  literal: SqlLiteral;
 }
 
-export type SqlColumns = { kind: "star" } | { kind: "named"; names: string[] };
+export type SqlLikeCase = "sensitive" | "insensitive";
+
+/**
+ * Sprint-393a widened expression — used by SELECT's WHERE, HAVING, and
+ * JOIN ON predicates. The variant set adds three new primaries over the
+ * sprint-392 narrow `SqlWhereExpr` (which remains in use for DML WHERE
+ * until sprint-393b):
+ *
+ * - `comparison` — column-op-(literal|placeholder|default). The left side
+ *   is a `SqlColumnRef` (qualified or unqualified); the right side is an
+ *   `SqlInsertValue`. This is the same wire shape sprint-392 produced for
+ *   DML WHERE, except the left side is widened from `string` to
+ *   `SqlColumnRef`.
+ * - `column-comparison` — column-op-column (cross-table or same-table).
+ * - `between` — `col BETWEEN low AND high`. The negated `NOT BETWEEN`
+ *   form is encoded as `not` wrapping `between` (no discrete variant).
+ * - `like` — `col LIKE 'pattern'` (`case_sensitivity: "sensitive"`) or
+ *   `col ILIKE 'pattern'` (`"insensitive"`). The negated `NOT LIKE` /
+ *   `NOT ILIKE` forms wrap with `not`.
+ */
+export type SqlSelectExpr =
+  | {
+      kind: "comparison";
+      left: SqlColumnRef;
+      op: SqlCompareOp;
+      value: SqlInsertValue;
+    }
+  | {
+      kind: "column-comparison";
+      left: SqlColumnRef;
+      op: SqlCompareOp;
+      right: SqlColumnRef;
+    }
+  | {
+      kind: "between";
+      column: SqlColumnRef;
+      low: SqlInsertValue;
+      high: SqlInsertValue;
+    }
+  | {
+      kind: "like";
+      column: SqlColumnRef;
+      case_sensitivity: SqlLikeCase;
+      pattern: SqlInsertValue;
+    }
+  | { kind: "and"; left: SqlSelectExpr; right: SqlSelectExpr }
+  | { kind: "or"; left: SqlSelectExpr; right: SqlSelectExpr }
+  | { kind: "not"; inner: SqlSelectExpr }
+  | { kind: "is-null"; column: SqlColumnRef }
+  | { kind: "is-not-null"; column: SqlColumnRef };
+
+/**
+ * A JOIN's `ON <expr>` or `USING (col, …)` predicate. Every JOIN variant
+ * other than `comma` and `cross-join` carries one of these.
+ */
+export type SqlJoinPredicate =
+  | { kind: "on"; expression: SqlSelectExpr }
+  | { kind: "using"; columns: string[] };
+
+/**
+ * How a FROM item attaches to the preceding item. The first FROM item
+ * always carries `comma` (the variant is reused for "no join" so the
+ * AST shape stays uniform). The spec keeps `comma` and `cross-join`
+ * distinct — downstream tooling must accept both shapes (no normalization).
+ */
+export type SqlJoinDescriptor =
+  | { kind: "comma" }
+  | { kind: "inner-join"; predicate: SqlJoinPredicate }
+  | { kind: "left-join"; predicate: SqlJoinPredicate }
+  | { kind: "right-join"; predicate: SqlJoinPredicate }
+  | { kind: "full-join"; predicate: SqlJoinPredicate }
+  | { kind: "cross-join" };
+
+export interface SqlFromItem {
+  /** Schema qualifier for `schema.table`. `null` for bare table names. */
+  schema: string | null;
+  table: string;
+  /** `AS alias` or bare-identifier alias. `null` when omitted. */
+  alias: string | null;
+  join: SqlJoinDescriptor;
+}
+
+export type SqlOrderDirection = "asc" | "desc";
+
+export type SqlNullsPlacement = "first" | "last" | "unspecified";
+
+export interface SqlOrderingItem {
+  column: SqlColumnRef;
+  direction: SqlOrderDirection;
+  nulls: SqlNullsPlacement;
+}
+
+export interface SqlLimitClause {
+  count: SqlInsertValue;
+  offset: SqlInsertValue | null;
+}
 
 export interface SqlSelectStatement {
   kind: "select";
   columns: SqlColumns;
-  table: string;
-  where: SqlWhereClause | null;
+  from: SqlFromItem[];
+  where: SqlSelectExpr | null;
+  group_by: SqlColumnRef[];
+  having: SqlSelectExpr | null;
+  order_by: SqlOrderingItem[];
+  limit: SqlLimitClause | null;
 }
 
 export type SqlParseErrorKind =
