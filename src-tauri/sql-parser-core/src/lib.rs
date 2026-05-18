@@ -25,9 +25,10 @@ pub mod lexer;
 pub mod parser;
 
 pub use ast::{
-    AlterAction, AlterTableStatement, BinaryOp, CascadeBehavior, Columns, DropObjectType,
-    DropStatement, Literal, ParseError, ParseErrorKind, ParseResult, SelectStatement,
-    TruncateStatement, WhereClause,
+    AlterAction, AlterTableStatement, BinaryOp, CascadeBehavior, Columns, CompareOp,
+    DeleteStatement, DropObjectType, DropStatement, InsertSource, InsertStatement, InsertValue,
+    Literal, OnConflict, ParseError, ParseErrorKind, ParseResult, SelectStatement, SqlLiteral,
+    TruncateStatement, UpdateAssignment, UpdateStatement, WhereClause, WhereExpr,
 };
 pub use parser::parse;
 
@@ -93,7 +94,9 @@ mod tests {
 
     #[test]
     fn smoke_error_serialization_shape() {
-        let result = parse_sql("INSERT INTO x VALUES (1)");
+        // Sprint-392 — INSERT is now supported, so pick a still-unsupported
+        // verb (CREATE / GRANT / REVOKE / EXPLAIN / SHOW / WITH / MERGE).
+        let result = parse_sql("CREATE TABLE x (id int)");
         let json = serde_json::to_value(&result).expect("serialize");
         assert_eq!(json["kind"], "error");
         assert_eq!(json["error_kind"], "unsupported-statement");

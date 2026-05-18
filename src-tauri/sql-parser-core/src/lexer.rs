@@ -46,10 +46,40 @@ pub enum Token {
     Column,
     Constraint,
 
+    // --- keywords (sprint-392 DML write triad) ---
+    Insert,
+    Into,
+    Values,
+    Default,
+    Returning,
+    Update,
+    Set,
+    Delete,
+    Using,
+    On,
+    Conflict,
+    Do,
+    Nothing,
+    And,
+    Or,
+    Not,
+    Null,
+    Is,
+    In,
+    True,
+    False,
+
     // --- literals / identifiers ---
     Ident(String),
     Integer(i64),
+    Float(f64),
     String(String),
+    /// `$1`, `$42` — positional placeholder (PG style).
+    PlaceholderPositional(String),
+    /// `?` — anonymous placeholder.
+    PlaceholderAnonymous,
+    /// `:name` — named placeholder (`@`/sqlite styles also accepted via `:`).
+    PlaceholderNamed(String),
 
     // --- punctuation ---
     Star,
@@ -61,6 +91,9 @@ pub enum Token {
     Gt,
     LtEq,
     GtEq,
+    LParen,
+    RParen,
+    Dot,
     Semicolon,
 }
 
@@ -121,6 +154,78 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 at: start,
             });
             i += 1;
+            continue;
+        }
+
+        // Sprint-392 — parentheses for VALUES / function-style boundaries.
+        if c == b'(' {
+            tokens.push(Spanned {
+                token: Token::LParen,
+                at: start,
+            });
+            i += 1;
+            continue;
+        }
+        if c == b')' {
+            tokens.push(Spanned {
+                token: Token::RParen,
+                at: start,
+            });
+            i += 1;
+            continue;
+        }
+
+        // Sprint-392 — `?` anonymous placeholder.
+        if c == b'?' {
+            tokens.push(Spanned {
+                token: Token::PlaceholderAnonymous,
+                at: start,
+            });
+            i += 1;
+            continue;
+        }
+
+        // Sprint-392 — `$<digits>` positional placeholder (PG-style).
+        if c == b'$' {
+            let mut end = i + 1;
+            while end < bytes.len() && bytes[end].is_ascii_digit() {
+                end += 1;
+            }
+            if end == i + 1 {
+                return Err(lex_err(
+                    start,
+                    "expected digits after '$' for positional placeholder",
+                ));
+            }
+            let slice = std::str::from_utf8(&bytes[i + 1..end])
+                .map_err(|_| lex_err(start, "utf-8"))?;
+            tokens.push(Spanned {
+                token: Token::PlaceholderPositional(slice.to_string()),
+                at: start,
+            });
+            i = end;
+            continue;
+        }
+
+        // Sprint-392 — `:name` named placeholder.
+        if c == b':' {
+            let mut end = i + 1;
+            while end < bytes.len() && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_') {
+                end += 1;
+            }
+            if end == i + 1 {
+                return Err(lex_err(
+                    start,
+                    "expected identifier after ':' for named placeholder",
+                ));
+            }
+            let slice = std::str::from_utf8(&bytes[i + 1..end])
+                .map_err(|_| lex_err(start, "utf-8"))?;
+            tokens.push(Spanned {
+                token: Token::PlaceholderNamed(slice.to_string()),
+                at: start,
+            });
+            i = end;
             continue;
         }
 
@@ -202,28 +307,87 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
             continue;
         }
 
-        // Integer literal — ASCII digits only. We do NOT support
-        // floating-point or signed literals (sprint-385 out-of-scope).
+        // Integer or float literal. Sprint-392 adds float support so
+        // `INSERT INTO t VALUES (3.14)` lexes cleanly. Integer literal
+        // remains the path for plain digit runs (used by SELECT WHERE
+        // and DML VALUES alike); a `.` followed by more digits promotes
+        // the token to a Float.
         if c.is_ascii_digit() {
             let mut end = i + 1;
             while end < bytes.len() && bytes[end].is_ascii_digit() {
                 end += 1;
             }
-            // SAFETY of `from_utf8_unchecked`: ASCII digits are valid
-            // UTF-8 by definition; we avoid `unwrap` by using the
-            // checked variant + `?`.
+            // Detect a fractional part — `.<digits>`. A trailing dot
+            // without digits (`3.`) is a lex error (we keep the grammar
+            // strict; PG/MySQL accept it but it's a footgun in this slice).
+            // To stay under the sprint-391 ×1.3 gzipped WASM budget we
+            // parse the float manually as integer-part + fraction-part
+            // accumulation. This avoids pulling rust's `dec2flt` machinery
+            // (which contributes ~35KB gzipped in optimized WASM).
+            let is_float = end < bytes.len()
+                && bytes[end] == b'.'
+                && bytes
+                    .get(end + 1)
+                    .is_some_and(|b| b.is_ascii_digit());
+            if is_float {
+                let int_slice = std::str::from_utf8(&bytes[i..end])
+                    .map_err(|_| lex_err(start, "utf-8"))?;
+                let int_part = int_slice
+                    .parse::<i64>()
+                    .map_err(|_| lex_err(start, "float out of range"))?;
+                end += 1; // consume '.'
+                let frac_start = end;
+                while end < bytes.len() && bytes[end].is_ascii_digit() {
+                    end += 1;
+                }
+                let frac_slice = std::str::from_utf8(&bytes[frac_start..end])
+                    .map_err(|_| lex_err(start, "utf-8"))?;
+                let frac_digits = end - frac_start;
+                let frac_int = frac_slice
+                    .parse::<u64>()
+                    .map_err(|_| lex_err(start, "float out of range"))?;
+                // Build the f64 manually: int + frac / 10^digits. This is
+                // not bit-perfect with `f64::parse` (which uses a precise
+                // round-half-to-even path) but is good enough for the
+                // sprint-392 use case (VALUES literals are forwarded
+                // verbatim to the DB driver — the AST f64 is for *display*
+                // and equality checks, not arithmetic).
+                let mut divisor: f64 = 1.0;
+                for _ in 0..frac_digits {
+                    divisor *= 10.0;
+                }
+                let value = (int_part as f64) + (frac_int as f64) / divisor;
+                tokens.push(Spanned {
+                    token: Token::Float(value),
+                    at: start,
+                });
+                i = end;
+                continue;
+            }
             let slice = std::str::from_utf8(&bytes[i..end])
-                .map_err(|_| lex_err(start, "internal: invalid utf-8 in integer literal slice"))?;
+                .map_err(|_| lex_err(start, "utf-8"))?;
             // `i64::from_str_radix` returns `Err` on overflow; surface
             // that as a lex error rather than panicking.
             let value = slice
                 .parse::<i64>()
-                .map_err(|_| lex_err(start, "integer literal out of range for i64"))?;
+                .map_err(|_| lex_err(start, "integer out of range"))?;
             tokens.push(Spanned {
                 token: Token::Integer(value),
                 at: start,
             });
             i = end;
+            continue;
+        }
+
+        // Sprint-392 — `.` qualifier (e.g. `other.id`). Standalone, never
+        // mixed with digit runs because the digit path consumes any
+        // trailing `.<digit>` as a Float literal first.
+        if c == b'.' {
+            tokens.push(Spanned {
+                token: Token::Dot,
+                at: start,
+            });
+            i += 1;
             continue;
         }
 
@@ -235,7 +399,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 end += 1;
             }
             let slice = std::str::from_utf8(&bytes[i..end])
-                .map_err(|_| lex_err(start, "internal: invalid utf-8 in identifier slice"))?;
+                .map_err(|_| lex_err(start, "utf-8"))?;
             let token = match slice.to_ascii_lowercase().as_str() {
                 "select" => Token::Select,
                 "from" => Token::From,
@@ -260,6 +424,28 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "identity" => Token::Identity,
                 "column" => Token::Column,
                 "constraint" => Token::Constraint,
+                // sprint-392 DML keywords.
+                "insert" => Token::Insert,
+                "into" => Token::Into,
+                "values" => Token::Values,
+                "default" => Token::Default,
+                "returning" => Token::Returning,
+                "update" => Token::Update,
+                "set" => Token::Set,
+                "delete" => Token::Delete,
+                "using" => Token::Using,
+                "on" => Token::On,
+                "conflict" => Token::Conflict,
+                "do" => Token::Do,
+                "nothing" => Token::Nothing,
+                "and" => Token::And,
+                "or" => Token::Or,
+                "not" => Token::Not,
+                "null" => Token::Null,
+                "is" => Token::Is,
+                "in" => Token::In,
+                "true" => Token::True,
+                "false" => Token::False,
                 _ => Token::Ident(slice.to_string()),
             };
             tokens.push(Spanned { token, at: start });
@@ -514,6 +700,166 @@ mod tests {
                 Token::Restart,
                 Token::Identity,
                 Token::Cascade,
+            ]
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // Sprint 392 — DML write triad keyword + punctuation lexing.
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn ac_392_lex_dml_verb_keywords_case_insensitive() {
+        for kw in ["INSERT", "insert", "Insert", "iNsErT"] {
+            assert_eq!(lex_ok(kw), vec![Token::Insert], "kw={kw}");
+        }
+        for kw in ["UPDATE", "update", "Update"] {
+            assert_eq!(lex_ok(kw), vec![Token::Update], "kw={kw}");
+        }
+        for kw in ["DELETE", "delete", "Delete"] {
+            assert_eq!(lex_ok(kw), vec![Token::Delete], "kw={kw}");
+        }
+    }
+
+    #[test]
+    fn ac_392_lex_dml_qualifier_keywords() {
+        assert_eq!(lex_ok("INTO"), vec![Token::Into]);
+        assert_eq!(lex_ok("VALUES"), vec![Token::Values]);
+        assert_eq!(lex_ok("DEFAULT"), vec![Token::Default]);
+        assert_eq!(lex_ok("RETURNING"), vec![Token::Returning]);
+        assert_eq!(lex_ok("SET"), vec![Token::Set]);
+        assert_eq!(lex_ok("USING"), vec![Token::Using]);
+        assert_eq!(lex_ok("ON"), vec![Token::On]);
+        assert_eq!(lex_ok("CONFLICT"), vec![Token::Conflict]);
+        assert_eq!(lex_ok("DO"), vec![Token::Do]);
+        assert_eq!(lex_ok("NOTHING"), vec![Token::Nothing]);
+    }
+
+    #[test]
+    fn ac_392_lex_where_boolean_keywords() {
+        assert_eq!(lex_ok("AND"), vec![Token::And]);
+        assert_eq!(lex_ok("OR"), vec![Token::Or]);
+        assert_eq!(lex_ok("NOT"), vec![Token::Not]);
+        assert_eq!(lex_ok("NULL"), vec![Token::Null]);
+        assert_eq!(lex_ok("IS"), vec![Token::Is]);
+        assert_eq!(lex_ok("IN"), vec![Token::In]);
+        assert_eq!(lex_ok("TRUE"), vec![Token::True]);
+        assert_eq!(lex_ok("FALSE"), vec![Token::False]);
+    }
+
+    #[test]
+    fn ac_392_lex_parens() {
+        assert_eq!(lex_ok("("), vec![Token::LParen]);
+        assert_eq!(lex_ok(")"), vec![Token::RParen]);
+        assert_eq!(
+            lex_ok("(1, 'a')"),
+            vec![
+                Token::LParen,
+                Token::Integer(1),
+                Token::Comma,
+                Token::String("a".into()),
+                Token::RParen,
+            ]
+        );
+    }
+
+    #[test]
+    fn ac_392_lex_dot_qualifier() {
+        let toks = lex_ok("other.id");
+        assert_eq!(
+            toks,
+            vec![
+                Token::Ident("other".into()),
+                Token::Dot,
+                Token::Ident("id".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn ac_392_lex_positional_placeholder() {
+        assert_eq!(lex_ok("$1"), vec![Token::PlaceholderPositional("1".into())]);
+        assert_eq!(
+            lex_ok("$42"),
+            vec![Token::PlaceholderPositional("42".into())]
+        );
+    }
+
+    #[test]
+    fn ac_392_lex_positional_placeholder_without_digits_is_lex_error() {
+        let err = lex("$x").unwrap_err();
+        assert_eq!(err.error_kind, ParseErrorKind::LexError);
+    }
+
+    #[test]
+    fn ac_392_lex_anonymous_placeholder() {
+        assert_eq!(lex_ok("?"), vec![Token::PlaceholderAnonymous]);
+    }
+
+    #[test]
+    fn ac_392_lex_named_placeholder() {
+        assert_eq!(
+            lex_ok(":name"),
+            vec![Token::PlaceholderNamed("name".into())]
+        );
+        assert_eq!(
+            lex_ok(":user_id"),
+            vec![Token::PlaceholderNamed("user_id".into())]
+        );
+    }
+
+    #[test]
+    fn ac_392_lex_named_placeholder_without_identifier_is_lex_error() {
+        let err = lex(": ").unwrap_err();
+        assert_eq!(err.error_kind, ParseErrorKind::LexError);
+    }
+
+    #[test]
+    fn ac_392_lex_float_literal_simple() {
+        // Avoid 3.14 — clippy::approx_constant flags it as a near-PI value.
+        let toks = lex_ok("2.5");
+        assert!(matches!(toks.as_slice(), [Token::Float(_)]));
+        if let Token::Float(v) = toks[0] {
+            assert!((v - 2.5).abs() < f64::EPSILON);
+        }
+    }
+
+    #[test]
+    fn ac_392_lex_float_literal_zero_point() {
+        let toks = lex_ok("0.5");
+        if let [Token::Float(v)] = toks.as_slice() {
+            assert!((v - 0.5).abs() < f64::EPSILON);
+        } else {
+            panic!("expected single float token, got {:?}", toks);
+        }
+    }
+
+    #[test]
+    fn ac_392_lex_integer_without_fraction_stays_integer() {
+        // Confirm fast path: `42` stays Integer, not Float.
+        assert_eq!(lex_ok("42"), vec![Token::Integer(42)]);
+    }
+
+    #[test]
+    fn ac_392_lex_insert_into_values_token_stream() {
+        let toks = lex_ok("INSERT INTO users (id, name) VALUES (1, 'a')");
+        assert_eq!(
+            toks,
+            vec![
+                Token::Insert,
+                Token::Into,
+                Token::Ident("users".into()),
+                Token::LParen,
+                Token::Ident("id".into()),
+                Token::Comma,
+                Token::Ident("name".into()),
+                Token::RParen,
+                Token::Values,
+                Token::LParen,
+                Token::Integer(1),
+                Token::Comma,
+                Token::String("a".into()),
+                Token::RParen,
             ]
         );
     }

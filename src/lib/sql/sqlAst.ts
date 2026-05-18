@@ -1,5 +1,5 @@
 /**
- * Sprint 385 / 391 — SQL parser frontend facade.
+ * Sprint 385 / 391 / 392 — SQL parser frontend facade.
  *
  * Bridges the WASM module emitted by `wasm-pack build --target web`
  * (`src/lib/sql/wasm/`) to the rest of the TS codebase. The WASM module
@@ -9,10 +9,16 @@
  *
  * Grammar (sprint-385): `SELECT <columns> FROM <table> [WHERE <ident>
  * <op> <literal>]`. Sprint-391 adds DDL destructive — `DROP …`,
- * `TRUNCATE …`, `ALTER TABLE … DROP COLUMN/CONSTRAINT/INDEX`. Anything
- * else returns a `SqlParseError` variant of the result union.
- * Further widening (INSERT / UPDATE / DELETE / JOIN / AND-OR /
- * DDL additive) is sprint-392+.
+ * `TRUNCATE …`, `ALTER TABLE … DROP COLUMN/CONSTRAINT/INDEX`. Sprint-392
+ * adds the DML write triad — `INSERT INTO <table> [(cols)] (VALUES /
+ * DEFAULT VALUES / SELECT) [ON CONFLICT …] [RETURNING …]`,
+ * `UPDATE <table> SET … [FROM] [WHERE] [RETURNING]`,
+ * `DELETE FROM <table> [USING] [WHERE] [RETURNING]`. WHERE is the narrow
+ * `column-op-literal + AND/OR/NOT/IS NULL` slice; richer expressions
+ * surface as `error-kind:'unsupported-expression'` so callers can fall
+ * back to regex heuristics. Anything else returns a `SqlParseError`
+ * variant. Further widening (SELECT JOIN / IN-list / functions /
+ * CREATE / GRANT) is sprint-393+.
  *
  * The TS types mirror the Rust `serde::Serialize` output one-for-one —
  * see `src-tauri/sql-parser-core/src/ast.rs`. The tagged-union shape
@@ -46,7 +52,13 @@ export type SqlParseErrorKind =
   | "lex-error"
   | "unsupported-statement"
   | "syntax-error"
-  | "empty-input";
+  | "empty-input"
+  // Sprint-392 — verb-level structure was recognized but the inner
+  // expression (WHERE / SET RHS) uses a construct outside the narrow
+  // sprint-392 expression slice (subquery / IN-list / cross-table
+  // comparison / arithmetic / function call). Callers may treat this as
+  // "fall back to regex heuristic".
+  | "unsupported-expression";
 
 export interface SqlParseError {
   kind: "error";
@@ -113,11 +125,94 @@ export interface SqlAlterTableStatement {
   action: SqlAlterAction;
 }
 
+// ---- sprint-392 DML write triad types --------------------------------
+
+/**
+ * Sprint-392 widened literal set — sprint-385's `SqlLiteral` covered only
+ * `integer` / `string`; DML VALUES needs every JSON-shaped column type.
+ * Re-using the existing `SqlLiteral` name would be a breaking change for
+ * sprint-385 callsites (sqlAst.test, useSafeModeGate, etc.), so we name
+ * the new union `SqlLiteralValue` and keep `SqlLiteral` untouched.
+ */
+export type SqlLiteralValue =
+  | { kind: "integer"; value: number }
+  | { kind: "float"; value: number }
+  | { kind: "string"; value: string }
+  | { kind: "boolean"; value: boolean }
+  | { kind: "null" };
+
+export type SqlInsertValue =
+  | { kind: "literal"; value: SqlLiteralValue }
+  | { kind: "default" }
+  | { kind: "placeholder"; name: string };
+
+export type SqlCompareOp = "eq" | "ne" | "lt" | "le" | "gt" | "ge";
+
+export type SqlWhereExpr =
+  | {
+      kind: "comparison";
+      column: string;
+      op: SqlCompareOp;
+      value: SqlInsertValue;
+    }
+  | { kind: "and"; left: SqlWhereExpr; right: SqlWhereExpr }
+  | { kind: "or"; left: SqlWhereExpr; right: SqlWhereExpr }
+  | { kind: "not"; inner: SqlWhereExpr }
+  | { kind: "is-null"; column: string }
+  | { kind: "is-not-null"; column: string };
+
+export type SqlInsertSource =
+  | { kind: "values"; rows: SqlInsertValue[][] }
+  | { kind: "default-values" }
+  | { kind: "select"; statement: SqlSelectStatement };
+
+export interface SqlUpdateAssignment {
+  column: string;
+  value: SqlInsertValue;
+}
+
+export type SqlOnConflict =
+  | { kind: "do-nothing" }
+  | {
+      kind: "do-update";
+      set: SqlUpdateAssignment[];
+      where_clause: SqlWhereExpr | null;
+    };
+
+export interface SqlInsertStatement {
+  kind: "insert";
+  table: string;
+  columns: string[];
+  source: SqlInsertSource;
+  on_conflict: SqlOnConflict | null;
+  returning: string[];
+}
+
+export interface SqlUpdateStatement {
+  kind: "update";
+  table: string;
+  assignments: SqlUpdateAssignment[];
+  from: string[];
+  where_clause: SqlWhereExpr | null;
+  returning: string[];
+}
+
+export interface SqlDeleteStatement {
+  kind: "delete";
+  table: string;
+  using: string[];
+  where_clause: SqlWhereExpr | null;
+  returning: string[];
+}
+
 export type SqlParseResult =
   | SqlSelectStatement
   | SqlDropStatement
   | SqlTruncateStatement
   | SqlAlterTableStatement
+  | SqlInsertStatement
+  | SqlUpdateStatement
+  | SqlDeleteStatement
   | SqlParseError;
 
 // ---- WASM bridge -----------------------------------------------------
@@ -238,6 +333,10 @@ const SQL_PARSE_RESULT_KINDS = new Set<string>([
   "drop",
   "truncate",
   "alter-table",
+  // Sprint-392 — DML write triad.
+  "insert",
+  "update",
+  "delete",
   "error",
 ]);
 

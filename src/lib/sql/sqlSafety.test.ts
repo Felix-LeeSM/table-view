@@ -125,6 +125,63 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           action: { kind: "drop-index", index: g(alterIdxMatch, 2) },
         };
       }
+      // ── sprint-392 DML write triad ─────────────────────────────
+      // INSERT — match very loosely; sqlSafety only checks `kind` so
+      // the row payload can be a stub.
+      if (/^INSERT\s+INTO\b/i.test(trimmed)) {
+        return {
+          kind: "insert",
+          table: "stub",
+          columns: [],
+          source: { kind: "values", rows: [[]] },
+          on_conflict: null,
+          returning: [],
+        };
+      }
+      // UPDATE — detect WHERE presence so sqlSafety can branch on
+      // where_clause === null. Use a coarse `\bWHERE\b` test against the
+      // upper-cased string.
+      if (/^UPDATE\b/i.test(trimmed)) {
+        const hasWhere = /\bWHERE\b/i.test(trimmed);
+        return {
+          kind: "update",
+          table: "stub",
+          assignments: [],
+          from: [],
+          where_clause: hasWhere
+            ? {
+                kind: "comparison",
+                column: "id",
+                op: "eq",
+                value: {
+                  kind: "literal",
+                  value: { kind: "integer", value: 1 },
+                },
+              }
+            : null,
+          returning: [],
+        };
+      }
+      if (/^DELETE\s+FROM\b/i.test(trimmed)) {
+        const hasWhere = /\bWHERE\b/i.test(trimmed);
+        return {
+          kind: "delete",
+          table: "stub",
+          using: [],
+          where_clause: hasWhere
+            ? {
+                kind: "comparison",
+                column: "id",
+                op: "eq",
+                value: {
+                  kind: "literal",
+                  value: { kind: "integer", value: 1 },
+                },
+              }
+            : null,
+          returning: [],
+        };
+      }
       // SELECT — return a `select` AST stub for completeness; non-DDL
       // paths in sqlSafety still go through the regex matcher because
       // `ddlDestructiveAnalysisFromAst` returns null for `select`.
@@ -690,6 +747,103 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(typeof a.severity).toBe("string");
       expect(Array.isArray(a.reasons)).toBe(true);
       expect(isDangerous(a)).toBe(true);
+      expect(isInfoStatement(a)).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Sprint 392 (2026-05-18) — AST-based DML write triad classifier callsite.
+  // Mirrors the sprint-391 block: preload the WASM module so
+  // `parseSqlPreloaded` resolves to a real AST shape (the mock above
+  // implements an inline mini-parser), then assert every DML case routes
+  // through the AST without changing the return shape contract.
+  // -------------------------------------------------------------------------
+  describe("Sprint 392 — AST-based DML write triad classifier (AC-392-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-392-X01] INSERT INTO users VALUES (1) → insert / warn via AST", () => {
+      const a = analyzeStatement("INSERT INTO users VALUES (1)");
+      expect(a.kind).toBe("insert");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-392-X02] UPDATE WHERE → update / warn via AST", () => {
+      const a = analyzeStatement("UPDATE users SET name = 'a' WHERE id = 1");
+      expect(a.kind).toBe("update");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-392-X03] UPDATE without WHERE → update / danger + reason via AST", () => {
+      const a = analyzeStatement("UPDATE users SET name = 'a'");
+      expect(a.kind).toBe("update");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["UPDATE without WHERE clause"]);
+    });
+
+    it("[AC-392-X04] DELETE WHERE → delete / warn via AST", () => {
+      const a = analyzeStatement("DELETE FROM users WHERE id = 1");
+      expect(a.kind).toBe("delete");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-392-X05] DELETE without WHERE → delete / danger + reason via AST", () => {
+      const a = analyzeStatement("DELETE FROM users");
+      expect(a.kind).toBe("delete");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["DELETE without WHERE clause"]);
+    });
+
+    it("[AC-392-X06] INSERT … ON CONFLICT DO UPDATE → insert / warn via AST (UPSERT)", () => {
+      // ON CONFLICT DO UPDATE classifies under `insert` / warn — caller
+      // does not have a separate "upsert" path; the destructive surface
+      // (UPDATE SET) is bounded by the conflict key.
+      const a = analyzeStatement(
+        "INSERT INTO users (id) VALUES (1) ON CONFLICT DO UPDATE SET name = 'a'",
+      );
+      expect(a.kind).toBe("insert");
+      expect(a.severity).toBe("warn");
+    });
+
+    it("[AC-392-X07] existing sqlSafety test suite — INSERT/UPDATE/DELETE return shapes unchanged", () => {
+      // Spot-check identical to AC-185-01h/01a/01b/01c/01d but executed
+      // with the WASM module preloaded so the AST path is the one that
+      // produces the result. If the AST path diverges from the regex
+      // output, this case fails before the larger regression suite does.
+      const insert = analyzeStatement(
+        "INSERT INTO users (id, name) VALUES (1, 'a')",
+      );
+      expect(insert.kind).toBe("insert");
+      expect(insert.severity).toBe("warn");
+
+      const updateWhere = analyzeStatement(
+        "UPDATE users SET active = false WHERE id = 1",
+      );
+      expect(updateWhere.kind).toBe("update");
+      expect(updateWhere.severity).toBe("warn");
+
+      const deleteNoWhere = analyzeStatement("DELETE FROM users");
+      expect(deleteNoWhere.kind).toBe("delete");
+      expect(deleteNoWhere.severity).toBe("danger");
+    });
+
+    it("[AC-392-X08] AST callsite preserves the `StatementAnalysis` shape contract for DML", () => {
+      const a = analyzeStatement("UPDATE users SET name = 'a' WHERE id = 1");
+      expect(Object.keys(a).sort()).toEqual(["kind", "reasons", "severity"]);
+      expect(typeof a.kind).toBe("string");
+      expect(typeof a.severity).toBe("string");
+      expect(Array.isArray(a.reasons)).toBe(true);
+      // `warn` severity → not dangerous, not info.
+      expect(isDangerous(a)).toBe(false);
       expect(isInfoStatement(a)).toBe(false);
     });
   });

@@ -74,10 +74,11 @@ mod tests {
     #[test]
     fn invalid_sql_returns_error_variant_not_err() {
         // The Result<_, String> arm is reserved for future infra failure;
-        // today every parse failure (including INSERT, malformed syntax,
-        // empty input) goes through the `Ok(Error(...))` path so the
-        // frontend can pattern-match on a single union shape.
-        let r = parse_sql_backend("INSERT INTO x VALUES (1)".to_string()).expect("ok");
+        // every parse failure goes through the `Ok(Error(...))` path so the
+        // frontend can pattern-match on a single union shape. MERGE is
+        // permanently out of scope (sprint-392 contract: "MERGE / REPLACE /
+        // INSERT IGNORE / ON DUPLICATE KEY UPDATE" excluded).
+        let r = parse_sql_backend("MERGE INTO x USING y ON x.id = y.id".to_string()).expect("ok");
         match r {
             ParseResult::Error(e) => {
                 assert_eq!(e.error_kind, ParseErrorKind::UnsupportedStatement);

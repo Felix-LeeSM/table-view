@@ -33,9 +33,10 @@
 //! - `LexError` — surfaced verbatim from `lexer::lex`.
 
 use crate::ast::{
-    AlterAction, AlterTableStatement, BinaryOp, CascadeBehavior, Columns, DropObjectType,
-    DropStatement, Literal, ParseError, ParseErrorKind, ParseResult, SelectStatement,
-    TruncateStatement, WhereClause,
+    AlterAction, AlterTableStatement, BinaryOp, CascadeBehavior, Columns, CompareOp,
+    DeleteStatement, DropObjectType, DropStatement, InsertSource, InsertStatement, InsertValue,
+    Literal, OnConflict, ParseError, ParseErrorKind, ParseResult, SelectStatement, SqlLiteral,
+    TruncateStatement, UpdateAssignment, UpdateStatement, WhereClause, WhereExpr,
 };
 use crate::lexer::{lex, Spanned, Token};
 
@@ -79,7 +80,7 @@ pub fn parse(input: &str) -> ParseResult {
         // input — same surface as `parse_sql("")`.
         return ParseResult::Error(ParseError {
             error_kind: ParseErrorKind::EmptyInput,
-            message: "no tokens after stripping whitespace/semicolons".to_string(),
+            message: "no tokens".to_string(),
             at: None,
         });
     }
@@ -97,7 +98,7 @@ pub fn parse(input: &str) -> ParseResult {
         let at = tokens[p.cursor].at;
         return ParseResult::Error(ParseError {
             error_kind: ParseErrorKind::SyntaxError,
-            message: "unexpected trailing tokens after statement".to_string(),
+            message: "unexpected trailing tokens".to_string(),
             at: Some(at),
         });
     }
@@ -133,7 +134,7 @@ impl<'a> Parser<'a> {
     fn parse_statement(&mut self) -> Result<ParseResult, ParseError> {
         let first = self
             .peek()
-            .ok_or_else(|| syntax_err(None, "expected statement, got end of input"))?;
+            .ok_or_else(|| syntax_err(None, "expected statement"))?;
 
         match &first.token {
             Token::Select => {
@@ -151,6 +152,18 @@ impl<'a> Parser<'a> {
             Token::Alter => {
                 self.advance();
                 Ok(ParseResult::AlterTable(self.parse_alter_table()?))
+            }
+            Token::Insert => {
+                self.advance();
+                Ok(ParseResult::Insert(self.parse_insert()?))
+            }
+            Token::Update => {
+                self.advance();
+                Ok(ParseResult::Update(self.parse_update()?))
+            }
+            Token::Delete => {
+                self.advance();
+                Ok(ParseResult::Delete(self.parse_delete()?))
             }
             Token::Ident(name) => {
                 // The lexer keeps any non-keyword as an identifier; if it
@@ -171,7 +184,7 @@ impl<'a> Parser<'a> {
             }
             _ => Err(syntax_err(
                 Some(first.at),
-                "expected SELECT / DROP / TRUNCATE / ALTER at start of statement",
+                "expected SELECT/INSERT/UPDATE/DELETE/DROP/TRUNCATE/ALTER at start",
             )),
         }
     }
@@ -183,11 +196,11 @@ impl<'a> Parser<'a> {
         // FROM
         let from_tok = self
             .peek()
-            .ok_or_else(|| syntax_err(None, "expected FROM after column list"))?;
+            .ok_or_else(|| syntax_err(None, "expected FROM"))?;
         if from_tok.token != Token::From {
             return Err(syntax_err(
                 Some(from_tok.at),
-                "expected FROM keyword after column list",
+                "expected FROM",
             ));
         }
         self.advance();
@@ -195,13 +208,13 @@ impl<'a> Parser<'a> {
         // table name
         let table_tok = self
             .peek()
-            .ok_or_else(|| syntax_err(None, "expected table name after FROM"))?;
+            .ok_or_else(|| syntax_err(None, "expected table name"))?;
         let table = match &table_tok.token {
             Token::Ident(name) => name.clone(),
             _ => {
                 return Err(syntax_err(
                     Some(table_tok.at),
-                    "expected table identifier after FROM",
+                    "expected table ident",
                 ));
             }
         };
@@ -232,7 +245,7 @@ impl<'a> Parser<'a> {
         // object-type
         let obj_tok = self
             .peek()
-            .ok_or_else(|| syntax_err(None, "expected object type after DROP"))?;
+            .ok_or_else(|| syntax_err(None, "expected object type"))?;
         let object_type = match obj_tok.token {
             Token::Table => DropObjectType::Table,
             Token::Database => DropObjectType::Database,
@@ -244,7 +257,7 @@ impl<'a> Parser<'a> {
             _ => {
                 return Err(syntax_err(
                     Some(obj_tok.at),
-                    "expected one of TABLE / DATABASE / INDEX / VIEW / SCHEMA / SEQUENCE / TYPE",
+                    "expected object type",
                 ));
             }
         };
@@ -256,13 +269,13 @@ impl<'a> Parser<'a> {
         // name
         let name_tok = self
             .peek()
-            .ok_or_else(|| syntax_err(None, "expected object name after DROP"))?;
+            .ok_or_else(|| syntax_err(None, "expected object name"))?;
         let name = match &name_tok.token {
             Token::Ident(s) => s.clone(),
             _ => {
                 return Err(syntax_err(
                     Some(name_tok.at),
-                    "expected object name identifier",
+                    "expected object ident",
                 ));
             }
         };
@@ -292,13 +305,13 @@ impl<'a> Parser<'a> {
         // table name
         let name_tok = self
             .peek()
-            .ok_or_else(|| syntax_err(None, "expected table name after TRUNCATE"))?;
+            .ok_or_else(|| syntax_err(None, "expected table name"))?;
         let table = match &name_tok.token {
             Token::Ident(s) => s.clone(),
             _ => {
                 return Err(syntax_err(
                     Some(name_tok.at),
-                    "expected table name identifier after TRUNCATE",
+                    "expected table ident",
                 ));
             }
         };
@@ -308,12 +321,12 @@ impl<'a> Parser<'a> {
         let restart_identity = match self.peek().map(|t| &t.token) {
             Some(Token::Restart) => {
                 self.advance();
-                self.expect_keyword(Token::Identity, "expected IDENTITY after RESTART")?;
+                self.expect_keyword(Token::Identity, "expected IDENTITY")?;
                 Some(true)
             }
             Some(Token::Continue) => {
                 self.advance();
-                self.expect_keyword(Token::Identity, "expected IDENTITY after CONTINUE")?;
+                self.expect_keyword(Token::Identity, "expected IDENTITY")?;
                 Some(false)
             }
             _ => None,
@@ -336,19 +349,19 @@ impl<'a> Parser<'a> {
         // TABLE
         self.expect_keyword(
             Token::Table,
-            "expected TABLE after ALTER (sprint-391 only supports ALTER TABLE)",
+            "expected TABLE",
         )?;
 
         // table name
         let name_tok = self
             .peek()
-            .ok_or_else(|| syntax_err(None, "expected table name after ALTER TABLE"))?;
+            .ok_or_else(|| syntax_err(None, "expected table name"))?;
         let table = match &name_tok.token {
             Token::Ident(s) => s.clone(),
             _ => {
                 return Err(syntax_err(
                     Some(name_tok.at),
-                    "expected table name identifier after ALTER TABLE",
+                    "expected table ident",
                 ));
             }
         };
@@ -358,7 +371,7 @@ impl<'a> Parser<'a> {
         // is an unsupported statement (or syntax error if the token isn't
         // a recognised ALTER action keyword).
         let action_tok = self.peek().ok_or_else(|| {
-            syntax_err(None, "expected action keyword after ALTER TABLE <name>")
+            syntax_err(None, "expected action")
         })?;
         match action_tok.token {
             Token::Drop => {
@@ -372,13 +385,13 @@ impl<'a> Parser<'a> {
             Token::Ident(_) => Err(ParseError {
                 error_kind: ParseErrorKind::UnsupportedStatement,
                 message:
-                    "sprint-391 only supports ALTER TABLE … DROP (ADD/RENAME is sprint-394)"
+                    "ALTER TABLE ADD/RENAME"
                         .to_string(),
                 at: Some(action_tok.at),
             }),
             _ => Err(syntax_err(
                 Some(action_tok.at),
-                "expected DROP keyword after ALTER TABLE <name>",
+                "expected DROP",
             )),
         }
     }
@@ -391,7 +404,7 @@ impl<'a> Parser<'a> {
         let target_tok = self.peek().ok_or_else(|| {
             syntax_err(
                 None,
-                "expected COLUMN / CONSTRAINT / INDEX after ALTER TABLE … DROP",
+                "expected COLUMN/CONSTRAINT/INDEX",
             )
         })?;
         match target_tok.token {
@@ -400,13 +413,13 @@ impl<'a> Parser<'a> {
                 let if_exists = self.consume_if_exists()?;
                 let col_tok = self
                     .peek()
-                    .ok_or_else(|| syntax_err(None, "expected column name after DROP COLUMN"))?;
+                    .ok_or_else(|| syntax_err(None, "expected column name"))?;
                 let column = match &col_tok.token {
                     Token::Ident(s) => s.clone(),
                     _ => {
                         return Err(syntax_err(
                             Some(col_tok.at),
-                            "expected column name identifier",
+                            "expected column ident",
                         ));
                     }
                 };
@@ -421,14 +434,14 @@ impl<'a> Parser<'a> {
             Token::Constraint => {
                 self.advance();
                 let c_tok = self.peek().ok_or_else(|| {
-                    syntax_err(None, "expected constraint name after DROP CONSTRAINT")
+                    syntax_err(None, "expected constraint name")
                 })?;
                 let constraint = match &c_tok.token {
                     Token::Ident(s) => s.clone(),
                     _ => {
                         return Err(syntax_err(
                             Some(c_tok.at),
-                            "expected constraint name identifier",
+                            "expected constraint ident",
                         ));
                     }
                 };
@@ -443,13 +456,13 @@ impl<'a> Parser<'a> {
                 self.advance();
                 let i_tok = self
                     .peek()
-                    .ok_or_else(|| syntax_err(None, "expected index name after DROP INDEX"))?;
+                    .ok_or_else(|| syntax_err(None, "expected index name"))?;
                 let index = match &i_tok.token {
                     Token::Ident(s) => s.clone(),
                     _ => {
                         return Err(syntax_err(
                             Some(i_tok.at),
-                            "expected index name identifier",
+                            "expected index ident",
                         ));
                     }
                 };
@@ -458,9 +471,528 @@ impl<'a> Parser<'a> {
             }
             _ => Err(syntax_err(
                 Some(target_tok.at),
-                "expected COLUMN / CONSTRAINT / INDEX after ALTER TABLE … DROP",
+                "expected COLUMN/CONSTRAINT/INDEX",
             )),
         }
+    }
+
+    // ---------------------------------------------------------------
+    // Sprint 392 — DML write triad sub-parsers (INSERT / UPDATE / DELETE).
+    // ---------------------------------------------------------------
+
+    /// `INSERT INTO <table> [(cols)] (VALUES … | DEFAULT VALUES | SELECT …)
+    ///  [ON CONFLICT …] [RETURNING …]`. Assumes `INSERT` has been
+    /// consumed.
+    fn parse_insert(&mut self) -> Result<InsertStatement, ParseError> {
+        // INTO
+        self.expect_keyword(
+            Token::Into,
+            "expected INTO",
+        )?;
+
+        // table name
+        let table = self.expect_ident("expected table name")?;
+
+        // optional `(col, col, …)`
+        let columns = if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+            self.advance();
+            let cols = self.parse_ident_list("expected column name")?;
+            self.expect_token(Token::RParen, "expected ')'")?;
+            cols
+        } else {
+            Vec::new()
+        };
+
+        // source — VALUES / DEFAULT VALUES / SELECT
+        let source = match self.peek().map(|t| &t.token) {
+            Some(Token::Values) => {
+                self.advance();
+                let rows = self.parse_values_rows()?;
+                InsertSource::Values { rows }
+            }
+            Some(Token::Default) => {
+                self.advance();
+                self.expect_keyword(
+                    Token::Values,
+                    "expected VALUES",
+                )?;
+                InsertSource::DefaultValues
+            }
+            Some(Token::Select) => {
+                self.advance();
+                let select = self.parse_select()?;
+                InsertSource::Select {
+                    statement: Box::new(select),
+                }
+            }
+            Some(_) | None => {
+                let at = self.peek().map(|t| t.at);
+                return Err(syntax_err(
+                    at,
+                    "expected VALUES/SELECT",
+                ));
+            }
+        };
+
+        // optional ON CONFLICT
+        let on_conflict = if matches!(self.peek().map(|t| &t.token), Some(Token::On)) {
+            self.advance();
+            self.expect_keyword(Token::Conflict, "expected CONFLICT")?;
+            Some(self.parse_on_conflict_action()?)
+        } else {
+            None
+        };
+
+        // optional RETURNING
+        let returning = self.parse_optional_returning()?;
+
+        Ok(InsertStatement {
+            table,
+            columns,
+            source,
+            on_conflict,
+            returning,
+        })
+    }
+
+    /// `UPDATE <table> SET <col> = <value>[, …] [FROM …] [WHERE …]
+    ///  [RETURNING …]`. Assumes `UPDATE` has been consumed.
+    fn parse_update(&mut self) -> Result<UpdateStatement, ParseError> {
+        let table = self.expect_ident("expected table name")?;
+
+        self.expect_keyword(Token::Set, "expected SET")?;
+
+        let assignments = self.parse_assignment_list()?;
+
+        // optional FROM
+        let from = if matches!(self.peek().map(|t| &t.token), Some(Token::From)) {
+            self.advance();
+            self.parse_ident_list("expected table name")?
+        } else {
+            Vec::new()
+        };
+
+        // optional WHERE
+        let where_clause = self.parse_optional_where_expr()?;
+
+        // optional RETURNING
+        let returning = self.parse_optional_returning()?;
+
+        Ok(UpdateStatement {
+            table,
+            assignments,
+            from,
+            where_clause,
+            returning,
+        })
+    }
+
+    /// `DELETE FROM <table> [USING …] [WHERE …] [RETURNING …]`. Assumes
+    /// `DELETE` has been consumed.
+    fn parse_delete(&mut self) -> Result<DeleteStatement, ParseError> {
+        self.expect_keyword(Token::From, "expected FROM")?;
+        let table = self.expect_ident("expected table name")?;
+
+        // optional USING
+        let using = if matches!(self.peek().map(|t| &t.token), Some(Token::Using)) {
+            self.advance();
+            self.parse_ident_list("expected table name")?
+        } else {
+            Vec::new()
+        };
+
+        let where_clause = self.parse_optional_where_expr()?;
+        let returning = self.parse_optional_returning()?;
+
+        Ok(DeleteStatement {
+            table,
+            using,
+            where_clause,
+            returning,
+        })
+    }
+
+    /// `VALUES (row1), (row2), …`. The `VALUES` keyword has been
+    /// consumed; this reads the parenthesised row tuples.
+    fn parse_values_rows(&mut self) -> Result<Vec<Vec<InsertValue>>, ParseError> {
+        let mut rows: Vec<Vec<InsertValue>> = Vec::new();
+        loop {
+            self.expect_token(Token::LParen, "expected '('")?;
+            let mut row: Vec<InsertValue> = Vec::new();
+            loop {
+                row.push(self.parse_insert_value()?);
+                match self.peek().map(|t| &t.token) {
+                    Some(Token::Comma) => {
+                        self.advance();
+                        // Forbid trailing comma — `(1, 'a',)` is a syntax error.
+                        if matches!(self.peek().map(|t| &t.token), Some(Token::RParen)) {
+                            let at = self.peek().map(|t| t.at);
+                            return Err(syntax_err(at, "trailing ',' before ')'"));
+                        }
+                        continue;
+                    }
+                    Some(Token::RParen) => {
+                        self.advance();
+                        break;
+                    }
+                    Some(_) | None => {
+                        let at = self.peek().map(|t| t.at);
+                        return Err(syntax_err(
+                            at,
+                            "expected ',' or ')'",
+                        ));
+                    }
+                }
+            }
+            rows.push(row);
+            // Another row?
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        Ok(rows)
+    }
+
+    /// Parse a single value cell — literal, DEFAULT, or a placeholder.
+    fn parse_insert_value(&mut self) -> Result<InsertValue, ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected value"))?
+            .clone();
+        match tok.token {
+            Token::Integer(v) => {
+                self.advance();
+                Ok(InsertValue::Literal {
+                    value: SqlLiteral::Integer { value: v },
+                })
+            }
+            Token::Float(v) => {
+                self.advance();
+                Ok(InsertValue::Literal {
+                    value: SqlLiteral::Float { value: v },
+                })
+            }
+            Token::String(s) => {
+                self.advance();
+                Ok(InsertValue::Literal {
+                    value: SqlLiteral::String { value: s },
+                })
+            }
+            Token::Null => {
+                self.advance();
+                Ok(InsertValue::Literal {
+                    value: SqlLiteral::Null,
+                })
+            }
+            Token::True => {
+                self.advance();
+                Ok(InsertValue::Literal {
+                    value: SqlLiteral::Boolean { value: true },
+                })
+            }
+            Token::False => {
+                self.advance();
+                Ok(InsertValue::Literal {
+                    value: SqlLiteral::Boolean { value: false },
+                })
+            }
+            Token::Default => {
+                self.advance();
+                Ok(InsertValue::Default)
+            }
+            Token::PlaceholderPositional(name) => {
+                self.advance();
+                Ok(InsertValue::Placeholder { name })
+            }
+            Token::PlaceholderAnonymous => {
+                self.advance();
+                Ok(InsertValue::Placeholder {
+                    name: String::new(),
+                })
+            }
+            Token::PlaceholderNamed(name) => {
+                self.advance();
+                Ok(InsertValue::Placeholder { name })
+            }
+            _ => Err(syntax_err(
+                Some(tok.at),
+                "expected value",
+            )),
+        }
+    }
+
+    /// `<col> = <value>[, <col> = <value>]*`. Used by UPDATE SET and
+    /// ON CONFLICT DO UPDATE SET.
+    fn parse_assignment_list(&mut self) -> Result<Vec<UpdateAssignment>, ParseError> {
+        let mut out: Vec<UpdateAssignment> = Vec::new();
+        loop {
+            let column = self.expect_ident("expected column name")?;
+            self.expect_token(Token::Eq, "expected '='")?;
+            let value = self.parse_insert_value()?;
+            out.push(UpdateAssignment { column, value });
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        Ok(out)
+    }
+
+    /// Parse `ON CONFLICT` action — `DO NOTHING` or `DO UPDATE SET … [WHERE …]`.
+    /// The `ON CONFLICT` tokens have been consumed; the parser is
+    /// positioned at `DO`.
+    fn parse_on_conflict_action(&mut self) -> Result<OnConflict, ParseError> {
+        self.expect_keyword(Token::Do, "expected DO")?;
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected NOTHING/UPDATE"))?
+            .clone();
+        match tok.token {
+            Token::Nothing => {
+                self.advance();
+                Ok(OnConflict::DoNothing)
+            }
+            Token::Update => {
+                self.advance();
+                self.expect_keyword(
+                    Token::Set,
+                    "expected SET",
+                )?;
+                let set = self.parse_assignment_list()?;
+                let where_clause = self.parse_optional_where_expr()?;
+                Ok(OnConflict::DoUpdate { set, where_clause })
+            }
+            _ => Err(syntax_err(
+                Some(tok.at),
+                "expected NOTHING/UPDATE",
+            )),
+        }
+    }
+
+    /// Optional `RETURNING col1, col2, …` clause. Returns an empty vec
+    /// when the keyword is absent.
+    fn parse_optional_returning(&mut self) -> Result<Vec<String>, ParseError> {
+        if !matches!(self.peek().map(|t| &t.token), Some(Token::Returning)) {
+            return Ok(Vec::new());
+        }
+        self.advance();
+        self.parse_ident_list("expected column name")
+    }
+
+    /// Optional WHERE expression. Returns None when the keyword is absent.
+    fn parse_optional_where_expr(&mut self) -> Result<Option<WhereExpr>, ParseError> {
+        if !matches!(self.peek().map(|t| &t.token), Some(Token::Where)) {
+            return Ok(None);
+        }
+        self.advance();
+        Ok(Some(self.parse_where_expr_or()?))
+    }
+
+    /// WHERE expression — OR precedence (lowest). `expr OR expr`.
+    fn parse_where_expr_or(&mut self) -> Result<WhereExpr, ParseError> {
+        let mut left = self.parse_where_expr_and()?;
+        while matches!(self.peek().map(|t| &t.token), Some(Token::Or)) {
+            self.advance();
+            let right = self.parse_where_expr_and()?;
+            left = WhereExpr::Or {
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+        Ok(left)
+    }
+
+    /// `expr AND expr`.
+    fn parse_where_expr_and(&mut self) -> Result<WhereExpr, ParseError> {
+        let mut left = self.parse_where_expr_not()?;
+        while matches!(self.peek().map(|t| &t.token), Some(Token::And)) {
+            self.advance();
+            let right = self.parse_where_expr_not()?;
+            left = WhereExpr::And {
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+        Ok(left)
+    }
+
+    /// `NOT expr` | primary.
+    fn parse_where_expr_not(&mut self) -> Result<WhereExpr, ParseError> {
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Not)) {
+            self.advance();
+            let inner = self.parse_where_expr_not()?;
+            return Ok(WhereExpr::Not {
+                inner: Box::new(inner),
+            });
+        }
+        self.parse_where_expr_primary()
+    }
+
+    /// Primary expression — either a parenthesised sub-expression or a
+    /// `column op literal` / `column IS [NOT] NULL` predicate.
+    fn parse_where_expr_primary(&mut self) -> Result<WhereExpr, ParseError> {
+        // Parenthesised expression
+        if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+            self.advance();
+            let inner = self.parse_where_expr_or()?;
+            self.expect_token(Token::RParen, "expected ')'")?;
+            return Ok(inner);
+        }
+
+        let col_tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected column ident"))?
+            .clone();
+        let column = match col_tok.token {
+            Token::Ident(ref s) => s.clone(),
+            _ => {
+                return Err(syntax_err(
+                    Some(col_tok.at),
+                    "expected column ident",
+                ));
+            }
+        };
+        self.advance();
+
+        // Reject qualified identifiers (`a.b`) — sprint-392 limits WHERE
+        // to single-column comparisons. Cross-table comparison is a
+        // sprint-393 widening.
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Dot)) {
+            let at = self.peek().map(|t| t.at);
+            return Err(unsupported_expression_err(
+                at,
+                "qualified column ref unsupported",
+            ));
+        }
+
+        // `IS NULL` / `IS NOT NULL`
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Is)) {
+            self.advance();
+            let is_not = if matches!(self.peek().map(|t| &t.token), Some(Token::Not)) {
+                self.advance();
+                true
+            } else {
+                false
+            };
+            self.expect_keyword(
+                Token::Null,
+                "expected NULL",
+            )?;
+            return Ok(if is_not {
+                WhereExpr::IsNotNull { column }
+            } else {
+                WhereExpr::IsNull { column }
+            });
+        }
+
+        // `IN ( … )` — explicitly unsupported in sprint-392; surface as
+        // UnsupportedExpression so caller can fall back to regex.
+        if matches!(self.peek().map(|t| &t.token), Some(Token::In)) {
+            let at = self.peek().map(|t| t.at);
+            return Err(unsupported_expression_err(
+                at,
+                "IN-list unsupported",
+            ));
+        }
+
+        // `col op value`
+        let op_tok = self
+            .peek()
+            .ok_or_else(|| {
+                syntax_err(None, "expected comparison op")
+            })?
+            .clone();
+        let op = match op_tok.token {
+            Token::Eq => CompareOp::Eq,
+            Token::NotEq | Token::BangEq => CompareOp::Ne,
+            Token::Lt => CompareOp::Lt,
+            Token::LtEq => CompareOp::Le,
+            Token::Gt => CompareOp::Gt,
+            Token::GtEq => CompareOp::Ge,
+            _ => {
+                return Err(syntax_err(
+                    Some(op_tok.at),
+                    "expected comparison op",
+                ));
+            }
+        };
+        self.advance();
+
+        // Sprint-392 forbids `col = col` (column-to-column). Detect the
+        // first token of the RHS — if it's an identifier (with or without
+        // a following `.`) surface as UnsupportedExpression. Literals /
+        // placeholders / DEFAULT / NULL / TRUE / FALSE are accepted via
+        // `parse_insert_value`.
+        let rhs_tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected value"))?;
+        if matches!(rhs_tok.token, Token::Ident(_)) {
+            let at = Some(rhs_tok.at);
+            return Err(unsupported_expression_err(
+                at,
+                "column-to-column compare unsupported",
+            ));
+        }
+        let value = self.parse_insert_value()?;
+
+        Ok(WhereExpr::Comparison { column, op, value })
+    }
+
+    /// Helper — consume a comma-separated identifier list. Reads at
+    /// least one identifier; bare empty lists are rejected by the
+    /// caller's downstream check (`)` follows immediately).
+    fn parse_ident_list(&mut self, msg: &str) -> Result<Vec<String>, ParseError> {
+        let mut out: Vec<String> = Vec::new();
+        loop {
+            let tok = self
+                .peek()
+                .ok_or_else(|| syntax_err(None, msg))?
+                .clone();
+            match tok.token {
+                Token::Ident(name) => {
+                    out.push(name);
+                    self.advance();
+                }
+                _ => return Err(syntax_err(Some(tok.at), msg)),
+            }
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        Ok(out)
+    }
+
+    /// Consume an identifier token or surface a syntax error.
+    fn expect_ident(&mut self, msg: &str) -> Result<String, ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, msg))?
+            .clone();
+        match tok.token {
+            Token::Ident(name) => {
+                self.advance();
+                Ok(name)
+            }
+            _ => Err(syntax_err(Some(tok.at), msg)),
+        }
+    }
+
+    /// Consume an exact punctuation/keyword token. Like `expect_keyword`
+    /// but the message is supplied per-call.
+    fn expect_token(&mut self, expected: Token, msg: &str) -> Result<(), ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, msg))?;
+        if tok.token != expected {
+            return Err(syntax_err(Some(tok.at), msg));
+        }
+        self.advance();
+        Ok(())
     }
 
     /// Consume an optional `IF EXISTS` token pair. Returns `true` if
@@ -474,9 +1006,9 @@ impl<'a> Parser<'a> {
         self.advance();
         let exists_tok = self
             .peek()
-            .ok_or_else(|| syntax_err(Some(if_tok.at), "expected EXISTS after IF"))?;
+            .ok_or_else(|| syntax_err(Some(if_tok.at), "expected EXISTS"))?;
         if exists_tok.token != Token::Exists {
-            return Err(syntax_err(Some(exists_tok.at), "expected EXISTS after IF"));
+            return Err(syntax_err(Some(exists_tok.at), "expected EXISTS"));
         }
         self.advance();
         Ok(true)
@@ -515,7 +1047,7 @@ impl<'a> Parser<'a> {
     fn parse_columns(&mut self) -> Result<Columns, ParseError> {
         let first = self
             .peek()
-            .ok_or_else(|| syntax_err(None, "expected column list after SELECT"))?;
+            .ok_or_else(|| syntax_err(None, "expected column list"))?;
         if first.token == Token::Star {
             self.advance();
             return Ok(Columns::Star);
@@ -525,14 +1057,14 @@ impl<'a> Parser<'a> {
         loop {
             let tok = self
                 .peek()
-                .ok_or_else(|| syntax_err(None, "expected column identifier"))?;
+                .ok_or_else(|| syntax_err(None, "expected column ident"))?;
             match &tok.token {
                 Token::Ident(name) => {
                     names.push(name.clone());
                     self.advance();
                 }
                 _ => {
-                    return Err(syntax_err(Some(tok.at), "expected column identifier"));
+                    return Err(syntax_err(Some(tok.at), "expected column ident"));
                 }
             }
             // Trailing comma → another column. Anything else → end of list.
@@ -549,13 +1081,13 @@ impl<'a> Parser<'a> {
         // identifier
         let col_tok = self
             .peek()
-            .ok_or_else(|| syntax_err(None, "expected column identifier after WHERE"))?;
+            .ok_or_else(|| syntax_err(None, "expected column ident"))?;
         let column = match &col_tok.token {
             Token::Ident(name) => name.clone(),
             _ => {
                 return Err(syntax_err(
                     Some(col_tok.at),
-                    "expected column identifier after WHERE",
+                    "expected column ident",
                 ));
             }
         };
@@ -564,7 +1096,7 @@ impl<'a> Parser<'a> {
         // op
         let op_tok = self
             .peek()
-            .ok_or_else(|| syntax_err(None, "expected comparison operator after column"))?;
+            .ok_or_else(|| syntax_err(None, "expected comparison op"))?;
         let op = match op_tok.token {
             Token::Eq => BinaryOp::Eq,
             Token::NotEq => BinaryOp::NotEq,
@@ -576,7 +1108,7 @@ impl<'a> Parser<'a> {
             _ => {
                 return Err(syntax_err(
                     Some(op_tok.at),
-                    "expected one of =, <>, !=, <, >, <=, >=",
+                    "expected comparison op",
                 ));
             }
         };
@@ -585,14 +1117,14 @@ impl<'a> Parser<'a> {
         // literal
         let lit_tok = self
             .peek()
-            .ok_or_else(|| syntax_err(None, "expected literal after comparison operator"))?;
+            .ok_or_else(|| syntax_err(None, "expected literal"))?;
         let literal = match &lit_tok.token {
             Token::Integer(v) => Literal::Integer { value: *v },
             Token::String(s) => Literal::String { value: s.clone() },
             _ => {
                 return Err(syntax_err(
                     Some(lit_tok.at),
-                    "expected integer or string literal",
+                    "expected literal",
                 ));
             }
         };
@@ -640,6 +1172,20 @@ fn syntax_err(at: Option<usize>, msg: &str) -> ParseError {
     }
 }
 
+/// Sprint-392 — the WHERE expression includes a construct outside the
+/// narrow column-op-literal slice (function call, subquery, IN-list,
+/// arithmetic, cross-table comparison, …). The parser surfaces this as
+/// its own `ParseErrorKind` so the caller (sqlSafety) can fall back to
+/// the regex heuristic without conflating it with a generic
+/// `SyntaxError` (which is genuinely broken SQL).
+fn unsupported_expression_err(at: Option<usize>, msg: &str) -> ParseError {
+    ParseError {
+        error_kind: ParseErrorKind::UnsupportedExpression,
+        message: msg.to_string(),
+        at,
+    }
+}
+
 fn is_known_sql_verb(name: &str) -> bool {
     matches!(
         name.to_ascii_uppercase().as_str(),
@@ -660,21 +1206,23 @@ fn is_known_sql_verb(name: &str) -> bool {
     )
 }
 
-/// Sprint-391 — the set of verbs whose grammar this crate actually
+/// Sprint-392 — the set of verbs whose grammar this crate actually
 /// implements. Anything in `is_known_sql_verb` but not in here is an
 /// `UnsupportedStatement`.
 fn is_supported_sql_verb(name: &str) -> bool {
     matches!(
         name.to_ascii_uppercase().as_str(),
-        "SELECT" | "DROP" | "TRUNCATE" | "ALTER"
+        "SELECT" | "DROP" | "TRUNCATE" | "ALTER" | "INSERT" | "UPDATE" | "DELETE"
     )
 }
 
 fn unsupported_message(verb: &str) -> String {
-    format!(
-        "sprint-391 only supports SELECT / DROP / TRUNCATE / ALTER TABLE … DROP; got '{}'",
-        verb
-    )
+    // Plain concat — `format!` is also fine since the panic infra
+    // already brings in `fmt`. We keep this minimal but readable.
+    let mut s = String::from("unsupported verb '");
+    s.push_str(verb);
+    s.push('\'');
+    s
 }
 
 #[cfg(test)]
@@ -781,21 +1329,39 @@ mod tests {
         assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
     }
 
+    // Sprint-392 — INSERT/UPDATE/DELETE are now supported. The
+    // sprint-385 tests that asserted they were `UnsupportedStatement`
+    // are inverted to assert successful parse + correct ParseResult
+    // variant. The `UnsupportedStatement` path is still exercised by
+    // verbs sprint-392 does not implement (CREATE / GRANT / REVOKE /
+    // MERGE / REPLACE / WITH-prefixed statements).
     #[test]
-    fn ac_p8_insert_is_unsupported_statement() {
-        let e = err("INSERT INTO users VALUES (1)");
+    fn ac_p8_insert_is_now_supported_statement() {
+        let r = parse("INSERT INTO users VALUES (1)");
+        assert!(matches!(r, ParseResult::Insert(_)));
+    }
+
+    #[test]
+    fn ac_p8_update_is_now_supported_statement() {
+        let r = parse("UPDATE users SET name = 'x'");
+        assert!(matches!(r, ParseResult::Update(_)));
+    }
+
+    #[test]
+    fn ac_p8_delete_is_now_supported_statement() {
+        let r = parse("DELETE FROM users");
+        assert!(matches!(r, ParseResult::Delete(_)));
+    }
+
+    #[test]
+    fn ac_p8_create_is_unsupported_statement() {
+        let e = err("CREATE TABLE t (id int)");
         assert_eq!(e.error_kind, ParseErrorKind::UnsupportedStatement);
     }
 
     #[test]
-    fn ac_p8_update_is_unsupported_statement() {
-        let e = err("UPDATE users SET name = 'x'");
-        assert_eq!(e.error_kind, ParseErrorKind::UnsupportedStatement);
-    }
-
-    #[test]
-    fn ac_p8_delete_is_unsupported_statement() {
-        let e = err("DELETE FROM users");
+    fn ac_p8_grant_is_unsupported_statement() {
+        let e = err("GRANT SELECT ON users TO alice");
         assert_eq!(e.error_kind, ParseErrorKind::UnsupportedStatement);
     }
 
@@ -1295,5 +1861,597 @@ mod tests {
     fn ac_391_a_alter_drop_index_missing_name_is_syntax_error() {
         let e = err("ALTER TABLE users DROP INDEX");
         assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    // -----------------------------------------------------------------
+    // Sprint 392 — DML write triad (INSERT / UPDATE / DELETE).
+    // -----------------------------------------------------------------
+
+    fn ok_insert(input: &str) -> InsertStatement {
+        match parse(input) {
+            ParseResult::Insert(i) => i,
+            other => panic!("expected Insert, got: {:?}", other),
+        }
+    }
+
+    fn ok_update(input: &str) -> UpdateStatement {
+        match parse(input) {
+            ParseResult::Update(u) => u,
+            other => panic!("expected Update, got: {:?}", other),
+        }
+    }
+
+    fn ok_delete(input: &str) -> DeleteStatement {
+        match parse(input) {
+            ParseResult::Delete(d) => d,
+            other => panic!("expected Delete, got: {:?}", other),
+        }
+    }
+
+    // ── INSERT — AC-392-I ────────────────────────────────────────────
+
+    #[test]
+    fn ac_392_i01_insert_minimal() {
+        let s = ok_insert("INSERT INTO users VALUES (1, 'a')");
+        assert_eq!(s.table, "users");
+        assert!(s.columns.is_empty());
+        match s.source {
+            InsertSource::Values { rows } => {
+                assert_eq!(rows.len(), 1);
+                assert_eq!(rows[0].len(), 2);
+                assert!(matches!(
+                    &rows[0][0],
+                    InsertValue::Literal {
+                        value: SqlLiteral::Integer { value: 1 }
+                    }
+                ));
+                assert!(matches!(
+                    &rows[0][1],
+                    InsertValue::Literal { value: SqlLiteral::String { value } } if value == "a"
+                ));
+            }
+            other => panic!("expected Values, got {:?}", other),
+        }
+        assert!(s.on_conflict.is_none());
+        assert!(s.returning.is_empty());
+    }
+
+    #[test]
+    fn ac_392_i02_insert_explicit_columns() {
+        let s = ok_insert("INSERT INTO users (id, name) VALUES (1, 'a')");
+        assert_eq!(s.columns, vec!["id".to_string(), "name".to_string()]);
+    }
+
+    #[test]
+    fn ac_392_i03_insert_multi_row() {
+        let s = ok_insert("INSERT INTO users VALUES (1, 'a'), (2, 'b')");
+        match s.source {
+            InsertSource::Values { rows } => {
+                assert_eq!(rows.len(), 2);
+                assert_eq!(rows[0].len(), 2);
+                assert_eq!(rows[1].len(), 2);
+            }
+            _ => panic!("expected Values"),
+        }
+    }
+
+    #[test]
+    fn ac_392_i04_insert_default_values() {
+        let s = ok_insert("INSERT INTO users DEFAULT VALUES");
+        assert!(matches!(s.source, InsertSource::DefaultValues));
+    }
+
+    #[test]
+    fn ac_392_i05_insert_value_default_keyword() {
+        let s = ok_insert("INSERT INTO users (id) VALUES (DEFAULT)");
+        match s.source {
+            InsertSource::Values { rows } => {
+                assert!(matches!(rows[0][0], InsertValue::Default));
+            }
+            _ => panic!("expected Values"),
+        }
+    }
+
+    #[test]
+    fn ac_392_i06_insert_positional_placeholder() {
+        let s = ok_insert("INSERT INTO users (id) VALUES ($1)");
+        match s.source {
+            InsertSource::Values { rows } => {
+                assert!(matches!(
+                    &rows[0][0],
+                    InsertValue::Placeholder { name } if name == "1"
+                ));
+            }
+            _ => panic!("expected Values"),
+        }
+    }
+
+    #[test]
+    fn ac_392_i07_insert_anonymous_placeholder() {
+        let s = ok_insert("INSERT INTO users (id) VALUES (?)");
+        match s.source {
+            InsertSource::Values { rows } => {
+                assert!(matches!(
+                    &rows[0][0],
+                    InsertValue::Placeholder { name } if name.is_empty()
+                ));
+            }
+            _ => panic!("expected Values"),
+        }
+    }
+
+    #[test]
+    fn ac_392_i08_insert_named_placeholder() {
+        let s = ok_insert("INSERT INTO users (id) VALUES (:name)");
+        match s.source {
+            InsertSource::Values { rows } => {
+                assert!(matches!(
+                    &rows[0][0],
+                    InsertValue::Placeholder { name } if name == "name"
+                ));
+            }
+            _ => panic!("expected Values"),
+        }
+    }
+
+    #[test]
+    fn ac_392_i09_insert_null_literal() {
+        let s = ok_insert("INSERT INTO users VALUES (NULL)");
+        match s.source {
+            InsertSource::Values { rows } => {
+                assert!(matches!(
+                    &rows[0][0],
+                    InsertValue::Literal {
+                        value: SqlLiteral::Null
+                    }
+                ));
+            }
+            _ => panic!("expected Values"),
+        }
+    }
+
+    #[test]
+    fn ac_392_i10_insert_boolean_literal() {
+        let s = ok_insert("INSERT INTO users VALUES (TRUE)");
+        match s.source {
+            InsertSource::Values { rows } => {
+                assert!(matches!(
+                    &rows[0][0],
+                    InsertValue::Literal {
+                        value: SqlLiteral::Boolean { value: true }
+                    }
+                ));
+            }
+            _ => panic!("expected Values"),
+        }
+        // FALSE works the same way.
+        let s = ok_insert("INSERT INTO users VALUES (FALSE)");
+        match s.source {
+            InsertSource::Values { rows } => {
+                assert!(matches!(
+                    &rows[0][0],
+                    InsertValue::Literal {
+                        value: SqlLiteral::Boolean { value: false }
+                    }
+                ));
+            }
+            _ => panic!("expected Values"),
+        }
+    }
+
+    #[test]
+    fn ac_392_i11_insert_select_source() {
+        let s = ok_insert("INSERT INTO users (x) SELECT id FROM source");
+        match s.source {
+            InsertSource::Select { statement } => {
+                assert_eq!(statement.table, "source");
+                assert_eq!(
+                    statement.columns,
+                    Columns::Named {
+                        names: vec!["id".into()]
+                    }
+                );
+            }
+            _ => panic!("expected Select source"),
+        }
+    }
+
+    #[test]
+    fn ac_392_i12_insert_on_conflict_do_nothing() {
+        let s = ok_insert("INSERT INTO users (id) VALUES (1) ON CONFLICT DO NOTHING");
+        assert!(matches!(s.on_conflict, Some(OnConflict::DoNothing)));
+    }
+
+    #[test]
+    fn ac_392_i13_insert_on_conflict_do_update() {
+        let s = ok_insert(
+            "INSERT INTO users (id) VALUES (1) ON CONFLICT DO UPDATE SET name = 'a'",
+        );
+        match s.on_conflict {
+            Some(OnConflict::DoUpdate { set, where_clause }) => {
+                assert_eq!(set.len(), 1);
+                assert_eq!(set[0].column, "name");
+                assert!(matches!(
+                    &set[0].value,
+                    InsertValue::Literal { value: SqlLiteral::String { value } } if value == "a"
+                ));
+                assert!(where_clause.is_none());
+            }
+            _ => panic!("expected DoUpdate"),
+        }
+    }
+
+    #[test]
+    fn ac_392_i14_insert_returning() {
+        let s = ok_insert("INSERT INTO users (id) VALUES (1) RETURNING id, name");
+        assert_eq!(s.returning, vec!["id".to_string(), "name".to_string()]);
+    }
+
+    #[test]
+    fn ac_392_i15_insert_without_source_is_syntax_error() {
+        let e = err("INSERT INTO users");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_392_i16_insert_without_into_is_syntax_error() {
+        let e = err("INSERT users VALUES (1)");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_392_i17_insert_trailing_comma_in_values_is_syntax_error() {
+        let e = err("INSERT INTO users VALUES (1, 'a',)");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_392_i18_insert_case_insensitive() {
+        let s = ok_insert("insert into users values (1)");
+        assert_eq!(s.table, "users");
+    }
+
+    #[test]
+    fn ac_392_i_insert_float_literal_in_values() {
+        // 2.5 avoids clippy::approx_constant (3.14 ~ PI).
+        let s = ok_insert("INSERT INTO measurements VALUES (2.5)");
+        match s.source {
+            InsertSource::Values { rows } => {
+                assert!(matches!(
+                    &rows[0][0],
+                    InsertValue::Literal { value: SqlLiteral::Float { value } } if (*value - 2.5).abs() < f64::EPSILON
+                ));
+            }
+            _ => panic!("expected Values"),
+        }
+    }
+
+    // ── UPDATE — AC-392-U ────────────────────────────────────────────
+
+    #[test]
+    fn ac_392_u01_update_no_where() {
+        let s = ok_update("UPDATE users SET name = 'a'");
+        assert_eq!(s.table, "users");
+        assert_eq!(s.assignments.len(), 1);
+        assert_eq!(s.assignments[0].column, "name");
+        assert!(s.where_clause.is_none());
+        assert!(s.from.is_empty());
+        assert!(s.returning.is_empty());
+    }
+
+    #[test]
+    fn ac_392_u02_update_with_where_eq() {
+        let s = ok_update("UPDATE users SET name = 'a' WHERE id = 1");
+        match s.where_clause {
+            Some(WhereExpr::Comparison { column, op, value }) => {
+                assert_eq!(column, "id");
+                assert_eq!(op, CompareOp::Eq);
+                assert!(matches!(
+                    value,
+                    InsertValue::Literal {
+                        value: SqlLiteral::Integer { value: 1 }
+                    }
+                ));
+            }
+            other => panic!("expected Comparison, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_392_u03_update_multi_assignment() {
+        let s = ok_update("UPDATE users SET name = 'a', age = 30");
+        assert_eq!(s.assignments.len(), 2);
+        assert_eq!(s.assignments[0].column, "name");
+        assert_eq!(s.assignments[1].column, "age");
+    }
+
+    #[test]
+    fn ac_392_u04_update_set_default() {
+        let s = ok_update("UPDATE users SET name = DEFAULT");
+        assert!(matches!(s.assignments[0].value, InsertValue::Default));
+    }
+
+    #[test]
+    fn ac_392_u05_update_with_placeholders() {
+        let s = ok_update("UPDATE users SET name = $1 WHERE id = $2");
+        assert!(matches!(
+            &s.assignments[0].value,
+            InsertValue::Placeholder { name } if name == "1"
+        ));
+        match s.where_clause {
+            Some(WhereExpr::Comparison { value, .. }) => {
+                assert!(matches!(
+                    value,
+                    InsertValue::Placeholder { name } if name == "2"
+                ));
+            }
+            _ => panic!("expected Comparison"),
+        }
+    }
+
+    #[test]
+    fn ac_392_u06_update_from_cross_table_where_is_unsupported_expression() {
+        // FROM other parses OK; WHERE compares cross-table → UnsupportedExpression.
+        let r = parse("UPDATE users SET name = 'a' FROM other WHERE other.id = users.id");
+        match r {
+            ParseResult::Error(e) => {
+                assert_eq!(e.error_kind, ParseErrorKind::UnsupportedExpression);
+            }
+            other => panic!("expected Error(UnsupportedExpression), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_392_u07_update_where_is_null() {
+        let s = ok_update("UPDATE users SET name = 'a' WHERE id IS NULL");
+        assert!(matches!(
+            s.where_clause,
+            Some(WhereExpr::IsNull { column }) if column == "id"
+        ));
+    }
+
+    #[test]
+    fn ac_392_u08_update_where_is_not_null() {
+        let s = ok_update("UPDATE users SET name = 'a' WHERE id IS NOT NULL");
+        assert!(matches!(
+            s.where_clause,
+            Some(WhereExpr::IsNotNull { column }) if column == "id"
+        ));
+    }
+
+    #[test]
+    fn ac_392_u09_update_where_and() {
+        let s = ok_update("UPDATE users SET name = 'a' WHERE id = 1 AND age > 30");
+        assert!(matches!(s.where_clause, Some(WhereExpr::And { .. })));
+    }
+
+    #[test]
+    fn ac_392_u10_update_where_or() {
+        let s = ok_update("UPDATE users SET name = 'a' WHERE id = 1 OR id = 2");
+        assert!(matches!(s.where_clause, Some(WhereExpr::Or { .. })));
+    }
+
+    #[test]
+    fn ac_392_u11_update_where_not_paren() {
+        let s = ok_update("UPDATE users SET name = 'a' WHERE NOT (id = 1)");
+        match s.where_clause {
+            Some(WhereExpr::Not { inner }) => {
+                assert!(matches!(*inner, WhereExpr::Comparison { .. }));
+            }
+            other => panic!("expected Not(Comparison), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_392_u12_update_returning() {
+        let s = ok_update("UPDATE users SET name = 'a' RETURNING id");
+        assert_eq!(s.returning, vec!["id".to_string()]);
+    }
+
+    #[test]
+    fn ac_392_u13_update_set_missing_is_syntax_error() {
+        let e = err("UPDATE users SET");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_392_u14_update_missing_set_keyword_is_syntax_error() {
+        let e = err("UPDATE users name = 'a'");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_392_u15_update_case_insensitive() {
+        let s = ok_update("update users set name = 'a' where id = 1");
+        assert_eq!(s.table, "users");
+        assert!(s.where_clause.is_some());
+    }
+
+    #[test]
+    fn ac_392_u_update_from_single_table_with_simple_where() {
+        // FROM parses + WHERE with column-op-literal also parses cleanly.
+        let s = ok_update("UPDATE users SET name = 'a' FROM other WHERE id = 1");
+        assert_eq!(s.from, vec!["other".to_string()]);
+        assert!(matches!(
+            s.where_clause,
+            Some(WhereExpr::Comparison { .. })
+        ));
+    }
+
+    // ── DELETE — AC-392-D ────────────────────────────────────────────
+
+    #[test]
+    fn ac_392_d01_delete_no_where() {
+        let s = ok_delete("DELETE FROM users");
+        assert_eq!(s.table, "users");
+        assert!(s.where_clause.is_none());
+        assert!(s.using.is_empty());
+        assert!(s.returning.is_empty());
+    }
+
+    #[test]
+    fn ac_392_d02_delete_with_where() {
+        let s = ok_delete("DELETE FROM users WHERE id = 1");
+        assert!(matches!(
+            s.where_clause,
+            Some(WhereExpr::Comparison { .. })
+        ));
+    }
+
+    #[test]
+    fn ac_392_d03_delete_where_and() {
+        let s = ok_delete("DELETE FROM users WHERE id = 1 AND age < 30");
+        assert!(matches!(s.where_clause, Some(WhereExpr::And { .. })));
+    }
+
+    #[test]
+    fn ac_392_d04_delete_using_cross_table_where_is_unsupported_expression() {
+        let r = parse("DELETE FROM users USING orders WHERE orders.user_id = users.id");
+        match r {
+            ParseResult::Error(e) => {
+                assert_eq!(e.error_kind, ParseErrorKind::UnsupportedExpression);
+            }
+            other => panic!("expected UnsupportedExpression, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_392_d05_delete_where_is_null() {
+        let s = ok_delete("DELETE FROM users WHERE name IS NULL");
+        assert!(matches!(
+            s.where_clause,
+            Some(WhereExpr::IsNull { column }) if column == "name"
+        ));
+    }
+
+    #[test]
+    fn ac_392_d06_delete_where_in_list_is_unsupported_expression() {
+        let r = parse("DELETE FROM users WHERE id IN (1, 2, 3)");
+        match r {
+            ParseResult::Error(e) => {
+                assert_eq!(e.error_kind, ParseErrorKind::UnsupportedExpression);
+            }
+            other => panic!("expected UnsupportedExpression, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_392_d07_delete_returning() {
+        let s = ok_delete("DELETE FROM users RETURNING id");
+        assert_eq!(s.returning, vec!["id".to_string()]);
+    }
+
+    #[test]
+    fn ac_392_d08_delete_missing_from_is_syntax_error() {
+        let e = err("DELETE users WHERE id = 1");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_392_d09_delete_no_table_is_syntax_error() {
+        let e = err("DELETE FROM");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_392_d10_delete_case_insensitive() {
+        let s = ok_delete("delete from users where id = 1");
+        assert_eq!(s.table, "users");
+        assert!(s.where_clause.is_some());
+    }
+
+    #[test]
+    fn ac_392_d_delete_using_single_table_no_where() {
+        // USING is OK by itself if no cross-table comparison follows.
+        let s = ok_delete("DELETE FROM users USING orders");
+        assert_eq!(s.using, vec!["orders".to_string()]);
+    }
+
+    // ── Serialization — AC-392-S ─────────────────────────────────────
+
+    #[test]
+    fn ac_392_s01_insert_serializes_with_kind_insert() {
+        let r = parse("INSERT INTO users VALUES (1, 'a')");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["kind"], "insert");
+        assert_eq!(json["table"], "users");
+        assert_eq!(json["source"]["kind"], "values");
+    }
+
+    #[test]
+    fn ac_392_s02_update_serializes_with_kind_update() {
+        let r = parse("UPDATE users SET name = 'a' WHERE id = 1");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["kind"], "update");
+        assert_eq!(json["table"], "users");
+        assert_eq!(json["where_clause"]["kind"], "comparison");
+    }
+
+    #[test]
+    fn ac_392_s03_delete_serializes_with_kind_delete() {
+        let r = parse("DELETE FROM users WHERE id = 1");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["kind"], "delete");
+        assert_eq!(json["table"], "users");
+    }
+
+    #[test]
+    fn ac_392_s04_where_comparison_serializes_with_kind_comparison() {
+        let r = parse("DELETE FROM users WHERE id = 1");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["where_clause"]["kind"], "comparison");
+        assert_eq!(json["where_clause"]["column"], "id");
+        assert_eq!(json["where_clause"]["op"], "eq");
+    }
+
+    #[test]
+    fn ac_392_s05_where_and_nested_round_trips() {
+        let r = parse("UPDATE users SET name = 'a' WHERE id = 1 AND age > 30");
+        let json = serde_json::to_string(&r).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(r, back);
+    }
+
+    #[test]
+    fn ac_392_s06_insert_null_literal_serializes_nested_kind() {
+        let r = parse("INSERT INTO users VALUES (NULL)");
+        let json = serde_json::to_value(&r).expect("serialize");
+        let v = &json["source"]["rows"][0][0];
+        assert_eq!(v["kind"], "literal");
+        assert_eq!(v["value"]["kind"], "null");
+    }
+
+    #[test]
+    fn ac_392_s07_insert_round_trips_through_serde_json() {
+        let r = parse(
+            "INSERT INTO users (id, name) VALUES (1, 'a'), (2, 'b') ON CONFLICT DO NOTHING RETURNING id",
+        );
+        let json = serde_json::to_string(&r).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(r, back);
+    }
+
+    #[test]
+    fn ac_392_s_update_round_trips_through_serde_json() {
+        let r = parse("UPDATE users SET name = 'a' FROM other WHERE id = 1 RETURNING id");
+        let json = serde_json::to_string(&r).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(r, back);
+    }
+
+    #[test]
+    fn ac_392_s_delete_round_trips_through_serde_json() {
+        let r = parse("DELETE FROM users USING orders WHERE id = 1 RETURNING id");
+        let json = serde_json::to_string(&r).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(r, back);
+    }
+
+    #[test]
+    fn ac_392_s_unsupported_expression_serializes_with_error_kind() {
+        let r = parse("DELETE FROM users WHERE id IN (1, 2, 3)");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["kind"], "error");
+        assert_eq!(json["error_kind"], "unsupported-expression");
     }
 }

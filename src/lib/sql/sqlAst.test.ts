@@ -61,11 +61,129 @@ vi.mock("./wasm/sql_parser_core.js", () => {
         } satisfies SqlParseResult;
       }
       if (sql === "INSERT INTO x VALUES (1)") {
+        // Pre-sprint-392 this was an unsupported-statement; sprint-392
+        // promotes INSERT to a first-class variant. The facade test that
+        // exercises "tagged error union" now uses MERGE (still
+        // unsupported in sprint-392) — see updated test below.
+        return {
+          kind: "insert",
+          table: "x",
+          columns: [],
+          source: {
+            kind: "values",
+            rows: [[{ kind: "literal", value: { kind: "integer", value: 1 } }]],
+          },
+          on_conflict: null,
+          returning: [],
+        } satisfies SqlParseResult;
+      }
+      if (
+        sql ===
+        "MERGE INTO x USING y ON x.id = y.id WHEN MATCHED THEN UPDATE SET a = 1"
+      ) {
         return {
           kind: "error",
           error_kind: "unsupported-statement",
-          message: "sprint-385 only supports SELECT",
+          message: "sprint-392 does not support MERGE",
           at: 0,
+        } satisfies SqlParseResult;
+      }
+      // ── sprint-392 DML write triad variants ──────────────────────
+      if (sql === "INSERT INTO users VALUES (1)") {
+        return {
+          kind: "insert",
+          table: "users",
+          columns: [],
+          source: {
+            kind: "values",
+            rows: [[{ kind: "literal", value: { kind: "integer", value: 1 } }]],
+          },
+          on_conflict: null,
+          returning: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "INSERT INTO users (id) VALUES ($1)") {
+        return {
+          kind: "insert",
+          table: "users",
+          columns: ["id"],
+          source: {
+            kind: "values",
+            rows: [[{ kind: "placeholder", name: "1" }]],
+          },
+          on_conflict: null,
+          returning: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "INSERT INTO users (id) VALUES (1) ON CONFLICT DO NOTHING") {
+        return {
+          kind: "insert",
+          table: "users",
+          columns: ["id"],
+          source: {
+            kind: "values",
+            rows: [[{ kind: "literal", value: { kind: "integer", value: 1 } }]],
+          },
+          on_conflict: { kind: "do-nothing" },
+          returning: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "UPDATE users SET name = 'a' WHERE id = 1") {
+        return {
+          kind: "update",
+          table: "users",
+          assignments: [
+            {
+              column: "name",
+              value: { kind: "literal", value: { kind: "string", value: "a" } },
+            },
+          ],
+          from: [],
+          where_clause: {
+            kind: "comparison",
+            column: "id",
+            op: "eq",
+            value: { kind: "literal", value: { kind: "integer", value: 1 } },
+          },
+          returning: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "UPDATE users SET name = 'a'") {
+        return {
+          kind: "update",
+          table: "users",
+          assignments: [
+            {
+              column: "name",
+              value: { kind: "literal", value: { kind: "string", value: "a" } },
+            },
+          ],
+          from: [],
+          where_clause: null,
+          returning: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "DELETE FROM users WHERE id = 1") {
+        return {
+          kind: "delete",
+          table: "users",
+          using: [],
+          where_clause: {
+            kind: "comparison",
+            column: "id",
+            op: "eq",
+            value: { kind: "literal", value: { kind: "integer", value: 1 } },
+          },
+          returning: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "DELETE FROM users") {
+        return {
+          kind: "delete",
+          table: "users",
+          using: [],
+          where_clause: null,
+          returning: [],
         } satisfies SqlParseResult;
       }
       // ── sprint-391 DDL destructive variants ──────────────────────
@@ -167,7 +285,10 @@ describe("parseSql (sprint-385 facade)", () => {
   });
 
   it("returns a tagged error union (not a thrown exception) for unsupported statements", async () => {
-    const result = await parseSql("INSERT INTO x VALUES (1)");
+    // Sprint-392 — INSERT is now supported. MERGE remains unsupported.
+    const result = await parseSql(
+      "MERGE INTO x USING y ON x.id = y.id WHEN MATCHED THEN UPDATE SET a = 1",
+    );
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.error_kind).toBe("unsupported-statement");
@@ -256,5 +377,118 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(result.kind).toBe("drop");
     if (result.kind !== "drop") return;
     expect(result.name).toBe("users");
+  });
+
+  // ── sprint-392 DML write triad facade tests (AC-392-F) ─────────────
+
+  it("[AC-392-F01] parses `INSERT INTO users VALUES (1)` into a kind:'insert' variant", async () => {
+    const result = await parseSql("INSERT INTO users VALUES (1)");
+    expect(result.kind).toBe("insert");
+    if (result.kind !== "insert") return;
+    expect(result.table).toBe("users");
+    expect(result.columns).toEqual([]);
+    expect(result.source.kind).toBe("values");
+    if (result.source.kind !== "values") return;
+    expect(result.source.rows.length).toBe(1);
+    const row0 = result.source.rows[0];
+    expect(row0).toBeDefined();
+    if (row0 === undefined) return;
+    expect(row0[0]).toEqual({
+      kind: "literal",
+      value: { kind: "integer", value: 1 },
+    });
+  });
+
+  it("[AC-392-F02] parses `INSERT INTO users (id) VALUES ($1)` into a placeholder value", async () => {
+    const result = await parseSql("INSERT INTO users (id) VALUES ($1)");
+    expect(result.kind).toBe("insert");
+    if (result.kind !== "insert") return;
+    expect(result.columns).toEqual(["id"]);
+    expect(result.source.kind).toBe("values");
+    if (result.source.kind !== "values") return;
+    const row0 = result.source.rows[0];
+    expect(row0).toBeDefined();
+    if (row0 === undefined) return;
+    expect(row0[0]).toEqual({
+      kind: "placeholder",
+      name: "1",
+    });
+  });
+
+  it("[AC-392-F03] parses `INSERT … ON CONFLICT DO NOTHING` into an on_conflict variant", async () => {
+    const result = await parseSql(
+      "INSERT INTO users (id) VALUES (1) ON CONFLICT DO NOTHING",
+    );
+    expect(result.kind).toBe("insert");
+    if (result.kind !== "insert") return;
+    expect(result.on_conflict).toEqual({ kind: "do-nothing" });
+  });
+
+  it("[AC-392-F04] parses `UPDATE users SET name = 'a' WHERE id = 1` with where_clause", async () => {
+    const result = await parseSql("UPDATE users SET name = 'a' WHERE id = 1");
+    expect(result.kind).toBe("update");
+    if (result.kind !== "update") return;
+    expect(result.table).toBe("users");
+    expect(result.assignments.length).toBe(1);
+    const first = result.assignments[0];
+    expect(first).toBeDefined();
+    if (first === undefined) return;
+    expect(first.column).toBe("name");
+    expect(result.where_clause).not.toBeNull();
+    if (result.where_clause === null) return;
+    expect(result.where_clause.kind).toBe("comparison");
+  });
+
+  it("[AC-392-F05] parses `UPDATE users SET name = 'a'` with where_clause === null", async () => {
+    const result = await parseSql("UPDATE users SET name = 'a'");
+    expect(result.kind).toBe("update");
+    if (result.kind !== "update") return;
+    expect(result.where_clause).toBeNull();
+  });
+
+  it("[AC-392-F06] parses `DELETE FROM users WHERE id = 1` with where_clause", async () => {
+    const result = await parseSql("DELETE FROM users WHERE id = 1");
+    expect(result.kind).toBe("delete");
+    if (result.kind !== "delete") return;
+    expect(result.table).toBe("users");
+    expect(result.where_clause).not.toBeNull();
+  });
+
+  it("[AC-392-F07] parses `DELETE FROM users` with where_clause === null", async () => {
+    const result = await parseSql("DELETE FROM users");
+    expect(result.kind).toBe("delete");
+    if (result.kind !== "delete") return;
+    expect(result.where_clause).toBeNull();
+  });
+
+  it("[AC-392-F08] parseSqlPreloaded — DML synchronous AST dispatch after preload", async () => {
+    await preloadSqlWasm();
+    const insert = parseSqlPreloaded("INSERT INTO users VALUES (1)");
+    expect(insert).not.toBeNull();
+    if (insert === null) return;
+    expect(insert.kind).toBe("insert");
+
+    const update = parseSqlPreloaded("UPDATE users SET name = 'a'");
+    expect(update).not.toBeNull();
+    if (update === null) return;
+    expect(update.kind).toBe("update");
+
+    const del = parseSqlPreloaded("DELETE FROM users WHERE id = 1");
+    expect(del).not.toBeNull();
+    if (del === null) return;
+    expect(del.kind).toBe("delete");
+  });
+
+  it("[AC-392-F09] runtime guard `isSqlParseResult` accepts INSERT / UPDATE / DELETE shapes", async () => {
+    // Indirect: a successful `parseSql` round-trip on each variant
+    // implies the union guard accepted the shape. If the guard rejected
+    // any variant, the facade would substitute the synthetic
+    // `lex-error`. We assert the *positive* path here for all three.
+    const insert = await parseSql("INSERT INTO users VALUES (1)");
+    expect(insert.kind).toBe("insert");
+    const update = await parseSql("UPDATE users SET name = 'a'");
+    expect(update.kind).toBe("update");
+    const del = await parseSql("DELETE FROM users");
+    expect(del.kind).toBe("delete");
   });
 });
