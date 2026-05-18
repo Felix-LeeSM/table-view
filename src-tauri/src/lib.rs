@@ -337,6 +337,13 @@ pub fn run() {
         commands::history::list_history,
         commands::history::get_history_detail,
         commands::history::clear_history,
+        // Sprint 385 (2026-05-17) — SQL parser IPC. Returns the same
+        // `ParseResult` tagged union that the frontend WASM facade
+        // produces, so callers can pattern-match identically regardless
+        // of whether they reached the parser via WASM or IPC. Native
+        // compile of `sql-parser-core` — no Tauri dep in the crate
+        // itself, just a plain function call here.
+        commands::sql_parser::parse_sql_backend,
     ]);
     record_phase(&mut cursor, "invoke-handler-register");
 

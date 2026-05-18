@@ -1,0 +1,16 @@
+{
+  "name": "sql-parser-core",
+  "type": "module",
+  "description": "Pure-Rust SQL parser core for table-view. Compiles to native (Tauri backend) and wasm32-unknown-unknown (frontend via wasm-pack).",
+  "version": "0.1.0",
+  "files": [
+    "sql_parser_core_bg.wasm",
+    "sql_parser_core.js",
+    "sql_parser_core.d.ts"
+  ],
+  "main": "sql_parser_core.js",
+  "types": "sql_parser_core.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
