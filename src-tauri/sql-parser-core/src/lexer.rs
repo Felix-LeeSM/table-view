@@ -18,10 +18,33 @@ use crate::ast::ParseErrorKind;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-    // --- keywords ---
+    // --- keywords (sprint-385) ---
     Select,
     From,
     Where,
+
+    // --- keywords (sprint-391 DDL destructive verbs) ---
+    Drop,
+    Truncate,
+    Alter,
+
+    // --- keywords (sprint-391 DDL object types + qualifiers) ---
+    Table,
+    Database,
+    Index,
+    View,
+    Schema,
+    Sequence,
+    Type,
+    If,
+    Exists,
+    Cascade,
+    Restrict,
+    Restart,
+    Continue,
+    Identity,
+    Column,
+    Constraint,
 
     // --- literals / identifiers ---
     Ident(String),
@@ -217,6 +240,26 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "select" => Token::Select,
                 "from" => Token::From,
                 "where" => Token::Where,
+                // sprint-391 DDL destructive verbs + qualifiers.
+                "drop" => Token::Drop,
+                "truncate" => Token::Truncate,
+                "alter" => Token::Alter,
+                "table" => Token::Table,
+                "database" => Token::Database,
+                "index" => Token::Index,
+                "view" => Token::View,
+                "schema" => Token::Schema,
+                "sequence" => Token::Sequence,
+                "type" => Token::Type,
+                "if" => Token::If,
+                "exists" => Token::Exists,
+                "cascade" => Token::Cascade,
+                "restrict" => Token::Restrict,
+                "restart" => Token::Restart,
+                "continue" => Token::Continue,
+                "identity" => Token::Identity,
+                "column" => Token::Column,
+                "constraint" => Token::Constraint,
                 _ => Token::Ident(slice.to_string()),
             };
             tokens.push(Spanned { token, at: start });
@@ -390,5 +433,107 @@ mod tests {
         assert_eq!(toks[1].at, 7); // id
         assert_eq!(toks[2].at, 10); // FROM
         assert_eq!(toks[3].at, 15); // users
+    }
+
+    // -----------------------------------------------------------------
+    // Sprint 391 — DDL destructive keyword recognition.
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn ac_391_lex_drop_verb_case_insensitive() {
+        for kw in ["DROP", "drop", "Drop", "dRoP"] {
+            assert_eq!(lex_ok(kw), vec![Token::Drop], "kw={kw}");
+        }
+    }
+
+    #[test]
+    fn ac_391_lex_truncate_verb_case_insensitive() {
+        for kw in ["TRUNCATE", "truncate", "Truncate"] {
+            assert_eq!(lex_ok(kw), vec![Token::Truncate], "kw={kw}");
+        }
+    }
+
+    #[test]
+    fn ac_391_lex_alter_verb_case_insensitive() {
+        for kw in ["ALTER", "alter", "Alter"] {
+            assert_eq!(lex_ok(kw), vec![Token::Alter], "kw={kw}");
+        }
+    }
+
+    #[test]
+    fn ac_391_lex_object_type_keywords() {
+        assert_eq!(lex_ok("TABLE"), vec![Token::Table]);
+        assert_eq!(lex_ok("DATABASE"), vec![Token::Database]);
+        assert_eq!(lex_ok("INDEX"), vec![Token::Index]);
+        assert_eq!(lex_ok("VIEW"), vec![Token::View]);
+        assert_eq!(lex_ok("SCHEMA"), vec![Token::Schema]);
+        assert_eq!(lex_ok("SEQUENCE"), vec![Token::Sequence]);
+        assert_eq!(lex_ok("TYPE"), vec![Token::Type]);
+    }
+
+    #[test]
+    fn ac_391_lex_qualifier_keywords() {
+        assert_eq!(lex_ok("IF"), vec![Token::If]);
+        assert_eq!(lex_ok("EXISTS"), vec![Token::Exists]);
+        assert_eq!(lex_ok("CASCADE"), vec![Token::Cascade]);
+        assert_eq!(lex_ok("RESTRICT"), vec![Token::Restrict]);
+        assert_eq!(lex_ok("RESTART"), vec![Token::Restart]);
+        assert_eq!(lex_ok("CONTINUE"), vec![Token::Continue]);
+        assert_eq!(lex_ok("IDENTITY"), vec![Token::Identity]);
+        assert_eq!(lex_ok("COLUMN"), vec![Token::Column]);
+        assert_eq!(lex_ok("CONSTRAINT"), vec![Token::Constraint]);
+    }
+
+    #[test]
+    fn ac_391_lex_drop_table_statement_tokens() {
+        // `DROP TABLE IF EXISTS users CASCADE` should tokenize to a clean
+        // verb + object-type + IF + EXISTS + identifier + CASCADE chain.
+        let toks = lex_ok("DROP TABLE IF EXISTS users CASCADE");
+        assert_eq!(
+            toks,
+            vec![
+                Token::Drop,
+                Token::Table,
+                Token::If,
+                Token::Exists,
+                Token::Ident("users".into()),
+                Token::Cascade,
+            ]
+        );
+    }
+
+    #[test]
+    fn ac_391_lex_truncate_full_form_tokens() {
+        let toks = lex_ok("TRUNCATE TABLE events RESTART IDENTITY CASCADE");
+        assert_eq!(
+            toks,
+            vec![
+                Token::Truncate,
+                Token::Table,
+                Token::Ident("events".into()),
+                Token::Restart,
+                Token::Identity,
+                Token::Cascade,
+            ]
+        );
+    }
+
+    #[test]
+    fn ac_391_lex_alter_drop_column_tokens() {
+        let toks = lex_ok("ALTER TABLE users DROP COLUMN IF EXISTS email CASCADE");
+        assert_eq!(
+            toks,
+            vec![
+                Token::Alter,
+                Token::Table,
+                Token::Ident("users".into()),
+                Token::Drop,
+                Token::Column,
+                Token::If,
+                Token::Exists,
+                Token::Ident("email".into()),
+                Token::Cascade,
+            ]
+        );
     }
 }

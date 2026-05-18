@@ -45,7 +45,7 @@ mod tests {
                 assert_eq!(table, "users");
                 assert!(where_clause.is_none());
             }
-            ParseResult::Error(e) => panic!("expected Select, got error: {:?}", e),
+            other => panic!("expected Select, got: {:?}", other),
         }
     }
 
@@ -67,7 +67,7 @@ mod tests {
                     }
                 );
             }
-            ParseResult::Error(e) => panic!("expected Select, got: {:?}", e),
+            other => panic!("expected Select, got: {:?}", other),
         }
     }
 
@@ -82,7 +82,7 @@ mod tests {
             ParseResult::Error(e) => {
                 assert_eq!(e.error_kind, ParseErrorKind::UnsupportedStatement);
             }
-            ParseResult::Select(_) => panic!("expected Error variant"),
+            other => panic!("expected Error variant, got: {:?}", other),
         }
     }
 }

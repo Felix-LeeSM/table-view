@@ -1,5 +1,5 @@
 /**
- * Sprint 385 — SQL parser frontend facade.
+ * Sprint 385 / 391 — SQL parser frontend facade.
  *
  * Bridges the WASM module emitted by `wasm-pack build --target web`
  * (`src/lib/sql/wasm/`) to the rest of the TS codebase. The WASM module
@@ -8,9 +8,11 @@
  * invariant of the sprint-385 contract.
  *
  * Grammar (sprint-385): `SELECT <columns> FROM <table> [WHERE <ident>
- * <op> <literal>]`. Anything else returns a `SqlParseError` variant of
- * the result union. Grammar widening (INSERT / UPDATE / DELETE / JOIN /
- * AND-OR / …) is sprint-386+.
+ * <op> <literal>]`. Sprint-391 adds DDL destructive — `DROP …`,
+ * `TRUNCATE …`, `ALTER TABLE … DROP COLUMN/CONSTRAINT/INDEX`. Anything
+ * else returns a `SqlParseError` variant of the result union.
+ * Further widening (INSERT / UPDATE / DELETE / JOIN / AND-OR /
+ * DDL additive) is sprint-392+.
  *
  * The TS types mirror the Rust `serde::Serialize` output one-for-one —
  * see `src-tauri/sql-parser-core/src/ast.rs`. The tagged-union shape
@@ -53,7 +55,70 @@ export interface SqlParseError {
   at: number | null;
 }
 
-export type SqlParseResult = SqlSelectStatement | SqlParseError;
+// ---- sprint-391 DDL destructive types --------------------------------
+
+/**
+ * Object kinds the sprint-391 grammar recognises after `DROP`.
+ * Trigger / function / procedure / role are deliberately out of scope —
+ * sqlSafety's regex fallback continues to classify them.
+ */
+export type SqlDropObjectType =
+  | "table"
+  | "database"
+  | "index"
+  | "view"
+  | "schema"
+  | "sequence"
+  | "type";
+
+export type SqlCascadeBehavior = "cascade" | "restrict";
+
+export interface SqlDropStatement {
+  kind: "drop";
+  object_type: SqlDropObjectType;
+  name: string;
+  if_exists: boolean;
+  /** `null` when the user did not write CASCADE/RESTRICT. */
+  cascade: SqlCascadeBehavior | null;
+}
+
+export interface SqlTruncateStatement {
+  kind: "truncate";
+  table: string;
+  /**
+   * `null` if unspecified, `true` if `RESTART IDENTITY`, `false` if
+   * `CONTINUE IDENTITY` — matches the Rust `Option<bool>` shape.
+   */
+  restart_identity: boolean | null;
+  cascade: SqlCascadeBehavior | null;
+}
+
+export type SqlAlterAction =
+  | {
+      kind: "drop-column";
+      column: string;
+      if_exists: boolean;
+      cascade: SqlCascadeBehavior | null;
+    }
+  | {
+      kind: "drop-constraint";
+      constraint: string;
+      cascade: SqlCascadeBehavior | null;
+    }
+  | { kind: "drop-index"; index: string };
+
+export interface SqlAlterTableStatement {
+  kind: "alter-table";
+  table: string;
+  action: SqlAlterAction;
+}
+
+export type SqlParseResult =
+  | SqlSelectStatement
+  | SqlDropStatement
+  | SqlTruncateStatement
+  | SqlAlterTableStatement
+  | SqlParseError;
 
 // ---- WASM bridge -----------------------------------------------------
 
@@ -75,6 +140,14 @@ interface SqlWasmModule {
 // rather than re-fetching for each call.
 let modulePromise: Promise<SqlWasmModule> | null = null;
 
+// Sprint 391 — once the WASM module has finished initialising we mirror
+// the module reference into a synchronous slot so sync callers
+// (`parseSqlPreloaded`, used by `sqlSafety.analyzeStatement`) can route
+// through the AST path without awaiting. `null` means the module has
+// not yet been loaded — sync callers must fall back to their existing
+// regex / heuristic path in that case.
+let loadedModule: SqlWasmModule | null = null;
+
 async function loadWasm(): Promise<SqlWasmModule> {
   if (modulePromise === null) {
     modulePromise = (async () => {
@@ -91,6 +164,9 @@ async function loadWasm(): Promise<SqlWasmModule> {
       // web`. Calling it with no args lets the glue locate the sibling
       // `.wasm` via `new URL("...", import.meta.url)`.
       await mod.default();
+      // Sprint 391 — once the module is ready, expose it via the sync
+      // slot so `parseSqlPreloaded` can dispatch without awaiting.
+      loadedModule = mod;
       return mod;
     })();
   }
@@ -127,12 +203,48 @@ export async function parseSql(sql: string): Promise<SqlParseResult> {
   return raw;
 }
 
+/**
+ * Sprint 391 — synchronous AST entry point. Returns `null` if the WASM
+ * module is not yet loaded; otherwise dispatches into the same Rust
+ * `parse_sql` function as `parseSql`. Used by `sqlSafety.analyzeStatement`
+ * to migrate the regex-based DDL destructive classifier to an AST-based
+ * one without breaking the synchronous public API of `analyzeStatement`.
+ *
+ * Callers MUST treat a `null` return as "fall back to the prior regex /
+ * heuristic path" — the function deliberately does NOT throw so the
+ * classifier can stay drop-in regression-safe.
+ */
+export function parseSqlPreloaded(sql: string): SqlParseResult | null {
+  if (loadedModule === null) return null;
+  const raw = loadedModule.parse_sql(sql);
+  if (!isSqlParseResult(raw)) return null;
+  return raw;
+}
+
+/**
+ * Sprint 391 — fire-and-forget preload. Resolves once the WASM module
+ * is loaded. Used by integration tests to make `parseSqlPreloaded`
+ * synchronously available. Production code does not need to call this
+ * explicitly; the first `parseSql(...)` await primes the same cache.
+ */
+export async function preloadSqlWasm(): Promise<void> {
+  await loadWasm();
+}
+
 // ---- runtime guards --------------------------------------------------
+
+const SQL_PARSE_RESULT_KINDS = new Set<string>([
+  "select",
+  "drop",
+  "truncate",
+  "alter-table",
+  "error",
+]);
 
 function isSqlParseResult(value: unknown): value is SqlParseResult {
   if (typeof value !== "object" || value === null) return false;
   const kind = (value as { kind?: unknown }).kind;
-  return kind === "select" || kind === "error";
+  return typeof kind === "string" && SQL_PARSE_RESULT_KINDS.has(kind);
 }
 
 /**
@@ -146,4 +258,5 @@ function isSqlParseResult(value: unknown): value is SqlParseResult {
  */
 export function __resetSqlWasmModuleForTests(): void {
   modulePromise = null;
+  loadedModule = null;
 }

@@ -1,7 +1,14 @@
-//! AST types for the sprint-385 grammar slice.
+//! AST types for the sprint-385 / sprint-391 grammar slices.
 //!
 //! Grammar (sprint-385):
 //!   `SELECT <columns> FROM <table> [WHERE <ident> <op> <literal>]`
+//!
+//! Grammar (sprint-391 — DDL destructive):
+//!   `DROP <object-type> [IF EXISTS] <name> [CASCADE|RESTRICT]`
+//!   `TRUNCATE [TABLE] <name> [RESTART|CONTINUE IDENTITY] [CASCADE|RESTRICT]`
+//!   `ALTER TABLE <name> DROP COLUMN [IF EXISTS] <col> [CASCADE|RESTRICT]`
+//!   `ALTER TABLE <name> DROP CONSTRAINT <name> [CASCADE|RESTRICT]`
+//!   `ALTER TABLE <name> DROP INDEX <name>` (MySQL-style)
 //!
 //! All node types are `serde::Serialize` + `Deserialize` so the same
 //! discriminated union shape round-trips through both the WASM bridge
@@ -22,9 +29,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum ParseResult {
-    /// A successfully parsed SELECT statement (the only grammar slice
-    /// sprint-385 supports).
+    /// A successfully parsed SELECT statement (sprint-385 grammar slice).
     Select(SelectStatement),
+    /// `DROP <object-type> …` (sprint-391).
+    Drop(DropStatement),
+    /// `TRUNCATE [TABLE] …` (sprint-391).
+    Truncate(TruncateStatement),
+    /// `ALTER TABLE <name> <action>` (sprint-391 — DROP-only actions for
+    /// now; ALTER ADD / RENAME are sprint-394).
+    AlterTable(AlterTableStatement),
     /// A parse / lex error. `kind` discriminator is one of:
     /// `"lex-error"`, `"unsupported-statement"`, `"syntax-error"`,
     /// `"empty-input"` — see `ParseErrorKind`.
@@ -108,11 +121,89 @@ pub enum ParseErrorKind {
     /// Lexer-level failure (unterminated string, unknown char, etc.).
     LexError,
     /// Statement begins with a keyword we recognize but do not support
-    /// in this sprint (INSERT / UPDATE / DELETE / DDL / …).
+    /// in this sprint (INSERT / UPDATE / DELETE / ALTER ADD / …).
     UnsupportedStatement,
     /// Parser-level failure — wrong token order, missing required clause,
     /// etc. The bulk of `ParseError` variants.
     SyntaxError,
     /// `parse_sql("")` or whitespace-only input.
     EmptyInput,
+}
+
+// ---- sprint-391 DDL destructive AST nodes ----------------------------
+
+/// `DROP <object-type> [IF EXISTS] <name> [CASCADE|RESTRICT]`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DropStatement {
+    pub object_type: DropObjectType,
+    pub name: String,
+    pub if_exists: bool,
+    pub cascade: Option<CascadeBehavior>,
+}
+
+/// Object kinds this sprint covers. `Trigger` / `Function` / `Procedure` /
+/// `Role` are deliberately out of scope — the sqlSafety regex fallback
+/// continues to classify those as `ddl-drop`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DropObjectType {
+    Table,
+    Database,
+    Index,
+    View,
+    Schema,
+    Sequence,
+    Type,
+}
+
+/// `CASCADE` and `RESTRICT` are mutually exclusive; the parser surfaces a
+/// `SyntaxError` if both appear. `None` means the option was omitted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CascadeBehavior {
+    Cascade,
+    Restrict,
+}
+
+/// `TRUNCATE [TABLE] <name> [RESTART|CONTINUE IDENTITY] [CASCADE|RESTRICT]`.
+///
+/// `restart_identity`:
+/// - `None`     — unspecified (default behavior is dialect-specific).
+/// - `Some(true)`  — `RESTART IDENTITY`.
+/// - `Some(false)` — `CONTINUE IDENTITY`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TruncateStatement {
+    pub table: String,
+    pub restart_identity: Option<bool>,
+    pub cascade: Option<CascadeBehavior>,
+}
+
+/// `ALTER TABLE <name> <action>`. Sprint-391 only covers `DROP …` actions;
+/// `ADD COLUMN` / `RENAME` etc. surface as `UnsupportedStatement` until
+/// sprint-394 widens the grammar.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AlterTableStatement {
+    pub table: String,
+    pub action: AlterAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum AlterAction {
+    /// `DROP COLUMN [IF EXISTS] <col> [CASCADE|RESTRICT]`.
+    DropColumn {
+        column: String,
+        if_exists: bool,
+        cascade: Option<CascadeBehavior>,
+    },
+    /// `DROP CONSTRAINT <name> [CASCADE|RESTRICT]`. PostgreSQL allows
+    /// `IF EXISTS` on DROP CONSTRAINT in newer versions; sprint-391 keeps
+    /// this strict (no `IF EXISTS`) — extending is a sprint-394 task.
+    DropConstraint {
+        constraint: String,
+        cascade: Option<CascadeBehavior>,
+    },
+    /// `DROP INDEX <name>` — MySQL-style syntax. PostgreSQL emits this as
+    /// a top-level `DROP INDEX` statement instead.
+    DropIndex { index: String },
 }
