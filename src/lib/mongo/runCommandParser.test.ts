@@ -111,12 +111,17 @@ describe("sprint-382 AST promotion — new behavior locked by the AST", () => {
     );
   });
 
-  it("extractAdminCommandBody returns null when a BSON literal is present", () => {
+  // Sprint 383 (2026-05-17) — BSON literals are now normalised to
+  // extended-JSON placeholders so the body parses successfully.
+  it("AC-383-B-R — extractAdminCommandBody normalises BSON literals to extended-JSON placeholders", () => {
     expect(
       extractAdminCommandBody(
         'db.runCommand({find: "users", filter: {_id: ObjectId("65abcdef0123456789abcdef")}})',
       ),
-    ).toBeNull();
+    ).toEqual({
+      find: "users",
+      filter: { _id: { $oid: "65abcdef0123456789abcdef" } },
+    });
   });
 
   it("extractAdminCommandBody handles a body with array + boolean + null values", () => {
