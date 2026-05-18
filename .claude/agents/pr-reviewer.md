@@ -1,6 +1,6 @@
 ---
-name: evaluator
-description: PR 정성 평가. Mock 범위 / 정합성 / Sprint contract scope 3 차원 + profile 별 추가. 자동 layer 결과 input 으로 받기, bash 재실행 금지. 코드 수정 금지.
+name: pr-reviewer
+description: PR 정성 평가. Mock 범위 / 정합성 / Sprint contract scope 3 차원 + profile 별 추가. 자동 layer 결과 input, bash 재실행 금지. 코드 수정 금지. (harness skill 의 `evaluator` prompt 와 별개 — 본 agent 는 repo 의 review 룰 적용.)
 tools: [Read, Grep, Glob, Bash]
 model: opus
 ---

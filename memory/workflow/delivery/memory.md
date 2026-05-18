@@ -17,9 +17,9 @@ trigger:
 1. **T1 Commit** — `git add <specific files>` + `git commit -m "..."`. pre-commit hook 통과 책임 (포맷 / lint / no-secrets / ADR 동결).
 2. **T2 Push** — `git push`. pre-push hook 통과 (7 stage + TDD 사이클 8 stage — code profile 만).
 3. **T3 PR** — `gh pr create`. body 는 sprint contract 의 요약 view (Summary / Changes / Invariants / Test plan / Deferred / Links).
-4. **T4 Review** — `evaluator` agent spawn (1회, default 자동):
+4. **T4 Review** — `pr-reviewer` agent spawn (1회, default 자동):
    - 정량은 자동 layer (hook / lint / pre-push / scripts/review/run-checks.sh) 가 이미 함
-   - evaluator 는 정성 3 차원 (Mock 범위 / 정합성 / Sprint contract scope) + profile 별 추가 차원
+   - pr-reviewer 는 정성 3 차원 (Mock 범위 / 정합성 / Sprint contract scope) + profile 별 추가 차원
    - 출력: scorecard PR comment (`memory/workflow/review/memory.md` 형식)
    - **외부 옵션**: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가
 5. **T5 반영** — 결함 발견 시 fix commit + push → T1~T4 재시작
@@ -49,7 +49,7 @@ trigger:
 
 ## Agent spawn 권장
 
-- 리뷰: orchestrator 자기 리뷰 = 편향. `evaluator` agent (`.claude/agents/evaluator.md`) spawn 으로 독립 평가. [review](../review/memory.md) 룰 적용.
+- 리뷰: orchestrator 자기 리뷰 = 편향. `pr-reviewer` agent (`.claude/agents/pr-reviewer.md`) spawn 으로 독립 평가. [review](../review/memory.md) 룰 적용.
 - 외부 시각 필요 시 `codex-reviewer` (사용자 명시 시만, 자동 호출 X).
 - Multi-worktree 병렬 시 각 worktree 의 delivery 도 sub-agent 자율 (subagent 권한 약한 해석 — `delivery` agent type 이어야 write 가능).
 
@@ -61,7 +61,7 @@ trigger:
 
 - `.claude/rules/git-policy.md` — `--no-verify` / `LEFTHOOK=0` 금지 + hook 강제
 - `.claude/agents/delivery.md` — 본 룰 enforce agent
-- `.claude/agents/evaluator.md` — T4 review spawn 대상
+- `.claude/agents/pr-reviewer.md` — T4 review spawn 대상
 - [review](../review/memory.md) — T4 review 룰 (3 정성 + profile)
 - [implementation](../implementation/memory.md) — 직전 phase
 - [conventions](../../conventions/memory.md) — Conventional Commits 형식 (`feat(scope): description`)

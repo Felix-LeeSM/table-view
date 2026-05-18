@@ -19,7 +19,7 @@ date: 2026-05-18
 | 388-07 (lefthook pre-commit adr-frozen 추가) | PASS | `glob: memory/decisions/**/*.md` stage |
 | 388-08 (lefthook pre-push 8_check-tdd-cycle 추가) | PASS | `tags: review` stage |
 | 388-09 (settings.json PostToolUse wrapper-cap 등록) | PASS | `.claude/{agents,rules,commands}/*.md` 매치 |
-| 388-10 (evaluator wrapper ≤ 15줄 + 새 source 3개) | PASS | 14줄 |
+| 388-10 (pr-reviewer wrapper ≤ 15줄 + 새 source 3개) | PASS | 14줄 |
 | 388-11 (delivery T4 + 자율 머지 조건) | PASS | T0~T6 timeline + 조건 명시 |
 | 388-12 (harness skill 영역 분리) | PASS | sprint-388 중 침범 시도 → 사용자 지적 → revert + 정합성 차원 카테고리 추가 + hook hard block + lesson 기록 |
 | 388-13 (check-memory-structure exit 0) | PASS | 신설 9 lessons index 포함 |
@@ -50,7 +50,7 @@ date: 2026-05-18
 | `check-wrapper-cap.sh` 신설 | PostToolUse (`.claude/{agents,rules,commands}/*.md`) | 줄수 cap (15/20/15), README skip |
 | `check-tdd-cycle.sh` 신설 | pre-push 8 stage | code profile 만 강제, `SKIP_TDD_CYCLE=1` 사용자 명시 우회 |
 | `check-adr-frozen.sh` 신설 | pre-commit (`memory/decisions/**/*.md`) | frontmatter 외 hunk 차단, 새 ADR OK |
-| `review/run-checks.sh` 신설 | 사용자 / evaluator 호출 | contract Required Checks batch + PASS/FAIL |
+| `review/run-checks.sh` 신설 | 사용자 / pr-reviewer 호출 | contract Required Checks batch + PASS/FAIL |
 
 ### 3. Hook 등록
 
@@ -59,9 +59,9 @@ date: 2026-05-18
 - `lefthook.yml` pre-commit 에 `adr-frozen` stage
 - `lefthook.yml` pre-push 에 `8_check-tdd-cycle` stage
 
-### 4. evaluator + delivery + lessons
+### 4. pr-reviewer + delivery + lessons
 
-- `.claude/agents/evaluator.md` 갱신 — read 리스트 새 source 3개
+- `.claude/agents/pr-reviewer.md` 갱신 — read 리스트 새 source 3개
 - `memory/workflow/delivery/memory.md` T4 review + T6 자율 머지 조건
 - `memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md`
   신설 — 본 sprint 의 plugin 영역 침범 시도 lesson
@@ -85,7 +85,7 @@ sprint-387 의 skills index 누락 같은 결함 재발 방지의 일환.
 정합성 차원에 카테고리 추가 + PreToolUse hard block + lesson 기록.
 
 **중간 발견 2 — 정합성 차원 보강 요청**: skill 영역 침범 같은 안티패턴을
-evaluator 가 잡아야 함 → 정합성 sub-checklist 에 외부 영역 카탈로그 5종 추가.
+pr-reviewer 가 잡아야 함 → 정합성 sub-checklist 에 외부 영역 카탈로그 5종 추가.
 
 ## Profile 분기 검증
 

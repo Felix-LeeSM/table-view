@@ -54,10 +54,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 
-### evaluator
-
-- [PR Review](../../memory/workflow/review/memory.md)
-
 ### frontend
 
 - [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
@@ -132,6 +128,10 @@ generator: scripts/regenerate-indexes.sh
 ### pr
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+
+### pr-reviewer
+
+- [PR Review](../../memory/workflow/review/memory.md)
 
 ### profile
 

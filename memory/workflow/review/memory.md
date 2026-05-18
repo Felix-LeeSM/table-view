@@ -1,23 +1,23 @@
 ---
-title: PR Review — 자동 layer + 정성 evaluator
+title: PR Review — 자동 layer + 정성 pr-reviewer
 type: workflow-rule
 updated: 2026-05-18
-task: review, evaluator, scorecard, profile
+task: review, pr-reviewer, scorecard, profile
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / delivery T4
-  layer: agent-prompt (evaluator agent) + hook (scripts/review/*)
+  layer: agent-prompt (pr-reviewer agent) + hook (scripts/review/*)
 ---
 
 # PR Review
 
-PR 한 건 = 자동 layer (hook / lint / script) + 정성 layer (evaluator agent 1
+PR 한 건 = 자동 layer (hook / lint / script) + 정성 layer (pr-reviewer agent 1
 spawn). agent 가 매번 bash 명령 돌리지 않도록 정량은 모두 자동 layer 로 빠짐.
 
 ## 2층 구조
 
 ```
 T0 ~ T3 코드 변경 / commit / push     ← Bash hook + lefthook 가 실시간 차단
-T4       evaluator spawn (1 회)      ← 정성 3 차원만
+T4       pr-reviewer spawn (1 회)      ← 정성 3 차원만
 T5       사용자 / 자동 머지 결정      ← scorecard + CI 결과 input
 ```
 
@@ -34,13 +34,13 @@ T5       사용자 / 자동 머지 결정      ← scorecard + CI 결과 input
 | 회귀 (tsc / lint / clippy / test / coverage) | lefthook `pre-push` 7 stage | pre-push |
 | TDD 사이클 (code profile) | `scripts/check-tdd-cycle.sh` | pre-push (8 stage) |
 | CI (PR check) | GitHub Actions | PR 생성 시 |
-| AC 명령 기반 | `scripts/review/run-checks.sh <sprint>` | evaluator 호출 시 / 사용자 |
+| AC 명령 기반 | `scripts/review/run-checks.sh <sprint>` | pr-reviewer 호출 시 / 사용자 |
 
 → 머지 차단 = 자동 layer 실패. agent 가 위 차원을 다시 확인하지 않음.
 
-### 정성 layer (evaluator 1 spawn)
+### 정성 layer (pr-reviewer 1 spawn)
 
-evaluator 가 보는 3 차원 — 모두 script 로 잡기 어려운 의미 판단:
+pr-reviewer 가 보는 3 차원 — 모두 script 로 잡기 어려운 의미 판단:
 
 **1. Mock 범위**
 - `git diff origin/main...HEAD` 의 test 파일에서 `vi.mock(...)` 인자 분석
@@ -84,7 +84,7 @@ contract frontmatter `review-profile` 필드:
 **공통 자동 layer**: dangerous Bash / memory 구조 / wrapper cap / god file /
 conventional commit / pre-push 7 stage.
 
-evaluator 가 spawn 시:
+pr-reviewer 가 spawn 시:
 1. `gh pr view <N> --json title` → sprint number 추출 (제목 정규식 `sprint-<N>`)
 2. contract.md frontmatter 파싱 (`review-profile`)
 3. 위 매트릭스 룩업 → 정성 차원 결정
@@ -118,7 +118,7 @@ evaluator 가 spawn 시:
 
 `memory/workflow/delivery/memory.md` 의 T4 (Review) 단계:
 
-1. **default**: agent A 가 push + PR 직후 `evaluator` agent spawn
+1. **default**: agent A 가 push + PR 직후 `pr-reviewer` agent spawn
 2. **option**: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가 spawn
 3. **자율 머지 조건** (T6):
    - 정성 4 차원 모두 ≥ 7/10
@@ -129,20 +129,21 @@ evaluator 가 spawn 시:
 
 ## Anti-patterns
 
-- evaluator 가 bash 로 `cargo test` / `pnpm vitest` 다시 돌리는 것. **금지**.
-  자동 layer 가 이미 함. evaluator 는 결과 input 받기만.
-- self-eval (구현한 agent = evaluator agent). **회피** — evaluator 는 별 spawn,
+- pr-reviewer 가 bash 로 `cargo test` / `pnpm vitest` 다시 돌리는 것. **금지**.
+  자동 layer 가 이미 함. pr-reviewer 는 결과 input 받기만.
+- self-eval (구현한 agent = pr-reviewer agent). **회피** — pr-reviewer 는 별 spawn,
   편향 차단.
 - profile N/A 차원을 보고서에 "N/A" 로 명시. **회피** — 매트릭스에서 빠진 차원
   은 출력 자체에서 제거.
 - **harness skill (`.claude/skills/harness/`) 파일 수정**. **금지** — skill
-  plugin 영역. harness 의 evaluator prompt 는 본 룰과 직교, 별 룰. repo 의
-  review 룰은 본 방, harness skill 은 자체 룰 — 두 룰 독립 진화. (Sprint 388
-  발견 — 안티패턴 회피.)
+  plugin 영역. harness 의 `evaluator` prompt 는 본 룰과 직교, 별 룰. repo 의
+  review 룰은 본 방 (pr-reviewer agent), harness skill 은 자체 룰 — 두 룰
+  독립 진화. agent 이름을 `evaluator` 가 아닌 `pr-reviewer` 로 한 것도 skill
+  의 evaluator 와 혼동 회피 (sprint-388 lock).
 
 ## 관련
 
-- `.claude/agents/evaluator.md` — wrapper
+- `.claude/agents/pr-reviewer.md` — wrapper
 - `scripts/review/run-checks.sh` — contract Required Checks batch
 - `memory/workflow/delivery/memory.md` — T4 review 통합
 - `memory/workflow/grill/memory.md` — review 와 직교 (grill = 결정 인터뷰)
