@@ -1,35 +1,20 @@
-# Table View — Claude Code 프로젝트 가이드
+# Claude Code 진입점
 
-## 프로젝트 개요
+본문은 `AGENTS.md` (universal) 1번 read.
 
-Table View는 Tauri 2.0 + React + Rust 기반의 TablePlus-like 데이터베이스 관리 도구입니다.
-데스크톱 앱으로, 다중 DBMS(PostgreSQL, MySQL, SQLite, MongoDB 등)를 지원합니다.
+## 프로젝트 한줄
 
-## 먼저 읽을 곳
+Tauri 2.0 + React + Rust TablePlus-like 로컬 DB 도구. 다중 DBMS.
 
-상세 지식은 **메모리 팔레스**에 주제별로 나뉘어 있다. 작업 시작 전 필요한 방만 읽는다.
+## 작업 전 read
 
-- **[`memory/memory.md`](memory/memory.md)** — 팔레스 입구, 30초/5분 path + 방 지도.
-  - [`memory/architecture/memory.md`](memory/architecture/memory.md) — 기술 스택, 디렉토리 구조, IPC·상태 흐름
-  - [`memory/conventions/memory.md`](memory/conventions/memory.md) — Rust/TS 컨벤션, 테스트, 커밋, 금지 사항, refactoring (god-file 포함)
-  - [`memory/workflow/memory.md`](memory/workflow/memory.md) — User-Claude 협업 룰 (bug-fix / grill / implementation / delivery)
-  - [`memory/ux/memory.md`](memory/ux/memory.md) — UX 머지 기준 (영속 상태 reset 등)
-  - [`memory/runbook/memory.md`](memory/runbook/memory.md) — 측정/실행 절차
-  - [`memory/roadmap/memory.md`](memory/roadmap/memory.md) — 현재 Phase 상태
-  - [`memory/decisions/memory.md`](memory/decisions/memory.md) — ADR 이력
-  - [`memory/lessons/memory.md`](memory/lessons/memory.md) — 교훈
-  - [`memory/index/by-task.md`](memory/index/by-task.md) — 작업 type → 룰 묶음
-  - [`memory/index/by-surface.md`](memory/index/by-surface.md) — 코드 surface → ADR/lesson 묶음
+- [`AGENTS.md`](AGENTS.md) — 작업 type → memory path 매트릭스
+- [`memory/memory.md`](memory/memory.md) — 팔레스 입구
+- [`.claude/rules/git-policy.md`](.claude/rules/git-policy.md) — hook 회피 금지
 
-## 프로젝트 문서
+## 강제 룰 (전역)
 
-- **[`docs/PLAN.md`](docs/PLAN.md)** — 마스터 플랜. 모든 구현 결정은 "TablePlus 사용자가 핵심 워크플로우에서 끊김 없이 전환 가능한가?" 기준으로 판단.
-- **[`docs/RISKS.md`](docs/RISKS.md)** — 잔여 위험 등록부. `active`/`resolved`/`deferred` 상태 추적.
-- **리팩토링 코드 작성 표준** — [`memory/conventions/refactoring/memory.md`](memory/conventions/refactoring/memory.md) (영속, 4 카테고리: B/D/C/A).
-
-## 메모리 팔레스 규칙 (강제)
-
-- `memory/` 트리는 **오직 `memory.md`만** 허용. 하위 주제는 디렉토리로 분기하고 다시 `memory.md`.
-- 한 파일 **200줄 이하**. 초과 시 `/split-memory`로 분할.
-- **ADR 본문은 작성 순간 동결** — 결정/이유/트레이드오프 수정 금지. 프론트매터 메타 필드(`status`, `superseded_by`)만 갱신 가능. 결정을 뒤집으려면 새 ADR을 추가하고 원본 상태를 `Superseded`로 전이.
-- 대화에서 배운 결정·교훈은 `/remember`로 적절한 방에 저장.
+- `memory/` 트리 200줄 cap, `memory.md` 만.
+- ADR 본문 동결. 결정 뒤집기 = 새 ADR + `Superseded`.
+- `--no-verify`, `LEFTHOOK=0`, sandbox 내 `git push --force` 금지.
+- `/remember` 로 대화 결정 저장.

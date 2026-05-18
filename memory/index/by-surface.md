@@ -1,7 +1,7 @@
 ---
 title: By-surface 인덱스
 type: index
-generated: 2026-05-17
+generated: 2026-05-18
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -31,6 +31,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
 
+### `src-tauri/**/*.rs`
+
+- [Rust 컨벤션](../../memory/conventions/rust/memory.md)
+
 ### `src-tauri/src/commands/connection.rs`
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
@@ -39,9 +43,17 @@ generator: scripts/regenerate-indexes.sh
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
 
+### `src/**/*.{ts`
+
+- [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
+
 ### `src/lib/perf/bootInstrumentation.ts`
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
+
+### `tsx}`
+
+- [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
 
 ### `vi.mock'`
 

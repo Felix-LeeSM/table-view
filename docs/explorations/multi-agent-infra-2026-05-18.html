@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>Multi-agent 인프라 — Claude / Codex / Cursor 동일 source</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --panel: #ffffff;
+      --panel-2: #f3f4f6;
+      --border: #d1d5db;
+      --text: #1f2328;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --warn: #c2410c;
+      --good: #15803d;
+      --danger: #b91c1c;
+      --claude: #b8460e;
+      --codex: #166534;
+      --cursor: #7e22ce;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    h2 { font-size: 16px; margin: 32px 0 12px; color: var(--accent); }
+    h3 { font-size: 14px; margin: 16px 0 8px; }
+    .lede { color: var(--muted); margin-bottom: 32px; max-width: 720px; }
+    .controls {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 24px;
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      box-shadow: var(--shadow);
+    }
+    .controls fieldset {
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin: 0;
+    }
+    .controls legend { font-size: 11px; color: var(--muted); padding: 0 6px; }
+    .controls label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-right: 12px;
+      cursor: pointer;
+    }
+    .controls input { cursor: pointer; }
+
+    /* Layer 다이어그램 */
+    .layers {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .layer {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .layer h3 { margin-top: 0; color: var(--good); }
+    .layer .badge {
+      display: inline-block;
+      background: var(--panel-2);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: 8px;
+    }
+    .layer code {
+      background: var(--panel-2);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+    .layer .files {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .layer .files li { margin: 3px 0; }
+
+    /* Agent platform tabs */
+    .platforms {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .platform-tab {
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--muted);
+      cursor: pointer;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 13px;
+    }
+    .platform-tab.active {
+      color: var(--text);
+      border-color: currentColor;
+    }
+    .platform-tab[data-platform="claude"].active { color: var(--claude); }
+    .platform-tab[data-platform="codex"].active { color: var(--codex); }
+    .platform-tab[data-platform="cursor"].active { color: var(--cursor); }
+
+    /* Wrapper preview */
+    .wrapper-preview {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+    }
+    .wrapper-preview pre {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 12px;
+      overflow: auto;
+      max-height: 380px;
+      margin: 8px 0 0;
+      white-space: pre-wrap;
+    }
+    .wrapper-preview .meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .wrapper-preview .token-badge {
+      display: inline-block;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 3px 10px;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+    .wrapper-preview .token-badge.eager { color: var(--warn); }
+    .wrapper-preview .token-badge.lazy { color: var(--good); }
+
+    /* 시퀀스 다이어그램 */
+    .sequence {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+    }
+    .seq-row {
+      display: grid;
+      grid-template-columns: 36px 180px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 8px 0;
+      border-top: 1px dashed var(--border);
+    }
+    .seq-row:first-of-type { border-top: 0; }
+    .seq-step {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--panel-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--accent);
+    }
+    .seq-who {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .seq-what {
+      font-size: 13px;
+    }
+    .seq-what code {
+      background: var(--panel-2);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 12px;
+      color: var(--text);
+    }
+    .seq-cost {
+      display: inline-block;
+      margin-left: 8px;
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 8px;
+    }
+    .seq-cost.token { background: rgba(194, 65, 12, 0.10); color: var(--warn); }
+    .seq-cost.skip { background: rgba(21, 128, 61, 0.10); color: var(--good); }
+
+    /* Cost table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    th, td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    th { background: var(--panel-2); color: var(--muted); font-weight: 600; font-size: 12px; }
+    tr:last-child td { border-bottom: 0; }
+    .cost-eager { color: var(--warn); }
+    .cost-lazy { color: var(--good); }
+    .delta { color: var(--accent); font-weight: 600; }
+
+    /* Multi-agent share */
+    .share-diagram {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+    }
+    .share-grid {
+      display: grid;
+      grid-template-columns: 1fr 200px 1fr;
+      gap: 24px;
+      align-items: center;
+    }
+    .agent-col {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .agent-card {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 12px;
+    }
+    .agent-card .name { font-weight: 600; }
+    .agent-card[data-platform="claude"] { border-left: 3px solid var(--claude); }
+    .agent-card[data-platform="codex"] { border-left: 3px solid var(--codex); }
+    .agent-card[data-platform="cursor"] { border-left: 3px solid var(--cursor); }
+    .agent-card code {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .source-center {
+      background: var(--panel-2);
+      border: 2px dashed var(--accent);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .source-center .title { font-weight: 600; margin-bottom: 8px; }
+    .source-center ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: left;
+    }
+    .source-center ul li { margin: 3px 0; }
+    .arrows { font-size: 18px; color: var(--accent); text-align: center; }
+
+    /* small util */
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .pill {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--panel-2);
+      color: var(--muted);
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Multi-agent 인프라 — Claude / Codex / Cursor 동일 source</h1>
+<p class="lede">
+  원칙: <strong>agent 가 필요할 때 필요한 문서만 read</strong>. 같은 hook / 같은 제약 / 같은 작업 방식, 두뇌만 달라짐. 아래 컨트롤로 platform + agent role + mode 바꿔보세요.
+</p>
+
+<!-- ============ CONTROLS ============ -->
+<div class="controls">
+  <fieldset>
+    <legend>Agent platform</legend>
+    <div class="platforms">
+      <button class="platform-tab active" data-platform="claude" onclick="setPlatform('claude')">Claude Code</button>
+      <button class="platform-tab" data-platform="codex" onclick="setPlatform('codex')">Codex</button>
+      <button class="platform-tab" data-platform="cursor" onclick="setPlatform('cursor')">Cursor</button>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Agent role</legend>
+    <label><input type="radio" name="role" value="grill-planner" onchange="setRole('grill-planner')" checked> grill-planner</label>
+    <label><input type="radio" name="role" value="tdd-generator" onchange="setRole('tdd-generator')"> tdd-generator</label>
+    <label><input type="radio" name="role" value="bug-fix" onchange="setRole('bug-fix')"> bug-fix</label>
+    <label><input type="radio" name="role" value="delivery" onchange="setRole('delivery')"> delivery</label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Mode</legend>
+    <label><input type="radio" name="mode" value="eager" onchange="setMode('eager')"> Eager (현 sprint-386)</label>
+    <label><input type="radio" name="mode" value="lazy" onchange="setMode('lazy')" checked> Lazy (가장 가벼운)</label>
+  </fieldset>
+</div>
+
+<!-- ============ LAYER 다이어그램 ============ -->
+<h2>4-layer 구조</h2>
+<div class="layers">
+  <div class="layer">
+    <h3>L1. Universal source <span class="badge">platform 중립</span></h3>
+    <div>모든 룰 본문 1곳. agent 가 trigger 시점에 read.</div>
+    <ul class="files">
+      <li>📁 <code>memory/</code> — 룰 (workflow / ux / runbook / conventions)</li>
+      <li>📁 <code>docs/</code> — sprint artifact</li>
+      <li>📁 <code>scripts/check-*.sh</code> — bash, universal</li>
+      <li>📄 <code>lefthook.yml</code> — git hook, universal</li>
+    </ul>
+  </div>
+
+  <div class="layer">
+    <h3>L2. Universal entry <span class="badge">agent 공통</span></h3>
+    <div>모든 agent 의 공통 시작점. 작업 type → memory path 매트릭스.</div>
+    <ul class="files">
+      <li>📄 <code>AGENTS.md</code> (신설) — 5-10줄, 작업 type 매트릭스</li>
+      <li>📄 <code>CLAUDE.md</code> — Claude 가 자동 read (현재 60줄 → 1-3줄 redirect 권장)</li>
+      <li>📄 codex / cursor 의 entry — 같은 본문 또는 1줄 redirect</li>
+    </ul>
+  </div>
+
+  <div class="layer">
+    <h3>L3. Per-agent wrapper <span class="badge">platform 별 thin</span></h3>
+    <div>3-5줄. role 명시 + memory path read 강제. 본문 0 embed.</div>
+    <ul class="files">
+      <li>📁 <code>.claude/agents/&lt;role&gt;.md</code> — Claude format</li>
+      <li>📁 <code>.codex/agents/&lt;role&gt;.&lt;ext&gt;</code> — Codex format (TBD)</li>
+      <li>📁 <code>.cursor/...</code> — Cursor format (TBD)</li>
+      <li>본문 = role + read 강제 path 1-2개</li>
+    </ul>
+  </div>
+
+  <div class="layer">
+    <h3>L4. Hook wiring <span class="badge">script universal + 형식 platform</span></h3>
+    <div>Script 본체는 universal. 각 platform 의 hook config 가 호출.</div>
+    <ul class="files">
+      <li>📄 <code>scripts/check-god-file.sh</code> (universal)</li>
+      <li>📄 <code>.claude/settings.json</code> PostToolUse → script 호출</li>
+      <li>📄 <code>.codex/config</code> → 같은 script 호출 (TBD)</li>
+      <li>📄 <code>lefthook.yml</code> pre-commit / pre-push → universal git layer</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============ WRAPPER PREVIEW ============ -->
+<h2>L3 Per-agent wrapper — Eager vs Lazy 비교</h2>
+<p style="font-size: 12px; color: var(--muted); margin-top: -4px;">
+  같은 role (선택한 platform / role) 의 wrapper. Mode 토글로 차이 즉시 비교.
+</p>
+
+<div class="row-2">
+  <div class="wrapper-preview">
+    <div class="meta">
+      <strong>Eager (현 sprint-386)</strong>
+      <span class="token-badge eager" id="eager-tokens">~2000 토큰</span>
+    </div>
+    <pre id="eager-content"></pre>
+  </div>
+  <div class="wrapper-preview">
+    <div class="meta">
+      <strong>Lazy (가장 가벼운)</strong>
+      <span class="token-badge lazy" id="lazy-tokens">~200 토큰</span>
+    </div>
+    <pre id="lazy-content"></pre>
+  </div>
+</div>
+
+<!-- ============ SPAWN 시퀀스 ============ -->
+<h2>Agent spawn 시퀀스 (현재 선택한 mode + role)</h2>
+<div class="sequence" id="sequence"></div>
+
+<!-- ============ COST TABLE ============ -->
+<h2>토큰 비용 (1 sprint 가정, 작업 type 1-3개 분기)</h2>
+<table>
+  <thead>
+    <tr>
+      <th>시나리오</th>
+      <th>Eager 토큰</th>
+      <th>Lazy 토큰</th>
+      <th>절약</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1 agent role 1회 spawn</td>
+      <td class="cost-eager">~2000</td>
+      <td class="cost-lazy">~700 (200 wrapper + 500 path)</td>
+      <td class="delta">-65%</td>
+    </tr>
+    <tr>
+      <td>2 agent role (grill → impl)</td>
+      <td class="cost-eager">~4000</td>
+      <td class="cost-lazy">~1400</td>
+      <td class="delta">-65%</td>
+    </tr>
+    <tr>
+      <td>5 agent role 분기 (grill + tdd + bug-fix + evaluator + delivery)</td>
+      <td class="cost-eager">~10000</td>
+      <td class="cost-lazy">~3500</td>
+      <td class="delta">-65%</td>
+    </tr>
+    <tr>
+      <td>같은 role 의 작업이 *다른 phase* 진입 (예: grill 중 보안 분기)</td>
+      <td class="cost-eager">~2000 (이미 embed, 추가 0)</td>
+      <td class="cost-lazy">~700 + 400 (분기 path)</td>
+      <td class="delta" style="color: var(--warn);">-45% (분기 잦으면 절약 줄어듦)</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============ MULTI-AGENT SHARE ============ -->
+<h2>Multi-agent 호환 — 같은 source 공유</h2>
+<div class="share-diagram">
+  <div class="share-grid">
+    <div class="agent-col">
+      <h3 style="margin-top:0;">Claude Code</h3>
+      <div class="agent-card" data-platform="claude">
+        <div class="name">.claude/agents/grill-planner.md</div>
+        <code>tools: [...], model: opus</code><br>
+        <code>"memory/workflow/grill/... read"</code>
+      </div>
+      <div class="agent-card" data-platform="claude">
+        <div class="name">.claude/agents/tdd-generator.md</div>
+        <code>"memory/workflow/implementation/... read"</code>
+      </div>
+      <div class="agent-card" data-platform="claude">
+        <div class="name">.claude/settings.json</div>
+        <code>PostToolUse → scripts/check-god-file.sh</code>
+      </div>
+    </div>
+
+    <div class="source-center">
+      <div class="title">📚 Universal Source</div>
+      <ul>
+        <li>memory/workflow/grill/memory.md</li>
+        <li>memory/workflow/bug-fix/memory.md</li>
+        <li>memory/workflow/implementation/memory.md</li>
+        <li>memory/workflow/delivery/memory.md</li>
+        <li>memory/ux/memory.md</li>
+        <li>memory/runbook/*/memory.md</li>
+        <li>memory/conventions/**/memory.md</li>
+        <li>scripts/check-god-file.sh</li>
+        <li>scripts/regenerate-indexes.sh</li>
+        <li>lefthook.yml</li>
+        <li>AGENTS.md (universal entry)</li>
+      </ul>
+    </div>
+
+    <div class="agent-col">
+      <h3 style="margin-top:0;">Codex / Cursor</h3>
+      <div class="agent-card" data-platform="codex">
+        <div class="name">.codex/agents/grill-planner.&lt;ext&gt;</div>
+        <code>같은 본문 — memory path 인용</code>
+      </div>
+      <div class="agent-card" data-platform="codex">
+        <div class="name">.codex/agents/tdd-generator.&lt;ext&gt;</div>
+        <code>같은 본문</code>
+      </div>
+      <div class="agent-card" data-platform="cursor">
+        <div class="name">.cursor/rules/...</div>
+        <code>같은 memory path 인용</code>
+      </div>
+      <div class="agent-card" data-platform="codex">
+        <div class="name">.codex/config</div>
+        <code>hook → 같은 scripts/check-*.sh</code>
+      </div>
+    </div>
+  </div>
+  <div class="arrows" style="margin-top: 16px;">↑ 각 wrapper 가 같은 source 를 *path 인용* — 본문 1개 source ↑</div>
+</div>
+
+<!-- ============ 강제 mechanism ============ -->
+<h2>Lazy 의 단점 — "agent 가 read 안 하면?"</h2>
+<div class="layer" style="background: var(--panel-2);">
+  <p>가장 가벼운 형태의 위험 = agent 가 wrapper 만 보고 memory path read 안 한 채 작업 시작. 해결:</p>
+  <ul>
+    <li><strong>Wrapper 의 강제 명령</strong> — "read 후 진행. read 없이 작업 = 룰 위반" 명시. agent 의 alignment 에 의존.</li>
+    <li><strong>Universal entry 의 enforcement 기준</strong> — <code>AGENTS.md</code> 가 "memory path 인용 없이 작업 = 룰 위반" 명시.</li>
+    <li><strong>PostToolUse hook 검증</strong> (옵션, deferred) — agent 의 첫 Edit/Write 직전 memory path read tool call 있었는지 검사. 복잡 — R2 deferred 영역.</li>
+  </ul>
+</div>
+
+<!-- ============ 추천 ============ -->
+<h2>추천</h2>
+<div class="layer" style="background: var(--panel-2);">
+  <h3>Sprint-387 후보 — agent wrapper 압축 + universal entry 신설</h3>
+  <ul>
+    <li>9 agent wrapper (`.claude/agents/*.md`) 50-90줄 → 3-5줄 압축</li>
+    <li><code>AGENTS.md</code> 신설 — Universal entry, 작업 type 매트릭스</li>
+    <li><code>CLAUDE.md</code> 1-3줄 redirect (또는 AGENTS.md 본문 같이)</li>
+    <li>강제 명령 명시 — wrapper / AGENTS.md 둘 다</li>
+    <li>Codex / Cursor 의 wrapper dir 위치 / format 조사 (deferred — 사용자가 사용 시점에 진입)</li>
+  </ul>
+  <p style="margin-top: 12px;"><strong>효과</strong>: agent spawn 토큰 ~65% 절약. Codex / Cursor 등 다른 agent 추가 시 wrapper dir 작성 비용만.</p>
+</div>
+
+<script>
+let platform = 'claude';
+let role = 'grill-planner';
+let mode = 'lazy';
+
+// 현 sprint 의 wrapper 본문 (eager 예시)
+const eagerWrappers = {
+  'grill-planner': `---
+name: grill-planner
+description: 결정 / 설계 / 계획 인터뷰. 사용자가 옵션 선택 / grill / "압박 테스트" 요청 시 사용.
+tools: [Read, Grep, Glob, Bash, Write, WebFetch]
+model: opus
+---
+
+먼저 caveman skill 발동. 출력 caveman 모드.
+
+# Grill planner
+
+memory/workflow/grill/memory.md 의 룰 enforce.
+
+## 규칙
+
+### 1. 한 메시지 = 결정 1개
+- 옵션 (a/b/c) + 추천 + 짧은 이유.
+- 묶어 묻지 말 것.
+- 예외: 사용자 명시 시.
+
+### 2. 옵션 분해 = 두 축
+옵션은 항상:
+- 기술 축 — implementation 비용 / 위험
+- 유저 플로우 축 — task 빈도 / 가치
+한 축만 → 폐기. 두 축 동등 → 옵션 폐기.
+
+### 3. 텍스트 한계 시 HTML
+다음 신호 → docs/explorations/<topic>-<date>.html:
+- UI 결정 / 복잡 워크플로우 / 자기 점검 의심
+[... 50+ 줄 더 ...]
+
+### 4. 보안 키워드 = 분기
+... (생략)
+
+## 권한
+... (생략)`,
+  'tdd-generator': `---
+name: tdd-generator
+...
+---
+[50-90줄 룰 본문 embed]`,
+  'bug-fix': `---
+name: bug-fix
+...
+---
+[50-90줄 룰 본문 embed]`,
+  'delivery': `---
+name: delivery
+...
+---
+[50-90줄 룰 본문 embed]`,
+};
+
+// 가장 가벼운 wrapper (lazy 예시)
+const lazyWrappers = {
+  'grill-planner': {
+    claude: `---
+name: grill-planner
+description: 결정 인터뷰 (grill / 옵션 선택 / 설계 압박)
+tools: [Read, Grep, Glob, Bash, Write]
+model: opus
+---
+작업 시작 시 반드시 read:
+1. memory/workflow/grill/memory.md (룰)
+2. 보안 키워드 등장 시 memory/workflow/grill/security-handoff/memory.md
+read 없이 작업 = 룰 위반.`,
+    codex: `# Codex agent: grill-planner
+# (format TBD — codex 의 system prompt 또는 config)
+
+Role: grill-planner — 결정 인터뷰
+Tools: read, grep, glob, shell, write
+Model: opus / gpt-5 / 등
+
+Trigger 시 read:
+- memory/workflow/grill/memory.md
+- 보안 키워드 시 memory/workflow/grill/security-handoff/memory.md`,
+    cursor: `# Cursor rule: grill-planner
+
+이 role 호출 시 반드시 read:
+- memory/workflow/grill/memory.md
+- 보안 키워드 시 memory/workflow/grill/security-handoff/memory.md`
+  },
+  'tdd-generator': {
+    claude: `---
+name: tdd-generator
+description: 신규 기능 TDD 사이클
+tools: [Read, Edit, Write, Bash, Grep, Glob]
+model: opus
+---
+작업 시작 시 반드시 read:
+1. memory/workflow/implementation/memory.md (noise / 자율성)
+2. memory/conventions/testing-scenarios/memory.md (8 원칙)
+3. memory/conventions/testing-scenarios/mock-scope/memory.md (mock 범위)
+4. memory/conventions/refactoring/god-file/memory.md (≥500줄 시퀀스)
+read 없이 작업 = 룰 위반. RED commit 없이 GREEN = 평가 fail.`,
+    codex: `# Codex agent: tdd-generator
+Role: TDD generator — RED→GREEN→REFACTOR
+Tools: read, edit, write, shell, grep, glob
+
+Trigger 시 read:
+- memory/workflow/implementation/memory.md
+- memory/conventions/testing-scenarios/memory.md
+- memory/conventions/testing-scenarios/mock-scope/memory.md
+- memory/conventions/refactoring/god-file/memory.md
+RED commit 없으면 fail.`,
+    cursor: `# Cursor rule: tdd-generator
+Read on trigger:
+- memory/workflow/implementation/memory.md
+- memory/conventions/testing-scenarios/memory.md
+- memory/conventions/testing-scenarios/mock-scope/memory.md
+- memory/conventions/refactoring/god-file/memory.md`
+  },
+  'bug-fix': {
+    claude: `---
+name: bug-fix
+description: 버그 / 회귀 / UX 이슈 — Red regression test 먼저
+tools: [Read, Edit, Write, Bash, Grep, Glob]
+model: opus
+---
+작업 시작 시 반드시 read:
+1. memory/workflow/bug-fix/memory.md (Red 우선)
+2. memory/conventions/testing-scenarios/mock-scope/memory.md (assertion 범위)
+read 없이 작업 = 룰 위반.`,
+    codex: `# Codex agent: bug-fix
+Trigger 시 read:
+- memory/workflow/bug-fix/memory.md
+- memory/conventions/testing-scenarios/mock-scope/memory.md
+Red 먼저, fix 그 다음.`,
+    cursor: `# Cursor rule: bug-fix
+Red regression test 먼저. read:
+- memory/workflow/bug-fix/memory.md
+- memory/conventions/testing-scenarios/mock-scope/memory.md`
+  },
+  'delivery': {
+    claude: `---
+name: delivery
+description: commit → push → PR → review → merge 자율 pipeline
+tools: [Read, Edit, Write, Bash, Grep, Glob]
+model: opus
+---
+작업 시작 시 반드시 read:
+1. memory/workflow/delivery/memory.md (pipeline)
+2. .claude/rules/git-policy.md (--no-verify 금지)
+read 없이 작업 = 룰 위반. force-push / main 직접 push = 사용자 확인.`,
+    codex: `# Codex agent: delivery
+Trigger 시 read:
+- memory/workflow/delivery/memory.md
+- .claude/rules/git-policy.md (또는 lefthook.yml)
+자율: commit / push / PR / review / merge. force-push 는 사용자 확인.`,
+    cursor: `# Cursor rule: delivery
+Read on trigger:
+- memory/workflow/delivery/memory.md
+Pipeline 자율, force-push 예외.`
+  }
+};
+
+// Spawn 시퀀스
+function getSequence(mode, role) {
+  const roleToPath = {
+    'grill-planner': 'memory/workflow/grill/memory.md',
+    'tdd-generator': 'memory/workflow/implementation/memory.md',
+    'bug-fix': 'memory/workflow/bug-fix/memory.md',
+    'delivery': 'memory/workflow/delivery/memory.md'
+  };
+  const path = roleToPath[role];
+
+  if (mode === 'eager') {
+    return [
+      { step: 1, who: 'Orchestrator', what: `agent spawn — <code>${role}</code>` },
+      { step: 2, who: 'Platform', what: `wrapper file load — <code>.claude/agents/${role}.md</code> <span class="seq-cost token">+2000 토큰 (룰 본문 embed)</span>` },
+      { step: 3, who: 'Agent', what: `system prompt 받음. <strong>모든 룰 이미 prompt 안</strong>. 추가 read 없음 <span class="seq-cost skip">+0</span>` },
+      { step: 4, who: 'Agent', what: '작업 시작 — 사용자 메시지 처리' },
+      { step: 5, who: 'Agent', what: '다른 phase 진입 시 (예: 보안 분기) → 이미 prompt 안에 있음 → 추가 read 0 <span class="seq-cost skip">+0</span>' },
+      { step: 6, who: 'Agent', what: '단점: <strong>작업 안 하는 룰까지 전부 토큰 비용</strong> 발생' }
+    ];
+  } else {
+    return [
+      { step: 1, who: 'Orchestrator', what: `agent spawn — <code>${role}</code>` },
+      { step: 2, who: 'Platform', what: `wrapper file load — <code>.claude/agents/${role}.md</code> <span class="seq-cost token">+200 토큰 (path 인용만)</span>` },
+      { step: 3, who: 'Agent', what: `system prompt 받음. "trigger 시 read: ${path}" 명시.` },
+      { step: 4, who: 'Agent', what: `작업 시작 직전 <code>Read ${path}</code> 호출 <span class="seq-cost token">+500 토큰 (룰 본문)</span>` },
+      { step: 5, who: 'Agent', what: '룰 인지 후 사용자 메시지 처리' },
+      { step: 6, who: 'Agent', what: '다른 phase 분기 시 (예: 보안) → <code>Read memory/workflow/grill/security-handoff/memory.md</code> 추가 호출 <span class="seq-cost token">+400 토큰</span>' },
+      { step: 7, who: 'Agent', what: '장점: <strong>실제로 쓰는 path 만 토큰</strong>. 작업 안 하는 룰은 read 0.' }
+    ];
+  }
+}
+
+function setPlatform(p) {
+  platform = p;
+  document.querySelectorAll('.platform-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.platform === p);
+  });
+  render();
+}
+
+function setRole(r) {
+  role = r;
+  render();
+}
+
+function setMode(m) {
+  mode = m;
+  render();
+}
+
+function render() {
+  // Eager 본문 (platform 무관, Claude format 예시)
+  document.getElementById('eager-content').textContent = eagerWrappers[role];
+  document.getElementById('eager-tokens').textContent = '~2000 토큰';
+
+  // Lazy 본문 (platform 별)
+  document.getElementById('lazy-content').textContent = lazyWrappers[role][platform];
+  document.getElementById('lazy-tokens').textContent = '~200 토큰';
+
+  // 시퀀스
+  const seq = getSequence(mode, role);
+  const container = document.getElementById('sequence');
+  container.innerHTML = seq.map(s => `
+    <div class="seq-row">
+      <div class="seq-step">${s.step}</div>
+      <div class="seq-who">${s.who}</div>
+      <div class="seq-what">${s.what}</div>
+    </div>
+  `).join('');
+}
+
+render();
+</script>
+
+</body>
+</html>

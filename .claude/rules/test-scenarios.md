@@ -1,34 +1,12 @@
-# 시나리오 테스트 체크리스트
+---
+paths:
+  - "**/*.{ts,tsx,rs}"
+---
 
-모든 새 기능/버그 수정 시 다음 시나리오를 검토:
+# 테스트 시나리오 wrapper
 
-## 필수 시나리오
-1. **Happy path**: 정상 입력 → 예상 결과
-2. **빈/누락 입력**: 빈 문자열, null, undefined, 빈 배열
-3. **에러 복구**: 실패 후 상태가 일관성 유지
-4. **동시성/경쟁**: 두 액션이 동시에 실행될 때 (예: 빠른 더블 클릭, 두 번 연속 실행)
-5. **상태 전이**: 모든 상태 전이 경로 (예: idle → running → completed, idle → running → error)
+Source: [`memory/conventions/testing-scenarios/memory.md`](../../memory/conventions/testing-scenarios/memory.md) (비-E2E 8원칙)
++ [`memory/conventions/e2e-scenarios/memory.md`](../../memory/conventions/e2e-scenarios/memory.md) (E2E).
 
-## 상황별 추가 시나리오
-- **UI 컴포넌트**: 렌더링(마운트/언마운트), 이벤트 핸들러, 접근성(aria 속성)
-- **스토어**: 상태 독립성(테스트 간 격리), 액션 조합 순서
-- **비동기**: 타임아웃, 취소, 경쟁 조건(stale 응답 덮어쓰기 방지)
-- **에지 케이스**: 대용량 데이터, 특수 문자, 유니코드, 매우 긴 문자열
-
-## 에러 처리 / catch 블록 (sprint-88 추가)
-- **try-await 함수는 reject 케이스 테스트 필수** — `await` 호출이 throw 했을 때 상태가
-  일관성 있게 복구되는지 (loading 플래그 해제, 사용자에게 에러 노출) 단언한다.
-- **catch 블록이 비어 있거나 에러를 삼키면 안 됨** — "best-effort" 라고 판단해 의도적으로
-  무시하는 경우에도 (a) 그 사유를 한 줄 주석으로 남기고 (b) 회복 액션이 있으면 그 액션을
-  테스트로 고정한다. 새 코드에서 빈 `catch {}` 를 추가할 때마다 audit 결과
-  (`docs/sprints/sprint-88/catch-audit.md`) 에 분류를 등록한다.
-
-## 커버리지 기준
-- 전체: 라인 40%, 함수 40%, 브랜치 35% (CI에서 검증)
-- 신규/수정 파일: 라인 70% 이상 권장
-
-## 필수 검증 명령
-모든 코드 변경 후 반드시 실행:
-1. `pnpm vitest run` — 테스트 통과
-2. `pnpm tsc --noEmit` — 타입 체크 통과
-3. `pnpm lint` — ESLint 에러 0건
+체크리스트 (happy / 빈 입력 / 에러 복구 / 동시성 / 상태 전이 / catch 블록) 와
+커버리지 기준 (전체 40% / 신규 70%) 은 source 의 P-시리즈 원칙 참고.

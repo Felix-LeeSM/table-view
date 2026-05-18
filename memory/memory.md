@@ -30,9 +30,14 @@ updated: 2026-05-17
   - [conventions/refactoring](./conventions/refactoring/memory.md) — 리팩토링 코드 작성 기준 (B/D/C/A 4 카테고리, god-file 시퀀스)
   - [conventions/testing-scenarios](./conventions/testing-scenarios/memory.md) — 비-E2E 시나리오 8원칙 (mock-scope sub-room 포함)
   - [conventions/e2e-scenarios](./conventions/e2e-scenarios/memory.md) — E2E 시나리오 설계
-- [workflow](./workflow/memory.md) — User-Claude 협업 phase 룰 (bug-fix / grill / implementation / delivery)
+  - [conventions/rust](./conventions/rust/memory.md) — Rust 컨벤션 전체 (`.claude/rules/rust-conventions.md` source)
+  - [conventions/react](./conventions/react/memory.md) — React/TS 컨벤션 전체 (`.claude/rules/react-conventions.md` source)
+- [workflow](./workflow/memory.md) — User-Claude 협업 phase 룰 (bug-fix / grill / implementation / delivery / git-policy)
+  - [workflow/git-policy](./workflow/git-policy/memory.md) — hook 회피 금지 (`.claude/rules/git-policy.md` source)
 - [ux](./ux/memory.md) — UX 머지 기준 (영속 상태 reset 등)
-- [runbook](./runbook/memory.md) — 절차 (cold-boot 측정 등)
+- [runbook](./runbook/memory.md) — 절차 (cold-boot 측정, multi-agent worktree 등)
+  - [runbook/worktree](./runbook/worktree/memory.md) — git worktree 다중 agent 격리 룰
+- [skills](./skills/remember/memory.md) — slash command source: [remember](./skills/remember/memory.md), [split-memory](./skills/split-memory/memory.md)
 - [roadmap](./roadmap/memory.md) — 현재 Phase 상태, 진행 중 스프린트
 - [decisions](./decisions/memory.md) — ADR 이력 (과거 결정, 대체 관계)
 - [lessons](./lessons/memory.md) — 실패·성공 교훈

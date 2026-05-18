@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-05-17
+generated: 2026-05-18
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -40,6 +40,7 @@ generator: scripts/regenerate-indexes.sh
 ### commit
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Git 정책](../../memory/workflow/git-policy/memory.md)
 
 ### decision-lock
 
@@ -53,6 +54,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 
+### frontend
+
+- [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
+
 ### god-file
 
 - [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
@@ -62,9 +67,22 @@ generator: scripts/regenerate-indexes.sh
 - [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
 - [보안 grill — threat-model 핸드오프 먼저](../../memory/workflow/grill/security-handoff/memory.md)
 
+### hook
+
+- [Git 정책](../../memory/workflow/git-policy/memory.md)
+
 ### implementation
 
 - [Implementation — agent 자율성 + noise 차단](../../memory/workflow/implementation/memory.md)
+
+### lefthook
+
+- [Git 정책](../../memory/workflow/git-policy/memory.md)
+
+### memory-write
+
+- [/remember skill](../../memory/skills/remember/memory.md)
+- [/split-memory skill](../../memory/skills/split-memory/memory.md)
 
 ### merge
 
@@ -78,9 +96,17 @@ generator: scripts/regenerate-indexes.sh
 
 - [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/conventions/testing-scenarios/mock-scope/memory.md)
 
+### multi-agent
+
+- [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
+
 ### option-design
 
 - [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
+
+### parallel
+
+- [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
 
 ### performance
 
@@ -101,10 +127,17 @@ generator: scripts/regenerate-indexes.sh
 ### push
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Git 정책](../../memory/workflow/git-policy/memory.md)
+
+### react-impl
+
+- [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
 
 ### refactor
 
+- [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
 - [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
+- [Rust 컨벤션](../../memory/conventions/rust/memory.md)
 - [Implementation — agent 자율성 + noise 차단](../../memory/workflow/implementation/memory.md)
 
 ### regression-guard
@@ -115,13 +148,25 @@ generator: scripts/regenerate-indexes.sh
 
 - [버그 fix — Red test 먼저](../../memory/workflow/bug-fix/memory.md)
 
+### remember
+
+- [/remember skill](../../memory/skills/remember/memory.md)
+
 ### review
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 
+### rust-impl
+
+- [Rust 컨벤션](../../memory/conventions/rust/memory.md)
+
 ### security
 
 - [보안 grill — threat-model 핸드오프 먼저](../../memory/workflow/grill/security-handoff/memory.md)
+
+### split
+
+- [/split-memory skill](../../memory/skills/split-memory/memory.md)
 
 ### test-writing
 
@@ -138,4 +183,8 @@ generator: scripts/regenerate-indexes.sh
 ### ux-review
 
 - [UX 머지 기준](../../memory/ux/memory.md)
+
+### worktree
+
+- [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
 
