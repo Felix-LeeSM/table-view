@@ -25,8 +25,9 @@ pub mod lexer;
 pub mod parser;
 
 pub use ast::{
-    BinaryOp, Columns, Literal, ParseError, ParseErrorKind, ParseResult, SelectStatement,
-    WhereClause,
+    AlterAction, AlterTableStatement, BinaryOp, CascadeBehavior, Columns, DropObjectType,
+    DropStatement, Literal, ParseError, ParseErrorKind, ParseResult, SelectStatement,
+    TruncateStatement, WhereClause,
 };
 pub use parser::parse;
 
@@ -96,5 +97,93 @@ mod tests {
         let json = serde_json::to_value(&result).expect("serialize");
         assert_eq!(json["kind"], "error");
         assert_eq!(json["error_kind"], "unsupported-statement");
+    }
+
+    // -----------------------------------------------------------------
+    // Sprint 391 — DDL destructive serialization (AC-391-S).
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn ac_391_s01_drop_variant_serializes_with_kind_drop() {
+        let result = parse_sql("DROP TABLE IF EXISTS users CASCADE");
+        let json = serde_json::to_value(&result).expect("serialize");
+        assert_eq!(json["kind"], "drop");
+        assert_eq!(json["object_type"], "table");
+        assert_eq!(json["name"], "users");
+        assert_eq!(json["if_exists"], true);
+        assert_eq!(json["cascade"], "cascade");
+    }
+
+    #[test]
+    fn ac_391_s02_truncate_variant_serializes_with_kind_truncate() {
+        let result = parse_sql("TRUNCATE TABLE events RESTART IDENTITY CASCADE");
+        let json = serde_json::to_value(&result).expect("serialize");
+        assert_eq!(json["kind"], "truncate");
+        assert_eq!(json["table"], "events");
+        assert_eq!(json["restart_identity"], true);
+        assert_eq!(json["cascade"], "cascade");
+    }
+
+    #[test]
+    fn ac_391_s03_alter_table_drop_column_serializes_nested_action() {
+        let result = parse_sql("ALTER TABLE users DROP COLUMN email CASCADE");
+        let json = serde_json::to_value(&result).expect("serialize");
+        assert_eq!(json["kind"], "alter-table");
+        assert_eq!(json["table"], "users");
+        assert_eq!(json["action"]["kind"], "drop-column");
+        assert_eq!(json["action"]["column"], "email");
+        assert_eq!(json["action"]["if_exists"], false);
+        assert_eq!(json["action"]["cascade"], "cascade");
+    }
+
+    #[test]
+    fn ac_391_s03b_alter_table_drop_constraint_serializes() {
+        let result = parse_sql("ALTER TABLE orders DROP CONSTRAINT fk_user");
+        let json = serde_json::to_value(&result).expect("serialize");
+        assert_eq!(json["kind"], "alter-table");
+        assert_eq!(json["action"]["kind"], "drop-constraint");
+        assert_eq!(json["action"]["constraint"], "fk_user");
+    }
+
+    #[test]
+    fn ac_391_s03c_alter_table_drop_index_serializes() {
+        let result = parse_sql("ALTER TABLE users DROP INDEX idx_email");
+        let json = serde_json::to_value(&result).expect("serialize");
+        assert_eq!(json["kind"], "alter-table");
+        assert_eq!(json["action"]["kind"], "drop-index");
+        assert_eq!(json["action"]["index"], "idx_email");
+    }
+
+    #[test]
+    fn ac_391_s04_drop_round_trips_through_serde_json() {
+        let result = parse_sql("DROP SCHEMA public CASCADE");
+        let json = serde_json::to_string(&result).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(result, back);
+    }
+
+    #[test]
+    fn ac_391_s04_truncate_round_trips_through_serde_json() {
+        let result = parse_sql("TRUNCATE users CONTINUE IDENTITY RESTRICT");
+        let json = serde_json::to_string(&result).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(result, back);
+    }
+
+    #[test]
+    fn ac_391_s04_alter_round_trips_through_serde_json() {
+        let result = parse_sql("ALTER TABLE users DROP COLUMN IF EXISTS email CASCADE");
+        let json = serde_json::to_string(&result).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(result, back);
+    }
+
+    #[test]
+    fn ac_391_s_drop_no_options_serializes_with_nulls() {
+        let result = parse_sql("DROP TABLE users");
+        let json = serde_json::to_value(&result).expect("serialize");
+        assert_eq!(json["if_exists"], false);
+        // `Option::None` → serde_json `Null`.
+        assert!(json["cascade"].is_null());
     }
 }

@@ -16,6 +16,14 @@
  *   `confirm` (production 또는 non-prod + strict).
  *
  * 다중 statement 우선순위: DANGER > WARN > INFO (worst tier 결정).
+ *
+ * Sprint 391 (2026-05-17) — DDL destructive classifier callsite 가 정규식
+ * 에서 AST 기반(`parseSqlPreloaded`) 으로 *부분* 교체. `analyzeStatement`
+ * 의 반환 shape (`kind` / `severity` / `reasons`) 는 변경 없음 — 호출자
+ * 영향 0. AST 가 preload 되지 않은 환경(테스트, cold-start)에서는 정규식
+ * fallback 으로 회귀-안전. 남은 정규식 (DML / SELECT widening / CREATE /
+ * GRANT / REVOKE / WITH / EXPLAIN / SHOW / DESCRIBE) 은 sprint-392~394 가
+ * 단계적으로 교체.
  */
 export type Severity = "info" | "warn" | "danger";
 
@@ -52,10 +60,85 @@ export interface StatementAnalysis {
   reasons: string[];
 }
 
+import { parseSqlPreloaded, type SqlParseResult } from "./sqlAst";
+
 const LINE_COMMENT_RE = /--[^\n\r]*/g;
 const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
 const WHITESPACE_RE = /\s+/g;
 const WORD_BOUNDARY_WHERE_RE = /\bWHERE\b/i;
+
+/**
+ * Sprint 391 — DDL destructive classifier callsite migration.
+ *
+ * Convert a parsed AST node (sprint-391 grammar slice) into the
+ * `StatementAnalysis` shape used by the rest of the codebase. Returns
+ * `null` for AST variants outside the DDL destructive scope so the
+ * caller falls through to the legacy regex matcher for non-DDL paths.
+ *
+ * Why a dedicated mapper instead of inlining at the callsite: the AST
+ * → analysis projection is a *contract* — `kind` / `severity` / `reasons`
+ * shape must stay identical to the prior regex output (sqlSafety tests
+ * pin this). Isolating the mapper makes the contract auditable and gives
+ * sprint-392/393/394 a single point to extend without re-touching
+ * `analyzeStatement` for every new variant.
+ */
+function ddlDestructiveAnalysisFromAst(
+  ast: SqlParseResult,
+): StatementAnalysis | null {
+  switch (ast.kind) {
+    case "drop": {
+      // Reason string format matches the prior regex output —
+      // `DROP TABLE` / `DROP INDEX` / `DROP VIEW` / … The AST object_type
+      // is kebab-case ("table", "database", …); upper-casing recreates
+      // the regex group capture.
+      const objectKeyword = ast.object_type.toUpperCase();
+      return {
+        kind: "ddl-drop",
+        severity: "danger",
+        reasons: [`DROP ${objectKeyword}`],
+      };
+    }
+    case "truncate": {
+      return {
+        kind: "ddl-truncate",
+        severity: "danger",
+        reasons: ["TRUNCATE"],
+      };
+    }
+    case "alter-table": {
+      // Only DropColumn / DropConstraint flow to `ddl-alter-drop`;
+      // DropIndex (MySQL-style) is also a structure-removing surface
+      // so we map it to the same kind — its blast radius (index drop)
+      // matches a top-level `DROP INDEX`.
+      switch (ast.action.kind) {
+        case "drop-column":
+          return {
+            kind: "ddl-alter-drop",
+            severity: "danger",
+            reasons: ["ALTER TABLE DROP COLUMN"],
+          };
+        case "drop-constraint":
+          return {
+            kind: "ddl-alter-drop",
+            severity: "danger",
+            reasons: ["ALTER TABLE DROP CONSTRAINT"],
+          };
+        case "drop-index":
+          return {
+            kind: "ddl-alter-drop",
+            severity: "danger",
+            reasons: ["ALTER TABLE DROP INDEX"],
+          };
+      }
+      return null;
+    }
+    // SELECT / error variants are not DDL destructive — return null so
+    // the legacy regex path handles them (sprint-392/393 will widen).
+    case "select":
+    case "error":
+      return null;
+  }
+}
 
 function stripComments(sql: string): string {
   return sql.replace(BLOCK_COMMENT_RE, " ").replace(LINE_COMMENT_RE, " ");
@@ -159,6 +242,24 @@ export function analyzeStatement(sql: string): StatementAnalysis {
     }
     // Sprint 254 — bounded UPDATE WHERE = WARN tier.
     return { kind: "update", severity: "warn", reasons: [] };
+  }
+
+  // Sprint 391 — DDL destructive (DROP / TRUNCATE / ALTER … DROP) is
+  // classified through the AST first. The WASM module may not be loaded
+  // (cold-start, jsdom unit tests) in which case `parseSqlPreloaded`
+  // returns `null` and we fall back to the legacy regex matchers below.
+  // The regex fallback is *bit-identical* to the prior behavior so
+  // existing sqlSafety tests remain green either way.
+  if (/^(DROP|TRUNCATE|ALTER)\b/.test(upper)) {
+    const ast = parseSqlPreloaded(normalized);
+    if (ast !== null) {
+      const fromAst = ddlDestructiveAnalysisFromAst(ast);
+      if (fromAst !== null) return fromAst;
+      // AST parsed but the variant is not DDL destructive (e.g. SELECT
+      // mis-detected by the regex, ALTER TABLE … ADD COLUMN that surfaces
+      // as `error`/unsupported). Fall through to the legacy path so the
+      // existing classification (ddl-other / WARN) stays in effect.
+    }
   }
 
   if (/^DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|TRIGGER)\b/.test(upper)) {

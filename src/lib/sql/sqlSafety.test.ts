@@ -8,8 +8,145 @@
 // / ALTER additive) 가 명시적으로 WARN 임을 union 으로 표현. DML CTE
 // 인식도 함께 추가 — `WITH x AS (UPDATE …) SELECT *` 는 INFO 가 아니라
 // wrapped statement 의 severity 와 정합.
-import { describe, it, expect } from "vitest";
+//
+// Sprint 391 (2026-05-17) — DDL destructive (DROP / TRUNCATE / ALTER … DROP)
+// 분류 callsite 가 정규식 → AST 기반(`parseSqlPreloaded`) 으로 부분 이행.
+// 본 test suite 의 모든 기존 case 는 *preload 없이* 정규식 fallback 으로
+// 동일 결과를 반환해야 하고, 신규 AC-391-X case 는 *preload 후* AST
+// 경로로 동일 분류를 반환해야 한다. 둘 다 PASS = `analyzeStatement` 의
+// 반환 shape 가 변경 없음을 입증.
+import { afterAll, beforeAll, describe, it, expect } from "vitest";
 import { analyzeStatement, isDangerous, isInfoStatement } from "./sqlSafety";
+import { __resetSqlWasmModuleForTests, preloadSqlWasm } from "./sqlAst";
+
+// Mock the WASM module surface the same way sqlAst.test.ts does — both
+// suites need the synchronous `parseSqlPreloaded` path to resolve to a
+// real Rust AST shape so sqlSafety's AST callsite can be exercised in
+// jsdom (where `.wasm` loading would otherwise fail).
+import { vi } from "vitest";
+
+vi.mock("./wasm/sql_parser_core.js", () => {
+  return {
+    default: vi.fn().mockResolvedValue(undefined),
+    parse_sql: vi.fn((sql: string) => {
+      // Inline mini-parser: reproduce the Rust ParseResult shape for
+      // every DDL destructive variant that the AC-391-X suite asserts.
+      // Anything outside this list returns `null` so `parseSqlPreloaded`
+      // falls back to its caller's regex path.
+      const trimmed = sql.trim().replace(/;$/, "");
+      const upper = trimmed.toUpperCase();
+
+      // The regex below uses anchored groups; if `.match` succeeds the
+      // capture groups we reference are guaranteed non-undefined. The
+      // helper centralises the `string | undefined` → `string` narrowing
+      // with a single non-null assertion site (vs. one per group).
+      const g = (m: RegExpMatchArray, i: number): string => {
+        const v = m[i];
+        if (v === undefined) {
+          throw new Error(`sqlSafety test mock: group ${i} missing`);
+        }
+        return v;
+      };
+      // DROP <obj> [IF EXISTS] <name> [CASCADE|RESTRICT]
+      const dropMatch = trimmed.match(
+        /^DROP\s+(TABLE|DATABASE|INDEX|VIEW|SCHEMA|SEQUENCE|TYPE)(\s+IF\s+EXISTS)?\s+(\S+?)(\s+(CASCADE|RESTRICT))?$/i,
+      );
+      if (dropMatch) {
+        return {
+          kind: "drop",
+          object_type: g(dropMatch, 1).toLowerCase(),
+          name: g(dropMatch, 3),
+          if_exists: Boolean(dropMatch[2]),
+          cascade: dropMatch[5]
+            ? (dropMatch[5].toLowerCase() as "cascade" | "restrict")
+            : null,
+        };
+      }
+      // TRUNCATE [TABLE] <name> [(RESTART|CONTINUE) IDENTITY] [CASCADE|RESTRICT]
+      const truncateMatch = trimmed.match(
+        /^TRUNCATE(\s+TABLE)?\s+(\S+?)(\s+(RESTART|CONTINUE)\s+IDENTITY)?(\s+(CASCADE|RESTRICT))?$/i,
+      );
+      if (truncateMatch) {
+        const ri = truncateMatch[4]
+          ? truncateMatch[4].toUpperCase() === "RESTART"
+          : null;
+        return {
+          kind: "truncate",
+          table: g(truncateMatch, 2),
+          restart_identity: ri,
+          cascade: truncateMatch[6]
+            ? (truncateMatch[6].toLowerCase() as "cascade" | "restrict")
+            : null,
+        };
+      }
+      // ALTER TABLE <name> DROP COLUMN [IF EXISTS] <col> [CASCADE|RESTRICT]
+      const alterColMatch = trimmed.match(
+        /^ALTER\s+TABLE\s+(\S+?)\s+DROP\s+COLUMN(\s+IF\s+EXISTS)?\s+(\S+?)(\s+(CASCADE|RESTRICT))?$/i,
+      );
+      if (alterColMatch) {
+        return {
+          kind: "alter-table",
+          table: g(alterColMatch, 1),
+          action: {
+            kind: "drop-column",
+            column: g(alterColMatch, 3),
+            if_exists: Boolean(alterColMatch[2]),
+            cascade: alterColMatch[5]
+              ? (alterColMatch[5].toLowerCase() as "cascade" | "restrict")
+              : null,
+          },
+        };
+      }
+      // ALTER TABLE <name> DROP CONSTRAINT <name> [CASCADE|RESTRICT]
+      const alterCstMatch = trimmed.match(
+        /^ALTER\s+TABLE\s+(\S+?)\s+DROP\s+CONSTRAINT\s+(\S+?)(\s+(CASCADE|RESTRICT))?$/i,
+      );
+      if (alterCstMatch) {
+        return {
+          kind: "alter-table",
+          table: g(alterCstMatch, 1),
+          action: {
+            kind: "drop-constraint",
+            constraint: g(alterCstMatch, 2),
+            cascade: alterCstMatch[4]
+              ? (alterCstMatch[4].toLowerCase() as "cascade" | "restrict")
+              : null,
+          },
+        };
+      }
+      // ALTER TABLE <name> DROP INDEX <name>
+      const alterIdxMatch = trimmed.match(
+        /^ALTER\s+TABLE\s+(\S+?)\s+DROP\s+INDEX\s+(\S+?)$/i,
+      );
+      if (alterIdxMatch) {
+        return {
+          kind: "alter-table",
+          table: g(alterIdxMatch, 1),
+          action: { kind: "drop-index", index: g(alterIdxMatch, 2) },
+        };
+      }
+      // SELECT — return a `select` AST stub for completeness; non-DDL
+      // paths in sqlSafety still go through the regex matcher because
+      // `ddlDestructiveAnalysisFromAst` returns null for `select`.
+      if (/^SELECT\b/.test(upper)) {
+        return {
+          kind: "select",
+          columns: { kind: "star" },
+          table: "stub",
+          where: null,
+        };
+      }
+      // Anything else → error variant; sqlSafety's AST callsite then
+      // falls through to its legacy regex matcher.
+      return {
+        kind: "error",
+        error_kind: "unsupported-statement",
+        message: "sprint-391 mock fallthrough",
+        at: 0,
+      };
+    }),
+  };
+});
 
 describe("sqlSafety.analyzeStatement", () => {
   it("[AC-185-01a] DELETE without WHERE → danger", () => {
@@ -424,6 +561,136 @@ describe("sqlSafety.analyzeStatement", () => {
       // an empty buffer; the upstream `if (!sql) return` already short-
       // circuits the empty path so the change is defensive only.
       expect(isInfoStatement(analyzeStatement(""))).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Sprint 391 (2026-05-17) — AST-based DDL destructive classifier callsite.
+  // 본 블록은 *WASM 모듈을 명시적으로 preload* 한 뒤 `analyzeStatement` 가
+  // `parseSqlPreloaded` 경로를 거치는 것을 가정한다. 모든 case 의 반환 shape
+  // (`kind` / `severity` / `reasons`) 는 정규식 fallback 과 *동일* — 호출자
+  // 영향 0 임을 입증.
+  // -------------------------------------------------------------------------
+  describe("Sprint 391 — AST-based DDL destructive classifier (AC-391-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      // Other describe blocks below this point (없지만 안전) 가 정규식
+      // fallback 을 가정하지 않도록 reset.
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-391-X01] DROP TABLE users → ddl-drop / danger via AST", () => {
+      const a = analyzeStatement("DROP TABLE users");
+      expect(a.kind).toBe("ddl-drop");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["DROP TABLE"]);
+    });
+
+    it("[AC-391-X02] DROP TABLE IF EXISTS users CASCADE → ddl-drop / danger via AST", () => {
+      const a = analyzeStatement("DROP TABLE IF EXISTS users CASCADE");
+      expect(a.kind).toBe("ddl-drop");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["DROP TABLE"]);
+    });
+
+    it("[AC-391-X02b] DROP SCHEMA public CASCADE → ddl-drop / danger via AST", () => {
+      const a = analyzeStatement("DROP SCHEMA public CASCADE");
+      expect(a.kind).toBe("ddl-drop");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["DROP SCHEMA"]);
+    });
+
+    it("[AC-391-X02c] DROP SEQUENCE my_seq → ddl-drop / danger via AST (new variant)", () => {
+      // Pre-sprint-391 regex did NOT match SEQUENCE — it fell through to
+      // the `^DROP\b/^ALTER\b/^CREATE\b` catch-all (`ddl-other` / WARN).
+      // The AST path correctly classifies it as `ddl-drop` / DANGER.
+      // This is the *only* case where AST vs regex differ; sqlSafety
+      // test suite previously had no SEQUENCE coverage so no regression.
+      const a = analyzeStatement("DROP SEQUENCE my_seq");
+      expect(a.kind).toBe("ddl-drop");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["DROP SEQUENCE"]);
+    });
+
+    it("[AC-391-X02d] DROP TYPE my_enum CASCADE → ddl-drop / danger via AST (new variant)", () => {
+      const a = analyzeStatement("DROP TYPE my_enum CASCADE");
+      expect(a.kind).toBe("ddl-drop");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["DROP TYPE"]);
+    });
+
+    it("[AC-391-X03] TRUNCATE TABLE events → ddl-truncate / danger via AST", () => {
+      const a = analyzeStatement("TRUNCATE TABLE events");
+      expect(a.kind).toBe("ddl-truncate");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["TRUNCATE"]);
+    });
+
+    it("[AC-391-X04] TRUNCATE users RESTART IDENTITY CASCADE → ddl-truncate / danger via AST", () => {
+      const a = analyzeStatement("TRUNCATE users RESTART IDENTITY CASCADE");
+      expect(a.kind).toBe("ddl-truncate");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["TRUNCATE"]);
+    });
+
+    it("[AC-391-X05] ALTER TABLE users DROP COLUMN email → ddl-alter-drop / danger via AST", () => {
+      const a = analyzeStatement("ALTER TABLE users DROP COLUMN email");
+      expect(a.kind).toBe("ddl-alter-drop");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["ALTER TABLE DROP COLUMN"]);
+    });
+
+    it("[AC-391-X06] ALTER TABLE users DROP CONSTRAINT pk CASCADE → ddl-alter-drop / danger via AST", () => {
+      const a = analyzeStatement(
+        "ALTER TABLE users DROP CONSTRAINT pk CASCADE",
+      );
+      expect(a.kind).toBe("ddl-alter-drop");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["ALTER TABLE DROP CONSTRAINT"]);
+    });
+
+    it("[AC-391-X06b] ALTER TABLE users DROP INDEX idx → ddl-alter-drop / danger via AST (MySQL-style)", () => {
+      // Pre-sprint-391 regex matched COLUMN/CONSTRAINT only — `DROP INDEX`
+      // on ALTER TABLE fell through to `ddl-other` / WARN. AST correctly
+      // classifies it as `ddl-alter-drop` / DANGER. Existing sqlSafety
+      // tests do not cover this so no regression.
+      const a = analyzeStatement("ALTER TABLE users DROP INDEX idx");
+      expect(a.kind).toBe("ddl-alter-drop");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["ALTER TABLE DROP INDEX"]);
+    });
+
+    it("[AC-391-X07] SELECT regression — AST path returns null, regex path handles SELECT", () => {
+      // With WASM preloaded the AST returns kind:'select'; sqlSafety's
+      // `ddlDestructiveAnalysisFromAst` returns null for `select`, so
+      // the regex matcher classifies it as INFO. Same result either way.
+      const a = analyzeStatement("SELECT * FROM users");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-391-X07b] DELETE regression — DML still routes through regex (AST scope is DDL only)", () => {
+      // Sprint-391 AST does NOT cover DML. The DELETE branch fires
+      // before the DDL preload-AST branch, so this case is unaffected.
+      const a = analyzeStatement("DELETE FROM users");
+      expect(a.kind).toBe("delete");
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-391-X08] AST callsite preserves the `StatementAnalysis` shape contract (kind / severity / reasons keys)", () => {
+      const a = analyzeStatement("DROP TABLE users CASCADE");
+      // Shape is exactly the same as the regex-era output — caller
+      // narrowing (`a.kind === "ddl-drop"`) continues to work.
+      expect(Object.keys(a).sort()).toEqual(["kind", "reasons", "severity"]);
+      expect(typeof a.kind).toBe("string");
+      expect(typeof a.severity).toBe("string");
+      expect(Array.isArray(a.reasons)).toBe(true);
+      expect(isDangerous(a)).toBe(true);
+      expect(isInfoStatement(a)).toBe(false);
     });
   });
 });
