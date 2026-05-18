@@ -33,12 +33,14 @@ Thumbs.db
 # Claude Code (local-only)
 .claude/settings.local.json
 .claude/org.settings.local.json
-# Sub-agent git worktrees. Untracked by design — also gitignored so Tailwind v4's
-# `@tailwindcss/vite` source-scanner (which respects .gitignore) doesn't walk into
-# them and resolve sibling `<img src="...">` paths against stale worktree roots.
-# `scripts/worktree-spawn.sh` 가 생성하는 multi-agent worktree 도 본 경로 사용
-# (sprint-387 lock).
+# Claude Code sub-agent git worktrees. Untracked by design — also gitignored so
+# Tailwind v4's `@tailwindcss/vite` source-scanner (which respects .gitignore)
+# doesn't walk into them and resolve sibling `<img src="...">` paths against
+# stale worktree roots.
 .claude/worktrees/
+# Multi-agent / multi-brain worktrees (Claude / Codex / Cursor 공통, platform-neutral).
+# `scripts/worktree-spawn.sh` 가 생성. sprint-387 lock.
+worktrees/
 
 # Test
 coverage/

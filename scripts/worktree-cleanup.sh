@@ -44,7 +44,7 @@ fi
 remove_worktree_for_branch() {
   local branch="$1"
   local sanitized="${branch//\//__}"
-  local path="$REPO_ROOT/.claude/worktrees/${sanitized}"
+  local path="$REPO_ROOT/worktrees/${sanitized}"
 
   if [ -d "$path" ]; then
     git worktree remove "$path" 2>&1 | grep -v "^$" || true

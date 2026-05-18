@@ -25,11 +25,11 @@ worktree-spawn.sh — multi-agent worktree 생성
 
 결과:
   - branch <branch-name> 신설
-  - .claude/worktrees/<sanitized>/ 에 worktree 추가 (sanitized = branch 의 / → __)
+  - worktrees/<sanitized>/ 에 worktree 추가 (sanitized = branch 의 / → __)
   - 해당 worktree 에서 lefthook install
   - stdout 에 worktree 경로 출력
 
-.claude/worktrees/ 는 .gitignore 처리되어 있음.
+worktrees/ 는 .gitignore 처리. platform-neutral (Claude / Codex / Cursor 공통).
 
 관련: memory/runbook/worktree/memory.md
 EOF
@@ -46,11 +46,11 @@ fi
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 SANITIZED="${BRANCH//\//__}"
-# .claude/worktrees/ 는 .gitignore 처리. Tailwind v4 source-scanner 가 sibling
-# 경로로 walking 하지 않도록 sprint-386 이전부터 ignored.
-WORKTREE_PATH="$REPO_ROOT/.claude/worktrees/${SANITIZED}"
+# worktrees/ 는 platform-neutral. .gitignore 처리. Claude / Codex / Cursor 모두
+# 본 경로 사용. (.claude/worktrees/ 는 별개 — Claude Code sub-agent 전용.)
+WORKTREE_PATH="$REPO_ROOT/worktrees/${SANITIZED}"
 
-mkdir -p "$REPO_ROOT/.claude/worktrees"
+mkdir -p "$REPO_ROOT/worktrees"
 
 if [ -d "$WORKTREE_PATH" ]; then
   echo "ERROR: worktree path already exists: $WORKTREE_PATH" >&2

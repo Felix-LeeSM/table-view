@@ -38,10 +38,12 @@ bash scripts/worktree-cleanup.sh --prune
 
 ## 격리 동작
 
-- worktree 디렉토리: `.claude/worktrees/<branch-sanitized>/` (repo 안, gitignored)
-  - 예: `sprint-388/foo` → `.claude/worktrees/sprint-388__foo/`
-  - `.claude/worktrees/` 는 `.gitignore` 처리 — Tailwind v4 source-scanner 가
-    sibling 경로로 walk 하지 않도록 이전부터 무시되던 path 재사용
+- worktree 디렉토리: `worktrees/<branch-sanitized>/` (repo 안, gitignored)
+  - 예: `sprint-388/foo` → `worktrees/sprint-388__foo/`
+  - `worktrees/` 는 platform-neutral — Claude Code / Codex / Cursor 어떤
+    brain 이든 같은 경로. `.gitignore` 처리.
+  - `.claude/worktrees/` 와 별개 — 그쪽은 Claude Code 의 sub-agent 전용
+    (sprint-387 이전 부터 존재).
 - git hook 은 worktree 별 `.git/worktrees/<name>/hooks/` 에 분리되어
   `lefthook install` 자동 실행
 - working tree state (untracked / staged) 는 worktree 별 독립
