@@ -70,6 +70,7 @@ DANGEROUS_PATTERNS=(
   'sql_truncate::(^|[^a-zA-Z0-9_])TRUNCATE([^a-zA-Z0-9_]|$)'
   'git_push_force::(^|[^a-zA-Z0-9_])git[[:space:]]+push[[:space:]]+.*--force'
   'git_reset_hard::(^|[^a-zA-Z0-9_])git[[:space:]]+reset[[:space:]]+--hard'
+  'git_pull::(^|[^a-zA-Z0-9_])git[[:space:]]+pull([^a-zA-Z0-9_]|$)'
   'no_verify::--no-verify([^a-zA-Z0-9_]|$)'
   'lefthook_env_zero::(^|[^a-zA-Z0-9_])LEFTHOOK=0([^a-zA-Z0-9_]|$)'
   'lefthook_skip::(^|[^a-zA-Z0-9_])LEFTHOOK_SKIP='
@@ -88,9 +89,14 @@ WARN_PATTERNS=(
 MEMORY_POINTER="memory/workflow/git-policy/memory.md"
 
 # Sprint 400 — git reset --hard <target> 의 target 별 메시지 dispatch.
+# Sprint 402 — 2-step bypass 차단: FETCH_HEAD / ORIG_HEAD / @{u} / refs/remotes/*
+# 단독 명령도 sequence 차단과 같은 layer 로 끌어올림.
 #
-# 4 분기:
-#   1) FETCH_HEAD / origin/* — destructive remote-ref reset, 4-step recovery
+# 5 분기:
+#   1) FETCH_HEAD / ORIG_HEAD / @{u} / origin/* / refs/remotes/* —
+#      destructive **remote/upstream ref reset**. agent 2-step bypass 의 진범.
+#      recovery = reflog 기반 update-ref + SHA refspec push (외부 race 가짜
+#      신호 절 참고).
 #   2) HEAD~N / HEAD^N / @~N / @^N — destructive relative-ref reset,
 #      `--soft` 옵션 안내 (commit 보존)
 #   3) 40-hex SHA — reflog 검색 → 발견되면 *복구 case 추정* + 사용자 명시 승인
@@ -101,23 +107,30 @@ MEMORY_POINTER="memory/workflow/git-policy/memory.md"
 emit_git_reset_hard_message() {
   local target="$1"
   case "$target" in
-    FETCH_HEAD | origin/*)
+    FETCH_HEAD | ORIG_HEAD | '@{u}' | origin/* | refs/remotes/*)
       cat >&2 <<EOF
-git reset --hard $target — destructive **remote-ref reset**.
+git reset --hard $target — destructive **remote/upstream ref reset**.
 push reject 후 즉시 reset 으로 가는 것은 거의 항상 잘못된 응급 처치 —
-본인 local commit 을 wipe 하고 remote ref 로 강제 정렬합니다.
+본인 local commit 을 wipe 하고 remote/upstream ref 로 강제 정렬합니다.
 
-회복 sequence ($MEMORY_POINTER Push reject 절 참고):
-  1) git ls-remote origin <branch>          # remote 상태부터 확인
-  2) closed PR 의 stale head ref 면:
-       gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>
-     (branch 가 PR close 시 --delete-branch 누락으로 남은 경우)
-  3) legit non-fast-forward 면:
-       git pull --rebase origin <branch>
-  4) commit 보존하면서 ref 만 옮길 때:
-       git reset --soft <sha>   또는   git stash
+본 hook 은 sprint-402 부터 다음 단독 명령도 모두 차단 (이전엔
+\`git fetch && git reset --hard FETCH_HEAD\` sequence 만 차단 → agent 가
+2 단계 분리로 우회):
+  - git reset --hard FETCH_HEAD
+  - git reset --hard ORIG_HEAD
+  - git reset --hard origin/<branch>
+  - git reset --hard @{u}
+  - git reset --hard refs/remotes/<...>
 
-자세히: $MEMORY_POINTER (Push reject 절)
+회복 정답 ($MEMORY_POINTER 외부 race 가짜 신호 + Push reject 절):
+  1) git ls-remote origin <branch>          # remote SHA 진단
+  2) git reflog                              # 직전 본인 commit SHA 확인
+  3) git update-ref refs/heads/<branch> <local-sha>
+                                             # ref 만 본인 SHA 로 fix
+  4) SHA="\$(git rev-parse HEAD)"            # SHA refspec push inline
+     git push origin "\$SHA":refs/heads/<branch>
+
+자세히: $MEMORY_POINTER (외부 race 가짜 신호 + Push reject 절)
 이 가이드를 따라도 안 풀리면 사용자 승인 요청.
 EOF
       ;;
@@ -183,12 +196,15 @@ target SHA 가 reflog 에서 발견되지 않습니다. 이 SHA 가:
   - remote 의 SHA 라면 → 'git fetch' 후 다시 시도 / 'git ls-remote' 로 확인
   - 잘못된 SHA 라면 → 'git rev-parse --verify $target' 로 먼저 검증
 
-destructive 위험: --hard 는 working tree + commit 을 wipe 합니다. 회복 시
-sequence ($MEMORY_POINTER Push reject 절):
-  1) git ls-remote origin <branch>
-  2) gh api -X DELETE refs/heads/<branch>  # stale PR ref 면
-  3) git pull --rebase origin <branch>     # legit non-fast-forward 면
-  4) git reset --soft <sha>                # commit 보존
+destructive 위험: --hard 는 working tree + commit 을 wipe 합니다. 회복 정답
+($MEMORY_POINTER 외부 race 가짜 신호 + Push reject 절):
+  1) git ls-remote origin <branch>          # remote SHA 진단
+  2) git reflog                              # 직전 본인 commit SHA 확인
+  3) git update-ref refs/heads/<branch> <local-sha>
+  4) SHA="\$(git rev-parse HEAD)" && git push origin "\$SHA":refs/heads/<branch>
+
+stale PR ref 가 의심되면 (closed PR 의 --delete-branch 누락):
+  gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>
 
 진행하려면 사용자 명시 승인 후 재시도. 자세히: $MEMORY_POINTER
 EOF
@@ -208,17 +224,19 @@ emit_git_reset_hard_default() {
 git reset --hard 는 destructive — 본인 commit 을 wipe 합니다.
 push reject 후 즉시 reset 으로 가는 것은 거의 항상 잘못된 응급 처치.
 
-회복 sequence ($MEMORY_POINTER Push reject 절 참고):
-  1) git ls-remote origin <branch>          # remote 상태부터 확인
-  2) closed PR 의 stale head ref 면:
-       gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>
-     (branch 가 PR close 시 --delete-branch 누락으로 남은 경우)
-  3) legit non-fast-forward 면:
-       git pull --rebase origin <branch>
-  4) commit 보존하면서 ref 만 옮길 때:
-       git reset --soft <sha>   또는   git stash
+회복 정답 ($MEMORY_POINTER 외부 race 가짜 신호 + Push reject 절):
+  1) git ls-remote origin <branch>          # remote SHA 진단
+  2) git reflog                              # 직전 본인 commit SHA 확인
+  3) git update-ref refs/heads/<branch> <local-sha>
+                                             # ref 만 본인 SHA 로 fix
+  4) SHA="\$(git rev-parse HEAD)"            # SHA refspec push inline
+     git push origin "\$SHA":refs/heads/<branch>
 
-자세히: $MEMORY_POINTER (Push reject 절)
+부드러운 대안 (덜 destructive):
+  - git reset --soft <sha>   # working tree + index 보존
+  - git stash                 # 작업 보호
+
+자세히: $MEMORY_POINTER (외부 race 가짜 신호 + Push reject 절)
 이 가이드를 따라도 안 풀리면 사용자 승인 요청.
 EOF
 }
@@ -266,6 +284,33 @@ git push --force 는 destructive — remote 의 commit 을 덮어씁니다.
     --force-with-lease 사용 + 사용자 승인 후 진행.
 
 자세히: $MEMORY_POINTER (Hook 강제 메커니즘 / 예외 절)
+EOF
+      ;;
+    git_pull)
+      cat >&2 <<EOF
+git pull 은 agent context 에서 **금지** (sprint-402).
+push reject → 즉시 \`git pull --rebase\` 는 race-trace 결과 agent 의
+*2-step bypass* 의 진범. pull 은 내부에서 fetch + merge/rebase 를 묶어
+실행 → 본인 local commit 이 silently rebase 되거나 wipe 될 위험.
+
+차단 대상:
+  - git pull
+  - git pull --rebase
+  - git pull origin <branch>
+  - git pull --rebase origin <branch>
+
+회복 정답 ($MEMORY_POINTER 외부 race 가짜 신호 + Push reject 절):
+  1) git ls-remote origin <branch>          # remote SHA 진단
+  2) git reflog                              # 직전 본인 commit SHA 확인
+  3) git update-ref refs/heads/<branch> <local-sha>
+                                             # ref 만 본인 SHA 로 fix
+  4) SHA="\$(git rev-parse HEAD)"            # SHA refspec push inline
+     git push origin "\$SHA":refs/heads/<branch>
+
+예외: 사용자가 채팅에서 직접 \`! git pull\` (! prefix bypass) 로 명시 호출 시는
+본 hook scope 밖.
+
+자세히: $MEMORY_POINTER (외부 race 가짜 신호 + Push reject 절)
 EOF
       ;;
     *)

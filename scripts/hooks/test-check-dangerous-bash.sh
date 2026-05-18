@@ -79,12 +79,14 @@ run_case() {
   fi
 }
 
-# Case 1 — git reset --hard: block + 4-step recovery + memory pointer.
+# Case 1 — git reset --hard FETCH_HEAD: block + sprint-402 update-ref recovery.
+# sprint-402 부터 recovery 가 git pull --rebase 대신 reflog + update-ref + SHA
+# refspec push 로 변경됨 (2-step bypass 차단).
 run_case \
   "case1: git reset --hard FETCH_HEAD → block + recovery" \
   1 \
   '{"tool_input":{"command":"git reset --hard FETCH_HEAD"}}' \
-  'MATCH:git ls-remote|gh api -X DELETE|git pull --rebase|memory/workflow/git-policy/memory.md'
+  'MATCH:git ls-remote|git reflog|git update-ref|memory/workflow/git-policy/memory.md'
 
 # Case 2 — gh pr close without --delete-branch: warn only.
 run_case \
@@ -145,12 +147,13 @@ HEAD_SHA="$(git rev-parse HEAD 2>/dev/null || echo 00000000000000000000000000000
 # 확률은 0 — git 의 SHA-1 충돌 가정.
 ABSENT_SHA="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 
-# Case 400-1 — git reset --hard origin/main: destructive, 4-step recovery.
+# Case 400-1 — git reset --hard origin/main: destructive, update-ref recovery.
+# sprint-402 부터 git pull --rebase 대신 update-ref + SHA refspec push.
 run_case \
   "case-400-1: git reset --hard origin/main → block + remote ref 경고" \
   1 \
   '{"tool_input":{"command":"git reset --hard origin/main"}}' \
-  'MATCH:origin/|git ls-remote|git pull --rebase|memory/workflow/git-policy/memory.md'
+  'MATCH:origin/|git ls-remote|git update-ref|memory/workflow/git-policy/memory.md'
 
 # Case 400-2 — git reset --hard HEAD~1: destructive, soft option 안내.
 run_case \
@@ -179,6 +182,64 @@ run_case \
   1 \
   '{"tool_input":{"command":"git reset --hard some-branch"}}' \
   'MATCH:BLOCKED|memory/workflow/git-policy/memory.md'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 402 — single-cmd reset target + git pull block (2-step bypass close)
+# ─────────────────────────────────────────────────────────────────────────────
+# 본 6 case 는 race-trace 결과 agent 의 2-step 분리 우회 (fetch 따로, reset 따로)
+# 를 차단하는 신규 단독 명령 + git pull 전 변종을 검증.
+#   - case-X1: git reset --hard FETCH_HEAD          (이미 case1 — 회복 sequence 본문 추가 검증)
+#   - case-X2: git reset --hard ORIG_HEAD           (신규)
+#   - case-X3: git reset --hard origin/main         (이미 case-400-1 — 메시지 본문 추가 검증)
+#   - case-X4: git reset --hard @{u}                (신규 — upstream tracking shortcut)
+#   - case-X5: git pull                              (신규 — pull 단독 차단)
+#   - case-X6: git pull --rebase origin main         (신규 — pull 변종 차단)
+# 추가로 refs/remotes/* 검출 신규 검증.
+
+# Case X1 — git reset --hard FETCH_HEAD: recovery sequence (update-ref + SHA refspec push) 검증.
+run_case \
+  "case-X1: git reset --hard FETCH_HEAD → block + update-ref recovery 안내" \
+  1 \
+  '{"tool_input":{"command":"git reset --hard FETCH_HEAD"}}' \
+  'MATCH:FETCH_HEAD|git update-ref|SHA refspec|memory/workflow/git-policy/memory.md'
+
+# Case X2 — git reset --hard ORIG_HEAD: 단독 명령 차단 + remote/upstream 분기.
+run_case \
+  "case-X2: git reset --hard ORIG_HEAD → block + remote/upstream ref 경고" \
+  1 \
+  '{"tool_input":{"command":"git reset --hard ORIG_HEAD"}}' \
+  'MATCH:ORIG_HEAD|git update-ref|memory/workflow/git-policy/memory.md'
+
+# Case X3 — git reset --hard origin/main: remote ref 분기 메시지 본문 검증.
+run_case \
+  "case-X3: git reset --hard origin/main → block + remote ref + 2-step bypass 안내" \
+  1 \
+  '{"tool_input":{"command":"git reset --hard origin/main"}}' \
+  'MATCH:origin/main|2 단계 분리로 우회|git update-ref|memory/workflow/git-policy/memory.md'
+
+# Case X4 — git reset --hard @{u}: upstream tracking shortcut, 신규 단독 차단.
+run_case \
+  "case-X4: git reset --hard @{u} → block + upstream ref 경고" \
+  1 \
+  '{"tool_input":{"command":"git reset --hard @{u}"}}' \
+  'MATCH:@{u}|git update-ref|memory/workflow/git-policy/memory.md'
+
+# Case X5 — git pull (단독): 신규 차단. recovery 정답 안내.
+run_case \
+  "case-X5: git pull → block + update-ref recovery 안내" \
+  1 \
+  '{"tool_input":{"command":"git pull"}}' \
+  'MATCH:git pull|2-step bypass|git update-ref|memory/workflow/git-policy/memory.md'
+
+# Case X6 — git pull --rebase origin main: 변종 차단.
+# refs/remotes/* 분기 검증은 X6 와 동일 layer (remote/upstream ref reset 그룹).
+# message 본문에 "refs/remotes/<...>" literal 이 포함됨을 확인하면 패턴 검출 +
+# message dispatch 모두 healthy 임이 증명 (smoke test 한계 내).
+run_case \
+  "case-X6: git pull --rebase origin main → block + pull 변종 차단" \
+  1 \
+  '{"tool_input":{"command":"git pull --rebase origin main"}}' \
+  'MATCH:git pull|--rebase|git update-ref|memory/workflow/git-policy/memory.md'
 
 echo ""
 echo "==== smoke test summary ===="
