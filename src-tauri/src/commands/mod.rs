@@ -21,6 +21,10 @@ pub mod rdb;
 pub mod release_tab_connection;
 pub mod single_instance;
 pub mod snapshot;
+// Sprint 385 (2026-05-17) — backend SQL parser IPC, mirrors the frontend
+// `src/lib/sql/sqlAst.ts` facade through the same `sql-parser-core`
+// crate (native compile here, WASM compile in the renderer).
+pub mod sql_parser;
 pub mod sqlite_pool;
 
 #[cfg(test)]

@@ -61,6 +61,14 @@ regex = "1"
 # not pull in the other two native backends.
 keyring = { version = "3", default-features = false }
 tauri-plugin-single-instance = "2"
+# Sprint 385 (2026-05-17) — pure-Rust SQL parser. The crate lives under
+# `sql-parser-core/` as a path dependency (NOT a Cargo workspace member)
+# so `cargo llvm-cov --lib` for `table-view` stays isolated from the new
+# crate's coverage profile and so `cargo build --target
+# wasm32-unknown-unknown` of the sub-crate doesn't pull in any Tauri
+# transitive deps. The same `.rs` sources compile to native (this dep)
+# and to WASM (frontend lazy-load via wasm-pack).
+sql-parser-core = { path = "sql-parser-core", version = "0.1.0" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", default-features = false, features = ["apple-native"] }

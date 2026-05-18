@@ -2,12 +2,23 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import wasm from "vite-plugin-wasm";
 import path from "path";
 
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig(async () => ({
-  plugins: [react(), ...(process.env.VITEST ? [] : [tailwindcss()])],
+  // Sprint 385 — `vite-plugin-wasm` lets the dynamic `import()` of the
+  // wasm-pack-generated JS glue (`src/lib/sql/wasm/sql_parser_core.js`)
+  // resolve its sibling `.wasm` URL correctly through Vite's asset
+  // pipeline. We deliberately do NOT pair it with `vite-plugin-top-
+  // level-await`: the wasm-pack `--target web` glue uses await only
+  // inside async functions (not at module top-level), and the TLA
+  // plugin's SWC transform disables esbuild minification for every
+  // touched module — that would balloon the main bundle by ~900KB
+  // (1.5MB → 2.4MB unminified). Our facade (`sqlAst.ts`) wraps the
+  // module init in an async function so no real TLA exists.
+  plugins: [wasm(), react(), ...(process.env.VITEST ? [] : [tailwindcss()])],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

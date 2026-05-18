@@ -101,6 +101,21 @@ jobs:
       - name: Run cargo tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration
 
+      # Sprint 390 (2026-05-17) — sprint-385 review found that the
+      # `sql-parser-core` path crate's 31 lib tests and the
+      # `parse_sql_backend` integration test (2 tests) were NOT covered
+      # by the Rust job above: the previous `cargo test --manifest-path
+      # src-tauri/Cargo.toml --lib --test storage_integration` line only
+      # runs `table-view`'s lib tests + one named integration target.
+      # Wire them in as separate steps so a regression in either set
+      # fails CI. Steps run serially with default `if: success()` — a
+      # failure in the table-view lib tests short-circuits the rest,
+      # which is the desired blast-radius behavior (fix upstream first).
+      - name: Run sql-parser-core unit tests
+        run: cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib
+      - name: Run parse_sql_backend integration test
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend
+
   integration-tests:
     name: Integration Tests (Docker)
     runs-on: ubuntu-latest

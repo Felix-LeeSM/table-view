@@ -1,10 +1,10 @@
 ---
-title: Git 정책 — hook 회피 절대 금지
+title: Git 정책 — hook 회피 절대 금지 + 능동 enforcement
 type: workflow-rule
-updated: 2026-05-18
-task: commit, push, hook, lefthook
+updated: 2026-05-17
+task: commit, push, hook, lefthook, push-reject, pr-close
 trigger:
-  signal: git commit / git push / hook 실패 시
+  signal: git commit / git push / hook 실패 / push reject / PR close 시
   layer: hook (.claude/hooks/pre-bash.sh + scripts/hooks/check-dangerous-bash.sh)
 ---
 
@@ -35,44 +35,26 @@ Code / Codex / Cursor) 에 같은 룰 적용.
    (`check_git_hooks`).
 2. **본 정책 문서** — 사람 / agent 모두 명문화 룰.
 
-## Hook 한계 (sprint-387 명시)
+## Hook 한계 + Worktree (sprint-387)
 
-본 hook 은 **부주의 방지** layer. 의도적 우회는 **차단 불가능**:
+본 hook 은 **부주의 방지** layer. 의도적 우회 (변수 substitution / 문자열
+concat / bin alias / eval split / PATH override) 는 **차단 불가능** — hook
+통과 = "agent 가 자기도 모르게 위반하지 않는다" 보장만. 정책 (본 문서) +
+git log 가 최종 source of truth.
 
-- 변수 substitution: `CMD="git push --force"; $CMD` — 호출 부에 패턴 없음.
-- 문자열 concat: `python -c "import os; os.system('git ' + 'push --force')"`.
-- bin alias: `cp $(which git) /tmp/g; /tmp/g push --force`.
-- eval split: `eval "git $(printf 'push --force')"`.
-- PATH override: `PATH=. fakegit push origin main --force`.
+차단 가능 케이스: 평문 명령 / `bash -c "..."` 안 평문 / `$(echo ...)` 안 평문
+/ alias 정의 본문 / heredoc / nohup / background.
 
-차단 가능:
-
-- 평문 명령 / `bash -c "..."` 안의 평문 / `$(echo ...)` 안의 평문 / alias 정의
-  본문 / heredoc / nohup / background.
-
-따라서 hook 통과 = 안전 보장이 아니라 "agent 가 *자기도 모르게* 위반하지
-않는다" 보장. 정책 (본 문서) + 사람 / agent 의 commit 메시지 + git log 가
-최종 source of truth.
-
-## Worktree 동작 (sprint-387 검증)
-
-- `.claude/settings.json` 의 hook command: `"$CLAUDE_PROJECT_DIR"/.claude/hooks/pre-bash.sh`
-- `$CLAUDE_PROJECT_DIR` 는 worktree root 의 절대 경로 → worktree 사본의
-  hook 호출 → worktree 사본의 `scripts/hooks/check-dangerous-bash.sh` 실행.
-- worktree 는 git checkout 으로 두 파일 모두 보유 → 격리된 worktree 에서도
-  동일 차단.
-- `.claude/settings.local.json` 만 worktree 별 다를 수 있음 (gitignored).
-  hook 정의는 tracked `settings.json` 이라 worktree 간 drift 없음.
+Worktree: `$CLAUDE_PROJECT_DIR` 가 worktree root 절대경로 → worktree 사본의
+`scripts/hooks/check-dangerous-bash.sh` 가 호출됨. tracked `settings.json` 만
+hook 정의 → worktree drift 없음.
 
 ## Hook 실패 시 — 회피 X, 근본 fix
 
-- **포맷 실패** → `cargo fmt` / `npx prettier --write` 재실행
-- **린트 실패** → 경고 수정. `// eslint-disable-next-line` 은 분명한 사유 +
-  코멘트와 함께만.
-- **테스트 실패** → 테스트 옳다면 코드 수정. 테스트 틀렸으면 테스트 수정 +
-  ADR/sprint 코멘트.
-- **e2e cold-boot timeout** → `e2e/_helpers.ts` timeout, `wdio.conf.ts` mocha
-  timeout, `scripts/e2e-host.sh` docker daemon/psql 사전조건 확인.
+- 포맷 실패 → `cargo fmt` / `npx prettier --write`.
+- 린트 실패 → 경고 수정. `eslint-disable` 은 사유 코멘트와 함께만.
+- 테스트 실패 → 코드 수정 또는 (테스트가 틀렸으면) 테스트 + ADR 수정.
+- e2e timeout → `e2e/_helpers.ts` + `wdio.conf.ts` timeout, docker daemon 확인.
 
 ## 예외 — 사용자 명시 승인 시만
 
@@ -96,6 +78,105 @@ lock).
 - 자율 범위 / 예외 / spawn 패턴: [delivery](../delivery/memory.md)
 - 본 정책 (hook 회피 금지) 은 자율 실행의 조건 — hook 통과 안 되면 commit/
   push 자체 안 됨. agent 가 hook 실패 회피 시도 = 본 정책 위반.
+
+## Push reject 응급 처치 (sprint-389)
+
+push 가 non-fast-forward 로 튕겼을 때 **절대** 즉시 `git reset --hard
+FETCH_HEAD` 하지 말 것 — 본인 commit 을 wipe 하는 destructive 행동.
+hook (`check-dangerous-bash.sh`) 가 이제 차단 메시지에 본 sequence 를 직접
+출력함 (능동 enforcement, sprint-389).
+
+### 4-step 진단 + 회복
+
+1. **remote 상태부터 확인**
+
+   ```bash
+   git ls-remote origin <branch>
+   ```
+
+   결과의 SHA 가 local `HEAD` 와 다르면 → 누가 / 무엇이 다른가 파악.
+
+2. **closed-PR 의 stale head ref 인 경우** — `gh pr close <N>` 가
+   `--delete-branch` 없이 호출되어 remote 에 ref 가 남아있을 때:
+
+   ```bash
+   gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>
+   ```
+
+   이후 다시 `git push origin <branch>` 시도. (예방: PR close cleanup 절.)
+
+3. **legit non-fast-forward** — 다른 작업자가 같은 branch 에 push:
+
+   ```bash
+   git pull --rebase origin <branch>
+   # 충돌 해결 후
+   git push origin <branch>
+   ```
+
+4. **본인 commit 보존하면서 ref 만 옮길 때** — `git reset --hard` 가 정말
+   필요한 것 같으면 한 단계 부드러운 옵션부터:
+
+   ```bash
+   git reset --soft <sha>   # working tree 보존
+   git stash                 # 작업 보호
+   ```
+
+   여전히 hard 가 필요하다고 판단되면 **사용자 승인 후** 진행.
+
+## PR close cleanup (sprint-389)
+
+`gh pr close` 시 **반드시** `--delete-branch` 동반. closed-PR 의 head ref 가
+remote 에 stale 로 남으면, 같은 sprint 가 재 spawn 될 때 새 branch 의 SHA 와
+non-fast-forward 충돌 → push reject. hook 이 본 호출을 detection 해 stderr
+WARNING 출력 (block 아님, exit 0).
+
+```bash
+gh pr close <N> --delete-branch --comment "<reason>"
+```
+
+### 재 spawn 시 stale ref 검증
+
+새 worktree / 새 branch 작업 시작 전:
+
+```bash
+# remote 에 같은 branch ref 가 살아있는지 검사
+git ls-remote origin <branch>
+
+# stale 발견 시 삭제
+gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>
+```
+
+## SHA refspec push 패턴 (sprint-389)
+
+agent 가 작업 중에 새 commit 을 만든 뒤 push 하기 직전에 *다른* 에이전트
+세션이 같은 branch 에 push 해버리는 race 가 가능. 이 race 를 막기 위한
+SHA refspec push 패턴:
+
+```bash
+git rev-parse HEAD                                          # 1) 로컬 SHA 확보
+git push origin '<literal-sha>':'refs/heads/<branch-name>'  # 2) literal SHA → branch
+```
+
+### Why
+
+- `git push origin HEAD:branch` 는 push 시점 `HEAD` 가 무엇이든 거기를
+  올림 → race 발생 가능.
+- literal SHA 를 명시하면 SHA-to-ref mapping 이 결정적 — race 발생해도
+  의도한 commit 만 올라가고, 그 사이 새 commit 이 추가됐다면 push 가
+  자동으로 reject (non-fast-forward) → 사용자가 진단 가능.
+
+### zsh `:r` 모디파이어 trap
+
+zsh 는 word 안의 `:` 를 modifier 로 해석 → `<sha>:refs/heads/foo` 가
+"sha 의 root extension 제거 + refs/heads/foo" 로 변환되어 깨짐.
+**single-quote 로 escape 필수**:
+
+```bash
+git push origin 'abc1234':'refs/heads/feat/foo'   # OK
+git push origin abc1234:refs/heads/feat/foo       # zsh 에서 깨짐
+```
+
+bash 에서는 위 quote 가 무해 (no-op) → cross-shell 호환 위해 항상 single-quote.
 
 ## 관련
 

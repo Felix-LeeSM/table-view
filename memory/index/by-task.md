@@ -129,6 +129,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 
+### pr-close
+
+- [Git 정책](../../memory/workflow/git-policy/memory.md)
+
 ### pr-reviewer
 
 - [PR Review](../../memory/workflow/review/memory.md)
@@ -140,6 +144,10 @@ generator: scripts/regenerate-indexes.sh
 ### push
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Git 정책](../../memory/workflow/git-policy/memory.md)
+
+### push-reject
+
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 
 ### react-impl

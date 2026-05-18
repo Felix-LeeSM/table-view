@@ -429,13 +429,56 @@ pub async fn explain_mongo_find(
 // 28 의 statement-level method whitelist 와 동거 가능. database 인자가
 // `None` 이면 driver 가 `admin` DB 에서 실행 (adminCommand semantics),
 // `Some("myapp")` 이면 해당 db (db-scoped command).
+//
+// ── Sprint 384 (2026-05-17) — extended-JSON → BSON conversion ───────────
+//
+// 작성 이유: sprint-383 의 mongoshAst 가 `ObjectId("507f…")` 같은 BSON
+// literal 을 extended-JSON placeholder `{"$oid": "507f…"}` 로 normalize
+// 한다. 이 placeholder 가 그대로 `bson::Document` 로 serde-deserialize
+// 되면 driver 는 sub-document 로 인식하고 MongoDB server 는 ObjectId 가
+// 아닌 일반 doc 으로 query — semantic bug. 본 sprint 는 IPC entry 에서
+// `serde_json::Value` 로 받고 `bson::Bson::try_from(...)` 한 줄로 진짜
+// `Bson::ObjectId` / `Bson::DateTime` / `Bson::Int64` / `Bson::Decimal128` /
+// `Bson::Binary(Uuid)` variant 로 변환한다. plain JSON (BSON marker 없는)
+// body 는 동일한 BSON Document 로 변환된다 (regression-lock).
+
+/// Convert a frontend-shaped JSON object into a BSON document, honouring
+/// extended-JSON placeholders (`{$oid}`, `{$date}`, `{$numberLong}`,
+/// `{$numberDecimal}`, `{$uuid}`) so the MongoDB driver sees real BSON
+/// variants instead of sub-documents.
+///
+/// Sprint 384 — the wrapper around `bson::Document::try_from` exists so
+/// (a) we can keep `AppError` boundaries thin and (b) we reject any
+/// non-object root with a clear message (`runCommand` body is always an
+/// object literal at the AST layer, but this is the IPC trust boundary).
+fn extjson_to_bson_document(value: serde_json::Value) -> Result<bson::Document, AppError> {
+    let obj = match value {
+        serde_json::Value::Object(map) => map,
+        other => {
+            return Err(AppError::Validation(format!(
+                "runCommand body must be a JSON object, got {}",
+                match other {
+                    serde_json::Value::Null => "null",
+                    serde_json::Value::Bool(_) => "boolean",
+                    serde_json::Value::Number(_) => "number",
+                    serde_json::Value::String(_) => "string",
+                    serde_json::Value::Array(_) => "array",
+                    serde_json::Value::Object(_) => unreachable!(),
+                }
+            )))
+        }
+    };
+    bson::Document::try_from(obj)
+        .map_err(|e| AppError::Validation(format!("invalid extended-JSON in runCommand body: {e}")))
+}
 
 async fn run_mongo_command_inner(
     state: &AppState,
     connection_id: &str,
     database: Option<&str>,
-    command: bson::Document,
+    command: serde_json::Value,
 ) -> Result<serde_json::Value, AppError> {
+    let command = extjson_to_bson_document(command)?;
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
@@ -448,12 +491,17 @@ async fn run_mongo_command_inner(
 /// `database` 는 frontend 가 `tab.database` 를 그대로 전달 — 비어 있으면
 /// `None`, 그렇지 않으면 `Some(name)`. backend 는 `None` 일 때 driver 의
 /// `admin` DB context 를 사용해 admin command 의미를 유지한다.
+///
+/// Sprint 384 — `command` 는 `serde_json::Value` 로 받아 `bson::Bson::try_from`
+/// 으로 extended-JSON placeholder (`{$oid}`, `{$date}`, `{$numberLong}`,
+/// `{$numberDecimal}`, `{$uuid}`) 를 진짜 BSON variant 로 변환한 뒤
+/// driver 에 전달한다. plain JSON 은 동일한 BSON Document 로 변환됨.
 #[tauri::command]
 pub async fn run_mongo_command(
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: Option<String>,
-    command: bson::Document,
+    command: serde_json::Value,
 ) -> Result<serde_json::Value, AppError> {
     run_mongo_command_inner(state.inner(), &connection_id, database.as_deref(), command).await
 }
@@ -872,8 +920,7 @@ mod tests {
     #[tokio::test]
     async fn run_mongo_command_unknown_connection_returns_notfound() {
         let state = AppState::new();
-        let mut cmd = bson::Document::new();
-        cmd.insert("ping", 1);
+        let cmd = serde_json::json!({ "ping": 1 });
         match run_mongo_command_inner(&state, "absent", None, cmd).await {
             Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
             other => panic!("Expected NotFound, got: {:?}", other),
@@ -883,8 +930,7 @@ mod tests {
     #[tokio::test]
     async fn run_mongo_command_rdb_paradigm_returns_unsupported() {
         let state = state_with("rdb", rdb_default()).await;
-        let mut cmd = bson::Document::new();
-        cmd.insert("ping", 1);
+        let cmd = serde_json::json!({ "ping": 1 });
         assert!(matches!(
             run_mongo_command_inner(&state, "rdb", None, cmd).await,
             Err(AppError::Unsupported(_))
@@ -911,8 +957,7 @@ mod tests {
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
 
-        let mut cmd = bson::Document::new();
-        cmd.insert("serverStatus", 1);
+        let cmd = serde_json::json!({ "serverStatus": 1 });
         let r = run_mongo_command_inner(&state, "d", None, cmd)
             .await
             .expect("should succeed");
@@ -941,8 +986,7 @@ mod tests {
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
 
-        let mut cmd = bson::Document::new();
-        cmd.insert("dbStats", 1);
+        let cmd = serde_json::json!({ "dbStats": 1 });
         let r = run_mongo_command_inner(&state, "d", Some("myapp"), cmd)
             .await
             .expect("should succeed");
@@ -953,5 +997,179 @@ mod tests {
             Some(Some("myapp".to_string())),
             "expected database=Some(\"myapp\") routing"
         );
+    }
+
+    // ── Sprint 384 (2026-05-17) — extended-JSON → BSON conversion ───────
+    //
+    // 작성 이유: sprint-383 mongoshAst 가 `ObjectId(...)` / `ISODate(...)` /
+    // `NumberLong(...)` / `Decimal128(...)` / `UUID(...)` 를 extended-JSON
+    // placeholder (`{$oid: "..."}` 등) 로 만든다. IPC entry 에서 그 placeholder
+    // 를 real BSON variant 로 변환하지 않으면 driver 가 sub-document 로
+    // 인식해 MongoDB server query 가 의미적으로 깨진다. 본 5개 단위 테스트는
+    // 각 marker 가 실제 Bson variant 로 변환되는지 + plain JSON regression
+    // + invalid placeholder reject 까지 cover.
+    //
+    // `StubDocumentAdapter` 와 `ActiveAdapter` 는 sprint-308 블록에서 이미
+    // import 됨 (line 602-603) — 여기서 재import 하면 E0252.
+
+    use std::sync::{Arc, Mutex};
+
+    /// Build a stub state + capture handle for the BSON variant captured by
+    /// the adapter closure. Single field `target` is the key inside the body
+    /// to inspect.
+    async fn run_command_capturing(
+        body: serde_json::Value,
+        target: &'static str,
+    ) -> (Result<serde_json::Value, AppError>, Option<bson::Bson>) {
+        let captured: Arc<Mutex<Option<bson::Bson>>> = Arc::new(Mutex::new(None));
+        let captured_for_closure = captured.clone();
+        let target_owned = target.to_string();
+        let mut s = StubDocumentAdapter::default();
+        s.run_command_fn = Some(Box::new(move |_db, command| {
+            *captured_for_closure.lock().unwrap() = command.get(&target_owned).cloned();
+            Ok(serde_json::json!({ "ok": 1 }))
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        let r = run_mongo_command_inner(&state, "d", None, body).await;
+        let captured = captured.lock().unwrap().clone();
+        (r, captured)
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_converts_oid_placeholder_to_object_id() {
+        // AC-384-P1-1 — ObjectId placeholder → Bson::ObjectId variant
+        let body = serde_json::json!({ "_id": {"$oid": "507f1f77bcf86cd799439011"} });
+        let (result, captured) = run_command_capturing(body, "_id").await;
+        result.expect("conversion + dispatch succeed");
+        match captured.expect("captured _id") {
+            bson::Bson::ObjectId(oid) => {
+                assert_eq!(oid.to_hex(), "507f1f77bcf86cd799439011")
+            }
+            other => panic!("expected Bson::ObjectId, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_converts_date_placeholder_to_datetime() {
+        // AC-384-P1-2 — ISODate placeholder → Bson::DateTime variant
+        let body = serde_json::json!({ "when": {"$date": "2026-05-18T12:00:00Z"} });
+        let (result, captured) = run_command_capturing(body, "when").await;
+        result.expect("conversion + dispatch succeed");
+        match captured.expect("captured when") {
+            bson::Bson::DateTime(_) => { /* ok */ }
+            other => panic!("expected Bson::DateTime, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_converts_numberlong_placeholder_to_int64() {
+        // AC-384-P1-3 — NumberLong placeholder → Bson::Int64 variant
+        let body = serde_json::json!({ "n": {"$numberLong": "9223372036854775000"} });
+        let (result, captured) = run_command_capturing(body, "n").await;
+        result.expect("conversion + dispatch succeed");
+        match captured.expect("captured n") {
+            bson::Bson::Int64(v) => assert_eq!(v, 9_223_372_036_854_775_000_i64),
+            other => panic!("expected Bson::Int64, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_converts_decimal128_placeholder_to_decimal128() {
+        // AC-384-P1-4 — Decimal128 placeholder → Bson::Decimal128 variant
+        let body = serde_json::json!({ "d": {"$numberDecimal": "3.14"} });
+        let (result, captured) = run_command_capturing(body, "d").await;
+        result.expect("conversion + dispatch succeed");
+        match captured.expect("captured d") {
+            bson::Bson::Decimal128(_) => { /* ok */ }
+            other => panic!("expected Bson::Decimal128, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_converts_uuid_placeholder_to_binary() {
+        // AC-384-P1-5 — UUID placeholder → Bson::Binary(subtype Uuid) variant
+        let body = serde_json::json!({ "u": {"$uuid": "550e8400-e29b-41d4-a716-446655440000"} });
+        let (result, captured) = run_command_capturing(body, "u").await;
+        result.expect("conversion + dispatch succeed");
+        match captured.expect("captured u") {
+            bson::Bson::Binary(bin) => {
+                assert_eq!(bin.subtype, bson::spec::BinarySubtype::Uuid);
+                assert_eq!(bin.bytes.len(), 16);
+            }
+            other => panic!("expected Bson::Binary(Uuid), got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_passes_plain_json_through_unchanged() {
+        // AC-384-P1-6 — regression lock: no extended-JSON markers ⇒ identical
+        // BSON Document conversion (Int32 / String preserved).
+        let body = serde_json::json!({ "ping": 1, "host": "example.com" });
+        let (result, _) = run_command_capturing(body, "ping").await;
+        result.expect("plain JSON dispatch succeeds");
+
+        // Re-run with a fresh closure that captures the *whole* document so we
+        // can assert the shape end-to-end.
+        let captured: Arc<Mutex<Option<bson::Document>>> = Arc::new(Mutex::new(None));
+        let captured_for_closure = captured.clone();
+        let mut s = StubDocumentAdapter::default();
+        s.run_command_fn = Some(Box::new(move |_db, command| {
+            *captured_for_closure.lock().unwrap() = Some(command);
+            Ok(serde_json::json!({ "ok": 1 }))
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        let _ = run_mongo_command_inner(
+            &state,
+            "d",
+            None,
+            serde_json::json!({ "ping": 1, "host": "example.com" }),
+        )
+        .await
+        .expect("ok");
+        let doc = captured.lock().unwrap().clone().expect("captured doc");
+        match doc.get("ping").expect("ping field") {
+            bson::Bson::Int32(v) => assert_eq!(*v, 1),
+            other => panic!("expected Bson::Int32 for ping, got: {:?}", other),
+        }
+        match doc.get("host").expect("host field") {
+            bson::Bson::String(v) => assert_eq!(v, "example.com"),
+            other => panic!("expected Bson::String for host, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_rejects_invalid_oid_placeholder_as_validation() {
+        // AC-384-P1-7 — invalid extended-JSON (24-hex check) surfaces as
+        // AppError::Validation, not a panic, not a Database error.
+        let state = state_with("d", document_default()).await;
+        let body = serde_json::json!({ "_id": {"$oid": "not-24-hex"} });
+        match run_mongo_command_inner(&state, "d", None, body).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("extended-JSON") || msg.contains("oid") || msg.contains("hex"),
+                    "unexpected validation message: {msg}"
+                );
+            }
+            other => panic!("expected AppError::Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_rejects_non_object_body() {
+        // Defensive boundary at the IPC trust line — runCommand body must be
+        // an object literal. The AST guarantees this upstream, but the
+        // converter rejects non-objects explicitly so a future caller cannot
+        // smuggle a primitive past the type system.
+        let state = state_with("d", document_default()).await;
+        let body = serde_json::json!([{ "ping": 1 }]);
+        match run_mongo_command_inner(&state, "d", None, body).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("JSON object") || msg.contains("array"),
+                    "unexpected validation message: {msg}"
+                );
+            }
+            other => panic!("expected AppError::Validation, got: {:?}", other),
+        }
     }
 }

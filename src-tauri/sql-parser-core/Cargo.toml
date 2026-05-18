@@ -1,0 +1,50 @@
+[package]
+name = "sql-parser-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91.0"
+publish = false
+description = "Pure-Rust SQL parser core for table-view. Compiles to native (Tauri backend) and wasm32-unknown-unknown (frontend via wasm-pack)."
+
+# `rlib` so the native Tauri backend can use it as a Rust path dependency,
+# `cdylib` so `wasm-pack build --target web` can produce the WASM artifact
+# for the frontend. Two crate-types from one source tree — that is the
+# entire point of this sprint's foundation work.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# `wasm` feature gates the wasm-bindgen wrapper. Without it the crate is
+# pure-Rust + serde (so it can be a normal Cargo dep from src-tauri).
+# `wasm-pack build --features wasm` enables the JS surface.
+[features]
+default = []
+wasm = ["dep:wasm-bindgen", "dep:serde-wasm-bindgen"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+# Optional — only pulled in for the `wasm` feature (WASM build path). The
+# native rlib path does NOT compile these in, keeping the backend dep
+# graph slim.
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+
+[dev-dependencies]
+serde_json = "1"
+
+# Sprint 385 foundation — release WASM profile aggressively shrinks the
+# output. `opt-level = "z"` favors size over speed, `lto = true` lets the
+# linker dead-code-eliminate across crate boundaries, `codegen-units = 1`
+# allows whole-crate optimization, and `panic = "abort"` strips the
+# panicking machinery (we never panic on user-input paths anyway).
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# wasm-pack metadata. The `wasm-opt` flags pass `--enable-bulk-memory`
+# so newer rustc-emitted bulk-memory opcodes (`memory.fill` / `memory.copy`)
+# don't fail the bundled `wasm-opt` validator. Keep `-Oz` (size).
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz", "--enable-bulk-memory"]
