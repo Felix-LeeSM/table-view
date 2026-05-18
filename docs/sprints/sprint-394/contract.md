@@ -78,15 +78,16 @@ sprint-391) `alter-table` with two new `action` variants. Discriminator
 names are kebab-case.
 
 - **CREATE TABLE statement.** Top-level `kind="create-table"` carries
-  five slots: `table` (the schema-qualified table reference shape from
+  four slots: `table` (the schema-qualified table reference shape from
   sprint-393a — `schema` may be null, `table` required), `if_not_exists`
   (boolean — true when `IF NOT EXISTS` was present), `columns` (an
   ordered list of column definitions; empty list is rejected as
-  `Error(SyntaxError)`), `table_constraints` (an ordered list of table-
-  level constraints; empty list when absent), and a creation-mode tag
-  reserved for future use (e.g. `temporary`, `unlogged`) that is set to
-  the literal string `"persistent"` for this sprint and is the only
-  permitted value.
+  `Error(SyntaxError)`), and `table_constraints` (an ordered list of
+  table-level constraints; empty list when absent). The AST does not
+  carry a "creation-mode" field — TEMPORARY / UNLOGGED variants are out
+  of scope for this sprint and are rejected at the parser level (see
+  AC-394-T23). A future sprint that introduces those variants will add
+  the slot deliberately.
 - **Column definition.** Each column has four slots: `name` (string),
   `data_type` (the column-type shape — see below), `constraints` (an
   ordered list of column-level constraints; empty when absent), and a
@@ -241,26 +242,32 @@ The new DDL additive branch maps AST `kind` to safety classification:
 - `kind="create-view"` → `kind="ddl-create"`, `severity="info"`,
   `reasons=[]`.
 - `kind="alter-table"` with action `add-column` → `kind=
-  "ddl-alter-add"`, `severity="warn"`, `reasons=["ALTER TABLE …
-  ADD COLUMN — schema change"]`.
+  "ddl-alter-add"`, `severity="warn"`, `reasons=["ALTER TABLE — ADD
+  COLUMN (schema 변경)"]`.
 - `kind="alter-table"` with action `add-constraint` → `kind=
-  "ddl-alter-add"`, `severity="warn"`, `reasons=["ALTER TABLE …
-  ADD CONSTRAINT — schema change"]`.
+  "ddl-alter-add"`, `severity="warn"`, `reasons=["ALTER TABLE — ADD
+  CONSTRAINT (schema 변경)"]`.
 - `kind="alter-table"` with action `rename-table` → `kind=
-  "ddl-alter-rename"`, `severity="warn"`, `reasons=["ALTER TABLE …
-  RENAME — name change"]`.
+  "ddl-alter-rename"`, `severity="warn"`, `reasons=["ALTER TABLE —
+  RENAME (이름 변경)"]`.
 - `kind="alter-table"` with action `rename-column` → `kind=
-  "ddl-alter-rename"`, `severity="warn"`, `reasons=["ALTER TABLE …
-  RENAME COLUMN — name change"]`.
+  "ddl-alter-rename"`, `severity="warn"`, `reasons=["ALTER TABLE —
+  RENAME COLUMN (이름 변경)"]`.
 
 **Decision (D1)**: `OR REPLACE` on a view does not escalate severity.
 A view that already exists has its body re-pointed, but no rows /
 schema are touched. Severity stays `info`.
 
-**Decision (D2)**: The `reasons` strings above are *fixed verbatim*
-(Korean prefix optional but the rule must pick one and stick to it
-across all tests). The tests pin the exact string so reviewers catch
-silent rewording.
+**Decision (D2)**: The `reasons` strings emitted by this sprint's new
+branches are *pinned verbatim*. The exact strings are:
+
+- ALTER TABLE … ADD COLUMN: `"ALTER TABLE — ADD COLUMN (schema 변경)"`.
+- ALTER TABLE … ADD CONSTRAINT: `"ALTER TABLE — ADD CONSTRAINT (schema 변경)"`.
+- ALTER TABLE … RENAME TO: `"ALTER TABLE — RENAME (이름 변경)"`.
+- ALTER TABLE … RENAME COLUMN: `"ALTER TABLE — RENAME COLUMN (이름 변경)"`.
+
+CREATE TABLE / CREATE INDEX / CREATE VIEW emit empty `reasons`
+arrays. Reviewers must reject silent rewording or prefix changes.
 
 **Decision (D3)**: When the AST `parseSqlPreloaded` returns an
 `Error(...)` for a CREATE-shaped input (e.g. `CREATE FUNCTION foo()
@@ -309,9 +316,9 @@ the same fallback contract as sprint-391 / sprint-392.
 - TS facade uses `unknown` + runtime guards; no `any`.
 - WASM bundle size: ≤ sprint-393b gzipped size × 1.4.
 - `OR REPLACE` does not escalate the safety classification (per D1).
-- The `creation-mode` slot is always `"persistent"` until a future
-  sprint introduces TEMPORARY / UNLOGGED — reviewers must reject any
-  silent value drift.
+- TEMPORARY / UNLOGGED variants of CREATE TABLE remain
+  `Error(SyntaxError)` in this sprint — reviewers must reject any
+  silent acceptance with a stub AST value.
 
 ## Acceptance Criteria
 
@@ -449,7 +456,7 @@ the same fallback contract as sprint-391 / sprint-392.
 
 - `AC-394-S01` A `create-table` parse serializes with top-level
   `kind="create-table"` and the documented slots (`table`,
-  `if_not_exists`, `columns`, `table_constraints`, `creation-mode`).
+  `if_not_exists`, `columns`, `table_constraints`).
 - `AC-394-S02` Column type variants serialize with the documented
   kebab-case `kind` discriminators (`integer`, `bigint`, `varchar`,
   `text`, `timestamp`, `date`, `boolean`, `numeric`, `serial`,
@@ -498,17 +505,19 @@ the same fallback contract as sprint-391 / sprint-392.
   * FROM t")` returns the same triple as plain CREATE VIEW (no
   escalation per D1).
 - `AC-394-X05` `analyzeStatement("ALTER TABLE t ADD COLUMN c TEXT")`
-  returns `kind="ddl-alter-add"`, `severity="warn"`, and a `reasons`
-  list containing the exact pinned string from D2 for ADD COLUMN.
+  returns `kind="ddl-alter-add"`, `severity="warn"`,
+  `reasons=["ALTER TABLE — ADD COLUMN (schema 변경)"]` (pinned per
+  D2).
 - `AC-394-X06` `analyzeStatement("ALTER TABLE t ADD CONSTRAINT pk
   PRIMARY KEY (id)")` returns `kind="ddl-alter-add"`,
-  `severity="warn"`, with the pinned ADD CONSTRAINT reason.
+  `severity="warn"`, `reasons=["ALTER TABLE — ADD CONSTRAINT
+  (schema 변경)"]` (pinned).
 - `AC-394-X07` `analyzeStatement("ALTER TABLE t RENAME TO t2")`
-  returns `kind="ddl-alter-rename"`, `severity="warn"`, with the
-  pinned RENAME reason.
+  returns `kind="ddl-alter-rename"`, `severity="warn"`,
+  `reasons=["ALTER TABLE — RENAME (이름 변경)"]` (pinned).
 - `AC-394-X08` `analyzeStatement("ALTER TABLE t RENAME COLUMN a TO
-  b")` returns `kind="ddl-alter-rename"`, `severity="warn"`, with
-  the pinned RENAME COLUMN reason.
+  b")` returns `kind="ddl-alter-rename"`, `severity="warn"`,
+  `reasons=["ALTER TABLE — RENAME COLUMN (이름 변경)"]` (pinned).
 - `AC-394-X09` `analyzeStatement("CREATE FUNCTION foo() RETURNS
   void AS $$ ... $$ LANGUAGE plpgsql")` falls back to regex
   classification (`ddl-create` / `severity="info"` from the existing

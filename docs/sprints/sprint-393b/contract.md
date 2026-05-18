@@ -361,11 +361,13 @@ change.
   UNION ALL SELECT a FROM z` parses with a `set_operation` list of
   length 2 in left-to-right input order.
 - `AC-393b-U06` Statement `SELECT a FROM x UNION SELECT a FROM y
-  ORDER BY a` parses with the ORDER BY applied to the *outer* SELECT
-  (ORDER BY appears after the second SELECT and binds to the chain
-  result; the AST records ORDER BY on the left-hand SELECT slot per the
-  documented serializer, which is acceptable as long as the location is
-  fixed and tested).
+  ORDER BY a` parses with the ORDER BY recorded on the *first* (leftmost)
+  `SelectStatement` in the chain. The right-hand entries of the
+  `set_operation` list carry SELECTs whose own `order_by` slot is empty.
+  Downstream consumers that want the "outer" ORDER BY read it from the
+  root SELECT, not from the last chain entry. This is a deterministic
+  serializer rule — implementations must not swap, normalize, or
+  duplicate the slot.
 - `AC-393b-U07` Statement `SELECT a UNION` (no right-hand SELECT) parses
   as `Error(SyntaxError)`.
 
@@ -384,14 +386,15 @@ change.
   with a FROM item whose `source.kind="subquery"` and alias `"s"`.
 - `AC-393b-Q06` Statement `SELECT a FROM (SELECT a FROM x)` (subquery
   FROM with no alias) parses as `Error(SyntaxError)`.
-- `AC-393b-Q07` Statement `SELECT a FROM x WHERE x.a = (SELECT max(b)
-  FROM y)` parses with WHERE comparison whose right-hand side is a
-  `scalar-subquery` primary. (Note: `max(b)` is itself a function call
-  inside a SELECT-list; that is out of scope without OVER. To keep
-  AC reproducible, the AC is satisfied when the parser either accepts
-  the form with `scalar-subquery` containing `Error(UnsupportedExpression)`
-  inside, or rejects only the inner function call and propagates the
-  error — implementer's choice is documented in the test description.)
+- `AC-393b-Q07` Statement `SELECT a FROM x WHERE x.a = (SELECT b FROM
+  y LIMIT 1)` parses with WHERE comparison whose right-hand side is a
+  `scalar-subquery` primary whose nested SELECT is a sprint-393a-shape
+  SELECT (no aggregate function). This input form deliberately avoids
+  the out-of-scope `max(b)` function call so that the AC is reproducible
+  without relying on an "implementer's choice" escape clause. A SELECT
+  with `max(b)` inside would propagate the inner `UnsupportedExpression`
+  error to the top level and is covered separately by the existing
+  sprint-392 "WHERE has function call" deferral.
 - `AC-393b-Q08` Statement `SELECT (SELECT a FROM x LIMIT 1) FROM y`
   parses with a SELECT-list item whose expression is a
   `scalar-subquery`.

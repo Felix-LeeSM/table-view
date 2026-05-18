@@ -172,9 +172,15 @@ following sub-parsers are added or extended:
 - **GROUP BY parser** — after WHERE (or after FROM if WHERE is absent),
   optionally accepts `GROUP BY <column-ref-list>`. A column reference list
   is one or more qualified-or-unqualified columns separated by commas.
-- **HAVING parser** — only valid when GROUP BY is present. Accepts
-  `HAVING <expression>` using the widened expression grammar. A HAVING
-  without GROUP BY parses to `SyntaxError`.
+- **HAVING parser** — accepts `HAVING <expression>` using the widened
+  expression grammar. The parser deliberately *requires* GROUP BY to be
+  present when HAVING is supplied: this sprint defers aggregate function
+  calls to sprint-393b, so a standalone HAVING (without GROUP BY) cannot
+  reference an aggregate and would always be functionally equivalent to a
+  WHERE. To prevent ambiguity in the AST shape and keep the safety
+  classifier's reasoning straightforward, the parser rejects HAVING-without-
+  GROUP-BY as `SyntaxError`. The rule is revisited in sprint-393b once
+  aggregates land.
 - **ORDER BY parser** — accepts `ORDER BY <ordering-item-list>`. Each
   ordering item is `<column-ref> [ASC|DESC] [NULLS FIRST|NULLS LAST]`.
 - **LIMIT parser** — accepts `LIMIT <value> [OFFSET <value>]`. Value must

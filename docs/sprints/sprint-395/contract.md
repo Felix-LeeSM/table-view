@@ -133,10 +133,15 @@ variants. Discriminator names are kebab-case.
 - **SET statement.** Top-level `kind="set"` carries: a `scope` slot
   (kebab-case tag `session`, `local`, or `default` — `default` when
   neither `SESSION` nor `LOCAL` was specified), a `name` slot
-  (string — the variable name), and a `value` slot (an `InsertValue`
-  using the sprint-392 literal-or-placeholder shape; identifiers
-  without quotes are parsed as a placeholder-style identifier value
-  — see the SET parser below).
+  (string — the variable name), and a `value` slot. The value is a
+  discriminated union with `kind` tags `literal` (carrying the sprint-
+  392 `SqlLiteral` shape — integer / float / string / boolean / null),
+  `default` (representing the `DEFAULT` keyword), and `identifier`
+  (carrying a `name` string — for bare-identifier RHS such as `SET
+  search_path = public`). The `identifier` variant is NOT a reuse of
+  the sprint-392 `InsertValue::Placeholder` — keeping the two shapes
+  distinct prevents downstream tooling from treating SET values as
+  parameter placeholders.
 - **COPY statement.** Top-level `kind="copy"` carries: a `direction`
   slot (kebab-case tag `from` or `to`), a `target` slot (a
   discriminated union — either `kind="table"` carrying a schema-
@@ -186,14 +191,15 @@ that re-orders them.
   position accepts dotted identifiers (`SHOW search_path` /
   `SHOW datestyle`).
 - **SET parser.** Accepts `SET [SESSION|LOCAL] <name> {TO|=}
-  <value>`. The value position accepts a literal (any
-  `InsertValue` variant), the keyword `DEFAULT` (recorded as
-  `InsertValue::Default`), or a bare identifier (recorded as
-  `InsertValue::Placeholder` with the identifier as the
-  placeholder name — this is a small parser convenience so the AST
-  surface stays narrow; reviewers must verify that downstream
-  consumers treat the bare-identifier case as opaque text, not as
-  a real placeholder).
+  <value>`. The value position accepts a literal (recorded with the
+  SET-specific `literal` kind tag wrapping the sprint-392
+  `SqlLiteral`), the keyword `DEFAULT` (recorded as `kind="default"`),
+  or a bare identifier (recorded as `kind="identifier"` with the
+  identifier as the `name` slot). The SET-specific value union is
+  documented above under "SET statement" — it is intentionally
+  distinct from the sprint-392 `InsertValue` shape so that bare
+  identifier RHSes do not pollute the placeholder surface used by
+  DML/SELECT.
 - **COPY parser.** Accepts both directions:
   `COPY <table-or-subquery> [(col1, col2)] FROM <source> [options]`
   and `COPY <table> [(cols)] TO <source> [options]`. The source is
@@ -245,9 +251,9 @@ that re-orders them.
 The new branches map AST `kind` to safety classification:
 
 - `kind="grant"` → `kind="permission-change"`, `severity="warn"`,
-  `reasons=["GRANT — permission change"]`.
+  `reasons=["GRANT — 권한 변경"]`.
 - `kind="revoke"` → `kind="permission-change"`, `severity="warn"`,
-  `reasons=["REVOKE — permission change"]`.
+  `reasons=["REVOKE — 권한 변경"]`.
 - `kind="explain"` → classification of `inner_statement`; if the
   inner statement is itself unclassified or `Error(...)`, fall back
   to the regex path on the original SQL string.
@@ -256,9 +262,9 @@ The new branches map AST `kind` to safety classification:
 - `kind="set"` → `kind="config-write"`, `severity="info"`,
   `reasons=[]`.
 - `kind="copy"` with `direction="from"` → `kind="data-movement"`,
-  `severity="warn"`, `reasons=["COPY FROM — bulk import"]`.
+  `severity="warn"`, `reasons=["COPY FROM — 대량 import"]`.
 - `kind="copy"` with `direction="to"` → `kind="data-movement"`,
-  `severity="warn"`, `reasons=["COPY TO — bulk export"]`.
+  `severity="warn"`, `reasons=["COPY TO — 대량 export"]`.
 - `kind="comment"` → `kind="metadata"`, `severity="info"`,
   `reasons=[]`.
 
@@ -283,7 +289,20 @@ as `SHOW <variable>` — `config-read` / `info`. The classifier does
 not distinguish between the target variants for safety purposes.
 
 **Decision (D5)**: The new `reasons` strings are *pinned verbatim*
-across all AC tests. Reviewers must reject silent rewording.
+across all AC tests. The exact strings are:
+
+- GRANT: `"GRANT — 권한 변경"`.
+- REVOKE: `"REVOKE — 권한 변경"`.
+- COPY FROM: `"COPY FROM — 대량 import"`.
+- COPY TO: `"COPY TO — 대량 export"`.
+
+(Korean prefix mirrors the sprint-392 / sprint-394 reason style of
+the existing sqlSafety surface — verifiable by grepping the
+existing reasons in `src/lib/sql/sqlSafety.ts`.) SHOW / SET /
+COMMENT classifications emit empty `reasons` arrays. EXPLAIN
+inherits its inner statement's `reasons` verbatim (D1) and does
+not append anything. Reviewers must reject silent rewording or
+prefix changes.
 
 ## Out of Scope
 
@@ -368,9 +387,11 @@ across all AC tests. Reviewers must reject silent rewording.
 - `AC-395-G09` Statement `GRANT EXECUTE ON FUNCTION foo TO alice`
   parses with object `kind="function"`, functions list `["foo"]`.
 - `AC-395-G10` Statement `GRANT SELECT ON users TO PUBLIC` parses
-  with grantees list of length 1 whose entry refers to the
-  PUBLIC pseudo-role (representation per implementer; AC verifies
-  the list length and presence).
+  with grantees list of length 1 whose single entry is a role
+  reference with kebab-case `kind="public"` (the pseudo-role
+  identifier). Plain identifier grantees (like `alice`) have
+  `kind="role"` carrying a `name` slot; `PUBLIC` does not collapse
+  into the role-by-name path.
 - `AC-395-G11` Statement `GRANT SELECT ON users TO alice WITH
   GRANT OPTION` parses with `with_grant_option=true`.
 - `AC-395-G12` Statement `GRANT` (no privilege) parses as
@@ -407,10 +428,11 @@ across all AC tests. Reviewers must reject silent rewording.
 - `AC-395-E04` Statement `EXPLAIN ANALYZE VERBOSE SELECT * FROM
   users` parses with both flags true.
 - `AC-395-E05` Statement `EXPLAIN (ANALYZE true, FORMAT 'json')
-  SELECT * FROM users` parses with options list of length 2;
-  the first option name is `"ANALYZE"` (or `"analyze"` — case-
-  preservation policy is implementer's choice but tests must
-  pin it) and the second's value is the string `"json"`.
+  SELECT * FROM users` parses with options list of length 2. Option
+  names are normalized to lowercase by the parser before recording
+  in the AST — so the first option's `name` slot is the lowercase
+  string `"analyze"` and the second's is `"format"`. The second
+  option's value is the string literal `"json"`.
 - `AC-395-E06` Statement `EXPLAIN DELETE FROM users WHERE id =
   1` parses with `inner_statement.kind="delete"`.
 - `AC-395-E07` Statement `EXPLAIN BEGIN` parses as
@@ -438,7 +460,8 @@ across all AC tests. Reviewers must reject silent rewording.
 
 - `AC-395-T01` Statement `SET search_path = 'public'` parses with
   `kind="set"`, scope `"default"`, name `"search_path"`, value
-  literal string `"public"`.
+  `kind="literal"` wrapping a `SqlLiteral` of kind `string` with
+  payload `"public"`.
 - `AC-395-T02` Statement `SET search_path TO 'public'` parses
   identically (TO and = are equivalent).
 - `AC-395-T03` Statement `SET SESSION timezone = 'UTC'` parses
@@ -448,8 +471,8 @@ across all AC tests. Reviewers must reject silent rewording.
 - `AC-395-T05` Statement `SET search_path = DEFAULT` parses with
   value `kind="default"`.
 - `AC-395-T06` Statement `SET search_path = public` (bare
-  identifier value) parses with value `kind="placeholder"`,
-  placeholder name `"public"` (per the SET parser convention).
+  identifier value) parses with value `kind="identifier"`,
+  `name="public"` (per the SET-specific value union).
 - `AC-395-T07` Statement `SET` (no name) parses as
   `Error(SyntaxError)`.
 
@@ -543,12 +566,11 @@ across all AC tests. Reviewers must reject silent rewording.
 
 - `AC-395-X01` `analyzeStatement("GRANT SELECT ON users TO
   alice")` returns `kind="permission-change"`,
-  `severity="warn"`, `reasons` containing the pinned GRANT
-  string from D5.
+  `severity="warn"`, `reasons=["GRANT — 권한 변경"]` (pinned
+  per D5).
 - `AC-395-X02` `analyzeStatement("REVOKE SELECT ON users FROM
   alice")` returns `kind="permission-change"`,
-  `severity="warn"`, `reasons` containing the pinned REVOKE
-  string.
+  `severity="warn"`, `reasons=["REVOKE — 권한 변경"]` (pinned).
 - `AC-395-X03` `analyzeStatement("EXPLAIN SELECT * FROM users")`
   returns `kind="select"`, `severity="info"`, `reasons=[]` —
   inherits from inner SELECT (D1).
@@ -566,11 +588,11 @@ across all AC tests. Reviewers must reject silent rewording.
 - `AC-395-X07` `analyzeStatement("SET timezone = 'UTC'")` returns
   `kind="config-write"`, `severity="info"`, `reasons=[]`.
 - `AC-395-X08` `analyzeStatement("COPY users FROM '/tmp/u.csv'")`
-  returns `kind="data-movement"`, `severity="warn"`, `reasons`
-  containing the pinned COPY FROM string.
+  returns `kind="data-movement"`, `severity="warn"`,
+  `reasons=["COPY FROM — 대량 import"]` (pinned).
 - `AC-395-X09` `analyzeStatement("COPY users TO '/tmp/u.csv'")`
-  returns `kind="data-movement"`, `severity="warn"`, `reasons`
-  containing the pinned COPY TO string.
+  returns `kind="data-movement"`, `severity="warn"`,
+  `reasons=["COPY TO — 대량 export"]` (pinned).
 - `AC-395-X10` `analyzeStatement("COMMENT ON TABLE users IS
   'all'")` returns `kind="metadata"`, `severity="info"`,
   `reasons=[]`.
