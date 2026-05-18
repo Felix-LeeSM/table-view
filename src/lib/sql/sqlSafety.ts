@@ -30,6 +30,13 @@
  * shape 는 여전히 동일 — 호출자 영향 0. 남은 정규식 (SELECT widening /
  * CREATE / GRANT / REVOKE / WITH / EXPLAIN / SHOW / DESCRIBE) 은 sprint-
  * 393~395 가 단계적으로 교체.
+ *
+ * Sprint 393a (2026-05-18) — SELECT 의 widened grammar (FROM 다중 / JOIN
+ * 변종 / WHERE expression 확장 / GROUP BY / HAVING / ORDER BY / LIMIT) 가
+ * AST 기반으로 분기. severity 변경 없음 — successful SELECT parse 는
+ * 여전히 `kind: "select"` / `severity: "info"` / `reasons: []`. 효과는
+ * 단지 regex fallback 경로가 더 적게 실행된다는 점이다. CTE / window /
+ * subquery / set ops 는 sprint-393b 까지 regex 경로로 남는다.
  */
 export type Severity = "info" | "warn" | "danger";
 
@@ -172,12 +179,16 @@ function statementAnalysisFromAst(
         };
       }
       return { kind: "delete", severity: "warn", reasons: [] };
-    // SELECT / error variants are not currently mapped here — `select`
-    // flows through the existing INFO path; `error` (lex / syntax /
-    // unsupported-expression / unsupported-statement) lets the caller
-    // fall through to the regex matcher for safety classification.
+    // Sprint-393a — successful widened SELECT parse always classifies as
+    // read-only `info`. No JOIN / GROUP / ORDER / LIMIT shape escalates
+    // severity — the AST simply confirms the statement is a valid SELECT
+    // and the regex fallback is bypassed.
     case "select":
+      return { kind: "select", severity: "info", reasons: [] };
     case "error":
+      // `error` (lex / syntax / unsupported-expression / unsupported-
+      // statement) lets the caller fall through to the regex matcher
+      // for safety classification.
       return null;
   }
 }
@@ -270,7 +281,12 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   // back to the legacy regex matchers below. The regex fallback is
   // *bit-identical* to the prior behavior so existing sqlSafety tests
   // remain green either way.
-  if (/^(DROP|TRUNCATE|ALTER|INSERT|UPDATE|DELETE)\b/.test(upper)) {
+  // Sprint 393a — SELECT widened grammar (FROM / JOIN / WHERE expression /
+  // GROUP / HAVING / ORDER / LIMIT). The AST may succeed for inputs that
+  // the regex path classifies anyway; for inputs the AST cannot parse
+  // (CTE / subquery / set ops / aggregate — deferred to sprint-393b), the
+  // `error` variant lets the regex SELECT branch below handle them.
+  if (/^(DROP|TRUNCATE|ALTER|INSERT|UPDATE|DELETE|SELECT)\b/.test(upper)) {
     const ast = parseSqlPreloaded(normalized);
     if (ast !== null) {
       const fromAst = statementAnalysisFromAst(ast);

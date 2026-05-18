@@ -30,20 +30,23 @@ pub fn parse_sql_backend(sql: String) -> Result<ParseResult, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sql_parser_core::{Columns, Literal, ParseErrorKind, SelectStatement, WhereClause};
+    use sql_parser_core::{
+        Columns, CompareOp, InsertValue, ParseErrorKind, SelectExpr, SqlLiteral,
+    };
 
     #[test]
     fn select_round_trips_via_command() {
+        // Sprint-393a — `SelectStatement` no longer has a top-level
+        // `table` field; the FROM list is the source of truth. Single-
+        // table sprint-385-style inputs produce a one-item FROM list
+        // with the table identifier.
         let r = parse_sql_backend("SELECT * FROM users".to_string()).expect("ok");
         match r {
-            ParseResult::Select(SelectStatement {
-                columns,
-                table,
-                where_clause,
-            }) => {
-                assert_eq!(columns, Columns::Star);
-                assert_eq!(table, "users");
-                assert!(where_clause.is_none());
+            ParseResult::Select(s) => {
+                assert_eq!(s.columns, Columns::Star);
+                assert_eq!(s.from.len(), 1);
+                assert_eq!(s.from[0].table, "users");
+                assert!(s.where_clause.is_none());
             }
             other => panic!("expected Select, got: {:?}", other),
         }
@@ -56,16 +59,35 @@ mod tests {
         match r {
             ParseResult::Select(s) => {
                 let w = s.where_clause.expect("where present");
-                assert_eq!(
-                    w,
-                    WhereClause {
-                        column: "name".to_string(),
-                        op: sql_parser_core::BinaryOp::Eq,
-                        literal: Literal::String {
-                            value: "felix".to_string()
-                        },
+                match w {
+                    SelectExpr::Comparison { left, op, value } => {
+                        assert_eq!(left.column, "name");
+                        assert_eq!(op, CompareOp::Eq);
+                        assert!(matches!(
+                            value,
+                            InsertValue::Literal {
+                                value: SqlLiteral::String { value }
+                            } if value == "felix"
+                        ));
                     }
-                );
+                    other => panic!("expected Comparison, got {:?}", other),
+                }
+            }
+            other => panic!("expected Select, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393a_select_with_join_round_trips_via_command() {
+        // Sprint-393a — `SELECT a FROM x JOIN y ON x.id = y.x_id` now
+        // flows through the Tauri command unchanged. The FROM list has
+        // two items; the second carries an `InnerJoin { On(...) }`.
+        let r =
+            parse_sql_backend("SELECT a FROM x JOIN y ON x.id = y.x_id".to_string()).expect("ok");
+        match r {
+            ParseResult::Select(s) => {
+                assert_eq!(s.from.len(), 2);
+                assert_eq!(s.from[1].table, "y");
             }
             other => panic!("expected Select, got: {:?}", other),
         }

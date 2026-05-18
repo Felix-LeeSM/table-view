@@ -69,6 +69,30 @@ pub enum Token {
     True,
     False,
 
+    // --- keywords (sprint-393a SELECT widening) ---
+    Join,
+    Inner,
+    Left,
+    Right,
+    Full,
+    Outer,
+    Cross,
+    As,
+    Between,
+    Like,
+    ILike,
+    Group,
+    By,
+    Having,
+    Order,
+    Asc,
+    Desc,
+    Nulls,
+    First,
+    Last,
+    Limit,
+    Offset,
+
     // --- literals / identifiers ---
     Ident(String),
     Integer(i64),
@@ -197,8 +221,8 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                     "expected digits after '$' for positional placeholder",
                 ));
             }
-            let slice = std::str::from_utf8(&bytes[i + 1..end])
-                .map_err(|_| lex_err(start, "utf-8"))?;
+            let slice =
+                std::str::from_utf8(&bytes[i + 1..end]).map_err(|_| lex_err(start, "utf-8"))?;
             tokens.push(Spanned {
                 token: Token::PlaceholderPositional(slice.to_string()),
                 at: start,
@@ -219,8 +243,8 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                     "expected identifier after ':' for named placeholder",
                 ));
             }
-            let slice = std::str::from_utf8(&bytes[i + 1..end])
-                .map_err(|_| lex_err(start, "utf-8"))?;
+            let slice =
+                std::str::from_utf8(&bytes[i + 1..end]).map_err(|_| lex_err(start, "utf-8"))?;
             tokens.push(Spanned {
                 token: Token::PlaceholderNamed(slice.to_string()),
                 at: start,
@@ -326,12 +350,10 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
             // (which contributes ~35KB gzipped in optimized WASM).
             let is_float = end < bytes.len()
                 && bytes[end] == b'.'
-                && bytes
-                    .get(end + 1)
-                    .is_some_and(|b| b.is_ascii_digit());
+                && bytes.get(end + 1).is_some_and(|b| b.is_ascii_digit());
             if is_float {
-                let int_slice = std::str::from_utf8(&bytes[i..end])
-                    .map_err(|_| lex_err(start, "utf-8"))?;
+                let int_slice =
+                    std::str::from_utf8(&bytes[i..end]).map_err(|_| lex_err(start, "utf-8"))?;
                 let int_part = int_slice
                     .parse::<i64>()
                     .map_err(|_| lex_err(start, "float out of range"))?;
@@ -364,8 +386,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 i = end;
                 continue;
             }
-            let slice = std::str::from_utf8(&bytes[i..end])
-                .map_err(|_| lex_err(start, "utf-8"))?;
+            let slice = std::str::from_utf8(&bytes[i..end]).map_err(|_| lex_err(start, "utf-8"))?;
             // `i64::from_str_radix` returns `Err` on overflow; surface
             // that as a lex error rather than panicking.
             let value = slice
@@ -398,8 +419,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
             while end < bytes.len() && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_') {
                 end += 1;
             }
-            let slice = std::str::from_utf8(&bytes[i..end])
-                .map_err(|_| lex_err(start, "utf-8"))?;
+            let slice = std::str::from_utf8(&bytes[i..end]).map_err(|_| lex_err(start, "utf-8"))?;
             let token = match slice.to_ascii_lowercase().as_str() {
                 "select" => Token::Select,
                 "from" => Token::From,
@@ -446,6 +466,29 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "in" => Token::In,
                 "true" => Token::True,
                 "false" => Token::False,
+                // sprint-393a SELECT widening keywords.
+                "join" => Token::Join,
+                "inner" => Token::Inner,
+                "left" => Token::Left,
+                "right" => Token::Right,
+                "full" => Token::Full,
+                "outer" => Token::Outer,
+                "cross" => Token::Cross,
+                "as" => Token::As,
+                "between" => Token::Between,
+                "like" => Token::Like,
+                "ilike" => Token::ILike,
+                "group" => Token::Group,
+                "by" => Token::By,
+                "having" => Token::Having,
+                "order" => Token::Order,
+                "asc" => Token::Asc,
+                "desc" => Token::Desc,
+                "nulls" => Token::Nulls,
+                "first" => Token::First,
+                "last" => Token::Last,
+                "limit" => Token::Limit,
+                "offset" => Token::Offset,
                 _ => Token::Ident(slice.to_string()),
             };
             tokens.push(Spanned { token, at: start });
@@ -860,6 +903,84 @@ mod tests {
                 Token::Comma,
                 Token::String("a".into()),
                 Token::RParen,
+            ]
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // Sprint 393a — SELECT widening keyword lexing.
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn ac_393a_lex_join_family_case_insensitive() {
+        for (kw, expected) in [
+            ("JOIN", Token::Join),
+            ("join", Token::Join),
+            ("INNER", Token::Inner),
+            ("LEFT", Token::Left),
+            ("RIGHT", Token::Right),
+            ("FULL", Token::Full),
+            ("OUTER", Token::Outer),
+            ("CROSS", Token::Cross),
+        ] {
+            assert_eq!(lex_ok(kw), vec![expected], "kw={kw}");
+        }
+    }
+
+    #[test]
+    fn ac_393a_lex_alias_keyword() {
+        assert_eq!(lex_ok("AS"), vec![Token::As]);
+        assert_eq!(lex_ok("as"), vec![Token::As]);
+    }
+
+    #[test]
+    fn ac_393a_lex_predicate_keywords() {
+        assert_eq!(lex_ok("BETWEEN"), vec![Token::Between]);
+        assert_eq!(lex_ok("LIKE"), vec![Token::Like]);
+        assert_eq!(lex_ok("ILIKE"), vec![Token::ILike]);
+        assert_eq!(lex_ok("ilike"), vec![Token::ILike]);
+    }
+
+    #[test]
+    fn ac_393a_lex_clause_keywords() {
+        assert_eq!(lex_ok("GROUP"), vec![Token::Group]);
+        assert_eq!(lex_ok("BY"), vec![Token::By]);
+        assert_eq!(lex_ok("HAVING"), vec![Token::Having]);
+        assert_eq!(lex_ok("ORDER"), vec![Token::Order]);
+        assert_eq!(lex_ok("LIMIT"), vec![Token::Limit]);
+        assert_eq!(lex_ok("OFFSET"), vec![Token::Offset]);
+    }
+
+    #[test]
+    fn ac_393a_lex_order_direction_keywords() {
+        assert_eq!(lex_ok("ASC"), vec![Token::Asc]);
+        assert_eq!(lex_ok("DESC"), vec![Token::Desc]);
+        assert_eq!(lex_ok("NULLS"), vec![Token::Nulls]);
+        assert_eq!(lex_ok("FIRST"), vec![Token::First]);
+        assert_eq!(lex_ok("LAST"), vec![Token::Last]);
+    }
+
+    #[test]
+    fn ac_393a_lex_select_join_token_stream() {
+        let toks = lex_ok("SELECT a FROM x INNER JOIN y ON x.id = y.x_id");
+        assert_eq!(
+            toks,
+            vec![
+                Token::Select,
+                Token::Ident("a".into()),
+                Token::From,
+                Token::Ident("x".into()),
+                Token::Inner,
+                Token::Join,
+                Token::Ident("y".into()),
+                Token::On,
+                Token::Ident("x".into()),
+                Token::Dot,
+                Token::Ident("id".into()),
+                Token::Eq,
+                Token::Ident("y".into()),
+                Token::Dot,
+                Token::Ident("x_id".into()),
             ]
         );
     }

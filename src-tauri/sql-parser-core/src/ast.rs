@@ -50,12 +50,183 @@ pub enum ParseResult {
     Error(ParseError),
 }
 
+/// Sprint-385 narrow SELECT had `table: String` + `where: Option<WhereClause>`.
+/// Sprint-393a widens the shape to support multi-table FROM, JOIN, the
+/// widened WHERE expression (column-column / BETWEEN / LIKE / ILIKE),
+/// GROUP BY, HAVING, ORDER BY, and LIMIT/OFFSET. The top-level `kind`
+/// discriminator stays `"select"` so existing callers that only branch on
+/// `kind` need no change. New fields are additive: sprint-385 inputs
+/// continue to parse — their FROM is a single-item list, their other new
+/// slots are absent / empty.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SelectStatement {
     pub columns: Columns,
-    pub table: String,
+    /// Ordered list of FROM items. Length ≥ 1 for any successfully-parsed
+    /// SELECT (a `FROM` clause is required by the sprint-393a grammar —
+    /// `SELECT 1` with no FROM is still out of scope).
+    pub from: Vec<FromItem>,
     #[serde(rename = "where")]
-    pub where_clause: Option<WhereClause>,
+    pub where_clause: Option<SelectExpr>,
+    /// `GROUP BY` columns. Empty when the clause is absent. Each item is a
+    /// qualified-or-unqualified column reference.
+    pub group_by: Vec<ColumnRef>,
+    pub having: Option<SelectExpr>,
+    /// `ORDER BY` items. Empty when the clause is absent.
+    pub order_by: Vec<OrderingItem>,
+    pub limit: Option<LimitClause>,
+}
+
+/// A single item in the FROM list. The `join` descriptor specifies how
+/// this item attaches to the previous item — `Comma` for the first item
+/// (and for any later comma-separated item), or one of the JOIN variants.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FromItem {
+    /// Schema qualifier for `schema.table` references — `None` for a bare
+    /// table name.
+    pub schema: Option<String>,
+    pub table: String,
+    /// `AS alias` or bare identifier alias. `None` when omitted.
+    pub alias: Option<String>,
+    pub join: JoinDescriptor,
+}
+
+/// How a FROM item attaches to the preceding item. The first FROM item
+/// always carries `Comma` (it is not a join — the variant is reused for
+/// "no join" so the AST stays uniform). Subsequent items carry the kind
+/// of attachment the user wrote: `Comma` for comma-separation, one of the
+/// `*-Join` variants for an explicit join keyword. The spec deliberately
+/// keeps `Comma` and `CrossJoin` distinct (no normalization) — downstream
+/// tooling must accept both shapes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum JoinDescriptor {
+    Comma,
+    InnerJoin { predicate: JoinPredicate },
+    LeftJoin { predicate: JoinPredicate },
+    RightJoin { predicate: JoinPredicate },
+    FullJoin { predicate: JoinPredicate },
+    CrossJoin,
+}
+
+/// `ON <expression>` or `USING (col, col, …)`. Every JOIN variant other
+/// than `CrossJoin` and `Comma` carries a predicate.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum JoinPredicate {
+    On { expression: SelectExpr },
+    Using { columns: Vec<String> },
+}
+
+/// A column reference — `column` (unqualified) or `table.column`
+/// (qualified). `table` carries the alias / table identifier the user
+/// wrote; resolution (mapping aliases to real tables) is downstream. The
+/// parser only records what the input wrote.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ColumnRef {
+    pub table: Option<String>,
+    pub column: String,
+}
+
+/// One ORDER BY item — column, direction (defaults to `Asc` when omitted),
+/// and nulls placement. The `Unspecified` variant of `nulls` is distinct
+/// from `First`/`Last`: downstream tooling must read it directly rather
+/// than defaulting to one of the explicit forms (contract §AST additions).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OrderingItem {
+    pub column: ColumnRef,
+    pub direction: OrderDirection,
+    pub nulls: NullsPlacement,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OrderDirection {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum NullsPlacement {
+    First,
+    Last,
+    Unspecified,
+}
+
+/// `LIMIT <count> [OFFSET <offset>]`. Both slots accept the same
+/// literal-or-placeholder shape as the existing `InsertValue`. The
+/// `offset` slot is `None` when the user did not write `OFFSET`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LimitClause {
+    pub count: InsertValue,
+    pub offset: Option<InsertValue>,
+}
+
+/// Sprint-393a widened expression — used by SELECT's `WHERE`, by `HAVING`,
+/// and by any JOIN `ON` predicate. The DML (`UPDATE` / `DELETE`) WHERE
+/// continues to use the narrower `WhereExpr` (sprint-392). 393b unifies
+/// the two.
+///
+/// The variant set adds three new primaries over sprint-392:
+/// - `Comparison` — column-op-literal/placeholder (existing semantics
+///   widened so the left side records a `ColumnRef` instead of a bare
+///   `String`; qualified columns `x.a > 10` are now first-class).
+/// - `ColumnComparison` — column-op-column (cross-table or same-table).
+/// - `Between` — `col BETWEEN low AND high`.
+/// - `Like` — `col LIKE 'pattern'` / `col ILIKE 'pattern'`. The negated
+///   forms (`NOT LIKE`, `NOT BETWEEN`) are not separate variants — they
+///   are wrapped in `Not { inner: ... }` so callers can switch on `kind`
+///   without enumerating "negative twins".
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum SelectExpr {
+    Comparison {
+        left: ColumnRef,
+        op: CompareOp,
+        value: InsertValue,
+    },
+    ColumnComparison {
+        left: ColumnRef,
+        op: CompareOp,
+        right: ColumnRef,
+    },
+    Between {
+        column: ColumnRef,
+        low: InsertValue,
+        high: InsertValue,
+    },
+    Like {
+        column: ColumnRef,
+        case_sensitivity: LikeCase,
+        pattern: InsertValue,
+    },
+    And {
+        left: Box<SelectExpr>,
+        right: Box<SelectExpr>,
+    },
+    Or {
+        left: Box<SelectExpr>,
+        right: Box<SelectExpr>,
+    },
+    Not {
+        inner: Box<SelectExpr>,
+    },
+    IsNull {
+        column: ColumnRef,
+    },
+    IsNotNull {
+        column: ColumnRef,
+    },
+}
+
+/// `LIKE` (case-sensitive) vs `ILIKE` (PostgreSQL case-insensitive). The
+/// negated forms are encoded via `SelectExpr::Not` wrapping a `Like`
+/// primary — see `SelectExpr` doc.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LikeCase {
+    Sensitive,
+    Insensitive,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -67,44 +238,14 @@ pub enum Columns {
     Named { names: Vec<String> },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct WhereClause {
-    pub column: String,
-    pub op: BinaryOp,
-    pub literal: Literal,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum BinaryOp {
-    #[serde(rename = "=")]
-    Eq,
-    #[serde(rename = "<>")]
-    NotEq,
-    #[serde(rename = "!=")]
-    BangEq,
-    #[serde(rename = "<")]
-    Lt,
-    #[serde(rename = ">")]
-    Gt,
-    #[serde(rename = "<=")]
-    LtEq,
-    #[serde(rename = ">=")]
-    GtEq,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
-pub enum Literal {
-    /// 64-bit integer literal — `42`, `0`, etc. We use i64 (not u64) so
-    /// negative literals would be representable, but sprint-385 lex does
-    /// not actually produce negatives (no unary minus in the grammar).
-    Integer { value: i64 },
-    /// Single-quoted string literal. The quotes are stripped; embedded
-    /// `''` escapes resolved (sprint-385 lex only handles `''` escape,
-    /// not backslash escapes — see `lexer.rs`).
-    String { value: String },
-}
+// Sprint-385's narrow `WhereClause` / `BinaryOp` / `Literal` types are
+// gone in sprint-393a — `SelectStatement` now holds the widened
+// `SelectExpr` (with `InsertValue`-shaped values + `ColumnRef`-shaped
+// columns). The shape change is intentional: SELECT WHERE is no longer
+// a single column-op-literal predicate, so a dedicated narrow type would
+// fight the JOIN / GROUP / HAVING / ORDER widening that this sprint
+// introduces. DML's narrow WHERE (`WhereExpr`) continues to use
+// sprint-392's column-op-`InsertValue` shape until sprint-393b unifies it.
 
 /// Field names are serialized as-is (snake_case) so the TS facade can
 /// `result.error_kind` directly — matches the discriminator name used
@@ -253,12 +394,16 @@ pub enum InsertSource {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum InsertValue {
-    Literal { value: SqlLiteral },
+    Literal {
+        value: SqlLiteral,
+    },
     /// `DEFAULT` keyword — server fills the column default.
     Default,
     /// `$1` / `?` / `:name` — prepared-statement placeholder. `name` is
     /// the raw identifier without prefix (`"1"`, `""`, `"name"`).
-    Placeholder { name: String },
+    Placeholder {
+        name: String,
+    },
 }
 
 /// Sprint-392 widened literal set (sprint-385's `Literal` covered only
@@ -267,12 +412,20 @@ pub enum InsertValue {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum SqlLiteral {
-    Integer { value: i64 },
+    Integer {
+        value: i64,
+    },
     /// f64 because IEEE-754 is what postgres `numeric`/`double precision`
     /// values are coerced to over the JSON bridge anyway.
-    Float { value: f64 },
-    String { value: String },
-    Boolean { value: bool },
+    Float {
+        value: f64,
+    },
+    String {
+        value: String,
+    },
+    Boolean {
+        value: bool,
+    },
     Null,
 }
 
