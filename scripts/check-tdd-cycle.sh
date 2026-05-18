@@ -25,8 +25,10 @@ if [ "$current_branch" = "main" ] || [ "$current_branch" = "master" ]; then
 	exit 0
 fi
 
-# branch name 에서 sprint number 추출
-sprint_num="$(echo "$current_branch" | grep -oE 'sprint-[0-9]+' | head -1 | sed 's/sprint-//')"
+# branch name 에서 sprint number 추출. grep 0-match → exit 1; pipefail 하에서
+# script 가 죽지 않도록 `|| true` 로 흡수 (sprint-* 외 branch 명, 예:
+# `chore/sprint-contracts-393-395` 처럼 sprint- 다음이 비숫자, 는 skip 의도).
+sprint_num="$(echo "$current_branch" | grep -oE 'sprint-[0-9]+' | head -1 | sed 's/sprint-//' || true)"
 if [ -z "$sprint_num" ]; then
 	# sprint branch 가 아닌 경우 skip (feature / chore 등)
 	exit 0
