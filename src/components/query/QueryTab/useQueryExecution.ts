@@ -1771,7 +1771,7 @@ export function useQueryExecution({
           updateQueryState(tab.id, {
             status: "error",
             error:
-              "Failed to parse the runCommand body — expected a JSON-shaped object like `{ ping: 1 }` (BSON literals are not yet supported).",
+              'Failed to parse the runCommand body — expected a JSON-shaped object like `{ ping: 1 }`. BSON literals (`ObjectId("…")`, `ISODate("…")`, `NumberLong("…")`, `Decimal128("…")`, `UUID("…")`) are accepted; nested calls or unknown literals are not.',
           });
           return;
         }
