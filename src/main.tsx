@@ -131,6 +131,22 @@ async function boot() {
       );
     });
 
+  // Sprint 401 (2026-05-17) — eager pre-load of the mongosh WASM parser.
+  // `parseMongoshStatement` 의 호출부 (`Toolbar.tsx` 의 render-path Run
+  // gate, `useQueryExecution` 의 dispatch) 는 sync 시그니처를 기대한다 —
+  // contract 의 `Decision Lock` 참조. 본 fire-and-forget 가 React mount
+  // 직후 background 에서 WASM 모듈을 로드해서, 사용자가 mongosh 입력을
+  // 시작할 때쯤이면 sync surface 가 이미 ready. 실패해도 facade 가
+  // synthetic "parser initializing" 에러를 반환하므로 boot 은 계속.
+  void import("@lib/mongo/mongoshAst")
+    .then((m) => m.initMongoshWasm())
+    .catch((e) => {
+      logger.warn(
+        "[main] mongosh WASM init failed:",
+        e instanceof Error ? e.message : e,
+      );
+    });
+
   // Register the launcher's `tauri://close-requested` listener.
   // Fire-and-forget: if it rejects the app still works via system-tray / Cmd+Q.
   void bootWindowLifecycle().catch((e) => {

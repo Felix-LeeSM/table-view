@@ -1,0 +1,16 @@
+{
+  "name": "mongosh-parser-core",
+  "type": "module",
+  "description": "Pure-Rust mongosh statement parser core for table-view. Compiles to native (rlib) and wasm32-unknown-unknown (frontend via wasm-pack). sprint-401.",
+  "version": "0.1.0",
+  "files": [
+    "mongosh_parser_core_bg.wasm",
+    "mongosh_parser_core.js",
+    "mongosh_parser_core.d.ts"
+  ],
+  "main": "mongosh_parser_core.js",
+  "types": "mongosh_parser_core.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

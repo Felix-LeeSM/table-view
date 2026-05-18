@@ -1,0 +1,59 @@
+[package]
+name = "mongosh-parser-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91.0"
+publish = false
+description = "Pure-Rust mongosh statement parser core for table-view. Compiles to native (rlib) and wasm32-unknown-unknown (frontend via wasm-pack). sprint-401."
+
+# `rlib` so the native Tauri backend *could* consume the crate as a Rust path
+# dependency (sprint-402+ if a `parse_mongosh_backend` Tauri command is needed),
+# `cdylib` so `wasm-pack build --target web` produces the WASM artifact for the
+# frontend. sprint-401 only ships the WASM build path; native consumption is
+# wired up in a later sprint.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# `wasm` feature gates the wasm-bindgen wrapper. Without it the crate is
+# pure-Rust + serde (so it could be a normal Cargo dep from src-tauri).
+# `wasm-pack build --features wasm` enables the JS surface.
+[features]
+default = []
+wasm = ["dep:wasm-bindgen", "dep:serde-wasm-bindgen"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+# Used for the polymorphic `body` / `args` payload — same `serde_json::Value`
+# shape the TS side returns. Backend `extjson_to_bson_document` already
+# accepts this shape (sprint-384).
+serde_json = "1"
+# Optional — only pulled in for the `wasm` feature (WASM build path). The
+# native rlib path does NOT compile these in, keeping any future backend
+# dep graph slim.
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+
+# Sprint 401 — release WASM profile aggressively shrinks the output. Same
+# settings as sprint-385's sql-parser-core: `opt-level = "z"` favors size,
+# `lto = true` lets the linker dead-code-eliminate across crate boundaries,
+# `codegen-units = 1` allows whole-crate optimization, and `panic = "abort"`
+# strips the panicking machinery (we never panic on user-input paths).
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# wasm-pack metadata. `--enable-bulk-memory` so newer rustc-emitted
+# bulk-memory opcodes don't fail the bundled `wasm-opt` validator;
+# `--enable-nontrapping-float-to-int` so `f64 as i64` casts (which Rust
+# emits as `i64.trunc_sat_f64_s` since the 2024 rustc-LLVM upgrade) pass
+# validation. The mongosh number-literal path needs the float→int cast
+# to produce JS-friendly integer JSON values.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+    "-Oz",
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int",
+]

@@ -1,0 +1,4 @@
+# Sprint 401 — wasm-pack writes "*" here on every build; we replace it
+# with this comment-only file so the generated .wasm + JS glue + .d.ts
+# artifacts are tracked by git. Frontend devs without a Rust toolchain
+# can then pnpm dev / pnpm build without first running build:mongosh-wasm.
