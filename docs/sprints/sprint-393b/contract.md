@@ -421,9 +421,13 @@ change.
   "preceding"` carrying the literal `5` and a null end bound.
 - `AC-393b-O07` Statement `SELECT count(*) OVER () FROM t` parses with
   a SELECT-list `window-function` whose arguments list has length 1 and
-  whose single argument is the special `*` shape (a column reference
-  with column slot `"*"`, table slot null — or whichever AST
-  representation the implementer chooses, as long as it is documented).
+  whose single argument is a window-argument variant identified by
+  `kind="star"`. The `star` variant is a fixed AST shape introduced by
+  this sprint (a discriminated union with the rest of the window-argument
+  variants — `column-ref`, `literal`, `placeholder`). The parser must
+  not encode `*` as a column reference with literal column-name `"*"`;
+  that would collide with downstream tooling that treats column-ref
+  values as identifiers.
 - `AC-393b-O08` Statement `SELECT sum(x) FROM t` (no OVER) parses with
   WHERE / SELECT-list expression `Error(UnsupportedExpression)` — bare
   function call is still out of scope.

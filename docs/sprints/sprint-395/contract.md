@@ -171,12 +171,16 @@ that re-orders them.
   separated list of named privileges. The object parser dispatches
   on the object-kind keyword (`TABLE` / `SEQUENCE` / `FUNCTION` /
   `SCHEMA` / `DATABASE`, plus the `ALL TABLES IN SCHEMA` shorthand
-  with a peek-ahead). The grantee list accepts `PUBLIC`, role
-  identifiers, or `CURRENT_USER` / `SESSION_USER` (the latter two
-  are normalized as role-references with a `well-known` sub-tag —
-  details captured by the implementer's test, not pinned by AC).
-  The `WITH GRANT OPTION` trailer and the `CASCADE` / `RESTRICT`
-  trailer (REVOKE only) are recognized.
+  with a peek-ahead). The grantee list accepts a role reference
+  whose AST shape is one of three pinned variants identified by a
+  kebab-case `kind` tag: `role` (carrying a `name` string for plain
+  identifier grantees), `public` (no extra slots — the `PUBLIC`
+  pseudo-role), and `current-session` (no extra slots — `CURRENT_USER`
+  and `SESSION_USER` are both normalized to this single tag; the
+  parser does not distinguish between them in the AST because both
+  resolve to the same role at runtime on every backend the app
+  supports). The `WITH GRANT OPTION` trailer and the `CASCADE` /
+  `RESTRICT` trailer (REVOKE only) are recognized.
 - **EXPLAIN parser.** Accepts the keyword sequence
   `EXPLAIN [ANALYZE] [VERBOSE] [(option_name option_value, ...)]
   inner-statement`. The parenthesized option list is comma-
