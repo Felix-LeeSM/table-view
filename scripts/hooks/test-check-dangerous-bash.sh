@@ -129,6 +129,57 @@ run_case \
   '{"tool_input":{"command":"LEFTHOOK=0 git push"}}' \
   'MATCH:memory/workflow/git-policy/memory.md'
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 400 — git reset --hard case dispatch (G2)
+# ─────────────────────────────────────────────────────────────────────────────
+# 본 5 case 는 destructive vs recovery 의 4 분기 + 회귀 분기를 검증.
+#   - case-400-1: origin/* ref           → destructive, 4-step recovery 안내
+#   - case-400-2: HEAD~N relative ref    → destructive, soft 옵션 안내
+#   - case-400-3: 40-hex SHA in reflog   → 복구 case 추정, 사용자 승인 안내
+#   - case-400-4: 40-hex SHA not in reflog → 알 수 없는 SHA, destructive 안내
+#   - case-400-5: branch name (기존 회귀) → destructive (회귀 유지)
+
+# Reflog 안에 분명 존재하는 SHA: HEAD 자신 (test 가 worktree 안에서 실행됨).
+HEAD_SHA="$(git rev-parse HEAD 2>/dev/null || echo 0000000000000000000000000000000000000000)"
+# Reflog 에 절대 없는 SHA (deadbeef 40-hex). 본 SHA 가 우연히 reflog 에 있을
+# 확률은 0 — git 의 SHA-1 충돌 가정.
+ABSENT_SHA="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+
+# Case 400-1 — git reset --hard origin/main: destructive, 4-step recovery.
+run_case \
+  "case-400-1: git reset --hard origin/main → block + remote ref 경고" \
+  1 \
+  '{"tool_input":{"command":"git reset --hard origin/main"}}' \
+  'MATCH:origin/|git ls-remote|git pull --rebase|memory/workflow/git-policy/memory.md'
+
+# Case 400-2 — git reset --hard HEAD~1: destructive, soft option 안내.
+run_case \
+  "case-400-2: git reset --hard HEAD~1 → block + soft 옵션 안내" \
+  1 \
+  '{"tool_input":{"command":"git reset --hard HEAD~1"}}' \
+  'MATCH:HEAD~|--soft|memory/workflow/git-policy/memory.md'
+
+# Case 400-3 — git reset --hard <SHA-in-reflog>: 복구 case 추정 + 승인 안내.
+run_case \
+  "case-400-3: git reset --hard <SHA in reflog> → block + 복구 case 안내" \
+  1 \
+  "{\"tool_input\":{\"command\":\"git reset --hard $HEAD_SHA\"}}" \
+  'MATCH:복구|사용자 명시 승인|reflog|memory/workflow/git-policy/memory.md'
+
+# Case 400-4 — git reset --hard <SHA-not-in-reflog>: 알 수 없는 SHA.
+run_case \
+  "case-400-4: git reset --hard <SHA not in reflog> → block + 미지 SHA 안내" \
+  1 \
+  "{\"tool_input\":{\"command\":\"git reset --hard $ABSENT_SHA\"}}" \
+  'MATCH:reflog|memory/workflow/git-policy/memory.md'
+
+# Case 400-5 — git reset --hard <branch-name>: 회귀 가드 (기존 destructive).
+run_case \
+  "case-400-5: git reset --hard some-branch → block (회귀 유지)" \
+  1 \
+  '{"tool_input":{"command":"git reset --hard some-branch"}}' \
+  'MATCH:BLOCKED|memory/workflow/git-policy/memory.md'
+
 echo ""
 echo "==== smoke test summary ===="
 echo "PASS: $PASS_COUNT"
