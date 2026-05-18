@@ -118,6 +118,35 @@ pub enum Token {
     Else,
     End,
 
+    // --- keywords (sprint-394 DDL additive — CREATE / ALTER ADD / RENAME) ---
+    Create,
+    Replace,
+    Rename,
+    To,
+    Unique,
+    Add,
+    Foreign,
+    Primary,
+    Key,
+    References,
+    Check,
+    Time,
+    Zone,
+    // Column type-name keywords (lexed so the parser can distinguish type
+    // position from identifier position). Distinct prefix `Kw` avoids
+    // collision with the existing literal tokens (`Integer(i64)`,
+    // `Boolean(bool)` — when added, etc.).
+    KwInteger,
+    KwBigint,
+    KwVarchar,
+    KwText,
+    KwTimestamp,
+    KwDate,
+    KwBoolean,
+    KwNumeric,
+    KwSerial,
+    KwUuid,
+
     // --- literals / identifiers ---
     Ident(String),
     Integer(i64),
@@ -535,6 +564,30 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "then" => Token::Then,
                 "else" => Token::Else,
                 "end" => Token::End,
+                // sprint-394 DDL additive keywords.
+                "create" => Token::Create,
+                "replace" => Token::Replace,
+                "rename" => Token::Rename,
+                "to" => Token::To,
+                "unique" => Token::Unique,
+                "add" => Token::Add,
+                "foreign" => Token::Foreign,
+                "primary" => Token::Primary,
+                "key" => Token::Key,
+                "references" => Token::References,
+                "check" => Token::Check,
+                "time" => Token::Time,
+                "zone" => Token::Zone,
+                "integer" => Token::KwInteger,
+                "bigint" => Token::KwBigint,
+                "varchar" => Token::KwVarchar,
+                "text" => Token::KwText,
+                "timestamp" => Token::KwTimestamp,
+                "date" => Token::KwDate,
+                "boolean" => Token::KwBoolean,
+                "numeric" => Token::KwNumeric,
+                "serial" => Token::KwSerial,
+                "uuid" => Token::KwUuid,
                 _ => Token::Ident(slice.to_string()),
             };
             tokens.push(Spanned { token, at: start });
@@ -1027,6 +1080,81 @@ mod tests {
                 Token::Ident("y".into()),
                 Token::Dot,
                 Token::Ident("x_id".into()),
+            ]
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // Sprint 394 — DDL additive keyword + type-name lexing.
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn ac_394_lex_create_verb_case_insensitive() {
+        for kw in ["CREATE", "create", "Create", "cReAtE"] {
+            assert_eq!(lex_ok(kw), vec![Token::Create], "kw={kw}");
+        }
+    }
+
+    #[test]
+    fn ac_394_lex_create_qualifier_keywords() {
+        assert_eq!(lex_ok("OR"), vec![Token::Or]);
+        assert_eq!(lex_ok("REPLACE"), vec![Token::Replace]);
+        assert_eq!(lex_ok("RENAME"), vec![Token::Rename]);
+        assert_eq!(lex_ok("TO"), vec![Token::To]);
+        assert_eq!(lex_ok("UNIQUE"), vec![Token::Unique]);
+        assert_eq!(lex_ok("ADD"), vec![Token::Add]);
+        assert_eq!(lex_ok("FOREIGN"), vec![Token::Foreign]);
+        assert_eq!(lex_ok("PRIMARY"), vec![Token::Primary]);
+        assert_eq!(lex_ok("KEY"), vec![Token::Key]);
+        assert_eq!(lex_ok("REFERENCES"), vec![Token::References]);
+        assert_eq!(lex_ok("CHECK"), vec![Token::Check]);
+        assert_eq!(lex_ok("TIME"), vec![Token::Time]);
+        assert_eq!(lex_ok("ZONE"), vec![Token::Zone]);
+    }
+
+    #[test]
+    fn ac_394_lex_type_name_keywords() {
+        assert_eq!(lex_ok("INTEGER"), vec![Token::KwInteger]);
+        assert_eq!(lex_ok("BIGINT"), vec![Token::KwBigint]);
+        assert_eq!(lex_ok("VARCHAR"), vec![Token::KwVarchar]);
+        assert_eq!(lex_ok("TEXT"), vec![Token::KwText]);
+        assert_eq!(lex_ok("TIMESTAMP"), vec![Token::KwTimestamp]);
+        assert_eq!(lex_ok("DATE"), vec![Token::KwDate]);
+        assert_eq!(lex_ok("BOOLEAN"), vec![Token::KwBoolean]);
+        assert_eq!(lex_ok("NUMERIC"), vec![Token::KwNumeric]);
+        assert_eq!(lex_ok("SERIAL"), vec![Token::KwSerial]);
+        assert_eq!(lex_ok("UUID"), vec![Token::KwUuid]);
+    }
+
+    #[test]
+    fn ac_394_lex_create_table_statement_tokens() {
+        let toks = lex_ok("CREATE TABLE users (id INTEGER)");
+        assert_eq!(
+            toks,
+            vec![
+                Token::Create,
+                Token::Table,
+                Token::Ident("users".into()),
+                Token::LParen,
+                Token::Ident("id".into()),
+                Token::KwInteger,
+                Token::RParen,
+            ]
+        );
+    }
+
+    #[test]
+    fn ac_394_lex_alter_rename_tokens() {
+        let toks = lex_ok("ALTER TABLE users RENAME TO members");
+        assert_eq!(
+            toks,
+            vec![
+                Token::Alter,
+                Token::Table,
+                Token::Ident("users".into()),
+                Token::Rename,
+                Token::To,
+                Token::Ident("members".into()),
             ]
         );
     }

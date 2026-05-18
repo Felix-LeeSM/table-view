@@ -276,7 +276,15 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     });
   });
 
-  it("[AC-245-C4-3] production + strict + CREATE TABLE → SqlPreviewDialog mount → Execute → executeQuery 1회 호출 (Sprint 255)", async () => {
+  it("[AC-245-C4-3] production + strict + CREATE TABLE → no SqlPreviewDialog → executeQuery 1회 호출 directly (sprint-394 — ddl-create/info)", async () => {
+    // Pre-sprint-394: CREATE TABLE was `ddl-other` / warn — the QueryTab
+    // mounted SqlPreviewDialog (Sprint 255 WARN-tier surface) and required
+    // an extra Execute click. Sprint-394 reclassifies CREATE TABLE /
+    // INDEX / VIEW as `ddl-create` / info — non-destructive construction
+    // — so the warn dialog is skipped and the first Execute click
+    // dispatches `executeQuery` immediately. The production+strict
+    // Safe-Mode gate is still consulted but treats `severity: "info"`
+    // as `allow`.
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     seedConnection("production");
     useSafeModeStore.setState({ mode: "strict" });
@@ -286,13 +294,10 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     await act(async () => {
       screen.getByTestId("execute-btn").click();
     });
-    const executeBtn = await screen.findByRole("button", { name: /execute/i });
-    await act(async () => {
-      executeBtn.click();
-    });
     await waitFor(() => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
     });
+    expect(screen.queryByText("Review SQL Changes")).not.toBeInTheDocument();
   });
 
   // ── AC-245-N1: M.1 NEW flow — non-prod + strict + destructive → confirm ──

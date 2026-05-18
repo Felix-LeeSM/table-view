@@ -36,9 +36,21 @@ pub enum ParseResult {
     Drop(DropStatement),
     /// `TRUNCATE [TABLE] …` (sprint-391).
     Truncate(TruncateStatement),
-    /// `ALTER TABLE <name> <action>` (sprint-391 — DROP-only actions for
-    /// now; ALTER ADD / RENAME are sprint-394).
+    /// `ALTER TABLE <name> <action>` — sprint-391 covers DROP-only
+    /// actions; sprint-394 widens with ADD COLUMN / ADD CONSTRAINT /
+    /// RENAME TO / RENAME COLUMN.
     AlterTable(AlterTableStatement),
+    /// Sprint-394 — `CREATE TABLE [IF NOT EXISTS] <name> (cols, table-
+    /// constraints)`. TEMPORARY / UNLOGGED / MATERIALIZED variants are
+    /// rejected as `SyntaxError` (out of scope this sprint).
+    CreateTable(CreateTableStatement),
+    /// Sprint-394 — `CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON
+    /// table (cols)`. Functional / expression indexes are deferred to
+    /// a future sprint.
+    CreateIndex(CreateIndexStatement),
+    /// Sprint-394 — `CREATE [OR REPLACE] VIEW name AS <select-stmt>`.
+    /// The view body may be a `SelectStatement` or `WithStatement`.
+    CreateView(CreateViewStatement),
     /// `INSERT INTO <table> …` (sprint-392).
     Insert(InsertStatement),
     /// `UPDATE <table> SET …` (sprint-392).
@@ -609,6 +621,191 @@ pub enum AlterAction {
     /// `DROP INDEX <name>` — MySQL-style syntax. PostgreSQL emits this as
     /// a top-level `DROP INDEX` statement instead.
     DropIndex { index: String },
+    /// Sprint-394 — `ADD COLUMN [IF NOT EXISTS] <col-def>`. The
+    /// column-def shape (name + data type + constraints) is reused from
+    /// CREATE TABLE so downstream tooling that walks column metadata can
+    /// share traversal code.
+    AddColumn {
+        column: ColumnDefinition,
+        if_not_exists: bool,
+    },
+    /// Sprint-394 — `ADD [CONSTRAINT <name>] <table-constraint>`. The
+    /// constraint shape (kebab-case `kind` discriminator + payload) is
+    /// the same one used inside CREATE TABLE's table-constraint list.
+    AddConstraint { constraint: TableConstraint },
+    /// Sprint-394 — `RENAME TO <new-name>`. Bare identifier; schema-
+    /// qualified rename targets (e.g. cross-schema move) are out of
+    /// scope this sprint.
+    RenameTable { new_name: String },
+    /// Sprint-394 — `RENAME COLUMN <old> TO <new>`.
+    RenameColumn { old_name: String, new_name: String },
+}
+
+// ---- sprint-394 DDL additive AST nodes -------------------------------
+
+/// Sprint-394 — schema-qualified table / view / index reference. Mirrors
+/// the sprint-393a FROM-item shape (`schema: Option<String>` +
+/// `table: String`) so downstream tooling can share traversal helpers.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TableRef {
+    pub schema: Option<String>,
+    pub table: String,
+}
+
+/// Sprint-394 — `CREATE TABLE [IF NOT EXISTS] <name> ( <cols + table-
+/// constraints> )`. The definition list is split into two ordered slots:
+/// `columns` (column definitions) and `table_constraints` (top-level
+/// table constraints introduced by `CONSTRAINT name …` or by a bare
+/// `PRIMARY KEY (...)` / `UNIQUE (...)` / `CHECK (...)` / `FOREIGN KEY
+/// (...) REFERENCES …`). Empty `columns` is rejected at parse time
+/// (`AC-394-T20`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreateTableStatement {
+    pub table: TableRef,
+    pub if_not_exists: bool,
+    pub columns: Vec<ColumnDefinition>,
+    pub table_constraints: Vec<TableConstraint>,
+}
+
+/// Sprint-394 — one column in a CREATE TABLE / ALTER TABLE ADD COLUMN
+/// definition list. `source_index` records the zero-based ordinal of
+/// this column in the source list — downstream tooling that maps AST
+/// back to source position relies on it (the slot is set by the parser,
+/// not by the user).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ColumnDefinition {
+    pub name: String,
+    pub data_type: ColumnType,
+    pub constraints: Vec<ColumnConstraint>,
+    pub source_index: usize,
+}
+
+/// Sprint-394 — column-type discriminated union. The `kind` tag is the
+/// kebab-case lowercase form of the type name (`integer`, `bigint`,
+/// `text`, …). Vendor-specific synonyms (`INT4`, `STRING`, `LONGTEXT`)
+/// are NOT lexed as type tokens — they parse as identifiers, and the
+/// parser surfaces a `SyntaxError`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ColumnType {
+    Integer,
+    Bigint,
+    Text,
+    Date,
+    Boolean,
+    Serial,
+    Uuid,
+    /// `VARCHAR(<length>)`. The length argument is required by the
+    /// sprint-394 grammar; bare `VARCHAR` parses to `SyntaxError`.
+    Varchar { length: i64 },
+    /// `TIMESTAMP [WITH TIME ZONE]`. The `with_time_zone` flag defaults
+    /// to false when the user wrote bare `TIMESTAMP`.
+    Timestamp { with_time_zone: bool },
+    /// `NUMERIC[(precision[, scale])]`. Both slots are `None` when the
+    /// user wrote bare `NUMERIC`; `precision` is set and `scale` is
+    /// `None` when only one argument is supplied.
+    Numeric {
+        precision: Option<i64>,
+        scale: Option<i64>,
+    },
+}
+
+/// Sprint-394 — column-level constraint. The optional `name` slot is set
+/// when the user wrote `CONSTRAINT <name> <constraint-body>` inline; it
+/// is `None` for bare constraints. The `kind` discriminator narrows to
+/// the constraint variant; the payload (if any) lives on the variant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ColumnConstraint {
+    pub name: Option<String>,
+    pub body: ColumnConstraintBody,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ColumnConstraintBody {
+    PrimaryKey,
+    NotNull,
+    Default {
+        value: InsertValue,
+    },
+    Unique,
+    /// Inline `REFERENCES <other> [(<other-col>)]`. The optional column
+    /// slot is `None` when the user wrote bare `REFERENCES other`.
+    References {
+        table: TableRef,
+        column: Option<String>,
+    },
+    /// `CHECK ( <expression> )` — the expression uses the unified
+    /// `SelectExpr` shape introduced by sprint-393a / 393b so any WHERE-
+    /// shaped predicate is admissible inside CHECK.
+    Check {
+        expression: SelectExpr,
+    },
+}
+
+/// Sprint-394 — table-level constraint. Same `name` / `body` shape as
+/// `ColumnConstraint`; the body variants carry a `columns` slot for
+/// `primary-key` / `unique` / `references` (the constraint applies to a
+/// named list of columns), and a bare `expression` slot for `check`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TableConstraint {
+    pub name: Option<String>,
+    pub body: TableConstraintBody,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum TableConstraintBody {
+    PrimaryKey {
+        columns: Vec<String>,
+    },
+    Unique {
+        columns: Vec<String>,
+    },
+    /// `FOREIGN KEY (<local-cols>) REFERENCES <other-table> [(<other-cols>)]`.
+    /// The `target_columns` slot is empty when the user wrote bare
+    /// `REFERENCES other` (no parenthesized target column list).
+    References {
+        columns: Vec<String>,
+        target_table: TableRef,
+        target_columns: Vec<String>,
+    },
+    Check {
+        expression: SelectExpr,
+    },
+}
+
+/// Sprint-394 — `CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON table
+/// (col1, col2, …)`. The column list is identifier-only — functional /
+/// expression indexes are deferred.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreateIndexStatement {
+    pub unique: bool,
+    pub if_not_exists: bool,
+    pub name: String,
+    pub table: TableRef,
+    pub columns: Vec<String>,
+}
+
+/// Sprint-394 — `CREATE [OR REPLACE] VIEW <name> AS <select-stmt>`. The
+/// body may be a plain SELECT (with optional set-operation chain) or a
+/// CTE-wrapped SELECT (`WITH t AS (...) SELECT ...`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreateViewStatement {
+    pub or_replace: bool,
+    pub name: TableRef,
+    pub body: CreateViewBody,
+}
+
+/// Sprint-394 — the two body shapes accepted inside a CREATE VIEW. The
+/// discriminator uses the same kebab-case `kind` tag scheme as
+/// `WithInner` so consumers can branch uniformly.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[allow(clippy::large_enum_variant)]
+pub enum CreateViewBody {
+    Select(SelectStatement),
+    With(WithStatement),
 }
 
 // ---- sprint-392 DML write triad AST nodes ----------------------------

@@ -371,6 +371,88 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           action: { kind: "drop-index", index: "idx" },
         } satisfies SqlParseResult;
       }
+      // ── sprint-394 DDL additive variants ─────────────────────────
+      if (sql === "CREATE TABLE users (id INTEGER, name TEXT)") {
+        return {
+          kind: "create-table",
+          table: { schema: null, table: "users" },
+          if_not_exists: false,
+          columns: [
+            {
+              name: "id",
+              data_type: { kind: "integer" },
+              constraints: [],
+              source_index: 0,
+            },
+            {
+              name: "name",
+              data_type: { kind: "text" },
+              constraints: [],
+              source_index: 1,
+            },
+          ],
+          table_constraints: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "CREATE UNIQUE INDEX idx ON users (email)") {
+        return {
+          kind: "create-index",
+          unique: true,
+          if_not_exists: false,
+          name: "idx",
+          table: { schema: null, table: "users" },
+          columns: ["email"],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "CREATE OR REPLACE VIEW v AS SELECT 1") {
+        return {
+          kind: "create-view",
+          or_replace: true,
+          name: { schema: null, table: "v" },
+          body: {
+            kind: "select",
+            columns: { kind: "named", names: ["1"] },
+            from: [
+              {
+                schema: null,
+                table: "stub",
+                alias: null,
+                join: { kind: "comma" },
+                source: { kind: "table", schema: null, table: "stub" },
+              },
+            ],
+            where: null,
+            group_by: [],
+            having: null,
+            order_by: [],
+            limit: null,
+            set_operation: [],
+          },
+        } satisfies SqlParseResult;
+      }
+      if (sql === "ALTER TABLE users ADD COLUMN email TEXT") {
+        return {
+          kind: "alter-table",
+          table: "users",
+          action: {
+            kind: "add-column",
+            column: {
+              name: "email",
+              data_type: { kind: "text" },
+              constraints: [],
+              source_index: 0,
+            },
+            if_not_exists: false,
+          },
+        } satisfies SqlParseResult;
+      }
+      if (sql === "ALTER TABLE users RENAME TO members") {
+        return {
+          kind: "alter-table",
+          table: "users",
+          action: { kind: "rename-table", new_name: "members" },
+        } satisfies SqlParseResult;
+      }
       // Synthetic "not a parse result" — used to exercise the facade's
       // defensive runtime guard.
       if (sql === "__internal_break__") {
@@ -998,5 +1080,98 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(c.kind).toBe("select");
     const i = await parseSql("DELETE FROM x WHERE x.id IN (1, 2, 3)");
     expect(i.kind).toBe("delete");
+  });
+
+  // ── sprint-394 DDL additive facade tests (AC-394-F) ───────────────
+
+  it("[AC-394-F01] parses `CREATE TABLE users (id INTEGER, name TEXT)` into a kind:'create-table'", async () => {
+    const result = await parseSql("CREATE TABLE users (id INTEGER, name TEXT)");
+    expect(result.kind).toBe("create-table");
+    if (result.kind !== "create-table") return;
+    expect(result.table.table).toBe("users");
+    expect(result.if_not_exists).toBe(false);
+    expect(result.columns).toHaveLength(2);
+    expect(result.columns[0]?.name).toBe("id");
+    expect(result.columns[0]?.data_type.kind).toBe("integer");
+    expect(result.table_constraints).toEqual([]);
+  });
+
+  it("[AC-394-F02] parses `CREATE UNIQUE INDEX idx ON users (email)` into a kind:'create-index' with unique=true", async () => {
+    const result = await parseSql("CREATE UNIQUE INDEX idx ON users (email)");
+    expect(result.kind).toBe("create-index");
+    if (result.kind !== "create-index") return;
+    expect(result.unique).toBe(true);
+    expect(result.name).toBe("idx");
+    expect(result.columns).toEqual(["email"]);
+  });
+
+  it("[AC-394-F03] parses `CREATE OR REPLACE VIEW v AS SELECT 1` with or_replace=true", async () => {
+    const result = await parseSql("CREATE OR REPLACE VIEW v AS SELECT 1");
+    expect(result.kind).toBe("create-view");
+    if (result.kind !== "create-view") return;
+    expect(result.or_replace).toBe(true);
+    expect(result.name.table).toBe("v");
+    expect(result.body.kind).toBe("select");
+  });
+
+  it("[AC-394-F04] parses `ALTER TABLE users ADD COLUMN email TEXT` with action.kind='add-column'", async () => {
+    const result = await parseSql("ALTER TABLE users ADD COLUMN email TEXT");
+    expect(result.kind).toBe("alter-table");
+    if (result.kind !== "alter-table") return;
+    expect(result.action.kind).toBe("add-column");
+    if (result.action.kind !== "add-column") return;
+    expect(result.action.if_not_exists).toBe(false);
+    expect(result.action.column.name).toBe("email");
+    expect(result.action.column.data_type.kind).toBe("text");
+  });
+
+  it("[AC-394-F05] parses `ALTER TABLE users RENAME TO members` with action.kind='rename-table'", async () => {
+    const result = await parseSql("ALTER TABLE users RENAME TO members");
+    expect(result.kind).toBe("alter-table");
+    if (result.kind !== "alter-table") return;
+    expect(result.action.kind).toBe("rename-table");
+    if (result.action.kind !== "rename-table") return;
+    expect(result.action.new_name).toBe("members");
+  });
+
+  it("[AC-394-F06] parseSqlPreloaded returns the new top-level shapes synchronously after preload", async () => {
+    await preloadSqlWasm();
+    const create = parseSqlPreloaded(
+      "CREATE TABLE users (id INTEGER, name TEXT)",
+    );
+    expect(create).not.toBeNull();
+    if (create === null) return;
+    expect(create.kind).toBe("create-table");
+
+    const index = parseSqlPreloaded("CREATE UNIQUE INDEX idx ON users (email)");
+    expect(index).not.toBeNull();
+    if (index === null) return;
+    expect(index.kind).toBe("create-index");
+
+    const view = parseSqlPreloaded("CREATE OR REPLACE VIEW v AS SELECT 1");
+    expect(view).not.toBeNull();
+    if (view === null) return;
+    expect(view.kind).toBe("create-view");
+
+    // parseSqlPreloaded null contract: untouched module returns null.
+    __resetSqlWasmModuleForTests();
+    expect(parseSqlPreloaded("CREATE TABLE foo (id INTEGER)")).toBeNull();
+    // re-prime for any later tests in this file.
+    await preloadSqlWasm();
+  });
+
+  it("[AC-394-F07] runtime guard accepts every sprint-394 widened shape (CREATE TABLE / INDEX / VIEW / ALTER ADD / RENAME)", async () => {
+    // All five statements should round-trip through `parseSql` without
+    // the runtime guard substituting the synthetic `lex-error`.
+    const t = await parseSql("CREATE TABLE users (id INTEGER, name TEXT)");
+    expect(t.kind).toBe("create-table");
+    const i = await parseSql("CREATE UNIQUE INDEX idx ON users (email)");
+    expect(i.kind).toBe("create-index");
+    const v = await parseSql("CREATE OR REPLACE VIEW v AS SELECT 1");
+    expect(v.kind).toBe("create-view");
+    const ac = await parseSql("ALTER TABLE users ADD COLUMN email TEXT");
+    expect(ac.kind).toBe("alter-table");
+    const rn = await parseSql("ALTER TABLE users RENAME TO members");
+    expect(rn.kind).toBe("alter-table");
   });
 });

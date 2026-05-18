@@ -333,12 +333,154 @@ export type SqlAlterAction =
       constraint: string;
       cascade: SqlCascadeBehavior | null;
     }
-  | { kind: "drop-index"; index: string };
+  | { kind: "drop-index"; index: string }
+  // Sprint-394 — additive ALTER actions.
+  | {
+      kind: "add-column";
+      column: SqlColumnDefinition;
+      if_not_exists: boolean;
+    }
+  | {
+      kind: "add-constraint";
+      constraint: SqlTableConstraint;
+    }
+  | { kind: "rename-table"; new_name: string }
+  | { kind: "rename-column"; old_name: string; new_name: string };
 
 export interface SqlAlterTableStatement {
   kind: "alter-table";
   table: string;
   action: SqlAlterAction;
+}
+
+// ---- sprint-394 DDL additive types -----------------------------------
+
+/**
+ * Sprint-394 — schema-qualified table / view / index reference. Mirrors
+ * the sprint-393a FROM-item shape (`schema: string | null` +
+ * `table: string`). CREATE TABLE, CREATE INDEX (`ON <table>`), CREATE
+ * VIEW (the view's own name), ALTER TABLE ADD CONSTRAINT REFERENCES
+ * target, and column-level REFERENCES targets all carry this shape.
+ */
+export interface SqlTableRef {
+  schema: string | null;
+  table: string;
+}
+
+/**
+ * Sprint-394 — column-type discriminated union. The `kind` tag is the
+ * kebab-case lowercase form of the SQL type-name. Vendor-specific
+ * synonyms (INT4 / STRING / DATETIME / LONGTEXT) parse to
+ * `SqlParseError` — the type-name allowlist is explicit in both lexer
+ * and parser.
+ */
+export type SqlColumnType =
+  | { kind: "integer" }
+  | { kind: "bigint" }
+  | { kind: "text" }
+  | { kind: "date" }
+  | { kind: "boolean" }
+  | { kind: "serial" }
+  | { kind: "uuid" }
+  | { kind: "varchar"; length: number }
+  | { kind: "timestamp"; with_time_zone: boolean }
+  | {
+      kind: "numeric";
+      precision: number | null;
+      scale: number | null;
+    };
+
+/**
+ * Sprint-394 — column-level constraint. The optional `name` slot is
+ * populated when the user wrote `CONSTRAINT <name> <body>`; bare
+ * constraints leave it `null`.
+ */
+export interface SqlColumnConstraint {
+  name: string | null;
+  body: SqlColumnConstraintBody;
+}
+
+export type SqlColumnConstraintBody =
+  | { kind: "primary-key" }
+  | { kind: "not-null" }
+  | { kind: "default"; value: SqlInsertValue }
+  | { kind: "unique" }
+  | {
+      kind: "references";
+      table: SqlTableRef;
+      column: string | null;
+    }
+  | { kind: "check"; expression: SqlSelectExpr };
+
+/**
+ * Sprint-394 — table-level constraint. Same `name` + `body` shape as
+ * `SqlColumnConstraint`; the body variants carry a `columns` slot for
+ * `primary-key` / `unique` / `references`. `check` carries only an
+ * expression (the predicate already names columns).
+ */
+export interface SqlTableConstraint {
+  name: string | null;
+  body: SqlTableConstraintBody;
+}
+
+export type SqlTableConstraintBody =
+  | { kind: "primary-key"; columns: string[] }
+  | { kind: "unique"; columns: string[] }
+  | {
+      kind: "references";
+      columns: string[];
+      target_table: SqlTableRef;
+      /** Empty when the user wrote bare `REFERENCES other` with no
+       *  parenthesized target column list. */
+      target_columns: string[];
+    }
+  | { kind: "check"; expression: SqlSelectExpr };
+
+/**
+ * Sprint-394 — one column definition in a CREATE TABLE / ALTER TABLE
+ * ADD COLUMN list. `source_index` is the zero-based ordinal of this
+ * column in the source list — set by the parser, not the user.
+ */
+export interface SqlColumnDefinition {
+  name: string;
+  data_type: SqlColumnType;
+  constraints: SqlColumnConstraint[];
+  source_index: number;
+}
+
+export interface SqlCreateTableStatement {
+  kind: "create-table";
+  table: SqlTableRef;
+  if_not_exists: boolean;
+  columns: SqlColumnDefinition[];
+  table_constraints: SqlTableConstraint[];
+}
+
+export interface SqlCreateIndexStatement {
+  kind: "create-index";
+  unique: boolean;
+  if_not_exists: boolean;
+  name: string;
+  table: SqlTableRef;
+  columns: string[];
+}
+
+/**
+ * Sprint-394 — CREATE VIEW body. The two body shapes match the AST
+ * `CreateViewBody` enum: a plain SELECT (with optional set-operation
+ * chain) or a CTE-wrapped SELECT (`WITH t AS (...) SELECT ...`). The
+ * discriminator uses the same kebab-case `kind` tag scheme as the rest
+ * of the AST.
+ */
+export type SqlCreateViewBody =
+  | (SqlSelectStatement & { kind: "select" })
+  | (SqlWithStatement & { kind: "with" });
+
+export interface SqlCreateViewStatement {
+  kind: "create-view";
+  or_replace: boolean;
+  name: SqlTableRef;
+  body: SqlCreateViewBody;
 }
 
 // ---- sprint-392 DML write triad types --------------------------------
@@ -451,6 +593,9 @@ export type SqlParseResult =
   | SqlDropStatement
   | SqlTruncateStatement
   | SqlAlterTableStatement
+  | SqlCreateTableStatement
+  | SqlCreateIndexStatement
+  | SqlCreateViewStatement
   | SqlInsertStatement
   | SqlUpdateStatement
   | SqlDeleteStatement
@@ -581,6 +726,10 @@ const SQL_PARSE_RESULT_KINDS = new Set<string>([
   "delete",
   // Sprint-393b — CTE-wrap top-level.
   "with",
+  // Sprint-394 — DDL additive top-levels.
+  "create-table",
+  "create-index",
+  "create-view",
   "error",
 ]);
 
