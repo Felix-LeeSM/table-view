@@ -27,8 +27,21 @@ fn parse_sql_backend_round_trips_select_statement() {
 
 #[test]
 fn parse_sql_backend_returns_error_variant_for_unsupported_statement() {
-    let result = parse_sql_backend("DELETE FROM users".to_string()).expect("Ok variant always");
+    // Sprint-392 — DELETE/UPDATE/INSERT are now supported. Use CREATE
+    // (sprint-394) for the unsupported-statement assertion.
+    let result =
+        parse_sql_backend("CREATE TABLE t (id int)".to_string()).expect("Ok variant always");
     let json = serde_json::to_value(&result).expect("serialize");
     assert_eq!(json["kind"], "error");
     assert_eq!(json["error_kind"], "unsupported-statement");
+}
+
+#[test]
+fn parse_sql_backend_round_trips_delete_statement() {
+    let result =
+        parse_sql_backend("DELETE FROM users WHERE id = 1".to_string()).expect("Ok variant always");
+    let json = serde_json::to_value(&result).expect("serialize");
+    assert_eq!(json["kind"], "delete");
+    assert_eq!(json["table"], "users");
+    assert_eq!(json["where_clause"]["kind"], "comparison");
 }

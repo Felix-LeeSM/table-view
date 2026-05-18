@@ -38,9 +38,15 @@ pub enum ParseResult {
     /// `ALTER TABLE <name> <action>` (sprint-391 — DROP-only actions for
     /// now; ALTER ADD / RENAME are sprint-394).
     AlterTable(AlterTableStatement),
+    /// `INSERT INTO <table> …` (sprint-392).
+    Insert(InsertStatement),
+    /// `UPDATE <table> SET …` (sprint-392).
+    Update(UpdateStatement),
+    /// `DELETE FROM <table> …` (sprint-392).
+    Delete(DeleteStatement),
     /// A parse / lex error. `kind` discriminator is one of:
     /// `"lex-error"`, `"unsupported-statement"`, `"syntax-error"`,
-    /// `"empty-input"` — see `ParseErrorKind`.
+    /// `"empty-input"`, `"unsupported-expression"` — see `ParseErrorKind`.
     Error(ParseError),
 }
 
@@ -128,6 +134,12 @@ pub enum ParseErrorKind {
     SyntaxError,
     /// `parse_sql("")` or whitespace-only input.
     EmptyInput,
+    /// Sprint-392 — WHERE / SET expression uses a construct outside the
+    /// sprint-392 narrow expression slice (subquery / function call /
+    /// arithmetic / IN-list / cross-table comparison / …). The verb-level
+    /// statement structure was recognized; only the inner expression is
+    /// unsupported. Caller may fall back to regex heuristics.
+    UnsupportedExpression,
 }
 
 // ---- sprint-391 DDL destructive AST nodes ----------------------------
@@ -206,4 +218,153 @@ pub enum AlterAction {
     /// `DROP INDEX <name>` — MySQL-style syntax. PostgreSQL emits this as
     /// a top-level `DROP INDEX` statement instead.
     DropIndex { index: String },
+}
+
+// ---- sprint-392 DML write triad AST nodes ----------------------------
+
+/// `INSERT INTO <table> [(cols)] (VALUES (...) | DEFAULT VALUES | SELECT …)
+///   [ON CONFLICT …] [RETURNING …]`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InsertStatement {
+    pub table: String,
+    /// Empty when columns were not specified (`INSERT INTO t VALUES (1)`
+    /// or `DEFAULT VALUES`).
+    pub columns: Vec<String>,
+    pub source: InsertSource,
+    pub on_conflict: Option<OnConflict>,
+    /// Empty when `RETURNING` is absent.
+    pub returning: Vec<String>,
+}
+
+/// Where the inserted row payload comes from.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum InsertSource {
+    /// `VALUES (...)[, (...)]` — at least one row, each row at least one value.
+    Values { rows: Vec<Vec<InsertValue>> },
+    /// `DEFAULT VALUES` — PG short-hand for "all defaults".
+    DefaultValues,
+    /// `INSERT … SELECT …` — sprint-385's narrow SELECT grammar is the
+    /// source. Boxed to keep `InsertSource` small (recursive variant).
+    Select { statement: Box<SelectStatement> },
+}
+
+/// A single value cell inside `VALUES (...)` or an `UpdateAssignment`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum InsertValue {
+    Literal { value: SqlLiteral },
+    /// `DEFAULT` keyword — server fills the column default.
+    Default,
+    /// `$1` / `?` / `:name` — prepared-statement placeholder. `name` is
+    /// the raw identifier without prefix (`"1"`, `""`, `"name"`).
+    Placeholder { name: String },
+}
+
+/// Sprint-392 widened literal set (sprint-385's `Literal` covered only
+/// `Integer` / `String`; we now also need `Float` / `Boolean` / `Null` so
+/// VALUES can hold every JSON-shaped column type a user would write).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum SqlLiteral {
+    Integer { value: i64 },
+    /// f64 because IEEE-754 is what postgres `numeric`/`double precision`
+    /// values are coerced to over the JSON bridge anyway.
+    Float { value: f64 },
+    String { value: String },
+    Boolean { value: bool },
+    Null,
+}
+
+/// `ON CONFLICT { DO NOTHING | DO UPDATE SET … [WHERE …] }` — PG-only
+/// UPSERT semantic. MySQL's `ON DUPLICATE KEY UPDATE` is *not* covered
+/// (sprint-395+ dialect work).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum OnConflict {
+    DoNothing,
+    DoUpdate {
+        set: Vec<UpdateAssignment>,
+        where_clause: Option<WhereExpr>,
+    },
+}
+
+/// `UPDATE <table> SET <col> = <value>[, …] [FROM …] [WHERE …] [RETURNING …]`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpdateStatement {
+    pub table: String,
+    pub assignments: Vec<UpdateAssignment>,
+    /// PG `UPDATE … FROM other_table` joins. Empty when absent.
+    pub from: Vec<String>,
+    pub where_clause: Option<WhereExpr>,
+    pub returning: Vec<String>,
+}
+
+/// `<column> = <value>` — used by `UPDATE SET …` and `ON CONFLICT DO
+/// UPDATE SET …`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpdateAssignment {
+    pub column: String,
+    pub value: InsertValue,
+}
+
+/// `DELETE FROM <table> [USING …] [WHERE …] [RETURNING …]`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeleteStatement {
+    pub table: String,
+    /// PG `DELETE … USING other_table`. Empty when absent.
+    pub using: Vec<String>,
+    pub where_clause: Option<WhereExpr>,
+    pub returning: Vec<String>,
+}
+
+/// Sprint-392 narrow WHERE expression. The grammar accepts:
+///   - `column <op> <literal-or-placeholder>` — `Comparison`
+///   - `<expr> AND <expr>` / `<expr> OR <expr>` — boolean
+///   - `NOT <expr>` — unary
+///   - `column IS NULL` / `column IS NOT NULL` — null tests
+///
+/// Anything richer (function calls, sub-queries, arithmetic, `IN (...)`,
+/// `LIKE`, `BETWEEN`, cross-table comparison `a.x = b.y`) surfaces as
+/// `Error(UnsupportedExpression)` from the parser — caller can fall back
+/// to a regex heuristic for safety classification.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum WhereExpr {
+    Comparison {
+        column: String,
+        op: CompareOp,
+        value: InsertValue,
+    },
+    And {
+        left: Box<WhereExpr>,
+        right: Box<WhereExpr>,
+    },
+    Or {
+        left: Box<WhereExpr>,
+        right: Box<WhereExpr>,
+    },
+    Not {
+        inner: Box<WhereExpr>,
+    },
+    IsNull {
+        column: String,
+    },
+    IsNotNull {
+        column: String,
+    },
+}
+
+/// Sprint-392 narrow comparison operators (matches `BinaryOp` of
+/// sprint-385's WhereClause but lives separately so sprint-393's WHERE
+/// widening can extend `WhereExpr` without disturbing `WhereClause`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompareOp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
 }

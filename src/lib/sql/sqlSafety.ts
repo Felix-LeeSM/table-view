@@ -21,9 +21,15 @@
  * 에서 AST 기반(`parseSqlPreloaded`) 으로 *부분* 교체. `analyzeStatement`
  * 의 반환 shape (`kind` / `severity` / `reasons`) 는 변경 없음 — 호출자
  * 영향 0. AST 가 preload 되지 않은 환경(테스트, cold-start)에서는 정규식
- * fallback 으로 회귀-안전. 남은 정규식 (DML / SELECT widening / CREATE /
- * GRANT / REVOKE / WITH / EXPLAIN / SHOW / DESCRIBE) 은 sprint-392~394 가
- * 단계적으로 교체.
+ * fallback 으로 회귀-안전.
+ *
+ * Sprint 392 (2026-05-18) — DML write triad (INSERT / UPDATE / DELETE) 도
+ * AST 기반으로 migrate. WHERE 의 narrow expression (column-op-literal +
+ * AND/OR/NOT/IS NULL) 만 AST 로 parse 되고 그 이상 (IN-list / 함수 호출 /
+ * subquery / cross-table) 은 `unsupported-expression` 으로 fallback. 반환
+ * shape 는 여전히 동일 — 호출자 영향 0. 남은 정규식 (SELECT widening /
+ * CREATE / GRANT / REVOKE / WITH / EXPLAIN / SHOW / DESCRIBE) 은 sprint-
+ * 393~395 가 단계적으로 교체.
  */
 export type Severity = "info" | "warn" | "danger";
 
@@ -69,20 +75,33 @@ const WORD_BOUNDARY_WHERE_RE = /\bWHERE\b/i;
 
 /**
  * Sprint 391 — DDL destructive classifier callsite migration.
+ * Sprint 392 — DML write triad migration (INSERT / UPDATE / DELETE).
  *
- * Convert a parsed AST node (sprint-391 grammar slice) into the
+ * Convert a parsed AST node (sprint-391 / 392 grammar slice) into the
  * `StatementAnalysis` shape used by the rest of the codebase. Returns
- * `null` for AST variants outside the DDL destructive scope so the
- * caller falls through to the legacy regex matcher for non-DDL paths.
+ * `null` for AST variants outside the supported scope so the caller
+ * falls through to the legacy regex matcher.
  *
  * Why a dedicated mapper instead of inlining at the callsite: the AST
  * → analysis projection is a *contract* — `kind` / `severity` / `reasons`
  * shape must stay identical to the prior regex output (sqlSafety tests
  * pin this). Isolating the mapper makes the contract auditable and gives
- * sprint-392/393/394 a single point to extend without re-touching
+ * sprint-393/394 a single point to extend without re-touching
  * `analyzeStatement` for every new variant.
+ *
+ * Sprint-392 invariants (D1/D2/D3):
+ * - INSERT — kind:'insert', severity:'warn' (existing Sprint 254 tier;
+ *   ON CONFLICT DO UPDATE classifies the same — caller treats UPSERT
+ *   as a write surface, not a destructive one).
+ * - UPDATE — kind:'update'; `where_clause === null` → severity:'danger'
+ *   + reason "UPDATE without WHERE clause"; otherwise severity:'warn'.
+ * - DELETE — kind:'delete'; `where_clause === null` → severity:'danger'
+ *   + reason "DELETE without WHERE clause"; otherwise severity:'warn'.
+ *
+ * The DML reason strings *match* the pre-sprint-392 regex output bit-for-
+ * bit so the existing sqlSafety test suite stays green (no regression).
  */
-function ddlDestructiveAnalysisFromAst(
+function statementAnalysisFromAst(
   ast: SqlParseResult,
 ): StatementAnalysis | null {
   switch (ast.kind) {
@@ -132,8 +151,31 @@ function ddlDestructiveAnalysisFromAst(
       }
       return null;
     }
-    // SELECT / error variants are not DDL destructive — return null so
-    // the legacy regex path handles them (sprint-392/393 will widen).
+    // Sprint-392 — DML write triad.
+    case "insert":
+      return { kind: "insert", severity: "warn", reasons: [] };
+    case "update":
+      if (ast.where_clause === null) {
+        return {
+          kind: "update",
+          severity: "danger",
+          reasons: ["UPDATE without WHERE clause"],
+        };
+      }
+      return { kind: "update", severity: "warn", reasons: [] };
+    case "delete":
+      if (ast.where_clause === null) {
+        return {
+          kind: "delete",
+          severity: "danger",
+          reasons: ["DELETE without WHERE clause"],
+        };
+      }
+      return { kind: "delete", severity: "warn", reasons: [] };
+    // SELECT / error variants are not currently mapped here — `select`
+    // flows through the existing INFO path; `error` (lex / syntax /
+    // unsupported-expression / unsupported-statement) lets the caller
+    // fall through to the regex matcher for safety classification.
     case "select":
     case "error":
       return null;
@@ -220,6 +262,27 @@ export function analyzeStatement(sql: string): StatementAnalysis {
 
   const upper = normalized.toUpperCase();
 
+  // Sprint 391 — DDL destructive (DROP / TRUNCATE / ALTER … DROP) is
+  // classified through the AST first.
+  // Sprint 392 — extended to the DML write triad (INSERT / UPDATE /
+  // DELETE). The WASM module may not be loaded (cold-start, jsdom unit
+  // tests) in which case `parseSqlPreloaded` returns `null` and we fall
+  // back to the legacy regex matchers below. The regex fallback is
+  // *bit-identical* to the prior behavior so existing sqlSafety tests
+  // remain green either way.
+  if (/^(DROP|TRUNCATE|ALTER|INSERT|UPDATE|DELETE)\b/.test(upper)) {
+    const ast = parseSqlPreloaded(normalized);
+    if (ast !== null) {
+      const fromAst = statementAnalysisFromAst(ast);
+      if (fromAst !== null) return fromAst;
+      // AST parsed but the variant is not one we map (e.g. SELECT
+      // mis-detected by the regex, or `error` from
+      // unsupported-expression / unsupported-statement). Fall through
+      // to the legacy regex path so the existing classification stays
+      // in effect — graceful degrade.
+    }
+  }
+
   if (/^DELETE\s+FROM\b/.test(upper)) {
     if (!hasOuterWhere(upper)) {
       return {
@@ -242,24 +305,6 @@ export function analyzeStatement(sql: string): StatementAnalysis {
     }
     // Sprint 254 — bounded UPDATE WHERE = WARN tier.
     return { kind: "update", severity: "warn", reasons: [] };
-  }
-
-  // Sprint 391 — DDL destructive (DROP / TRUNCATE / ALTER … DROP) is
-  // classified through the AST first. The WASM module may not be loaded
-  // (cold-start, jsdom unit tests) in which case `parseSqlPreloaded`
-  // returns `null` and we fall back to the legacy regex matchers below.
-  // The regex fallback is *bit-identical* to the prior behavior so
-  // existing sqlSafety tests remain green either way.
-  if (/^(DROP|TRUNCATE|ALTER)\b/.test(upper)) {
-    const ast = parseSqlPreloaded(normalized);
-    if (ast !== null) {
-      const fromAst = ddlDestructiveAnalysisFromAst(ast);
-      if (fromAst !== null) return fromAst;
-      // AST parsed but the variant is not DDL destructive (e.g. SELECT
-      // mis-detected by the regex, ALTER TABLE … ADD COLUMN that surfaces
-      // as `error`/unsupported). Fall through to the legacy path so the
-      // existing classification (ddl-other / WARN) stays in effect.
-    }
   }
 
   if (/^DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|TRIGGER)\b/.test(upper)) {
