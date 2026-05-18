@@ -70,4 +70,30 @@ fi
 # hook 활성화 (lefthook install 은 .git/hooks 가 worktree 별로 분리됨)
 (cd "$WORKTREE_PATH" && command -v lefthook >/dev/null 2>&1 && lefthook install >/dev/null 2>&1 || true)
 
+# Sprint 400 — spawn 직후 *생성한 worktree 안* 에서 path 검증.
+# 새 worktree 의 `git rev-parse --show-toplevel` 가 기대 path 와 일치하는지
+# 확인. 일치하지 않으면 git worktree metadata 가 망가졌거나 base repo 의
+# 잘못된 위치로 spawn 한 경우 — 즉시 ABORT 해서 agent 가 contamination 된
+# 디렉토리에서 작업하지 못하도록 한다.
+ACTUAL_TOPLEVEL="$(git -C "$WORKTREE_PATH" rev-parse --show-toplevel 2>/dev/null || echo '')"
+if [ "$ACTUAL_TOPLEVEL" != "$WORKTREE_PATH" ]; then
+  echo "ABORT: spawn 한 worktree path 가 git toplevel 과 불일치." >&2
+  echo "       expected: $WORKTREE_PATH" >&2
+  echo "       actual  : $ACTUAL_TOPLEVEL" >&2
+  echo "       worktree metadata 오류 가능. 'git worktree list' + 'git" >&2
+  echo "       worktree repair' 로 진단." >&2
+  exit 1
+fi
+
+# Path 출력 (orchestrator / agent prompt template 용).
 echo "$WORKTREE_PATH"
+
+# Sprint 400 — agent 첫 turn 검증 스니펫. agent prompt template 의 첫 단계로
+# 본 스니펫을 그대로 호출하면 cross-worktree contamination 을 turn 0 에 차단.
+# stderr 로 출력해서 spawn script 의 stdout (worktree path) 와 분리.
+cat >&2 <<EOF
+
+# Agent 첫 turn 검증 스니펫 (sprint-400):
+test "\$(git -C "$WORKTREE_PATH" rev-parse --show-toplevel)" = "$WORKTREE_PATH" \\
+  || { echo "ABORT: not in expected worktree" >&2; exit 1; }
+EOF

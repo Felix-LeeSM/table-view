@@ -1,8 +1,8 @@
 ---
 title: Multi-agent worktree runbook
 type: runbook
-updated: 2026-05-18
-task: worktree, multi-agent, parallel
+updated: 2026-05-17
+task: worktree, multi-agent, parallel, spawn-verify
 ---
 
 # Multi-agent worktree
@@ -61,6 +61,23 @@ bash scripts/worktree-cleanup.sh --prune
   메타데이터가 중첩 시 추적 어려움.
 - `git push --force` 같은 destructive 명령은 worktree 환경 무관하게
   `scripts/hooks/check-dangerous-bash.sh` 가 차단.
+
+## 첫 turn 검증 (sprint-400)
+
+다중 worktree 병렬 작업 시 *cross-worktree contamination* (다른 worktree 의
+디렉토리에서 작업) 위험이 있음. sprint-381 / 380 / 385 에서 3 회 관측됨.
+agent 가 첫 turn 에 반드시 worktree path 검증:
+
+```bash
+# expected_path = orchestrator 가 spawn 시 출력한 worktree path
+test "$(git rev-parse --show-toplevel)" = "<expected_path>" \
+  || { echo "ABORT: wrong worktree" >&2; exit 1; }
+```
+
+`scripts/worktree-spawn.sh` 가 spawn 직후 본 스니펫을 stderr 로 자동 출력 —
+orchestrator 가 그대로 agent prompt 의 "MANDATORY first command" 슬롯에
+삽입. 불일치 시 agent 는 **즉시 abort + 사용자 보고**. main 디렉토리에서 작업
+재개 X.
 
 ## 관련
 
