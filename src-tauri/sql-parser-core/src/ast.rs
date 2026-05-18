@@ -28,6 +28,7 @@ use serde::{Deserialize, Serialize};
 /// through `serde_wasm_bindgen` / `serde_json` symmetrically.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
+#[allow(clippy::large_enum_variant)]
 pub enum ParseResult {
     /// A successfully parsed SELECT statement (sprint-385 grammar slice).
     Select(SelectStatement),
@@ -44,10 +45,46 @@ pub enum ParseResult {
     Update(UpdateStatement),
     /// `DELETE FROM <table> …` (sprint-392).
     Delete(DeleteStatement),
+    /// Sprint-393b — `WITH [RECURSIVE] cte AS (...) <inner-statement>`. The
+    /// `inner_statement` slot is one of SELECT / INSERT / UPDATE / DELETE —
+    /// nested `WITH` is rejected at parse time (out of scope this sprint).
+    With(WithStatement),
     /// A parse / lex error. `kind` discriminator is one of:
     /// `"lex-error"`, `"unsupported-statement"`, `"syntax-error"`,
     /// `"empty-input"`, `"unsupported-expression"` — see `ParseErrorKind`.
     Error(ParseError),
+}
+
+/// Sprint-393b — `WITH [RECURSIVE] <cte-list> <inner-statement>`. The
+/// inner statement is one of SELECT / INSERT / UPDATE / DELETE; the
+/// `Box` avoids the recursive-size issue without forcing every callsite
+/// into an indirection.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WithStatement {
+    pub recursive: bool,
+    pub ctes: Vec<CteDefinition>,
+    pub inner_statement: Box<WithInner>,
+}
+
+/// Sprint-393b — the four statement variants accepted as the inner body
+/// of a `WITH`. Nested `WITH` is out of scope (rejected as SyntaxError).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[allow(clippy::large_enum_variant)]
+pub enum WithInner {
+    Select(SelectStatement),
+    Insert(InsertStatement),
+    Update(UpdateStatement),
+    Delete(DeleteStatement),
+}
+
+/// Sprint-393b — a single CTE entry in the `WITH ... AS (...)` list.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CteDefinition {
+    pub name: String,
+    /// Optional column-list (`WITH t(a, b) AS (...)`). Empty when absent.
+    pub columns: Vec<String>,
+    pub body: SelectStatement,
 }
 
 /// Sprint-385 narrow SELECT had `table: String` + `where: Option<WhereClause>`.
@@ -74,20 +111,79 @@ pub struct SelectStatement {
     /// `ORDER BY` items. Empty when the clause is absent.
     pub order_by: Vec<OrderingItem>,
     pub limit: Option<LimitClause>,
+    /// Sprint-393b — chained set operations (`UNION` / `INTERSECT` /
+    /// `EXCEPT`). Empty when the SELECT is not part of a set-operation
+    /// chain. Entries are stored in left-to-right input order; the
+    /// serializer/parser MUST NOT normalize order — set operations are
+    /// non-commutative in general.
+    pub set_operation: Vec<SetOperationEntry>,
+}
+
+/// Sprint-393b — one chained set operation. The first SELECT in a chain
+/// is the root `SelectStatement`; subsequent operators + right-hand
+/// SELECTs are recorded here in input order.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SetOperationEntry {
+    pub operator: SetOperator,
+    pub statement: SelectStatement,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SetOperator {
+    Union,
+    UnionAll,
+    Intersect,
+    Except,
 }
 
 /// A single item in the FROM list. The `join` descriptor specifies how
 /// this item attaches to the previous item — `Comma` for the first item
 /// (and for any later comma-separated item), or one of the JOIN variants.
+///
+/// Sprint-385/393a kept the `schema` + `table` slots at the top level. The
+/// sprint-393a tests inspect those slots directly via `item.table` /
+/// `item.schema`. Sprint-393b *adds* support for subquery FROM items —
+/// `FROM (SELECT ...) AS alias` — by surfacing the same data through a
+/// discriminated `source` slot AND keeping the legacy `schema` + `table`
+/// slots populated for table-source items (empty string for `table` when
+/// the source is a subquery). Downstream code that switches on
+/// `source.kind` gets the wider shape; legacy code that reads `table`
+/// continues to work for table-source items.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FromItem {
     /// Schema qualifier for `schema.table` references — `None` for a bare
-    /// table name.
+    /// table name or for a subquery FROM item.
     pub schema: Option<String>,
+    /// Table identifier for a table source; empty string when the source
+    /// is a subquery (the legacy `table` field is kept for the sprint-
+    /// 393a tests that index `from[i].table` directly).
     pub table: String,
     /// `AS alias` or bare identifier alias. `None` when omitted.
+    /// Subquery FROM items REQUIRE an alias — a missing alias is a
+    /// `SyntaxError` (AC-393b-Q06).
     pub alias: Option<String>,
     pub join: JoinDescriptor,
+    /// Sprint-393b — discriminated FROM-item source. For a plain table
+    /// reference, this carries `kind="table"` with `schema` + `table`
+    /// duplicated from the top-level slots; for a parenthesized SELECT,
+    /// `kind="subquery"` with the nested SELECT body.
+    pub source: FromSource,
+}
+
+/// Sprint-393b — FROM-item source. The variant tag is the same shape
+/// the spec mandates for downstream consumers (`source.kind === "table"`
+/// vs `"subquery"`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum FromSource {
+    Table {
+        schema: Option<String>,
+        table: String,
+    },
+    Subquery {
+        statement: Box<SelectStatement>,
+    },
 }
 
 /// How a FROM item attaches to the preceding item. The first FROM item
@@ -190,6 +286,14 @@ pub enum SelectExpr {
         op: CompareOp,
         right: ColumnRef,
     },
+    /// Sprint-393b — `col op (SELECT ...)` — column-vs-scalar-subquery
+    /// comparison. The right-hand side is a parenthesized SELECT used as
+    /// a scalar.
+    ScalarSubqueryComparison {
+        left: ColumnRef,
+        op: CompareOp,
+        right: Box<SelectStatement>,
+    },
     Between {
         column: ColumnRef,
         low: InsertValue,
@@ -217,6 +321,129 @@ pub enum SelectExpr {
     IsNotNull {
         column: ColumnRef,
     },
+    /// Sprint-393b — `column IN (literal, literal, ...)`. The negated
+    /// `NOT IN` form wraps this primary in `Not`.
+    InList {
+        column: ColumnRef,
+        values: Vec<InsertValue>,
+    },
+    /// Sprint-393b — `column IN (SELECT ...)`. Distinct AST variant from
+    /// `InList` so downstream tooling can branch on intent (subquery
+    /// IN-membership vs. literal IN-list); the parser routes by lookahead
+    /// on the first token inside the parentheses.
+    InSubquery {
+        column: ColumnRef,
+        statement: Box<SelectStatement>,
+    },
+    /// Sprint-393b — `EXISTS (SELECT ...)`. The negated `NOT EXISTS` form
+    /// wraps this primary in `Not`.
+    Exists {
+        statement: Box<SelectStatement>,
+    },
+    /// Sprint-393b — `(SELECT ...)` used as a scalar value in a SELECT
+    /// list / comparison RHS. The variant carries the nested SELECT body
+    /// only — column count / row count are runtime-checked, not at parse.
+    ScalarSubquery {
+        statement: Box<SelectStatement>,
+    },
+    /// Sprint-393b — `func(args) OVER (...)`. The arg list, partition-by,
+    /// order-by, and frame are populated per the OVER clause body; bare
+    /// function calls without OVER continue to be
+    /// `Error(UnsupportedExpression)` (see AC-393b-O08).
+    WindowFunction {
+        name: String,
+        arguments: Vec<WindowArgument>,
+        over: OverClause,
+    },
+    /// Sprint-393b — `CASE [operand] WHEN cond THEN result ... [ELSE
+    /// fallback] END`. The simple-CASE form populates `operand`; the
+    /// searched-CASE form leaves it null.
+    Case {
+        operand: Option<Box<SelectExpr>>,
+        when_clauses: Vec<CaseWhen>,
+        else_clause: Option<Box<SelectExpr>>,
+    },
+    /// Sprint-393b — bare literal expression. Sprint-393a's expression
+    /// grammar required every primary to start with a column reference,
+    /// which makes `CASE WHEN x.a > 0 THEN 'pos' ELSE 'neg' END`
+    /// un-parseable (the THEN/ELSE result is a literal). This variant
+    /// carries a bare literal-or-placeholder so result expressions can
+    /// be represented uniformly.
+    Literal {
+        value: InsertValue,
+    },
+    /// Sprint-393b — bare column-reference expression (the value of a
+    /// column). Used when a column reference appears in operand /
+    /// THEN-result / ELSE-result positions of a CASE expression without
+    /// a following comparator.
+    ColumnRefExpr {
+        column: ColumnRef,
+    },
+    /// Sprint-393b — `<expression> <op> <literal>`. Used for the rare
+    /// case where the left-hand side of a comparator is not a bare
+    /// column reference — e.g. `CASE WHEN ... END = 1`. The existing
+    /// `Comparison` variant is preserved for the common column-op-value
+    /// shape (downstream tooling indexes by `kind`).
+    ExpressionComparison {
+        left: Box<SelectExpr>,
+        op: CompareOp,
+        value: InsertValue,
+    },
+}
+
+/// Sprint-393b — one argument to a window function. The `Star` variant is
+/// a dedicated AST shape for `COUNT(*)`; the spec forbids encoding `*` as
+/// a column reference with literal column-name `"*"` (downstream tooling
+/// treats column-ref values as identifiers).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum WindowArgument {
+    Star,
+    ColumnRef { reference: ColumnRef },
+    Literal { value: SqlLiteral },
+    Placeholder { name: String },
+}
+
+/// Sprint-393b — `OVER (...)` body.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OverClause {
+    pub partition_by: Vec<ColumnRef>,
+    pub order_by: Vec<OrderingItem>,
+    pub frame: Option<WindowFrame>,
+}
+
+/// Sprint-393b — `ROWS|RANGE <start> [BETWEEN <start> AND <end>]`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WindowFrame {
+    pub unit: FrameUnit,
+    pub start: FrameBound,
+    pub end: Option<FrameBound>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FrameUnit {
+    Rows,
+    Range,
+}
+
+/// Sprint-393b — one frame bound (`UNBOUNDED PRECEDING` / `N PRECEDING`
+/// / `CURRENT ROW` / `N FOLLOWING` / `UNBOUNDED FOLLOWING`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum FrameBound {
+    UnboundedPreceding,
+    UnboundedFollowing,
+    CurrentRow,
+    Preceding { offset: i64 },
+    Following { offset: i64 },
+}
+
+/// Sprint-393b — one `WHEN ... THEN ...` arm of a `CASE` expression.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CaseWhen {
+    pub condition: SelectExpr,
+    pub result: SelectExpr,
 }
 
 /// `LIKE` (case-sensitive) vs `ILIKE` (PostgreSQL case-insensitive). The
@@ -236,6 +463,29 @@ pub enum Columns {
     Star,
     /// `SELECT a, b, c`
     Named { names: Vec<String> },
+    /// Sprint-393b — at least one expression item that is not a bare
+    /// column identifier (CASE, window function, scalar subquery, …).
+    /// The list preserves input order. Bare-identifier and `*` items
+    /// passed through this variant get wrapped accordingly so callers
+    /// that only switch on `Columns::Star` / `Columns::Named` continue
+    /// to work for those inputs unchanged.
+    Expressions { items: Vec<SelectListItem> },
+}
+
+/// Sprint-393b — one item in a SELECT list when at least one item is a
+/// non-bare-column expression. The discriminator uses kebab-case.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum SelectListItem {
+    /// `*` inside an `Expressions` list — preserved verbatim so a mix
+    /// of `*` and expressions stays serializable.
+    Star,
+    /// Bare or qualified identifier.
+    Column { reference: ColumnRef },
+    /// A widened expression — CASE / window-function / scalar-subquery
+    /// / IN-list etc. The expression uses the same `SelectExpr` grammar
+    /// as WHERE / HAVING / JOIN ON.
+    Expression { expression: SelectExpr },
 }
 
 // Sprint-385's narrow `WhereClause` / `BinaryOp` / `Literal` types are
@@ -432,24 +682,34 @@ pub enum SqlLiteral {
 /// `ON CONFLICT { DO NOTHING | DO UPDATE SET … [WHERE …] }` — PG-only
 /// UPSERT semantic. MySQL's `ON DUPLICATE KEY UPDATE` is *not* covered
 /// (sprint-395+ dialect work).
+///
+/// Sprint-393b — the `where_clause` slot now uses the unified `SelectExpr`
+/// shape (with IN-list / IN-subquery / EXISTS / CASE support) so the DML
+/// WHERE matches the SELECT WHERE widening.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum OnConflict {
     DoNothing,
     DoUpdate {
         set: Vec<UpdateAssignment>,
-        where_clause: Option<WhereExpr>,
+        where_clause: Option<SelectExpr>,
     },
 }
 
 /// `UPDATE <table> SET <col> = <value>[, …] [FROM …] [WHERE …] [RETURNING …]`.
+///
+/// Sprint-393b — `where_clause` migrates to the unified `SelectExpr`
+/// shape (was `WhereExpr` in sprint-392). DML WHERE now accepts every
+/// expression form that SELECT WHERE accepts (BETWEEN / LIKE / IN-list /
+/// IN-subquery / EXISTS / CASE / window functions); the previous
+/// `UnsupportedExpression` deferrals (e.g. AC-392-D06 IN-list) are lifted.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UpdateStatement {
     pub table: String,
     pub assignments: Vec<UpdateAssignment>,
     /// PG `UPDATE … FROM other_table` joins. Empty when absent.
     pub from: Vec<String>,
-    pub where_clause: Option<WhereExpr>,
+    pub where_clause: Option<SelectExpr>,
     pub returning: Vec<String>,
 }
 
@@ -462,12 +722,15 @@ pub struct UpdateAssignment {
 }
 
 /// `DELETE FROM <table> [USING …] [WHERE …] [RETURNING …]`.
+///
+/// Sprint-393b — `where_clause` migrates to the unified `SelectExpr`
+/// shape (was `WhereExpr` in sprint-392).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DeleteStatement {
     pub table: String,
     /// PG `DELETE … USING other_table`. Empty when absent.
     pub using: Vec<String>,
-    pub where_clause: Option<WhereExpr>,
+    pub where_clause: Option<SelectExpr>,
     pub returning: Vec<String>,
 }
 

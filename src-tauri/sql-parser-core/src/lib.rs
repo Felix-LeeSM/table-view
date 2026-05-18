@@ -25,11 +25,13 @@ pub mod lexer;
 pub mod parser;
 
 pub use ast::{
-    AlterAction, AlterTableStatement, CascadeBehavior, ColumnRef, Columns, CompareOp,
-    DeleteStatement, DropObjectType, DropStatement, FromItem, InsertSource, InsertStatement,
-    InsertValue, JoinDescriptor, JoinPredicate, LikeCase, LimitClause, NullsPlacement, OnConflict,
-    OrderDirection, OrderingItem, ParseError, ParseErrorKind, ParseResult, SelectExpr,
-    SelectStatement, SqlLiteral, TruncateStatement, UpdateAssignment, UpdateStatement, WhereExpr,
+    AlterAction, AlterTableStatement, CascadeBehavior, CaseWhen, ColumnRef, Columns, CompareOp,
+    CteDefinition, DeleteStatement, DropObjectType, DropStatement, FrameBound, FrameUnit, FromItem,
+    FromSource, InsertSource, InsertStatement, InsertValue, JoinDescriptor, JoinPredicate,
+    LikeCase, LimitClause, NullsPlacement, OnConflict, OrderDirection, OrderingItem, OverClause,
+    ParseError, ParseErrorKind, ParseResult, SelectExpr, SelectListItem, SelectStatement,
+    SetOperationEntry, SetOperator, SqlLiteral, TruncateStatement, UpdateAssignment,
+    UpdateStatement, WhereExpr, WindowArgument, WindowFrame, WithInner, WithStatement,
 };
 pub use parser::parse;
 

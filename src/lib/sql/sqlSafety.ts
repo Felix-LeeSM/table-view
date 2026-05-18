@@ -112,6 +112,16 @@ function statementAnalysisFromAst(
   ast: SqlParseResult,
 ): StatementAnalysis | null {
   switch (ast.kind) {
+    // Sprint-393b — `WITH (CTE wrap) <inner-statement>` inherits the inner
+    // statement's classification per D1/D2. The recursive call uses the
+    // same mapper to avoid duplicating the per-variant rules. CTE bodies
+    // are SELECTs (read-only), so they do not need their own classification.
+    case "with": {
+      const inner = ast.inner_statement;
+      const innerAnalysis = statementAnalysisFromAst(inner);
+      if (innerAnalysis === null) return null;
+      return innerAnalysis;
+    }
     case "drop": {
       // Reason string format matches the prior regex output —
       // `DROP TABLE` / `DROP INDEX` / `DROP VIEW` / … The AST object_type
@@ -286,7 +296,7 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   // the regex path classifies anyway; for inputs the AST cannot parse
   // (CTE / subquery / set ops / aggregate — deferred to sprint-393b), the
   // `error` variant lets the regex SELECT branch below handle them.
-  if (/^(DROP|TRUNCATE|ALTER|INSERT|UPDATE|DELETE|SELECT)\b/.test(upper)) {
+  if (/^(DROP|TRUNCATE|ALTER|INSERT|UPDATE|DELETE|SELECT|WITH)\b/.test(upper)) {
     const ast = parseSqlPreloaded(normalized);
     if (ast !== null) {
       const fromAst = statementAnalysisFromAst(ast);

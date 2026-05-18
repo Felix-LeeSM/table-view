@@ -93,6 +93,31 @@ pub enum Token {
     Limit,
     Offset,
 
+    // --- keywords (sprint-393b SELECT widening 2 — CTE / set ops / window
+    //     / subquery / CASE) ---
+    // Note: `Exists` is already lexed by sprint-391 (DROP IF EXISTS) and
+    // is reused here for `EXISTS (SELECT ...)`.
+    With,
+    Recursive,
+    Union,
+    Intersect,
+    Except,
+    All,
+    Over,
+    Partition,
+    Rows,
+    Range,
+    Preceding,
+    Following,
+    Unbounded,
+    Current,
+    Row,
+    Case,
+    When,
+    Then,
+    Else,
+    End,
+
     // --- literals / identifiers ---
     Ident(String),
     Integer(i64),
@@ -489,6 +514,27 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "last" => Token::Last,
                 "limit" => Token::Limit,
                 "offset" => Token::Offset,
+                // sprint-393b SELECT widening 2 keywords.
+                "with" => Token::With,
+                "recursive" => Token::Recursive,
+                "union" => Token::Union,
+                "intersect" => Token::Intersect,
+                "except" => Token::Except,
+                "all" => Token::All,
+                "over" => Token::Over,
+                "partition" => Token::Partition,
+                "rows" => Token::Rows,
+                "range" => Token::Range,
+                "preceding" => Token::Preceding,
+                "following" => Token::Following,
+                "unbounded" => Token::Unbounded,
+                "current" => Token::Current,
+                "row" => Token::Row,
+                "case" => Token::Case,
+                "when" => Token::When,
+                "then" => Token::Then,
+                "else" => Token::Else,
+                "end" => Token::End,
                 _ => Token::Ident(slice.to_string()),
             };
             tokens.push(Spanned { token, at: start });

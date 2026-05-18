@@ -50,6 +50,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
               table: "users",
               alias: null,
               join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "users" },
             },
           ],
           where: {
@@ -65,6 +66,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           having: null,
           order_by: [],
           limit: null,
+          set_operation: [],
         } satisfies SqlParseResult;
       }
       if (sql === "SELECT * FROM users") {
@@ -77,6 +79,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
               table: "users",
               alias: null,
               join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "users" },
             },
           ],
           where: null,
@@ -84,6 +87,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           having: null,
           order_by: [],
           limit: null,
+          set_operation: [],
         } satisfies SqlParseResult;
       }
       // ── sprint-393a SELECT widening ────────────────────────────────
@@ -97,6 +101,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
               table: "x",
               alias: null,
               join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "x" },
             },
             {
               schema: null,
@@ -114,6 +119,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
                   },
                 },
               },
+              source: { kind: "table", schema: null, table: "y" },
             },
           ],
           where: null,
@@ -121,6 +127,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           having: null,
           order_by: [],
           limit: null,
+          set_operation: [],
         } satisfies SqlParseResult;
       }
       if (sql === "SELECT a FROM x WHERE x.a BETWEEN 1 AND 10") {
@@ -133,6 +140,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
               table: "x",
               alias: null,
               join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "x" },
             },
           ],
           where: {
@@ -145,6 +153,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           having: null,
           order_by: [],
           limit: null,
+          set_operation: [],
         } satisfies SqlParseResult;
       }
       if (sql === "SELECT a FROM x ORDER BY a DESC NULLS FIRST LIMIT 5") {
@@ -157,6 +166,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
               table: "x",
               alias: null,
               join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "x" },
             },
           ],
           where: null,
@@ -173,6 +183,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
             count: { kind: "literal", value: { kind: "integer", value: 5 } },
             offset: null,
           },
+          set_operation: [],
         } satisfies SqlParseResult;
       }
       if (sql === "INSERT INTO x VALUES (1)") {
@@ -254,9 +265,11 @@ vi.mock("./wasm/sql_parser_core.js", () => {
             },
           ],
           from: [],
+          // Sprint-393b — DML WHERE migrates to the unified SqlSelectExpr
+          // shape (column-as-ColumnRef left, instead of bare string).
           where_clause: {
             kind: "comparison",
-            column: "id",
+            left: { table: null, column: "id" },
             op: "eq",
             value: { kind: "literal", value: { kind: "integer", value: 1 } },
           },
@@ -285,7 +298,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           using: [],
           where_clause: {
             kind: "comparison",
-            column: "id",
+            left: { table: null, column: "id" },
             op: "eq",
             value: { kind: "literal", value: { kind: "integer", value: 1 } },
           },
@@ -362,6 +375,219 @@ vi.mock("./wasm/sql_parser_core.js", () => {
       // defensive runtime guard.
       if (sql === "__internal_break__") {
         return { not: "valid" } as unknown;
+      }
+      // ── sprint-393b SELECT widening 2 — minimal stubs ──────────────
+      if (sql === "WITH t AS (SELECT 1) SELECT * FROM t") {
+        return {
+          kind: "with",
+          recursive: false,
+          ctes: [
+            {
+              name: "t",
+              columns: [],
+              body: {
+                kind: "select",
+                columns: { kind: "star" },
+                from: [
+                  {
+                    schema: null,
+                    table: "t",
+                    alias: null,
+                    join: { kind: "comma" },
+                    source: { kind: "table", schema: null, table: "t" },
+                  },
+                ],
+                where: null,
+                group_by: [],
+                having: null,
+                order_by: [],
+                limit: null,
+                set_operation: [],
+              },
+            },
+          ],
+          inner_statement: {
+            kind: "select",
+            columns: { kind: "star" },
+            from: [
+              {
+                schema: null,
+                table: "t",
+                alias: null,
+                join: { kind: "comma" },
+                source: { kind: "table", schema: null, table: "t" },
+              },
+            ],
+            where: null,
+            group_by: [],
+            having: null,
+            order_by: [],
+            limit: null,
+            set_operation: [],
+          },
+        } satisfies SqlParseResult;
+      }
+      if (sql === "SELECT a FROM x UNION ALL SELECT a FROM y") {
+        const stub_y: SqlParseResult = {
+          kind: "select",
+          columns: { kind: "named", names: ["a"] },
+          from: [
+            {
+              schema: null,
+              table: "y",
+              alias: null,
+              join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "y" },
+            },
+          ],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [],
+        };
+        return {
+          kind: "select",
+          columns: { kind: "named", names: ["a"] },
+          from: [
+            {
+              schema: null,
+              table: "x",
+              alias: null,
+              join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "x" },
+            },
+          ],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [{ operator: "union-all", statement: stub_y }],
+        } satisfies SqlParseResult;
+      }
+      if (
+        sql === "SELECT row_number() OVER (PARTITION BY a ORDER BY b) FROM x"
+      ) {
+        return {
+          kind: "select",
+          columns: {
+            kind: "expressions",
+            items: [
+              {
+                kind: "expression",
+                expression: {
+                  kind: "window-function",
+                  name: "row_number",
+                  arguments: [],
+                  over: {
+                    partition_by: [{ table: null, column: "a" }],
+                    order_by: [
+                      {
+                        column: { table: null, column: "b" },
+                        direction: "asc",
+                        nulls: "unspecified",
+                      },
+                    ],
+                    frame: null,
+                  },
+                },
+              },
+            ],
+          },
+          from: [
+            {
+              schema: null,
+              table: "x",
+              alias: null,
+              join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "x" },
+            },
+          ],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "SELECT CASE WHEN x.a > 0 THEN 'p' ELSE 'n' END FROM x") {
+        return {
+          kind: "select",
+          columns: {
+            kind: "expressions",
+            items: [
+              {
+                kind: "expression",
+                expression: {
+                  kind: "case",
+                  operand: null,
+                  when_clauses: [
+                    {
+                      condition: {
+                        kind: "comparison",
+                        left: { table: "x", column: "a" },
+                        op: "gt",
+                        value: {
+                          kind: "literal",
+                          value: { kind: "integer", value: 0 },
+                        },
+                      },
+                      result: {
+                        kind: "literal",
+                        value: {
+                          kind: "literal",
+                          value: { kind: "string", value: "p" },
+                        },
+                      },
+                    },
+                  ],
+                  else_clause: {
+                    kind: "literal",
+                    value: {
+                      kind: "literal",
+                      value: { kind: "string", value: "n" },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+          from: [
+            {
+              schema: null,
+              table: "x",
+              alias: null,
+              join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "x" },
+            },
+          ],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "DELETE FROM x WHERE x.id IN (1, 2, 3)") {
+        return {
+          kind: "delete",
+          table: "x",
+          using: [],
+          where_clause: {
+            kind: "in-list",
+            column: { table: "x", column: "id" },
+            values: [
+              { kind: "literal", value: { kind: "integer", value: 1 } },
+              { kind: "literal", value: { kind: "integer", value: 2 } },
+              { kind: "literal", value: { kind: "integer", value: 3 } },
+            ],
+          },
+          returning: [],
+        } satisfies SqlParseResult;
       }
       return null;
     }),
@@ -688,5 +914,89 @@ describe("parseSql (sprint-385 facade)", () => {
       "SELECT a FROM x ORDER BY a DESC NULLS FIRST LIMIT 5",
     );
     expect(ordered.kind).toBe("select");
+  });
+
+  // ── sprint-393b SELECT widening 2 facade tests (AC-393b-F) ─────────
+
+  it("[AC-393b-F01] parses `WITH t AS (SELECT 1) SELECT * FROM t` into a `with` top-level", async () => {
+    const result = await parseSql("WITH t AS (SELECT 1) SELECT * FROM t");
+    expect(result.kind).toBe("with");
+    if (result.kind !== "with") return;
+    expect(result.recursive).toBe(false);
+    expect(result.ctes).toHaveLength(1);
+    expect(result.ctes[0]?.name).toBe("t");
+    expect(result.inner_statement.kind).toBe("select");
+  });
+
+  it("[AC-393b-F02] parses UNION ALL into a `set_operation` chain entry", async () => {
+    const result = await parseSql("SELECT a FROM x UNION ALL SELECT a FROM y");
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.set_operation).toHaveLength(1);
+    expect(result.set_operation[0]?.operator).toBe("union-all");
+  });
+
+  it("[AC-393b-F03] parses a window function into a `window-function` expression item", async () => {
+    const result = await parseSql(
+      "SELECT row_number() OVER (PARTITION BY a ORDER BY b) FROM x",
+    );
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.columns.kind).toBe("expressions");
+    if (result.columns.kind !== "expressions") return;
+    const item = result.columns.items[0];
+    expect(item).toBeDefined();
+    if (!item || item.kind !== "expression") return;
+    expect(item.expression.kind).toBe("window-function");
+    if (item.expression.kind !== "window-function") return;
+    expect(item.expression.over.partition_by).toHaveLength(1);
+    expect(item.expression.over.order_by).toHaveLength(1);
+  });
+
+  it("[AC-393b-F04] parses CASE in SELECT list into a `case` expression item", async () => {
+    const result = await parseSql(
+      "SELECT CASE WHEN x.a > 0 THEN 'p' ELSE 'n' END FROM x",
+    );
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.columns.kind).toBe("expressions");
+    if (result.columns.kind !== "expressions") return;
+    const item = result.columns.items[0];
+    if (!item || item.kind !== "expression") return;
+    expect(item.expression.kind).toBe("case");
+  });
+
+  it("[AC-393b-F05] parses DELETE with IN-list — the sprint-392 deferral is lifted", async () => {
+    const result = await parseSql("DELETE FROM x WHERE x.id IN (1, 2, 3)");
+    expect(result.kind).toBe("delete");
+    if (result.kind !== "delete") return;
+    expect(result.where_clause).not.toBeNull();
+    if (result.where_clause === null) return;
+    expect(result.where_clause.kind).toBe("in-list");
+  });
+
+  it("[AC-393b-F06] parseSqlPreloaded returns the WITH shape synchronously after preload", async () => {
+    await preloadSqlWasm();
+    const r = parseSqlPreloaded("WITH t AS (SELECT 1) SELECT * FROM t");
+    expect(r).not.toBeNull();
+    if (r === null) return;
+    expect(r.kind).toBe("with");
+  });
+
+  it("[AC-393b-F07] runtime guard accepts every sprint-393b widened shape (WITH / UNION / window / CASE / IN-list)", async () => {
+    const w = await parseSql("WITH t AS (SELECT 1) SELECT * FROM t");
+    expect(w.kind).toBe("with");
+    const u = await parseSql("SELECT a FROM x UNION ALL SELECT a FROM y");
+    expect(u.kind).toBe("select");
+    const win = await parseSql(
+      "SELECT row_number() OVER (PARTITION BY a ORDER BY b) FROM x",
+    );
+    expect(win.kind).toBe("select");
+    const c = await parseSql(
+      "SELECT CASE WHEN x.a > 0 THEN 'p' ELSE 'n' END FROM x",
+    );
+    expect(c.kind).toBe("select");
+    const i = await parseSql("DELETE FROM x WHERE x.id IN (1, 2, 3)");
+    expect(i.kind).toBe("delete");
   });
 });
