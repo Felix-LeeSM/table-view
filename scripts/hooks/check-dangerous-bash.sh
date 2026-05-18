@@ -142,13 +142,14 @@ EOF
       if [ "${#target}" -ge 7 ] && echo "$target" | grep -qE '^[0-9a-fA-F]+$'; then
         local sha_found="no"
         # reflog 검색 — git 명령 실패해도 (worktree 외부 호출 등) 안전하게 fallback.
-        # `git reflog` 의 출력이 길면 `grep -q` 가 첫 매치에서 종료 → SIGPIPE 로
-        # git 가 죽음 (exit 141). `set -o pipefail` 하에서는 그 141 가 pipeline
-        # 의 exit 가 되어 false-negative. 회피: reflog output 을 한 번에 모은 뒤 grep.
+        # 주의: `echo "$dump" | grep -q` 는 grep 이 첫 매치 후 종료할 때 echo 의
+        # write 가 SIGPIPE → exit 141. `set -o pipefail` 하에서 pipeline 전체가
+        # 실패로 평가되어 false-negative. here-string 사용 시 pipe 가 없으므로
+        # SIGPIPE 자체가 발생하지 않음.
         if command -v git >/dev/null 2>&1; then
           local reflog_dump
           reflog_dump="$(git reflog --all --format='%H' 2>/dev/null || true)"
-          if echo "$reflog_dump" | grep -qF -- "$target"; then
+          if grep -qF -- "$target" <<<"$reflog_dump"; then
             sha_found="yes"
           fi
         fi

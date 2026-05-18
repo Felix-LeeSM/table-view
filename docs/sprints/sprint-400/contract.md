@@ -101,9 +101,10 @@ PreToolUse* + *lefthook* 만 cover. 본 sprint 는 **3 개의 후속 gap** 을 �
 
 - `AC-400-09` `scripts/worktree-spawn.sh` 가 spawn 후 *생성한 worktree 안에서
   git rev-parse --show-toplevel 검증* 수행. 불일치 시 ABORT + stderr.
-- `AC-400-10` `scripts/worktree-spawn.sh` 가 *마지막 stdout 라인* 으로 agent
-  가 첫 turn 에 붙여넣을 검증 명령 스니펫 출력 (예: `test "$(git rev-parse
-  --show-toplevel)" = "<path>" || exit 1`).
+- `AC-400-10` `scripts/worktree-spawn.sh` 가 *stderr* 로 agent 가 첫 turn 에
+  붙여넣을 검증 명령 스니펫 출력 (예: `test "$(git rev-parse --show-toplevel)"
+  = "<path>" || exit 1`). path 자체는 stdout (단일 라인) 에 출력하여 caller 가
+  capture 할 수 있도록 stream 분리.
 - `AC-400-11` `memory/runbook/worktree/memory.md` 에 "첫 turn 검증" 절 추가.
   worktree path mismatch 시 abort 책임 명시.
 - `AC-400-12` `memory/runbook/worktree/memory.md` ≤ 200줄 cap 유지.
