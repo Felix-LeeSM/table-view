@@ -44,9 +44,12 @@ export function classifyMongoStatement(sql: string): MongoStatementKind {
  * expression doesn't match the admin command shape or the body cannot be
  * parsed.
  *
- * Sprint 382 (2026-05-17) — backed by the AST. BSON literals
- * (`ObjectId("...")`, `ISODate(...)`) inside the body are still rejected;
- * full BSON literal support is deferred to sprint-383.
+ * Sprint 382 (2026-05-17) — backed by the AST.
+ * Sprint 383 — BSON literals (`ObjectId` / `ISODate` / `NumberLong` /
+ * `Decimal128` / `UUID`) accepted as extended-JSON placeholders inside
+ * the body; sprint-384 — backend converts those placeholders to real BSON
+ * variants via `bson::Bson::try_from(serde_json::Value)` before dispatching
+ * to the driver.
  */
 export function extractAdminCommandBody(
   sql: string,
