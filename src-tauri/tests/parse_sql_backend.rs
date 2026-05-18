@@ -59,13 +59,13 @@ fn parse_sql_backend_round_trips_select_widening_statement() {
 
 #[test]
 fn parse_sql_backend_returns_error_variant_for_unsupported_statement() {
-    // Sprint-394 — DELETE/UPDATE/INSERT/CREATE TABLE/INDEX/VIEW/ALTER
-    // ADD/RENAME are now supported. EXPLAIN remains in `is_known_sql_verb`
-    // but not in `is_supported_sql_verb`, so it surfaces as
-    // `unsupported-statement` — useful as the canonical fixture for the
-    // crate-boundary error contract.
-    let result =
-        parse_sql_backend("EXPLAIN SELECT * FROM users".to_string()).expect("Ok variant always");
+    // Sprint-395 — EXPLAIN/GRANT/REVOKE/SHOW/SET/COPY/COMMENT moved to
+    // supported. MERGE remains in `is_known_sql_verb` but not in
+    // `is_supported_sql_verb`, so it surfaces as `unsupported-statement` —
+    // useful as the canonical fixture for the crate-boundary error
+    // contract.
+    let result = parse_sql_backend("MERGE INTO target USING source ON foo = bar".to_string())
+        .expect("Ok variant always");
     let json = serde_json::to_value(&result).expect("serialize");
     assert_eq!(json["kind"], "error");
     assert_eq!(json["error_kind"], "unsupported-statement");

@@ -588,6 +588,178 @@ export interface SqlCteDefinition {
   body: SqlSelectStatement;
 }
 
+// ---- sprint-395 misc grammar types -----------------------------------
+
+/**
+ * Sprint-395 — One privilege tag in a GRANT/REVOKE statement. `select`,
+ * `update`, and `references` may carry a `columns` slot (empty when the
+ * privilege applies to all columns of the table). `all` represents both
+ * `ALL` and `ALL PRIVILEGES`.
+ */
+export type SqlPrivilegeTag =
+  | { kind: "all" }
+  | { kind: "select"; columns: string[] }
+  | { kind: "insert" }
+  | { kind: "update"; columns: string[] }
+  | { kind: "delete" }
+  | { kind: "truncate" }
+  | { kind: "references"; columns: string[] }
+  | { kind: "trigger" }
+  | { kind: "usage" }
+  | { kind: "execute" };
+
+/**
+ * Sprint-395 — GRANT/REVOKE object target. `all-in-schema` represents
+ * the PG `ALL TABLES IN SCHEMA name` shorthand.
+ */
+export type SqlGrantObject =
+  | { kind: "table"; tables: SqlTableRef[] }
+  | { kind: "schema"; schemas: string[] }
+  | { kind: "database"; databases: string[] }
+  | { kind: "sequence"; sequences: string[] }
+  | { kind: "function"; functions: string[] }
+  | { kind: "all-in-schema"; schema_name: string };
+
+/**
+ * Sprint-395 — grantee / revokee reference. Plain identifier roles get
+ * `kind="role"`. `PUBLIC` gets `kind="public"`. Both `CURRENT_USER` and
+ * `SESSION_USER` normalize to `kind="current-session"`.
+ */
+export type SqlRoleRef =
+  | { kind: "role"; name: string }
+  | { kind: "public" }
+  | { kind: "current-session" };
+
+export interface SqlGrantStatement {
+  kind: "grant";
+  privileges: SqlPrivilegeTag[];
+  object: SqlGrantObject;
+  grantees: SqlRoleRef[];
+  with_grant_option: boolean;
+}
+
+export interface SqlRevokeStatement {
+  kind: "revoke";
+  privileges: SqlPrivilegeTag[];
+  object: SqlGrantObject;
+  revokees: SqlRoleRef[];
+  grant_option_for: boolean;
+  cascade: SqlCascadeBehavior | null;
+}
+
+/**
+ * Sprint-395 — EXPLAIN/COPY option pair. The `name` slot is normalized to
+ * lowercase by the parser. The `value` slot uses the sprint-392
+ * `SqlInsertValue` shape.
+ */
+export interface SqlExplainOption {
+  name: string;
+  value: SqlInsertValue;
+}
+
+/**
+ * Sprint-395 — statement variants accepted as the inner body of an
+ * EXPLAIN. The discriminator uses kebab-case `kind` tags matching the
+ * Rust `ExplainInner` enum.
+ */
+export type SqlExplainInner =
+  | SqlSelectStatement
+  | SqlInsertStatement
+  | SqlUpdateStatement
+  | SqlDeleteStatement
+  | SqlWithStatement;
+
+export interface SqlExplainStatement {
+  kind: "explain";
+  analyze: boolean;
+  verbose: boolean;
+  options: SqlExplainOption[];
+  inner_statement: SqlExplainInner;
+}
+
+/**
+ * Sprint-395 — SHOW target variant. The `variable` form carries the
+ * variable name (possibly dotted); the `tables` form carries an optional
+ * schema qualifier.
+ */
+export type SqlShowTarget =
+  | { kind: "variable"; name: string }
+  | { kind: "tables"; schema: string | null }
+  | { kind: "databases" }
+  | { kind: "schemas" };
+
+export interface SqlShowStatement {
+  kind: "show";
+  target: SqlShowTarget;
+}
+
+export type SqlSetScope = "session" | "local" | "default";
+
+/**
+ * Sprint-395 — SET RHS. Distinct from `SqlInsertValue` so bare-identifier
+ * SET targets (`SET search_path = public`) do not pollute the placeholder
+ * surface used by DML/SELECT.
+ */
+export type SqlSetValue =
+  | { kind: "literal"; value: SqlLiteralValue }
+  | { kind: "default" }
+  | { kind: "identifier"; name: string };
+
+export interface SqlSetStatement {
+  kind: "set-stmt";
+  scope: SqlSetScope;
+  name: string;
+  value: SqlSetValue;
+}
+
+export type SqlCopyDirection = "from" | "to";
+
+export type SqlCopyTarget =
+  | { kind: "table"; table: SqlTableRef; columns: string[] }
+  | { kind: "select"; statement: SqlSelectStatement };
+
+export type SqlCopySource =
+  | { kind: "file"; path: string }
+  | { kind: "stdin" }
+  | { kind: "stdout" };
+
+export interface SqlCopyStatement {
+  kind: "copy";
+  direction: SqlCopyDirection;
+  target: SqlCopyTarget;
+  source: SqlCopySource;
+  options: SqlExplainOption[];
+}
+
+/**
+ * Sprint-395 — COMMENT object target. `column` carries `table` + `column`;
+ * `constraint` carries `table` + `constraint`; the rest carry a single
+ * `name` slot.
+ */
+export type SqlCommentTarget =
+  | { kind: "table"; name: string }
+  | { kind: "column"; table: string; column: string }
+  | { kind: "view"; name: string }
+  | { kind: "index"; name: string }
+  | { kind: "schema"; name: string }
+  | { kind: "sequence"; name: string }
+  | { kind: "database"; name: string }
+  | { kind: "constraint"; table: string; constraint: string };
+
+/**
+ * Sprint-395 — COMMENT text. The `null` variant captures `IS NULL` (clear
+ * the comment); `string` carries the literal text.
+ */
+export type SqlCommentText =
+  | { kind: "string"; value: string }
+  | { kind: "null" };
+
+export interface SqlCommentStatement {
+  kind: "comment";
+  target: SqlCommentTarget;
+  text: SqlCommentText;
+}
+
 export type SqlParseResult =
   | SqlSelectStatement
   | SqlDropStatement
@@ -600,6 +772,14 @@ export type SqlParseResult =
   | SqlUpdateStatement
   | SqlDeleteStatement
   | SqlWithStatement
+  // Sprint-395 — misc grammar top-levels.
+  | SqlGrantStatement
+  | SqlRevokeStatement
+  | SqlExplainStatement
+  | SqlShowStatement
+  | SqlSetStatement
+  | SqlCopyStatement
+  | SqlCommentStatement
   | SqlParseError;
 
 // ---- WASM bridge -----------------------------------------------------
@@ -730,6 +910,14 @@ const SQL_PARSE_RESULT_KINDS = new Set<string>([
   "create-table",
   "create-index",
   "create-view",
+  // Sprint-395 — misc grammar top-levels.
+  "grant",
+  "revoke",
+  "explain",
+  "show",
+  "set-stmt",
+  "copy",
+  "comment",
   "error",
 ]);
 
