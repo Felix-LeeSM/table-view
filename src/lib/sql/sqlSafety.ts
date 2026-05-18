@@ -52,6 +52,16 @@ export type StatementKind =
   | "ddl-drop"
   | "ddl-truncate"
   | "ddl-alter-drop"
+  // Sprint 394 — DDL additive classifications.
+  // - `ddl-create` (info): CREATE TABLE / INDEX / VIEW — non-destructive
+  //   construction. SafeMode treats as read-equivalent (no warn dialog).
+  // - `ddl-alter-add` (warn): ALTER TABLE ADD COLUMN / ADD CONSTRAINT —
+  //   schema-extending write surface.
+  // - `ddl-alter-rename` (warn): ALTER TABLE RENAME TO / RENAME COLUMN —
+  //   non-data-loss but breaks external queries hard-coding the old name.
+  | "ddl-create"
+  | "ddl-alter-add"
+  | "ddl-alter-rename"
   | "ddl-other"
   // Mongo variants share this union so `useSafeModeGate` is
   // paradigm-agnostic. `*-all` (empty filter) is danger; `*-many`
@@ -146,6 +156,12 @@ function statementAnalysisFromAst(
       // DropIndex (MySQL-style) is also a structure-removing surface
       // so we map it to the same kind — its blast radius (index drop)
       // matches a top-level `DROP INDEX`.
+      //
+      // Sprint-394 — additive actions (ADD COLUMN / ADD CONSTRAINT /
+      // RENAME TO / RENAME COLUMN) map to `ddl-alter-add` /
+      // `ddl-alter-rename` per the per-action table in the contract.
+      // The reason strings are pinned per decision D2 — reviewers must
+      // reject silent rewording.
       switch (ast.action.kind) {
         case "drop-column":
           return {
@@ -165,9 +181,41 @@ function statementAnalysisFromAst(
             severity: "danger",
             reasons: ["ALTER TABLE DROP INDEX"],
           };
+        case "add-column":
+          return {
+            kind: "ddl-alter-add",
+            severity: "warn",
+            reasons: ["ALTER TABLE — ADD COLUMN (schema 변경)"],
+          };
+        case "add-constraint":
+          return {
+            kind: "ddl-alter-add",
+            severity: "warn",
+            reasons: ["ALTER TABLE — ADD CONSTRAINT (schema 변경)"],
+          };
+        case "rename-table":
+          return {
+            kind: "ddl-alter-rename",
+            severity: "warn",
+            reasons: ["ALTER TABLE — RENAME (이름 변경)"],
+          };
+        case "rename-column":
+          return {
+            kind: "ddl-alter-rename",
+            severity: "warn",
+            reasons: ["ALTER TABLE — RENAME COLUMN (이름 변경)"],
+          };
       }
       return null;
     }
+    // Sprint-394 — DDL additive top-levels. Per contract D1: all three
+    // CREATE variants classify as `ddl-create` / info / empty reasons.
+    // `OR REPLACE` does NOT escalate severity (`create-view.or_replace`
+    // is intentionally ignored here).
+    case "create-table":
+    case "create-index":
+    case "create-view":
+      return { kind: "ddl-create", severity: "info", reasons: [] };
     // Sprint-392 — DML write triad.
     case "insert":
       return { kind: "insert", severity: "warn", reasons: [] };
@@ -296,7 +344,11 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   // the regex path classifies anyway; for inputs the AST cannot parse
   // (CTE / subquery / set ops / aggregate — deferred to sprint-393b), the
   // `error` variant lets the regex SELECT branch below handle them.
-  if (/^(DROP|TRUNCATE|ALTER|INSERT|UPDATE|DELETE|SELECT|WITH)\b/.test(upper)) {
+  if (
+    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|UPDATE|DELETE|SELECT|WITH)\b/.test(
+      upper,
+    )
+  ) {
     const ast = parseSqlPreloaded(normalized);
     if (ast !== null) {
       const fromAst = statementAnalysisFromAst(ast);
@@ -348,6 +400,12 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   // `ALTER TABLE … DROP COLUMN/CONSTRAINT` is destructive enough
   // (column + data loss / FK invalidation) that the structure-surface
   // gate must flag it for the production warn / strict tier.
+  //
+  // Sprint-394 — additive ALTER TABLE actions (ADD COLUMN / ADD
+  // CONSTRAINT / RENAME TO / RENAME COLUMN) classify with their own
+  // kinds + pinned reasons (D2). The regex path mirrors the AST path
+  // bit-for-bit so jsdom unit tests without a preloaded WASM module
+  // still produce the same `StatementAnalysis` shape.
   if (/^ALTER\s+TABLE\b/.test(upper)) {
     const dropMatch = upper.match(/\bDROP\s+(COLUMN|CONSTRAINT)\b/);
     if (dropMatch) {
@@ -355,6 +413,47 @@ export function analyzeStatement(sql: string): StatementAnalysis {
         kind: "ddl-alter-drop",
         severity: "danger",
         reasons: [`ALTER TABLE DROP ${dropMatch[1]}`],
+      };
+    }
+    // RENAME COLUMN takes precedence over plain RENAME (the test below
+    // would otherwise match `RENAME` first).
+    if (/\bRENAME\s+COLUMN\b/.test(upper)) {
+      return {
+        kind: "ddl-alter-rename",
+        severity: "warn",
+        reasons: ["ALTER TABLE — RENAME COLUMN (이름 변경)"],
+      };
+    }
+    if (/\bRENAME\s+TO\b/.test(upper)) {
+      return {
+        kind: "ddl-alter-rename",
+        severity: "warn",
+        reasons: ["ALTER TABLE — RENAME (이름 변경)"],
+      };
+    }
+    if (/\bADD\s+COLUMN\b/.test(upper)) {
+      return {
+        kind: "ddl-alter-add",
+        severity: "warn",
+        reasons: ["ALTER TABLE — ADD COLUMN (schema 변경)"],
+      };
+    }
+    if (/\bADD\s+CONSTRAINT\b/.test(upper)) {
+      return {
+        kind: "ddl-alter-add",
+        severity: "warn",
+        reasons: ["ALTER TABLE — ADD CONSTRAINT (schema 변경)"],
+      };
+    }
+    // Anonymous ADD <constraint-keyword> — bare PRIMARY KEY / UNIQUE /
+    // FOREIGN KEY / CHECK at the ADD position. All classify as
+    // `ddl-alter-add` per contract; the reason string uses the ADD
+    // CONSTRAINT phrasing because semantically they are the same.
+    if (/\bADD\s+(PRIMARY|UNIQUE|FOREIGN|CHECK)\b/.test(upper)) {
+      return {
+        kind: "ddl-alter-add",
+        severity: "warn",
+        reasons: ["ALTER TABLE — ADD CONSTRAINT (schema 변경)"],
       };
     }
   }
@@ -369,14 +468,19 @@ export function analyzeStatement(sql: string): StatementAnalysis {
     return { kind: "ddl-other", severity: "danger", reasons: ["REVOKE"] };
   }
 
-  if (
-    /^DROP\b/.test(upper) ||
-    /^ALTER\b/.test(upper) ||
-    /^CREATE\b/.test(upper)
-  ) {
-    // Sprint 254 — additive ALTER / CREATE / non-DROP-keyword DROP
-    // (defensive — DROP TABLE/DATABASE/SCHEMA/INDEX/VIEW already handled
-    // above) classify as WARN (write surface).
+  // Sprint-394 — CREATE TABLE / INDEX / VIEW / MATERIALIZED VIEW classify
+  // as `ddl-create` / info / empty reasons. CREATE FUNCTION / TRIGGER /
+  // ROLE / EXTENSION also classify here (the AST parser rejects them as
+  // SyntaxError; the regex fallback still produces `ddl-create` because
+  // the verb-level semantics is the same — construction, non-destructive).
+  if (/^CREATE\b/.test(upper)) {
+    return { kind: "ddl-create", severity: "info", reasons: [] };
+  }
+
+  if (/^DROP\b/.test(upper) || /^ALTER\b/.test(upper)) {
+    // Sprint 254 — non-DROP-keyword DROP / ALTER without a recognised
+    // action keyword falls through here. Defensive — most ALTER TABLE /
+    // DROP variants are handled by their dedicated branches above.
     return { kind: "ddl-other", severity: "warn", reasons: [] };
   }
 

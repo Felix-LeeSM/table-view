@@ -228,7 +228,13 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
     );
   });
 
-  it("[AC-255-03c] CREATE TABLE single → dialog mount + Execute → executeQuery 1회 호출", async () => {
+  it("[AC-255-03c] CREATE TABLE single → sprint-394 ddl-create/info → dialog SKIPPED → executeQuery 1회 호출", async () => {
+    // Pre-sprint-394 behavior: CREATE was `ddl-other` / warn → mounted
+    // the warn dialog and required an extra Execute click.
+    // Sprint-394 (contract): CREATE TABLE / INDEX / VIEW classify as
+    // `ddl-create` / info — non-destructive construction. The safe-mode
+    // gate now skips the warn dialog and dispatches `executeQuery`
+    // directly on the first click.
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     seedConnection("development");
     const tab = seedTab("CREATE TABLE foo (id int)");
@@ -238,14 +244,11 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
       screen.getByTestId("execute-btn").click();
     });
 
-    expect(mockExecuteQuery).not.toHaveBeenCalled();
-    const executeBtn = await screen.findByRole("button", { name: /execute/i });
-    await act(async () => {
-      executeBtn.click();
-    });
     await waitFor(() => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
     });
+    // The warn dialog should never have mounted.
+    expect(screen.queryByText("Review SQL Changes")).not.toBeInTheDocument();
   });
 
   it("[AC-255-03d] ALTER TABLE … ADD COLUMN (additive) → dialog mount + Execute → executeQuery 1회 호출", async () => {

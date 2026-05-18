@@ -59,13 +59,51 @@ fn parse_sql_backend_round_trips_select_widening_statement() {
 
 #[test]
 fn parse_sql_backend_returns_error_variant_for_unsupported_statement() {
-    // Sprint-392 — DELETE/UPDATE/INSERT are now supported. Use CREATE
-    // (sprint-394) for the unsupported-statement assertion.
+    // Sprint-394 — DELETE/UPDATE/INSERT/CREATE TABLE/INDEX/VIEW/ALTER
+    // ADD/RENAME are now supported. EXPLAIN remains in `is_known_sql_verb`
+    // but not in `is_supported_sql_verb`, so it surfaces as
+    // `unsupported-statement` — useful as the canonical fixture for the
+    // crate-boundary error contract.
     let result =
-        parse_sql_backend("CREATE TABLE t (id int)".to_string()).expect("Ok variant always");
+        parse_sql_backend("EXPLAIN SELECT * FROM users".to_string()).expect("Ok variant always");
     let json = serde_json::to_value(&result).expect("serialize");
     assert_eq!(json["kind"], "error");
     assert_eq!(json["error_kind"], "unsupported-statement");
+}
+
+#[test]
+fn parse_sql_backend_round_trips_create_table_statement() {
+    // Sprint-394 — CREATE TABLE flows through the AST. Confirm the
+    // crate-boundary contract: schema-qualified table reference, column
+    // list with allowlisted type, and constraint round-trip cleanly.
+    let result = parse_sql_backend(
+        "CREATE TABLE public.users (id INTEGER PRIMARY KEY, email TEXT NOT NULL)".to_string(),
+    )
+    .expect("Ok variant always");
+    let json = serde_json::to_value(&result).expect("serialize");
+    assert_eq!(json["kind"], "create-table");
+    assert_eq!(json["table"]["schema"], "public");
+    assert_eq!(json["table"]["table"], "users");
+    assert_eq!(json["columns"][0]["name"], "id");
+    assert_eq!(json["columns"][0]["data_type"]["kind"], "integer");
+    assert_eq!(
+        json["columns"][0]["constraints"][0]["body"]["kind"],
+        "primary-key"
+    );
+}
+
+#[test]
+fn parse_sql_backend_round_trips_alter_table_add_column() {
+    // Sprint-394 — ALTER TABLE ADD COLUMN is no longer
+    // UnsupportedStatement; it round-trips with `action.kind` =
+    // `add-column`.
+    let result = parse_sql_backend("ALTER TABLE users ADD COLUMN email TEXT".to_string())
+        .expect("Ok variant always");
+    let json = serde_json::to_value(&result).expect("serialize");
+    assert_eq!(json["kind"], "alter-table");
+    assert_eq!(json["action"]["kind"], "add-column");
+    assert_eq!(json["action"]["column"]["name"], "email");
+    assert_eq!(json["action"]["column"]["data_type"]["kind"], "text");
 }
 
 #[test]

@@ -33,13 +33,16 @@
 //! - `LexError` — surfaced verbatim from `lexer::lex`.
 
 use crate::ast::{
-    AlterAction, AlterTableStatement, CascadeBehavior, CaseWhen, ColumnRef, Columns, CompareOp,
+    AlterAction, AlterTableStatement, CascadeBehavior, CaseWhen, ColumnConstraint,
+    ColumnConstraintBody, ColumnDefinition, ColumnRef, ColumnType, Columns, CompareOp,
+    CreateIndexStatement, CreateTableStatement, CreateViewBody, CreateViewStatement,
     CteDefinition, DeleteStatement, DropObjectType, DropStatement, FrameBound, FrameUnit, FromItem,
     FromSource, InsertSource, InsertStatement, InsertValue, JoinDescriptor, JoinPredicate,
     LikeCase, LimitClause, NullsPlacement, OnConflict, OrderDirection, OrderingItem, OverClause,
     ParseError, ParseErrorKind, ParseResult, SelectExpr, SelectListItem, SelectStatement,
-    SetOperationEntry, SetOperator, SqlLiteral, TruncateStatement, UpdateAssignment,
-    UpdateStatement, WindowArgument, WindowFrame, WithInner, WithStatement,
+    SetOperationEntry, SetOperator, SqlLiteral, TableConstraint, TableConstraintBody, TableRef,
+    TruncateStatement, UpdateAssignment, UpdateStatement, WindowArgument, WindowFrame, WithInner,
+    WithStatement,
 };
 use crate::lexer::{lex, Spanned, Token};
 
@@ -171,6 +174,16 @@ impl<'a> Parser<'a> {
             Token::With => {
                 self.advance();
                 Ok(ParseResult::With(self.parse_with()?))
+            }
+            Token::Create => {
+                // Sprint-394 — `CREATE TABLE / CREATE INDEX / CREATE
+                // UNIQUE INDEX / CREATE VIEW / CREATE OR REPLACE VIEW`.
+                // Any other follow-up token (FUNCTION / TRIGGER /
+                // EXTENSION / TEMPORARY / MATERIALIZED / …) falls
+                // through to `SyntaxError` here — the regex fallback in
+                // sqlSafety still classifies them.
+                self.advance();
+                self.parse_create_dispatch()
             }
             Token::Ident(name) => {
                 // The lexer keeps any non-keyword as an identifier; if it
@@ -1420,8 +1433,10 @@ impl<'a> Parser<'a> {
     }
 
     /// `ALTER TABLE <name> <action>`. Assumes the `ALTER` token has been
-    /// consumed. Only DROP-family actions are accepted here — ADD /
-    /// RENAME / ALTER COLUMN surface as `UnsupportedStatement`.
+    /// consumed. Sprint-391 covers DROP-family actions; sprint-394 adds
+    /// ADD COLUMN / ADD CONSTRAINT / RENAME TO / RENAME COLUMN. Any
+    /// other action keyword (`ALTER COLUMN TYPE`, `OWNER TO`, …) is a
+    /// `SyntaxError` — out of scope for this sprint.
     fn parse_alter_table(&mut self) -> Result<AlterTableStatement, ParseError> {
         // TABLE
         self.expect_keyword(Token::Table, "expected TABLE")?;
@@ -1438,9 +1453,9 @@ impl<'a> Parser<'a> {
         };
         self.advance();
 
-        // action — only DROP is supported in sprint-391; everything else
-        // is an unsupported statement (or syntax error if the token isn't
-        // a recognised ALTER action keyword).
+        // action dispatch — DROP / ADD / RENAME. Anything else (ALTER
+        // COLUMN / OWNER TO / SET TABLESPACE / …) surfaces as a syntax
+        // error per the sprint-394 out-of-scope list.
         let action_tok = self
             .peek()
             .ok_or_else(|| syntax_err(None, "expected action"))?;
@@ -1450,16 +1465,82 @@ impl<'a> Parser<'a> {
                 let action = self.parse_alter_drop_action()?;
                 Ok(AlterTableStatement { table, action })
             }
-            // Any non-DROP action keyword (ADD / RENAME / ALTER /
-            // identifier) is out of scope for sprint-391 — DDL additive
-            // grammar is sprint-394.
-            Token::Ident(_) => Err(ParseError {
-                error_kind: ParseErrorKind::UnsupportedStatement,
-                message: "ALTER TABLE ADD/RENAME".to_string(),
-                at: Some(action_tok.at),
-            }),
-            _ => Err(syntax_err(Some(action_tok.at), "expected DROP")),
+            Token::Add => {
+                self.advance();
+                let action = self.parse_alter_add_action()?;
+                Ok(AlterTableStatement { table, action })
+            }
+            Token::Rename => {
+                self.advance();
+                let action = self.parse_alter_rename_action()?;
+                Ok(AlterTableStatement { table, action })
+            }
+            _ => Err(syntax_err(
+                Some(action_tok.at),
+                "expected DROP, ADD, or RENAME",
+            )),
         }
+    }
+
+    /// Sprint-394 — parse the body of `ALTER TABLE <name> ADD …`. Three
+    /// shapes are accepted:
+    ///   1. `ADD COLUMN [IF NOT EXISTS] <col-def>`
+    ///   2. `ADD CONSTRAINT <name> <constraint-body>`
+    ///   3. `ADD <bare-constraint>` — same as #2 but the constraint
+    ///      name slot stays `None`.
+    /// The `ADD` keyword has been consumed by the caller.
+    fn parse_alter_add_action(&mut self) -> Result<AlterAction, ParseError> {
+        // ADD COLUMN — column-definition shape (shared with CREATE TABLE).
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Column)) {
+            self.advance();
+            let if_not_exists = self.consume_if_not_exists()?;
+            // `source_index` is meaningless outside a CREATE TABLE column
+            // list; we record 0 so downstream tooling that iterates the
+            // single column can still address it uniformly.
+            let column = self.parse_column_definition(0)?;
+            return Ok(AlterAction::AddColumn {
+                column,
+                if_not_exists,
+            });
+        }
+        // ADD CONSTRAINT — explicit constraint name.
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Constraint)) {
+            self.advance();
+            let name = self.expect_ident("expected constraint name")?;
+            let body = self.parse_table_constraint_body()?;
+            return Ok(AlterAction::AddConstraint {
+                constraint: TableConstraint {
+                    name: Some(name),
+                    body,
+                },
+            });
+        }
+        // ADD <bare-constraint> — anonymous table constraint introduced
+        // by the constraint keyword (PRIMARY / UNIQUE / FOREIGN / CHECK).
+        let body = self.parse_table_constraint_body()?;
+        Ok(AlterAction::AddConstraint {
+            constraint: TableConstraint { name: None, body },
+        })
+    }
+
+    /// Sprint-394 — parse the body of `ALTER TABLE <name> RENAME …`. Two
+    /// shapes are accepted:
+    ///   1. `RENAME TO <new-name>` — rename the table itself.
+    ///   2. `RENAME COLUMN <old> TO <new>` — rename a column.
+    /// The `RENAME` keyword has been consumed by the caller.
+    fn parse_alter_rename_action(&mut self) -> Result<AlterAction, ParseError> {
+        // RENAME COLUMN — qualified rename.
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Column)) {
+            self.advance();
+            let old_name = self.expect_ident("expected column name")?;
+            self.expect_keyword(Token::To, "expected TO")?;
+            let new_name = self.expect_ident("expected new column name")?;
+            return Ok(AlterAction::RenameColumn { old_name, new_name });
+        }
+        // RENAME TO — table rename.
+        self.expect_keyword(Token::To, "expected TO")?;
+        let new_name = self.expect_ident("expected new table name")?;
+        Ok(AlterAction::RenameTable { new_name })
     }
 
     /// `DROP COLUMN [IF EXISTS] <col> [CASCADE|RESTRICT]`
@@ -1528,6 +1609,576 @@ impl<'a> Parser<'a> {
                 "expected COLUMN/CONSTRAINT/INDEX",
             )),
         }
+    }
+
+    // ---------------------------------------------------------------
+    // Sprint 394 — DDL additive sub-parsers (CREATE TABLE / INDEX /
+    //              VIEW + ALTER TABLE ADD / RENAME helpers).
+    // ---------------------------------------------------------------
+
+    /// Dispatch on the token following `CREATE`. Supported shapes:
+    ///   - `CREATE TABLE …`
+    ///   - `CREATE [UNIQUE] INDEX …`
+    ///   - `CREATE [OR REPLACE] VIEW …`
+    /// Any other follow-up token (FUNCTION / TRIGGER / EXTENSION /
+    /// TEMPORARY / MATERIALIZED / …) parses to `SyntaxError` per the
+    /// sprint-394 out-of-scope list.
+    fn parse_create_dispatch(&mut self) -> Result<ParseResult, ParseError> {
+        let next = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected TABLE/INDEX/VIEW after CREATE"))?
+            .clone();
+        match next.token {
+            Token::Table => {
+                self.advance();
+                Ok(ParseResult::CreateTable(self.parse_create_table()?))
+            }
+            Token::Unique => {
+                // `CREATE UNIQUE INDEX …`
+                self.advance();
+                self.expect_keyword(Token::Index, "expected INDEX after UNIQUE")?;
+                Ok(ParseResult::CreateIndex(
+                    self.parse_create_index_body(true)?,
+                ))
+            }
+            Token::Index => {
+                self.advance();
+                Ok(ParseResult::CreateIndex(
+                    self.parse_create_index_body(false)?,
+                ))
+            }
+            Token::Or => {
+                // `CREATE OR REPLACE VIEW …`
+                self.advance();
+                self.expect_keyword(Token::Replace, "expected REPLACE after OR")?;
+                self.expect_keyword(Token::View, "expected VIEW after OR REPLACE")?;
+                Ok(ParseResult::CreateView(self.parse_create_view_body(true)?))
+            }
+            Token::View => {
+                self.advance();
+                Ok(ParseResult::CreateView(self.parse_create_view_body(false)?))
+            }
+            // CREATE FUNCTION / TRIGGER / EXTENSION / TEMPORARY /
+            // MATERIALIZED / ROLE / SCHEMA — out of scope; surface a
+            // SyntaxError so the sqlSafety regex fallback still
+            // classifies the statement (D3).
+            _ => Err(syntax_err(
+                Some(next.at),
+                "expected TABLE / INDEX / VIEW / [OR REPLACE] VIEW after CREATE",
+            )),
+        }
+    }
+
+    /// `CREATE TABLE` body — the `CREATE TABLE` tokens have been consumed.
+    fn parse_create_table(&mut self) -> Result<CreateTableStatement, ParseError> {
+        // Optional `IF NOT EXISTS`.
+        let if_not_exists = self.consume_if_not_exists()?;
+        // Schema-qualified or bare table reference.
+        let table = self.parse_table_ref()?;
+        // `( <defs> )` — at least one column.
+        self.expect_token(Token::LParen, "expected '(' after table name")?;
+        // Empty definition list is rejected (`AC-394-T20`).
+        if matches!(self.peek().map(|t| &t.token), Some(Token::RParen)) {
+            let at = self.peek().map(|t| t.at);
+            return Err(syntax_err(at, "CREATE TABLE requires at least one column"));
+        }
+        let mut columns: Vec<ColumnDefinition> = Vec::new();
+        let mut table_constraints: Vec<TableConstraint> = Vec::new();
+        let mut col_index: usize = 0;
+        loop {
+            // Branch by the leading token of the next item: a table-
+            // constraint keyword vs. a column-definition (the column
+            // path requires an identifier as the leading token).
+            let lead = self
+                .peek()
+                .ok_or_else(|| syntax_err(None, "expected column or constraint"))?
+                .clone();
+            match lead.token {
+                Token::Constraint => {
+                    self.advance();
+                    let name = self.expect_ident("expected constraint name")?;
+                    let body = self.parse_table_constraint_body()?;
+                    table_constraints.push(TableConstraint {
+                        name: Some(name),
+                        body,
+                    });
+                }
+                Token::Primary | Token::Unique | Token::Foreign | Token::Check => {
+                    let body = self.parse_table_constraint_body()?;
+                    table_constraints.push(TableConstraint { name: None, body });
+                }
+                Token::Ident(_) => {
+                    let col = self.parse_column_definition(col_index)?;
+                    col_index += 1;
+                    columns.push(col);
+                }
+                _ => {
+                    return Err(syntax_err(
+                        Some(lead.at),
+                        "expected column name or constraint keyword",
+                    ));
+                }
+            }
+            // Either `,` (more items) or `)` (end of list).
+            match self.peek().map(|t| &t.token) {
+                Some(Token::Comma) => {
+                    self.advance();
+                    continue;
+                }
+                Some(Token::RParen) => {
+                    self.advance();
+                    break;
+                }
+                Some(_) | None => {
+                    let at = self.peek().map(|t| t.at);
+                    return Err(syntax_err(at, "expected ',' or ')'"));
+                }
+            }
+        }
+        if columns.is_empty() {
+            // Edge case — only table-level constraints inside the
+            // parens. Sprint-394 rejects this (AC-394-T20 spec wording
+            // says "empty column list" but the broader invariant is
+            // that a CREATE TABLE produces at least one column).
+            let at = self.peek().map(|t| t.at);
+            return Err(syntax_err(at, "CREATE TABLE requires at least one column"));
+        }
+        Ok(CreateTableStatement {
+            table,
+            if_not_exists,
+            columns,
+            table_constraints,
+        })
+    }
+
+    /// Sprint-394 — schema-qualified or bare table reference. Used by
+    /// CREATE TABLE / CREATE INDEX (`ON table`) / CREATE VIEW.
+    fn parse_table_ref(&mut self) -> Result<TableRef, ParseError> {
+        let first = self.expect_ident("expected table name")?;
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Dot)) {
+            self.advance();
+            let table = self.expect_ident("expected table name after '.'")?;
+            // Reject three-dot qualifier (sprint-393a's table-ref shape
+            // is at most two-part).
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Dot)) {
+                let at = self.peek().map(|t| t.at);
+                return Err(syntax_err(at, "three-dot table qualifier unsupported"));
+            }
+            Ok(TableRef {
+                schema: Some(first),
+                table,
+            })
+        } else {
+            Ok(TableRef {
+                schema: None,
+                table: first,
+            })
+        }
+    }
+
+    /// One column definition: `<name> <type> [<col-constraint> …]`.
+    /// `source_index` is the zero-based ordinal recorded into the AST.
+    fn parse_column_definition(
+        &mut self,
+        source_index: usize,
+    ) -> Result<ColumnDefinition, ParseError> {
+        let name = self.expect_ident("expected column name")?;
+        let data_type = self.parse_column_type()?;
+        let constraints = self.parse_column_constraints()?;
+        Ok(ColumnDefinition {
+            name,
+            data_type,
+            constraints,
+            source_index,
+        })
+    }
+
+    /// Parse a column type token sequence. The lexer keyword allowlist
+    /// (`INTEGER`, `BIGINT`, `VARCHAR`, `TEXT`, `TIMESTAMP`, `DATE`,
+    /// `BOOLEAN`, `NUMERIC`, `SERIAL`, `UUID`) is the source of truth;
+    /// any other token in type position parses to `SyntaxError` (AC-
+    /// 394-T21). `VARCHAR(n)` requires a parenthesized integer; `NUMERIC`
+    /// accepts zero, one, or two integer arguments; `TIMESTAMP WITH TIME
+    /// ZONE` is recognized as a three-token sequence.
+    fn parse_column_type(&mut self) -> Result<ColumnType, ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected column type"))?
+            .clone();
+        match tok.token {
+            Token::KwInteger => {
+                self.advance();
+                Ok(ColumnType::Integer)
+            }
+            Token::KwBigint => {
+                self.advance();
+                Ok(ColumnType::Bigint)
+            }
+            Token::KwText => {
+                self.advance();
+                Ok(ColumnType::Text)
+            }
+            Token::KwDate => {
+                self.advance();
+                Ok(ColumnType::Date)
+            }
+            Token::KwBoolean => {
+                self.advance();
+                Ok(ColumnType::Boolean)
+            }
+            Token::KwSerial => {
+                self.advance();
+                Ok(ColumnType::Serial)
+            }
+            Token::KwUuid => {
+                self.advance();
+                Ok(ColumnType::Uuid)
+            }
+            Token::KwVarchar => {
+                self.advance();
+                self.expect_token(Token::LParen, "VARCHAR requires '(<length>)'")?;
+                let len_tok = self
+                    .peek()
+                    .ok_or_else(|| syntax_err(None, "expected length integer"))?
+                    .clone();
+                let length = match len_tok.token {
+                    Token::Integer(v) => v,
+                    _ => {
+                        return Err(syntax_err(
+                            Some(len_tok.at),
+                            "VARCHAR length must be an integer literal",
+                        ));
+                    }
+                };
+                self.advance();
+                self.expect_token(Token::RParen, "expected ')'")?;
+                Ok(ColumnType::Varchar { length })
+            }
+            Token::KwTimestamp => {
+                self.advance();
+                // `TIMESTAMP WITH TIME ZONE` — three-token suffix.
+                let with_time_zone =
+                    if matches!(self.peek().map(|t| &t.token), Some(Token::With)) {
+                        self.advance();
+                        self.expect_keyword(Token::Time, "expected TIME after WITH")?;
+                        self.expect_keyword(Token::Zone, "expected ZONE after TIME")?;
+                        true
+                    } else {
+                        false
+                    };
+                Ok(ColumnType::Timestamp { with_time_zone })
+            }
+            Token::KwNumeric => {
+                self.advance();
+                // `NUMERIC` — bare, `NUMERIC(p)`, or `NUMERIC(p, s)`.
+                if !matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+                    return Ok(ColumnType::Numeric {
+                        precision: None,
+                        scale: None,
+                    });
+                }
+                self.advance();
+                let p_tok = self
+                    .peek()
+                    .ok_or_else(|| syntax_err(None, "expected precision integer"))?
+                    .clone();
+                let precision = match p_tok.token {
+                    Token::Integer(v) => v,
+                    _ => {
+                        return Err(syntax_err(
+                            Some(p_tok.at),
+                            "NUMERIC precision must be an integer literal",
+                        ));
+                    }
+                };
+                self.advance();
+                let scale = if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                    self.advance();
+                    let s_tok = self
+                        .peek()
+                        .ok_or_else(|| syntax_err(None, "expected scale integer"))?
+                        .clone();
+                    let s = match s_tok.token {
+                        Token::Integer(v) => v,
+                        _ => {
+                            return Err(syntax_err(
+                                Some(s_tok.at),
+                                "NUMERIC scale must be an integer literal",
+                            ));
+                        }
+                    };
+                    self.advance();
+                    Some(s)
+                } else {
+                    None
+                };
+                self.expect_token(Token::RParen, "expected ')'")?;
+                Ok(ColumnType::Numeric {
+                    precision: Some(precision),
+                    scale,
+                })
+            }
+            // Bare identifier in type position — vendor synonym like
+            // INT4 / STRING / DATETIME — out of scope (AC-394-T21).
+            Token::Ident(_) => Err(syntax_err(
+                Some(tok.at),
+                "unsupported column type — sprint-394 allowlist is \
+                 INTEGER/BIGINT/VARCHAR/TEXT/TIMESTAMP/DATE/BOOLEAN/NUMERIC/SERIAL/UUID",
+            )),
+            _ => Err(syntax_err(Some(tok.at), "expected column type")),
+        }
+    }
+
+    /// Parse the column-level constraint suffix of a column definition.
+    /// Returns an empty vec when no constraint keywords are present.
+    /// Loops until a comma / closing paren / unrecognized token; the
+    /// caller (CREATE TABLE definition list / ALTER TABLE ADD COLUMN)
+    /// decides what terminates the surrounding context.
+    fn parse_column_constraints(&mut self) -> Result<Vec<ColumnConstraint>, ParseError> {
+        let mut out: Vec<ColumnConstraint> = Vec::new();
+        loop {
+            // Optional `CONSTRAINT <name>` prefix introduces an
+            // inline-named column constraint.
+            let name = if matches!(self.peek().map(|t| &t.token), Some(Token::Constraint)) {
+                self.advance();
+                Some(self.expect_ident("expected constraint name")?)
+            } else {
+                None
+            };
+
+            let body = match self.peek().map(|t| &t.token) {
+                Some(Token::Primary) => {
+                    self.advance();
+                    self.expect_keyword(Token::Key, "expected KEY after PRIMARY")?;
+                    ColumnConstraintBody::PrimaryKey
+                }
+                Some(Token::Not) => {
+                    self.advance();
+                    self.expect_keyword(Token::Null, "expected NULL after NOT")?;
+                    ColumnConstraintBody::NotNull
+                }
+                Some(Token::Default) => {
+                    self.advance();
+                    // The DEFAULT slot accepts only literal / placeholder
+                    // values in this sprint (function calls are deferred —
+                    // see contract Out-of-Scope §). `parse_insert_value`
+                    // surfaces a `SyntaxError` for anything else.
+                    let value = self.parse_insert_value()?;
+                    ColumnConstraintBody::Default { value }
+                }
+                Some(Token::Unique) => {
+                    self.advance();
+                    ColumnConstraintBody::Unique
+                }
+                Some(Token::References) => {
+                    self.advance();
+                    let table = self.parse_table_ref()?;
+                    // Optional `(<col>)`.
+                    let column =
+                        if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+                            self.advance();
+                            let c = self.expect_ident("expected referenced column")?;
+                            self.expect_token(Token::RParen, "expected ')'")?;
+                            Some(c)
+                        } else {
+                            None
+                        };
+                    ColumnConstraintBody::References { table, column }
+                }
+                Some(Token::Check) => {
+                    self.advance();
+                    self.expect_token(Token::LParen, "expected '(' after CHECK")?;
+                    let expression = self.parse_select_expr_or()?;
+                    self.expect_token(Token::RParen, "expected ')'")?;
+                    ColumnConstraintBody::Check { expression }
+                }
+                _ => {
+                    // No more constraints. If a `CONSTRAINT name` prefix
+                    // was consumed but no body keyword followed, surface
+                    // a SyntaxError — the prefix becomes orphan otherwise.
+                    if name.is_some() {
+                        let at = self.peek().map(|t| t.at);
+                        return Err(syntax_err(at, "expected column-constraint body"));
+                    }
+                    break;
+                }
+            };
+            out.push(ColumnConstraint { name, body });
+        }
+        Ok(out)
+    }
+
+    /// Parse a table-level constraint body. The leading token is one of:
+    ///   - `PRIMARY KEY ( <cols> )` — `Primary` consumed here.
+    ///   - `UNIQUE ( <cols> )`.
+    ///   - `FOREIGN KEY ( <cols> ) REFERENCES <table> [ ( <cols> ) ]`.
+    ///   - `CHECK ( <expression> )`.
+    /// Caller already consumed an optional `CONSTRAINT <name>` prefix.
+    fn parse_table_constraint_body(&mut self) -> Result<TableConstraintBody, ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected table-constraint body"))?
+            .clone();
+        match tok.token {
+            Token::Primary => {
+                self.advance();
+                self.expect_keyword(Token::Key, "expected KEY after PRIMARY")?;
+                let columns = self.parse_parenthesized_ident_list()?;
+                Ok(TableConstraintBody::PrimaryKey { columns })
+            }
+            Token::Unique => {
+                self.advance();
+                let columns = self.parse_parenthesized_ident_list()?;
+                Ok(TableConstraintBody::Unique { columns })
+            }
+            Token::Foreign => {
+                self.advance();
+                self.expect_keyword(Token::Key, "expected KEY after FOREIGN")?;
+                let columns = self.parse_parenthesized_ident_list()?;
+                self.expect_keyword(Token::References, "expected REFERENCES")?;
+                let target_table = self.parse_table_ref()?;
+                let target_columns =
+                    if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+                        self.parse_parenthesized_ident_list()?
+                    } else {
+                        Vec::new()
+                    };
+                Ok(TableConstraintBody::References {
+                    columns,
+                    target_table,
+                    target_columns,
+                })
+            }
+            Token::Check => {
+                self.advance();
+                self.expect_token(Token::LParen, "expected '(' after CHECK")?;
+                let expression = self.parse_select_expr_or()?;
+                self.expect_token(Token::RParen, "expected ')'")?;
+                Ok(TableConstraintBody::Check { expression })
+            }
+            _ => Err(syntax_err(
+                Some(tok.at),
+                "expected PRIMARY KEY / UNIQUE / FOREIGN KEY / CHECK",
+            )),
+        }
+    }
+
+    /// `( <ident> ( , <ident> )* )`. The opening paren is required —
+    /// reused by PRIMARY KEY / UNIQUE / FOREIGN KEY column lists.
+    fn parse_parenthesized_ident_list(&mut self) -> Result<Vec<String>, ParseError> {
+        self.expect_token(Token::LParen, "expected '('")?;
+        let cols = self.parse_ident_list("expected column name")?;
+        self.expect_token(Token::RParen, "expected ')'")?;
+        Ok(cols)
+    }
+
+    /// Sprint-394 — optional `IF NOT EXISTS` token triple. Returns
+    /// `true` when all three keywords are present (in order); returns
+    /// `false` if `IF` is absent. A partial sequence (`IF` without
+    /// `NOT EXISTS`) is a `SyntaxError`.
+    fn consume_if_not_exists(&mut self) -> Result<bool, ParseError> {
+        if !matches!(self.peek().map(|t| &t.token), Some(Token::If)) {
+            return Ok(false);
+        }
+        let if_tok = self.peek().expect("just peeked").clone();
+        self.advance();
+        self.expect_keyword(Token::Not, "expected NOT after IF")
+            .map_err(|_| syntax_err(Some(if_tok.at), "expected NOT EXISTS after IF"))?;
+        self.expect_keyword(Token::Exists, "expected EXISTS after NOT")?;
+        Ok(true)
+    }
+
+    /// `CREATE INDEX` body — `unique` is `true` when the caller consumed
+    /// `UNIQUE INDEX`. The `INDEX` token has been consumed.
+    fn parse_create_index_body(
+        &mut self,
+        unique: bool,
+    ) -> Result<CreateIndexStatement, ParseError> {
+        let if_not_exists = self.consume_if_not_exists()?;
+        let name = self.expect_ident("expected index name")?;
+        self.expect_keyword(Token::On, "expected ON")?;
+        let table = self.parse_table_ref()?;
+        self.expect_token(Token::LParen, "expected '('")?;
+        // Reject empty column list (AC-394-I05).
+        if matches!(self.peek().map(|t| &t.token), Some(Token::RParen)) {
+            let at = self.peek().map(|t| t.at);
+            return Err(syntax_err(at, "CREATE INDEX requires at least one column"));
+        }
+        // Identifier-only column list — expression / functional indexes
+        // (`CREATE INDEX idx ON t (lower(a))`) parse to `SyntaxError`
+        // (AC-394-I06) because the second token after the column ident
+        // would be `(`, which fails the comma/RParen branch below.
+        let mut columns: Vec<String> = Vec::new();
+        loop {
+            let col = self.expect_ident("expected column ident")?;
+            columns.push(col);
+            match self.peek().map(|t| &t.token) {
+                Some(Token::Comma) => {
+                    self.advance();
+                    continue;
+                }
+                Some(Token::RParen) => {
+                    self.advance();
+                    break;
+                }
+                Some(_) | None => {
+                    let at = self.peek().map(|t| t.at);
+                    return Err(syntax_err(
+                        at,
+                        "expected ',' or ')' — expression-indexes are out of scope",
+                    ));
+                }
+            }
+        }
+        Ok(CreateIndexStatement {
+            unique,
+            if_not_exists,
+            name,
+            table,
+            columns,
+        })
+    }
+
+    /// `CREATE VIEW` body — `or_replace` is `true` when the caller
+    /// consumed `OR REPLACE`. The `VIEW` token has been consumed.
+    fn parse_create_view_body(
+        &mut self,
+        or_replace: bool,
+    ) -> Result<CreateViewStatement, ParseError> {
+        let name = self.parse_table_ref()?;
+        self.expect_keyword(Token::As, "expected AS")?;
+        // The body may start with `SELECT` (plain SELECT, with optional
+        // set-operation chain — `parse_select` handles the chain) or
+        // `WITH` (CTE-wrapped SELECT — `parse_with` enforces that the
+        // inner statement is a SELECT for the view body).
+        let body = match self.peek().map(|t| &t.token) {
+            Some(Token::Select) => {
+                self.advance();
+                CreateViewBody::Select(self.parse_select()?)
+            }
+            Some(Token::With) => {
+                self.advance();
+                let with = self.parse_with()?;
+                // A view body's CTE wrap must be a SELECT (view bodies
+                // are read-only by definition).
+                if !matches!(*with.inner_statement, WithInner::Select(_)) {
+                    return Err(syntax_err(
+                        None,
+                        "VIEW body's CTE wrap must end in a SELECT",
+                    ));
+                }
+                CreateViewBody::With(with)
+            }
+            Some(_) | None => {
+                let at = self.peek().map(|t| t.at);
+                return Err(syntax_err(at, "expected SELECT or WITH after AS"));
+            }
+        };
+        Ok(CreateViewStatement {
+            or_replace,
+            name,
+            body,
+        })
     }
 
     // ---------------------------------------------------------------
@@ -2414,11 +3065,21 @@ fn is_known_sql_verb(name: &str) -> bool {
 
 /// Sprint-392 — the set of verbs whose grammar this crate actually
 /// implements. Anything in `is_known_sql_verb` but not in here is an
-/// `UnsupportedStatement`. Sprint-393b adds `WITH` (CTE wrap).
+/// `UnsupportedStatement`. Sprint-393b adds `WITH` (CTE wrap). Sprint-394
+/// adds `CREATE` (TABLE / INDEX / VIEW) — `CREATE FUNCTION` /
+/// `CREATE TRIGGER` etc. surface as `SyntaxError` from the dispatcher.
 fn is_supported_sql_verb(name: &str) -> bool {
     matches!(
         name.to_ascii_uppercase().as_str(),
-        "SELECT" | "DROP" | "TRUNCATE" | "ALTER" | "INSERT" | "UPDATE" | "DELETE" | "WITH"
+        "SELECT"
+            | "DROP"
+            | "TRUNCATE"
+            | "ALTER"
+            | "INSERT"
+            | "UPDATE"
+            | "DELETE"
+            | "WITH"
+            | "CREATE"
     )
 }
 
@@ -2593,8 +3254,20 @@ mod tests {
     }
 
     #[test]
-    fn ac_p8_create_is_unsupported_statement() {
+    fn ac_p8_create_unknown_type_is_syntax_error() {
+        // Sprint-394 — CREATE TABLE is supported, but `int` is not in
+        // the column-type allowlist (the sprint-394 grammar accepts
+        // INTEGER / BIGINT / etc.). The parser surfaces a SyntaxError
+        // on the inner type position. Use `EXPLAIN` to keep an
+        // UnsupportedStatement smoke-test alive for known-but-unsupported
+        // verbs.
         let e = err("CREATE TABLE t (id int)");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_p8_explain_is_unsupported_statement() {
+        let e = err("EXPLAIN SELECT * FROM users");
         assert_eq!(e.error_kind, ParseErrorKind::UnsupportedStatement);
     }
 
@@ -3916,9 +4589,15 @@ mod tests {
     }
 
     #[test]
-    fn ac_391_a14_alter_table_add_column_is_unsupported() {
+    fn ac_391_a14_alter_table_add_column_is_supported_post_394() {
+        // Sprint-394 — ADD COLUMN is now an accepted additive ALTER
+        // action. The sprint-391 test asserted `UnsupportedStatement` for
+        // the same input; the assertion is updated to reflect the widened
+        // grammar. A vendor-only type name (`int`) still fails because the
+        // type-name allowlist is INTEGER (see AC-394-T21), so the parser
+        // surfaces a SyntaxError on the inner column-type instead.
         let e = err("ALTER TABLE users ADD COLUMN x int");
-        assert_eq!(e.error_kind, ParseErrorKind::UnsupportedStatement);
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
     }
 
     #[test]
@@ -5534,5 +6213,957 @@ mod tests {
         let json = serde_json::to_string(&r).expect("serialize");
         let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(r, back);
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    // Sprint 394 — DDL additive grammar (CREATE TABLE / CREATE INDEX /
+    //              CREATE VIEW + ALTER TABLE ADD / RENAME).
+    // ═════════════════════════════════════════════════════════════════
+
+    fn ok_create_table(input: &str) -> CreateTableStatement {
+        match parse(input) {
+            ParseResult::CreateTable(c) => c,
+            other => panic!("expected CreateTable, got: {:?}", other),
+        }
+    }
+
+    fn ok_create_index(input: &str) -> CreateIndexStatement {
+        match parse(input) {
+            ParseResult::CreateIndex(c) => c,
+            other => panic!("expected CreateIndex, got: {:?}", other),
+        }
+    }
+
+    fn ok_create_view(input: &str) -> CreateViewStatement {
+        match parse(input) {
+            ParseResult::CreateView(c) => c,
+            other => panic!("expected CreateView, got: {:?}", other),
+        }
+    }
+
+    // ── T — CREATE TABLE — AC-394-T ───────────────────────────────────
+
+    #[test]
+    fn ac_394_t01_create_table_two_columns() {
+        let s = ok_create_table("CREATE TABLE users (id INTEGER, name TEXT)");
+        assert!(!s.if_not_exists);
+        assert_eq!(s.table.schema, None);
+        assert_eq!(s.table.table, "users");
+        assert_eq!(s.columns.len(), 2);
+        assert!(s.table_constraints.is_empty());
+        assert_eq!(s.columns[0].name, "id");
+        assert!(matches!(s.columns[0].data_type, ColumnType::Integer));
+        assert_eq!(s.columns[0].source_index, 0);
+        assert_eq!(s.columns[1].name, "name");
+        assert!(matches!(s.columns[1].data_type, ColumnType::Text));
+        assert_eq!(s.columns[1].source_index, 1);
+    }
+
+    #[test]
+    fn ac_394_t02_create_table_if_not_exists() {
+        let s = ok_create_table("CREATE TABLE IF NOT EXISTS users (id INTEGER)");
+        assert!(s.if_not_exists);
+        assert_eq!(s.table.table, "users");
+    }
+
+    #[test]
+    fn ac_394_t03_create_table_schema_qualified() {
+        let s = ok_create_table("CREATE TABLE public.users (id INTEGER)");
+        assert_eq!(s.table.schema.as_deref(), Some("public"));
+        assert_eq!(s.table.table, "users");
+    }
+
+    #[test]
+    fn ac_394_t04_create_table_varchar_length() {
+        let s = ok_create_table("CREATE TABLE t (a VARCHAR(255))");
+        assert!(matches!(
+            s.columns[0].data_type,
+            ColumnType::Varchar { length: 255 }
+        ));
+    }
+
+    #[test]
+    fn ac_394_t05_create_table_numeric_precision_scale() {
+        let s = ok_create_table("CREATE TABLE t (a NUMERIC(10, 2))");
+        assert!(matches!(
+            s.columns[0].data_type,
+            ColumnType::Numeric {
+                precision: Some(10),
+                scale: Some(2),
+            }
+        ));
+    }
+
+    #[test]
+    fn ac_394_t06_create_table_numeric_precision_only() {
+        let s = ok_create_table("CREATE TABLE t (a NUMERIC(10))");
+        assert!(matches!(
+            s.columns[0].data_type,
+            ColumnType::Numeric {
+                precision: Some(10),
+                scale: None,
+            }
+        ));
+    }
+
+    #[test]
+    fn ac_394_t07_create_table_numeric_bare() {
+        let s = ok_create_table("CREATE TABLE t (a NUMERIC)");
+        assert!(matches!(
+            s.columns[0].data_type,
+            ColumnType::Numeric {
+                precision: None,
+                scale: None,
+            }
+        ));
+    }
+
+    #[test]
+    fn ac_394_t08_create_table_timestamp_bare() {
+        let s = ok_create_table("CREATE TABLE t (a TIMESTAMP)");
+        assert!(matches!(
+            s.columns[0].data_type,
+            ColumnType::Timestamp {
+                with_time_zone: false,
+            }
+        ));
+    }
+
+    #[test]
+    fn ac_394_t09_create_table_timestamp_with_time_zone() {
+        let s = ok_create_table("CREATE TABLE t (a TIMESTAMP WITH TIME ZONE)");
+        assert!(matches!(
+            s.columns[0].data_type,
+            ColumnType::Timestamp {
+                with_time_zone: true,
+            }
+        ));
+    }
+
+    #[test]
+    fn ac_394_t10_create_table_uuid_primary_key() {
+        let s = ok_create_table("CREATE TABLE t (a UUID PRIMARY KEY)");
+        assert!(matches!(s.columns[0].data_type, ColumnType::Uuid));
+        assert_eq!(s.columns[0].constraints.len(), 1);
+        assert!(matches!(
+            s.columns[0].constraints[0].body,
+            ColumnConstraintBody::PrimaryKey
+        ));
+        assert_eq!(s.columns[0].constraints[0].name, None);
+    }
+
+    #[test]
+    fn ac_394_t11_create_table_not_null_default_order() {
+        let s = ok_create_table("CREATE TABLE t (a INTEGER NOT NULL DEFAULT 0)");
+        assert_eq!(s.columns[0].constraints.len(), 2);
+        assert!(matches!(
+            s.columns[0].constraints[0].body,
+            ColumnConstraintBody::NotNull
+        ));
+        match &s.columns[0].constraints[1].body {
+            ColumnConstraintBody::Default { value } => assert!(matches!(
+                value,
+                InsertValue::Literal {
+                    value: SqlLiteral::Integer { value: 0 }
+                }
+            )),
+            other => panic!("expected default, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_t12_create_table_unique_inline() {
+        let s = ok_create_table("CREATE TABLE t (a INTEGER UNIQUE)");
+        assert!(matches!(
+            s.columns[0].constraints[0].body,
+            ColumnConstraintBody::Unique
+        ));
+    }
+
+    #[test]
+    fn ac_394_t13_create_table_references_no_column() {
+        let s = ok_create_table("CREATE TABLE t (a INTEGER REFERENCES other)");
+        match &s.columns[0].constraints[0].body {
+            ColumnConstraintBody::References { table, column } => {
+                assert_eq!(table.table, "other");
+                assert_eq!(column, &None);
+            }
+            other => panic!("expected references, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_t14_create_table_references_with_column() {
+        let s = ok_create_table("CREATE TABLE t (a INTEGER REFERENCES other(id))");
+        match &s.columns[0].constraints[0].body {
+            ColumnConstraintBody::References { table, column } => {
+                assert_eq!(table.table, "other");
+                assert_eq!(column.as_deref(), Some("id"));
+            }
+            other => panic!("expected references, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_t15_create_table_check_constraint() {
+        let s = ok_create_table("CREATE TABLE t (a INTEGER CHECK (a > 0))");
+        match &s.columns[0].constraints[0].body {
+            ColumnConstraintBody::Check { expression } => {
+                assert!(matches!(expression, SelectExpr::Comparison { .. }));
+            }
+            other => panic!("expected check, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_t16_create_table_table_primary_key() {
+        let s = ok_create_table("CREATE TABLE t (a INTEGER, PRIMARY KEY (a))");
+        assert_eq!(s.table_constraints.len(), 1);
+        match &s.table_constraints[0].body {
+            TableConstraintBody::PrimaryKey { columns } => {
+                assert_eq!(columns, &vec!["a".to_string()]);
+            }
+            other => panic!("expected primary-key, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_t17_create_table_table_unique_multi_column() {
+        let s = ok_create_table("CREATE TABLE t (a INTEGER, b INTEGER, UNIQUE (a, b))");
+        assert_eq!(s.table_constraints.len(), 1);
+        match &s.table_constraints[0].body {
+            TableConstraintBody::Unique { columns } => {
+                assert_eq!(columns, &vec!["a".to_string(), "b".to_string()]);
+            }
+            other => panic!("expected unique, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_t18_create_table_table_foreign_key() {
+        let s = ok_create_table(
+            "CREATE TABLE t (a INTEGER, FOREIGN KEY (a) REFERENCES other(id))",
+        );
+        match &s.table_constraints[0].body {
+            TableConstraintBody::References {
+                columns,
+                target_table,
+                target_columns,
+            } => {
+                assert_eq!(columns, &vec!["a".to_string()]);
+                assert_eq!(target_table.table, "other");
+                assert_eq!(target_columns, &vec!["id".to_string()]);
+            }
+            other => panic!("expected references, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_t19_create_table_named_constraint() {
+        let s = ok_create_table(
+            "CREATE TABLE t (a INTEGER, CONSTRAINT pk PRIMARY KEY (a))",
+        );
+        assert_eq!(s.table_constraints[0].name.as_deref(), Some("pk"));
+    }
+
+    #[test]
+    fn ac_394_t20_create_table_empty_definition_list_is_syntax_error() {
+        let e = err("CREATE TABLE t ()");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_t21_create_table_unknown_type_is_syntax_error() {
+        let e = err("CREATE TABLE t (a INT4)");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_t22_create_table_no_name_is_syntax_error() {
+        let e = err("CREATE TABLE");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_t23_create_temporary_table_is_syntax_error() {
+        // TEMPORARY is not a lexed keyword in this sprint — it parses as
+        // an identifier, the dispatcher sees `Token::Ident("TEMPORARY")`
+        // after CREATE, and surfaces SyntaxError.
+        let e = err("CREATE TEMPORARY TABLE t (a INTEGER)");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_t24_create_table_case_insensitive() {
+        let s = ok_create_table("create table users (id integer)");
+        assert_eq!(s.table.table, "users");
+        assert!(matches!(s.columns[0].data_type, ColumnType::Integer));
+    }
+
+    #[test]
+    fn ac_394_t_bigint_serial_date_boolean_types() {
+        let s =
+            ok_create_table("CREATE TABLE t (a BIGINT, b SERIAL, c DATE, d BOOLEAN)");
+        assert!(matches!(s.columns[0].data_type, ColumnType::Bigint));
+        assert!(matches!(s.columns[1].data_type, ColumnType::Serial));
+        assert!(matches!(s.columns[2].data_type, ColumnType::Date));
+        assert!(matches!(s.columns[3].data_type, ColumnType::Boolean));
+    }
+
+    // ── I — CREATE INDEX — AC-394-I ───────────────────────────────────
+
+    #[test]
+    fn ac_394_i01_create_index_basic() {
+        let s = ok_create_index("CREATE INDEX idx ON users (email)");
+        assert!(!s.unique);
+        assert!(!s.if_not_exists);
+        assert_eq!(s.name, "idx");
+        assert_eq!(s.table.table, "users");
+        assert_eq!(s.columns, vec!["email".to_string()]);
+    }
+
+    #[test]
+    fn ac_394_i02_create_unique_index() {
+        let s = ok_create_index("CREATE UNIQUE INDEX idx ON users (email)");
+        assert!(s.unique);
+    }
+
+    #[test]
+    fn ac_394_i03_create_index_if_not_exists() {
+        let s = ok_create_index("CREATE INDEX IF NOT EXISTS idx ON users (email)");
+        assert!(s.if_not_exists);
+    }
+
+    #[test]
+    fn ac_394_i04_create_index_schema_multi_column() {
+        let s = ok_create_index("CREATE INDEX idx ON public.users (a, b)");
+        assert_eq!(s.table.schema.as_deref(), Some("public"));
+        assert_eq!(s.columns, vec!["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn ac_394_i05_create_index_empty_column_list_is_syntax_error() {
+        let e = err("CREATE INDEX idx ON users ()");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_i06_create_index_expression_index_is_syntax_error() {
+        let e = err("CREATE INDEX idx ON users (lower(a))");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    // ── V — CREATE VIEW — AC-394-V ────────────────────────────────────
+
+    #[test]
+    fn ac_394_v01_create_view_select_body() {
+        let s = ok_create_view(
+            "CREATE VIEW v_active AS SELECT * FROM users WHERE active = 1",
+        );
+        assert!(!s.or_replace);
+        assert_eq!(s.name.table, "v_active");
+        assert!(matches!(s.body, CreateViewBody::Select(_)));
+    }
+
+    #[test]
+    fn ac_394_v02_create_or_replace_view() {
+        let s = ok_create_view("CREATE OR REPLACE VIEW v AS SELECT * FROM users");
+        assert!(s.or_replace);
+    }
+
+    #[test]
+    fn ac_394_v03_create_view_schema_qualified() {
+        let s = ok_create_view("CREATE VIEW public.v AS SELECT a FROM x");
+        assert_eq!(s.name.schema.as_deref(), Some("public"));
+        assert_eq!(s.name.table, "v");
+    }
+
+    #[test]
+    fn ac_394_v04_create_view_with_cte_body() {
+        let s = ok_create_view(
+            "CREATE VIEW v AS WITH t AS (SELECT a FROM x) SELECT a FROM t",
+        );
+        assert!(matches!(s.body, CreateViewBody::With(_)));
+    }
+
+    #[test]
+    fn ac_394_v05_create_view_set_operation_body() {
+        let s =
+            ok_create_view("CREATE VIEW v AS SELECT a FROM x UNION SELECT a FROM y");
+        match s.body {
+            CreateViewBody::Select(sel) => assert_eq!(sel.set_operation.len(), 1),
+            other => panic!("expected select body, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_v06_create_view_no_body_is_syntax_error() {
+        let e = err("CREATE VIEW v");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_v07_create_materialized_view_is_syntax_error() {
+        // MATERIALIZED is not a lexed keyword; the dispatcher routes
+        // through `Token::Ident("MATERIALIZED")` after CREATE and
+        // surfaces SyntaxError.
+        let e = err("CREATE MATERIALIZED VIEW v AS SELECT 1 FROM x");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    // ── A — ALTER TABLE additive — AC-394-A ───────────────────────────
+
+    #[test]
+    fn ac_394_a01_alter_add_column_basic() {
+        let s = ok_alter("ALTER TABLE users ADD COLUMN email TEXT");
+        assert_eq!(s.table, "users");
+        match s.action {
+            AlterAction::AddColumn {
+                column,
+                if_not_exists,
+            } => {
+                assert!(!if_not_exists);
+                assert_eq!(column.name, "email");
+                assert!(matches!(column.data_type, ColumnType::Text));
+            }
+            other => panic!("expected add-column, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_a02_alter_add_column_if_not_exists() {
+        let s = ok_alter("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT");
+        match s.action {
+            AlterAction::AddColumn { if_not_exists, .. } => {
+                assert!(if_not_exists);
+            }
+            other => panic!("expected add-column, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_a03_alter_add_column_with_constraints() {
+        let s = ok_alter("ALTER TABLE users ADD COLUMN age INTEGER NOT NULL DEFAULT 0");
+        match s.action {
+            AlterAction::AddColumn { column, .. } => {
+                assert_eq!(column.constraints.len(), 2);
+                assert!(matches!(
+                    column.constraints[0].body,
+                    ColumnConstraintBody::NotNull
+                ));
+                assert!(matches!(
+                    column.constraints[1].body,
+                    ColumnConstraintBody::Default { .. }
+                ));
+            }
+            other => panic!("expected add-column, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_a04_alter_add_constraint_named_primary_key() {
+        let s =
+            ok_alter("ALTER TABLE users ADD CONSTRAINT users_pk PRIMARY KEY (id)");
+        match s.action {
+            AlterAction::AddConstraint { constraint } => {
+                assert_eq!(constraint.name.as_deref(), Some("users_pk"));
+                match constraint.body {
+                    TableConstraintBody::PrimaryKey { columns } => {
+                        assert_eq!(columns, vec!["id".to_string()]);
+                    }
+                    other => panic!("expected primary-key, got {:?}", other),
+                }
+            }
+            other => panic!("expected add-constraint, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_a05_alter_add_anonymous_unique() {
+        let s = ok_alter("ALTER TABLE users ADD UNIQUE (email)");
+        match s.action {
+            AlterAction::AddConstraint { constraint } => {
+                assert_eq!(constraint.name, None);
+                assert!(matches!(
+                    constraint.body,
+                    TableConstraintBody::Unique { .. }
+                ));
+            }
+            other => panic!("expected add-constraint, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_a06_alter_rename_table() {
+        let s = ok_alter("ALTER TABLE users RENAME TO members");
+        match s.action {
+            AlterAction::RenameTable { new_name } => assert_eq!(new_name, "members"),
+            other => panic!("expected rename-table, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_a07_alter_rename_column() {
+        let s = ok_alter("ALTER TABLE users RENAME COLUMN email TO email_address");
+        match s.action {
+            AlterAction::RenameColumn { old_name, new_name } => {
+                assert_eq!(old_name, "email");
+                assert_eq!(new_name, "email_address");
+            }
+            other => panic!("expected rename-column, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_a08_alter_add_column_no_name_is_syntax_error() {
+        let e = err("ALTER TABLE users ADD COLUMN");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_a09_alter_rename_no_target_is_syntax_error() {
+        let e = err("ALTER TABLE users RENAME");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_a10_alter_column_type_is_syntax_error() {
+        // ALTER COLUMN TYPE is out of scope (only ADD / RENAME / DROP
+        // are accepted as ALTER actions in this sprint).
+        let e = err("ALTER TABLE users ALTER COLUMN email TYPE VARCHAR(255)");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_a11_alter_case_insensitive() {
+        let s = ok_alter("alter table users add column email text");
+        match s.action {
+            AlterAction::AddColumn { column, .. } => {
+                assert_eq!(column.name, "email");
+            }
+            other => panic!("expected add-column, got {:?}", other),
+        }
+        let s2 = ok_alter("alter table users rename to members");
+        assert!(matches!(s2.action, AlterAction::RenameTable { .. }));
+    }
+
+    // ── S — Serialization — AC-394-S ──────────────────────────────────
+
+    #[test]
+    fn ac_394_s01_create_table_serializes_with_documented_slots() {
+        let r = parse("CREATE TABLE users (id INTEGER, name TEXT)");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["kind"], "create-table");
+        assert!(json["table"].is_object());
+        assert_eq!(json["if_not_exists"], false);
+        assert!(json["columns"].is_array());
+        assert!(json["table_constraints"].is_array());
+    }
+
+    #[test]
+    fn ac_394_s02_column_type_kebab_case_discriminators() {
+        let r = parse(
+            "CREATE TABLE t (a INTEGER, b BIGINT, c VARCHAR(10), d TEXT, e TIMESTAMP, \
+             f DATE, g BOOLEAN, h NUMERIC, i SERIAL, j UUID)",
+        );
+        let json = serde_json::to_value(&r).expect("serialize");
+        let cols = &json["columns"];
+        let expected = [
+            "integer", "bigint", "varchar", "text", "timestamp", "date", "boolean",
+            "numeric", "serial", "uuid",
+        ];
+        for (i, kind) in expected.iter().enumerate() {
+            assert_eq!(
+                cols[i]["data_type"]["kind"], *kind,
+                "column {} should serialize with kind {}",
+                i, kind
+            );
+        }
+    }
+
+    #[test]
+    fn ac_394_s03_constraint_kebab_case_discriminators() {
+        let r = parse(
+            "CREATE TABLE t (\
+             a INTEGER PRIMARY KEY, \
+             b INTEGER NOT NULL, \
+             c INTEGER DEFAULT 0, \
+             d INTEGER UNIQUE, \
+             e INTEGER REFERENCES other(id), \
+             f INTEGER CHECK (f > 0)\
+             )",
+        );
+        let json = serde_json::to_value(&r).expect("serialize");
+        let cols = &json["columns"];
+        assert_eq!(cols[0]["constraints"][0]["body"]["kind"], "primary-key");
+        assert_eq!(cols[1]["constraints"][0]["body"]["kind"], "not-null");
+        assert_eq!(cols[2]["constraints"][0]["body"]["kind"], "default");
+        assert_eq!(cols[3]["constraints"][0]["body"]["kind"], "unique");
+        assert_eq!(cols[4]["constraints"][0]["body"]["kind"], "references");
+        assert_eq!(cols[5]["constraints"][0]["body"]["kind"], "check");
+    }
+
+    #[test]
+    fn ac_394_s04_create_index_and_view_serialize() {
+        let idx = parse("CREATE INDEX idx ON t (a)");
+        let idx_json = serde_json::to_value(&idx).expect("serialize");
+        assert_eq!(idx_json["kind"], "create-index");
+        assert_eq!(idx_json["unique"], false);
+        assert_eq!(idx_json["if_not_exists"], false);
+        assert_eq!(idx_json["name"], "idx");
+        assert!(idx_json["columns"].is_array());
+
+        let view = parse("CREATE VIEW v AS SELECT a FROM x");
+        let view_json = serde_json::to_value(&view).expect("serialize");
+        assert_eq!(view_json["kind"], "create-view");
+        assert_eq!(view_json["or_replace"], false);
+        assert!(view_json["name"].is_object());
+        assert!(view_json["body"].is_object());
+    }
+
+    #[test]
+    fn ac_394_s05_alter_table_action_discriminators() {
+        let add_col = parse("ALTER TABLE t ADD COLUMN c TEXT");
+        let add_col_json = serde_json::to_value(&add_col).expect("serialize");
+        assert_eq!(add_col_json["action"]["kind"], "add-column");
+
+        let add_cst = parse("ALTER TABLE t ADD CONSTRAINT pk PRIMARY KEY (id)");
+        let add_cst_json = serde_json::to_value(&add_cst).expect("serialize");
+        assert_eq!(add_cst_json["action"]["kind"], "add-constraint");
+
+        let rename_t = parse("ALTER TABLE t RENAME TO t2");
+        let rename_t_json = serde_json::to_value(&rename_t).expect("serialize");
+        assert_eq!(rename_t_json["action"]["kind"], "rename-table");
+
+        let rename_c = parse("ALTER TABLE t RENAME COLUMN a TO b");
+        let rename_c_json = serde_json::to_value(&rename_c).expect("serialize");
+        assert_eq!(rename_c_json["action"]["kind"], "rename-column");
+    }
+
+    #[test]
+    fn ac_394_s06_round_trip_create_table() {
+        let inputs = [
+            "CREATE TABLE users (id INTEGER, name TEXT)",
+            "CREATE TABLE IF NOT EXISTS t (a VARCHAR(255) NOT NULL)",
+            "CREATE TABLE t (a NUMERIC(10, 2), b TIMESTAMP WITH TIME ZONE)",
+            "CREATE TABLE t (a INTEGER, PRIMARY KEY (a))",
+            "CREATE TABLE t (a INTEGER, CONSTRAINT pk PRIMARY KEY (a))",
+            "CREATE INDEX idx ON t (a, b)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx ON public.t (a)",
+            "CREATE OR REPLACE VIEW v AS SELECT a FROM x",
+            "CREATE VIEW v AS WITH t AS (SELECT a FROM x) SELECT a FROM t",
+            "ALTER TABLE t ADD COLUMN c TEXT",
+            "ALTER TABLE t ADD CONSTRAINT pk PRIMARY KEY (id)",
+            "ALTER TABLE t RENAME TO t2",
+            "ALTER TABLE t RENAME COLUMN a TO b",
+        ];
+        for input in inputs {
+            let r = parse(input);
+            let json = serde_json::to_string(&r).expect("serialize");
+            let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(r, back, "round-trip failed for: {}", input);
+        }
+    }
+
+    // ── Extra coverage — defensive ────────────────────────────────────
+
+    #[test]
+    fn ac_394_extra_create_function_is_syntax_error() {
+        // Out-of-scope CREATE variant. The dispatcher hits a non-keyword
+        // identifier after CREATE and surfaces SyntaxError so the
+        // sqlSafety regex fallback (D3) classifies these.
+        let e = err("CREATE FUNCTION foo() RETURNS void AS bar");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_unique_inline_and_table_level_mixed() {
+        let s = ok_create_table(
+            "CREATE TABLE t (a INTEGER UNIQUE, b INTEGER, UNIQUE (b))",
+        );
+        assert_eq!(s.columns.len(), 2);
+        assert!(matches!(
+            s.columns[0].constraints[0].body,
+            ColumnConstraintBody::Unique
+        ));
+        assert_eq!(s.table_constraints.len(), 1);
+    }
+
+    #[test]
+    fn ac_394_extra_create_index_trailing_semicolon() {
+        let s = ok_create_index("CREATE INDEX idx ON t (a);");
+        assert_eq!(s.name, "idx");
+    }
+
+    #[test]
+    fn ac_394_extra_named_column_constraint_via_constraint_keyword() {
+        // `CONSTRAINT <name> NOT NULL` inline — the spec wording in §AST
+        // additions / Column-level constraint says each constraint may
+        // optionally carry a name slot set by `CONSTRAINT name …`.
+        let s = ok_create_table(
+            "CREATE TABLE t (a INTEGER CONSTRAINT a_nn NOT NULL)",
+        );
+        assert_eq!(s.columns[0].constraints[0].name.as_deref(), Some("a_nn"));
+        assert!(matches!(
+            s.columns[0].constraints[0].body,
+            ColumnConstraintBody::NotNull
+        ));
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_default_string_literal() {
+        let s = ok_create_table("CREATE TABLE t (a TEXT DEFAULT 'guest')");
+        match &s.columns[0].constraints[0].body {
+            ColumnConstraintBody::Default { value } => match value {
+                InsertValue::Literal {
+                    value: SqlLiteral::String { value },
+                } => assert_eq!(value, "guest"),
+                other => panic!("expected string default, got {:?}", other),
+            },
+            other => panic!("expected default, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_extra_create_view_body_with_where() {
+        let s = ok_create_view("CREATE VIEW v AS SELECT a FROM x WHERE x.a > 0");
+        match s.body {
+            CreateViewBody::Select(sel) => {
+                assert!(sel.where_clause.is_some());
+            }
+            other => panic!("expected select body, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_extra_alter_add_constraint_check_anonymous() {
+        let s = ok_alter("ALTER TABLE t ADD CHECK (a > 0)");
+        match s.action {
+            AlterAction::AddConstraint { constraint } => {
+                assert_eq!(constraint.name, None);
+                assert!(matches!(
+                    constraint.body,
+                    TableConstraintBody::Check { .. }
+                ));
+            }
+            other => panic!("expected add-constraint, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_extra_alter_add_foreign_key_named() {
+        let s = ok_alter(
+            "ALTER TABLE orders ADD CONSTRAINT orders_user_fk FOREIGN KEY (user_id) REFERENCES users(id)",
+        );
+        match s.action {
+            AlterAction::AddConstraint { constraint } => {
+                assert_eq!(constraint.name.as_deref(), Some("orders_user_fk"));
+                match constraint.body {
+                    TableConstraintBody::References {
+                        columns,
+                        target_table,
+                        target_columns,
+                    } => {
+                        assert_eq!(columns, vec!["user_id".to_string()]);
+                        assert_eq!(target_table.table, "users");
+                        assert_eq!(target_columns, vec!["id".to_string()]);
+                    }
+                    other => panic!("expected references, got {:?}", other),
+                }
+            }
+            other => panic!("expected add-constraint, got {:?}", other),
+        }
+    }
+
+    // ── More coverage — exhaustive depth across grammar ───────────────
+
+    #[test]
+    fn ac_394_extra_create_table_table_check_constraint() {
+        let s = ok_create_table("CREATE TABLE t (a INTEGER, CHECK (a > 0))");
+        assert_eq!(s.table_constraints.len(), 1);
+        match &s.table_constraints[0].body {
+            TableConstraintBody::Check { expression } => {
+                assert!(matches!(expression, SelectExpr::Comparison { .. }));
+            }
+            other => panic!("expected check, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_named_check_constraint() {
+        let s = ok_create_table(
+            "CREATE TABLE t (a INTEGER, CONSTRAINT positive CHECK (a > 0))",
+        );
+        assert_eq!(s.table_constraints[0].name.as_deref(), Some("positive"));
+        assert!(matches!(
+            s.table_constraints[0].body,
+            TableConstraintBody::Check { .. }
+        ));
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_three_columns_source_index_increments() {
+        let s = ok_create_table("CREATE TABLE t (a INTEGER, b INTEGER, c TEXT)");
+        assert_eq!(s.columns[0].source_index, 0);
+        assert_eq!(s.columns[1].source_index, 1);
+        assert_eq!(s.columns[2].source_index, 2);
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_varchar_zero_length() {
+        // Zero-length VARCHAR is a degenerate but well-defined input;
+        // the parser does not validate length semantics — the AST just
+        // records what was written.
+        let s = ok_create_table("CREATE TABLE t (a VARCHAR(0))");
+        assert!(matches!(
+            s.columns[0].data_type,
+            ColumnType::Varchar { length: 0 }
+        ));
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_varchar_missing_length_is_syntax_error() {
+        // Bare `VARCHAR` (no parenthesized length) is rejected.
+        let e = err("CREATE TABLE t (a VARCHAR)");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_numeric_with_unknown_argument_is_syntax_error() {
+        let e = err("CREATE TABLE t (a NUMERIC(x))");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_timestamp_with_missing_zone_is_syntax_error() {
+        let e = err("CREATE TABLE t (a TIMESTAMP WITH TIME)");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_default_function_is_syntax_error() {
+        // Per contract Out-of-Scope §: DEFAULT with function call parses
+        // to Error. Functions are not part of the expression grammar in
+        // the DEFAULT slot — `parse_insert_value` only accepts literal /
+        // placeholder forms.
+        let e = err("CREATE TABLE t (a TIMESTAMP DEFAULT now())");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_default_with_placeholder() {
+        let s = ok_create_table("CREATE TABLE t (a INTEGER DEFAULT $1)");
+        match &s.columns[0].constraints[0].body {
+            ColumnConstraintBody::Default { value } => {
+                assert!(matches!(value, InsertValue::Placeholder { .. }));
+            }
+            other => panic!("expected default, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_default_null() {
+        let s = ok_create_table("CREATE TABLE t (a INTEGER DEFAULT NULL)");
+        match &s.columns[0].constraints[0].body {
+            ColumnConstraintBody::Default { value } => assert!(matches!(
+                value,
+                InsertValue::Literal {
+                    value: SqlLiteral::Null
+                }
+            )),
+            other => panic!("expected default, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_extra_create_index_trailing_garbage_is_syntax_error() {
+        let e = err("CREATE INDEX idx ON t (a) garbage");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_extra_create_view_missing_as_is_syntax_error() {
+        let e = err("CREATE VIEW v SELECT a FROM x");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_extra_create_view_serializes_with_body_kind() {
+        let r = parse("CREATE VIEW v AS SELECT a FROM x");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["body"]["kind"], "select");
+        let r2 = parse("CREATE VIEW v AS WITH t AS (SELECT a FROM x) SELECT a FROM t");
+        let json2 = serde_json::to_value(&r2).expect("serialize");
+        assert_eq!(json2["body"]["kind"], "with");
+    }
+
+    #[test]
+    fn ac_394_extra_alter_rename_to_missing_target_is_syntax_error() {
+        let e = err("ALTER TABLE users RENAME TO");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_extra_alter_rename_column_missing_to_is_syntax_error() {
+        let e = err("ALTER TABLE users RENAME COLUMN email email_address");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_394_extra_alter_add_constraint_unique_named() {
+        let s = ok_alter("ALTER TABLE t ADD CONSTRAINT t_unique UNIQUE (a, b)");
+        match s.action {
+            AlterAction::AddConstraint { constraint } => {
+                assert_eq!(constraint.name.as_deref(), Some("t_unique"));
+                match constraint.body {
+                    TableConstraintBody::Unique { columns } => {
+                        assert_eq!(columns, vec!["a".to_string(), "b".to_string()]);
+                    }
+                    other => panic!("expected unique, got {:?}", other),
+                }
+            }
+            other => panic!("expected add-constraint, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_compound_check_expression() {
+        // CHECK predicate widened by sprint-393a/b's expression grammar
+        // — confirm an AND-joined check expression parses.
+        let s = ok_create_table(
+            "CREATE TABLE t (a INTEGER, b INTEGER, CHECK (a > 0 AND b > 0))",
+        );
+        match &s.table_constraints[0].body {
+            TableConstraintBody::Check { expression } => {
+                assert!(matches!(expression, SelectExpr::And { .. }));
+            }
+            other => panic!("expected check, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_394_extra_create_unique_index_if_not_exists() {
+        let s = ok_create_index(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx ON users (email)",
+        );
+        assert!(s.unique);
+        assert!(s.if_not_exists);
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_serialization_preserves_table_constraint_columns() {
+        let r = parse("CREATE TABLE t (a INTEGER, b INTEGER, PRIMARY KEY (a, b))");
+        let json = serde_json::to_value(&r).expect("serialize");
+        let cols = &json["table_constraints"][0]["body"]["columns"];
+        assert_eq!(cols[0], "a");
+        assert_eq!(cols[1], "b");
+    }
+
+    #[test]
+    fn ac_394_extra_create_table_table_ref_serializes_with_schema_and_table() {
+        let r = parse("CREATE TABLE public.users (id INTEGER)");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["table"]["schema"], "public");
+        assert_eq!(json["table"]["table"], "users");
     }
 }

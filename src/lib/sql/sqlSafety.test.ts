@@ -125,6 +125,119 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           action: { kind: "drop-index", index: g(alterIdxMatch, 2) },
         };
       }
+      // ── sprint-394 DDL additive: ALTER TABLE … ADD / RENAME ──────
+      // The mock only checks the prefix; full AST shape stays minimal —
+      // sqlSafety's mapper inspects `action.kind` only.
+      const alterAddColMatch = trimmed.match(
+        /^ALTER\s+TABLE\s+\S+?\s+ADD\s+COLUMN\b/i,
+      );
+      if (alterAddColMatch) {
+        return {
+          kind: "alter-table",
+          table: "stub",
+          action: {
+            kind: "add-column",
+            column: {
+              name: "stub",
+              data_type: { kind: "text" },
+              constraints: [],
+              source_index: 0,
+            },
+            if_not_exists: false,
+          },
+        };
+      }
+      const alterAddCstMatch = trimmed.match(
+        /^ALTER\s+TABLE\s+\S+?\s+ADD\s+(CONSTRAINT|PRIMARY|UNIQUE|FOREIGN|CHECK)\b/i,
+      );
+      if (alterAddCstMatch) {
+        return {
+          kind: "alter-table",
+          table: "stub",
+          action: {
+            kind: "add-constraint",
+            constraint: {
+              name: null,
+              body: { kind: "primary-key", columns: ["stub"] },
+            },
+          },
+        };
+      }
+      const alterRenameColMatch = trimmed.match(
+        /^ALTER\s+TABLE\s+\S+?\s+RENAME\s+COLUMN\b/i,
+      );
+      if (alterRenameColMatch) {
+        return {
+          kind: "alter-table",
+          table: "stub",
+          action: { kind: "rename-column", old_name: "a", new_name: "b" },
+        };
+      }
+      const alterRenameMatch = trimmed.match(
+        /^ALTER\s+TABLE\s+\S+?\s+RENAME\s+TO\b/i,
+      );
+      if (alterRenameMatch) {
+        return {
+          kind: "alter-table",
+          table: "stub",
+          action: { kind: "rename-table", new_name: "stub" },
+        };
+      }
+      // ── sprint-394 DDL additive: CREATE TABLE / INDEX / VIEW ─────
+      if (/^CREATE\s+TABLE\b/i.test(trimmed)) {
+        return {
+          kind: "create-table",
+          table: { schema: null, table: "stub" },
+          if_not_exists: false,
+          columns: [
+            {
+              name: "id",
+              data_type: { kind: "integer" },
+              constraints: [],
+              source_index: 0,
+            },
+          ],
+          table_constraints: [],
+        };
+      }
+      if (/^CREATE\s+(UNIQUE\s+)?INDEX\b/i.test(trimmed)) {
+        const unique = /^CREATE\s+UNIQUE\s+INDEX\b/i.test(trimmed);
+        return {
+          kind: "create-index",
+          unique,
+          if_not_exists: false,
+          name: "stub",
+          table: { schema: null, table: "stub" },
+          columns: ["stub"],
+        };
+      }
+      if (/^CREATE\s+(OR\s+REPLACE\s+)?VIEW\b/i.test(trimmed)) {
+        const or_replace = /^CREATE\s+OR\s+REPLACE\s+VIEW\b/i.test(trimmed);
+        return {
+          kind: "create-view",
+          or_replace,
+          name: { schema: null, table: "stub" },
+          body: {
+            kind: "select",
+            columns: { kind: "star" },
+            from: [
+              {
+                schema: null,
+                table: "stub",
+                alias: null,
+                join: { kind: "comma" },
+                source: { kind: "table", schema: null, table: "stub" },
+              },
+            ],
+            where: null,
+            group_by: [],
+            having: null,
+            order_by: [],
+            limit: null,
+            set_operation: [],
+          },
+        };
+      }
       // ── sprint-392 DML write triad ─────────────────────────────
       // INSERT — match very loosely; sqlSafety only checks `kind` so
       // the row payload can be a stub.
@@ -418,13 +531,19 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(a.severity).toBe("info");
   });
 
-  it("ALTER additive / CREATE → ddl-other / warn (Sprint 254)", () => {
+  it("ALTER additive / CREATE → sprint-394 classifications (was ddl-other / warn before sprint-394)", () => {
+    // Sprint-394 — ALTER ADD COLUMN is now `ddl-alter-add` / warn with
+    // a pinned reason (D2). CREATE INDEX is `ddl-create` / info / no
+    // reasons. The pre-sprint-394 baseline classified both as
+    // `ddl-other` / warn / no reasons.
     const a = analyzeStatement("ALTER TABLE users ADD COLUMN x int");
-    expect(a.kind).toBe("ddl-other");
+    expect(a.kind).toBe("ddl-alter-add");
     expect(a.severity).toBe("warn");
+    expect(a.reasons).toEqual(["ALTER TABLE — ADD COLUMN (schema 변경)"]);
     const b = analyzeStatement("CREATE INDEX idx_x ON users (x)");
-    expect(b.kind).toBe("ddl-other");
-    expect(b.severity).toBe("warn");
+    expect(b.kind).toBe("ddl-create");
+    expect(b.severity).toBe("info");
+    expect(b.reasons).toEqual([]);
   });
 
   // -------------------------------------------------------------------------
@@ -462,12 +581,14 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(a.reasons).toEqual(["ALTER TABLE DROP CONSTRAINT"]);
   });
 
-  it("[AC-187-01e] ALTER TABLE … ADD COLUMN stays ddl-other / warn (Sprint 254)", () => {
+  it("[AC-187-01e] ALTER TABLE … ADD COLUMN is ddl-alter-add / warn / pinned reason (Sprint 394)", () => {
+    // Sprint 187: classified as `ddl-other` / warn / [].
+    // Sprint 394 (D2): kind moves to `ddl-alter-add`, severity stays
+    // `warn`, and the reasons list now carries the pinned D2 string.
     const a = analyzeStatement("ALTER TABLE users ADD COLUMN nickname text");
-    expect(a.kind).toBe("ddl-other");
-    // Sprint 254 — additive ALTER is WARN (write surface).
+    expect(a.kind).toBe("ddl-alter-add");
     expect(a.severity).toBe("warn");
-    expect(a.reasons).toEqual([]);
+    expect(a.reasons).toEqual(["ALTER TABLE — ADD COLUMN (schema 변경)"]);
     expect(isDangerous(a)).toBe(false);
   });
 
@@ -539,22 +660,28 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(a.severity).toBe("warn");
     });
 
-    it("[AC-254-02d] CREATE TABLE → warn", () => {
+    it("[AC-254-02d] CREATE TABLE → ddl-create / info (sprint-394 update)", () => {
+      // Pre-sprint-394: classified as `ddl-other` / warn. Sprint-394
+      // moves CREATE TABLE / INDEX / VIEW to `ddl-create` / info per
+      // the contract — these are non-destructive constructions and do
+      // not require a warn dialog.
       const a = analyzeStatement("CREATE TABLE foo (id int)");
-      expect(a.kind).toBe("ddl-other");
-      expect(a.severity).toBe("warn");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
     });
 
-    it("[AC-254-02e] ALTER TABLE … ADD COLUMN (additive) → warn", () => {
+    it("[AC-254-02e] ALTER TABLE … ADD COLUMN (additive) → ddl-alter-add / warn (sprint-394 update)", () => {
+      // Sprint-394 kind change — kept under the same `warn` tier (the
+      // schema-changing nature of ADD COLUMN warrants the warn dialog).
       const a = analyzeStatement("ALTER TABLE users ADD COLUMN nickname text");
-      expect(a.kind).toBe("ddl-other");
+      expect(a.kind).toBe("ddl-alter-add");
       expect(a.severity).toBe("warn");
     });
 
-    it("[AC-254-02f] CREATE INDEX → warn", () => {
+    it("[AC-254-02f] CREATE INDEX → ddl-create / info (sprint-394 update)", () => {
       const a = analyzeStatement("CREATE INDEX idx_x ON users (x)");
-      expect(a.kind).toBe("ddl-other");
-      expect(a.severity).toBe("warn");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
     });
 
     // ── STOP tier (danger 보존) ───────────────────────────────────────────
@@ -705,13 +832,20 @@ describe("sqlSafety.analyzeStatement", () => {
       ).toBe(false);
     });
 
-    it("[AC-255-01l] CREATE TABLE → NOT INFO (WARN candidate)", () => {
+    it("[AC-255-01l] CREATE TABLE → INFO (sprint-394 — ddl-create / info)", () => {
+      // Pre-sprint-394: NOT INFO (WARN candidate via `ddl-other`).
+      // Sprint-394 (per contract): CREATE TABLE is non-destructive
+      // construction → `ddl-create` / info. The safe-mode UI may now
+      // skip its warn dialog for plain CREATE TABLE.
       expect(
         isInfoStatement(analyzeStatement("CREATE TABLE foo (id int)")),
-      ).toBe(false);
+      ).toBe(true);
     });
 
-    it("[AC-255-01m] ALTER TABLE … ADD COLUMN (additive) → NOT INFO (WARN candidate)", () => {
+    it("[AC-255-01m] ALTER TABLE … ADD COLUMN (additive) → NOT INFO (ddl-alter-add / warn)", () => {
+      // Sprint-394 keeps ALTER ADD as warn (the schema-modifying nature
+      // warrants the warn dialog). The `kind` is `ddl-alter-add`; the
+      // severity tier is unchanged.
       expect(
         isInfoStatement(
           analyzeStatement("ALTER TABLE users ADD COLUMN nickname text"),
@@ -1109,6 +1243,126 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(Object.keys(a).sort()).toEqual(["kind", "reasons", "severity"]);
       expect(isInfoStatement(a)).toBe(true);
       expect(isDangerous(a)).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Sprint 394 (2026-05-18) — AST-based DDL additive classifier callsite.
+  // Pre-condition: WASM module preloaded (the mock above produces
+  // create-table / create-index / create-view / alter-table-additive
+  // shapes). Every case asserts the documented (kind, severity, reasons)
+  // triple. Reason strings are pinned per D2 — reviewers must reject
+  // silent rewording.
+  // -------------------------------------------------------------------------
+  describe("Sprint 394 — AST-based DDL additive classifier (AC-394-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-394-X01] CREATE TABLE → ddl-create / info / [] via AST", () => {
+      const a = analyzeStatement("CREATE TABLE t (a INTEGER)");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-394-X02] CREATE INDEX → ddl-create / info / [] via AST", () => {
+      const a = analyzeStatement("CREATE INDEX idx ON t (a)");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-394-X03] CREATE VIEW → ddl-create / info / [] via AST", () => {
+      const a = analyzeStatement("CREATE VIEW v AS SELECT a FROM t");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-394-X04] CREATE OR REPLACE VIEW does NOT escalate severity (D1)", () => {
+      // D1: OR REPLACE on a view re-points the body but does not touch
+      // existing rows / schema. The classification stays `info` —
+      // identical to plain CREATE VIEW.
+      const a = analyzeStatement("CREATE OR REPLACE VIEW v AS SELECT a FROM t");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-394-X05] ALTER TABLE ADD COLUMN → ddl-alter-add / warn / pinned reason (D2)", () => {
+      const a = analyzeStatement("ALTER TABLE t ADD COLUMN c TEXT");
+      expect(a.kind).toBe("ddl-alter-add");
+      expect(a.severity).toBe("warn");
+      // Pinned per D2 — verbatim match required.
+      expect(a.reasons).toEqual(["ALTER TABLE — ADD COLUMN (schema 변경)"]);
+    });
+
+    it("[AC-394-X06] ALTER TABLE ADD CONSTRAINT → ddl-alter-add / warn / pinned reason (D2)", () => {
+      const a = analyzeStatement(
+        "ALTER TABLE t ADD CONSTRAINT pk PRIMARY KEY (id)",
+      );
+      expect(a.kind).toBe("ddl-alter-add");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["ALTER TABLE — ADD CONSTRAINT (schema 변경)"]);
+    });
+
+    it("[AC-394-X07] ALTER TABLE RENAME TO → ddl-alter-rename / warn / pinned reason (D2)", () => {
+      const a = analyzeStatement("ALTER TABLE t RENAME TO t2");
+      expect(a.kind).toBe("ddl-alter-rename");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["ALTER TABLE — RENAME (이름 변경)"]);
+    });
+
+    it("[AC-394-X08] ALTER TABLE RENAME COLUMN → ddl-alter-rename / warn / pinned reason (D2)", () => {
+      const a = analyzeStatement("ALTER TABLE t RENAME COLUMN a TO b");
+      expect(a.kind).toBe("ddl-alter-rename");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["ALTER TABLE — RENAME COLUMN (이름 변경)"]);
+    });
+
+    it("[AC-394-X09] CREATE FUNCTION falls back to regex (ddl-create / info — D3 fallback contract)", () => {
+      // The AST parser surfaces SyntaxError for CREATE FUNCTION (out of
+      // scope this sprint). The classifier falls back to the regex path
+      // which classifies `^CREATE\b` as `ddl-create` / info. The regex
+      // path matches the AST classification for parity.
+      const a = analyzeStatement(
+        "CREATE FUNCTION foo() RETURNS void AS bar LANGUAGE plpgsql",
+      );
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-394-X10] existing sqlSafety regression — DROP TABLE still danger via AST", () => {
+      // Sanity — adding the sprint-394 branches must not regress the
+      // sprint-391 DDL destructive classifier.
+      const a = analyzeStatement("DROP TABLE users");
+      expect(a.kind).toBe("ddl-drop");
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-394-X11] StatementAnalysis return shape unchanged for the new DDL additive paths", () => {
+      const cases = [
+        "CREATE TABLE t (a INTEGER)",
+        "CREATE INDEX idx ON t (a)",
+        "CREATE VIEW v AS SELECT a FROM t",
+        "ALTER TABLE t ADD COLUMN c TEXT",
+        "ALTER TABLE t ADD CONSTRAINT pk PRIMARY KEY (id)",
+        "ALTER TABLE t RENAME TO t2",
+        "ALTER TABLE t RENAME COLUMN a TO b",
+      ];
+      for (const sql of cases) {
+        const a = analyzeStatement(sql);
+        expect(Object.keys(a).sort()).toEqual(["kind", "reasons", "severity"]);
+        expect(typeof a.kind).toBe("string");
+        expect(typeof a.severity).toBe("string");
+        expect(Array.isArray(a.reasons)).toBe(true);
+      }
     });
   });
 });

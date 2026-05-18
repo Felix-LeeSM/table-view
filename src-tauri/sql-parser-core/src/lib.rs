@@ -103,9 +103,10 @@ mod tests {
 
     #[test]
     fn smoke_error_serialization_shape() {
-        // Sprint-392 — INSERT is now supported, so pick a still-unsupported
-        // verb (CREATE / GRANT / REVOKE / EXPLAIN / SHOW / WITH / MERGE).
-        let result = parse_sql("CREATE TABLE x (id int)");
+        // Sprint-394 — CREATE/INSERT/UPDATE/DELETE/ALTER/WITH are now
+        // supported. Pick a verb still in `is_known_sql_verb` but not in
+        // `is_supported_sql_verb` (EXPLAIN / GRANT / REVOKE / MERGE).
+        let result = parse_sql("EXPLAIN SELECT * FROM users");
         let json = serde_json::to_value(&result).expect("serialize");
         assert_eq!(json["kind"], "error");
         assert_eq!(json["error_kind"], "unsupported-statement");
