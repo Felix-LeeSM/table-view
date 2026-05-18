@@ -192,29 +192,122 @@ describe("parseMongoshStatement — multi-statement rejection (AC-382-T9)", () =
   });
 });
 
-describe("parseMongoshStatement — BSON literal rejection (AC-382-T10)", () => {
-  it("AC-382-T10 — rejects ObjectId(...) inside the body", () => {
+// Sprint 383 (2026-05-17) — BSON literal acceptance (was rejection in
+// sprint-382). The body is normalised to extended-JSON placeholders so
+// backend `run_mongo_command` can deserialize unchanged.
+describe("parseMongoshStatement — BSON literal acceptance (AC-383-B1..B14)", () => {
+  it("AC-383-B1 — ObjectId('<hex>') → {$oid: '<hex>'} inside the body", () => {
     const result = parseMongoshStatement(
-      'db.runCommand({find: "users", filter: {_id: ObjectId("65abcdef0123456789abcdef")}})',
+      'db.runCommand({_id: ObjectId("507f1f77bcf86cd799439011")})',
     );
-    expectError(result);
-    expect(result.errorKind).toBe("bson-literal");
+    expectAdmin(result);
+    expect(result.body).toEqual({
+      _id: { $oid: "507f1f77bcf86cd799439011" },
+    });
   });
 
-  it("AC-382-T10 — rejects ISODate(...) inside the body", () => {
-    const result = parseMongoshStatement(
-      'db.runCommand({find: "events", filter: {when: ISODate("2026-05-17T00:00:00Z")}})',
-    );
-    expectError(result);
-    expect(result.errorKind).toBe("bson-literal");
+  it("AC-383-B2 — ObjectId() with no args → {$oid: null}", () => {
+    const result = parseMongoshStatement("db.runCommand({_id: ObjectId()})");
+    expectAdmin(result);
+    expect(result.body).toEqual({ _id: { $oid: null } });
   });
 
-  it("AC-382-T10 — rejects NumberLong(...) inside the body", () => {
+  it("AC-383-B3 — accepts an arbitrary string arg; length/charset checked downstream", () => {
     const result = parseMongoshStatement(
-      'db.runCommand({find: "metrics", filter: {n: NumberLong("42")}})',
+      'db.runCommand({_id: ObjectId("not-24-hex-chars")})',
+    );
+    expectAdmin(result);
+    expect(result.body).toEqual({ _id: { $oid: "not-24-hex-chars" } });
+  });
+
+  it("AC-383-B4 — ISODate('<iso>') → {$date: '<iso>'}", () => {
+    const result = parseMongoshStatement(
+      'db.runCommand({when: ISODate("2026-05-18T12:00:00Z")})',
+    );
+    expectAdmin(result);
+    expect(result.body).toEqual({
+      when: { $date: "2026-05-18T12:00:00Z" },
+    });
+  });
+
+  it("AC-383-B5 — ISODate() with no args → {$date: null}", () => {
+    const result = parseMongoshStatement("db.runCommand({when: ISODate()})");
+    expectAdmin(result);
+    expect(result.body).toEqual({ when: { $date: null } });
+  });
+
+  it("AC-383-B6 — NumberLong('<digits>') → {$numberLong: '<digits>'}", () => {
+    const result = parseMongoshStatement(
+      'db.runCommand({n: NumberLong("123456789")})',
+    );
+    expectAdmin(result);
+    expect(result.body).toEqual({ n: { $numberLong: "123456789" } });
+  });
+
+  it("AC-383-B7 — NumberLong(123) (number arg) → {$numberLong: '123'} (string)", () => {
+    const result = parseMongoshStatement("db.runCommand({n: NumberLong(123)})");
+    expectAdmin(result);
+    expect(result.body).toEqual({ n: { $numberLong: "123" } });
+  });
+
+  it("AC-383-B8 — Decimal128('3.14') → {$numberDecimal: '3.14'}", () => {
+    const result = parseMongoshStatement(
+      'db.runCommand({d: Decimal128("3.14")})',
+    );
+    expectAdmin(result);
+    expect(result.body).toEqual({ d: { $numberDecimal: "3.14" } });
+  });
+
+  it("AC-383-B9 — Decimal128(3.14) → {$numberDecimal: '3.14'}", () => {
+    const result = parseMongoshStatement(
+      "db.runCommand({d: Decimal128(3.14)})",
+    );
+    expectAdmin(result);
+    expect(result.body).toEqual({ d: { $numberDecimal: "3.14" } });
+  });
+
+  it("AC-383-B10 — UUID('<uuid>') → {$uuid: '<uuid>'}", () => {
+    const result = parseMongoshStatement(
+      'db.runCommand({u: UUID("550e8400-e29b-41d4-a716-446655440000")})',
+    );
+    expectAdmin(result);
+    expect(result.body).toEqual({
+      u: { $uuid: "550e8400-e29b-41d4-a716-446655440000" },
+    });
+  });
+
+  it("AC-383-B11 — top-level ObjectId('...') (no db.) → non-db-statement error", () => {
+    const result = parseMongoshStatement(
+      'ObjectId("507f1f77bcf86cd799439011")',
     );
     expectError(result);
-    expect(result.errorKind).toBe("bson-literal");
+    expect(result.errorKind).toBe("non-db-statement");
+  });
+
+  it("AC-383-B12 — BSON literal with >1 arg is rejected", () => {
+    const result = parseMongoshStatement(
+      'db.runCommand({_id: ObjectId("a", "b")})',
+    );
+    expectError(result);
+    expect(result.errorKind).toBe("unsupported-syntax");
+  });
+
+  it("AC-383-B13 — BSON literal with non-primitive arg is rejected", () => {
+    const result = parseMongoshStatement(
+      'db.runCommand({_id: ObjectId({$oid: "x"})})',
+    );
+    expectError(result);
+    expect(result.errorKind).toBe("unsupported-syntax");
+  });
+
+  it("AC-383-B14 — BSON literal inside a collection command argument is accepted", () => {
+    const result = parseMongoshStatement(
+      'db.users.find({_id: ObjectId("507f1f77bcf86cd799439011")})',
+    );
+    expectCollection(result);
+    expect(result.args).toEqual([
+      { _id: { $oid: "507f1f77bcf86cd799439011" } },
+    ]);
   });
 });
 
@@ -231,10 +324,12 @@ describe("parseMongoshStatement — empty / unknown (AC-382-T11)", () => {
     expect(result.errorKind).toBe("unsupported-syntax");
   });
 
-  it("non-mongo SQL returns an error (no `db.` prefix)", () => {
+  it("non-mongo SQL returns a non-db-statement error (no `db.` prefix)", () => {
+    // Sprint 383 — bare expression heads get the differentiated
+    // `non-db-statement` kind instead of the legacy `unsupported-syntax`.
     const result = parseMongoshStatement("SELECT 1");
     expectError(result);
-    expect(result.errorKind).toBe("unsupported-syntax");
+    expect(result.errorKind).toBe("non-db-statement");
   });
 });
 
@@ -247,12 +342,8 @@ describe("parseMongoshStatement — unsupported syntax (AC-382-T12)", () => {
     expect(result.errorKind).toBe("unsupported-syntax");
   });
 
-  it("AC-382-T12 — rejects template literal", () => {
-    const result = parseMongoshStatement("db.runCommand({name: `alice`})");
-    expectError(result);
-    expect(result.errorKind).toBe("unsupported-syntax");
-  });
-
+  // Sprint 383 (2026-05-17) — interpolation-free template literals are now
+  // accepted as plain strings (AC-383-T1). Interpolation still rejected.
   it("rejects an unterminated string literal", () => {
     const result = parseMongoshStatement('db.runCommand({name: "alice');
     expectError(result);
@@ -271,10 +362,13 @@ describe("parseMongoshStatement — unsupported syntax (AC-382-T12)", () => {
     expect(result.errorKind).toBe("unsupported-syntax");
   });
 
-  it("rejects let/const/var declarations", () => {
+  // Sprint 383 (2026-05-17) — errorKind for `let`/`const`/`var` and function
+  // declarations is differentiated (AC-383-R1, AC-383-R2). Generic
+  // `unsupported-syntax` is reserved for parser errors.
+  it("rejects let/const/var declarations with `variable-declaration` errorKind", () => {
     const result = parseMongoshStatement("let x = 1; db.users.find({})");
     expectError(result);
-    expect(result.errorKind).toBe("unsupported-syntax");
+    expect(result.errorKind).toBe("variable-declaration");
   });
 
   it("admin command must receive an object literal body (not a string)", () => {
@@ -310,5 +404,88 @@ describe("parseMongoshStatement — invariants", () => {
   it("never throws on a non-string runtime input", () => {
     const result = parseMongoshStatement(123 as unknown as string);
     expectError(result);
+  });
+});
+
+// Sprint 383 (2026-05-17) — block comment + template literal coverage.
+describe("parseMongoshStatement — block comments (AC-383-C1..C3)", () => {
+  it("AC-383-C1 — leading block comment is stripped", () => {
+    const result = parseMongoshStatement(
+      "/* leading */ db.runCommand({ping: 1})",
+    );
+    expectAdmin(result);
+    expect(result.body).toEqual({ ping: 1 });
+  });
+
+  it("AC-383-C2 — inline block comment inside the body is stripped", () => {
+    const result = parseMongoshStatement(
+      "db.runCommand(/* inline */{ping: 1})",
+    );
+    expectAdmin(result);
+    expect(result.body).toEqual({ ping: 1 });
+  });
+
+  it("AC-383-C3 — nested block comment is NOT supported (first `*/` closes)", () => {
+    // `/* a /* b */ c */ db.runCommand(...)` — the lexer closes at the first
+    // `*/`, leaving ` c */ db.runCommand(...)` which then fails to parse.
+    const result = parseMongoshStatement(
+      "/* a /* b */ c */ db.runCommand({ping: 1})",
+    );
+    expectError(result);
+  });
+});
+
+describe("parseMongoshStatement — template literals (AC-383-T1..T2)", () => {
+  it("AC-383-T1 — interpolation-free template literal acts as a string", () => {
+    const result = parseMongoshStatement("db.runCommand({name: `alice`})");
+    expectAdmin(result);
+    expect(result.body).toEqual({ name: "alice" });
+  });
+
+  it("AC-383-T2 — template literal with `${` interpolation is rejected", () => {
+    const result = parseMongoshStatement(
+      "db.runCommand({name: `hello ${world}`})",
+    );
+    expectError(result);
+    expect(result.errorKind).toBe("unsupported-syntax");
+  });
+});
+
+describe("parseMongoshStatement — differentiated rejection (AC-383-R1..R3)", () => {
+  it("AC-383-R1 — `let x = 1` head returns variable-declaration", () => {
+    const result = parseMongoshStatement("let x = 1");
+    expectError(result);
+    expect(result.errorKind).toBe("variable-declaration");
+    expect(result.message).toMatch(/query tab/i);
+  });
+
+  it("AC-383-R1 — const head also returns variable-declaration", () => {
+    const result = parseMongoshStatement("const x = 1");
+    expectError(result);
+    expect(result.errorKind).toBe("variable-declaration");
+  });
+
+  it("AC-383-R1 — var head also returns variable-declaration", () => {
+    const result = parseMongoshStatement("var x = 1");
+    expectError(result);
+    expect(result.errorKind).toBe("variable-declaration");
+  });
+
+  it("AC-383-R2 — `function foo() {}` returns function-declaration", () => {
+    const result = parseMongoshStatement("function foo() {}");
+    expectError(result);
+    expect(result.errorKind).toBe("function-declaration");
+  });
+
+  it("AC-383-R3 — bare expression `1 + 1` returns non-db-statement", () => {
+    const result = parseMongoshStatement("1 + 1");
+    expectError(result);
+    expect(result.errorKind).toBe("non-db-statement");
+  });
+
+  it("AC-383-R3 — bare string literal returns non-db-statement", () => {
+    const result = parseMongoshStatement('"hello"');
+    expectError(result);
+    expect(result.errorKind).toBe("non-db-statement");
   });
 });

@@ -86,6 +86,76 @@ describe("analyzeMongoPipeline", () => {
     ]);
     expect(a.severity).toBe("info");
   });
+
+  // Sprint 383 (2026-05-17) — depth-1 nested $out/$merge detection inside
+  // $facet sub-pipelines and $lookup.pipeline. Deeper nesting (≥2) requires
+  // a cycle detector and remains out-of-scope.
+  it("[AC-383-P1] $facet sub-pipeline contains $out → danger / mongo-out", () => {
+    const a = analyzeMongoPipeline([
+      { $facet: { alpha: [{ $match: {} }, { $out: "x" }] } },
+    ]);
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-out");
+  });
+
+  it("[AC-383-P2] $facet sub-pipeline contains $merge → danger / mongo-merge", () => {
+    const a = analyzeMongoPipeline([
+      { $facet: { alpha: [{ $merge: { into: "y" } }] } },
+    ]);
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-merge");
+  });
+
+  it("[AC-383-P3] $lookup.pipeline contains $out → danger / mongo-out", () => {
+    const a = analyzeMongoPipeline([
+      {
+        $lookup: {
+          from: "src",
+          as: "joined",
+          pipeline: [{ $match: {} }, { $out: "y" }],
+        },
+      },
+    ]);
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-out");
+  });
+
+  it("[AC-383-P4] $lookup.pipeline contains $merge → danger / mongo-merge", () => {
+    const a = analyzeMongoPipeline([
+      {
+        $lookup: {
+          from: "src",
+          as: "joined",
+          pipeline: [{ $merge: "y" }],
+        },
+      },
+    ]);
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-merge");
+  });
+
+  it("[AC-383-P5] $facet > $facet > $out (depth 2) is NOT detected → info (deferred)", () => {
+    const a = analyzeMongoPipeline([
+      {
+        $facet: {
+          alpha: [{ $facet: { beta: [{ $out: "z" }] } }],
+        },
+      },
+    ]);
+    expect(a.severity).toBe("info");
+  });
+
+  it("[AC-383-P6] $facet with read-only sub-pipeline → info", () => {
+    const a = analyzeMongoPipeline([
+      {
+        $facet: {
+          alpha: [{ $match: { x: 1 } }, { $sort: { x: 1 } }],
+          beta: [{ $count: "n" }],
+        },
+      },
+    ]);
+    expect(a.severity).toBe("info");
+  });
 });
 
 // AC-198-03 — `analyzeMongoOperation` unit tests. date 2026-05-02.

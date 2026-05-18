@@ -9,38 +9,84 @@ import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
  * - `$out`   — replaces the target collection wholesale.
  * - `$merge` — upserts; can mutate rows the user didn't intend.
  *
- * `$lookup` cycles and `$function` server-side JS are out of scope —
- * the danger boundary isn't well-defined for those.
+ * `$function` server-side JS is out of scope — the danger boundary isn't
+ * well-defined for it.
  *
  * On multiple violations, only the first stage's reason is surfaced;
  * resolving it lets the next violation re-block on the same path.
  *
  * Sprint 254 (2026-05-09) — read-only pipeline 은 `severity: "info"` (was
  * "safe"). 3-tier union split. ADR 0023 grill Q2-(a).
+ *
+ * Sprint 383 (2026-05-17) — depth-1 nested detect. `$facet` sub-pipelines
+ * and `$lookup.pipeline` arrays are scanned for `$out`/`$merge` at one
+ * extra level. Deeper nesting (`$facet > $facet > $out`) still slips
+ * through; that needs a cycle detector tracked in a follow-up.
  */
 export function analyzeMongoPipeline(pipeline: unknown[]): StatementAnalysis {
   for (const stage of pipeline) {
     if (!isPipelineStage(stage)) continue;
     const keys = Object.keys(stage);
-    if (keys.length === 0) continue;
     const op = keys[0];
-    if (op === "$out") {
-      return {
-        kind: "mongo-out",
-        severity: "danger",
-        reasons: ["MongoDB $out (collection replace)"],
-      };
-    }
-    if (op === "$merge") {
-      return {
-        kind: "mongo-merge",
-        severity: "danger",
-        reasons: ["MongoDB $merge (collection upsert)"],
-      };
-    }
+    if (op === undefined) continue;
+    if (op === "$out") return MONGO_OUT_DANGER;
+    if (op === "$merge") return MONGO_MERGE_DANGER;
+    // Sprint 383 — depth-1 nested scan for $facet / $lookup.pipeline.
+    const nested = scanNestedDestructive(op, stage[op]);
+    if (nested) return nested;
   }
   // Sprint 254 — read-only pipeline = INFO.
   return { kind: "mongo-other", severity: "info", reasons: [] };
+}
+
+const MONGO_OUT_DANGER: StatementAnalysis = {
+  kind: "mongo-out",
+  severity: "danger",
+  reasons: ["MongoDB $out (collection replace)"],
+};
+
+const MONGO_MERGE_DANGER: StatementAnalysis = {
+  kind: "mongo-merge",
+  severity: "danger",
+  reasons: ["MongoDB $merge (collection upsert)"],
+};
+
+// Sprint 383 — depth-1 nested detector. `$facet` carries a map of named
+// sub-pipelines (`{alpha: [stages]}`); `$lookup` may carry a `pipeline`
+// array. We only inspect immediate child stages — deeper nesting is a
+// known follow-up.
+function scanNestedDestructive(
+  op: string | undefined,
+  payload: unknown,
+): StatementAnalysis | null {
+  if (op === "$facet" && isPipelineStage(payload)) {
+    for (const subPipeline of Object.values(payload)) {
+      if (!Array.isArray(subPipeline)) continue;
+      const found = scanTopLevelDestructive(subPipeline);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (op === "$lookup" && isPipelineStage(payload)) {
+    const sub = payload["pipeline"];
+    if (!Array.isArray(sub)) return null;
+    return scanTopLevelDestructive(sub);
+  }
+  return null;
+}
+
+function scanTopLevelDestructive(
+  pipeline: readonly unknown[],
+): StatementAnalysis | null {
+  for (const stage of pipeline) {
+    if (!isPipelineStage(stage)) continue;
+    const keys = Object.keys(stage);
+    if (keys.length === 0) continue;
+    const op = keys[0];
+    if (op === "$out") return MONGO_OUT_DANGER;
+    if (op === "$merge") return MONGO_MERGE_DANGER;
+  }
+  return null;
 }
 
 function isPipelineStage(value: unknown): value is Record<string, unknown> {
