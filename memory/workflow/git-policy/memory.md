@@ -1,8 +1,8 @@
 ---
 title: Git 정책 — hook 회피 절대 금지 + 능동 enforcement
 type: workflow-rule
-updated: 2026-05-17
-task: commit, push, hook, lefthook, push-reject, pr-close
+updated: 2026-05-18
+task: commit, push, hook, lefthook, push-reject, pr-close, race-trace
 trigger:
   signal: git commit / git push / hook 실패 / push reject / PR close 시
   layer: hook (.claude/hooks/pre-bash.sh + scripts/hooks/check-dangerous-bash.sh)
@@ -79,49 +79,61 @@ lock).
 - 본 정책 (hook 회피 금지) 은 자율 실행의 조건 — hook 통과 안 되면 commit/
   push 자체 안 됨. agent 가 hook 실패 회피 시도 = 본 정책 위반.
 
-## Push reject 응급 처치 (sprint-389)
+## 외부 race 가짜 신호 (sprint-402)
 
-push 가 non-fast-forward 로 튕겼을 때 **절대** 즉시 `git reset --hard
-FETCH_HEAD` 하지 말 것 — 본인 commit 을 wipe 하는 destructive 행동.
-hook (`check-dangerous-bash.sh`) 가 이제 차단 메시지에 본 sequence 를 직접
-출력함 (능동 enforcement, sprint-389).
+`diag/race-trace` agent 결과: push reject / 알 수 없는 remote SHA 를 "외부
+race" (다른 작업자 / 다른 brain 의 동시 push) 로 오인하는 사례 = 거의 100%
+**본인 (agent) 의 fetch + reset 또는 pull 자체가 진범**. 즉, race 가
+*감지되는 시점* 에는 이미 본인 명령이 원인. 외부 race 가설은 가짜 신호.
 
-### 4-step 진단 + 회복
+실제 진단: push reject 시 reflog (`git reflog --all`) 의 직전 entry 가 본인
+commit 인지 확인 → 거의 항상 yes. 그렇다면 외부 race 아님, *본인의 fetch +
+reset 으로 ref 가 옮겨진 결과* 의 push reject.
 
-1. **remote 상태부터 확인**
+## Push reject 응급 처치 (sprint-389, sprint-402 update)
 
-   ```bash
-   git ls-remote origin <branch>
-   ```
+push 가 non-fast-forward 로 튕겼을 때 **절대** `git reset --hard FETCH_HEAD`
+/ `git pull --rebase` 하지 말 것 — 본인 commit wipe 또는 silent rebase.
+sprint-402 부터 hook 이 다음 단독 명령도 모두 block (이전엔 `git fetch &&
+git reset --hard FETCH_HEAD` sequence 만 차단 → agent 가 2 단계 분리로
+우회 → race-trace 가 진범 확정):
 
-   결과의 SHA 가 local `HEAD` 와 다르면 → 누가 / 무엇이 다른가 파악.
+- `git reset --hard FETCH_HEAD` / `ORIG_HEAD` / `@{u}` / `origin/<branch>`
+  / `refs/remotes/<...>`
+- `git pull` 모든 변종 (`--rebase`, `origin <branch>` 포함)
 
-2. **closed-PR 의 stale head ref 인 경우** — `gh pr close <N>` 가
-   `--delete-branch` 없이 호출되어 remote 에 ref 가 남아있을 때:
+agent 는 위 명령 *어느 것으로도* 본 hook 우회 불가능 — single-cmd 도 block.
 
-   ```bash
-   gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>
-   ```
+### 회복 정답 (4-step)
 
-   이후 다시 `git push origin <branch>` 시도. (예방: PR close cleanup 절.)
-
-3. **legit non-fast-forward** — 다른 작업자가 같은 branch 에 push:
-
-   ```bash
-   git pull --rebase origin <branch>
-   # 충돌 해결 후
-   git push origin <branch>
-   ```
-
-4. **본인 commit 보존하면서 ref 만 옮길 때** — `git reset --hard` 가 정말
-   필요한 것 같으면 한 단계 부드러운 옵션부터:
+1. **remote 상태 진단**
 
    ```bash
-   git reset --soft <sha>   # working tree 보존
-   git stash                 # 작업 보호
+   git ls-remote origin <branch>     # remote 의 SHA 확인
    ```
 
-   여전히 hard 가 필요하다고 판단되면 **사용자 승인 후** 진행.
+2. **본인 reflog 의 직전 commit SHA 확인**
+
+   ```bash
+   git reflog                         # 직전 본인 commit SHA 찾기
+   ```
+
+3. **ref 만 본인 SHA 로 fix** — working tree / index / commit 보존:
+
+   ```bash
+   git update-ref refs/heads/<branch> <local-sha>
+   ```
+
+4. **SHA refspec push inline** — race 발생해도 의도한 commit 만 올라감:
+
+   ```bash
+   SHA="$(git rev-parse HEAD)"
+   git push origin "$SHA":refs/heads/<branch>
+   ```
+
+closed-PR stale ref 가 의심되면 (PR close 시 `--delete-branch` 누락):
+`gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>` 후 재시도.
+여전히 안 풀리면 **사용자 승인 요청**.
 
 ## PR close cleanup (sprint-389)
 
@@ -168,15 +180,8 @@ git push origin '<literal-sha>':'refs/heads/<branch-name>'  # 2) literal SHA →
 ### zsh `:r` 모디파이어 trap
 
 zsh 는 word 안의 `:` 를 modifier 로 해석 → `<sha>:refs/heads/foo` 가
-"sha 의 root extension 제거 + refs/heads/foo" 로 변환되어 깨짐.
-**single-quote 로 escape 필수**:
-
-```bash
-git push origin 'abc1234':'refs/heads/feat/foo'   # OK
-git push origin abc1234:refs/heads/feat/foo       # zsh 에서 깨짐
-```
-
-bash 에서는 위 quote 가 무해 (no-op) → cross-shell 호환 위해 항상 single-quote.
+깨짐. **single-quote escape 필수** (bash 에선 무해): `git push origin
+'abc1234':'refs/heads/feat/foo'`.
 
 ## 관련
 
