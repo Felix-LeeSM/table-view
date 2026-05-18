@@ -14,6 +14,7 @@ User-Claude 협업 phase 별 행동 룰. 코드 룰은 [conventions](../conventi
 - [grill](./grill/memory.md) — 결정 인터뷰 룰 (1q/메시지, 두 축 옵션 분해, html 시각화). sub-room: [security-handoff](./grill/security-handoff/memory.md)
 - [implementation](./implementation/memory.md) — 구현 phase 의 agent 자율성 + tool output noise 차단
 - [delivery](./delivery/memory.md) — code → commit → push → PR → review → merge 전체 자율 pipeline
+- [git-policy](./git-policy/memory.md) — hook 회피 금지 룰 (commit / push 강제 메커니즘)
 
 ## phase 식별
 

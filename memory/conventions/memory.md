@@ -79,3 +79,5 @@ Sprint 189–198 의 모든 refactor / feature 커밋은 본 표준의 규칙을
 - [decisions](../decisions/memory.md) — 컨벤션을 만든 결정들
 - [e2e-scenarios](e2e-scenarios/memory.md) — E2E 시나리오 설계 8원칙 + CUJ 5종
 - [testing-scenarios](testing-scenarios/memory.md) — 비-E2E 시나리오 설계 8원칙 (unit/component/store/integration/async)
+- [rust](./rust/memory.md) — Rust 컨벤션 전체 (`.claude/rules/rust-conventions.md` source)
+- [react](./react/memory.md) — React/TS 컨벤션 전체 (`.claude/rules/react-conventions.md` source)
