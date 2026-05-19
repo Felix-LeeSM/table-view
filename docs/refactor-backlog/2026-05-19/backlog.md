@@ -11,7 +11,7 @@ Score: `Impact*3 − Risk*2 − Effort*1` (H=3, M=2, L=1). 동점 시 dependency
 
 | Rank | Item | Source | Impact | Risk | Effort | Score | Recommended sprint |
 |------|------|--------|--------|------|--------|-------|---------------------|
-| 1 | sprint-392 sqlSafety kind/severity drift 정정 (`dml-*` prefix + `info` severity) | 06 | H(3) | L(1) | S(1) | 6 | sprint-403 (contract realign + 회귀 test) |
+| 1 | sprint-392 sqlSafety kind/severity drift 정정 (`dml-*` prefix + `info` severity) | 06 | H(3) | L(1) | S(1) | 6 | sprint-403b (contract realign + 회귀 test) |
 | 2 | `parse_db_type` lift + `FromStr` impl (Group F) | 02 | M(2) | L(1) | S(1) | 3 | sprint-404 — quick-win pack ① |
 | 3 | TS `dead export` 6건 일괄 삭제 (LogoMark, calcDefaultColWidth, isRecordArray, ConfirmDialog shim, default exports) | 02 | M(2) | L(1) | S(1) | 3 | sprint-404 — quick-win pack ② |
 | 4 | `cancel_query_native` JSON-in-string → 타입화된 `AppError::Cancel` variant | 03 | H(3) | M(2) | S(1) | 4 | sprint-405 (IPC 안정성) |
@@ -101,7 +101,7 @@ Detail (트레이서 / AC / dependency / risk) 는 `sprint-plan.md` 참조.
 
 | sprint | 영역 | LOC churn (예상) | Risk | Depends on |
 |--------|------|-------------------|------|------------|
-| sprint-403 | sprint-392 sqlSafety kind/severity drift 정정 | < 150 | L | — |
+| sprint-403b | sprint-392 sqlSafety kind/severity drift 정정 | < 150 | L | — |
 | sprint-404 | Quick-win pack: `parse_db_type` lift + dead-export 6건 + `InMemoryKeyringBackend` gate | < 200 | L | — |
 | sprint-405 | IPC 안정성: `cancel_query_native` typed variant + `query_table_data` cancel-token | < 300 | M | — |
 | sprint-406 | Test scaffold: `@lib/tauri` mock 단일화 (96 사이트) | < 500 | M | — |
@@ -161,7 +161,7 @@ split 시 sub-directory + 하위 `memory.md` index (200줄 cap 룰 유지).
 
 ## 7. 결정 필요 사항 (PR 본문에 명시)
 
-1. **Backlog vs dialect sprint 우선순위** — sprint-396+ (grammar 계속) vs sprint-403~ (refactor backlog). 두 트랙 병행 시 wave-N 의 wire contract 변경 (sprint-409) 이 grammar sprint 와 conflict 가능.
+1. **Backlog vs dialect sprint 우선순위** — sprint-396+ (grammar 계속) vs sprint-403b, 404+ (refactor backlog). 두 트랙 병행 시 wave-N 의 wire contract 변경 (sprint-409) 이 grammar sprint 와 conflict 가능.
 2. **Wire convention 통일 (sprint-409) 의 BC**: snake_case → camelCase 마이그레이션은 frontend snapshot/cache breaking. migration shim 필요 vs hard cutover.
 3. **State-management 24-sprint plan 흡수 여부**: sprint-410 (`workspaceStore`) / sprint-413 (`documentStore`) 가 기존 plan 의 Wave 와 정합되는지 확인 필요.
 4. **Quick-win 묶음 (sprint-404)**: 단일 PR 로 묶을지 별도 chore PR 로 분리할지.
