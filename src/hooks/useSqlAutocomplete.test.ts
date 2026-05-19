@@ -149,6 +149,55 @@ describe("useSqlAutocomplete", () => {
     expect(ns).toHaveProperty("CURRENT_TIMESTAMP");
   });
 
+  it("adds MySQL-specific scalar, date, JSON, and session functions when dbType is mysql", () => {
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", "db1", {
+        dialect: MySQL,
+        dbType: "mysql",
+      }),
+    );
+
+    const ns = result.current as Record<
+      string,
+      { self?: { apply?: string; type?: string } }
+    >;
+    for (const fn of [
+      "IFNULL",
+      "DATE_FORMAT",
+      "STR_TO_DATE",
+      "CURDATE",
+      "CURTIME",
+      "UTC_TIMESTAMP",
+      "GROUP_CONCAT",
+      "JSON_EXTRACT",
+      "JSON_UNQUOTE",
+      "JSON_OBJECT",
+      "JSON_ARRAY",
+      "UUID",
+      "LAST_INSERT_ID",
+      "DATABASE",
+      "USER",
+      "VERSION",
+    ]) {
+      expect(ns).toHaveProperty(fn);
+      expect(ns[fn]?.self?.apply).toBe(fn);
+      expect(ns[fn]?.self?.type).toBe("function");
+    }
+  });
+
+  it("keeps PostgreSQL-only function candidates out of the MySQL function surface", () => {
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", "db1", {
+        dialect: MySQL,
+        dbType: "mysql",
+      }),
+    );
+
+    expect(result.current).not.toHaveProperty("DATE_TRUNC");
+    expect(result.current).not.toHaveProperty("TO_CHAR");
+    expect(result.current).not.toHaveProperty("JSONB_BUILD_OBJECT");
+  });
+
   it("includes table columns when tableColumns provided", () => {
     useSchemaStore.setState({
       tables: {
@@ -385,6 +434,52 @@ describe("useSqlAutocomplete", () => {
       "`Users`"
     ];
     expect(aliased?.self?.apply).toBe("`Users`");
+  });
+
+  it("emits a fully-backtick-quoted schema-qualified key for MySQL dialect", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            sales: [{ name: "Orders", schema: "sales", row_count: 1 }],
+          },
+        },
+      },
+      tableColumnsCache: {
+        conn1: {
+          db1: {
+            sales: {
+              Orders: [
+                {
+                  name: "order_id",
+                  data_type: "bigint",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", "db1", {
+        dialect: MySQL,
+        dbType: "mysql",
+      }),
+    );
+
+    const ns = result.current as Record<
+      string,
+      { children?: Record<string, unknown> }
+    >;
+    expect(ns).toHaveProperty("`sales`.`Orders`");
+    expect(ns["`sales`.`Orders`"]?.children).toHaveProperty("order_id");
   });
 
   // AC-04: Postgres dialect → double-quote identifier quoting.

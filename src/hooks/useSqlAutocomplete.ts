@@ -14,8 +14,8 @@ import type { DatabaseType } from "@/types/connection";
 // 않으므로 (defaultKeyword = (label, type) => ({ label, type, boost: -1 })),
 // ns 의 inject 책임은 제거됐다.
 
-/** Common SQL functions exposed as autocomplete candidates. */
-const SQL_FUNCTIONS = [
+/** Cross-dialect SQL functions exposed as autocomplete candidates. */
+const COMMON_SQL_FUNCTIONS = [
   "COUNT",
   "SUM",
   "AVG",
@@ -31,10 +31,60 @@ const SQL_FUNCTIONS = [
   "TRIM",
   "SUBSTRING",
   "EXTRACT",
-  "DATE_TRUNC",
   "NOW",
   "CURRENT_TIMESTAMP",
 ];
+
+/** PostgreSQL-only functions. Also used for legacy callers without `dbType`. */
+const POSTGRESQL_SQL_FUNCTIONS = [
+  "DATE_TRUNC",
+  "TO_CHAR",
+  "TO_TIMESTAMP",
+  "JSONB_BUILD_OBJECT",
+  "JSONB_AGG",
+  "ARRAY_AGG",
+];
+
+/** MySQL-specific function surface. Kept conservative and editor-only. */
+const MYSQL_SQL_FUNCTIONS = [
+  "IFNULL",
+  "DATE_FORMAT",
+  "STR_TO_DATE",
+  "CURDATE",
+  "CURTIME",
+  "UTC_TIMESTAMP",
+  "GROUP_CONCAT",
+  "JSON_EXTRACT",
+  "JSON_UNQUOTE",
+  "JSON_OBJECT",
+  "JSON_ARRAY",
+  "UUID",
+  "LAST_INSERT_ID",
+  "DATABASE",
+  "USER",
+  "VERSION",
+];
+
+const SQLITE_SQL_FUNCTIONS = [
+  "DATE",
+  "TIME",
+  "DATETIME",
+  "STRFTIME",
+  "JULIANDAY",
+  "IFNULL",
+];
+
+function sqlFunctionsForDbType(dbType: DatabaseType | undefined): string[] {
+  const dialectSpecific =
+    dbType === "mysql"
+      ? MYSQL_SQL_FUNCTIONS
+      : dbType === "sqlite"
+        ? SQLITE_SQL_FUNCTIONS
+        : dbType === "mongodb" || dbType === "redis"
+          ? []
+          : POSTGRESQL_SQL_FUNCTIONS;
+  return Array.from(new Set([...COMMON_SQL_FUNCTIONS, ...dialectSpecific]));
+}
 
 /** Explicit test-only overrides: `table → column names`. */
 export type TableColumnOverrides = Record<string, string[]>;
@@ -49,10 +99,10 @@ export interface UseSqlAutocompleteOptions {
    */
   dialect?: SQLDialect;
   /**
-   * Connection `db_type`. Sprint 302 이후로는 keyword surface 책임이
-   * lang-sql 의 `keywordCompletionSource` 로 이관되었으므로 이 옵션은
-   * keyword 라우팅에는 영향이 없다. ts 시그니처는 backwards-compat 을
-   * 위해 유지하며, 향후 다른 dialect-specific 분기에 활용될 자리로 둔다.
+   * Connection `db_type`. Keyword surface 책임은 lang-sql 의
+   * `keywordCompletionSource` 로 이관되어 이 옵션은 keyword 라우팅에는
+   * 영향이 없다. Function 후보는 dialect-specific drift 를 막기 위해
+   * 이 값으로 분기한다.
    */
   dbType?: DatabaseType;
 }
@@ -131,7 +181,7 @@ export function useSqlAutocomplete(
   const views = useSchemaStore((s) => s.views);
   const columnsCache = useSchemaStore((s) => s.tableColumnsCache);
   const opts = normalizeOptions(arg);
-  const { tableColumns, dialect } = opts;
+  const { tableColumns, dialect, dbType } = opts;
 
   return useMemo(() => {
     const ns: Record<string, SQLNamespace> = {};
@@ -150,7 +200,7 @@ export function useSqlAutocomplete(
       children: {},
     });
 
-    for (const fn of SQL_FUNCTIONS) {
+    for (const fn of sqlFunctionsForDbType(dbType)) {
       ns[fn] = reservedToken(fn, "function");
     }
 
@@ -343,5 +393,14 @@ export function useSqlAutocomplete(
     }
 
     return ns as SQLNamespace;
-  }, [tables, views, columnsCache, connectionId, db, tableColumns, dialect]);
+  }, [
+    tables,
+    views,
+    columnsCache,
+    connectionId,
+    db,
+    tableColumns,
+    dialect,
+    dbType,
+  ]);
 }

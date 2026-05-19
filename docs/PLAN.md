@@ -211,6 +211,7 @@ e2e dead 제약 (cross-window invariant 변경 회피) 으로 phase 선정. Phas
 |------|------|
 | [Architecture](architecture.md) | 시스템 구조, DB driver 추상화, 기술 결정 |
 | [RISKS](RISKS.md) | 잔여 위험 등록부 (20개 항목, 상태 추적) |
+| [Query Language Support](query-language-support.md) | PostgreSQL / MySQL / MongoDB 자동완성·문법 지원 범위 |
 | [Sprints](sprints/README.md) | harness sprint 실행 산출물 |
 
 ## 구현 계획
