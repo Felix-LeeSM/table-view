@@ -601,7 +601,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
 describe("sqlSafety.analyzeStatement", () => {
   it("[AC-185-01a] DELETE without WHERE → danger", () => {
     const a = analyzeStatement("DELETE FROM users");
-    expect(a.kind).toBe("delete");
+    expect(a.kind).toBe("dml-delete");
     expect(a.severity).toBe("danger");
     expect(a.reasons).toEqual(["DELETE without WHERE clause"]);
     expect(isDangerous(a)).toBe(true);
@@ -609,7 +609,7 @@ describe("sqlSafety.analyzeStatement", () => {
 
   it("[AC-185-01b] DELETE with WHERE → warn (Sprint 254: bounded write)", () => {
     const a = analyzeStatement("DELETE FROM users WHERE id = 1");
-    expect(a.kind).toBe("delete");
+    expect(a.kind).toBe("dml-delete");
     expect(a.severity).toBe("warn");
     expect(a.reasons).toEqual([]);
     expect(isDangerous(a)).toBe(false);
@@ -617,14 +617,14 @@ describe("sqlSafety.analyzeStatement", () => {
 
   it("[AC-185-01c] UPDATE without WHERE → danger", () => {
     const a = analyzeStatement("UPDATE users SET active = false");
-    expect(a.kind).toBe("update");
+    expect(a.kind).toBe("dml-update");
     expect(a.severity).toBe("danger");
     expect(a.reasons).toEqual(["UPDATE without WHERE clause"]);
   });
 
   it("[AC-185-01d] UPDATE with WHERE → warn (Sprint 254: bounded write)", () => {
     const a = analyzeStatement("UPDATE users SET active = false WHERE id = 1");
-    expect(a.kind).toBe("update");
+    expect(a.kind).toBe("dml-update");
     expect(a.severity).toBe("warn");
   });
 
@@ -649,10 +649,10 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(a.reasons).toEqual(["TRUNCATE"]);
   });
 
-  it("[AC-185-01h] INSERT INTO → warn (Sprint 254: write surface)", () => {
+  it("[AC-185-01h] INSERT INTO → dml-insert / info (Sprint 403)", () => {
     const a = analyzeStatement("INSERT INTO users (id, name) VALUES (1, 'a')");
-    expect(a.kind).toBe("insert");
-    expect(a.severity).toBe("warn");
+    expect(a.kind).toBe("dml-insert");
+    expect(a.severity).toBe("info");
   });
 
   it("[AC-185-01i] SELECT → info (Sprint 254: read tier)", () => {
@@ -663,7 +663,7 @@ describe("sqlSafety.analyzeStatement", () => {
 
   it("[AC-185-01j] case-insensitive (delete from t) → danger", () => {
     const a = analyzeStatement("delete from users");
-    expect(a.kind).toBe("delete");
+    expect(a.kind).toBe("dml-delete");
     expect(a.severity).toBe("danger");
   });
 
@@ -671,13 +671,13 @@ describe("sqlSafety.analyzeStatement", () => {
     const a = analyzeStatement(
       "-- this comment hides nothing\nDELETE FROM users -- inline\n",
     );
-    expect(a.kind).toBe("delete");
+    expect(a.kind).toBe("dml-delete");
     expect(a.severity).toBe("danger");
 
     const b = analyzeStatement(
       "/* block comment */ DELETE FROM users WHERE id = 1",
     );
-    expect(b.kind).toBe("delete");
+    expect(b.kind).toBe("dml-delete");
     // Sprint 254 — bounded DELETE WHERE is now WARN (was safe).
     expect(b.severity).toBe("warn");
   });
@@ -686,7 +686,7 @@ describe("sqlSafety.analyzeStatement", () => {
     const a = analyzeStatement(
       "DELETE FROM t WHERE id IN (SELECT id FROM u WHERE flag = 1)",
     );
-    expect(a.kind).toBe("delete");
+    expect(a.kind).toBe("dml-delete");
     // Sprint 254 — bounded DELETE WHERE = WARN.
     expect(a.severity).toBe("warn");
   });
@@ -765,7 +765,7 @@ describe("sqlSafety.analyzeStatement", () => {
   // Sprint 254 (2026-05-09) — 3-tier classifier corpus. ADR 0023 grill Q2-(a)
   // "3-tier severity 채택" 의 정식 분류:
   //   - INFO: SELECT / WITH …SELECT (no DML CTE) / EXPLAIN / SHOW / DESCRIBE / DESC.
-  //   - WARN: INSERT / UPDATE WHERE / DELETE WHERE / CREATE / ALTER additive.
+  //   - WARN: UPDATE WHERE / DELETE WHERE / ALTER additive.
   //   - STOP (danger): DROP / TRUNCATE / WHERE-less DELETE·UPDATE / ALTER DROP /
   //     GRANT / REVOKE.
   // DML CTE (`WITH x AS (UPDATE …) SELECT *`) 는 INFO 가 아니어야 한다 — wrapped
@@ -815,21 +815,21 @@ describe("sqlSafety.analyzeStatement", () => {
     });
 
     // ── WARN tier ─────────────────────────────────────────────────────────
-    it("[AC-254-02a] INSERT INTO → warn", () => {
+    it("[AC-403-01] INSERT INTO → dml-insert / info", () => {
       const a = analyzeStatement("INSERT INTO users (id) VALUES (1)");
-      expect(a.kind).toBe("insert");
-      expect(a.severity).toBe("warn");
+      expect(a.kind).toBe("dml-insert");
+      expect(a.severity).toBe("info");
     });
 
     it("[AC-254-02b] UPDATE … WHERE → warn (bounded)", () => {
       const a = analyzeStatement("UPDATE users SET name = 'a' WHERE id = 1");
-      expect(a.kind).toBe("update");
+      expect(a.kind).toBe("dml-update");
       expect(a.severity).toBe("warn");
     });
 
     it("[AC-254-02c] DELETE … WHERE → warn (bounded)", () => {
       const a = analyzeStatement("DELETE FROM users WHERE id = 1");
-      expect(a.kind).toBe("delete");
+      expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("warn");
     });
 
@@ -923,11 +923,11 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(a.severity).toBe("danger");
     });
 
-    it("[AC-254-04d] WITH x AS (INSERT …) SELECT * → warn (DML CTE wrapped)", () => {
+    it("[AC-403-01b] WITH x AS (INSERT …) SELECT * → info (DML CTE wrapped)", () => {
       const a = analyzeStatement(
         "WITH x AS (INSERT INTO users (id) VALUES (1) RETURNING id) SELECT * FROM x",
       );
-      expect(a.severity).toBe("warn");
+      expect(a.severity).toBe("info");
     });
 
     it("[AC-254-04e] WITH x AS (SELECT 1) SELECT * — pure read CTE → info (regression)", () => {
@@ -991,10 +991,10 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(isInfoStatement(analyzeStatement("explain select 1"))).toBe(true);
     });
 
-    it("[AC-255-01i] INSERT → NOT INFO (WARN candidate)", () => {
+    it("[AC-403-06] INSERT → INFO (no WARN dialog candidate)", () => {
       expect(
         isInfoStatement(analyzeStatement("INSERT INTO users (id) VALUES (1)")),
-      ).toBe(false);
+      ).toBe(true);
     });
 
     it("[AC-255-01j] UPDATE WHERE → NOT INFO (WARN candidate)", () => {
@@ -1158,7 +1158,7 @@ describe("sqlSafety.analyzeStatement", () => {
       // Sprint-391 AST does NOT cover DML. The DELETE branch fires
       // before the DDL preload-AST branch, so this case is unaffected.
       const a = analyzeStatement("DELETE FROM users");
-      expect(a.kind).toBe("delete");
+      expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("danger");
     });
 
@@ -1192,71 +1192,64 @@ describe("sqlSafety.analyzeStatement", () => {
       __resetSqlWasmModuleForTests();
     });
 
-    it("[AC-392-X01] INSERT INTO users VALUES (1) → insert / warn via AST", () => {
+    it("[AC-403-01c] INSERT INTO users VALUES (1) → dml-insert / info via AST", () => {
       const a = analyzeStatement("INSERT INTO users VALUES (1)");
-      expect(a.kind).toBe("insert");
-      expect(a.severity).toBe("warn");
+      expect(a.kind).toBe("dml-insert");
+      expect(a.severity).toBe("info");
       expect(a.reasons).toEqual([]);
     });
 
-    it("[AC-392-X02] UPDATE WHERE → update / warn via AST", () => {
+    it("[AC-403-02b] UPDATE WHERE → dml-update / warn via AST", () => {
       const a = analyzeStatement("UPDATE users SET name = 'a' WHERE id = 1");
-      expect(a.kind).toBe("update");
+      expect(a.kind).toBe("dml-update");
       expect(a.severity).toBe("warn");
       expect(a.reasons).toEqual([]);
     });
 
-    it("[AC-392-X03] UPDATE without WHERE → update / danger + reason via AST", () => {
+    it("[AC-403-02c] UPDATE without WHERE → dml-update / danger + reason via AST", () => {
       const a = analyzeStatement("UPDATE users SET name = 'a'");
-      expect(a.kind).toBe("update");
+      expect(a.kind).toBe("dml-update");
       expect(a.severity).toBe("danger");
       expect(a.reasons).toEqual(["UPDATE without WHERE clause"]);
     });
 
-    it("[AC-392-X04] DELETE WHERE → delete / warn via AST", () => {
+    it("[AC-403-03b] DELETE WHERE → dml-delete / warn via AST", () => {
       const a = analyzeStatement("DELETE FROM users WHERE id = 1");
-      expect(a.kind).toBe("delete");
+      expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("warn");
       expect(a.reasons).toEqual([]);
     });
 
-    it("[AC-392-X05] DELETE without WHERE → delete / danger + reason via AST", () => {
+    it("[AC-403-03c] DELETE without WHERE → dml-delete / danger + reason via AST", () => {
       const a = analyzeStatement("DELETE FROM users");
-      expect(a.kind).toBe("delete");
+      expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("danger");
       expect(a.reasons).toEqual(["DELETE without WHERE clause"]);
     });
 
-    it("[AC-392-X06] INSERT … ON CONFLICT DO UPDATE → insert / warn via AST (UPSERT)", () => {
-      // ON CONFLICT DO UPDATE classifies under `insert` / warn — caller
-      // does not have a separate "upsert" path; the destructive surface
-      // (UPDATE SET) is bounded by the conflict key.
+    it("[AC-403-01d] INSERT … ON CONFLICT DO UPDATE → dml-insert / info via AST", () => {
       const a = analyzeStatement(
         "INSERT INTO users (id) VALUES (1) ON CONFLICT DO UPDATE SET name = 'a'",
       );
-      expect(a.kind).toBe("insert");
-      expect(a.severity).toBe("warn");
+      expect(a.kind).toBe("dml-insert");
+      expect(a.severity).toBe("info");
     });
 
-    it("[AC-392-X07] existing sqlSafety test suite — INSERT/UPDATE/DELETE return shapes unchanged", () => {
-      // Spot-check identical to AC-185-01h/01a/01b/01c/01d but executed
-      // with the WASM module preloaded so the AST path is the one that
-      // produces the result. If the AST path diverges from the regex
-      // output, this case fails before the larger regression suite does.
+    it("[AC-403-04] AST path matches DML kind prefix contract", () => {
       const insert = analyzeStatement(
         "INSERT INTO users (id, name) VALUES (1, 'a')",
       );
-      expect(insert.kind).toBe("insert");
-      expect(insert.severity).toBe("warn");
+      expect(insert.kind).toBe("dml-insert");
+      expect(insert.severity).toBe("info");
 
       const updateWhere = analyzeStatement(
         "UPDATE users SET active = false WHERE id = 1",
       );
-      expect(updateWhere.kind).toBe("update");
+      expect(updateWhere.kind).toBe("dml-update");
       expect(updateWhere.severity).toBe("warn");
 
       const deleteNoWhere = analyzeStatement("DELETE FROM users");
-      expect(deleteNoWhere.kind).toBe("delete");
+      expect(deleteNoWhere.kind).toBe("dml-delete");
       expect(deleteNoWhere.severity).toBe("danger");
     });
 
@@ -1269,6 +1262,38 @@ describe("sqlSafety.analyzeStatement", () => {
       // `warn` severity → not dangerous, not info.
       expect(isDangerous(a)).toBe(false);
       expect(isInfoStatement(a)).toBe(false);
+    });
+  });
+
+  describe("Sprint 403 — DML kind/severity contract", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-403-01] INSERT → dml-insert / info", () => {
+      const a = analyzeStatement("INSERT INTO t VALUES (1)");
+      expect(a.kind).toBe("dml-insert");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-403-02] UPDATE WHERE → dml-update / warn", () => {
+      const a = analyzeStatement("UPDATE t SET a = 1 WHERE id = 1");
+      expect(a.kind).toBe("dml-update");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-403-03] DELETE WHERE → dml-delete / warn", () => {
+      const a = analyzeStatement("DELETE FROM t WHERE id = 1");
+      expect(a.kind).toBe("dml-delete");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
     });
   });
 
@@ -1360,26 +1385,26 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(a.reasons).toEqual([]);
     });
 
-    it("[AC-393b-X02] WITH wrapping INSERT → insert / warn (inherits inner DML classification)", () => {
+    it("[AC-393b-X02] WITH wrapping INSERT → dml-insert / info (inherits inner DML classification)", () => {
       const a = analyzeStatement(
         "WITH t AS (SELECT 1) INSERT INTO x SELECT * FROM t",
       );
-      expect(a.kind).toBe("insert");
-      expect(a.severity).toBe("warn");
+      expect(a.kind).toBe("dml-insert");
+      expect(a.severity).toBe("info");
     });
 
     it("[AC-393b-X03] WITH wrapping UPDATE WHERE → update / warn", () => {
       const a = analyzeStatement(
         "WITH t AS (SELECT 1) UPDATE x SET a = 1 WHERE x.id = 1",
       );
-      expect(a.kind).toBe("update");
+      expect(a.kind).toBe("dml-update");
       expect(a.severity).toBe("warn");
       expect(a.reasons).toEqual([]);
     });
 
     it("[AC-393b-X04] WITH wrapping UPDATE without WHERE → update / danger + reason", () => {
       const a = analyzeStatement("WITH t AS (SELECT 1) UPDATE x SET a = 1");
-      expect(a.kind).toBe("update");
+      expect(a.kind).toBe("dml-update");
       expect(a.severity).toBe("danger");
       // Per D2, the reasons list is the inner statement's reasons,
       // unchanged (verbatim). The sprint-392 "UPDATE without WHERE clause"
@@ -1389,7 +1414,7 @@ describe("sqlSafety.analyzeStatement", () => {
 
     it("[AC-393b-X05] WITH wrapping DELETE without WHERE → delete / danger + reason", () => {
       const a = analyzeStatement("WITH t AS (SELECT 1) DELETE FROM x");
-      expect(a.kind).toBe("delete");
+      expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("danger");
       expect(a.reasons).toContain("DELETE without WHERE clause");
     });
@@ -1402,7 +1427,7 @@ describe("sqlSafety.analyzeStatement", () => {
 
     it("[AC-393b-X07] DELETE with IN-list (sprint-392 deferral lifted) → delete / warn / no extra reasons", () => {
       const a = analyzeStatement("DELETE FROM x WHERE x.id IN (1, 2, 3)");
-      expect(a.kind).toBe("delete");
+      expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("warn");
       expect(a.reasons).toEqual([]);
     });
@@ -1578,7 +1603,7 @@ describe("sqlSafety.analyzeStatement", () => {
 
     it("[AC-395-X04] EXPLAIN DELETE (no WHERE) → inherits inner DELETE classification (D1)", () => {
       const a = analyzeStatement("EXPLAIN DELETE FROM users");
-      expect(a.kind).toBe("delete");
+      expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("danger");
       // The sprint-392 "WHERE 없는 DELETE" string passes through verbatim.
       expect(a.reasons).toContain("DELETE without WHERE clause");
@@ -1595,7 +1620,7 @@ describe("sqlSafety.analyzeStatement", () => {
       const a = analyzeStatement(
         "EXPLAIN ANALYZE UPDATE users SET a = 1 WHERE id = 1",
       );
-      expect(a.kind).toBe("update");
+      expect(a.kind).toBe("dml-update");
       // Bounded UPDATE WHERE — sprint-393b classifies as `warn`.
       expect(a.severity).toBe("warn");
       expect(a.reasons).toEqual([]);

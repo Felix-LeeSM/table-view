@@ -6,8 +6,8 @@
  * - `"info"`: read-only / metadata-introspection. SELECT, WITH …SELECT
  *   (no DML CTE), EXPLAIN, SHOW, DESCRIBE, DESC. SafeMode 매트릭스에서
  *   *항상* `allow`.
- * - `"warn"`: bounded write 표면. INSERT, UPDATE WHERE, DELETE WHERE,
- *   CREATE, ALTER additive (no DROP COLUMN/CONSTRAINT). SafeMode 매트릭스
+ * - `"warn"`: bounded write 표면. UPDATE WHERE, DELETE WHERE, ALTER
+ *   additive (no DROP COLUMN/CONSTRAINT). SafeMode 매트릭스
  *   결과는 `allow` (raw editor 의 SqlPreviewDialog 가 QueryTab-level 에서
  *   처리 — Sprint 255). dry-run 100+ row 시 STOP 으로 escalate (Sprint 254
  *   의 `escalateWarnIfLargeImpact` helper).
@@ -26,10 +26,12 @@
  * Sprint 392 (2026-05-18) — DML write triad (INSERT / UPDATE / DELETE) 도
  * AST 기반으로 migrate. WHERE 의 narrow expression (column-op-literal +
  * AND/OR/NOT/IS NULL) 만 AST 로 parse 되고 그 이상 (IN-list / 함수 호출 /
- * subquery / cross-table) 은 `unsupported-expression` 으로 fallback. 반환
- * shape 는 여전히 동일 — 호출자 영향 0. 남은 정규식 (SELECT widening /
- * CREATE / GRANT / REVOKE / WITH / EXPLAIN / SHOW / DESCRIBE) 은 sprint-
- * 393~395 가 단계적으로 교체.
+ * subquery / cross-table) 은 `unsupported-expression` 으로 fallback. 남은
+ * 정규식 (SELECT widening / CREATE / GRANT / REVOKE / WITH / EXPLAIN /
+ * SHOW / DESCRIBE) 은 sprint-393~395 가 단계적으로 교체.
+ *
+ * Sprint 403 (2026-05-19) — Sprint 392 contract drift 정정. DML kind 는
+ * `dml-*` prefix 로 통일하고 INSERT 는 additive write 로 `info` 처리한다.
  *
  * Sprint 393a (2026-05-18) — SELECT 의 widened grammar (FROM 다중 / JOIN
  * 변종 / WHERE expression 확장 / GROUP BY / HAVING / ORDER BY / LIMIT) 가
@@ -46,9 +48,9 @@ export type StatementKind =
   // SHOW / DESCRIBE / DESC) 의 분류. `select` 와 같은 INFO tier 지만 식별
   // helper (`isInfoStatement`) 에서 함께 true 로 처리된다.
   | "info"
-  | "insert"
-  | "update"
-  | "delete"
+  | "dml-insert"
+  | "dml-update"
+  | "dml-delete"
   | "ddl-drop"
   | "ddl-truncate"
   | "ddl-alter-drop"
@@ -119,13 +121,11 @@ const WORD_BOUNDARY_WHERE_RE = /\bWHERE\b/i;
  * sprint-393/394 a single point to extend without re-touching
  * `analyzeStatement` for every new variant.
  *
- * Sprint-392 invariants (D1/D2/D3):
- * - INSERT — kind:'insert', severity:'warn' (existing Sprint 254 tier;
- *   ON CONFLICT DO UPDATE classifies the same — caller treats UPSERT
- *   as a write surface, not a destructive one).
- * - UPDATE — kind:'update'; `where_clause === null` → severity:'danger'
+ * Sprint-403 invariants:
+ * - INSERT — kind:'dml-insert', severity:'info'.
+ * - UPDATE — kind:'dml-update'; `where_clause === null` → severity:'danger'
  *   + reason "UPDATE without WHERE clause"; otherwise severity:'warn'.
- * - DELETE — kind:'delete'; `where_clause === null` → severity:'danger'
+ * - DELETE — kind:'dml-delete'; `where_clause === null` → severity:'danger'
  *   + reason "DELETE without WHERE clause"; otherwise severity:'warn'.
  *
  * The DML reason strings *match* the pre-sprint-392 regex output bit-for-
@@ -280,25 +280,25 @@ function statementAnalysisFromAst(
       return { kind: "ddl-create", severity: "info", reasons: [] };
     // Sprint-392 — DML write triad.
     case "insert":
-      return { kind: "insert", severity: "warn", reasons: [] };
+      return { kind: "dml-insert", severity: "info", reasons: [] };
     case "update":
       if (ast.where_clause === null) {
         return {
-          kind: "update",
+          kind: "dml-update",
           severity: "danger",
           reasons: ["UPDATE without WHERE clause"],
         };
       }
-      return { kind: "update", severity: "warn", reasons: [] };
+      return { kind: "dml-update", severity: "warn", reasons: [] };
     case "delete":
       if (ast.where_clause === null) {
         return {
-          kind: "delete",
+          kind: "dml-delete",
           severity: "danger",
           reasons: ["DELETE without WHERE clause"],
         };
       }
-      return { kind: "delete", severity: "warn", reasons: [] };
+      return { kind: "dml-delete", severity: "warn", reasons: [] };
     // Sprint-393a — successful widened SELECT parse always classifies as
     // read-only `info`. No JOIN / GROUP / ORDER / LIMIT shape escalates
     // severity — the AST simply confirms the statement is a valid SELECT
@@ -430,25 +430,25 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   if (/^DELETE\s+FROM\b/.test(upper)) {
     if (!hasOuterWhere(upper)) {
       return {
-        kind: "delete",
+        kind: "dml-delete",
         severity: "danger",
         reasons: ["DELETE without WHERE clause"],
       };
     }
     // Sprint 254 — bounded DELETE WHERE = WARN tier (was "safe").
-    return { kind: "delete", severity: "warn", reasons: [] };
+    return { kind: "dml-delete", severity: "warn", reasons: [] };
   }
 
   if (/^UPDATE\s+\S/.test(upper)) {
     if (!hasOuterWhere(upper)) {
       return {
-        kind: "update",
+        kind: "dml-update",
         severity: "danger",
         reasons: ["UPDATE without WHERE clause"],
       };
     }
     // Sprint 254 — bounded UPDATE WHERE = WARN tier.
-    return { kind: "update", severity: "warn", reasons: [] };
+    return { kind: "dml-update", severity: "warn", reasons: [] };
   }
 
   if (/^DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|TRIGGER)\b/.test(upper)) {
@@ -562,8 +562,7 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   }
 
   if (/^INSERT\s+INTO\b/.test(upper)) {
-    // Sprint 254 — INSERT = WARN tier.
-    return { kind: "insert", severity: "warn", reasons: [] };
+    return { kind: "dml-insert", severity: "info", reasons: [] };
   }
 
   if (/^SELECT\b/.test(upper)) {
@@ -644,8 +643,8 @@ export function isDangerous(analysis: StatementAnalysis): boolean {
  * Sprint 254 — `severity === "info"` 직접 비교로 단순화. 기존 두-가지 kind
  * 매칭 (`select` / `info`) 의미 보존: 둘 다 severity:"info".
  *
- * `severity: "warn"` (INSERT / UPDATE WHERE / CREATE …) 와 `"danger"` (STOP)
- * 는 INFO 가 아니므로 false.
+ * `severity: "warn"` (UPDATE WHERE / CREATE …) 와 `"danger"` (STOP) 는
+ * INFO 가 아니므로 false.
  */
 export function isInfoStatement(analysis: StatementAnalysis): boolean {
   return analysis.severity === "info";

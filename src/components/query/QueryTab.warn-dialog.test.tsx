@@ -1,11 +1,12 @@
 // Sprint 255 (2026-05-09) — raw SQL/MQL editor 의 WARN-tier preview
 // dialog mount. ADR 0023 grill Q3-(b) "모든 환경 + 모든 write 표면" 의
-// 핵심 보호: 사용자가 raw editor 에서 ad-hoc INSERT/UPDATE WHERE/CREATE/
-// ALTER additive 실행 시 시각적 preview 없이 즉시 IPC 발동하던 gap 을
+// 핵심 보호: 사용자가 raw editor 에서 ad-hoc UPDATE WHERE/ALTER additive
+// 실행 시 시각적 preview 없이 즉시 IPC 발동하던 gap 을
 // SqlPreviewDialog (RDB) / MqlPreviewModal (Mongo aggregate) 으로 메운다.
+// Sprint 403 부터 INSERT 는 `info` tier 라 dialog 없이 직접 실행된다.
 //
 // 테스트 axis (TDD red-fail 우선 작성):
-// - INSERT INTO single → SqlPreviewDialog mount + executeQuery NOT called
+// - INSERT INTO single → dialog NOT mount (INFO skip)
 // - UPDATE WHERE single → dialog mount + Execute click → executeQuery 1회
 // - CREATE TABLE single → dialog mount + Execute click → executeQuery 1회
 // - ALTER TABLE … ADD COLUMN single → dialog mount + Execute → 1회
@@ -18,8 +19,8 @@
 // - Mongo aggregate read-only ($match) → dialog NOT mount (INFO skip)
 // - Mongo aggregate write ($out) → ConfirmDestructiveDialog (STOP 우선)
 //
-// `severity: "safe"` 인 non-INFO 만 WARN dialog 발동. INFO/STOP 분기는 위와
-// 같이 회귀 테스트로 가드.
+// `severity: "warn"` 인 non-INFO 만 WARN dialog 발동. INFO/STOP 분기는
+// 위와 같이 회귀 테스트로 가드.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   seedWorkspace,
@@ -180,7 +181,8 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
 
   // ── RDB WARN dialog mount cases ─────────────────────────────────────────
 
-  it("[AC-255-03a] INSERT INTO single → SqlPreviewDialog mount, executeQuery NOT called", async () => {
+  it("[AC-403-06a] INSERT INTO single → dialog NOT mount, executeQuery 1회 직접 호출", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     seedConnection("development");
     const tab = seedTab("INSERT INTO users (id, name) VALUES (1, 'a')");
     render(<QueryTab tab={tab} />);
@@ -189,10 +191,10 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
       screen.getByTestId("execute-btn").click();
     });
 
-    expect(mockExecuteQuery).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(screen.getByText("Review SQL Changes")).toBeInTheDocument();
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
     });
+    expect(screen.queryByText("Review SQL Changes")).not.toBeInTheDocument();
     // STOP dialog 가 동시 mount 되어선 안 된다.
     expect(
       screen.queryByTestId("confirm-destructive-confirm"),
@@ -273,7 +275,7 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
 
   it("[AC-255-04a] WARN dialog Cancel click → dialog dismissed + executeQuery NOT called", async () => {
     seedConnection("development");
-    const tab = seedTab("INSERT INTO users (id) VALUES (1)");
+    const tab = seedTab("UPDATE users SET name = 'a' WHERE id = 1");
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -370,7 +372,7 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
 
   it("[AC-255-06a] INFO + WARN 다중 → WARN dialog 1개 mount (preview에 join된 batch 등장)", async () => {
     seedConnection("development");
-    const tab = seedTab("SELECT 1; INSERT INTO users (id) VALUES (1)");
+    const tab = seedTab("SELECT 1; UPDATE users SET name = 'a' WHERE id = 1");
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -391,11 +393,13 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
   });
 
   it("[AC-255-06b] STOP + WARN 다중 (production + warn) → STOP 우선 ConfirmDestructiveDialog mount, WARN dialog 미발동", async () => {
-    // production + warn — DELETE without WHERE 는 STOP, INSERT 는 WARN.
+    // production + warn — DELETE without WHERE 는 STOP, UPDATE WHERE 는 WARN.
     // STOP > WARN 우선순위로 ConfirmDestructiveDialog 만 mount.
     seedConnection("production");
     useSafeModeStore.setState({ mode: "warn" });
-    const tab = seedTab("INSERT INTO users (id) VALUES (1); DELETE FROM logs");
+    const tab = seedTab(
+      "UPDATE users SET name = 'a' WHERE id = 1; DELETE FROM logs",
+    );
     render(<QueryTab tab={tab} />);
 
     await act(async () => {

@@ -4,9 +4,9 @@
 // row 면 STOP (`danger`) 로 escalate.
 //
 // 정책:
-//   - WARN bounded UPDATE/DELETE 만 escalation 대상 (kind === "update" |
-//     "delete"). INSERT / CREATE / ALTER additive 는 dry-run 조회 비용 대비
-//     ROI 가 낮으므로 본 sprint 에서는 제외 — 향후 sprint 에서 확장 가능.
+//   - WARN bounded UPDATE/DELETE 만 escalation 대상
+//     (kind === "dml-update" | "dml-delete"). CREATE / ALTER additive 는
+//     dry-run 조회 비용 대비 ROI 가 낮으므로 본 sprint 에서는 제외.
 //   - dry-run IPC 2s timeout. timeout 시 STOP fallback.
 //   - IPC unsupported (MySQL / SQLite — adapter 가 Unsupported error) →
 //     STOP fallback (보수적).

@@ -22,9 +22,9 @@ import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
  *         (M.1 NEW flow — shared-staging / learning environments)
  *       * non-prod + warn / off       → allow
  *
- *   - safe write (INSERT / UPDATE WHERE / DELETE WHERE / CREATE / ALTER
- *     additive / Mongo *-many): always allow. Cmd+Z (Phase 5) is the
- *     safety net here, not a dialog.
+ *   - non-destructive writes (INSERT / UPDATE WHERE / DELETE WHERE /
+ *     CREATE / ALTER additive / Mongo *-many): always allow. Cmd+Z
+ *     (Phase 5) is the safety net here, not a dialog.
  *
  *   - read (SELECT / WITH / Mongo read pipeline): always allow.
  *

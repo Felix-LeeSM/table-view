@@ -11,8 +11,8 @@
 //
 // date 2026-05-08 (Sprint 245 — ADR 0022 Phase 1).
 //
-// Sprint 254 (2026-05-09) — `Severity` union 3-tier split. 기존 `"safe"` 로
-// 분류된 SELECT / INSERT / UPDATE WHERE / CREATE 는 각각 INFO / WARN /
+// Sprint 254 (2026-05-09) — `Severity` union 3-tier split. Sprint 403 기준
+// SELECT / INSERT / UPDATE WHERE / CREATE 는 각각 INFO / INFO /
 // WARN / WARN 으로 매핑. 매트릭스 *결과* 회귀 0 — INFO 는 allow, WARN 는 raw
 // editor WARN dialog 가 QueryTab-level 에서 처리하므로 `decideSafeModeAction`
 // 은 여전히 allow 반환. DANGER 는 기존 confirm 분기 그대로.
@@ -31,13 +31,13 @@ const SELECT_ANALYSIS: StatementAnalysis = {
   reasons: [],
 };
 const UPDATE_WHERE: StatementAnalysis = {
-  kind: "update",
+  kind: "dml-update",
   severity: "warn",
   reasons: [],
 };
 const INSERT: StatementAnalysis = {
-  kind: "insert",
-  severity: "warn",
+  kind: "dml-insert",
+  severity: "info",
   reasons: [],
 };
 const CREATE: StatementAnalysis = {
@@ -51,7 +51,7 @@ const TRUNCATE: StatementAnalysis = {
   reasons: ["TRUNCATE"],
 };
 const DELETE_NO_WHERE: StatementAnalysis = {
-  kind: "delete",
+  kind: "dml-delete",
   severity: "danger",
   reasons: ["DELETE without WHERE clause"],
 };
@@ -72,8 +72,8 @@ describe("decideSafeModeAction — Sprint 245 destructive-only matrix (Sprint 25
     });
   });
 
-  // ── L2: non-prod + strict + warn write → allow ──
-  it("[AC-245-L2] non-production + strict + WARN write (UPDATE WHERE / INSERT / CREATE) → allow", () => {
+  // ── L2: non-prod + strict + non-danger write → allow ──
+  it("[AC-245-L2] non-production + strict + non-danger write (UPDATE WHERE / INSERT / CREATE) → allow", () => {
     expect(decideSafeModeAction("strict", "development", UPDATE_WHERE)).toEqual(
       { action: "allow" },
     );
@@ -147,9 +147,10 @@ describe("decideSafeModeAction — Sprint 245 destructive-only matrix (Sprint 25
     });
   });
 
-  // ── L7: production + (strict|warn|off) + WARN write → allow ──
-  it("[AC-245-L7] production + (strict | warn | off) + WARN write → allow", () => {
-    // Sprint 254 — UPDATE_WHERE / INSERT / CREATE 는 이제 severity:"warn".
+  // ── L7: production + (strict|warn|off) + safe write → allow ──
+  it("[AC-245-L7] production + (strict | warn | off) + safe write → allow", () => {
+    // Sprint 403 — INSERT 는 severity:"info"; UPDATE_WHERE / CREATE 는
+    // severity:"warn".
     // SafeMode 매트릭스 결과는 회귀 0 — WARN tier 의 raw editor 표시 처리는
     // QueryTab-level (`pendingRdbWarn`) 의 책임이고, `decideSafeModeAction`
     // 은 여전히 allow 반환. ADR 0022 의 "safe writes 는 production 에서도
@@ -204,7 +205,7 @@ describe("decideSafeModeAction — Sprint 245 destructive-only matrix (Sprint 25
     });
   });
 
-  it("[AC-254-05b] WARN tier (severity 'warn') → allow regardless of mode/env (raw editor preview is QueryTab-level)", () => {
+  it("[AC-254-05b] non-danger write tier → allow regardless of mode/env (raw editor preview is QueryTab-level for WARN only)", () => {
     expect(decideSafeModeAction("strict", "production", INSERT)).toEqual({
       action: "allow",
     });
