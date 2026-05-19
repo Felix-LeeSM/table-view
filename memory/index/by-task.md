@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-05-18
+generated: 2026-05-19
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -16,6 +16,10 @@ generator: scripts/regenerate-indexes.sh
 ### agent-autonomy
 
 - [Implementation — agent 자율성 + noise 차단](../../memory/workflow/implementation/memory.md)
+
+### agent-hard-rule
+
+- [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
 
 ### baseline
 
@@ -72,6 +76,10 @@ generator: scripts/regenerate-indexes.sh
 - [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 
+### hook-design
+
+- [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
+
 ### implementation
 
 - [Implementation — agent 자율성 + noise 차단](../../memory/workflow/implementation/memory.md)
@@ -79,6 +87,7 @@ generator: scripts/regenerate-indexes.sh
 ### lefthook
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
+- [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
 
 ### memory-write
 
@@ -137,6 +146,14 @@ generator: scripts/regenerate-indexes.sh
 
 - [PR Review](../../memory/workflow/review/memory.md)
 
+### pre-commit
+
+- [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
+
+### pre-push
+
+- [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
+
 ### profile
 
 - [PR Review](../../memory/workflow/review/memory.md)
@@ -149,6 +166,11 @@ generator: scripts/regenerate-indexes.sh
 ### push-reject
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
+
+### race-trace
+
+- [Git 정책](../../memory/workflow/git-policy/memory.md)
+- [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
 
 ### react-impl
 
@@ -199,6 +221,10 @@ generator: scripts/regenerate-indexes.sh
 ### skill
 
 - [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
+
+### spawn-verify
+
+- [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
 
 ### split
 

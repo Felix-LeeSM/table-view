@@ -1,8 +1,8 @@
 ---
 title: Multi-agent worktree runbook
 type: runbook
-updated: 2026-05-17
-task: worktree, multi-agent, parallel, spawn-verify
+updated: 2026-05-18
+task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 ---
 
 # Multi-agent worktree
@@ -78,6 +78,26 @@ test "$(git rev-parse --show-toplevel)" = "<expected_path>" \
 orchestrator 가 그대로 agent prompt 의 "MANDATORY first command" 슬롯에
 삽입. 불일치 시 agent 는 **즉시 abort + 사용자 보고**. main 디렉토리에서 작업
 재개 X.
+
+### Agent hard rule — fetch/reset/pull 금지 (sprint-402)
+
+`git fetch && git reset --hard FETCH_HEAD`, `git reset --hard
+FETCH_HEAD/ORIG_HEAD/origin/*/@{u}/refs/remotes/*`, `git pull` (모든 변종)
+**절대 금지**. hook (sprint-402) 이 단독 명령도 모두 block — 2 단계 분리
+우회 불가능.
+
+Push reject 시 회복 정답:
+
+```bash
+git ls-remote origin <branch>                           # 1) remote SHA 진단
+git reflog                                              # 2) 직전 본인 SHA
+git update-ref refs/heads/<branch> <local-sha>          # 3) ref 만 fix
+SHA="$(git rev-parse HEAD)"
+git push origin "$SHA":refs/heads/<branch>              # 4) SHA refspec push
+```
+
+자세히: [git-policy](../../workflow/git-policy/memory.md) — 외부 race 가짜
+신호 + Push reject 응급 처치 절.
 
 ## 관련
 

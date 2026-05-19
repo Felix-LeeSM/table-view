@@ -25,10 +25,16 @@ pub mod lexer;
 pub mod parser;
 
 pub use ast::{
-    AlterAction, AlterTableStatement, BinaryOp, CascadeBehavior, Columns, CompareOp,
-    DeleteStatement, DropObjectType, DropStatement, InsertSource, InsertStatement, InsertValue,
-    Literal, OnConflict, ParseError, ParseErrorKind, ParseResult, SelectStatement, SqlLiteral,
-    TruncateStatement, UpdateAssignment, UpdateStatement, WhereClause, WhereExpr,
+    AlterAction, AlterTableStatement, CascadeBehavior, CaseWhen, ColumnRef, Columns, CommentStatement,
+    CommentTarget, CommentText, CompareOp, CopyDirection, CopySource, CopyStatement, CopyTarget,
+    CteDefinition, DeleteStatement, DropObjectType, DropStatement, ExplainInner, ExplainOption,
+    ExplainStatement, FrameBound, FrameUnit, FromItem, FromSource, GrantObject, GrantStatement,
+    InsertSource, InsertStatement, InsertValue, JoinDescriptor, JoinPredicate, LikeCase,
+    LimitClause, NullsPlacement, OnConflict, OrderDirection, OrderingItem, OverClause, ParseError,
+    ParseErrorKind, ParseResult, PrivilegeTag, RevokeStatement, RoleRef, SelectExpr,
+    SelectListItem, SelectStatement, SetOperationEntry, SetOperator, SetScope, SetStatement,
+    SetValue, ShowStatement, ShowTarget, SqlLiteral, TruncateStatement, UpdateAssignment,
+    UpdateStatement, WhereExpr, WindowArgument, WindowFrame, WithInner, WithStatement,
 };
 pub use parser::parse;
 
@@ -88,15 +94,23 @@ mod tests {
         let result = parse_sql("SELECT * FROM users");
         let json = serde_json::to_value(&result).expect("serialize");
         assert_eq!(json["kind"], "select");
-        assert_eq!(json["table"], "users");
+        // Sprint-393a — `table` is no longer a top-level slot; the FROM
+        // list is the source of truth. The first item's `table` field
+        // holds what used to live on the SelectStatement root.
+        assert_eq!(json["from"][0]["table"], "users");
+        assert_eq!(json["from"][0]["schema"], serde_json::Value::Null);
+        assert_eq!(json["from"][0]["alias"], serde_json::Value::Null);
+        assert_eq!(json["from"][0]["join"]["kind"], "comma");
         assert_eq!(json["columns"]["kind"], "star");
     }
 
     #[test]
     fn smoke_error_serialization_shape() {
-        // Sprint-392 — INSERT is now supported, so pick a still-unsupported
-        // verb (CREATE / GRANT / REVOKE / EXPLAIN / SHOW / WITH / MERGE).
-        let result = parse_sql("CREATE TABLE x (id int)");
+        // Sprint-394 — CREATE/INSERT/UPDATE/DELETE/ALTER/WITH are now
+        // supported. Sprint-395 — GRANT/REVOKE/EXPLAIN/SHOW/SET/COPY/COMMENT
+        // are now supported. Pick a verb still in `is_known_sql_verb` but
+        // not in `is_supported_sql_verb` (MERGE).
+        let result = parse_sql("MERGE INTO users USING source ON foo = bar");
         let json = serde_json::to_value(&result).expect("serialize");
         assert_eq!(json["kind"], "error");
         assert_eq!(json["error_kind"], "unsupported-statement");

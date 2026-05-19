@@ -8,7 +8,7 @@
 //   - dry-run < 100 row → WARN preserved (pendingRdbWarn mount).
 //   - dry-run timeout (2s) → STOP fallback.
 //   - dry-run IPC unsupported / throws → STOP fallback.
-//   - INSERT (WARN but not bounded UPDATE/DELETE) → 단순 WARN, escalation skip.
+//   - INSERT (INFO) → 직접 IPC, escalation skip.
 //   - INFO statement (SELECT) → 직접 IPC, escalation skip.
 //   - DANGER statement (DROP) → STOP confirm 그대로, escalation 분기 도달 X.
 //
@@ -182,9 +182,9 @@ describe("useQueryExecution — Sprint 254 dry-run WARN escalation", () => {
     expect(executeQueryMock).not.toHaveBeenCalled();
   });
 
-  // [AC-254-06e] INSERT (WARN tier but not UPDATE/DELETE) → escalation
-  // skip. Only bounded UPDATE/DELETE probe dry-run (master spec scope).
-  it("[AC-254-06e] INSERT INTO → WARN, dry-run NOT probed (only UPDATE/DELETE escalate)", async () => {
+  // [AC-403-06] INSERT (INFO) → 직접 IPC, warn dialog / dry-run skip.
+  it("[AC-403-06] INSERT INTO → INFO direct IPC (no WARN dialog, no dry-run)", async () => {
+    executeQueryMock.mockResolvedValueOnce(makeDmlResult(1));
     const tab = seedTab("INSERT INTO users (id) VALUES (1)");
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
@@ -193,8 +193,9 @@ describe("useQueryExecution — Sprint 254 dry-run WARN escalation", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.pendingRdbWarn).not.toBeNull();
+      expect(executeQueryMock).toHaveBeenCalledTimes(1);
     });
+    expect(result.current.pendingRdbWarn).toBeNull();
     expect(result.current.pendingRdbConfirm).toBeNull();
     expect(executeQueryDryRunMock).not.toHaveBeenCalled();
   });

@@ -1952,13 +1952,13 @@ export function useQueryExecution({
       // direct IPC 발동 invariant 보존.
       if (decision.action === "allow" && analysis.severity === "warn") {
         hasWarn = true;
-        // Sprint 254 — bounded UPDATE/DELETE 만 escalation 대상. INSERT /
-        // CREATE / ALTER additive 는 dry-run 비용 대비 ROI 낮음.
-        if (analysis.kind === "update" || analysis.kind === "delete") {
+        // Sprint 403 — bounded UPDATE/DELETE 만 escalation 대상.
+        // INSERT 는 info-tier 이라 이 WARN branch 에 들어오지 않는다.
+        if (analysis.kind === "dml-update" || analysis.kind === "dml-delete") {
           escalationCandidates.push({
             stmt,
             reason:
-              analysis.kind === "update"
+              analysis.kind === "dml-update"
                 ? "UPDATE affects 100+ rows (dry-run threshold)"
                 : "DELETE affects 100+ rows (dry-run threshold)",
           });

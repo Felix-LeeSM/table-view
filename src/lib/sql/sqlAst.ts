@@ -1,5 +1,5 @@
 /**
- * Sprint 385 / 391 / 392 — SQL parser frontend facade.
+ * Sprint 385 / 391 / 392 / 393a — SQL parser frontend facade.
  *
  * Bridges the WASM module emitted by `wasm-pack build --target web`
  * (`src/lib/sql/wasm/`) to the rest of the TS codebase. The WASM module
@@ -16,9 +16,18 @@
  * `DELETE FROM <table> [USING] [WHERE] [RETURNING]`. WHERE is the narrow
  * `column-op-literal + AND/OR/NOT/IS NULL` slice; richer expressions
  * surface as `error-kind:'unsupported-expression'` so callers can fall
- * back to regex heuristics. Anything else returns a `SqlParseError`
- * variant. Further widening (SELECT JOIN / IN-list / functions /
- * CREATE / GRANT) is sprint-393+.
+ * back to regex heuristics.
+ *
+ * Sprint-393a widens the **SELECT** grammar with FROM-list (commas /
+ * schema qualifiers / aliases), the JOIN family (INNER/LEFT/RIGHT/FULL/
+ * CROSS + ON/USING), WHERE expression widening (column-column /
+ * BETWEEN / LIKE / ILIKE), GROUP BY, HAVING, ORDER BY [ASC|DESC]
+ * [NULLS FIRST|LAST], and LIMIT [OFFSET]. The new SELECT WHERE / HAVING
+ * / JOIN-ON expression shape is `SqlSelectExpr`; the DML (UPDATE /
+ * DELETE) WHERE continues to use the sprint-392 narrow `SqlWhereExpr`
+ * until sprint-393b unifies the two. The top-level `kind` discriminator
+ * stays `"select"` — downstream consumers that only branched on top-
+ * level kind need no code change.
  *
  * The TS types mirror the Rust `serde::Serialize` output one-for-one —
  * see `src-tauri/sql-parser-core/src/ast.rs`. The tagged-union shape
@@ -27,25 +36,232 @@
 
 // ---- public types ----------------------------------------------------
 
-export type SqlBinaryOp = "=" | "<>" | "!=" | "<" | ">" | "<=" | ">=";
+export type SqlColumns =
+  | { kind: "star" }
+  | { kind: "named"; names: string[] }
+  // Sprint-393b — at least one item is a non-bare-column expression
+  // (CASE / window-function / scalar-subquery / literal). The list
+  // preserves input order.
+  | { kind: "expressions"; items: SqlSelectListItem[] };
 
-export type SqlLiteral =
-  | { kind: "integer"; value: number }
-  | { kind: "string"; value: string };
+export type SqlSelectListItem =
+  | { kind: "star" }
+  | { kind: "column"; reference: SqlColumnRef }
+  | { kind: "expression"; expression: SqlSelectExpr };
 
-export interface SqlWhereClause {
+// ---- sprint-393a SELECT widening types -------------------------------
+
+/**
+ * A column reference — `column` (unqualified) or `table.column`
+ * (qualified). `table` is `null` for unqualified references; the parser
+ * does not resolve aliases or schema scopes, it only records what the
+ * input wrote.
+ */
+export interface SqlColumnRef {
+  table: string | null;
   column: string;
-  op: SqlBinaryOp;
-  literal: SqlLiteral;
 }
 
-export type SqlColumns = { kind: "star" } | { kind: "named"; names: string[] };
+export type SqlLikeCase = "sensitive" | "insensitive";
+
+/**
+ * Sprint-393a widened expression — used by SELECT's WHERE, HAVING, and
+ * JOIN ON predicates. The variant set adds three new primaries over the
+ * sprint-392 narrow `SqlWhereExpr` (which remains in use for DML WHERE
+ * until sprint-393b):
+ *
+ * - `comparison` — column-op-(literal|placeholder|default). The left side
+ *   is a `SqlColumnRef` (qualified or unqualified); the right side is an
+ *   `SqlInsertValue`. This is the same wire shape sprint-392 produced for
+ *   DML WHERE, except the left side is widened from `string` to
+ *   `SqlColumnRef`.
+ * - `column-comparison` — column-op-column (cross-table or same-table).
+ * - `between` — `col BETWEEN low AND high`. The negated `NOT BETWEEN`
+ *   form is encoded as `not` wrapping `between` (no discrete variant).
+ * - `like` — `col LIKE 'pattern'` (`case_sensitivity: "sensitive"`) or
+ *   `col ILIKE 'pattern'` (`"insensitive"`). The negated `NOT LIKE` /
+ *   `NOT ILIKE` forms wrap with `not`.
+ */
+export type SqlSelectExpr =
+  | {
+      kind: "comparison";
+      left: SqlColumnRef;
+      op: SqlCompareOp;
+      value: SqlInsertValue;
+    }
+  | {
+      kind: "column-comparison";
+      left: SqlColumnRef;
+      op: SqlCompareOp;
+      right: SqlColumnRef;
+    }
+  | {
+      kind: "scalar-subquery-comparison";
+      left: SqlColumnRef;
+      op: SqlCompareOp;
+      right: SqlSelectStatement;
+    }
+  | {
+      kind: "between";
+      column: SqlColumnRef;
+      low: SqlInsertValue;
+      high: SqlInsertValue;
+    }
+  | {
+      kind: "like";
+      column: SqlColumnRef;
+      case_sensitivity: SqlLikeCase;
+      pattern: SqlInsertValue;
+    }
+  | { kind: "and"; left: SqlSelectExpr; right: SqlSelectExpr }
+  | { kind: "or"; left: SqlSelectExpr; right: SqlSelectExpr }
+  | { kind: "not"; inner: SqlSelectExpr }
+  | { kind: "is-null"; column: SqlColumnRef }
+  | { kind: "is-not-null"; column: SqlColumnRef }
+  // Sprint-393b — new primaries.
+  | {
+      kind: "in-list";
+      column: SqlColumnRef;
+      values: SqlInsertValue[];
+    }
+  | {
+      kind: "in-subquery";
+      column: SqlColumnRef;
+      statement: SqlSelectStatement;
+    }
+  | { kind: "exists"; statement: SqlSelectStatement }
+  | { kind: "scalar-subquery"; statement: SqlSelectStatement }
+  | {
+      kind: "window-function";
+      name: string;
+      arguments: SqlWindowArgument[];
+      over: SqlOverClause;
+    }
+  | {
+      kind: "case";
+      operand: SqlSelectExpr | null;
+      when_clauses: SqlCaseWhen[];
+      else_clause: SqlSelectExpr | null;
+    }
+  | { kind: "literal"; value: SqlInsertValue }
+  | { kind: "column-ref-expr"; column: SqlColumnRef }
+  | {
+      kind: "expression-comparison";
+      left: SqlSelectExpr;
+      op: SqlCompareOp;
+      value: SqlInsertValue;
+    };
+
+// Sprint-393b — window-function support types --------------------------
+
+export type SqlWindowArgument =
+  | { kind: "star" }
+  | { kind: "column-ref"; reference: SqlColumnRef }
+  | { kind: "literal"; value: SqlLiteralValue }
+  | { kind: "placeholder"; name: string };
+
+export interface SqlOverClause {
+  partition_by: SqlColumnRef[];
+  order_by: SqlOrderingItem[];
+  frame: SqlWindowFrame | null;
+}
+
+export interface SqlWindowFrame {
+  unit: "rows" | "range";
+  start: SqlFrameBound;
+  end: SqlFrameBound | null;
+}
+
+export type SqlFrameBound =
+  | { kind: "unbounded-preceding" }
+  | { kind: "unbounded-following" }
+  | { kind: "current-row" }
+  | { kind: "preceding"; offset: number }
+  | { kind: "following"; offset: number };
+
+export interface SqlCaseWhen {
+  condition: SqlSelectExpr;
+  result: SqlSelectExpr;
+}
+
+/**
+ * A JOIN's `ON <expr>` or `USING (col, …)` predicate. Every JOIN variant
+ * other than `comma` and `cross-join` carries one of these.
+ */
+export type SqlJoinPredicate =
+  | { kind: "on"; expression: SqlSelectExpr }
+  | { kind: "using"; columns: string[] };
+
+/**
+ * How a FROM item attaches to the preceding item. The first FROM item
+ * always carries `comma` (the variant is reused for "no join" so the
+ * AST shape stays uniform). The spec keeps `comma` and `cross-join`
+ * distinct — downstream tooling must accept both shapes (no normalization).
+ */
+export type SqlJoinDescriptor =
+  | { kind: "comma" }
+  | { kind: "inner-join"; predicate: SqlJoinPredicate }
+  | { kind: "left-join"; predicate: SqlJoinPredicate }
+  | { kind: "right-join"; predicate: SqlJoinPredicate }
+  | { kind: "full-join"; predicate: SqlJoinPredicate }
+  | { kind: "cross-join" };
+
+export interface SqlFromItem {
+  /** Schema qualifier for `schema.table`. `null` for bare table names. */
+  schema: string | null;
+  table: string;
+  /** `AS alias` or bare-identifier alias. `null` when omitted. */
+  alias: string | null;
+  join: SqlJoinDescriptor;
+  /**
+   * Sprint-393b — discriminated FROM-item source. For a plain table
+   * reference: `kind="table"` with `schema` + `table` (duplicating the
+   * top-level slots). For `FROM (SELECT ...) AS alias`: `kind="subquery"`
+   * with the nested SELECT body.
+   */
+  source: SqlFromSource;
+}
+
+export type SqlFromSource =
+  | { kind: "table"; schema: string | null; table: string }
+  | { kind: "subquery"; statement: SqlSelectStatement };
+
+export type SqlOrderDirection = "asc" | "desc";
+
+export type SqlNullsPlacement = "first" | "last" | "unspecified";
+
+export interface SqlOrderingItem {
+  column: SqlColumnRef;
+  direction: SqlOrderDirection;
+  nulls: SqlNullsPlacement;
+}
+
+export interface SqlLimitClause {
+  count: SqlInsertValue;
+  offset: SqlInsertValue | null;
+}
 
 export interface SqlSelectStatement {
   kind: "select";
   columns: SqlColumns;
-  table: string;
-  where: SqlWhereClause | null;
+  from: SqlFromItem[];
+  where: SqlSelectExpr | null;
+  group_by: SqlColumnRef[];
+  having: SqlSelectExpr | null;
+  order_by: SqlOrderingItem[];
+  limit: SqlLimitClause | null;
+  /**
+   * Sprint-393b — chained set operations (`UNION` / `UNION ALL` /
+   * `INTERSECT` / `EXCEPT`). Empty when the SELECT is not part of a chain.
+   * Entries are in left-to-right input order — implementations must NOT
+   * normalize or reorder.
+   */
+  set_operation: SqlSetOperationEntry[];
+}
+
+export interface SqlSetOperationEntry {
+  operator: "union" | "union-all" | "intersect" | "except";
+  statement: SqlSelectStatement;
 }
 
 export type SqlParseErrorKind =
@@ -117,12 +333,154 @@ export type SqlAlterAction =
       constraint: string;
       cascade: SqlCascadeBehavior | null;
     }
-  | { kind: "drop-index"; index: string };
+  | { kind: "drop-index"; index: string }
+  // Sprint-394 — additive ALTER actions.
+  | {
+      kind: "add-column";
+      column: SqlColumnDefinition;
+      if_not_exists: boolean;
+    }
+  | {
+      kind: "add-constraint";
+      constraint: SqlTableConstraint;
+    }
+  | { kind: "rename-table"; new_name: string }
+  | { kind: "rename-column"; old_name: string; new_name: string };
 
 export interface SqlAlterTableStatement {
   kind: "alter-table";
   table: string;
   action: SqlAlterAction;
+}
+
+// ---- sprint-394 DDL additive types -----------------------------------
+
+/**
+ * Sprint-394 — schema-qualified table / view / index reference. Mirrors
+ * the sprint-393a FROM-item shape (`schema: string | null` +
+ * `table: string`). CREATE TABLE, CREATE INDEX (`ON <table>`), CREATE
+ * VIEW (the view's own name), ALTER TABLE ADD CONSTRAINT REFERENCES
+ * target, and column-level REFERENCES targets all carry this shape.
+ */
+export interface SqlTableRef {
+  schema: string | null;
+  table: string;
+}
+
+/**
+ * Sprint-394 — column-type discriminated union. The `kind` tag is the
+ * kebab-case lowercase form of the SQL type-name. Vendor-specific
+ * synonyms (INT4 / STRING / DATETIME / LONGTEXT) parse to
+ * `SqlParseError` — the type-name allowlist is explicit in both lexer
+ * and parser.
+ */
+export type SqlColumnType =
+  | { kind: "integer" }
+  | { kind: "bigint" }
+  | { kind: "text" }
+  | { kind: "date" }
+  | { kind: "boolean" }
+  | { kind: "serial" }
+  | { kind: "uuid" }
+  | { kind: "varchar"; length: number }
+  | { kind: "timestamp"; with_time_zone: boolean }
+  | {
+      kind: "numeric";
+      precision: number | null;
+      scale: number | null;
+    };
+
+/**
+ * Sprint-394 — column-level constraint. The optional `name` slot is
+ * populated when the user wrote `CONSTRAINT <name> <body>`; bare
+ * constraints leave it `null`.
+ */
+export interface SqlColumnConstraint {
+  name: string | null;
+  body: SqlColumnConstraintBody;
+}
+
+export type SqlColumnConstraintBody =
+  | { kind: "primary-key" }
+  | { kind: "not-null" }
+  | { kind: "default"; value: SqlInsertValue }
+  | { kind: "unique" }
+  | {
+      kind: "references";
+      table: SqlTableRef;
+      column: string | null;
+    }
+  | { kind: "check"; expression: SqlSelectExpr };
+
+/**
+ * Sprint-394 — table-level constraint. Same `name` + `body` shape as
+ * `SqlColumnConstraint`; the body variants carry a `columns` slot for
+ * `primary-key` / `unique` / `references`. `check` carries only an
+ * expression (the predicate already names columns).
+ */
+export interface SqlTableConstraint {
+  name: string | null;
+  body: SqlTableConstraintBody;
+}
+
+export type SqlTableConstraintBody =
+  | { kind: "primary-key"; columns: string[] }
+  | { kind: "unique"; columns: string[] }
+  | {
+      kind: "references";
+      columns: string[];
+      target_table: SqlTableRef;
+      /** Empty when the user wrote bare `REFERENCES other` with no
+       *  parenthesized target column list. */
+      target_columns: string[];
+    }
+  | { kind: "check"; expression: SqlSelectExpr };
+
+/**
+ * Sprint-394 — one column definition in a CREATE TABLE / ALTER TABLE
+ * ADD COLUMN list. `source_index` is the zero-based ordinal of this
+ * column in the source list — set by the parser, not the user.
+ */
+export interface SqlColumnDefinition {
+  name: string;
+  data_type: SqlColumnType;
+  constraints: SqlColumnConstraint[];
+  source_index: number;
+}
+
+export interface SqlCreateTableStatement {
+  kind: "create-table";
+  table: SqlTableRef;
+  if_not_exists: boolean;
+  columns: SqlColumnDefinition[];
+  table_constraints: SqlTableConstraint[];
+}
+
+export interface SqlCreateIndexStatement {
+  kind: "create-index";
+  unique: boolean;
+  if_not_exists: boolean;
+  name: string;
+  table: SqlTableRef;
+  columns: string[];
+}
+
+/**
+ * Sprint-394 — CREATE VIEW body. The two body shapes match the AST
+ * `CreateViewBody` enum: a plain SELECT (with optional set-operation
+ * chain) or a CTE-wrapped SELECT (`WITH t AS (...) SELECT ...`). The
+ * discriminator uses the same kebab-case `kind` tag scheme as the rest
+ * of the AST.
+ */
+export type SqlCreateViewBody =
+  | (SqlSelectStatement & { kind: "select" })
+  | (SqlWithStatement & { kind: "with" });
+
+export interface SqlCreateViewStatement {
+  kind: "create-view";
+  or_replace: boolean;
+  name: SqlTableRef;
+  body: SqlCreateViewBody;
 }
 
 // ---- sprint-392 DML write triad types --------------------------------
@@ -148,18 +506,13 @@ export type SqlInsertValue =
 
 export type SqlCompareOp = "eq" | "ne" | "lt" | "le" | "gt" | "ge";
 
-export type SqlWhereExpr =
-  | {
-      kind: "comparison";
-      column: string;
-      op: SqlCompareOp;
-      value: SqlInsertValue;
-    }
-  | { kind: "and"; left: SqlWhereExpr; right: SqlWhereExpr }
-  | { kind: "or"; left: SqlWhereExpr; right: SqlWhereExpr }
-  | { kind: "not"; inner: SqlWhereExpr }
-  | { kind: "is-null"; column: string }
-  | { kind: "is-not-null"; column: string };
+/**
+ * Sprint-393b — DML WHERE migrates to the unified `SqlSelectExpr` shape.
+ * `SqlWhereExpr` is preserved as a type alias for backwards compatibility
+ * (downstream callers may still import the name), but the union expanded
+ * to match the wider `SqlSelectExpr` shape.
+ */
+export type SqlWhereExpr = SqlSelectExpr;
 
 export type SqlInsertSource =
   | { kind: "values"; rows: SqlInsertValue[][] }
@@ -205,14 +558,228 @@ export interface SqlDeleteStatement {
   returning: string[];
 }
 
+/**
+ * Sprint-393b — `WITH [RECURSIVE] cte AS (...) <inner-statement>`. The
+ * inner statement is one of SELECT / INSERT / UPDATE / DELETE (nested
+ * WITH is rejected at parse time, out of scope this sprint).
+ */
+export interface SqlWithStatement {
+  kind: "with";
+  recursive: boolean;
+  ctes: SqlCteDefinition[];
+  inner_statement: SqlWithInner;
+}
+
+/**
+ * Sprint-393b — the four statement variants accepted as the inner body
+ * of a `WITH`. Serialized with a `kind` discriminator matching the Rust
+ * `WithInner` enum.
+ */
+export type SqlWithInner =
+  | SqlSelectStatement
+  | SqlInsertStatement
+  | SqlUpdateStatement
+  | SqlDeleteStatement;
+
+export interface SqlCteDefinition {
+  name: string;
+  /** Empty list when the user did not write `(col, col, ...)`. */
+  columns: string[];
+  body: SqlSelectStatement;
+}
+
+// ---- sprint-395 misc grammar types -----------------------------------
+
+/**
+ * Sprint-395 — One privilege tag in a GRANT/REVOKE statement. `select`,
+ * `update`, and `references` may carry a `columns` slot (empty when the
+ * privilege applies to all columns of the table). `all` represents both
+ * `ALL` and `ALL PRIVILEGES`.
+ */
+export type SqlPrivilegeTag =
+  | { kind: "all" }
+  | { kind: "select"; columns: string[] }
+  | { kind: "insert" }
+  | { kind: "update"; columns: string[] }
+  | { kind: "delete" }
+  | { kind: "truncate" }
+  | { kind: "references"; columns: string[] }
+  | { kind: "trigger" }
+  | { kind: "usage" }
+  | { kind: "execute" };
+
+/**
+ * Sprint-395 — GRANT/REVOKE object target. `all-in-schema` represents
+ * the PG `ALL TABLES IN SCHEMA name` shorthand.
+ */
+export type SqlGrantObject =
+  | { kind: "table"; tables: SqlTableRef[] }
+  | { kind: "schema"; schemas: string[] }
+  | { kind: "database"; databases: string[] }
+  | { kind: "sequence"; sequences: string[] }
+  | { kind: "function"; functions: string[] }
+  | { kind: "all-in-schema"; schema_name: string };
+
+/**
+ * Sprint-395 — grantee / revokee reference. Plain identifier roles get
+ * `kind="role"`. `PUBLIC` gets `kind="public"`. Both `CURRENT_USER` and
+ * `SESSION_USER` normalize to `kind="current-session"`.
+ */
+export type SqlRoleRef =
+  | { kind: "role"; name: string }
+  | { kind: "public" }
+  | { kind: "current-session" };
+
+export interface SqlGrantStatement {
+  kind: "grant";
+  privileges: SqlPrivilegeTag[];
+  object: SqlGrantObject;
+  grantees: SqlRoleRef[];
+  with_grant_option: boolean;
+}
+
+export interface SqlRevokeStatement {
+  kind: "revoke";
+  privileges: SqlPrivilegeTag[];
+  object: SqlGrantObject;
+  revokees: SqlRoleRef[];
+  grant_option_for: boolean;
+  cascade: SqlCascadeBehavior | null;
+}
+
+/**
+ * Sprint-395 — EXPLAIN/COPY option pair. The `name` slot is normalized to
+ * lowercase by the parser. The `value` slot uses the sprint-392
+ * `SqlInsertValue` shape.
+ */
+export interface SqlExplainOption {
+  name: string;
+  value: SqlInsertValue;
+}
+
+/**
+ * Sprint-395 — statement variants accepted as the inner body of an
+ * EXPLAIN. The discriminator uses kebab-case `kind` tags matching the
+ * Rust `ExplainInner` enum.
+ */
+export type SqlExplainInner =
+  | SqlSelectStatement
+  | SqlInsertStatement
+  | SqlUpdateStatement
+  | SqlDeleteStatement
+  | SqlWithStatement;
+
+export interface SqlExplainStatement {
+  kind: "explain";
+  analyze: boolean;
+  verbose: boolean;
+  options: SqlExplainOption[];
+  inner_statement: SqlExplainInner;
+}
+
+/**
+ * Sprint-395 — SHOW target variant. The `variable` form carries the
+ * variable name (possibly dotted); the `tables` form carries an optional
+ * schema qualifier.
+ */
+export type SqlShowTarget =
+  | { kind: "variable"; name: string }
+  | { kind: "tables"; schema: string | null }
+  | { kind: "databases" }
+  | { kind: "schemas" };
+
+export interface SqlShowStatement {
+  kind: "show";
+  target: SqlShowTarget;
+}
+
+export type SqlSetScope = "session" | "local" | "default";
+
+/**
+ * Sprint-395 — SET RHS. Distinct from `SqlInsertValue` so bare-identifier
+ * SET targets (`SET search_path = public`) do not pollute the placeholder
+ * surface used by DML/SELECT.
+ */
+export type SqlSetValue =
+  | { kind: "literal"; value: SqlLiteralValue }
+  | { kind: "default" }
+  | { kind: "identifier"; name: string };
+
+export interface SqlSetStatement {
+  kind: "set-stmt";
+  scope: SqlSetScope;
+  name: string;
+  value: SqlSetValue;
+}
+
+export type SqlCopyDirection = "from" | "to";
+
+export type SqlCopyTarget =
+  | { kind: "table"; table: SqlTableRef; columns: string[] }
+  | { kind: "select"; statement: SqlSelectStatement };
+
+export type SqlCopySource =
+  | { kind: "file"; path: string }
+  | { kind: "stdin" }
+  | { kind: "stdout" };
+
+export interface SqlCopyStatement {
+  kind: "copy";
+  direction: SqlCopyDirection;
+  target: SqlCopyTarget;
+  source: SqlCopySource;
+  options: SqlExplainOption[];
+}
+
+/**
+ * Sprint-395 — COMMENT object target. `column` carries `table` + `column`;
+ * `constraint` carries `table` + `constraint`; the rest carry a single
+ * `name` slot.
+ */
+export type SqlCommentTarget =
+  | { kind: "table"; name: string }
+  | { kind: "column"; table: string; column: string }
+  | { kind: "view"; name: string }
+  | { kind: "index"; name: string }
+  | { kind: "schema"; name: string }
+  | { kind: "sequence"; name: string }
+  | { kind: "database"; name: string }
+  | { kind: "constraint"; table: string; constraint: string };
+
+/**
+ * Sprint-395 — COMMENT text. The `null` variant captures `IS NULL` (clear
+ * the comment); `string` carries the literal text.
+ */
+export type SqlCommentText =
+  | { kind: "string"; value: string }
+  | { kind: "null" };
+
+export interface SqlCommentStatement {
+  kind: "comment";
+  target: SqlCommentTarget;
+  text: SqlCommentText;
+}
+
 export type SqlParseResult =
   | SqlSelectStatement
   | SqlDropStatement
   | SqlTruncateStatement
   | SqlAlterTableStatement
+  | SqlCreateTableStatement
+  | SqlCreateIndexStatement
+  | SqlCreateViewStatement
   | SqlInsertStatement
   | SqlUpdateStatement
   | SqlDeleteStatement
+  | SqlWithStatement
+  // Sprint-395 — misc grammar top-levels.
+  | SqlGrantStatement
+  | SqlRevokeStatement
+  | SqlExplainStatement
+  | SqlShowStatement
+  | SqlSetStatement
+  | SqlCopyStatement
+  | SqlCommentStatement
   | SqlParseError;
 
 // ---- WASM bridge -----------------------------------------------------
@@ -337,6 +904,20 @@ const SQL_PARSE_RESULT_KINDS = new Set<string>([
   "insert",
   "update",
   "delete",
+  // Sprint-393b — CTE-wrap top-level.
+  "with",
+  // Sprint-394 — DDL additive top-levels.
+  "create-table",
+  "create-index",
+  "create-view",
+  // Sprint-395 — misc grammar top-levels.
+  "grant",
+  "revoke",
+  "explain",
+  "show",
+  "set-stmt",
+  "copy",
+  "comment",
   "error",
 ]);
 

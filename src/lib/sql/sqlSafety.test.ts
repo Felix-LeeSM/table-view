@@ -125,6 +125,119 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           action: { kind: "drop-index", index: g(alterIdxMatch, 2) },
         };
       }
+      // ── sprint-394 DDL additive: ALTER TABLE … ADD / RENAME ──────
+      // The mock only checks the prefix; full AST shape stays minimal —
+      // sqlSafety's mapper inspects `action.kind` only.
+      const alterAddColMatch = trimmed.match(
+        /^ALTER\s+TABLE\s+\S+?\s+ADD\s+COLUMN\b/i,
+      );
+      if (alterAddColMatch) {
+        return {
+          kind: "alter-table",
+          table: "stub",
+          action: {
+            kind: "add-column",
+            column: {
+              name: "stub",
+              data_type: { kind: "text" },
+              constraints: [],
+              source_index: 0,
+            },
+            if_not_exists: false,
+          },
+        };
+      }
+      const alterAddCstMatch = trimmed.match(
+        /^ALTER\s+TABLE\s+\S+?\s+ADD\s+(CONSTRAINT|PRIMARY|UNIQUE|FOREIGN|CHECK)\b/i,
+      );
+      if (alterAddCstMatch) {
+        return {
+          kind: "alter-table",
+          table: "stub",
+          action: {
+            kind: "add-constraint",
+            constraint: {
+              name: null,
+              body: { kind: "primary-key", columns: ["stub"] },
+            },
+          },
+        };
+      }
+      const alterRenameColMatch = trimmed.match(
+        /^ALTER\s+TABLE\s+\S+?\s+RENAME\s+COLUMN\b/i,
+      );
+      if (alterRenameColMatch) {
+        return {
+          kind: "alter-table",
+          table: "stub",
+          action: { kind: "rename-column", old_name: "a", new_name: "b" },
+        };
+      }
+      const alterRenameMatch = trimmed.match(
+        /^ALTER\s+TABLE\s+\S+?\s+RENAME\s+TO\b/i,
+      );
+      if (alterRenameMatch) {
+        return {
+          kind: "alter-table",
+          table: "stub",
+          action: { kind: "rename-table", new_name: "stub" },
+        };
+      }
+      // ── sprint-394 DDL additive: CREATE TABLE / INDEX / VIEW ─────
+      if (/^CREATE\s+TABLE\b/i.test(trimmed)) {
+        return {
+          kind: "create-table",
+          table: { schema: null, table: "stub" },
+          if_not_exists: false,
+          columns: [
+            {
+              name: "id",
+              data_type: { kind: "integer" },
+              constraints: [],
+              source_index: 0,
+            },
+          ],
+          table_constraints: [],
+        };
+      }
+      if (/^CREATE\s+(UNIQUE\s+)?INDEX\b/i.test(trimmed)) {
+        const unique = /^CREATE\s+UNIQUE\s+INDEX\b/i.test(trimmed);
+        return {
+          kind: "create-index",
+          unique,
+          if_not_exists: false,
+          name: "stub",
+          table: { schema: null, table: "stub" },
+          columns: ["stub"],
+        };
+      }
+      if (/^CREATE\s+(OR\s+REPLACE\s+)?VIEW\b/i.test(trimmed)) {
+        const or_replace = /^CREATE\s+OR\s+REPLACE\s+VIEW\b/i.test(trimmed);
+        return {
+          kind: "create-view",
+          or_replace,
+          name: { schema: null, table: "stub" },
+          body: {
+            kind: "select",
+            columns: { kind: "star" },
+            from: [
+              {
+                schema: null,
+                table: "stub",
+                alias: null,
+                join: { kind: "comma" },
+                source: { kind: "table", schema: null, table: "stub" },
+              },
+            ],
+            where: null,
+            group_by: [],
+            having: null,
+            order_by: [],
+            limit: null,
+            set_operation: [],
+          },
+        };
+      }
       // ── sprint-392 DML write triad ─────────────────────────────
       // INSERT — match very loosely; sqlSafety only checks `kind` so
       // the row payload can be a stub.
@@ -148,10 +261,12 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           table: "stub",
           assignments: [],
           from: [],
+          // Sprint-393b — DML WHERE uses unified `SqlSelectExpr` shape
+          // (left is a `SqlColumnRef`, not a bare `string`).
           where_clause: hasWhere
             ? {
                 kind: "comparison",
-                column: "id",
+                left: { table: null, column: "id" },
                 op: "eq",
                 value: {
                   kind: "literal",
@@ -171,7 +286,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           where_clause: hasWhere
             ? {
                 kind: "comparison",
-                column: "id",
+                left: { table: null, column: "id" },
                 op: "eq",
                 value: {
                   kind: "literal",
@@ -182,16 +297,294 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           returning: [],
         };
       }
-      // SELECT — return a `select` AST stub for completeness; non-DDL
-      // paths in sqlSafety still go through the regex matcher because
-      // `ddlDestructiveAnalysisFromAst` returns null for `select`.
+      // SELECT — sprint-393a routes SELECT through the AST. Return the
+      // widened SELECT shape (FROM list, optional clause slots all null /
+      // empty) so the runtime guard accepts the value and
+      // `statementAnalysisFromAst` returns `kind: "select"` / `info`.
       if (/^SELECT\b/.test(upper)) {
         return {
           kind: "select",
           columns: { kind: "star" },
-          table: "stub",
+          from: [
+            {
+              schema: null,
+              table: "stub",
+              alias: null,
+              join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "stub" },
+            },
+          ],
           where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [],
         };
+      }
+      // Sprint-393b — WITH CTE wrap. The mock detects the inner verb
+      // (SELECT / INSERT / UPDATE / DELETE) by peeking past the CTE list
+      // and produces a `with` parse result with the inner statement
+      // shaped to match the inner verb. The classifier under test is
+      // `statementAnalysisFromAst`'s `with` recursion.
+      if (/^WITH\b/i.test(trimmed)) {
+        // Strip the WITH prefix and re-route the inner statement
+        // through this same mock so we get a real inner-statement shape.
+        // Match: WITH [RECURSIVE]? <ident> AS (...) <inner-tokens>
+        const m = trimmed.match(
+          /^WITH\s+(?:RECURSIVE\s+)?[A-Z_][A-Z0-9_]*\s*(?:\([^)]*\)\s*)?AS\s*\([^)]*\)\s*(.+)$/i,
+        );
+        if (m && m[1]) {
+          const innerSql = m[1].trim();
+          const innerUpper = innerSql.toUpperCase();
+          const innerResult = (() => {
+            if (innerUpper.startsWith("INSERT")) {
+              return {
+                kind: "insert",
+                table: "stub",
+                columns: [],
+                source: { kind: "values", rows: [[]] },
+                on_conflict: null,
+                returning: [],
+              };
+            }
+            if (innerUpper.startsWith("UPDATE")) {
+              const hasWhere = /\bWHERE\b/i.test(innerSql);
+              return {
+                kind: "update",
+                table: "stub",
+                assignments: [],
+                from: [],
+                where_clause: hasWhere
+                  ? {
+                      kind: "comparison",
+                      left: { table: null, column: "id" },
+                      op: "eq",
+                      value: {
+                        kind: "literal",
+                        value: { kind: "integer", value: 1 },
+                      },
+                    }
+                  : null,
+                returning: [],
+              };
+            }
+            if (innerUpper.startsWith("DELETE")) {
+              const hasWhere = /\bWHERE\b/i.test(innerSql);
+              return {
+                kind: "delete",
+                table: "stub",
+                using: [],
+                where_clause: hasWhere
+                  ? {
+                      kind: "comparison",
+                      left: { table: null, column: "id" },
+                      op: "eq",
+                      value: {
+                        kind: "literal",
+                        value: { kind: "integer", value: 1 },
+                      },
+                    }
+                  : null,
+                returning: [],
+              };
+            }
+            return {
+              kind: "select",
+              columns: { kind: "star" },
+              from: [
+                {
+                  schema: null,
+                  table: "stub",
+                  alias: null,
+                  join: { kind: "comma" },
+                  source: { kind: "table", schema: null, table: "stub" },
+                },
+              ],
+              where: null,
+              group_by: [],
+              having: null,
+              order_by: [],
+              limit: null,
+              set_operation: [],
+            };
+          })();
+          return {
+            kind: "with",
+            recursive: false,
+            ctes: [],
+            inner_statement: innerResult,
+          };
+        }
+      }
+      // ── sprint-395 misc grammar mocks ─────────────────────────────
+      // GRANT — match very loosely; sqlSafety only checks `kind` so the
+      // privileges/object/grantees shapes can be stubs.
+      if (/^GRANT\b/i.test(trimmed)) {
+        return {
+          kind: "grant",
+          privileges: [{ kind: "select", columns: [] }],
+          object: { kind: "table", tables: [{ schema: null, table: "stub" }] },
+          grantees: [{ kind: "role", name: "stub" }],
+          with_grant_option: false,
+        };
+      }
+      if (/^REVOKE\b/i.test(trimmed)) {
+        return {
+          kind: "revoke",
+          privileges: [{ kind: "select", columns: [] }],
+          object: { kind: "table", tables: [{ schema: null, table: "stub" }] },
+          revokees: [{ kind: "role", name: "stub" }],
+          grant_option_for: false,
+          cascade: null,
+        };
+      }
+      // SHOW — sqlSafety only checks `kind`; target shape is a stub.
+      if (/^SHOW\b/i.test(trimmed)) {
+        return {
+          kind: "show",
+          target: { kind: "variable", name: "stub" },
+        };
+      }
+      // SET — sqlSafety only checks `kind`. Note `Token::Set` is already
+      // a keyword (sprint-392 UPDATE SET) — top-level SET still matches.
+      if (/^SET\b/i.test(trimmed)) {
+        return {
+          kind: "set-stmt",
+          scope: "default",
+          name: "stub",
+          value: {
+            kind: "literal",
+            value: { kind: "string", value: "stub" },
+          },
+        };
+      }
+      // COPY — direction-aware mock so X08/X09 distinguish FROM vs TO.
+      if (/^COPY\b/i.test(trimmed)) {
+        const isTo = /\bTO\b/i.test(trimmed);
+        return {
+          kind: "copy",
+          direction: isTo ? "to" : "from",
+          target: {
+            kind: "table",
+            table: { schema: null, table: "stub" },
+            columns: [],
+          },
+          source: isTo ? { kind: "stdout" } : { kind: "stdin" },
+          options: [],
+        };
+      }
+      // COMMENT — sqlSafety only checks `kind`.
+      if (/^COMMENT\b/i.test(trimmed)) {
+        return {
+          kind: "comment",
+          target: { kind: "table", name: "stub" },
+          text: { kind: "string", value: "stub" },
+        };
+      }
+      // EXPLAIN — wrap with the appropriate inner shape so the
+      // EXPLAIN-inheritance branch (D1) is exercised. The mock peeks at
+      // the inner verb to construct the inner_statement shape.
+      if (/^EXPLAIN\b/i.test(trimmed)) {
+        // Strip the EXPLAIN [ANALYZE] [VERBOSE] [(opts)] prefix.
+        const innerSqlMatch = trimmed.match(
+          /^EXPLAIN(?:\s+ANALYZE)?(?:\s+VERBOSE)?(?:\s*\([^)]*\))?\s+(.+)$/i,
+        );
+        if (innerSqlMatch && innerSqlMatch[1]) {
+          const innerSql = innerSqlMatch[1].trim();
+          const innerUpper = innerSql.toUpperCase();
+          // Reject the BEGIN smoke-test inner verb so the regex fallback
+          // exercises (AC-395-X11). Any other inner is fed back through
+          // the mock — recursion via a wrapping function is awkward in
+          // a vi.mock, so we inline the cases we care about.
+          if (innerUpper.startsWith("BEGIN")) {
+            return {
+              kind: "error",
+              error_kind: "unsupported-statement",
+              message: "sprint-395 mock: EXPLAIN BEGIN fallthrough",
+              at: 0,
+            };
+          }
+          // Build inner statement shape based on first verb.
+          let inner: unknown;
+          if (innerUpper.startsWith("INSERT")) {
+            inner = {
+              kind: "insert",
+              table: "stub",
+              columns: [],
+              source: { kind: "values", rows: [[]] },
+              on_conflict: null,
+              returning: [],
+            };
+          } else if (innerUpper.startsWith("UPDATE")) {
+            const hasWhere = /\bWHERE\b/i.test(innerSql);
+            inner = {
+              kind: "update",
+              table: "stub",
+              assignments: [],
+              from: [],
+              where_clause: hasWhere
+                ? {
+                    kind: "comparison",
+                    left: { table: null, column: "id" },
+                    op: "eq",
+                    value: {
+                      kind: "literal",
+                      value: { kind: "integer", value: 1 },
+                    },
+                  }
+                : null,
+              returning: [],
+            };
+          } else if (innerUpper.startsWith("DELETE")) {
+            const hasWhere = /\bWHERE\b/i.test(innerSql);
+            inner = {
+              kind: "delete",
+              table: "stub",
+              using: [],
+              where_clause: hasWhere
+                ? {
+                    kind: "comparison",
+                    left: { table: null, column: "id" },
+                    op: "eq",
+                    value: {
+                      kind: "literal",
+                      value: { kind: "integer", value: 1 },
+                    },
+                  }
+                : null,
+              returning: [],
+            };
+          } else {
+            // Default: SELECT.
+            inner = {
+              kind: "select",
+              columns: { kind: "star" },
+              from: [
+                {
+                  schema: null,
+                  table: "stub",
+                  alias: null,
+                  join: { kind: "comma" },
+                  source: { kind: "table", schema: null, table: "stub" },
+                },
+              ],
+              where: null,
+              group_by: [],
+              having: null,
+              order_by: [],
+              limit: null,
+              set_operation: [],
+            };
+          }
+          return {
+            kind: "explain",
+            analyze: /\bANALYZE\b/i.test(trimmed),
+            verbose: /\bVERBOSE\b/i.test(trimmed),
+            options: [],
+            inner_statement: inner,
+          };
+        }
       }
       // Anything else → error variant; sqlSafety's AST callsite then
       // falls through to its legacy regex matcher.
@@ -208,7 +601,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
 describe("sqlSafety.analyzeStatement", () => {
   it("[AC-185-01a] DELETE without WHERE → danger", () => {
     const a = analyzeStatement("DELETE FROM users");
-    expect(a.kind).toBe("delete");
+    expect(a.kind).toBe("dml-delete");
     expect(a.severity).toBe("danger");
     expect(a.reasons).toEqual(["DELETE without WHERE clause"]);
     expect(isDangerous(a)).toBe(true);
@@ -216,7 +609,7 @@ describe("sqlSafety.analyzeStatement", () => {
 
   it("[AC-185-01b] DELETE with WHERE → warn (Sprint 254: bounded write)", () => {
     const a = analyzeStatement("DELETE FROM users WHERE id = 1");
-    expect(a.kind).toBe("delete");
+    expect(a.kind).toBe("dml-delete");
     expect(a.severity).toBe("warn");
     expect(a.reasons).toEqual([]);
     expect(isDangerous(a)).toBe(false);
@@ -224,14 +617,14 @@ describe("sqlSafety.analyzeStatement", () => {
 
   it("[AC-185-01c] UPDATE without WHERE → danger", () => {
     const a = analyzeStatement("UPDATE users SET active = false");
-    expect(a.kind).toBe("update");
+    expect(a.kind).toBe("dml-update");
     expect(a.severity).toBe("danger");
     expect(a.reasons).toEqual(["UPDATE without WHERE clause"]);
   });
 
   it("[AC-185-01d] UPDATE with WHERE → warn (Sprint 254: bounded write)", () => {
     const a = analyzeStatement("UPDATE users SET active = false WHERE id = 1");
-    expect(a.kind).toBe("update");
+    expect(a.kind).toBe("dml-update");
     expect(a.severity).toBe("warn");
   });
 
@@ -256,10 +649,10 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(a.reasons).toEqual(["TRUNCATE"]);
   });
 
-  it("[AC-185-01h] INSERT INTO → warn (Sprint 254: write surface)", () => {
+  it("[AC-185-01h] INSERT INTO → dml-insert / info (Sprint 403)", () => {
     const a = analyzeStatement("INSERT INTO users (id, name) VALUES (1, 'a')");
-    expect(a.kind).toBe("insert");
-    expect(a.severity).toBe("warn");
+    expect(a.kind).toBe("dml-insert");
+    expect(a.severity).toBe("info");
   });
 
   it("[AC-185-01i] SELECT → info (Sprint 254: read tier)", () => {
@@ -270,7 +663,7 @@ describe("sqlSafety.analyzeStatement", () => {
 
   it("[AC-185-01j] case-insensitive (delete from t) → danger", () => {
     const a = analyzeStatement("delete from users");
-    expect(a.kind).toBe("delete");
+    expect(a.kind).toBe("dml-delete");
     expect(a.severity).toBe("danger");
   });
 
@@ -278,13 +671,13 @@ describe("sqlSafety.analyzeStatement", () => {
     const a = analyzeStatement(
       "-- this comment hides nothing\nDELETE FROM users -- inline\n",
     );
-    expect(a.kind).toBe("delete");
+    expect(a.kind).toBe("dml-delete");
     expect(a.severity).toBe("danger");
 
     const b = analyzeStatement(
       "/* block comment */ DELETE FROM users WHERE id = 1",
     );
-    expect(b.kind).toBe("delete");
+    expect(b.kind).toBe("dml-delete");
     // Sprint 254 — bounded DELETE WHERE is now WARN (was safe).
     expect(b.severity).toBe("warn");
   });
@@ -293,7 +686,7 @@ describe("sqlSafety.analyzeStatement", () => {
     const a = analyzeStatement(
       "DELETE FROM t WHERE id IN (SELECT id FROM u WHERE flag = 1)",
     );
-    expect(a.kind).toBe("delete");
+    expect(a.kind).toBe("dml-delete");
     // Sprint 254 — bounded DELETE WHERE = WARN.
     expect(a.severity).toBe("warn");
   });
@@ -307,13 +700,19 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(a.severity).toBe("info");
   });
 
-  it("ALTER additive / CREATE → ddl-other / warn (Sprint 254)", () => {
+  it("ALTER additive / CREATE → sprint-394 classifications (was ddl-other / warn before sprint-394)", () => {
+    // Sprint-394 — ALTER ADD COLUMN is now `ddl-alter-add` / warn with
+    // a pinned reason (D2). CREATE INDEX is `ddl-create` / info / no
+    // reasons. The pre-sprint-394 baseline classified both as
+    // `ddl-other` / warn / no reasons.
     const a = analyzeStatement("ALTER TABLE users ADD COLUMN x int");
-    expect(a.kind).toBe("ddl-other");
+    expect(a.kind).toBe("ddl-alter-add");
     expect(a.severity).toBe("warn");
+    expect(a.reasons).toEqual(["ALTER TABLE — ADD COLUMN (schema 변경)"]);
     const b = analyzeStatement("CREATE INDEX idx_x ON users (x)");
-    expect(b.kind).toBe("ddl-other");
-    expect(b.severity).toBe("warn");
+    expect(b.kind).toBe("ddl-create");
+    expect(b.severity).toBe("info");
+    expect(b.reasons).toEqual([]);
   });
 
   // -------------------------------------------------------------------------
@@ -351,12 +750,14 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(a.reasons).toEqual(["ALTER TABLE DROP CONSTRAINT"]);
   });
 
-  it("[AC-187-01e] ALTER TABLE … ADD COLUMN stays ddl-other / warn (Sprint 254)", () => {
+  it("[AC-187-01e] ALTER TABLE … ADD COLUMN is ddl-alter-add / warn / pinned reason (Sprint 394)", () => {
+    // Sprint 187: classified as `ddl-other` / warn / [].
+    // Sprint 394 (D2): kind moves to `ddl-alter-add`, severity stays
+    // `warn`, and the reasons list now carries the pinned D2 string.
     const a = analyzeStatement("ALTER TABLE users ADD COLUMN nickname text");
-    expect(a.kind).toBe("ddl-other");
-    // Sprint 254 — additive ALTER is WARN (write surface).
+    expect(a.kind).toBe("ddl-alter-add");
     expect(a.severity).toBe("warn");
-    expect(a.reasons).toEqual([]);
+    expect(a.reasons).toEqual(["ALTER TABLE — ADD COLUMN (schema 변경)"]);
     expect(isDangerous(a)).toBe(false);
   });
 
@@ -364,7 +765,7 @@ describe("sqlSafety.analyzeStatement", () => {
   // Sprint 254 (2026-05-09) — 3-tier classifier corpus. ADR 0023 grill Q2-(a)
   // "3-tier severity 채택" 의 정식 분류:
   //   - INFO: SELECT / WITH …SELECT (no DML CTE) / EXPLAIN / SHOW / DESCRIBE / DESC.
-  //   - WARN: INSERT / UPDATE WHERE / DELETE WHERE / CREATE / ALTER additive.
+  //   - WARN: UPDATE WHERE / DELETE WHERE / ALTER additive.
   //   - STOP (danger): DROP / TRUNCATE / WHERE-less DELETE·UPDATE / ALTER DROP /
   //     GRANT / REVOKE.
   // DML CTE (`WITH x AS (UPDATE …) SELECT *`) 는 INFO 가 아니어야 한다 — wrapped
@@ -391,9 +792,13 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(a.severity).toBe("info");
     });
 
-    it("[AC-254-01d] SHOW TABLES → info", () => {
+    it("[AC-254-01d] SHOW TABLES → config-read / info (sprint-395 update)", () => {
+      // Pre-sprint-395: kind="info" (legacy regex bucket).
+      // Sprint-395 (X06 / D4): SHOW classifies as `config-read` with
+      // severity:"info" — separate metadata-read kind from EXPLAIN/DESC.
+      // `isInfoStatement` continues to return true (severity-based).
       const a = analyzeStatement("SHOW TABLES");
-      expect(a.kind).toBe("info");
+      expect(a.kind).toBe("config-read");
       expect(a.severity).toBe("info");
     });
 
@@ -410,40 +815,46 @@ describe("sqlSafety.analyzeStatement", () => {
     });
 
     // ── WARN tier ─────────────────────────────────────────────────────────
-    it("[AC-254-02a] INSERT INTO → warn", () => {
+    it("[AC-403-01] INSERT INTO → dml-insert / info", () => {
       const a = analyzeStatement("INSERT INTO users (id) VALUES (1)");
-      expect(a.kind).toBe("insert");
-      expect(a.severity).toBe("warn");
+      expect(a.kind).toBe("dml-insert");
+      expect(a.severity).toBe("info");
     });
 
     it("[AC-254-02b] UPDATE … WHERE → warn (bounded)", () => {
       const a = analyzeStatement("UPDATE users SET name = 'a' WHERE id = 1");
-      expect(a.kind).toBe("update");
+      expect(a.kind).toBe("dml-update");
       expect(a.severity).toBe("warn");
     });
 
     it("[AC-254-02c] DELETE … WHERE → warn (bounded)", () => {
       const a = analyzeStatement("DELETE FROM users WHERE id = 1");
-      expect(a.kind).toBe("delete");
+      expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("warn");
     });
 
-    it("[AC-254-02d] CREATE TABLE → warn", () => {
+    it("[AC-254-02d] CREATE TABLE → ddl-create / info (sprint-394 update)", () => {
+      // Pre-sprint-394: classified as `ddl-other` / warn. Sprint-394
+      // moves CREATE TABLE / INDEX / VIEW to `ddl-create` / info per
+      // the contract — these are non-destructive constructions and do
+      // not require a warn dialog.
       const a = analyzeStatement("CREATE TABLE foo (id int)");
-      expect(a.kind).toBe("ddl-other");
-      expect(a.severity).toBe("warn");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
     });
 
-    it("[AC-254-02e] ALTER TABLE … ADD COLUMN (additive) → warn", () => {
+    it("[AC-254-02e] ALTER TABLE … ADD COLUMN (additive) → ddl-alter-add / warn (sprint-394 update)", () => {
+      // Sprint-394 kind change — kept under the same `warn` tier (the
+      // schema-changing nature of ADD COLUMN warrants the warn dialog).
       const a = analyzeStatement("ALTER TABLE users ADD COLUMN nickname text");
-      expect(a.kind).toBe("ddl-other");
+      expect(a.kind).toBe("ddl-alter-add");
       expect(a.severity).toBe("warn");
     });
 
-    it("[AC-254-02f] CREATE INDEX → warn", () => {
+    it("[AC-254-02f] CREATE INDEX → ddl-create / info (sprint-394 update)", () => {
       const a = analyzeStatement("CREATE INDEX idx_x ON users (x)");
-      expect(a.kind).toBe("ddl-other");
-      expect(a.severity).toBe("warn");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
     });
 
     // ── STOP tier (danger 보존) ───────────────────────────────────────────
@@ -472,16 +883,22 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(a.severity).toBe("danger");
     });
 
-    it("[AC-254-03f] GRANT → danger", () => {
+    it("[AC-254-03f] GRANT → permission-change / warn (sprint-395 update)", () => {
+      // Pre-sprint-395: ddl-other / danger.
+      // Sprint-395 (X01 / D5): permission-change / warn / pinned reason.
       const a = analyzeStatement("GRANT SELECT ON users TO bob");
-      expect(a.kind).toBe("ddl-other");
-      expect(a.severity).toBe("danger");
+      expect(a.kind).toBe("permission-change");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["GRANT — 권한 변경"]);
     });
 
-    it("[AC-254-03g] REVOKE → danger", () => {
+    it("[AC-254-03g] REVOKE → permission-change / warn (sprint-395 update)", () => {
+      // Pre-sprint-395: ddl-other / danger.
+      // Sprint-395 (X02 / D5): permission-change / warn / pinned reason.
       const a = analyzeStatement("REVOKE SELECT ON users FROM bob");
-      expect(a.kind).toBe("ddl-other");
-      expect(a.severity).toBe("danger");
+      expect(a.kind).toBe("permission-change");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["REVOKE — 권한 변경"]);
     });
 
     // ── DML CTE — `WITH x AS (UPDATE …) SELECT *` ─────────────────────────
@@ -506,11 +923,11 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(a.severity).toBe("danger");
     });
 
-    it("[AC-254-04d] WITH x AS (INSERT …) SELECT * → warn (DML CTE wrapped)", () => {
+    it("[AC-403-01b] WITH x AS (INSERT …) SELECT * → info (DML CTE wrapped)", () => {
       const a = analyzeStatement(
         "WITH x AS (INSERT INTO users (id) VALUES (1) RETURNING id) SELECT * FROM x",
       );
-      expect(a.severity).toBe("warn");
+      expect(a.severity).toBe("info");
     });
 
     it("[AC-254-04e] WITH x AS (SELECT 1) SELECT * — pure read CTE → info (regression)", () => {
@@ -574,10 +991,10 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(isInfoStatement(analyzeStatement("explain select 1"))).toBe(true);
     });
 
-    it("[AC-255-01i] INSERT → NOT INFO (WARN candidate)", () => {
+    it("[AC-403-06] INSERT → INFO (no WARN dialog candidate)", () => {
       expect(
         isInfoStatement(analyzeStatement("INSERT INTO users (id) VALUES (1)")),
-      ).toBe(false);
+      ).toBe(true);
     });
 
     it("[AC-255-01j] UPDATE WHERE → NOT INFO (WARN candidate)", () => {
@@ -594,13 +1011,20 @@ describe("sqlSafety.analyzeStatement", () => {
       ).toBe(false);
     });
 
-    it("[AC-255-01l] CREATE TABLE → NOT INFO (WARN candidate)", () => {
+    it("[AC-255-01l] CREATE TABLE → INFO (sprint-394 — ddl-create / info)", () => {
+      // Pre-sprint-394: NOT INFO (WARN candidate via `ddl-other`).
+      // Sprint-394 (per contract): CREATE TABLE is non-destructive
+      // construction → `ddl-create` / info. The safe-mode UI may now
+      // skip its warn dialog for plain CREATE TABLE.
       expect(
         isInfoStatement(analyzeStatement("CREATE TABLE foo (id int)")),
-      ).toBe(false);
+      ).toBe(true);
     });
 
-    it("[AC-255-01m] ALTER TABLE … ADD COLUMN (additive) → NOT INFO (WARN candidate)", () => {
+    it("[AC-255-01m] ALTER TABLE … ADD COLUMN (additive) → NOT INFO (ddl-alter-add / warn)", () => {
+      // Sprint-394 keeps ALTER ADD as warn (the schema-modifying nature
+      // warrants the warn dialog). The `kind` is `ddl-alter-add`; the
+      // severity tier is unchanged.
       expect(
         isInfoStatement(
           analyzeStatement("ALTER TABLE users ADD COLUMN nickname text"),
@@ -721,10 +1145,10 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(a.reasons).toEqual(["ALTER TABLE DROP INDEX"]);
     });
 
-    it("[AC-391-X07] SELECT regression — AST path returns null, regex path handles SELECT", () => {
-      // With WASM preloaded the AST returns kind:'select'; sqlSafety's
-      // `ddlDestructiveAnalysisFromAst` returns null for `select`, so
-      // the regex matcher classifies it as INFO. Same result either way.
+    it("[AC-391-X07] SELECT regression — AST path classifies SELECT as info (sprint-393a)", () => {
+      // Sprint-393a — SELECT routes through the AST. The widened shape
+      // (FROM list, etc.) maps to `kind:'select'` / `severity:'info'` —
+      // same result as the pre-sprint-393a regex path.
       const a = analyzeStatement("SELECT * FROM users");
       expect(a.kind).toBe("select");
       expect(a.severity).toBe("info");
@@ -734,7 +1158,7 @@ describe("sqlSafety.analyzeStatement", () => {
       // Sprint-391 AST does NOT cover DML. The DELETE branch fires
       // before the DDL preload-AST branch, so this case is unaffected.
       const a = analyzeStatement("DELETE FROM users");
-      expect(a.kind).toBe("delete");
+      expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("danger");
     });
 
@@ -768,71 +1192,64 @@ describe("sqlSafety.analyzeStatement", () => {
       __resetSqlWasmModuleForTests();
     });
 
-    it("[AC-392-X01] INSERT INTO users VALUES (1) → insert / warn via AST", () => {
+    it("[AC-403-01c] INSERT INTO users VALUES (1) → dml-insert / info via AST", () => {
       const a = analyzeStatement("INSERT INTO users VALUES (1)");
-      expect(a.kind).toBe("insert");
-      expect(a.severity).toBe("warn");
+      expect(a.kind).toBe("dml-insert");
+      expect(a.severity).toBe("info");
       expect(a.reasons).toEqual([]);
     });
 
-    it("[AC-392-X02] UPDATE WHERE → update / warn via AST", () => {
+    it("[AC-403-02b] UPDATE WHERE → dml-update / warn via AST", () => {
       const a = analyzeStatement("UPDATE users SET name = 'a' WHERE id = 1");
-      expect(a.kind).toBe("update");
+      expect(a.kind).toBe("dml-update");
       expect(a.severity).toBe("warn");
       expect(a.reasons).toEqual([]);
     });
 
-    it("[AC-392-X03] UPDATE without WHERE → update / danger + reason via AST", () => {
+    it("[AC-403-02c] UPDATE without WHERE → dml-update / danger + reason via AST", () => {
       const a = analyzeStatement("UPDATE users SET name = 'a'");
-      expect(a.kind).toBe("update");
+      expect(a.kind).toBe("dml-update");
       expect(a.severity).toBe("danger");
       expect(a.reasons).toEqual(["UPDATE without WHERE clause"]);
     });
 
-    it("[AC-392-X04] DELETE WHERE → delete / warn via AST", () => {
+    it("[AC-403-03b] DELETE WHERE → dml-delete / warn via AST", () => {
       const a = analyzeStatement("DELETE FROM users WHERE id = 1");
-      expect(a.kind).toBe("delete");
+      expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("warn");
       expect(a.reasons).toEqual([]);
     });
 
-    it("[AC-392-X05] DELETE without WHERE → delete / danger + reason via AST", () => {
+    it("[AC-403-03c] DELETE without WHERE → dml-delete / danger + reason via AST", () => {
       const a = analyzeStatement("DELETE FROM users");
-      expect(a.kind).toBe("delete");
+      expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("danger");
       expect(a.reasons).toEqual(["DELETE without WHERE clause"]);
     });
 
-    it("[AC-392-X06] INSERT … ON CONFLICT DO UPDATE → insert / warn via AST (UPSERT)", () => {
-      // ON CONFLICT DO UPDATE classifies under `insert` / warn — caller
-      // does not have a separate "upsert" path; the destructive surface
-      // (UPDATE SET) is bounded by the conflict key.
+    it("[AC-403-01d] INSERT … ON CONFLICT DO UPDATE → dml-insert / info via AST", () => {
       const a = analyzeStatement(
         "INSERT INTO users (id) VALUES (1) ON CONFLICT DO UPDATE SET name = 'a'",
       );
-      expect(a.kind).toBe("insert");
-      expect(a.severity).toBe("warn");
+      expect(a.kind).toBe("dml-insert");
+      expect(a.severity).toBe("info");
     });
 
-    it("[AC-392-X07] existing sqlSafety test suite — INSERT/UPDATE/DELETE return shapes unchanged", () => {
-      // Spot-check identical to AC-185-01h/01a/01b/01c/01d but executed
-      // with the WASM module preloaded so the AST path is the one that
-      // produces the result. If the AST path diverges from the regex
-      // output, this case fails before the larger regression suite does.
+    it("[AC-403-04] AST path matches DML kind prefix contract", () => {
       const insert = analyzeStatement(
         "INSERT INTO users (id, name) VALUES (1, 'a')",
       );
-      expect(insert.kind).toBe("insert");
-      expect(insert.severity).toBe("warn");
+      expect(insert.kind).toBe("dml-insert");
+      expect(insert.severity).toBe("info");
 
       const updateWhere = analyzeStatement(
         "UPDATE users SET active = false WHERE id = 1",
       );
-      expect(updateWhere.kind).toBe("update");
+      expect(updateWhere.kind).toBe("dml-update");
       expect(updateWhere.severity).toBe("warn");
 
       const deleteNoWhere = analyzeStatement("DELETE FROM users");
-      expect(deleteNoWhere.kind).toBe("delete");
+      expect(deleteNoWhere.kind).toBe("dml-delete");
       expect(deleteNoWhere.severity).toBe("danger");
     });
 
@@ -845,6 +1262,439 @@ describe("sqlSafety.analyzeStatement", () => {
       // `warn` severity → not dangerous, not info.
       expect(isDangerous(a)).toBe(false);
       expect(isInfoStatement(a)).toBe(false);
+    });
+  });
+
+  describe("Sprint 403 — DML kind/severity contract", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-403-01] INSERT → dml-insert / info", () => {
+      const a = analyzeStatement("INSERT INTO t VALUES (1)");
+      expect(a.kind).toBe("dml-insert");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-403-02] UPDATE WHERE → dml-update / warn", () => {
+      const a = analyzeStatement("UPDATE t SET a = 1 WHERE id = 1");
+      expect(a.kind).toBe("dml-update");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-403-03] DELETE WHERE → dml-delete / warn", () => {
+      const a = analyzeStatement("DELETE FROM t WHERE id = 1");
+      expect(a.kind).toBe("dml-delete");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Sprint 393a (2026-05-18) — AST-based SELECT classifier callsite.
+  // SELECT widening (FROM-list / JOIN family / WHERE expression widening /
+  // GROUP BY / HAVING / ORDER BY / LIMIT) routes through the AST and is
+  // classified as `kind:'select'` / `severity:'info'` / `reasons:[]`. The
+  // sprint-393a contract pins severity NOT to escalate for read-only joins /
+  // aggregations / paging — that decision is deferred to a later sprint.
+  // -------------------------------------------------------------------------
+  describe("Sprint 393a — AST-based SELECT widening classifier (AC-393a-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-393a-X01] SELECT with JOIN + WHERE → select / info / [] via AST", () => {
+      const a = analyzeStatement(
+        "SELECT a FROM x JOIN y ON x.id = y.x_id WHERE x.flag = 1",
+      );
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-393a-X02] SELECT with ORDER BY + LIMIT OFFSET → select / info / []", () => {
+      const a = analyzeStatement(
+        "SELECT a FROM x ORDER BY a LIMIT 10 OFFSET 5",
+      );
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-393a-X03] every widened SELECT clause populated → still select / info / []", () => {
+      // AC-393a-F01's full-clause-chain input — exercises FROM + WHERE +
+      // GROUP BY + HAVING + ORDER BY + LIMIT + OFFSET in one statement.
+      const a = analyzeStatement(
+        "SELECT a FROM x WHERE x.a > 1 GROUP BY a HAVING a > 0 ORDER BY a LIMIT 5 OFFSET 1",
+      );
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-393a-X04] existing sqlSafety tests regress to zero — SELECT path stays info", () => {
+      // Spot-check the pre-sprint-393a SELECT inputs route through AST
+      // and stay classified the same way as the regex path did. The full
+      // regression-zero guarantee is pinned by the other AC-185 / AC-254
+      // cases above (which run without preload).
+      expect(analyzeStatement("SELECT * FROM users").severity).toBe("info");
+      expect(
+        analyzeStatement("SELECT id, name FROM users WHERE id = 1").severity,
+      ).toBe("info");
+    });
+
+    it("[AC-393a-X05] StatementAnalysis return shape unchanged (kind / severity / reasons only)", () => {
+      const a = analyzeStatement("SELECT a FROM x JOIN y ON x.id = y.x_id");
+      expect(Object.keys(a).sort()).toEqual(["kind", "reasons", "severity"]);
+      expect(isInfoStatement(a)).toBe(true);
+      expect(isDangerous(a)).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Sprint 393b — AST-based SELECT widening 2 + CTE wrap classifier
+  // (AC-393b-X). The classifier inherits the inner statement's
+  // classification (D1/D2) when the top-level kind is `with`.
+  // -------------------------------------------------------------------------
+  describe("Sprint 393b — AST-based CTE wrap + IN-list classifier (AC-393b-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-393b-X01] WITH wrapping SELECT → select / info / []", () => {
+      const a = analyzeStatement("WITH t AS (SELECT 1) SELECT * FROM t");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-393b-X02] WITH wrapping INSERT → dml-insert / info (inherits inner DML classification)", () => {
+      const a = analyzeStatement(
+        "WITH t AS (SELECT 1) INSERT INTO x SELECT * FROM t",
+      );
+      expect(a.kind).toBe("dml-insert");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-393b-X03] WITH wrapping UPDATE WHERE → update / warn", () => {
+      const a = analyzeStatement(
+        "WITH t AS (SELECT 1) UPDATE x SET a = 1 WHERE x.id = 1",
+      );
+      expect(a.kind).toBe("dml-update");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-393b-X04] WITH wrapping UPDATE without WHERE → update / danger + reason", () => {
+      const a = analyzeStatement("WITH t AS (SELECT 1) UPDATE x SET a = 1");
+      expect(a.kind).toBe("dml-update");
+      expect(a.severity).toBe("danger");
+      // Per D2, the reasons list is the inner statement's reasons,
+      // unchanged (verbatim). The sprint-392 "UPDATE without WHERE clause"
+      // surfaces.
+      expect(a.reasons).toContain("UPDATE without WHERE clause");
+    });
+
+    it("[AC-393b-X05] WITH wrapping DELETE without WHERE → delete / danger + reason", () => {
+      const a = analyzeStatement("WITH t AS (SELECT 1) DELETE FROM x");
+      expect(a.kind).toBe("dml-delete");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toContain("DELETE without WHERE clause");
+    });
+
+    it("[AC-393b-X06] SELECT with UNION → still select / info / []", () => {
+      const a = analyzeStatement("SELECT a FROM x UNION SELECT a FROM y");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-393b-X07] DELETE with IN-list (sprint-392 deferral lifted) → delete / warn / no extra reasons", () => {
+      const a = analyzeStatement("DELETE FROM x WHERE x.id IN (1, 2, 3)");
+      expect(a.kind).toBe("dml-delete");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-393b-X08] existing sqlSafety regression — bare SELECT path still info", () => {
+      // The existing classifier behavior for SELECT must be preserved.
+      expect(analyzeStatement("SELECT * FROM users").severity).toBe("info");
+      // The existing classifier behavior for DELETE WHERE → warn must
+      // be preserved.
+      expect(analyzeStatement("DELETE FROM x WHERE id = 1").severity).toBe(
+        "warn",
+      );
+    });
+
+    it("[AC-393b-X09] StatementAnalysis return shape unchanged for the new `with` path", () => {
+      const a = analyzeStatement("WITH t AS (SELECT 1) SELECT * FROM t");
+      expect(Object.keys(a).sort()).toEqual(["kind", "reasons", "severity"]);
+      expect(isInfoStatement(a)).toBe(true);
+      expect(isDangerous(a)).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Sprint 394 (2026-05-18) — AST-based DDL additive classifier callsite.
+  // Pre-condition: WASM module preloaded (the mock above produces
+  // create-table / create-index / create-view / alter-table-additive
+  // shapes). Every case asserts the documented (kind, severity, reasons)
+  // triple. Reason strings are pinned per D2 — reviewers must reject
+  // silent rewording.
+  // -------------------------------------------------------------------------
+  describe("Sprint 394 — AST-based DDL additive classifier (AC-394-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-394-X01] CREATE TABLE → ddl-create / info / [] via AST", () => {
+      const a = analyzeStatement("CREATE TABLE t (a INTEGER)");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-394-X02] CREATE INDEX → ddl-create / info / [] via AST", () => {
+      const a = analyzeStatement("CREATE INDEX idx ON t (a)");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-394-X03] CREATE VIEW → ddl-create / info / [] via AST", () => {
+      const a = analyzeStatement("CREATE VIEW v AS SELECT a FROM t");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-394-X04] CREATE OR REPLACE VIEW does NOT escalate severity (D1)", () => {
+      // D1: OR REPLACE on a view re-points the body but does not touch
+      // existing rows / schema. The classification stays `info` —
+      // identical to plain CREATE VIEW.
+      const a = analyzeStatement("CREATE OR REPLACE VIEW v AS SELECT a FROM t");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-394-X05] ALTER TABLE ADD COLUMN → ddl-alter-add / warn / pinned reason (D2)", () => {
+      const a = analyzeStatement("ALTER TABLE t ADD COLUMN c TEXT");
+      expect(a.kind).toBe("ddl-alter-add");
+      expect(a.severity).toBe("warn");
+      // Pinned per D2 — verbatim match required.
+      expect(a.reasons).toEqual(["ALTER TABLE — ADD COLUMN (schema 변경)"]);
+    });
+
+    it("[AC-394-X06] ALTER TABLE ADD CONSTRAINT → ddl-alter-add / warn / pinned reason (D2)", () => {
+      const a = analyzeStatement(
+        "ALTER TABLE t ADD CONSTRAINT pk PRIMARY KEY (id)",
+      );
+      expect(a.kind).toBe("ddl-alter-add");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["ALTER TABLE — ADD CONSTRAINT (schema 변경)"]);
+    });
+
+    it("[AC-394-X07] ALTER TABLE RENAME TO → ddl-alter-rename / warn / pinned reason (D2)", () => {
+      const a = analyzeStatement("ALTER TABLE t RENAME TO t2");
+      expect(a.kind).toBe("ddl-alter-rename");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["ALTER TABLE — RENAME (이름 변경)"]);
+    });
+
+    it("[AC-394-X08] ALTER TABLE RENAME COLUMN → ddl-alter-rename / warn / pinned reason (D2)", () => {
+      const a = analyzeStatement("ALTER TABLE t RENAME COLUMN a TO b");
+      expect(a.kind).toBe("ddl-alter-rename");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["ALTER TABLE — RENAME COLUMN (이름 변경)"]);
+    });
+
+    it("[AC-394-X09] CREATE FUNCTION falls back to regex (ddl-create / info — D3 fallback contract)", () => {
+      // The AST parser surfaces SyntaxError for CREATE FUNCTION (out of
+      // scope this sprint). The classifier falls back to the regex path
+      // which classifies `^CREATE\b` as `ddl-create` / info. The regex
+      // path matches the AST classification for parity.
+      const a = analyzeStatement(
+        "CREATE FUNCTION foo() RETURNS void AS bar LANGUAGE plpgsql",
+      );
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-394-X10] existing sqlSafety regression — DROP TABLE still danger via AST", () => {
+      // Sanity — adding the sprint-394 branches must not regress the
+      // sprint-391 DDL destructive classifier.
+      const a = analyzeStatement("DROP TABLE users");
+      expect(a.kind).toBe("ddl-drop");
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-394-X11] StatementAnalysis return shape unchanged for the new DDL additive paths", () => {
+      const cases = [
+        "CREATE TABLE t (a INTEGER)",
+        "CREATE INDEX idx ON t (a)",
+        "CREATE VIEW v AS SELECT a FROM t",
+        "ALTER TABLE t ADD COLUMN c TEXT",
+        "ALTER TABLE t ADD CONSTRAINT pk PRIMARY KEY (id)",
+        "ALTER TABLE t RENAME TO t2",
+        "ALTER TABLE t RENAME COLUMN a TO b",
+      ];
+      for (const sql of cases) {
+        const a = analyzeStatement(sql);
+        expect(Object.keys(a).sort()).toEqual(["kind", "reasons", "severity"]);
+        expect(typeof a.kind).toBe("string");
+        expect(typeof a.severity).toBe("string");
+        expect(Array.isArray(a.reasons)).toBe(true);
+      }
+    });
+  });
+
+  describe("Sprint 395 — AST-based misc grammar classifier (AC-395-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-395-X01] GRANT → permission-change / warn / pinned reason (D5)", () => {
+      const a = analyzeStatement("GRANT SELECT ON users TO alice");
+      expect(a.kind).toBe("permission-change");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["GRANT — 권한 변경"]);
+    });
+
+    it("[AC-395-X02] REVOKE → permission-change / warn / pinned reason (D5)", () => {
+      const a = analyzeStatement("REVOKE SELECT ON users FROM alice");
+      expect(a.kind).toBe("permission-change");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["REVOKE — 권한 변경"]);
+    });
+
+    it("[AC-395-X03] EXPLAIN SELECT → inherits inner SELECT classification (D1)", () => {
+      const a = analyzeStatement("EXPLAIN SELECT * FROM users");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-395-X04] EXPLAIN DELETE (no WHERE) → inherits inner DELETE classification (D1)", () => {
+      const a = analyzeStatement("EXPLAIN DELETE FROM users");
+      expect(a.kind).toBe("dml-delete");
+      expect(a.severity).toBe("danger");
+      // The sprint-392 "WHERE 없는 DELETE" string passes through verbatim.
+      expect(a.reasons).toContain("DELETE without WHERE clause");
+    });
+
+    it("[AC-395-X05] EXPLAIN ANALYZE UPDATE WHERE → update / danger (sprint-392 baseline) — inherits inner", () => {
+      // Sprint-392 baseline classifies bare UPDATE WHERE as `update` /
+      // `danger` when AST parses but the WHERE is in `unsupported-
+      // expression` territory (`x.a > 0` qualified-column comparison was
+      // not in sprint-392's narrow WHERE). Sprint-393b widened that —
+      // qualified-column WHERE now parses, so the analysis returns
+      // `update` / `warn` (bounded). EXPLAIN inherits per D1. We assert
+      // the kind + severity; reasons are empty when WHERE is present.
+      const a = analyzeStatement(
+        "EXPLAIN ANALYZE UPDATE users SET a = 1 WHERE id = 1",
+      );
+      expect(a.kind).toBe("dml-update");
+      // Bounded UPDATE WHERE — sprint-393b classifies as `warn`.
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-395-X06] SHOW → config-read / info / empty reasons (D4)", () => {
+      const a = analyzeStatement("SHOW search_path");
+      expect(a.kind).toBe("config-read");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-395-X07] SET → config-write / info / empty reasons (D3)", () => {
+      const a = analyzeStatement("SET timezone = 'UTC'");
+      expect(a.kind).toBe("config-write");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-395-X08] COPY FROM → data-movement / warn / pinned reason (D5)", () => {
+      const a = analyzeStatement("COPY users FROM '/tmp/u.csv'");
+      expect(a.kind).toBe("data-movement");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["COPY FROM — 대량 import"]);
+    });
+
+    it("[AC-395-X09] COPY TO → data-movement / warn / pinned reason (D5)", () => {
+      const a = analyzeStatement("COPY users TO '/tmp/u.csv'");
+      expect(a.kind).toBe("data-movement");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["COPY TO — 대량 export"]);
+    });
+
+    it("[AC-395-X10] COMMENT → metadata / info / empty reasons", () => {
+      const a = analyzeStatement("COMMENT ON TABLE users IS 'all'");
+      expect(a.kind).toBe("metadata");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-395-X11] EXPLAIN BEGIN → AST falls back; regex EXPLAIN branch returns info", () => {
+      // BEGIN is not a supported inner statement for EXPLAIN (out of
+      // scope), so the AST parser returns Error(...). The classifier
+      // falls back to the regex path which classifies `^EXPLAIN\b` as
+      // `info` / `info` / [].
+      const a = analyzeStatement("EXPLAIN BEGIN");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-395-X12] existing regression — DROP TABLE still danger via AST", () => {
+      // Sanity — adding the sprint-395 branches must not regress the
+      // sprint-391 DDL destructive classifier.
+      const a = analyzeStatement("DROP TABLE users");
+      expect(a.kind).toBe("ddl-drop");
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-395-X13] StatementAnalysis return shape unchanged for the new misc paths", () => {
+      const cases = [
+        "GRANT SELECT ON users TO alice",
+        "REVOKE SELECT ON users FROM alice",
+        "EXPLAIN SELECT * FROM users",
+        "SHOW search_path",
+        "SET timezone = 'UTC'",
+        "COPY users FROM '/tmp/u.csv'",
+        "COMMENT ON TABLE users IS 'all'",
+      ];
+      for (const sql of cases) {
+        const a = analyzeStatement(sql);
+        expect(Object.keys(a).sort()).toEqual(["kind", "reasons", "severity"]);
+        expect(typeof a.kind).toBe("string");
+        expect(typeof a.severity).toBe("string");
+        expect(Array.isArray(a.reasons)).toBe(true);
+      }
     });
   });
 });
