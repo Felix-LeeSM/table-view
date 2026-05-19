@@ -5,8 +5,9 @@ Codex currently exposes built-in sub-agent roles (`default`, `explorer`,
 Claude Code agent roster as thin role wrappers and map each one to a Codex
 built-in role.
 
-Use only when sub-agents are explicitly authorized by the user. The source of
-truth remains `memory/`; these wrappers are pointers, not duplicated policy.
+The source of truth remains `memory/`; these wrappers are pointers, not
+duplicated policy. Agent spawning follows the workflow memory and the active
+runtime's tool policy.
 
 ## Mapping
 

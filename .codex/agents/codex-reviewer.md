@@ -5,8 +5,6 @@ description: 외부 시각 리뷰 wrapper. Codex 내부에서는 self-review ref
 source: .claude/agents/codex-reviewer.md
 ---
 
-Use only when the user explicitly asks for this review path.
-
 Read:
 1. 대상 sprint 의 `contract.md` / ADR / 산출물
 2. `memory/workflow/review/memory.md`

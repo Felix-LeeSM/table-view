@@ -2,6 +2,7 @@
 # check-wrapper-cap.sh
 # Lazy wrapper 줄수 cap 점검. sprint-387 lock:
 #   .claude/agents    ≤ 15 줄
+#   .codex/agents     ≤ 15 줄
 #   .claude/rules     ≤ 20 줄
 #   .claude/commands  ≤ 15 줄
 # README.md 는 skip (디렉토리 정책 문서).
@@ -43,6 +44,7 @@ check_dir() {
 }
 
 check_dir ".claude/agents" 15
+check_dir ".codex/agents" 15
 check_dir ".claude/rules" 20
 check_dir ".claude/commands" 15
 
