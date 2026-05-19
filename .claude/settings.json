@@ -16,7 +16,7 @@
           },
           {
             "type": "command",
-            "if": "Edit(.claude/skills/**)|Write(.claude/skills/**)",
+            "if": "Edit(.claude/skills/**)|Write(.claude/skills/**)|MultiEdit(.claude/skills/**)",
             "command": "echo 'BLOCKED: .claude/skills/ 는 skill plugin 영역. 본 repo 가 수정하면 plugin update 시 충돌. 룰 추가는 memory/ 아래에 신설하세요. (sprint-388 lock)' >&2 && exit 1"
           },
           {

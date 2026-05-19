@@ -350,9 +350,14 @@ paths_from_command_tokens() {
         mode="tee"
         continue
         ;;
-      cp | mv | install)
+      cp | install)
         reset_mode
         mode="last-dest"
+        continue
+        ;;
+      mv)
+        reset_mode
+        mode="all-targets"
         continue
         ;;
       rm | touch | mkdir | truncate)

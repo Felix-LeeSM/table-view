@@ -170,6 +170,7 @@ run_case "main command: redirection traversal to src blocked" 1 main-command "ca
 run_case "main command: tee to source blocked" 1 main-command "printf hi | tee src/App.tsx"
 run_case "main command: tee traversal to source blocked" 1 main-command "printf hi | tee worktrees/../src/App.tsx"
 run_case "main command: cp to manifest blocked" 1 main-command "cp /tmp/package.json package.json"
+run_case "main command: mv source file out of main blocked" 1 main-command "mv src/App.tsx /tmp/App.tsx"
 run_case "main command: mv to source directory blocked" 1 main-command "mv /tmp/App.tsx src"
 run_case "main command: sed -i source blocked" 1 main-command "sed -i '' 's/a/b/' src/App.tsx"
 run_case "main command: perl -pi source blocked" 1 main-command "perl -pi -e 's/a/b/' src/App.tsx"
@@ -179,6 +180,15 @@ run_case "main command: external temp source-like path allowed" 0 main-command "
 
 run_codex_hook_case "Codex hook: .codex skills allowed" ".codex/skills/tdd/SKILL.md" allow
 run_codex_hook_case "Codex hook: .claude skills denied" ".claude/skills/tdd/SKILL.md" deny
+
+run_jq_case "Claude settings: .claude skills hard block includes MultiEdit with Edit and Write" '
+  .hooks.PreToolUse[]
+  | .hooks[]?
+  | select((.command // "") | contains("BLOCKED: .claude/skills/"))
+  | (.if // "")
+  | split("|")
+  | (index("Edit(.claude/skills/**)") and index("Write(.claude/skills/**)") and index("MultiEdit(.claude/skills/**)"))
+'
 
 run_jq_case "Claude settings: main source guard includes MultiEdit with Edit and Write" '
   .hooks.PreToolUse[]
