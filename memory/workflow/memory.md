@@ -15,6 +15,7 @@ User-Claude 협업 phase 별 행동 룰. 코드 룰은 [conventions](../conventi
 - [implementation](./implementation/memory.md) — 구현 phase 의 agent 자율성 + tool output noise 차단
 - [delivery](./delivery/memory.md) — code → commit → push → PR → review → merge 전체 자율 pipeline
 - [git-policy](./git-policy/memory.md) — hook 회피 금지 룰 (commit / push 강제 메커니즘)
+- [hooks](./hooks/memory.md) — hook script 작성 룰 (ref mutation 금지, read-only verification)
 
 ## phase 식별
 
