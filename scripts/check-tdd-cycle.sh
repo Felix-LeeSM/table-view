@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # check-tdd-cycle.sh
-# code profile sprint 의 RED commit 존재 확인. pre-push 의 8 stage.
+# code profile sprint 의 RED commit 존재 확인. pre-push 의 TDD gate.
 #
 # 동작:
 #   1. 현재 branch 가 main 이면 skip (push 대상 branch 만 검사).

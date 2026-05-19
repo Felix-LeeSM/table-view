@@ -10,4 +10,4 @@ caveman 모드 (단 force push / main push / merge 정책 미정 시 잠시 끔)
 2. `.claude/rules/git-policy.md` (hook 회피 금지)
 3. PR 작성 시 `.claude/skills/create-pr/SKILL.md`
 
-금지: `--no-verify`, `LEFTHOOK=0`, `HUSKY=0`, 사용자 승인 없는 `--force`.
+금지: `--no-verify`, `--no-gpg-sign`, `LEFTHOOK=0`, `HUSKY=0`, 사용자 승인 없는 `--force`.

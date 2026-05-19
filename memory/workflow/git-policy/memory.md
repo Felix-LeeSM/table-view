@@ -1,7 +1,7 @@
 ---
 title: Git 정책 — hook 회피 절대 금지 + 능동 enforcement
 type: workflow-rule
-updated: 2026-05-18
+updated: 2026-05-19
 task: commit, push, hook, lefthook, push-reject, pr-close, race-trace
 trigger:
   signal: git commit / git push / hook 실패 / push reject / PR close 시
@@ -16,6 +16,7 @@ Code / Codex / Cursor) 에 같은 룰 적용.
 ## 절대 금지 — Hook 회피
 
 **`git commit --no-verify` / `git push --no-verify` 어떤 상황에서도 사용 금지.**
+**`--no-gpg-sign` / `commit.gpgsign=false` 등 signing 우회도 금지.**
 **환경 변수 `LEFTHOOK=0`, `LEFTHOOK_SKIP=...`, `HUSKY=0` 등 hook 비활성화도 금지.**
 
 ### Why
@@ -30,9 +31,9 @@ Code / Codex / Cursor) 에 같은 룰 적용.
 ## 강제 메커니즘 (2 레이어)
 
 1. **Bash PreToolUse hook** — `scripts/hooks/check-dangerous-bash.sh` 의
-   `DANGEROUS_PATTERNS` 에 `--no-verify`, `LEFTHOOK=0` 등록. `git commit` /
-   `git push` 명령은 lefthook 바이너리 + git hook 파일 존재 확인
-   (`check_git_hooks`).
+   `DANGEROUS_PATTERNS` 에 `--no-verify`, `--no-gpg-sign`, `LEFTHOOK=0`
+   등록. `git commit` / `git push` 는 lefthook 바이너리 + hook 파일 확인.
+   pre-push 는 outgoing unsigned commit 도 차단.
 2. **본 정책 문서** — 사람 / agent 모두 명문화 룰.
 
 ## Hook 한계 + Worktree (sprint-387)
@@ -55,6 +56,8 @@ hook 정의 → worktree drift 없음.
 - 린트 실패 → 경고 수정. `eslint-disable` 은 사유 코멘트와 함께만.
 - 테스트 실패 → 코드 수정 또는 (테스트가 틀렸으면) 테스트 + ADR 수정.
 - e2e timeout → `e2e/_helpers.ts` + `wdio.conf.ts` timeout, docker daemon 확인.
+- GPG pinentry timeout → 즉시 중단. 사용자에게 signing cache warm-up 필요를
+  보고하고 unsigned commit 으로 진행하지 않음.
 
 ## 예외 — 사용자 명시 승인 시만
 
@@ -68,6 +71,8 @@ hook 정의 → worktree drift 없음.
 - (a) 회피 사유 commit body 에 1줄 기록
 - (b) 후속 커밋에서 회피한 검사를 통과시키는 변경 push
 - (c) `memory/lessons/` 에 사유 기록
+
+GPG signing 우회는 위 예외에 포함하지 않음. signing 불가 시 멈춤.
 
 ## 책임 주체 — Assistant 직접 실행
 

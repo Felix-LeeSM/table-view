@@ -1,7 +1,7 @@
 ---
 title: Multi-agent worktree runbook
 type: runbook
-updated: 2026-05-18
+updated: 2026-05-19
 task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 ---
 
@@ -54,6 +54,24 @@ bash scripts/worktree-cleanup.sh --prune
   worktree 생성하지 않음 (사용자가 보지 못하는 디스크 공간 차지 위험).
 - cleanup: PR 머지 직후 또는 sprint 종료 시. `gh pr merge --delete-branch`
   는 branch 만 삭제 — worktree 디스크는 별도 정리 필요.
+
+## Agent lifecycle
+
+orchestrator 는 spawn 할 때 agent registry 를 머릿속/작업 노트에 유지:
+
+| state | 의미 |
+|---|---|
+| planned | 목적 / PR / worktree / owner / 종료 조건 확정 |
+| running | agent 작업 중. 같은 책임 중복 spawn 금지 |
+| waiting | CI / review / 사용자 결정 대기 |
+| done | 결과가 PR 또는 branch 에 반영됨 |
+| closed | `close_agent` + worktree cleanup 또는 보존 사유 기록 완료 |
+| abandoned | 실패/오염. push 금지, close 후 상태 기록 |
+
+한 PR 의 write 책임자는 **delivery owner 1명**. reviewer 는 read-only.
+review finding 은 새 worker 를 계속 만들지 말고 같은 delivery owner 에게
+reflect/fix 로 되돌린다. 실패 worker 는 즉시 close 하고 dirty worktree 는
+보존 사유를 기록하거나 사용자 승인 후 정리.
 
 ## 주의
 

@@ -107,12 +107,15 @@ pre-push:
   # (macOS WKWebView)에서 통과해야만 push 허용. `--no-verify` / `LEFTHOOK=0`
   # 회피는 `.claude/hooks/pre-bash.sh`에서 차단.
   #
-  # 순서: 빠른 체크가 먼저 실패하면 무거운 체크 시간을 아낀다 (fail-fast).
+  # 순서: signed-commit / 빠른 체크가 먼저 실패하면 무거운 체크 시간을 아낀다 (fail-fast).
   # `piped: true`로 직렬 실행 — e2e는 cold start ~1-3분이라 다른 체크와
   # 동시에 돌리면 docker boot 비용이 항상 부과됨. 직렬은 또한 실패 원인을
   # 한눈에 짚게 한다.
   piped: true
   commands:
+    0_signed-commits:
+      tags: security git
+      run: bash scripts/check-signed-commits.sh
     1_ts-typecheck:
       tags: lint frontend
       run: npx tsc --noEmit

@@ -57,6 +57,15 @@ generator: scripts/regenerate-indexes.sh
 ### delivery
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
+
+### docs
+
+- [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
+
+### documentation
+
+- [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 
 ### frontend
 
@@ -137,6 +146,7 @@ generator: scripts/regenerate-indexes.sh
 ### pr
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 
 ### pr-close
 
@@ -203,6 +213,7 @@ generator: scripts/regenerate-indexes.sh
 
 - [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 - [PR Review](../../memory/workflow/review/memory.md)
 
 ### rust-impl

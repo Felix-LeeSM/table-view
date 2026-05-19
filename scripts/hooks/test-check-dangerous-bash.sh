@@ -116,6 +116,27 @@ run_case \
   '{"tool_input":{"command":"git commit --no-verify -m foo"}}' \
   'MATCH:memory/workflow/git-policy/memory.md'
 
+# 회귀 가드 1b — --no-gpg-sign 차단.
+run_case \
+  "regression: git commit --no-gpg-sign → block + GPG 안내" \
+  1 \
+  '{"tool_input":{"command":"git commit --no-gpg-sign -m foo"}}' \
+  'MATCH:GPG signing 우회|cache warm-up|memory/workflow/git-policy/memory.md'
+
+# 회귀 가드 1c — git -c commit.gpgsign=false 차단.
+run_case \
+  "regression: git -c commit.gpgsign=false commit → block" \
+  1 \
+  '{"tool_input":{"command":"git -c commit.gpgsign=false commit -m foo"}}' \
+  'MATCH:commit.gpgsign=false|GPG signing 우회|memory/workflow/git-policy/memory.md'
+
+# 회귀 가드 1d — GIT_CONFIG_KEY 우회 차단.
+run_case \
+  "regression: GIT_CONFIG_KEY_0=commit.gpgsign → block" \
+  1 \
+  '{"tool_input":{"command":"GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false git commit -m foo"}}' \
+  'MATCH:GPG signing 우회|memory/workflow/git-policy/memory.md'
+
 # 회귀 가드 2 — rm -rf 위험 경로 차단 (기존 패턴 유지 확인).
 # 패턴은 / ~ * . src node_modules target 만 매칭 (sprint-387 의 보수적 규칙).
 run_case \

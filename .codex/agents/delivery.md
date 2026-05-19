@@ -10,5 +10,5 @@ Read:
 2. `memory/workflow/git-policy/memory.md`
 3. PR 작성 시 `.claude/skills/create-pr/SKILL.md`
 
-Flow: commit -> push -> PR -> reviewer -> merge when checks + score allow.
-No hook bypass, main direct push, or force push without explicit user approval.
+Flow: commit -> push -> PR -> reviewer -> merge/blocked report -> cleanup.
+No hook/signing bypass, main direct push, or force push without explicit user approval.
