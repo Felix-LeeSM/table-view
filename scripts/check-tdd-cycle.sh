@@ -7,11 +7,11 @@
 #   2. branch name 에서 sprint number 추출 (sprint-NNN/...).
 #   3. docs/sprints/sprint-NNN/contract.md 에서 review-profile 추출.
 #   4. profile != "code" 이면 skip (infra / docs / security 무관).
-#   5. origin/main..HEAD 에 RED 표식 commit 없으면 fail.
+#   5. merge-base..HEAD 에 RED 표식 commit 없으면 fail.
 #
 # 환경:
 #   - SKIP_TDD_CYCLE=1 으로 강제 skip 가능 (긴급 hotfix 시 사용자 명시).
-#   - origin/main fetch 안 됐으면 best-effort.
+#   - origin/main local ref 없으면 main local ref 로 fallback. fetch 호출 금지.
 
 set -euo pipefail
 
@@ -58,15 +58,10 @@ if [ "$profile" != "code" ]; then
 	exit 0
 fi
 
-# origin/main fetch 시도 (best-effort)
-git fetch --quiet origin main 2>/dev/null || true
-
-base="origin/main"
-if ! git rev-parse --verify "$base" >/dev/null 2>&1; then
-	base="main"
-fi
-if ! git rev-parse --verify "$base" >/dev/null 2>&1; then
-	# main 자체가 없으면 skip
+# base 결정 — read-only. hook 안에서 FETCH_HEAD / remote ref 를 변경하지 않는다.
+base="$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2>/dev/null || true)"
+if [ -z "$base" ]; then
+	# local main 계열 ref 가 없으면 best-effort skip
 	exit 0
 fi
 
