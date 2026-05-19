@@ -21,6 +21,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 resolve_command() {
   if [ -n "${COMMAND:-}" ]; then
     echo "$COMMAND"
@@ -379,6 +381,19 @@ check_warn_patterns() {
   done
 }
 
+check_main_worktree_source_writes() {
+  local stderr status
+  status=0
+  stderr="$(bash "$SCRIPT_DIR/check-main-worktree-source-edit.sh" --command "$CMD" 2>&1 >/dev/null)" || status=$?
+  if [ "$status" -ne 0 ]; then
+    printf '%s\n' "$stderr" >&2
+    exit "$status"
+  fi
+  if [ -n "$stderr" ]; then
+    printf '%s\n' "$stderr" >&2
+  fi
+}
+
 check_lefthook_binary() {
   if ! command -v lefthook >/dev/null 2>&1; then
     block "lefthook is not installed. Run 'pnpm install' first."
@@ -422,6 +437,7 @@ check_git_hooks() {
 }
 
 check_dangerous_patterns
+check_main_worktree_source_writes
 check_warn_patterns
 check_git_hooks
 

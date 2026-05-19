@@ -1,8 +1,8 @@
 ---
 title: Multi-agent worktree runbook
 type: runbook
-updated: 2026-05-18
-task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
+updated: 2026-05-19
+task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule, orchestrator-default
 ---
 
 # Multi-agent worktree
@@ -19,6 +19,30 @@ task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
   spawn 해도 충돌 없음
 - 사용자가 같은 repo 에서 다른 brain (예: Codex review + Claude implement)
   을 동시에 돌리고 싶을 때
+
+## 기본 orchestration 정책 (2026-05-19 lock)
+
+메인 대화 agent 는 기본적으로 **orchestrator** 역할. 사용자의 질문에 답하고,
+계획/분해/상태 판단/이상 상황 보고를 담당한다.
+
+- 구현/리뷰는 기본적으로 orchestrator 가 worktree 를 생성한 뒤 subagent 에
+  위임한다.
+- 작은 수정, 문서, 조사, 단순 질문 답변은 orchestrator 가 직접 처리 가능.
+- worker/reviewer 는 orchestrator 가 지정한 worktree 안에서만 작업한다.
+- orchestrator 는 worker 결과를 그대로 중계하지 않고, scope / hook / test /
+  PR / 이상 상황을 판단해서 사용자에게 보고한다.
+
+### Orchestrator preflight
+
+구현/리뷰 task 로 판정되면 코드 수정 전:
+
+1. `bash scripts/worktree-spawn.sh <branch>` 실행.
+2. stderr 의 첫 turn 검증 + worker contract 를 subagent prompt 에 붙여넣기.
+3. owned scope / validation / report 형식을 채워서 위임.
+4. worker 결과 수신 후 scope, hook, test, PR, 이상 상황을 판단.
+
+main worktree 에서 직접 허용되는 작업: memory/docs/agent 설정/scripts guard,
+작은 문서 수정, 조사, 단순 질문 답변.
 
 ## 명령
 

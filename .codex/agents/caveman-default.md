@@ -5,7 +5,7 @@ description: 출력 압축 모듈. 다른 agent 가 caveman 모드가 필요할 
 source: .claude/agents/caveman-default.md
 ---
 
-Use `.claude/skills/caveman/SKILL.md` as the source. Keep output terse while
+Use `.codex/skills/caveman/SKILL.md` as the source. Keep output terse while
 preserving technical accuracy.
 
 Temporarily expand only for security warnings, irreversible operations,

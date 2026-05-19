@@ -6,7 +6,7 @@ source: .claude/agents/tdd-generator.md
 ---
 
 Read:
-1. `.claude/skills/tdd/SKILL.md`
+1. `.codex/skills/tdd/SKILL.md`
 2. `memory/conventions/testing-scenarios/memory.md`
 3. `memory/conventions/testing-scenarios/mock-scope/memory.md`
 4. `memory/workflow/implementation/memory.md`

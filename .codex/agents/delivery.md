@@ -8,7 +8,7 @@ source: .claude/agents/delivery.md
 Read:
 1. `memory/workflow/delivery/memory.md`
 2. `memory/workflow/git-policy/memory.md`
-3. PR 작성 시 `.claude/skills/create-pr/SKILL.md`
+3. PR 작성 시 `.codex/skills/create-pr/SKILL.md`
 
 Flow: commit -> push -> PR -> reviewer -> merge when checks + score allow.
 No hook bypass, main direct push, or force push without explicit user approval.

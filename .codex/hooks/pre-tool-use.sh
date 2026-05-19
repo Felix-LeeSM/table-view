@@ -47,6 +47,22 @@ deny() {
   fi
 }
 
+run_main_worktree_source_check() {
+  local stderr status
+  status=0
+  stderr="$(bash "$ROOT/scripts/hooks/check-main-worktree-source-edit.sh" "$@" 2>&1 >/dev/null)" || status=$?
+  if [ "$status" -ne 0 ]; then
+    if [ -z "$stderr" ]; then
+      stderr="BLOCKED: source/app edit in main worktree."
+    fi
+    deny "$stderr"
+    exit 0
+  fi
+  if [ -n "$stderr" ]; then
+    printf '%s\n' "$stderr" >&2
+  fi
+}
+
 is_bash_tool() {
   [ "$tool_name" = "Bash" ] || { [ -z "$tool_name" ] && [ -n "$command" ]; }
 }
@@ -62,6 +78,7 @@ if is_bash_tool; then
   if [ -n "$stderr" ]; then
     printf '%s\n' "$stderr" >&2
   fi
+  run_main_worktree_source_check --command "$command"
 fi
 
 paths_from_json() {
@@ -106,6 +123,8 @@ check_path() {
       printf '%s\n' "WARNING: ADR 본문은 작성 순간 동결입니다. 결정을 뒤집으려면 새 ADR을 추가하세요." >&2
       ;;
   esac
+
+  run_main_worktree_source_check "$raw"
 }
 
 while IFS= read -r path; do
