@@ -40,9 +40,20 @@ paths_from_patch() {
 }
 
 paths_file="$(mktemp "${TMPDIR:-/tmp}/codex-hook-paths.XXXXXX")"
-trap 'rm -f "$paths_file"' EXIT
+output_file="$(mktemp "${TMPDIR:-/tmp}/codex-hook-output.XXXXXX")"
+context_file="$(mktemp "${TMPDIR:-/tmp}/codex-hook-context.XXXXXX")"
+trap 'rm -f "$paths_file" "$output_file" "$context_file"' EXIT
 { paths_from_json; paths_from_patch; } | sort -u > "$paths_file"
 [ -s "$paths_file" ] || exit 0
+
+run_advisory() {
+  local label="$1"
+  shift
+  {
+    printf '## %s\n' "$label"
+    "$@"
+  } >> "$output_file" 2>&1 || true
+}
 
 has_rs=0
 has_ts=0
@@ -68,7 +79,7 @@ while IFS= read -r raw; do
 done < "$paths_file"
 
 if [ "$has_rs" = "1" ]; then
-  (cd "$ROOT/src-tauri" && cargo fmt 2>/dev/null) || true
+  (cd "$ROOT/src-tauri" && cargo fmt >/dev/null 2>/dev/null) || true
 fi
 
 if [ "$has_ts" = "1" ]; then
@@ -77,28 +88,55 @@ if [ "$has_ts" = "1" ]; then
     rel="${raw#$ROOT/}"
     case "$rel" in
       *.ts | *.tsx)
-        [ -f "$ROOT/$rel" ] && (cd "$ROOT" && npx prettier --write "$rel" 2>/dev/null) || true
+        [ -f "$ROOT/$rel" ] && (cd "$ROOT" && npx prettier --write "$rel" >/dev/null 2>/dev/null) || true
         ;;
     esac
   done < "$paths_file"
 fi
 
+run_god_file_check() {
+  while IFS= read -r raw; do
+    [ -n "$raw" ] || continue
+    rel="${raw#$ROOT/}"
+    case "$rel" in
+      *.ts | *.tsx | *.rs)
+        [ -f "$ROOT/$rel" ] || continue
+        jq -n --arg file "$ROOT/$rel" '{ tool_input: { file_path: $file } }' |
+          CLAUDE_PROJECT_DIR="$ROOT" bash "$ROOT/scripts/check-god-file.sh"
+        ;;
+    esac
+  done < "$paths_file"
+}
+
 if [ "$has_memory" = "1" ]; then
-  (cd "$ROOT" && bash scripts/check-memory-size.sh 2>&1 | head -10) || true
-  (cd "$ROOT" && bash scripts/check-memory-structure.sh 2>&1 | head -10) || true
-  (cd "$ROOT" && bash scripts/regenerate-indexes.sh 2>&1 | tail -5) || true
+  run_advisory "memory-size" bash -lc "cd \"$ROOT\" && bash scripts/check-memory-size.sh 2>&1 | head -10"
+  run_advisory "memory-structure" bash -lc "cd \"$ROOT\" && bash scripts/check-memory-structure.sh 2>&1 | head -10"
+  run_advisory "memory-index" bash -lc "cd \"$ROOT\" && bash scripts/regenerate-indexes.sh 2>&1 | tail -5"
 fi
 
 if [ "$has_adr" = "1" ]; then
-  (cd "$ROOT" && bash scripts/check-memory-adr.sh 2>&1 | head -30) || true
+  run_advisory "memory-adr" bash -lc "cd \"$ROOT\" && bash scripts/check-memory-adr.sh 2>&1 | head -30"
 fi
 
 if [ "$has_code" = "1" ]; then
-  bash "$ROOT/scripts/check-god-file.sh" 2>&1 | head -10 || true
+  run_advisory "god-file" run_god_file_check
 fi
 
 if [ "$has_wrapper" = "1" ]; then
-  (cd "$ROOT" && bash scripts/check-wrapper-cap.sh 2>&1 | head -10) || true
+  run_advisory "wrapper-cap" bash -lc "cd \"$ROOT\" && bash scripts/check-wrapper-cap.sh 2>&1 | head -10"
+fi
+
+if [ -s "$output_file" ]; then
+  grep -vE '^(## [A-Za-z0-9_-]+)?$' "$output_file" > "$context_file" || true
+fi
+
+if [ -s "$context_file" ]; then
+  jq -n --rawfile context "$context_file" '{
+    hookSpecificOutput: {
+      hookEventName: "PostToolUse",
+      additionalContext: ("Codex post-edit policy output:\n" + $context)
+    }
+  }'
 fi
 
 exit 0
