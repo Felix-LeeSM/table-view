@@ -78,7 +78,7 @@
           },
           {
             "type": "command",
-            "if": "Edit(.claude/agents/*.md)|Edit(.claude/rules/*.md)|Edit(.claude/commands/*.md)|Write(.claude/agents/*.md)|Write(.claude/rules/*.md)|Write(.claude/commands/*.md)",
+            "if": "Edit(.claude/agents/*.md)|Edit(.claude/rules/*.md)|Edit(.claude/commands/*.md)|Edit(.codex/agents/*.md)|Write(.claude/agents/*.md)|Write(.claude/rules/*.md)|Write(.claude/commands/*.md)|Write(.codex/agents/*.md)",
             "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/check-wrapper-cap.sh 2>&1 | head -10 || true",
             "timeout": 10
           },

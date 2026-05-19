@@ -157,6 +157,7 @@ export default tseslint.config(
       // sub-agent worktree 디렉토리. main repo 의 lint 가 안의 partial
       // 변경을 collect 하지 않도록 차단.
       ".claude/**",
+      "worktrees/**",
       // Sprint 385 — wasm-pack 이 생성하는 JS glue + d.ts. `any` 와
       // tslint disable 헤더를 포함해 eslint 가 자연스럽게 막는다. 본
       // 디렉토리는 build artifact 이므로 lint 대상에서 제외.
