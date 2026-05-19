@@ -16,6 +16,7 @@ json_field() {
 }
 
 command="$(json_field '.tool_input.command // .input.command // .command')"
+patch_payload="$(json_field '.tool_input.input // .input.input // .tool_input.patch // .input.patch // .patch')"
 
 paths_from_json() {
   if ! command -v jq >/dev/null 2>&1 || [ -z "$INPUT" ]; then
@@ -32,14 +33,16 @@ paths_from_json() {
 }
 
 paths_from_patch() {
-  [ -n "$command" ] || return 0
-  printf '%s\n' "$command" | sed -nE \
+  { [ -n "$command" ] || [ -n "$patch_payload" ]; } || return 0
+  printf '%s\n%s\n' "$command" "$patch_payload" | sed -nE \
     -e 's/^\*\*\* (Add|Update|Delete) File: (.*)$/\2/p' \
     -e 's/^\*\*\* Move to: (.*)$/\1/p'
 }
 
-mapfile -t paths < <({ paths_from_json; paths_from_patch; } | sort -u)
-[ "${#paths[@]}" -gt 0 ] || exit 0
+paths_file="$(mktemp "${TMPDIR:-/tmp}/codex-hook-paths.XXXXXX")"
+trap 'rm -f "$paths_file"' EXIT
+{ paths_from_json; paths_from_patch; } | sort -u > "$paths_file"
+[ -s "$paths_file" ] || exit 0
 
 has_rs=0
 has_ts=0
@@ -48,7 +51,8 @@ has_adr=0
 has_code=0
 has_wrapper=0
 
-for raw in "${paths[@]}"; do
+while IFS= read -r raw; do
+  [ -n "$raw" ] || continue
   rel="${raw#$ROOT/}"
   case "$rel" in
     *.rs) has_rs=1; has_code=1 ;;
@@ -61,21 +65,22 @@ for raw in "${paths[@]}"; do
       has_wrapper=1
       ;;
   esac
-done
+done < "$paths_file"
 
 if [ "$has_rs" = "1" ]; then
   (cd "$ROOT/src-tauri" && cargo fmt 2>/dev/null) || true
 fi
 
 if [ "$has_ts" = "1" ]; then
-  for raw in "${paths[@]}"; do
+  while IFS= read -r raw; do
+    [ -n "$raw" ] || continue
     rel="${raw#$ROOT/}"
     case "$rel" in
       *.ts | *.tsx)
         [ -f "$ROOT/$rel" ] && (cd "$ROOT" && npx prettier --write "$rel" 2>/dev/null) || true
         ;;
     esac
-  done
+  done < "$paths_file"
 fi
 
 if [ "$has_memory" = "1" ]; then

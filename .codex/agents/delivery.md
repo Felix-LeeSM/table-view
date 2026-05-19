@@ -11,4 +11,4 @@ Read:
 3. PR 작성 시 `.claude/skills/create-pr/SKILL.md`
 
 Flow: commit -> push -> PR -> reviewer -> merge when checks + score allow.
-No `--no-verify`, `LEFTHOOK=0`, `HUSKY=0`, main direct push, or force push.
+No hook bypass, main direct push, or force push without explicit user approval.

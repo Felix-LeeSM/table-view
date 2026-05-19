@@ -23,6 +23,7 @@ json_string() {
 event_name="$(json_field '.hook_event_name')"
 tool_name="$(json_field '.tool_name')"
 command="$(json_field '.tool_input.command // .input.command // .command')"
+patch_payload="$(json_field '.tool_input.input // .input.input // .tool_input.patch // .input.patch // .patch')"
 
 deny() {
   local reason="$1"
@@ -78,8 +79,8 @@ paths_from_json() {
 }
 
 paths_from_patch() {
-  [ -n "$command" ] || return 0
-  printf '%s\n' "$command" | sed -nE \
+  { [ -n "$command" ] || [ -n "$patch_payload" ]; } || return 0
+  printf '%s\n%s\n' "$command" "$patch_payload" | sed -nE \
     -e 's/^\*\*\* (Add|Update|Delete) File: (.*)$/\2/p' \
     -e 's/^\*\*\* Move to: (.*)$/\1/p'
 }
