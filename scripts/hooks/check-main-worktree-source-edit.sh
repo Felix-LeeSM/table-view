@@ -70,8 +70,63 @@ trim_token() {
   printf '%s\n' "$value"
 }
 
+normalize_path() {
+  local path="$1"
+  local is_absolute=0
+  local parts=()
+  local normalized=()
+  local IFS='/'
+  local part last_index joined
+
+  case "$path" in
+    /*) is_absolute=1 ;;
+  esac
+
+  read -r -a parts <<< "$path"
+
+  for part in "${parts[@]}"; do
+    case "$part" in
+      "" | ".")
+        continue
+        ;;
+      "..")
+        if [ "${#normalized[@]}" -gt 0 ]; then
+          last_index=$((${#normalized[@]} - 1))
+          unset "normalized[$last_index]"
+        elif [ "$is_absolute" = "1" ]; then
+          continue
+        else
+          return 1
+        fi
+        ;;
+      *)
+        normalized+=("$part")
+        ;;
+    esac
+  done
+
+  joined=""
+  for part in "${normalized[@]}"; do
+    if [ -z "$joined" ]; then
+      joined="$part"
+    else
+      joined="$joined/$part"
+    fi
+  done
+
+  if [ "$is_absolute" = "1" ]; then
+    if [ -n "$joined" ]; then
+      printf '/%s\n' "$joined"
+    else
+      printf '/\n'
+    fi
+  else
+    printf '%s\n' "$joined"
+  fi
+}
+
 relative_path() {
-  local raw
+  local raw normalized_raw
   raw="$(trim_token "$1")"
 
   [ -n "$raw" ] || return 1
@@ -82,16 +137,20 @@ relative_path() {
   esac
 
   case "$raw" in
-    "$ROOT"/*)
-      raw="${raw#$ROOT/}"
-      ;;
     /*)
-      return 1
+      normalized_raw="$(normalize_path "$raw")" || return 1
       ;;
-    ./*)
-      while [ "${raw#./}" != "$raw" ]; do
-        raw="${raw#./}"
-      done
+    *)
+      normalized_raw="$(normalize_path "$ROOT/$raw")" || return 1
+      ;;
+  esac
+
+  case "$normalized_raw" in
+    "$ROOT"/*)
+      raw="${normalized_raw#$ROOT/}"
+      ;;
+    *)
+      return 1
       ;;
   esac
 

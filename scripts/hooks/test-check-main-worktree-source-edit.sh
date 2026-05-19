@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOK="$SCRIPT_DIR/check-main-worktree-source-edit.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CODEX_HOOK="$REPO_ROOT/.codex/hooks/pre-tool-use.sh"
+CLAUDE_SETTINGS="$REPO_ROOT/.claude/settings.json"
 
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -113,6 +114,17 @@ run_codex_hook_case() {
   fi
 }
 
+run_jq_case() {
+  local name="$1"
+  local query="$2"
+
+  if jq -e "$query" "$CLAUDE_SETTINGS" >/dev/null; then
+    record_pass "$name"
+  else
+    record_fail "$name"
+  fi
+}
+
 if [ ! -f "$HOOK" ]; then
   echo "FAIL: missing hook script: $HOOK" >&2
   exit 1
@@ -124,8 +136,13 @@ run_case "linked worktree: src path allowed" 0 linked-path "src/App.tsx"
 
 run_case "main: src path blocked" 1 main-path "src/App.tsx"
 run_case "main: src directory blocked" 1 main-path "src"
+run_case "main: docs traversal to src blocked" 1 main-path "docs/../src/App.tsx"
+run_case "main: worktrees traversal to src blocked" 1 main-path "worktrees/../src/App.tsx"
+run_case "main: absolute docs traversal to src blocked" 1 main-path "$MAIN_ROOT/docs/../src/App.tsx"
+run_case "main: parent traversal back to src blocked" 1 main-path "../${MAIN_ROOT##*/}/src/App.tsx"
 run_case "main: absolute linked worktree source path allowed" 0 main-path "$LINKED_ROOT/src/App.tsx"
 run_case "main: relative linked worktree source path allowed" 0 main-path "worktrees/linked-fixture/src/App.tsx"
+run_case "main: relative linked worktree normalized source path allowed" 0 main-path "worktrees/linked-fixture/./src/../src/App.tsx"
 run_case "main: package manifest blocked" 1 main-path "package.json"
 run_case "main: components manifest blocked" 1 main-path "components.json"
 run_case "main: tsconfig blocked" 1 main-path "tsconfig.node.json"
@@ -149,7 +166,9 @@ run_case "main: Codex skills orchestration allowed" 0 main-path ".codex/skills/t
 run_case "main: non-source Tauri asset allowed" 0 main-path "src-tauri/icons/icon.png"
 
 run_case "main command: redirection to src blocked" 1 main-command "cat > src/App.tsx <<'EOF'"
+run_case "main command: redirection traversal to src blocked" 1 main-command "cat > docs/../src/App.tsx <<'EOF'"
 run_case "main command: tee to source blocked" 1 main-command "printf hi | tee src/App.tsx"
+run_case "main command: tee traversal to source blocked" 1 main-command "printf hi | tee worktrees/../src/App.tsx"
 run_case "main command: cp to manifest blocked" 1 main-command "cp /tmp/package.json package.json"
 run_case "main command: mv to source directory blocked" 1 main-command "mv /tmp/App.tsx src"
 run_case "main command: sed -i source blocked" 1 main-command "sed -i '' 's/a/b/' src/App.tsx"
@@ -160,6 +179,14 @@ run_case "main command: external temp source-like path allowed" 0 main-command "
 
 run_codex_hook_case "Codex hook: .codex skills allowed" ".codex/skills/tdd/SKILL.md" allow
 run_codex_hook_case "Codex hook: .claude skills denied" ".claude/skills/tdd/SKILL.md" deny
+
+run_jq_case "Claude settings: main source guard includes MultiEdit with Edit and Write" '
+  .hooks.PreToolUse[]
+  | select(any(.hooks[]?; (.command // "") | contains("check-main-worktree-source-edit.sh")))
+  | .matcher
+  | split("|")
+  | (index("Edit") and index("Write") and index("MultiEdit"))
+'
 
 echo ""
 echo "==== main-worktree source edit hook summary ===="
