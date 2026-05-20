@@ -27,7 +27,7 @@ import {
 } from "@/lib/datagrid/paradigmEditAdapter";
 import type { MqlPreview } from "@/lib/mongo/mqlGenerator";
 import type { TableData } from "@/types/schema";
-import type { CommitError } from "@/components/datagrid/useDataGridEdit";
+import type { CommitError } from "@/components/datagrid/dataGridEditFsm";
 import type { SqlDialect } from "@/components/datagrid/sqlGenerator";
 
 /** Sprint 347 — connection.dbType → sqlGenerator dialect tag. Redis /

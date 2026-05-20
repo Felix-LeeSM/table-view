@@ -19,11 +19,8 @@ import { getDefaultRem, type ColumnCategory } from "@/lib/columnCategory";
 import type { ColumnInfo, SortInfo } from "@/types/schema";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
-import {
-  editKey,
-  cellToEditValue,
-  useDataGridEdit,
-} from "@components/datagrid/useDataGridEdit";
+import { editKey, cellToEditValue } from "@components/datagrid/dataGridEditFsm";
+import { useDocumentDataGridEdit } from "@components/datagrid/useDocumentDataGridEdit";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import ProjectionDialog from "@components/document/ProjectionDialog";
 import AddDocumentModal from "@components/document/AddDocumentModal";
@@ -215,17 +212,15 @@ export default function DocumentDataGrid({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Editing state managed by the shared hook in document paradigm mode.
-  // The hook treats `schema` as the Mongo database name and `table` as the
-  // collection name — see `useDataGridEdit` doc block on `paradigm`.
-  const editState = useDataGridEdit({
+  // Editing state managed by the document-specific hook. It treats `schema`
+  // as the Mongo database name and `table` as the collection name.
+  const editState = useDocumentDataGridEdit({
     data,
     schema: database,
     table: collection,
     connectionId,
     page,
     fetchData,
-    paradigm: "document",
   });
 
   const totalPages = data

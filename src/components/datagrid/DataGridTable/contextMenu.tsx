@@ -19,7 +19,7 @@ import {
   rowsToSqlInsert,
 } from "@lib/format";
 import type { TableData } from "@/types/schema";
-import { cellToEditValue } from "../useDataGridEdit";
+import { cellToEditValue } from "../dataGridEditFsm";
 
 /**
  * `DataGridTable` 의 context menu 분리.

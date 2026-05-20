@@ -35,7 +35,7 @@ import DataGridToolbar from "@components/datagrid/DataGridToolbar";
 import DataGridTable, {
   type DataGridTableHandle,
 } from "@components/datagrid/DataGridTable";
-import { useDataGridEdit } from "@components/datagrid/useDataGridEdit";
+import { useRdbDataGridEdit } from "@components/datagrid/useRdbDataGridEdit";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { ExportButton } from "@components/shared/ExportButton";
 import SqlSyntax from "@components/shared/SqlSyntax";
@@ -350,7 +350,7 @@ export default function DataGrid({
   const totalPages = data ? Math.ceil(data.total_count / pageSize) : 0;
 
   // Editing state managed by hook
-  const editState = useDataGridEdit({
+  const editState = useRdbDataGridEdit({
     data,
     schema,
     table,

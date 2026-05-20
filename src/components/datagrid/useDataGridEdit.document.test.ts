@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import { renderHook, act } from "@testing-library/react";
-import { useDataGridEdit } from "./useDataGridEdit";
+import { useDocumentDataGridEdit } from "./useDocumentDataGridEdit";
 import type { TableData } from "@/types/schema";
 
 // Sprint 86 — document paradigm dispatch tests. These exercise the MQL
@@ -110,14 +110,13 @@ const DOC_DATA: TableData = {
 
 function renderDocHook() {
   return renderHook(() =>
-    useDataGridEdit({
+    useDocumentDataGridEdit({
       data: DOC_DATA,
       schema: "app",
       table: "users",
       connectionId: "conn-mongo",
       page: 1,
       fetchData: mockFetchData,
-      paradigm: "document",
     }),
   );
 }
