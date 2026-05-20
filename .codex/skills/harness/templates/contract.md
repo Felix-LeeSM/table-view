@@ -9,15 +9,15 @@
 
 ## In Scope
 
-- 
+-
 
 ## Out of Scope
 
-- 
+-
 
 ## Invariants
 
-- 
+-
 
 ## Acceptance Criteria
 
@@ -27,14 +27,14 @@
 
 ## Design Bar / Quality Bar
 
-- 
+-
 
 ## Verification Plan
 
 ### Required Checks
 
-1. 
-2. 
+1.
+2.
 
 ### Required Evidence
 
@@ -64,9 +64,9 @@
 
 ## Test Script / Repro Script
 
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ## Ownership
 

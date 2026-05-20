@@ -58,7 +58,7 @@ contains_local_env_file_reference() {
   local scrubbed="$CMD"
   # `.env.example` is a tracked template and may be inspected or edited.
   scrubbed="${scrubbed//.env.example/}"
-  local pattern="(^|[^A-Za-z0-9_./-])(\./)?([^[:space:]\"';&|<>]+/)?\.env($|[^A-Za-z0-9_.-])|(^|[^A-Za-z0-9_./-])(\./)?([^[:space:]\"';&|<>]+/)?\.env\.local($|[^A-Za-z0-9_.-])|(^|[^A-Za-z0-9_./-])(\./)?([^[:space:]\"';&|<>]+/)?\.env\.[^[:space:]\"';&|<>]*\.local($|[^A-Za-z0-9_.-])"
+  local pattern='(^|[[:space:]<>])["'\'']?(\./)?([^[:space:]"'\'';&|<>]+/)?\.env(\.[^[:space:]"'\'';&|<>]+)?(["'\'']?($|[[:space:];&|<>]))'
   echo "$scrubbed" | grep -qE "$pattern"
 }
 
@@ -68,8 +68,7 @@ BLOCKED: Reading or editing local env files is not allowed.
 
 Blocked patterns:
   - .env
-  - .env.local
-  - .env.*.local
+  - .env.*
 
 Allowed template:
   - .env.example

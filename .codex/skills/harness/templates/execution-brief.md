@@ -2,33 +2,33 @@
 
 ## Objective
 
-- 
+-
 
 ## Task Why
 
-- 
+-
 
 ## Scope Boundary
 
-- 
+-
 
 ## Invariants
 
-- 
+-
 
 ## Done Criteria
 
-1. 
-2. 
+1.
+2.
 
 ## Verification Plan
 
 - Profile:
 - Required checks:
-  1. 
-  2. 
+  1.
+  2.
 - Required evidence:
-  - 
+  -
 
 ## Evidence To Return
 

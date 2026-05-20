@@ -4,9 +4,9 @@
 
 - Profile:
 - Checks run:
-  - 
+  -
 - Evidence reviewed:
-  - 
+  -
 
 ## Findings
 
@@ -29,8 +29,8 @@
 
 ## Missing Evidence
 
-- 
+-
 
 ## Residual Risk
 
-- 
+-

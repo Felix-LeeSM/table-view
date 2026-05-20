@@ -25,7 +25,7 @@
 
 ### Screenshots / Links / Artifacts
 
-- 
+-
 
 ## Changed Areas
 
@@ -33,12 +33,12 @@
 
 ## Assumptions
 
-- 
+-
 
 ## Residual Risk
 
-- 
+-
 
 ## Next Sprint Candidates
 
-- 
+-

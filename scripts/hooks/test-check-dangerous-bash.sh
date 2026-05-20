@@ -274,12 +274,24 @@ run_case \
   "env-policy: rg token .env.local → block" \
   1 \
   '{"tool_input":{"command":"rg token .env.local"}}' \
-  'MATCH:local env files|.env.local'
+  'MATCH:local env files|Allowed template'
+
+run_case \
+  "env-policy: cat .env.production → block" \
+  1 \
+  '{"tool_input":{"command":"cat .env.production"}}' \
+  'MATCH:local env files|Allowed template'
 
 run_case \
   "env-policy: cat .env.example → allow" \
   0 \
   '{"tool_input":{"command":"cat .env.example"}}' \
+  EMPTY
+
+run_case \
+  "env-policy: rg escaped .env pattern in policy files → allow" \
+  0 \
+  '{"tool_input":{"command":"rg -n '\''^\\\\.env|env'\'' .gitignore .prettierignore"}}' \
   EMPTY
 
 echo ""
