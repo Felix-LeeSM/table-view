@@ -2,7 +2,7 @@
 title: Frontend guidance
 type: convention
 updated: 2026-05-20
-surface: src/**/*.{ts,tsx,css}
+surface: src/**/*.ts, src/**/*.tsx, src/**/*.css
 task: frontend, ui, react-impl
 trigger:
   signal: src frontend/UI 편집 시

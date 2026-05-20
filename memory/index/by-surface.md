@@ -35,10 +35,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
 
-### `css}`
-
-- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
-
 ### `memory/workflow/review`
 
 - [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
@@ -60,7 +56,16 @@ generator: scripts/regenerate-indexes.sh
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
 
-### `src/**/*.{ts`
+### `src/**/*.css`
+
+- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
+
+### `src/**/*.ts`
+
+- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
+- [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
+
+### `src/**/*.tsx`
 
 - [Frontend Guidance](../../memory/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
@@ -68,14 +73,6 @@ generator: scripts/regenerate-indexes.sh
 ### `src/lib/perf/bootInstrumentation.ts`
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
-
-### `tsx`
-
-- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
-
-### `tsx}`
-
-- [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
 
 ### `vi.mock'`
 

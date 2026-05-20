@@ -64,7 +64,7 @@ DOD에 맞춰 코드를 작성합니다.
 
 ### 2-2. 코드 작성
 
-- 기존 프로젝트 규칙(AGENTS.md, docs/agents/rules/*)을 준수
+- 기존 프로젝트 규칙(AGENTS.md, memory/)을 준수
 - UI / React 작업은 `memory/conventions/frontend/memory.md`,
   `memory/conventions/react/memory.md`, 기존 컴포넌트 패턴을 우선 적용
 - 기존 코드 패턴을 따르고, 불필요한 추상화 지양
