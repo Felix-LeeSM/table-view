@@ -14,4 +14,5 @@ Current dispatchers:
 
 - `check-edit-policy.sh` — Edit/Write hard blocks and advisory warnings.
 - `check-dangerous-bash.sh` — Bash command policy.
+- `check-signed-commits.sh` — pre-push outgoing signed-commit gate.
 - `post-tool-use.sh` — post-edit formatter/check dispatcher.
