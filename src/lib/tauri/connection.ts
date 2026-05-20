@@ -54,6 +54,10 @@ export async function testConnection(
   });
 }
 
+export async function createSqliteDatabaseFile(path: string): Promise<string> {
+  return invoke<string>("create_sqlite_database_file", { path });
+}
+
 export async function connectToDatabase(id: string): Promise<void> {
   return invoke("connect", { id });
 }

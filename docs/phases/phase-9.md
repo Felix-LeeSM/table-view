@@ -103,3 +103,15 @@ saved model:
   key flags, and foreign-key references.
 - Free-form query execution, table preview, DDL, export streaming, and richer
   SQLite introspection remain unsupported until their own feature-order slices.
+
+## SQLite File Creation Slice
+
+SQLite file creation is an explicit user action layered on top of the
+connection slice:
+
+- Selecting SQLite in the add/edit connection dialog exposes a `Create` action
+  next to the existing file picker.
+- The create action uses a save-file picker, refuses to overwrite an existing
+  file, requires an absolute path, and requires the parent directory to exist.
+- `test_connection` and normal `connect` still must not create missing files;
+  silent path typo creation remains forbidden.

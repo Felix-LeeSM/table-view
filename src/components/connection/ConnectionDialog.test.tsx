@@ -1534,6 +1534,9 @@ describe("ConnectionDialog", () => {
 
       // File path field is the sole DBMS-specific input.
       expect(screen.getByLabelText("Database file")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Create SQLite database file"),
+      ).toBeInTheDocument();
 
       // Network/auth fields are not rendered.
       expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();

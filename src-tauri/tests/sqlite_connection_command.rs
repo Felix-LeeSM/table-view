@@ -1,7 +1,8 @@
 use serial_test::serial;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use table_view_lib::commands::connection::{
-    save_connection, test_connection, SaveConnectionRequest, TestConnectionRequest,
+    create_sqlite_database_file, save_connection, test_connection, SaveConnectionRequest,
+    TestConnectionRequest,
 };
 use table_view_lib::error::AppError;
 use table_view_lib::models::{ConnectionConfigPublic, DatabaseType};
@@ -112,6 +113,68 @@ async fn test_connection_routes_sqlite_to_adapter() {
     .unwrap();
 
     assert_eq!(result, "Connection successful");
+
+    cleanup();
+}
+
+#[tokio::test]
+#[serial]
+async fn create_sqlite_database_file_creates_new_valid_database() {
+    let dir = setup();
+    let db_path = dir.path().join("created.sqlite");
+
+    let created = create_sqlite_database_file(db_path.to_str().unwrap().to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(created, db_path.display().to_string());
+    assert!(db_path.exists());
+
+    let result = test_connection(TestConnectionRequest {
+        config: sqlite_public(&created),
+        password: Some(String::new()),
+        existing_id: None,
+    })
+    .await
+    .unwrap();
+    assert_eq!(result, "Connection successful");
+
+    cleanup();
+}
+
+#[tokio::test]
+#[serial]
+async fn create_sqlite_database_file_rejects_existing_file() {
+    let dir = setup();
+    let db_path = dir.path().join("existing.sqlite");
+    create_sqlite_file(&db_path).await;
+
+    let result = create_sqlite_database_file(db_path.to_str().unwrap().to_string()).await;
+
+    match result {
+        Err(AppError::Validation(message)) => assert!(message.contains("already exists")),
+        other => panic!("Expected existing-file validation error, got: {:?}", other),
+    }
+
+    cleanup();
+}
+
+#[tokio::test]
+#[serial]
+async fn create_sqlite_database_file_rejects_missing_parent() {
+    let dir = setup();
+    let db_path = dir.path().join("missing").join("app.sqlite");
+
+    let result = create_sqlite_database_file(db_path.to_str().unwrap().to_string()).await;
+
+    match result {
+        Err(AppError::Validation(message)) => assert!(message.contains("parent directory")),
+        other => panic!(
+            "Expected parent-directory validation error, got: {:?}",
+            other
+        ),
+    }
+    assert!(!db_path.exists());
 
     cleanup();
 }
