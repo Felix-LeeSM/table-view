@@ -9,15 +9,17 @@
 // `executeQueryDryRun` mock; the dialog integration is covered in
 // `ConfirmDestructiveDialog.test.tsx`.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { act, renderHook, waitFor } from "@testing-library/react";
 
 const executeQueryDryRunMock = vi.fn();
 const cancelQueryMock = vi.fn();
-
-vi.mock("@lib/tauri", () => ({
-  executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
-  cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
+    cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
+  });
+});
 
 import { useDryRun } from "./useDryRun";
 

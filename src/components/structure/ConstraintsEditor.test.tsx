@@ -4,6 +4,7 @@
 // which the Sprint 187 analyzer extension flags as ddl-alter-drop /
 // danger. Date: 2026-05-01.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -12,22 +13,23 @@ import {
   act,
 } from "@testing-library/react";
 import ConstraintsEditor from "./ConstraintsEditor";
-
-vi.mock("@lib/tauri", () => ({
-  dropConstraint: vi.fn(() =>
-    Promise.resolve({
-      sql: "ALTER TABLE users DROP CONSTRAINT fk_users_org",
-    }),
-  ),
-  addConstraint: vi.fn(() =>
-    Promise.resolve({
-      sql: "ALTER TABLE users ADD CONSTRAINT u_users_email UNIQUE (email)",
-    }),
-  ),
-  // Sprint 247 — `<DryRunPreview>` IPC stub. See IndexesEditor.test.tsx.
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    dropConstraint: vi.fn(() =>
+      Promise.resolve({
+        sql: "ALTER TABLE users DROP CONSTRAINT fk_users_org",
+      }),
+    ),
+    addConstraint: vi.fn(() =>
+      Promise.resolve({
+        sql: "ALTER TABLE users ADD CONSTRAINT u_users_email UNIQUE (email)",
+      }),
+    ),
+    // Sprint 247 — `<DryRunPreview>` IPC stub. See IndexesEditor.test.tsx.
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+    cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
+  });
+});
 
 import * as tauri from "@lib/tauri";
 import { useConnectionStore } from "@stores/connectionStore";

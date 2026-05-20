@@ -4,53 +4,55 @@
 // to the nested form. Aggregate results moved to a dedicated axis
 // (`aggregateResults`) so find / aggregate caches can never alias.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   useDocumentStore,
   __resetDocumentStoreForTests,
 } from "./documentStore";
-
-vi.mock("@lib/tauri", () => ({
-  listMongoDatabases: vi.fn(() =>
-    Promise.resolve([{ name: "admin" }, { name: "table_view_test" }]),
-  ),
-  listMongoCollections: vi.fn(() =>
-    Promise.resolve([
-      { name: "users", database: "table_view_test", document_count: 3 },
-    ]),
-  ),
-  inferCollectionFields: vi.fn(() =>
-    Promise.resolve([
-      {
-        name: "_id",
-        data_type: "objectId",
-        nullable: false,
-        default_value: null,
-        is_primary_key: false,
-        is_foreign_key: false,
-        fk_reference: null,
-        comment: null,
-      },
-    ]),
-  ),
-  findDocuments: vi.fn(() =>
-    Promise.resolve({
-      columns: [{ name: "_id", data_type: "objectId" }],
-      rows: [[1]],
-      raw_documents: [{ _id: 1 }],
-      total_count: 1,
-      execution_time_ms: 5,
-    }),
-  ),
-  aggregateDocuments: vi.fn(() =>
-    Promise.resolve({
-      columns: [{ name: "_id", data_type: "objectId" }],
-      rows: [[1]],
-      raw_documents: [{ _id: 1 }],
-      total_count: 1,
-      execution_time_ms: 5,
-    }),
-  ),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listMongoDatabases: vi.fn(() =>
+      Promise.resolve([{ name: "admin" }, { name: "table_view_test" }]),
+    ),
+    listMongoCollections: vi.fn(() =>
+      Promise.resolve([
+        { name: "users", database: "table_view_test", document_count: 3 },
+      ]),
+    ),
+    inferCollectionFields: vi.fn(() =>
+      Promise.resolve([
+        {
+          name: "_id",
+          data_type: "objectId",
+          nullable: false,
+          default_value: null,
+          is_primary_key: false,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+      ]),
+    ),
+    findDocuments: vi.fn(() =>
+      Promise.resolve({
+        columns: [{ name: "_id", data_type: "objectId" }],
+        rows: [[1]],
+        raw_documents: [{ _id: 1 }],
+        total_count: 1,
+        execution_time_ms: 5,
+      }),
+    ),
+    aggregateDocuments: vi.fn(() =>
+      Promise.resolve({
+        columns: [{ name: "_id", data_type: "objectId" }],
+        rows: [[1]],
+        raw_documents: [{ _id: 1 }],
+        total_count: 1,
+        execution_time_ms: 5,
+      }),
+    ),
+  });
+});
 
 import * as tauri from "@lib/tauri";
 

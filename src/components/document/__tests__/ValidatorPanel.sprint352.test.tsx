@@ -6,17 +6,19 @@
 // 유지된다.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ValidatorPanel } from "../ValidatorPanel";
 
 const getMongoValidatorMock = vi.fn();
 const setMongoValidatorMock = vi.fn();
-
-vi.mock("@/lib/tauri", () => ({
-  getMongoValidator: (...args: unknown[]) => getMongoValidatorMock(...args),
-  setMongoValidator: (...args: unknown[]) => setMongoValidatorMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    getMongoValidator: (...args: unknown[]) => getMongoValidatorMock(...args),
+    setMongoValidator: (...args: unknown[]) => setMongoValidatorMock(...args),
+  });
+});
 
 describe("ValidatorPanel — Sprint 352 (level + action toggles)", () => {
   beforeEach(() => {

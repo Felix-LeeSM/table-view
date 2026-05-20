@@ -3,18 +3,16 @@
 // Read-only 라 reorder 없음 — visual order == data order.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, within } from "@testing-library/react";
 import QueryResultGrid from "./QueryResultGrid";
 import type { QueryResult } from "@/types/query";
 import { useSchemaStore } from "@stores/schemaStore";
-
-vi.mock("@lib/tauri", async () => {
-  const mod = await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
-  return {
-    ...mod,
+beforeEach(() => {
+  setupTauriMock({
     getTableColumns: vi.fn(async () => []),
     executeQuery: vi.fn(async () => ({})),
-  };
+  });
 });
 
 const SELECT_RESULT: QueryResult = {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { renderHook, act } from "@testing-library/react";
 import { useDataGridEdit } from "./useDataGridEdit";
 import type { TableData } from "@/types/schema";
@@ -9,8 +10,8 @@ import type { TableData } from "@/types/schema";
 // in the same batch are validated independently.
 
 // Sprint 354 (L2 fix, 2026-05-16) — `executeQuery` / `executeQueryBatch`
-// moved out of `schemaStore` to `@lib/tauri`. Mocks must be hoisted so
-// `vi.mock("@lib/tauri")` factory body can close over them.
+// moved out of `schemaStore` to `@lib/tauri`. Mocks stay hoisted so the
+// shared Tauri helper can close over them.
 const { mockExecuteQuery, mockExecuteQueryBatch } = vi.hoisted(() => ({
   mockExecuteQuery: vi.fn(() =>
     Promise.resolve({
@@ -37,15 +38,11 @@ const { mockExecuteQuery, mockExecuteQueryBatch } = vi.hoisted(() => ({
   ),
 }));
 const mockFetchData = vi.fn();
-
-vi.mock("@lib/tauri", async () => {
-  const actual =
-    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
-  return {
-    ...actual,
+beforeEach(() => {
+  setupTauriMock({
     executeQuery: mockExecuteQuery,
     executeQueryBatch: mockExecuteQueryBatch,
-  };
+  });
 });
 
 vi.mock("@stores/workspaceStore", () => ({

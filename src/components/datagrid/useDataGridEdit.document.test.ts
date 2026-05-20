@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { renderHook, act } from "@testing-library/react";
 import { useDataGridEdit } from "./useDataGridEdit";
 import type { TableData } from "@/types/schema";
@@ -32,18 +33,16 @@ const mockBulkWriteDocuments = vi.fn<(...args: unknown[]) => Promise<unknown>>(
       upserted_ids: [],
     }),
 );
-
-// Sprint 354 (L2 fix, 2026-05-16) — `executeQuery` / `executeQueryBatch`
-// moved out of `schemaStore` to `@lib/tauri`. Merge spies into the same
-// mock so the direct import in `useDataGridPreviewCommit` lands here.
-vi.mock("@/lib/tauri", () => ({
-  insertDocument: (...args: unknown[]) => mockInsertDocument(...args),
-  updateDocument: (...args: unknown[]) => mockUpdateDocument(...args),
-  deleteDocument: (...args: unknown[]) => mockDeleteDocument(...args),
-  bulkWriteDocuments: (...args: unknown[]) => mockBulkWriteDocuments(...args),
-  executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
-  executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    insertDocument: (...args: unknown[]) => mockInsertDocument(...args),
+    updateDocument: (...args: unknown[]) => mockUpdateDocument(...args),
+    deleteDocument: (...args: unknown[]) => mockDeleteDocument(...args),
+    bulkWriteDocuments: (...args: unknown[]) => mockBulkWriteDocuments(...args),
+    executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
+    executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
+  });
+});
 
 vi.mock("@stores/schemaStore", () => ({
   useSchemaStore: (selector: (state: Record<string, unknown>) => unknown) =>

@@ -22,6 +22,7 @@
 // `severity: "warn"` 인 non-INFO 만 WARN dialog 발동. INFO/STOP 분기는
 // 위와 같이 회귀 테스트로 가드.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -46,14 +47,15 @@ import {
 } from "./__tests__/queryTabTestHelpers";
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
-  cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
-  findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
-  aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
+    cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
+    findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
+    aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+  });
+});
 
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: vi.fn().mockResolvedValue(""),

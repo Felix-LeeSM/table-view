@@ -3,6 +3,7 @@
 // state, shortcut hint, and the Run button click → handleExecute path.
 // Cases are byte-equivalent to the originals — no behaviour change.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
@@ -25,14 +26,15 @@ import type { Extension } from "@codemirror/state";
 // path. `vi.fn()` lives at module scope so individual tests can read
 // `.mock.calls` after clicking the button.
 const mockExecuteQueryDryRun = vi.fn();
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
-  cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
-  findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
-  aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
-  executeQueryDryRun: (...args: unknown[]) => mockExecuteQueryDryRun(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
+    cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
+    findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
+    aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
+    executeQueryDryRun: (...args: unknown[]) => mockExecuteQueryDryRun(...args),
+  });
+});
 
 // Sprint 132 — the QueryTab raw-query hook calls `verifyActiveDb` after
 // optimistic `setActiveDb`. The wrapper itself is unit-tested in

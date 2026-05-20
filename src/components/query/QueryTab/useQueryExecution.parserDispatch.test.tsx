@@ -24,6 +24,7 @@
 // estimatedDocumentCount, distinctDocuments) + verifyActiveDb stub +
 // splitSqlStatements stub.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -46,19 +47,20 @@ const findOneDocumentMock = vi.fn();
 const countDocumentsMock = vi.fn();
 const estimatedDocumentCountMock = vi.fn();
 const distinctDocumentsMock = vi.fn();
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: (...args: unknown[]) => executeQueryMock(...args),
-  executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
-  cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
-  findDocuments: (...args: unknown[]) => findDocumentsMock(...args),
-  aggregateDocuments: (...args: unknown[]) => aggregateDocumentsMock(...args),
-  findOneDocument: (...args: unknown[]) => findOneDocumentMock(...args),
-  countDocuments: (...args: unknown[]) => countDocumentsMock(...args),
-  estimatedDocumentCount: (...args: unknown[]) =>
-    estimatedDocumentCountMock(...args),
-  distinctDocuments: (...args: unknown[]) => distinctDocumentsMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: (...args: unknown[]) => executeQueryMock(...args),
+    executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
+    cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
+    findDocuments: (...args: unknown[]) => findDocumentsMock(...args),
+    aggregateDocuments: (...args: unknown[]) => aggregateDocumentsMock(...args),
+    findOneDocument: (...args: unknown[]) => findOneDocumentMock(...args),
+    countDocuments: (...args: unknown[]) => countDocumentsMock(...args),
+    estimatedDocumentCount: (...args: unknown[]) =>
+      estimatedDocumentCountMock(...args),
+    distinctDocuments: (...args: unknown[]) => distinctDocumentsMock(...args),
+  });
+});
 
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: vi.fn().mockResolvedValue(""),

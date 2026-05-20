@@ -15,6 +15,7 @@
 // connectionStore.setActiveDb side-effect 로 end-to-end 단언.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -36,14 +37,15 @@ const {
   toastWarningMock: vi.fn(),
   verifyActiveDbMock: vi.fn(),
 }));
-
-vi.mock("@lib/tauri", () => ({
-  dropTableRequest: mockDropTableRequest,
-  dropTable: mockDropTable,
-  listTables: mockListTables,
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    dropTableRequest: mockDropTableRequest,
+    dropTable: mockDropTable,
+    listTables: mockListTables,
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+    cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
+  });
+});
 
 vi.mock("@lib/toast", () => ({
   toast: { warning: toastWarningMock, info: vi.fn(), error: vi.fn() },

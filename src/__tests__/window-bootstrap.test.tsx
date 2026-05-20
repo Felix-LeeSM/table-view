@@ -26,6 +26,7 @@ import {
   afterEach,
   type Mock,
 } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, cleanup } from "@testing-library/react";
 
 // The label-resolution seam lives in `src/lib/window-label.ts`. We mock it so
@@ -61,24 +62,26 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
   emit: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("@lib/tauri", () => ({
-  listConnections: vi.fn(() => Promise.resolve([])),
-  listGroups: vi.fn(() => Promise.resolve([])),
-  testConnection: vi.fn(() => Promise.resolve(true)),
-  connect: vi.fn(() => Promise.resolve()),
-  disconnect: vi.fn(() => Promise.resolve()),
-  connectToDatabase: vi.fn(() => Promise.resolve()),
-  disconnectFromDatabase: vi.fn(() => Promise.resolve()),
-  saveConnections: vi.fn(() => Promise.resolve()),
-  saveGroups: vi.fn(() => Promise.resolve()),
-  deleteConnection: vi.fn(() => Promise.resolve()),
-  updateConnection: vi.fn(() => Promise.resolve()),
-  createConnection: vi.fn(() => Promise.resolve("test-id")),
-  addGroup: vi.fn(() => Promise.resolve("g1")),
-  updateGroup: vi.fn(() => Promise.resolve()),
-  deleteGroup: vi.fn(() => Promise.resolve()),
-  moveConnectionToGroup: vi.fn(() => Promise.resolve()),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listConnections: vi.fn(() => Promise.resolve([])),
+    listGroups: vi.fn(() => Promise.resolve([])),
+    testConnection: vi.fn(() => Promise.resolve(true)),
+    connect: vi.fn(() => Promise.resolve()),
+    disconnect: vi.fn(() => Promise.resolve()),
+    connectToDatabase: vi.fn(() => Promise.resolve()),
+    disconnectFromDatabase: vi.fn(() => Promise.resolve()),
+    saveConnections: vi.fn(() => Promise.resolve()),
+    saveGroups: vi.fn(() => Promise.resolve()),
+    deleteConnection: vi.fn(() => Promise.resolve()),
+    updateConnection: vi.fn(() => Promise.resolve()),
+    createConnection: vi.fn(() => Promise.resolve("test-id")),
+    addGroup: vi.fn(() => Promise.resolve("g1")),
+    updateGroup: vi.fn(() => Promise.resolve()),
+    deleteGroup: vi.fn(() => Promise.resolve()),
+    moveConnectionToGroup: vi.fn(() => Promise.resolve()),
+  });
+});
 
 // HomePage transitively pulls in the connection bootstrap (`loadConnections`,
 // `loadGroups`, `initEventListeners`, theme, MRU). Stub it so the only thing

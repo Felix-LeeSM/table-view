@@ -36,6 +36,7 @@ import {
   afterEach,
   type Mock,
 } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 // Sprint 155 — `tauri.conf.json` is the source of truth for AC-141-1's
 // fixed launcher / resizable workspace dimensions. Vite's JSON import gives
 // us a synchronous, type-friendly read without dragging `@types/node` into
@@ -48,19 +49,15 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import * as windowControls from "@lib/window-controls";
 import type { ConnectionConfig } from "@/types/connection";
-
-vi.mock("@lib/tauri", async () => {
-  const actual =
-    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
-  return {
-    ...actual,
+beforeEach(() => {
+  setupTauriMock({
     connectToDatabase: vi.fn().mockResolvedValue(undefined),
     disconnectFromDatabase: vi.fn().mockResolvedValue(undefined),
     listConnections: vi.fn().mockResolvedValue([]),
     listGroups: vi.fn().mockResolvedValue([]),
     listSchemas: vi.fn().mockResolvedValue([]),
     listTables: vi.fn().mockResolvedValue([]),
-  };
+  });
 });
 
 // Sprint 154 — `@lib/window-controls` is the lifecycle seam. WorkspacePage

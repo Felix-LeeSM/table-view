@@ -9,6 +9,7 @@
 // localStorage + safe-mode reset). Cases are byte-equivalent to the
 // originals — no behaviour change.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -40,17 +41,18 @@ import {
 } from "./__tests__/queryTabTestHelpers";
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
-  cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
-  findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
-  aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
-  // Sprint 247 — `<DryRunPreview>` IPC stub. Document paradigm short-
-  // circuits to `unsupported` without invoking IPC; the mock is here
-  // for completeness so the import resolves.
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
+    cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
+    findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
+    aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
+    // Sprint 247 — `<DryRunPreview>` IPC stub. Document paradigm short-
+    // circuits to `unsupported` without invoking IPC; the mock is here
+    // for completeness so the import resolves.
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+  });
+});
 
 // Sprint 132 — the QueryTab raw-query hook calls `verifyActiveDb` after
 // optimistic `setActiveDb`. The wrapper itself is unit-tested in

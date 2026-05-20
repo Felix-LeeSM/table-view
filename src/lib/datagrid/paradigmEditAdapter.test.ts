@@ -17,6 +17,7 @@
 //     3. execute → 명령 N개 순차 dispatch
 //     4. execute failure → ok:false (failedIndex 미정)
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { TableData } from "@/types/schema";
 import type { SafeModeGate } from "@/hooks/useSafeModeGate";
 import {
@@ -45,12 +46,14 @@ const deleteDocument = vi.fn();
 // 기존 insert/update/deleteDocument mock 은 호출되지 않지만 type-mock
 // 호환을 위해 유지.
 const bulkWriteDocuments = vi.fn();
-vi.mock("@/lib/tauri", () => ({
-  insertDocument: (...args: unknown[]) => insertDocument(...args),
-  updateDocument: (...args: unknown[]) => updateDocument(...args),
-  deleteDocument: (...args: unknown[]) => deleteDocument(...args),
-  bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocuments(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    insertDocument: (...args: unknown[]) => insertDocument(...args),
+    updateDocument: (...args: unknown[]) => updateDocument(...args),
+    deleteDocument: (...args: unknown[]) => deleteDocument(...args),
+    bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocuments(...args),
+  });
+});
 
 function makeRdbData(): TableData {
   return {

@@ -14,6 +14,7 @@
 //     flow); safe writes / SELECT pass.
 //   - non-production + warn / off: bypass.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -31,14 +32,15 @@ import type { ConnectionConfig } from "@/types/connection";
 const mockExecuteQueryBatch = vi.fn();
 const mockToastError = vi.fn();
 const mockToastInfo = vi.fn();
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: vi.fn(),
-  executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
-  // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: vi.fn(),
+    executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
+    // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+    cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
+  });
+});
 
 vi.mock("@lib/toast", () => ({
   toast: {

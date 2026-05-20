@@ -39,6 +39,11 @@ import {
   type Mock,
 } from "vitest";
 import {
+  doMockTauriModule,
+  doUnmockTauriModule,
+  setupTauriMock,
+} from "@/test-utils/tauriMock";
+import {
   seedWorkspace,
   getTestWorkspace,
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
@@ -102,21 +107,20 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.resolve()),
 }));
-
-// Mock the Tauri invoke wrapper so connectionStore (transitively imported by
-// tabStore) doesn't crash on module load.
-vi.mock("@lib/tauri", () => ({
-  listConnections: vi.fn(() => Promise.resolve([])),
-  listGroups: vi.fn(() => Promise.resolve([])),
-  saveConnection: vi.fn(() => Promise.resolve({})),
-  deleteConnection: vi.fn(() => Promise.resolve()),
-  testConnection: vi.fn(() => Promise.resolve("ok")),
-  connectToDatabase: vi.fn(() => Promise.resolve()),
-  disconnectFromDatabase: vi.fn(() => Promise.resolve()),
-  saveGroup: vi.fn(() => Promise.resolve({})),
-  deleteGroup: vi.fn(() => Promise.resolve()),
-  moveConnectionToGroup: vi.fn(() => Promise.resolve()),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listConnections: vi.fn(() => Promise.resolve([])),
+    listGroups: vi.fn(() => Promise.resolve([])),
+    saveConnection: vi.fn(() => Promise.resolve({})),
+    deleteConnection: vi.fn(() => Promise.resolve()),
+    testConnection: vi.fn(() => Promise.resolve("ok")),
+    connectToDatabase: vi.fn(() => Promise.resolve()),
+    disconnectFromDatabase: vi.fn(() => Promise.resolve()),
+    saveGroup: vi.fn(() => Promise.resolve({})),
+    deleteGroup: vi.fn(() => Promise.resolve()),
+    moveConnectionToGroup: vi.fn(() => Promise.resolve()),
+  });
+});
 
 // Default the window label to "workspace" so `tabStore`'s attach guard fires
 // at module load. The launcher-only test below re-imports tabStore with the
@@ -364,7 +368,7 @@ describe("cross-window store sync (Sprint 153)", () => {
         emit: busModule.emit,
         listen: busModule.listen,
       }));
-      vi.doMock("@lib/tauri", () => ({
+      setupTauriMock({
         listConnections: vi.fn(() => Promise.resolve([])),
         listGroups: vi.fn(() => Promise.resolve([])),
         saveConnection: vi.fn(() => Promise.resolve({})),
@@ -375,7 +379,8 @@ describe("cross-window store sync (Sprint 153)", () => {
         saveGroup: vi.fn(() => Promise.resolve({})),
         deleteGroup: vi.fn(() => Promise.resolve()),
         moveConnectionToGroup: vi.fn(() => Promise.resolve()),
-      }));
+      });
+      doMockTauriModule();
 
       const { useWorkspaceStore: launcherWorkspaceStore } =
         await import("@stores/workspaceStore");
@@ -415,7 +420,7 @@ describe("cross-window store sync (Sprint 153)", () => {
 
       vi.doUnmock("@lib/window-label");
       vi.doUnmock("@tauri-apps/api/event");
-      vi.doUnmock("@lib/tauri");
+      doUnmockTauriModule();
     });
   });
 

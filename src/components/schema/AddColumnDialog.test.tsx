@@ -16,6 +16,7 @@
 //   syntax check, embedded `'` preserved.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -29,14 +30,15 @@ const { mockAddColumnRequest, mockListPostgresTypes } = vi.hoisted(() => ({
   mockAddColumnRequest: vi.fn(),
   mockListPostgresTypes: vi.fn().mockResolvedValue([]),
 }));
-
-vi.mock("@lib/tauri", () => ({
-  addColumnRequest: mockAddColumnRequest,
-  listPostgresTypes: mockListPostgresTypes,
-  // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    addColumnRequest: mockAddColumnRequest,
+    listPostgresTypes: mockListPostgresTypes,
+    // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+    cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
+  });
+});
 
 import AddColumnDialog from "./AddColumnDialog";
 import { useConnectionStore } from "@stores/connectionStore";

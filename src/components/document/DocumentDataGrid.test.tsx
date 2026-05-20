@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -105,18 +106,19 @@ const bulkWriteDocumentsMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(
       upserted_ids: [],
     }),
 );
-
-vi.mock("@lib/tauri", () => ({
-  listMongoDatabases: vi.fn(() => Promise.resolve([])),
-  listMongoCollections: vi.fn(() => Promise.resolve([])),
-  inferCollectionFields: vi.fn(() => Promise.resolve([])),
-  findDocuments: (...args: [string, string, string, unknown?]) =>
-    findMock(...args),
-  insertDocument: (...args: unknown[]) => insertDocumentMock(...args),
-  updateDocument: (...args: unknown[]) => updateDocumentMock(...args),
-  deleteDocument: (...args: unknown[]) => deleteDocumentMock(...args),
-  bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocumentsMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listMongoDatabases: vi.fn(() => Promise.resolve([])),
+    listMongoCollections: vi.fn(() => Promise.resolve([])),
+    inferCollectionFields: vi.fn(() => Promise.resolve([])),
+    findDocuments: (...args: [string, string, string, unknown?]) =>
+      findMock(...args),
+    insertDocument: (...args: unknown[]) => insertDocumentMock(...args),
+    updateDocument: (...args: unknown[]) => updateDocumentMock(...args),
+    deleteDocument: (...args: unknown[]) => deleteDocumentMock(...args),
+    bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocumentsMock(...args),
+  });
+});
 
 beforeEach(() => {
   __resetDocumentStoreForTests();

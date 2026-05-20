@@ -20,6 +20,7 @@
 // `@lib/sql/sqlUtils.splitSqlStatements`, `@lib/toast.toast.info`, and
 // `useSafeModeGate` (no-op since dry-run never invokes the gate).
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -37,14 +38,15 @@ const executeQueryMock = vi.fn();
 const cancelQueryMock = vi.fn();
 const findDocumentsMock = vi.fn();
 const aggregateDocumentsMock = vi.fn();
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: (...args: unknown[]) => executeQueryMock(...args),
-  executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
-  cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
-  findDocuments: (...args: unknown[]) => findDocumentsMock(...args),
-  aggregateDocuments: (...args: unknown[]) => aggregateDocumentsMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: (...args: unknown[]) => executeQueryMock(...args),
+    executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
+    cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
+    findDocuments: (...args: unknown[]) => findDocumentsMock(...args),
+    aggregateDocuments: (...args: unknown[]) => aggregateDocumentsMock(...args),
+  });
+});
 
 // `dispatchDbMutationHint` calls verifyActiveDb fire-and-forget. Stub
 // so the dry-run tests don't accidentally trigger the real IPC.

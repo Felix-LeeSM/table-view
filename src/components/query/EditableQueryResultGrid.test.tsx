@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -12,10 +13,12 @@ import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 
 const mockExecuteQuery = vi.fn();
 const mockExecuteQueryBatch = vi.fn();
-vi.mock("@lib/tauri", () => ({
-  executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
-  executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
+    executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
+  });
+});
 
 const RESULT: QueryResult = {
   columns: [

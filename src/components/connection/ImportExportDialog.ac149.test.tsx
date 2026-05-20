@@ -13,21 +13,18 @@
  * (AC-149-N) for grep-ability even though the call signature changed.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import ImportExportDialog from "./ImportExportDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig, ConnectionGroup } from "@/types/connection";
-
-vi.mock("@lib/tauri", async () => {
-  const actual =
-    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
-  return {
-    ...actual,
+beforeEach(() => {
+  setupTauriMock({
     exportConnections: vi.fn(),
     importConnections: vi.fn(),
     exportConnectionsEncrypted: vi.fn(),
     importConnectionsEncrypted: vi.fn(),
-  };
+  });
 });
 
 beforeEach(() => {

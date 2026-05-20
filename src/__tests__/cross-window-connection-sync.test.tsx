@@ -38,6 +38,7 @@ import {
   afterEach,
   type Mock,
 } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 // ---------------------------------------------------------------------------
 // Shared in-process event bus mock for `@tauri-apps/api/event`.
@@ -91,25 +92,24 @@ vi.mock("@tauri-apps/api/event", () => ({
   emit: busModule.emit,
   listen: busModule.listen,
 }));
-
-// Mock the Tauri invoke wrapper so the bridge attach inside connectionStore
-// does not try to call real backend commands during module import.
-vi.mock("@lib/tauri", () => ({
-  listConnections: vi.fn(() => Promise.resolve([])),
-  listGroups: vi.fn(() => Promise.resolve([])),
-  saveConnection: vi.fn((conn: unknown, isNew: boolean) =>
-    Promise.resolve(isNew ? { ...(conn as object), id: "new-id" } : conn),
-  ),
-  deleteConnection: vi.fn(() => Promise.resolve()),
-  testConnection: vi.fn(() => Promise.resolve("ok")),
-  connectToDatabase: vi.fn(() => Promise.resolve()),
-  disconnectFromDatabase: vi.fn(() => Promise.resolve()),
-  saveGroup: vi.fn((group: unknown, isNew: boolean) =>
-    Promise.resolve(isNew ? { ...(group as object), id: "new-gid" } : group),
-  ),
-  deleteGroup: vi.fn(() => Promise.resolve()),
-  moveConnectionToGroup: vi.fn(() => Promise.resolve()),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listConnections: vi.fn(() => Promise.resolve([])),
+    listGroups: vi.fn(() => Promise.resolve([])),
+    saveConnection: vi.fn((conn: unknown, isNew: boolean) =>
+      Promise.resolve(isNew ? { ...(conn as object), id: "new-id" } : conn),
+    ),
+    deleteConnection: vi.fn(() => Promise.resolve()),
+    testConnection: vi.fn(() => Promise.resolve("ok")),
+    connectToDatabase: vi.fn(() => Promise.resolve()),
+    disconnectFromDatabase: vi.fn(() => Promise.resolve()),
+    saveGroup: vi.fn((group: unknown, isNew: boolean) =>
+      Promise.resolve(isNew ? { ...(group as object), id: "new-gid" } : group),
+    ),
+    deleteGroup: vi.fn(() => Promise.resolve()),
+    moveConnectionToGroup: vi.fn(() => Promise.resolve()),
+  });
+});
 
 // Mock the window-label resolver so the bridge gets a deterministic origin id
 // in the test process. The store falls back to "test" when the label is

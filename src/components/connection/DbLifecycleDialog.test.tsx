@@ -5,6 +5,7 @@
 // create 의 informational copy 가드.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DbLifecycleDialog } from "./DbLifecycleDialog";
@@ -17,10 +18,11 @@ vi.mock("@/lib/tauri/ddl", () => ({
   createRdbDatabase: (...args: unknown[]) => createRdbDatabaseMock(...args),
   dropRdbDatabase: (...args: unknown[]) => dropRdbDatabaseMock(...args),
 }));
-
-vi.mock("@/lib/tauri", () => ({
-  dropMongoDatabase: (...args: unknown[]) => dropMongoDatabaseMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    dropMongoDatabase: (...args: unknown[]) => dropMongoDatabaseMock(...args),
+  });
+});
 
 describe("DbLifecycleDialog (Sprint 335 — Slice M live wire)", () => {
   beforeEach(() => {

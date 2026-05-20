@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { act, render, screen } from "@testing-library/react";
 import WorkspaceSidebar from "./WorkspaceSidebar";
 import MainArea from "@/components/layout/MainArea";
@@ -55,19 +56,20 @@ vi.mock("@lib/window-label", async () => {
 
 // Manual-resolve handle so each test controls the IPC timing precisely.
 const listConnectionsMock = vi.fn();
-
-vi.mock("@lib/tauri", () => ({
-  listConnections: (...args: unknown[]) => listConnectionsMock(...args),
-  listGroups: vi.fn(() => Promise.resolve([])),
-  saveConnection: vi.fn(),
-  deleteConnection: vi.fn(),
-  testConnection: vi.fn(),
-  connectToDatabase: vi.fn(),
-  disconnectFromDatabase: vi.fn(),
-  saveGroup: vi.fn(),
-  deleteGroup: vi.fn(),
-  moveConnectionToGroup: vi.fn(),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listConnections: (...args: unknown[]) => listConnectionsMock(...args),
+    listGroups: vi.fn(() => Promise.resolve([])),
+    saveConnection: vi.fn(),
+    deleteConnection: vi.fn(),
+    testConnection: vi.fn(),
+    connectToDatabase: vi.fn(),
+    disconnectFromDatabase: vi.fn(),
+    saveGroup: vi.fn(),
+    deleteGroup: vi.fn(),
+    moveConnectionToGroup: vi.fn(),
+  });
+});
 
 // The heavy paradigm trees aren't needed for swap-order assertions — the
 // sidebar's pre-hydrate branch returns before pickSidebar runs.

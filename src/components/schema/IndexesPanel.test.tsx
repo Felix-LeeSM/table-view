@@ -8,14 +8,16 @@
 // 포함), (e) error 표면, (f) RDB placeholder 잔존 을 모두 가드.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, waitFor } from "@testing-library/react";
 import { IndexesPanel } from "./IndexesPanel";
 
 const listMongoIndexesMock = vi.fn();
-
-vi.mock("@/lib/tauri", () => ({
-  listMongoIndexes: (...args: unknown[]) => listMongoIndexesMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listMongoIndexes: (...args: unknown[]) => listMongoIndexesMock(...args),
+  });
+});
 
 describe("IndexesPanel (Sprint 332 — Slice J live wire)", () => {
   beforeEach(() => {

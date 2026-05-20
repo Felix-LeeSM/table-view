@@ -10,6 +10,7 @@
 // 두꺼운 wrapper.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -30,18 +31,19 @@ const {
   toastWarningMock: vi.fn(),
   verifyActiveDbMock: vi.fn(),
 }));
-
-vi.mock("@lib/tauri", () => ({
-  createTable: vi.fn(),
-  createTablePlan: mockCreateTablePlan,
-  createIndex: vi.fn(),
-  dropIndex: vi.fn(),
-  addConstraint: vi.fn(),
-  dropConstraint: vi.fn(),
-  listPostgresTypes: mockListPostgresTypes,
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    createTable: vi.fn(),
+    createTablePlan: mockCreateTablePlan,
+    createIndex: vi.fn(),
+    dropIndex: vi.fn(),
+    addConstraint: vi.fn(),
+    dropConstraint: vi.fn(),
+    listPostgresTypes: mockListPostgresTypes,
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+    cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
+  });
+});
 
 vi.mock("@lib/toast", () => ({
   toast: { warning: toastWarningMock, info: vi.fn(), error: vi.fn() },
