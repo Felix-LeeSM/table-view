@@ -31,8 +31,8 @@ import {
   cellToEditValue,
   editKey,
   getInputTypeForColumn,
-  type DataGridEditState,
-} from "@components/datagrid/useDataGridEdit";
+} from "@components/datagrid/dataGridEditFsm";
+import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import {
   formatCellValue,
   isBlobColumn,

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { TableData } from "@/types/schema";
-import { editKey, cellToEditValue } from "../useDataGridEdit";
+import { editKey, cellToEditValue } from "../dataGridEditFsm";
 
 /**
  * `DataGridTable` 의 inline-edit cursor 이동 hook.

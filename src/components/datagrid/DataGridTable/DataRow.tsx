@@ -10,7 +10,7 @@ import {
   cellToEditValue,
   deriveEditorSeed,
   getInputTypeForColumn,
-} from "../useDataGridEdit";
+} from "../dataGridEditFsm";
 import { isJsonbColumn, isArrayColumn } from "../sqlGenerator";
 import { cn } from "@lib/utils";
 import { isBlobColumn, parseFkReference } from "./columnUtils";

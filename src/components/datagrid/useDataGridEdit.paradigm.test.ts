@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useDataGridEdit } from "./useDataGridEdit";
+import { useDocumentDataGridEdit } from "./useDocumentDataGridEdit";
+import { useRdbDataGridEdit } from "./useRdbDataGridEdit";
 import type { TableData } from "@/types/schema";
 
 const mockExecuteQuery = vi.fn();
@@ -65,16 +66,15 @@ describe("useDataGridEdit — document paradigm edit permission (Sprint 86)", ()
   // open an editor for document grids identically to RDB grids. This case
   // preserves the original intent (the default parameter path stays
   // backward-compatible) while documenting the behaviour change.
-  it("handleStartEdit sets editingCell/editValue when paradigm === 'document'", () => {
+  it("handleStartEdit sets editingCell/editValue through the document hook", () => {
     const { result } = renderHook(() =>
-      useDataGridEdit({
+      useDocumentDataGridEdit({
         data: MOCK_DATA,
         schema: "app",
         table: "users",
         connectionId: "conn-mongo",
         page: 1,
         fetchData: mockFetchData,
-        paradigm: "document",
       }),
     );
 
@@ -88,9 +88,9 @@ describe("useDataGridEdit — document paradigm edit permission (Sprint 86)", ()
     expect(result.current.pendingEdits.size).toBe(0);
   });
 
-  it("handleStartEdit still works when paradigm is omitted (defaults to rdb)", () => {
+  it("handleStartEdit still works through the RDB hook", () => {
     const { result } = renderHook(() =>
-      useDataGridEdit({
+      useRdbDataGridEdit({
         data: MOCK_DATA,
         schema: "public",
         table: "users",

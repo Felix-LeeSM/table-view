@@ -32,7 +32,7 @@ import {
   cellToEditString,
   editKey,
   getInputTypeForColumn,
-} from "@components/datagrid/useDataGridEdit";
+} from "@components/datagrid/dataGridEditFsm";
 import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { useConnectionStore } from "@stores/connectionStore";
 import PendingChangesTray from "./PendingChangesTray";

@@ -2,10 +2,8 @@ import { Fragment } from "react";
 import Decimal from "decimal.js";
 import { isDocumentSentinel, type DocumentQueryResult } from "@/types/document";
 import type { ColumnInfo, TableData } from "@/types/schema";
-import {
-  editKey,
-  type DataGridEditState,
-} from "@components/datagrid/useDataGridEdit";
+import { editKey } from "@components/datagrid/dataGridEditFsm";
+import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import { safeStringifyCell } from "@lib/jsonCell";
 import { cn } from "@lib/utils";
 import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
