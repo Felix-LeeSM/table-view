@@ -1,0 +1,185 @@
+# Query Language Support
+
+기준일: 2026-05-19. 이 문서는 사용자가 에디터에서 쓰는 언어 표면을 정리한다.
+
+중요한 구분:
+
+- 실행은 각 DB 서버가 최종 판단한다. PostgreSQL/MySQL SQL은 가능한 한 원문을 서버에 보낸다.
+- 자동완성과 Safe Mode 분석은 클라이언트가 이해하는 부분집합이다. 이 문서의 "지원/미지원 문법"은 주로 그 클라이언트 표면을 뜻한다.
+- MongoDB는 임의 JavaScript를 실행하지 않는다. 지원되는 `db....` 표현식만 파싱해 IPC 명령으로 dispatch 한다.
+
+표기:
+
+- ✅ 지원: 자동완성 또는 클라이언트 파서가 구조적으로 다룬다.
+- ⚠️ 부분 지원: 실행은 가능하거나 후보는 뜨지만, 클라이언트 이해/검증이 제한된다.
+- ❌ 미지원: 클라이언트가 의도적으로 제안/파싱/dispatch 하지 않는다.
+
+## 자동완성 공통
+
+| 표면 | PostgreSQL | MySQL | MongoDB |
+|---|---|---|---|
+| 키워드 | ✅ CodeMirror PostgreSQL dialect | ✅ CodeMirror MySQL dialect | 해당 없음 |
+| 테이블/뷰/컬렉션 | ✅ schema store 기반 | ✅ database/table store 기반 | ✅ collectionNames 기반 |
+| 컬럼/필드 | ✅ cache 기반 columns | ✅ cache 기반 columns | ✅ sampled fieldNames 기반 |
+| quoted identifier | ✅ `"schema"."table"` | ✅ `` `db`.`table` `` | 해당 없음 |
+| alias column | ✅ `FROM t AS x`, `JOIN t x`, 일부 anywhere scan | ✅ 동일 SQL source 공유 | 해당 없음 |
+| CTE/derived columns | ✅ `WITH c AS (...)`, `FROM (...) a` 일부 projection 추출 | ✅ 동일 SQL source 공유 | 해당 없음 |
+| function candidates | ✅ common + PostgreSQL 전용 | ✅ common + MySQL 전용 | 해당 없음 |
+| operator candidates | SQL keyword/function surface | SQL keyword/function surface | ✅ query operators, aggregation stages, accumulators, BSON tags |
+
+## PostgreSQL SQL
+
+### 자동완성
+
+✅ 지원:
+
+- 공통 함수: `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, `COALESCE`, `NULLIF`, `CAST`, `CONCAT`, `LENGTH`, `UPPER`, `LOWER`, `TRIM`, `SUBSTRING`, `EXTRACT`, `NOW`, `CURRENT_TIMESTAMP`.
+- PostgreSQL 함수 후보: `DATE_TRUNC`, `TO_CHAR`, `TO_TIMESTAMP`, `JSONB_BUILD_OBJECT`, `JSONB_AGG`, `ARRAY_AGG`.
+- PostgreSQL 키워드 후보: `RETURNING`, `ILIKE`, `SERIAL`, `BIGSERIAL`, `JSONB`, `EXCLUDED`, `ON CONFLICT`, `MATERIALIZED VIEW`.
+- schema-qualified / fully-quoted table path와 cached columns.
+- `UPDATE ... SET`, `INSERT INTO ... (...)`, `DELETE FROM ... WHERE`, 단순 `SELECT ... FROM`의 column 후보.
+
+⚠️ 제한:
+
+- alias/CTE completion은 editor buffer를 스캔하는 보강 source다. SQL 의미 분석기가 아니므로 복잡한 nested scope, 같은 alias shadowing, 동적 SQL은 완전 보장하지 않는다.
+- 함수 후보는 편의 surface다. 모든 PostgreSQL built-in function을 열거하지 않는다.
+
+### 클라이언트 SQL 파서 / Safe Mode
+
+✅ 지원:
+
+- `SELECT ... FROM ...`: projection, table/schema qualifiers, alias, comma join, `INNER/LEFT/RIGHT/FULL/CROSS JOIN`, `ON`, `USING`.
+- `WHERE` / `HAVING`: comparison, column comparison, `BETWEEN`, `LIKE`, `ILIKE`, `IN (...)`, `IN (SELECT ...)`, `EXISTS`, scalar subquery, `IS NULL`, boolean `AND`/`OR`/`NOT`.
+- `GROUP BY`, `ORDER BY`, `LIMIT ... OFFSET ...`.
+- set operations: `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`.
+- expressions: literals, column refs, `CASE`, window functions with `OVER`, scalar subqueries.
+- CTE: `WITH [RECURSIVE] cte AS (...)` wrapping `SELECT` / `INSERT` / `UPDATE` / `DELETE`; CTE body는 `SELECT`.
+- DML: `INSERT INTO ... VALUES`, `DEFAULT VALUES`, `INSERT ... SELECT`, PostgreSQL `ON CONFLICT`, `RETURNING`, `UPDATE ... SET ... FROM ... WHERE ... RETURNING`, `DELETE ... USING ... WHERE ... RETURNING`.
+- DDL subset: `CREATE TABLE`, `CREATE INDEX`, `CREATE VIEW`, `DROP TABLE/DATABASE/INDEX/VIEW/SCHEMA/SEQUENCE/TYPE`, `TRUNCATE`, `ALTER TABLE ADD/DROP/RENAME COLUMN`, `ADD/DROP CONSTRAINT`, `DROP INDEX`, `RENAME TABLE`.
+- misc: `GRANT`, `REVOKE`, `EXPLAIN`, `SHOW`, `SET`, `COPY`, `COMMENT`.
+
+⚠️ 부분 지원:
+
+- `SELECT 1`처럼 `FROM` 없는 select는 파서의 구조 지원 범위 밖이다.
+- bare function call expression은 일부 위치에서 `OVER` 없는 함수 표현식으로 거부될 수 있다.
+- parser가 거부해도 서버 실행 자체가 항상 불가능하다는 뜻은 아니다. Safe Mode는 거부 시 기존 heuristic으로 fallback할 수 있다.
+
+❌ 미지원:
+
+- stored procedure/function body 문법, PL/pgSQL block, `DO $$ ... $$`.
+- `MERGE`.
+- 임의 vendor extension 전체. 지원 목록 밖은 `unsupported-statement`, `syntax-error`, 또는 `unsupported-expression`으로 떨어진다.
+
+## MySQL SQL
+
+### 자동완성
+
+✅ 지원:
+
+- 공통 SQL 함수 후보는 PostgreSQL과 동일.
+- MySQL 전용 함수 후보: `IFNULL`, `DATE_FORMAT`, `STR_TO_DATE`, `CURDATE`, `CURTIME`, `UTC_TIMESTAMP`, `GROUP_CONCAT`, `JSON_EXTRACT`, `JSON_UNQUOTE`, `JSON_OBJECT`, `JSON_ARRAY`, `UUID`, `LAST_INSERT_ID`, `DATABASE`, `USER`, `VERSION`.
+- MySQL 키워드 후보: `AUTO_INCREMENT`, `REPLACE INTO`, `DUAL`, `ENGINE`, `DUPLICATE KEY UPDATE`.
+- backtick alias: `` `table` ``, fully-qualified `` `db`.`table` ``.
+- PostgreSQL-only 후보(`DATE_TRUNC`, `TO_CHAR`, `JSONB_BUILD_OBJECT` 등)는 `dbType: "mysql"`에서 제외된다.
+
+⚠️ 제한:
+
+- 함수 후보는 MySQL에서 자주 쓰는 scalar/date/json/session surface 위주다. 모든 built-in function을 열거하지 않는다.
+- SQL alias/CTE/column completion source는 PostgreSQL과 공유한다. MySQL-specific parser가 아니라 editor-level SQL source다.
+
+### 실행 / adapter surface
+
+✅ 지원:
+
+- 연결, ping, cancel query.
+- database list / switch database / current database.
+- table, column, index, constraint, view, function, trigger read path.
+- free-form SQL execution: `SELECT`, `WITH`, `SHOW`, `EXPLAIN`, `DESCRIBE/DESC`는 result grid, `INSERT/UPDATE/DELETE/REPLACE`는 DML rows affected, 그 외는 DDL로 처리.
+- table paging, filters, raw where, order by, default primary-key ordering, streaming rows.
+- MySQL DDL UI backend: table/column/index/constraint create/drop/rename/alter family.
+
+⚠️ 제한:
+
+- MySQL DDL은 implicit commit이 있다. batch/dry-run transaction wrapper가 DDL rollback을 완전 보장하지 않는다.
+- `DROP TABLE ... CASCADE`, `DROP COLUMN ... CASCADE` 같은 PostgreSQL-style option은 MySQL emission에서 무시된다.
+- trigger write는 PG request shape과 MySQL inline body model이 달라 create/drop은 미지원이고 read-only만 지원한다.
+
+### 클라이언트 SQL 파서 / Safe Mode
+
+현재 SQL parser는 PostgreSQL/ANSI 중심의 공통 parser다. MySQL 실행은 서버에 맡기지만, Safe Mode 분류와 일부 editor 분석은 아래 부분집합만 구조적으로 이해한다.
+
+✅ 지원:
+
+- PostgreSQL SQL 섹션의 공통 SELECT/DML/DDL subset 대부분.
+- MySQL identifier quoting은 autocomplete/editor path에서 backtick으로 처리.
+
+⚠️ 부분 지원:
+
+- `SHOW`, `SET`, `EXPLAIN` 등은 공통 misc grammar로 일부 파싱된다.
+- MySQL DB switch는 별도 mutation detector가 `USE <db>`를 감지해 active DB hint를 갱신한다. SQL AST 본체의 일반 DDL/DML grammar와는 별도다.
+
+❌ 미지원:
+
+- MySQL `LIMIT offset, count` form. `LIMIT count OFFSET offset` 형태만 client parser가 다룬다.
+- MySQL `ON DUPLICATE KEY UPDATE`.
+- stored procedure/function/event body, `DELIMITER`, `CALL`, `LOAD DATA`, `LOCK/UNLOCK TABLES`, transaction/control-flow scripting.
+- MySQL dialect 전체를 의미론적으로 validate하는 기능. 서버가 받을 수 있는 SQL이라도 client parser는 모를 수 있다.
+
+## MongoDB Mongosh / MQL
+
+### 자동완성
+
+✅ 지원:
+
+- `db.` 뒤 collection names.
+- `db.<collection>.` 뒤 collection method 후보: `find`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `distinct`, `insertOne`, `insertMany`, `updateOne`, `updateMany`, `replaceOne`, `deleteOne`, `deleteMany`, `createIndex`, `dropIndex`.
+- db-level method 후보: `runCommand`, `adminCommand`.
+- query operators 18개: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$and`, `$or`, `$nor`, `$not`, `$exists`, `$type`, `$regex`, `$elemMatch`, `$size`, `$all`.
+- aggregation stages 14개: `$match`, `$project`, `$group`, `$sort`, `$limit`, `$skip`, `$unwind`, `$lookup`, `$count`, `$addFields`, `$replaceRoot`, `$facet`, `$out`, `$merge`.
+- accumulators 9개: `$sum`, `$avg`, `$min`, `$max`, `$push`, `$addToSet`, `$first`, `$last`, `$count`.
+- BSON extended JSON tags: `$oid`, `$date`, `$numberLong`, `$numberDouble`, `$numberInt`, `$numberDecimal`, `$binary`, `$regularExpression`, `$timestamp`, `$minKey`, `$maxKey`, `$symbol`, `$code`.
+- `db.runCommand({` / `db.adminCommand({` 첫 key 위치에서 admin command literal 후보.
+
+⚠️ 제한:
+
+- MongoDB는 schemaless라 field completion은 sampled/cache된 fieldNames 기반이다. 컬렉션의 모든 possible field를 보장하지 않는다.
+- operator 후보는 context-aware지만 MongoDB server의 모든 operator/stage를 열거하지 않는다.
+
+### 실행 parser / dispatch
+
+✅ 지원:
+
+- `db.runCommand({...})`, `db.adminCommand({...})`.
+- collection commands dispatched by the typed parser: `find`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `distinct`, `insertOne`, `insertMany`, `updateOne`, `updateMany`, `deleteOne`, `deleteMany`, `bulkWrite`.
+- cursor chain for `find` / `aggregate`: `.sort(...)`, `.limit(...)`, `.skip(...)`, `.toArray()`.
+- JSON-like values: object, array, string, number, boolean, null, comments.
+- BSON literals in collection dispatch: `ObjectId(...)`, `ISODate(...)`, `UUID(...)`, `NumberLong(...)`, `NumberDecimal(...)`, `BinData(...)`.
+- BSON literals in the WASM admin/body parser: `ObjectId(...)`, `ISODate(...)`, `UUID(...)`, `NumberLong(...)`, `Decimal128(...)`; `BinData(...)` and `NumberDecimal(...)` are recognized names but rejected in that branch.
+- admin command safe-mode analysis for destructive command keys such as `drop`, `dropDatabase`, `dropIndexes`, `killOp`, `renameCollection`.
+
+⚠️ 부분 지원:
+
+- There are two parser surfaces in current code: the WASM statement classifier recognizes admin vs collection statements for toolbar/database gating, while the collection dispatch path still uses the TypeScript whitelist parser. The effective executable collection surface is the stricter dispatch whitelist.
+- `replaceOne`, `createIndex`, `dropIndex` may appear in autocomplete, but the dispatch whitelist does not currently include them. Treat them as completion-only until dispatch support lands.
+- `db.runCommand` / `db.adminCommand` accepts JSON-shaped command bodies with BSON placeholders, but not arbitrary JavaScript expressions.
+
+❌ 미지원:
+
+- arbitrary JavaScript: `eval`, callbacks, arrow functions, variables, declarations, loops, conditionals, classes, functions.
+- shell helpers: `use`, `show`.
+- bare collection access: `users.find({})`; must start with `db.`.
+- cross-db navigation: `db.getSiblingDB(...)`.
+- multiple statements separated by semicolon.
+- unsupported cursor methods such as `.forEach()`, `.map()`, `.pretty()`.
+- arbitrary mongosh helper methods outside the dispatch whitelist.
+
+## Coverage 판단
+
+현재 상태는 "PostgreSQL strong / MySQL usable but not 100% dialect-complete / MongoDB strong for whitelisted mongosh workflows"다.
+
+다음이 남아 있다:
+
+- MySQL client parser dialect closure: `ON DUPLICATE KEY UPDATE`, `LIMIT offset,count`, `CALL`, `LOAD DATA`, `DELIMITER`/procedure body, transaction scripting.
+- MySQL autocomplete expansion: more built-in functions, variables, system/session functions, engine/storage-specific clauses.
+- Mongo dispatch/autocomplete alignment: autocomplete-only methods(`replaceOne`, `createIndex`, `dropIndex`)의 실행 dispatch 추가 또는 후보 제거.
+- Mongo full operator/stage coverage: current list is curated, not exhaustive.
