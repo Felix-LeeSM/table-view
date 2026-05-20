@@ -297,57 +297,27 @@ export async function editGridCellInRow(
   nextValue: string,
   editorLabel: string,
 ) {
+  let targetCell: WebdriverIO.Element | null = null;
+
   await browser.waitUntil(
-    async () =>
-      await browser.execute(
-        (needle, colIndex) => {
-          const rows = Array.from(document.querySelectorAll('[role="row"]'));
-          return rows.some((row) => {
-            const cells = Array.from(
-              row.querySelectorAll<HTMLElement>('[role="gridcell"]'),
-            );
-            const hasNeedle = cells.some((cell) =>
-              (cell.textContent ?? "").includes(needle),
-            );
-            const target = row.querySelector<HTMLElement>(
-              `[role="gridcell"][aria-colindex="${colIndex}"]`,
-            );
-            return hasNeedle && target && target.offsetParent !== null;
-          });
-        },
-        rowNeedle,
-        ariaColIndex,
-      ),
+    async () => {
+      targetCell = await findGridCellInRow(rowNeedle, ariaColIndex);
+      return targetCell !== null;
+    },
     {
       timeout: 15000,
       timeoutMsg: `grid row containing ${rowNeedle} did not expose editable column ${ariaColIndex}`,
     },
   );
 
-  await browser.execute(
-    (needle, colIndex) => {
-      const rows = Array.from(document.querySelectorAll('[role="row"]'));
-      const row = rows.find((candidate) => {
-        const cells = Array.from(
-          candidate.querySelectorAll<HTMLElement>('[role="gridcell"]'),
-        );
-        return cells.some((cell) => (cell.textContent ?? "").includes(needle));
-      });
-      const cell = row?.querySelector<HTMLElement>(
-        `[role="gridcell"][aria-colindex="${colIndex}"]`,
-      );
-      if (!cell) {
-        throw new Error(
-          `grid row containing ${needle} did not contain column ${colIndex}`,
-        );
-      }
-      cell.dispatchEvent(
-        new MouseEvent("dblclick", { bubbles: true, cancelable: true }),
-      );
-    },
-    rowNeedle,
-    ariaColIndex,
-  );
+  if (!targetCell) {
+    throw new Error(
+      `grid row containing ${rowNeedle} did not contain column ${ariaColIndex}`,
+    );
+  }
+
+  await targetCell.scrollIntoView();
+  await targetCell.doubleClick();
 
   const editor = await $(`[aria-label="${editorLabel}"]`);
   await editor.waitForDisplayed({ timeout: 5000 });
@@ -357,6 +327,34 @@ export async function editGridCellInRow(
 
   const commit = await $('[aria-label="Commit changes"]');
   await commit.waitForDisplayed({ timeout: 10000 });
+}
+
+async function findGridCellInRow(
+  rowNeedle: string,
+  ariaColIndex: number,
+): Promise<WebdriverIO.Element | null> {
+  const rows = await $$('[role="row"]');
+  for (const row of rows) {
+    if (!(await isDisplayed(row))) continue;
+    const rowText = await row.getText();
+    if (!rowText.includes(rowNeedle)) continue;
+
+    const cell = await row.$(
+      `[role="gridcell"][aria-colindex="${ariaColIndex}"]`,
+    );
+    if ((await cell.isExisting()) && (await isDisplayed(cell))) {
+      return cell;
+    }
+  }
+  return null;
+}
+
+async function isDisplayed(element: WebdriverIO.Element): Promise<boolean> {
+  try {
+    return await element.isDisplayed();
+  } catch {
+    return false;
+  }
 }
 
 export async function executeSqlPreview() {
