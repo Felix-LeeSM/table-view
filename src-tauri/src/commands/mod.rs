@@ -18,6 +18,7 @@ pub mod persist_settings;
 pub mod persist_workspace;
 pub mod query;
 pub mod rdb;
+pub mod registry;
 pub mod release_tab_connection;
 pub mod single_instance;
 pub mod snapshot;
