@@ -551,6 +551,33 @@ impl PostgresAdapter {
         order_by: Option<&str>,
         filters: Option<&[FilterCondition]>,
         raw_where: Option<&str>,
+        cancel_token: Option<&CancellationToken>,
+    ) -> Result<TableData, AppError> {
+        if cancel_token.is_some_and(CancellationToken::is_cancelled) {
+            return Err(AppError::Database("Operation cancelled".into()));
+        }
+        let work = self.query_table_data_uncancelled(
+            table, schema, page, page_size, order_by, filters, raw_where,
+        );
+        match cancel_token {
+            Some(token) => tokio::select! {
+                result = work => result,
+                _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+            },
+            None => work.await,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn query_table_data_uncancelled(
+        &self,
+        table: &str,
+        schema: &str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&str>,
+        filters: Option<&[FilterCondition]>,
+        raw_where: Option<&str>,
     ) -> Result<TableData, AppError> {
         let pool = self.active_pool().await?;
 
@@ -946,6 +973,22 @@ mod tests {
                 );
             }
             other => panic!("Expected Validation error, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn query_table_data_pre_cancel_short_circuits_before_pool_lookup() {
+        let adapter = PostgresAdapter::new();
+        let token = CancellationToken::new();
+        token.cancel();
+
+        let result = adapter
+            .query_table_data("users", "public", 1, 10, None, None, None, Some(&token))
+            .await;
+
+        match result {
+            Err(AppError::Database(msg)) => assert_eq!(msg, "Operation cancelled"),
+            other => panic!("expected Operation cancelled, got {other:?}"),
         }
     }
 

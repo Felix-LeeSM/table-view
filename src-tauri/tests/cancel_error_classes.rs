@@ -18,6 +18,7 @@
 //! cancel_mysql / cancel_mongo 통합 테스트가 다룬다.
 
 use table_view_lib::commands::cancel_query::{classify_cancel_error, CancelError};
+use table_view_lib::error::AppError;
 
 #[test]
 fn already_completed_serialises_with_stable_tag() {
@@ -46,6 +47,35 @@ fn network_error_serialises_with_stable_tag() {
     let json = serde_json::to_value(&err).unwrap();
     assert_eq!(json["type"], "NetworkError");
     assert_eq!(json["message"], "broken pipe");
+}
+
+#[test]
+fn app_error_cancel_serialises_as_top_level_cancel_tag() {
+    let value = serde_json::to_value(AppError::Cancel(CancelError::AlreadyCompleted)).unwrap();
+
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "type": "Cancel",
+            "payload": { "type": "AlreadyCompleted" },
+        })
+    );
+}
+
+#[test]
+fn app_error_cancel_preserves_message_payload() {
+    let value = serde_json::to_value(AppError::Cancel(CancelError::PermissionDenied {
+        message: "denied".into(),
+    }))
+    .unwrap();
+
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "type": "Cancel",
+            "payload": { "type": "PermissionDenied", "message": "denied" },
+        })
+    );
 }
 
 #[test]

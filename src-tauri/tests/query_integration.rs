@@ -815,7 +815,7 @@ async fn test_query_table_data_filter_eq_with_numeric_cast() {
         value: Some("300.0".to_string()),
     }];
     let data = adapter
-        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None, None)
         .await
         .expect("filter eq");
     assert_eq!(data.total_count, 1);
@@ -851,7 +851,7 @@ async fn test_query_table_data_filter_like_and_isnull() {
         value: Some("A%".to_string()),
     }];
     let data = adapter
-        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None, None)
         .await
         .expect("filter like");
     assert_eq!(data.total_count, 1);
@@ -864,7 +864,7 @@ async fn test_query_table_data_filter_like_and_isnull() {
         value: None,
     }];
     let data = adapter
-        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None, None)
         .await
         .expect("filter is null");
     assert_eq!(data.total_count, 2);
@@ -876,7 +876,7 @@ async fn test_query_table_data_filter_like_and_isnull() {
         value: None,
     }];
     let data = adapter
-        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None, None)
         .await
         .expect("filter is not null");
     assert_eq!(data.total_count, 3);
@@ -910,7 +910,7 @@ async fn test_query_table_data_filter_unknown_column_is_ignored() {
         value: Some("x".to_string()),
     }];
     let data = adapter
-        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None, None)
         .await
         .expect("unknown column → no WHERE → all rows");
     assert_eq!(data.total_count, 5);
@@ -945,6 +945,7 @@ async fn test_query_table_data_raw_where_accepts_clean_clause() {
             None,
             None,
             Some("amount > 200 AND active = TRUE"),
+            None,
         )
         .await
         .expect("raw_where clean");
@@ -981,6 +982,7 @@ async fn test_query_table_data_raw_where_rejects_semicolon() {
             None,
             None,
             Some("id = 1; DROP TABLE secrets"),
+            None,
         )
         .await
         .expect_err("raw_where with `;` must be rejected");
@@ -1015,7 +1017,7 @@ async fn test_query_table_data_raw_where_rejects_dangerous_keywords() {
     for kw in ["DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "TRUNCATE"] {
         let clause = format!("{kw} TABLE foo");
         let err = adapter
-            .query_table_data(&table, "public", 1, 50, None, None, Some(&clause))
+            .query_table_data(&table, "public", 1, 50, None, None, Some(&clause), None)
             .await
             .expect_err(&format!("{kw} must be rejected"));
         match err {
@@ -1050,7 +1052,7 @@ async fn test_query_table_data_pagination_and_ordering() {
 
     // page=2, page_size=2, ORDER BY id ASC → rows 3,4.
     let data = adapter
-        .query_table_data(&table, "public", 2, 2, Some("id ASC"), None, None)
+        .query_table_data(&table, "public", 2, 2, Some("id ASC"), None, None, None)
         .await
         .expect("paginate");
     assert_eq!(data.total_count, 5);
@@ -1062,7 +1064,7 @@ async fn test_query_table_data_pagination_and_ordering() {
 
     // ORDER BY DESC reverses.
     let data = adapter
-        .query_table_data(&table, "public", 1, 2, Some("id DESC"), None, None)
+        .query_table_data(&table, "public", 1, 2, Some("id DESC"), None, None, None)
         .await
         .expect("desc order");
     assert_eq!(data.rows[0][0].as_i64(), Some(5));

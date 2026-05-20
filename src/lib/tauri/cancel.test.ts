@@ -20,33 +20,56 @@ import {
 } from "./cancel";
 
 describe("parseCancelError", () => {
-  it("parses AlreadyCompleted wire shape", () => {
-    // backend 가 AppError::Database 안에 JSON 을 넣어 보내므로 prefix
-    // 를 strip 한 뒤 JSON.parse.
-    const raw = 'Database error: {"type":"AlreadyCompleted"}';
-    expect(parseCancelError(raw)).toEqual({ type: "AlreadyCompleted" });
+  it("parses typed AppError::Cancel AlreadyCompleted envelope", () => {
+    expect(
+      parseCancelError({
+        type: "Cancel",
+        payload: { type: "AlreadyCompleted" },
+      }),
+    ).toEqual({ type: "AlreadyCompleted" });
   });
 
-  it("parses PermissionDenied with message", () => {
-    const raw =
-      'Database error: {"type":"PermissionDenied","message":"role cannot kill"}';
-    expect(parseCancelError(raw)).toEqual({
+  it("parses typed AppError::Cancel PermissionDenied envelope", () => {
+    expect(
+      parseCancelError({
+        type: "Cancel",
+        payload: {
+          type: "PermissionDenied",
+          message: "role cannot kill",
+        },
+      }),
+    ).toEqual({
       type: "PermissionDenied",
       message: "role cannot kill",
     });
   });
 
-  it("parses NetworkError with message", () => {
-    const raw =
-      'Database error: {"type":"NetworkError","message":"broken pipe"}';
-    expect(parseCancelError(raw)).toEqual({
+  it("parses typed AppError::Cancel NetworkError envelope", () => {
+    expect(
+      parseCancelError({
+        type: "Cancel",
+        payload: {
+          type: "NetworkError",
+          message: "broken pipe",
+        },
+      }),
+    ).toEqual({
       type: "NetworkError",
       message: "broken pipe",
     });
   });
 
+  it("parses JSON-string typed AppError::Cancel envelope defensively", () => {
+    const raw =
+      '{"type":"Cancel","payload":{"type":"NetworkError","message":"reset"}}';
+    expect(parseCancelError(raw)).toEqual({
+      type: "NetworkError",
+      message: "reset",
+    });
+  });
+
   it("falls back to NetworkError on non-JSON error string", () => {
-    // legacy plain-text 에러 path — 사용자에게 toast 로 보이도록 보수적
+    // Plain-text 에러 path — 사용자에게 toast 로 보이도록 보수적
     // NetworkError 분류.
     expect(parseCancelError("plain string error")).toEqual({
       type: "NetworkError",
@@ -54,11 +77,14 @@ describe("parseCancelError", () => {
     });
   });
 
-  it("falls back to NetworkError on object missing type field", () => {
-    const raw = 'Database error: {"oops":1}';
+  it("does not parse AppError::Database JSON payload as a cancel class", () => {
+    const raw = {
+      type: "Database",
+      payload: '{"type":"AlreadyCompleted"}',
+    };
     expect(parseCancelError(raw)).toEqual({
       type: "NetworkError",
-      message: raw,
+      message: '{"type":"AlreadyCompleted"}',
     });
   });
 
@@ -87,9 +113,10 @@ describe("cancelQueryNative", () => {
   });
 
   it("rethrows the IPC error as a typed CancelError (AlreadyCompleted)", async () => {
-    invokeMock.mockRejectedValueOnce(
-      'Database error: {"type":"AlreadyCompleted"}',
-    );
+    invokeMock.mockRejectedValueOnce({
+      type: "Cancel",
+      payload: { type: "AlreadyCompleted" },
+    });
     // expect.rejects matcher 는 thrown value 자체를 검증한다.
     await expect(cancelQueryNative("c", 1)).rejects.toEqual({
       type: "AlreadyCompleted",
@@ -97,9 +124,10 @@ describe("cancelQueryNative", () => {
   });
 
   it("rethrows the IPC error as PermissionDenied", async () => {
-    invokeMock.mockRejectedValueOnce(
-      'Database error: {"type":"PermissionDenied","message":"forbidden"}',
-    );
+    invokeMock.mockRejectedValueOnce({
+      type: "Cancel",
+      payload: { type: "PermissionDenied", message: "forbidden" },
+    });
     await expect(cancelQueryNative("c", 1)).rejects.toEqual({
       type: "PermissionDenied",
       message: "forbidden",
@@ -107,9 +135,10 @@ describe("cancelQueryNative", () => {
   });
 
   it("rethrows the IPC error as NetworkError", async () => {
-    invokeMock.mockRejectedValueOnce(
-      'Database error: {"type":"NetworkError","message":"reset"}',
-    );
+    invokeMock.mockRejectedValueOnce({
+      type: "Cancel",
+      payload: { type: "NetworkError", message: "reset" },
+    });
     await expect(cancelQueryNative("c", 1)).rejects.toEqual({
       type: "NetworkError",
       message: "reset",

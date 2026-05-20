@@ -197,7 +197,7 @@ async fn test_query_table_data() {
 
     // Query page 1, page_size 2
     let data = adapter
-        .query_table_data(&table_name, "public", 1, 2, None, None, None)
+        .query_table_data(&table_name, "public", 1, 2, None, None, None, None)
         .await
         .expect("query_table_data failed");
 
@@ -209,7 +209,7 @@ async fn test_query_table_data() {
 
     // Query page 2
     let data_page2 = adapter
-        .query_table_data(&table_name, "public", 2, 2, None, None, None)
+        .query_table_data(&table_name, "public", 2, 2, None, None, None, None)
         .await
         .expect("query_table_data page 2 failed");
     assert_eq!(data_page2.rows.len(), 1, "Expected 1 row on page 2");
@@ -248,7 +248,16 @@ async fn test_query_table_data_ordering() {
 
     // Query ordered by label ASC
     let data = adapter
-        .query_table_data(&table_name, "public", 1, 50, Some("label"), None, None)
+        .query_table_data(
+            &table_name,
+            "public",
+            1,
+            50,
+            Some("label"),
+            None,
+            None,
+            None,
+        )
         .await
         .expect("query_table_data with ordering failed");
 
@@ -301,7 +310,16 @@ async fn test_query_table_data_ordering_desc() {
 
     // Query ordered by label DESC using "label DESC" format
     let data = adapter
-        .query_table_data(&table_name, "public", 1, 50, Some("label DESC"), None, None)
+        .query_table_data(
+            &table_name,
+            "public",
+            1,
+            50,
+            Some("label DESC"),
+            None,
+            None,
+            None,
+        )
         .await
         .expect("query_table_data with DESC ordering failed");
 
@@ -322,7 +340,16 @@ async fn test_query_table_data_ordering_desc() {
 
     // Verify backward-compatible single-word still defaults to ASC
     let data_asc = adapter
-        .query_table_data(&table_name, "public", 1, 50, Some("label"), None, None)
+        .query_table_data(
+            &table_name,
+            "public",
+            1,
+            50,
+            Some("label"),
+            None,
+            None,
+            None,
+        )
         .await
         .expect("query_table_data with default ASC ordering failed");
 
@@ -517,7 +544,16 @@ async fn test_query_table_data_with_filter_bigint() {
     }];
 
     let data = adapter
-        .query_table_data(&table_name, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(
+            &table_name,
+            "public",
+            1,
+            50,
+            None,
+            Some(&filters),
+            None,
+            None,
+        )
         .await
         .expect("query_table_data with bigint filter failed");
 
@@ -574,7 +610,16 @@ async fn test_query_table_data_with_filter_text() {
     }];
 
     let data = adapter
-        .query_table_data(&table_name, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(
+            &table_name,
+            "public",
+            1,
+            50,
+            None,
+            Some(&filters),
+            None,
+            None,
+        )
         .await
         .expect("query_table_data with text LIKE filter failed");
 
@@ -631,7 +676,16 @@ async fn test_query_table_data_with_filter_integer() {
     }];
 
     let data = adapter
-        .query_table_data(&table_name, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(
+            &table_name,
+            "public",
+            1,
+            50,
+            None,
+            Some(&filters),
+            None,
+            None,
+        )
         .await
         .expect("query_table_data with integer Gt filter failed");
 
@@ -690,6 +744,7 @@ async fn test_query_table_data_multi_column_ordering() {
             Some("category ASC, label ASC"),
             None,
             None,
+            None,
         )
         .await
         .expect("query_table_data with multi-column ordering failed");
@@ -728,6 +783,7 @@ async fn test_query_table_data_multi_column_ordering() {
             1,
             50,
             Some("category ASC, label DESC"),
+            None,
             None,
             None,
         )
@@ -1387,7 +1443,7 @@ async fn test_query_table_data_bigint_value_is_string_wire() {
         .expect("insert bigint");
 
     let data = adapter
-        .query_table_data(&table_name, "public", 1, 50, None, None, None)
+        .query_table_data(&table_name, "public", 1, 50, None, None, None, None)
         .await
         .expect("query_table_data bigint");
     assert_eq!(data.rows.len(), 1);
@@ -1428,7 +1484,7 @@ async fn test_query_table_data_numeric_value_is_string_wire() {
         .expect("insert numeric");
 
     let data = adapter
-        .query_table_data(&table_name, "public", 1, 50, None, None, None)
+        .query_table_data(&table_name, "public", 1, 50, None, None, None, None)
         .await
         .expect("query_table_data numeric");
     assert_eq!(data.rows.len(), 1);
@@ -1468,7 +1524,7 @@ async fn test_query_table_data_int4_value_remains_number_wire() {
         .expect("insert int4");
 
     let data = adapter
-        .query_table_data(&table_name, "public", 1, 50, None, None, None)
+        .query_table_data(&table_name, "public", 1, 50, None, None, None, None)
         .await
         .expect("query_table_data int4");
     assert_eq!(data.rows.len(), 1);
