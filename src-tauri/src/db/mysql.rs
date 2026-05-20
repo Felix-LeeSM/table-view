@@ -1,9 +1,4 @@
-//! MySQL adapter — Phase 17 entrypoint.
-//!
-//! Sprint 281 (Slice A: read path) → 282 (Slice B: queries) → 283
-//! (Slice C: streaming) → 284 (Slice D: DDL) → 285 (Slice E: indexes /
-//! constraints) → 286 (Slice F: views / functions / triggers) → 287
-//! (Slice G: DB-level).
+//! MySQL/MariaDB adapter entrypoint.
 //!
 //! Sub-module layout (PG `db/postgres/*` 와 1:1):
 //! - `connection` — `MysqlAdapter` struct + lifecycle + multi-DB sub-pool LRU.
@@ -15,12 +10,8 @@
 //!   column, create table, create / drop index, add / drop constraint) +
 //!   identifier validators / quoting helpers.
 //!
-//! Current surface = `MysqlAdapter` + `DbAdapter` impl (4 method) +
-//! `RdbAdapter` impl 의 read/query/stream/DDL/introspection 거의 전부.
-//! 미구현은: `create_trigger` / `drop_trigger` 는 MySQL trigger body 가
-//! inline 이라 PG `CreateTriggerRequest` 의 `function_name` 필드 의미가
-//! 다르므로 `Unsupported` reject — frontend 가 paradigm-aware 분기로
-//! 다이얼로그를 숨긴다.
+//! `create_trigger` / `drop_trigger` 는 PG-shaped request 와 MySQL trigger
+//! body shape 이 달라 `Unsupported` reject 한다.
 
 mod connection;
 mod mutations;
@@ -45,7 +36,7 @@ use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult
 
 impl DbAdapter for MysqlAdapter {
     fn kind(&self) -> DatabaseType {
-        DatabaseType::Mysql
+        self.kind.clone()
     }
 
     fn connect<'a>(
@@ -431,6 +422,12 @@ mod tests {
     fn kind_returns_mysql_paradigm() {
         let a = MysqlAdapter::new();
         assert!(matches!(a.kind(), DatabaseType::Mysql));
+    }
+
+    #[test]
+    fn kind_preserves_mariadb_when_constructed_for_mariadb() {
+        let a = MysqlAdapter::new_mariadb();
+        assert!(matches!(a.kind(), DatabaseType::Mariadb));
     }
 
     #[test]

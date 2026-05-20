@@ -53,11 +53,14 @@ pub use session::get_session_id;
 /// Sprint 281 (Phase 17 Slice A) wires MySQL — RdbAdapter read path
 /// (namespaces / tables / columns) is live; DDL / queries / streaming
 /// surfaces still return `AppError::Unsupported` until Slice B~G land.
-/// SQLite remains unsupported.
+/// MariaDB shares the MySQL protocol adapter while preserving its distinct
+/// `DatabaseType` on the active adapter. SQLite / MSSQL / Oracle remain
+/// explicit unsupported variants until their adapter slices land.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
         DatabaseType::Mysql => Ok(ActiveAdapter::Rdb(Box::new(MysqlAdapter::new()))),
+        DatabaseType::Mariadb => Ok(ActiveAdapter::Rdb(Box::new(MysqlAdapter::new_mariadb()))),
         DatabaseType::Mongodb => Ok(ActiveAdapter::Document(Box::new(MongoAdapter::new()))),
         other => Err(AppError::Unsupported(format!(
             "Database type {:?} is not supported yet",
@@ -285,6 +288,32 @@ mod tests {
             "expected Rdb variant"
         );
         assert!(matches!(adapter.kind(), DatabaseType::Mysql));
+    }
+
+    #[test]
+    fn test_make_adapter_mariadb_returns_rdb_variant_with_mariadb_kind() {
+        let adapter = make_adapter(&DatabaseType::Mariadb).expect("mariadb should succeed");
+        assert!(
+            matches!(adapter, ActiveAdapter::Rdb(_)),
+            "expected Rdb variant"
+        );
+        assert!(matches!(adapter.kind(), DatabaseType::Mariadb));
+    }
+
+    #[test]
+    fn test_make_adapter_mssql_returns_unsupported() {
+        assert!(matches!(
+            make_adapter(&DatabaseType::Mssql),
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[test]
+    fn test_make_adapter_oracle_returns_unsupported() {
+        assert!(matches!(
+            make_adapter(&DatabaseType::Oracle),
+            Err(AppError::Unsupported(_))
+        ));
     }
 
     #[test]

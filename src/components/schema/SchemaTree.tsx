@@ -89,7 +89,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   // RDB schema-level migration export. Hidden on Mongo/Redis and when
   // dbType hasn't loaded yet.
   const isRdbConnection =
-    dbType === "postgresql" || dbType === "mysql" || dbType === "sqlite";
+    dbType === "postgresql" ||
+    dbType === "mysql" ||
+    dbType === "mariadb" ||
+    dbType === "sqlite";
   const {
     exportSchema: exportSchemaWithInclude,
     exportDatabase: exportDatabaseWithInclude,

@@ -6,7 +6,10 @@ describe("DB_TYPE_META", () => {
   const expectedTypes: DatabaseType[] = [
     "postgresql",
     "mysql",
+    "mariadb",
     "sqlite",
+    "mssql",
+    "oracle",
     "mongodb",
     "redis",
   ];

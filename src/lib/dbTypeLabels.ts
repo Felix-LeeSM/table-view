@@ -15,13 +15,16 @@ export interface SidebarObjectLabel {
 }
 
 const SIDEBAR_OBJECT_LABELS: Record<DatabaseType, SidebarObjectLabel> = {
-  // PostgreSQL / 향후 MSSQL → 사용자에게 보이는 최상위 트리 노드는 schema.
+  // PostgreSQL / MSSQL / Oracle → 사용자에게 보이는 최상위 트리 노드는 schema.
   postgresql: { single: "schema", plural: "schemas" },
-  // MySQL 은 (사용자 의도상) database/schema 구분이 무의미하므로 "table"
+  // MySQL / MariaDB 는 database/schema 구분이 무의미하므로 "table"
   // 단위로 묶어 표현. 사용자 캡처에서 "Collapse all tables" 직접 언급.
   mysql: { single: "table", plural: "tables" },
+  mariadb: { single: "table", plural: "tables" },
   // SQLite 는 schema 개념 없음 — 최상위 노드는 table.
   sqlite: { single: "table", plural: "tables" },
+  mssql: { single: "schema", plural: "schemas" },
+  oracle: { single: "schema", plural: "schemas" },
   // MongoDB 는 database > collection 구조이지만 sidebar 의 "전부" 단위는
   // collection (database 는 connection 시 선택; 변경은 DbSwitcher 로).
   mongodb: { single: "collection", plural: "collections" },

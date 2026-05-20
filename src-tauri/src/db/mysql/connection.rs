@@ -52,6 +52,7 @@ pub struct MysqlPoolState {
 #[derive(Clone)]
 pub struct MysqlAdapter {
     inner: Arc<Mutex<MysqlPoolState>>,
+    pub(super) kind: crate::models::DatabaseType,
 }
 
 impl Default for MysqlAdapter {
@@ -62,8 +63,17 @@ impl Default for MysqlAdapter {
 
 impl MysqlAdapter {
     pub fn new() -> Self {
+        Self::new_for(crate::models::DatabaseType::Mysql)
+    }
+
+    pub fn new_mariadb() -> Self {
+        Self::new_for(crate::models::DatabaseType::Mariadb)
+    }
+
+    fn new_for(kind: crate::models::DatabaseType) -> Self {
         Self {
             inner: Arc::new(Mutex::new(MysqlPoolState::default())),
+            kind,
         }
     }
 

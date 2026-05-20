@@ -141,13 +141,12 @@ describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
     expect(result!.port).toBe(DATABASE_DEFAULTS.mongodb);
   });
 
-  // AC-178-01 (parser leg) — MariaDB is wire-compatible with MySQL; the
-  // alias maps it onto the existing MySQL adapter without introducing a
-  // new `DatabaseType` variant. Date 2026-04-30.
-  it("parses mariadb URL → dbType=mysql, paradigm=rdb, all fields populated", () => {
+  // AC-178-01 (parser leg) — MariaDB is wire-compatible with MySQL but
+  // keeps a distinct DatabaseType so fixtures and UI labels stay DBMS-specific.
+  it("parses mariadb URL → dbType=mariadb, paradigm=rdb, all fields populated", () => {
     const result = parseConnectionUrl("mariadb://root:pw@localhost:3306/app");
     expect(result).toEqual({
-      dbType: "mysql",
+      dbType: "mariadb",
       host: "localhost",
       port: 3306,
       user: "root",
@@ -170,6 +169,34 @@ describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
   it("decodes URL-encoded password for mariadb", () => {
     const result = parseConnectionUrl("mariadb://root:my%23pw@host:3306/app");
     expect(result!.password).toBe("my#pw");
+  });
+
+  it("recognizes mssql/sqlserver/sqlsrv URLs as unsupported typed drafts", () => {
+    for (const scheme of ["mssql", "sqlserver", "sqlsrv"]) {
+      const result = parseConnectionUrl(`${scheme}://sa:pw@host:1433/master`);
+      expect(result).toMatchObject({
+        dbType: "mssql",
+        host: "host",
+        port: 1433,
+        user: "sa",
+        database: "master",
+        paradigm: "rdb",
+      });
+    }
+  });
+
+  it("recognizes oracle URLs as unsupported typed drafts", () => {
+    const result = parseConnectionUrl(
+      "oracle://system:pw@localhost:1521/FREEPDB1",
+    );
+    expect(result).toMatchObject({
+      dbType: "oracle",
+      host: "localhost",
+      port: 1521,
+      user: "system",
+      database: "FREEPDB1",
+      paradigm: "rdb",
+    });
   });
 
   // AC-178-04 (parser leg) — malformed URL pastes return null so the UI
@@ -243,11 +270,35 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
     });
   });
 
+  it("MariaDB defaults mirror MySQL connection fields", () => {
+    expect(DATABASE_DEFAULT_FIELDS.mariadb).toEqual({
+      port: 3306,
+      user: "root",
+      database: "mysql",
+    });
+  });
+
   it("SQLite defaults: port=0, user='', database=''", () => {
     expect(DATABASE_DEFAULT_FIELDS.sqlite).toEqual({
       port: 0,
       user: "",
       database: "",
+    });
+  });
+
+  it("MSSQL defaults: port=1433, user=sa, database=master", () => {
+    expect(DATABASE_DEFAULT_FIELDS.mssql).toEqual({
+      port: 1433,
+      user: "sa",
+      database: "master",
+    });
+  });
+
+  it("Oracle defaults: port=1521, user=system, database=FREEPDB1", () => {
+    expect(DATABASE_DEFAULT_FIELDS.oracle).toEqual({
+      port: 1521,
+      user: "system",
+      database: "FREEPDB1",
     });
   });
 
@@ -272,7 +323,9 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
   it("only PG defaults user to 'postgres' (regression guard for #4)", () => {
     expect(DATABASE_DEFAULT_FIELDS.postgresql.user).toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.mysql.user).not.toBe("postgres");
+    expect(DATABASE_DEFAULT_FIELDS.mariadb.user).not.toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.sqlite.user).not.toBe("postgres");
+    expect(DATABASE_DEFAULT_FIELDS.mssql.user).not.toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.mongodb.user).not.toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.redis.user).not.toBe("postgres");
   });
@@ -287,10 +340,11 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
 // Date 2026-05-13.
 // ---------------------------------------------------------------------------
 describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
-  it("exposes PG / MySQL / Mongo (Sprint 281 Phase 17 Slice A 합류)", () => {
+  it("exposes PG / MySQL / MariaDB / Mongo", () => {
     expect([...SUPPORTED_DATABASE_TYPES]).toEqual([
       "postgresql",
       "mysql",
+      "mariadb",
       "mongodb",
     ]);
   });
@@ -298,8 +352,11 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
   it("isSupportedDatabaseType matches the SUPPORTED list", () => {
     expect(isSupportedDatabaseType("postgresql")).toBe(true);
     expect(isSupportedDatabaseType("mysql")).toBe(true);
+    expect(isSupportedDatabaseType("mariadb")).toBe(true);
     expect(isSupportedDatabaseType("mongodb")).toBe(true);
     expect(isSupportedDatabaseType("sqlite")).toBe(false);
+    expect(isSupportedDatabaseType("mssql")).toBe(false);
+    expect(isSupportedDatabaseType("oracle")).toBe(false);
     expect(isSupportedDatabaseType("redis")).toBe(false);
   });
 
@@ -308,7 +365,10 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     // 메시지에서도 사용되므로.
     expect(DATABASE_TYPE_LABELS.postgresql).toBe("PostgreSQL");
     expect(DATABASE_TYPE_LABELS.mysql).toBe("MySQL");
+    expect(DATABASE_TYPE_LABELS.mariadb).toBe("MariaDB");
     expect(DATABASE_TYPE_LABELS.sqlite).toBe("SQLite");
+    expect(DATABASE_TYPE_LABELS.mssql).toBe("Microsoft SQL Server");
+    expect(DATABASE_TYPE_LABELS.oracle).toBe("Oracle");
     expect(DATABASE_TYPE_LABELS.mongodb).toBe("MongoDB");
     expect(DATABASE_TYPE_LABELS.redis).toBe("Redis");
   });

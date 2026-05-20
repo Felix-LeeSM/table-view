@@ -14,6 +14,10 @@ describe("databaseTypeToSqlDialect", () => {
     expect(databaseTypeToSqlDialect("mysql")).toBe(MySQL);
   });
 
+  it("maps mariadb to the MySQL dialect", () => {
+    expect(databaseTypeToSqlDialect("mariadb")).toBe(MySQL);
+  });
+
   // AC-03: SQLite resolution
   it("maps sqlite to the SQLite dialect", () => {
     expect(databaseTypeToSqlDialect("sqlite")).toBe(SQLite);
@@ -26,6 +30,14 @@ describe("databaseTypeToSqlDialect", () => {
 
   it("falls back to StandardSQL for redis", () => {
     expect(databaseTypeToSqlDialect("redis")).toBe(StandardSQL);
+  });
+
+  it("falls back to StandardSQL for mssql until a dedicated CodeMirror dialect is wired", () => {
+    expect(databaseTypeToSqlDialect("mssql")).toBe(StandardSQL);
+  });
+
+  it("falls back to StandardSQL for oracle until a dedicated CodeMirror dialect is wired", () => {
+    expect(databaseTypeToSqlDialect("oracle")).toBe(StandardSQL);
   });
 
   it("falls back to StandardSQL for undefined (deleted connection)", () => {

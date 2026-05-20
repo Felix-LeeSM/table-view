@@ -4,8 +4,8 @@ import type { DatabaseType } from "@/types/connection";
  * DBMS-shape-aware sidebar tree depth. `SchemaTree` renders one of three
  * shapes depending on whether the DBMS exposes a real `schema` layer:
  *
- *   - `with-schema` — PostgreSQL: `database → schema → table`. The
- *     schema row is interactive (expand/collapse, refresh).
+ *   - `with-schema` — PostgreSQL/MSSQL/Oracle: `database → schema → table`.
+ *     The schema row is interactive (expand/collapse, refresh).
  *   - `no-schema`   — MySQL/MariaDB: schema row suppressed (MySQL
  *     conflates schema with database) but categories and items still
  *     render under each backend-returned schema.
@@ -26,8 +26,11 @@ export type RdbTreeShape = "with-schema" | "no-schema" | "flat";
 export function resolveRdbTreeShape(dbType: DatabaseType): RdbTreeShape {
   switch (dbType) {
     case "postgresql":
+    case "mssql":
+    case "oracle":
       return "with-schema";
     case "mysql":
+    case "mariadb":
       return "no-schema";
     case "sqlite":
       return "flat";

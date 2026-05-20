@@ -20,7 +20,7 @@ import {
  */
 
 /**
- * DBMS-aware label for the sidebar row-count cell. PG/MySQL report
+ * DBMS-aware label for the sidebar row-count cell. PG/MySQL/MariaDB report
  * estimates (`pg_class.reltuples`, `information_schema.tables.TABLE_ROWS`);
  * SQLite reports an exact COUNT(*) since it has no estimate catalog and
  * the file-local count is fast enough. Both `aria-label` (screen readers)
@@ -31,7 +31,7 @@ export function rowCountLabel(
   rowCount: number | null | undefined,
 ): string {
   // SQLite reports the exact count synchronously, but `rowCount` may be
-  // null on PG/MySQL when ANALYZE hasn't run yet. Avoid promising a
+  // null on PG/MySQL/MariaDB when ANALYZE hasn't run yet. Avoid promising a
   // count we don't have.
   if (dbType === "sqlite" || rowCount == null) {
     return "Exact row count not yet fetched";
@@ -39,7 +39,7 @@ export function rowCountLabel(
   if (dbType === "postgresql") {
     return "Estimated row count from pg_class.reltuples";
   }
-  if (dbType === "mysql") {
+  if (dbType === "mysql" || dbType === "mariadb") {
     return "Estimated row count from information_schema.tables";
   }
   return "Estimated row count";
@@ -47,8 +47,8 @@ export function rowCountLabel(
 
 /**
  * Visible row-count text:
- *   - `?` when unknown (SQLite always; PG/MySQL when null)
- *   - `~12,345` for PG/MySQL estimates — the tilde flags "estimate" at a
+ *   - `?` when unknown (SQLite always; PG/MySQL/MariaDB when null)
+ *   - `~12,345` for PG/MySQL/MariaDB estimates — the tilde flags "estimate" at a
  *     glance so the user can tell it apart from an exact count.
  */
 export function rowCountText(

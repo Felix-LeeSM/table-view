@@ -15,6 +15,12 @@ describe("selectCompletionModule (paradigm × dbType)", () => {
     expect(mod.keywords).toContain("AUTO_INCREMENT");
   });
 
+  it("returns mysql-compatible module for ('rdb', 'mariadb')", () => {
+    const mod = selectCompletionModule("rdb", "mariadb");
+    expect(mod.dbType).toBe("mariadb");
+    expect(mod.keywords).toContain("AUTO_INCREMENT");
+  });
+
   it("returns sqlite module for ('rdb', 'sqlite')", () => {
     const mod = selectCompletionModule("rdb", "sqlite");
     expect(mod.dbType).toBe("sqlite");

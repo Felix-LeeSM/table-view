@@ -21,7 +21,7 @@ export interface ResolvedPgModule {
 }
 
 export interface ResolvedMysqlModule {
-  readonly dbType: "mysql";
+  readonly dbType: "mysql" | "mariadb";
   readonly keywords: readonly string[];
   readonly createSource: typeof mysql.createCompletionSource;
 }
@@ -49,7 +49,7 @@ export type ResolvedCompletionModule =
  * Map a (paradigm, dbType) pair to its completion module. Throws
  * `CompletionPairingError` when the pair is incompatible. Compatible pairs:
  *  - `("rdb", "postgresql")` → pg
- *  - `("rdb", "mysql")` → mysql
+ *  - `("rdb", "mysql" | "mariadb")` → mysql
  *  - `("rdb", "sqlite")` → sqlite
  *  - `("document", "mongodb")` → mongo
  *
@@ -70,9 +70,9 @@ export function selectCompletionModule(
         createSource: pg.createCompletionSource,
       };
     }
-    if (dbType === "mysql") {
+    if (dbType === "mysql" || dbType === "mariadb") {
       return {
-        dbType: "mysql",
+        dbType,
         keywords: mysql.keywords,
         createSource: mysql.createCompletionSource,
       };

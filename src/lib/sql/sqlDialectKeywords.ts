@@ -135,9 +135,13 @@ export function getKeywordsForDialect(
     case "postgresql":
       return [...POSTGRES_KEYWORDS, ...COMMON_SQL_KEYWORDS];
     case "mysql":
+    case "mariadb":
       return [...MYSQL_KEYWORDS, ...COMMON_SQL_KEYWORDS];
     case "sqlite":
       return [...SQLITE_KEYWORDS, ...COMMON_SQL_KEYWORDS];
+    case "mssql":
+    case "oracle":
+      return COMMON_SQL_KEYWORDS;
     case "mongodb":
     case "redis":
       // SqlQueryEditor is never mounted for these paradigms. Defensive

@@ -256,6 +256,17 @@ describe("DbSwitcher", () => {
     expect(trigger).toHaveAttribute("aria-haspopup", "listbox");
   });
 
+  it("stays read-only for SQLite because the database is the connection file", () => {
+    setStores({ paradigm: "rdb", connected: true, dbType: "sqlite" });
+    render(<DbSwitcher />);
+    expect(
+      screen.getByRole("button", { name: /active database \(read-only\)/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /active database switcher/i }),
+    ).not.toBeInTheDocument();
+  });
+
   // Sprint 328 — Mongo paradigm hides the toolbar switcher entirely (no
   // chip, no read-only fallback). DataGrip-style tab-local chip will take
   // over in Sprint 329; sidebar selection no longer mutates connection
