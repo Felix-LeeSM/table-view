@@ -6,6 +6,7 @@ import {
   openNewQueryTab,
   runQuery,
   typeQuery,
+  waitForGridText,
   waitForLauncher,
 } from "./_helpers";
 
@@ -24,33 +25,25 @@ describe("PostgreSQL smoke", () => {
     await usersTable.waitForDisplayed({ timeout: 10000 });
     await usersTable.click();
 
-    const table = await $("table");
-    await table.waitForDisplayed({ timeout: 15000 });
-    await browser.waitUntil(
-      async () => {
-        const body = (
-          ((await table.getProperty("textContent")) as string) ?? ""
-        )
-          .trim()
-          .toLowerCase();
-        return body.includes("alice") || body.includes("alice@example.com");
-      },
-      {
-        timeout: 15000,
-        timeoutMsg: "seeded Postgres users row did not appear in grid",
-      },
+    await waitForGridText(
+      ["alice", "alice@example.com"],
+      15000,
+      "seeded Postgres users row did not appear in grid",
     );
 
     await openNewQueryTab();
     await typeQuery("SELECT 1 AS test_column");
     await runQuery();
 
-    const header = await $("th*=test_column");
-    await header.waitForDisplayed({ timeout: 15000 });
+    const resultGrid = await waitForGridText(
+      ["test_column"],
+      15000,
+      "SELECT 1 header did not appear in result grid",
+    );
 
     await browser.waitUntil(
       async () => {
-        const cells = await $$("td");
+        const cells = await $$('[role="gridcell"]');
         for (const cell of cells) {
           const text = (
             ((await cell.getProperty("textContent")) as string) ?? ""
@@ -65,6 +58,6 @@ describe("PostgreSQL smoke", () => {
       },
     );
 
-    expect(await header.isDisplayed()).toBe(true);
+    expect(await resultGrid.isDisplayed()).toBe(true);
   });
 });

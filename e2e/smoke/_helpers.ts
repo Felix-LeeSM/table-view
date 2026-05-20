@@ -242,6 +242,28 @@ export async function runQuery() {
   await run.click();
 }
 
+export async function waitForGridText(
+  snippets: string[],
+  timeout: number,
+  timeoutMsg: string,
+) {
+  const grid = await $('[role="grid"]');
+  await grid.waitForDisplayed({ timeout });
+  await browser.waitUntil(
+    async () => {
+      const text = (
+        ((await grid.getProperty("textContent")) as string) ?? ""
+      ).toLowerCase();
+      return snippets.some((snippet) => text.includes(snippet.toLowerCase()));
+    },
+    {
+      timeout,
+      timeoutMsg,
+    },
+  );
+  return grid;
+}
+
 export async function expandIfCollapsed(selector: string, timeout = 10000) {
   const node = await $(selector);
   await node.waitForDisplayed({ timeout });
