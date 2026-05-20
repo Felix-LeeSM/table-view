@@ -12,11 +12,14 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 
 Phase 1–4 완료 (Sprint 24–54 PASS). Phase 5–11 부분 진행. **Phase 12 완료(2026-04-27, Sprint 150–155)** — launcher/workspace 별도 `WebviewWindow` + 5 store cross-window IPC sync + 실제 lifecycle wiring + ADR 0011 → 0012 supersede + RISK-025 resolved.
 
-진행 중/대기: **Phase 13** (PG preview tab parity + multi-window activation 회귀 진단), Phase 14 (workspace theme toggle), Phase 15 (connection group DnD + nested indent), Phase 16 (Recent connections 동작 보장).
+최근 closure 기준: **Phase 13–17, 21–23, 27 종료**. Phase 18–20
+(MariaDB / SQLite / Oracle) 은 보류. 현재 다음 후보는 Phase 28 (MongoDB
+Full Support 후속 / parser consolidation) 과 2026-05-19 refactor backlog
+(`docs/refactor-backlog/2026-05-19/`) 이다.
 
 ## 방향 결정 (2026-05-01)
 
-**TablePlus 패리티 우선, 신규 DBMS 추가는 보류.** PostgreSQL + MongoDB 두 패러다임 위에서 TablePlus의 데일리 워크플로(grid export · row inline edit · DDL UI · Safe Mode)를 닫는 것이 최우선. **Phase 17–20 (MySQL / MariaDB / SQLite / Oracle 어댑터)은 패리티 달성 이후 재개**한다 (`보류` 상태).
+**TablePlus 패리티 우선, 신규 DBMS 추가는 보류.** PostgreSQL + MongoDB 두 패러다임 위에서 TablePlus의 데일리 워크플로(grid export · row inline edit · DDL UI · Safe Mode)를 닫는 것이 최우선. **Phase 17 (MySQL)은 Sprint 276–296 sequence 로 retrospective closure 됐고, Phase 18–20 (MariaDB / SQLite / Oracle 어댑터)은 계속 보류**한다.
 
 ### 작업 순서 (Impact 큰 순) — Phase 21–27
 
@@ -223,25 +226,26 @@ e2e dead 제약 (cross-window invariant 변경 회피) 으로 phase 선정. Phas
 | 3 | Query Editor | 완료 | [phase-3.md](phases/phase-3.md) |
 | 4 | Editing & Polish | 완료 | [phase-4.md](phases/phase-4.md) |
 | 5 | Extended Features | 진행 중 | [phase-5.md](phases/phase-5.md) |
-| 6 | MongoDB 지원 | 계획 | [phase-6.md](phases/phase-6.md) |
+| 6 | MongoDB 지원 | 부분 완료 → Phase 28 로 승계 | [phase-6.md](phases/phase-6.md), [phase-28.md](phases/phase-28.md) |
 | 7 | Elasticsearch 지원 | 계획 | [phase-7.md](phases/phase-7.md) |
 | 8 | Redis 지원 | 계획 | [phase-8.md](phases/phase-8.md) |
 | 12 | Multi-window split (launcher/workspace) | 완료 | [phase-12.md](phases/phase-12.md) |
-| 13 | PG preview tab parity + multi-window activation 회귀 진단 | 계획 | [phase-13.md](phases/phase-13.md) |
-| 14 | Workspace theme toggle | 계획 | [phase-14.md](phases/phase-14.md) |
-| 15 | Connection group DnD + nested indent | 계획 | [phase-15.md](phases/phase-15.md) |
-| 16 | Recent connections (MRU) 동작 보장 | 계획 | [phase-16.md](phases/phase-16.md) |
-| 17 | MySQL 어댑터 | 진행 중 (Sprint 277 seed infra ✓ / Sprint 276 unsupported UI hide ✓ / 다음: adapter 본체) | [phase-17.md](phases/phase-17.md) |
+| 13 | PG preview tab parity + multi-window activation 회귀 진단 | 종료 (Sprint 156–160; E2E 일부 deferred) | [phase-13.md](phases/phase-13.md) |
+| 14 | Workspace theme toggle | 종료 (Sprint 161–162; E2E 일부 deferred) | [phase-14.md](phases/phase-14.md) |
+| 15 | Connection group DnD + nested indent | 종료 (Sprint 163–164; P2 후속 deferred) | [phase-15.md](phases/phase-15.md) |
+| 16 | Recent connections (MRU) 동작 보장 | 종료 (Sprint 166–168; UX 보강 후속 완료) | [phase-16.md](phases/phase-16.md) |
+| 17 | MySQL 어댑터 | 종료 (Sprint 278–287 + Sprint 296 retrospective) | [phase-17.md](phases/phase-17.md) |
 | 18 | MariaDB 어댑터 | **보류** (2026-05-01) | [phase-18.md](phases/phase-18.md) |
 | 19 | SQLite 어댑터 | **보류** (2026-05-01) | [phase-19.md](phases/phase-19.md) |
 | 20 | Oracle 어댑터 | **보류** (2026-05-01) | [phase-20.md](phases/phase-20.md) |
-| 21 | CSV / SQL / JSON Export | 계획 (Sprint 181) | [phase-21.md](phases/phase-21.md) |
-| 22 | Row 인라인 편집 RDB + Preview/Commit/Discard 게이트 | 계획 | [phase-22.md](phases/phase-22.md) |
+| 21 | CSV / SQL / JSON Export | 종료 (Sprint 181) | [phase-21.md](phases/phase-21.md) |
+| 22 | Row 인라인 편집 RDB + Preview/Commit/Discard 게이트 | 완료 (Sprint 181–184) | [phase-22.md](phases/phase-22.md) |
 | 23 | Safe Mode (프로덕션 가드) | 종료 (Sprint 185–188, 2026-05-01) | [phase-23.md](phases/phase-23.md) |
 | 24 | Index Write UI | 계획 | [phase-24.md](phases/phase-24.md) |
 | 25 | Constraint Write UI | 계획 | [phase-25.md](phases/phase-25.md) |
 | 26 | Trigger 관리 | 계획 | [phase-26.md](phases/phase-26.md) |
 | 27 | Table / Column DDL UI | 종료 (Sprint 237 closure, 2026-05-13) | [phase-27.md](phases/phase-27.md) |
+| 28 | MongoDB Full Support | 진행/후속 판단 (Slice A–M 대부분 구현, parser consolidation 후보) | [phase-28.md](phases/phase-28.md) |
 
 > Phase 9–11은 본 phase 분할 이전의 임시 스케치(`phase-9.md` 등). Phase 17–20이 phase-9의 RDBMS 확장 계획을 승계해 분할 — 2026-05-01 결정으로 패리티 달성 시까지 보류. Phase 21–27 이 그 자리를 차지하고, 본 7단계 종료 시점에 Phase 17–20 재개를 재평가.
 
