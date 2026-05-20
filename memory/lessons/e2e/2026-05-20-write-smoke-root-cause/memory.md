@@ -2,10 +2,10 @@
 title: Write smoke는 preview close가 아니라 persisted outcome을 검증한다
 type: lesson
 date: 2026-05-20
-surface: "e2e/smoke/**/*.ts, src/lib/mongo/mqlToBulk.ts, src-tauri/src/db/mongodb/mutations.rs"
+surface: e2e/smoke/**/*.ts, src/lib/mongo/mqlToBulk.ts, src-tauri/src/db/mongodb/mutations.rs
 ---
 
-# 상황
+# Write smoke는 preview close가 아니라 persisted outcome을 검증한다
 
 CI smoke를 연결/조회 중심에서 실제 write path 검증으로 강화하자 Postgres grid edit,
 Mongo MQL preview execute에서 순차적으로 실패했다. 최종 CI green 기준은 PR #58
