@@ -324,16 +324,91 @@ export async function editGridCellInRow(
   }
 
   await targetCell.scrollIntoView();
-  await targetCell.doubleClick();
-
-  const editor = await $(`[aria-label="${editorLabel}"]`);
-  await editor.waitForDisplayed({ timeout: 5000 });
+  const editor = await openGridCellEditor(
+    targetCell,
+    rowNeedle,
+    ariaColIndex,
+    editorLabel,
+  );
   await editor.clearValue();
   await editor.setValue(nextValue);
   await browser.keys("Enter");
 
   const commit = await $('[aria-label="Commit changes"]');
   await commit.waitForDisplayed({ timeout: 10000 });
+}
+
+async function openGridCellEditor(
+  targetCell: WebdriverIO.Element,
+  rowNeedle: string,
+  ariaColIndex: number,
+  editorLabel: string,
+): Promise<WebdriverIO.Element> {
+  await targetCell.doubleClick();
+  let editor = await findDisplayedEditor(editorLabel);
+  if (editor) return editor;
+
+  await targetCell.click();
+  await targetCell.click();
+  editor = await findDisplayedEditor(editorLabel);
+  if (editor) return editor;
+
+  await dispatchGridCellDoubleClick(rowNeedle, ariaColIndex);
+  editor = await findDisplayedEditor(editorLabel, 5000);
+  if (editor) return editor;
+
+  throw new Error(`grid editor ${editorLabel} did not open`);
+}
+
+async function findDisplayedEditor(
+  editorLabel: string,
+  timeout = 500,
+): Promise<WebdriverIO.Element | null> {
+  const editor = await $(`[aria-label="${editorLabel}"]`);
+  try {
+    await editor.waitForDisplayed({ timeout });
+    return editor;
+  } catch {
+    return null;
+  }
+}
+
+async function dispatchGridCellDoubleClick(
+  rowNeedle: string,
+  ariaColIndex: number,
+) {
+  await browser.execute(
+    (needle, colIndex) => {
+      const rows = Array.from(document.querySelectorAll('[role="row"]'));
+      const row = rows.find((candidate) =>
+        ((candidate as HTMLElement).textContent ?? "").includes(needle),
+      );
+      const cell = row?.querySelector<HTMLElement>(
+        `[role="gridcell"][aria-colindex="${colIndex}"]`,
+      );
+      if (!cell) return;
+
+      const rect = cell.getBoundingClientRect();
+      const eventInit: MouseEventInit = {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+        view: window,
+      };
+      cell.dispatchEvent(new MouseEvent("mousedown", eventInit));
+      cell.dispatchEvent(new MouseEvent("mouseup", eventInit));
+      cell.dispatchEvent(new MouseEvent("click", { ...eventInit, detail: 1 }));
+      cell.dispatchEvent(new MouseEvent("mousedown", eventInit));
+      cell.dispatchEvent(new MouseEvent("mouseup", eventInit));
+      cell.dispatchEvent(new MouseEvent("click", { ...eventInit, detail: 2 }));
+      cell.dispatchEvent(
+        new MouseEvent("dblclick", { ...eventInit, detail: 2 }),
+      );
+    },
+    rowNeedle,
+    ariaColIndex,
+  );
 }
 
 async function findGridCellInRow(
