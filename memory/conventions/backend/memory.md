@@ -42,6 +42,12 @@ Backend 변경은 Tauri command / state / DB adapter contract 를 깨지 않는 
 - DDL/destructive command 는 request-shaped struct + `preview_only` 를
   우선하고, preview 와 execute 가 같은 SQL builder 를 공유하게 한다.
   execute branch 는 가능한 한 transaction 으로 감싼다.
+- Public Tauri/store-facing wire structs default to
+  `#[serde(rename_all = "camelCase")]`. Legacy restore/import compatibility is
+  explicit via `#[serde(alias = "...")]`, `#[serde(default)]`, or a documented
+  normalizer, not by leaking mixed casing into new payloads.
+- Keep intentional snake_case exceptions only where the current contract says
+  so, for example SQL/schema table-data fields and `BulkWriteResult` counters.
 - error 는 `AppError` 계열로 context 를 보존한다. 문자열만 맞추는 테스트 금지.
 - secret / connection string / password 는 log, debug output, fixture direct write 에 남기지 않음.
 - async path 에 blocking 작업을 섞지 않는다. 필요 시 `spawn_blocking` 로 격리.
