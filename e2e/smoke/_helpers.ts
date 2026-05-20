@@ -310,7 +310,13 @@ async function executePreviewAction(ariaLabel: string) {
   await switchToWorkspaceWindow();
   const execute = await $(`[aria-label="${ariaLabel}"]`);
   await execute.waitForDisplayed({ timeout: 10000 });
-  await execute.click();
+  await browser.execute((label) => {
+    const button = Array.from(
+      document.querySelectorAll<HTMLElement>("[aria-label]"),
+    ).find((candidate) => candidate.getAttribute("aria-label") === label);
+    if (!button) throw new Error(`${label} button did not appear`);
+    button.click();
+  }, ariaLabel);
   await browser.waitUntil(
     async () => {
       const previewActions = await $$(`[aria-label="${ariaLabel}"]`);
