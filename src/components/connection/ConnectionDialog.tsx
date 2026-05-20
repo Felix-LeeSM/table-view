@@ -20,7 +20,7 @@
 // hatch — new dialogs should pick a preset.
 //
 // Sprint 138 (#4 — DBMS-aware connection form): the inner network/auth/db
-// row(s) are no longer rendered inline. `db_type` switches into one of five
+// row(s) are no longer rendered inline. `dbType` switches into one of five
 // sub-components (Pg/Mysql/Sqlite/Mongo/Redis) so the form shape and
 // defaults match each DBMS. The `assertNever` exhaustive check in the
 // switch statement guarantees a new `DatabaseType` variant breaks the
@@ -133,7 +133,7 @@ export default function ConnectionDialog({
   } = draftForm;
 
   const urlImport = useConnectionUrlImport({
-    dbType: form.db_type,
+    dbType: form.dbType,
     applyParsedConnection,
     setHostPort: (host, port) => setForm((f) => ({ ...f, host, port })),
   });
@@ -316,7 +316,7 @@ export default function ConnectionDialog({
       {pendingDbTypeChange && (
         <ConfirmDialog
           title="Replace custom port?"
-          message={`Switching from ${form.db_type} to ${pendingDbTypeChange.to} will reset port ${form.port} → ${DATABASE_DEFAULTS[pendingDbTypeChange.to]}. Continue?`}
+          message={`Switching from ${form.dbType} to ${pendingDbTypeChange.to} will reset port ${form.port} → ${DATABASE_DEFAULTS[pendingDbTypeChange.to]}. Continue?`}
           confirmLabel={`Use default port ${DATABASE_DEFAULTS[pendingDbTypeChange.to]}`}
           onConfirm={handleConfirmDbTypeReplace}
           onCancel={handleCancelDbTypeReplace}

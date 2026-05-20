@@ -17,19 +17,19 @@ import type { DocumentQueryResult } from "@/types/document";
 function buildPage1(): DocumentQueryResult {
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId", category: "unknown" },
-      { name: "name", data_type: "string", category: "unknown" },
+      { name: "_id", dataType: "ObjectId", category: "unknown" },
+      { name: "name", dataType: "string", category: "unknown" },
     ],
     rows: [
       [{ $oid: "65abcdef0123456789abcdef" }, "Alice"],
       [{ $oid: "65abcdef0123456789abcde0" }, "Bob"],
     ],
-    raw_documents: [
+    rawDocuments: [
       { _id: { $oid: "65abcdef0123456789abcdef" }, name: "Alice" },
       { _id: { $oid: "65abcdef0123456789abcde0" }, name: "Bob" },
     ],
-    total_count: 700,
-    execution_time_ms: 2,
+    totalCount: 700,
+    executionTimeMs: 2,
   };
 }
 
@@ -38,20 +38,20 @@ function buildPage2(): DocumentQueryResult {
   // `score` but drops `name`. accumulator must keep `name` from page 1.
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId", category: "unknown" },
-      { name: "email", data_type: "string", category: "unknown" },
-      { name: "score", data_type: "int", category: "unknown" },
+      { name: "_id", dataType: "ObjectId", category: "unknown" },
+      { name: "email", dataType: "string", category: "unknown" },
+      { name: "score", dataType: "int", category: "unknown" },
     ],
     rows: [[{ $oid: "65abcdef0123456789abcde1" }, "carol@example.com", 42]],
-    raw_documents: [
+    rawDocuments: [
       {
         _id: { $oid: "65abcdef0123456789abcde1" },
         email: "carol@example.com",
         score: 42,
       },
     ],
-    total_count: 700,
-    execution_time_ms: 1,
+    totalCount: 700,
+    executionTimeMs: 1,
   };
 }
 
@@ -162,13 +162,13 @@ describe("DocumentDataGrid — schema accumulator (Sprint 320 E.2)", () => {
     // backend that only returns `_id` + `email` for the new collection.
     findMock.mockResolvedValue({
       columns: [
-        { name: "_id", data_type: "ObjectId", category: "unknown" },
-        { name: "email", data_type: "string", category: "unknown" },
+        { name: "_id", dataType: "ObjectId", category: "unknown" },
+        { name: "email", dataType: "string", category: "unknown" },
       ],
       rows: [[{ $oid: "ff0000" }, "x@example.com"]],
-      raw_documents: [{ _id: { $oid: "ff0000" }, email: "x@example.com" }],
-      total_count: 1,
-      execution_time_ms: 1,
+      rawDocuments: [{ _id: { $oid: "ff0000" }, email: "x@example.com" }],
+      totalCount: 1,
+      executionTimeMs: 1,
     });
 
     rerender(
@@ -193,22 +193,20 @@ describe("DocumentDataGrid — schema accumulator (Sprint 320 E.2)", () => {
     const page1WithScore: DocumentQueryResult = {
       ...buildPage1(),
       columns: [
-        { name: "_id", data_type: "ObjectId", category: "unknown" },
-        { name: "score", data_type: "int", category: "unknown" },
+        { name: "_id", dataType: "ObjectId", category: "unknown" },
+        { name: "score", dataType: "int", category: "unknown" },
       ],
       rows: [[{ $oid: "65abcdef0123456789abcdef" }, 100]],
-      raw_documents: [
-        { _id: { $oid: "65abcdef0123456789abcdef" }, score: 100 },
-      ],
+      rawDocuments: [{ _id: { $oid: "65abcdef0123456789abcdef" }, score: 100 }],
     };
     const page2WithScoreAsString: DocumentQueryResult = {
       ...buildPage2(),
       columns: [
-        { name: "_id", data_type: "ObjectId", category: "unknown" },
-        { name: "score", data_type: "string", category: "unknown" },
+        { name: "_id", dataType: "ObjectId", category: "unknown" },
+        { name: "score", dataType: "string", category: "unknown" },
       ],
       rows: [[{ $oid: "65abcdef0123456789abcde1" }, "high"]],
-      raw_documents: [
+      rawDocuments: [
         { _id: { $oid: "65abcdef0123456789abcde1" }, score: "high" },
       ],
     };

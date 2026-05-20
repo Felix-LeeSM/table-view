@@ -136,12 +136,12 @@ export function useMigrationExport(): UseMigrationExportReturn {
       toast.error("Export: connection not found");
       return null;
     }
-    const dialect = DBMS_TO_DIALECT[conn.db_type];
+    const dialect = DBMS_TO_DIALECT[conn.dbType];
     if (!dialect) {
-      toast.error(`Export: ${conn.db_type} is not yet supported (RDB only)`);
+      toast.error(`Export: ${conn.dbType} is not yet supported (RDB only)`);
       return null;
     }
-    return { dialect, dbType: conn.db_type };
+    return { dialect, dbType: conn.dbType };
   };
 
   const exportSchema = useCallback(

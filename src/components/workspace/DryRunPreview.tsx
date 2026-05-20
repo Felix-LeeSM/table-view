@@ -72,8 +72,8 @@ export default function DryRunPreview({
               data-testid={`dry-run-result-row-${idx}`}
               className="font-mono text-3xs text-foreground"
             >
-              statement {idx + 1} of {state.results!.length} — {r.total_count}{" "}
-              rows affected ({r.execution_time_ms}ms)
+              statement {idx + 1} of {state.results!.length} — {r.totalCount}{" "}
+              rows affected ({r.executionTimeMs}ms)
             </li>
           ))}
         </ul>

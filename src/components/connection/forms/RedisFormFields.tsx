@@ -9,7 +9,7 @@
  *     configuration). Stored as string in `ConnectionDraft.database` for
  *     parity with the existing schema; the input type is `number` and we
  *     clamp to the 0–15 range.
- *   - `tls_enabled` is shared with Mongo's TLS toggle for code reuse —
+ *   - `tlsEnabled` is shared with Mongo's TLS toggle for code reuse —
  *     this sprint only ships the form-side field; backend support is
  *     deferred to Phase 8 (see master spec non-goals).
  */
@@ -172,8 +172,8 @@ export default function RedisFormFields({
           id="conn-tls-enabled"
           type="checkbox"
           className="cursor-pointer"
-          checked={!!draft.tls_enabled}
-          onChange={(e) => onChange({ tls_enabled: e.target.checked })}
+          checked={!!draft.tlsEnabled}
+          onChange={(e) => onChange({ tlsEnabled: e.target.checked })}
         />
         Enable TLS
       </label>

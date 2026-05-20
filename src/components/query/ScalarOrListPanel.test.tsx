@@ -17,11 +17,11 @@ import type { QueryResult } from "@/types/query";
 describe("ScalarOrListPanel — count mode", () => {
   it('renders the big numeric + "Count" label', () => {
     const result: QueryResult = {
-      columns: [{ name: "count", data_type: "Int64", category: "int" }],
+      columns: [{ name: "count", dataType: "Int64", category: "int" }],
       rows: [[42]],
-      total_count: 1,
-      execution_time_ms: 3,
-      query_type: "select",
+      totalCount: 1,
+      executionTimeMs: 3,
+      queryType: "select",
       resultKind: "scalar",
     };
     render(<ScalarOrListPanel result={result} mode="count" />);
@@ -31,11 +31,11 @@ describe("ScalarOrListPanel — count mode", () => {
 
   it("renders 0 when count is zero", () => {
     const result: QueryResult = {
-      columns: [{ name: "count", data_type: "Int64", category: "int" }],
+      columns: [{ name: "count", dataType: "Int64", category: "int" }],
       rows: [[0]],
-      total_count: 1,
-      execution_time_ms: 1,
-      query_type: "select",
+      totalCount: 1,
+      executionTimeMs: 1,
+      queryType: "select",
       resultKind: "scalar",
     };
     render(<ScalarOrListPanel result={result} mode="count" />);
@@ -46,11 +46,11 @@ describe("ScalarOrListPanel — count mode", () => {
 describe("ScalarOrListPanel — list mode", () => {
   it("renders the field-name title + one row per value", () => {
     const result: QueryResult = {
-      columns: [{ name: "country", data_type: "string", category: "text" }],
+      columns: [{ name: "country", dataType: "string", category: "text" }],
       rows: [["KR"], ["US"], ["JP"]],
-      total_count: 3,
-      execution_time_ms: 5,
-      query_type: "select",
+      totalCount: 3,
+      executionTimeMs: 5,
+      queryType: "select",
       resultKind: "list",
     };
     render(<ScalarOrListPanel result={result} mode="list" />);
@@ -66,11 +66,11 @@ describe("ScalarOrListPanel — list mode", () => {
 
   it("renders empty list cleanly (no items, no NULL placeholder)", () => {
     const result: QueryResult = {
-      columns: [{ name: "value", data_type: "string", category: "text" }],
+      columns: [{ name: "value", dataType: "string", category: "text" }],
       rows: [],
-      total_count: 0,
-      execution_time_ms: 2,
-      query_type: "select",
+      totalCount: 0,
+      executionTimeMs: 2,
+      queryType: "select",
       resultKind: "list",
     };
     render(<ScalarOrListPanel result={result} mode="list" />);
@@ -83,9 +83,9 @@ describe("ScalarOrListPanel — findOne-empty mode", () => {
     const result: QueryResult = {
       columns: [],
       rows: [],
-      total_count: 0,
-      execution_time_ms: 2,
-      query_type: "select",
+      totalCount: 0,
+      executionTimeMs: 2,
+      queryType: "select",
       resultKind: "scalar",
     };
     render(<ScalarOrListPanel result={result} mode="findOne-empty" />);

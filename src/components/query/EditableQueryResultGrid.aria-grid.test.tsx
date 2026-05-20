@@ -17,17 +17,17 @@ beforeEach(() => {
 
 const RESULT: QueryResult = {
   columns: [
-    { name: "id", data_type: "integer", category: "int" },
-    { name: "name", data_type: "text", category: "text" },
-    { name: "email", data_type: "varchar", category: "text" },
+    { name: "id", dataType: "integer", category: "int" },
+    { name: "name", dataType: "text", category: "text" },
+    { name: "email", dataType: "varchar", category: "text" },
   ],
   rows: [
     [1, "Alice", "alice@example.com"],
     [2, "Bob", "bob@example.com"],
   ],
-  total_count: 2,
-  execution_time_ms: 1,
-  query_type: "select",
+  totalCount: 2,
+  executionTimeMs: 1,
+  queryType: "select",
 };
 
 const PLAN: RawEditPlan = {
@@ -122,7 +122,7 @@ describe("EditableQueryResultGrid ARIA grid roles (Sprint 260 AC-260-03)", () =>
   });
 
   it("empty result 의 row 이 단일 role=gridcell + aria-colindex=1", () => {
-    const emptyResult: QueryResult = { ...RESULT, rows: [], total_count: 0 };
+    const emptyResult: QueryResult = { ...RESULT, rows: [], totalCount: 0 };
     render(
       <EditableQueryResultGrid
         result={emptyResult}

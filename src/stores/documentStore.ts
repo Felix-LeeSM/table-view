@@ -7,6 +7,7 @@ import type {
   FindBody,
 } from "@/types/document";
 import * as tauri from "@lib/tauri";
+import { normalizeDocumentQueryResult } from "@lib/wireCamelCase";
 
 /**
  * Zustand store backing the document paradigm read path.
@@ -220,11 +221,8 @@ export const useDocumentStore = create<DocumentState>((set) => ({
   runFind: async (connectionId, database, collection, body) => {
     const key = `find:${connectionId}:${database}:${collection}`;
     const reqId = nextRequestId(key);
-    const result = await tauri.findDocuments(
-      connectionId,
-      database,
-      collection,
-      body,
+    const result = normalizeDocumentQueryResult(
+      await tauri.findDocuments(connectionId, database, collection, body),
     );
     if (isLatestRequest(key, reqId)) {
       set((state) => ({
@@ -253,11 +251,13 @@ export const useDocumentStore = create<DocumentState>((set) => ({
     const pipelineKey = JSON.stringify(pipeline);
     const key = `aggregate:${connectionId}:${database}:${collection}:${pipelineKey}`;
     const reqId = nextRequestId(key);
-    const result = await tauri.aggregateDocuments(
-      connectionId,
-      database,
-      collection,
-      pipeline,
+    const result = normalizeDocumentQueryResult(
+      await tauri.aggregateDocuments(
+        connectionId,
+        database,
+        collection,
+        pipeline,
+      ),
     );
     if (isLatestRequest(key, reqId)) {
       set((state) => ({

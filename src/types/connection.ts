@@ -42,33 +42,33 @@ export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
  * Broad paradigm classification mirrored from the backend. Each
  * `DatabaseType` maps to exactly one paradigm so the UI can branch on
  * paradigm (e.g. mongo → document tree) without re-inspecting the raw
- * `db_type` string.
+ * `dbType` string.
  */
 export type Paradigm = "rdb" | "document" | "search" | "kv";
 
 /**
  * The shape of a connection as it lives in the frontend. Note: there is no
  * `password` field — passwords are kept exclusively in the encrypted backend
- * store and never sent to the renderer process. Use `has_password` to know
+ * store and never sent to the renderer process. Use `hasPassword` to know
  * whether the user has set one.
  */
 export interface ConnectionConfig {
   id: string;
   name: string;
-  db_type: DatabaseType;
+  dbType: DatabaseType;
   host: string;
   port: number;
   user: string;
   database: string;
-  group_id: string | null;
+  groupId: string | null;
   color: string | null;
-  connection_timeout?: number;
-  keep_alive_interval?: number;
+  connectionTimeout?: number;
+  keepAliveInterval?: number;
   environment?: string | null;
   /** Whether a password is currently stored on disk for this connection. */
-  has_password: boolean;
+  hasPassword: boolean;
   /**
-   * Paradigm tag derived from `db_type` on the backend. Required —
+   * Paradigm tag derived from `dbType` on the backend. Required —
    * the backend always emits a typed `Paradigm` enum, so consumers
    * can rely on it being present.
    */
@@ -78,11 +78,11 @@ export interface ConnectionConfig {
   // frontend treats them as optional so non-mongo connections type-check
   // without boilerplate.
   /** MongoDB auth source (`authSource`). */
-  auth_source?: string | null;
+  authSource?: string | null;
   /** MongoDB replica set name. */
-  replica_set?: string | null;
+  replicaSet?: string | null;
   /** Whether TLS is enabled for this MongoDB connection. */
-  tls_enabled?: boolean | null;
+  tlsEnabled?: boolean | null;
 }
 
 /**
@@ -93,10 +93,7 @@ export interface ConnectionConfig {
  * - `""`       → explicitly clear the stored password
  * - non-empty  → set/replace the stored password
  */
-export interface ConnectionDraft extends Omit<
-  ConnectionConfig,
-  "has_password"
-> {
+export interface ConnectionDraft extends Omit<ConnectionConfig, "hasPassword"> {
   password: string | null;
 }
 
@@ -127,7 +124,7 @@ export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
 
 /**
  * Per-DBMS defaults seeded into the form when the user picks or switches
- * `db_type`. Adds `user` + `database` defaults on top of
+ * `dbType`. Adds `user` + `database` defaults on top of
  * `DATABASE_DEFAULTS`, so the dialog no longer hard-codes
  * `user="postgres"` for every DBMS.
  *
@@ -175,13 +172,13 @@ export function createEmptyDraft(): ConnectionDraft {
   return {
     id: "",
     name: "",
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
     password: "",
     database: "postgres",
-    group_id: null,
+    groupId: null,
     color: null,
     paradigm: "rdb",
   };
@@ -194,20 +191,20 @@ export function draftFromConnection(conn: ConnectionConfig): ConnectionDraft {
   return {
     id: conn.id,
     name: conn.name,
-    db_type: conn.db_type,
+    dbType: conn.dbType,
     host: conn.host,
     port: conn.port,
     user: conn.user,
     database: conn.database,
-    group_id: conn.group_id,
+    groupId: conn.groupId,
     color: conn.color,
-    connection_timeout: conn.connection_timeout,
-    keep_alive_interval: conn.keep_alive_interval,
+    connectionTimeout: conn.connectionTimeout,
+    keepAliveInterval: conn.keepAliveInterval,
     environment: conn.environment,
     paradigm: conn.paradigm,
-    auth_source: conn.auth_source,
-    replica_set: conn.replica_set,
-    tls_enabled: conn.tls_enabled,
+    authSource: conn.authSource,
+    replicaSet: conn.replicaSet,
+    tlsEnabled: conn.tlsEnabled,
     password: null,
   };
 }
@@ -223,7 +220,7 @@ export function parseConnectionUrl(
     if (parsed.protocol === "sqlite:") {
       const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
       return {
-        db_type: "sqlite",
+        dbType: "sqlite",
         host: "",
         port: DATABASE_DEFAULT_FIELDS.sqlite.port,
         user: "",
@@ -254,7 +251,7 @@ export function parseConnectionUrl(
     // unchanged (silent best-effort, no alert).
     if (!parsed.hostname) return null;
     return {
-      db_type: dbType,
+      dbType,
       host: parsed.hostname,
       port: parsed.port ? parseInt(parsed.port, 10) : DATABASE_DEFAULTS[dbType],
       user: decodeURIComponent(parsed.username),
@@ -279,7 +276,7 @@ export function parseSqliteFilePath(
   const trimmed = raw.trim();
   if (trimmed.length === 0) return null;
   return {
-    db_type: "sqlite",
+    dbType: "sqlite",
     host: "",
     port: DATABASE_DEFAULT_FIELDS.sqlite.port,
     user: "",

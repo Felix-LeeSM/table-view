@@ -11,7 +11,7 @@ import type { TableData } from "@/types/schema";
 // wrapper with the payload the generator produced.
 
 const mockInsertDocument = vi.fn<(...args: unknown[]) => Promise<unknown>>(() =>
-  Promise.resolve({ ObjectId: "507f1f77bcf86cd799439099" }),
+  Promise.resolve({ objectId: "507f1f77bcf86cd799439099" }),
 );
 const mockUpdateDocument = vi.fn<(...args: unknown[]) => Promise<void>>(() =>
   Promise.resolve(),
@@ -181,7 +181,7 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
         kind: "updateOne",
         database: "app",
         collection: "users",
-        documentId: { ObjectId: HEX_A },
+        documentId: { objectId: HEX_A },
         patch: { $set: { name: "Ada Lovelace" } },
       },
     ]);

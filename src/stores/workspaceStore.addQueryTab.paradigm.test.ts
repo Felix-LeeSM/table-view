@@ -10,7 +10,7 @@
  *   at the backend `as_rdb()` paradigm gate with
  *   `Unsupported operation: Operation requires a relational (RDB)
  *   connection`. The fix derives the paradigm from
- *   `connectionStore.connections[connId].db_type` via `paradigmOf()`
+ *   `connectionStore.connections[connId].dbType` via `paradigmOf()`
  *   when the caller does not pass an explicit override.
  *
  * The contract these tests lock:
@@ -18,7 +18,7 @@
  *   2. Postgres connection + no override → `"rdb"` (regression guard).
  *   3. Redis connection + no override → `"kv"`.
  *   4. Explicit `opts.paradigm` always wins, even when it disagrees
- *      with `db_type`. The override is the seam DocumentDatabaseTree
+ *      with `dbType`. The override is the seam DocumentDatabaseTree
  *      uses to force `"document"` for the right-click "New query here"
  *      action and must keep working unchanged.
  *   5. Unknown `connId` falls back to `"rdb"` defensively so a stale
@@ -44,14 +44,14 @@ function makeConnection(
   return {
     id,
     name: `${id}-name`,
-    db_type: dbType,
+    dbType: dbType,
     host: "localhost",
     port: 5432,
     user: "user",
     database: "defaultdb",
-    group_id: null,
+    groupId: null,
     color: null,
-    has_password: false,
+    hasPassword: false,
     paradigm: paradigmOf(dbType),
     ...overrides,
   };
@@ -109,7 +109,7 @@ describe("workspaceStore.addQueryTab — paradigm auto-detection", () => {
     expect(tab.paradigm).toBe("kv");
   });
 
-  it("honours an explicit opts.paradigm override against db_type", () => {
+  it("honours an explicit opts.paradigm override against dbType", () => {
     // Mongo connection, but caller insists on a `document` paradigm
     // explicitly. The store must not second-guess the override — that
     // is the seam DocumentDatabaseTree uses for "New query here".

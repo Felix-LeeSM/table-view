@@ -63,9 +63,9 @@ describe("useDryRun", () => {
       {
         columns: [],
         rows: [],
-        total_count: 7,
-        execution_time_ms: 4,
-        query_type: { dml: { rows_affected: 7 } },
+        totalCount: 7,
+        executionTimeMs: 4,
+        queryType: { dml: { rows_affected: 7 } },
       },
     ];
     executeQueryDryRunMock.mockResolvedValueOnce(payload);

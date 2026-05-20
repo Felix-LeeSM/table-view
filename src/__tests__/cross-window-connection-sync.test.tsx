@@ -147,13 +147,13 @@ function makeConn(id: string, name = `${id} DB`): ConnectionConfig {
   return {
     id,
     name,
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: false,
+    hasPassword: false,
     database: "test",
-    group_id: null,
+    groupId: null,
     color: null,
     paradigm: "rdb",
   };

@@ -36,6 +36,7 @@ pub enum ColumnCategory {
 
 /// Column metadata for a query result
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct QueryColumn {
     /// Column name
     pub name: String,
@@ -140,6 +141,7 @@ pub struct ServerInfoRow {
 
 /// Result of an arbitrary SQL query execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct QueryResult {
     /// Column metadata (names and types)
     pub columns: Vec<QueryColumn>,
@@ -231,6 +233,14 @@ mod tests {
             category: ColumnCategory::Unknown,
         };
         let json = serde_json::to_string(&col).unwrap();
+        assert!(
+            json.contains("\"dataType\":\"integer\""),
+            "query column wire shape must be camelCase: {json}"
+        );
+        assert!(
+            !json.contains("data_type"),
+            "query column wire shape must not expose snake_case: {json}"
+        );
         let deserialized: QueryColumn = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.name, "user_id");
         assert_eq!(deserialized.data_type, "integer");
@@ -261,6 +271,28 @@ mod tests {
         };
 
         let json = serde_json::to_string(&result).unwrap();
+        assert!(
+            json.contains("\"dataType\":\"integer\""),
+            "nested query column wire shape must be camelCase: {json}"
+        );
+        assert!(
+            json.contains("\"totalCount\":2"),
+            "query result total_count must serialize as totalCount: {json}"
+        );
+        assert!(
+            json.contains("\"executionTimeMs\":15"),
+            "query result execution_time_ms must serialize as executionTimeMs: {json}"
+        );
+        assert!(
+            json.contains("\"queryType\":\"select\""),
+            "query result query_type must serialize as queryType: {json}"
+        );
+        assert!(
+            !json.contains("total_count")
+                && !json.contains("execution_time_ms")
+                && !json.contains("query_type"),
+            "query result wire shape must not expose snake_case keys: {json}"
+        );
         let deserialized: QueryResult = serde_json::from_str(&json).unwrap();
 
         assert_eq!(deserialized.columns.len(), 2);

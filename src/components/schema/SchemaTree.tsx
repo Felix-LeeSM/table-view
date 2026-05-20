@@ -75,12 +75,12 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const connectionName = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name,
   );
-  // DBMS-shape-aware tree depth. Driven off `db_type` because the shape
+  // DBMS-shape-aware tree depth. Driven off `dbType` because the shape
   // difference (with-schema / no-schema / flat) is *within* the rdb
   // paradigm. Defaults to `with-schema` (PG) on first render so the
   // initial paint matches the most explicit shape.
   const dbType = useConnectionStore(
-    (s) => s.connections.find((c) => c.id === connectionId)?.db_type,
+    (s) => s.connections.find((c) => c.id === connectionId)?.dbType,
   );
   const treeShape: RdbTreeShape = dbType
     ? resolveRdbTreeShape(dbType)

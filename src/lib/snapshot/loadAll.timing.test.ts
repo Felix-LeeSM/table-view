@@ -37,14 +37,14 @@ function makeSnapshot(): InitialAppState {
           {
             id: "c1",
             name: "Primary",
-            db_type: "postgresql",
+            dbType: "postgresql",
             host: "localhost",
             port: 5432,
             user: "u",
             database: "d",
-            group_id: null,
+            groupId: null,
             color: null,
-            has_password: true,
+            hasPassword: true,
             paradigm: "rdb",
           },
         ],
@@ -143,6 +143,116 @@ describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
 
     const safe = useSafeModeStore.getState();
     expect(safe.mode).toBe("warn");
+  });
+
+  it("normalizes legacy snake-case connection snapshot fields on restore", async () => {
+    const snap = makeSnapshot();
+    snap.stores.connections = {
+      items: [
+        {
+          id: "legacy-c1",
+          name: "Legacy",
+          db_type: "mongodb",
+          host: "localhost",
+          port: 27017,
+          user: "",
+          database: "admin",
+          group_id: "legacy-g1",
+          color: null,
+          has_password: true,
+          paradigm: "document",
+          auth_source: "admin",
+          replica_set: "rs0",
+          tls_enabled: true,
+        },
+      ],
+      groups: [
+        {
+          id: "legacy-g1",
+          name: "Legacy Group",
+          color: null,
+          collapsed: false,
+        },
+      ],
+    } as never;
+    snap.runtime.activeStatuses = {
+      "legacy-c1": { type: "connected", active_db: "admin" },
+    } as never;
+    invokeMock.mockResolvedValueOnce(snap);
+
+    await loadAllFromSnapshot();
+
+    const conn = useConnectionStore.getState();
+    expect(conn.connections[0]).toMatchObject({
+      id: "legacy-c1",
+      dbType: "mongodb",
+      groupId: "legacy-g1",
+      hasPassword: true,
+      authSource: "admin",
+      replicaSet: "rs0",
+      tlsEnabled: true,
+    });
+    expect(conn.activeStatuses["legacy-c1"]).toEqual({
+      type: "connected",
+      activeDb: "admin",
+    });
+  });
+
+  it("normalizes legacy snake-case completed queryState in workspace snapshots", async () => {
+    const snap = makeSnapshot();
+    snap.stores.workspaces = {
+      byConnectionId: {
+        c1: {
+          d: {
+            tabs: [
+              {
+                type: "query",
+                id: "query-1",
+                title: "Query",
+                connectionId: "c1",
+                closable: true,
+                sql: "select 1",
+                paradigm: "rdb",
+                queryMode: "sql",
+                queryState: {
+                  status: "completed",
+                  result: {
+                    columns: [
+                      { name: "id", data_type: "int4", category: "int" },
+                    ],
+                    rows: [[1]],
+                    total_count: 1,
+                    execution_time_ms: 4,
+                    query_type: "select",
+                  },
+                },
+              },
+            ],
+            activeTabId: "query-1",
+            closedTabHistory: [],
+            dirtyTabIds: [],
+            sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+          },
+        },
+      },
+    } as never;
+    invokeMock.mockResolvedValueOnce(snap);
+
+    await loadAllFromSnapshot();
+
+    const tab = useWorkspaceStore.getState().workspaces.c1?.d?.tabs[0];
+    expect(tab?.type).toBe("query");
+    if (tab?.type !== "query") throw new Error("expected query tab");
+    expect(tab.queryState.status).toBe("completed");
+    if (tab.queryState.status !== "completed") {
+      throw new Error("expected completed query state");
+    }
+    expect(tab.queryState.result).toMatchObject({
+      totalCount: 1,
+      executionTimeMs: 4,
+      queryType: "select",
+    });
+    expect(tab.queryState.result.columns[0]?.dataType).toBe("int4");
   });
 
   it("does NOT hydrate favorites / queryHistory / datagrid_prefs (lazy via mount IPC)", async () => {

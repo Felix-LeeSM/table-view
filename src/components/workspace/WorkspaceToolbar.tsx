@@ -12,7 +12,7 @@ import SafeModeToggle from "./SafeModeToggle";
  *
  * Connection swap path: Home → double-click. Schema selection is unified
  * into the sidebar tree (`SchemaTree`), which folds the schema row away on
- * `db_type`s without that layer (mysql / sqlite). The toolbar carries no
+ * `dbType`s without that layer (mysql / sqlite). The toolbar carries no
  * schema chip — active schema is implicit in the tab title for relational
  * tabs and irrelevant for document tabs.
  *

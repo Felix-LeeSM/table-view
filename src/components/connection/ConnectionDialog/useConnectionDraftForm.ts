@@ -21,9 +21,9 @@ import {
  *     the password input is never folded into the draft until save).
  *   - `clearPassword` / `setClearPassword` (edit-mode keep/clear toggle).
  *   - `pendingDbTypeChange` (Sprint 108 — confirmation flow when the user
- *     swaps `db_type` while a custom port is set).
+ *     swaps `dbType` while a custom port is set).
  *   - `applyDbTypeChange` (Sprint 138 — DBMS-aware defaults; preserves
- *     `host` / `name` / `group_id` / `color` / `environment`).
+ *     `host` / `name` / `groupId` / `color` / `environment`).
  *   - `resolvePassword` (Sprint 178 — keep/clear/set semantics).
  *   - `trimDraft` (Sprint 178 — name/host/database/user; password verbatim).
  *   - `applyParsedConnection` (URL mode `Parse & Continue` + form-mode
@@ -62,7 +62,7 @@ export interface UseConnectionDraftFormReturn {
   /**
    * Merge a parsed connection into the draft. `parsed` matches the
    * return shape of `parseConnectionUrl` / `parseSqliteFilePath` —
-   * `Partial<ConnectionDraft>` (e.g. `auth_source` is omitted on
+   * `Partial<ConnectionDraft>` (e.g. `authSource` is omitted on
    * non-Mongo URLs).
    *
    * - `mode: "url"` — URL-mode `Parse & Continue` semantics: name fallback
@@ -82,7 +82,7 @@ export function useConnectionDraftForm(
   connection?: ConnectionConfig,
 ): UseConnectionDraftFormReturn {
   const isEditing = !!connection;
-  const hadPassword = !!connection?.has_password;
+  const hadPassword = !!connection?.hasPassword;
 
   const [form, setForm] = useState<ConnectionDraft>(
     connection ? draftFromConnection(connection) : createEmptyDraft(),
@@ -99,16 +99,16 @@ export function useConnectionDraftForm(
     to: DatabaseType;
   } | null>(null);
 
-  const isSqlite = form.db_type === "sqlite";
+  const isSqlite = form.dbType === "sqlite";
   // Sprint 381 (2026-05-17) — Mongo db-contract α: `database` is optional
   // on Mongo (default DB landing field, not connection-required) so the
   // Save validator skips the "Database is required" branch when true.
-  const isMongo = form.db_type === "mongodb";
+  const isMongo = form.dbType === "mongodb";
 
   /**
-   * Sprint 138 — when the user changes `db_type`, reset the DBMS-specific
+   * Sprint 138 — when the user changes `dbType`, reset the DBMS-specific
    * defaults (`port`, `user`, `database`) but **preserve** entries the user
-   * has likely typed deliberately (`host`, `name`, `group_id`, `color`,
+   * has likely typed deliberately (`host`, `name`, `groupId`, `color`,
    * `environment`). The `host` preservation matters because users often
    * point all their dev DBMSes at the same host (`localhost`) and it would
    * be hostile to wipe it on every type swap.
@@ -118,7 +118,7 @@ export function useConnectionDraftForm(
       const defaults = DATABASE_DEFAULT_FIELDS[dbType];
       return {
         ...f,
-        db_type: dbType,
+        dbType: dbType,
         port: defaults.port,
         user: defaults.user,
         database: defaults.database,
@@ -128,7 +128,7 @@ export function useConnectionDraftForm(
   };
 
   const handleDbTypeChange = (newDbType: DatabaseType) => {
-    const oldDbType = form.db_type;
+    const oldDbType = form.dbType;
     if (newDbType === oldDbType) return;
     const currentPort = form.port;
     // "Default-or-empty" port → safe to overwrite silently (legacy behaviour).

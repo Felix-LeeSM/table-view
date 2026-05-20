@@ -103,27 +103,30 @@ pub struct ConnectionConfig {
 
 /// Public-facing connection shape returned to the frontend and exported to
 /// JSON. Crucially this struct has **no password field** — the boolean
-/// `has_password` is the only signal the UI gets about whether a password is
+/// `hasPassword` is the only signal the UI gets about whether a password is
 /// stored. The plaintext never leaves the backend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectionConfigPublic {
     pub id: String,
     pub name: String,
+    #[serde(alias = "db_type")]
     pub db_type: DatabaseType,
     pub host: String,
     pub port: u16,
     pub user: String,
     pub database: String,
+    #[serde(alias = "group_id")]
     pub group_id: Option<String>,
     pub color: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "connection_timeout")]
     pub connection_timeout: Option<u32>,
-    #[serde(default)]
+    #[serde(default, alias = "keep_alive_interval")]
     pub keep_alive_interval: Option<u32>,
     #[serde(default)]
     pub environment: Option<String>,
     /// Whether a password is stored on disk. Derived, never persisted.
-    #[serde(default)]
+    #[serde(default, alias = "has_password")]
     pub has_password: bool,
     /// Paradigm tag derived from `db_type`. Sprint 65 tightens this from the
     /// previous `String` + `#[serde(default)]` shape into a typed
@@ -133,11 +136,11 @@ pub struct ConnectionConfigPublic {
     /// "kv"`) mirrors the lowercase serialization.
     pub paradigm: Paradigm,
     // ── MongoDB-specific optional fields (Sprint 65) ─────────────────────
-    #[serde(default)]
+    #[serde(default, alias = "auth_source")]
     pub auth_source: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "replica_set")]
     pub replica_set: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "tls_enabled")]
     pub tls_enabled: Option<bool>,
 }
 
@@ -343,6 +346,21 @@ mod tests {
             "paradigm tag missing from payload: {}",
             json
         );
+        assert!(
+            json.contains("\"dbType\":\"postgresql\""),
+            "db_type must serialize as dbType: {}",
+            json
+        );
+        assert!(
+            json.contains("\"hasPassword\":true"),
+            "has_password must serialize as hasPassword: {}",
+            json
+        );
+        assert!(
+            !json.contains("db_type") && !json.contains("has_password"),
+            "public connection wire shape must not expose snake_case keys: {}",
+            json
+        );
     }
 
     #[test]
@@ -375,20 +393,61 @@ mod tests {
             json
         );
         assert!(
-            json.contains("\"auth_source\":\"admin\""),
-            "auth_source missing from payload: {}",
+            json.contains("\"authSource\":\"admin\""),
+            "authSource missing from payload: {}",
             json
         );
         assert!(
-            json.contains("\"replica_set\":\"rs0\""),
-            "replica_set missing from payload: {}",
+            json.contains("\"replicaSet\":\"rs0\""),
+            "replicaSet missing from payload: {}",
             json
         );
         assert!(
-            json.contains("\"tls_enabled\":true"),
-            "tls_enabled missing from payload: {}",
+            json.contains("\"tlsEnabled\":true"),
+            "tlsEnabled missing from payload: {}",
             json
         );
+        assert!(
+            !json.contains("auth_source")
+                && !json.contains("replica_set")
+                && !json.contains("tls_enabled"),
+            "public connection wire shape must not expose snake_case keys: {}",
+            json
+        );
+    }
+
+    #[test]
+    fn connection_config_public_deserializes_legacy_snake_case_payload() {
+        let json = r#"{
+            "id": "c1",
+            "name": "DB",
+            "db_type": "mongodb",
+            "host": "localhost",
+            "port": 27017,
+            "user": "u",
+            "database": "admin",
+            "group_id": "g1",
+            "color": null,
+            "connection_timeout": 30,
+            "keep_alive_interval": 60,
+            "environment": "production",
+            "has_password": true,
+            "paradigm": "document",
+            "auth_source": "admin",
+            "replica_set": "rs0",
+            "tls_enabled": true
+        }"#;
+
+        let public: ConnectionConfigPublic = serde_json::from_str(json).unwrap();
+
+        assert!(matches!(public.db_type, DatabaseType::Mongodb));
+        assert_eq!(public.group_id.as_deref(), Some("g1"));
+        assert_eq!(public.connection_timeout, Some(30));
+        assert_eq!(public.keep_alive_interval, Some(60));
+        assert!(public.has_password);
+        assert_eq!(public.auth_source.as_deref(), Some("admin"));
+        assert_eq!(public.replica_set.as_deref(), Some("rs0"));
+        assert_eq!(public.tls_enabled, Some(true));
     }
 
     #[test]
@@ -400,12 +459,12 @@ mod tests {
         let json = r#"{
             "id": "c1",
             "name": "DB",
-            "db_type": "postgresql",
+            "dbType": "postgresql",
             "host": "h",
             "port": 5432,
             "user": "u",
             "database": "d",
-            "group_id": null,
+            "groupId": null,
             "color": null
         }"#;
         let result: Result<ConnectionConfigPublic, _> = serde_json::from_str(json);

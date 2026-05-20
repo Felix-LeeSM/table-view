@@ -15,20 +15,20 @@ import type { DocumentQueryResult } from "@/types/document";
 function buildResult(): DocumentQueryResult {
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId", category: "unknown" },
-      { name: "name", data_type: "string", category: "unknown" },
-      { name: "age", data_type: "int32", category: "unknown" },
+      { name: "_id", dataType: "ObjectId", category: "unknown" },
+      { name: "name", dataType: "string", category: "unknown" },
+      { name: "age", dataType: "int32", category: "unknown" },
     ],
     rows: [[{ $oid: "65abcdef0123456789abcdef" }, "Alice", 30]],
-    raw_documents: [
+    rawDocuments: [
       {
         _id: { $oid: "65abcdef0123456789abcdef" },
         name: "Alice",
         age: 30,
       },
     ],
-    total_count: 1,
-    execution_time_ms: 1,
+    totalCount: 1,
+    executionTimeMs: 1,
   };
 }
 

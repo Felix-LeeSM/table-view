@@ -7,18 +7,18 @@ function makeDraft(overrides: Partial<ConnectionDraft> = {}): ConnectionDraft {
   return {
     id: "",
     name: "",
-    db_type: "mongodb",
+    dbType: "mongodb",
     host: "localhost",
     port: 27017,
     user: "",
     password: null,
     database: "",
-    group_id: null,
+    groupId: null,
     color: null,
     paradigm: "document",
-    auth_source: null,
-    replica_set: null,
-    tls_enabled: false,
+    authSource: null,
+    replicaSet: null,
+    tlsEnabled: false,
     ...overrides,
   };
 }
@@ -27,7 +27,7 @@ const inputClass = "input";
 const labelClass = "label";
 
 describe("MongoFormFields", () => {
-  it("renders Mongo-specific fields (auth_source / replica_set / tls) + optional user/password labels", () => {
+  it("renders Mongo-specific fields (authSource / replicaSet / tls) + optional user/password labels", () => {
     render(
       <MongoFormFields
         draft={makeDraft()}
@@ -55,7 +55,7 @@ describe("MongoFormFields", () => {
     );
   });
 
-  it("propagates auth_source / replica_set / tls_enabled through onChange", () => {
+  it("propagates authSource / replicaSet / tlsEnabled through onChange", () => {
     const onChange = vi.fn();
     render(
       <MongoFormFields
@@ -77,11 +77,11 @@ describe("MongoFormFields", () => {
         { target: { value: "admin" } },
       );
     });
-    expect(onChange).toHaveBeenCalledWith({ auth_source: "admin" });
+    expect(onChange).toHaveBeenCalledWith({ authSource: "admin" });
 
     act(() => {
       fireEvent.click(screen.getByLabelText("Enable TLS"));
     });
-    expect(onChange).toHaveBeenCalledWith({ tls_enabled: true });
+    expect(onChange).toHaveBeenCalledWith({ tlsEnabled: true });
   });
 });

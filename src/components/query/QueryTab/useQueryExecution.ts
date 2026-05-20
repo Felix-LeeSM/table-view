@@ -259,7 +259,7 @@ export function useQueryExecution({
   // entries still carry `"aggregate"` — only the source of truth flipped
   // from the toggle state to the parser output.
   // Sprint 360 Phase 2 (Q23) — self-window schemaCache invalidate. When a
-  // raw RDB dispatch finishes with `query_type === "ddl"` we wipe the
+  // raw RDB dispatch finishes with `queryType === "ddl"` we wipe the
   // connection's entire schema cache (`schemas` / `tables` / `views` /
   // `functions` / `tableColumnsCache` / `triggers`) so the sidebar's
   // `useSchemaCache` re-fetches against the post-DDL backend. Cross-window
@@ -386,9 +386,9 @@ export function useQueryExecution({
         const queryResult: import("@/types/query").QueryResult = {
           columns: docResult.columns,
           rows: docResult.rows,
-          total_count: docResult.total_count,
-          execution_time_ms: docResult.execution_time_ms,
-          query_type: "select",
+          totalCount: docResult.totalCount,
+          executionTimeMs: docResult.executionTimeMs,
+          queryType: "select",
         };
         completeQuery(tab.id, queryId, queryResult);
         recordHistory({
@@ -495,12 +495,12 @@ export function useQueryExecution({
         completeQuery(tab.id, queryId, result);
         // Sprint 360 Phase 2 (Q23) — self-window schemaCache invalidate
         // on DDL completion. The backend tags every CREATE / ALTER / DROP
-        // statement as `query_type: "ddl"`, so a single boolean check
+        // statement as `queryType: "ddl"`, so a single boolean check
         // covers the sidebar refresh trigger without hand-rolling the
         // statement classifier here. Wide drop only — the sidebar's
         // `useSchemaCache` mount-effect refetches `loadSchemas` +
         // `loadTables` for the connection.
-        if (result.query_type === "ddl") {
+        if (result.queryType === "ddl") {
           clearSchemaForConnection(tab.connectionId);
         }
         recordHistory({
@@ -675,7 +675,7 @@ export function useQueryExecution({
       // connection cache so the sidebar refetches. Cache drop is
       // idempotent for non-DDL batches because the guard skips the call.
       const batchHasDdl = statementResults.some(
-        (s) => s.status === "success" && s.result?.query_type === "ddl",
+        (s) => s.status === "success" && s.result?.queryType === "ddl",
       );
       if (batchHasDdl) {
         clearSchemaForConnection(tab.connectionId);
@@ -1223,9 +1223,9 @@ export function useQueryExecution({
         const queryResult: import("@/types/query").QueryResult = {
           columns: docResult.columns,
           rows: docResult.rows,
-          total_count: docResult.total_count,
-          execution_time_ms: docResult.execution_time_ms,
-          query_type: "select",
+          totalCount: docResult.totalCount,
+          executionTimeMs: docResult.executionTimeMs,
+          queryType: "select",
         };
         completeQuery(tab.id, queryId, queryResult);
         recordHistory({
@@ -1279,16 +1279,16 @@ export function useQueryExecution({
             ? {
                 columns: [],
                 rows: [],
-                total_count: 0,
-                execution_time_ms: Date.now() - startTime,
-                query_type: "select",
+                totalCount: 0,
+                executionTimeMs: Date.now() - startTime,
+                queryType: "select",
               }
             : {
                 columns: docRow.columns,
                 rows: [docRow.row],
-                total_count: 1,
-                execution_time_ms: Date.now() - startTime,
-                query_type: "select",
+                totalCount: 1,
+                executionTimeMs: Date.now() - startTime,
+                queryType: "select",
               };
         completeQuery(tab.id, queryId, queryResult);
         recordHistory({
@@ -1337,11 +1337,11 @@ export function useQueryExecution({
           filter,
         );
         const queryResult: import("@/types/query").QueryResult = {
-          columns: [{ name: "count", data_type: "Int64", category: "int" }],
+          columns: [{ name: "count", dataType: "Int64", category: "int" }],
           rows: [[count]],
-          total_count: 1,
-          execution_time_ms: Date.now() - startTime,
-          query_type: "select",
+          totalCount: 1,
+          executionTimeMs: Date.now() - startTime,
+          queryType: "select",
           resultKind: "scalar",
         };
         completeQuery(tab.id, queryId, queryResult);
@@ -1389,11 +1389,11 @@ export function useQueryExecution({
           collection,
         );
         const queryResult: import("@/types/query").QueryResult = {
-          columns: [{ name: "count", data_type: "Int64", category: "int" }],
+          columns: [{ name: "count", dataType: "Int64", category: "int" }],
           rows: [[count]],
-          total_count: 1,
-          execution_time_ms: Date.now() - startTime,
-          query_type: "select",
+          totalCount: 1,
+          executionTimeMs: Date.now() - startTime,
+          queryType: "select",
           resultKind: "scalar",
         };
         completeQuery(tab.id, queryId, queryResult);
@@ -1458,9 +1458,9 @@ export function useQueryExecution({
         const queryResult: import("@/types/query").QueryResult = {
           columns: [],
           rows: [],
-          total_count: 0,
-          execution_time_ms: Date.now() - startTime,
-          query_type: "select",
+          totalCount: 0,
+          executionTimeMs: Date.now() - startTime,
+          queryType: "select",
           resultKind: "writeSummary",
           writeSummary: summary,
         };
@@ -1697,11 +1697,11 @@ export function useQueryExecution({
           filter,
         );
         const queryResult: import("@/types/query").QueryResult = {
-          columns: [{ name: "value", data_type: "string", category: "text" }],
+          columns: [{ name: "value", dataType: "string", category: "text" }],
           rows: values.map((v) => [v]),
-          total_count: values.length,
-          execution_time_ms: Date.now() - startTime,
-          query_type: "select",
+          totalCount: values.length,
+          executionTimeMs: Date.now() - startTime,
+          queryType: "select",
           resultKind: "list",
         };
         completeQuery(tab.id, queryId, queryResult);
@@ -1816,14 +1816,14 @@ export function useQueryExecution({
               columns: [
                 {
                   name: "response",
-                  data_type: "JSON",
+                  dataType: "JSON",
                   category: "object",
                 },
               ],
               rows: [[responseJson]],
-              total_count: 1,
-              execution_time_ms: Date.now() - startTime,
-              query_type: "select",
+              totalCount: 1,
+              executionTimeMs: Date.now() - startTime,
+              queryType: "select",
             };
             completeQuery(tab.id, queryId, queryResult);
             recordHistory({
@@ -2099,9 +2099,9 @@ export function useQueryExecution({
           ({
             columns: [],
             rows: [],
-            total_count: 0,
-            execution_time_ms: 0,
-            query_type: "ddl",
+            totalCount: 0,
+            executionTimeMs: 0,
+            queryType: "ddl",
           } satisfies import("@/types/query").QueryResult);
         completeQueryDryRun(tab.id, queryId, lastResult);
         return;
@@ -2111,7 +2111,7 @@ export function useQueryExecution({
           sql: statements[idx] ?? "",
           status: "success" as const,
           result: res,
-          durationMs: res.execution_time_ms,
+          durationMs: res.executionTimeMs,
         }));
       const lastResult = results[results.length - 1]!;
       completeQueryDryRun(tab.id, queryId, lastResult, statementResults);

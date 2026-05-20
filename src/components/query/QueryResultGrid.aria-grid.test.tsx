@@ -17,17 +17,17 @@ beforeEach(() => {
 
 const SELECT_RESULT: QueryResult = {
   columns: [
-    { name: "id", data_type: "integer", category: "int" },
-    { name: "name", data_type: "text", category: "text" },
-    { name: "email", data_type: "varchar", category: "text" },
+    { name: "id", dataType: "integer", category: "int" },
+    { name: "name", dataType: "text", category: "text" },
+    { name: "email", dataType: "varchar", category: "text" },
   ],
   rows: [
     [1, "Alice", "alice@example.com"],
     [2, "Bob", "bob@example.com"],
   ],
-  total_count: 2,
-  execution_time_ms: 1,
-  query_type: "select",
+  totalCount: 2,
+  executionTimeMs: 1,
+  queryType: "select",
 };
 
 beforeEach(() => {
@@ -112,7 +112,7 @@ describe("QueryResultGrid ARIA grid roles (Sprint 260 AC-260-03)", () => {
     const emptyResult: QueryResult = {
       ...SELECT_RESULT,
       rows: [],
-      total_count: 0,
+      totalCount: 0,
     };
     render(
       <QueryResultGrid

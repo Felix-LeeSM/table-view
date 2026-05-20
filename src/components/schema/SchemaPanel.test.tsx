@@ -20,13 +20,13 @@ function makeConn(id: string): ConnectionConfig {
   return {
     id,
     name: `${id} DB`,
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: false,
+    hasPassword: false,
     database: "test",
-    group_id: null,
+    groupId: null,
     color: null,
     environment: null,
     paradigm: "rdb",
@@ -144,7 +144,7 @@ describe("SchemaPanel", () => {
   it("renders DocumentDatabaseTree when connection paradigm is document", () => {
     const mongoConn: ConnectionConfig = {
       ...makeConn("m1"),
-      db_type: "mongodb",
+      dbType: "mongodb",
       paradigm: "document",
     };
     setupStore({ connections: [mongoConn], active: ["m1"] });

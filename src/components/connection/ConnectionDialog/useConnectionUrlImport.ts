@@ -126,8 +126,8 @@ export function useConnectionUrlImport({
     // Sprint 276 — parser 가 인식한 DBMS 가 아직 wire-up 되지 않았다면
     // 명시적으로 거부. URL 모드는 의도된 사용자 액션이므로 silent 가 아니라
     // urlError 로 알린다 (form-mode paste 는 AC-178-04 에 따라 silent).
-    if (parsed.db_type && !isSupportedDatabaseType(parsed.db_type)) {
-      setUrlError(unsupportedDbTypeMessage(parsed.db_type));
+    if (parsed.dbType && !isSupportedDatabaseType(parsed.dbType)) {
+      setUrlError(unsupportedDbTypeMessage(parsed.dbType));
       return false;
     }
     applyParsedConnection(parsed, "url");
@@ -155,7 +155,7 @@ export function useConnectionUrlImport({
     // 의 silent 룰을 따라 form 을 건드리지 않고 paste 만 흘려보낸다 (사용자가
     // 직접 host 에 텍스트가 들어가는 걸 보면 인식 자체가 안 됐다고 자연스레
     // 깨닫는다). URL 모드 (Parse & Continue) 에서는 명시 거부.
-    if (parsed.db_type && !isSupportedDatabaseType(parsed.db_type)) {
+    if (parsed.dbType && !isSupportedDatabaseType(parsed.dbType)) {
       return;
     }
     // Successful parse: prevent the literal URL from also landing in the
@@ -164,7 +164,7 @@ export function useConnectionUrlImport({
     // populate the password input separately.
     e.preventDefault();
     applyParsedConnection(parsed, "paste");
-    setDetectedScheme(parsed.db_type ?? null);
+    setDetectedScheme(parsed.dbType ?? null);
   };
 
   const handleHostBlur = (e: React.FocusEvent<HTMLDivElement>) => {

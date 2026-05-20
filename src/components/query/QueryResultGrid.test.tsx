@@ -15,7 +15,7 @@ beforeEach(() => {
     getTableColumns: vi.fn(async () => [
       {
         name: "id",
-        data_type: "integer",
+        dataType: "integer",
         category: "unknown",
         nullable: false,
         default_value: null,
@@ -26,7 +26,7 @@ beforeEach(() => {
       },
       {
         name: "name",
-        data_type: "text",
+        dataType: "text",
         category: "unknown",
         nullable: true,
         default_value: null,
@@ -42,32 +42,32 @@ beforeEach(() => {
 
 const SELECT_RESULT: QueryResult = {
   columns: [
-    { name: "id", data_type: "integer", category: "unknown" },
-    { name: "name", data_type: "text", category: "unknown" },
+    { name: "id", dataType: "integer", category: "unknown" },
+    { name: "name", dataType: "text", category: "unknown" },
   ],
   rows: [
     [1, "Alice"],
     [2, null],
   ],
-  total_count: 2,
-  execution_time_ms: 15,
-  query_type: "select",
+  totalCount: 2,
+  executionTimeMs: 15,
+  queryType: "select",
 };
 
 const DML_RESULT: QueryResult = {
   columns: [],
   rows: [],
-  total_count: 5,
-  execution_time_ms: 8,
-  query_type: { dml: { rows_affected: 5 } },
+  totalCount: 5,
+  executionTimeMs: 8,
+  queryType: { dml: { rows_affected: 5 } },
 };
 
 const DDL_RESULT: QueryResult = {
   columns: [],
   rows: [],
-  total_count: 0,
-  execution_time_ms: 120,
-  query_type: "ddl",
+  totalCount: 0,
+  executionTimeMs: 120,
+  queryType: "ddl",
 };
 
 describe("QueryResultGrid", () => {
@@ -218,7 +218,7 @@ describe("QueryResultGrid", () => {
     const emptyResult: QueryResult = {
       ...SELECT_RESULT,
       rows: [],
-      total_count: 0,
+      totalCount: 0,
     };
     render(
       <QueryResultGrid

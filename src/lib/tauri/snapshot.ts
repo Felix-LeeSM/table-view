@@ -30,7 +30,7 @@ export type StoreSlot<T> = T | { error: string };
 
 export interface ConnectionsStore {
   /** `ConnectionConfig` 는 frontend 명. Rust 측 `ConnectionConfigPublic` 의 wire
-   * 형태 — `has_password` boolean 만 노출, plaintext / ciphertext 없음. */
+   * 형태 — `hasPassword` boolean 만 노출, plaintext / ciphertext 없음. */
   items: ConnectionConfig[];
   groups: ConnectionGroup[];
 }

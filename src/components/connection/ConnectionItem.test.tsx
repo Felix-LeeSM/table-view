@@ -131,13 +131,13 @@ function makeConnection(
   return {
     id: "conn-1",
     name: "Test DB",
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: false,
+    hasPassword: false,
     database: "testdb",
-    group_id: null,
+    groupId: null,
     color: null,
     environment: null,
     paradigm: "rdb",
@@ -194,14 +194,14 @@ describe("ConnectionItem", () => {
   });
 
   it.each([
-    { db_type: "postgresql" as const, short: "PG" },
-    { db_type: "mysql" as const, short: "MY" },
-    { db_type: "sqlite" as const, short: "SQ" },
-    { db_type: "mongodb" as const, short: "MG" },
-    { db_type: "redis" as const, short: "RD" },
-  ] as const)("renders $short badge for $db_type", ({ db_type, short }) => {
+    { dbType: "postgresql" as const, short: "PG" },
+    { dbType: "mysql" as const, short: "MY" },
+    { dbType: "sqlite" as const, short: "SQ" },
+    { dbType: "mongodb" as const, short: "MG" },
+    { dbType: "redis" as const, short: "RD" },
+  ] as const)("renders $short badge for $dbType", ({ dbType, short }) => {
     setStoreState({});
-    render(<ConnectionItem connection={makeConnection({ db_type })} />);
+    render(<ConnectionItem connection={makeConnection({ dbType })} />);
 
     expect(screen.getByText(short)).toBeInTheDocument();
   });
@@ -756,12 +756,10 @@ describe("ConnectionItem", () => {
   // -----------------------------------------------------------------------
   // DB type badge title attribute
   // -----------------------------------------------------------------------
-  it("shows db_type as title on the badge", () => {
+  it("shows dbType as title on the badge", () => {
     setStoreState({});
 
-    render(
-      <ConnectionItem connection={makeConnection({ db_type: "mysql" })} />,
-    );
+    render(<ConnectionItem connection={makeConnection({ dbType: "mysql" })} />);
 
     const badge = screen.getByText("MY");
     expect(badge).toHaveAttribute("title", "mysql");
@@ -1013,9 +1011,7 @@ describe("ConnectionItem", () => {
         ],
       });
 
-      render(
-        <ConnectionItem connection={makeConnection({ group_id: "g1" })} />,
-      );
+      render(<ConnectionItem connection={makeConnection({ groupId: "g1" })} />);
 
       const item = screen.getByRole("button", { name: /Test DB/ });
       act(() => {
@@ -1031,9 +1027,7 @@ describe("ConnectionItem", () => {
         groups: [{ id: "g1", name: "Prod", color: null, collapsed: false }],
       });
 
-      render(
-        <ConnectionItem connection={makeConnection({ group_id: null })} />,
-      );
+      render(<ConnectionItem connection={makeConnection({ groupId: null })} />);
 
       const item = screen.getByRole("button", { name: /Test DB/ });
       act(() => {
@@ -1054,9 +1048,7 @@ describe("ConnectionItem", () => {
         moveConnectionToGroup: mockMove,
       });
 
-      render(
-        <ConnectionItem connection={makeConnection({ group_id: null })} />,
-      );
+      render(<ConnectionItem connection={makeConnection({ groupId: null })} />);
 
       const item = screen.getByRole("button", { name: /Test DB/ });
       act(() => {
@@ -1077,9 +1069,7 @@ describe("ConnectionItem", () => {
         moveConnectionToGroup: mockMove,
       });
 
-      render(
-        <ConnectionItem connection={makeConnection({ group_id: "g1" })} />,
-      );
+      render(<ConnectionItem connection={makeConnection({ groupId: "g1" })} />);
 
       const item = screen.getByRole("button", { name: /Test DB/ });
       act(() => {
@@ -1096,9 +1086,7 @@ describe("ConnectionItem", () => {
     it("renders submenu with no extra entries when there are zero groups (edge: only 'No group')", () => {
       setStoreState({ groups: [] });
 
-      render(
-        <ConnectionItem connection={makeConnection({ group_id: null })} />,
-      );
+      render(<ConnectionItem connection={makeConnection({ groupId: null })} />);
 
       const item = screen.getByRole("button", { name: /Test DB/ });
       act(() => {

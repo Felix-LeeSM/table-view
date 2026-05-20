@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { QueryResult } from "@/types/query";
 import type { FilterCondition, TableData } from "@/types/schema";
+import { normalizeQueryResult } from "@lib/wireCamelCase";
 
 import { wrapNumericCells } from "./numericWrap";
 
@@ -50,13 +51,13 @@ export async function executeQuery(
   queryId: string,
   expectedDatabase?: string,
 ): Promise<QueryResult> {
-  const result = await invoke<QueryResult>("execute_query", {
+  const result = await invoke<unknown>("execute_query", {
     connectionId,
     sql,
     queryId,
     expectedDatabase: expectedDatabase ?? null,
   });
-  return wrapNumericCells(result);
+  return wrapNumericCells(normalizeQueryResult(result));
 }
 
 export async function cancelQuery(queryId: string): Promise<string> {
@@ -73,18 +74,20 @@ export async function executeQueryBatch(
   queryId: string,
   expectedDatabase?: string,
 ): Promise<QueryResult[]> {
-  const results = await invoke<QueryResult[]>("execute_query_batch", {
+  const results = await invoke<unknown[]>("execute_query_batch", {
     connectionId,
     statements,
     queryId,
     expectedDatabase: expectedDatabase ?? null,
   });
-  return results.map(wrapNumericCells);
+  return results.map((result) =>
+    wrapNumericCells(normalizeQueryResult(result)),
+  );
 }
 
 // Sprint 247 (ADR 0022 Phase 3) — dry-run a batch of SQL statements
 // inside a transaction that is unconditionally rolled back. Returns
-// per-statement statistics (`total_count` / `execution_time_ms`) for the
+// per-statement statistics (`totalCount` / `executionTimeMs`) for the
 // destructive-statement confirm dialog's preview pane. The eventual
 // commit goes through `executeQueryBatch`, NOT this wrapper — dry-run
 // is observation only. Failure shape mirrors `executeQueryBatch`
@@ -106,11 +109,13 @@ export async function executeQueryDryRun(
   queryId: string,
   expectedDatabase?: string,
 ): Promise<QueryResult[]> {
-  const results = await invoke<QueryResult[]>("execute_query_dry_run", {
+  const results = await invoke<unknown[]>("execute_query_dry_run", {
     connectionId,
     statements,
     queryId,
     expectedDatabase: expectedDatabase ?? null,
   });
-  return results.map(wrapNumericCells);
+  return results.map((result) =>
+    wrapNumericCells(normalizeQueryResult(result)),
+  );
 }

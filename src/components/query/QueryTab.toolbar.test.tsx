@@ -245,9 +245,9 @@ describe("QueryTab — toolbar", () => {
       {
         columns: [],
         rows: [],
-        total_count: 0,
-        execution_time_ms: 1,
-        query_type: { dml: { rows_affected: 0 } },
+        totalCount: 0,
+        executionTimeMs: 1,
+        queryType: { dml: { rows_affected: 0 } },
       },
     ]);
     const tab = makeQueryTab({ sql: "DELETE FROM users WHERE id = 1" });

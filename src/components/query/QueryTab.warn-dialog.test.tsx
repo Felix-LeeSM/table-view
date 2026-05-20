@@ -154,7 +154,7 @@ function seedDocConnection(env: string | null) {
       makeConn({
         id: "conn-mongo",
         environment: env,
-        db_type: "mongodb",
+        dbType: "mongodb",
         paradigm: "document",
       }),
     ],

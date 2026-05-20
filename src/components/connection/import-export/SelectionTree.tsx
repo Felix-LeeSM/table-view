@@ -41,11 +41,11 @@ export default function SelectionTree({
       .map((g) => ({
         id: g.id,
         name: g.name,
-        connections: connections.filter((c) => c.group_id === g.id),
+        connections: connections.filter((c) => c.groupId === g.id),
       }))
       .filter((g) => g.connections.length > 0);
 
-    const ungrouped = connections.filter((c) => !c.group_id);
+    const ungrouped = connections.filter((c) => !c.groupId);
     if (ungrouped.length > 0) {
       grouped.push({
         id: null,
@@ -225,9 +225,9 @@ function GroupSection({
             />
             <span className="font-medium text-foreground">{c.name}</span>
             <span className="text-muted-foreground">
-              ({c.db_type} @ {c.host}:{c.port})
+              ({c.dbType} @ {c.host}:{c.port})
             </span>
-            {c.has_password && (
+            {c.hasPassword && (
               <span className="ml-auto rounded bg-success/10 px-1.5 text-3xs font-medium text-success">
                 pw set
               </span>

@@ -75,19 +75,19 @@ vi.mock("@lib/sql/sqlUtils", () => ({
 }));
 
 const SELECT_RESULT: QueryResult = {
-  columns: [{ name: "id", data_type: "integer", category: "unknown" }],
+  columns: [{ name: "id", dataType: "integer", category: "unknown" }],
   rows: [[1]],
-  total_count: 1,
-  execution_time_ms: 3,
-  query_type: "select",
+  totalCount: 1,
+  executionTimeMs: 3,
+  queryType: "select",
 };
 
 const DML_RESULT: QueryResult = {
   columns: [],
   rows: [],
-  total_count: 0,
-  execution_time_ms: 5,
-  query_type: { dml: { rows_affected: 4 } },
+  totalCount: 0,
+  executionTimeMs: 5,
+  queryType: { dml: { rows_affected: 4 } },
 };
 
 function seedTab(overrides: Parameters<typeof makeQueryTab>[0] = {}) {

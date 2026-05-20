@@ -55,10 +55,10 @@ export default function ConnectionList({
     ? allConnections.filter((c) => c.environment === environmentFilter)
     : allConnections;
 
-  const rootConnections = connections.filter((c) => !c.group_id);
+  const rootConnections = connections.filter((c) => !c.groupId);
   const groupedConnections = groups.map((group) => ({
     group,
-    connections: connections.filter((c) => c.group_id === group.id),
+    connections: connections.filter((c) => c.groupId === group.id),
   }));
 
   return (

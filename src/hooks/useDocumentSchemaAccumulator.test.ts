@@ -10,8 +10,8 @@ import { renderHook, act } from "@testing-library/react";
 import { useDocumentSchemaAccumulator } from "./useDocumentSchemaAccumulator";
 import type { DocumentColumn } from "@/types/document";
 
-function col(name: string, data_type = "string"): DocumentColumn {
-  return { name, data_type, category: "unknown" };
+function col(name: string, dataType = "string"): DocumentColumn {
+  return { name, dataType, category: "unknown" };
 }
 
 describe("useDocumentSchemaAccumulator (Sprint 319 E.1)", () => {
@@ -74,7 +74,7 @@ describe("useDocumentSchemaAccumulator (Sprint 319 E.1)", () => {
       result.current.merge([col("score", "string")]);
     });
     expect(
-      result.current.columns.find((c) => c.name === "score")?.data_type,
+      result.current.columns.find((c) => c.name === "score")?.dataType,
     ).toBe("int");
   });
 

@@ -7,7 +7,7 @@
 // eager refetch 만 검증한다.
 //
 // AC 매핑:
-//   AC-360-02: `runRdbSingleNow` 완료 후 `query_type === "ddl"` 이면
+//   AC-360-02: `runRdbSingleNow` 완료 후 `queryType === "ddl"` 이면
 //              `schemaStore.clearForConnection(connId)` 호출.
 //   AC-360-03: clear 직후 그 conn 의 sidebar 캐시가 비어 있어야 한다.
 //   AC-360-04: completeQuery → clearForConnection 사이의 timing < 100ms.
@@ -82,17 +82,17 @@ vi.mock("@lib/sql/sqlUtils", () => ({
 const DDL_RESULT: QueryResult = {
   columns: [],
   rows: [],
-  total_count: 0,
-  execution_time_ms: 7,
-  query_type: "ddl",
+  totalCount: 0,
+  executionTimeMs: 7,
+  queryType: "ddl",
 };
 
 const SELECT_RESULT: QueryResult = {
-  columns: [{ name: "id", data_type: "integer", category: "unknown" }],
+  columns: [{ name: "id", dataType: "integer", category: "unknown" }],
   rows: [[1]],
-  total_count: 1,
-  execution_time_ms: 4,
-  query_type: "select",
+  totalCount: 1,
+  executionTimeMs: 4,
+  queryType: "select",
 };
 
 // Seed the schema cache with non-trivial data across `views` / `functions`
@@ -214,9 +214,9 @@ describe("useQueryExecution — sprint-360 Phase 2 Q23 self-invalidate", () => {
     });
   });
 
-  // AC-360-02 — DDL 결과 (`query_type === "ddl"`) 가 도착하면 hook 이
+  // AC-360-02 — DDL 결과 (`queryType === "ddl"`) 가 도착하면 hook 이
   // `schemaStore.clearForConnection(connId)` 를 호출. drop / create 둘 다
-  // 백엔드가 `query_type: "ddl"` 로 분류한다.
+  // 백엔드가 `queryType: "ddl"` 로 분류한다.
   it("AC-360-02: clears schemaStore for the connection after a DDL result", async () => {
     executeQueryMock.mockResolvedValueOnce(DDL_RESULT);
     seedSchemaCache();

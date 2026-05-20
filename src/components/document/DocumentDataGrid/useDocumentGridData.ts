@@ -156,14 +156,14 @@ export function useDocumentGridData({
   }, [fetchData]);
 
   // Convert DocumentQueryResult → a minimal TableData-compatible shape so
-  // the edit hook (which speaks TableData) can consume it. The `raw_documents`
+  // the edit hook (which speaks TableData) can consume it. The `rawDocuments`
   // payload still powers Quick Look; the flattened `rows` power the grid
   // and the MQL generator.
   const data: TableData | null = useMemo(() => {
     if (!queryResult) return null;
     const columns: ColumnInfo[] = queryResult.columns.map((c) => ({
       name: c.name,
-      data_type: c.data_type,
+      data_type: c.dataType,
       nullable: true,
       default_value: null,
       is_primary_key: c.name === "_id",
@@ -182,7 +182,7 @@ export function useDocumentGridData({
     return {
       columns,
       rows: queryResult.rows,
-      total_count: queryResult.total_count,
+      total_count: queryResult.totalCount,
       page,
       page_size: pageSize,
       executed_query: `db.${collection}.find({})${sortChain}.skip(${

@@ -23,7 +23,7 @@ beforeEach(() => {
       Promise.resolve([
         {
           name: "_id",
-          data_type: "objectId",
+          dataType: "objectId",
           nullable: false,
           default_value: null,
           is_primary_key: false,
@@ -35,20 +35,20 @@ beforeEach(() => {
     ),
     findDocuments: vi.fn(() =>
       Promise.resolve({
-        columns: [{ name: "_id", data_type: "objectId" }],
+        columns: [{ name: "_id", dataType: "objectId" }],
         rows: [[1]],
-        raw_documents: [{ _id: 1 }],
-        total_count: 1,
-        execution_time_ms: 5,
+        rawDocuments: [{ _id: 1 }],
+        totalCount: 1,
+        executionTimeMs: 5,
       }),
     ),
     aggregateDocuments: vi.fn(() =>
       Promise.resolve({
-        columns: [{ name: "_id", data_type: "objectId" }],
+        columns: [{ name: "_id", dataType: "objectId" }],
         rows: [[1]],
-        raw_documents: [{ _id: 1 }],
-        total_count: 1,
-        execution_time_ms: 5,
+        rawDocuments: [{ _id: 1 }],
+        totalCount: 1,
+        executionTimeMs: 5,
       }),
     ),
   });
@@ -134,11 +134,33 @@ describe("documentStore", () => {
     const result = await useDocumentStore
       .getState()
       .runFind("conn-1", "db", "users");
-    expect(result.total_count).toBe(1);
+    expect(result.totalCount).toBe(1);
     expect(
       useDocumentStore.getState().queryResults["conn-1"]?.["db"]?.["users"]
         ?.rows,
     ).toHaveLength(1);
+  });
+
+  it("normalizes a legacy snake-case cached find result before storing it", async () => {
+    vi.mocked(tauri.findDocuments).mockResolvedValueOnce({
+      columns: [{ name: "_id", data_type: "objectId" }],
+      rows: [[1]],
+      raw_documents: [{ _id: 1 }],
+      total_count: 7,
+      execution_time_ms: 3,
+    } as never);
+
+    const result = await useDocumentStore
+      .getState()
+      .runFind("conn-1", "db", "users");
+
+    expect(result.totalCount).toBe(7);
+    expect(result.columns[0]?.dataType).toBe("objectId");
+    expect(result.rawDocuments[0]?._id).toBe(1);
+    expect(
+      useDocumentStore.getState().queryResults["conn-1"]?.["db"]?.["users"]
+        ?.totalCount,
+    ).toBe(7);
   });
 
   it("runFind stale response does not overwrite a newer response", async () => {
@@ -149,9 +171,9 @@ describe("documentStore", () => {
     const freshResult = {
       columns: [],
       rows: [],
-      raw_documents: [],
-      total_count: 42,
-      execution_time_ms: 1,
+      rawDocuments: [],
+      totalCount: 42,
+      executionTimeMs: 1,
     };
     vi.mocked(tauri.findDocuments)
       .mockImplementationOnce(() => slow as Promise<never>)
@@ -162,20 +184,20 @@ describe("documentStore", () => {
     await p2;
     expect(
       useDocumentStore.getState().queryResults["conn-1"]?.["db"]?.["users"]
-        ?.total_count,
+        ?.totalCount,
     ).toBe(42);
 
     resolveSlow({
       columns: [],
       rows: [],
-      raw_documents: [],
-      total_count: 999,
-      execution_time_ms: 99,
+      rawDocuments: [],
+      totalCount: 999,
+      executionTimeMs: 99,
     });
     await p1;
     expect(
       useDocumentStore.getState().queryResults["conn-1"]?.["db"]?.["users"]
-        ?.total_count,
+        ?.totalCount,
     ).toBe(42);
   });
 
@@ -208,7 +230,7 @@ describe("documentStore", () => {
       "users",
       pipeline,
     );
-    expect(result.total_count).toBe(1);
+    expect(result.totalCount).toBe(1);
 
     const pipelineKey = JSON.stringify(pipeline);
     expect(
@@ -227,9 +249,9 @@ describe("documentStore", () => {
     const freshResult = {
       columns: [],
       rows: [],
-      raw_documents: [],
-      total_count: 77,
-      execution_time_ms: 1,
+      rawDocuments: [],
+      totalCount: 77,
+      executionTimeMs: 1,
     };
     vi.mocked(tauri.aggregateDocuments)
       .mockImplementationOnce(() => slow as Promise<never>)
@@ -247,21 +269,21 @@ describe("documentStore", () => {
     expect(
       useDocumentStore.getState().aggregateResults["conn-1"]?.["db"]?.[
         "users"
-      ]?.[pipelineKey]?.total_count,
+      ]?.[pipelineKey]?.totalCount,
     ).toBe(77);
 
     resolveSlow({
       columns: [],
       rows: [],
-      raw_documents: [],
-      total_count: 999,
-      execution_time_ms: 99,
+      rawDocuments: [],
+      totalCount: 999,
+      executionTimeMs: 99,
     });
     await p1;
     expect(
       useDocumentStore.getState().aggregateResults["conn-1"]?.["db"]?.[
         "users"
-      ]?.[pipelineKey]?.total_count,
+      ]?.[pipelineKey]?.totalCount,
     ).toBe(77);
   });
 
@@ -269,16 +291,16 @@ describe("documentStore", () => {
     vi.mocked(tauri.findDocuments).mockResolvedValueOnce({
       columns: [],
       rows: [],
-      raw_documents: [],
-      total_count: 3,
-      execution_time_ms: 1,
+      rawDocuments: [],
+      totalCount: 3,
+      executionTimeMs: 1,
     });
     vi.mocked(tauri.aggregateDocuments).mockResolvedValueOnce({
       columns: [],
       rows: [],
-      raw_documents: [],
-      total_count: 7,
-      execution_time_ms: 1,
+      rawDocuments: [],
+      totalCount: 7,
+      executionTimeMs: 1,
     });
 
     await useDocumentStore.getState().runFind("conn-1", "db", "users");
@@ -288,12 +310,12 @@ describe("documentStore", () => {
 
     const s = useDocumentStore.getState();
     // find caches under queryResults at the (connId, db, collection) path.
-    expect(s.queryResults["conn-1"]?.["db"]?.["users"]?.total_count).toBe(3);
+    expect(s.queryResults["conn-1"]?.["db"]?.["users"]?.totalCount).toBe(3);
     // aggregate caches under its own axis so the two never alias.
     const pipelineKey = JSON.stringify([{ $match: {} }]);
     expect(
       s.aggregateResults["conn-1"]?.["db"]?.["users"]?.[pipelineKey]
-        ?.total_count,
+        ?.totalCount,
     ).toBe(7);
   });
 

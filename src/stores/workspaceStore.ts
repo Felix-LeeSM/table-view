@@ -142,7 +142,7 @@ export function resolveActiveDb(connectionId: string): string {
 }
 
 /**
- * Derive the paradigm for `connectionId` from its `db_type`. Used as the
+ * Derive the paradigm for `connectionId` from its `dbType`. Used as the
  * `addQueryTab` paradigm fallback when the caller (sidebar "+ Query"
  * button, Cmd+N) does not pass an explicit paradigm. Previously the
  * store hard-coded `"rdb"` here, which produced an RDB query tab on
@@ -154,7 +154,7 @@ export function resolveActiveDb(connectionId: string): string {
  */
 function resolveParadigmForConnection(connectionId: string): Paradigm {
   const conn = useConnectionStore.getState();
-  const dbType = conn.connections.find((c) => c.id === connectionId)?.db_type;
+  const dbType = conn.connections.find((c) => c.id === connectionId)?.dbType;
   return dbType ? paradigmOf(dbType) : "rdb";
 }
 

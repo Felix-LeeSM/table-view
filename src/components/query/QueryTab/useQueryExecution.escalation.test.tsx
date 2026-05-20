@@ -60,9 +60,9 @@ function makeDmlResult(rowsAffected: number): QueryResult {
   return {
     columns: [],
     rows: [],
-    total_count: rowsAffected,
-    execution_time_ms: 5,
-    query_type: { dml: { rows_affected: rowsAffected } },
+    totalCount: rowsAffected,
+    executionTimeMs: 5,
+    queryType: { dml: { rows_affected: rowsAffected } },
   };
 }
 
