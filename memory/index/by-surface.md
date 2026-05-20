@@ -89,4 +89,3 @@ generator: scripts/regenerate-indexes.sh
 ### `vi.mock'`
 
 - [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/conventions/testing-scenarios/mock-scope/memory.md)
-
