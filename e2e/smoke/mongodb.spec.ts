@@ -1,8 +1,9 @@
-import { $, browser, expect } from "@wdio/globals";
+import { $, expect } from "@wdio/globals";
 import {
   createMongoConnection,
   expandIfCollapsed,
   openConnection,
+  waitForGridText,
   waitForLauncher,
 } from "./_helpers";
 
@@ -23,22 +24,10 @@ describe("MongoDB smoke", () => {
     await collection.waitForDisplayed({ timeout: 15000 });
     await collection.click();
 
-    const table = await $("table");
-    await table.waitForDisplayed({ timeout: 15000 });
-
-    await browser.waitUntil(
-      async () => {
-        const text = (
-          ((await table.getProperty("textContent")) as string) ?? ""
-        )
-          .trim()
-          .toLowerCase();
-        return text.includes("mona") || text.includes("mona@example.com");
-      },
-      {
-        timeout: 15000,
-        timeoutMsg: "seeded MongoDB document did not appear in document grid",
-      },
+    await waitForGridText(
+      ["mona", "mona@example.com"],
+      15000,
+      "seeded MongoDB document did not appear in document grid",
     );
 
     expect(await collection.isDisplayed()).toBe(true);

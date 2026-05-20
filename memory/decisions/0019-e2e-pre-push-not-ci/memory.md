@@ -1,10 +1,10 @@
 ---
 id: "0019"
 title: E2E를 CI에서 제거하고 lefthook pre-push(host-native)로 이동
-status: Accepted
+status: Superseded
 date: 2026-05-01
 supersedes: "0015"
-superseded_by: null
+superseded_by: "0044"
 ---
 
 **결정**: GitHub Actions CI에서 `e2e` job(4-shard ubuntu-latest + Dockerfile.e2e + xvfb + WebKitGTK + tauri-driver)을 제거하고, e2e 검증을 개발자 host machine의 `lefthook` pre-push hook(`scripts/e2e-host.sh` → `pnpm test:e2e`)으로 이동한다. 사용자 환경(macOS WKWebView / Windows WebView2)과 동일한 native runtime에서만 검증한다. `--no-verify` / `LEFTHOOK=0` 회피는 `.claude/hooks/pre-bash.sh`에 dangerous-pattern으로 등록 및 `.claude/rules/git-policy.md`에 정책 명문화로 차단.

@@ -1,10 +1,10 @@
 ---
 id: "0020"
 title: ADR 0019 후속 — pre-push e2e는 host docker로 한정 (tauri-driver macOS 미지원)
-status: Accepted
+status: Superseded
 date: 2026-05-01
 supersedes: null
-superseded_by: null
+superseded_by: "0044"
 ---
 
 **결정**: ADR 0019의 "host-native pre-push" 의도(macOS WKWebView / Windows WebView2 직접 검증)는 `tauri-driver`가 Linux 전용(`WebKitWebDriver` on `webkit2gtk`)이라는 platform 제약 때문에 실현 불가. lefthook pre-push의 `5_e2e` 단계는 `pnpm test:e2e:docker`(= `docker compose --profile test up --abort-on-container-exit --exit-code-from e2e`)를 호출해 사용자 머신의 docker daemon 안에서 ubuntu + xvfb + webkit2gtk-driver 스택을 띄운다. 보조 스크립트 `scripts/e2e-host.sh`는 폐기. ADR 0019의 "CI에서 e2e 제거" 결정은 그대로 유효 — 변경된 것은 게이트의 실행 환경(CI runner → 사용자 머신 docker)만이며 검증 스택은 동일하다.
