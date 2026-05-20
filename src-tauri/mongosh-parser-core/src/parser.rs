@@ -11,7 +11,7 @@
 //! Rust panic. `errorKind` distinguishes UI-surfaceable categories so the
 //! toolbar can render targeted messages.
 
-use crate::ast::{AdminCommandName, MongoshErrorKind, MongoshStatement};
+use crate::ast::{AdminCommandName, CursorChainStep, MongoshErrorKind, MongoshStatement};
 use crate::lexer::{describe_token, lex, top_level_semicolons, Spanned, Token};
 use serde_json::{Map, Number, Value as JsonValue};
 
@@ -31,6 +31,7 @@ const BSON_PLACEHOLDER_KEYS: &[(&str, &str)] = &[
     ("ObjectId", "$oid"),
     ("ISODate", "$date"),
     ("NumberLong", "$numberLong"),
+    ("NumberDecimal", "$numberDecimal"),
     ("Decimal128", "$numberDecimal"),
     ("UUID", "$uuid"),
 ];
@@ -42,7 +43,7 @@ fn bson_placeholder(name: &str) -> Option<&'static str> {
 }
 
 fn bson_coerce_to_string(name: &str) -> bool {
-    matches!(name, "NumberLong" | "Decimal128")
+    matches!(name, "NumberLong" | "NumberDecimal" | "Decimal128")
 }
 
 const VARIABLE_DECL_KEYWORDS: &[&str] = &["var", "let", "const"];
@@ -309,10 +310,7 @@ fn parse_collection_command(stream: &mut Stream<'_>, collection: &str) -> Mongos
         Ok(a) => a,
         Err(e) => return e,
     };
-    // Chain methods: parsed but their args are discarded (TS parity —
-    // the Phase 28 dispatcher honors only the first method on a
-    // collection; chain semantics go through the server-side aggregate
-    // pipeline).
+    let mut cursor_chain = Vec::new();
     while stream.consume_punct('.') {
         let chain_tok = match stream.next() {
             Some(t) => t.clone(),
@@ -332,9 +330,14 @@ fn parse_collection_command(stream: &mut Stream<'_>, collection: &str) -> Mongos
                 );
             }
         };
-        if let Err(e) = parse_arg_list(stream, &chain_name) {
-            return e;
-        }
+        let args = match parse_arg_list(stream, &chain_name) {
+            Ok(args) => args,
+            Err(e) => return e,
+        };
+        cursor_chain.push(CursorChainStep {
+            name: chain_name,
+            args,
+        });
     }
     if !stream.at_end() {
         return err(
@@ -346,6 +349,7 @@ fn parse_collection_command(stream: &mut Stream<'_>, collection: &str) -> Mongos
         collection: collection.to_string(),
         method,
         args,
+        cursor_chain,
     }
 }
 
@@ -455,11 +459,12 @@ fn parse_bson_literal(
     stream: &mut Stream<'_>,
     name: String,
 ) -> Result<JsonValue, MongoshStatement> {
+    if name == "BinData" {
+        return parse_bindata_literal(stream);
+    }
     let placeholder = match bson_placeholder(&name) {
         Some(k) => k,
         None => {
-            // Legacy unsupported BSON helper (e.g. BinData). Match TS
-            // semantics: consume the ident then return a `bson-literal` err.
             stream.next();
             return Err(err(
                 MongoshErrorKind::BsonLiteral,
@@ -539,6 +544,70 @@ fn parse_bson_literal(
 enum ScalarArg {
     Str(String),
     Num(f64),
+}
+
+fn parse_bindata_literal(stream: &mut Stream<'_>) -> Result<JsonValue, MongoshStatement> {
+    stream.next(); // consume BinData
+    let args = parse_arg_list(stream, "BinData")?;
+    if args.len() != 2 {
+        return Err(err(
+            MongoshErrorKind::BsonLiteral,
+            "BinData(...) expects (subType: number, base64: string)",
+        ));
+    }
+
+    let subtype = match &args[0] {
+        JsonValue::Number(n) => {
+            let Some(raw) = n.as_i64() else {
+                return Err(err(
+                    MongoshErrorKind::BsonLiteral,
+                    "BinData(...) subtype must be an integer 0..255",
+                ));
+            };
+            if !(0..=255).contains(&raw) {
+                return Err(err(
+                    MongoshErrorKind::BsonLiteral,
+                    "BinData(...) subtype must be an integer 0..255",
+                ));
+            }
+            raw as u8
+        }
+        _ => {
+            return Err(err(
+                MongoshErrorKind::BsonLiteral,
+                "BinData(...) expects (subType: number, base64: string)",
+            ));
+        }
+    };
+
+    let base64 = match &args[1] {
+        JsonValue::String(s) => s,
+        _ => {
+            return Err(err(
+                MongoshErrorKind::BsonLiteral,
+                "BinData(...) expects (subType: number, base64: string)",
+            ));
+        }
+    };
+    if !base64
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '='))
+    {
+        return Err(err(
+            MongoshErrorKind::BsonLiteral,
+            "BinData(..., ...) base64 payload is malformed",
+        ));
+    }
+
+    let mut binary = Map::new();
+    binary.insert("base64".into(), JsonValue::String(base64.clone()));
+    binary.insert(
+        "subType".into(),
+        JsonValue::String(format!("{:02x}", subtype)),
+    );
+    let mut wrapper = Map::new();
+    wrapper.insert("$binary".into(), JsonValue::Object(binary));
+    Ok(JsonValue::Object(wrapper))
 }
 
 fn parse_object(stream: &mut Stream<'_>) -> Result<JsonValue, MongoshStatement> {
@@ -785,13 +854,16 @@ mod tests {
         }
     }
 
-    fn expect_collection(s: MongoshStatement) -> (String, String, Vec<JsonValue>) {
+    fn expect_collection(
+        s: MongoshStatement,
+    ) -> (String, String, Vec<JsonValue>, Vec<CursorChainStep>) {
         match s {
             MongoshStatement::CollectionCommand {
                 collection,
                 method,
                 args,
-            } => (collection, method, args),
+                cursor_chain,
+            } => (collection, method, args, cursor_chain),
             other => panic!("expected collection-command, got {:?}", other),
         }
     }
@@ -826,19 +898,47 @@ mod tests {
     #[test]
     fn ac_p3_collection_find_empty() {
         let s = parse("db.users.find({})");
-        let (coll, method, args) = expect_collection(s);
+        let (coll, method, args, chain) = expect_collection(s);
         assert_eq!(coll, "users");
         assert_eq!(method, "find");
         assert_eq!(args, vec![serde_json::json!({})]);
+        assert!(chain.is_empty());
     }
 
     #[test]
     fn ac_p4_collection_find_two_args() {
         let s = parse("db.users.find({}, {limit: 10})");
-        let (_, _, args) = expect_collection(s);
+        let (_, _, args, _) = expect_collection(s);
         assert_eq!(args.len(), 2);
         assert_eq!(args[0], serde_json::json!({}));
         assert_eq!(args[1], serde_json::json!({"limit": 10}));
+    }
+
+    #[test]
+    fn collection_cursor_chain_preserved() {
+        let s = parse("db.users.find({}).sort({name: 1}).limit(10).skip(5).toArray()");
+        let (_, _, _, chain) = expect_collection(s);
+        assert_eq!(
+            chain,
+            vec![
+                CursorChainStep {
+                    name: "sort".into(),
+                    args: vec![serde_json::json!({"name": 1})],
+                },
+                CursorChainStep {
+                    name: "limit".into(),
+                    args: vec![serde_json::json!(10)],
+                },
+                CursorChainStep {
+                    name: "skip".into(),
+                    args: vec![serde_json::json!(5)],
+                },
+                CursorChainStep {
+                    name: "toArray".into(),
+                    args: vec![],
+                },
+            ]
+        );
     }
 
     #[test]
@@ -943,10 +1043,20 @@ mod tests {
     }
 
     #[test]
-    fn bson_bindata_unsupported() {
-        let s = parse(r#"db.runCommand({d: BinData(0, "x")})"#);
-        let (kind, _) = expect_error(s);
-        assert!(matches!(kind, MongoshErrorKind::BsonLiteral));
+    fn bson_bindata_supported() {
+        let s = parse(r#"db.runCommand({d: BinData(15, "AQID")})"#);
+        let (_, body) = expect_admin(s);
+        assert_eq!(
+            body,
+            serde_json::json!({"d": {"$binary": {"base64": "AQID", "subType": "0f"}}})
+        );
+    }
+
+    #[test]
+    fn bson_number_decimal_alias() {
+        let s = parse(r#"db.runCommand({d: NumberDecimal("3.14")})"#);
+        let (_, body) = expect_admin(s);
+        assert_eq!(body, serde_json::json!({"d": {"$numberDecimal": "3.14"}}));
     }
 
     #[test]
@@ -1015,7 +1125,7 @@ mod tests {
     #[test]
     fn lone_trailing_semicolon_tolerated() {
         let s = parse("db.users.find({});");
-        let (_, method, _) = expect_collection(s);
+        let (_, method, _, _) = expect_collection(s);
         assert_eq!(method, "find");
     }
 
