@@ -440,7 +440,31 @@ mod tests {
     //! 이라 OS keyring 미접촉.
     use super::*;
     use crate::storage::crypto::{encrypt, InMemoryKeyringBackend, KeyringBackend};
+    use serial_test::serial;
+    use std::ffi::{OsStr, OsString};
     use tempfile::TempDir;
+
+    struct EnvVarGuard {
+        key: &'static str,
+        prior: Option<OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: impl AsRef<OsStr>) -> Self {
+            let prior = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, prior }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.prior {
+                Some(value) => std::env::set_var(self.key, value),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
 
     fn seed_disk_key(data_dir: &Path, key: &[u8]) {
         let path = disk_key_path(data_dir);
@@ -909,17 +933,13 @@ mod tests {
     // ---------------- app_data_dir_for_keyring — test env override ----------------
 
     #[test]
+    #[serial]
     fn app_data_dir_for_keyring_honors_test_env() {
         let dir = TempDir::new().unwrap();
-        // Save any prior value so concurrent tests aren't disturbed.
-        let prior = std::env::var("TABLE_VIEW_TEST_DATA_DIR").ok();
-        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+        let _guard = EnvVarGuard::set("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+
         let resolved = app_data_dir_for_keyring().unwrap();
+
         assert_eq!(resolved, dir.path());
-        // Restore.
-        match prior {
-            Some(v) => std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", v),
-            None => std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR"),
-        }
     }
 }
