@@ -25,6 +25,12 @@ Backend 변경은 Tauri command / state / DB adapter contract 를 깨지 않는 
 
 - command signature 변경은 user-facing contract 변경으로 보고 호출부와 테스트를 함께 갱신.
 - DB I/O 는 adapter trait 경계를 지킨다. DBMS 별 예외는 adapter 내부에 가둔다.
+- Public Tauri/store-facing wire structs default to
+  `#[serde(rename_all = "camelCase")]`. Legacy restore/import compatibility is
+  explicit via `#[serde(alias = "...")]`, `#[serde(default)]`, or a documented
+  normalizer, not by leaking mixed casing into new payloads.
+- Keep intentional snake_case exceptions only where the current contract says
+  so, for example SQL/schema table-data fields and `BulkWriteResult` counters.
 - error 는 `AppError` 계열로 context 를 보존한다. 문자열만 맞추는 테스트 금지.
 - secret / connection string / password 는 log, debug output, fixture direct write 에 남기지 않음.
 - async path 에 blocking 작업을 섞지 않는다. 필요 시 `spawn_blocking` 로 격리.

@@ -31,6 +31,18 @@ trigger:
 - palette 는 단일 hue 로 밀지 않음. 기존 token 우선, 새 색은 contrast 검증.
 - 텍스트가 버튼/칩/카드 안에서 넘치거나 겹치면 layout bug 로 본다.
 
+## Wire contract
+
+- Frontend canonical IPC/store-facing types use camelCase. Legacy snake_case
+  payloads are normalized only at boundaries such as `src/lib/tauri/**`,
+  snapshot/session hydration, import/restore, and `src/lib/wireCamelCase.ts`.
+- Do not pass legacy snake_case query/document/connection payloads into stores
+  or UI renderers. Normalize first, then keep the store/UI surface camelCase.
+- Explicit legacy exceptions stay snake_case until their own contract changes:
+  `QueryType.dml.rows_affected`, `BulkWriteResult` counters,
+  `ColumnInfo.data_type`, `TableData.total_count`, and
+  `CollectionInfo.document_count`.
+
 ## Workflow
 
 - UI 변경은 `npm run lint`, `npx tsc --noEmit`, 관련 Vitest 를 통과시킨다.
