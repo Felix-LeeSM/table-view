@@ -3,7 +3,7 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import DocumentDataGrid from "./DocumentDataGrid";
-import { __resetDocumentStoreForTests } from "@stores/documentStore";
+import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
 import type { DocumentQueryResult } from "@/types/document";
 
 // Sprint 117 — DocumentDataGrid 페이지네이션이 RDB DataGrid 와 동일한

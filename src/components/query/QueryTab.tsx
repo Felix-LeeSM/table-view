@@ -8,7 +8,7 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { databaseTypeToSqlDialect } from "@lib/sql/sqlDialect";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
-import { useDocumentStore } from "@stores/documentStore";
+import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
 import { assertNever } from "@/lib/paradigm";
 import SqlQueryEditor from "./SqlQueryEditor";
@@ -87,8 +87,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
   // cache slice for this tab to a string array so the hook's memo key is
   // stable against unrelated cache updates. RDB tabs compute `undefined`
   // and the resulting no-op extension set is gated out by paradigm.
-  const fieldsCache = useDocumentStore((s) => s.fieldsCache);
-  const collectionsCache = useDocumentStore((s) => s.collections);
+  const fieldsCache = useDocumentCatalogStore((s) => s.fieldsCache);
+  const collectionsCache = useDocumentCatalogStore((s) => s.collections);
   const mongoFieldNames = useMemo(() => {
     if (tab.paradigm !== "document" || !tab.database || !tab.collection) {
       return undefined;

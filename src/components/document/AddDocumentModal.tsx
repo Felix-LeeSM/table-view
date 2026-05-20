@@ -13,7 +13,7 @@ import {
 import { acceptCompletion } from "@codemirror/autocomplete";
 import FormDialog from "@components/ui/dialog/FormDialog";
 import { useMongoAutocomplete } from "@/hooks/useMongoAutocomplete";
-import { useDocumentStore } from "@stores/documentStore";
+import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 
 /**
@@ -73,7 +73,7 @@ export default function AddDocumentModal({
   const [text, setText] = useState<string>(DEFAULT_TEMPLATE);
   const [parseError, setParseError] = useState<string | null>(null);
 
-  const fieldsCacheEntry = useDocumentStore((s) =>
+  const fieldsCacheEntry = useDocumentCatalogStore((s) =>
     connectionId && database && collection
       ? s.fieldsCache[connectionId]?.[database]?.[collection]
       : undefined,

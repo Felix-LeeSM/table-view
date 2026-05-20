@@ -156,7 +156,7 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
   //         counter 둘 다 clear.
   it("__resetDocumentStoreForTests clears request counters + store (#30)", async () => {
     const { useDocumentStore, __resetDocumentStoreForTests } =
-      await import("./documentStore");
+      await import("../test-utils/documentStore");
     useDocumentStore.setState({
       databases: { "conn-A": [] },
       collections: { "conn-A": { db1: [] } },

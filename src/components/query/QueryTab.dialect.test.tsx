@@ -21,7 +21,7 @@ import type { Extension } from "@codemirror/state";
 import QueryTab from "./QueryTab";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useDocumentStore } from "@stores/documentStore";
+import { useDocumentStore } from "@/test-utils/documentStore";
 import {
   mockExecuteQuery,
   mockCancelQuery,

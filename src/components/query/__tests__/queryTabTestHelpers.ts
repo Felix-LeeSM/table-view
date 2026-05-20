@@ -18,7 +18,7 @@ import {
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
-import { __resetDocumentStoreForTests } from "@stores/documentStore";
+import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
 import type { ConnectionConfig, DatabaseType } from "@/types/connection";
 import type { QueryResult } from "@/types/query";
 import { useToastStore } from "@lib/toast";

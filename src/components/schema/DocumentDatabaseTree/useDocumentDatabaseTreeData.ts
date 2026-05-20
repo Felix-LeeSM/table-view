@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useDocumentStore } from "@stores/documentStore";
+import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import {
   isMongoSystemDatabase,
   MONGO_SYSTEM_DATABASES,
@@ -44,12 +44,12 @@ const EMPTY_COLLECTIONS_BY_DB: Record<string, CollectionInfo[] | undefined> =
 export function useDocumentDatabaseTreeData(
   connectionId: string,
 ): UseDocumentDatabaseTreeData {
-  const databases = useDocumentStore((s) => s.databases[connectionId]);
-  const collectionsByDb = useDocumentStore(
+  const databases = useDocumentCatalogStore((s) => s.databases[connectionId]);
+  const collectionsByDb = useDocumentCatalogStore(
     (s) => s.collections[connectionId] ?? EMPTY_COLLECTIONS_BY_DB,
   );
-  const loadDatabases = useDocumentStore((s) => s.loadDatabases);
-  const loadCollections = useDocumentStore((s) => s.loadCollections);
+  const loadDatabases = useDocumentCatalogStore((s) => s.loadDatabases);
+  const loadCollections = useDocumentCatalogStore((s) => s.loadCollections);
 
   // The DbSwitcher clears the documentStore cache on swap; the auto-load
   // guard below keys on `(connectionId, activeDb)` so the swap re-fetches

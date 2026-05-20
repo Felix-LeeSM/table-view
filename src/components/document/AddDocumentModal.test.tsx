@@ -8,7 +8,7 @@ import { json as jsonLanguage } from "@codemirror/lang-json";
 import AddDocumentModal, {
   type AddDocumentModalProps,
 } from "./AddDocumentModal";
-import { useDocumentStore } from "@stores/documentStore";
+import { useDocumentStore } from "@/test-utils/documentStore";
 
 function getEditorContainer(): HTMLElement {
   return screen.getByLabelText("Document JSON");

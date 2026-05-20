@@ -6,7 +6,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { useDocumentStore } from "@stores/documentStore";
+import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
 import { isDocumentSentinel } from "@/types/document";
 import { safeStringifyCell } from "@lib/jsonCell";
@@ -49,7 +49,7 @@ export default function DocumentDataGrid({
   collection,
 }: DocumentDataGridProps) {
   // sprint-373 — `recordHistoryEntry` 가 disable gate + wire shape normalise.
-  const fieldsCacheEntry = useDocumentStore(
+  const fieldsCacheEntry = useDocumentCatalogStore(
     (s) => s.fieldsCache[connectionId]?.[database]?.[collection],
   );
 

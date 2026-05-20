@@ -10,13 +10,15 @@ const {
   mockConnect,
   mockDisconnect,
   mockClearSchema,
-  mockClearDocument,
+  mockClearDocumentCatalog,
+  mockClearDocumentQuery,
   mockGetState,
 } = vi.hoisted(() => ({
   mockConnect: vi.fn(() => Promise.resolve()),
   mockDisconnect: vi.fn(() => Promise.resolve()),
   mockClearSchema: vi.fn(),
-  mockClearDocument: vi.fn(),
+  mockClearDocumentCatalog: vi.fn(),
+  mockClearDocumentQuery: vi.fn(),
   mockGetState: vi.fn(() => ({
     activeStatuses: { c1: { type: "connected" } } as Record<
       string,
@@ -41,9 +43,14 @@ vi.mock("@stores/schemaStore", () => ({
     selector({ clearForConnection: mockClearSchema }),
 }));
 
-vi.mock("@stores/documentStore", () => ({
-  useDocumentStore: (selector: (s: unknown) => unknown) =>
-    selector({ clearConnection: mockClearDocument }),
+vi.mock("@stores/documentCatalogStore", () => ({
+  useDocumentCatalogStore: (selector: (s: unknown) => unknown) =>
+    selector({ clearConnection: mockClearDocumentCatalog }),
+}));
+
+vi.mock("@stores/documentQueryStore", () => ({
+  useDocumentQueryStore: (selector: (s: unknown) => unknown) =>
+    selector({ clearConnection: mockClearDocumentQuery }),
 }));
 
 import { useConnectionLifecycle } from "./useConnectionLifecycle";
@@ -53,7 +60,8 @@ describe("useConnectionLifecycle", () => {
     mockConnect.mockClear();
     mockDisconnect.mockClear();
     mockClearSchema.mockClear();
-    mockClearDocument.mockClear();
+    mockClearDocumentCatalog.mockClear();
+    mockClearDocumentQuery.mockClear();
     mockGetState.mockReturnValue({
       activeStatuses: { c1: { type: "connected" } },
     });
@@ -67,7 +75,8 @@ describe("useConnectionLifecycle", () => {
     });
     expect(mockConnect).toHaveBeenCalledWith("c1");
     expect(mockClearSchema).toHaveBeenCalledWith("c1");
-    expect(mockClearDocument).toHaveBeenCalledWith("c1");
+    expect(mockClearDocumentCatalog).toHaveBeenCalledWith("c1");
+    expect(mockClearDocumentQuery).toHaveBeenCalledWith("c1");
     expect(returned).toBe(true);
   });
 
@@ -93,7 +102,8 @@ describe("useConnectionLifecycle", () => {
     });
     expect(mockDisconnect).toHaveBeenCalledWith("c1");
     expect(mockClearSchema).toHaveBeenCalledWith("c1");
-    expect(mockClearDocument).toHaveBeenCalledWith("c1");
+    expect(mockClearDocumentCatalog).toHaveBeenCalledWith("c1");
+    expect(mockClearDocumentQuery).toHaveBeenCalledWith("c1");
   });
 
   it("connect: backend가 reject하면 cache clear를 부르지 않는다", async () => {
@@ -105,6 +115,7 @@ describe("useConnectionLifecycle", () => {
       await expect(result.current.connect("c1")).rejects.toThrow("boom");
     });
     expect(mockClearSchema).not.toHaveBeenCalled();
-    expect(mockClearDocument).not.toHaveBeenCalled();
+    expect(mockClearDocumentCatalog).not.toHaveBeenCalled();
+    expect(mockClearDocumentQuery).not.toHaveBeenCalled();
   });
 });

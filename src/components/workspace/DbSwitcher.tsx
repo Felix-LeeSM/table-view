@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { ChevronDown, Database, Loader2 } from "lucide-react";
 import { useActiveTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useDocumentStore } from "@stores/documentStore";
+import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
+import { useDocumentQueryStore } from "@stores/documentQueryStore";
 import {
   Tooltip,
   TooltipContent,
@@ -76,7 +77,12 @@ export default function DbSwitcher() {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const setActiveDb = useConnectionStore((s) => s.setActiveDb);
-  const clearDocumentConnection = useDocumentStore((s) => s.clearConnection);
+  const clearDocumentCatalogConnection = useDocumentCatalogStore(
+    (s) => s.clearConnection,
+  );
+  const clearDocumentQueryConnection = useDocumentQueryStore(
+    (s) => s.clearConnection,
+  );
   // When no active tab is open, fall back to the focused connection so the
   // switcher shows the database name immediately after opening the workspace
   // (before any table/collection is clicked).
@@ -207,7 +213,8 @@ export default function DbSwitcher() {
         await switchActiveDb(activeConn.id, dbName);
         setActiveDb(activeConn.id, dbName);
         if (paradigm === "document") {
-          clearDocumentConnection(activeConn.id);
+          clearDocumentCatalogConnection(activeConn.id);
+          clearDocumentQueryConnection(activeConn.id);
         }
         setOpen(false);
         toast.success(`Switched to "${dbName}".`);
@@ -216,7 +223,14 @@ export default function DbSwitcher() {
         toast.error(`Failed to switch DB: ${message}`);
       }
     },
-    [activeConn, activeDb, paradigm, setActiveDb, clearDocumentConnection],
+    [
+      activeConn,
+      activeDb,
+      paradigm,
+      setActiveDb,
+      clearDocumentCatalogConnection,
+      clearDocumentQueryConnection,
+    ],
   );
 
   // Sprint 328 — Mongo (document) paradigm no longer surfaces a global
