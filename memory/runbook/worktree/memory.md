@@ -55,6 +55,15 @@ bash scripts/worktree-cleanup.sh --prune
 - cleanup: PR 머지 직후 또는 sprint 종료 시. `gh pr merge --delete-branch`
   는 branch 만 삭제 — worktree 디스크는 별도 정리 필요.
 
+## Primary worktree guard
+
+primary worktree 는 orchestration-only. `src/`, `src-tauri/src/`, app config /
+manifest 편집은 linked worktree 에서만 한다. `scripts/hooks/check-edit-policy.sh`
+가 `scripts/hooks/check-main-worktree-source-edit.sh` 를 호출해 Edit/Write/
+MultiEdit 과 obvious Bash writes(redirection, tee, sed/perl -i, cp/mv 등)를
+차단한다. `memory/`, `docs/`, `scripts/`, `.codex/` 같은 orchestration path 와
+`worktrees/*` linked target 은 허용.
+
 ## Agent lifecycle
 
 orchestrator 는 spawn 할 때 agent registry 를 머릿속/작업 노트에 유지:
