@@ -29,13 +29,13 @@ function buildPagedResult(
   ]);
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId", category: "unknown" },
-      { name: "name", data_type: "string", category: "unknown" },
+      { name: "_id", dataType: "ObjectId", category: "unknown" },
+      { name: "name", dataType: "string", category: "unknown" },
     ],
     rows,
-    raw_documents: rows.map((r) => ({ _id: r[0], name: r[1] })),
-    total_count: totalCount,
-    execution_time_ms: 1,
+    rawDocuments: rows.map((r) => ({ _id: r[0], name: r[1] })),
+    totalCount: totalCount,
+    executionTimeMs: 1,
   };
 }
 

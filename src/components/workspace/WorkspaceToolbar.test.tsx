@@ -17,13 +17,13 @@ function makeConnection(
   return {
     id,
     name: `${id} DB`,
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: false,
+    hasPassword: false,
     database: "test",
-    group_id: null,
+    groupId: null,
     color: null,
     environment: null,
     paradigm: "rdb",
@@ -164,7 +164,7 @@ describe("WorkspaceToolbar", () => {
   // chip is absent.
   it("hides the DbSwitcher entirely for document query tabs (Sprint 328)", () => {
     const mongo = makeConnection("m1", {
-      db_type: "mongodb",
+      dbType: "mongodb",
       paradigm: "document",
     });
     setConnections({ connections: [mongo], active: ["m1"] });

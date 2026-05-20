@@ -198,7 +198,7 @@ function setProductionConnection() {
       {
         id: "conn-1",
         name: "prod",
-        db_type: "postgres",
+        dbType: "postgres",
         host: "localhost",
         port: 5432,
         database: "app",
@@ -217,7 +217,7 @@ function setDevConnection() {
       {
         id: "conn-1",
         name: "dev",
-        db_type: "postgres",
+        dbType: "postgres",
         host: "localhost",
         port: 5432,
         database: "app",

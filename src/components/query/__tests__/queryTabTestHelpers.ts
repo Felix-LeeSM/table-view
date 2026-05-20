@@ -31,24 +31,24 @@ import type { Extension } from "@codemirror/state";
 
 export const MOCK_RESULT: QueryResult = {
   columns: [
-    { name: "id", data_type: "integer", category: "unknown" },
-    { name: "name", data_type: "text", category: "unknown" },
+    { name: "id", dataType: "integer", category: "unknown" },
+    { name: "name", dataType: "text", category: "unknown" },
   ],
   rows: [[1, "Alice"]],
-  total_count: 1,
-  execution_time_ms: 5,
-  query_type: "select",
+  totalCount: 1,
+  executionTimeMs: 5,
+  queryType: "select",
 };
 
 export const MOCK_DOC_RESULT = {
   columns: [
-    { name: "_id", data_type: "objectId", category: "unknown" },
-    { name: "name", data_type: "string", category: "unknown" },
+    { name: "_id", dataType: "objectId", category: "unknown" },
+    { name: "name", dataType: "string", category: "unknown" },
   ],
   rows: [[1, "Alice"]],
-  raw_documents: [{ _id: 1, name: "Alice" }],
-  total_count: 1,
-  execution_time_ms: 4,
+  rawDocuments: [{ _id: 1, name: "Alice" }],
+  totalCount: 1,
+  executionTimeMs: 4,
 };
 
 // ---------------------------------------------------------------------------
@@ -111,18 +111,18 @@ export function makeQueryTab(
 export function makeConn(
   overrides: Partial<ConnectionConfig> = {},
 ): ConnectionConfig {
-  const dbType: DatabaseType = overrides.db_type ?? "postgresql";
+  const dbType: DatabaseType = overrides.dbType ?? "postgresql";
   return {
     id: "conn1",
     name: "Test",
-    db_type: dbType,
+    dbType: dbType,
     host: "localhost",
     port: 5432,
     user: "postgres",
     database: "db",
-    group_id: null,
+    groupId: null,
     color: null,
-    has_password: false,
+    hasPassword: false,
     paradigm: "rdb",
     ...overrides,
   };

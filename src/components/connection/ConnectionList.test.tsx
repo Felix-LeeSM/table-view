@@ -93,13 +93,13 @@ function makeConnection(
   return {
     id: "conn-1",
     name: "Test DB",
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: false,
+    hasPassword: false,
     database: "testdb",
-    group_id: null,
+    groupId: null,
     color: null,
     paradigm: "rdb",
     ...overrides,
@@ -149,13 +149,13 @@ describe("ConnectionList", () => {
   });
 
   // -----------------------------------------------------------------------
-  // AC-01: Root connections (group_id === null) rendered as ConnectionItem
+  // AC-01: Root connections (groupId === null) rendered as ConnectionItem
   // -----------------------------------------------------------------------
   it("renders root connections as ConnectionItem stubs", () => {
     setStoreState({
       connections: [
-        makeConnection({ id: "c1", name: "Root DB 1", group_id: null }),
-        makeConnection({ id: "c2", name: "Root DB 2", group_id: null }),
+        makeConnection({ id: "c1", name: "Root DB 1", groupId: null }),
+        makeConnection({ id: "c2", name: "Root DB 2", groupId: null }),
       ],
       groups: [],
     });
@@ -171,8 +171,8 @@ describe("ConnectionList", () => {
   it("does not render grouped connections at root level", () => {
     setStoreState({
       connections: [
-        makeConnection({ id: "c1", name: "Root DB", group_id: null }),
-        makeConnection({ id: "c2", name: "Grouped DB", group_id: "g1" }),
+        makeConnection({ id: "c1", name: "Root DB", groupId: null }),
+        makeConnection({ id: "c2", name: "Grouped DB", groupId: "g1" }),
       ],
       groups: [makeGroup({ id: "g1", name: "Group A" })],
     });
@@ -204,8 +204,8 @@ describe("ConnectionList", () => {
   it("renders groups as ConnectionGroup stubs", () => {
     setStoreState({
       connections: [
-        makeConnection({ id: "c1", name: "DB A", group_id: "g1" }),
-        makeConnection({ id: "c2", name: "DB B", group_id: "g2" }),
+        makeConnection({ id: "c1", name: "DB A", groupId: "g1" }),
+        makeConnection({ id: "c2", name: "DB B", groupId: "g2" }),
       ],
       groups: [
         makeGroup({ id: "g1", name: "Group 1" }),
@@ -224,9 +224,9 @@ describe("ConnectionList", () => {
   it("passes correct connections to each group", () => {
     setStoreState({
       connections: [
-        makeConnection({ id: "c1", name: "DB 1", group_id: "g1" }),
-        makeConnection({ id: "c2", name: "DB 2", group_id: "g1" }),
-        makeConnection({ id: "c3", name: "DB 3", group_id: "g2" }),
+        makeConnection({ id: "c1", name: "DB 1", groupId: "g1" }),
+        makeConnection({ id: "c2", name: "DB 2", groupId: "g1" }),
+        makeConnection({ id: "c3", name: "DB 3", groupId: "g2" }),
       ],
       groups: [
         makeGroup({ id: "g1", name: "Group A" }),
@@ -269,7 +269,7 @@ describe("ConnectionList", () => {
 
   it("does not show drag hint when groups exist", () => {
     setStoreState({
-      connections: [makeConnection({ id: "c1", name: "DB", group_id: "g1" })],
+      connections: [makeConnection({ id: "c1", name: "DB", groupId: "g1" })],
       groups: [makeGroup({ id: "g1", name: "Group 1" })],
     });
 
@@ -372,8 +372,8 @@ describe("ConnectionList", () => {
   it("renders both root connections and groups together", () => {
     setStoreState({
       connections: [
-        makeConnection({ id: "c1", name: "Root DB", group_id: null }),
-        makeConnection({ id: "c2", name: "Grouped DB", group_id: "g1" }),
+        makeConnection({ id: "c1", name: "Root DB", groupId: null }),
+        makeConnection({ id: "c2", name: "Grouped DB", groupId: "g1" }),
       ],
       groups: [makeGroup({ id: "g1", name: "My Group" })],
     });
@@ -416,7 +416,7 @@ describe("ConnectionList", () => {
   // -----------------------------------------------------------------------
   it("never renders an ungrouped-drop-hint dialog during a drag", () => {
     setStoreState({
-      connections: [makeConnection({ id: "c1", name: "DB", group_id: "g1" })],
+      connections: [makeConnection({ id: "c1", name: "DB", groupId: "g1" })],
       groups: [makeGroup({ id: "g1", name: "G" })],
     });
     _draggedConnectionId = "c1";
@@ -438,8 +438,8 @@ describe("ConnectionList", () => {
     it("marks the matching root connection as selected", () => {
       setStoreState({
         connections: [
-          makeConnection({ id: "c1", name: "Root 1", group_id: null }),
-          makeConnection({ id: "c2", name: "Root 2", group_id: null }),
+          makeConnection({ id: "c1", name: "Root 1", groupId: null }),
+          makeConnection({ id: "c2", name: "Root 2", groupId: null }),
         ],
         groups: [],
       });
@@ -455,7 +455,7 @@ describe("ConnectionList", () => {
       const onSelect = vi.fn();
       setStoreState({
         connections: [
-          makeConnection({ id: "c1", name: "Root 1", group_id: null }),
+          makeConnection({ id: "c1", name: "Root 1", groupId: null }),
         ],
         groups: [],
       });
@@ -472,7 +472,7 @@ describe("ConnectionList", () => {
       const onActivate = vi.fn();
       setStoreState({
         connections: [
-          makeConnection({ id: "c1", name: "Root 1", group_id: null }),
+          makeConnection({ id: "c1", name: "Root 1", groupId: null }),
         ],
         groups: [],
       });
@@ -488,7 +488,7 @@ describe("ConnectionList", () => {
     it("forwards selectedId, onSelect, onActivate to ConnectionGroup", () => {
       setStoreState({
         connections: [
-          makeConnection({ id: "g-1", name: "Inside", group_id: "grp" }),
+          makeConnection({ id: "g-1", name: "Inside", groupId: "grp" }),
         ],
         groups: [makeGroup({ id: "grp", name: "Group A" })],
       });
@@ -538,7 +538,7 @@ describe("ConnectionList", () => {
       const onActivate = vi.fn();
       setStoreState({
         connections: [
-          makeConnection({ id: "conn-a", name: "Conn A", group_id: null }),
+          makeConnection({ id: "conn-a", name: "Conn A", groupId: null }),
         ],
         groups: [],
       });
@@ -557,7 +557,7 @@ describe("ConnectionList", () => {
     it("AC-363-FE-02: same connection clicked twice → IPC fired twice (backend dedups)", () => {
       setStoreState({
         connections: [
-          makeConnection({ id: "conn-a", name: "Conn A", group_id: null }),
+          makeConnection({ id: "conn-a", name: "Conn A", groupId: null }),
         ],
         groups: [],
       });
@@ -585,7 +585,7 @@ describe("ConnectionList", () => {
 
       setStoreState({
         connections: [
-          makeConnection({ id: "conn-x", name: "X", group_id: null }),
+          makeConnection({ id: "conn-x", name: "X", groupId: null }),
         ],
         groups: [],
       });
@@ -608,7 +608,7 @@ describe("ConnectionList", () => {
     it("AC-363-FE-04: IPC fires even when caller did not pass onActivate", () => {
       setStoreState({
         connections: [
-          makeConnection({ id: "conn-z", name: "Z", group_id: null }),
+          makeConnection({ id: "conn-z", name: "Z", groupId: null }),
         ],
         groups: [],
       });
@@ -627,7 +627,7 @@ describe("ConnectionList", () => {
       const onSelect = vi.fn();
       setStoreState({
         connections: [
-          makeConnection({ id: "conn-q", name: "Q", group_id: null }),
+          makeConnection({ id: "conn-q", name: "Q", groupId: null }),
         ],
         groups: [],
       });

@@ -18,16 +18,16 @@ beforeEach(() => {
 
 const SELECT_RESULT: QueryResult = {
   columns: [
-    { name: "id", data_type: "integer", category: "int" },
-    { name: "name", data_type: "text", category: "text" },
+    { name: "id", dataType: "integer", category: "int" },
+    { name: "name", dataType: "text", category: "text" },
   ],
   rows: [
     [1, "Alice"],
     [2, "Bob"],
   ],
-  total_count: 2,
-  execution_time_ms: 1,
-  query_type: "select",
+  totalCount: 2,
+  executionTimeMs: 1,
+  queryType: "select",
 };
 
 beforeEach(() => {

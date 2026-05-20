@@ -1,7 +1,7 @@
-// AC-144-3 — (paradigm, db_type) → completion module resolver.
+// AC-144-3 — (paradigm, dbType) → completion module resolver.
 //
 // Throws `CompletionPairingError` when a paradigm is wired to an
-// incompatible db_type (e.g. `rdb` × `mongodb`). The TS literal types of
+// incompatible dbType (e.g. `rdb` × `mongodb`). The TS literal types of
 // each module's `dbType` already prevent the mismatch at compile time, but
 // the runtime guard exists for defence in depth.
 
@@ -46,7 +46,7 @@ export type ResolvedCompletionModule =
   | ResolvedMongoModule;
 
 /**
- * Map a (paradigm, db_type) pair to its completion module. Throws
+ * Map a (paradigm, dbType) pair to its completion module. Throws
  * `CompletionPairingError` when the pair is incompatible. Compatible pairs:
  *  - `("rdb", "postgresql")` → pg
  *  - `("rdb", "mysql")` → mysql

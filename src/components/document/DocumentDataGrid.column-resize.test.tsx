@@ -32,19 +32,19 @@ beforeEach(() => {
 function buildResult(): DocumentQueryResult {
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId", category: "uuid" },
-      { name: "name", data_type: "string", category: "text" },
+      { name: "_id", dataType: "ObjectId", category: "uuid" },
+      { name: "name", dataType: "string", category: "text" },
     ],
     rows: [
       [{ $oid: "65abcdef0123456789abcdef" }, "Alice"],
       [{ $oid: "65abcdef0123456789abcde0" }, "Bob"],
     ],
-    raw_documents: [
+    rawDocuments: [
       { _id: { $oid: "65abcdef0123456789abcdef" }, name: "Alice" },
       { _id: { $oid: "65abcdef0123456789abcde0" }, name: "Bob" },
     ],
-    total_count: 2,
-    execution_time_ms: 1,
+    totalCount: 2,
+    executionTimeMs: 1,
   };
 }
 

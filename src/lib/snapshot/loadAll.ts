@@ -51,6 +51,11 @@ import { useThemeStore } from "@stores/themeStore";
 import { useSafeModeStore, type SafeMode } from "@stores/safeModeStore";
 import type { ThemeMode } from "@lib/themeBoot";
 import { DEFAULT_THEME_ID, isThemeId } from "@lib/themeCatalog";
+import {
+  normalizeActiveStatuses,
+  normalizeConnectionConfig,
+  normalizeQueryState,
+} from "@lib/wireCamelCase";
 
 // ---------------------------------------------------------------------------
 // Listener buffer — collects `state-changed` events that arrive while a
@@ -229,7 +234,7 @@ async function hydrateConnections(snap: InitialAppState): Promise<void> {
     return;
   }
   useConnectionStore.setState({
-    connections: slot.items,
+    connections: slot.items.map(normalizeConnectionConfig),
     groups: slot.groups,
     // Snapshot is the source of truth at boot — flip `hasLoadedOnce` so
     // the launcher skeleton swaps out immediately. Matches the post-boot
@@ -239,20 +244,57 @@ async function hydrateConnections(snap: InitialAppState): Promise<void> {
   });
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeWorkspaceTab(value: unknown): unknown {
+  if (!isRecord(value) || value.type !== "query") return value;
+  return {
+    ...value,
+    queryState: normalizeQueryState(value.queryState),
+  };
+}
+
+function normalizeWorkspaceState(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  return {
+    ...value,
+    tabs: Array.isArray(value.tabs)
+      ? value.tabs.map(normalizeWorkspaceTab)
+      : value.tabs,
+    closedTabHistory: Array.isArray(value.closedTabHistory)
+      ? value.closedTabHistory.map(normalizeWorkspaceTab)
+      : value.closedTabHistory,
+  };
+}
+
+function normalizeWorkspaceSnapshot(
+  value: Record<string, unknown>,
+): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const [connId, byDb] of Object.entries(value)) {
+    if (!isRecord(byDb)) continue;
+    out[connId] = {};
+    for (const [db, workspace] of Object.entries(byDb)) {
+      out[connId][db] = normalizeWorkspaceState(workspace);
+    }
+  }
+  return out;
+}
+
 async function hydrateWorkspaces(snap: InitialAppState): Promise<void> {
   const slot = snap.stores.workspaces;
   if ("error" in slot) return;
-  // Wire shape: `byConnectionId[connId][db] = unknown`. The store treats
-  // each `(connId, db)` cell as the persisted `WorkspaceState`. Migration
-  // already happened in `loadPersistedWorkspaces`; the snapshot path
-  // assumes backend serialized the post-migration shape. Future sprint
-  // (370) is the formal hydrate path — this sprint passes through.
+  // Wire shape: `byConnectionId[connId][db] = unknown`. The store treats each
+  // cell as a `WorkspaceState`; normalize query tab result payloads here so
+  // legacy snake_case snapshots do not enter the renderer.
   //
   // The cast is bounded to the call boundary; the store's internal type
   // is `Record<string, Record<string, WorkspaceState>>`.
   useWorkspaceStore.setState({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    workspaces: slot.byConnectionId as any,
+    workspaces: normalizeWorkspaceSnapshot(slot.byConnectionId) as any,
   });
 }
 
@@ -305,7 +347,7 @@ async function hydrateRuntimeActiveStatuses(
   // No store internals changed; the receiver writes the same field that
   // `connectToDatabase` mutates at runtime.
   useConnectionStore.setState({
-    activeStatuses: snap.runtime.activeStatuses,
+    activeStatuses: normalizeActiveStatuses(snap.runtime.activeStatuses),
   });
 }
 

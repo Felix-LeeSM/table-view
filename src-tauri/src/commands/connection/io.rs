@@ -313,8 +313,8 @@ mod tests {
             !exported.contains(&ciphertext),
             "Exported JSON must not contain on-disk ciphertext"
         );
-        // Public payload field that signals presence is fine
-        assert!(exported.contains("\"has_password\": true"));
+        // Public payload field that signals presence is fine.
+        assert!(exported.contains("\"hasPassword\": true"));
 
         cleanup_test_env();
     }

@@ -200,12 +200,12 @@ export default function ConnectionItem({
             <span
               className="ml-auto shrink-0 rounded px-1 py-0.5 text-4xs font-semibold leading-none"
               style={{
-                backgroundColor: `${DB_TYPE_META[connection.db_type].color}20`,
-                color: DB_TYPE_META[connection.db_type].color,
+                backgroundColor: `${DB_TYPE_META[connection.dbType].color}20`,
+                color: DB_TYPE_META[connection.dbType].color,
               }}
-              title={connection.db_type}
+              title={connection.dbType}
             >
-              {DB_TYPE_META[connection.db_type].short}
+              {DB_TYPE_META[connection.dbType].short}
             </span>
           </div>
         </ContextMenuTrigger>
@@ -232,14 +232,14 @@ export default function ConnectionItem({
             </ContextMenuSubTrigger>
             <ContextMenuSubContent>
               <ContextMenuItem
-                disabled={connection.group_id === null}
+                disabled={connection.groupId === null}
                 onClick={async () => {
-                  if (connection.group_id !== null) {
+                  if (connection.groupId !== null) {
                     await moveConnectionToGroup(connection.id, null);
                   }
                 }}
               >
-                {connection.group_id === null ? (
+                {connection.groupId === null ? (
                   <Check size={14} />
                 ) : (
                   <span className="inline-block w-3.5" aria-hidden="true" />
@@ -248,7 +248,7 @@ export default function ConnectionItem({
               </ContextMenuItem>
               {groups.length > 0 && <ContextMenuSeparator />}
               {groups.map((g) => {
-                const isCurrent = connection.group_id === g.id;
+                const isCurrent = connection.groupId === g.id;
                 return (
                   <ContextMenuItem
                     key={g.id}

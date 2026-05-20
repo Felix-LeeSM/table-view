@@ -6,7 +6,7 @@
  *     connections in dev clusters)
  *   - `database` is the default DB to land on after connect — labelled
  *     "(optional)" because the user can pick a DB later via DbSwitcher
- *   - `auth_source`, `replica_set`, `tls_enabled` are Mongo-specific and
+ *   - `authSource`, `replicaSet`, `tlsEnabled` are Mongo-specific and
  *     persisted in the existing `ConnectionConfig` extension fields
  *     (see Sprint 65).
  */
@@ -162,8 +162,8 @@ export default function MongoFormFields({
           <input
             id="conn-auth-source"
             className={inputClass}
-            value={draft.auth_source ?? ""}
-            onChange={(e) => onChange({ auth_source: e.target.value || null })}
+            value={draft.authSource ?? ""}
+            onChange={(e) => onChange({ authSource: e.target.value || null })}
             placeholder="admin"
           />
         </div>
@@ -174,8 +174,8 @@ export default function MongoFormFields({
           <input
             id="conn-replica-set"
             className={inputClass}
-            value={draft.replica_set ?? ""}
-            onChange={(e) => onChange({ replica_set: e.target.value || null })}
+            value={draft.replicaSet ?? ""}
+            onChange={(e) => onChange({ replicaSet: e.target.value || null })}
             placeholder="rs0"
           />
         </div>
@@ -184,8 +184,8 @@ export default function MongoFormFields({
             id="conn-tls-enabled"
             type="checkbox"
             className="cursor-pointer"
-            checked={!!draft.tls_enabled}
-            onChange={(e) => onChange({ tls_enabled: e.target.checked })}
+            checked={!!draft.tlsEnabled}
+            onChange={(e) => onChange({ tlsEnabled: e.target.checked })}
           />
           Enable TLS
         </label>

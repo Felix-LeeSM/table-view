@@ -46,13 +46,13 @@ function makeConn(
   return {
     id,
     name: `${id} DB`,
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: hasPw,
+    hasPassword: hasPw,
     database: "test",
-    group_id: groupId,
+    groupId: groupId,
     color: null,
     environment: null,
     paradigm: "rdb",
@@ -188,7 +188,7 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
     });
 
     useConnectionStore.setState({
-      // Mix has_password=true with has_password=false so a future "strip
+      // Mix hasPassword=true with hasPassword=false so a future "strip
       // password-bearing rows" regression would shrink the id array.
       connections: [
         makeConn("plain-1", false),

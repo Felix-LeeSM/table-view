@@ -4,9 +4,11 @@ import type {
   ConnectionDraft,
   ConnectionGroup,
 } from "@/types/connection";
+import { normalizeConnectionConfig } from "@lib/wireCamelCase";
 
 export async function listConnections(): Promise<ConnectionConfig[]> {
-  return invoke<ConnectionConfig[]>("list_connections");
+  const connections = await invoke<unknown[]>("list_connections");
+  return connections.map(normalizeConnectionConfig);
 }
 
 /**
@@ -19,13 +21,14 @@ export async function saveConnection(
   isNew: boolean,
 ): Promise<ConnectionConfig> {
   const { password, ...connection } = draft;
-  return invoke<ConnectionConfig>("save_connection", {
+  const saved = await invoke<unknown>("save_connection", {
     req: {
-      connection: { ...connection, has_password: false },
+      connection: { ...connection, hasPassword: false },
       password,
       is_new: isNew,
     },
   });
+  return normalizeConnectionConfig(saved);
 }
 
 export async function deleteConnection(id: string): Promise<void> {
@@ -44,7 +47,7 @@ export async function testConnection(
   const { password, ...rest } = draft;
   return invoke<string>("test_connection", {
     req: {
-      config: { ...rest, has_password: false },
+      config: { ...rest, hasPassword: false },
       password,
       existing_id: existingId,
     },

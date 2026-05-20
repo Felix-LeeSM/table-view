@@ -791,7 +791,7 @@ describe("DataGrid", () => {
         {
           id: "conn1",
           name: "prod-conn",
-          db_type: "postgres",
+          dbType: "postgres",
           host: "localhost",
           port: 5432,
           database: "app",

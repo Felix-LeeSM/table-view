@@ -78,11 +78,11 @@ export default function RecentConnections({
           <span
             className="ml-auto shrink-0 rounded px-1 py-0.5 text-4xs font-semibold leading-none"
             style={{
-              backgroundColor: `${DB_TYPE_META[conn!.db_type].color}20`,
-              color: DB_TYPE_META[conn!.db_type].color,
+              backgroundColor: `${DB_TYPE_META[conn!.dbType].color}20`,
+              color: DB_TYPE_META[conn!.dbType].color,
             }}
           >
-            {DB_TYPE_META[conn!.db_type].short}
+            {DB_TYPE_META[conn!.dbType].short}
           </span>
           {/* Sprint 297 — swap slot: 평소엔 시간, 호버 시 같은 자리에 X.
               grid stack 으로 두 element 가 같은 cell 을 점유해 슬롯 width

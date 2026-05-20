@@ -17,23 +17,23 @@ import {
 import type { DocumentQueryResult } from "@/types/document";
 
 // Canned results used by the mocked store. Shaped to mirror the backend's
-// flattening: `rows` carry sentinels, `raw_documents` keep the nested
+// flattening: `rows` carry sentinels, `rawDocuments` keep the nested
 // values for Quick Look.
 function buildResult(
   overrides: Partial<DocumentQueryResult> = {},
 ): DocumentQueryResult {
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId", category: "unknown" },
-      { name: "name", data_type: "string", category: "unknown" },
-      { name: "meta", data_type: "document", category: "unknown" },
-      { name: "tags", data_type: "array", category: "unknown" },
+      { name: "_id", dataType: "ObjectId", category: "unknown" },
+      { name: "name", dataType: "string", category: "unknown" },
+      { name: "meta", dataType: "document", category: "unknown" },
+      { name: "tags", dataType: "array", category: "unknown" },
     ],
     rows: [
       [{ $oid: "65abcdef0123456789abcdef" }, "Alice", "{...}", "[3 items]"],
       [{ $oid: "65abcdef0123456789abcde0" }, "Bob", "{...}", "[0 items]"],
     ],
-    raw_documents: [
+    rawDocuments: [
       {
         _id: { $oid: "65abcdef0123456789abcdef" },
         name: "Alice",
@@ -47,8 +47,8 @@ function buildResult(
         tags: [],
       },
     ],
-    total_count: 2,
-    execution_time_ms: 3,
+    totalCount: 2,
+    executionTimeMs: 3,
     ...overrides,
   };
 }
@@ -56,15 +56,15 @@ function buildResult(
 function buildSecondPageResult(): DocumentQueryResult {
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId", category: "unknown" },
-      { name: "name", data_type: "string", category: "unknown" },
-      { name: "meta", data_type: "document", category: "unknown" },
-      { name: "tags", data_type: "array", category: "unknown" },
+      { name: "_id", dataType: "ObjectId", category: "unknown" },
+      { name: "name", dataType: "string", category: "unknown" },
+      { name: "meta", dataType: "document", category: "unknown" },
+      { name: "tags", dataType: "array", category: "unknown" },
     ],
     rows: [
       [{ $oid: "65abcdef0123456789abcde1" }, "Carol", "{...}", "[1 items]"],
     ],
-    raw_documents: [
+    rawDocuments: [
       {
         _id: { $oid: "65abcdef0123456789abcde1" },
         name: "Carol",
@@ -72,8 +72,8 @@ function buildSecondPageResult(): DocumentQueryResult {
         tags: ["solo"],
       },
     ],
-    total_count: 301,
-    execution_time_ms: 2,
+    totalCount: 301,
+    executionTimeMs: 2,
   };
 }
 
@@ -88,7 +88,7 @@ const findMock =
   >();
 
 const insertDocumentMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(() =>
-  Promise.resolve({ ObjectId: "65abcdef0123456789abcdef" }),
+  Promise.resolve({ objectId: "65abcdef0123456789abcdef" }),
 );
 const updateDocumentMock = vi.fn<(...args: unknown[]) => Promise<void>>(() =>
   Promise.resolve(),
@@ -126,7 +126,7 @@ beforeEach(() => {
   findMock.mockResolvedValue(buildResult());
   insertDocumentMock.mockReset();
   insertDocumentMock.mockResolvedValue({
-    ObjectId: "65abcdef0123456789abcdef",
+    objectId: "65abcdef0123456789abcdef",
   });
   updateDocumentMock.mockReset();
   updateDocumentMock.mockResolvedValue(undefined);
@@ -255,7 +255,7 @@ describe("DocumentDataGrid", () => {
       async (_c: string, _db: string, _col: string, body?: unknown) => {
         const b = body as { skip?: number } | undefined;
         if (b && (b.skip ?? 0) > 0) return buildSecondPageResult();
-        return buildResult({ total_count: 301 });
+        return buildResult({ totalCount: 301 });
       },
     );
 
@@ -283,7 +283,7 @@ describe("DocumentDataGrid", () => {
 
   it("renders the 'No documents' empty state when the result has no rows", async () => {
     findMock.mockResolvedValue(
-      buildResult({ rows: [], raw_documents: [], total_count: 0 }),
+      buildResult({ rows: [], rawDocuments: [], totalCount: 0 }),
     );
 
     renderGrid();
@@ -401,7 +401,7 @@ describe("DocumentDataGrid", () => {
       [
         {
           op: "updateOne",
-          filter: { _id: { ObjectId: "65abcdef0123456789abcdef" } },
+          filter: { _id: { objectId: "65abcdef0123456789abcdef" } },
           update: { $set: { name: "Ada" } },
         },
       ],

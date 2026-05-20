@@ -87,7 +87,7 @@ function seedDocTab(
     connections: [
       makeConn({
         id: tab.connectionId,
-        db_type: "mongodb",
+        dbType: "mongodb",
         paradigm: "document",
         environment: "development",
       }),
@@ -232,7 +232,7 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
       connections: [
         makeConn({
           id: "conn-mongo",
-          db_type: "mongodb",
+          dbType: "mongodb",
           paradigm: "document",
           environment: "production",
         }),

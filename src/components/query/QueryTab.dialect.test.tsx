@@ -1,7 +1,7 @@
 // Sprint 218 — `dialect` axis split from `QueryTab.test.tsx` (P11
 // step 2). Covers Sprint 82 provider-aware SQL dialect prop (Postgres /
 // MySQL / SQLite mapping, missing-connection / non-RDB StandardSQL
-// fallback, db_type flip) and Sprint 83 Mongo autocomplete + operator
+// fallback, dbType flip) and Sprint 83 Mongo autocomplete + operator
 // highlight wiring (no mongoExtensions on RDB tabs, 2-entry array on
 // document tabs, queryMode-driven identity rebuild, fieldsCache feed,
 // fieldsCache isolation from RDB tabs). Cases are byte-equivalent to
@@ -150,7 +150,7 @@ describe("QueryTab — dialect", () => {
   // AC-01: Postgres connection → QueryEditor receives the Postgres dialect.
   it("passes the PostgreSQL dialect when the active connection is postgres", () => {
     useConnectionStore.setState({
-      connections: [makeConn({ id: "conn1", db_type: "postgresql" })],
+      connections: [makeConn({ id: "conn1", dbType: "postgresql" })],
     });
     const tab = makeQueryTab();
     render(<QueryTab tab={tab} />);
@@ -160,7 +160,7 @@ describe("QueryTab — dialect", () => {
   // AC-02: MySQL connection → MySQL dialect.
   it("passes the MySQL dialect when the active connection is mysql", () => {
     useConnectionStore.setState({
-      connections: [makeConn({ id: "conn1", db_type: "mysql" })],
+      connections: [makeConn({ id: "conn1", dbType: "mysql" })],
     });
     const tab = makeQueryTab();
     render(<QueryTab tab={tab} />);
@@ -170,7 +170,7 @@ describe("QueryTab — dialect", () => {
   // AC-03: SQLite connection → SQLite dialect.
   it("passes the SQLite dialect when the active connection is sqlite", () => {
     useConnectionStore.setState({
-      connections: [makeConn({ id: "conn1", db_type: "sqlite" })],
+      connections: [makeConn({ id: "conn1", dbType: "sqlite" })],
     });
     const tab = makeQueryTab();
     render(<QueryTab tab={tab} />);
@@ -193,7 +193,7 @@ describe("QueryTab — dialect", () => {
   it("falls back to StandardSQL when the connection paradigm is non-RDB", () => {
     useConnectionStore.setState({
       connections: [
-        makeConn({ id: "conn1", db_type: "mongodb", paradigm: "document" }),
+        makeConn({ id: "conn1", dbType: "mongodb", paradigm: "document" }),
       ],
     });
     const tab = makeQueryTab();
@@ -201,11 +201,11 @@ describe("QueryTab — dialect", () => {
     expect(mockEditorProps.lastDialect).toBe(StandardSQL);
   });
 
-  // AC-05: changing the active connection's db_type swaps the dialect prop
+  // AC-05: changing the active connection's dbType swaps the dialect prop
   // without recreating the QueryTab / QueryEditor.
-  it("updates the dialect prop when connection db_type flips", async () => {
+  it("updates the dialect prop when connection dbType flips", async () => {
     useConnectionStore.setState({
-      connections: [makeConn({ id: "conn1", db_type: "postgresql" })],
+      connections: [makeConn({ id: "conn1", dbType: "postgresql" })],
     });
     const tab = makeQueryTab();
     render(<QueryTab tab={tab} />);
@@ -213,7 +213,7 @@ describe("QueryTab — dialect", () => {
 
     await act(async () => {
       useConnectionStore.setState({
-        connections: [makeConn({ id: "conn1", db_type: "mysql" })],
+        connections: [makeConn({ id: "conn1", dbType: "mysql" })],
       });
     });
     expect(mockEditorProps.lastDialect).toBe(MySQL);

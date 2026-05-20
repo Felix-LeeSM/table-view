@@ -50,7 +50,7 @@ describe("generateMqlPreview — happy paths", () => {
         kind: "updateOne",
         database: "app",
         collection: "users",
-        documentId: { ObjectId: HEX_A },
+        documentId: { objectId: HEX_A },
         patch: { $set: { name: "Ada Lovelace" } },
       },
     ]);
@@ -92,7 +92,7 @@ describe("generateMqlPreview — happy paths", () => {
         kind: "deleteOne",
         database: "app",
         collection: "users",
-        documentId: { ObjectId: HEX_B },
+        documentId: { objectId: HEX_B },
       },
     ]);
   });
@@ -218,7 +218,7 @@ describe("generateMqlPreview — error guards", () => {
     expect(commands).toHaveLength(1);
     expect(commands[0]).toMatchObject({
       kind: "updateOne",
-      documentId: { ObjectId: HEX_A },
+      documentId: { objectId: HEX_A },
     });
     expect(previewLines).toHaveLength(1);
     expect(errors).toEqual([{ kind: "missing-id", rowIdx: 1 }]);
@@ -244,7 +244,7 @@ describe("generateMqlPreview — edge cases", () => {
       `db.users.updateOne({ _id: ObjectId("${HEX_A}") }, { $set: { name: "Ada L." } })`,
     ]);
     expect(commands[0]).toMatchObject({
-      documentId: { ObjectId: HEX_A },
+      documentId: { objectId: HEX_A },
     });
   });
 
@@ -258,7 +258,7 @@ describe("generateMqlPreview — edge cases", () => {
       `db.users.updateOne({ _id: 7 }, { $set: { name: "Ada L." } })`,
     ]);
     expect(commands[0]).toMatchObject({
-      documentId: { Number: 7 },
+      documentId: { number: 7 },
     });
   });
 

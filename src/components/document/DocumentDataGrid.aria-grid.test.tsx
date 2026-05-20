@@ -38,15 +38,15 @@ beforeEach(() => {
 function buildResult(): DocumentQueryResult {
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId", category: "uuid" },
-      { name: "name", data_type: "string", category: "text" },
-      { name: "tags", data_type: "array", category: "object" },
+      { name: "_id", dataType: "ObjectId", category: "uuid" },
+      { name: "name", dataType: "string", category: "text" },
+      { name: "tags", dataType: "array", category: "object" },
     ],
     rows: [
       [{ $oid: "65abcdef0123456789abcdef" }, "Alice", "[3 items]"],
       [{ $oid: "65abcdef0123456789abcde0" }, "Bob", "[0 items]"],
     ],
-    raw_documents: [
+    rawDocuments: [
       {
         _id: { $oid: "65abcdef0123456789abcdef" },
         name: "Alice",
@@ -54,8 +54,8 @@ function buildResult(): DocumentQueryResult {
       },
       { _id: { $oid: "65abcdef0123456789abcde0" }, name: "Bob", tags: [] },
     ],
-    total_count: 2,
-    execution_time_ms: 1,
+    totalCount: 2,
+    executionTimeMs: 1,
   };
 }
 
@@ -131,8 +131,8 @@ describe("DocumentDataGrid ARIA grid roles (Sprint 260 AC-260-03)", () => {
     findMock.mockResolvedValue({
       ...buildResult(),
       rows: [],
-      raw_documents: [],
-      total_count: 0,
+      rawDocuments: [],
+      totalCount: 0,
     });
     render(
       <DocumentDataGrid

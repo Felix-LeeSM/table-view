@@ -8,12 +8,12 @@ import type { QueryColumn } from "@/types/query";
 
 function col(
   name: string,
-  data_type: string,
+  dataType: string,
   is_primary_key = false,
 ): ColumnInfo {
   return {
     name,
-    data_type,
+    data_type: dataType,
     nullable: !is_primary_key,
     default_value: null,
     is_primary_key,
@@ -23,8 +23,8 @@ function col(
   };
 }
 
-function qcol(name: string, data_type = "text"): QueryColumn {
-  return { name, data_type, category: "unknown" };
+function qcol(name: string, dataType = "text"): QueryColumn {
+  return { name, dataType, category: "unknown" };
 }
 
 describe("parseSingleTableSelect", () => {

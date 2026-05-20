@@ -166,13 +166,13 @@ function makeConnection(
   return {
     id: "conn-1",
     name: "Test DB",
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: false,
+    hasPassword: false,
     database: "testdb",
-    group_id: "g1",
+    groupId: "g1",
     color: null,
     paradigm: "rdb",
     ...overrides,
@@ -1039,7 +1039,7 @@ describe("ConnectionGroup", () => {
   // Sprint 369 (Phase 4, Q20.3) — Collapse persistence migrated LS → SQLite.
   // -----------------------------------------------------------------------
   // 작성 이유 (2026-05-16): `table-view-group-collapsed` localStorage map 폐기.
-  // `set_group_collapsed(group_id, collapsed)` IPC 가 SQLite SOT 에 commit.
+  // `set_group_collapsed(groupId, collapsed)` IPC 가 SQLite SOT 에 commit.
   // 본 컴포넌트는 group.collapsed prop 으로 mount → 그 값이 SQLite hydrate
   // 결과를 반영 (snapshot 가 hydrate 하는 후속 sprint 에서 보장). 본 sprint
   // 의 invariant 는 (1) LS getItem/setItem 0회, (2) toggle 시 IPC 1회.

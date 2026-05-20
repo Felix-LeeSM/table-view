@@ -4,7 +4,7 @@ import { assertNever } from "@/lib/paradigm";
 /**
  * Per-dialect SQL keyword sets. Returns the keywords appropriate for a
  * single `DatabaseType` so `useSqlAutocomplete` can swap candidates as
- * the active connection's `db_type` changes — without that, Postgres-
+ * the active connection's `dbType` changes — without that, Postgres-
  * only keywords (`RETURNING`, `ILIKE`) would surface on MySQL tabs.
  *
  * Non-RDB DatabaseTypes (`mongodb`, `redis`) return an empty list because

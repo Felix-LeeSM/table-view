@@ -57,7 +57,7 @@ export interface SqlQueryEditorProps {
   schemaNamespace?: SQLNamespace;
   /**
    * The CodeMirror `SQLDialect` to use for parsing + keyword highlighting.
-   * Mapped from the active connection's `db_type` upstream by
+   * Mapped from the active connection's `dbType` upstream by
    * `databaseTypeToSqlDialect`. When omitted falls back to `StandardSQL`.
    */
   sqlDialect?: SQLDialect;

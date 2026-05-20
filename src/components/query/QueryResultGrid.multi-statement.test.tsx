@@ -19,24 +19,24 @@ beforeEach(() => {
 
 const SELECT_RESULT_A: QueryResult = {
   columns: [
-    { name: "id", data_type: "integer", category: "unknown" },
-    { name: "name", data_type: "text", category: "unknown" },
+    { name: "id", dataType: "integer", category: "unknown" },
+    { name: "name", dataType: "text", category: "unknown" },
   ],
   rows: [
     [1, "Alice"],
     [2, "Bob"],
   ],
-  total_count: 2,
-  execution_time_ms: 5,
-  query_type: "select",
+  totalCount: 2,
+  executionTimeMs: 5,
+  queryType: "select",
 };
 
 const DDL_RESULT: QueryResult = {
   columns: [],
   rows: [],
-  total_count: 0,
-  execution_time_ms: 11,
-  query_type: "ddl",
+  totalCount: 0,
+  executionTimeMs: 11,
+  queryType: "ddl",
 };
 
 const SUCCESS_STMT_A: QueryStatementResult = {

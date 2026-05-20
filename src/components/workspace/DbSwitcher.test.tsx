@@ -72,14 +72,14 @@ function makeConnection(
   return {
     id: "c1",
     name: "Local PG",
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
     database: "postgres",
-    group_id: null,
+    groupId: null,
     color: null,
-    has_password: false,
+    hasPassword: false,
     ...overrides,
   };
 }
@@ -88,7 +88,7 @@ function setStores(options: {
   paradigm: Paradigm;
   connected: boolean;
   tab?: TableTab | QueryTab;
-  dbType?: ConnectionConfig["db_type"];
+  dbType?: ConnectionConfig["dbType"];
   /** Sprint 130 — seed the connected status with a specific activeDb. */
   activeDb?: string;
 }) {
@@ -104,7 +104,7 @@ function setStores(options: {
       : makeTableTab());
   const conn = makeConnection({
     paradigm: options.paradigm,
-    db_type:
+    dbType:
       options.dbType ??
       (options.paradigm === "document" ? "mongodb" : "postgresql"),
   });

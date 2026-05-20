@@ -5,6 +5,7 @@ import {
 } from "@stores/connectionStore";
 import type { ConnectionStatus } from "@/types/connection";
 import { readConnectionSession } from "@lib/scopedLocalStorage";
+import { normalizeActiveStatuses } from "@lib/wireCamelCase";
 
 /**
  * Sprint 224 (P10 step 3a) — moves the read-only `hydrateFromSession`
@@ -40,10 +41,9 @@ export function hydrateConnectionSession(): void {
   > = {};
   if (session.focusedConnId) patch.focusedConnId = session.focusedConnId;
   if (session.activeStatuses)
-    patch.activeStatuses = session.activeStatuses as Record<
-      string,
-      ConnectionStatus
-    >;
+    patch.activeStatuses = normalizeActiveStatuses(
+      session.activeStatuses,
+    ) as Record<string, ConnectionStatus>;
   if (Object.keys(patch).length > 0) useConnectionStore.setState(patch);
 }
 

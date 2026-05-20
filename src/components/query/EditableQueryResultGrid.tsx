@@ -165,7 +165,7 @@ export default function EditableQueryResultGrid({
               setCellDetail({
                 data: cell,
                 columnName: col.name,
-                dataType: col.data_type,
+                dataType: col.dataType,
               });
             }
           },
@@ -281,7 +281,7 @@ export default function EditableQueryResultGrid({
                     <span className="truncate">{col.name}</span>
                   </div>
                   <div className="mt-0.5 truncate text-3xs text-muted-foreground">
-                    {col.data_type}
+                    {col.dataType}
                   </div>
                   <div
                     className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
@@ -357,7 +357,7 @@ export default function EditableQueryResultGrid({
                     >
                       {isEditing ? (
                         <input
-                          type={getInputTypeForColumn(col.data_type)}
+                          type={getInputTypeForColumn(col.dataType)}
                           className="w-full rounded-sm border-none bg-background px-1 py-0 text-xs text-foreground shadow-sm outline-none"
                           value={grid.editValue}
                           autoFocus

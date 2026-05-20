@@ -30,7 +30,7 @@ import type { TableData } from "@/types/schema";
 import type { CommitError } from "@/components/datagrid/useDataGridEdit";
 import type { SqlDialect } from "@/components/datagrid/sqlGenerator";
 
-/** Sprint 347 — connection.db_type → sqlGenerator dialect tag. Redis /
+/** Sprint 347 — connection.dbType → sqlGenerator dialect tag. Redis /
  *  unsupported types fall through to undefined (the generator default). */
 function dialectFromDbType(dbType: string | undefined): SqlDialect | undefined {
   if (dbType === "postgresql") return "postgresql";
@@ -153,11 +153,11 @@ export function useDataGridPreviewCommit(
   // `recordHistoryEntry` 가 backend wire shape + disable gate 를 책임.
   // RDB / Mongo / DDL editors share one decision matrix via `useSafeModeGate`.
   const safeModeGate = useSafeModeGate(connectionId);
-  // Sprint 347 — derive SQL dialect from the connection's db_type so the
+  // Sprint 347 — derive SQL dialect from the connection's dbType so the
   // generator can dispatch jsonb_set vs JSON_SET correctly.
   const dialect = useConnectionStore((s) => {
     const conn = s.connections.find((c) => c.id === connectionId);
-    return dialectFromDbType(conn?.db_type);
+    return dialectFromDbType(conn?.dbType);
   });
 
   // Paradigm-keyed adapter. Selection happens here exactly once per

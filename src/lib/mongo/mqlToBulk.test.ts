@@ -39,14 +39,14 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
         kind: "updateOne",
         database: DB,
         collection: COLL,
-        documentId: { ObjectId: "507f1f77bcf86cd799439011" },
+        documentId: { objectId: "507f1f77bcf86cd799439011" },
         patch: { $set: { name: "Ada L." } },
       },
     ];
     expect(mqlCommandsToBulkOps(cmds)).toEqual([
       {
         op: "updateOne",
-        filter: { _id: { ObjectId: "507f1f77bcf86cd799439011" } },
+        filter: { _id: { objectId: "507f1f77bcf86cd799439011" } },
         update: { $set: { name: "Ada L." } },
       },
     ]);
@@ -58,14 +58,14 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
         kind: "updateOne",
         database: DB,
         collection: COLL,
-        documentId: { ObjectId: "507f1f77bcf86cd799439011" },
+        documentId: { objectId: "507f1f77bcf86cd799439011" },
         patch: { $set: { name: "Ada L." }, $unset: { legacyField: "" } },
       },
     ];
     expect(mqlCommandsToBulkOps(cmds)).toEqual([
       {
         op: "updateOne",
-        filter: { _id: { ObjectId: "507f1f77bcf86cd799439011" } },
+        filter: { _id: { objectId: "507f1f77bcf86cd799439011" } },
         update: { $set: { name: "Ada L." }, $unset: { legacyField: "" } },
       },
     ]);
@@ -77,13 +77,13 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
         kind: "deleteOne",
         database: DB,
         collection: COLL,
-        documentId: { ObjectId: "507f1f77bcf86cd799439022" },
+        documentId: { objectId: "507f1f77bcf86cd799439022" },
       },
     ];
     expect(mqlCommandsToBulkOps(cmds)).toEqual([
       {
         op: "deleteOne",
-        filter: { _id: { ObjectId: "507f1f77bcf86cd799439022" } },
+        filter: { _id: { objectId: "507f1f77bcf86cd799439022" } },
       },
     ]);
   });
@@ -100,14 +100,14 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
         kind: "updateOne",
         database: DB,
         collection: COLL,
-        documentId: { ObjectId: "507f1f77bcf86cd799439011" },
+        documentId: { objectId: "507f1f77bcf86cd799439011" },
         patch: { $set: { name: "Ada L." } },
       },
       {
         kind: "deleteOne",
         database: DB,
         collection: COLL,
-        documentId: { ObjectId: "507f1f77bcf86cd799439022" },
+        documentId: { objectId: "507f1f77bcf86cd799439022" },
       },
     ];
     const ops = mqlCommandsToBulkOps(cmds);

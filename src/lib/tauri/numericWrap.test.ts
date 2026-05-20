@@ -1,5 +1,5 @@
 // Sprint 261 (ADR 0026) — wrapNumericCells unit tests.
-// 작성: 2026-05-11. wrapper 가 column.data_type 만 보고 분기하는지, 안전
+// 작성: 2026-05-11. wrapper 가 column.dataType 만 보고 분기하는지, 안전
 // 범위 number 컬럼은 손대지 않는지, 멱등성을 갖는지 검증.
 
 import Decimal from "decimal.js";
@@ -9,9 +9,9 @@ import { wrapNumericCells } from "./numericWrap";
 import type { QueryColumn } from "@/types/query";
 
 function col(name: string, dataType: string): QueryColumn {
-  // category 는 wrap 결정과 무관 (data_type 만 single source of truth) —
+  // category 는 wrap 결정과 무관 (dataType 만 single source of truth) —
   // 테스트 fixture 단순화를 위해 "int" 고정.
-  return { name, data_type: dataType, category: "int" };
+  return { name, dataType: dataType, category: "int" };
 }
 
 function cellAt(

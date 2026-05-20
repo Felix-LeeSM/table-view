@@ -7,16 +7,16 @@ function makeDraft(overrides: Partial<ConnectionDraft> = {}): ConnectionDraft {
   return {
     id: "",
     name: "",
-    db_type: "redis",
+    dbType: "redis",
     host: "localhost",
     port: 6379,
     user: "",
     password: null,
     database: "0",
-    group_id: null,
+    groupId: null,
     color: null,
     paradigm: "kv",
-    tls_enabled: false,
+    tlsEnabled: false,
     ...overrides,
   };
 }

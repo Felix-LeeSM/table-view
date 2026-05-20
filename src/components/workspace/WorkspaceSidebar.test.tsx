@@ -30,13 +30,13 @@ function makeConn(
   return {
     id,
     name: `${id} DB`,
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: false,
+    hasPassword: false,
     database: "test",
-    group_id: null,
+    groupId: null,
     color: null,
     environment: null,
     paradigm: "rdb",
@@ -230,7 +230,7 @@ describe("WorkspaceSidebar", () => {
   it("renders DocumentSidebar -> DocumentDatabaseTree for paradigm 'document'", () => {
     setupStore({
       connections: [
-        makeConn("m1", { db_type: "mongodb", paradigm: "document" }),
+        makeConn("m1", { dbType: "mongodb", paradigm: "document" }),
       ],
       active: ["m1"],
     });
@@ -243,7 +243,7 @@ describe("WorkspaceSidebar", () => {
 
   it("renders the kv placeholder for paradigm 'kv'", () => {
     setupStore({
-      connections: [makeConn("k1", { db_type: "redis", paradigm: "kv" })],
+      connections: [makeConn("k1", { dbType: "redis", paradigm: "kv" })],
       active: ["k1"],
     });
     render(<WorkspaceSidebar selectedId="k1" />);
@@ -261,7 +261,7 @@ describe("WorkspaceSidebar", () => {
   });
 
   it("renders the search placeholder for paradigm 'search'", () => {
-    // We don't have a "search" db_type yet but the type system permits
+    // We don't have a "search" dbType yet but the type system permits
     // the paradigm value, so seed one directly to exercise the branch.
     const searchConn = makeConn("s1");
     (searchConn as ConnectionConfig).paradigm = "search";
@@ -285,7 +285,7 @@ describe("WorkspaceSidebar", () => {
   it("active tab paradigm overrides selectedId paradigm", () => {
     const rdb = makeConn("c-rdb", { paradigm: "rdb" });
     const mongo = makeConn("c-doc", {
-      db_type: "mongodb",
+      dbType: "mongodb",
       paradigm: "document",
     });
     setupStore({ connections: [rdb, mongo], active: [rdb.id, mongo.id] });
@@ -311,7 +311,7 @@ describe("WorkspaceSidebar", () => {
 
   it("uses active tab even when selectedId is null", () => {
     const mongo = makeConn("m1", {
-      db_type: "mongodb",
+      dbType: "mongodb",
       paradigm: "document",
     });
     setupStore({ connections: [mongo], active: [mongo.id] });

@@ -22,13 +22,13 @@ function makeConnection(
   return {
     id: "conn-1",
     name: "My DB",
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: true,
+    hasPassword: true,
     database: "mydb",
-    group_id: null,
+    groupId: null,
     color: null,
     environment: null,
     paradigm: "rdb",
@@ -118,16 +118,16 @@ describe("ConnectionDialog", () => {
     ).not.toBeInTheDocument();
   });
 
-  // 편집 모드에서 unsupported DBMS connection 의 db_type 도 그대로 표시되도록
+  // 편집 모드에서 unsupported DBMS connection 의 dbType 도 그대로 표시되도록
   // 예외적으로 자기 자신만 추가 — Select 가 빈값으로 보이지 않도록.
-  it("Sprint 276: edit mode preserves an unsupported db_type in the dropdown", async () => {
+  it("Sprint 276: edit mode preserves an unsupported dbType in the dropdown", async () => {
     const user = userEvent.setup();
     renderDialog({
-      connection: makeConnection({ db_type: "mysql", port: 3306 }),
+      connection: makeConnection({ dbType: "mysql", port: 3306 }),
     });
 
     await user.click(screen.getByLabelText("Database Type"));
-    // 편집 중인 connection 의 db_type 은 노출 (사용자가 빈 select 를 보지
+    // 편집 중인 connection 의 dbType 은 노출 (사용자가 빈 select 를 보지
     // 않도록). 다른 unsupported 어댑터는 여전히 숨김.
     expect(screen.getByRole("option", { name: "MySQL" })).toBeInTheDocument();
     expect(
@@ -283,7 +283,7 @@ describe("ConnectionDialog", () => {
     const draft = mockUpdateConnection.mock.calls[0]![0] as ConnectionDraft;
     expect(draft.name).toBe("Existing DB");
     expect(draft.id).toBe(conn.id);
-    // Editing with empty input + has_password=true → password is null (keep)
+    // Editing with empty input + hasPassword=true → password is null (keep)
     expect(draft.password).toBeNull();
     expect(onClose).toHaveBeenCalled();
   });
@@ -739,28 +739,28 @@ describe("ConnectionDialog", () => {
   // -----------------------------------------------------------------------
   describe("Password handling", () => {
     it("password input starts empty when editing a connection with a stored password", () => {
-      renderDialog({ connection: makeConnection({ has_password: true }) });
+      renderDialog({ connection: makeConnection({ hasPassword: true }) });
       const pw = screen.getByLabelText("Password") as HTMLInputElement;
       expect(pw.value).toBe("");
       expect(pw.placeholder).toMatch(/leave blank to keep current password/i);
     });
 
-    it("shows 'Password set' badge when has_password is true", () => {
-      renderDialog({ connection: makeConnection({ has_password: true }) });
+    it("shows 'Password set' badge when hasPassword is true", () => {
+      renderDialog({ connection: makeConnection({ hasPassword: true }) });
       expect(screen.getByTestId("password-status-badge")).toHaveTextContent(
         /password set/i,
       );
     });
 
-    it("shows 'No password' badge when has_password is false", () => {
-      renderDialog({ connection: makeConnection({ has_password: false }) });
+    it("shows 'No password' badge when hasPassword is false", () => {
+      renderDialog({ connection: makeConnection({ hasPassword: false }) });
       expect(screen.getByTestId("password-status-badge")).toHaveTextContent(
         /no password/i,
       );
     });
 
     it("editing + empty input + Update → sends password: null (preserve)", async () => {
-      renderDialog({ connection: makeConnection({ has_password: true }) });
+      renderDialog({ connection: makeConnection({ hasPassword: true }) });
 
       await act(async () => {
         fireEvent.click(screen.getByText("Update"));
@@ -771,7 +771,7 @@ describe("ConnectionDialog", () => {
     });
 
     it("editing + new password typed + Update → sends new password", async () => {
-      renderDialog({ connection: makeConnection({ has_password: true }) });
+      renderDialog({ connection: makeConnection({ hasPassword: true }) });
 
       const pw = screen.getByLabelText("Password") as HTMLInputElement;
       await act(async () => {
@@ -786,7 +786,7 @@ describe("ConnectionDialog", () => {
     });
 
     it("editing + Clear password checked → sends empty string", async () => {
-      renderDialog({ connection: makeConnection({ has_password: true }) });
+      renderDialog({ connection: makeConnection({ hasPassword: true }) });
 
       const clearCheckbox = screen.getByLabelText(
         /clear stored password on save/i,
@@ -803,7 +803,7 @@ describe("ConnectionDialog", () => {
     });
 
     it("Clear password checkbox disables the password input and clears it", async () => {
-      renderDialog({ connection: makeConnection({ has_password: true }) });
+      renderDialog({ connection: makeConnection({ hasPassword: true }) });
 
       const pw = screen.getByLabelText("Password") as HTMLInputElement;
       await act(async () => {
@@ -821,7 +821,7 @@ describe("ConnectionDialog", () => {
     });
 
     it("Test Connection while editing forwards existingId", async () => {
-      const conn = makeConnection({ id: "to-test", has_password: true });
+      const conn = makeConnection({ id: "to-test", hasPassword: true });
       renderDialog({ connection: conn });
 
       await act(async () => {
@@ -833,8 +833,8 @@ describe("ConnectionDialog", () => {
       expect(args[1]).toBe("to-test");
     });
 
-    it("does not show the Clear password checkbox when has_password is false", () => {
-      renderDialog({ connection: makeConnection({ has_password: false }) });
+    it("does not show the Clear password checkbox when hasPassword is false", () => {
+      renderDialog({ connection: makeConnection({ hasPassword: false }) });
       expect(
         screen.queryByLabelText(/clear stored password on save/i),
       ).toBeNull();
@@ -845,7 +845,7 @@ describe("ConnectionDialog", () => {
   // Sprint 65: MongoDB-specific conditional fields
   // -----------------------------------------------------------------------
   describe("MongoDB conditional fields", () => {
-    it("does not render mongo-only fields when db_type is postgresql", () => {
+    it("does not render mongo-only fields when dbType is postgresql", () => {
       renderDialog();
       expect(screen.queryByLabelText("Auth Source")).not.toBeInTheDocument();
       expect(screen.queryByLabelText("Replica Set")).not.toBeInTheDocument();
@@ -881,7 +881,7 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Database (optional)")).toBeInTheDocument();
     });
 
-    it("includes auth_source, replica_set, tls_enabled in the saved draft", async () => {
+    it("includes authSource, replicaSet, tlsEnabled in the saved draft", async () => {
       const user = userEvent.setup();
       renderDialog();
       const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
@@ -913,11 +913,11 @@ describe("ConnectionDialog", () => {
 
       expect(mockAddConnection).toHaveBeenCalledTimes(1);
       const draft = mockAddConnection.mock.calls[0]![0] as ConnectionDraft;
-      expect(draft.db_type).toBe("mongodb");
+      expect(draft.dbType).toBe("mongodb");
       expect(draft.paradigm).toBe("document");
-      expect(draft.auth_source).toBe("admin");
-      expect(draft.replica_set).toBe("rs0");
-      expect(draft.tls_enabled).toBe(true);
+      expect(draft.authSource).toBe("admin");
+      expect(draft.replicaSet).toBe("rs0");
+      expect(draft.tlsEnabled).toBe(true);
     });
 
     // Sprint 381 (2026-05-17) — db-contract α: Mongo connection 의
@@ -959,7 +959,7 @@ describe("ConnectionDialog", () => {
       ).not.toBeInTheDocument();
       expect(mockAddConnection).toHaveBeenCalledTimes(1);
       const draft = mockAddConnection.mock.calls[0]![0] as ConnectionDraft;
-      expect(draft.db_type).toBe("mongodb");
+      expect(draft.dbType).toBe("mongodb");
       expect(draft.database).toBe("");
     });
 
@@ -1534,7 +1534,7 @@ describe("ConnectionDialog", () => {
       expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
     });
 
-    it("AC-S138-01 Mongo: auth_source / replica_set / tls_enabled present + user defaults to empty", async () => {
+    it("AC-S138-01 Mongo: authSource / replicaSet / tlsEnabled present + user defaults to empty", async () => {
       const user = userEvent.setup();
       renderDialog();
       const trigger = screen.getByLabelText("Database Type");

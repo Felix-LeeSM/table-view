@@ -19,15 +19,15 @@ import type { DocumentQueryResult } from "@/types/document";
 function buildResult(): DocumentQueryResult {
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId", category: "unknown" },
-      { name: "name", data_type: "string", category: "unknown" },
-      { name: "meta", data_type: "document", category: "unknown" },
-      { name: "tags", data_type: "array", category: "unknown" },
+      { name: "_id", dataType: "ObjectId", category: "unknown" },
+      { name: "name", dataType: "string", category: "unknown" },
+      { name: "meta", dataType: "document", category: "unknown" },
+      { name: "tags", dataType: "array", category: "unknown" },
     ],
     rows: [
       [{ $oid: "65abcdef0123456789abcdef" }, "Alice", "{...}", "[3 items]"],
     ],
-    raw_documents: [
+    rawDocuments: [
       {
         _id: { $oid: "65abcdef0123456789abcdef" },
         name: "Alice",
@@ -35,8 +35,8 @@ function buildResult(): DocumentQueryResult {
         tags: ["alpha", "beta", "gamma"],
       },
     ],
-    total_count: 1,
-    execution_time_ms: 1,
+    totalCount: 1,
+    executionTimeMs: 1,
   };
 }
 
@@ -121,7 +121,7 @@ describe("DocumentDataGrid — nested inline tree (Sprint 341 Option D)", () => 
       rows: [
         [{ $oid: "b0000000000000000000000a" }, "Bob", "{...}", "[2 items]"],
       ],
-      raw_documents: [
+      rawDocuments: [
         {
           _id: { $oid: "b0000000000000000000000a" },
           name: "Bob",

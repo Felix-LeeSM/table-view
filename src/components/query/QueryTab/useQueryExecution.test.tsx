@@ -32,27 +32,27 @@ const cancelQueryMock = vi.fn();
 const findDocumentsMock = vi.fn();
 
 const SELECT_RESULT: QueryResult = {
-  columns: [{ name: "id", data_type: "integer", category: "unknown" }],
+  columns: [{ name: "id", dataType: "integer", category: "unknown" }],
   rows: [[1]],
-  total_count: 1,
-  execution_time_ms: 3,
-  query_type: "select",
+  totalCount: 1,
+  executionTimeMs: 3,
+  queryType: "select",
 };
 
 const SECOND_SELECT_RESULT: QueryResult = {
-  columns: [{ name: "two", data_type: "integer", category: "unknown" }],
+  columns: [{ name: "two", dataType: "integer", category: "unknown" }],
   rows: [[2]],
-  total_count: 1,
-  execution_time_ms: 4,
-  query_type: "select",
+  totalCount: 1,
+  executionTimeMs: 4,
+  queryType: "select",
 };
 
 const DOC_RESULT: DocumentQueryResult = {
-  columns: [{ name: "_id", data_type: "objectId", category: "unknown" }],
+  columns: [{ name: "_id", dataType: "objectId", category: "unknown" }],
   rows: [["abc"]],
-  raw_documents: [{ _id: "abc", active: true }],
-  total_count: 1,
-  execution_time_ms: 5,
+  rawDocuments: [{ _id: "abc", active: true }],
+  totalCount: 1,
+  executionTimeMs: 5,
 };
 
 function seedRdbTab(
@@ -85,7 +85,7 @@ function seedMongoTab(
     connections: [
       makeConn({
         id: tab.connectionId,
-        db_type: "mongodb",
+        dbType: "mongodb",
         paradigm: "document",
         environment: "development",
       }),
@@ -220,9 +220,9 @@ describe("useQueryExecution scaffold", () => {
       result: {
         columns: DOC_RESULT.columns,
         rows: DOC_RESULT.rows,
-        total_count: DOC_RESULT.total_count,
-        execution_time_ms: DOC_RESULT.execution_time_ms,
-        query_type: "select",
+        totalCount: DOC_RESULT.totalCount,
+        executionTimeMs: DOC_RESULT.executionTimeMs,
+        queryType: "select",
       },
     });
   });

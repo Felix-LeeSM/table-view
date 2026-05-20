@@ -87,7 +87,7 @@ function pickFallbackFocus(
  * silently broadcast.
  *
  *  - `connections`, `groups` — durable, user-visible state both windows
- *    render. Backend redacts passwords via `has_password: boolean`
+ *    render. Backend redacts passwords via `hasPassword: boolean`
  *    before populating `connections`, so the synced array is secret-free.
  *  - `activeStatuses` — workspace owns the live pool; launcher reads it
  *    so it never offers to connect what the workspace already owns.
@@ -276,7 +276,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     set((state) => ({
       groups: state.groups.filter((g) => g.id !== id),
       connections: state.connections.map((c) =>
-        c.group_id === id ? { ...c, group_id: null } : c,
+        c.groupId === id ? { ...c, groupId: null } : c,
       ),
     }));
   },
@@ -285,7 +285,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     await tauri.moveConnectionToGroup(connectionId, groupId);
     set((state) => ({
       connections: state.connections.map((c) =>
-        c.id === connectionId ? { ...c, group_id: groupId } : c,
+        c.id === connectionId ? { ...c, groupId: groupId } : c,
       ),
     }));
   },

@@ -158,7 +158,7 @@ function ResultTable({ result }: { result: QueryResult }) {
             >
               <div className="truncate">{col.name}</div>
               <div className="mt-0.5 truncate text-3xs text-muted-foreground">
-                {col.data_type}
+                {col.dataType}
               </div>
               <div
                 className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
@@ -195,7 +195,7 @@ function ResultTable({ result }: { result: QueryResult }) {
                       setCellDetail({
                         data: cell,
                         columnName: col.name,
-                        dataType: col.data_type,
+                        dataType: col.dataType,
                       });
                     }
                   }}
@@ -248,11 +248,11 @@ function ResultTable({ result }: { result: QueryResult }) {
 }
 
 function DmlMessage({ result }: { result: QueryResult }) {
-  const qt = result.query_type;
+  const qt = result.queryType;
   const rowsAffected =
     typeof qt === "object" && "dml" in qt
       ? qt.dml.rows_affected
-      : result.total_count;
+      : result.totalCount;
   return (
     <div className="flex items-center justify-center py-8 text-sm text-secondary-foreground">
       {rowsAffected.toLocaleString()} row{rowsAffected !== 1 ? "s" : ""}{" "}
@@ -427,7 +427,7 @@ function CompletedSingleResult({
         <div className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground">
           <span>Write</span>
           <span className="text-muted-foreground">
-            {result.execution_time_ms} ms
+            {result.executionTimeMs} ms
           </span>
         </div>
         <WriteSummaryPanel summary={result.writeSummary} />
@@ -452,13 +452,13 @@ function CompletedSingleResult({
             {mode === "list" && (
               <>
                 {" "}
-                &mdash; {result.total_count.toLocaleString()} value
-                {result.total_count !== 1 ? "s" : ""}
+                &mdash; {result.totalCount.toLocaleString()} value
+                {result.totalCount !== 1 ? "s" : ""}
               </>
             )}
           </span>
           <span className="text-muted-foreground">
-            {result.execution_time_ms} ms
+            {result.executionTimeMs} ms
           </span>
         </div>
         <ScalarOrListPanel result={result} mode={mode} />
@@ -471,22 +471,22 @@ function CompletedSingleResult({
       {/* Status bar */}
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground">
         <span>
-          {queryTypeLabel(result.query_type)}
-          {result.query_type === "select" && (
+          {queryTypeLabel(result.queryType)}
+          {result.queryType === "select" && (
             <>
               {" "}
-              &mdash; {result.total_count.toLocaleString()} row
-              {result.total_count !== 1 ? "s" : ""}
+              &mdash; {result.totalCount.toLocaleString()} row
+              {result.totalCount !== 1 ? "s" : ""}
             </>
           )}
         </span>
         <span className="text-muted-foreground">
-          {result.execution_time_ms} ms
+          {result.executionTimeMs} ms
         </span>
       </div>
 
       {/* Content */}
-      {result.query_type === "select" && (
+      {result.queryType === "select" && (
         <SelectResultArea
           result={result}
           connectionId={connectionId}
@@ -495,10 +495,10 @@ function CompletedSingleResult({
           onAfterCommit={onAfterCommit}
         />
       )}
-      {typeof result.query_type === "object" && "dml" in result.query_type && (
+      {typeof result.queryType === "object" && "dml" in result.queryType && (
         <DmlMessage result={result} />
       )}
-      {result.query_type === "ddl" && <DdlMessage />}
+      {result.queryType === "ddl" && <DdlMessage />}
     </div>
   );
 }
@@ -506,7 +506,7 @@ function CompletedSingleResult({
 /** Verb label shown in each multi-statement tab trigger. */
 function statementVerb(stmt: QueryStatementResult): string {
   if (stmt.status === "error") return "ERROR";
-  if (stmt.result) return queryTypeLabel(stmt.result.query_type);
+  if (stmt.result) return queryTypeLabel(stmt.result.queryType);
   return "Query";
 }
 
@@ -517,8 +517,8 @@ function statementVerb(stmt: QueryStatementResult): string {
 function statementBadge(stmt: QueryStatementResult): string {
   if (stmt.status === "error") return "✕";
   if (!stmt.result) return `${stmt.durationMs} ms`;
-  if (stmt.result.query_type === "select") {
-    const n = stmt.result.total_count;
+  if (stmt.result.queryType === "select") {
+    const n = stmt.result.totalCount;
     return `${n.toLocaleString()} row${n !== 1 ? "s" : ""}`;
   }
   return `${stmt.durationMs} ms`;

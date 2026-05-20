@@ -40,13 +40,13 @@ function makeConnection(
   return {
     id: "conn-1",
     name: "My DB",
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: true,
+    hasPassword: true,
     database: "mydb",
-    group_id: null,
+    groupId: null,
     color: null,
     environment: null,
     paradigm: "rdb",
@@ -105,7 +105,7 @@ beforeEach(() => {
 
 // ===========================================================================
 // AC-178-01: Pasting any of the 8 recognised URLs into the form-mode host
-// field populates db_type / host / port / user / database / password and
+// field populates dbType / host / port / user / database / password and
 // surfaces a non-modal "detected" affordance.
 //
 // Date 2026-04-30. Reason: the user pastes a URL into the host field and
@@ -119,7 +119,7 @@ interface PasteCase {
   scheme: string;
   url: string;
   expected: {
-    db_type: string;
+    dbType: string;
     host: string;
     port: number;
     user?: string;
@@ -138,7 +138,7 @@ const PASTE_CASES: PasteCase[] = [
     scheme: "postgres",
     url: "postgres://u:p@h:1234/db",
     expected: {
-      db_type: "postgresql",
+      dbType: "postgresql",
       host: "h",
       port: 1234,
       user: "u",
@@ -150,7 +150,7 @@ const PASTE_CASES: PasteCase[] = [
     scheme: "postgresql",
     url: "postgresql://admin:s3cret@db.example.com:5432/myapp",
     expected: {
-      db_type: "postgresql",
+      dbType: "postgresql",
       host: "db.example.com",
       port: 5432,
       user: "admin",
@@ -162,7 +162,7 @@ const PASTE_CASES: PasteCase[] = [
     scheme: "mongodb",
     url: "mongodb://mu:mp@mongo.local:27018/logs",
     expected: {
-      db_type: "mongodb",
+      dbType: "mongodb",
       host: "mongo.local",
       port: 27018,
       user: "mu",
@@ -174,7 +174,7 @@ const PASTE_CASES: PasteCase[] = [
     scheme: "mongodb+srv",
     url: "mongodb+srv://srvu:srvp@cluster.example.com/mydb",
     expected: {
-      db_type: "mongodb",
+      dbType: "mongodb",
       host: "cluster.example.com",
       // SRV URLs typically omit port → fall back to the mongodb default.
       port: 27017,
@@ -193,7 +193,7 @@ describe("[AC-178-01] form-mode host paste detection", () => {
       renderDialog();
       // SQLite needs a separate path — its form has no Host field. The
       // host field is only available in non-SQLite mode, but a SQLite
-      // URL paste should still flip db_type. We type the SQLite URL
+      // URL paste should still flip dbType. We type the SQLite URL
       // into the host field while currently on PG, which is the
       // realistic "user pastes anything they have" scenario.
       await act(async () => {
@@ -203,7 +203,7 @@ describe("[AC-178-01] form-mode host paste detection", () => {
       // After paste, all parsed fields should be present on the form.
       // For SQLite, the dbtype switch unmounts Host/Port/User/Password
       // and renders the file-path field in their place — assert that.
-      if (c.expected.db_type === "sqlite") {
+      if (c.expected.dbType === "sqlite") {
         // Database file field renders; host/port/user/password absent.
         expect(screen.getByLabelText("Database file")).toHaveValue(
           c.expected.database!,
@@ -222,9 +222,9 @@ describe("[AC-178-01] form-mode host paste detection", () => {
       // Mongo and Redis label the user input differently — match by
       // partial text where the label permutes by paradigm.
       const userInput =
-        c.expected.db_type === "mongodb"
+        c.expected.dbType === "mongodb"
           ? (screen.getByLabelText(/^User \(optional\)/) as HTMLInputElement)
-          : c.expected.db_type === "redis"
+          : c.expected.dbType === "redis"
             ? (screen.getByLabelText(
                 /^Username \(optional\)/,
               ) as HTMLInputElement)
@@ -234,7 +234,7 @@ describe("[AC-178-01] form-mode host paste detection", () => {
       // "Redis database index (0-15)" via aria-label; non-Redis uses
       // "Database" or "Database (optional)" via <label>.
       const dbInput =
-        c.expected.db_type === "redis"
+        c.expected.dbType === "redis"
           ? (screen.getByLabelText(
               "Redis database index (0-15)",
             ) as HTMLInputElement)
@@ -494,7 +494,7 @@ describe("[Sprint 281] unsupported DBMS paste is silent (no form change)", () =>
       await act(async () => {
         pasteIntoHost(c.url);
       });
-      // db_type Select 는 여전히 PostgreSQL (기본). Host/Port 는 paste 의
+      // dbType Select 는 여전히 PostgreSQL (기본). Host/Port 는 paste 의
       // 기본 동작 영향만 받을 수 있어 affordance 부재로 reject 를 검증.
       expect(
         screen.queryByTestId("connection-url-detected"),
