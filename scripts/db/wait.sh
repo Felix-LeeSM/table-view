@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # Wait for the fixture-stack postgres + mysql + mongo containers
 # (table_view_postgres, table_view_mysql, table_view_mongo) to become
-# healthy. Targets the canonical docker-compose.yml at the repo root, not
-# the legacy docker-compose.test.yml referenced by
-# scripts/wait-for-test-db.sh (which is stale — different container names).
+# healthy. Targets the canonical docker-compose.yml at the repo root.
 #
 # Sprint 250 — added MySQL branch alongside PG/Mongo for Phase 17 seeding.
 set -euo pipefail

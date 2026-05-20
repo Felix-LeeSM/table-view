@@ -2,7 +2,7 @@
 name: pr-reviewer
 codex_agent_type: explorer
 description: PR 정성 평가. Mock / 정합성 / scope / docs topology 중심. 코드 수정 금지.
-source: .claude/agents/pr-reviewer.md
+source: memory/workflow/review/memory.md
 ---
 
 Read:

@@ -48,12 +48,8 @@ description: >
 DOD를 사용자에게 제시하고 승인을 받습니다.
 사용자가 수정하면 DOD를 업데이트합니다.
 
-DOD 승인 후, 사용자에게 질문합니다:
-"이번 스프린트의 구현 계획을 interactive planning으로 수립할까요?
- (각 설계 선택지를 논의하며 진행합니다)"
-
-- **예**: `plan-interactively` 스킬을 호출하여 Phase 2(Implement) 전에 계획 수립
-- **아니요**: 기존대로 agent가 자율적으로 Phase 2로 진행
+DOD 승인 후에는 `memory/workflow/grill/memory.md` 기준으로 필요한 결정만
+잠그고, 명확한 작업은 자율적으로 Phase 2로 진행합니다.
 
 ---
 
@@ -68,10 +64,9 @@ DOD에 맞춰 코드를 작성합니다.
 
 ### 2-2. 코드 작성
 
-- 기존 프로젝트 규칙(AGENTS.md, docs/agents/rules/*)을 준수
-- 관련 스킬 활용:
-  - UI 작업 → `frontend-design` 스킬 참조
-  - React 코드 → `react-best-practices` 스킬 참조
+- 기존 프로젝트 규칙(AGENTS.md, memory/)을 준수
+- UI / React 작업은 `memory/conventions/frontend/memory.md`,
+  `memory/conventions/react/memory.md`, 기존 컴포넌트 패턴을 우선 적용
 - 기존 코드 패턴을 따르고, 불필요한 추상화 지양
 
 ### 2-3. 자가 검증

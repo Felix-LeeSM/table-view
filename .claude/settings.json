@@ -2,27 +2,12 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Read|Edit|Write|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "if": "Edit(*.env)|Edit(*.env.*)|Write(*.env)|Write(*.env.*)",
-            "command": "echo 'BLOCKED: Editing .env files is not allowed. Use .env.local for local overrides.' >&2 && exit 1"
-          },
-          {
-            "type": "command",
-            "if": "Edit(*.claude/settings.local.json)|Write(*.claude/settings.local.json)",
-            "command": "echo 'BLOCKED: Editing local settings is not allowed.' >&2 && exit 1"
-          },
-          {
-            "type": "command",
-            "if": "Edit(.claude/skills/**)|Write(.claude/skills/**)",
-            "command": "echo 'BLOCKED: .claude/skills/ 는 skill plugin 영역. 본 repo 가 수정하면 plugin update 시 충돌. 룰 추가는 memory/ 아래에 신설하세요. (sprint-388 lock)' >&2 && exit 1"
-          },
-          {
-            "type": "command",
-            "if": "Edit(memory/decisions/*/memory.md)|Write(memory/decisions/*/memory.md)",
-            "command": "echo '⚠️  ADR 본문은 작성 순간 동결입니다. 결정/이유/트레이드오프 본문을 수정하지 마세요. 갱신 가능한 것은 프론트매터 메타 필드(status, superseded_by)뿐입니다. 결정을 뒤집으려면 새 ADR을 추가하세요.' >&2"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/hooks/check-edit-policy.sh",
+            "timeout": 10
           }
         ]
       },
@@ -31,62 +16,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-bash.sh"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/hooks/check-dangerous-bash.sh"
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "if": "Edit(*.rs)|Write(*.rs)",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\"/src-tauri && cargo fmt 2>/dev/null || true",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/hooks/post-tool-use.sh 2>&1 | head -60 || true",
             "timeout": 30
-          },
-          {
-            "type": "command",
-            "if": "Edit(*.ts)|Edit(*.tsx)|Write(*.ts)|Write(*.tsx)",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && npx prettier --write $(echo \"$TOOL_INPUT\" | jq -r '.file_path' | sed \"s|^$CLAUDE_PROJECT_DIR/||\") 2>/dev/null || true",
-            "timeout": 15
-          },
-          {
-            "type": "command",
-            "if": "Edit(memory/**)|Write(memory/**)",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/check-memory-size.sh 2>&1 | head -10 || true",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "if": "Edit(memory/**)|Write(memory/**)",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/check-memory-structure.sh 2>&1 | head -10 || true",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "if": "Edit(memory/decisions/**)|Write(memory/decisions/**)",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/check-memory-adr.sh 2>&1 | head -30 || true",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "if": "Edit(*.ts)|Edit(*.tsx)|Edit(*.rs)|Write(*.ts)|Write(*.tsx)|Write(*.rs)",
-            "command": "bash \"$CLAUDE_PROJECT_DIR\"/scripts/check-god-file.sh 2>&1 | head -10 || true",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "if": "Edit(.claude/agents/*.md)|Edit(.claude/rules/*.md)|Edit(.claude/commands/*.md)|Edit(.codex/agents/*.md)|Write(.claude/agents/*.md)|Write(.claude/rules/*.md)|Write(.claude/commands/*.md)|Write(.codex/agents/*.md)",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/check-wrapper-cap.sh 2>&1 | head -10 || true",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "if": "Edit(memory/**)|Write(memory/**)",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/regenerate-indexes.sh 2>&1 | tail -5 || true",
-            "timeout": 15
           }
         ]
       }

@@ -2,7 +2,7 @@
 name: bug-fix
 codex_agent_type: worker
 description: 사용자 보고 버그 / 회귀 / UX 이슈. Red regression test 먼저, Green fix, Verify 회귀 없음.
-source: .claude/agents/bug-fix.md
+source: memory/workflow/bug-fix/memory.md
 ---
 
 Read:

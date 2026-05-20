@@ -1,134 +1,14 @@
 #!/usr/bin/env bash
-# Codex PostToolUse policy wrapper. Mirrors Claude post-edit hooks for repo
-# formatters and lightweight structural checks.
+# Codex PostToolUse policy wrapper. Delegates repo checks to scripts/hooks.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-INPUT="$(cat || true)"
-
-json_field() {
-  local expr="$1"
-  if ! command -v jq >/dev/null 2>&1 || [ -z "$INPUT" ]; then
-    return 0
-  fi
-  printf '%s' "$INPUT" | jq -r "$expr // empty" 2>/dev/null || true
-}
-
-command="$(json_field '.tool_input.command // .input.command // .command')"
-patch_payload="$(json_field '.tool_input.input // .input.input // .tool_input.patch // .input.patch // .patch')"
-
-paths_from_json() {
-  if ! command -v jq >/dev/null 2>&1 || [ -z "$INPUT" ]; then
-    return 0
-  fi
-  printf '%s' "$INPUT" | jq -r '
-    [
-      .tool_input.file_path?, .input.file_path?, .file_path?,
-      .tool_input.path?, .input.path?, .path?,
-      (.tool_input.files?[]? | .file_path? // .path?),
-      (.input.files?[]? | .file_path? // .path?)
-    ] | .[]? | select(type == "string" and length > 0)
-  ' 2>/dev/null || true
-}
-
-paths_from_patch() {
-  { [ -n "$command" ] || [ -n "$patch_payload" ]; } || return 0
-  printf '%s\n%s\n' "$command" "$patch_payload" | sed -nE \
-    -e 's/^\*\*\* (Add|Update|Delete) File: (.*)$/\2/p' \
-    -e 's/^\*\*\* Move to: (.*)$/\1/p'
-}
-
-paths_file="$(mktemp "${TMPDIR:-/tmp}/codex-hook-paths.XXXXXX")"
-output_file="$(mktemp "${TMPDIR:-/tmp}/codex-hook-output.XXXXXX")"
 context_file="$(mktemp "${TMPDIR:-/tmp}/codex-hook-context.XXXXXX")"
-trap 'rm -f "$paths_file" "$output_file" "$context_file"' EXIT
-{ paths_from_json; paths_from_patch; } | sort -u > "$paths_file"
-[ -s "$paths_file" ] || exit 0
+trap 'rm -f "$context_file"' EXIT
 
-run_advisory() {
-  local label="$1"
-  shift
-  {
-    printf '## %s\n' "$label"
-    "$@"
-  } >> "$output_file" 2>&1 || true
-}
-
-has_rs=0
-has_ts=0
-has_memory=0
-has_adr=0
-has_code=0
-has_wrapper=0
-
-while IFS= read -r raw; do
-  [ -n "$raw" ] || continue
-  rel="${raw#$ROOT/}"
-  case "$rel" in
-    *.rs) has_rs=1; has_code=1 ;;
-    *.ts | *.tsx) has_ts=1; has_code=1 ;;
-  esac
-  case "$rel" in
-    memory/*) has_memory=1 ;;
-    memory/decisions/*) has_adr=1 ;;
-    .claude/agents/*.md | .claude/rules/*.md | .claude/commands/*.md | .codex/agents/*.md)
-      has_wrapper=1
-      ;;
-  esac
-done < "$paths_file"
-
-if [ "$has_rs" = "1" ]; then
-  (cd "$ROOT/src-tauri" && cargo fmt >/dev/null 2>/dev/null) || true
-fi
-
-if [ "$has_ts" = "1" ]; then
-  while IFS= read -r raw; do
-    [ -n "$raw" ] || continue
-    rel="${raw#$ROOT/}"
-    case "$rel" in
-      *.ts | *.tsx)
-        [ -f "$ROOT/$rel" ] && (cd "$ROOT" && npx prettier --write "$rel" >/dev/null 2>/dev/null) || true
-        ;;
-    esac
-  done < "$paths_file"
-fi
-
-run_god_file_check() {
-  while IFS= read -r raw; do
-    [ -n "$raw" ] || continue
-    rel="${raw#$ROOT/}"
-    case "$rel" in
-      *.ts | *.tsx | *.rs)
-        [ -f "$ROOT/$rel" ] || continue
-        jq -n --arg file "$ROOT/$rel" '{ tool_input: { file_path: $file } }' |
-          CLAUDE_PROJECT_DIR="$ROOT" bash "$ROOT/scripts/check-god-file.sh"
-        ;;
-    esac
-  done < "$paths_file"
-}
-
-if [ "$has_memory" = "1" ]; then
-  run_advisory "memory-size" bash -lc "cd \"$ROOT\" && bash scripts/check-memory-size.sh 2>&1 | head -10"
-  run_advisory "memory-structure" bash -lc "cd \"$ROOT\" && bash scripts/check-memory-structure.sh 2>&1 | head -10"
-  run_advisory "memory-index" bash -lc "cd \"$ROOT\" && bash scripts/regenerate-indexes.sh 2>&1 | tail -5"
-fi
-
-if [ "$has_adr" = "1" ]; then
-  run_advisory "memory-adr" bash -lc "cd \"$ROOT\" && bash scripts/check-memory-adr.sh 2>&1 | head -30"
-fi
-
-if [ "$has_code" = "1" ]; then
-  run_advisory "god-file" run_god_file_check
-fi
-
-if [ "$has_wrapper" = "1" ]; then
-  run_advisory "wrapper-cap" bash -lc "cd \"$ROOT\" && bash scripts/check-wrapper-cap.sh 2>&1 | head -10"
-fi
-
-if [ -s "$output_file" ]; then
-  grep -vE '^(## [A-Za-z0-9_-]+)?$' "$output_file" > "$context_file" || true
-fi
+INPUT="$(cat || true)"
+printf '%s' "$INPUT" | bash "$ROOT/scripts/hooks/post-tool-use.sh" > "$context_file" 2>&1 || true
 
 if [ -s "$context_file" ]; then
   jq -n --rawfile context "$context_file" '{

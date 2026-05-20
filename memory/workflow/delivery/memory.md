@@ -1,7 +1,7 @@
 ---
 title: Delivery — commit → merge 전체 자율
 type: workflow-rule
-updated: 2026-05-19
+updated: 2026-05-20
 task: delivery, commit, push, pr, review, merge
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
@@ -23,8 +23,8 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 
 ## Pipeline (T0~T7)
 
-1. **T1 Commit** — `git add <specific files>` + signed `git commit -m "..."`. pre-commit hook 통과 책임.
-2. **T2 Push** — `git push`. signed-commit gate + pre-push stage 통과.
+1. **T1 Commit** — `git add <specific files>` + `git commit -m "..."`. pre-commit hook 통과 책임.
+2. **T2 Push** — `git push`. pre-push stage 통과.
 3. **T3 PR** — `gh pr create`. body 는 Summary / Changes / Invariants / Test plan / Documentation impact / Links.
 4. **T4 Review** — `pr-reviewer` agent spawn (1회, default 자동):
    - 정량은 자동 layer (hook / lint / pre-push / scripts/review/run-checks.sh) 가 이미 함

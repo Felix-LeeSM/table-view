@@ -5,8 +5,9 @@
 #   bash scripts/worktree-spawn.sh <branch-name> [base-branch]
 #
 # 동작:
-#   - <branch-name> 이름의 새 branch 생성 (base 는 default main)
-#   - ../<repo-name>--<sanitized-branch>/ 에 worktree 추가
+#   - origin/<branch-name> 이 있으면 그 remote branch 를 source 로 새 local branch 생성
+#   - 없으면 origin/<base-branch> (default main) 기준으로 새 local branch 생성
+#   - worktrees/<sanitized-branch>/ 에 worktree 추가
 #   - 해당 worktree 에서 lefthook install 실행 (hook 활성화)
 #   - 생성된 worktree 경로 출력 (agent 가 cd 할 path)
 
@@ -24,7 +25,8 @@ worktree-spawn.sh — multi-agent worktree 생성
   bash scripts/worktree-spawn.sh feature/bar develop       # base = develop
 
 결과:
-  - branch <branch-name> 신설
+  - origin/<branch-name> 있으면 해당 remote branch 기반 local branch 신설
+  - 없으면 origin/<base-branch> 기반 local branch 신설
   - worktrees/<sanitized>/ 에 worktree 추가 (sanitized = branch 의 / → __)
   - 해당 worktree 에서 lefthook install
   - stdout 에 worktree 경로 출력
@@ -57,14 +59,25 @@ if [ -d "$WORKTREE_PATH" ]; then
   exit 1
 fi
 
-# Fetch latest base (가능하면)
-git fetch --quiet origin "$BASE" 2>/dev/null || true
-
-# branch 가 이미 있나? 있으면 그 branch 로 worktree, 없으면 신설.
 if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
-  git worktree add "$WORKTREE_PATH" "$BRANCH"
+  echo "ERROR: local branch already exists: $BRANCH" >&2
+  echo "       기존 branch 재사용은 worktree contamination 위험이 있어 금지." >&2
+  exit 1
+fi
+
+# remote refs 최신화. 생성 source 는 항상 origin/* 로 잡는다. 새 branch 생성
+# 케이스에서는 origin/<branch> 가 없어도 정상이라 branch fetch 는 best-effort.
+git fetch --quiet origin "$BASE"
+git fetch --quiet origin "$BRANCH" 2>/dev/null || true
+
+if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+  git worktree add -b "$BRANCH" "$WORKTREE_PATH" "origin/$BRANCH"
 else
-  git worktree add -b "$BRANCH" "$WORKTREE_PATH" "$BASE"
+  if ! git show-ref --verify --quiet "refs/remotes/origin/$BASE"; then
+    echo "ERROR: remote base branch not found: origin/$BASE" >&2
+    exit 1
+  fi
+  git worktree add -b "$BRANCH" "$WORKTREE_PATH" "origin/$BASE"
 fi
 
 # hook 활성화 (lefthook install 은 .git/hooks 가 worktree 별로 분리됨)

@@ -6,8 +6,8 @@ task: refactor, god-file, comment-cleanup, decomposition
 surface: '**/*.ts, **/*.tsx, **/*.rs'
 trigger:
   signal: file >= 500 lines
-  layer: hook (scripts/check-god-file.sh) + ESLint max-lines + agent-prompt
-  hook_script: scripts/check-god-file.sh
+  layer: hook (scripts/hooks/check-god-file.sh) + ESLint max-lines + agent-prompt
+  hook_script: scripts/hooks/check-god-file.sh
 ---
 
 # God file 시퀀스
@@ -15,7 +15,7 @@ trigger:
 ## 임계 — 500줄
 
 파일 line count ≥ 500 → "god file" 지정. 자동 감지:
-- PostToolUse hook (`scripts/check-god-file.sh`) — Edit/Write 시 stderr 경고 + 본 문서 path 출력.
+- PostToolUse hook (`scripts/hooks/check-god-file.sh`) — Edit/Write 시 stderr 경고 + 본 문서 path 출력.
 - ESLint `max-lines: 500` (warn).
 - Clippy `too_many_lines` (활성 검토).
 
@@ -88,5 +88,5 @@ pnpm tsc --noEmit && pnpm lint && pnpm vitest run <touched-tree>
 
 - [refactoring](../memory.md) — 4 카테고리 (B/D/C/A) 룰셋
 - [decomposition](../decomposition/memory.md) — god file commit 시퀀스 (5+ commit)
-- `scripts/check-god-file.sh` — hook script
+- `scripts/hooks/check-god-file.sh` — hook script
 - CLAUDE.md — comment policy (WHY only)

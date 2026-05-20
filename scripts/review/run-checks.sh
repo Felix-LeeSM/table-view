@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # review/run-checks.sh
 # sprint contract.md 의 "Required Checks" 섹션 numbered list 파싱 → 백틱 안의
-# 명령 batch 실행 → PASS/FAIL list 출력. evaluator agent / 사용자가 호출.
+# allowlisted 명령 batch 실행 → PASS/FAIL list 출력. evaluator agent / 사용자 호출.
 #
 # 사용:
 #   bash scripts/review/run-checks.sh <sprint-number>
@@ -24,7 +24,8 @@ review/run-checks.sh — sprint contract Required Checks batch
 동작:
   - docs/sprints/sprint-<N>/contract.md 의 '### Required Checks' 섹션 numbered
     list 파싱
-  - 각 항목의 백틱 안 명령 (\` ... \`) 추출 + bash 로 실행
+  - 각 항목의 백틱 안 명령 (\` ... \`) 추출
+  - allowlist prefix 와 일치하는 명령만 실행
   - PASS/FAIL list 출력
 
 관련: memory/workflow/review/memory.md
@@ -56,6 +57,33 @@ total=0
 pass=0
 failures=()
 
+is_allowed_command() {
+	case "$1" in
+		npm\ run\ lint* | npm\ run\ test* | npm\ run\ build* | npm\ run\ contrast:check*)
+			return 0
+			;;
+		pnpm\ lint* | pnpm\ test* | pnpm\ build* | pnpm\ contrast:check* | pnpm\ vitest\ run* | pnpm\ exec\ tsc* | pnpm\ tsc*)
+			return 0
+			;;
+		npx\ tsc\ --noEmit* | npx\ eslint* | npx\ prettier\ --check* | npx\ vitest\ run*)
+			return 0
+			;;
+		cargo\ test* | cargo\ check* | cargo\ clippy* | cargo\ fmt\ --check*)
+			return 0
+			;;
+		cd\ src-tauri\ \&\&\ cargo\ test* | cd\ src-tauri\ \&\&\ cargo\ check* | cd\ src-tauri\ \&\&\ cargo\ clippy* | cd\ src-tauri\ \&\&\ cargo\ fmt\ --check*)
+			return 0
+			;;
+		bash\ scripts/hooks/check-*.sh* | bash\ scripts/regenerate-indexes.sh*)
+			return 0
+			;;
+		rg\ * | grep\ * | git\ diff* | git\ status* | git\ show*)
+			return 0
+			;;
+	esac
+	return 1
+}
+
 # numbered list 의 각 줄에서 첫 백틱 명령 추출
 while IFS= read -r line; do
 	# 숫자. 로 시작하는 줄만
@@ -66,9 +94,16 @@ while IFS= read -r line; do
 	[ -z "$cmd" ] && continue
 
 	total=$((total + 1))
+	if ! is_allowed_command "$cmd"; then
+		echo "✗ $cmd"
+		echo "    command not in review allowlist"
+		failures+=("$cmd")
+		continue
+	fi
+
 	# 명령 실행 (subshell, stderr 캡쳐)
 	tmp_err="$(mktemp)"
-	if eval "$cmd" >/dev/null 2>"$tmp_err"; then
+	if bash -lc "$cmd" >/dev/null 2>"$tmp_err"; then
 		echo "✓ $cmd"
 		pass=$((pass + 1))
 	else

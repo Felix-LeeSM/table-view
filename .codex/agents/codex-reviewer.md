@@ -2,7 +2,7 @@
 name: codex-reviewer
 codex_agent_type: default
 description: 외부 시각 리뷰 wrapper. Codex 내부에서는 self-review reference 로만 사용.
-source: .claude/agents/codex-reviewer.md
+source: memory/workflow/review/memory.md
 ---
 
 Read:

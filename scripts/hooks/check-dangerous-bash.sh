@@ -54,6 +54,31 @@ if [ -z "$CMD" ]; then
   exit 0
 fi
 
+contains_local_env_file_reference() {
+  local scrubbed="$CMD"
+  # `.env.example` is a tracked template and may be inspected or edited.
+  scrubbed="${scrubbed//.env.example/}"
+  local pattern="(^|[^A-Za-z0-9_./-])(\./)?([^[:space:]\"';&|<>]+/)?\.env($|[^A-Za-z0-9_.-])|(^|[^A-Za-z0-9_./-])(\./)?([^[:space:]\"';&|<>]+/)?\.env\.local($|[^A-Za-z0-9_.-])|(^|[^A-Za-z0-9_./-])(\./)?([^[:space:]\"';&|<>]+/)?\.env\.[^[:space:]\"';&|<>]*\.local($|[^A-Za-z0-9_.-])"
+  echo "$scrubbed" | grep -qE "$pattern"
+}
+
+if contains_local_env_file_reference; then
+  cat >&2 <<EOF
+BLOCKED: Reading or editing local env files is not allowed.
+
+Blocked patterns:
+  - .env
+  - .env.local
+  - .env.*.local
+
+Allowed template:
+  - .env.example
+
+Use .env.example for documented defaults. Do not inspect local secret files.
+EOF
+  exit 1
+fi
+
 # ERE 패턴. 토큰 경계 — `bash -c "git push --force"` 같이 quote / paren 으로
 # 감싼 호출도 차단되도록 앞/뒤 anchor 를 [^a-zA-Z0-9_] 로 완화.
 # (sprint-387 의 bash -c bypass 결함 fix — string concat / variable

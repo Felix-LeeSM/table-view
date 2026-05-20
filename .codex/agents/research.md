@@ -2,7 +2,7 @@
 name: research
 codex_agent_type: explorer
 description: 코드 / 문서 / 외부 자료 탐색만. 코드 변경 0.
-source: .claude/agents/research.md
+source: memory/workflow/implementation/memory.md
 ---
 
 Read:

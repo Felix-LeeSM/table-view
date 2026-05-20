@@ -1,11 +1,11 @@
 ---
 title: Git 정책 — hook 회피 절대 금지 + 능동 enforcement
 type: workflow-rule
-updated: 2026-05-19
+updated: 2026-05-20
 task: commit, push, hook, lefthook, push-reject, pr-close, race-trace
 trigger:
   signal: git commit / git push / hook 실패 / push reject / PR close 시
-  layer: hook (.claude/hooks/pre-bash.sh + scripts/hooks/check-dangerous-bash.sh)
+  layer: hook (.claude/settings.json + scripts/hooks/check-dangerous-bash.sh)
 ---
 
 # Git 정책
@@ -33,7 +33,6 @@ Code / Codex / Cursor) 에 같은 룰 적용.
 1. **Bash PreToolUse hook** — `scripts/hooks/check-dangerous-bash.sh` 의
    `DANGEROUS_PATTERNS` 에 `--no-verify`, `--no-gpg-sign`, `LEFTHOOK=0`
    등록. `git commit` / `git push` 는 lefthook 바이너리 + hook 파일 확인.
-   pre-push 는 outgoing unsigned commit 도 차단.
 2. **본 정책 문서** — 사람 / agent 모두 명문화 룰.
 
 ## Hook 한계 + Worktree (sprint-387)
@@ -193,7 +192,7 @@ zsh 는 word 안의 `:` 를 modifier 로 해석 → `<sha>:refs/heads/foo` 가
 - ADR 0019 — E2E 를 CI 에서 pre-push 로 이동
 - ADR 0020 — pre-push e2e 는 host docker 한정 (tauri-driver macOS 미지원)
 - `scripts/hooks/check-dangerous-bash.sh` — 차단 패턴 (platform-neutral)
-- `.claude/hooks/pre-bash.sh` — Claude Code wrapper
+- `.claude/settings.json` — Claude Code hook wrapper
 - `lefthook.yml` — hook 정의
 - [delivery](../delivery/memory.md) — 자율 pipeline
 - `.claude/agents/delivery.md` — enforce agent

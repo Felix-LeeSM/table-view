@@ -262,6 +262,26 @@ run_case \
   '{"tool_input":{"command":"git pull --rebase origin main"}}' \
   'MATCH:git pull|--rebase|git update-ref|memory/workflow/git-policy/memory.md'
 
+# Local env files are secret-bearing. `.env.example` remains allowed because
+# it is the tracked documentation template.
+run_case \
+  "env-policy: cat .env → block" \
+  1 \
+  '{"tool_input":{"command":"cat .env"}}' \
+  'MATCH:local env files|.env.example'
+
+run_case \
+  "env-policy: rg token .env.local → block" \
+  1 \
+  '{"tool_input":{"command":"rg token .env.local"}}' \
+  'MATCH:local env files|.env.local'
+
+run_case \
+  "env-policy: cat .env.example → allow" \
+  0 \
+  '{"tool_input":{"command":"cat .env.example"}}' \
+  EMPTY
+
 echo ""
 echo "==== smoke test summary ===="
 echo "PASS: $PASS_COUNT"

@@ -35,4 +35,4 @@ trigger:
 
 - `/remember` — 새 룰 저장 (200줄 cap 점검 포함)
 - `memory/memory.md` — 팔레스 입구
-- `scripts/check-memory-structure.sh` — `memory.md` 외 파일 차단
+- `scripts/hooks/check-memory-structure.sh` — `memory.md` 외 파일 차단
