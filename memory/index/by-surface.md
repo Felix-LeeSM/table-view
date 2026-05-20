@@ -35,6 +35,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
 
+### `e2e/smoke/**/*.ts`
+
+- [Write smoke는 preview close가 아니라 persisted outcome을 검증한다](../../memory/lessons/e2e/2026-05-20-write-smoke-root-cause/memory.md)
+
 ### `memory/workflow/review`
 
 - [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
@@ -51,6 +55,10 @@ generator: scripts/regenerate-indexes.sh
 ### `src-tauri/src/commands/connection.rs`
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
+
+### `src-tauri/src/db/mongodb/mutations.rs`
+
+- [Write smoke는 preview close가 아니라 persisted outcome을 검증한다](../../memory/lessons/e2e/2026-05-20-write-smoke-root-cause/memory.md)
 
 ### `src-tauri/src/lib.rs`
 
@@ -69,6 +77,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [Frontend Guidance](../../memory/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
+
+### `src/lib/mongo/mqlToBulk.ts`
+
+- [Write smoke는 preview close가 아니라 persisted outcome을 검증한다](../../memory/lessons/e2e/2026-05-20-write-smoke-root-cause/memory.md)
 
 ### `src/lib/perf/bootInstrumentation.ts`
 
