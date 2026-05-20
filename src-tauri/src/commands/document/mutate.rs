@@ -40,6 +40,7 @@ use crate::commands::connection::AppState;
 use crate::db::{BulkWriteOp, BulkWriteResult, DocumentId};
 use crate::error::AppError;
 
+use super::bulk_write_parse::parse_bulk_write_operations;
 use super::not_connected;
 
 async fn insert_document_inner(
@@ -358,8 +359,9 @@ pub async fn bulk_write_documents(
     connection_id: String,
     database: String,
     collection: String,
-    operations: Vec<BulkWriteOp>,
+    operations: Vec<serde_json::Value>,
 ) -> Result<BulkWriteResult, AppError> {
+    let operations = parse_bulk_write_operations(operations)?;
     bulk_write_documents_inner(
         state.inner(),
         &connection_id,

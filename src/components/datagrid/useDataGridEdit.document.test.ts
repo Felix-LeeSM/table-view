@@ -230,12 +230,12 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
       [
         {
           op: "updateOne",
-          filter: { _id: { ObjectId: HEX_A } },
+          filter: { _id: { $oid: HEX_A } },
           update: { $set: { name: "Ada L." } },
         },
         {
           op: "deleteOne",
-          filter: { _id: { ObjectId: HEX_B } },
+          filter: { _id: { $oid: HEX_B } },
         },
       ],
     );

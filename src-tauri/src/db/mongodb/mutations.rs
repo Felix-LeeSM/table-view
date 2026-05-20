@@ -8,11 +8,6 @@
 //! co-located.
 
 use bson::{doc, Bson, Document};
-use mongodb::options::{
-    DeleteManyModel, DeleteOneModel, InsertOneModel, ReplaceOneModel, UpdateManyModel,
-    UpdateOneModel, WriteModel,
-};
-use mongodb::Namespace;
 
 use crate::error::AppError;
 
@@ -230,16 +225,12 @@ impl MongoAdapter {
 
     /// Sprint 308 — body of `DocumentAdapter::bulk_write`.
     ///
-    /// 작성 이유 (2026-05-14): A1 mongosh 파서가 `db.coll.bulkWrite([...])` 를
-    /// dispatch 했을 때 InsertOne / UpdateOne / UpdateMany / DeleteOne /
-    /// DeleteMany / ReplaceOne 의 heterogeneous 배열을 단일 round-trip 으로
-    /// 실행. driver 의 `ordered: true` default 를 유지해 첫 실패에서
-    /// short-circuit. 빈 배열은 `Ok(BulkWriteResult::default())` 로
-    /// short-circuit — driver 가 empty list 를 거부하는 케이스를 wrap 하지
-    /// 않는다.
-    ///
-    /// `verbose_results()` 를 호출해 각 update/replace 의 `upserted_id` 를
-    /// 모아 wire 의 `upserted_ids: Vec<DocumentId>` 로 surfacing.
+    /// The frontend sends a single IPC payload that mirrors
+    /// `db.coll.bulkWrite([...])`, but the backend executes the ops through the
+    /// collection CRUD APIs in order. The MongoDB Rust driver's `Client::bulk_write`
+    /// uses the server-level bulk write command, which MongoDB 7 rejects; this
+    /// fallback preserves ordered semantics for one collection while keeping the
+    /// app compatible with MongoDB 7.
     pub(super) async fn bulk_write_impl(
         &self,
         db: &str,
@@ -253,99 +244,93 @@ impl MongoAdapter {
         }
 
         let client = self.current_client().await?;
-        let namespace = Namespace::new(db.to_string(), collection.to_string());
+        let coll = client.database(db).collection::<Document>(collection);
+        let mut summary = BulkWriteResult::default();
 
-        let models: Vec<WriteModel> = ops
-            .into_iter()
-            .map(|op| -> WriteModel {
-                match op {
-                    BulkWriteOp::InsertOne { document } => WriteModel::InsertOne(
-                        InsertOneModel::builder()
-                            .namespace(namespace.clone())
-                            .document(document)
-                            .build(),
-                    ),
-                    BulkWriteOp::UpdateOne {
-                        filter,
-                        update,
-                        upsert,
-                    } => WriteModel::UpdateOne(
-                        UpdateOneModel::builder()
-                            .namespace(namespace.clone())
-                            .filter(filter)
-                            .update(update)
-                            .upsert(upsert)
-                            .build(),
-                    ),
-                    BulkWriteOp::UpdateMany {
-                        filter,
-                        update,
-                        upsert,
-                    } => WriteModel::UpdateMany(
-                        UpdateManyModel::builder()
-                            .namespace(namespace.clone())
-                            .filter(filter)
-                            .update(update)
-                            .upsert(upsert)
-                            .build(),
-                    ),
-                    BulkWriteOp::DeleteOne { filter } => WriteModel::DeleteOne(
-                        DeleteOneModel::builder()
-                            .namespace(namespace.clone())
-                            .filter(filter)
-                            .build(),
-                    ),
-                    BulkWriteOp::DeleteMany { filter } => WriteModel::DeleteMany(
-                        DeleteManyModel::builder()
-                            .namespace(namespace.clone())
-                            .filter(filter)
-                            .build(),
-                    ),
-                    BulkWriteOp::ReplaceOne {
-                        filter,
-                        replacement,
-                        upsert,
-                    } => WriteModel::ReplaceOne(
-                        ReplaceOneModel::builder()
-                            .namespace(namespace.clone())
-                            .filter(filter)
-                            .replacement(replacement)
-                            .upsert(upsert)
-                            .build(),
-                    ),
+        for (idx, op) in ops.into_iter().enumerate() {
+            match op {
+                BulkWriteOp::InsertOne { document } => {
+                    coll.insert_one(document).await.map_err(|e| {
+                        AppError::Database(format!("bulk_write op {idx} insert_one failed: {e}"))
+                    })?;
+                    summary.inserted_count += 1;
                 }
-            })
-            .collect();
+                BulkWriteOp::UpdateOne {
+                    filter,
+                    update,
+                    upsert,
+                } => {
+                    let result = coll
+                        .update_one(filter, update)
+                        .upsert(upsert)
+                        .await
+                        .map_err(|e| {
+                            AppError::Database(format!(
+                                "bulk_write op {idx} update_one failed: {e}"
+                            ))
+                        })?;
+                    summary.matched_count += result.matched_count as i64;
+                    summary.modified_count += result.modified_count as i64;
+                    if let Some(id) = result.upserted_id {
+                        summary.upserted_ids.push(bson_id_to_document_id(&id));
+                    }
+                }
+                BulkWriteOp::UpdateMany {
+                    filter,
+                    update,
+                    upsert,
+                } => {
+                    let result = coll
+                        .update_many(filter, update)
+                        .upsert(upsert)
+                        .await
+                        .map_err(|e| {
+                            AppError::Database(format!(
+                                "bulk_write op {idx} update_many failed: {e}"
+                            ))
+                        })?;
+                    summary.matched_count += result.matched_count as i64;
+                    summary.modified_count += result.modified_count as i64;
+                    if let Some(id) = result.upserted_id {
+                        summary.upserted_ids.push(bson_id_to_document_id(&id));
+                    }
+                }
+                BulkWriteOp::DeleteOne { filter } => {
+                    let result = coll.delete_one(filter).await.map_err(|e| {
+                        AppError::Database(format!("bulk_write op {idx} delete_one failed: {e}"))
+                    })?;
+                    summary.deleted_count += result.deleted_count as i64;
+                }
+                BulkWriteOp::DeleteMany { filter } => {
+                    let result = coll.delete_many(filter).await.map_err(|e| {
+                        AppError::Database(format!("bulk_write op {idx} delete_many failed: {e}"))
+                    })?;
+                    summary.deleted_count += result.deleted_count as i64;
+                }
+                BulkWriteOp::ReplaceOne {
+                    filter,
+                    replacement,
+                    upsert,
+                } => {
+                    let result = coll
+                        .replace_one(filter, replacement)
+                        .upsert(upsert)
+                        .await
+                        .map_err(|e| {
+                            AppError::Database(format!(
+                                "bulk_write op {idx} replace_one failed: {e}"
+                            ))
+                        })?;
+                    summary.matched_count += result.matched_count as i64;
+                    summary.modified_count += result.modified_count as i64;
+                    if let Some(id) = result.upserted_id {
+                        summary.upserted_ids.push(bson_id_to_document_id(&id));
+                    }
+                }
+            }
+        }
 
-        // verbose_results() exposes per-op UpdateResult.upserted_id so the
-        // aggregate `upserted_ids` can be returned to the frontend. Without
-        // verbose, only counters (no individual ids) come back.
-        let verbose = client
-            .bulk_write(models)
-            .verbose_results()
-            .await
-            .map_err(|e| AppError::Database(format!("bulk_write failed: {e}")))?;
-
-        // Collect upserted ids in deterministic order by their input index.
-        let mut upserted_pairs: Vec<(usize, Bson)> = verbose
-            .update_results
-            .into_iter()
-            .filter_map(|(idx, update_result)| update_result.upserted_id.map(|id| (idx, id)))
-            .collect();
-        upserted_pairs.sort_by_key(|(idx, _)| *idx);
-        let upserted_ids: Vec<DocumentId> = upserted_pairs
-            .into_iter()
-            .map(|(_, bson)| bson_id_to_document_id(&bson))
-            .collect();
-
-        let summary = verbose.summary;
-        Ok(BulkWriteResult {
-            inserted_count: summary.inserted_count,
-            matched_count: summary.matched_count,
-            modified_count: summary.modified_count,
-            deleted_count: summary.deleted_count,
-            upserted_ids,
-        })
+        Ok(summary)
     }
 }
 

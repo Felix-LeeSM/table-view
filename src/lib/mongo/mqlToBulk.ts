@@ -2,13 +2,19 @@
  * Sprint 326 — Slice I.1: `MqlCommand[]` → `BulkWriteOp[]` mapper.
  *
  * commit path 가 N 번의 IPC roundtrip 대신 단일 `bulk_write_documents`
- * 호출로 묶일 수 있도록 변환. `_id` filter shape (`DocumentId` tagged
- * union) 는 backend Rust 의 `BulkWriteOp.filter` 가 그대로 deserialize
- * 한다.
+ * 호출로 묶일 수 있도록 변환. `_id` filter 는 canonical extended JSON
+ * 형태로 보내 backend 가 실제 BSON ObjectId 로 복원할 수 있게 한다.
  */
 
 import type { MqlCommand } from "./mqlGenerator";
-import type { BulkWriteOp } from "@/types/documentMutate";
+import type { BulkWriteOp, DocumentId } from "@/types/documentMutate";
+
+function documentIdToFilterValue(id: DocumentId): unknown {
+  if ("ObjectId" in id) return { $oid: id.ObjectId };
+  if ("String" in id) return id.String;
+  if ("Number" in id) return id.Number;
+  return id.Raw;
+}
 
 export function mqlCommandsToBulkOps(
   commands: ReadonlyArray<MqlCommand>,
@@ -26,13 +32,13 @@ export function mqlCommandsToBulkOps(
         // wrapping up into the generator.
         return {
           op: "updateOne",
-          filter: { _id: cmd.documentId },
+          filter: { _id: documentIdToFilterValue(cmd.documentId) },
           update: cmd.patch,
         };
       case "deleteOne":
         return {
           op: "deleteOne",
-          filter: { _id: cmd.documentId },
+          filter: { _id: documentIdToFilterValue(cmd.documentId) },
         };
     }
   });
