@@ -1,8 +1,7 @@
 # Phase 27: Table / Column DDL UI
 
-> **상태: 계획** — TablePlus 패리티 7단계 중 7단계 (마지막).
-> **본 Phase 종료 시점이 TablePlus `working-with-table` 영역 패리티
-> 달성 마일스톤.**
+> **상태: 종료 (Sprint 237 closure, 2026-05-13)** — TablePlus 패리티
+> 7단계 중 7단계. Closure 이후 Phase 28 (MongoDB Full Support) 로 진입.
 
 ## 배경
 

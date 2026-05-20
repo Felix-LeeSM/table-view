@@ -1,6 +1,8 @@
 # Phase 21: CSV / SQL / JSON Export
 
-> **상태: 계획 (Sprint 181)** — TablePlus 패리티 7단계 중 1단계, 단판승.
+> **상태: 종료 (Sprint 181)** — CSV / TSV / SQL INSERT / JSON export across
+> three result-grid surfaces. Closure evidence:
+> [`docs/sprints/sprint-181/handoff.md`](../sprints/sprint-181/handoff.md).
 
 ## 배경
 
