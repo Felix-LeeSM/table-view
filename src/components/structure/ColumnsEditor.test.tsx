@@ -71,7 +71,7 @@ function setProductionConnection() {
       {
         id: "conn-1",
         name: "prod-conn",
-        db_type: "postgres",
+        dbType: "postgres",
         host: "localhost",
         port: 5432,
         database: "app",
@@ -334,7 +334,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
         {
           id: "conn-1",
           name: "dev-conn",
-          db_type: "postgres",
+          dbType: "postgres",
           host: "localhost",
           port: 5432,
           database: "app",
@@ -378,7 +378,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
         {
           id: "conn-1",
           name: "dev-conn",
-          db_type: "postgres",
+          dbType: "postgres",
           host: "localhost",
           port: 5432,
           database: "app",
@@ -423,7 +423,7 @@ describe("ColumnsEditor — Sprint 236 modal entrypoints", () => {
         {
           id: "conn-1",
           name: "dev-conn",
-          db_type: "postgres",
+          dbType: "postgres",
           host: "localhost",
           port: 5432,
           database: "app",
@@ -494,7 +494,7 @@ describe("ColumnsEditor — Sprint 237 USING + null-rows probe", () => {
         {
           id: "conn-1",
           name: "dev-conn",
-          db_type: "postgres",
+          dbType: "postgres",
           host: "localhost",
           port: 5432,
           database: "app",

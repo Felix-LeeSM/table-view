@@ -16,7 +16,7 @@ describe("parseConnectionUrl", () => {
       "postgresql://admin:pass123@db.example.com:5432/mydb",
     );
     expect(result).toEqual({
-      db_type: "postgresql",
+      dbType: "postgresql",
       host: "db.example.com",
       port: 5432,
       user: "admin",
@@ -29,13 +29,13 @@ describe("parseConnectionUrl", () => {
   it("parses postgres:// shorthand", () => {
     const result = parseConnectionUrl("postgres://user:pw@host/testdb");
     expect(result).not.toBeNull();
-    expect(result!.db_type).toBe("postgresql");
+    expect(result!.dbType).toBe("postgresql");
   });
 
   it("parses mysql URL", () => {
     const result = parseConnectionUrl("mysql://root:secret@localhost:3306/app");
     expect(result).toEqual({
-      db_type: "mysql",
+      dbType: "mysql",
       host: "localhost",
       port: 3306,
       user: "root",
@@ -77,7 +77,7 @@ describe("parseConnectionUrl", () => {
 describe("createEmptyDraft", () => {
   it("returns default postgresql draft", () => {
     const conn = createEmptyDraft();
-    expect(conn.db_type).toBe("postgresql");
+    expect(conn.dbType).toBe("postgresql");
     expect(conn.port).toBe(5432);
     expect(conn.host).toBe("localhost");
     expect(conn.id).toBe("");
@@ -89,7 +89,7 @@ describe("createEmptyDraft", () => {
     expect(conn.paradigm).toBe("rdb");
   });
 
-  // Sprint 345 (2026-05-15) — createEmptyDraft 의 db_type 이 postgresql 이라
+  // Sprint 345 (2026-05-15) — createEmptyDraft 의 dbType 이 postgresql 이라
   // database 도 PG default ('postgres') 로 prefill. 사용자가 폼 열자마자
   // submit 해도 빈 database 가 backend 로 가지 않는다.
   it("prefills database with PG default for the initial postgresql draft", () => {
@@ -104,14 +104,14 @@ describe("parseConnectionUrl paradigm tagging (Sprint 65)", () => {
       "mongodb://user:pass@localhost:27017/app",
     );
     expect(result).not.toBeNull();
-    expect(result!.db_type).toBe("mongodb");
+    expect(result!.dbType).toBe("mongodb");
     expect(result!.paradigm).toBe("document");
   });
 
   it("tags redis URLs with the kv paradigm", () => {
     const result = parseConnectionUrl("redis://localhost:6379");
     expect(result).not.toBeNull();
-    expect(result!.db_type).toBe("redis");
+    expect(result!.dbType).toBe("redis");
     expect(result!.paradigm).toBe("kv");
   });
 });
@@ -126,12 +126,12 @@ describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
   // AC-178-01 (parser leg) — Mongo SRV transport. Frontend preserves the
   // SRV cluster hostname as-is (the backend resolves SRV at connect time
   // per spec §C.4 / contract Edge Cases). Date 2026-04-30.
-  it("parses mongodb+srv URL → db_type=mongodb, paradigm=document, default port", () => {
+  it("parses mongodb+srv URL → dbType=mongodb, paradigm=document, default port", () => {
     const result = parseConnectionUrl(
       "mongodb+srv://user:secret@cluster.example.com/mydb",
     );
     expect(result).not.toBeNull();
-    expect(result!.db_type).toBe("mongodb");
+    expect(result!.dbType).toBe("mongodb");
     expect(result!.paradigm).toBe("document");
     expect(result!.host).toBe("cluster.example.com");
     expect(result!.user).toBe("user");
@@ -144,10 +144,10 @@ describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
   // AC-178-01 (parser leg) — MariaDB is wire-compatible with MySQL; the
   // alias maps it onto the existing MySQL adapter without introducing a
   // new `DatabaseType` variant. Date 2026-04-30.
-  it("parses mariadb URL → db_type=mysql, paradigm=rdb, all fields populated", () => {
+  it("parses mariadb URL → dbType=mysql, paradigm=rdb, all fields populated", () => {
     const result = parseConnectionUrl("mariadb://root:pw@localhost:3306/app");
     expect(result).toEqual({
-      db_type: "mysql",
+      dbType: "mysql",
       host: "localhost",
       port: 3306,
       user: "root",
@@ -318,7 +318,7 @@ describe("parseSqliteFilePath / sqlite URL fallback (Sprint 138)", () => {
   it("treats absolute paths as SQLite drafts", () => {
     const result = parseSqliteFilePath("/data/app.sqlite");
     expect(result).not.toBeNull();
-    expect(result!.db_type).toBe("sqlite");
+    expect(result!.dbType).toBe("sqlite");
     expect(result!.database).toBe("/data/app.sqlite");
     expect(result!.host).toBe("");
     expect(result!.port).toBe(0);
@@ -338,7 +338,7 @@ describe("parseSqliteFilePath / sqlite URL fallback (Sprint 138)", () => {
   it("parseConnectionUrl accepts sqlite:/path URLs", () => {
     const result = parseConnectionUrl("sqlite:/data/app.sqlite");
     expect(result).not.toBeNull();
-    expect(result!.db_type).toBe("sqlite");
+    expect(result!.dbType).toBe("sqlite");
     expect(result!.database).toBe("/data/app.sqlite");
   });
 });

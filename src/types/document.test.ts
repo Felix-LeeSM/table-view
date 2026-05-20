@@ -12,8 +12,8 @@ describe("DocumentRow wire shape (Sprint 308)", () => {
   it("parses a typical findOne wire payload", () => {
     const wire = JSON.stringify({
       columns: [
-        { name: "_id", data_type: "ObjectId", category: "unknown" },
-        { name: "name", data_type: "String", category: "unknown" },
+        { name: "_id", dataType: "ObjectId", category: "unknown" },
+        { name: "name", dataType: "String", category: "unknown" },
       ],
       row: [{ $oid: "507f1f77bcf86cd799439011" }, "alice"],
       raw: { _id: { $oid: "507f1f77bcf86cd799439011" }, name: "alice" },
@@ -30,9 +30,9 @@ describe("DocumentRow wire shape (Sprint 308)", () => {
     // documents/arrays — the type wrapper must not strip them.
     const row: DocumentRow = {
       columns: [
-        { name: "_id", data_type: "ObjectId", category: "unknown" },
-        { name: "profile", data_type: "Document", category: "unknown" },
-        { name: "tags", data_type: "Array", category: "unknown" },
+        { name: "_id", dataType: "ObjectId", category: "unknown" },
+        { name: "profile", dataType: "Document", category: "unknown" },
+        { name: "tags", dataType: "Array", category: "unknown" },
       ],
       row: [{ $oid: "507f1f77bcf86cd799439011" }, "{...}", "[3 items]"],
       raw: {},

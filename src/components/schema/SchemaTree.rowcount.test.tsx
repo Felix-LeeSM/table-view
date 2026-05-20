@@ -79,13 +79,13 @@ function makeConnection(id: string, dbType: DatabaseType): ConnectionConfig {
   return {
     id,
     name: `${id} DB`,
-    db_type: dbType,
+    dbType: dbType,
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: false,
+    hasPassword: false,
     database: "test",
-    group_id: null,
+    groupId: null,
     color: null,
     environment: null,
     paradigm:

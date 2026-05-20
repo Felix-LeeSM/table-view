@@ -75,11 +75,11 @@ describe("persistWorkspaces — Sprint 353 (dehydration invariants preserved as 
       queryState: {
         status: "completed",
         result: {
-          columns: [{ name: "id", data_type: "int4", category: "int" }],
+          columns: [{ name: "id", dataType: "int4", category: "int" }],
           rows: [[1], [2], [3]],
-          total_count: 3,
-          execution_time_ms: 4,
-          query_type: "select",
+          totalCount: 3,
+          executionTimeMs: 4,
+          queryType: "select",
         },
       },
     });
@@ -149,16 +149,16 @@ describe("dehydrate — Sprint 353 (AC-353-01 queryState idle strip)", () => {
         status: "completed",
         result: {
           columns: [
-            { name: "id", data_type: "int4", category: "int" },
-            { name: "name", data_type: "text", category: "text" },
+            { name: "id", dataType: "int4", category: "int" },
+            { name: "name", dataType: "text", category: "text" },
           ],
           rows: [
             [1, "Alice"],
             [2, "Bob"],
           ],
-          total_count: 2,
-          execution_time_ms: 12,
-          query_type: "select",
+          totalCount: 2,
+          executionTimeMs: 12,
+          queryType: "select",
         },
       },
     });
@@ -253,13 +253,13 @@ describe("dehydrate — Sprint 353 (AC-353-06 LS payload budget < 50KB)", () => 
     const heavyResult = {
       columns: Array.from({ length: 10 }, (_, c) => ({
         name: `col_${c}`,
-        data_type: "text",
+        dataType: "text",
         category: "text" as const,
       })),
       rows: Array.from({ length: 1000 }, () => heavyRow),
-      total_count: 1000,
-      execution_time_ms: 8,
-      query_type: "select" as const,
+      totalCount: 1000,
+      executionTimeMs: 8,
+      queryType: "select" as const,
     };
     const activeTabs = Array.from({ length: 5 }, (_, i) =>
       makeQueryTab({

@@ -8,15 +8,15 @@ function makeConn(id: string, groupId: string | null = null): ConnectionConfig {
   return {
     id,
     name: `${id} DB`,
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
     database: "test",
-    group_id: groupId,
+    groupId: groupId,
     color: null,
     environment: null,
-    has_password: false,
+    hasPassword: false,
     paradigm: "rdb",
   };
 }
@@ -229,7 +229,7 @@ describe("SelectionTree", () => {
   });
 
   // --- Extra: ungrouped pseudo-group ---
-  it("renders an ungrouped (No group) pseudo-group for connections without a group_id", () => {
+  it("renders an ungrouped (No group) pseudo-group for connections without a groupId", () => {
     const groups = [makeGroup("g1", "Prod")];
     const connections = [makeConn("c1", "g1"), makeConn("c2", null)];
 

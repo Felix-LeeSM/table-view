@@ -14,9 +14,9 @@ import type { QueryResult } from "@/types/query";
 const DML_RESULT: QueryResult = {
   columns: [],
   rows: [],
-  total_count: 0,
-  execution_time_ms: 4,
-  query_type: { dml: { rows_affected: 3 } },
+  totalCount: 0,
+  executionTimeMs: 4,
+  queryType: { dml: { rows_affected: 3 } },
 };
 
 describe("QueryResultGrid — dry-run banner (Sprint 248)", () => {

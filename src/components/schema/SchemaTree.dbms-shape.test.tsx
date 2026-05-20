@@ -9,7 +9,7 @@ import { resolveRdbTreeShape } from "./treeShape";
 
 /**
  * Sprint 135 — AC-S135-02 / 03 / 04 / 07: SchemaTree must render at
- * different depths depending on `connection.db_type`.
+ * different depths depending on `connection.dbType`.
  *
  *   - `postgresql` → `database → schema → table` (3-level, schema row
  *     visible).
@@ -32,13 +32,13 @@ function makeConnection(id: string, dbType: DatabaseType): ConnectionConfig {
   return {
     id,
     name: `${id} DB`,
-    db_type: dbType,
+    dbType: dbType,
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: false,
+    hasPassword: false,
     database: "test",
-    group_id: null,
+    groupId: null,
     color: null,
     environment: null,
     paradigm:
@@ -344,7 +344,7 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
   // resolveRdbTreeShape — pure function-level coverage (catches the
   // exhaustive switch arms without rendering anything)
   // ─────────────────────────────────────────────────────────────────────
-  it("resolveRdbTreeShape maps every relational db_type to a shape", () => {
+  it("resolveRdbTreeShape maps every relational dbType to a shape", () => {
     expect(resolveRdbTreeShape("postgresql")).toBe("with-schema");
     expect(resolveRdbTreeShape("mysql")).toBe("no-schema");
     expect(resolveRdbTreeShape("sqlite")).toBe("flat");

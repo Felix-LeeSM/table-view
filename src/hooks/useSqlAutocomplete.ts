@@ -99,7 +99,7 @@ export interface UseSqlAutocompleteOptions {
    */
   dialect?: SQLDialect;
   /**
-   * Connection `db_type`. Keyword surface 책임은 lang-sql 의
+   * Connection `dbType`. Keyword surface 책임은 lang-sql 의
    * `keywordCompletionSource` 로 이관되어 이 옵션은 keyword 라우팅에는
    * 영향이 없다. Function 후보는 dialect-specific drift 를 막기 위해
    * 이 값으로 분기한다.

@@ -144,11 +144,11 @@ describe("QueryTab — execution", () => {
 
   it("executes multiple statements sequentially", async () => {
     const secondResult: QueryResult = {
-      columns: [{ name: "n", data_type: "integer", category: "unknown" }],
+      columns: [{ name: "n", dataType: "integer", category: "unknown" }],
       rows: [[42]],
-      total_count: 1,
-      execution_time_ms: 2,
-      query_type: "select",
+      totalCount: 1,
+      executionTimeMs: 2,
+      queryType: "select",
     };
     mockExecuteQuery
       .mockResolvedValueOnce(MOCK_RESULT)
@@ -283,11 +283,11 @@ describe("QueryTab — execution", () => {
     // Sprint 100 — every statement succeeds → statements[] has N
     // success entries and `result` mirrors the last successful result.
     const secondResult: QueryResult = {
-      columns: [{ name: "n", data_type: "integer", category: "unknown" }],
+      columns: [{ name: "n", dataType: "integer", category: "unknown" }],
       rows: [[42]],
-      total_count: 1,
-      execution_time_ms: 2,
-      query_type: "select",
+      totalCount: 1,
+      executionTimeMs: 2,
+      queryType: "select",
     };
     mockExecuteQuery
       .mockResolvedValueOnce(MOCK_RESULT)
@@ -454,11 +454,11 @@ describe("QueryTab — execution", () => {
 
   it("records success history for all-success multi-statements", async () => {
     const secondResult: QueryResult = {
-      columns: [{ name: "n", data_type: "integer", category: "unknown" }],
+      columns: [{ name: "n", dataType: "integer", category: "unknown" }],
       rows: [[42]],
-      total_count: 1,
-      execution_time_ms: 2,
-      query_type: "select",
+      totalCount: 1,
+      executionTimeMs: 2,
+      queryType: "select",
     };
     mockExecuteQuery
       .mockResolvedValueOnce(MOCK_RESULT)

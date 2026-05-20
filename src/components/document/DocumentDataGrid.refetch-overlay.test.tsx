@@ -53,14 +53,14 @@ function buildResult(
 ): DocumentQueryResult {
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId", category: "unknown" },
-      { name: "name", data_type: "string", category: "unknown" },
+      { name: "_id", dataType: "ObjectId", category: "unknown" },
+      { name: "name", dataType: "string", category: "unknown" },
     ],
     rows: [
       [{ $oid: "65abcdef0123456789abcdef" }, "Alice"],
       [{ $oid: "65abcdef0123456789abcde0" }, "Bob"],
     ],
-    raw_documents: [
+    rawDocuments: [
       {
         _id: { $oid: "65abcdef0123456789abcdef" },
         name: "Alice",
@@ -70,8 +70,8 @@ function buildResult(
         name: "Bob",
       },
     ],
-    total_count: 2,
-    execution_time_ms: 3,
+    totalCount: 2,
+    executionTimeMs: 3,
     ...overrides,
   };
 }
@@ -128,7 +128,7 @@ function renderGrid() {
  */
 async function enterRefetchState(): Promise<HTMLElement> {
   findMock
-    .mockResolvedValueOnce(buildResult({ total_count: 301 }))
+    .mockResolvedValueOnce(buildResult({ totalCount: 301 }))
     .mockImplementationOnce(
       () =>
         new Promise<DocumentQueryResult>((resolve) => {
@@ -160,7 +160,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
 
     // Resolve the hanging fetch so React Testing Library doesn't warn
     // about pending state at teardown.
-    pendingResolver?.(buildResult({ total_count: 301 }));
+    pendingResolver?.(buildResult({ totalCount: 301 }));
   });
 
   // Reason: AC-176-02 — same negative-test guarantee as DataGridTable but
@@ -191,7 +191,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
     // Secondary user-visible invariant.
     expect(rowAlice).toHaveAttribute("aria-selected", "false");
 
-    pendingResolver?.(buildResult({ total_count: 301 }));
+    pendingResolver?.(buildResult({ totalCount: 301 }));
   });
 
   // Reason: AC-176-02 — double-click on the overlay must not open the
@@ -210,7 +210,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
     // surface is absent.
     expect(screen.queryByLabelText(/Editing /)).not.toBeInTheDocument();
 
-    pendingResolver?.(buildResult({ total_count: 301 }));
+    pendingResolver?.(buildResult({ totalCount: 301 }));
   });
 
   // Reason: AC-176-02 — right-click on the overlay must not open a
@@ -227,7 +227,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
     // No context menu portal mounted.
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 
-    pendingResolver?.(buildResult({ total_count: 301 }));
+    pendingResolver?.(buildResult({ totalCount: 301 }));
   });
 
   // Sprint 180 (AC-180-05) — per-vector retry guarantee for
@@ -248,12 +248,12 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
     let secondPendingResolver: ((value: DocumentQueryResult) => void) | null =
       null;
 
-    // total_count must be > pageSize × 2 so the user can click Next
+    // totalCount must be > pageSize × 2 so the user can click Next
     // page twice (page 1 → 2 → 3) without hitting the last-page disabled
     // state. DEFAULT_PAGE_SIZE = 300 (from `@lib/gridPolicy`), so we use
     // 1500 (= 5 pages worth) to leave plenty of room.
     findMock
-      .mockResolvedValueOnce(buildResult({ total_count: 1500 }))
+      .mockResolvedValueOnce(buildResult({ totalCount: 1500 }))
       .mockImplementationOnce(
         () =>
           new Promise<DocumentQueryResult>((resolve) => {
@@ -262,9 +262,9 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
       )
       .mockResolvedValueOnce(
         buildResult({
-          total_count: 1500,
+          totalCount: 1500,
           rows: [[{ $oid: "65abcdef0123456789abcde1" }, "Carol"]],
-          raw_documents: [
+          rawDocuments: [
             {
               _id: { $oid: "65abcdef0123456789abcde1" },
               name: "Carol",
@@ -297,7 +297,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
     // with Carol.
     const nextBtn = screen.getByLabelText("Next page");
     // Sanity: the button should be enabled now (loading=false post-cancel,
-    // total_count=301 implies totalPages>=4).
+    // totalCount=301 implies totalPages>=4).
     expect(nextBtn).not.toBeDisabled();
     fireEvent.click(nextBtn);
 
@@ -327,7 +327,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
     const resolver = secondPendingResolver as
       | ((value: DocumentQueryResult) => void)
       | null;
-    resolver?.(buildResult({ total_count: 1500 }));
+    resolver?.(buildResult({ totalCount: 1500 }));
   });
 
   // Reason: AC-176-04 — spinner visuals on DocumentDataGrid match the
@@ -357,6 +357,6 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
     // the wrapper's aria-label instead.
     expect(spinner).toHaveAttribute("aria-hidden", "true");
 
-    pendingResolver?.(buildResult({ total_count: 301 }));
+    pendingResolver?.(buildResult({ totalCount: 301 }));
   });
 });

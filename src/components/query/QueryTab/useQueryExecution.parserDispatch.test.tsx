@@ -79,15 +79,15 @@ vi.mock("@lib/sql/sqlUtils", () => ({
 }));
 
 const DOC_RESULT: DocumentQueryResult = {
-  columns: [{ name: "_id", data_type: "objectId", category: "unknown" }],
+  columns: [{ name: "_id", dataType: "objectId", category: "unknown" }],
   rows: [["x"]],
-  raw_documents: [{ _id: "x" }],
-  total_count: 1,
-  execution_time_ms: 4,
+  rawDocuments: [{ _id: "x" }],
+  totalCount: 1,
+  executionTimeMs: 4,
 };
 
 const DOC_ROW: DocumentRow = {
-  columns: [{ name: "_id", data_type: "objectId", category: "unknown" }],
+  columns: [{ name: "_id", dataType: "objectId", category: "unknown" }],
   row: ["x"],
   raw: { _id: "x" },
 };
@@ -102,7 +102,7 @@ function seedDocTab(
     connections: [
       makeConn({
         id: tab.connectionId,
-        db_type: "mongodb",
+        dbType: "mongodb",
         paradigm: "document",
         environment: "development",
       }),
@@ -322,10 +322,10 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       }
       expect(updated.queryState.result.resultKind).toBe("scalar");
       expect(updated.queryState.result.columns).toEqual([
-        { name: "count", data_type: "Int64", category: "int" },
+        { name: "count", dataType: "Int64", category: "int" },
       ]);
       expect(updated.queryState.result.rows).toEqual([[42]]);
-      expect(updated.queryState.result.total_count).toBe(1);
+      expect(updated.queryState.result.totalCount).toBe(1);
     });
   });
 
@@ -394,10 +394,10 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       }
       expect(updated.queryState.result.resultKind).toBe("list");
       expect(updated.queryState.result.columns).toEqual([
-        { name: "value", data_type: "string", category: "text" },
+        { name: "value", dataType: "string", category: "text" },
       ]);
       expect(updated.queryState.result.rows).toEqual([["KR"], ["US"], ["JP"]]);
-      expect(updated.queryState.result.total_count).toBe(3);
+      expect(updated.queryState.result.totalCount).toBe(3);
     });
   });
 
@@ -454,7 +454,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       }
       expect(updated.queryState.result.columns).toEqual(DOC_ROW.columns);
       expect(updated.queryState.result.rows).toEqual([DOC_ROW.row]);
-      expect(updated.queryState.result.total_count).toBe(1);
+      expect(updated.queryState.result.totalCount).toBe(1);
     });
   });
 
@@ -479,7 +479,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       }
       expect(updated.queryState.result.columns).toEqual([]);
       expect(updated.queryState.result.rows).toEqual([]);
-      expect(updated.queryState.result.total_count).toBe(0);
+      expect(updated.queryState.result.totalCount).toBe(0);
     });
   });
 
@@ -493,7 +493,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       connections: [
         makeConn({
           id: "conn-mongo",
-          db_type: "mongodb",
+          dbType: "mongodb",
           paradigm: "document",
           environment: "production",
         }),

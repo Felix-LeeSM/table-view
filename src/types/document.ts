@@ -14,7 +14,7 @@ import type { ColumnCategory } from "@/lib/columnCategory";
  * ... }`, `Int64` → `{ "$numberLong": "..." }`, etc. Nested documents and
  * arrays in cell positions are flattened to sentinel strings (`"{...}"` and
  * `"[N items]"`) before reaching `rows`; the full value survives in
- * `raw_documents` for the Quick Look panel.
+ * `rawDocuments` for the Quick Look panel.
  */
 
 /**
@@ -56,7 +56,7 @@ export interface CollectionInfo {
  */
 export interface DocumentColumn {
   name: string;
-  data_type: string;
+  dataType: string;
   category: ColumnCategory;
 }
 
@@ -81,15 +81,15 @@ export interface FindBody {
 
 /**
  * The flattened result shape consumed by the DataGrid. `rows` carry
- * already-sentinelised cell values; `raw_documents` preserve the original
+ * already-sentinelised cell values; `rawDocuments` preserve the original
  * document so the Quick Look panel can render the full tree.
  */
 export interface DocumentQueryResult {
   columns: DocumentColumn[];
   rows: unknown[][];
-  raw_documents: Record<string, unknown>[];
-  total_count: number;
-  execution_time_ms: number;
+  rawDocuments: Record<string, unknown>[];
+  totalCount: number;
+  executionTimeMs: number;
 }
 
 /**

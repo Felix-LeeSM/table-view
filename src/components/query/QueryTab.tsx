@@ -69,8 +69,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
     [connections, tab.connectionId],
   );
   const sqlDialect = useMemo(
-    () => databaseTypeToSqlDialect(connection?.db_type),
-    [connection?.db_type],
+    () => databaseTypeToSqlDialect(connection?.dbType),
+    [connection?.dbType],
   );
   // `dbType` flows in so the autocomplete namespace surfaces
   // dialect-specific keywords (PG: RETURNING/ILIKE; MySQL: AUTO_INCREMENT;
@@ -80,7 +80,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     tab.database ?? "",
     {
       dialect: sqlDialect,
-      dbType: connection?.db_type,
+      dbType: connection?.dbType,
     },
   );
   // Cached Mongo field names for autocomplete. We project the single

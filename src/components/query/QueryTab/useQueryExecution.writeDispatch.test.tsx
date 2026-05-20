@@ -85,7 +85,7 @@ function seedDocTab(
     connections: [
       makeConn({
         id: tab.connectionId,
-        db_type: "mongodb",
+        dbType: "mongodb",
         paradigm: "document",
         environment: "development",
       }),
@@ -126,7 +126,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
   // [AC-312-write-01] insertOne(doc) → insertDocument + writeSummary insert.
   it("dispatches insertOne to insertDocument", async () => {
     insertDocumentMock.mockResolvedValueOnce({
-      ObjectId: "507f1f77bcf86cd799439011",
+      objectId: "507f1f77bcf86cd799439011",
     });
     const tab = seedDocTab('db.users.insertOne({name:"Mona"})');
     const { result } = renderHook(() => useQueryExecution({ tab }));
@@ -150,7 +150,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       expect(r.resultKind).toBe("writeSummary");
       expect(r.writeSummary).toEqual({
         kind: "insert",
-        insertedIds: [{ ObjectId: "507f1f77bcf86cd799439011" }],
+        insertedIds: [{ objectId: "507f1f77bcf86cd799439011" }],
       });
     });
 
@@ -161,8 +161,8 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
   // [AC-312-write-02] insertMany([docs]) → insertManyDocuments.
   it("dispatches insertMany to insertManyDocuments", async () => {
     insertManyDocumentsMock.mockResolvedValueOnce([
-      { Number: 1 },
-      { Number: 2 },
+      { number: 1 },
+      { number: 2 },
     ]);
     const tab = seedDocTab("db.users.insertMany([{n:1},{n:2}])");
     const { result } = renderHook(() => useQueryExecution({ tab }));
@@ -184,7 +184,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       const r = getCompletedResult(tab.id);
       expect(r.writeSummary).toEqual({
         kind: "insert",
-        insertedIds: [{ Number: 1 }, { Number: 2 }],
+        insertedIds: [{ number: 1 }, { number: 2 }],
       });
     });
     expect(useQueryHistoryStore.getState().recentVisible[0]!.queryMode).toBe(
@@ -236,7 +236,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       connections: [
         makeConn({
           id: "conn-mongo",
-          db_type: "mongodb",
+          dbType: "mongodb",
           paradigm: "document",
           environment: "production",
         }),
@@ -320,7 +320,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       "conn-mongo",
       "table_view_test",
       "users",
-      { ObjectId: "507f1f77bcf86cd799439011" },
+      { objectId: "507f1f77bcf86cd799439011" },
     );
     expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
     await waitFor(() => {
@@ -377,7 +377,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       "conn-mongo",
       "table_view_test",
       "users",
-      { String: "abc" },
+      { string: "abc" },
       { name: "Mona" },
     );
     expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
@@ -471,7 +471,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       connections: [
         makeConn({
           id: "conn-mongo",
-          db_type: "mongodb",
+          dbType: "mongodb",
           paradigm: "document",
           environment: "production",
         }),

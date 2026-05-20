@@ -23,7 +23,7 @@ const HEX_C = "507f1f77bcf86cd799439033";
 const mockExecuteQuery = vi.fn();
 const mockExecuteQueryBatch = vi.fn();
 const mockInsertDocument = vi.fn<(...args: unknown[]) => Promise<unknown>>(() =>
-  Promise.resolve({ ObjectId: "507f1f77bcf86cd799439099" }),
+  Promise.resolve({ objectId: "507f1f77bcf86cd799439099" }),
 );
 const mockUpdateDocument = vi.fn<(...args: unknown[]) => Promise<void>>(() =>
   Promise.resolve(),
@@ -198,7 +198,7 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
       executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
     });
     mockInsertDocument.mockResolvedValue({
-      ObjectId: "507f1f77bcf86cd799439099",
+      objectId: "507f1f77bcf86cd799439099",
     });
     mockUpdateDocument.mockResolvedValue(undefined);
     mockDeleteDocument.mockResolvedValue(undefined);

@@ -3,7 +3,7 @@
 // PostgreSQL `bigint` / `numeric` and MongoDB `Int64` / `Decimal128` are
 // emitted by the Rust backend as JSON string tokens to preserve digit-for-
 // digit precision through `JSON.parse`. This helper inspects each column's
-// `data_type` (the single source of truth) and replaces those string cells
+// `dataType` (or legacy `data_type`) and replaces those string cells
 // with `BigInt(...)` or `new Decimal(...)`. All other cells (int4, real,
 // boolean, text, extjson wrappers, null) pass through unchanged.
 //
@@ -16,7 +16,8 @@ import Decimal from "decimal.js";
 type Wrapper = "bigint" | "decimal" | "passthrough";
 
 interface ColumnLike {
-  data_type: string;
+  dataType?: string;
+  data_type?: string;
 }
 
 function wrapperFor(dataType: string): Wrapper {
@@ -41,7 +42,7 @@ function wrapperFor(dataType: string): Wrapper {
 
 /**
  * Wrap precision-sensitive cell values in `result.rows` based on the
- * matching column's `data_type`. Returns the same object reference with
+ * matching column's type. Returns the same object reference with
  * `rows` mutated in place — Tauri invoke just deserialized this payload so
  * we own it, and avoiding a shallow copy keeps the hot path allocation-
  * free.
@@ -53,7 +54,9 @@ function wrapperFor(dataType: string): Wrapper {
 export function wrapNumericCells<
   T extends { columns: ColumnLike[]; rows: unknown[][] },
 >(result: T): T {
-  const wrappers = result.columns.map((c) => wrapperFor(c.data_type));
+  const wrappers = result.columns.map((c) =>
+    wrapperFor(c.dataType ?? c.data_type ?? ""),
+  );
   // Fast path: no precision-sensitive columns means no work.
   if (wrappers.every((w) => w === "passthrough")) {
     return result;

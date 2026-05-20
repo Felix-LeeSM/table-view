@@ -457,10 +457,9 @@ async fn test_snapshot_returns_seeded_connections_and_groups() {
     // password 는 has_password boolean 으로만 노출 — plaintext / ciphertext 없음.
     assert!(items[0].get("password").is_none());
     assert!(items[0].get("password_enc").is_none());
-    // ConnectionConfigPublic 자체는 `rename_all = "camelCase"` 가 없어
-    // wire 에는 snake_case `has_password` 그대로 노출 — 기존 list_connections
-    // IPC 와 byte-equivalent.
-    assert_eq!(items[0]["has_password"], Value::Bool(false));
+    // ConnectionConfigPublic wire shape is camelCase.
+    assert_eq!(items[0]["hasPassword"], Value::Bool(false));
+    assert!(items[0].get("has_password").is_none());
     assert_eq!(groups[0]["id"], Value::String("g1".into()));
 
     cleanup();

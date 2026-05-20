@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { selectCompletionModule, CompletionPairingError } from "./pairing";
 
-describe("selectCompletionModule (paradigm × db_type)", () => {
+describe("selectCompletionModule (paradigm × dbType)", () => {
   it("returns pg module for ('rdb', 'postgresql')", () => {
     const mod = selectCompletionModule("rdb", "postgresql");
     expect(mod.dbType).toBe("postgresql");
@@ -44,7 +44,7 @@ describe("selectCompletionModule (paradigm × db_type)", () => {
     );
   });
 
-  it("CompletionPairingError message names both paradigm and db_type", () => {
+  it("CompletionPairingError message names both paradigm and dbType", () => {
     try {
       selectCompletionModule("rdb", "mongodb");
       expect.fail("expected throw");

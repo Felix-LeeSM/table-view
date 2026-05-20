@@ -19,7 +19,7 @@ describe("WriteSummaryPanel — insert variant", () => {
   it('renders "Inserted N document(s)" headline + chevron-expandable id list', () => {
     const summary: WriteSummaryData = {
       kind: "insert",
-      insertedIds: [{ ObjectId: "507f1f77bcf86cd799439011" }, { Number: 42 }],
+      insertedIds: [{ objectId: "507f1f77bcf86cd799439011" }, { number: 42 }],
     };
     render(<WriteSummaryPanel summary={summary} />);
     expect(screen.getByText(/Inserted 2 document\(s\)/i)).toBeInTheDocument();
@@ -45,7 +45,7 @@ describe("WriteSummaryPanel — insert variant", () => {
   it("uses singular copy for exactly 1 document", () => {
     const summary: WriteSummaryData = {
       kind: "insert",
-      insertedIds: [{ String: "abc" }],
+      insertedIds: [{ string: "abc" }],
     };
     render(<WriteSummaryPanel summary={summary} />);
     expect(screen.getByText("Inserted 1 document")).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe("WriteSummaryPanel — bulkWrite variant", () => {
         matched_count: 4,
         modified_count: 2,
         deleted_count: 1,
-        upserted_ids: [{ ObjectId: "507f1f77bcf86cd799439011" }],
+        upserted_ids: [{ objectId: "507f1f77bcf86cd799439011" }],
       },
     };
     render(<WriteSummaryPanel summary={summary} />);

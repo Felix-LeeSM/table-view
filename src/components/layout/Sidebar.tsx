@@ -173,7 +173,7 @@ export default function Sidebar() {
   }, [focusedConnId, workspacesById]);
   const focusedDbType = useMemo(() => {
     if (!focusedConnId) return null;
-    return connections.find((c) => c.id === focusedConnId)?.db_type ?? null;
+    return connections.find((c) => c.id === focusedConnId)?.dbType ?? null;
   }, [focusedConnId, connections]);
   const sidebarObjectPlural = useMemo(() => {
     if (!focusedDbType) return "schemas";

@@ -18,6 +18,12 @@ import type {
   DocumentId,
 } from "@/types/documentMutate";
 import type { ColumnInfo, IndexInfo } from "@/types/schema";
+import {
+  normalizeDocumentId,
+  normalizeDocumentQueryResult,
+  normalizeDocumentRow,
+  normalizeBulkWriteResult,
+} from "@lib/wireCamelCase";
 
 import { wrapNumericCells } from "./numericWrap";
 
@@ -279,13 +285,13 @@ export async function findDocuments(
   collection: string,
   body?: FindBody,
 ): Promise<DocumentQueryResult> {
-  const result = await invoke<DocumentQueryResult>("find_documents", {
+  const result = await invoke<unknown>("find_documents", {
     connectionId,
     database,
     collection,
     body: body ?? null,
   });
-  return wrapNumericCells(result);
+  return wrapNumericCells(normalizeDocumentQueryResult(result));
 }
 
 /**
@@ -299,20 +305,20 @@ export async function aggregateDocuments(
   collection: string,
   pipeline: Record<string, unknown>[],
 ): Promise<DocumentQueryResult> {
-  const result = await invoke<DocumentQueryResult>("aggregate_documents", {
+  const result = await invoke<unknown>("aggregate_documents", {
     connectionId,
     database,
     collection,
     pipeline,
   });
-  return wrapNumericCells(result);
+  return wrapNumericCells(normalizeDocumentQueryResult(result));
 }
 
 // ── Document paradigm — mutate ─────────────────────────────────────────────
 // Wrappers for the `insert_document` / `update_document` / `delete_document`
 // commands. Payloads use the `DocumentId` tagged union from
-// `@/types/documentMutate`, whose shape matches Rust's default serde
-// encoding (`{"ObjectId": "<hex>"}`, …) so no translation layer is needed.
+// `@/types/documentMutate`, whose shape matches Rust's camelCase serde
+// encoding (`{"objectId": "<hex>"}`, …).
 
 /**
  * Insert a single document into `collection`. When the document carries an
@@ -326,12 +332,13 @@ export async function insertDocument(
   collection: string,
   document: Record<string, unknown>,
 ): Promise<DocumentId> {
-  return invoke<DocumentId>("insert_document", {
+  const id = await invoke<unknown>("insert_document", {
     connectionId,
     database,
     collection,
     document,
   });
+  return normalizeDocumentId(id);
 }
 
 /**
@@ -454,13 +461,17 @@ export async function findOneDocument(
   filter?: Record<string, unknown>,
   queryId?: string,
 ): Promise<DocumentRow | null> {
-  return invoke<DocumentRow | null>("find_one_document", {
+  const result = await invoke<unknown | null>("find_one_document", {
     connectionId,
     database,
     collection,
     filter: filter ?? null,
     queryId: queryId ?? null,
   });
+  if (result === null) return null;
+  const row = normalizeDocumentRow(result);
+  wrapNumericCells({ columns: row.columns, rows: [row.row] });
+  return row;
 }
 
 /**
@@ -537,12 +548,13 @@ export async function insertManyDocuments(
   collection: string,
   documents: Record<string, unknown>[],
 ): Promise<DocumentId[]> {
-  return invoke<DocumentId[]>("insert_many_documents", {
+  const ids = await invoke<unknown[]>("insert_many_documents", {
     connectionId,
     database,
     collection,
     documents,
   });
+  return ids.map(normalizeDocumentId);
 }
 
 /**
@@ -557,12 +569,13 @@ export async function bulkWriteDocuments(
   collection: string,
   operations: BulkWriteOp[],
 ): Promise<BulkWriteResult> {
-  return invoke<BulkWriteResult>("bulk_write_documents", {
+  const result = await invoke<unknown>("bulk_write_documents", {
     connectionId,
     database,
     collection,
     operations,
   });
+  return normalizeBulkWriteResult(result);
 }
 
 /**

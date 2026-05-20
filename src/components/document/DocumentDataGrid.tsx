@@ -150,7 +150,7 @@ export default function DocumentDataGrid({
   // doc, or leaves the panel dangling under an empty slot.
   useEffect(() => {
     if (!expandedNested) return;
-    const currentDoc = queryResult?.raw_documents[expandedNested.rowIdx];
+    const currentDoc = queryResult?.rawDocuments[expandedNested.rowIdx];
     const currentId = safeStringifyCell(currentDoc?._id);
     if (
       currentDoc === undefined ||
@@ -179,7 +179,7 @@ export default function DocumentDataGrid({
     const effectiveColumns: ColumnInfo[] = schemaAccumulator.columns.map(
       (c) => ({
         name: c.name,
-        data_type: c.data_type,
+        data_type: c.dataType,
         nullable: true,
         default_value: null,
         is_primary_key: c.name === "_id",
@@ -631,7 +631,7 @@ export default function DocumentDataGrid({
       {showQuickLookMounted && queryResult && (
         <QuickLookPanel
           mode="document"
-          rawDocuments={queryResult.raw_documents}
+          rawDocuments={queryResult.rawDocuments}
           selectedRowIds={editState.selectedRowIds}
           database={database}
           collection={collection}

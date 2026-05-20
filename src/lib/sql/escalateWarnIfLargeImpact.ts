@@ -10,10 +10,10 @@
 //   - dry-run IPC 2s timeout. timeout 시 STOP fallback.
 //   - IPC unsupported (MySQL / SQLite — adapter 가 Unsupported error) →
 //     STOP fallback (보수적).
-//   - `total_count` 가 100 이상이면 STOP escalate.
-//   - DML rows-affected 정보는 `query_type === { dml: { rows_affected } }`
+//   - `totalCount` 가 100 이상이면 STOP escalate.
+//   - DML rows-affected 정보는 `queryType === { dml: { rows_affected } }`
 //     로 제공되므로 그것을 우선 본다. SELECT 가 dry-run 결과로 오면
-//     `total_count` 를 사용.
+//     `totalCount` 를 사용.
 //   - Mongo paradigm 은 caller 가 escalate skip — 본 helper 는 호출 자체가
 //     안 되도록 상위 routing 에서 가드.
 //
@@ -94,15 +94,15 @@ export async function escalateWarnIfLargeImpact(
 }
 
 /**
- * DML 결과의 rows-affected 추출. backend 의 `QueryResult.query_type` 은
+ * DML 결과의 rows-affected 추출. backend 의 `QueryResult.queryType` 은
  * `"select" | "ddl" | { dml: { rows_affected: number } }` union 이므로
- * DML 인 경우 우선 그 값을, 아니면 `total_count` 를 사용한다.
+ * DML 인 경우 우선 그 값을, 아니면 `totalCount` 를 사용한다.
  */
 function extractRowsAffected(result: QueryResult): number {
-  const qt = result.query_type;
+  const qt = result.queryType;
   if (typeof qt === "object" && qt !== null && "dml" in qt) {
     const dml = (qt as { dml: { rows_affected: number } }).dml;
     if (typeof dml.rows_affected === "number") return dml.rows_affected;
   }
-  return result.total_count ?? 0;
+  return result.totalCount ?? 0;
 }

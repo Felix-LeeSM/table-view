@@ -41,13 +41,13 @@ function makeConnection(
   return {
     id: "conn-1",
     name: "Test DB",
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: false,
+    hasPassword: false,
     database: "testdb",
-    group_id: null,
+    groupId: null,
     color: null,
     paradigm: "rdb",
     ...overrides,
@@ -131,8 +131,8 @@ describe("RecentConnections", () => {
       { connectionId: "c2", lastUsed: now - 120000 },
     ];
     mockConnState.connections = [
-      makeConnection({ id: "c1", db_type: "postgresql" }),
-      makeConnection({ id: "c2", db_type: "mysql" }),
+      makeConnection({ id: "c1", dbType: "postgresql" }),
+      makeConnection({ id: "c2", dbType: "mysql" }),
     ];
 
     render(<RecentConnections />);

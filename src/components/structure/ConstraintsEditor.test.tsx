@@ -49,7 +49,7 @@ function setProductionConnection() {
       {
         id: "conn-1",
         name: "prod-conn",
-        db_type: "postgres",
+        dbType: "postgres",
         host: "localhost",
         port: 5432,
         database: "app",
@@ -198,7 +198,7 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
         {
           id: "conn-1",
           name: "dev-conn",
-          db_type: "postgres",
+          dbType: "postgres",
           host: "localhost",
           port: 5432,
           database: "app",

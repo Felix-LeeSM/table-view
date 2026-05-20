@@ -99,7 +99,7 @@ export default function DocumentGridRows({
           : null;
         const expandedRawValue =
           isExpandedHere && expandedColName
-            ? queryResult?.raw_documents[rowIdx]?.[expandedColName]
+            ? queryResult?.rawDocuments[rowIdx]?.[expandedColName]
             : undefined;
         return (
           <Fragment key={`row-${page}-${rowIdx}`}>
@@ -204,7 +204,7 @@ export default function DocumentGridRows({
                         expandedNested={expandedNested}
                         setExpandedNested={setExpandedNested}
                         pendingEdits={editState.pendingEdits}
-                        rowId={queryResult?.raw_documents[rowIdx]?._id}
+                        rowId={queryResult?.rawDocuments[rowIdx]?._id}
                       />
                     ) : (
                       <span

@@ -22,17 +22,17 @@ beforeEach(() => {
 
 const RESULT: QueryResult = {
   columns: [
-    { name: "id", data_type: "integer", category: "unknown" },
-    { name: "name", data_type: "text", category: "unknown" },
-    { name: "email", data_type: "varchar", category: "unknown" },
+    { name: "id", dataType: "integer", category: "unknown" },
+    { name: "name", dataType: "text", category: "unknown" },
+    { name: "email", dataType: "varchar", category: "unknown" },
   ],
   rows: [
     [1, "Alice", "alice@example.com"],
     [2, "Bob", "bob@example.com"],
   ],
-  total_count: 2,
-  execution_time_ms: 5,
-  query_type: "select",
+  totalCount: 2,
+  executionTimeMs: 5,
+  queryType: "select",
 };
 
 const PLAN: RawEditPlan = {

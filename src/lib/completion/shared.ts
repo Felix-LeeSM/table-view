@@ -179,9 +179,9 @@ function stripIdentifierQuotes(raw: string): string {
 // ── pairing error ──────────────────────────────────────────────────────────
 
 /**
- * Thrown when a (paradigm, db_type) pair is wired to the wrong completion
- * module — e.g. an `rdb` paradigm wired to a `mongodb` db_type, or a
- * `document` paradigm wired to a `postgresql` db_type. This is also a
+ * Thrown when a (paradigm, dbType) pair is wired to the wrong completion
+ * module — e.g. an `rdb` paradigm wired to a `mongodb` dbType, or a
+ * `document` paradigm wired to a `postgresql` dbType. This is also a
  * compile-time TS error at every per-DBMS module boundary because each
  * module's `dbType` field is locked to a literal `DatabaseType`. The
  * runtime guard exists for defence in depth (config corruption, future
@@ -193,7 +193,7 @@ export class CompletionPairingError extends Error {
 
   constructor(paradigm: Paradigm, dbType: DatabaseType) {
     super(
-      `CompletionPairingError: paradigm '${paradigm}' is incompatible with db_type '${dbType}'.`,
+      `CompletionPairingError: paradigm '${paradigm}' is incompatible with dbType '${dbType}'.`,
     );
     this.name = "CompletionPairingError";
     this.paradigm = paradigm;

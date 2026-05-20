@@ -10,10 +10,10 @@ import type { MqlCommand } from "./mqlGenerator";
 import type { BulkWriteOp, DocumentId } from "@/types/documentMutate";
 
 function documentIdToFilterValue(id: DocumentId): unknown {
-  if ("ObjectId" in id) return { $oid: id.ObjectId };
-  if ("String" in id) return id.String;
-  if ("Number" in id) return id.Number;
-  return id.Raw;
+  if ("objectId" in id) return { $oid: id.objectId };
+  if ("string" in id) return id.string;
+  if ("number" in id) return id.number;
+  return id.raw;
 }
 
 export function mqlCommandsToBulkOps(

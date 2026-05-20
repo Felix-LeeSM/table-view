@@ -51,6 +51,7 @@ pub type RdbQueryResult = QueryResult;
 /// dependency. `Raw` retains an escape hatch for exotic `_id` shapes
 /// (composite documents, binary types) that do not fit the top three cases.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum DocumentId {
     ObjectId(String),
     String(String),
@@ -85,6 +86,7 @@ pub struct FindBody {
 /// data grid consumer projects scalar cells through the same JSON pipeline
 /// that the RDB paradigm uses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DocumentQueryResult {
     pub columns: Vec<QueryColumn>,
     pub rows: Vec<Vec<serde_json::Value>>,
@@ -102,10 +104,73 @@ pub struct DocumentQueryResult {
 /// `columns` 와 길이가 같다 (`raw` 는 원본 BSON 을 보존해 Quick Look 이
 /// 그대로 렌더링).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DocumentRow {
     pub columns: Vec<QueryColumn>,
     pub row: Vec<serde_json::Value>,
     pub raw: bson::Document,
+}
+
+#[cfg(test)]
+mod wire_shape_tests {
+    use super::*;
+    use crate::models::ColumnCategory;
+
+    #[test]
+    fn document_id_serializes_variant_tags_as_camel_case() {
+        let object_id = serde_json::to_value(DocumentId::ObjectId("507f".into())).unwrap();
+        assert_eq!(object_id, serde_json::json!({ "objectId": "507f" }));
+
+        let string_id = serde_json::to_value(DocumentId::String("key".into())).unwrap();
+        assert_eq!(string_id, serde_json::json!({ "string": "key" }));
+
+        let number_id = serde_json::to_value(DocumentId::Number(42)).unwrap();
+        assert_eq!(number_id, serde_json::json!({ "number": 42 }));
+    }
+
+    #[test]
+    fn document_query_result_serializes_public_keys_as_camel_case() {
+        let result = DocumentQueryResult {
+            columns: vec![QueryColumn {
+                name: "_id".into(),
+                data_type: "ObjectId".into(),
+                category: ColumnCategory::Uuid,
+            }],
+            rows: vec![vec![serde_json::json!("507f")]],
+            raw_documents: vec![bson::doc! { "_id": "507f" }],
+            total_count: 1,
+            execution_time_ms: 7,
+        };
+
+        let json = serde_json::to_value(result).unwrap();
+        assert_eq!(json["columns"][0]["dataType"], "ObjectId");
+        assert!(json["columns"][0].get("data_type").is_none());
+        assert_eq!(json["rawDocuments"][0]["_id"], "507f");
+        assert!(json.get("raw_documents").is_none());
+        assert_eq!(json["totalCount"], 1);
+        assert!(json.get("total_count").is_none());
+        assert_eq!(json["executionTimeMs"], 7);
+        assert!(json.get("execution_time_ms").is_none());
+    }
+
+    #[test]
+    fn document_row_serializes_nested_columns_as_camel_case() {
+        let row = DocumentRow {
+            columns: vec![QueryColumn {
+                name: "name".into(),
+                data_type: "String".into(),
+                category: ColumnCategory::Text,
+            }],
+            row: vec![serde_json::json!("Ada")],
+            raw: bson::doc! { "name": "Ada" },
+        };
+
+        let json = serde_json::to_value(row).unwrap();
+        assert_eq!(json["columns"][0]["dataType"], "String");
+        assert!(json["columns"][0].get("data_type").is_none());
+        assert_eq!(json["row"][0], "Ada");
+        assert_eq!(json["raw"]["name"], "Ada");
+    }
 }
 
 /// Sprint 308 — `bulkWrite` sub-op wire shape.

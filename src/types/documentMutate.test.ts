@@ -14,7 +14,7 @@ const HEX = "507f1f77bcf86cd799439011";
 describe("parseObjectIdLiteral", () => {
   it("lifts a valid canonical-EJSON $oid wrapper into an ObjectId variant", () => {
     const parsed = parseObjectIdLiteral({ $oid: HEX });
-    expect(parsed).toEqual({ ObjectId: HEX });
+    expect(parsed).toEqual({ objectId: HEX });
   });
 
   it("rejects a wrapper whose hex is not 24 characters", () => {
@@ -43,22 +43,22 @@ describe("documentIdFromRow", () => {
 
   it("extracts ObjectId from a canonical EJSON wrapper", () => {
     expect(documentIdFromRow({ _id: { $oid: HEX } })).toEqual({
-      ObjectId: HEX,
+      objectId: HEX,
     });
   });
 
   it("extracts ObjectId from a plain 24-hex string", () => {
-    expect(documentIdFromRow({ _id: HEX })).toEqual({ ObjectId: HEX });
+    expect(documentIdFromRow({ _id: HEX })).toEqual({ objectId: HEX });
   });
 
   it("extracts a non-hex string as the String variant", () => {
     expect(documentIdFromRow({ _id: "custom-key" })).toEqual({
-      String: "custom-key",
+      string: "custom-key",
     });
   });
 
   it("extracts a finite number as the Number variant", () => {
-    expect(documentIdFromRow({ _id: 7 })).toEqual({ Number: 7 });
+    expect(documentIdFromRow({ _id: 7 })).toEqual({ number: 7 });
   });
 
   it("returns null for composite or unsupported _id shapes", () => {
@@ -71,50 +71,50 @@ describe("documentIdFromRow", () => {
 
 describe("formatDocumentIdForMql", () => {
   it('renders ObjectId as mongosh ObjectId("<hex>") literal', () => {
-    expect(formatDocumentIdForMql({ ObjectId: HEX })).toBe(
+    expect(formatDocumentIdForMql({ objectId: HEX })).toBe(
       `ObjectId("${HEX}")`,
     );
   });
 
   it("renders String as a double-quoted literal and escapes backslash/quote", () => {
-    expect(formatDocumentIdForMql({ String: "plain" })).toBe('"plain"');
-    expect(formatDocumentIdForMql({ String: 'a"b' })).toBe('"a\\"b"');
-    expect(formatDocumentIdForMql({ String: "c\\d" })).toBe('"c\\\\d"');
+    expect(formatDocumentIdForMql({ string: "plain" })).toBe('"plain"');
+    expect(formatDocumentIdForMql({ string: 'a"b' })).toBe('"a\\"b"');
+    expect(formatDocumentIdForMql({ string: "c\\d" })).toBe('"c\\\\d"');
   });
 
   it("renders Number as an unquoted integer literal", () => {
-    expect(formatDocumentIdForMql({ Number: 42 })).toBe("42");
-    expect(formatDocumentIdForMql({ Number: -1 })).toBe("-1");
+    expect(formatDocumentIdForMql({ number: 42 })).toBe("42");
+    expect(formatDocumentIdForMql({ number: -1 })).toBe("-1");
   });
 
   it("renders Raw as compact JSON of the wrapped payload", () => {
-    const id: DocumentId = { Raw: { $date: "2024-01-01" } };
+    const id: DocumentId = { raw: { $date: "2024-01-01" } };
     expect(formatDocumentIdForMql(id)).toBe('{"$date":"2024-01-01"}');
   });
 });
 
 describe("kindOfDocumentId", () => {
   it("discriminates every variant", () => {
-    expect(kindOfDocumentId({ ObjectId: HEX })).toBe("ObjectId");
-    expect(kindOfDocumentId({ String: "s" })).toBe("String");
-    expect(kindOfDocumentId({ Number: 1 })).toBe("Number");
-    expect(kindOfDocumentId({ Raw: null })).toBe("Raw");
+    expect(kindOfDocumentId({ objectId: HEX })).toBe("objectId");
+    expect(kindOfDocumentId({ string: "s" })).toBe("string");
+    expect(kindOfDocumentId({ number: 1 })).toBe("number");
+    expect(kindOfDocumentId({ raw: null })).toBe("raw");
   });
 });
 
 describe("wire-format roundtrip sanity", () => {
   // These JSON strings are the exact shapes the Rust serde encoder emits
-  // (verified via a scratch cargo project — see Sprint 86 handoff). The
+  // (verified by Rust model shape tests). The
   // TypeScript mirror must accept them verbatim after `JSON.parse`.
   it("deserialises the four Rust-emitted wire shapes", () => {
-    const oid = JSON.parse(`{"ObjectId":"${HEX}"}`) as DocumentId;
-    expect(kindOfDocumentId(oid)).toBe("ObjectId");
-    const s = JSON.parse('{"String":"key"}') as DocumentId;
-    expect(kindOfDocumentId(s)).toBe("String");
-    const n = JSON.parse('{"Number":42}') as DocumentId;
-    expect(kindOfDocumentId(n)).toBe("Number");
-    const raw = JSON.parse('{"Raw":{"$date":"2024-01-01"}}') as DocumentId;
-    expect(kindOfDocumentId(raw)).toBe("Raw");
+    const oid = JSON.parse(`{"objectId":"${HEX}"}`) as DocumentId;
+    expect(kindOfDocumentId(oid)).toBe("objectId");
+    const s = JSON.parse('{"string":"key"}') as DocumentId;
+    expect(kindOfDocumentId(s)).toBe("string");
+    const n = JSON.parse('{"number":42}') as DocumentId;
+    expect(kindOfDocumentId(n)).toBe("number");
+    const raw = JSON.parse('{"raw":{"$date":"2024-01-01"}}') as DocumentId;
+    expect(kindOfDocumentId(raw)).toBe("raw");
   });
 });
 
@@ -195,16 +195,16 @@ describe("BulkWriteOp wire shape (Sprint 308)", () => {
 describe("BulkWriteResult wire shape (Sprint 308)", () => {
   it("matches the Rust snake_case wire output", () => {
     // Rust struct default-derived (no `rename_all` attribute) — same
-    // convention as `DocumentQueryResult.total_count` / `raw_documents`.
+    // DocumentId nested values use the enum's camelCase serde tags.
     const wire =
-      '{"inserted_count":3,"matched_count":2,"modified_count":1,"deleted_count":4,"upserted_ids":[{"Number":99}]}';
+      '{"inserted_count":3,"matched_count":2,"modified_count":1,"deleted_count":4,"upserted_ids":[{"number":99}]}';
     const parsed = JSON.parse(wire) as BulkWriteResult;
     expect(parsed.inserted_count).toBe(3);
     expect(parsed.matched_count).toBe(2);
     expect(parsed.modified_count).toBe(1);
     expect(parsed.deleted_count).toBe(4);
     expect(parsed.upserted_ids).toHaveLength(1);
-    expect(parsed.upserted_ids[0]).toEqual({ Number: 99 });
+    expect(parsed.upserted_ids[0]).toEqual({ number: 99 });
   });
 
   it("handles the empty BulkWriteResult::default() shape", () => {

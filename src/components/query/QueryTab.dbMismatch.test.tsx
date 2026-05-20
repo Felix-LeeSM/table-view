@@ -119,14 +119,14 @@ function seedConn1WithActiveDb(activeDb: string): void {
       {
         id: "conn1",
         name: "Test",
-        db_type: "postgresql",
+        dbType: "postgresql",
         host: "h",
         port: 5432,
         user: "u",
         database: "db1",
-        group_id: null,
+        groupId: null,
         color: null,
-        has_password: false,
+        hasPassword: false,
         paradigm: "rdb",
       },
     ],
@@ -281,9 +281,9 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
       .mockResolvedValueOnce({
         columns: [],
         rows: [],
-        total_count: 0,
-        execution_time_ms: 1,
-        query_type: "select",
+        totalCount: 0,
+        executionTimeMs: 1,
+        queryType: "select",
       });
     mockVerifyActiveDb.mockResolvedValueOnce("db_actual");
 
@@ -332,16 +332,16 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
       .mockResolvedValueOnce({
         columns: [],
         rows: [],
-        total_count: 0,
-        execution_time_ms: 1,
-        query_type: "select",
+        totalCount: 0,
+        executionTimeMs: 1,
+        queryType: "select",
       })
       .mockResolvedValueOnce({
         columns: [],
         rows: [],
-        total_count: 0,
-        execution_time_ms: 1,
-        query_type: "select",
+        totalCount: 0,
+        executionTimeMs: 1,
+        queryType: "select",
       });
     mockVerifyActiveDb.mockResolvedValue("db_actual");
 

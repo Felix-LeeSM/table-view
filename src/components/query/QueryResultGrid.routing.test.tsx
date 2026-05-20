@@ -30,11 +30,11 @@ beforeEach(() => {
 describe("QueryResultGrid — resultKind routing", () => {
   it("[AC-312-routing-01] undefined resultKind → DataGrid (legacy invariant)", () => {
     const result: QueryResult = {
-      columns: [{ name: "id", data_type: "integer", category: "int" }],
+      columns: [{ name: "id", dataType: "integer", category: "int" }],
       rows: [[1]],
-      total_count: 1,
-      execution_time_ms: 2,
-      query_type: "select",
+      totalCount: 1,
+      executionTimeMs: 2,
+      queryType: "select",
     };
     render(<QueryResultGrid queryState={{ status: "completed", result }} />);
     // Status-bar token from the legacy grid path.
@@ -45,11 +45,11 @@ describe("QueryResultGrid — resultKind routing", () => {
 
   it('[AC-312-routing-02] "scalar" with columns.count → ScalarOrListPanel count mode', () => {
     const result: QueryResult = {
-      columns: [{ name: "count", data_type: "Int64", category: "int" }],
+      columns: [{ name: "count", dataType: "Int64", category: "int" }],
       rows: [[123]],
-      total_count: 1,
-      execution_time_ms: 1,
-      query_type: "select",
+      totalCount: 1,
+      executionTimeMs: 1,
+      queryType: "select",
       resultKind: "scalar",
     };
     render(<QueryResultGrid queryState={{ status: "completed", result }} />);
@@ -60,11 +60,11 @@ describe("QueryResultGrid — resultKind routing", () => {
 
   it('[AC-312-routing-03] "list" → ScalarOrListPanel list mode', () => {
     const result: QueryResult = {
-      columns: [{ name: "value", data_type: "string", category: "text" }],
+      columns: [{ name: "value", dataType: "string", category: "text" }],
       rows: [["a"], ["b"]],
-      total_count: 2,
-      execution_time_ms: 4,
-      query_type: "select",
+      totalCount: 2,
+      executionTimeMs: 4,
+      queryType: "select",
       resultKind: "list",
     };
     render(<QueryResultGrid queryState={{ status: "completed", result }} />);
@@ -76,13 +76,13 @@ describe("QueryResultGrid — resultKind routing", () => {
     const result: QueryResult = {
       columns: [],
       rows: [],
-      total_count: 0,
-      execution_time_ms: 7,
-      query_type: "select",
+      totalCount: 0,
+      executionTimeMs: 7,
+      queryType: "select",
       resultKind: "writeSummary",
       writeSummary: {
         kind: "insert",
-        insertedIds: [{ ObjectId: "507f1f77bcf86cd799439011" }],
+        insertedIds: [{ objectId: "507f1f77bcf86cd799439011" }],
       },
     };
     render(<QueryResultGrid queryState={{ status: "completed", result }} />);
@@ -93,9 +93,9 @@ describe("QueryResultGrid — resultKind routing", () => {
     const result: QueryResult = {
       columns: [],
       rows: [],
-      total_count: 0,
-      execution_time_ms: 1,
-      query_type: "select",
+      totalCount: 0,
+      executionTimeMs: 1,
+      queryType: "select",
       resultKind: "scalar",
     };
     render(<QueryResultGrid queryState={{ status: "completed", result }} />);

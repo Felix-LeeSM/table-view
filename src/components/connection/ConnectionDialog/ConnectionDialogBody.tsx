@@ -90,7 +90,7 @@ export default function ConnectionDialogBody({
   labelClass,
 }: ConnectionDialogBodyProps) {
   /**
-   * Sprint 138 — exhaustive switch on `db_type`. Adding a new
+   * Sprint 138 — exhaustive switch on `dbType`. Adding a new
    * `DatabaseType` variant without updating this switch fails the
    * `assertNever` compile-time check.
    */
@@ -108,7 +108,7 @@ export default function ConnectionDialogBody({
     const onChange = (patch: Partial<ConnectionDraft>) =>
       setForm((f) => ({ ...f, ...patch }));
 
-    switch (form.db_type) {
+    switch (form.dbType) {
       case "postgresql":
         return (
           <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
@@ -135,7 +135,7 @@ export default function ConnectionDialogBody({
           <RedisFormFields draft={form} onChange={onChange} {...sharedAuth} />
         );
       default:
-        return assertNever(form.db_type);
+        return assertNever(form.dbType);
     }
   };
 
@@ -233,7 +233,7 @@ export default function ConnectionDialogBody({
               Database Type
             </label>
             <Select
-              value={form.db_type}
+              value={form.dbType}
               onValueChange={(v) => handleDbTypeChange(v as DatabaseType)}
             >
               <SelectTrigger
@@ -246,17 +246,17 @@ export default function ConnectionDialogBody({
               <SelectContent>
                 {/* Sprint 276 — 새 connection 생성 시엔 백엔드 어댑터가
                     wire-up 된 DBMS (PG/Mongo) 만 노출. 편집 모드에서 기존
-                    connection 의 db_type 이 unsupported 라면 그 항목도
+                    connection 의 dbType 이 unsupported 라면 그 항목도
                     예외적으로 추가해 Select 가 빈값으로 보이지 않게 한다
-                    (db_type 변경 자체는 의도된 흐름이 아니므로 그대로 둠). */}
+                    (dbType 변경 자체는 의도된 흐름이 아니므로 그대로 둠). */}
                 {SUPPORTED_DATABASE_TYPES.map((t) => (
                   <SelectItem key={t} value={t}>
                     {DATABASE_TYPE_LABELS[t]}
                   </SelectItem>
                 ))}
-                {isEditing && !isSupportedDatabaseType(form.db_type) && (
-                  <SelectItem value={form.db_type}>
-                    {DATABASE_TYPE_LABELS[form.db_type]}
+                {isEditing && !isSupportedDatabaseType(form.dbType) && (
+                  <SelectItem value={form.dbType}>
+                    {DATABASE_TYPE_LABELS[form.dbType]}
                   </SelectItem>
                 )}
               </SelectContent>
@@ -335,11 +335,11 @@ export default function ConnectionDialogBody({
                     type="number"
                     min={5}
                     max={600}
-                    value={form.connection_timeout ?? 300}
+                    value={form.connectionTimeout ?? 300}
                     onChange={(e) =>
                       setForm((f) => ({
                         ...f,
-                        connection_timeout: parseInt(e.target.value, 10) || 300,
+                        connectionTimeout: parseInt(e.target.value, 10) || 300,
                       }))
                     }
                     placeholder="300"
@@ -355,11 +355,11 @@ export default function ConnectionDialogBody({
                     type="number"
                     min={5}
                     max={300}
-                    value={form.keep_alive_interval ?? 30}
+                    value={form.keepAliveInterval ?? 30}
                     onChange={(e) =>
                       setForm((f) => ({
                         ...f,
-                        keep_alive_interval: parseInt(e.target.value, 10) || 30,
+                        keepAliveInterval: parseInt(e.target.value, 10) || 30,
                       }))
                     }
                     placeholder="30"

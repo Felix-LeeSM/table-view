@@ -52,8 +52,8 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
     expect(getKeywordsForDialect("redis")).toEqual([]);
   });
 
-  // Deleted connection (db_type undefined) falls back to the common ANSI set.
-  it("undefined db_type returns the common ANSI keyword set", () => {
+  // Deleted connection (dbType undefined) falls back to the common ANSI set.
+  it("undefined dbType returns the common ANSI keyword set", () => {
     const kws = getKeywordsForDialect(undefined);
     expect(kws).toEqual(COMMON_SQL_KEYWORDS);
   });

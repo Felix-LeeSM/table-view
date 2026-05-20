@@ -69,7 +69,7 @@ function setDevConnection() {
       {
         id: "conn-1",
         name: "dev",
-        db_type: "postgresql",
+        dbType: "postgresql",
         host: "localhost",
         port: 5432,
         database: "app",

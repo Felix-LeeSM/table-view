@@ -48,17 +48,17 @@ function makeGroup(
   };
 }
 
-function makeConnection(id: string, group_id: string | null): ConnectionConfig {
+function makeConnection(id: string, groupId: string | null): ConnectionConfig {
   return {
     id,
     name: `${id} DB`,
-    db_type: "postgresql",
+    dbType: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
-    has_password: false,
+    hasPassword: false,
     database: "test",
-    group_id,
+    groupId,
     color: null,
     environment: null,
     paradigm: "rdb",

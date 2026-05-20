@@ -563,12 +563,12 @@ describe("QueryTab — document", () => {
     mockFindDocuments.mockResolvedValueOnce({
       columns: [],
       rows: [],
-      total_count: 0,
-      execution_time_ms: 1,
+      totalCount: 0,
+      executionTimeMs: 1,
     });
 
     useConnectionStore.setState({
-      connections: [makeConn({ db_type: "mongodb", paradigm: "document" })],
+      connections: [makeConn({ dbType: "mongodb", paradigm: "document" })],
       activeStatuses: {
         conn1: { type: "connected", activeDb: "table_view_test" },
       },
@@ -629,7 +629,7 @@ describe("QueryTab — document", () => {
         connections: [
           makeConn({
             id: "conn-mongo",
-            db_type: "mongodb",
+            dbType: "mongodb",
             paradigm: "document",
             environment: "production",
           }),
@@ -759,7 +759,7 @@ describe("QueryTab — document", () => {
         connections: [
           makeConn({
             id: "conn-mongo",
-            db_type: "mongodb",
+            dbType: "mongodb",
             paradigm: "document",
             environment: "staging",
           }),
@@ -792,7 +792,7 @@ describe("QueryTab — document", () => {
         connections: [
           makeConn({
             id: "conn-mongo",
-            db_type: "mongodb",
+            dbType: "mongodb",
             paradigm: "document",
             environment: "staging",
           }),
