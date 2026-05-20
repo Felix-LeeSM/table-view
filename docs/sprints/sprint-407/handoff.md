@@ -8,7 +8,8 @@ execution paths that future decomposition work must preserve.
 ## Guardrails
 
 - No production source changes.
-- All IPC in the scaffold uses `setupTauriMock`.
+- Tauri barrel IPC in the scaffold uses `setupTauriMock`; the DbMismatch
+  recovery test stubs the `verifyActiveDb` API wrapper directly.
 - Query history is disabled inside the scaffold so assertions stay focused on
   execution state and IPC routing, not best-effort history persistence.
 

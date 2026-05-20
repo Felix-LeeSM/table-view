@@ -26,16 +26,6 @@ vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: verifyActiveDbMock,
 }));
 
-vi.mock("@lib/sql/sqlUtils", () => ({
-  splitSqlStatements: (sql: string) =>
-    sql
-      .split(";")
-      .map((s) => s.trim())
-      .filter(Boolean),
-  formatSql: (sql: string) => sql.toUpperCase(),
-  uglifySql: (sql: string) => sql.replace(/\s+/g, " ").trim(),
-}));
-
 const executeQueryMock = vi.fn();
 const executeQueryDryRunMock = vi.fn();
 const cancelQueryMock = vi.fn();
@@ -223,6 +213,17 @@ describe("useQueryExecution scaffold", () => {
     );
     await waitFor(() => {
       expect(getSeededMongoTab().queryState.status).toBe("completed");
+    });
+    const updated = getSeededMongoTab();
+    expect(updated.queryState).toMatchObject({
+      status: "completed",
+      result: {
+        columns: DOC_RESULT.columns,
+        rows: DOC_RESULT.rows,
+        total_count: DOC_RESULT.total_count,
+        execution_time_ms: DOC_RESULT.execution_time_ms,
+        query_type: "select",
+      },
     });
   });
 
