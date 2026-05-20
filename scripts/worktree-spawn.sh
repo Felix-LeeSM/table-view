@@ -10,6 +10,7 @@
 #   - worktrees/<sanitized-branch>/ 에 worktree 추가
 #   - 해당 worktree 에서 lefthook install 실행 (hook 활성화)
 #   - 생성된 worktree 경로 출력 (agent 가 cd 할 path)
+#   - stderr 에 worker prompt 계약 템플릿 출력
 
 set -euo pipefail
 
@@ -30,6 +31,7 @@ worktree-spawn.sh — multi-agent worktree 생성
   - worktrees/<sanitized>/ 에 worktree 추가 (sanitized = branch 의 / → __)
   - 해당 worktree 에서 lefthook install
   - stdout 에 worktree 경로 출력
+  - stderr 에 agent 첫 turn 검증 + worker prompt 계약 템플릿 출력
 
 worktrees/ 는 .gitignore 처리. platform-neutral (Claude / Codex / Cursor 공통).
 
@@ -109,4 +111,41 @@ cat >&2 <<EOF
 # Agent 첫 turn 검증 스니펫 (sprint-400):
 test "\$(git -C "$WORKTREE_PATH" rev-parse --show-toplevel)" = "$WORKTREE_PATH" \\
   || { echo "ABORT: not in expected worktree" >&2; exit 1; }
+EOF
+
+cat >&2 <<EOF
+
+# Worker prompt contract template:
+You are not alone in this codebase. Do not revert edits made by others.
+Work only inside this worktree:
+  $WORKTREE_PATH
+
+Branch:
+  $BRANCH
+
+MANDATORY first command:
+  test "\$(git -C "$WORKTREE_PATH" rev-parse --show-toplevel)" = "$WORKTREE_PATH" \\
+    || { echo "ABORT: not in expected worktree" >&2; exit 1; }
+
+Hard rules:
+  - Do not create another worktree.
+  - Do not pull from git.
+  - Do not hard-reset to FETCH_HEAD, ORIG_HEAD, upstream, origin/*, or refs/remotes/*.
+  - Do not bypass hooks with verification-skip flags or hook-disabling env vars.
+  - Do not modify unrelated user changes.
+
+Owned scope:
+  - <files/modules>
+
+Task:
+  - <task summary>
+
+Validation:
+  - <test/check commands>
+
+Return:
+  - changed files
+  - tests/checks run
+  - blockers/risks
+  - PR URL if created
 EOF

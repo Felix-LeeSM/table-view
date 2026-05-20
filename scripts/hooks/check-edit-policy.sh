@@ -31,6 +31,34 @@ json_field() {
 
 command="$(json_field '.tool_input.command // .input.command // .command')"
 patch_payload="$(json_field '.tool_input.input // .input.input // .tool_input.patch // .input.patch // .patch')"
+tool_name="$(json_field '.tool_name // .tool // .name')"
+
+is_write_path_tool() {
+	case "$tool_name" in
+		Edit | Write | MultiEdit)
+			return 0
+			;;
+	esac
+	return 1
+}
+
+run_main_worktree_source_check() {
+	local status=0
+	local stderr=""
+
+	stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$ROOT" bash "$ROOT/scripts/hooks/check-main-worktree-source-edit.sh" "$@" 2>&1 >/dev/null)" || status=$?
+	if [ "$status" -ne 0 ]; then
+		if [ -n "$stderr" ]; then
+			printf '%s\n' "$stderr" >&2
+		else
+			printf '%s\n' "BLOCKED: source/app edit in primary worktree." >&2
+		fi
+		exit 1
+	fi
+	if [ -n "$stderr" ]; then
+		printf '%s\n' "$stderr" >&2
+	fi
+}
 
 paths_from_json() {
 	if ! command -v jq >/dev/null 2>&1 || [ -z "$INPUT" ]; then
@@ -74,11 +102,19 @@ check_path() {
 			echo "WARNING: ADR 본문은 작성 순간 동결입니다. 결정을 뒤집으려면 새 ADR을 추가하세요." >&2
 			;;
 	esac
+
+	if is_write_path_tool; then
+		run_main_worktree_source_check "$raw"
+	fi
 }
 
 while IFS= read -r path; do
 	[ -n "$path" ] || continue
 	check_path "$path"
 done < <({ paths_from_json; paths_from_patch; } | sort -u)
+
+if [ -n "$command" ]; then
+	run_main_worktree_source_check --command "$command"
+fi
 
 exit 0
