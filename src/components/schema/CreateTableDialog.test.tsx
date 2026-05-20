@@ -713,6 +713,11 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
         expect.objectContaining({ preview_only: true, schema: "analytics" }),
       ),
     );
+    expect(
+      mockCreateTable.mock.calls.every(
+        ([call]) => (call as { schema: string }).schema === "analytics",
+      ),
+    ).toBe(true);
   });
 
   it("dropdown lists ≥ 2 schemas when availableSchemas has multiple entries (AC-227-02)", async () => {
