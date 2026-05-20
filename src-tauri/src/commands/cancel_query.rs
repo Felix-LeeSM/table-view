@@ -26,13 +26,13 @@
 //! schema-introspection paths. The new `cancel_query_native` is what
 //! TablePlus-style "Stop running query" UI fires for user-typed queries.
 
-use serde::{Deserialize, Serialize};
 use tauri::State;
 use tracing::{info, warn};
 
 use crate::commands::connection::AppState;
 use crate::commands::not_connected;
 use crate::error::AppError;
+pub use crate::error::CancelError;
 
 /// Sprint 359 — wire-shape error returned from `cancel_query_native`.
 ///
@@ -43,30 +43,7 @@ use crate::error::AppError;
 ///   * `PermissionDenied` → toast ("Cannot cancel — backend rejected the
 ///     request"). The PG error string is forwarded for advanced users.
 ///   * `NetworkError`     → toast with the underlying driver message.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum CancelError {
-    AlreadyCompleted,
-    PermissionDenied { message: String },
-    NetworkError { message: String },
-}
-
-impl std::fmt::Display for CancelError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CancelError::AlreadyCompleted => f.write_str("Cancel: query already completed"),
-            CancelError::PermissionDenied { message } => {
-                write!(f, "Cancel: permission denied ({message})")
-            }
-            CancelError::NetworkError { message } => {
-                write!(f, "Cancel: network error ({message})")
-            }
-        }
-    }
-}
-
-impl std::error::Error for CancelError {}
-
+///
 /// Classify a free-form driver error message into the three
 /// front-end-facing buckets (Q5.5).
 ///
@@ -161,12 +138,8 @@ impl CancelError {
 
 /// IPC entry — `cancel_query_native(connection_id, server_pid)`.
 ///
-/// Returns `Ok(())` on success. Failure path serialises a `CancelError`
-/// JSON object: `{ "type": "AlreadyCompleted" | "PermissionDenied" |
-/// "NetworkError", "message"?: string }`. We map this to `AppError`'s
-/// string-only shape via Display so the existing Tauri command result
-/// surface stays consistent — frontend wrapper unmarshals the JSON
-/// shape from the string (see `src/lib/tauri/cancel.ts`).
+/// Returns `Ok(())` on success. Failure path surfaces `AppError::Cancel`,
+/// which serialises as `{ "type": "Cancel", "payload": <CancelError> }`.
 #[tauri::command]
 pub async fn cancel_query_native(
     state: State<'_, AppState>,
@@ -175,13 +148,7 @@ pub async fn cancel_query_native(
 ) -> Result<(), AppError> {
     match cancel_query_native_inner(state.inner(), &connection_id, server_pid).await {
         Ok(()) => Ok(()),
-        Err(class) => {
-            // Wire format: serialise the CancelError as JSON and wrap in
-            // AppError::Database so the existing Tauri error channel
-            // delivers it. The frontend wrapper parses the JSON.
-            let json = serde_json::to_string(&class).unwrap_or_else(|_| class.to_string());
-            Err(AppError::Database(json))
-        }
+        Err(class) => Err(AppError::Cancel(class)),
     }
 }
 

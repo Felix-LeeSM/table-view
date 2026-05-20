@@ -1,6 +1,6 @@
 mod common;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use table_view_lib::commands::connection::AppState;
 use table_view_lib::commands::query::{validate_cancel_inputs, validate_query_inputs};
@@ -815,7 +815,7 @@ async fn test_query_table_data_filter_eq_with_numeric_cast() {
         value: Some("300.0".to_string()),
     }];
     let data = adapter
-        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None, None)
         .await
         .expect("filter eq");
     assert_eq!(data.total_count, 1);
@@ -851,7 +851,7 @@ async fn test_query_table_data_filter_like_and_isnull() {
         value: Some("A%".to_string()),
     }];
     let data = adapter
-        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None, None)
         .await
         .expect("filter like");
     assert_eq!(data.total_count, 1);
@@ -864,7 +864,7 @@ async fn test_query_table_data_filter_like_and_isnull() {
         value: None,
     }];
     let data = adapter
-        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None, None)
         .await
         .expect("filter is null");
     assert_eq!(data.total_count, 2);
@@ -876,7 +876,7 @@ async fn test_query_table_data_filter_like_and_isnull() {
         value: None,
     }];
     let data = adapter
-        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None, None)
         .await
         .expect("filter is not null");
     assert_eq!(data.total_count, 3);
@@ -910,7 +910,7 @@ async fn test_query_table_data_filter_unknown_column_is_ignored() {
         value: Some("x".to_string()),
     }];
     let data = adapter
-        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None, None)
         .await
         .expect("unknown column → no WHERE → all rows");
     assert_eq!(data.total_count, 5);
@@ -945,11 +945,72 @@ async fn test_query_table_data_raw_where_accepts_clean_clause() {
             None,
             None,
             Some("amount > 200 AND active = TRUE"),
+            None,
         )
         .await
         .expect("raw_where clean");
     // amount > 200 AND active = TRUE → Charlie (300) + Eve (500).
     assert_eq!(data.total_count, 2);
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_query_table_data_cancel_token_interrupts_in_flight_raw_where() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_qtd_cancel_{ts}");
+    seed_filter_table(&adapter, &table).await;
+
+    let cancel_token = CancellationToken::new();
+    let child_token = cancel_token.clone();
+    let spawned_adapter = adapter.clone();
+    let table_for_task = table.clone();
+    let query_handle = tokio::spawn(async move {
+        let raw_where =
+            format!("id IN (SELECT id FROM \"public\".\"{table_for_task}\", pg_sleep(2))");
+        spawned_adapter
+            .query_table_data(
+                &table_for_task,
+                "public",
+                1,
+                50,
+                None,
+                None,
+                Some(raw_where.as_str()),
+                Some(&child_token),
+            )
+            .await
+    });
+
+    sleep(Duration::from_millis(100)).await;
+    let wait_start = Instant::now();
+    cancel_token.cancel();
+
+    let result = tokio::time::timeout(Duration::from_secs(5), query_handle)
+        .await
+        .expect("query_table_data cancel should return within 5s")
+        .expect("query task should complete");
+    assert!(
+        wait_start.elapsed() < Duration::from_secs(5),
+        "query_table_data cancel took {:?}",
+        wait_start.elapsed()
+    );
+    match result {
+        Err(AppError::Database(msg)) => assert_eq!(msg, "Operation cancelled"),
+        other => panic!("expected Operation cancelled, got {other:?}"),
+    }
 
     adapter
         .execute_query(&format!("DROP TABLE {table}"), None)
@@ -981,6 +1042,7 @@ async fn test_query_table_data_raw_where_rejects_semicolon() {
             None,
             None,
             Some("id = 1; DROP TABLE secrets"),
+            None,
         )
         .await
         .expect_err("raw_where with `;` must be rejected");
@@ -1015,7 +1077,7 @@ async fn test_query_table_data_raw_where_rejects_dangerous_keywords() {
     for kw in ["DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "TRUNCATE"] {
         let clause = format!("{kw} TABLE foo");
         let err = adapter
-            .query_table_data(&table, "public", 1, 50, None, None, Some(&clause))
+            .query_table_data(&table, "public", 1, 50, None, None, Some(&clause), None)
             .await
             .expect_err(&format!("{kw} must be rejected"));
         match err {
@@ -1050,7 +1112,7 @@ async fn test_query_table_data_pagination_and_ordering() {
 
     // page=2, page_size=2, ORDER BY id ASC → rows 3,4.
     let data = adapter
-        .query_table_data(&table, "public", 2, 2, Some("id ASC"), None, None)
+        .query_table_data(&table, "public", 2, 2, Some("id ASC"), None, None, None)
         .await
         .expect("paginate");
     assert_eq!(data.total_count, 5);
@@ -1062,7 +1124,7 @@ async fn test_query_table_data_pagination_and_ordering() {
 
     // ORDER BY DESC reverses.
     let data = adapter
-        .query_table_data(&table, "public", 1, 2, Some("id DESC"), None, None)
+        .query_table_data(&table, "public", 1, 2, Some("id DESC"), None, None, None)
         .await
         .expect("desc order");
     assert_eq!(data.rows[0][0].as_i64(), Some(5));

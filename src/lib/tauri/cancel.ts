@@ -17,8 +17,9 @@
 //   * PermissionDenied → toast (privilege error from the server).
 //   * NetworkError     → toast (driver / TCP fault).
 //
-// The wire shape is a JSON object embedded in `AppError::Database`'s
-// string surface. We parse it here so callers see a typed discriminator.
+// The wire shape is `AppError::Cancel`, serialized as a typed top-level
+// object. We parse only that envelope so ordinary database error strings
+// that happen to contain JSON cannot be mistaken for cancel classifications.
 
 import { invoke } from "@tauri-apps/api/core";
 
@@ -27,51 +28,53 @@ export type CancelError =
   | { type: "PermissionDenied"; message: string }
   | { type: "NetworkError"; message: string };
 
-const DB_ERROR_PREFIX = "Database error: ";
-
-/// Parse the backend's wire-encoded `CancelError`.
-///
-/// The backend wraps the JSON inside `AppError::Database(json)` so the
-/// existing Tauri error channel can deliver it. We strip the prefix and
-/// parse — falling back to `NetworkError` when the message isn't JSON
-/// (e.g. legacy error path).
 export function parseCancelError(raw: unknown): CancelError {
-  const text = typeof raw === "string" ? raw : String(raw);
-  const stripped = text.startsWith(DB_ERROR_PREFIX)
-    ? text.slice(DB_ERROR_PREFIX.length)
-    : text;
-  try {
-    const parsed = JSON.parse(stripped) as unknown;
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "type" in parsed &&
-      typeof (parsed as { type: unknown }).type === "string"
-    ) {
-      const type = (parsed as { type: string }).type;
-      if (type === "AlreadyCompleted") {
-        return { type: "AlreadyCompleted" };
-      }
-      if (type === "PermissionDenied") {
-        const message = (parsed as { message?: unknown }).message;
-        return {
-          type: "PermissionDenied",
-          message: typeof message === "string" ? message : "",
-        };
-      }
-      if (type === "NetworkError") {
-        const message = (parsed as { message?: unknown }).message;
-        return {
-          type: "NetworkError",
-          message: typeof message === "string" ? message : "",
-        };
-      }
-    }
-  } catch {
-    // JSON parse failure — wire shape changed or legacy plain-text
-    // error. Fall through to the NetworkError default below.
+  const envelope = parseMaybeJson(raw);
+  if (isRecord(envelope) && envelope.type === "Cancel") {
+    const parsed = parseCancelPayload(envelope.payload);
+    if (parsed) return parsed;
   }
-  return { type: "NetworkError", message: text };
+  return { type: "NetworkError", message: stringifyUnknownError(raw) };
+}
+
+function parseCancelPayload(payload: unknown): CancelError | null {
+  if (!isRecord(payload) || typeof payload.type !== "string") return null;
+  if (payload.type === "AlreadyCompleted") return { type: "AlreadyCompleted" };
+  if (payload.type === "PermissionDenied") {
+    return {
+      type: "PermissionDenied",
+      message: typeof payload.message === "string" ? payload.message : "",
+    };
+  }
+  if (payload.type === "NetworkError") {
+    return {
+      type: "NetworkError",
+      message: typeof payload.message === "string" ? payload.message : "",
+    };
+  }
+  return null;
+}
+
+function parseMaybeJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+function stringifyUnknownError(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (isRecord(value)) {
+    if (typeof value.message === "string") return value.message;
+    if (typeof value.payload === "string") return value.payload;
+  }
+  return String(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 /// Fire a paradigm-native cancel against the server pid recorded in

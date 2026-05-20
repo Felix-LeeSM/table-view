@@ -22,7 +22,7 @@
 mod common;
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use table_view_lib::db::mysql::MysqlAdapter;
 use table_view_lib::db::{DbAdapter, RdbAdapter};
@@ -803,7 +803,16 @@ async fn test_mysql_query_table_data_filter_eq_with_numeric_cast() {
         value: Some("300.0".to_string()),
     }];
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, Some(&filters), None)
+        .query_table_data(
+            &table,
+            MYSQL_SCHEMA,
+            1,
+            50,
+            None,
+            Some(&filters),
+            None,
+            None,
+        )
         .await
         .expect("filter eq");
     assert_eq!(data.total_count, 1);
@@ -838,7 +847,16 @@ async fn test_mysql_query_table_data_filter_like_and_isnull() {
         value: Some("A%".to_string()),
     }];
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, Some(&filters), None)
+        .query_table_data(
+            &table,
+            MYSQL_SCHEMA,
+            1,
+            50,
+            None,
+            Some(&filters),
+            None,
+            None,
+        )
         .await
         .expect("filter like");
     assert_eq!(data.total_count, 1);
@@ -850,7 +868,16 @@ async fn test_mysql_query_table_data_filter_like_and_isnull() {
         value: None,
     }];
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, Some(&filters), None)
+        .query_table_data(
+            &table,
+            MYSQL_SCHEMA,
+            1,
+            50,
+            None,
+            Some(&filters),
+            None,
+            None,
+        )
         .await
         .expect("filter is null");
     assert_eq!(data.total_count, 2);
@@ -861,7 +888,16 @@ async fn test_mysql_query_table_data_filter_like_and_isnull() {
         value: None,
     }];
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, Some(&filters), None)
+        .query_table_data(
+            &table,
+            MYSQL_SCHEMA,
+            1,
+            50,
+            None,
+            Some(&filters),
+            None,
+            None,
+        )
         .await
         .expect("filter is not null");
     assert_eq!(data.total_count, 3);
@@ -896,7 +932,16 @@ async fn test_mysql_query_table_data_filter_unknown_column_is_ignored() {
         value: Some("x".to_string()),
     }];
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, Some(&filters), None)
+        .query_table_data(
+            &table,
+            MYSQL_SCHEMA,
+            1,
+            50,
+            None,
+            Some(&filters),
+            None,
+            None,
+        )
         .await
         .expect("unknown column → no WHERE → all rows");
     assert_eq!(data.total_count, 5);
@@ -932,11 +977,70 @@ async fn test_mysql_query_table_data_raw_where_accepts_clean_clause() {
             None,
             None,
             Some("amount > 200 AND active = TRUE"),
+            None,
         )
         .await
         .expect("raw_where clean");
     // amount > 200 AND active = TRUE → Charlie (300) + Eve (500).
     assert_eq!(data.total_count, 2);
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_query_table_data_cancel_token_interrupts_in_flight_raw_where() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_qtd_cancel_{ts}");
+    seed_filter_table_mysql(&adapter, &table).await;
+
+    let cancel_token = CancellationToken::new();
+    let child_token = cancel_token.clone();
+    let spawned_adapter = adapter.clone();
+    let table_for_task = table.clone();
+    let query_handle = tokio::spawn(async move {
+        spawned_adapter
+            .query_table_data(
+                &table_for_task,
+                MYSQL_SCHEMA,
+                1,
+                50,
+                None,
+                None,
+                Some("id = 1 AND SLEEP(2) = 0"),
+                Some(&child_token),
+            )
+            .await
+    });
+
+    sleep(Duration::from_millis(100)).await;
+    let wait_start = Instant::now();
+    cancel_token.cancel();
+
+    let result = tokio::time::timeout(Duration::from_secs(5), query_handle)
+        .await
+        .expect("query_table_data cancel should return within 5s")
+        .expect("query task should complete");
+    assert!(
+        wait_start.elapsed() < Duration::from_secs(5),
+        "query_table_data cancel took {:?}",
+        wait_start.elapsed()
+    );
+    match result {
+        Err(AppError::Database(msg)) => assert_eq!(msg, "Operation cancelled"),
+        other => panic!("expected Operation cancelled, got {other:?}"),
+    }
 
     adapter
         .execute_query(&format!("DROP TABLE {table}"), None)
@@ -970,6 +1074,7 @@ async fn test_mysql_query_table_data_raw_where_rejects_semicolon() {
             None,
             None,
             Some("id = 1; DROP TABLE secrets"),
+            None,
         )
         .await
         .expect_err("raw_where with `;` must be rejected");
@@ -1005,7 +1110,7 @@ async fn test_mysql_query_table_data_raw_where_rejects_dangerous_keywords() {
     for kw in ["DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "TRUNCATE"] {
         let clause = format!("{kw} TABLE foo");
         let err = adapter
-            .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, None, Some(&clause))
+            .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, None, Some(&clause), None)
             .await
             .expect_err(&format!("{kw} must be rejected"));
         match err {
@@ -1041,7 +1146,7 @@ async fn test_mysql_query_table_data_pagination_and_ordering() {
 
     // page=2, page_size=2, ORDER BY id ASC → rows 3,4.
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 2, 2, Some("id ASC"), None, None)
+        .query_table_data(&table, MYSQL_SCHEMA, 2, 2, Some("id ASC"), None, None, None)
         .await
         .expect("paginate");
     assert_eq!(data.total_count, 5);
@@ -1053,7 +1158,16 @@ async fn test_mysql_query_table_data_pagination_and_ordering() {
 
     // ORDER BY DESC reverses.
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 2, Some("id DESC"), None, None)
+        .query_table_data(
+            &table,
+            MYSQL_SCHEMA,
+            1,
+            2,
+            Some("id DESC"),
+            None,
+            None,
+            None,
+        )
         .await
         .expect("desc order");
     assert_eq!(data.rows[0][0].as_i64(), Some(5));
@@ -1312,7 +1426,7 @@ async fn test_mysql_query_table_data_pagination() {
         .expect("INSERT");
 
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 2, None, None, None)
+        .query_table_data(&table, MYSQL_SCHEMA, 1, 2, None, None, None, None)
         .await
         .expect("page 1");
     assert_eq!(data.columns.len(), 2);
@@ -1322,7 +1436,7 @@ async fn test_mysql_query_table_data_pagination() {
     assert_eq!(data.page_size, 2);
 
     let page2 = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 2, 2, None, None, None)
+        .query_table_data(&table, MYSQL_SCHEMA, 2, 2, None, None, None, None)
         .await
         .expect("page 2");
     assert_eq!(page2.rows.len(), 1);
@@ -1365,7 +1479,7 @@ async fn test_mysql_query_table_data_ordering_asc() {
         .expect("INSERT");
 
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, Some("label"), None, None)
+        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, Some("label"), None, None, None)
         .await
         .expect("ORDER BY label");
     assert_eq!(data.rows.len(), 3);
@@ -1410,7 +1524,16 @@ async fn test_mysql_query_table_data_ordering_desc() {
         .expect("INSERT");
 
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, Some("label DESC"), None, None)
+        .query_table_data(
+            &table,
+            MYSQL_SCHEMA,
+            1,
+            50,
+            Some("label DESC"),
+            None,
+            None,
+            None,
+        )
         .await
         .expect("ORDER BY label DESC");
     assert_eq!(data.rows.len(), 3);
@@ -1419,7 +1542,7 @@ async fn test_mysql_query_table_data_ordering_desc() {
 
     // Single-word still ASC by default.
     let asc = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, Some("label"), None, None)
+        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, Some("label"), None, None, None)
         .await
         .expect("default ASC");
     assert_eq!(asc.rows[0][1].as_str().unwrap_or(""), "alpha");
@@ -1573,7 +1696,16 @@ async fn test_mysql_query_table_data_with_filter_bigint() {
         value: Some("2".to_string()),
     }];
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, Some(&filters), None)
+        .query_table_data(
+            &table,
+            MYSQL_SCHEMA,
+            1,
+            50,
+            None,
+            Some(&filters),
+            None,
+            None,
+        )
         .await
         .expect("filter bigint");
     assert_eq!(data.rows.len(), 1);
@@ -1626,7 +1758,16 @@ async fn test_mysql_query_table_data_with_filter_text() {
         value: Some("%li%".to_string()),
     }];
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, Some(&filters), None)
+        .query_table_data(
+            &table,
+            MYSQL_SCHEMA,
+            1,
+            50,
+            None,
+            Some(&filters),
+            None,
+            None,
+        )
         .await
         .expect("filter text LIKE");
     // alice + charlie.
@@ -1682,7 +1823,16 @@ async fn test_mysql_query_table_data_with_filter_integer() {
         value: Some("50".to_string()),
     }];
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, Some(&filters), None)
+        .query_table_data(
+            &table,
+            MYSQL_SCHEMA,
+            1,
+            50,
+            None,
+            Some(&filters),
+            None,
+            None,
+        )
         .await
         .expect("filter int >");
     assert_eq!(data.rows.len(), 2);
@@ -1740,6 +1890,7 @@ async fn test_mysql_query_table_data_multi_column_ordering() {
             Some("category ASC, label ASC"),
             None,
             None,
+            None,
         )
         .await
         .expect("multi-column ORDER BY");
@@ -1758,6 +1909,7 @@ async fn test_mysql_query_table_data_multi_column_ordering() {
             1,
             50,
             Some("category ASC, label DESC"),
+            None,
             None,
             None,
         )
@@ -2456,7 +2608,7 @@ async fn test_mysql_query_table_data_bigint_value_is_number_wire() {
         .expect("INSERT");
 
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, None, None)
+        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, None, None, None)
         .await
         .expect("query_table_data");
     assert_eq!(data.rows.len(), 1);
@@ -2507,7 +2659,7 @@ async fn test_mysql_query_table_data_decimal_value_is_string_wire() {
         .expect("INSERT");
 
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, None, None)
+        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, None, None, None)
         .await
         .expect("query_table_data");
     assert_eq!(data.rows.len(), 1);
@@ -2548,7 +2700,7 @@ async fn test_mysql_query_table_data_int_value_remains_number_wire() {
         .expect("INSERT");
 
     let data = adapter
-        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, None, None)
+        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, None, None, None)
         .await
         .expect("query_table_data");
     assert_eq!(data.rows.len(), 1);

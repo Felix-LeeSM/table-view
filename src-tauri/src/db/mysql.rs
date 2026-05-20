@@ -180,16 +180,10 @@ impl RdbAdapter for MysqlAdapter {
         cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<TableData, AppError>> + Send + 'a>> {
         Box::pin(async move {
-            let work = self.query_table_data(
-                table, namespace, page, page_size, order_by, filters, raw_where,
-            );
-            match cancel {
-                Some(token) => tokio::select! {
-                    result = work => result,
-                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
-                },
-                None => work.await,
-            }
+            self.query_table_data(
+                table, namespace, page, page_size, order_by, filters, raw_where, cancel,
+            )
+            .await
         })
     }
 

@@ -1,4 +1,34 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+/// Native cancel failure shape returned by `cancel_query_native`.
+///
+/// The frontend uses the `type` discriminator to decide whether the cancel
+/// race is silent (`AlreadyCompleted`) or user-visible (`PermissionDenied` /
+/// `NetworkError`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum CancelError {
+    AlreadyCompleted,
+    PermissionDenied { message: String },
+    NetworkError { message: String },
+}
+
+impl std::fmt::Display for CancelError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CancelError::AlreadyCompleted => f.write_str("Cancel: query already completed"),
+            CancelError::PermissionDenied { message } => {
+                write!(f, "Cancel: permission denied ({message})")
+            }
+            CancelError::NetworkError { message } => {
+                write!(f, "Cancel: network error ({message})")
+            }
+        }
+    }
+}
+
+impl std::error::Error for CancelError {}
 
 #[derive(Error, Debug)]
 pub enum AppError {
@@ -19,6 +49,9 @@ pub enum AppError {
 
     #[error("Database error: {0}")]
     Database(String),
+
+    #[error(transparent)]
+    Cancel(#[from] CancelError),
 
     #[error("Unsupported operation: {0}")]
     Unsupported(String),
@@ -53,7 +86,23 @@ impl serde::Serialize for AppError {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(self.to_string().as_str())
+        match self {
+            AppError::Cancel(error) => {
+                #[derive(Serialize)]
+                struct CancelEnvelope<'a> {
+                    #[serde(rename = "type")]
+                    kind: &'static str,
+                    payload: &'a CancelError,
+                }
+
+                CancelEnvelope {
+                    kind: "Cancel",
+                    payload: error,
+                }
+                .serialize(serializer)
+            }
+            _ => serializer.serialize_str(self.to_string().as_str()),
+        }
     }
 }
 
@@ -104,6 +153,17 @@ mod tests {
         let err = AppError::Connection("timeout".into());
         let json = serde_json::to_string(&err).unwrap();
         assert_eq!(json, "\"Connection error: timeout\"");
+    }
+
+    #[test]
+    fn cancel_error_serializes_to_typed_envelope() {
+        let err = AppError::Cancel(CancelError::PermissionDenied {
+            message: "cannot kill backend".into(),
+        });
+        let json = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["type"], "Cancel");
+        assert_eq!(json["payload"]["type"], "PermissionDenied");
+        assert_eq!(json["payload"]["message"], "cannot kill backend");
     }
 
     #[test]
