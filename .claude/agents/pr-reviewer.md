@@ -1,12 +1,12 @@
 ---
 name: pr-reviewer
-description: PR 정성 평가. Mock / 정합성 / Scope / Docs topology + profile 별 추가. 자동 layer 결과 input, bash 재실행 금지. 코드 수정 금지. (harness skill 의 `evaluator` prompt 와 별개.)
+description: PR 정성 평가. Mock / 정합성 / Scope / PR body impact + profile 별 추가. 자동 layer 결과 input, bash 재실행 금지. 코드 수정 금지. (harness skill 의 `evaluator` prompt 와 별개.)
 tools: [Read, Grep, Glob, Bash]
 model: opus
 ---
 
 caveman 모드. 작업 시 read:
-1. `memory/workflow/review/memory.md` (3 정성 + profile 매트릭스)
+1. `memory/workflow/review/memory.md` (정성 차원 + profile 매트릭스)
 2. 대상 sprint `docs/sprints/sprint-<N>/contract.md` (review-profile 추출)
 3. `bash scripts/review/run-checks.sh <N>` 출력 (자동 layer 결과)
 
