@@ -1,8 +1,13 @@
-import { $, browser, expect } from "@wdio/globals";
+import { $, $$, browser, expect } from "@wdio/globals";
 
 const WORKSPACE_TITLE = "Table View — Workspace";
 
 export type DbType = "postgresql" | "mongodb";
+
+export async function step<T>(label: string, action: () => Promise<T>) {
+  console.log(`[e2e smoke] step: ${label}`);
+  return await action();
+}
 
 export async function waitForLauncher() {
   await switchToLauncherWindow();
@@ -262,6 +267,120 @@ export async function waitForGridText(
     },
   );
   return grid;
+}
+
+export async function waitForGridTextAll(
+  snippets: string[],
+  timeout: number,
+  timeoutMsg: string,
+) {
+  const grid = await $('[role="grid"]');
+  await grid.waitForDisplayed({ timeout });
+  await browser.waitUntil(
+    async () => {
+      const text = (
+        ((await grid.getProperty("textContent")) as string) ?? ""
+      ).toLowerCase();
+      return snippets.every((snippet) => text.includes(snippet.toLowerCase()));
+    },
+    {
+      timeout,
+      timeoutMsg,
+    },
+  );
+  return grid;
+}
+
+export async function editGridCellInRow(
+  rowNeedle: string,
+  ariaColIndex: number,
+  nextValue: string,
+  editorLabel: string,
+) {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (needle, colIndex) => {
+          const rows = Array.from(document.querySelectorAll('[role="row"]'));
+          return rows.some((row) => {
+            const cells = Array.from(
+              row.querySelectorAll<HTMLElement>('[role="gridcell"]'),
+            );
+            const hasNeedle = cells.some((cell) =>
+              (cell.textContent ?? "").includes(needle),
+            );
+            const target = row.querySelector<HTMLElement>(
+              `[role="gridcell"][aria-colindex="${colIndex}"]`,
+            );
+            return hasNeedle && target && target.offsetParent !== null;
+          });
+        },
+        rowNeedle,
+        ariaColIndex,
+      ),
+    {
+      timeout: 15000,
+      timeoutMsg: `grid row containing ${rowNeedle} did not expose editable column ${ariaColIndex}`,
+    },
+  );
+
+  await browser.execute(
+    (needle, colIndex) => {
+      const rows = Array.from(document.querySelectorAll('[role="row"]'));
+      const row = rows.find((candidate) => {
+        const cells = Array.from(
+          candidate.querySelectorAll<HTMLElement>('[role="gridcell"]'),
+        );
+        return cells.some((cell) => (cell.textContent ?? "").includes(needle));
+      });
+      const cell = row?.querySelector<HTMLElement>(
+        `[role="gridcell"][aria-colindex="${colIndex}"]`,
+      );
+      if (!cell) {
+        throw new Error(
+          `grid row containing ${needle} did not contain column ${colIndex}`,
+        );
+      }
+      cell.dispatchEvent(
+        new MouseEvent("dblclick", { bubbles: true, cancelable: true }),
+      );
+    },
+    rowNeedle,
+    ariaColIndex,
+  );
+
+  const editor = await $(`[aria-label="${editorLabel}"]`);
+  await editor.waitForDisplayed({ timeout: 5000 });
+  await editor.clearValue();
+  await editor.setValue(nextValue);
+  await browser.keys("Enter");
+
+  const commit = await $('[aria-label="Commit changes"]');
+  await commit.waitForDisplayed({ timeout: 10000 });
+}
+
+export async function executeSqlPreview() {
+  await executePreviewAction("Execute SQL");
+}
+
+export async function executeMqlPreview() {
+  await executePreviewAction("Execute MQL commands");
+}
+
+async function executePreviewAction(ariaLabel: string) {
+  const execute = await $(`[aria-label="${ariaLabel}"]`);
+  await execute.waitForDisplayed({ timeout: 10000 });
+  await execute.click();
+  await browser.waitUntil(
+    async () => {
+      const previewActions = await $$(`[aria-label="${ariaLabel}"]`);
+      return previewActions.length === 0;
+    },
+    {
+      timeout: 15000,
+      timeoutMsg: `${ariaLabel} preview did not close after execution`,
+    },
+  );
 }
 
 export async function expandIfCollapsed(selector: string, timeout = 10000) {
