@@ -7,28 +7,30 @@
 // 동등한 케이스가 그곳에서 다시 검증된다.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { useSchemaStore } from "./schemaStore";
-
-vi.mock("@lib/tauri", () => ({
-  listSchemas: vi.fn(() => Promise.resolve([{ name: "public" }])),
-  listTables: vi.fn(() =>
-    Promise.resolve([{ name: "users", schema: "public", row_count: null }]),
-  ),
-  listViews: vi.fn(() => Promise.resolve([])),
-  listFunctions: vi.fn(() => Promise.resolve([])),
-  listSchemaColumns: vi.fn(() => Promise.resolve({})),
-  // Unused in this file but the mock must satisfy import surface.
-  getTableColumns: vi.fn(),
-  getTableIndexes: vi.fn(),
-  getTableConstraints: vi.fn(),
-  getViewColumns: vi.fn(),
-  getViewDefinition: vi.fn(),
-  queryTableData: vi.fn(),
-  dropTable: vi.fn(),
-  executeQuery: vi.fn(),
-  executeQueryBatch: vi.fn(),
-  renameTable: vi.fn(),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listSchemas: vi.fn(() => Promise.resolve([{ name: "public" }])),
+    listTables: vi.fn(() =>
+      Promise.resolve([{ name: "users", schema: "public", row_count: null }]),
+    ),
+    listViews: vi.fn(() => Promise.resolve([])),
+    listFunctions: vi.fn(() => Promise.resolve([])),
+    listSchemaColumns: vi.fn(() => Promise.resolve({})),
+    // Unused in this file but the mock must satisfy import surface.
+    getTableColumns: vi.fn(),
+    getTableIndexes: vi.fn(),
+    getTableConstraints: vi.fn(),
+    getViewColumns: vi.fn(),
+    getViewDefinition: vi.fn(),
+    queryTableData: vi.fn(),
+    dropTable: vi.fn(),
+    executeQuery: vi.fn(),
+    executeQueryBatch: vi.fn(),
+    renameTable: vi.fn(),
+  });
+});
 
 describe("schemaStore — db-aware caching (Sprint 263)", () => {
   beforeEach(() => {

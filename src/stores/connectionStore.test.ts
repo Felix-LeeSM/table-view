@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { useConnectionStore, SYNCED_KEYS } from "./connectionStore";
 
 // Mock @tauri-apps/api/event. The Sprint 152 bridge attach inside
@@ -54,45 +55,45 @@ vi.mock("@lib/window-label", async () => {
     getCurrentWindowLabel: () => "test",
   };
 });
-
-// Mock the tauri invoke wrapper
-vi.mock("@lib/tauri", () => ({
-  listConnections: vi.fn(() =>
-    Promise.resolve([
-      {
-        id: "c1",
-        name: "TestDB",
-        db_type: "postgresql",
-        host: "localhost",
-        port: 5432,
-        user: "postgres",
-        password: "secret",
-        database: "test",
-        group_id: null,
-        color: null,
-        connection_timeout: null,
-        keep_alive_interval: null,
-      },
-    ]),
-  ),
-  listGroups: vi.fn(() =>
-    Promise.resolve([
-      { id: "g1", name: "Production", color: null, collapsed: false },
-    ]),
-  ),
-  saveConnection: vi.fn((conn, isNew) =>
-    Promise.resolve(isNew ? { ...conn, id: "new-id" } : conn),
-  ),
-  deleteConnection: vi.fn(() => Promise.resolve()),
-  testConnection: vi.fn(() => Promise.resolve("Connection successful")),
-  connectToDatabase: vi.fn(() => Promise.resolve()),
-  disconnectFromDatabase: vi.fn(() => Promise.resolve()),
-  saveGroup: vi.fn((group, isNew) =>
-    Promise.resolve(isNew ? { ...group, id: "new-gid" } : group),
-  ),
-  deleteGroup: vi.fn(() => Promise.resolve()),
-  moveConnectionToGroup: vi.fn(() => Promise.resolve()),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listConnections: vi.fn(() =>
+      Promise.resolve([
+        {
+          id: "c1",
+          name: "TestDB",
+          db_type: "postgresql",
+          host: "localhost",
+          port: 5432,
+          user: "postgres",
+          password: "secret",
+          database: "test",
+          group_id: null,
+          color: null,
+          connection_timeout: null,
+          keep_alive_interval: null,
+        },
+      ]),
+    ),
+    listGroups: vi.fn(() =>
+      Promise.resolve([
+        { id: "g1", name: "Production", color: null, collapsed: false },
+      ]),
+    ),
+    saveConnection: vi.fn((conn, isNew) =>
+      Promise.resolve(isNew ? { ...conn, id: "new-id" } : conn),
+    ),
+    deleteConnection: vi.fn(() => Promise.resolve()),
+    testConnection: vi.fn(() => Promise.resolve("Connection successful")),
+    connectToDatabase: vi.fn(() => Promise.resolve()),
+    disconnectFromDatabase: vi.fn(() => Promise.resolve()),
+    saveGroup: vi.fn((group, isNew) =>
+      Promise.resolve(isNew ? { ...group, id: "new-gid" } : group),
+    ),
+    deleteGroup: vi.fn(() => Promise.resolve()),
+    moveConnectionToGroup: vi.fn(() => Promise.resolve()),
+  });
+});
 
 describe("connectionStore", () => {
   beforeEach(() => {

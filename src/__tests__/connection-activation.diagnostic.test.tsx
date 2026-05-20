@@ -25,6 +25,7 @@ import {
   afterEach,
   type Mock,
 } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -46,19 +47,15 @@ vi.mock("@lib/window-controls", () => ({
   onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
   onCurrentWindowCloseRequested: vi.fn(() => Promise.resolve(() => {})),
 }));
-
-vi.mock("@lib/tauri", async () => {
-  const actual =
-    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
-  return {
-    ...actual,
+beforeEach(() => {
+  setupTauriMock({
     connectToDatabase: vi.fn().mockResolvedValue(undefined),
     disconnectFromDatabase: vi.fn().mockResolvedValue(undefined),
     listConnections: vi.fn().mockResolvedValue([]),
     listGroups: vi.fn().mockResolvedValue([]),
     listSchemas: vi.fn().mockResolvedValue([]),
     listTables: vi.fn().mockResolvedValue([]),
-  };
+  });
 });
 
 vi.mock("@components/connection/ConnectionList", () => ({

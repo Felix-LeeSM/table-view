@@ -5,6 +5,7 @@
 // than a re-runnable buildAlterRequest. The drop path is the dangerous one;
 // CREATE INDEX stays analyzer-safe. Date: 2026-05-01.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -13,24 +14,25 @@ import {
   act,
 } from "@testing-library/react";
 import IndexesEditor from "./IndexesEditor";
-
-vi.mock("@lib/tauri", () => ({
-  dropIndex: vi.fn(() =>
-    Promise.resolve({
-      sql: "DROP INDEX idx_users_email",
-    }),
-  ),
-  createIndex: vi.fn(() =>
-    Promise.resolve({
-      sql: "CREATE INDEX idx_users_email ON users (email)",
-    }),
-  ),
-  // Sprint 247 — `<DryRunPreview>` mounts inside `<ConfirmDestructiveDialog>`
-  // and calls `executeQueryDryRun`. Stub `[]` so the dialog assertions stay
-  // unchanged; the dry-run lifecycle itself is covered in useDryRun.test.ts.
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    dropIndex: vi.fn(() =>
+      Promise.resolve({
+        sql: "DROP INDEX idx_users_email",
+      }),
+    ),
+    createIndex: vi.fn(() =>
+      Promise.resolve({
+        sql: "CREATE INDEX idx_users_email ON users (email)",
+      }),
+    ),
+    // Sprint 247 — `<DryRunPreview>` mounts inside `<ConfirmDestructiveDialog>`
+    // and calls `executeQueryDryRun`. Stub `[]` so the dialog assertions stay
+    // unchanged; the dry-run lifecycle itself is covered in useDryRun.test.ts.
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+    cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
+  });
+});
 
 import * as tauri from "@lib/tauri";
 import { useConnectionStore } from "@stores/connectionStore";

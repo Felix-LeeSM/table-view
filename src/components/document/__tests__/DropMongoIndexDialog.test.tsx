@@ -5,15 +5,17 @@
 // error 시 모달 유지 + role=alert inline.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DropMongoIndexDialog } from "../DropMongoIndexDialog";
 
 const dropMongoIndexMock = vi.fn();
-
-vi.mock("@/lib/tauri", () => ({
-  dropMongoIndex: (...args: unknown[]) => dropMongoIndexMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    dropMongoIndex: (...args: unknown[]) => dropMongoIndexMock(...args),
+  });
+});
 
 beforeEach(() => {
   dropMongoIndexMock.mockReset();

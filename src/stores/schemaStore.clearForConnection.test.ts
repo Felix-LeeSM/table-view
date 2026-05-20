@@ -7,19 +7,21 @@
 // sprint-360 의 contract 어휘 (AC-360-01 / AC-360-05) 로 다시 고정한다.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { useSchemaStore } from "./schemaStore";
-
-vi.mock("@lib/tauri", () => ({
-  listSchemas: vi.fn(() => Promise.resolve([{ name: "public" }])),
-  listTables: vi.fn(() =>
-    Promise.resolve([{ name: "users", schema: "public", row_count: null }]),
-  ),
-  listViews: vi.fn(() => Promise.resolve([])),
-  listFunctions: vi.fn(() => Promise.resolve([])),
-  listTriggers: vi.fn(() => Promise.resolve([])),
-  getTableColumns: vi.fn(() => Promise.resolve([])),
-  listSchemaColumns: vi.fn(() => Promise.resolve({})),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listSchemas: vi.fn(() => Promise.resolve([{ name: "public" }])),
+    listTables: vi.fn(() =>
+      Promise.resolve([{ name: "users", schema: "public", row_count: null }]),
+    ),
+    listViews: vi.fn(() => Promise.resolve([])),
+    listFunctions: vi.fn(() => Promise.resolve([])),
+    listTriggers: vi.fn(() => Promise.resolve([])),
+    getTableColumns: vi.fn(() => Promise.resolve([])),
+    listSchemaColumns: vi.fn(() => Promise.resolve({})),
+  });
+});
 
 const SEEDED_CACHE = {
   schemas: {

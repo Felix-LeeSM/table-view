@@ -20,6 +20,7 @@
 // correctly: success row, error message, document disclaimer, and
 // IPC-not-called when `open=false`.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
@@ -30,11 +31,12 @@ import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
 // `cancelQuery` from `@lib/tauri`, so the dialog tree is fully isolated.
 const executeQueryDryRunMock = vi.fn();
 const cancelQueryMock = vi.fn();
-
-vi.mock("@lib/tauri", () => ({
-  executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
-  cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
+    cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
+  });
+});
 
 const REASON = "DELETE without WHERE clause";
 const SQL = "DELETE FROM users";

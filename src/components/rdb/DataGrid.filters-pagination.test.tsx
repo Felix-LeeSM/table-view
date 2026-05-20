@@ -5,6 +5,7 @@
 // reset. Cases are byte-equivalent to the originals — no behaviour
 // change.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { screen, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import DataGrid from "./DataGrid";
@@ -35,20 +36,8 @@ vi.mock("@stores/schemaStore", () => ({
       executeQueryBatch: mockExecuteQueryBatch,
     }),
 }));
-
-// Sprint 354 (L2 fix, 2026-05-16) — `queryTableData` / `executeQuery` /
-// `executeQueryBatch` moved out of `schemaStore` to `@lib/tauri`. Use
-// `importOriginal` so the real exports (cancelQuery, executeQueryDryRun,
-// etc.) stay live and only the three commit-path symbols become spies.
-// The getter-property pattern defers the spy lookup until the call site
-// fires, which sidesteps the
-// `Cannot access '__vi_import_X__'` hoisting race that hits when the
-// factory closes over the helper-exported spy reference directly.
-vi.mock("@lib/tauri", async () => {
-  const actual =
-    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
-  return {
-    ...actual,
+beforeEach(() => {
+  setupTauriMock({
     get queryTableData() {
       return mockQueryTableData;
     },
@@ -58,7 +47,7 @@ vi.mock("@lib/tauri", async () => {
     get executeQueryBatch() {
       return mockExecuteQueryBatch;
     },
-  };
+  });
 });
 
 // Sprint 76 — a minimal reactive mock that mirrors zustand's hook + getState

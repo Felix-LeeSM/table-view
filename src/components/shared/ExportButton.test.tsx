@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { ExportButton } from "./ExportButton";
 import type { ExportContext } from "@/lib/tauri";
 import { useToastStore } from "@/lib/toast";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 // Sprint 181 — ExportButton dispatches into `@tauri-apps/plugin-dialog`
 // (`save`) and `@tauri-apps/api/core` (`invoke`). Both are unavailable in
@@ -39,6 +40,24 @@ const ROWS = [
 beforeEach(() => {
   mockSave.mockReset();
   mockInvoke.mockReset();
+  setupTauriMock({
+    exportGridRows: (
+      format: string,
+      targetPath: string,
+      headers: string[],
+      rows: unknown[][],
+      context: ExportContext,
+      exportId: string | null = null,
+    ) =>
+      mockInvoke("export_grid_rows", {
+        format,
+        targetPath,
+        headers,
+        rows,
+        context,
+        exportId,
+      }),
+  });
   useToastStore.getState().clear();
 });
 

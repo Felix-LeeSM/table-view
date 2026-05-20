@@ -8,6 +8,7 @@
 // + connectionStore 변경의 async chain 이 직전 테스트(uglify) 의 SQL 변경
 // 이벤트 처리와 race. 본 sprint 의 신규 case 들만 격리해 격동 차단.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -30,13 +31,14 @@ import {
 } from "./__tests__/queryTabTestHelpers";
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
-  cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
-  findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
-  aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
+    cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
+    findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
+    aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
+  });
+});
 
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: (...args: unknown[]) => mockVerifyActiveDb(...args),

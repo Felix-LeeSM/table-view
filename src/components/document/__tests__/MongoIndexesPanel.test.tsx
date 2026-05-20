@@ -9,6 +9,7 @@
 // RO 시나리오는 그대로 유지하면서 추가.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -22,19 +23,13 @@ import { MongoIndexesPanel } from "../MongoIndexesPanel";
 const listMongoIndexesMock = vi.fn();
 const createMongoIndexMock = vi.fn();
 const dropMongoIndexMock = vi.fn();
-
-vi.mock("@/lib/tauri", () => ({
-  listMongoIndexes: (...args: unknown[]) => listMongoIndexesMock(...args),
-  createMongoIndex: (...args: unknown[]) => createMongoIndexMock(...args),
-  dropMongoIndex: (...args: unknown[]) => dropMongoIndexMock(...args),
-}));
-
-// `@lib/tauri` is an alias of `@/lib/tauri` so resolve both for safety.
-vi.mock("@lib/tauri", () => ({
-  listMongoIndexes: (...args: unknown[]) => listMongoIndexesMock(...args),
-  createMongoIndex: (...args: unknown[]) => createMongoIndexMock(...args),
-  dropMongoIndex: (...args: unknown[]) => dropMongoIndexMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listMongoIndexes: (...args: unknown[]) => listMongoIndexesMock(...args),
+    createMongoIndex: (...args: unknown[]) => createMongoIndexMock(...args),
+    dropMongoIndex: (...args: unknown[]) => dropMongoIndexMock(...args),
+  });
+});
 
 beforeEach(() => {
   listMongoIndexesMock.mockReset();

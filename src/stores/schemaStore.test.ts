@@ -1,87 +1,50 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { useSchemaStore } from "./schemaStore";
-
-// Mock the tauri invoke wrapper
-vi.mock("@lib/tauri", () => ({
-  listSchemas: vi.fn(() =>
-    Promise.resolve([{ name: "public" }, { name: "test_schema" }]),
-  ),
-  listTables: vi.fn(() =>
-    Promise.resolve([
-      { name: "users", schema: "public", row_count: 42 },
-      { name: "orders", schema: "public", row_count: null },
-    ]),
-  ),
-  listViews: vi.fn(() =>
-    Promise.resolve([
-      {
-        name: "active_users",
-        schema: "public",
-        definition: "SELECT * FROM users WHERE active = true",
-      },
-    ]),
-  ),
-  listFunctions: vi.fn(() =>
-    Promise.resolve([
-      {
-        name: "calculate_total",
-        schema: "public",
-        arguments: "user_id integer",
-        returnType: "numeric",
-        language: "plpgsql",
-        source: "BEGIN RETURN 0; END",
-        kind: "function",
-      },
-      {
-        name: "do_migration",
-        schema: "public",
-        arguments: null,
-        returnType: null,
-        language: "plpgsql",
-        source: "BEGIN END",
-        kind: "procedure",
-      },
-    ]),
-  ),
-  getTableColumns: vi.fn(() =>
-    Promise.resolve([
-      {
-        name: "id",
-        data_type: "integer",
-        nullable: false,
-        default_value: null,
-        is_primary_key: true,
-        is_foreign_key: false,
-        fk_reference: null,
-        comment: null,
-      },
-    ]),
-  ),
-  getTableIndexes: vi.fn(() =>
-    Promise.resolve([
-      {
-        name: "users_pkey",
-        columns: ["id"],
-        index_type: "btree",
-        is_unique: true,
-        is_primary: true,
-      },
-    ]),
-  ),
-  getTableConstraints: vi.fn(() =>
-    Promise.resolve([
-      {
-        name: "users_pkey",
-        constraint_type: "PRIMARY KEY",
-        columns: ["id"],
-        reference_table: null,
-        reference_columns: null,
-      },
-    ]),
-  ),
-  queryTableData: vi.fn(() =>
-    Promise.resolve({
-      columns: [
+beforeEach(() => {
+  setupTauriMock({
+    listSchemas: vi.fn(() =>
+      Promise.resolve([{ name: "public" }, { name: "test_schema" }]),
+    ),
+    listTables: vi.fn(() =>
+      Promise.resolve([
+        { name: "users", schema: "public", row_count: 42 },
+        { name: "orders", schema: "public", row_count: null },
+      ]),
+    ),
+    listViews: vi.fn(() =>
+      Promise.resolve([
+        {
+          name: "active_users",
+          schema: "public",
+          definition: "SELECT * FROM users WHERE active = true",
+        },
+      ]),
+    ),
+    listFunctions: vi.fn(() =>
+      Promise.resolve([
+        {
+          name: "calculate_total",
+          schema: "public",
+          arguments: "user_id integer",
+          returnType: "numeric",
+          language: "plpgsql",
+          source: "BEGIN RETURN 0; END",
+          kind: "function",
+        },
+        {
+          name: "do_migration",
+          schema: "public",
+          arguments: null,
+          returnType: null,
+          language: "plpgsql",
+          source: "BEGIN END",
+          kind: "procedure",
+        },
+      ]),
+    ),
+    getTableColumns: vi.fn(() =>
+      Promise.resolve([
         {
           name: "id",
           data_type: "integer",
@@ -92,92 +55,130 @@ vi.mock("@lib/tauri", () => ({
           fk_reference: null,
           comment: null,
         },
-      ],
-      rows: [[1]],
-      total_count: 1,
-      page: 1,
-      page_size: 50,
-      executed_query: "SELECT * FROM public.users LIMIT 50 OFFSET 0",
-    }),
-  ),
-  executeQuery: vi.fn(() =>
-    Promise.resolve({
-      columns: [{ name: "id", data_type: "integer" }],
-      rows: [[1]],
-      total_count: 1,
-      execution_time_ms: 3,
-      query_type: "select",
-    }),
-  ),
-  // Sprint 183 — schemaStore exposes a batch helper that wraps the
-  // multi-statement Tauri command. Mock kept simple; the store layer just
-  // forwards arguments.
-  executeQueryBatch: vi.fn((_id: string, statements: string[]) =>
-    Promise.resolve(
-      statements.map(() => ({
-        columns: [],
-        rows: [],
-        total_count: 0,
-        execution_time_ms: 1,
-        query_type: "dml" as const,
-      })),
+      ]),
     ),
-  ),
-  dropTable: vi.fn(() => Promise.resolve()),
-  renameTable: vi.fn(() => Promise.resolve()),
-  getViewColumns: vi.fn(() =>
-    Promise.resolve([
-      {
-        name: "id",
-        data_type: "integer",
-        nullable: false,
-        default_value: null,
-        is_primary_key: false,
-        is_foreign_key: false,
-        fk_reference: null,
-        comment: null,
-      },
-      {
-        name: "name",
-        data_type: "text",
-        nullable: true,
-        default_value: null,
-        is_primary_key: false,
-        is_foreign_key: false,
-        fk_reference: null,
-        comment: "display name",
-      },
-    ]),
-  ),
-  getViewDefinition: vi.fn(() =>
-    Promise.resolve("SELECT id, name FROM users WHERE active = true"),
-  ),
-  // Sprint 272 — trigger IPC mock. Default resolves with a single
-  // canonical fixture; individual tests override per-call as needed.
-  listTriggers: vi.fn(() =>
-    Promise.resolve([
-      {
-        name: "audit_users_insert",
-        schema: "public",
-        table: "users",
-        timing: "BEFORE",
-        events: ["INSERT"],
-        orientation: "ROW",
-        functionSchema: "audit",
-        functionName: "log_insert",
-        arguments: null,
-        whenExpression: null,
-        definition:
-          "CREATE TRIGGER audit_users_insert BEFORE INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION audit.log_insert()",
-      },
-    ]),
-  ),
-  getTriggerSource: vi.fn(() =>
-    Promise.resolve(
-      "CREATE TRIGGER audit_users_insert BEFORE INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION audit.log_insert()",
+    getTableIndexes: vi.fn(() =>
+      Promise.resolve([
+        {
+          name: "users_pkey",
+          columns: ["id"],
+          index_type: "btree",
+          is_unique: true,
+          is_primary: true,
+        },
+      ]),
     ),
-  ),
-}));
+    getTableConstraints: vi.fn(() =>
+      Promise.resolve([
+        {
+          name: "users_pkey",
+          constraint_type: "PRIMARY KEY",
+          columns: ["id"],
+          reference_table: null,
+          reference_columns: null,
+        },
+      ]),
+    ),
+    queryTableData: vi.fn(() =>
+      Promise.resolve({
+        columns: [
+          {
+            name: "id",
+            data_type: "integer",
+            nullable: false,
+            default_value: null,
+            is_primary_key: true,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+        rows: [[1]],
+        total_count: 1,
+        page: 1,
+        page_size: 50,
+        executed_query: "SELECT * FROM public.users LIMIT 50 OFFSET 0",
+      }),
+    ),
+    executeQuery: vi.fn(() =>
+      Promise.resolve({
+        columns: [{ name: "id", data_type: "integer" }],
+        rows: [[1]],
+        total_count: 1,
+        execution_time_ms: 3,
+        query_type: "select",
+      }),
+    ),
+    // Sprint 183 — schemaStore exposes a batch helper that wraps the
+    // multi-statement Tauri command. Mock kept simple; the store layer just
+    // forwards arguments.
+    executeQueryBatch: vi.fn((_id: string, statements: string[]) =>
+      Promise.resolve(
+        statements.map(() => ({
+          columns: [],
+          rows: [],
+          total_count: 0,
+          execution_time_ms: 1,
+          query_type: "dml" as const,
+        })),
+      ),
+    ),
+    dropTable: vi.fn(() => Promise.resolve()),
+    renameTable: vi.fn(() => Promise.resolve()),
+    getViewColumns: vi.fn(() =>
+      Promise.resolve([
+        {
+          name: "id",
+          data_type: "integer",
+          nullable: false,
+          default_value: null,
+          is_primary_key: false,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+        {
+          name: "name",
+          data_type: "text",
+          nullable: true,
+          default_value: null,
+          is_primary_key: false,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: "display name",
+        },
+      ]),
+    ),
+    getViewDefinition: vi.fn(() =>
+      Promise.resolve("SELECT id, name FROM users WHERE active = true"),
+    ),
+    // Sprint 272 — trigger IPC mock. Default resolves with a single
+    // canonical fixture; individual tests override per-call as needed.
+    listTriggers: vi.fn(() =>
+      Promise.resolve([
+        {
+          name: "audit_users_insert",
+          schema: "public",
+          table: "users",
+          timing: "BEFORE",
+          events: ["INSERT"],
+          orientation: "ROW",
+          functionSchema: "audit",
+          functionName: "log_insert",
+          arguments: null,
+          whenExpression: null,
+          definition:
+            "CREATE TRIGGER audit_users_insert BEFORE INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION audit.log_insert()",
+        },
+      ]),
+    ),
+    getTriggerSource: vi.fn(() =>
+      Promise.resolve(
+        "CREATE TRIGGER audit_users_insert BEFORE INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION audit.log_insert()",
+      ),
+    ),
+  });
+});
 
 describe("schemaStore", () => {
   beforeEach(() => {

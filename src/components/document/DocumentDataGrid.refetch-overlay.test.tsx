@@ -30,6 +30,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -81,19 +82,20 @@ const findMock =
       ...args: [string, string, string, unknown?]
     ) => Promise<DocumentQueryResult>
   >();
-
-vi.mock("@lib/tauri", () => ({
-  listMongoDatabases: vi.fn(() => Promise.resolve([])),
-  listMongoCollections: vi.fn(() => Promise.resolve([])),
-  inferCollectionFields: vi.fn(() => Promise.resolve([])),
-  findDocuments: (...args: [string, string, string, unknown?]) => {
-    return findMock(...args);
-  },
-  insertDocument: vi.fn(() => Promise.resolve({})),
-  updateDocument: vi.fn(() => Promise.resolve()),
-  deleteDocument: vi.fn(() => Promise.resolve()),
-  cancelQuery: vi.fn(() => Promise.resolve("")),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listMongoDatabases: vi.fn(() => Promise.resolve([])),
+    listMongoCollections: vi.fn(() => Promise.resolve([])),
+    inferCollectionFields: vi.fn(() => Promise.resolve([])),
+    findDocuments: (...args: [string, string, string, unknown?]) => {
+      return findMock(...args);
+    },
+    insertDocument: vi.fn(() => Promise.resolve({})),
+    updateDocument: vi.fn(() => Promise.resolve()),
+    deleteDocument: vi.fn(() => Promise.resolve()),
+    cancelQuery: vi.fn(() => Promise.resolve("")),
+  });
+});
 
 beforeEach(() => {
   __resetDocumentStoreForTests();

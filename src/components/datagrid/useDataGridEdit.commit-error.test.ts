@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { renderHook, act } from "@testing-library/react";
 import { useDataGridEdit } from "./useDataGridEdit";
 import type { TableData } from "@/types/schema";
@@ -35,18 +36,11 @@ const { mockExecuteQuery, mockExecuteQueryBatch } = vi.hoisted(() => ({
   mockExecuteQueryBatch: vi.fn(),
 }));
 const mockFetchData = vi.fn();
-
-// Sprint 354 (L2 fix, 2026-05-16) — `executeQueryBatch` moved out of
-// `schemaStore` to `@lib/tauri`. Mock the canonical home so
-// `useDataGridPreviewCommit`'s direct import resolves to our spy.
-vi.mock("@lib/tauri", async () => {
-  const actual =
-    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
-  return {
-    ...actual,
+beforeEach(() => {
+  setupTauriMock({
     executeQuery: mockExecuteQuery,
     executeQueryBatch: mockExecuteQueryBatch,
-  };
+  });
 });
 
 vi.mock("@stores/workspaceStore", () => ({
@@ -140,6 +134,10 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
     // batch with the 2nd rejecting), and we don't want it leaking into the
     // next test.
     vi.resetAllMocks();
+    setupTauriMock({
+      executeQuery: mockExecuteQuery,
+      executeQueryBatch: mockExecuteQueryBatch,
+    });
   });
 
   it("[AC-183-08b] simple failure: single statement reject records commitError, keeps preview open, flags cell key", async () => {

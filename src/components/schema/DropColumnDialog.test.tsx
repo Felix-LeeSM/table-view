@@ -15,6 +15,7 @@
 //   typing-confirm input is the user-visible gate).
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -27,13 +28,14 @@ import {
 const { mockDropColumnRequest } = vi.hoisted(() => ({
   mockDropColumnRequest: vi.fn(),
 }));
-
-vi.mock("@lib/tauri", () => ({
-  dropColumnRequest: mockDropColumnRequest,
-  // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    dropColumnRequest: mockDropColumnRequest,
+    // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+    cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
+  });
+});
 
 import DropColumnDialog from "./DropColumnDialog";
 import { useConnectionStore } from "@stores/connectionStore";

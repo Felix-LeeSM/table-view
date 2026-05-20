@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -9,17 +10,11 @@ import {
 import QueryResultGrid from "./QueryResultGrid";
 import type { QueryResult, QueryStatementResult } from "@/types/query";
 import { useSchemaStore } from "@stores/schemaStore";
-
-// We never hit the backend in these tests, but the editable-result branch
-// reads `tableColumnsCache` / fires `getTableColumns`; mock the module so
-// the SELECT path stays read-only and predictable.
-vi.mock("@lib/tauri", async () => {
-  const mod = await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
-  return {
-    ...mod,
+beforeEach(() => {
+  setupTauriMock({
     getTableColumns: vi.fn(async () => []),
     executeQuery: vi.fn(async () => ({})),
-  };
+  });
 });
 
 const SELECT_RESULT_A: QueryResult = {

@@ -9,6 +9,7 @@
 // 을 한꺼번에 단언. IPC 는 Sprint 266 wire format 으로 mock 한다.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 const setActiveDbMock = vi.hoisted(() => vi.fn());
 const toastWarningMock = vi.hoisted(() => vi.fn());
@@ -30,26 +31,31 @@ vi.mock("@lib/api/verifyActiveDb", () => ({
 
 const DB_MISMATCH_ERROR =
   "Database mismatch: expected 'dbA', backend pool has 'dbB'";
-
-vi.mock("@lib/tauri", () => ({
-  listSchemas: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
-  listTables: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
-  listViews: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
-  listFunctions: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
-  getTableColumns: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
-  listSchemaColumns: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
-  getTableIndexes: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
-  getTableConstraints: vi.fn(() =>
-    Promise.reject(new Error(DB_MISMATCH_ERROR)),
-  ),
-  getViewColumns: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
-  getViewDefinition: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
-  queryTableData: vi.fn(() => Promise.reject(new Error("unrelated"))),
-  executeQuery: vi.fn(() => Promise.resolve({})),
-  executeQueryBatch: vi.fn(() => Promise.resolve([])),
-  dropTable: vi.fn(() => Promise.resolve()),
-  renameTable: vi.fn(() => Promise.resolve()),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listSchemas: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
+    listTables: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
+    listViews: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
+    listFunctions: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
+    getTableColumns: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
+    listSchemaColumns: vi.fn(() =>
+      Promise.reject(new Error(DB_MISMATCH_ERROR)),
+    ),
+    getTableIndexes: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
+    getTableConstraints: vi.fn(() =>
+      Promise.reject(new Error(DB_MISMATCH_ERROR)),
+    ),
+    getViewColumns: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
+    getViewDefinition: vi.fn(() =>
+      Promise.reject(new Error(DB_MISMATCH_ERROR)),
+    ),
+    queryTableData: vi.fn(() => Promise.reject(new Error("unrelated"))),
+    executeQuery: vi.fn(() => Promise.resolve({})),
+    executeQueryBatch: vi.fn(() => Promise.resolve([])),
+    dropTable: vi.fn(() => Promise.resolve()),
+    renameTable: vi.fn(() => Promise.resolve()),
+  });
+});
 
 import { useSchemaStore } from "./schemaStore";
 

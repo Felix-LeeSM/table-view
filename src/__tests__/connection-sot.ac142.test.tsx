@@ -10,6 +10,7 @@
  * Each `it(...)` name embeds the AC label (AC-142-N) for grep-ability.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -21,17 +22,13 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import * as windowControls from "@lib/window-controls";
 import type { ConnectionConfig } from "@/types/connection";
-
-vi.mock("@lib/tauri", async () => {
-  const actual =
-    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
-  return {
-    ...actual,
+beforeEach(() => {
+  setupTauriMock({
     connectToDatabase: vi.fn().mockResolvedValue(undefined),
     disconnectFromDatabase: vi.fn().mockResolvedValue(undefined),
     listConnections: vi.fn().mockResolvedValue([]),
     listGroups: vi.fn().mockResolvedValue([]),
-  };
+  });
 });
 
 // Sprint 154 — `@lib/window-controls` is the new lifecycle seam. HomePage's

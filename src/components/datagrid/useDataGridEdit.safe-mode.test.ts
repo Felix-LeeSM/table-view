@@ -19,6 +19,7 @@
 //   - non-production + warn / off: bypass.
 // date 2026-05-01 (initial), 2026-05-08 (Sprint 244 → Sprint 245).
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { renderHook, act } from "@testing-library/react";
 import { useDataGridEdit } from "./useDataGridEdit";
 import { useSafeModeStore } from "@stores/safeModeStore";
@@ -30,17 +31,10 @@ const { mockExecuteQueryBatch } = vi.hoisted(() => ({
 const mockToastError = vi.fn();
 const mockToastInfo = vi.fn();
 const mockFetchData = vi.fn();
-
-// Sprint 354 (L2 fix, 2026-05-16) — `executeQueryBatch` moved out of
-// `schemaStore` to `@lib/tauri`. Mock the canonical home so
-// `useDataGridPreviewCommit`'s direct import resolves to our spy.
-vi.mock("@lib/tauri", async () => {
-  const actual =
-    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
-  return {
-    ...actual,
+beforeEach(() => {
+  setupTauriMock({
     executeQueryBatch: mockExecuteQueryBatch,
-  };
+  });
 });
 
 vi.mock("@stores/workspaceStore", () => ({
@@ -114,6 +108,9 @@ function renderHookFor(env: string | null, mode: "strict" | "warn" | "off") {
 describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    setupTauriMock({
+      executeQueryBatch: mockExecuteQueryBatch,
+    });
     mockExecuteQueryBatch.mockResolvedValue([]);
   });
 

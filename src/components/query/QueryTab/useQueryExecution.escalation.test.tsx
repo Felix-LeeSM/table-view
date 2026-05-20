@@ -15,6 +15,7 @@
 // `useQueryExecution` 직접 mount (renderHook) 가 가능한지는 다른 dry-run.test.ts
 // 의 패턴 (full QueryTab mount 회피) 을 따른다.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useWorkspaceStore } from "@stores/workspaceStore";
@@ -29,14 +30,15 @@ const executeQueryDryRunMock = vi.fn();
 const cancelQueryMock = vi.fn();
 const findDocumentsMock = vi.fn();
 const aggregateDocumentsMock = vi.fn();
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: (...args: unknown[]) => executeQueryMock(...args),
-  executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
-  cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
-  findDocuments: (...args: unknown[]) => findDocumentsMock(...args),
-  aggregateDocuments: (...args: unknown[]) => aggregateDocumentsMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: (...args: unknown[]) => executeQueryMock(...args),
+    executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
+    cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
+    findDocuments: (...args: unknown[]) => findDocumentsMock(...args),
+    aggregateDocuments: (...args: unknown[]) => aggregateDocumentsMock(...args),
+  });
+});
 
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: vi.fn().mockResolvedValue(""),

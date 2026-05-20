@@ -17,6 +17,7 @@
 // (`useConnectionMutations.test.ts` / `CreateTableDialog.test.tsx`).
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { renderHook, act, waitFor } from "@testing-library/react";
 
 import type { PostgresTypeInfo } from "@/types/schema";
@@ -24,10 +25,11 @@ import type { PostgresTypeInfo } from "@/types/schema";
 const { mockListPostgresTypes } = vi.hoisted(() => ({
   mockListPostgresTypes: vi.fn(),
 }));
-
-vi.mock("@lib/tauri", () => ({
-  listPostgresTypes: mockListPostgresTypes,
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listPostgresTypes: mockListPostgresTypes,
+  });
+});
 
 // Imported AFTER the mock so the hook resolves to the mocked wrapper.
 // `invalidatePostgresTypesCache` is a free function exported alongside

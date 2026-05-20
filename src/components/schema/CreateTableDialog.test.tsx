@@ -37,6 +37,7 @@
 // `tauri.createTable` is re-bindable inside test bodies. Pattern source:
 // Sprint 219/223/224 (`useConnectionMutations.test.ts`).
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -171,19 +172,20 @@ mockCreateTablePlan.mockImplementation(
     return { sql: sqlParts.filter((s) => s.length > 0).join(";\n") };
   },
 );
-
-vi.mock("@lib/tauri", () => ({
-  createTable: mockCreateTable,
-  createTablePlan: mockCreateTablePlan,
-  createIndex: mockCreateIndex,
-  dropIndex: mockDropIndex,
-  addConstraint: mockAddConstraint,
-  dropConstraint: mockDropConstraint,
-  listPostgresTypes: mockListPostgresTypes,
-  // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    createTable: mockCreateTable,
+    createTablePlan: mockCreateTablePlan,
+    createIndex: mockCreateIndex,
+    dropIndex: mockDropIndex,
+    addConstraint: mockAddConstraint,
+    dropConstraint: mockDropConstraint,
+    listPostgresTypes: mockListPostgresTypes,
+    // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+    cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
+  });
+});
 
 import CreateTableDialog from "./CreateTableDialog";
 import { useConnectionStore } from "@stores/connectionStore";

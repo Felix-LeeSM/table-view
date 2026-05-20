@@ -2,16 +2,18 @@
 // grid roles integrity 가드. RDB DataGridTable.aria-grid.test.tsx 와 동형.
 // Raw query editable 도 column reorder 없음 — visual order == data order.
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, within } from "@testing-library/react";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
 import type { QueryResult } from "@/types/query";
 import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: vi.fn(async () => ({})),
-  executeQueryBatch: vi.fn(async () => []),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: vi.fn(async () => ({})),
+    executeQueryBatch: vi.fn(async () => []),
+  });
+});
 
 const RESULT: QueryResult = {
   columns: [

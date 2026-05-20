@@ -14,6 +14,7 @@
 // here.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -34,25 +35,27 @@ const updateManyMock = vi.fn();
 const deleteDocumentMock = vi.fn();
 const deleteManyMock = vi.fn();
 const bulkWriteDocumentsMock = vi.fn();
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: vi.fn(),
-  executeQueryDryRun: vi.fn(),
-  cancelQuery: vi.fn(),
-  findDocuments: vi.fn(),
-  aggregateDocuments: vi.fn(),
-  findOneDocument: vi.fn(),
-  countDocuments: vi.fn(),
-  estimatedDocumentCount: vi.fn(),
-  distinctDocuments: vi.fn(),
-  insertDocument: (...args: unknown[]) => insertDocumentMock(...args),
-  insertManyDocuments: (...args: unknown[]) => insertManyDocumentsMock(...args),
-  updateDocument: (...args: unknown[]) => updateDocumentMock(...args),
-  updateMany: (...args: unknown[]) => updateManyMock(...args),
-  deleteDocument: (...args: unknown[]) => deleteDocumentMock(...args),
-  deleteMany: (...args: unknown[]) => deleteManyMock(...args),
-  bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocumentsMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: vi.fn(),
+    executeQueryDryRun: vi.fn(),
+    cancelQuery: vi.fn(),
+    findDocuments: vi.fn(),
+    aggregateDocuments: vi.fn(),
+    findOneDocument: vi.fn(),
+    countDocuments: vi.fn(),
+    estimatedDocumentCount: vi.fn(),
+    distinctDocuments: vi.fn(),
+    insertDocument: (...args: unknown[]) => insertDocumentMock(...args),
+    insertManyDocuments: (...args: unknown[]) =>
+      insertManyDocumentsMock(...args),
+    updateDocument: (...args: unknown[]) => updateDocumentMock(...args),
+    updateMany: (...args: unknown[]) => updateManyMock(...args),
+    deleteDocument: (...args: unknown[]) => deleteDocumentMock(...args),
+    deleteMany: (...args: unknown[]) => deleteManyMock(...args),
+    bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocumentsMock(...args),
+  });
+});
 
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: vi.fn().mockResolvedValue(""),

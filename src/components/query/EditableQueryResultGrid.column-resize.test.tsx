@@ -3,15 +3,17 @@
 // 결정적인 stable identity 가 없어 persistenceKey 미사용).
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, act } from "@testing-library/react";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
 import type { QueryResult } from "@/types/query";
 import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: vi.fn(async () => ({})),
-  executeQueryBatch: vi.fn(async () => []),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: vi.fn(async () => ({})),
+    executeQueryBatch: vi.fn(async () => []),
+  });
+});
 
 const RESULT: QueryResult = {
   columns: [

@@ -8,6 +8,7 @@
 // (d) shift+click → secondary 추가 4 경로를 lock.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import DocumentDataGrid from "./DocumentDataGrid";
 import { __resetDocumentStoreForTests } from "@stores/documentStore";
@@ -39,17 +40,18 @@ const findMock =
       ...args: [string, string, string, unknown?]
     ) => Promise<DocumentQueryResult>
   >();
-
-vi.mock("@lib/tauri", () => ({
-  listMongoDatabases: vi.fn(() => Promise.resolve([])),
-  listMongoCollections: vi.fn(() => Promise.resolve([])),
-  inferCollectionFields: vi.fn(() => Promise.resolve([])),
-  findDocuments: (...args: [string, string, string, unknown?]) =>
-    findMock(...args),
-  insertDocument: vi.fn(() => Promise.resolve({})),
-  updateDocument: vi.fn(() => Promise.resolve()),
-  deleteDocument: vi.fn(() => Promise.resolve()),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listMongoDatabases: vi.fn(() => Promise.resolve([])),
+    listMongoCollections: vi.fn(() => Promise.resolve([])),
+    inferCollectionFields: vi.fn(() => Promise.resolve([])),
+    findDocuments: (...args: [string, string, string, unknown?]) =>
+      findMock(...args),
+    insertDocument: vi.fn(() => Promise.resolve({})),
+    updateDocument: vi.fn(() => Promise.resolve()),
+    deleteDocument: vi.fn(() => Promise.resolve()),
+  });
+});
 
 beforeEach(() => {
   __resetDocumentStoreForTests();

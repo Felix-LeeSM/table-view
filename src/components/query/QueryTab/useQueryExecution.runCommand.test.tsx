@@ -8,6 +8,7 @@
 // promote 한 뒤에도 이 케이스들은 dispatch 단언 부분이 그대로 lock 유지.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -36,27 +37,29 @@ const deleteDocumentMock = vi.fn();
 const deleteManyMock = vi.fn();
 const bulkWriteDocumentsMock = vi.fn();
 const runMongoCommandMock = vi.fn();
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: (...args: unknown[]) => executeQueryMock(...args),
-  executeQueryDryRun: vi.fn(),
-  cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
-  findDocuments: (...args: unknown[]) => findDocumentsMock(...args),
-  aggregateDocuments: (...args: unknown[]) => aggregateDocumentsMock(...args),
-  findOneDocument: (...args: unknown[]) => findOneDocumentMock(...args),
-  countDocuments: (...args: unknown[]) => countDocumentsMock(...args),
-  estimatedDocumentCount: (...args: unknown[]) =>
-    estimatedDocumentCountMock(...args),
-  distinctDocuments: (...args: unknown[]) => distinctDocumentsMock(...args),
-  insertDocument: (...args: unknown[]) => insertDocumentMock(...args),
-  insertManyDocuments: (...args: unknown[]) => insertManyDocumentsMock(...args),
-  updateDocument: (...args: unknown[]) => updateDocumentMock(...args),
-  updateMany: (...args: unknown[]) => updateManyMock(...args),
-  deleteDocument: (...args: unknown[]) => deleteDocumentMock(...args),
-  deleteMany: (...args: unknown[]) => deleteManyMock(...args),
-  bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocumentsMock(...args),
-  runMongoCommand: (...args: unknown[]) => runMongoCommandMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: (...args: unknown[]) => executeQueryMock(...args),
+    executeQueryDryRun: vi.fn(),
+    cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
+    findDocuments: (...args: unknown[]) => findDocumentsMock(...args),
+    aggregateDocuments: (...args: unknown[]) => aggregateDocumentsMock(...args),
+    findOneDocument: (...args: unknown[]) => findOneDocumentMock(...args),
+    countDocuments: (...args: unknown[]) => countDocumentsMock(...args),
+    estimatedDocumentCount: (...args: unknown[]) =>
+      estimatedDocumentCountMock(...args),
+    distinctDocuments: (...args: unknown[]) => distinctDocumentsMock(...args),
+    insertDocument: (...args: unknown[]) => insertDocumentMock(...args),
+    insertManyDocuments: (...args: unknown[]) =>
+      insertManyDocumentsMock(...args),
+    updateDocument: (...args: unknown[]) => updateDocumentMock(...args),
+    updateMany: (...args: unknown[]) => updateManyMock(...args),
+    deleteDocument: (...args: unknown[]) => deleteDocumentMock(...args),
+    deleteMany: (...args: unknown[]) => deleteManyMock(...args),
+    bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocumentsMock(...args),
+    runMongoCommand: (...args: unknown[]) => runMongoCommandMock(...args),
+  });
+});
 
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: vi.fn().mockResolvedValue(""),

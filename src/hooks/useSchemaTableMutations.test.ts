@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { renderHook, act } from "@testing-library/react";
 import type { TableInfo } from "@/types/schema";
 
@@ -75,12 +76,13 @@ vi.mock("@stores/schemaStore", () => ({
     { getState: mockGetState, setState: mockSetState },
   ),
 }));
-
-vi.mock("@lib/tauri", () => ({
-  dropTable: mockTauriDrop,
-  renameTable: mockTauriRename,
-  listTables: mockTauriListTables,
-}));
+beforeEach(() => {
+  setupTauriMock({
+    dropTable: mockTauriDrop,
+    renameTable: mockTauriRename,
+    listTables: mockTauriListTables,
+  });
+});
 
 import { useSchemaTableMutations } from "./useSchemaTableMutations";
 

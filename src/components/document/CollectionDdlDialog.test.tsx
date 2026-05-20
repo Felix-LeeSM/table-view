@@ -4,6 +4,7 @@
 // 가드도 같이 가드.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CollectionDdlDialog } from "./CollectionDdlDialog";
@@ -11,12 +12,13 @@ import { CollectionDdlDialog } from "./CollectionDdlDialog";
 const createCollectionMock = vi.fn();
 const renameCollectionMock = vi.fn();
 const dropCollectionMock = vi.fn();
-
-vi.mock("@/lib/tauri", () => ({
-  createCollection: (...args: unknown[]) => createCollectionMock(...args),
-  renameCollection: (...args: unknown[]) => renameCollectionMock(...args),
-  dropCollection: (...args: unknown[]) => dropCollectionMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    createCollection: (...args: unknown[]) => createCollectionMock(...args),
+    renameCollection: (...args: unknown[]) => renameCollectionMock(...args),
+    dropCollection: (...args: unknown[]) => dropCollectionMock(...args),
+  });
+});
 
 describe("CollectionDdlDialog (Sprint 334 — Slice L live wire)", () => {
   beforeEach(() => {

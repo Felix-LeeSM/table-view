@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -9,23 +10,13 @@ import {
 import ImportExportDialog from "./ImportExportDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig } from "@/types/connection";
-
-// 2026-05-05 — Export pane는 backend가 자동 생성한 BIP39 mnemonic을
-// 단일 응답으로 받는다. Sprint 140 시절의 사용자 입력 password 흐름은
-// 폐기되었고, 본 suite는 자동 생성 + 1회 표시 + acknowledgement 강제
-// 흐름이 회귀되지 않도록 잠근다. Import는 받은 mnemonic을 그대로
-// 입력하므로 길이 검증을 강제하지 않는다.
-
-vi.mock("@lib/tauri", async () => {
-  const actual =
-    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
-  return {
-    ...actual,
+beforeEach(() => {
+  setupTauriMock({
     exportConnections: vi.fn(),
     importConnections: vi.fn(),
     exportConnectionsEncrypted: vi.fn(),
     importConnectionsEncrypted: vi.fn(),
-  };
+  });
 });
 
 const writeText = vi.fn(() => Promise.resolve());

@@ -27,6 +27,7 @@
 // Sprint 230 code calls executeQuery directly, so the
 // `not.toHaveBeenCalled()` assertion captures the red state.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -50,15 +51,16 @@ import {
 } from "./__tests__/queryTabTestHelpers";
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
-  cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
-  findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
-  aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
-  // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
+    cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
+    findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
+    aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
+    // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+  });
+});
 
 // `verifyActiveDb` is fired post-execute by `dispatchDbMutationHint`. Stub
 // it so the safe-mode tests don't accidentally exercise the real IPC.

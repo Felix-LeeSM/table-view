@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { getAllTabsForConnection } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import {
   act,
@@ -14,53 +15,52 @@ import {
 } from "@stores/documentStore";
 import { useWorkspaceStore, type TableTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
-
-// Mock the tauri bridge so the store actions resolve against canned data
-// instead of invoking the backend.
-vi.mock("@lib/tauri", () => ({
-  listMongoDatabases: vi.fn(() =>
-    Promise.resolve([{ name: "admin" }, { name: "table_view_test" }]),
-  ),
-  listMongoCollections: vi.fn((_conn: string, db: string) =>
-    Promise.resolve(
-      db === "table_view_test"
-        ? [
-            {
-              name: "users",
-              database: "table_view_test",
-              document_count: 3,
-            },
-          ]
-        : db === "dbX"
+beforeEach(() => {
+  setupTauriMock({
+    listMongoDatabases: vi.fn(() =>
+      Promise.resolve([{ name: "admin" }, { name: "table_view_test" }]),
+    ),
+    listMongoCollections: vi.fn((_conn: string, db: string) =>
+      Promise.resolve(
+        db === "table_view_test"
           ? [
               {
-                name: "x_collection",
-                database: "dbX",
-                document_count: 7,
+                name: "users",
+                database: "table_view_test",
+                document_count: 3,
               },
             ]
-          : db === "dbY"
+          : db === "dbX"
             ? [
                 {
-                  name: "y_collection",
-                  database: "dbY",
-                  document_count: 11,
+                  name: "x_collection",
+                  database: "dbX",
+                  document_count: 7,
                 },
               ]
-            : [],
+            : db === "dbY"
+              ? [
+                  {
+                    name: "y_collection",
+                    database: "dbY",
+                    document_count: 11,
+                  },
+                ]
+              : [],
+      ),
     ),
-  ),
-  inferCollectionFields: vi.fn(() => Promise.resolve([])),
-  findDocuments: vi.fn(() =>
-    Promise.resolve({
-      columns: [],
-      rows: [],
-      raw_documents: [],
-      total_count: 0,
-      execution_time_ms: 0,
-    }),
-  ),
-}));
+    inferCollectionFields: vi.fn(() => Promise.resolve([])),
+    findDocuments: vi.fn(() =>
+      Promise.resolve({
+        columns: [],
+        rows: [],
+        raw_documents: [],
+        total_count: 0,
+        execution_time_ms: 0,
+      }),
+    ),
+  });
+});
 
 describe("DocumentDatabaseTree", () => {
   beforeEach(() => {

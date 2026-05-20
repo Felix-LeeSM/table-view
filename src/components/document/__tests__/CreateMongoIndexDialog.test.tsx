@@ -6,15 +6,17 @@
 // alert) 을 검증한다. createMongoIndex 는 vi.mock 으로 캡처.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CreateMongoIndexDialog } from "../CreateMongoIndexDialog";
 
 const createMongoIndexMock = vi.fn();
-
-vi.mock("@/lib/tauri", () => ({
-  createMongoIndex: (...args: unknown[]) => createMongoIndexMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    createMongoIndex: (...args: unknown[]) => createMongoIndexMock(...args),
+  });
+});
 
 beforeEach(() => {
   createMongoIndexMock.mockReset();

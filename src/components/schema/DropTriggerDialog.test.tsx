@@ -12,6 +12,7 @@
 // + Sprint 269 passive Retry toast 가 emit.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -27,12 +28,13 @@ const { mockDropTrigger, toastWarningMock, verifyActiveDbMock } = vi.hoisted(
     verifyActiveDbMock: vi.fn(),
   }),
 );
-
-vi.mock("@lib/tauri", () => ({
-  dropTrigger: mockDropTrigger,
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    dropTrigger: mockDropTrigger,
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+    cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
+  });
+});
 
 vi.mock("@lib/toast", () => ({
   toast: { warning: toastWarningMock, info: vi.fn(), error: vi.fn() },

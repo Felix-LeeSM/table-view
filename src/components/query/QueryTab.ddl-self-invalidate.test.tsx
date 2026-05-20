@@ -15,6 +15,7 @@
 //              `tableColumnsCache` 모두 비워진다 (narrow scope 금지).
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { useWorkspaceStore } from "@stores/workspaceStore";
@@ -36,30 +37,31 @@ const listTablesMock = vi.fn();
 const listViewsMock = vi.fn();
 const listFunctionsMock = vi.fn();
 const listSchemaColumnsMock = vi.fn();
-
-vi.mock("@lib/tauri", () => ({
-  executeQuery: (...args: unknown[]) => executeQueryMock(...args),
-  executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
-  cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
-  listSchemas: (...args: unknown[]) => listSchemasMock(...args),
-  listTables: (...args: unknown[]) => listTablesMock(...args),
-  listViews: (...args: unknown[]) => listViewsMock(...args),
-  listFunctions: (...args: unknown[]) => listFunctionsMock(...args),
-  listSchemaColumns: (...args: unknown[]) => listSchemaColumnsMock(...args),
-  findDocuments: vi.fn(),
-  aggregateDocuments: vi.fn(),
-  findOneDocument: vi.fn(),
-  countDocuments: vi.fn(),
-  estimatedDocumentCount: vi.fn(),
-  distinctDocuments: vi.fn(),
-  insertDocument: vi.fn(),
-  insertManyDocuments: vi.fn(),
-  updateDocument: vi.fn(),
-  updateMany: vi.fn(),
-  deleteDocument: vi.fn(),
-  deleteMany: vi.fn(),
-  bulkWriteDocuments: vi.fn(),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    executeQuery: (...args: unknown[]) => executeQueryMock(...args),
+    executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
+    cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
+    listSchemas: (...args: unknown[]) => listSchemasMock(...args),
+    listTables: (...args: unknown[]) => listTablesMock(...args),
+    listViews: (...args: unknown[]) => listViewsMock(...args),
+    listFunctions: (...args: unknown[]) => listFunctionsMock(...args),
+    listSchemaColumns: (...args: unknown[]) => listSchemaColumnsMock(...args),
+    findDocuments: vi.fn(),
+    aggregateDocuments: vi.fn(),
+    findOneDocument: vi.fn(),
+    countDocuments: vi.fn(),
+    estimatedDocumentCount: vi.fn(),
+    distinctDocuments: vi.fn(),
+    insertDocument: vi.fn(),
+    insertManyDocuments: vi.fn(),
+    updateDocument: vi.fn(),
+    updateMany: vi.fn(),
+    deleteDocument: vi.fn(),
+    deleteMany: vi.fn(),
+    bulkWriteDocuments: vi.fn(),
+  });
+});
 
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: vi.fn().mockResolvedValue(""),

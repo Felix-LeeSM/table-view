@@ -17,6 +17,7 @@
 // so the Sprint 187 Safe Mode gate regressions are migrated to drive
 // the modify path instead of the trash path. Date: 2026-05-07.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -25,28 +26,29 @@ import {
   act,
 } from "@testing-library/react";
 import ColumnsEditor from "./ColumnsEditor";
-
-vi.mock("@lib/tauri", () => ({
-  alterTable: vi.fn(() =>
-    Promise.resolve({
-      sql: "ALTER TABLE users DROP COLUMN email",
-    }),
-  ),
-  // Sprint 236 — modal IPC wrappers are mocked so the dialogs mount
-  // without exploding when ColumnsEditor renders them. The modal flow
-  // itself is covered by `AddColumnDialog.test.tsx` /
-  // `DropColumnDialog.test.tsx`.
-  addColumnRequest: vi.fn(() => Promise.resolve({ sql: "" })),
-  dropColumnRequest: vi.fn(() => Promise.resolve({ sql: "" })),
-  listPostgresTypes: vi.fn(() => Promise.resolve([])),
-  // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
-  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
-  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
-  // Sprint 237 — NULL-rows conflict probe IPC. Default resolves to 0
-  // so existing tests (which don't toggle nullable→NOT NULL) stay
-  // green; targeted tests override via `vi.mocked(...).mockResolvedValue`.
-  countNullRows: vi.fn(() => Promise.resolve(0)),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    alterTable: vi.fn(() =>
+      Promise.resolve({
+        sql: "ALTER TABLE users DROP COLUMN email",
+      }),
+    ),
+    // Sprint 236 — modal IPC wrappers are mocked so the dialogs mount
+    // without exploding when ColumnsEditor renders them. The modal flow
+    // itself is covered by `AddColumnDialog.test.tsx` /
+    // `DropColumnDialog.test.tsx`.
+    addColumnRequest: vi.fn(() => Promise.resolve({ sql: "" })),
+    dropColumnRequest: vi.fn(() => Promise.resolve({ sql: "" })),
+    listPostgresTypes: vi.fn(() => Promise.resolve([])),
+    // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+    executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+    cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
+    // Sprint 237 — NULL-rows conflict probe IPC. Default resolves to 0
+    // so existing tests (which don't toggle nullable→NOT NULL) stay
+    // green; targeted tests override via `vi.mocked(...).mockResolvedValue`.
+    countNullRows: vi.fn(() => Promise.resolve(0)),
+  });
+});
 
 import * as tauri from "@lib/tauri";
 import { useConnectionStore } from "@stores/connectionStore";

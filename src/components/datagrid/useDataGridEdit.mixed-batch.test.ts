@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { renderHook, act } from "@testing-library/react";
 import { useDataGridEdit } from "./useDataGridEdit";
 import type { TableData } from "@/types/schema";
@@ -41,18 +42,16 @@ const mockBulkWriteDocuments = vi.fn<(...args: unknown[]) => Promise<unknown>>(
       upserted_ids: [],
     }),
 );
-
-// Sprint 354 (L2 fix, 2026-05-16) — `executeQueryBatch` moved out of
-// `schemaStore` to `@lib/tauri`. Merge the spy into the same mock so
-// `useDataGridPreviewCommit`'s direct import lands on the spy.
-vi.mock("@/lib/tauri", () => ({
-  insertDocument: (...args: unknown[]) => mockInsertDocument(...args),
-  updateDocument: (...args: unknown[]) => mockUpdateDocument(...args),
-  deleteDocument: (...args: unknown[]) => mockDeleteDocument(...args),
-  bulkWriteDocuments: (...args: unknown[]) => mockBulkWriteDocuments(...args),
-  executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
-  executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    insertDocument: (...args: unknown[]) => mockInsertDocument(...args),
+    updateDocument: (...args: unknown[]) => mockUpdateDocument(...args),
+    deleteDocument: (...args: unknown[]) => mockDeleteDocument(...args),
+    bulkWriteDocuments: (...args: unknown[]) => mockBulkWriteDocuments(...args),
+    executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
+    executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
+  });
+});
 
 vi.mock("@stores/workspaceStore", () => ({
   useActiveTabId: () => "tab-1",
@@ -189,6 +188,15 @@ function buildLargeRdbFixture(rowCount: number): TableData {
 describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    setupTauriMock({
+      insertDocument: (...args: unknown[]) => mockInsertDocument(...args),
+      updateDocument: (...args: unknown[]) => mockUpdateDocument(...args),
+      deleteDocument: (...args: unknown[]) => mockDeleteDocument(...args),
+      bulkWriteDocuments: (...args: unknown[]) =>
+        mockBulkWriteDocuments(...args),
+      executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
+      executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
+    });
     mockInsertDocument.mockResolvedValue({
       ObjectId: "507f1f77bcf86cd799439099",
     });

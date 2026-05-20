@@ -8,6 +8,7 @@
 // 2026-05-12 — Sprint 263. hook signature 가 `(connId, db)` 로 확장됐고
 // schemaStore 가 `(connId, db, schema)` 로 nested 됐다.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useSchemaCache } from "./useSchemaCache";
 import { useSchemaStore } from "@stores/schemaStore";
@@ -23,26 +24,25 @@ vi.mock("@/lib/toast", () => ({
     info: vi.fn(),
   },
 }));
-
-// Tauri invoke layer — defaults to resolve, individual tests override
-// with `mockRejectedValueOnce` for failure-path assertions.
-vi.mock("@lib/tauri", () => ({
-  listSchemas: vi.fn(() => Promise.resolve([{ name: "public" }])),
-  listTables: vi.fn(() => Promise.resolve([])),
-  listViews: vi.fn(() => Promise.resolve([])),
-  listFunctions: vi.fn(() => Promise.resolve([])),
-  listSchemaColumns: vi.fn(() => Promise.resolve({})),
-  getTableColumns: vi.fn(() => Promise.resolve([])),
-  getTableIndexes: vi.fn(() => Promise.resolve([])),
-  getTableConstraints: vi.fn(() => Promise.resolve([])),
-  queryTableData: vi.fn(),
-  executeQuery: vi.fn(),
-  executeQueryBatch: vi.fn(),
-  dropTable: vi.fn(),
-  renameTable: vi.fn(),
-  getViewColumns: vi.fn(() => Promise.resolve([])),
-  getViewDefinition: vi.fn(() => Promise.resolve("")),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listSchemas: vi.fn(() => Promise.resolve([{ name: "public" }])),
+    listTables: vi.fn(() => Promise.resolve([])),
+    listViews: vi.fn(() => Promise.resolve([])),
+    listFunctions: vi.fn(() => Promise.resolve([])),
+    listSchemaColumns: vi.fn(() => Promise.resolve({})),
+    getTableColumns: vi.fn(() => Promise.resolve([])),
+    getTableIndexes: vi.fn(() => Promise.resolve([])),
+    getTableConstraints: vi.fn(() => Promise.resolve([])),
+    queryTableData: vi.fn(),
+    executeQuery: vi.fn(),
+    executeQueryBatch: vi.fn(),
+    dropTable: vi.fn(),
+    renameTable: vi.fn(),
+    getViewColumns: vi.fn(() => Promise.resolve([])),
+    getViewDefinition: vi.fn(() => Promise.resolve("")),
+  });
+});
 
 beforeEach(() => {
   useSchemaStore.setState({

@@ -33,6 +33,7 @@
 // Table cases remain byte-equivalent in intent — only the post-action
 // dialog assertions are mechanically updated.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import {
   render,
@@ -94,16 +95,17 @@ const {
     },
   ),
 }));
-
-vi.mock("@lib/tauri", () => ({
-  dropTableRequest: mockDropTableRequest,
-  renameTableRequest: mockRenameTableRequest,
-  dropTable: mockDropTable,
-  renameTable: mockRenameTable,
-  listTables: mockListTables,
-  createTable: mockCreateTable,
-  createTablePlan: mockCreateTablePlan,
-}));
+beforeEach(() => {
+  setupTauriMock({
+    dropTableRequest: mockDropTableRequest,
+    renameTableRequest: mockRenameTableRequest,
+    dropTable: mockDropTable,
+    renameTable: mockRenameTable,
+    listTables: mockListTables,
+    createTable: mockCreateTable,
+    createTablePlan: mockCreateTablePlan,
+  });
+});
 
 import SchemaTree from "./SchemaTree";
 import { useSchemaStore } from "@stores/schemaStore";

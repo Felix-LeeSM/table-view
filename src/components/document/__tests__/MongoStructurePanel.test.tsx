@@ -9,6 +9,7 @@
 // 가드), (e) Validator sub-sub-tab 이 `validator-panel` testid 를 mount.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
   screen,
@@ -21,12 +22,13 @@ import { MongoStructurePanel } from "../MongoStructurePanel";
 const listMongoIndexesMock = vi.fn();
 const getMongoValidatorMock = vi.fn();
 const setMongoValidatorMock = vi.fn();
-
-vi.mock("@/lib/tauri", () => ({
-  listMongoIndexes: (...args: unknown[]) => listMongoIndexesMock(...args),
-  getMongoValidator: (...args: unknown[]) => getMongoValidatorMock(...args),
-  setMongoValidator: (...args: unknown[]) => setMongoValidatorMock(...args),
-}));
+beforeEach(() => {
+  setupTauriMock({
+    listMongoIndexes: (...args: unknown[]) => listMongoIndexesMock(...args),
+    getMongoValidator: (...args: unknown[]) => getMongoValidatorMock(...args),
+    setMongoValidator: (...args: unknown[]) => setMongoValidatorMock(...args),
+  });
+});
 
 describe("MongoStructurePanel (Sprint 350 — tracer Indexes/Validator shell)", () => {
   beforeEach(() => {

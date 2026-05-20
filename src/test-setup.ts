@@ -1,6 +1,16 @@
 import "@testing-library/jest-dom/vitest";
 import { beforeAll, beforeEach, vi } from "vitest";
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { resetTauriMock } from "./test-utils/tauriMock";
+
+vi.mock("@lib/tauri", async () => {
+  const { getTauriMockModule } = await import("./test-utils/tauriMock");
+  return getTauriMockModule();
+});
+vi.mock("@/lib/tauri", async () => {
+  const { getTauriMockModule } = await import("./test-utils/tauriMock");
+  return getTauriMockModule();
+});
 
 // Sprint 401 (2026-05-17) — eager WASM bootstrap for the mongosh parser.
 // `parseMongoshStatement` 의 *모든* 호출부 (Toolbar render, useQueryExecution
@@ -62,6 +72,7 @@ vi.mock("@lib/window-label", async () => {
 // tests byte-identical (no `beforeEach` edits required) while the new
 // store backs the per-mount lifecycle correctly.
 beforeEach(() => {
+  resetTauriMock();
   useDataGridEditStore.setState({ entries: new Map() });
 });
 
