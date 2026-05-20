@@ -85,14 +85,59 @@ async function clickDomSelector(selector: string) {
 export async function selectDatabaseType(dbType: DbType) {
   const trigger = await $("#conn-db-type");
   await trigger.waitForDisplayed({ timeout: 5000 });
-  const current = await trigger.getText();
-  const expected = dbType === "postgresql" ? "PostgreSQL" : "MongoDB";
+  const expected = dbTypeLabel(dbType);
+  const current = await getDomText("#conn-db-type");
   if (current.includes(expected)) return;
 
   await trigger.click();
-  const option = await $(`div[role="option"][data-value="${dbType}"]`);
-  await option.waitForDisplayed({ timeout: 5000 });
-  await option.click();
+  await clickVisibleOption(expected);
+  await browser.waitUntil(
+    async () => (await getDomText("#conn-db-type")).includes(expected),
+    {
+      timeout: 5000,
+      timeoutMsg: `Database Type did not switch to ${expected}`,
+    },
+  );
+}
+
+function dbTypeLabel(dbType: DbType): string {
+  return dbType === "postgresql" ? "PostgreSQL" : "MongoDB";
+}
+
+async function getDomText(selector: string): Promise<string> {
+  return await browser.execute((sel) => {
+    return document.querySelector(sel)?.textContent ?? "";
+  }, selector);
+}
+
+async function clickVisibleOption(label: string) {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((text) => {
+        return Array.from(
+          document.querySelectorAll<HTMLElement>('[role="option"]'),
+        ).some(
+          (option) =>
+            option.offsetParent !== null && option.textContent?.trim() === text,
+        );
+      }, label),
+    {
+      timeout: 5000,
+      timeoutMsg: `${label} option did not appear in the open select`,
+    },
+  );
+
+  await browser.execute((text) => {
+    const option = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="option"]'),
+    ).find(
+      (candidate) =>
+        candidate.offsetParent !== null &&
+        candidate.textContent?.trim() === text,
+    );
+    if (!option) throw new Error(`${text} option did not appear`);
+    option.click();
+  }, label);
 }
 
 export async function createPostgresConnection(name = "E2E Postgres") {
