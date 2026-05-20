@@ -1,6 +1,6 @@
 ---
 name: improve-codebase-architecture
-description: CONTEXT.md의 도메인 언어와 docs/adr/의 결정에 비추어 코드베이스에서 깊이를 더할 기회(deepening opportunity)를 발견. 사용자가 아키텍처를 개선하거나, 리팩토링 기회를 찾거나, 강하게 결합된 모듈을 통합하거나, 코드베이스를 더 테스트 가능하고 AI 친화적으로 만들고 싶을 때 사용.
+description: memory/의 도메인 언어와 memory/decisions의 결정에 비추어 코드베이스에서 깊이를 더할 기회(deepening opportunity)를 발견. 사용자가 아키텍처를 개선하거나, 리팩토링 기회를 찾거나, 강하게 결합된 모듈을 통합하거나, 코드베이스를 더 테스트 가능하고 AI 친화적으로 만들고 싶을 때 사용.
 ---
 
 # Improve Codebase Architecture
@@ -32,7 +32,8 @@ description: CONTEXT.md의 도메인 언어와 docs/adr/의 결정에 비추어 
 
 ### 1. 탐색
 
-먼저 프로젝트의 도메인 용어집과 건드리는 영역의 ADR을 읽어.
+먼저 `memory/memory.md`, `memory/index/by-surface.md`, 건드리는 영역의 관련
+`memory/**/memory.md` 와 `memory/decisions/memory.md` 를 읽어.
 
 그 다음 Agent 도구를 `subagent_type=Explore`와 함께 사용해서 코드베이스를 걸어. 경직된 휴리스틱을 따르지 말고 — 유기적으로 탐색하면서 마찰을 느끼는 곳을 메모:
 
@@ -53,7 +54,7 @@ deepening 기회의 번호 매긴 리스트를 제시. 각 후보에 대해:
 - **Solution** — 무엇이 바뀔지 평이한 한국어 설명
 - **Benefits** — locality와 leverage 관점, 그리고 테스트가 어떻게 개선될지
 
-**도메인은 CONTEXT.md 어휘를, 아키텍처는 [LANGUAGE.md](LANGUAGE.md) 어휘를 사용.** `CONTEXT.md`가 "Order"를 정의했다면, "Order intake 모듈"이라고 말해 — "FooBarHandler"나 "Order service"가 아니라.
+**도메인은 `memory/**/memory.md` 어휘를, 아키텍처는 [LANGUAGE.md](LANGUAGE.md) 어휘를 사용.** memory 가 "Order"를 정의했다면, "Order intake 모듈"이라고 말해 — "FooBarHandler"나 "Order service"가 아니라.
 
 **ADR 충돌**: 후보가 기존 ADR과 모순될 때, 마찰이 ADR을 다시 열 만큼 충분히 진짜일 때만 표면화. 명확히 표시 (예: _"contradicts ADR-0007 — 하지만 다시 열 만한 이유는…"_). ADR이 금지하는 모든 이론적 리팩토링을 나열하지 마.
 
@@ -65,7 +66,7 @@ deepening 기회의 번호 매긴 리스트를 제시. 각 후보에 대해:
 
 부수 효과는 결정이 구체화될 때 인라인으로 발생:
 
-- **deepened 모듈이 `CONTEXT.md`에 없는 개념의 이름을 따랐어?** 그 용어를 `CONTEXT.md`에 추가 — `/grill-with-docs`와 같은 규율 ([CONTEXT-FORMAT.md](../grill-with-docs/CONTEXT-FORMAT.md) 참고). 파일이 없으면 게으르게 생성.
-- **대화 중에 모호한 용어를 다듬어?** 그 자리에서 `CONTEXT.md` 업데이트.
-- **사용자가 무게 있는 이유로 후보를 거부?** ADR 제안, 다음과 같이 표현: _"이걸 ADR로 기록해서 미래 아키텍처 리뷰가 같은 걸 다시 제안하지 않게 할까?"_ 미래 탐험가가 같은 것을 다시 제안하지 않게 하기 위해 그 이유가 실제로 필요할 때만 제안 — 일시적 이유 ("지금은 가치 없음")와 자명한 이유는 건너뛰어. [ADR-FORMAT.md](../grill-with-docs/ADR-FORMAT.md) 참고.
+- **deepened 모듈이 memory 에 없는 개념의 이름을 따랐어?** `/grill-with-memory` 규율에 따라 적절한 `memory/**/memory.md` 에 추가한다.
+- **대화 중에 모호한 용어를 다듬어?** 그 자리에서 해당 memory source 를 업데이트한다.
+- **사용자가 무게 있는 이유로 후보를 거부?** ADR 제안, 다음과 같이 표현: _"이걸 ADR로 기록해서 미래 아키텍처 리뷰가 같은 걸 다시 제안하지 않게 할까?"_ 미래 탐험가가 같은 것을 다시 제안하지 않게 하기 위해 그 이유가 실제로 필요할 때만 제안 — 일시적 이유 ("지금은 가치 없음")와 자명한 이유는 건너뛰어. ADR 기준은 `memory/workflow/grill/memory.md` 의 `Grill with memory` 섹션을 따른다.
 - **deepened 모듈을 위한 대안 인터페이스를 탐색하고 싶어?** [INTERFACE-DESIGN.md](INTERFACE-DESIGN.md) 참고.
