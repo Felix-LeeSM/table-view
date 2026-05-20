@@ -1,4 +1,6 @@
-import PreviewDialog from "@components/ui/dialog/PreviewDialog";
+import PreviewDialog, {
+  type PreviewDialogCommitError,
+} from "@components/ui/dialog/PreviewDialog";
 import ExecuteButton from "@components/ui/ExecuteButton";
 
 /**
@@ -20,6 +22,7 @@ export interface MqlPreviewModalProps {
   onExecute: () => void | Promise<void>;
   onCancel: () => void;
   loading?: boolean;
+  commitError?: PreviewDialogCommitError | null;
   /**
    * Sprint 256 (ADR 0023, AC-256-05) — environment + connection label
    * for the env-aware footer ExecuteButton. Optional; legacy callers
@@ -36,6 +39,7 @@ export default function MqlPreviewModal({
   onExecute,
   onCancel,
   loading = false,
+  commitError = null,
   environment = null,
   connectionLabel = null,
 }: MqlPreviewModalProps) {
@@ -51,6 +55,7 @@ export default function MqlPreviewModal({
       loading={loading}
       confirmDisabled={executeDisabled}
       confirmAriaLabel="Execute MQL commands"
+      commitError={commitError}
       // Sprint 252: Plain-text join — Mongo dialect highlighter absent so
       // SqlSyntax is intentionally NOT wrapped here (AC-252-07 plain
       // fallback). Empty previewLines → joined string is "" → button

@@ -46,7 +46,7 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
     expect(mqlCommandsToBulkOps(cmds)).toEqual([
       {
         op: "updateOne",
-        filter: { _id: { objectId: "507f1f77bcf86cd799439011" } },
+        filter: { _id: { $oid: "507f1f77bcf86cd799439011" } },
         update: { $set: { name: "Ada L." } },
       },
     ]);
@@ -65,7 +65,7 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
     expect(mqlCommandsToBulkOps(cmds)).toEqual([
       {
         op: "updateOne",
-        filter: { _id: { objectId: "507f1f77bcf86cd799439011" } },
+        filter: { _id: { $oid: "507f1f77bcf86cd799439011" } },
         update: { $set: { name: "Ada L." }, $unset: { legacyField: "" } },
       },
     ]);
@@ -83,7 +83,7 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
     expect(mqlCommandsToBulkOps(cmds)).toEqual([
       {
         op: "deleteOne",
-        filter: { _id: { objectId: "507f1f77bcf86cd799439022" } },
+        filter: { _id: { $oid: "507f1f77bcf86cd799439022" } },
       },
     ]);
   });

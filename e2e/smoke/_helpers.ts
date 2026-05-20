@@ -1,8 +1,15 @@
-import { $, browser, expect } from "@wdio/globals";
+import { $, $$, browser, expect } from "@wdio/globals";
+
+export { editGridCellInRow } from "./grid-edit";
 
 const WORKSPACE_TITLE = "Table View — Workspace";
 
 export type DbType = "postgresql" | "mongodb";
+
+export async function step<T>(label: string, action: () => Promise<T>) {
+  console.log(`[e2e smoke] step: ${label}`);
+  return await action();
+}
 
 export async function waitForLauncher() {
   await switchToLauncherWindow();
@@ -222,6 +229,7 @@ export async function openConnection(name: string) {
 }
 
 export async function openNewQueryTab() {
+  await switchToWorkspaceWindow();
   const newQuery = await $('[aria-label="New Query Tab"]');
   await newQuery.waitForDisplayed({ timeout: 10000 });
   await newQuery.click();
@@ -230,6 +238,7 @@ export async function openNewQueryTab() {
 }
 
 export async function typeQuery(sql: string) {
+  await switchToWorkspaceWindow();
   const content = await $(".cm-content");
   await content.waitForDisplayed({ timeout: 5000 });
   await content.click();
@@ -237,6 +246,7 @@ export async function typeQuery(sql: string) {
 }
 
 export async function runQuery() {
+  await switchToWorkspaceWindow();
   const run = await $('[aria-label="Run query"]');
   await run.waitForDisplayed({ timeout: 5000 });
   await run.click();
@@ -247,6 +257,7 @@ export async function waitForGridText(
   timeout: number,
   timeoutMsg: string,
 ) {
+  await switchToWorkspaceWindow();
   const grid = await $('[role="grid"]');
   await grid.waitForDisplayed({ timeout });
   await browser.waitUntil(
@@ -264,7 +275,62 @@ export async function waitForGridText(
   return grid;
 }
 
+export async function waitForGridTextAll(
+  snippets: string[],
+  timeout: number,
+  timeoutMsg: string,
+) {
+  await switchToWorkspaceWindow();
+  const grid = await $('[role="grid"]');
+  await grid.waitForDisplayed({ timeout });
+  await browser.waitUntil(
+    async () => {
+      const text = (
+        ((await grid.getProperty("textContent")) as string) ?? ""
+      ).toLowerCase();
+      return snippets.every((snippet) => text.includes(snippet.toLowerCase()));
+    },
+    {
+      timeout,
+      timeoutMsg,
+    },
+  );
+  return grid;
+}
+
+export async function executeSqlPreview() {
+  await executePreviewAction("Execute SQL");
+}
+
+export async function executeMqlPreview() {
+  await executePreviewAction("Execute MQL commands");
+}
+
+async function executePreviewAction(ariaLabel: string) {
+  await switchToWorkspaceWindow();
+  const execute = await $(`[aria-label="${ariaLabel}"]`);
+  await execute.waitForDisplayed({ timeout: 10000 });
+  await browser.execute((label) => {
+    const button = Array.from(
+      document.querySelectorAll<HTMLElement>("[aria-label]"),
+    ).find((candidate) => candidate.getAttribute("aria-label") === label);
+    if (!button) throw new Error(`${label} button did not appear`);
+    button.click();
+  }, ariaLabel);
+  await browser.waitUntil(
+    async () => {
+      const previewActions = await $$(`[aria-label="${ariaLabel}"]`);
+      return previewActions.length === 0;
+    },
+    {
+      timeout: 15000,
+      timeoutMsg: `${ariaLabel} preview did not close after execution`,
+    },
+  );
+}
+
 export async function expandIfCollapsed(selector: string, timeout = 10000) {
+  await switchToWorkspaceWindow();
   const node = await $(selector);
   await node.waitForDisplayed({ timeout });
   if ((await node.getAttribute("aria-expanded")) !== "true") {

@@ -401,7 +401,7 @@ describe("DocumentDataGrid", () => {
       [
         {
           op: "updateOne",
-          filter: { _id: { objectId: "65abcdef0123456789abcdef" } },
+          filter: { _id: { $oid: "65abcdef0123456789abcdef" } },
           update: { $set: { name: "Ada" } },
         },
       ],
@@ -409,6 +409,39 @@ describe("DocumentDataGrid", () => {
     await waitFor(() => {
       expect(findMock.mock.calls.length).toBeGreaterThan(initialFindCalls);
     });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "MQL Preview" })).toBeNull();
+    });
+    expect(
+      screen.queryByRole("button", { name: "Commit changes" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("Execute inside the MQL preview surfaces bulkWrite failures in the modal", async () => {
+    bulkWriteDocumentsMock.mockRejectedValueOnce(
+      new Error("bulk_write failed: unsupported server command"),
+    );
+    renderGrid();
+
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    fireEvent.doubleClick(screen.getByText("Alice"));
+    const editor = await screen.findByLabelText("Editing name");
+    fireEvent.change(editor, { target: { value: "Ada" } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Commit changes" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Execute MQL commands" }),
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("unsupported server command");
+    expect(
+      screen.getByRole("dialog", { name: "MQL Preview" }),
+    ).toBeInTheDocument();
   });
 
   it("toolbar Add opens the AddDocumentModal and submits via insertDocument", async () => {

@@ -1,63 +1,72 @@
-import { $, $$, browser, expect } from "@wdio/globals";
+import { $, expect } from "@wdio/globals";
 import {
   createPostgresConnection,
+  editGridCellInRow,
+  executeSqlPreview,
   expandIfCollapsed,
   openConnection,
   openNewQueryTab,
   runQuery,
+  step,
   typeQuery,
-  waitForGridText,
+  waitForGridTextAll,
   waitForLauncher,
 } from "./_helpers";
 
 const CONNECTION_NAME = "E2E Postgres";
 
 describe("PostgreSQL smoke", () => {
-  it("creates a connection, opens seeded data, and executes a query", async () => {
-    await waitForLauncher();
-    await createPostgresConnection(CONNECTION_NAME);
-    await openConnection(CONNECTION_NAME);
+  it("creates a connection, edits seeded data, and verifies the committed value through a query", async () => {
+    const editedName = `Alice Smoke ${Date.now()}`;
 
-    await expandIfCollapsed('[aria-label="public schema"]', 30000);
-    await expandIfCollapsed('[aria-label="Tables in public"]');
+    await step("create Postgres connection and open workspace", async () => {
+      await waitForLauncher();
+      await createPostgresConnection(CONNECTION_NAME);
+      await openConnection(CONNECTION_NAME);
+    });
 
-    const usersTable = await $('[aria-label="users table"]');
-    await usersTable.waitForDisplayed({ timeout: 10000 });
-    await usersTable.click();
+    await step("open seeded users table", async () => {
+      await expandIfCollapsed('[aria-label="public schema"]', 30000);
+      await expandIfCollapsed('[aria-label="Tables in public"]');
 
-    await waitForGridText(
-      ["alice", "alice@example.com"],
-      15000,
-      "seeded Postgres users row did not appear in grid",
-    );
+      const usersTable = await $('[aria-label="users table"]');
+      await usersTable.waitForDisplayed({ timeout: 10000 });
+      await usersTable.click();
 
-    await openNewQueryTab();
-    await typeQuery("SELECT 1 AS test_column");
-    await runQuery();
+      await waitForGridTextAll(
+        ["alice@example.com"],
+        15000,
+        "seeded Postgres users row did not appear in grid",
+      );
+    });
 
-    const resultGrid = await waitForGridText(
-      ["test_column"],
-      15000,
-      "SELECT 1 header did not appear in result grid",
-    );
+    await step("edit Alice name cell and execute the SQL preview", async () => {
+      await editGridCellInRow(
+        "alice@example.com",
+        2,
+        editedName,
+        "Editing name",
+      );
 
-    await browser.waitUntil(
-      async () => {
-        const cells = await $$('[role="gridcell"]');
-        for (const cell of cells) {
-          const text = (
-            ((await cell.getProperty("textContent")) as string) ?? ""
-          ).trim();
-          if (text === "1") return true;
-        }
-        return false;
-      },
-      {
-        timeout: 15000,
-        timeoutMsg: "SELECT 1 result did not appear in result grid",
-      },
-    );
+      const commit = await $('[aria-label="Commit changes"]');
+      await commit.click();
+      await executeSqlPreview();
+    });
 
-    expect(await resultGrid.isDisplayed()).toBe(true);
+    await step("verify committed value through a query tab", async () => {
+      await openNewQueryTab();
+      await typeQuery(
+        "SELECT name AS edited_name FROM users WHERE email = 'alice@example.com'",
+      );
+      await runQuery();
+
+      const resultGrid = await waitForGridTextAll(
+        ["edited_name", editedName],
+        15000,
+        "committed Postgres edit did not appear in query result grid",
+      );
+
+      expect(await resultGrid.isDisplayed()).toBe(true);
+    });
   });
 });

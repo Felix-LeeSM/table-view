@@ -1,7 +1,7 @@
 ---
 title: Lessons — e2e
 type: index
-updated: 2026-05-18
+updated: 2026-05-20
 ---
 
 # Lessons — e2e
@@ -12,6 +12,7 @@ E2E 안정성 / Vite OOM / cross-window invariant 사고.
 
 - [2026-04-25-e2e-stale-after-ui-redesign](./2026-04-25-e2e-stale-after-ui-redesign/memory.md)
 - [2026-05-06-vite-oom-host-prereq-cross-window-invariant](./2026-05-06-vite-oom-host-prereq-cross-window-invariant/memory.md)
+- [2026-05-20-write-smoke-root-cause](./2026-05-20-write-smoke-root-cause/memory.md)
 
 ## 진입 규칙
 

@@ -646,6 +646,7 @@ export default function DocumentDataGrid({
           previewLines={mqlPreview.previewLines}
           errors={mqlErrors}
           loading={executing}
+          commitError={editState.commitError}
           onExecute={handleExecuteMql}
           onCancel={() => editState.setMqlPreview(null)}
         />
