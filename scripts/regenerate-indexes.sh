@@ -141,6 +141,10 @@ EOF
   '
 } > "$BY_SURFACE"
 
+# Keep generated markdown friendly to `git diff --check`: one newline at EOF,
+# no trailing blank paragraph after the final entry.
+perl -0pi -e 's/\n+\z/\n/' "$BY_TASK" "$BY_SURFACE"
+
 # Stat 출력
 TASK_LINES=$(wc -l < "$BY_TASK" | tr -d ' ')
 SURFACE_LINES=$(wc -l < "$BY_SURFACE" | tr -d ' ')
