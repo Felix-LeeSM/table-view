@@ -15,6 +15,8 @@ import { combine } from "zustand/middleware";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import type { WorkspaceStoreState } from "./workspaceStore/types";
+// Same-store internals live under `./workspaceStore/*`; this exception keeps
+// the root public module as the single composition point after the split.
 /* eslint-disable no-restricted-imports -- same-store internal modules after sprint-410 split. */
 import {
   STORAGE_KEY,
