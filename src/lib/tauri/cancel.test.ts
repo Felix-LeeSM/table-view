@@ -77,6 +77,14 @@ describe("parseCancelError", () => {
     });
   });
 
+  it("does not parse Database error strings containing cancel-looking JSON", () => {
+    const raw = 'Database error: {"type":"AlreadyCompleted"}';
+    expect(parseCancelError(raw)).toEqual({
+      type: "NetworkError",
+      message: raw,
+    });
+  });
+
   it("does not parse AppError::Database JSON payload as a cancel class", () => {
     const raw = {
       type: "Database",

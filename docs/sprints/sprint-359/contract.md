@@ -7,6 +7,10 @@
 - Owner: Generator (sprint-359)
 - Verification Profile: `mixed` (cargo test + cargo clippy + pnpm vitest + pnpm tsc + pnpm lint)
 
+Supersession note: sprint-405 keeps the Q5.5 cancel classes but replaces the
+transport from JSON embedded in `AppError::Database` to the typed top-level
+`AppError::Cancel` envelope. See `docs/sprints/sprint-405/contract.md`.
+
 ## In Scope
 
 - `src-tauri/src/state/active_connections.rs` — `ActiveConnection { pool, introspection_pool, tab_affinity: HashMap<TabId, Option<(PoolConnection, server_pid)>> }` 스키마 추가. boot 시 빈 HashMap (Q5.6 lazy 의 None — codex 정합).

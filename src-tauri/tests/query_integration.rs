@@ -1,6 +1,6 @@
 mod common;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use table_view_lib::commands::connection::AppState;
 use table_view_lib::commands::query::{validate_cancel_inputs, validate_query_inputs};
@@ -951,6 +951,66 @@ async fn test_query_table_data_raw_where_accepts_clean_clause() {
         .expect("raw_where clean");
     // amount > 200 AND active = TRUE → Charlie (300) + Eve (500).
     assert_eq!(data.total_count, 2);
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_query_table_data_cancel_token_interrupts_in_flight_raw_where() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_qtd_cancel_{ts}");
+    seed_filter_table(&adapter, &table).await;
+
+    let cancel_token = CancellationToken::new();
+    let child_token = cancel_token.clone();
+    let spawned_adapter = adapter.clone();
+    let table_for_task = table.clone();
+    let query_handle = tokio::spawn(async move {
+        let raw_where =
+            format!("id IN (SELECT id FROM \"public\".\"{table_for_task}\", pg_sleep(2))");
+        spawned_adapter
+            .query_table_data(
+                &table_for_task,
+                "public",
+                1,
+                50,
+                None,
+                None,
+                Some(raw_where.as_str()),
+                Some(&child_token),
+            )
+            .await
+    });
+
+    sleep(Duration::from_millis(100)).await;
+    let wait_start = Instant::now();
+    cancel_token.cancel();
+
+    let result = tokio::time::timeout(Duration::from_secs(5), query_handle)
+        .await
+        .expect("query_table_data cancel should return within 5s")
+        .expect("query task should complete");
+    assert!(
+        wait_start.elapsed() < Duration::from_secs(5),
+        "query_table_data cancel took {:?}",
+        wait_start.elapsed()
+    );
+    match result {
+        Err(AppError::Database(msg)) => assert_eq!(msg, "Operation cancelled"),
+        other => panic!("expected Operation cancelled, got {other:?}"),
+    }
 
     adapter
         .execute_query(&format!("DROP TABLE {table}"), None)
