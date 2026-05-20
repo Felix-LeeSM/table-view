@@ -216,19 +216,14 @@ describe("parseMongoshExpression — BSON literal reification (AC-03)", () => {
     });
   });
 
-  it('reifies UUID("550e8400-e29b-41d4-a716-446655440000") to { $binary, subType "04" }', () => {
+  it('reifies UUID("550e8400-e29b-41d4-a716-446655440000") to { $uuid }', () => {
     const result = parseMongoshExpression(
       'db.users.find({uuid: UUID("550e8400-e29b-41d4-a716-446655440000")})',
     );
     expectSuccess(result);
-    const value = (
-      result.args[0] as {
-        uuid: { $binary: { base64: string; subType: string } };
-      }
-    ).uuid;
-    expect(value.$binary.subType).toBe("04");
-    // Base64 of the UUID's 16 raw bytes is a deterministic derived value.
-    expect(value.$binary.base64).toBe("VQ6EAOKbQdSnFkRmVUQAAA==");
+    expect(result.args[0]).toEqual({
+      uuid: { $uuid: "550e8400-e29b-41d4-a716-446655440000" },
+    });
   });
 
   it('reifies NumberLong("9223372036854775807") to { $numberLong }', () => {
@@ -593,10 +588,10 @@ describe("parseMongoshExpression — lexer / value coverage", () => {
     expect(result.errorKind).toBe("unsupported-syntax");
   });
 
-  it("treats `undefined` as a value (mongosh permits, backend ignores)", () => {
+  it("rejects `undefined` as a bare identifier value", () => {
     const result = parseMongoshExpression("db.users.find({trace: undefined})");
-    expectSuccess(result);
-    expect((result.args[0] as { trace?: unknown }).trace).toBeUndefined();
+    expectError(result);
+    expect(result.errorKind).toBe("unsupported-syntax");
   });
 });
 
@@ -643,12 +638,14 @@ describe("parseMongoshExpression — BSON literal edge cases", () => {
     expect(result.errorKind).toBe("bson-literal");
   });
 
-  it("rejects NumberLong with a non-string argument", () => {
+  it("accepts NumberLong with a numeric argument via the shared WASM parser", () => {
     const result = parseMongoshExpression(
-      "db.metrics.insertOne({n: NumberLong(9223372036854775807)})",
+      "db.metrics.insertOne({n: NumberLong(123)})",
     );
-    expectError(result);
-    expect(result.errorKind).toBe("bson-literal");
+    expectSuccess(result);
+    expect(result.args[0]).toEqual({
+      n: { $numberLong: "123" },
+    });
   });
 
   it("rejects NumberLong with a non-integer literal", () => {
@@ -685,12 +682,14 @@ describe("parseMongoshExpression — BSON literal edge cases", () => {
     expect(result.errorKind).toBe("bson-literal");
   });
 
-  it("rejects NumberDecimal with a non-string argument", () => {
+  it("accepts NumberDecimal with a numeric argument via the shared WASM parser", () => {
     const result = parseMongoshExpression(
       "db.prices.insertOne({amt: NumberDecimal(1)})",
     );
-    expectError(result);
-    expect(result.errorKind).toBe("bson-literal");
+    expectSuccess(result);
+    expect(result.args[0]).toEqual({
+      amt: { $numberDecimal: "1" },
+    });
   });
 
   it("rejects BinData with a wrong argument count", () => {

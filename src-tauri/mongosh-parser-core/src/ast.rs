@@ -12,6 +12,13 @@
 //! `serde_wasm_bindgen` round-trips `Value` cleanly to JS.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CursorChainStep {
+    pub name: String,
+    pub args: Vec<JsonValue>,
+}
 
 /// Top-level result returned by `parse_mongosh`. Tagged union so the TS
 /// facade can narrow on `kind` without try/catch — parse errors travel as a
@@ -33,7 +40,9 @@ pub enum MongoshStatement {
     CollectionCommand {
         collection: String,
         method: String,
-        args: Vec<serde_json::Value>,
+        args: Vec<JsonValue>,
+        #[serde(rename = "cursorChain", default, skip_serializing_if = "Vec::is_empty")]
+        cursor_chain: Vec<CursorChainStep>,
     },
     /// Parse / lex error. `errorKind` distinguishes UI-surfaceable
     /// categories — see `MongoshErrorKind`.

@@ -1,8 +1,9 @@
 ---
 id: 0029
 title: mongosh expression parser — handwritten whitelist (WASM sidecar 미채택)
-status: Accepted
+status: Superseded
 date: 2026-05-14
+superseded_by: 0043
 ---
 
 **결정**: Phase 28 Slice A1 의 mongosh expression parser 는 `src/lib/mongo/mongoshParser.ts` 안에 자체 구현한 **pure-TS hand-written whitelist parser** 로 둔다. mongosh LSP / WASM sidecar (Q14 option 2+ 의 "preferred" 안) 는 채택하지 않는다.

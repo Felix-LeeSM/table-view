@@ -27,6 +27,12 @@ export interface MongoshCollectionCommand {
   readonly collection: string;
   readonly method: string;
   readonly args: readonly unknown[];
+  readonly cursorChain?: readonly CursorChainStep[];
+}
+
+export interface CursorChainStep {
+  readonly name: string;
+  readonly args: readonly unknown[];
 }
 
 export interface MongoshParseError {

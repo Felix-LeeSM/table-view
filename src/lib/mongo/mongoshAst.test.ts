@@ -88,6 +88,19 @@ describe("parseMongoshStatement — collection commands (AC-382-T3/T4)", () => {
     expect(result.args).toEqual([{}, { limit: 10 }]);
   });
 
+  it("preserves cursor-chain steps for dispatch adapters", () => {
+    const result = parseMongoshStatement(
+      "db.users.find({}).sort({name: 1}).limit(10).skip(5).toArray()",
+    );
+    expectCollection(result);
+    expect(result.cursorChain).toEqual([
+      { name: "sort", args: [{ name: 1 }] },
+      { name: "limit", args: [10] },
+      { name: "skip", args: [5] },
+      { name: "toArray", args: [] },
+    ]);
+  });
+
   it("parses db.users.estimatedDocumentCount() with no args", () => {
     const result = parseMongoshStatement("db.users.estimatedDocumentCount()");
     expectCollection(result);
@@ -273,6 +286,24 @@ describe("parseMongoshStatement — BSON literal acceptance (AC-383-B1..B14)", (
     expectAdmin(result);
     expect(result.body).toEqual({
       u: { $uuid: "550e8400-e29b-41d4-a716-446655440000" },
+    });
+  });
+
+  it("accepts NumberDecimal as a Decimal128 alias", () => {
+    const result = parseMongoshStatement(
+      'db.runCommand({d: NumberDecimal("3.14")})',
+    );
+    expectAdmin(result);
+    expect(result.body).toEqual({ d: { $numberDecimal: "3.14" } });
+  });
+
+  it("accepts BinData(subType, base64) as canonical $binary", () => {
+    const result = parseMongoshStatement(
+      'db.runCommand({d: BinData(15, "AQID")})',
+    );
+    expectAdmin(result);
+    expect(result.body).toEqual({
+      d: { $binary: { base64: "AQID", subType: "0f" } },
     });
   });
 

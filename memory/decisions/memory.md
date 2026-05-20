@@ -35,7 +35,6 @@ updated: 2026-05-17
 | [0026](./0026-numeric-wire-string-type-aware-wrap/memory.md) | 수치 wire-format — string token + frontend type-aware wrap (BigInt / Decimal / Number) | Accepted | 2026-05-11 | — |
 | [0027](./0027-per-workspace-state-store/memory.md) | Per-workspace state — workspaceStore (tabStore 흡수) keyed by (connId, db) with explicit-API | Accepted | 2026-05-12 | — |
 | [0028](./0028-mysql-driver-sqlx/memory.md) | MySQL adapter 라이브러리 — sqlx::mysql (mysql_async 미채택) | Accepted | 2026-05-14 | — |
-| [0029](./0029-mongosh-parser-strategy/memory.md) | mongosh expression parser — handwritten whitelist (WASM sidecar 미채택) | Accepted | 2026-05-14 | — |
 | [0030](./0030-mongo-db-scope-tab-local/memory.md) | Mongo DB-scope — toolbar chip 제거, tab-local chip + sidebar 우클릭 entry-point | Accepted | 2026-05-15 | — |
 | [0031](./0031-syntax-palette-manual-and-token-integrity/memory.md) | Syntax palette — manual themes.css + theme-agnostic fallback + token integrity 강제 | Accepted | 2026-05-15 | — |
 | [0032](./0032-sqlite-infrastructure-and-atomic-snapshot/memory.md) | SQLite 인프라 + atomic snapshot bootstrap (Q1/Q9 + SQLite 도입) | Accepted | 2026-05-17 | — |
@@ -49,6 +48,7 @@ updated: 2026-05-17
 | [0040](./0040-file-key-os-keyring/memory.md) | File-key OS keyring + 2-phase migration with Linux fallback | Accepted | 2026-05-17 | — |
 | [0041](./0041-schema-cache-eager-wide-invalidate/memory.md) | SchemaCache cross-window invalidation — in-process event + wide + eager | Accepted | 2026-05-17 | — |
 | [0042](./0042-query-history-privacy/memory.md) | Query history retention / privacy / export — local at-rest 정책 | Accepted | 2026-05-17 | — |
+| [0043](./0043-mongosh-parser-rust-wasm-sot/memory.md) | mongosh parser — Rust/WASM single parser with TS policy adapter | Accepted | 2026-05-20 | 0029 |
 
 ## 역사 (Superseded / Deprecated)
 
@@ -56,6 +56,7 @@ updated: 2026-05-17
 |----|------|------|------|--------------|
 | [0011](./0011-single-window-stub-for-launcher-workspace/memory.md) | Sprint 149 — launcher/workspace lifecycle은 single-window stub으로 우선 잠그고 실제 윈도우 분리는 phase 12 이월 | Superseded | 2026-04-27 | [0012](./0012-multi-window-launcher-workspace/memory.md) |
 | [0015](./0015-e2e-docker-pipeline-canonical/memory.md) | E2E 실행을 docker compose 파이프라인으로 표준화 | Superseded | 2026-04-29 | [0019](./0019-e2e-pre-push-not-ci/memory.md) |
+| [0029](./0029-mongosh-parser-strategy/memory.md) | mongosh expression parser — handwritten whitelist (WASM sidecar 미채택) | Superseded | 2026-05-14 | [0043](./0043-mongosh-parser-rust-wasm-sot/memory.md) |
 
 형식:
 
