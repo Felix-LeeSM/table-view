@@ -19,7 +19,7 @@
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@components/ui/button";
-import ConfirmDialog from "@components/shared/ConfirmDialog";
+import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 import { clearHistory } from "@lib/tauri/history";
 import { toast } from "@lib/toast";
 import { logger } from "@lib/logger";

@@ -66,8 +66,8 @@ async function dispatchSettingUpdate(entityId: string): Promise<void> {
       entityId === "query_history_retention_days"
     ) {
       // sprint-373 (2026-05-17) — query history toggle + retention select.
-      // Both keys route through the same dispatcher so cross-window state
-      // (HistorySettings switch / HistoryRetentionSelect) stays coherent.
+      // Both keys route through the same dispatcher so cross-window
+      // HistorySettings state stays coherent.
       await applyHistorySettingsFromBackend(entityId);
     }
     // Other keys (sidebar_width, home_recent_collapsed, …) are handled

@@ -7,6 +7,7 @@ use bip39::{Language, Mnemonic};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+#[cfg(any(test, debug_assertions))]
 use std::sync::Mutex;
 use zeroize::Zeroizing;
 
@@ -108,15 +109,16 @@ impl KeyringBackend for OsKeyringBackend {
     }
 }
 
-/// Sprint 356 (Q22) — test-only in-memory keyring. Backed by a `Mutex<...>`
-/// so the same instance can be passed by `&` to multiple call sites in one
-/// test (mirrors `OsKeyringBackend` which is also `&self` everywhere).
+/// Sprint 356 (Q22) — debug/test-only in-memory keyring. Backed by a
+/// `Mutex<...>` so the same instance can be passed by `&` to multiple call
+/// sites in one test (mirrors `OsKeyringBackend` which is also `&self`
+/// everywhere). Release binaries should not expose this helper.
 ///
-/// `available` is a constructor flag — `new_available()` simulates a
-/// healthy Linux desktop / macOS / Windows machine, `new_unavailable()`
-/// simulates the Linux server / minimal-desktop case from AC-356-05 where
-/// `is_available()` returns false and the migration path must fall back
-/// to disk.
+/// `available` is a constructor flag — `new_available()` simulates a healthy
+/// Linux desktop / macOS / Windows machine, `new_unavailable()` simulates the
+/// Linux server / minimal-desktop case from AC-356-05 where `is_available()`
+/// returns false and the migration path must fall back to disk.
+#[cfg(any(test, debug_assertions))]
 pub struct InMemoryKeyringBackend {
     inner: Mutex<std::collections::HashMap<String, Vec<u8>>>,
     available: bool,
@@ -127,6 +129,7 @@ pub struct InMemoryKeyringBackend {
     set_should_fail: Mutex<bool>,
 }
 
+#[cfg(any(test, debug_assertions))]
 impl InMemoryKeyringBackend {
     pub fn new_available() -> Self {
         Self {
@@ -156,6 +159,7 @@ impl InMemoryKeyringBackend {
     }
 }
 
+#[cfg(any(test, debug_assertions))]
 impl KeyringBackend for InMemoryKeyringBackend {
     fn is_available(&self) -> bool {
         self.available

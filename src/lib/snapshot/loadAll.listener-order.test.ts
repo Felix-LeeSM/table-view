@@ -5,7 +5,7 @@
 // 순서 — listener 가 IPC 이전에 등록되어야 snapshot 적용 직전에 발생한 backend
 // emit 도 buffer 에 잡힌다. 코드 grep 으로 line 번호 비교.
 //
-// AC-367-04 (동작): listener 가 registerStateChangedListener 보다 먼저 등록된 상태에서
+// AC-367-04 (동작): state-changed listener 가 snapshot IPC 보다 먼저 등록된 상태에서
 // `loadAllFromSnapshot` 호출 → IPC 응답 전에 fake `state-changed` event 가 발생하면
 // snapshot 적용 후 그 event 가 한 번만 dispatch 된다 (snapshotVersion 기준 dedup).
 //

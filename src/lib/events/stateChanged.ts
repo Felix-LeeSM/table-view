@@ -409,44 +409,8 @@ function routeGapHandler(payload: StateChangedPayload): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Tauri listen() registration
-// ---------------------------------------------------------------------------
-
 /**
  * Tauri event name — keep in lockstep with backend `STATE_CHANGED_EVENT`
  * in `src-tauri/src/events.rs`.
  */
 export const STATE_CHANGED_EVENT = "state-changed";
-
-/**
- * Register the singleton `state-changed` listener for this window. Reads
- * the current window label once and passes it into every dispatch so the
- * self-echo skip works correctly.
- *
- * Returns the Tauri unlisten function. Production callers don't dispose
- * (listener lives for the renderer's lifetime); tests can dispose to
- * drop the listen() registration between cases.
- *
- * Best-effort: if Tauri is unavailable (vitest jsdom default), returns
- * a no-op unlisten so callers don't have to special-case the environment.
- */
-export async function registerStateChangedListener(): Promise<() => void> {
-  // Lazy-import the Tauri runtime + window-label helpers — vitest jsdom
-  // mocks `@lib/window-label` to return `null`, and `@tauri-apps/api/event`
-  // throws synchronously if loaded outside a Tauri runtime in some
-  // configurations. The lazy path keeps the module import-safe.
-  try {
-    const { listen } = await import("@tauri-apps/api/event");
-    const { getCurrentWindowLabel } = await import("@lib/window-label");
-    const label = getCurrentWindowLabel() ?? "";
-    const unlisten = await listen<unknown>(STATE_CHANGED_EVENT, (event) => {
-      dispatchStateChangedPayload(label, event.payload);
-    });
-    return unlisten;
-  } catch {
-    // Tauri runtime unavailable — return a no-op unlisten so callers
-    // can keep their lifecycle code straight.
-    return () => {};
-  }
-}

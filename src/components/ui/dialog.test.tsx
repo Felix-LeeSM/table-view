@@ -15,7 +15,7 @@ import CellDetailDialog from "@components/datagrid/CellDetailDialog";
 import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import AddDocumentModal from "@components/document/AddDocumentModal";
-import ConfirmDialog from "@components/shared/ConfirmDialog";
+import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 
 // ---------------------------------------------------------------------------

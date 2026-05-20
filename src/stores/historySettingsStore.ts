@@ -93,19 +93,6 @@ export const useHistorySettingsStore = create<HistorySettingsState>()(
 );
 
 /**
- * 5 source caller 가 사용하는 직접 selector. `addOptimisticEntry` 직전
- * `if (!useHistorySettingsStore.getState().queryHistoryEnabled) return;`
- * 패턴 — IPC 호출 자체를 skip 하도록 한다 (AC-373-03).
- *
- * 함수 노출 이유 (hook 이 아님): callable 인 caller (useCallback 안 closure,
- * non-React 모듈 의 helper) 도 사용할 수 있어야 함. React 컴포넌트는
- * `useHistorySettingsStore((s) => s.queryHistoryEnabled)` 로 subscribe.
- */
-export function isQueryHistoryEnabled(): boolean {
-  return useHistorySettingsStore.getState().queryHistoryEnabled;
-}
-
-/**
  * Cross-window setting receiver. `settingsReceiver.ts` 가 entityId 별
  * dispatch 할 때 본 함수가 두 키의 refetch + store sync 를 책임.
  *

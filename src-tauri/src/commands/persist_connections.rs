@@ -17,6 +17,7 @@ use crate::models::{ConnectionConfig, DatabaseType};
 use crate::storage::reconcile::{is_force_failure_for_tests, record_sqlite_result};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use std::str::FromStr;
 use tauri::State;
 
 /// IPC request body for `persist_connection`. password 는 별 IPC
@@ -53,17 +54,6 @@ pub struct PersistConnectionRequest {
     pub sort_order: i64,
 }
 
-fn parse_db_type(s: &str) -> DatabaseType {
-    match s {
-        "postgresql" => DatabaseType::Postgresql,
-        "mysql" => DatabaseType::Mysql,
-        "sqlite" => DatabaseType::Sqlite,
-        "mongodb" => DatabaseType::Mongodb,
-        "redis" => DatabaseType::Redis,
-        _ => DatabaseType::Postgresql,
-    }
-}
-
 pub async fn persist_connection_inner(
     pool: &SqlitePool,
     req: PersistConnectionRequest,
@@ -74,7 +64,7 @@ pub async fn persist_connection_inner(
     let config = ConnectionConfig {
         id: req.id.clone(),
         name: req.name.clone(),
-        db_type: parse_db_type(&req.db_type),
+        db_type: DatabaseType::from_str(&req.db_type).unwrap_or_default(),
         host: req.host.clone(),
         port: req.port,
         user: req.user.clone(),
@@ -209,17 +199,32 @@ mod tests {
     }
 
     #[test]
-    fn parse_db_type_maps_each_known_variant() {
+    fn database_type_from_str_maps_each_known_variant() {
         // 5 known variants → corresponding enum. unknown → fallback Postgresql.
         assert!(matches!(
-            parse_db_type("postgresql"),
+            DatabaseType::from_str("postgresql").unwrap_or_default(),
             DatabaseType::Postgresql
         ));
-        assert!(matches!(parse_db_type("mysql"), DatabaseType::Mysql));
-        assert!(matches!(parse_db_type("sqlite"), DatabaseType::Sqlite));
-        assert!(matches!(parse_db_type("mongodb"), DatabaseType::Mongodb));
-        assert!(matches!(parse_db_type("redis"), DatabaseType::Redis));
-        assert!(matches!(parse_db_type("???"), DatabaseType::Postgresql));
+        assert!(matches!(
+            DatabaseType::from_str("mysql").unwrap_or_default(),
+            DatabaseType::Mysql
+        ));
+        assert!(matches!(
+            DatabaseType::from_str("sqlite").unwrap_or_default(),
+            DatabaseType::Sqlite
+        ));
+        assert!(matches!(
+            DatabaseType::from_str("mongodb").unwrap_or_default(),
+            DatabaseType::Mongodb
+        ));
+        assert!(matches!(
+            DatabaseType::from_str("redis").unwrap_or_default(),
+            DatabaseType::Redis
+        ));
+        assert!(matches!(
+            DatabaseType::from_str("???").unwrap_or_default(),
+            DatabaseType::Postgresql
+        ));
     }
 
     #[tokio::test]
