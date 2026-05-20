@@ -17,9 +17,6 @@ import type { DatabaseType } from "@/types/connection";
  */
 export type RdbTreeShape = "with-schema" | "no-schema" | "flat";
 
-/** Subset of `DatabaseType` that legitimately mounts `SchemaTree`. */
-export type RelationalDatabaseType = "postgresql" | "mysql" | "sqlite";
-
 /**
  * Resolve the tree shape for a given relational `DatabaseType`. Falls
  * back to `with-schema` (PG) on unmapped values rather than throwing —

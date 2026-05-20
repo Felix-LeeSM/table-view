@@ -49,9 +49,3 @@ export function isBlobColumn(dataType: string): boolean {
     lower.includes("image")
   );
 }
-
-export function calcDefaultColWidth(name: string, dataType: string): number {
-  const nameWidth = name.length * 8 + 40;
-  const typeWidth = dataType.length * 6 + 20;
-  return Math.max(MIN_COL_WIDTH, Math.min(400, Math.max(nameWidth, typeWidth)));
-}

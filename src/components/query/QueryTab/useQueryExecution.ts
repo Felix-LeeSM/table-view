@@ -24,6 +24,7 @@ import {
 import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
+import { stripSqlComments } from "@lib/sql/stripSqlComments";
 import {
   analyzeMongoPipeline,
   analyzeMongoOperation,
@@ -1901,12 +1902,7 @@ export function useQueryExecution({
     const statements = splitSqlStatements(sql).filter((stmt) => {
       // Strip SQL comments and whitespace to detect statements that are
       // effectively empty (e.g. "-- comment only" or "/* block */").
-      // Line comments: -- ... (to end of line)
-      // Block comments: /* ... */
-      let s = stmt;
-      s = s.replace(/--[^\n]*/g, "");
-      s = s.replace(/\/\*[\s\S]*?\*\//g, "");
-      return s.trim().length > 0;
+      return stripSqlComments(stmt).trim().length > 0;
     });
     if (statements.length === 0) return;
 
@@ -2076,10 +2072,7 @@ export function useQueryExecution({
     const statements = splitSqlStatements(sql).filter((stmt) => {
       // Mirror the comment-strip-then-non-empty filter used by
       // `handleExecute` so dry-run treats `-- comment` only as empty.
-      let s = stmt;
-      s = s.replace(/--[^\n]*/g, "");
-      s = s.replace(/\/\*[\s\S]*?\*\//g, "");
-      return s.trim().length > 0;
+      return stripSqlComments(stmt).trim().length > 0;
     });
     if (statements.length === 0) return;
 

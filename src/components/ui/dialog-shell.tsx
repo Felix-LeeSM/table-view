@@ -122,7 +122,7 @@ function DialogShellFooter({
   );
 }
 
-// Compound exports — both as default + named to match shadcn idiom.
+// Compound exports — named only; call sites import `DialogShell` explicitly.
 const DialogShell = Object.assign(DialogShellRoot, {
   Header: DialogShellHeader,
   Body: DialogShellBody,
@@ -136,4 +136,3 @@ export {
   DialogShellBody,
   DialogShellFooter,
 };
-export default DialogShell;

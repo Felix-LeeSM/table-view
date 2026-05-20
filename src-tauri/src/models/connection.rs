@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -32,6 +33,21 @@ impl DatabaseType {
             DatabaseType::Postgresql | DatabaseType::Mysql | DatabaseType::Sqlite => Paradigm::Rdb,
             DatabaseType::Mongodb => Paradigm::Document,
             DatabaseType::Redis => Paradigm::Kv,
+        }
+    }
+}
+
+impl FromStr for DatabaseType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "postgresql" => Ok(DatabaseType::Postgresql),
+            "mysql" => Ok(DatabaseType::Mysql),
+            "sqlite" => Ok(DatabaseType::Sqlite),
+            "mongodb" => Ok(DatabaseType::Mongodb),
+            "redis" => Ok(DatabaseType::Redis),
+            _ => Err(()),
         }
     }
 }

@@ -14,8 +14,7 @@ import { documentIdFromRow, type DocumentId } from "@/types/documentMutate";
  * `QueryTab` module-top helpers:
  *   - `readDocumentContext` reads `database`/`collection` for document
  *     tabs (Mongo find/aggregate Tauri commands fail without both).
- *   - `isRecord` / `isRecordArray` narrow JSON.parse output (find → object,
- *     aggregate → object[]).
+ *   - `isRecord` narrows JSON.parse output before document dispatch.
  *   - `applyDbMutationHint` lexes a freshly-run SQL for `\c`/`USE`/
  *     `SET search_path`; on a hit it optimistically flips the active DB
  *     and round-trips `verify_active_db`. Fire-and-forget — never throws,
@@ -37,12 +36,6 @@ export function readDocumentContext(
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function isRecordArray(
-  value: unknown,
-): value is Record<string, unknown>[] {
-  return Array.isArray(value) && value.every(isRecord);
 }
 
 /**
