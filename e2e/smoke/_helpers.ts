@@ -227,6 +227,7 @@ export async function openConnection(name: string) {
 }
 
 export async function openNewQueryTab() {
+  await switchToWorkspaceWindow();
   const newQuery = await $('[aria-label="New Query Tab"]');
   await newQuery.waitForDisplayed({ timeout: 10000 });
   await newQuery.click();
@@ -235,6 +236,7 @@ export async function openNewQueryTab() {
 }
 
 export async function typeQuery(sql: string) {
+  await switchToWorkspaceWindow();
   const content = await $(".cm-content");
   await content.waitForDisplayed({ timeout: 5000 });
   await content.click();
@@ -242,6 +244,7 @@ export async function typeQuery(sql: string) {
 }
 
 export async function runQuery() {
+  await switchToWorkspaceWindow();
   const run = await $('[aria-label="Run query"]');
   await run.waitForDisplayed({ timeout: 5000 });
   await run.click();
@@ -252,6 +255,7 @@ export async function waitForGridText(
   timeout: number,
   timeoutMsg: string,
 ) {
+  await switchToWorkspaceWindow();
   const grid = await $('[role="grid"]');
   await grid.waitForDisplayed({ timeout });
   await browser.waitUntil(
@@ -274,6 +278,7 @@ export async function waitForGridTextAll(
   timeout: number,
   timeoutMsg: string,
 ) {
+  await switchToWorkspaceWindow();
   const grid = await $('[role="grid"]');
   await grid.waitForDisplayed({ timeout });
   await browser.waitUntil(
@@ -297,6 +302,8 @@ export async function editGridCellInRow(
   nextValue: string,
   editorLabel: string,
 ) {
+  await switchToWorkspaceWindow();
+
   let targetCell: WebdriverIO.Element | null = null;
 
   await browser.waitUntil(
@@ -366,6 +373,7 @@ export async function executeMqlPreview() {
 }
 
 async function executePreviewAction(ariaLabel: string) {
+  await switchToWorkspaceWindow();
   const execute = await $(`[aria-label="${ariaLabel}"]`);
   await execute.waitForDisplayed({ timeout: 10000 });
   await execute.click();
@@ -382,6 +390,7 @@ async function executePreviewAction(ariaLabel: string) {
 }
 
 export async function expandIfCollapsed(selector: string, timeout = 10000) {
+  await switchToWorkspaceWindow();
   const node = await $(selector);
   await node.waitForDisplayed({ timeout });
   if ((await node.getAttribute("aria-expanded")) !== "true") {
