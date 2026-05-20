@@ -29,15 +29,8 @@ export async function editGridCellInRow(
   }
 
   await targetCell.scrollIntoView();
-  const editor = await openGridCellEditor(
-    targetCell,
-    rowNeedle,
-    ariaColIndex,
-    editorLabel,
-  );
-  await editor.clearValue();
-  await editor.setValue(nextValue);
-  await browser.keys("Enter");
+  await openGridCellEditor(targetCell, rowNeedle, ariaColIndex, editorLabel);
+  await setGridEditorValue(editorLabel, nextValue);
 
   const commit = await $('[aria-label="Commit changes"]');
   await commit.waitForDisplayed({ timeout: 10000 });
@@ -73,6 +66,38 @@ async function openGridCellEditor(
   }
 
   throw new Error(`grid editor ${editorLabel} did not open`);
+}
+
+async function setGridEditorValue(editorLabel: string, nextValue: string) {
+  await browser.execute(
+    (label, value) => {
+      const editor = Array.from(
+        document.querySelectorAll<HTMLInputElement>("input[aria-label]"),
+      ).find((candidate) => candidate.getAttribute("aria-label") === label);
+      if (!editor) throw new Error(`${label} input did not appear`);
+
+      editor.focus();
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      if (!setter) throw new Error("HTMLInputElement value setter missing");
+
+      setter.call(editor, value);
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      editor.dispatchEvent(new Event("change", { bubbles: true }));
+      editor.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          code: "Enter",
+          key: "Enter",
+        }),
+      );
+    },
+    editorLabel,
+    nextValue,
+  );
 }
 
 async function findDisplayedEditor(
