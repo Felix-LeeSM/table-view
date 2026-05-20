@@ -340,18 +340,36 @@ async function findGridCellInRow(
   rowNeedle: string,
   ariaColIndex: number,
 ): Promise<WebdriverIO.Element | null> {
-  const rows = await $$('[role="row"]');
-  for (const row of rows) {
-    if (!(await isDisplayed(row))) continue;
-    const rowText = await row.getText();
-    if (!rowText.includes(rowNeedle)) continue;
+  const rowIndex = await browser.execute(
+    (needle, colIndex) => {
+      const rows = Array.from(document.querySelectorAll('[role="row"]'));
+      for (const row of rows) {
+        const element = row as HTMLElement;
+        if (element.getClientRects().length === 0) continue;
+        if (!(element.textContent ?? "").includes(needle)) continue;
 
-    const cell = await row.$(
-      `[role="gridcell"][aria-colindex="${ariaColIndex}"]`,
-    );
-    if ((await cell.isExisting()) && (await isDisplayed(cell))) {
-      return cell;
-    }
+        const cell = element.querySelector<HTMLElement>(
+          `[role="gridcell"][aria-colindex="${colIndex}"]`,
+        );
+        if (cell && cell.getClientRects().length > 0) {
+          return element.getAttribute("aria-rowindex");
+        }
+      }
+      return null;
+    },
+    rowNeedle,
+    ariaColIndex,
+  );
+
+  if (typeof rowIndex !== "string" || rowIndex.length === 0) {
+    return null;
+  }
+
+  const cell = await $(
+    `[role="row"][aria-rowindex="${rowIndex}"] [role="gridcell"][aria-colindex="${ariaColIndex}"]`,
+  );
+  if ((await cell.isExisting()) && (await isDisplayed(cell))) {
+    return cell;
   }
   return null;
 }
