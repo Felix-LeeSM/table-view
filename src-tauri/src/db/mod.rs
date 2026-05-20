@@ -15,12 +15,14 @@ pub mod active;
 pub mod mongodb;
 pub mod mysql;
 pub mod postgres;
+pub mod sqlite;
 pub mod traits;
 pub mod types;
 
 pub use mongodb::MongoAdapter;
 pub use mysql::MysqlAdapter;
 pub use postgres::PostgresAdapter;
+pub use sqlite::SqliteAdapter;
 
 pub use active::ActiveAdapter;
 pub use traits::{DbAdapter, DocumentAdapter, KvAdapter, RdbAdapter, SearchAdapter};

@@ -57,8 +57,7 @@ export default function SqliteFormFields({
         </button>
       </div>
       <p className="mt-1 text-2xs text-muted-foreground">
-        Absolute path to the SQLite database file. Leave blank to create on
-        first connect (if the directory exists).
+        Absolute path to an existing SQLite database file.
       </p>
     </div>
   );
