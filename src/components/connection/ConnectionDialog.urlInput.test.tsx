@@ -128,11 +128,7 @@ interface PasteCase {
   };
 }
 
-// Sprint 276 (2026-05-13) — paste detection은 *supported* DBMS 에 한해 form 을
-// 1-step 채운다. MySQL/MariaDB/Redis/SQLite scheme paste 는 이제 silent reject
-// (아래 [Sprint 276] unsupported DBMS paste 그룹에서 별도 검증). 해당 어댑터가
-// Phase 17 이후 합류하면 supported 리스트가 늘어나며 paste 케이스도 자연스럽게
-// 복원된다.
+// Paste detection은 *supported* DBMS 에 한해 form 을 1-step 채운다.
 const PASTE_CASES: PasteCase[] = [
   {
     scheme: "postgres",
@@ -180,6 +176,17 @@ const PASTE_CASES: PasteCase[] = [
       user: "root",
       database: "app",
       password: "p",
+    },
+  },
+  {
+    scheme: "sqlite",
+    url: "sqlite:/data/app.sqlite",
+    expected: {
+      dbType: "sqlite",
+      host: "",
+      port: 0,
+      database: "/data/app.sqlite",
+      password: "",
     },
   },
   {
@@ -233,6 +240,9 @@ describe("[AC-178-01] form-mode host paste detection", () => {
           c.expected.database!,
         );
         expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();
+        const affordance = screen.getByTestId("connection-url-detected");
+        expect(affordance).toBeInTheDocument();
+        expect(affordance.textContent).toMatch(/Detected .+ URL/);
         return;
       }
 
@@ -492,20 +502,17 @@ describe("[AC-178-03] host:port blur split", () => {
 
 // ===========================================================================
 // Sprint 281 (2026-05-13) — unsupported DBMS scheme paste.
-// `SUPPORTED_DATABASE_TYPES` 에 없는 DBMS (Redis/SQLite) URL 을 host 필드에
+// `SUPPORTED_DATABASE_TYPES` 에 없는 DBMS URL 을 host 필드에
 // paste 하면 form 은 변경되지 않는다 (AC-178-04 의 silent 룰 적용: best-effort
 // 경로이므로 alert 없이 단순히 form 을 건드리지 않음). URL 모드의 Parse &
 // Continue 는 명시적 사용자 액션이라 거부 메시지를 노출 — 별도 그룹.
 //
-// MySQL/MariaDB 는 Sprint 281 (Phase 17 Slice A) 합류로 supported 가 됐으므로
-// 본 silent-reject list 에서 제외 — paste 시 detected affordance 가 노출되고
-// form 이 자동 채워진다 (`parses mysql/mariadb URL` 그룹에서 별도 검증).
+// MySQL/MariaDB/SQLite 는 supported 이므로 본 silent-reject list 에서 제외.
 // ===========================================================================
 
 describe("[Sprint 281] unsupported DBMS paste is silent (no form change)", () => {
   const unsupportedPastes = [
     { scheme: "redis", url: "redis://rediu:redip@redis.local:6379/0" },
-    { scheme: "sqlite", url: "sqlite:/data/app.sqlite" },
     { scheme: "mssql", url: "mssql://sa:pw@mssql.local:1433/master" },
     { scheme: "oracle", url: "oracle://system:pw@oracle.local:1521/FREEPDB1" },
   ];

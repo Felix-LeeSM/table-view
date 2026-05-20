@@ -334,17 +334,16 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
 // ---------------------------------------------------------------------------
 // Sprint 276 / 281 — `SUPPORTED_DATABASE_TYPES` 가 connection 생성 UI 의
 // DBMS 노출 단일 source. 백엔드 `make_adapter` 가 실제 어댑터를 반환하는
-// DBMS 만 포함되어야 한다. Sprint 281 (Phase 17 Slice A) 에서 MySQL 합류
-// (read path 만 동작; DDL/queries 는 Slice B~G 합류 전 Unsupported).
-// SQLite/Redis 는 여전히 backend stub.
+// DBMS 만 포함되어야 한다.
 // Date 2026-05-13.
 // ---------------------------------------------------------------------------
 describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
-  it("exposes PG / MySQL / MariaDB / Mongo", () => {
+  it("exposes PG / MySQL / MariaDB / SQLite / Mongo", () => {
     expect([...SUPPORTED_DATABASE_TYPES]).toEqual([
       "postgresql",
       "mysql",
       "mariadb",
+      "sqlite",
       "mongodb",
     ]);
   });
@@ -353,8 +352,8 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("postgresql")).toBe(true);
     expect(isSupportedDatabaseType("mysql")).toBe(true);
     expect(isSupportedDatabaseType("mariadb")).toBe(true);
+    expect(isSupportedDatabaseType("sqlite")).toBe(true);
     expect(isSupportedDatabaseType("mongodb")).toBe(true);
-    expect(isSupportedDatabaseType("sqlite")).toBe(false);
     expect(isSupportedDatabaseType("mssql")).toBe(false);
     expect(isSupportedDatabaseType("oracle")).toBe(false);
     expect(isSupportedDatabaseType("redis")).toBe(false);

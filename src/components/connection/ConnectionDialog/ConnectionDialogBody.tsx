@@ -250,11 +250,10 @@ export default function ConnectionDialogBody({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {/* Sprint 276 — 새 connection 생성 시엔 백엔드 어댑터가
-                    wire-up 된 DBMS (PG/Mongo) 만 노출. 편집 모드에서 기존
-                    connection 의 dbType 이 unsupported 라면 그 항목도
-                    예외적으로 추가해 Select 가 빈값으로 보이지 않게 한다
-                    (dbType 변경 자체는 의도된 흐름이 아니므로 그대로 둠). */}
+                {/* 새 connection 생성 시엔 백엔드 어댑터가 wire-up 된 DBMS
+                    만 노출. 편집 모드에서 기존 connection 의 dbType 이
+                    unsupported 라면 그 항목도 예외적으로 추가해 Select 가
+                    빈값으로 보이지 않게 한다. */}
                 {SUPPORTED_DATABASE_TYPES.map((t) => (
                   <SelectItem key={t} value={t}>
                     {DATABASE_TYPE_LABELS[t]}

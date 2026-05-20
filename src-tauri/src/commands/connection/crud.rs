@@ -15,6 +15,7 @@ use super::{make_adapter, AppState, SaveConnectionRequest, TestConnectionRequest
 use crate::db::mongodb::MongoAdapter;
 use crate::db::mysql::MysqlAdapter;
 use crate::db::postgres::PostgresAdapter;
+use crate::db::sqlite::SqliteAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
 use crate::storage;
@@ -41,8 +42,14 @@ pub fn save_connection(req: SaveConnectionRequest) -> Result<ConnectionConfigPub
     if req.connection.name.trim().is_empty() {
         return Err(AppError::Validation("Connection name is required".into()));
     }
-    if req.connection.host.trim().is_empty() {
+    let is_sqlite = matches!(&req.connection.db_type, DatabaseType::Sqlite);
+    if !is_sqlite && req.connection.host.trim().is_empty() {
         return Err(AppError::Validation("Host is required".into()));
+    }
+    if is_sqlite && req.connection.database.trim().is_empty() {
+        return Err(AppError::Validation(
+            "SQLite database file is required".into(),
+        ));
     }
 
     let mut conn = req.connection.into_config_with_empty_password();
@@ -90,6 +97,9 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         }
         DatabaseType::Mysql | DatabaseType::Mariadb => {
             MysqlAdapter::test(&full).await?;
+        }
+        DatabaseType::Sqlite => {
+            SqliteAdapter::test(&full).await?;
         }
         DatabaseType::Mongodb => {
             MongoAdapter::test(&full).await?;

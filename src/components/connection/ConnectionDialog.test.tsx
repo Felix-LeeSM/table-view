@@ -92,12 +92,9 @@ describe("ConnectionDialog", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 281 (2026-05-13) — connection 생성 시 dropdown 에는 supported
-  // 어댑터 (PG/MySQL/Mongo) 만 노출되어야 한다. Sprint 281 이전엔 MySQL 도
-  // hide 였으나 Phase 17 Slice A 합류로 노출. SQLite/Redis 는 여전히
-  // backend stub 이므로 숨김.
+  // connection 생성 시 dropdown 에는 supported 어댑터만 노출되어야 한다.
   // -----------------------------------------------------------------------
-  it("Sprint 281: DBMS dropdown exposes supported adapters (PG + MySQL + Mongo)", async () => {
+  it("DBMS dropdown exposes supported adapters", async () => {
     const user = userEvent.setup();
     renderDialog();
     await user.click(screen.getByLabelText("Database Type"));
@@ -107,12 +104,11 @@ describe("ConnectionDialog", () => {
       screen.getByRole("option", { name: "PostgreSQL" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "MySQL" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "MariaDB" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "MongoDB" })).toBeInTheDocument();
 
     // Unsupported — 안 보임.
-    expect(
-      screen.queryByRole("option", { name: "SQLite" }),
-    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("option", { name: "Redis" }),
     ).not.toBeInTheDocument();
@@ -123,16 +119,16 @@ describe("ConnectionDialog", () => {
   it("Sprint 276: edit mode preserves an unsupported dbType in the dropdown", async () => {
     const user = userEvent.setup();
     renderDialog({
-      connection: makeConnection({ dbType: "mysql", port: 3306 }),
+      connection: makeConnection({ dbType: "mssql", port: 1433 }),
     });
 
     await user.click(screen.getByLabelText("Database Type"));
     // 편집 중인 connection 의 dbType 은 노출 (사용자가 빈 select 를 보지
     // 않도록). 다른 unsupported 어댑터는 여전히 숨김.
-    expect(screen.getByRole("option", { name: "MySQL" })).toBeInTheDocument();
     expect(
-      screen.queryByRole("option", { name: "SQLite" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("option", { name: "Microsoft SQL Server" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
     expect(
       screen.queryByRole("option", { name: "Redis" }),
     ).not.toBeInTheDocument();
@@ -412,16 +408,34 @@ describe("ConnectionDialog", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Invalid URL");
   });
 
-  // Sprint 281 (2026-05-13) — URL parser 가 인식한 DBMS scheme 이지만 백엔드
-  // 어댑터가 아직 wire-up 되지 않은 경우 (SQLite/Redis), Parse & Continue
-  // 는 명시적 사용자 액션이므로 silent 가 아니라 거부 메시지를 노출한다 (form-
-  // mode paste 는 Sprint 276 의 silent 룰 적용). MySQL 은 Sprint 281 합류로
-  // supported 가 됐으므로 본 거부 list 에서 제외.
+  it("accepts sqlite:/path URL and switches to the SQLite file form", async () => {
+    renderDialog();
+    await act(async () => {
+      fireEvent.click(screen.getByText("URL"));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Connection URL"), {
+        target: { value: "sqlite:/data/app.sqlite" },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Parse & Continue"));
+    });
+
+    expect(screen.getByLabelText("Database file")).toHaveValue(
+      "/data/app.sqlite",
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  // URL parser 가 인식한 DBMS scheme 이지만 백엔드 어댑터가 아직 wire-up
+  // 되지 않은 경우 Parse & Continue 는 명시적 거부 메시지를 노출한다.
   it.each([
-    ["sqlite", "sqlite:/data/app.sqlite", "SQLite"],
+    ["mssql", "mssql://sa:pw@mssql.local:1433/master", "Microsoft SQL Server"],
+    ["oracle", "oracle://system:pw@oracle.local:1521/FREEPDB1", "Oracle"],
     ["redis", "redis://u:p@redis.local:6379/0", "Redis"],
   ])(
-    "rejects unsupported %s URL with explanatory error (Sprint 281)",
+    "rejects unsupported %s URL with explanatory error",
     async (_scheme, url, label) => {
       renderDialog();
       await act(async () => {
@@ -542,10 +556,7 @@ describe("ConnectionDialog", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  // Sprint 276 (2026-05-13) — MySQL/SQLite/Redis 옵션은 connection 생성 UI
-  // 에서 숨김 (백엔드 어댑터 미합류). MySQL 어댑터가 Phase 17 에서 wire-up
-  // 되면 unskip — 로직 자체는 그대로 유효.
-  it.skip("updates database type and port when selecting MySQL", async () => {
+  it("updates database type and port when selecting MySQL", async () => {
     const user = userEvent.setup();
     renderDialog();
 
@@ -1235,11 +1246,9 @@ describe("ConnectionDialog", () => {
   // is a user-customised value, a ConfirmDialog asks for explicit consent
   // before replacement; cancel leaves dbType + port untouched.
   // -----------------------------------------------------------------------
-  // Sprint 276 (2026-05-13) — port-guard 로직은 그대로 유효하지만 시나리오
-  // 가 unsupported DBMS (MySQL/SQLite) 옵션 클릭에 의존하므로 일괄 skip.
-  // PG↔Mongo port-guard 회귀 가드는 바로 아래 describe 에 새로 추가됨.
-  // Phase 17 에서 MySQL 어댑터 합류 시 .skip 제거.
-  describe.skip("Sprint 108: DB type change port guard", () => {
+  // MySQL/SQLite are supported again, so the original port-guard scenarios
+  // run alongside the PG↔Mongo coverage below.
+  describe("Sprint 108: DB type change port guard", () => {
     it("auto-updates port when current port is the default (postgres 5432 → mysql 3306)", async () => {
       const user = userEvent.setup();
       renderDialog();
@@ -1516,8 +1525,7 @@ describe("ConnectionDialog", () => {
       expect(userInput.value).not.toBe("postgres");
     });
 
-    // Sprint 276 — SQLite 옵션 hide. SQLite 어댑터 합류 시 unskip.
-    it.skip("AC-S138-04 SQLite: file path field present, host/port/user/password absent", async () => {
+    it("AC-S138-04 SQLite: file path field present, host/port/user/password absent", async () => {
       const user = userEvent.setup();
       renderDialog();
       const trigger = screen.getByLabelText("Database Type");

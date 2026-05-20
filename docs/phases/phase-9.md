@@ -79,10 +79,27 @@ The first slice establishes the contract only:
 - widen frontend/backend `DatabaseType` to include MariaDB, SQLite, MSSQL, and
   Oracle as relational variants;
 - expose MariaDB because it can share the MySQL adapter and connection test path;
-- keep MSSQL, Oracle, and SQLite out of the "supported add connection" list until
-  their adapters land;
+- keep unwired DBMS types out of the "supported add connection" list until their
+  adapters land;
 - lock tree shape and database-switcher behavior with unit tests;
 - add DBMS-specific baseline seed files.
 
 Subsequent PRs should stay in the feature order above and avoid bundling unrelated
 DBMS features into one large branch.
+
+## SQLite Connection Slice
+
+SQLite is the next feature-order slice for connection / test connection /
+saved model:
+
+- `DatabaseType::Sqlite` returns an RDB adapter and is exposed in the add
+  connection dialog.
+- The backend accepts SQLite saved connections without host/user/password,
+  but still requires an explicit database file path.
+- `test_connection` opens an existing SQLite file with `PRAGMA foreign_keys`
+  enabled and must not silently create a missing file.
+- The adapter provides the minimum catalog reads needed for the flat sidebar:
+  one `main` namespace, table names, exact table row counts, columns, primary
+  key flags, and foreign-key references.
+- Free-form query execution, table preview, DDL, export streaming, and richer
+  SQLite introspection remain unsupported until their own feature-order slices.
