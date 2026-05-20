@@ -688,6 +688,16 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     renderDialog({ availableSchemas: ["public", "analytics"] });
     await fillSimpleForm();
 
+    // The preview pane is live and may flush once with the initial schema
+    // before the user changes the dropdown. Isolate the post-change preview
+    // so this assertion does not race that legitimate first request.
+    await waitFor(() =>
+      expect(mockCreateTable).toHaveBeenCalledWith(
+        expect.objectContaining({ preview_only: true, schema: "public" }),
+      ),
+    );
+    mockCreateTable.mockClear();
+
     // Open the schema dropdown and pick "analytics".
     fireEvent.click(screen.getByRole("combobox", { name: "Target schema" }));
     // Radix Select renders the listbox as a portal — the option
@@ -698,9 +708,16 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     fireEvent.click(analyticsOption);
 
     // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
-    await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
-    const call = mockCreateTable.mock.calls[0]![0] as { schema: string };
-    expect(call.schema).toBe("analytics");
+    await waitFor(() =>
+      expect(mockCreateTable).toHaveBeenCalledWith(
+        expect.objectContaining({ preview_only: true, schema: "analytics" }),
+      ),
+    );
+    expect(
+      mockCreateTable.mock.calls.every(
+        ([call]) => (call as { schema: string }).schema === "analytics",
+      ),
+    ).toBe(true);
   });
 
   it("dropdown lists ≥ 2 schemas when availableSchemas has multiple entries (AC-227-02)", async () => {
