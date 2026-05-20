@@ -1,4 +1,4 @@
-import { syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import type {
   CompletionContext,
   CompletionResult,
@@ -48,7 +48,7 @@ export function updateColumnCompletionSource(
     }
 
     const { state, pos, explicit } = context;
-    const tree = syntaxTree(state);
+    const tree = ensureSyntaxTree(state, pos, 50) ?? syntaxTree(state);
     const node = tree.resolveInner(pos, -1);
 
     // Skip non-identifier surfaces where a column suggestion would be
