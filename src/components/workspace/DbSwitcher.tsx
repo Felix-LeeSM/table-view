@@ -18,7 +18,7 @@ import { listDatabases } from "@/lib/api/listDatabases";
 import { switchActiveDb } from "@/lib/api/switchActiveDb";
 import { toast } from "@/lib/toast";
 import type { DatabaseInfo } from "@/types/document";
-import type { Paradigm } from "@/types/connection";
+import type { DatabaseType, Paradigm } from "@/types/connection";
 
 /**
  * DB switcher in the workspace toolbar. For `rdb` / `document` paradigms on
@@ -53,6 +53,7 @@ import type { Paradigm } from "@/types/connection";
 function readOnlyTooltipCopy(args: {
   hasActiveTab: boolean;
   paradigm: Paradigm | null;
+  dbType: DatabaseType | null;
   isConnected: boolean;
 }): string {
   if (!args.hasActiveTab) {
@@ -60,6 +61,9 @@ function readOnlyTooltipCopy(args: {
   }
   if (args.paradigm === "kv" || args.paradigm === "search") {
     return "Database switching isn't supported for this connection type.";
+  }
+  if (args.dbType === "sqlite") {
+    return "SQLite uses one database file per connection.";
   }
   if (!args.isConnected) {
     return "Connect to switch databases.";
@@ -88,7 +92,9 @@ export default function DbSwitcher() {
   const status = activeConn ? activeStatuses[activeConn.id] : undefined;
   const isConnected = status?.type === "connected";
   const paradigm = activeConn?.paradigm ?? null;
-  const supportsSwitching = paradigm === "rdb" || paradigm === "document";
+  const supportsSwitching =
+    (paradigm === "rdb" && activeConn?.dbType !== "sqlite") ||
+    paradigm === "document";
   const enabled = supportsSwitching && isConnected;
   // RDB connections expose the active sub-pool via
   // `activeStatuses[id].activeDb`. We pick that as the primary label
@@ -233,6 +239,7 @@ export default function DbSwitcher() {
     const tooltipCopy = readOnlyTooltipCopy({
       hasActiveTab: !!activeTab,
       paradigm,
+      dbType: activeConn?.dbType ?? null,
       isConnected,
     });
     return (

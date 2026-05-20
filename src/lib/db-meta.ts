@@ -14,7 +14,10 @@ export interface DbMeta {
 export const DB_TYPE_META: Record<DatabaseType, DbMeta> = {
   postgresql: { label: "PostgreSQL", short: "PG", color: "#336791" },
   mysql: { label: "MySQL", short: "MY", color: "#4479A1" },
+  mariadb: { label: "MariaDB", short: "MA", color: "#C0765A" },
   sqlite: { label: "SQLite", short: "SQ", color: "#003B57" },
+  mssql: { label: "Microsoft SQL Server", short: "MS", color: "#CC2927" },
+  oracle: { label: "Oracle", short: "OR", color: "#F80000" },
   mongodb: { label: "MongoDB", short: "MG", color: "#47A248" },
   redis: { label: "Redis", short: "RD", color: "#DC382D" },
 };

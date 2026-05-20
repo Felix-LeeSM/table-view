@@ -114,8 +114,14 @@ export default function ConnectionDialogBody({
           <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
         );
       case "mysql":
+      case "mariadb":
         return (
           <MysqlFormFields draft={form} onChange={onChange} {...sharedAuth} />
+        );
+      case "mssql":
+      case "oracle":
+        return (
+          <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
         );
       case "sqlite":
         return (

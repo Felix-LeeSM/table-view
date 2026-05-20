@@ -62,6 +62,7 @@ export interface UseMigrationExportReturn {
 const DBMS_TO_DIALECT: Partial<Record<string, DdlDialect>> = {
   postgresql: "postgresql",
   mysql: "mysql",
+  mariadb: "mysql",
   sqlite: "sqlite",
 };
 

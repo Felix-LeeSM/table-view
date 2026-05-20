@@ -75,14 +75,28 @@ const SQLITE_SQL_FUNCTIONS = [
 ];
 
 function sqlFunctionsForDbType(dbType: DatabaseType | undefined): string[] {
-  const dialectSpecific =
-    dbType === "mysql"
-      ? MYSQL_SQL_FUNCTIONS
-      : dbType === "sqlite"
-        ? SQLITE_SQL_FUNCTIONS
-        : dbType === "mongodb" || dbType === "redis"
-          ? []
-          : POSTGRESQL_SQL_FUNCTIONS;
+  let dialectSpecific: readonly string[];
+  switch (dbType) {
+    case "mysql":
+    case "mariadb":
+      dialectSpecific = MYSQL_SQL_FUNCTIONS;
+      break;
+    case "sqlite":
+      dialectSpecific = SQLITE_SQL_FUNCTIONS;
+      break;
+    case "mongodb":
+    case "redis":
+      dialectSpecific = [];
+      break;
+    case "mssql":
+    case "oracle":
+      dialectSpecific = [];
+      break;
+    case "postgresql":
+    case undefined:
+      dialectSpecific = POSTGRESQL_SQL_FUNCTIONS;
+      break;
+  }
   return Array.from(new Set([...COMMON_SQL_FUNCTIONS, ...dialectSpecific]));
 }
 

@@ -29,6 +29,13 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
     expect(kws).not.toContain("PRAGMA");
   });
 
+  it("MariaDB reuses the MySQL keyword surface", () => {
+    const kws = getKeywordsForDialect("mariadb");
+    expect(kws).toContain("AUTO_INCREMENT");
+    expect(kws).toContain("REPLACE INTO");
+    expect(kws).not.toContain("RETURNING");
+  });
+
   // AC-S139-03: SQLite dialect includes PRAGMA + WITHOUT ROWID and excludes
   // ILIKE (Postgres-only) plus AUTO_INCREMENT (MySQL-only).
   it("SQLite dialect includes PRAGMA + WITHOUT ROWID + IIF, excludes ILIKE + AUTO_INCREMENT", () => {
@@ -52,6 +59,11 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
     expect(getKeywordsForDialect("redis")).toEqual([]);
   });
 
+  it("MSSQL / Oracle start with common SQL keywords only", () => {
+    expect(getKeywordsForDialect("mssql")).toEqual(COMMON_SQL_KEYWORDS);
+    expect(getKeywordsForDialect("oracle")).toEqual(COMMON_SQL_KEYWORDS);
+  });
+
   // Deleted connection (dbType undefined) falls back to the common ANSI set.
   it("undefined dbType returns the common ANSI keyword set", () => {
     const kws = getKeywordsForDialect(undefined);
@@ -60,7 +72,12 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
 
   // Each dialect's full set is at least as large as the common set.
   it("PG / MySQL / SQLite all contain the COMMON_SQL_KEYWORDS set", () => {
-    for (const dbType of ["postgresql", "mysql", "sqlite"] as const) {
+    for (const dbType of [
+      "postgresql",
+      "mysql",
+      "mariadb",
+      "sqlite",
+    ] as const) {
       const kws = getKeywordsForDialect(dbType);
       for (const common of COMMON_SQL_KEYWORDS) {
         expect(kws).toContain(common);

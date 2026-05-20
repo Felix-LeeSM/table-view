@@ -1,7 +1,10 @@
 export type DatabaseType =
   | "postgresql"
   | "mysql"
+  | "mariadb"
   | "sqlite"
+  | "mssql"
+  | "oracle"
   | "mongodb"
   | "redis";
 
@@ -21,6 +24,7 @@ export type DatabaseType =
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",
   "mysql",
+  "mariadb",
   "mongodb",
 ];
 
@@ -33,7 +37,10 @@ export function isSupportedDatabaseType(t: DatabaseType): boolean {
 export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
   postgresql: "PostgreSQL",
   mysql: "MySQL",
+  mariadb: "MariaDB",
   sqlite: "SQLite",
+  mssql: "Microsoft SQL Server",
+  oracle: "Oracle",
   mongodb: "MongoDB",
   redis: "Redis",
 };
@@ -117,7 +124,10 @@ export type ConnectionStatus =
 export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
   postgresql: 5432,
   mysql: 3306,
+  mariadb: 3306,
   sqlite: 0,
+  mssql: 1433,
+  oracle: 1521,
   mongodb: 27017,
   redis: 6379,
 };
@@ -129,9 +139,11 @@ export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
  * `user="postgres"` for every DBMS.
  *
  * - `postgresql`: classic super-user/db pair.
- * - `mysql`: standard root user, empty default DB.
+ * - `mysql` / `mariadb`: standard root user, system DB default.
  * - `sqlite`: file-based; the form swaps host/port/user/password for a
  *   file path field.
+ * - `mssql`: `sa` / `master` default.
+ * - `oracle`: common local Oracle Free service default.
  * - `mongodb`: optional auth — empty user/db.
  * - `redis`: ACL optional, default DB index `"0"` (kept as string for
  *   ConnectionConfig parity).
@@ -148,7 +160,10 @@ export const DATABASE_DEFAULT_FIELDS: Record<
 > = {
   postgresql: { port: 5432, user: "postgres", database: "postgres" },
   mysql: { port: 3306, user: "root", database: "mysql" },
+  mariadb: { port: 3306, user: "root", database: "mysql" },
   sqlite: { port: 0, user: "", database: "" },
+  mssql: { port: 1433, user: "sa", database: "master" },
+  oracle: { port: 1521, user: "system", database: "FREEPDB1" },
   mongodb: { port: 27017, user: "", database: "admin" },
   redis: { port: 6379, user: "", database: "0" },
 };
@@ -159,7 +174,10 @@ export function paradigmOf(dbType: DatabaseType): Paradigm {
   switch (dbType) {
     case "postgresql":
     case "mysql":
+    case "mariadb":
     case "sqlite":
+    case "mssql":
+    case "oracle":
       return "rdb";
     case "mongodb":
       return "document";
@@ -229,16 +247,18 @@ export function parseConnectionUrl(
         paradigm: paradigmOf("sqlite"),
       };
     }
-    // URL-scheme aliases. `postgres` is legacy shorthand for `postgresql`,
-    // `mongodb+srv` is the SRV-record variant (backend resolves SRV at
-    // connect time), and `mariadb` is wire-compatible with MySQL so it
-    // routes through the same adapter. None introduce new `DatabaseType`
-    // variants.
+    // URL-scheme aliases. `postgres` is legacy shorthand for `postgresql`;
+    // SQL Server clients use several scheme names; `mongodb+srv` is the
+    // SRV-record variant and the backend resolves SRV at connect time.
     const dbTypeMap: Record<string, DatabaseType> = {
       postgresql: "postgresql",
       postgres: "postgresql",
       mysql: "mysql",
-      mariadb: "mysql",
+      mariadb: "mariadb",
+      mssql: "mssql",
+      sqlserver: "mssql",
+      sqlsrv: "mssql",
+      oracle: "oracle",
       mongodb: "mongodb",
       "mongodb+srv": "mongodb",
       redis: "redis",

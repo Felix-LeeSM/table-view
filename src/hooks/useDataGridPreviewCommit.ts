@@ -34,7 +34,7 @@ import type { SqlDialect } from "@/components/datagrid/sqlGenerator";
  *  unsupported types fall through to undefined (the generator default). */
 function dialectFromDbType(dbType: string | undefined): SqlDialect | undefined {
   if (dbType === "postgresql") return "postgresql";
-  if (dbType === "mysql") return "mysql";
+  if (dbType === "mysql" || dbType === "mariadb") return "mysql";
   if (dbType === "sqlite") return "sqlite";
   return undefined;
 }

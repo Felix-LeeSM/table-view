@@ -28,7 +28,8 @@ use tauri::State;
 pub struct PersistConnectionRequest {
     pub id: String,
     pub name: String,
-    /// `"postgresql" | "mysql" | "sqlite" | "mongodb" | "redis"` snake-lower.
+    /// Snake-lower DBMS tag (`postgresql`, `mysql`, `mariadb`, `sqlite`,
+    /// `mssql`, `oracle`, `mongodb`, `redis`).
     pub db_type: String,
     pub host: String,
     pub port: u16,
@@ -200,7 +201,7 @@ mod tests {
 
     #[test]
     fn database_type_from_str_maps_each_known_variant() {
-        // 5 known variants → corresponding enum. unknown → fallback Postgresql.
+        // Known variants → corresponding enum. unknown → fallback Postgresql.
         assert!(matches!(
             DatabaseType::from_str("postgresql").unwrap_or_default(),
             DatabaseType::Postgresql
@@ -210,8 +211,24 @@ mod tests {
             DatabaseType::Mysql
         ));
         assert!(matches!(
+            DatabaseType::from_str("mariadb").unwrap_or_default(),
+            DatabaseType::Mariadb
+        ));
+        assert!(matches!(
             DatabaseType::from_str("sqlite").unwrap_or_default(),
             DatabaseType::Sqlite
+        ));
+        assert!(matches!(
+            DatabaseType::from_str("mssql").unwrap_or_default(),
+            DatabaseType::Mssql
+        ));
+        assert!(matches!(
+            DatabaseType::from_str("sqlserver").unwrap_or_default(),
+            DatabaseType::Mssql
+        ));
+        assert!(matches!(
+            DatabaseType::from_str("oracle").unwrap_or_default(),
+            DatabaseType::Oracle
         ));
         assert!(matches!(
             DatabaseType::from_str("mongodb").unwrap_or_default(),

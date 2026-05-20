@@ -7,7 +7,10 @@ pub enum DatabaseType {
     #[default]
     Postgresql,
     Mysql,
+    Mariadb,
     Sqlite,
+    Mssql,
+    Oracle,
     Mongodb,
     Redis,
 }
@@ -18,7 +21,10 @@ impl DatabaseType {
         match self {
             DatabaseType::Postgresql => 5432,
             DatabaseType::Mysql => 3306,
+            DatabaseType::Mariadb => 3306,
             DatabaseType::Sqlite => 0,
+            DatabaseType::Mssql => 1433,
+            DatabaseType::Oracle => 1521,
             DatabaseType::Mongodb => 27017,
             DatabaseType::Redis => 6379,
         }
@@ -30,7 +36,12 @@ impl DatabaseType {
     /// string.
     pub fn paradigm(&self) -> Paradigm {
         match self {
-            DatabaseType::Postgresql | DatabaseType::Mysql | DatabaseType::Sqlite => Paradigm::Rdb,
+            DatabaseType::Postgresql
+            | DatabaseType::Mysql
+            | DatabaseType::Mariadb
+            | DatabaseType::Sqlite
+            | DatabaseType::Mssql
+            | DatabaseType::Oracle => Paradigm::Rdb,
             DatabaseType::Mongodb => Paradigm::Document,
             DatabaseType::Redis => Paradigm::Kv,
         }
@@ -44,7 +55,10 @@ impl FromStr for DatabaseType {
         match s {
             "postgresql" => Ok(DatabaseType::Postgresql),
             "mysql" => Ok(DatabaseType::Mysql),
+            "mariadb" => Ok(DatabaseType::Mariadb),
             "sqlite" => Ok(DatabaseType::Sqlite),
+            "mssql" | "sqlserver" | "sqlsrv" => Ok(DatabaseType::Mssql),
+            "oracle" => Ok(DatabaseType::Oracle),
             "mongodb" => Ok(DatabaseType::Mongodb),
             "redis" => Ok(DatabaseType::Redis),
             _ => Err(()),
@@ -257,7 +271,10 @@ mod tests {
     fn default_port_returns_correct_values() {
         assert_eq!(DatabaseType::Postgresql.default_port(), 5432);
         assert_eq!(DatabaseType::Mysql.default_port(), 3306);
+        assert_eq!(DatabaseType::Mariadb.default_port(), 3306);
         assert_eq!(DatabaseType::Sqlite.default_port(), 0);
+        assert_eq!(DatabaseType::Mssql.default_port(), 1433);
+        assert_eq!(DatabaseType::Oracle.default_port(), 1521);
         assert_eq!(DatabaseType::Mongodb.default_port(), 27017);
         assert_eq!(DatabaseType::Redis.default_port(), 6379);
     }
@@ -275,7 +292,10 @@ mod tests {
         let types = vec![
             DatabaseType::Postgresql,
             DatabaseType::Mysql,
+            DatabaseType::Mariadb,
             DatabaseType::Sqlite,
+            DatabaseType::Mssql,
+            DatabaseType::Oracle,
             DatabaseType::Mongodb,
             DatabaseType::Redis,
         ];
@@ -292,13 +312,22 @@ mod tests {
         assert_eq!(json, "\"postgresql\"");
         let json = serde_json::to_string(&DatabaseType::Mysql).unwrap();
         assert_eq!(json, "\"mysql\"");
+        let json = serde_json::to_string(&DatabaseType::Mariadb).unwrap();
+        assert_eq!(json, "\"mariadb\"");
+        let json = serde_json::to_string(&DatabaseType::Mssql).unwrap();
+        assert_eq!(json, "\"mssql\"");
+        let json = serde_json::to_string(&DatabaseType::Oracle).unwrap();
+        assert_eq!(json, "\"oracle\"");
     }
 
     #[test]
     fn database_type_paradigm_maps_expected_tags() {
         assert_eq!(DatabaseType::Postgresql.paradigm(), Paradigm::Rdb);
         assert_eq!(DatabaseType::Mysql.paradigm(), Paradigm::Rdb);
+        assert_eq!(DatabaseType::Mariadb.paradigm(), Paradigm::Rdb);
         assert_eq!(DatabaseType::Sqlite.paradigm(), Paradigm::Rdb);
+        assert_eq!(DatabaseType::Mssql.paradigm(), Paradigm::Rdb);
+        assert_eq!(DatabaseType::Oracle.paradigm(), Paradigm::Rdb);
         assert_eq!(DatabaseType::Mongodb.paradigm(), Paradigm::Document);
         assert_eq!(DatabaseType::Redis.paradigm(), Paradigm::Kv);
     }

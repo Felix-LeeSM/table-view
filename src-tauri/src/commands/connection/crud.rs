@@ -13,6 +13,7 @@
 use super::session::keep_alive_loop;
 use super::{make_adapter, AppState, SaveConnectionRequest, TestConnectionRequest};
 use crate::db::mongodb::MongoAdapter;
+use crate::db::mysql::MysqlAdapter;
 use crate::db::postgres::PostgresAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
@@ -86,6 +87,9 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
     match full.db_type {
         DatabaseType::Postgresql => {
             PostgresAdapter::test(&full).await?;
+        }
+        DatabaseType::Mysql | DatabaseType::Mariadb => {
+            MysqlAdapter::test(&full).await?;
         }
         DatabaseType::Mongodb => {
             MongoAdapter::test(&full).await?;

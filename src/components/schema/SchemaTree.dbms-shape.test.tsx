@@ -347,7 +347,10 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
   it("resolveRdbTreeShape maps every relational dbType to a shape", () => {
     expect(resolveRdbTreeShape("postgresql")).toBe("with-schema");
     expect(resolveRdbTreeShape("mysql")).toBe("no-schema");
+    expect(resolveRdbTreeShape("mariadb")).toBe("no-schema");
     expect(resolveRdbTreeShape("sqlite")).toBe("flat");
+    expect(resolveRdbTreeShape("mssql")).toBe("with-schema");
+    expect(resolveRdbTreeShape("oracle")).toBe("with-schema");
   });
 
   it("resolveRdbTreeShape falls back to with-schema for non-relational db_types so a misrouted Mongo/Redis connection doesn't crash", () => {

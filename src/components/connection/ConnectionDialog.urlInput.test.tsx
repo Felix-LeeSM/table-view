@@ -159,6 +159,30 @@ const PASTE_CASES: PasteCase[] = [
     },
   },
   {
+    scheme: "mysql",
+    url: "mysql://root:p@mysql.local:13306/app",
+    expected: {
+      dbType: "mysql",
+      host: "mysql.local",
+      port: 13306,
+      user: "root",
+      database: "app",
+      password: "p",
+    },
+  },
+  {
+    scheme: "mariadb",
+    url: "mariadb://root:p@mariadb.local:13307/app",
+    expected: {
+      dbType: "mariadb",
+      host: "mariadb.local",
+      port: 13307,
+      user: "root",
+      database: "app",
+      password: "p",
+    },
+  },
+  {
     scheme: "mongodb",
     url: "mongodb://mu:mp@mongo.local:27018/logs",
     expected: {
@@ -482,6 +506,8 @@ describe("[Sprint 281] unsupported DBMS paste is silent (no form change)", () =>
   const unsupportedPastes = [
     { scheme: "redis", url: "redis://rediu:redip@redis.local:6379/0" },
     { scheme: "sqlite", url: "sqlite:/data/app.sqlite" },
+    { scheme: "mssql", url: "mssql://sa:pw@mssql.local:1433/master" },
+    { scheme: "oracle", url: "oracle://system:pw@oracle.local:1521/FREEPDB1" },
   ];
 
   for (const c of unsupportedPastes) {

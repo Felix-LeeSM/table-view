@@ -196,7 +196,10 @@ describe("ConnectionItem", () => {
   it.each([
     { dbType: "postgresql" as const, short: "PG" },
     { dbType: "mysql" as const, short: "MY" },
+    { dbType: "mariadb" as const, short: "MA" },
     { dbType: "sqlite" as const, short: "SQ" },
+    { dbType: "mssql" as const, short: "MS" },
+    { dbType: "oracle" as const, short: "OR" },
     { dbType: "mongodb" as const, short: "MG" },
     { dbType: "redis" as const, short: "RD" },
   ] as const)("renders $short badge for $dbType", ({ dbType, short }) => {
