@@ -3,6 +3,7 @@ name: E2E Smoke
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 concurrency:
@@ -18,7 +19,6 @@ jobs:
     name: Runtime Happy Path
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    continue-on-error: true
 
     services:
       postgres:

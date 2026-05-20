@@ -183,6 +183,7 @@ jobs:
           MONGO_PORT: 27017
         run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading
 
-  # Runtime E2E smoke lives in .github/workflows/e2e-smoke.yml as an
-  # informational check. This workflow remains the correctness gate:
-  # lint/test/build plus Rust unit and integration coverage.
+  # Runtime E2E smoke lives in .github/workflows/e2e-smoke.yml as a
+  # blocking remote check on pull requests and main. This workflow keeps
+  # the non-runtime correctness gates: lint/test/build plus Rust unit and
+  # integration coverage.

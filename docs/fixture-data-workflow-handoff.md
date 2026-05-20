@@ -25,7 +25,7 @@ Use two named profiles:
 
 | Profile | Size | Use |
 | --- | ---: | --- |
-| `e2e` | 1K-3K rows | Automated tests and pre-push checks |
+| `e2e` | 1K-3K rows | Automated tests and remote smoke checks |
 | `development` | 5K-20K rows, 10-15% multilingual/edge mix | Daily development and QA |
 
 Reason:

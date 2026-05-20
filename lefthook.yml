@@ -102,10 +102,11 @@ pre-commit:
       run: bash scripts/hooks/check-adr-frozen.sh
 
 pre-push:
-  # ADR 0019 (2026-05-01) — E2E를 CI에서 떼고 host-native pre-push 게이트로
-  # 이동. push 전에 단위/린트/빌드 체크를 끝낸 다음 e2e가 실제 사용자 환경
-  # (macOS WKWebView)에서 통과해야만 push 허용. `--no-verify` / `LEFTHOOK=0`
-  # 회피는 `scripts/hooks/check-dangerous-bash.sh`에서 차단.
+  # ADR 0044 (2026-05-20) — runtime E2E smoke 는 GitHub Actions remote
+  # check 로 승격한다. pre-push 는 push 전에 빠른 정적/단위/통합 게이트를
+  # 유지하고, PR/main 의 실제 앱 부팅 smoke 는 `.github/workflows/e2e-smoke.yml`
+  # 이 blocking check 로 보장한다. `--no-verify` / `LEFTHOOK=0` 회피는
+  # `scripts/hooks/check-dangerous-bash.sh`에서 차단.
   #
   # 순서: signed-commit / 빠른 체크가 먼저 실패하면 무거운 체크 시간을 아낀다 (fail-fast).
   # `piped: true`로 직렬 실행 — e2e는 cold start ~1-3분이라 다른 체크와
