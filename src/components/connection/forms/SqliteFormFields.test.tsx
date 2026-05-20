@@ -8,8 +8,16 @@ import type { ConnectionDraft } from "@/types/connection";
 // reach into Tauri. The default mock resolves to a fixed file path; tests
 // that need a different return value reset the mock per-case.
 const mockOpen = vi.fn().mockResolvedValue(null);
+const mockSave = vi.fn().mockResolvedValue(null);
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: (opts: unknown) => mockOpen(opts),
+  save: (opts: unknown) => mockSave(opts),
+}));
+
+const mockCreateSqliteDatabaseFile = vi.fn();
+vi.mock("@/lib/tauri/connection", () => ({
+  createSqliteDatabaseFile: (path: string) =>
+    mockCreateSqliteDatabaseFile(path),
 }));
 
 function makeDraft(overrides: Partial<ConnectionDraft> = {}): ConnectionDraft {
@@ -36,6 +44,9 @@ describe("SqliteFormFields", () => {
   beforeEach(() => {
     mockOpen.mockReset();
     mockOpen.mockResolvedValue(null);
+    mockSave.mockReset();
+    mockSave.mockResolvedValue(null);
+    mockCreateSqliteDatabaseFile.mockReset();
   });
 
   // AC-143-3 — file path input is labelled "Database file" verbatim.
@@ -90,6 +101,20 @@ describe("SqliteFormFields", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders a Create button labelled 'Create SQLite database file'", () => {
+    render(
+      <SqliteFormFields
+        draft={makeDraft()}
+        onChange={vi.fn()}
+        inputClass={inputClass}
+        labelClass={labelClass}
+      />,
+    );
+    expect(
+      screen.getByLabelText("Create SQLite database file"),
+    ).toBeInTheDocument();
+  });
+
   // AC-143-3 — clicking Browse opens the Tauri file picker; the chosen
   // path lands in `draft.database` via onChange.
   it("clicking Browse opens the dialog plugin and writes the picked path into onChange", async () => {
@@ -136,5 +161,82 @@ describe("SqliteFormFields", () => {
 
     expect(mockOpen).toHaveBeenCalled();
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("clicking Create opens the save dialog, creates the file, and writes the created path into onChange", async () => {
+    mockSave.mockResolvedValueOnce("/Users/me/databases/new.sqlite");
+    mockCreateSqliteDatabaseFile.mockResolvedValueOnce(
+      "/Users/me/databases/new.sqlite",
+    );
+    const onChange = vi.fn();
+    render(
+      <SqliteFormFields
+        draft={makeDraft({ database: "/Users/me/databases/new.sqlite" })}
+        onChange={onChange}
+        inputClass={inputClass}
+        labelClass={labelClass}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Create SQLite database file"));
+    });
+
+    expect(mockSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Create SQLite database file",
+        defaultPath: "/Users/me/databases/new.sqlite",
+      }),
+    );
+    expect(mockCreateSqliteDatabaseFile).toHaveBeenCalledWith(
+      "/Users/me/databases/new.sqlite",
+    );
+    expect(onChange).toHaveBeenCalledWith({
+      database: "/Users/me/databases/new.sqlite",
+    });
+  });
+
+  it("does NOT create a database file when the save dialog is cancelled", async () => {
+    mockSave.mockResolvedValueOnce(null);
+    const onChange = vi.fn();
+    render(
+      <SqliteFormFields
+        draft={makeDraft({ database: "/existing.sqlite" })}
+        onChange={onChange}
+        inputClass={inputClass}
+        labelClass={labelClass}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Create SQLite database file"));
+    });
+
+    expect(mockSave).toHaveBeenCalled();
+    expect(mockCreateSqliteDatabaseFile).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("renders an inline alert when database file creation fails", async () => {
+    mockSave.mockResolvedValueOnce("/Users/me/databases/existing.sqlite");
+    mockCreateSqliteDatabaseFile.mockRejectedValueOnce(
+      "Validation error: SQLite database file already exists",
+    );
+    render(
+      <SqliteFormFields
+        draft={makeDraft()}
+        onChange={vi.fn()}
+        inputClass={inputClass}
+        labelClass={labelClass}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Create SQLite database file"));
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "SQLite database file already exists",
+    );
   });
 });

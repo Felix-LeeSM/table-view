@@ -6,7 +6,10 @@
  * `ConnectionDraft` carries the chosen path so the backend
  * `connection_test`/`addConnection` command shapes don't change.
  */
-import { open } from "@tauri-apps/plugin-dialog";
+import { useState } from "react";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { Database, FolderOpen } from "lucide-react";
+import { createSqliteDatabaseFile } from "@/lib/tauri/connection";
 import type { ConnectionDraft } from "@/types/connection";
 
 export interface SqliteFormFieldsProps {
@@ -22,6 +25,9 @@ export default function SqliteFormFields({
   inputClass,
   labelClass,
 }: SqliteFormFieldsProps) {
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
   const handleBrowse = async () => {
     const picked = await open({
       multiple: false,
@@ -30,6 +36,33 @@ export default function SqliteFormFields({
     });
     if (typeof picked === "string" && picked.length > 0) {
       onChange({ database: picked });
+    }
+  };
+
+  const handleCreate = async () => {
+    setCreateError(null);
+    try {
+      const picked = await save({
+        title: "Create SQLite database file",
+        defaultPath: draft.database || "database.sqlite",
+        filters: [
+          {
+            name: "SQLite database",
+            extensions: ["sqlite", "sqlite3", "db"],
+          },
+        ],
+      });
+      if (typeof picked !== "string" || picked.length === 0) {
+        return;
+      }
+
+      setCreating(true);
+      const created = await createSqliteDatabaseFile(picked);
+      onChange({ database: created });
+    } catch (error) {
+      setCreateError(String(error));
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -51,14 +84,30 @@ export default function SqliteFormFields({
           type="button"
           aria-label="Browse for database file"
           onClick={handleBrowse}
-          className="rounded-md border border-border bg-background px-3 text-xs hover:bg-muted"
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs hover:bg-muted"
         >
+          <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
           Browse
+        </button>
+        <button
+          type="button"
+          aria-label="Create SQLite database file"
+          onClick={handleCreate}
+          disabled={creating}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Database className="h-3.5 w-3.5" aria-hidden="true" />
+          {creating ? "Creating" : "Create"}
         </button>
       </div>
       <p className="mt-1 text-2xs text-muted-foreground">
-        Absolute path to an existing SQLite database file.
+        Absolute path to a SQLite database file.
       </p>
+      {createError && (
+        <p className="mt-1 text-xs text-destructive" role="alert">
+          {createError}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 //! Sprint 209 — `commands/connection` entry. 1710-line god file 를
-//! 5-way split (entry + session / crud / groups / io).
+//! 6-way split (entry + session / crud / groups / io / sqlite_file).
 //!
 //! Entry retains:
 //!   - `AppState` + `impl AppState` + `impl Default for AppState` —
@@ -9,7 +9,7 @@
 //!   - `SaveConnectionRequest` / `TestConnectionRequest` request bodies —
 //!     consumed by `crud::save_connection` / `crud::test_connection` and
 //!     constructed in tests under `test_helpers`.
-//!   - `pub use {session,crud,groups,io}::*;` re-exports so
+//!   - `pub use {session,crud,groups,io,sqlite_file}::*;` re-exports so
 //!     `lib.rs::invoke_handler!` and external users keep
 //!     `commands::connection::<command>` paths.
 //!
@@ -37,6 +37,7 @@ pub mod crud;
 pub mod groups;
 pub mod io;
 pub mod session;
+pub mod sqlite_file;
 
 pub use crud::{
     connect, delete_connection, disconnect, list_connections, save_connection, test_connection,
@@ -47,6 +48,7 @@ pub use io::{
     import_connections_encrypted, EncryptedExportResult, ExportPayload, ImportResult, RenamedEntry,
 };
 pub use session::get_session_id;
+pub use sqlite_file::create_sqlite_database_file;
 
 /// Build an `ActiveAdapter` for the given database type.
 ///

@@ -28,6 +28,7 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         commands::connection::crud::save_connection,
         commands::connection::crud::delete_connection,
         commands::connection::crud::test_connection,
+        commands::connection::sqlite_file::create_sqlite_database_file,
         commands::connection::crud::connect,
         commands::connection::crud::disconnect,
         commands::connection::groups::list_groups,
