@@ -103,6 +103,10 @@ generator: scripts/regenerate-indexes.sh
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 - [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
 
+### memory-grill
+
+- [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
+
 ### memory-write
 
 - [/remember skill](../../memory/skills/remember/memory.md)
@@ -279,4 +283,3 @@ generator: scripts/regenerate-indexes.sh
 ### worktree
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
-
