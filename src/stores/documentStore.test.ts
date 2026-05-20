@@ -8,7 +8,7 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   useDocumentStore,
   __resetDocumentStoreForTests,
-} from "./documentStore";
+} from "@/test-utils/documentStore";
 beforeEach(() => {
   setupTauriMock({
     listMongoDatabases: vi.fn(() =>
@@ -199,6 +199,34 @@ describe("documentStore", () => {
       useDocumentStore.getState().queryResults["conn-1"]?.["db"]?.["users"]
         ?.totalCount,
     ).toBe(42);
+  });
+
+  it("catalog reload does not invalidate an in-flight find result", async () => {
+    let resolveFind: (value: unknown) => void = () => {};
+    const slowFind = new Promise((r) => {
+      resolveFind = r;
+    });
+    vi.mocked(tauri.findDocuments).mockImplementationOnce(
+      () => slowFind as Promise<never>,
+    );
+
+    const findPromise = useDocumentStore
+      .getState()
+      .runFind("conn-1", "db", "users");
+    await useDocumentStore.getState().loadCollections("conn-1", "db");
+
+    resolveFind({
+      columns: [],
+      rows: [],
+      rawDocuments: [],
+      totalCount: 5,
+      executionTimeMs: 1,
+    });
+    await findPromise;
+
+    const state = useDocumentStore.getState();
+    expect(state.collections["conn-1"]?.["db"]?.[0]?.name).toBe("users");
+    expect(state.queryResults["conn-1"]?.["db"]?.["users"]?.totalCount).toBe(5);
   });
 
   it("clearConnection removes every cache entry scoped to that connection", async () => {

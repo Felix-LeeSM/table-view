@@ -29,7 +29,7 @@ import {
 } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
-import { useDocumentStore } from "@stores/documentStore";
+import { useDocumentStore } from "@/test-utils/documentStore";
 import type {
   ConnectionConfig,
   ConnectionStatus,

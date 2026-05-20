@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useDocumentStore } from "@stores/documentStore";
+import { useDocumentQueryStore } from "@stores/documentQueryStore";
 import { cancelQuery } from "@lib/tauri";
 import type { ColumnInfo, SortInfo, TableData } from "@/types/schema";
 import type { DocumentQueryResult } from "@/types/document";
@@ -80,8 +80,8 @@ export function useDocumentGridData({
   sorts,
   projection,
 }: UseDocumentGridDataParams): UseDocumentGridDataResult {
-  const runFind = useDocumentStore((s) => s.runFind);
-  const queryResult = useDocumentStore(
+  const runFind = useDocumentQueryStore((s) => s.runFind);
+  const queryResult = useDocumentQueryStore(
     (s) => s.queryResults[connectionId]?.[database]?.[collection],
   );
 

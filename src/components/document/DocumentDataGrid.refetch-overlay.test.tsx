@@ -39,7 +39,7 @@ import {
   createEvent,
 } from "@testing-library/react";
 import DocumentDataGrid from "./DocumentDataGrid";
-import { __resetDocumentStoreForTests } from "@stores/documentStore";
+import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
 import type { DocumentQueryResult } from "@/types/document";
 
 // Programmable resolver so we can keep `runFind` pending mid-test, then

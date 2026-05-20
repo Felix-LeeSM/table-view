@@ -13,7 +13,7 @@ import DocumentDataGrid from "./DocumentDataGrid";
 import {
   useDocumentStore,
   __resetDocumentStoreForTests,
-} from "@stores/documentStore";
+} from "@/test-utils/documentStore";
 import type { DocumentQueryResult } from "@/types/document";
 
 // Canned results used by the mocked store. Shaped to mirror the backend's

@@ -12,7 +12,7 @@ import DocumentDatabaseTree from "./DocumentDatabaseTree";
 import {
   useDocumentStore,
   __resetDocumentStoreForTests,
-} from "@stores/documentStore";
+} from "@/test-utils/documentStore";
 import { useWorkspaceStore, type TableTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 beforeEach(() => {

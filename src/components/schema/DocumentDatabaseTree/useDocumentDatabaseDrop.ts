@@ -4,7 +4,7 @@ import { toast } from "@/lib/toast";
 import { dropCollection } from "@lib/tauri";
 import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
-import { useDocumentStore } from "@stores/documentStore";
+import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
 
 interface DropDialogState {
@@ -17,7 +17,7 @@ interface DropDialogState {
  * mutation → history record. Mirrors the SchemaTree drop-table flow.
  */
 export function useDocumentDatabaseDrop(connectionId: string) {
-  const loadCollections = useDocumentStore((s) => s.loadCollections);
+  const loadCollections = useDocumentCatalogStore((s) => s.loadCollections);
   const safeModeGate = useSafeModeGate(connectionId);
 
   const [dropDialog, setDropDialog] = useState<DropDialogState | null>(null);

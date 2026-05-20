@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, act, waitFor } from "@testing-library/react";
 import DocumentDataGrid from "./DocumentDataGrid";
-import { __resetDocumentStoreForTests } from "@stores/documentStore";
+import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
 import type { DocumentQueryResult } from "@/types/document";
 
 const findMock =
