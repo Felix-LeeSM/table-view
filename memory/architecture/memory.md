@@ -1,7 +1,7 @@
 ---
 title: Architecture
 type: memory
-updated: 2026-04-22
+updated: 2026-05-20
 ---
 
 # 시스템 구조
@@ -17,7 +17,8 @@ updated: 2026-04-22
 | State Management | Zustand |
 | Styling | Tailwind CSS 4 (다크 모드 지원 필수) |
 | Backend | Rust (Tauri commands) |
-| DB Drivers | sqlx (PostgreSQL, MySQL, SQLite), mongodb, redis |
+| DB Drivers | sqlx (PostgreSQL / MySQL), mongodb |
+| App Storage | SQLite via sqlx |
 | Build Tool | Vite 6 (frontend), Cargo (backend) |
 | Testing | Vitest (frontend), cargo test (backend), Playwright (e2e) |
 
@@ -54,7 +55,8 @@ table-view/
 ## Rust 주요 모듈
 
 - `commands/` — IPC 핸들러 (connection, query, schema)
-- `db/` — DbAdapter trait + 구현체 (postgres 구현 완료, mysql/sqlite 예정)
+- `db/` — ActiveAdapter + paradigm trait + 사용자 DB 구현체 (PostgreSQL, MySQL,
+  MongoDB)
 - `storage/` — 연결 설정 파일 I/O + 암호화 (AES-256-GCM, OsRng)
 - `models/` — 공용 구조체 (ConnectionConfig, ConnectionGroup, DatabaseType 등)
 - `error.rs` — `AppError` (thiserror) + `Result<T, AppError>`
@@ -62,15 +64,20 @@ table-view/
 ## Frontend 상태 관리
 
 - Zustand store 파일: `src/stores/`
-- 주요 store: `connectionStore`, `tabStore`, `favoritesStore`
-- `connectionStore`는 `focusedConnId`(전역 현재 선택) 보유 — Sidebar 로컬 state가 아님.
-  상세 결정: [decisions/0003](../decisions/0003-multi-connection-focused-id/memory.md)
+- 주요 store: `connectionStore`, `workspaceStore`, `schemaStore`, `favoritesStore`,
+  `mruStore`, `themeStore`, `safeModeStore`.
+- `connectionStore.focusedConnId` 는 launcher/connection-list focus 용도다.
+  workspace 작업 identity 는 window label 의 `workspace-{connection_id}` +
+  active db 로부터 `(connId, db)` 를 만들고, `workspaceStore` 가 그 key 로 tab /
+  sidebar state 를 소유한다. 상세 결정: [decisions/0027](../decisions/0027-per-workspace-state-store/memory.md),
+  [decisions/0039](../decisions/0039-workspace-window-per-connection/memory.md)
 
 ## 데이터 흐름
 
-1. 사용자 UI 조작 → store action → `invoke("command_name", args)`
-2. Rust command → DbAdapter 메서드 호출 → `Result` 반환
-3. store 상태 업데이트 → 컴포넌트 리렌더
+1. 사용자 UI 조작 → component/hook/store → `src/lib/tauri/**` domain wrapper
+2. Wrapper → `invoke("command_name", args)` typed request/response
+3. Rust command → `ActiveAdapter` paradigm gate → adapter/storage/state method
+4. `Result<T, AppError>` 반환 → wrapper post-processing → store/UI 반영
 
 ## 관련 방
 
