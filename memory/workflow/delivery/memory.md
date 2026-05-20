@@ -1,7 +1,7 @@
 ---
 title: Delivery — commit → merge 전체 자율
 type: workflow-rule
-updated: 2026-05-17
+updated: 2026-05-20
 task: delivery, commit, push, pr, review, merge
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
@@ -12,23 +12,40 @@ trigger:
 
 작업 종료 시 agent 가 다음 pipeline 을 자율 실행. 사용자에게 "이제 커밋해 주세요" 안내 금지.
 
-## Pipeline (T0~T6)
+## Ownership
 
-1. **T1 Commit** — `git add <specific files>` + `git commit -m "..."`. pre-commit hook 통과 책임 (포맷 / lint / no-secrets / ADR 동결).
-2. **T2 Push** — `git push`. pre-push hook 통과 (7 stage + TDD 사이클 8 stage — code profile 만).
-3. **T3 PR** — `gh pr create`. body 는 sprint contract 의 요약 view (Summary / Changes / Invariants / Test plan / Deferred / Links).
+- **orchestrator**: task 정의, worktree/agent 상태 추적, blocker 보고.
+- **delivery owner**: 구현/commit/push/PR/review 반영/merge/cleanup 소유.
+- **pr-reviewer**: read-only 판단자. commit / push / merge 금지.
+
+한 PR 에 delivery owner 는 1명. review finding fix 는 같은 owner 에게 되돌려
+reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
+
+## Pipeline (T0~T7)
+
+1. **T1 Commit** — `git add <specific files>` + `git commit -m "..."`. pre-commit hook 통과 책임.
+2. **T2 Push** — `git push`. pre-push stage 통과.
+3. **T3 PR** — `gh pr create`. body 는 Summary / Changes / Invariants / Test plan / Documentation impact / Links.
 4. **T4 Review** — `pr-reviewer` agent spawn (1회, default 자동):
    - 정량은 자동 layer (hook / lint / pre-push / scripts/review/run-checks.sh) 가 이미 함
-   - pr-reviewer 는 정성 3 차원 (Mock 범위 / 정합성 / Sprint contract scope) + profile 별 추가 차원
+   - pr-reviewer 는 정성 차원 + documentation topology 를 평가
    - 출력: scorecard PR comment (`memory/workflow/review/memory.md` 형식)
    - **외부 옵션**: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가
-5. **T5 반영** — 결함 발견 시 fix commit + push → T1~T4 재시작
-6. **T6 Merge** — 자율 머지 조건:
+5. **T5 Reflect/Fix** — 결함 발견 시 delivery owner 가 fix commit + push → T4 재시작
+6. **T6 Merge or Blocked report** — 자율 머지 조건:
    - 정성 모든 차원 ≥ 7/10
    - `gh pr checks` SUCCESS (CI green)
+   - `gh pr view` 가 mergeable 이고 branch policy block 없음
    - 사용자 명시 거부 없음
    → `gh pr merge --squash --delete-branch` 자율 실행
-   조건 미달 시 사용자 확인 (예: 일부 결함 ack 후 머지 강행)
+   조건 미달 시 원인(PR conflict / CI / policy / review)을 사용자에게 보고.
+7. **T7 Cleanup** — merge/blocked 이후 agent close + worktree cleanup 또는 보존 사유 기록.
+
+## PR body gates
+
+- `Documentation impact` 필수. 자세히: [documentation](../documentation/memory.md).
+- PR body / comment 는 GitHub 에서 볼 수 있는 repo-relative path / URL 만 사용.
+  `/Users`, `/tmp`, `file://`, `worktrees/` 근거 금지.
 
 ## Why
 
@@ -43,15 +60,17 @@ trigger:
 
 ## Hook 강제 — 절대 회피 금지
 
-- `--no-verify` / `LEFTHOOK=0` 금지 ([git-policy.md](../../../.claude/rules/git-policy.md))
+- `--no-verify` / `LEFTHOOK=0` / `--no-gpg-sign` 금지 ([git-policy.md](../../../.claude/rules/git-policy.md))
 - hook 실패 시 회피 X, 근본 원인 fix.
-- GPG signing pinentry timeout 시 사용자에게 cache 안내 1회, 그 외 진행.
+- GPG signing pinentry timeout 시 즉시 중단. 사용자에게 cache warm-up 필요를
+  보고하고, unsigned commit 으로 진행하지 않음.
 
 ## Agent spawn 권장
 
 - 리뷰: orchestrator 자기 리뷰 = 편향. `pr-reviewer` agent (`.claude/agents/pr-reviewer.md`) spawn 으로 독립 평가. [review](../review/memory.md) 룰 적용.
 - 외부 시각 필요 시 `codex-reviewer` (사용자 명시 시만, 자동 호출 X).
-- Multi-worktree 병렬 시 각 worktree 의 delivery 도 sub-agent 자율 (subagent 권한 약한 해석 — `delivery` agent type 이어야 write 가능).
+- Multi-worktree 병렬 시 각 worktree 의 delivery 도 delivery owner 가 소유.
+  reviewer 는 read-only, merge 는 delivery owner 책임.
 
 ## Sync 책임
 
@@ -62,6 +81,7 @@ trigger:
 - `.claude/rules/git-policy.md` — `--no-verify` / `LEFTHOOK=0` 금지 + hook 강제
 - `.claude/agents/delivery.md` — 본 룰 enforce agent
 - `.claude/agents/pr-reviewer.md` — T4 review spawn 대상
-- [review](../review/memory.md) — T4 review 룰 (3 정성 + profile)
+- [review](../review/memory.md) — T4 review 룰 (정성 차원 + profile)
+- [documentation](../documentation/memory.md) — 문서화 impact + evidence portability
 - [implementation](../implementation/memory.md) — 직전 phase
 - [conventions](../../conventions/memory.md) — Conventional Commits 형식 (`feat(scope): description`)

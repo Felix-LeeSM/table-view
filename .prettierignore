@@ -1,5 +1,6 @@
 docs/
 .claude/
+.codex/
 dist/
 node_modules/
 src-tauri/gen/

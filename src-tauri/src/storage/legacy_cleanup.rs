@@ -11,10 +11,6 @@
 //! 의 "사용자 manual recovery 용" 의도와 align (30일 동안 사용자는 디스크
 //! 에서 직접 손에 넣을 수 있고, 그 이후엔 SQLite SOT 가 안정적이라고 간주).
 //!
-//! Scripts/ 에는 `scripts/cleanup-legacy-files.sh` 가 dry-run / 외부 cron
-//! path 로 같은 정책을 실행한다 (in-app boot 외에 사용자가 manual run
-//! 할 수 있도록).
-//!
 //! Failure mode: 파일 stat / remove 실패는 `tracing::warn` 만 — 다음 boot
 //! 에 다시 시도. Q10 zero-telemetry — 외부 전송 0.
 

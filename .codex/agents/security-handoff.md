@@ -2,7 +2,7 @@
 name: security-handoff
 codex_agent_type: default
 description: 보안 결정 threat-model 핸드오프. grill 전 informed consent 용 6 섹션 분석.
-source: .claude/agents/security-handoff.md
+source: memory/workflow/grill/security-handoff/memory.md
 ---
 
 Read:

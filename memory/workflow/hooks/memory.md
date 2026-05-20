@@ -2,7 +2,7 @@
 name: Git hook — ref mutation 금지 (read-only verification)
 description: Hook script 는 검증 only. ref mutation (fetch/reset/push 등) 금지 — 부수효과 cascade + 자살 trigger.
 type: workflow-rule
-updated: 2026-05-19
+updated: 2026-05-20
 task: hook-design, lefthook, pre-push, pre-commit, race-trace
 trigger:
   signal: hook script 작성 / lefthook step 추가 / pre-push 차단 동작 분석 시
@@ -41,7 +41,7 @@ Hook 은 *검증 게이트*. 의무:
 - **Read-only**: 현재 state 만 inspection 후 PASS/FAIL 판단
 
 Hook 안 mutation 의 부수효과 cascade:
-- 예 (실제 발생, 2026-05-19): `scripts/check-tdd-cycle.sh:62` 의
+- 예 (실제 발생, 2026-05-19): `scripts/hooks/check-tdd-cycle.sh:62` 의
   `git fetch --quiet origin main` 이 매 push 마다 `.git/FETCH_HEAD` 를
   origin/main 의 head 로 갱신 → 그 직후 외부 process 의
   `git reset --hard FETCH_HEAD` 호출 시 → sprint branch 가 origin/main 의
@@ -68,14 +68,14 @@ Hook 안 mutation 의 부수효과 cascade:
 |---|---|---|
 | pre-commit/ts-format | `prettier --write` + `stage_fixed: true` | 의도된 formatter (예외) |
 | pre-commit/ts-lint | `eslint --fix` + `stage_fixed: true` | 의도된 formatter (예외) |
-| pre-push/8_check-tdd-cycle | (former) `git fetch origin main` | ★ Anti-pattern, PR #41 에서 제거 |
+| pre-push/7_check-tdd-cycle | (former) `git fetch origin main` | ★ Anti-pattern, PR #41 에서 제거 |
 | 그 외 모든 step | none | read-only |
 
 ## 관련
 
 - `memory/workflow/git-policy/memory.md` — hook *회피* 금지 (agent 행동 룰).
   본 룰은 hook *작성자* 관점.
-- `scripts/check-tdd-cycle.sh` — hook design 의 적용 사례 (PR #41 에서
+- `scripts/hooks/check-tdd-cycle.sh` — hook design 의 적용 사례 (PR #41 에서
   fetch 제거).
 - `scripts/hooks/check-dangerous-bash.sh` — PreToolUse hook. agent 의 reset
   명령 차단.

@@ -54,6 +54,30 @@ if [ -z "$CMD" ]; then
   exit 0
 fi
 
+contains_local_env_file_reference() {
+  local scrubbed="$CMD"
+  # `.env.example` is a tracked template and may be inspected or edited.
+  scrubbed="${scrubbed//.env.example/}"
+  local pattern='(^|[[:space:]<>])["'\'']?(\./)?([^[:space:]"'\'';&|<>]+/)?\.env(\.[^[:space:]"'\'';&|<>]+)?(["'\'']?($|[[:space:];&|<>]))'
+  echo "$scrubbed" | grep -qE "$pattern"
+}
+
+if contains_local_env_file_reference; then
+  cat >&2 <<EOF
+BLOCKED: Reading or editing local env files is not allowed.
+
+Blocked patterns:
+  - .env
+  - .env.*
+
+Allowed template:
+  - .env.example
+
+Use .env.example for documented defaults. Do not inspect local secret files.
+EOF
+  exit 1
+fi
+
 # ERE 패턴. 토큰 경계 — `bash -c "git push --force"` 같이 quote / paren 으로
 # 감싼 호출도 차단되도록 앞/뒤 anchor 를 [^a-zA-Z0-9_] 로 완화.
 # (sprint-387 의 bash -c bypass 결함 fix — string concat / variable
@@ -62,8 +86,8 @@ fi
 #
 # Pattern IDs (block 메시지 dispatch key):
 #   rm_destructive / sql_drop / sql_truncate / git_push_force / git_reset_hard
-#   / no_verify / lefthook_env_zero / lefthook_skip / husky_zero / dd_if
-#   / mkfs / dev_write
+#   / no_verify / no_gpg_sign / gpgsign_false / gpgsign_env_key
+#   / lefthook_env_zero / lefthook_skip / husky_zero / dd_if / mkfs / dev_write
 DANGEROUS_PATTERNS=(
   'rm_destructive::(^|[^a-zA-Z0-9_])rm[[:space:]]+-[rRfF]*[rR][rRfF]*[[:space:]]+(/|~|\*|\.|src|node_modules|target)([[:space:]/]|$)'
   'sql_drop::(^|[^a-zA-Z0-9_])DROP[[:space:]]+(DATABASE|TABLE)([^a-zA-Z0-9_]|$)'
@@ -72,6 +96,9 @@ DANGEROUS_PATTERNS=(
   'git_reset_hard::(^|[^a-zA-Z0-9_])git[[:space:]]+reset[[:space:]]+--hard'
   'git_pull::(^|[^a-zA-Z0-9_])git[[:space:]]+pull([^a-zA-Z0-9_]|$)'
   'no_verify::--no-verify([^a-zA-Z0-9_]|$)'
+  'no_gpg_sign::--no-gpg-sign([^a-zA-Z0-9_]|$)'
+  'gpgsign_false::commit[.]gpgsign([[:space:]]*=[[:space:]]*|[[:space:]]+)false([^a-zA-Z0-9_]|$)'
+  'gpgsign_env_key::GIT_CONFIG_KEY_[0-9]+=commit[.]gpgsign'
   'lefthook_env_zero::(^|[^a-zA-Z0-9_])LEFTHOOK=0([^a-zA-Z0-9_]|$)'
   'lefthook_skip::(^|[^a-zA-Z0-9_])LEFTHOOK_SKIP='
   'husky_zero::(^|[^a-zA-Z0-9_])HUSKY=0([^a-zA-Z0-9_]|$)'
@@ -270,6 +297,20 @@ pre-commit / pre-push 는 품질 + 회귀 게이트입니다.
 
 자세히: $MEMORY_POINTER (Hook 실패 시 절)
 예외 (사용자 명시 승인 시만): revert 백포팅, hook 자체 손상 복구.
+EOF
+      ;;
+    no_gpg_sign | gpgsign_false | gpgsign_env_key)
+      cat >&2 <<EOF
+GPG signing 우회 (--no-gpg-sign / commit.gpgsign=false) 는 금지.
+서명 필수 repo 에서 pinentry timeout 이 나면 agent 는 즉시 중단하고
+사용자에게 gpg-agent cache warm-up 을 요청해야 합니다.
+
+회복:
+  - 사용자가 로컬 TTY 에서 한 번 signed commit 또는 gpg sign 으로 cache warm-up
+  - 그 뒤 동일 staged diff 로 git commit 재시도
+  - unsigned commit 이 만들어졌다면 signed commit 으로 대체 후 push
+
+자세히: $MEMORY_POINTER (Hook 실패 시 / GPG signing 절)
 EOF
       ;;
     git_push_force)

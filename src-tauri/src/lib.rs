@@ -26,8 +26,8 @@ pub static BOOT_T0: OnceLock<Instant> = OnceLock::new();
 
 /// Sprint 175 Sprint 2 — phase-breakdown helper. Emits a single
 /// structured `info!` line on `target: "boot"` so the measurement
-/// protocol (and `scripts/measure-startup.sh` once it learns the
-/// `phase=` token) can grep deterministically for per-segment deltas
+/// protocol (`memory/runbook/cold-boot/memory.md`) can grep
+/// deterministically for per-segment deltas
 /// without depending on log line ordering.
 ///
 /// Each call updates `cursor` to `now`, so the next call's delta is

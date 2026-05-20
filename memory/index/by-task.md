@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-05-19
+generated: 2026-05-20
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -20,6 +20,10 @@ generator: scripts/regenerate-indexes.sh
 ### agent-hard-rule
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
+
+### backend
+
+- [Backend Guidance](../../memory/conventions/backend/memory.md)
 
 ### baseline
 
@@ -57,9 +61,19 @@ generator: scripts/regenerate-indexes.sh
 ### delivery
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
+
+### docs
+
+- [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
+
+### documentation
+
+- [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 
 ### frontend
 
+- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
 
 ### god-file
@@ -137,6 +151,7 @@ generator: scripts/regenerate-indexes.sh
 ### pr
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 
 ### pr-close
 
@@ -174,6 +189,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### react-impl
 
+- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
 
 ### refactor
@@ -203,10 +219,12 @@ generator: scripts/regenerate-indexes.sh
 
 - [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 - [PR Review](../../memory/workflow/review/memory.md)
 
 ### rust-impl
 
+- [Backend Guidance](../../memory/conventions/backend/memory.md)
 - [Rust 컨벤션](../../memory/conventions/rust/memory.md)
 
 ### scorecard
@@ -234,6 +252,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
 
+### tauri
+
+- [Backend Guidance](../../memory/conventions/backend/memory.md)
+
 ### test-writing
 
 - [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/conventions/testing-scenarios/mock-scope/memory.md)
@@ -241,6 +263,10 @@ generator: scripts/regenerate-indexes.sh
 ### threat-model
 
 - [보안 grill — threat-model 핸드오프 먼저](../../memory/workflow/grill/security-handoff/memory.md)
+
+### ui
+
+- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
 
 ### user-report
 

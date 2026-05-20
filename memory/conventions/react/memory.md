@@ -2,7 +2,7 @@
 title: React / TypeScript 컨벤션 (전체)
 type: convention
 updated: 2026-05-18
-surface: src/**/*.{ts,tsx}
+surface: src/**/*.ts, src/**/*.tsx
 task: react-impl, refactor, frontend
 trigger:
   signal: src/**/*.{ts,tsx} 편집 시

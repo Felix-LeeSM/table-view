@@ -94,8 +94,8 @@ Reason:
 
 Two-medium split:
 
-- **bash** for docker lifecycle (`db:up`, `db:down`) — short shell-outs to `docker compose` plus the existing `scripts/wait-for-test-db.sh`.
-- **TypeScript** under `scripts/fixtures/` for everything else (`db:seed`, `db:reset`, `db:connections`, `db:generate`), run via `tsx` (matches existing `scripts/generate-syntax-palette.ts` pattern). Use `@faker-js/faker` for synthetic data (multilingual locale support out of the box: `ko`, `ja`, `zh_CN`, `en`, etc.).
+- **bash** for docker lifecycle (`db:up`, `db:down`) — short shell-outs to `docker compose` plus `scripts/db/wait.sh`.
+- **TypeScript** under `scripts/fixtures/` for everything else (`db:seed`, `db:reset`, `db:connections`, `db:generate`), run via `tsx`. Use `@faker-js/faker` for synthetic data (multilingual locale support out of the box: `ko`, `ja`, `zh_CN`, `en`, etc.).
 
 Candidate structure:
 
@@ -120,7 +120,7 @@ fixtures/
 pnpm scripts (in `package.json`):
 
 ```json
-"db:up":           "docker compose up -d postgres mongo && ./scripts/wait-for-test-db.sh",
+"db:up":           "docker compose up -d postgres mongo mysql && ./scripts/db/wait.sh",
 "db:down":         "docker compose down",
 "db:seed":         "tsx scripts/fixtures/index.ts seed",
 "db:reset":        "tsx scripts/fixtures/index.ts reset",
@@ -628,4 +628,3 @@ Reason:
 
 - Final column-type catalog details (exact set of supported types and per-type options).
 - Exact `@faker-js/faker` field mapping per type.
-

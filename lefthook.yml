@@ -99,20 +99,23 @@ pre-commit:
       # Sprint 388 — memory/decisions/*/memory.md 의 frontmatter 외 hunk 차단.
       # 새 ADR (untracked → added) 은 OK. 결정 뒤집기는 새 ADR + supersedes.
       glob: "memory/decisions/**/*.md"
-      run: bash scripts/check-adr-frozen.sh
+      run: bash scripts/hooks/check-adr-frozen.sh
 
 pre-push:
   # ADR 0019 (2026-05-01) — E2E를 CI에서 떼고 host-native pre-push 게이트로
   # 이동. push 전에 단위/린트/빌드 체크를 끝낸 다음 e2e가 실제 사용자 환경
   # (macOS WKWebView)에서 통과해야만 push 허용. `--no-verify` / `LEFTHOOK=0`
-  # 회피는 `.claude/hooks/pre-bash.sh`에서 차단.
+  # 회피는 `scripts/hooks/check-dangerous-bash.sh`에서 차단.
   #
-  # 순서: 빠른 체크가 먼저 실패하면 무거운 체크 시간을 아낀다 (fail-fast).
+  # 순서: signed-commit / 빠른 체크가 먼저 실패하면 무거운 체크 시간을 아낀다 (fail-fast).
   # `piped: true`로 직렬 실행 — e2e는 cold start ~1-3분이라 다른 체크와
   # 동시에 돌리면 docker boot 비용이 항상 부과됨. 직렬은 또한 실패 원인을
   # 한눈에 짚게 한다.
   piped: true
   commands:
+    0_signed-commits:
+      tags: security git
+      run: bash scripts/hooks/check-signed-commits.sh
     1_ts-typecheck:
       tags: lint frontend
       run: npx tsc --noEmit
@@ -180,7 +183,7 @@ pre-push:
       # security profile sprint 는 자동 skip. SKIP_TDD_CYCLE=1 강제 우회 가능
       # (사용자 명시 시 한정, git-policy.md 회피 금지 룰의 예외).
       tags: review
-      run: bash scripts/check-tdd-cycle.sh
+      run: bash scripts/hooks/check-tdd-cycle.sh
 
 commit-msg:
   commands:

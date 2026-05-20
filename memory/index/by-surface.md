@@ -1,7 +1,7 @@
 ---
 title: By-surface 인덱스
 type: index
-generated: 2026-05-19
+generated: 2026-05-20
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -45,6 +45,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### `src-tauri/**/*.rs`
 
+- [Backend Guidance](../../memory/conventions/backend/memory.md)
 - [Rust 컨벤션](../../memory/conventions/rust/memory.md)
 
 ### `src-tauri/src/commands/connection.rs`
@@ -55,17 +56,23 @@ generator: scripts/regenerate-indexes.sh
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
 
-### `src/**/*.{ts`
+### `src/**/*.css`
 
+- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
+
+### `src/**/*.ts`
+
+- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
+- [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
+
+### `src/**/*.tsx`
+
+- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
 
 ### `src/lib/perf/bootInstrumentation.ts`
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
-
-### `tsx}`
-
-- [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
 
 ### `vi.mock'`
 

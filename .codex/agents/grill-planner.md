@@ -2,7 +2,7 @@
 name: grill-planner
 codex_agent_type: default
 description: 결정 / 설계 / 계획 인터뷰. 한 메시지 = 결정 1개, 두 축 옵션 분해.
-source: .claude/agents/grill-planner.md
+source: memory/workflow/grill/memory.md
 ---
 
 Read:

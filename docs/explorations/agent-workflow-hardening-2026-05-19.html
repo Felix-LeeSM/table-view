@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Workflow Hardening - 2026-05-19</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --panel: #ffffff;
+      --ink: #1f2428;
+      --muted: #626a70;
+      --line: #d9ddd7;
+      --green: #176b4d;
+      --red: #a63f2c;
+      --amber: #9b6413;
+      --blue: #24618e;
+      --teal: #1e7776;
+      --violet: #6f4c9b;
+      --shadow: 0 10px 28px rgba(31, 36, 40, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family:
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+      line-height: 1.55;
+    }
+
+    header {
+      padding: 42px 28px 30px;
+      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(90deg, rgba(23, 107, 77, 0.09), transparent 38%),
+        linear-gradient(270deg, rgba(36, 97, 142, 0.09), transparent 44%),
+        #fbfbf8;
+    }
+
+    main {
+      padding: 26px 28px 60px;
+    }
+
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      max-width: 900px;
+      font-size: 40px;
+      font-weight: 760;
+    }
+
+    h2 {
+      margin-bottom: 16px;
+      font-size: 23px;
+      font-weight: 720;
+    }
+
+    h3 {
+      font-size: 16px;
+      font-weight: 720;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    .subtitle {
+      max-width: 880px;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 22px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    section {
+      margin-top: 28px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .panel.pad {
+      padding: 18px;
+    }
+
+    .finding {
+      display: grid;
+      grid-template-columns: 11px 1fr;
+      gap: 12px;
+      padding: 18px;
+    }
+
+    .bar {
+      width: 11px;
+      border-radius: 99px;
+      background: var(--blue);
+    }
+
+    .bar.green { background: var(--green); }
+    .bar.red { background: var(--red); }
+    .bar.amber { background: var(--amber); }
+    .bar.teal { background: var(--teal); }
+    .bar.violet { background: var(--violet); }
+
+    .finding h3 {
+      margin-bottom: 7px;
+    }
+
+    .finding p,
+    .panel p,
+    li {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    ul,
+    ol {
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+
+    li + li {
+      margin-top: 5px;
+    }
+
+    code {
+      padding: 1px 5px;
+      border: 1px solid #d9dfdc;
+      border-radius: 5px;
+      background: #f3f5f2;
+      color: #2a3432;
+      font-size: 0.92em;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(110px, 1fr));
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .step {
+      min-height: 116px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .step .num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      margin-bottom: 10px;
+      border-radius: 50%;
+      background: #edf3ef;
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .step span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.42;
+    }
+
+    .matrix {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      font-size: 14px;
+    }
+
+    .matrix th,
+    .matrix td {
+      padding: 12px 13px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .matrix th {
+      background: #f0f3ef;
+      color: #2b3430;
+      font-size: 13px;
+    }
+
+    .matrix tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .tag {
+      display: inline-block;
+      margin: 0 4px 5px 0;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #eff4f4;
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .callout {
+      padding: 15px 17px;
+      border-left: 5px solid var(--amber);
+      border-radius: 8px;
+      background: #fff8ec;
+      color: #4b3a22;
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .decision {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 14px;
+      padding: 15px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .decision:last-child {
+      border-bottom: 0;
+    }
+
+    .decision b {
+      color: var(--ink);
+      font-size: 14px;
+    }
+
+    .decision p {
+      font-size: 14px;
+    }
+
+    @media (max-width: 860px) {
+      header,
+      main {
+        padding-left: 18px;
+        padding-right: 18px;
+      }
+
+      h1 {
+        font-size: 30px;
+      }
+
+      .grid.two,
+      .grid.three {
+        grid-template-columns: 1fr;
+      }
+
+      .decision {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Agent Workflow Hardening</h1>
+      <p class="subtitle">
+        지금까지 논의한 문제를 “프롬프트로 먼저 유도하고, reviewer가 잡고, 위험한 것만 hook으로 막는” 운영 모델로 정리한 결정 초안입니다.
+      </p>
+      <div class="meta">
+        <span class="pill">2026-05-19</span>
+        <span class="pill">orchestrator + worktree agents</span>
+        <span class="pill">review - reflect - merge</span>
+        <span class="pill">documentation impact gate</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <section>
+        <h2>진단</h2>
+        <div class="grid two">
+          <article class="panel finding">
+            <div class="bar red"></div>
+            <div>
+              <h3>문서 체계 이탈</h3>
+              <p>
+                agent가 기존 SOT를 먼저 찾도록 강제되지 않았다. 그래서 audit 결과와 sprint sequencing을
+                <code>RISKS</code>, <code>PLAN</code>, sprint contract로 흡수하지 않고 새 임시 backlog 문서로 남겼다.
+              </p>
+            </div>
+          </article>
+          <article class="panel finding">
+            <div class="bar amber"></div>
+            <div>
+              <h3>문서화 누락 가능성</h3>
+              <p>
+                어디에 써야 하는지만 정하면 부족하다. 중요한 변경이 문서화가 필요한지 판단하는 gate가 없으면,
+                API, workflow, safety 정책 변경이 코드에만 남을 수 있다.
+              </p>
+            </div>
+          </article>
+          <article class="panel finding">
+            <div class="bar teal"></div>
+            <div>
+              <h3>review와 merge 책임 분리 불명확</h3>
+              <p>
+                reviewer는 read-only 판단자여야 한다. merge는 delivery owner가 해야 한다. 현재는 reviewer 이후
+                reflect, fix, merge, cleanup을 소유하는 agent가 고정되지 않아 PR과 worktree가 쌓였다.
+              </p>
+            </div>
+          </article>
+          <article class="panel finding">
+            <div class="bar violet"></div>
+            <div>
+              <h3>로컬 증거와 GPG 우회</h3>
+              <p>
+                PR에서 볼 수 없는 절대경로가 body에 들어갔고, GPG timeout에서 멈추지 않고 unsigned commit이 만들어졌다.
+                둘 다 프롬프트만으로는 취약하므로 reviewer gate와 hook 보강이 필요하다.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>문서화 원칙</h2>
+        <div class="panel pad">
+          <table class="matrix" aria-label="Documentation system of truth matrix">
+            <thead>
+              <tr>
+                <th>문서 유형</th>
+                <th>기존 SOT</th>
+                <th>agent가 해야 할 일</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="tag">risk</span>후속 위험, 감사 잔여</td>
+                <td><code>docs/RISKS.md</code></td>
+                <td>새 backlog 문서 대신 risk row로 남기고, 종료 조건을 적는다.</td>
+              </tr>
+              <tr>
+                <td><span class="tag">sequencing</span>sprint 순서, 큰 계획</td>
+                <td><code>docs/PLAN.md</code></td>
+                <td>계획 표에 흡수한다. 실제 실행 전에는 sprint contract로 승격한다.</td>
+              </tr>
+              <tr>
+                <td><span class="tag">execution</span>실제 sprint 범위</td>
+                <td><code>docs/sprints/sprint-N/</code></td>
+                <td>contract, execution brief, handoff, findings에 남긴다.</td>
+              </tr>
+              <tr>
+                <td><span class="tag">rule</span>반복 적용될 규칙</td>
+                <td><code>memory/**/memory.md</code></td>
+                <td>200줄 cap을 지키며 workflow, convention, lesson으로 분류한다.</td>
+              </tr>
+              <tr>
+                <td><span class="tag">temporary</span>임시 audit 문서</td>
+                <td>사용자 승인 필요</td>
+                <td>retire 조건, 소유 SOT, 흡수 계획 없이는 새 디렉토리로 만들지 않는다.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>Documentation Impact Gate</h2>
+        <div class="grid two">
+          <div class="panel pad">
+            <h3>문서화 필요 트리거</h3>
+            <ul>
+              <li>사용자 가시 동작, default, shortcut, warning/confirm 정책 변경</li>
+              <li>IPC, store API, hook API, enum, SQL kind/severity 같은 contract 변경</li>
+              <li>agent, git, review, delivery, hook workflow 변경</li>
+              <li>password, signing, destructive command, safe mode 같은 safety 변경</li>
+              <li>CI, pre-push, test strategy, coverage threshold 변경</li>
+              <li>새 invariant, deferred risk, follow-up이 생긴 경우</li>
+            </ul>
+          </div>
+          <div class="panel pad">
+            <h3>PR body 필수 섹션</h3>
+            <p>모든 PR은 아래 판단을 포함한다. reviewer는 이 판단의 타당성을 본다.</p>
+            <ul>
+              <li><code>Required: yes/no</code></li>
+              <li><code>Trigger</code>: 무엇 때문에 문서화가 필요하거나 불필요한가</li>
+              <li><code>Updated SOT</code>: 반영한 기존 문서</li>
+              <li><code>Not used</code>: 새 임시 문서를 만들지 않은 이유</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Review 관점</h2>
+        <div class="grid three">
+          <div class="panel pad">
+            <h3>정합성</h3>
+            <p>새 룰, 코드, 문서가 기존 ADR, memory, 실제 코드와 충돌하지 않는지 본다.</p>
+          </div>
+          <div class="panel pad">
+            <h3>Scope</h3>
+            <p>sprint contract의 in-scope/out-of-scope와 PR diff가 맞는지 본다.</p>
+          </div>
+          <div class="panel pad">
+            <h3>Documentation topology</h3>
+            <p>문서화가 필요한 변경인지, 필요한 경우 기존 SOT에 반영됐는지, 새 문서가 체계를 우회하지 않았는지 본다.</p>
+          </div>
+          <div class="panel pad">
+            <h3>Evidence portability</h3>
+            <p>PR body와 review comment에 GitHub에서 볼 수 없는 로컬 절대경로가 없는지 본다.</p>
+          </div>
+          <div class="panel pad">
+            <h3>Lifecycle closure</h3>
+            <p>review green 이후 merge, blocked report, worktree cleanup, agent close가 이어졌는지 본다.</p>
+          </div>
+          <div class="panel pad">
+            <h3>Safety gate</h3>
+            <p>GPG signing, no hook bypass, force push 금지 같은 delivery safety가 지켜졌는지 본다.</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>자동화 시나리오</h2>
+        <div class="flow" aria-label="Automated review reflect merge flow">
+          <div class="step">
+            <span class="num">1</span>
+            <strong>Orchestrator</strong>
+            <span>task, scope, worktree path, delivery owner를 정의한다.</span>
+          </div>
+          <div class="step">
+            <span class="num">2</span>
+            <strong>Delivery owner</strong>
+            <span>worktree에서 구현, commit, push, PR 생성을 소유한다.</span>
+          </div>
+          <div class="step">
+            <span class="num">3</span>
+            <strong>PR body</strong>
+            <span>Documentation impact와 portable evidence를 포함한다.</span>
+          </div>
+          <div class="step">
+            <span class="num">4</span>
+            <strong>Reviewer</strong>
+            <span>read-only로 정합성, scope, documentation topology를 평가한다.</span>
+          </div>
+          <div class="step">
+            <span class="num">5</span>
+            <strong>Reflect</strong>
+            <span>finding이 있으면 같은 delivery owner가 수정한다.</span>
+          </div>
+          <div class="step">
+            <span class="num">6</span>
+            <strong>CI Gate</strong>
+            <span>checks green, mergeable, policy unblocked인지 확인한다.</span>
+          </div>
+          <div class="step">
+            <span class="num">7</span>
+            <strong>Merge</strong>
+            <span>delivery owner가 squash merge와 branch deletion을 수행한다.</span>
+          </div>
+          <div class="step">
+            <span class="num">8</span>
+            <strong>Cleanup</strong>
+            <span>worktree cleanup, agent close, final report로 종료한다.</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Agent Lifecycle</h2>
+        <div class="panel pad">
+          <div class="decision">
+            <b>planned</b>
+            <p>목적, PR 번호, worktree, owner, 종료 조건이 등록된 상태.</p>
+          </div>
+          <div class="decision">
+            <b>running</b>
+            <p>worker나 reviewer가 작업 중인 상태. 같은 책임으로 중복 spawn하지 않는다.</p>
+          </div>
+          <div class="decision">
+            <b>waiting</b>
+            <p>CI, review, 사용자 결정처럼 외부 gate를 기다리는 상태.</p>
+          </div>
+          <div class="decision">
+            <b>done</b>
+            <p>작업 결과가 PR 또는 branch에 반영된 상태.</p>
+          </div>
+          <div class="decision">
+            <b>closed</b>
+            <p><code>close_agent</code> 호출과 worktree cleanup 또는 보존 사유 기록까지 끝난 상태.</p>
+          </div>
+          <div class="decision">
+            <b>abandoned</b>
+            <p>실패, 중단, 오염 감지. push 금지, agent close, worktree 상태 기록 후 새 owner로 재시작한다.</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>GPG Signing Rule</h2>
+        <div class="grid two">
+          <div class="callout">
+            <strong>새 delivery 규칙</strong>
+            <p>
+              GPG signing 실패나 pinentry timeout이 발생하면 즉시 멈춘다. agent는 <code>--no-gpg-sign</code>이나
+              <code>commit.gpgsign=false</code>로 진행하지 않는다.
+            </p>
+          </div>
+          <div class="callout">
+            <strong>hook 보강</strong>
+            <p>
+              Bash hook은 signing bypass 명령을 차단하고, pre-push는 outgoing commit 중 unsigned commit을 차단한다.
+              사용자가 GPG cache를 warm-up한 뒤 재개한다.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>수정 PR 범위</h2>
+        <div class="panel pad">
+          <ol>
+            <li>문서화 SOT와 Documentation Impact Gate를 workflow memory에 추가한다.</li>
+            <li>pr-reviewer 관점에 documentation topology와 portable evidence를 추가한다.</li>
+            <li>delivery owner가 review, reflect, merge, cleanup까지 소유하도록 pipeline을 고친다.</li>
+            <li>agent lifecycle registry와 close/cleanup 체크리스트를 worktree runbook에 추가한다.</li>
+            <li>GPG signing bypass 차단과 unsigned commit pre-push gate를 추가한다.</li>
+          </ol>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

@@ -135,30 +135,18 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib   # ~410 tests
 
 ### 통합 테스트 (Docker 필요)
 
-PostgreSQL 컨테이너를 띄운 후 실행:
+Docker daemon이 켜진 상태에서 실행:
 
 ```bash
-docker compose -f docker-compose.test.yml up -d
-./scripts/wait-for-test-db.sh
 cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration
-docker compose -f docker-compose.test.yml down
 ```
 
-또는 한 명령으로:
-
-```bash
-pnpm test:docker
-```
+기존 compose 스택을 재사용하려면 `pnpm db:up`으로 DB를 띄운 뒤
+`PGHOST`/`PGPORT` 등 환경변수를 명시해서 실행합니다.
 
 - `schema_integration`: 스키마, 컬럼, 인덱스, 필터, 정렬
 - `query_integration`: SELECT, DML, DDL, 취소, 에러 처리
 - Docker가 없어도 graceful skip으로 exit 0 반환
-
-포트 충돌 시 환경변수로 오버라이드:
-
-```bash
-PG_PORT=15432 pnpm test:docker
-```
 
 ### E2E smoke (Linux host, informational CI)
 

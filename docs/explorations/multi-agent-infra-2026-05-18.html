@@ -376,7 +376,7 @@
     <h3>L4. Hook wiring <span class="badge">script universal + 형식 platform</span></h3>
     <div>Script 본체는 universal. 각 platform 의 hook config 가 호출.</div>
     <ul class="files">
-      <li>📄 <code>scripts/check-god-file.sh</code> (universal)</li>
+      <li>📄 <code>scripts/hooks/check-god-file.sh</code> (universal)</li>
       <li>📄 <code>.claude/settings.json</code> PostToolUse → script 호출</li>
       <li>📄 <code>.codex/config</code> → 같은 script 호출 (TBD)</li>
       <li>📄 <code>lefthook.yml</code> pre-commit / pre-push → universal git layer</li>
@@ -467,7 +467,7 @@
       </div>
       <div class="agent-card" data-platform="claude">
         <div class="name">.claude/settings.json</div>
-        <code>PostToolUse → scripts/check-god-file.sh</code>
+        <code>PostToolUse → scripts/hooks/check-god-file.sh</code>
       </div>
     </div>
 
@@ -481,7 +481,7 @@
         <li>memory/ux/memory.md</li>
         <li>memory/runbook/*/memory.md</li>
         <li>memory/conventions/**/memory.md</li>
-        <li>scripts/check-god-file.sh</li>
+        <li>scripts/hooks/check-god-file.sh</li>
         <li>scripts/regenerate-indexes.sh</li>
         <li>lefthook.yml</li>
         <li>AGENTS.md (universal entry)</li>
