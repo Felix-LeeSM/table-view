@@ -49,6 +49,15 @@ backend contract 를 통해서만 다룬다.
   backend `AppError::DbMismatch` 로 감지한다. 문자열 비교로 자체 판정하지 않는다.
 - Query/table result 는 wrapper 에서 numeric post-processing 을 끝낸 뒤 UI 로
   넘긴다. cell-domain stringify 는 `safeStringifyCell` 을 사용한다.
+- Frontend canonical IPC/store-facing types use camelCase. Legacy snake_case
+  payloads are normalized only at boundaries such as `src/lib/tauri/**`,
+  snapshot/session hydration, import/restore, and `src/lib/wireCamelCase.ts`.
+- Do not pass legacy snake_case query/document/connection payloads into stores
+  or UI renderers. Normalize first, then keep the store/UI surface camelCase.
+- Explicit legacy exceptions stay snake_case until their own contract changes:
+  `QueryType.dml.rows_affected`, `BulkWriteResult` counters,
+  `ColumnInfo.data_type`, `TableData.total_count`, and
+  `CollectionInfo.document_count`.
 
 ## State 경계
 
