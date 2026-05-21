@@ -1,11 +1,6 @@
-import {
-  MySQL,
-  PostgreSQL,
-  SQLite,
-  StandardSQL,
-  type SQLDialect,
-} from "@codemirror/lang-sql";
+import type { SQLDialect } from "@codemirror/lang-sql";
 import type { DatabaseType } from "@/types/connection";
+import { codeMirrorDialectForDatabaseType } from "./sqlDialectProfile";
 
 /**
  * Map a `DatabaseType` to its CodeMirror `SQLDialect`.
@@ -24,18 +19,5 @@ import type { DatabaseType } from "@/types/connection";
 export function databaseTypeToSqlDialect(
   dbType: DatabaseType | undefined,
 ): SQLDialect {
-  switch (dbType) {
-    case "postgresql":
-      return PostgreSQL;
-    case "mysql":
-    case "mariadb":
-      return MySQL;
-    case "sqlite":
-      return SQLite;
-    default:
-      // MongoDB, Redis, undefined (deleted connection reference), and
-      // unmapped DatabaseType variants fall back to the generic standard
-      // dialect.
-      return StandardSQL;
-  }
+  return codeMirrorDialectForDatabaseType(dbType);
 }

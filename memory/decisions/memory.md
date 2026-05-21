@@ -1,7 +1,7 @@
 ---
 title: ADR 인덱스
 type: index
-updated: 2026-05-20
+updated: 2026-05-21
 ---
 
 # ADR 인덱스
@@ -48,6 +48,7 @@ updated: 2026-05-20
 | [0042](./0042-query-history-privacy/memory.md)                                       | Query history retention / privacy / export — local at-rest 정책                               | Accepted | 2026-05-17 | —          |
 | [0043](./0043-mongosh-parser-rust-wasm-sot/memory.md)                                | mongosh parser — Rust/WASM single parser with TS policy adapter                               | Accepted | 2026-05-20 | 0029       |
 | [0044](./0044-e2e-smoke-remote-required/memory.md)                                   | E2E smoke — remote PR/main blocking check                                                     | Accepted | 2026-05-20 | 0019, 0020 |
+| [0045](./0045-language-completion-profile-wasm-boundary/memory.md)                   | language completion — dialect profile + WASM hot-path boundary                                | Accepted | 2026-05-21 | —          |
 
 ## 역사 (Superseded / Deprecated)
 

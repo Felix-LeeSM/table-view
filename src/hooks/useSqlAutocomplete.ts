@@ -3,6 +3,7 @@ import { SQLNamespace, type SQLDialect } from "@codemirror/lang-sql";
 import type { Completion } from "@codemirror/autocomplete";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { DatabaseType } from "@/types/connection";
+import { getSqlFunctionsForDatabaseType } from "@lib/sql/sqlDialectProfile";
 
 // Sprint 302 (2026-05-14) — keyword 책임은 lang-sql 의
 // `keywordCompletionSource` 가 dialect.dialect.words 기반으로 단독 수행.
@@ -13,92 +14,6 @@ import type { DatabaseType } from "@/types/connection";
 // 이전에 inject 했던 keyword set 의 superset 이고 auto-quote 도 발생하지
 // 않으므로 (defaultKeyword = (label, type) => ({ label, type, boost: -1 })),
 // ns 의 inject 책임은 제거됐다.
-
-/** Cross-dialect SQL functions exposed as autocomplete candidates. */
-const COMMON_SQL_FUNCTIONS = [
-  "COUNT",
-  "SUM",
-  "AVG",
-  "MIN",
-  "MAX",
-  "COALESCE",
-  "NULLIF",
-  "CAST",
-  "CONCAT",
-  "LENGTH",
-  "UPPER",
-  "LOWER",
-  "TRIM",
-  "SUBSTRING",
-  "EXTRACT",
-  "NOW",
-  "CURRENT_TIMESTAMP",
-];
-
-/** PostgreSQL-only functions. Also used for legacy callers without `dbType`. */
-const POSTGRESQL_SQL_FUNCTIONS = [
-  "DATE_TRUNC",
-  "TO_CHAR",
-  "TO_TIMESTAMP",
-  "JSONB_BUILD_OBJECT",
-  "JSONB_AGG",
-  "ARRAY_AGG",
-];
-
-/** MySQL-specific function surface. Kept conservative and editor-only. */
-const MYSQL_SQL_FUNCTIONS = [
-  "IFNULL",
-  "DATE_FORMAT",
-  "STR_TO_DATE",
-  "CURDATE",
-  "CURTIME",
-  "UTC_TIMESTAMP",
-  "GROUP_CONCAT",
-  "JSON_EXTRACT",
-  "JSON_UNQUOTE",
-  "JSON_OBJECT",
-  "JSON_ARRAY",
-  "UUID",
-  "LAST_INSERT_ID",
-  "DATABASE",
-  "USER",
-  "VERSION",
-];
-
-const SQLITE_SQL_FUNCTIONS = [
-  "DATE",
-  "TIME",
-  "DATETIME",
-  "STRFTIME",
-  "JULIANDAY",
-  "IFNULL",
-];
-
-function sqlFunctionsForDbType(dbType: DatabaseType | undefined): string[] {
-  let dialectSpecific: readonly string[];
-  switch (dbType) {
-    case "mysql":
-    case "mariadb":
-      dialectSpecific = MYSQL_SQL_FUNCTIONS;
-      break;
-    case "sqlite":
-      dialectSpecific = SQLITE_SQL_FUNCTIONS;
-      break;
-    case "mongodb":
-    case "redis":
-      dialectSpecific = [];
-      break;
-    case "mssql":
-    case "oracle":
-      dialectSpecific = [];
-      break;
-    case "postgresql":
-    case undefined:
-      dialectSpecific = POSTGRESQL_SQL_FUNCTIONS;
-      break;
-  }
-  return Array.from(new Set([...COMMON_SQL_FUNCTIONS, ...dialectSpecific]));
-}
 
 /** Explicit test-only overrides: `table → column names`. */
 export type TableColumnOverrides = Record<string, string[]>;
@@ -214,7 +129,7 @@ export function useSqlAutocomplete(
       children: {},
     });
 
-    for (const fn of sqlFunctionsForDbType(dbType)) {
+    for (const fn of getSqlFunctionsForDatabaseType(dbType)) {
       ns[fn] = reservedToken(fn, "function");
     }
 
