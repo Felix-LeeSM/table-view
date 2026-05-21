@@ -1,8 +1,13 @@
 use serde::Serialize;
 
+mod aliases;
 mod compact;
 #[cfg(test)]
 mod completion_tests;
+mod token;
+
+use aliases::{resolve_alias, scan_aliases};
+use token::completion_token_at;
 
 pub use compact::complete_sql_compact;
 
@@ -103,10 +108,11 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
     let token = completion_token_at(&request.text, request.cursor);
     let mut items = Vec::new();
 
-    if request.dialect == "postgresql" {
+    if supports_sql_completion(&request.dialect) {
         if let Some(qualifier) = &token.qualifier {
             add_qualified_columns(&mut items, &request, qualifier, &token.prefix);
         } else {
+            add_meta_commands(&mut items, &request, &token.prefix);
             add_keywords(&mut items, &request, &token.prefix);
             add_catalog_objects(&mut items, &request, &token.prefix);
             add_unqualified_columns(&mut items, &request, &token.prefix);
@@ -135,45 +141,6 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct CompletionToken {
-    prefix: String,
-    qualifier: Option<String>,
-    from_utf16: usize,
-    from_utf8: usize,
-}
-
-fn completion_token_at(text: &str, cursor: CompletionCursorOffsets) -> CompletionToken {
-    let cursor_utf8 = valid_cursor_utf8(text, cursor.utf8);
-    let before = &text[..cursor_utf8];
-    let mut from_utf8 = cursor_utf8;
-
-    for (idx, ch) in before.char_indices().rev() {
-        if !is_ident_char(ch) {
-            break;
-        }
-        from_utf8 = idx;
-    }
-
-    let prefix = text[from_utf8..cursor_utf8].to_string();
-    let mut qualifier = None;
-    if from_utf8 > 0 && text[..from_utf8].ends_with('.') {
-        let dot_utf8 = from_utf8 - 1;
-        let qualifier_start = scan_qualifier_start(&text[..dot_utf8]);
-        if qualifier_start < dot_utf8 {
-            qualifier = Some(text[qualifier_start..dot_utf8].to_string());
-        }
-    }
-
-    let prefix_utf16 = utf16_len(&prefix);
-    CompletionToken {
-        prefix,
-        qualifier,
-        from_utf16: cursor.cursor_utf16_saturating_sub(prefix_utf16),
-        from_utf8,
-    }
-}
-
 trait CursorUtf16SaturatingSub {
     fn cursor_utf16_saturating_sub(self, rhs: usize) -> usize;
 }
@@ -184,33 +151,6 @@ impl CursorUtf16SaturatingSub for CompletionCursorOffsets {
     }
 }
 
-fn valid_cursor_utf8(text: &str, requested: usize) -> usize {
-    let mut cursor = requested.min(text.len());
-    while cursor > 0 && !text.is_char_boundary(cursor) {
-        cursor -= 1;
-    }
-    cursor
-}
-
-fn scan_qualifier_start(before_dot: &str) -> usize {
-    let mut start = before_dot.len();
-    for (idx, ch) in before_dot.char_indices().rev() {
-        if !(is_ident_char(ch) || ch == '.') {
-            break;
-        }
-        start = idx;
-    }
-    start
-}
-
-fn utf16_len(text: &str) -> usize {
-    text.chars().map(char::len_utf16).sum()
-}
-
-fn is_ident_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || ch == '_' || ch == '$'
-}
-
 fn add_keywords(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest, prefix: &str) {
     for keyword in &request.vocabulary.keywords {
         if matches_prefix(keyword, prefix) {
@@ -218,8 +158,26 @@ fn add_keywords(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest,
                 label: keyword.clone(),
                 kind: "keyword".to_string(),
                 apply: Some(keyword.clone()),
-                detail: Some("PostgreSQL keyword".to_string()),
+                detail: Some(keyword_detail(&request.dialect)),
                 boost: Some(10),
+            });
+        }
+    }
+}
+
+fn add_meta_commands(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    prefix: &str,
+) {
+    for command in shell_commands(&request.shell) {
+        if matches_prefix(command, prefix) {
+            items.push(CompletionItem {
+                label: (*command).to_string(),
+                kind: "meta-command".to_string(),
+                apply: Some((*command).to_string()),
+                detail: Some(shell_detail(&request.shell)),
+                boost: Some(60),
             });
         }
     }
@@ -305,7 +263,7 @@ fn add_functions(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest
                 label: function.clone(),
                 kind: "function".to_string(),
                 apply: Some(function.clone()),
-                detail: Some("PostgreSQL function".to_string()),
+                detail: Some(function_detail(&request.dialect)),
                 boost: Some(20),
             });
         }
@@ -356,122 +314,52 @@ fn dedupe_items(items: &mut Vec<CompletionItem>) {
     });
 }
 
-fn scan_aliases(text: &str) -> Vec<(String, String)> {
-    let tokens = lexical_words_and_dots(text);
-    let mut aliases = Vec::new();
-    let mut i = 0usize;
-    while i < tokens.len() {
-        let token = tokens[i].to_ascii_lowercase();
-        if token != "from" && token != "join" {
-            i += 1;
-            continue;
-        }
-
-        let Some((table_ref, next)) = read_table_ref(&tokens, i + 1) else {
-            i += 1;
-            continue;
-        };
-        push_alias(&mut aliases, &table_ref, &table_ref);
-        if let Some(bare) = table_ref.rsplit('.').next() {
-            push_alias(&mut aliases, bare, &table_ref);
-        }
-
-        let mut alias_idx = next;
-        if tokens
-            .get(alias_idx)
-            .is_some_and(|t| t.eq_ignore_ascii_case("as"))
-        {
-            alias_idx += 1;
-        }
-        if let Some(alias) = tokens.get(alias_idx) {
-            if is_alias_candidate(alias) {
-                push_alias(&mut aliases, alias, &table_ref);
-            }
-        }
-        i = alias_idx.saturating_add(1);
-    }
-    aliases
+fn supports_sql_completion(dialect: &str) -> bool {
+    matches!(dialect, "postgresql" | "mysql" | "mariadb" | "sqlite")
 }
 
-fn push_alias(aliases: &mut Vec<(String, String)>, alias: &str, table_ref: &str) {
-    let key = alias.to_ascii_lowercase();
-    if aliases.iter().any(|(existing, _)| existing == &key) {
-        return;
-    }
-    aliases.push((key, table_ref.to_string()));
+fn keyword_detail(dialect: &str) -> String {
+    let mut detail = dialect_label(dialect).to_string();
+    detail.push_str(" keyword");
+    detail
 }
 
-fn resolve_alias<'a>(aliases: &'a [(String, String)], qualifier: &str) -> Option<&'a str> {
-    let key = qualifier.to_ascii_lowercase();
-    aliases
-        .iter()
-        .find(|(alias, _)| alias == &key)
-        .map(|(_, table_ref)| table_ref.as_str())
+fn function_detail(dialect: &str) -> String {
+    let mut detail = dialect_label(dialect).to_string();
+    detail.push_str(" function");
+    detail
 }
 
-fn read_table_ref(tokens: &[String], start: usize) -> Option<(String, usize)> {
-    let first = tokens.get(start)?;
-    if !is_alias_candidate(first) {
-        return None;
+fn dialect_label(dialect: &str) -> &'static str {
+    match dialect {
+        "postgresql" => "PostgreSQL",
+        "mysql" => "MySQL",
+        "mariadb" => "MariaDB",
+        "sqlite" => "SQLite",
+        _ => "SQL",
     }
-    if tokens.get(start + 1).is_some_and(|t| t == ".") {
-        let second = tokens.get(start + 2)?;
-        if is_alias_candidate(second) {
-            let mut qualified = String::with_capacity(first.len() + second.len() + 1);
-            qualified.push_str(first);
-            qualified.push('.');
-            qualified.push_str(second);
-            return Some((qualified, start + 3));
-        }
-    }
-    Some((first.clone(), start + 1))
 }
 
-fn lexical_words_and_dots(text: &str) -> Vec<String> {
-    let mut tokens = Vec::new();
-    let mut current = String::new();
-    for ch in text.chars() {
-        if is_ident_char(ch) {
-            current.push(ch);
-            continue;
-        }
-        if !current.is_empty() {
-            tokens.push(std::mem::take(&mut current));
-        }
-        if ch == '.' {
-            tokens.push(".".to_string());
-        }
-    }
-    if !current.is_empty() {
-        tokens.push(current);
-    }
-    tokens
+fn shell_detail(shell: &str) -> String {
+    let mut detail = shell.to_string();
+    detail.push_str(" command");
+    detail
 }
 
-fn is_alias_candidate(token: &str) -> bool {
-    if token == "." {
-        return false;
+fn shell_commands(shell: &str) -> &'static [&'static str] {
+    match shell {
+        "psql" => &[
+            "\\d",
+            "\\d+",
+            "\\dt",
+            "\\dv",
+            "\\df",
+            "\\dn",
+            "\\copy",
+            "\\conninfo",
+        ],
+        "mysql-client" => &["\\G", "\\c", "\\q", "source", "delimiter", "tee", "notee"],
+        "sqlite-cli" => &[".tables", ".schema", ".mode", ".headers", ".read", ".quit"],
+        _ => &[],
     }
-    !matches!(
-        token.to_ascii_lowercase().as_str(),
-        "where"
-            | "join"
-            | "inner"
-            | "left"
-            | "right"
-            | "full"
-            | "cross"
-            | "on"
-            | "using"
-            | "group"
-            | "order"
-            | "having"
-            | "limit"
-            | "offset"
-            | "union"
-            | "intersect"
-            | "except"
-            | "set"
-            | "values"
-    )
 }

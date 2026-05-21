@@ -17,16 +17,17 @@
 
 ## 자동완성 공통
 
-| 표면 | PostgreSQL | MySQL | MongoDB |
-|---|---|---|---|
-| 키워드 | ✅ CodeMirror PostgreSQL dialect | ✅ CodeMirror MySQL dialect | 해당 없음 |
-| 테이블/뷰/컬렉션 | ✅ schema store 기반 | ✅ database/table store 기반 | ✅ collectionNames 기반 |
-| 컬럼/필드 | ✅ cache 기반 columns | ✅ cache 기반 columns | ✅ sampled fieldNames 기반 |
-| quoted identifier | ✅ `"schema"."table"` | ✅ `` `db`.`table` `` | 해당 없음 |
-| alias column | ✅ `FROM t AS x`, `JOIN t x`, 일부 anywhere scan | ✅ 동일 SQL source 공유 | 해당 없음 |
-| CTE/derived columns | ✅ `WITH c AS (...)`, `FROM (...) a` 일부 projection 추출 | ✅ 동일 SQL source 공유 | 해당 없음 |
-| function candidates | ✅ common + PostgreSQL 전용 | ✅ common + MySQL 전용 | 해당 없음 |
-| operator candidates | SQL keyword/function surface | SQL keyword/function surface | ✅ query operators, aggregation stages, accumulators, BSON tags |
+| 표면 | PostgreSQL | MySQL | MariaDB | SQLite | MongoDB |
+|---|---|---|---|---|---|
+| 키워드 | ✅ CodeMirror + WASM | ✅ CodeMirror + WASM | ✅ MySQL family | ✅ CodeMirror + WASM | 해당 없음 |
+| 테이블/뷰/컬렉션 | ✅ schema store 기반 | ✅ database/table store 기반 | ✅ MySQL family | ✅ table/view store 기반 | ✅ collectionNames 기반 |
+| 컬럼/필드 | ✅ cache 기반 columns | ✅ cache 기반 columns | ✅ cache 기반 columns | ✅ cache 기반 columns | ✅ sampled fieldNames 기반 |
+| quoted identifier | ✅ `"schema"."table"` | ✅ `` `db`.`table` `` | ✅ `` `db`.`table` `` | ✅ `"table"` | 해당 없음 |
+| alias column | ✅ simple alias scan | ✅ simple alias scan | ✅ simple alias scan | ✅ simple alias scan | 해당 없음 |
+| CTE/derived fallback | ✅ TS fallback | ✅ TS fallback | ✅ TS fallback | ✅ TS fallback | 해당 없음 |
+| function candidates | ✅ common + PostgreSQL | ✅ common + MySQL | ✅ common + MySQL | ✅ common + SQLite | 해당 없음 |
+| shell/meta | ✅ `psql` commands | ✅ mysql client commands | ✅ mysql client commands | ✅ sqlite-cli commands | 해당 없음 |
+| operator candidates | SQL keyword/function surface | SQL keyword/function surface | SQL keyword/function surface | SQL keyword/function surface | ✅ query operators, aggregation stages, accumulators, BSON tags |
 
 ## 자동완성 아키텍처 방향
 
@@ -66,6 +67,8 @@ SQL dialect와 shell/meta command는 별도 layer다.
   keyword/function vocabulary, capability flags.
 - `src/lib/sql/sqlCompletionContext.ts` — schema store cache를 Rust/WASM
   completion request 에 넘길 flat catalog context 로 정규화하는 adapter.
+- `src/lib/sql/sqlHybridCompletionSource.ts` — CodeMirror popup 의 WASM-first
+  source. WASM 후보가 없으면 기존 TypeScript source set으로 fallback.
 - `src/lib/sql/sqlDialect.ts` — CodeMirror dialect mapping wrapper.
 - `src/lib/sql/sqlDialectKeywords.ts` — legacy import compatibility wrapper.
 
@@ -78,8 +81,7 @@ SQL dialect와 shell/meta command는 별도 layer다.
 - psql/mysql/sqlite shell command는 SQL parser grammar에 섞지 않는다.
 - 큰 catalog는 매 키 입력마다 통째로 직렬화하지 않고 active scope와 prefix
   기반 slice로 축소한다.
-- 기존 CodeMirror/lang-sql completion은 WASM source가 안정될 때까지 fallback
-  로 유지한다.
+- 기존 CodeMirror/lang-sql/TS completion은 WASM source의 fallback 으로 유지한다.
 
 ## PostgreSQL SQL
 
@@ -132,7 +134,7 @@ SQL dialect와 shell/meta command는 별도 layer다.
 
 - 공통 SQL 함수 후보는 PostgreSQL과 동일.
 - MySQL 전용 함수 후보: `IFNULL`, `DATE_FORMAT`, `STR_TO_DATE`, `CURDATE`, `CURTIME`, `UTC_TIMESTAMP`, `GROUP_CONCAT`, `JSON_EXTRACT`, `JSON_UNQUOTE`, `JSON_OBJECT`, `JSON_ARRAY`, `UUID`, `LAST_INSERT_ID`, `DATABASE`, `USER`, `VERSION`.
-- MySQL 키워드 후보: `AUTO_INCREMENT`, `REPLACE INTO`, `DUAL`, `ENGINE`, `DUPLICATE KEY UPDATE`.
+- MySQL 키워드 후보: `SHOW`, `DESCRIBE`, `USE`, `AUTO_INCREMENT`, `REPLACE INTO`, `DUAL`, `ENGINE`, `ON DUPLICATE KEY UPDATE`, `DUPLICATE KEY UPDATE`.
 - backtick alias: `` `table` ``, fully-qualified `` `db`.`table` ``.
 - PostgreSQL-only 후보(`DATE_TRUNC`, `TO_CHAR`, `JSONB_BUILD_OBJECT` 등)는 `dbType: "mysql"`에서 제외된다.
 
@@ -186,7 +188,7 @@ SQL dialect와 shell/meta command는 별도 layer다.
 ✅ 지원:
 
 - `db.` 뒤 collection names.
-- `db.<collection>.` 뒤 collection method 후보: `find`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `distinct`, `insertOne`, `insertMany`, `updateOne`, `updateMany`, `replaceOne`, `deleteOne`, `deleteMany`, `createIndex`, `dropIndex`.
+- `db.<collection>.` 뒤 collection method 후보: `find`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `distinct`, `insertOne`, `insertMany`, `updateOne`, `updateMany`, `replaceOne`, `deleteOne`, `deleteMany`, `createIndex`, `dropIndex`, `bulkWrite`.
 - db-level method 후보: `runCommand`, `adminCommand`.
 - query operators 18개: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$and`, `$or`, `$nor`, `$not`, `$exists`, `$type`, `$regex`, `$elemMatch`, `$size`, `$all`.
 - aggregation stages 14개: `$match`, `$project`, `$group`, `$sort`, `$limit`, `$skip`, `$unwind`, `$lookup`, `$count`, `$addFields`, `$replaceRoot`, `$facet`, `$out`, `$merge`.
@@ -229,10 +231,10 @@ SQL dialect와 shell/meta command는 별도 layer다.
 
 ## Coverage 판단
 
-현재 상태는 "PostgreSQL strong / MySQL usable but not 100% dialect-complete / MongoDB strong for whitelisted mongosh workflows"다.
+현재 상태는 "PostgreSQL strong / MySQL·MariaDB·SQLite completion smoke open / MongoDB strong for whitelisted mongosh workflows"다.
 
 다음이 남아 있다:
 
 - MySQL client parser dialect closure: `ON DUPLICATE KEY UPDATE`, `LIMIT offset,count`, `CALL`, `LOAD DATA`, `DELIMITER`/procedure body, transaction scripting.
-- MySQL autocomplete expansion: more built-in functions, variables, system/session functions, engine/storage-specific clauses.
+- MySQL/MariaDB/SQLite autocomplete expansion: more built-in functions, variables, system/session functions, engine/storage-specific clauses.
 - Mongo full operator/stage coverage: current list is curated, not exhaustive.

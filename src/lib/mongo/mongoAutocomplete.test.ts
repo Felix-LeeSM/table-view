@@ -9,13 +9,16 @@ import {
   MONGO_ALL_OPERATORS,
   MONGO_QUERY_OPERATORS,
   MONGO_TYPE_TAGS,
+  MONGOSH_DB_METHODS,
   MONGOSH_DB_LEVEL_METHODS,
   createMongoAdminCommandSource,
   createMongoCompletionSource,
   createMongoOperatorHighlight,
   createMongoshDbSource,
+  classifyMongoCompletionPosition,
   type MongoQueryMode,
 } from "./mongoAutocomplete";
+import { MONGOSH_METHOD_WHITELIST } from "./mongoshParser";
 
 /**
  * Build an EditorState with the JSON language loaded and invoke the source
@@ -44,6 +47,11 @@ function labels(result: ReturnType<typeof runSource>): string[] {
 }
 
 describe("mongoAutocomplete constants", () => {
+  it("collection method completions stay aligned with the parser whitelist", () => {
+    const labels = MONGOSH_DB_METHODS.map((method) => method.label);
+    expect(labels).toEqual([...MONGOSH_METHOD_WHITELIST]);
+  });
+
   it("MONGO_QUERY_OPERATORS enumerates the 18 filter operators", () => {
     expect(MONGO_QUERY_OPERATORS).toContain("$eq");
     expect(MONGO_QUERY_OPERATORS).toContain("$ne");
@@ -123,6 +131,27 @@ describe("mongoAutocomplete constants", () => {
     ]);
     const actual = new Set(MONGO_ALL_OPERATORS);
     expect(actual).toEqual(expected);
+  });
+});
+
+describe("classifyMongoCompletionPosition", () => {
+  function classify(doc: string) {
+    const state = EditorState.create({
+      doc,
+      extensions: [jsonLanguage()],
+    });
+    return classifyMongoCompletionPosition(
+      new CompletionContext(state, doc.length, true),
+    );
+  }
+
+  it("routes aggregate top-level object keys to stage candidates", () => {
+    expect(classify('[{"')).toBe("stage-key");
+  });
+
+  it("routes nested filter keys separately from values", () => {
+    expect(classify('{"')).toBe("accumulator-or-filter-key");
+    expect(classify('{"age": ')).toBe("value");
   });
 });
 

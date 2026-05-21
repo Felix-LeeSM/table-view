@@ -13,17 +13,14 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from "@codemirror/view";
+import {
+  classifyMongoCompletionPosition,
+  type MongoCompletionPositionKind,
+} from "./mongoCompletionPosition";
+import { MONGOSH_METHOD_WHITELIST } from "./mongoshParser";
 
-/** Minimal shape of a lezer SyntaxNode — we only walk `.parent` and read
- * `.name` / offsets, so restating the needed subset keeps this module free
- * of a direct `@lezer/common` dependency. */
-interface MinimalSyntaxNode {
-  readonly name: string;
-  readonly from: number;
-  readonly to: number;
-  readonly parent: MinimalSyntaxNode | null;
-  readonly firstChild: MinimalSyntaxNode | null;
-}
+export { classifyMongoCompletionPosition } from "./mongoCompletionPosition";
+export type { MongoCompletionPositionKind } from "./mongoCompletionPosition";
 
 /**
  * MongoDB MQL vocabulary — pure module, no React / Zustand deps. Lists
@@ -235,7 +232,25 @@ export const MONGOSH_DB_METHODS: ReadonlyArray<{
     detail: "(indexName)",
     info: "Drop the named index from the collection.",
   },
+  {
+    label: "bulkWrite",
+    type: "function",
+    detail: "(operations, options?)",
+    info: "Run multiple write operations in one ordered or unordered batch.",
+  },
 ];
+
+const MONGOSH_DB_METHOD_LABELS = new Set(
+  MONGOSH_DB_METHODS.map((method) => method.label),
+);
+
+for (const method of MONGOSH_METHOD_WHITELIST) {
+  if (!MONGOSH_DB_METHOD_LABELS.has(method)) {
+    throw new Error(
+      `mongosh autocomplete missing whitelisted method: ${method}`,
+    );
+  }
+}
 
 /**
  * Sprint 381 (2026-05-17) — mongosh top-level helpers that don't belong on
@@ -585,17 +600,6 @@ export interface MongoCompletionOptions {
 }
 
 /**
- * Classification of the JSON context around the cursor. Uses a
- * deliberately simple heuristic in `classifyPosition` — full scope
- * analysis isn't required for the autocomplete quality target.
- */
-type PositionKind =
-  | "stage-key" // top-level object key inside a pipeline array (aggregate mode)
-  | "accumulator-or-filter-key" // nested object key position
-  | "value" // after `:`, inside a value expression
-  | "unknown";
-
-/**
  * Build an autocomplete `CompletionSource` that serves MQL-aware candidates.
  *
  * The source triggers on:
@@ -620,7 +624,7 @@ export function createMongoCompletionSource(
     // Dollar-prefixed token wins when present — it unambiguously signals
     // an operator / stage / accumulator / type-tag candidate position.
     if (dollarMatch) {
-      const position = classifyPosition(context);
+      const position = classifyMongoCompletionPosition(context);
       const candidates: Completion[] = [];
       appendDollarCandidates(candidates, opts.queryMode, position);
       if (candidates.length === 0) return null;
@@ -635,7 +639,7 @@ export function createMongoCompletionSource(
     // this to key positions so ordinary string-value typing doesn't pull up
     // a field-name popup mid-sentence.
     if (quotedKeyMatch && opts.fieldNames && opts.fieldNames.length > 0) {
-      const position = classifyPosition(context);
+      const position = classifyMongoCompletionPosition(context);
       if (position === "value" || position === "unknown") {
         // Field names only make sense as object keys; suppress the popup
         // elsewhere so users writing `"active": "..."` don't see noise.
@@ -657,126 +661,10 @@ export function createMongoCompletionSource(
   };
 }
 
-/**
- * Heuristic JSON position classifier. Intentionally shallow — the contract
- * explicitly allows "simple heuristic, no deep scope analysis". The rules:
- *
- * 1. Walk ancestors to find the innermost `Object` / `Array`.
- * 2. Scan the document up to the cursor and find the last *meaningful*
- *    non-whitespace, non-quote character. The character classifies the slot:
- *      - `{` or `,`  → key position
- *      - `:`         → value position
- *      - `[`         → stage-key (top-level aggregate slot)
- * 3. If the innermost `Object` sits directly inside an `Array`, treat key
- *    positions as `stage-key`. Otherwise nested-object key positions become
- *    `accumulator-or-filter-key`.
- *
- * Imprecision this accepts on purpose:
- *  - `$lookup`'s nested `pipeline: [...]` isn't rewalked — inner stages
- *    surface as nested keys rather than stage-keys. A future refinement
- *    can track `$lookup` / `$facet` recursion.
- *  - Positions inside string values return `unknown` (no `:` / `,`
- *    immediately before the cursor).
- */
-function classifyPosition(context: CompletionContext): PositionKind {
-  const { state, pos } = context;
-  const tree = syntaxTree(state);
-  const node: MinimalSyntaxNode = tree.resolveInner(pos, -1);
-
-  // Cursor inside a String literal → value position (JSON strings can live
-  // as object values or array items, both handled identically by MQL).
-  for (let cur: MinimalSyntaxNode | null = node; cur; cur = cur.parent) {
-    if (cur.name === "String") {
-      // However: a string that's the PropertyName of an enclosing Property
-      // (i.e. we're typing a key) is a key position, not a value position.
-      if (cur.parent && cur.parent.name === "Property") {
-        // PropertyName is the Property's first child; if cur is literally
-        // that first child we're inside the key.
-        const propName = cur.parent.firstChild;
-        if (propName && propName.from === cur.from && propName.to === cur.to) {
-          return nearestObjectIsInArray(cur)
-            ? "stage-key"
-            : "accumulator-or-filter-key";
-        }
-      }
-      return "value";
-    }
-    if (cur.name === "PropertyName") {
-      return nearestObjectIsInArray(cur)
-        ? "stage-key"
-        : "accumulator-or-filter-key";
-    }
-    if (cur.name === "Object" || cur.name === "Array") break;
-  }
-
-  // Outside a string: inspect the last non-whitespace character up to pos.
-  // This covers the common "just typed `$` after `{`, `,`, or `:`" path.
-  const upToCursor = state.doc.sliceString(0, pos);
-  const lastChar = lastMeaningfulChar(upToCursor);
-
-  if (lastChar === ":") return "value";
-  if (lastChar === "{" || lastChar === ",") {
-    // Key position — check the enclosing object's parent.
-    return closestObjectIsInArray(tree, pos)
-      ? "stage-key"
-      : "accumulator-or-filter-key";
-  }
-  if (lastChar === "[") {
-    // Just after array open: the next object will be a stage.
-    return "stage-key";
-  }
-
-  return "unknown";
-}
-
-/** Last non-whitespace, non-string-body character preceding `pos`. Scans
- * backwards through the partial source. Stops at the first printable char.
- * Returns `null` when nothing meaningful precedes the cursor. */
-function lastMeaningfulChar(upToCursor: string): string | null {
-  for (let i = upToCursor.length - 1; i >= 0; i--) {
-    const ch = upToCursor[i]!;
-    if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") continue;
-    // Skip anything that's part of a currently-typed `$keyword` or quoted
-    // identifier so we report the *enclosing* punctuation instead.
-    if (/[A-Za-z0-9_$"]/.test(ch)) continue;
-    return ch;
-  }
-  return null;
-}
-
-/** True when walking up from `node` we find an `Object` whose parent is an
- * `Array`. Used to distinguish top-level pipeline stages (object inside
- * array) from nested objects. */
-function nearestObjectIsInArray(node: MinimalSyntaxNode): boolean {
-  for (let cur: MinimalSyntaxNode | null = node; cur; cur = cur.parent) {
-    if (cur.name === "Object") {
-      const parent = cur.parent;
-      return parent?.name === "Array";
-    }
-  }
-  return false;
-}
-
-/** Variant that starts from a doc offset — used when the cursor is outside
- * any string node. */
-function closestObjectIsInArray(
-  tree: ReturnType<typeof syntaxTree>,
-  pos: number,
-): boolean {
-  const node: MinimalSyntaxNode = tree.resolveInner(pos, -1);
-  for (let cur: MinimalSyntaxNode | null = node; cur; cur = cur.parent) {
-    if (cur.name === "Object") {
-      const parent = cur.parent;
-      return parent?.name === "Array";
-    }
-  }
-  return false;
-}
-
 function appendDollarCandidates(
   out: Completion[],
   mode: MongoQueryMode,
-  position: PositionKind,
+  position: MongoCompletionPositionKind,
 ): void {
   if (position === "value") {
     // Value position → BSON extended JSON type tags (e.g. `{ "$oid": "..." }`).

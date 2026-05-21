@@ -1,10 +1,4 @@
-import {
-  useRef,
-  useEffect,
-  useCallback,
-  forwardRef,
-  useImperativeHandle,
-} from "react";
+import { useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
@@ -26,13 +20,8 @@ import {
   indentOnInput,
 } from "@codemirror/language";
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
-import { updateColumnCompletionSource } from "@lib/sql/updateColumnCompletion";
-import { aliasColumnCompletionSource } from "@lib/sql/aliasColumnCompletion";
-import { cteColumnCompletionSource } from "@lib/sql/cteColumnCompletion";
-import { wrappedSchemaCompletionSource } from "@lib/sql/schemaCompletionWrapper";
-import { sqlCompletionShadowSource } from "@lib/sql/sqlCodeMirrorCompletionAdapter";
+import { createSqlHybridCompletionSource } from "@lib/sql/sqlHybridCompletionSource";
 import type { SqlCompletionContext } from "@lib/sql/sqlCompletionContext";
-import type { SqlCompletionRequest } from "@lib/sql/sqlCompletionRequest";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 
@@ -70,63 +59,23 @@ export interface SqlQueryEditorProps {
    * `databaseTypeToSqlDialect`. When omitted falls back to `StandardSQL`.
    */
   sqlDialect?: SQLDialect;
-  /**
-   * Sprint 421 — shadow path for the future Rust/WASM completion core.
-   * The source builds a normalized request from CodeMirror state but
-   * returns `null`, so the visible autocomplete candidates remain owned by
-   * the existing TypeScript sources until the parity gate flips.
-   */
   completionContext?: SqlCompletionContext;
-  onCompletionShadowRequest?: (request: SqlCompletionRequest) => void;
 }
 
 const buildSqlLang = (
   dialect: SQLDialect,
   ns: SQLNamespace | undefined,
   getCompletionContext: () => SqlCompletionContext | null | undefined,
-  onCompletionShadowRequest: (request: SqlCompletionRequest) => void,
 ): Extension => [
-  // Sprint 304 (2026-05-14) — `schema` 인자 *제거*. lang-sql 의 자동
-  // schemaCompletionSource wire 는 ns top-level (table) 을 모든 컨텍스트
-  // 에서 emit 해 우리 column source 와 같은 라벨이 popup 에 두 번
-  // 노출됐다. wrappedSchemaCompletionSource 가 같은 lang-sql source 를
-  // 호출하지만 column-only 컨텍스트에서 table 후보를 제거한다.
   sqlLanguage({
     dialect,
     upperCaseKeywords: true,
   }),
   dialect.language.data.of({
-    autocomplete: wrappedSchemaCompletionSource(() => ns, dialect),
-  }),
-  // 2026-05-11 — supplement lang-sql's built-in `schemaCompletionSource`,
-  // which only resolves a target table behind `FROM`. Without this,
-  // `UPDATE users SET <cursor>` and `INSERT INTO users (<cursor>)` get
-  // no column candidates. The source is scoped to the active SQL
-  // language so it stays dormant outside SQL contexts.
-  dialect.language.data.of({
-    autocomplete: updateColumnCompletionSource(() => ns),
-  }),
-  // Sprint 294 (2026-05-14) — alias-aware mid-typing flow. lang-sql 의 alias
-  // map 은 cursor 의 Statement 안에 FROM 절이 이미 있을 때만 작동 → 사용자
-  // 가 SELECT projection 을 먼저 입력하는 일반 패턴 (`SELECT u.` + 후행
-  // FROM) 에서 후보 0. 이 source 는 buffer 전체에서 FROM/JOIN alias 패턴을
-  // 탐색해 anywhere-scan 으로 보강한다.
-  dialect.language.data.of({
-    autocomplete: aliasColumnCompletionSource(() => ns),
-  }),
-  // Sprint 295 (2026-05-14) — CTE / derived subquery virtual table. paren-
-  // depth-aware mini-parser 가 `WITH <name> AS (<inner-select>)` 와 `FROM
-  // (<inner-select>) [AS] <alias>` 의 projection list 를 추출해 가상
-  // 컬럼을 alias prefix 후보로 emit. base table 의 실제 컬럼은 위 alias
-  // source 가 담당하므로 가상 alias 와 base alias 가 같은 popup 에서
-  // 충돌 없이 dedup 된다.
-  dialect.language.data.of({
-    autocomplete: cteColumnCompletionSource(() => ns),
-  }),
-  dialect.language.data.of({
-    autocomplete: sqlCompletionShadowSource({
+    autocomplete: createSqlHybridCompletionSource({
+      dialect,
+      getNamespace: () => ns,
       getCompletionContext,
-      onRequest: onCompletionShadowRequest,
     }),
   }),
 ];
@@ -141,7 +90,6 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
       schemaNamespace,
       sqlDialect,
       completionContext,
-      onCompletionShadowRequest,
     },
     ref,
   ) {
@@ -178,14 +126,6 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
     dialectRef.current = effectiveDialect;
     const completionContextRef = useRef(completionContext);
     completionContextRef.current = completionContext;
-    const onCompletionShadowRequestRef = useRef(onCompletionShadowRequest);
-    onCompletionShadowRequestRef.current = onCompletionShadowRequest;
-    const emitCompletionShadowRequest = useCallback(
-      (request: SqlCompletionRequest) => {
-        onCompletionShadowRequestRef.current?.(request);
-      },
-      [],
-    );
 
     // Create the CodeMirror editor once.
     useEffect(() => {
@@ -203,7 +143,6 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
               dialectRef.current,
               schemaNamespaceRef.current,
               () => completionContextRef.current,
-              emitCompletionShadowRequest,
             ),
           ),
           syntaxHighlighting(viewTableHighlightStyle),
@@ -301,7 +240,7 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
         view.destroy();
         viewRef.current = null;
       };
-    }, [emitCompletionShadowRequest]);
+    }, []);
 
     // Reconfigure the SQL extension bundle in place when dialect or schema
     // identity changes — keeps cursor/selection intact.
@@ -314,11 +253,10 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
             effectiveDialect,
             schemaNamespace,
             () => completionContextRef.current,
-            emitCompletionShadowRequest,
           ),
         ),
       });
-    }, [effectiveDialect, schemaNamespace, emitCompletionShadowRequest]);
+    }, [effectiveDialect, schemaNamespace]);
 
     // Sync external sql changes into the editor (e.g. when switching tabs).
     useEffect(() => {
