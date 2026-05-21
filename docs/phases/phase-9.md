@@ -101,8 +101,8 @@ saved model:
 - The adapter provides the minimum catalog reads needed for the flat sidebar:
   one `main` namespace, table names, exact table row counts, columns, primary
   key flags, and foreign-key references.
-- Free-form query execution, table preview, DDL, export streaming, and richer
-  SQLite introspection remain unsupported until their own feature-order slices.
+- Batch execution, dry-run, DDL, export streaming, and richer SQLite
+  introspection remain unsupported until their own feature-order slices.
 
 ## SQLite File Creation Slice
 
@@ -115,3 +115,17 @@ connection slice:
   file, requires an absolute path, and requires the parent directory to exist.
 - `test_connection` and normal `connect` still must not create missing files;
   silent path typo creation remains forbidden.
+
+## SQLite Query / Preview Slice
+
+SQLite table preview and single-statement query execution follow the shared RDB
+contract:
+
+- Free-form `execute_query` supports SQLite `SELECT`/`WITH`/`PRAGMA`/`EXPLAIN`
+  result sets plus single-statement DML/DDL result metadata.
+- `query_table_data` supports pagination, validated `ORDER BY`, structured
+  filters, raw `WHERE` validation, primary-key tiebreak ordering, and JSON cell
+  projection.
+- Multi-statement batch execution, dry-run, native cancel, edit commit
+  semantics, DDL builders, export streaming, and richer introspection remain
+  separate parity slices.
