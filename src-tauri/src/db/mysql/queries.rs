@@ -23,6 +23,7 @@ use sqlx::TypeInfo;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
+use crate::db::raw_where::{validate_raw_where_clause, RawWhereDialect};
 use crate::error::AppError;
 use crate::models::{
     FilterCondition, FilterOperator, QueryColumn, QueryResult, QueryType, TableData,
@@ -211,26 +212,10 @@ fn hex_encode(bytes: &[u8]) -> String {
     out
 }
 
-/// raw WHERE 입력 검증. PG queries.rs 와 동일 정책 — semicolon 차단 +
-/// DDL/DML keyword prefix 차단.
+/// raw WHERE 입력 검증. 공통 AST validator 가 fragment 를 dialect SELECT 에
+/// 감싸서 boolean expression 만 허용한다.
 fn validate_raw_where(rw: &str) -> Result<(), AppError> {
-    if rw.contains(';') {
-        return Err(AppError::Validation(
-            "Raw WHERE clause must not contain semicolons".into(),
-        ));
-    }
-    let upper = rw.to_uppercase();
-    for keyword in &[
-        "DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "CREATE", "TRUNCATE", "GRANT", "REVOKE",
-    ] {
-        if upper.starts_with(keyword) {
-            return Err(AppError::Validation(format!(
-                "Raw WHERE clause must not start with {}",
-                keyword
-            )));
-        }
-    }
-    Ok(())
+    validate_raw_where_clause(RawWhereDialect::Mysql, rw)
 }
 
 impl MysqlAdapter {

@@ -4,6 +4,7 @@ use sqlx::sqlite::SqliteRow;
 use sqlx::{Column, Row, TypeInfo};
 use tokio_util::sync::CancellationToken;
 
+use crate::db::raw_where::{validate_raw_where_clause, RawWhereDialect};
 use crate::error::AppError;
 use crate::models::{
     FilterCondition, FilterOperator, QueryColumn, QueryResult, QueryType, TableData,
@@ -40,24 +41,7 @@ pub(super) fn strip_trailing_terminator(sql: &str) -> &str {
 }
 
 fn validate_raw_where(rw: &str) -> Result<(), AppError> {
-    if rw.contains(';') {
-        return Err(AppError::Validation(
-            "Raw WHERE clause must not contain semicolons".into(),
-        ));
-    }
-    let upper = rw.to_uppercase();
-    let dangerous_starts = [
-        "DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "CREATE", "TRUNCATE", "GRANT", "REVOKE",
-    ];
-    for keyword in &dangerous_starts {
-        if upper.starts_with(keyword) {
-            return Err(AppError::Validation(format!(
-                "Raw WHERE clause must not start with {}",
-                keyword
-            )));
-        }
-    }
-    Ok(())
+    validate_raw_where_clause(RawWhereDialect::Sqlite, rw)
 }
 
 fn hex_encode(bytes: &[u8]) -> String {

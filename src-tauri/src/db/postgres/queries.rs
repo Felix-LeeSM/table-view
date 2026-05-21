@@ -12,6 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 use super::category::map_pg_data_type;
+use crate::db::raw_where::{validate_raw_where_clause, RawWhereDialect};
 use crate::error::AppError;
 use crate::models::{
     ColumnInfo, FilterCondition, FilterOperator, QueryColumn, QueryResult, QueryType, TableData,
@@ -587,30 +588,9 @@ impl PostgresAdapter {
         // Build safe query — table/schema are validated identifiers
         let qualified_table = qualified_table(schema, table);
 
-        // Validate raw_where if provided
         let raw_where_trimmed = raw_where.map(|rw| rw.trim()).filter(|rw| !rw.is_empty());
-
         if let Some(rw) = &raw_where_trimmed {
-            // Reject semicolons to prevent multi-statement injection
-            if rw.contains(';') {
-                return Err(AppError::Validation(
-                    "Raw WHERE clause must not contain semicolons".into(),
-                ));
-            }
-            // Reject dangerous statements at the start of the clause
-            let upper = rw.to_uppercase();
-            let dangerous_starts = [
-                "DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "CREATE", "TRUNCATE", "GRANT",
-                "REVOKE",
-            ];
-            for keyword in &dangerous_starts {
-                if upper.starts_with(keyword) {
-                    return Err(AppError::Validation(format!(
-                        "Raw WHERE clause must not start with {}",
-                        keyword
-                    )));
-                }
-            }
+            validate_raw_where_clause(RawWhereDialect::Postgres, rw)?;
         }
 
         // Build WHERE clause: raw_where takes precedence over structured filters
