@@ -313,6 +313,18 @@ run_case \
   EMPTY
 
 run_case \
+  "case-418-2b: base64 decode piped to quoted bash → block" \
+  1 \
+  '{"tool_input":{"command":"printf Z2l0IHB1c2ggLS1mb3JjZQo= | base64 -d | \"bash\""}}' \
+  'MATCH:base64|shell pipe|memory/workflow/git-policy/memory.md'
+
+run_case \
+  "case-418-2c: base64 decode piped to quoted /bin/bash → block" \
+  1 \
+  '{"tool_input":{"command":"printf Z2l0IHB1c2ggLS1mb3JjZQo= | base64 -d | /bin/\"bash\""}}' \
+  'MATCH:base64|shell pipe|memory/workflow/git-policy/memory.md'
+
+run_case \
   "case-418-3: eval command substitution → block" \
   1 \
   '{"tool_input":{"command":"eval $(printf '\''git'\'')"}}' \
@@ -323,6 +335,24 @@ run_case \
   1 \
   '{"tool_input":{"command":"git checkout origin/main"}}' \
   'MATCH:git checkout|origin/main|memory/workflow/git-policy/memory.md'
+
+run_case \
+  "case-418-4b: git checkout upstream/main → block" \
+  1 \
+  '{"tool_input":{"command":"git checkout upstream/main"}}' \
+  'MATCH:git checkout|upstream/main|memory/workflow/git-policy/memory.md'
+
+run_case \
+  "case-418-4c: git checkout -b scratch origin/main → allow" \
+  0 \
+  '{"tool_input":{"command":"git checkout -b scratch origin/main"}}' \
+  EMPTY
+
+run_case \
+  "case-418-4d: git reset pathspec origin/main → allow" \
+  0 \
+  '{"tool_input":{"command":"git reset -- origin/main"}}' \
+  EMPTY
 
 run_case \
   "case-418-5: git log FETCH_HEAD → allow" \

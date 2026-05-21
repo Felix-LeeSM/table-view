@@ -38,13 +38,13 @@ Code / Codex / Cursor) 에 같은 룰 적용.
 
 ## Hook 한계 + Worktree (sprint-387)
 
-본 hook 은 **부주의 방지** layer. 의도적 우회 (변수 substitution / 문자열
-concat / bin alias / eval split / PATH override) 는 **차단 불가능** — hook
-통과 = "agent 가 자기도 모르게 위반하지 않는다" 보장만. 정책 (본 문서) +
-git log 가 최종 source of truth.
+본 hook 은 **부주의 방지** layer. 변수 substitution / 문자열 concat / bin
+alias / PATH override 같은 의도적 우회는 **차단 불가능** — hook 통과 =
+"agent 가 자기도 모르게 위반하지 않는다" 보장만. 정책 (본 문서) + git log 가
+최종 source of truth.
 
 차단 가능 케이스: 평문 명령 / `bash -c "..."` 안 평문 / `$(echo ...)` 안 평문
-/ alias 정의 본문 / heredoc / nohup / background.
+/ alias 정의 본문 / heredoc / nohup / background / `base64 -d | bash` 류 script-smuggling / `eval $(...)` / remote-upstream target-only `git checkout`.
 
 Worktree: `$CLAUDE_PROJECT_DIR` 가 worktree root 절대경로 → worktree 사본의
 `scripts/hooks/check-dangerous-bash.sh` 가 호출됨. tracked `settings.json` 만
