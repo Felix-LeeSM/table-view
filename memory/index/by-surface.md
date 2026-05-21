@@ -39,6 +39,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [Write smoke는 preview close가 아니라 persisted outcome을 검증한다](../../memory/lessons/e2e/2026-05-20-write-smoke-root-cause/memory.md)
 
+### `lefthook.yml`
+
+- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
+
 ### `memory/workflow/review`
 
 - [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
@@ -46,6 +50,14 @@ generator: scripts/regenerate-indexes.sh
 ### `scripts/hooks/check-dangerous-bash.sh`
 
 - [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
+
+### `scripts/hooks/test-worktree-push-ref-safety.sh`
+
+- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
+
+### `scripts/worktree-spawn.sh`
+
+- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 
 ### `src-tauri/**/*.rs`
 
