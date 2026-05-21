@@ -82,8 +82,11 @@ pub enum DocumentQueryMode {
     InsertMany,
     UpdateOne,
     UpdateMany,
+    ReplaceOne,
     DeleteOne,
     DeleteMany,
+    CreateIndex,
+    DropIndex,
     BulkWrite,
 }
 
@@ -111,8 +114,11 @@ impl HistoryQueryMode {
                 DocumentQueryMode::InsertMany => "insertMany",
                 DocumentQueryMode::UpdateOne => "updateOne",
                 DocumentQueryMode::UpdateMany => "updateMany",
+                DocumentQueryMode::ReplaceOne => "replaceOne",
                 DocumentQueryMode::DeleteOne => "deleteOne",
                 DocumentQueryMode::DeleteMany => "deleteMany",
+                DocumentQueryMode::CreateIndex => "createIndex",
+                DocumentQueryMode::DropIndex => "dropIndex",
                 DocumentQueryMode::BulkWrite => "bulkWrite",
             },
         }
@@ -159,8 +165,11 @@ impl HistoryQueryModeFilter {
                 DocumentQueryMode::InsertMany => "insertMany",
                 DocumentQueryMode::UpdateOne => "updateOne",
                 DocumentQueryMode::UpdateMany => "updateMany",
+                DocumentQueryMode::ReplaceOne => "replaceOne",
                 DocumentQueryMode::DeleteOne => "deleteOne",
                 DocumentQueryMode::DeleteMany => "deleteMany",
+                DocumentQueryMode::CreateIndex => "createIndex",
+                DocumentQueryMode::DropIndex => "dropIndex",
                 DocumentQueryMode::BulkWrite => "bulkWrite",
             }),
         }
@@ -1230,8 +1239,11 @@ mod tests {
             DocumentQueryMode::InsertMany,
             DocumentQueryMode::UpdateOne,
             DocumentQueryMode::UpdateMany,
+            DocumentQueryMode::ReplaceOne,
             DocumentQueryMode::DeleteOne,
             DocumentQueryMode::DeleteMany,
+            DocumentQueryMode::CreateIndex,
+            DocumentQueryMode::DropIndex,
             DocumentQueryMode::BulkWrite,
         ];
         for v in variants {

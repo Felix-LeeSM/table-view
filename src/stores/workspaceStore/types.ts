@@ -97,8 +97,11 @@ export type QueryMode =
   | "insertMany"
   | "updateOne"
   | "updateMany"
+  | "replaceOne"
   | "deleteOne"
   | "deleteMany"
+  | "createIndex"
+  | "dropIndex"
   | "bulkWrite";
 
 /** A tab that hosts the SQL / document query editor. */

@@ -24,8 +24,11 @@ export const MONGOSH_METHOD_WHITELIST = [
   "insertMany",
   "updateOne",
   "updateMany",
+  "replaceOne",
   "deleteOne",
   "deleteMany",
+  "createIndex",
+  "dropIndex",
   "bulkWrite",
 ] as const;
 

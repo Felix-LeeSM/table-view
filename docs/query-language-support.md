@@ -204,7 +204,7 @@ SQL dialect와 shell/meta command는 별도 layer다.
 ✅ 지원:
 
 - `db.runCommand({...})`, `db.adminCommand({...})`.
-- collection commands dispatched by the typed parser: `find`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `distinct`, `insertOne`, `insertMany`, `updateOne`, `updateMany`, `deleteOne`, `deleteMany`, `bulkWrite`.
+- collection commands dispatched by the typed parser: `find`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `distinct`, `insertOne`, `insertMany`, `updateOne`, `updateMany`, `replaceOne`, `deleteOne`, `deleteMany`, `createIndex`, `dropIndex`, `bulkWrite`.
 - cursor chain for `find` / `aggregate`: `.sort(...)`, `.limit(...)`, `.skip(...)`, `.toArray()`.
 - JSON-like values: object, array, string, number, boolean, null, comments.
 - BSON literals in collection dispatch: `ObjectId(...)`, `ISODate(...)`, `UUID(...)`, `NumberLong(...)`, `NumberDecimal(...)`, `BinData(...)`.
@@ -213,8 +213,8 @@ SQL dialect와 shell/meta command는 별도 layer다.
 
 ⚠️ 부분 지원:
 
-- There are two parser surfaces in current code: the WASM statement classifier recognizes admin vs collection statements for toolbar/database gating, while the collection dispatch path still uses the TypeScript whitelist parser. The effective executable collection surface is the stricter dispatch whitelist.
-- `replaceOne`, `createIndex`, `dropIndex` may appear in autocomplete, but the dispatch whitelist does not currently include them. Treat them as completion-only until dispatch support lands.
+- There are two parser surfaces in current code: the WASM statement classifier recognizes admin vs collection statements for toolbar/database gating, while the collection dispatch path still applies a TypeScript dispatch whitelist. Autocomplete collection methods are covered by that executable whitelist.
+- `createIndex` supports the app's typed index request surface: ascending/descending key specs plus `name`, `unique`, `sparse`, `expireAfterSeconds`, `partialFilterExpression`, and `collation`.
 - `db.runCommand` / `db.adminCommand` accepts JSON-shaped command bodies with BSON placeholders, but not arbitrary JavaScript expressions.
 
 ❌ 미지원:
@@ -235,5 +235,4 @@ SQL dialect와 shell/meta command는 별도 layer다.
 
 - MySQL client parser dialect closure: `ON DUPLICATE KEY UPDATE`, `LIMIT offset,count`, `CALL`, `LOAD DATA`, `DELIMITER`/procedure body, transaction scripting.
 - MySQL autocomplete expansion: more built-in functions, variables, system/session functions, engine/storage-specific clauses.
-- Mongo dispatch/autocomplete alignment: autocomplete-only methods(`replaceOne`, `createIndex`, `dropIndex`)의 실행 dispatch 추가 또는 후보 제거.
 - Mongo full operator/stage coverage: current list is curated, not exhaustive.

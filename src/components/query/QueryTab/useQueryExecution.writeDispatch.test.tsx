@@ -35,6 +35,8 @@ const updateManyMock = vi.fn();
 const deleteDocumentMock = vi.fn();
 const deleteManyMock = vi.fn();
 const bulkWriteDocumentsMock = vi.fn();
+const createMongoIndexMock = vi.fn();
+const dropMongoIndexMock = vi.fn();
 beforeEach(() => {
   setupTauriMock({
     executeQuery: vi.fn(),
@@ -54,6 +56,8 @@ beforeEach(() => {
     deleteDocument: (...args: unknown[]) => deleteDocumentMock(...args),
     deleteMany: (...args: unknown[]) => deleteManyMock(...args),
     bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocumentsMock(...args),
+    createMongoIndex: (...args: unknown[]) => createMongoIndexMock(...args),
+    dropMongoIndex: (...args: unknown[]) => dropMongoIndexMock(...args),
   });
 });
 
@@ -106,6 +110,10 @@ function getCompletedResult(tabId: string) {
   return updated.queryState.result;
 }
 
+async function actAsync(fn: () => Promise<void>) {
+  await act(fn);
+}
+
 describe("useQueryExecution — Sprint 312 write dispatch", () => {
   beforeEach(() => {
     insertDocumentMock.mockReset();
@@ -115,6 +123,8 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     deleteDocumentMock.mockReset();
     deleteManyMock.mockReset();
     bulkWriteDocumentsMock.mockReset();
+    createMongoIndexMock.mockReset();
+    dropMongoIndexMock.mockReset();
     useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({ connections: [] });
     useQueryHistoryStore.setState({ recentVisible: [] });
@@ -131,9 +141,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     const tab = seedDocTab('db.users.insertOne({name:"Mona"})');
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await actAsync(result.current.handleExecute);
 
     await waitFor(() => {
       expect(insertDocumentMock).toHaveBeenCalledTimes(1);
@@ -167,9 +175,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     const tab = seedDocTab("db.users.insertMany([{n:1},{n:2}])");
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await actAsync(result.current.handleExecute);
 
     await waitFor(() => {
       expect(insertManyDocumentsMock).toHaveBeenCalledTimes(1);
@@ -199,17 +205,13 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     const tab = seedDocTab("db.users.deleteMany({archived:true})");
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await actAsync(result.current.handleExecute);
 
     // WARN tier — pending state set, IPC NOT called yet.
     expect(result.current.pendingMongoWarn).not.toBeNull();
     expect(deleteManyMock).not.toHaveBeenCalled();
 
-    await act(async () => {
-      await result.current.confirmMongoWarn();
-    });
+    await actAsync(result.current.confirmMongoWarn);
 
     await waitFor(() => {
       expect(deleteManyMock).toHaveBeenCalledTimes(1);
@@ -244,9 +246,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     });
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await actAsync(result.current.handleExecute);
 
     expect(result.current.pendingMongoConfirm).not.toBeNull();
     expect(result.current.pendingMongoConfirm!.reason).toMatch(
@@ -269,15 +269,11 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     );
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await actAsync(result.current.handleExecute);
     expect(result.current.pendingMongoWarn).not.toBeNull();
     expect(updateManyMock).not.toHaveBeenCalled();
 
-    await act(async () => {
-      await result.current.confirmMongoWarn();
-    });
+    await actAsync(result.current.confirmMongoWarn);
 
     await waitFor(() => {
       expect(updateManyMock).toHaveBeenCalledTimes(1);
@@ -309,9 +305,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     );
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await actAsync(result.current.handleExecute);
 
     await waitFor(() => {
       expect(deleteDocumentMock).toHaveBeenCalledTimes(1);
@@ -338,9 +332,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     const tab = seedDocTab('db.users.deleteOne({email:"x@y.com"})');
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await actAsync(result.current.handleExecute);
 
     await waitFor(() => {
       expect(bulkWriteDocumentsMock).toHaveBeenCalledTimes(1);
@@ -366,9 +358,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     );
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await actAsync(result.current.handleExecute);
 
     await waitFor(() => {
       expect(updateDocumentMock).toHaveBeenCalledTimes(1);
@@ -395,9 +385,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     );
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await actAsync(result.current.handleExecute);
 
     await waitFor(() => {
       expect(bulkWriteDocumentsMock).toHaveBeenCalledTimes(1);
@@ -440,9 +428,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     );
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await actAsync(result.current.handleExecute);
 
     await waitFor(() => {
       expect(bulkWriteDocumentsMock).toHaveBeenCalledTimes(1);
@@ -459,6 +445,103 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     });
     expect(useQueryHistoryStore.getState().recentVisible[0]!.queryMode).toBe(
       "bulkWrite",
+    );
+  });
+
+  it("dispatches replaceOne through bulkWriteDocuments", async () => {
+    const bulkResult: BulkWriteResult = {
+      ...EMPTY_BULK_RESULT,
+      matched_count: 1,
+      modified_count: 1,
+    };
+    bulkWriteDocumentsMock.mockResolvedValueOnce(bulkResult);
+    const tab = seedDocTab(
+      'db.users.replaceOne({email:"x@y.com"}, {email:"x@y.com", verified:true}, {upsert:true})',
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await actAsync(result.current.handleExecute);
+
+    await waitFor(() => {
+      expect(bulkWriteDocumentsMock).toHaveBeenCalledTimes(1);
+    });
+    expect(bulkWriteDocumentsMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      "table_view_test",
+      "users",
+      [
+        {
+          op: "replaceOne",
+          filter: { email: "x@y.com" },
+          replacement: { email: "x@y.com", verified: true },
+          upsert: true,
+        },
+      ],
+    );
+    await waitFor(() => {
+      const r = getCompletedResult(tab.id);
+      expect(r.writeSummary).toEqual({ kind: "bulkWrite", result: bulkResult });
+    });
+    expect(useQueryHistoryStore.getState().recentVisible[0]!.queryMode).toBe(
+      "replaceOne",
+    );
+  });
+
+  it("dispatches createIndex to createMongoIndex", async () => {
+    createMongoIndexMock.mockResolvedValueOnce({ name: "email_1" });
+    const tab = seedDocTab(
+      'db.users.createIndex({email:1}, {name:"email_1", unique:true})',
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await actAsync(result.current.handleExecute);
+
+    await waitFor(() => {
+      expect(createMongoIndexMock).toHaveBeenCalledTimes(1);
+    });
+    expect(createMongoIndexMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      "table_view_test",
+      "users",
+      {
+        name: "email_1",
+        fields: [{ name: "email", direction: "asc" }],
+        unique: true,
+      },
+    );
+    await waitFor(() => {
+      const r = getCompletedResult(tab.id);
+      expect(r.queryType).toBe("ddl");
+      expect(r.rows).toEqual([["createIndex", "email_1"]]);
+    });
+    expect(useQueryHistoryStore.getState().recentVisible[0]!.queryMode).toBe(
+      "createIndex",
+    );
+  });
+
+  it("dispatches dropIndex to dropMongoIndex", async () => {
+    dropMongoIndexMock.mockResolvedValueOnce(undefined);
+    const tab = seedDocTab('db.users.dropIndex("email_1")');
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await actAsync(result.current.handleExecute);
+
+    await waitFor(() => {
+      expect(dropMongoIndexMock).toHaveBeenCalledTimes(1);
+    });
+    expect(dropMongoIndexMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      "table_view_test",
+      "users",
+      "email_1",
+    );
+    await waitFor(() => {
+      const r = getCompletedResult(tab.id);
+      expect(r.queryType).toBe("ddl");
+      expect(r.rows).toEqual([["dropIndex", "email_1"]]);
+    });
+    expect(useQueryHistoryStore.getState().recentVisible[0]!.queryMode).toBe(
+      "dropIndex",
     );
   });
 
@@ -479,9 +562,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     });
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await actAsync(result.current.handleExecute);
 
     expect(result.current.pendingMongoConfirm).not.toBeNull();
     expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
