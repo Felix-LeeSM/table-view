@@ -14,7 +14,8 @@ Phase 1–4 완료 (Sprint 24–54 PASS). Phase 5–11 부분 진행. **Phase 12
 
 최근 closure 기준: **Phase 13–17, 21–23, 27 종료**. Phase 18–20
 (MariaDB / SQLite / Oracle) 은 보류. 현재 다음 후보는 Phase 28 (MongoDB
-Full Support 후속 / parser consolidation) 과 2026-05-19 refactor backlog
+Full Support 후속 / parser consolidation), Phase 31 (Language Completion
+Architecture), 2026-05-19 refactor backlog
 (`docs/refactor-backlog/2026-05-19/`) 이다.
 
 ## 방향 결정 (2026-05-01)
@@ -208,6 +209,28 @@ e2e dead 제약 (cross-window invariant 변경 회피) 으로 phase 선정. Phas
 - Phase 5 (371, 372, 373) — 371 ← 355+365+370, 372 ← 370+371, 373 ← 371+372.
 - Phase 6 (374, 375, 376) — 374 ← all, 375 ← 367+368+369+370+371+372+373, 376 ← 368+371+373+375.
 
+### Language completion architecture (Sprint 420–..., Phase 31)
+
+ADR 0045 의 completion boundary 를 장기 계획으로 승격. 목표는 current
+CodeMirror/TS completion 을 유지하면서, Rust/WASM completion core 로 안전하게
+교체 가능한 request/result contract 를 먼저 고정하는 것이다. PostgreSQL 먼저
+shadow 하되 request shape 은 MySQL / MariaDB / SQLite 를 처음부터 포함한다.
+
+| Sprint | 단계 | 목적 |
+|---|---|---|
+| **420** | A | Completion request/result contract + SQL request builder + PLAN/phase 문서화 |
+| 421 | B | CodeMirror adapter shadow path — TS result 와 WASM-ready request 동시 생성 |
+| 422 | C | PostgreSQL WASM completion core v0 — keyword/table/column/function provider |
+| 423 | D | PostgreSQL parity gate + WASM-first 전환, TS fallback 유지 |
+| 424 | E | MySQL/MariaDB dialect closure — backtick, `LIMIT offset,count`, `ON DUPLICATE KEY`, `SHOW/DESCRIBE/USE` |
+| 425 | F | SQLite dialect + shell — `PRAGMA`, `WITHOUT ROWID`, `.tables`, `.schema` |
+| 426 | G | Mongo completion alignment — mongosh WASM classifier 기반 context routing |
+| 427 | H | TS parser/helper cleanup — parity 완료 helper 부터 제거 |
+
+**기준 문서**: [`docs/phases/phase-31.md`](phases/phase-31.md),
+[`docs/query-language-support.md`](query-language-support.md),
+[`memory/decisions/0045-language-completion-profile-wasm-boundary/memory.md`](../memory/decisions/0045-language-completion-profile-wasm-boundary/memory.md).
+
 ## 문서 목차
 
 | 문서 | 설명 |
@@ -215,6 +238,7 @@ e2e dead 제약 (cross-window invariant 변경 회피) 으로 phase 선정. Phas
 | [Architecture](architecture.md) | 시스템 구조, DB driver 추상화, 기술 결정 |
 | [RISKS](RISKS.md) | 잔여 위험 등록부 (20개 항목, 상태 추적) |
 | [Query Language Support](query-language-support.md) | PostgreSQL / MySQL / MongoDB 자동완성·문법 지원 범위 |
+| [Phase 31](phases/phase-31.md) | Multi-dialect language completion architecture |
 | [Sprints](sprints/README.md) | harness sprint 실행 산출물 |
 
 ## 구현 계획
@@ -246,8 +270,9 @@ e2e dead 제약 (cross-window invariant 변경 회피) 으로 phase 선정. Phas
 | 26 | Trigger 관리 | 계획 | [phase-26.md](phases/phase-26.md) |
 | 27 | Table / Column DDL UI | 종료 (Sprint 237 closure, 2026-05-13) | [phase-27.md](phases/phase-27.md) |
 | 28 | MongoDB Full Support | 진행/후속 판단 (Slice A–M 대부분 구현, parser consolidation 후보) | [phase-28.md](phases/phase-28.md) |
+| 31 | Language Completion Architecture | 진행 (Sprint 420 contract boundary) | [phase-31.md](phases/phase-31.md) |
 
-> Phase 9–11은 본 phase 분할 이전의 임시 스케치(`phase-9.md` 등). Phase 17–20이 phase-9의 RDBMS 확장 계획을 승계해 분할 — 2026-05-01 결정으로 패리티 달성 시까지 보류. Phase 21–27 이 그 자리를 차지하고, 본 7단계 종료 시점에 Phase 17–20 재개를 재평가.
+> Phase 9–11은 본 phase 분할 이전의 임시 스케치(`phase-9.md` 등). Phase 17–20이 phase-9의 RDBMS 확장 계획을 승계해 분할 — 2026-05-01 결정으로 패리티 달성 시까지 보류. Phase 21–27 이 그 자리를 차지하고, 본 7단계 종료 시점에 Phase 17–20 재개를 재평가. Phase 29/30 은 기존 후보(통합 후속 / 보안 surface) 로 남겨두고, completion 은 충돌 회피를 위해 Phase 31 로 배치한다.
 
 ## TDD / E2E 정책 (Phase 13 이후)
 
