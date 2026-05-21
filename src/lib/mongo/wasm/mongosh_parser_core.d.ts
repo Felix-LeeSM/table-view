@@ -1,6 +1,8 @@
 /* tslint:disable */
 /* eslint-disable */
 
+export function mongo_completion_vocabulary(): any;
+
 export function parse_mongosh(input: string): any;
 
 export type InitInput =
@@ -12,6 +14,7 @@ export type InitInput =
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  readonly mongo_completion_vocabulary: () => number;
   readonly parse_mongosh: (a: number, b: number) => number;
   readonly __wbindgen_export: (a: number, b: number) => number;
   readonly __wbindgen_export2: (

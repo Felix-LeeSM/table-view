@@ -5,9 +5,11 @@ mod compact;
 #[cfg(test)]
 mod completion_tests;
 mod token;
+mod vocabulary;
 
 use aliases::{resolve_alias, scan_aliases};
 use token::completion_token_at;
+use vocabulary::{builtin_functions, builtin_keywords, builtin_shell_commands};
 
 pub use compact::complete_sql_compact;
 
@@ -152,6 +154,18 @@ impl CursorUtf16SaturatingSub for CompletionCursorOffsets {
 }
 
 fn add_keywords(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest, prefix: &str) {
+    for keyword in builtin_keywords(&request.dialect) {
+        if matches_prefix(keyword, prefix) {
+            items.push(CompletionItem {
+                label: (*keyword).to_string(),
+                kind: "keyword".to_string(),
+                apply: Some((*keyword).to_string()),
+                detail: Some(keyword_detail(&request.dialect)),
+                boost: Some(12),
+            });
+        }
+    }
+
     for keyword in &request.vocabulary.keywords {
         if matches_prefix(keyword, prefix) {
             items.push(CompletionItem {
@@ -170,7 +184,7 @@ fn add_meta_commands(
     request: &SqlCompletionRequest,
     prefix: &str,
 ) {
-    for command in shell_commands(&request.shell) {
+    for command in builtin_shell_commands(&request.shell) {
         if matches_prefix(command, prefix) {
             items.push(CompletionItem {
                 label: (*command).to_string(),
@@ -257,6 +271,18 @@ fn column_item(column: &SqlCompletionCatalogColumn) -> CompletionItem {
 }
 
 fn add_functions(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest, prefix: &str) {
+    for function in builtin_functions(&request.dialect) {
+        if matches_prefix(function, prefix) {
+            items.push(CompletionItem {
+                label: (*function).to_string(),
+                kind: "function".to_string(),
+                apply: Some((*function).to_string()),
+                detail: Some(function_detail(&request.dialect)),
+                boost: Some(22),
+            });
+        }
+    }
+
     for function in &request.vocabulary.functions {
         if matches_prefix(function, prefix) {
             items.push(CompletionItem {
@@ -344,22 +370,4 @@ fn shell_detail(shell: &str) -> String {
     let mut detail = shell.to_string();
     detail.push_str(" command");
     detail
-}
-
-fn shell_commands(shell: &str) -> &'static [&'static str] {
-    match shell {
-        "psql" => &[
-            "\\d",
-            "\\d+",
-            "\\dt",
-            "\\dv",
-            "\\df",
-            "\\dn",
-            "\\copy",
-            "\\conninfo",
-        ],
-        "mysql-client" => &["\\G", "\\c", "\\q", "source", "delimiter", "tee", "notee"],
-        "sqlite-cli" => &[".tables", ".schema", ".mode", ".headers", ".read", ".quit"],
-        _ => &[],
-    }
 }
