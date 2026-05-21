@@ -984,8 +984,7 @@ async fn test_query_table_data_cancel_token_interrupts_in_flight_raw_where() {
     let spawned_adapter = adapter.clone();
     let table_for_task = table.clone();
     let query_handle = tokio::spawn(async move {
-        let raw_where =
-            format!("id IN (SELECT id FROM \"public\".\"{table_for_task}\", pg_sleep(2))");
+        let raw_where = "id > 0 AND pg_sleep(2) IS NULL";
         spawned_adapter
             .query_table_data(
                 &table_for_task,
@@ -994,7 +993,7 @@ async fn test_query_table_data_cancel_token_interrupts_in_flight_raw_where() {
                 50,
                 None,
                 None,
-                Some(raw_where.as_str()),
+                Some(raw_where),
                 Some(&child_token),
             )
             .await

@@ -110,11 +110,21 @@ export function validateRawSql(sql: string): string | null {
     "REVOKE",
   ];
   for (const kw of dangerous) {
-    if (upper.startsWith(kw)) {
+    if (startsWithKeyword(upper, kw)) {
       return `Raw WHERE clause must not start with ${kw}`;
     }
   }
   return null;
+}
+
+function startsWithKeyword(input: string, keyword: string): boolean {
+  if (!input.startsWith(keyword)) return false;
+  const next = input[keyword.length];
+  return next === undefined || !isIdentifierChar(next);
+}
+
+function isIdentifierChar(char: string): boolean {
+  return /^[A-Z0-9_$]$/.test(char);
 }
 
 // ── Schema change types ────────────────────────────────────────────────

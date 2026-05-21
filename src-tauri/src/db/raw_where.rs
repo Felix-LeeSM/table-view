@@ -1,10 +1,13 @@
+use std::any::TypeId;
+
 use crate::error::AppError;
 use sqlparser::ast::{
     BinaryOperator, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, GroupByExpr, Query,
     Select, SetExpr, Statement, UnaryOperator,
 };
-use sqlparser::dialect::{MySqlDialect, PostgreSqlDialect, SQLiteDialect};
-use sqlparser::parser::Parser;
+use sqlparser::dialect::{Dialect, MySqlDialect, PostgreSqlDialect, Precedence, SQLiteDialect};
+use sqlparser::keywords::Keyword;
+use sqlparser::parser::{Parser, ParserError};
 use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,14 +120,11 @@ fn tokenize_sql(
     }
 }
 
-fn parse_sql(
-    dialect: RawWhereDialect,
-    sql: &str,
-) -> Result<Vec<Statement>, sqlparser::parser::ParserError> {
+fn parse_sql(dialect: RawWhereDialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
     match dialect {
         RawWhereDialect::Postgres => Parser::parse_sql(&PostgreSqlDialect {}, sql),
         RawWhereDialect::Mysql => Parser::parse_sql(&MySqlDialect {}, sql),
-        RawWhereDialect::Sqlite => Parser::parse_sql(&SQLiteDialect {}, sql),
+        RawWhereDialect::Sqlite => Parser::parse_sql(&TableViewSQLiteDialect {}, sql),
     }
 }
 
@@ -181,26 +181,9 @@ fn is_predicate(expr: &Expr) -> bool {
             BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => {
                 is_predicate(left) && is_predicate(right)
             }
-            BinaryOperator::Eq
-            | BinaryOperator::NotEq
-            | BinaryOperator::Gt
-            | BinaryOperator::Lt
-            | BinaryOperator::GtEq
-            | BinaryOperator::LtEq
-            | BinaryOperator::Spaceship
-            | BinaryOperator::Match
-            | BinaryOperator::Regexp
-            | BinaryOperator::PGRegexMatch
-            | BinaryOperator::PGRegexIMatch
-            | BinaryOperator::PGRegexNotMatch
-            | BinaryOperator::PGRegexNotIMatch
-            | BinaryOperator::PGLikeMatch
-            | BinaryOperator::PGILikeMatch
-            | BinaryOperator::PGNotLikeMatch
-            | BinaryOperator::PGNotILikeMatch
-            | BinaryOperator::PGStartsWith
-            | BinaryOperator::Custom(_) => is_safe_value_expr(left) && is_safe_value_expr(right),
-            _ => false,
+            _ => {
+                binary_operator_is_safe(op) && is_safe_value_expr(left) && is_safe_value_expr(right)
+            }
         },
         Expr::Between {
             expr, low, high, ..
@@ -229,6 +212,10 @@ fn is_predicate(expr: &Expr) -> bool {
     }
 }
 
+fn binary_operator_is_safe(op: &BinaryOperator) -> bool {
+    !matches!(op, BinaryOperator::Assignment)
+}
+
 fn is_safe_value_expr(expr: &Expr) -> bool {
     match expr {
         Expr::InSubquery { .. }
@@ -238,9 +225,10 @@ fn is_safe_value_expr(expr: &Expr) -> bool {
         | Expr::AllOp { .. } => false,
         Expr::Nested(inner) => is_safe_value_expr(inner),
         Expr::UnaryOp { expr, .. } => is_safe_value_expr(expr),
-        Expr::BinaryOp { left, right, .. }
-        | Expr::IsDistinctFrom(left, right)
-        | Expr::IsNotDistinctFrom(left, right) => {
+        Expr::BinaryOp { left, op, right } => {
+            binary_operator_is_safe(op) && is_safe_value_expr(left) && is_safe_value_expr(right)
+        }
+        Expr::IsDistinctFrom(left, right) | Expr::IsNotDistinctFrom(left, right) => {
             is_safe_value_expr(left) && is_safe_value_expr(right)
         }
         Expr::Between {
@@ -310,6 +298,124 @@ fn is_safe_value_expr(expr: &Expr) -> bool {
     }
 }
 
+#[derive(Debug)]
+struct TableViewSQLiteDialect;
+
+impl Dialect for TableViewSQLiteDialect {
+    fn dialect(&self) -> TypeId {
+        TypeId::of::<SQLiteDialect>()
+    }
+
+    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+        ch == '`' || ch == '"' || ch == '['
+    }
+
+    fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
+        Some('`')
+    }
+
+    fn is_identifier_start(&self, ch: char) -> bool {
+        ch.is_ascii_lowercase()
+            || ch.is_ascii_uppercase()
+            || ch == '_'
+            || ('\u{007f}'..='\u{ffff}').contains(&ch)
+    }
+
+    fn is_identifier_part(&self, ch: char) -> bool {
+        self.is_identifier_start(ch) || ch.is_ascii_digit()
+    }
+
+    fn supports_filter_during_aggregation(&self) -> bool {
+        true
+    }
+
+    fn supports_start_transaction_modifier(&self) -> bool {
+        true
+    }
+
+    fn supports_notnull_operator(&self) -> bool {
+        true
+    }
+
+    fn supports_comma_separated_trim(&self) -> bool {
+        true
+    }
+
+    fn parse_infix(
+        &self,
+        parser: &mut Parser,
+        expr: &Expr,
+        _precedence: u8,
+    ) -> Option<Result<Expr, ParserError>> {
+        let negated = parser.parse_keyword(Keyword::NOT);
+        if consume_glob_word(parser) {
+            return Some(sqlite_binary_expr(
+                parser,
+                expr,
+                BinaryOperator::Custom("GLOB".into()),
+                negated,
+            ));
+        }
+
+        for (keyword, op) in [
+            (Keyword::REGEXP, BinaryOperator::Regexp),
+            (Keyword::MATCH, BinaryOperator::Match),
+        ] {
+            if parser.parse_keyword(keyword) {
+                return Some(sqlite_binary_expr(parser, expr, op, negated));
+            }
+        }
+        if negated {
+            parser.prev_token();
+        }
+        None
+    }
+
+    fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
+        if is_glob_word(&parser.peek_token_ref().token)
+            || (matches!(&parser.peek_token_ref().token, Token::Word(word) if word.keyword == Keyword::NOT)
+                && is_glob_word(&parser.peek_nth_token_ref(1).token))
+        {
+            return Some(Ok(self.prec_value(Precedence::Like)));
+        }
+        None
+    }
+}
+
+fn is_glob_word(token: &Token) -> bool {
+    matches!(token, Token::Word(word) if word.value.eq_ignore_ascii_case("GLOB"))
+}
+
+fn consume_glob_word(parser: &mut Parser) -> bool {
+    if is_glob_word(&parser.peek_token_ref().token) {
+        parser.advance_token();
+        true
+    } else {
+        false
+    }
+}
+
+fn sqlite_binary_expr(
+    parser: &mut Parser,
+    expr: &Expr,
+    op: BinaryOperator,
+    negated: bool,
+) -> Result<Expr, ParserError> {
+    let binary = Expr::BinaryOp {
+        left: Box::new(expr.clone()),
+        op,
+        right: Box::new(parser.parse_expr()?),
+    };
+    Ok(if negated {
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            expr: Box::new(binary),
+        }
+    } else {
+        binary
+    })
+}
+
 fn group_by_expr_is_empty(group_by: &GroupByExpr) -> bool {
     match group_by {
         GroupByExpr::All(modifiers) => modifiers.is_empty(),
@@ -350,88 +456,5 @@ fn function_arg_expr_is_safe(arg: &FunctionArgExpr) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn accepts_plain_boolean_filter() {
-        assert!(validate_raw_where_clause(
-            RawWhereDialect::Sqlite,
-            "status = 'active' AND age > 18",
-        )
-        .is_ok());
-    }
-
-    #[test]
-    fn accepts_dialect_quoted_identifiers() {
-        assert!(
-            validate_raw_where_clause(RawWhereDialect::Postgres, r#""status" = 'active'"#,).is_ok()
-        );
-        assert!(validate_raw_where_clause(RawWhereDialect::Mysql, "`status` = 'active'",).is_ok());
-    }
-
-    #[test]
-    fn accepts_booleanish_value_expressions() {
-        assert!(validate_raw_where_clause(RawWhereDialect::Postgres, "is_active").is_ok());
-        assert!(validate_raw_where_clause(RawWhereDialect::Sqlite, "json_valid(payload)").is_ok());
-    }
-
-    #[test]
-    fn accepts_comment_marker_inside_string_literal() {
-        assert!(validate_raw_where_clause(RawWhereDialect::Sqlite, "note = '--literal'").is_ok());
-    }
-
-    #[test]
-    fn accepts_identifier_starting_with_dangerous_keyword() {
-        assert!(
-            validate_raw_where_clause(RawWhereDialect::Sqlite, "updated_at IS NOT NULL").is_ok()
-        );
-    }
-
-    #[test]
-    fn rejects_union_select_tail() {
-        assert!(validate_raw_where_clause(
-            RawWhereDialect::Sqlite,
-            "active = 1 UNION SELECT password FROM users",
-        )
-        .is_err());
-    }
-
-    #[test]
-    fn rejects_line_comment_smuggling() {
-        assert!(validate_raw_where_clause(
-            RawWhereDialect::Sqlite,
-            "active = 1 -- hide the rest\n OR 1 = 1",
-        )
-        .is_err());
-    }
-
-    #[test]
-    fn keeps_dangerous_prefix_error_copy() {
-        let err = validate_raw_where_clause(RawWhereDialect::Mysql, "DROP TABLE users")
-            .expect_err("dangerous prefix should be rejected");
-        match err {
-            AppError::Validation(message) => assert!(message.contains("DROP")),
-            other => panic!("expected validation error, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn rejects_subqueries() {
-        assert!(validate_raw_where_clause(
-            RawWhereDialect::Sqlite,
-            "id IN (SELECT id FROM admins)",
-        )
-        .is_err());
-    }
-
-    #[test]
-    fn keeps_semicolon_error_copy() {
-        let err = validate_raw_where_clause(RawWhereDialect::Sqlite, "a = 1; DROP TABLE users")
-            .expect_err("semicolon should be rejected");
-        match err {
-            AppError::Validation(message) => assert!(message.contains("semicolons")),
-            other => panic!("expected validation error, got {other:?}"),
-        }
-    }
-}
+#[path = "raw_where_tests.rs"]
+mod tests;
