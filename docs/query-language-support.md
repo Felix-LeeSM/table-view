@@ -64,6 +64,8 @@ SQL dialect와 shell/meta command는 별도 layer다.
 
 - `src/lib/sql/sqlDialectProfile.ts` — SQL dialect profile, shell profile,
   keyword/function vocabulary, capability flags.
+- `src/lib/sql/sqlCompletionContext.ts` — schema store cache를 Rust/WASM
+  completion request 에 넘길 flat catalog context 로 정규화하는 adapter.
 - `src/lib/sql/sqlDialect.ts` — CodeMirror dialect mapping wrapper.
 - `src/lib/sql/sqlDialectKeywords.ts` — legacy import compatibility wrapper.
 
