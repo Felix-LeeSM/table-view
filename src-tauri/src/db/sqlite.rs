@@ -1,12 +1,14 @@
 //! SQLite adapter entrypoint.
 //!
-//! This slice wires SQLite connection lifecycle and a minimal read-only
-//! catalog surface so a file-backed connection can be tested, saved, opened,
-//! and shown in the flat sidebar shape. Query execution, DDL, export, and the
-//! richer PostgreSQL parity surfaces remain explicit `Unsupported` until their
-//! feature-order slices land.
+//! SQLite adapter entrypoint.
+//!
+//! SQLite currently supports connection lifecycle, explicit file creation,
+//! baseline catalog reads, table preview, and single-statement query execution.
+//! Batch execution, dry-run, DDL, export, and richer PostgreSQL parity surfaces
+//! remain explicit `Unsupported` until their feature-order slices land.
 
 mod connection;
+mod queries;
 
 pub use connection::SqliteAdapter;
 
@@ -97,25 +99,30 @@ impl RdbAdapter for SqliteAdapter {
 
     fn execute_sql<'a>(
         &'a self,
-        _sql: &'a str,
-        _cancel: Option<&'a tokio_util::sync::CancellationToken>,
+        sql: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<RdbQueryResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("free-form SQL execution")) })
+        Box::pin(async move { self.execute_query(sql, cancel).await })
     }
 
     #[allow(clippy::too_many_arguments)]
     fn query_table_data<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _page: i32,
-        _page_size: i32,
-        _order_by: Option<&'a str>,
-        _filters: Option<&'a [FilterCondition]>,
-        _raw_where: Option<&'a str>,
-        _cancel: Option<&'a tokio_util::sync::CancellationToken>,
+        namespace: &'a str,
+        table: &'a str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&'a str>,
+        filters: Option<&'a [FilterCondition]>,
+        raw_where: Option<&'a str>,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<TableData, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("table preview")) })
+        Box::pin(async move {
+            self.query_table_data(
+                namespace, table, page, page_size, order_by, filters, raw_where, cancel,
+            )
+            .await
+        })
     }
 
     fn drop_table<'a>(
