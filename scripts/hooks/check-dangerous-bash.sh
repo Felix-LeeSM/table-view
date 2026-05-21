@@ -86,15 +86,19 @@ fi
 #
 # Pattern IDs (block 메시지 dispatch key):
 #   rm_destructive / sql_drop / sql_truncate / git_push_force / git_reset_hard
-#   / no_verify / no_gpg_sign / gpgsign_false / gpgsign_env_key
-#   / lefthook_env_zero / lefthook_skip / husky_zero / dd_if / mkfs / dev_write
+#   / git_remote_ref_mutation / base64_shell_pipe / eval_cmd_subst / no_verify
+#   / no_gpg_sign / gpgsign_false / gpgsign_env_key / lefthook_env_zero
+#   / lefthook_skip / husky_zero / dd_if / mkfs / dev_write
 DANGEROUS_PATTERNS=(
   'rm_destructive::(^|[^a-zA-Z0-9_])rm[[:space:]]+-[rRfF]*[rR][rRfF]*[[:space:]]+(/|~|\*|\.|src|node_modules|target)([[:space:]/]|$)'
   'sql_drop::(^|[^a-zA-Z0-9_])DROP[[:space:]]+(DATABASE|TABLE)([^a-zA-Z0-9_]|$)'
   'sql_truncate::(^|[^a-zA-Z0-9_])TRUNCATE([^a-zA-Z0-9_]|$)'
+  'base64_shell_pipe::(^|[^a-zA-Z0-9_])base64[[:space:]][^|;&]*(-d|--decode|-D)[^|;&]*[|][[:space:]]*([^[:space:]|;&]*/)?(bash|sh|zsh)([^a-zA-Z0-9_]|$)'
+  'eval_cmd_subst::(^|[^a-zA-Z0-9_])eval[[:space:]]+.*\$\('
   'git_push_force::(^|[^a-zA-Z0-9_])git[[:space:]]+push[[:space:]]+.*--force'
   'git_reset_hard::(^|[^a-zA-Z0-9_])git[[:space:]]+reset[[:space:]]+--hard'
   'git_pull::(^|[^a-zA-Z0-9_])git[[:space:]]+pull([^a-zA-Z0-9_]|$)'
+  'git_remote_ref_mutation::(^|[^a-zA-Z0-9_])git[[:space:]]+(reset|checkout)[[:space:]]+([^;&|]*[[:space:]])?(FETCH_HEAD|ORIG_HEAD|@\{u\}|origin/[^[:space:];&|]+|refs/remotes/[^[:space:];&|]+)([^a-zA-Z0-9_]|$)'
   'no_verify::--no-verify([^a-zA-Z0-9_]|$)'
   'no_gpg_sign::--no-gpg-sign([^a-zA-Z0-9_]|$)'
   'gpgsign_false::commit[.]gpgsign([[:space:]]*=[[:space:]]*|[[:space:]]+)false([^a-zA-Z0-9_]|$)'
@@ -273,6 +277,53 @@ emit_block_message() {
   local pattern="$2"
   echo "BLOCKED: Dangerous command pattern detected ($id): $pattern" >&2
   case "$id" in
+    base64_shell_pipe)
+      cat >&2 <<EOF
+base64 decode piped into a shell is blocked.
+This shell pipe form is treated as script smuggling.
+This pattern hides executable script text from the visible Bash command and
+can bypass plain-text hook policy checks.
+
+Blocked form:
+  base64 -d ... | bash
+  base64 --decode ... | sh
+
+Allowed: decode to a file or stdout for inspection without piping to
+bash/sh/zsh.
+
+자세히: $MEMORY_POINTER (Hook 한계 + 회피 금지)
+EOF
+      ;;
+    eval_cmd_subst)
+      cat >&2 <<EOF
+eval with command substitution is blocked.
+This can assemble a dangerous command char-by-char at runtime, outside the
+plain-text command patterns that the hook can inspect reliably.
+
+Blocked form:
+  eval \$(...)
+
+Use an explicit command instead so the hook and reviewer can inspect it.
+
+자세히: $MEMORY_POINTER (Hook 한계 + 회피 금지)
+EOF
+      ;;
+    git_remote_ref_mutation)
+      cat >&2 <<EOF
+git reset/checkout against remote or upstream refs is blocked.
+Target-only ref movement can detach or overwrite local work without the
+more obvious \`--hard\` spelling.
+
+Blocked command:
+  $CMD
+
+Allowed read-only inspection examples:
+  git log FETCH_HEAD
+  git show origin/main
+
+자세히: $MEMORY_POINTER (Push reject 절 + hook 회피 금지)
+EOF
+      ;;
     git_reset_hard)
       # Sprint 400 — target argument 별 case dispatch.
       # 마지막 토큰 = `git reset --hard <target>` 의 <target>. 토큰 형식별로
