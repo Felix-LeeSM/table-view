@@ -26,6 +26,9 @@ task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 # 새 worktree + branch
 bash scripts/worktree-spawn.sh sprint-388/foo
 
+# 새 worktree + 기본 의존성 warm-start
+bash scripts/worktree-spawn.sh --with-deps sprint-388/foo
+
 # 머지 끝난 worktree 정리
 bash scripts/worktree-cleanup.sh sprint-388/foo
 
@@ -47,6 +50,15 @@ bash scripts/worktree-cleanup.sh --prune
 - git hook 은 worktree 별 `.git/worktrees/<name>/hooks/` 에 분리되어
   `lefthook install` 자동 실행
 - working tree state (untracked / staged) 는 worktree 별 독립
+
+## 의존성 warm-start
+
+`--with-deps` (alias: `--bootstrap`) 를 주면 spawn 직후 현재 worktree 의
+`node_modules/` 와 `src-tauri/target/` 을 새 worktree 로 복사하고, 새
+worktree 기준으로 `pnpm install --frozen-lockfile` 와 `cargo fetch
+--manifest-path src-tauri/Cargo.toml` 를 실행한다. 복사는 빠른 시작용이고,
+install/fetch 가 branch 별 lockfile 차이를 보정한다. 기본 spawn 은 여전히
+의존성 복사 없이 빠르게 생성한다.
 
 ## 책임
 
