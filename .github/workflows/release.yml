@@ -3,7 +3,7 @@ name: Release
 # Trigger policy:
 # - tag push (`v*.*.*`): the actual release pipeline. Tag SHA's tauri.conf.json
 #   version must match the tag (e.g. tag `v0.2.0` ↔ "version": "0.2.0"). Builds
-#   bundles for macOS arm64+intel, Windows x64, Linux x64 and attaches them to
+#   bundles for macOS arm64, Windows x64, Linux x64 and attaches them to
 #   a *draft* GitHub Release named after the tag — the maintainer reviews and
 #   publishes manually so an accidental tag push doesn't ship to users.
 # - `workflow_dispatch`: manual trigger from the Actions UI for dry-runs. Still
@@ -34,10 +34,6 @@ jobs:
             platform: macos-14
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
-          - label: macOS intel
-            platform: macos-13
-            target: x86_64-apple-darwin
-            args: --target x86_64-apple-darwin
           - label: Windows x64
             platform: windows-latest
             target: x86_64-pc-windows-msvc
@@ -52,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # Linux Tauri bundles depend on webkit2gtk + librsvg + patchelf. macOS &
       # Windows runners come with everything Tauri needs preinstalled (libwebview2
@@ -71,12 +67,12 @@ jobs:
             file
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10.20.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22.14.0
           cache: pnpm
@@ -87,8 +83,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       # Rust target dir caches across runs of the same matrix leg. Keyed on
-      # OS+target so macOS arm64 and intel don't share an incompatible target
-      # tree.
+      # OS+target so each platform keeps an isolated target tree.
       - name: Cache cargo target
         uses: Swatinem/rust-cache@v2
         with:
@@ -117,7 +112,7 @@ jobs:
 
             **Install**
 
-            - **macOS**: download the matching `.dmg` (arm64 for Apple Silicon, x64 for Intel).
+            - **macOS**: download the Apple Silicon `.dmg`.
               Unsigned — on first launch right-click → Open, or run
               `xattr -d com.apple.quarantine "/Applications/Table View.app"`.
             - **Windows**: run the `.msi` installer. Unsigned — SmartScreen may
