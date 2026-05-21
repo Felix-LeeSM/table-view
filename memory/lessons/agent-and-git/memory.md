@@ -1,7 +1,7 @@
 ---
 title: Lessons — agent-and-git
 type: index
-updated: 2026-05-18
+updated: 2026-05-21
 ---
 
 # Lessons — agent-and-git
@@ -13,6 +13,7 @@ Agent 인스턴스 / git pinentry / parallel commit 사고.
 - [2026-04-24-gpg-sign-pinentry-blocks-agent-commit](./2026-04-24-gpg-sign-pinentry-blocks-agent-commit/memory.md)
 - [2026-04-24-parallel-agent-commit-isolation](./2026-04-24-parallel-agent-commit-isolation/memory.md)
 - [2026-05-18-skill-plugin-area-touch](./2026-05-18-skill-plugin-area-touch/memory.md) — skill plugin 영역 침범 안티패턴
+- [2026-05-21-cargo-deny-git-env-ref-snapback](./2026-05-21-cargo-deny-git-env-ref-snapback/memory.md) — hook nested Git env 오염으로 worktree ref snapback
 
 ## 진입 규칙
 

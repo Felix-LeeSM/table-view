@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-05-20
+generated: 2026-05-21
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -32,6 +32,10 @@ generator: scripts/regenerate-indexes.sh
 ### bug-fix
 
 - [버그 fix — Red test 먼저](../../memory/workflow/bug-fix/memory.md)
+
+### cargo-deny
+
+- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 
 ### code-writing
 
@@ -76,6 +80,10 @@ generator: scripts/regenerate-indexes.sh
 - [Frontend Guidance](../../memory/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
 
+### git
+
+- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
+
 ### god-file
 
 - [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
@@ -87,6 +95,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### hook
 
+- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 - [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 
@@ -171,6 +180,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### pre-push
 
+- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 - [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
 
 ### profile
@@ -184,6 +194,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### push-reject
 
+- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 
 ### race-trace
@@ -225,6 +236,10 @@ generator: scripts/regenerate-indexes.sh
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 - [PR Review](../../memory/workflow/review/memory.md)
+
+### root-cause
+
+- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 
 ### rust-impl
 
@@ -282,4 +297,5 @@ generator: scripts/regenerate-indexes.sh
 
 ### worktree
 
+- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
