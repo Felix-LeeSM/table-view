@@ -294,6 +294,84 @@ run_case \
   '{"tool_input":{"command":"rg -n '\''^\\\\.env|env'\'' .gitignore .prettierignore"}}' \
   EMPTY
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 418 — shell bypass closure
+# ─────────────────────────────────────────────────────────────────────────────
+# Close common script-smuggling and target-only ref mutation bypasses while
+# keeping read-only inspection commands allowed.
+
+run_case \
+  "case-418-1: base64 decode piped to bash → block" \
+  1 \
+  '{"tool_input":{"command":"printf Z2l0IHB1c2ggLS1mb3JjZQo= | base64 -d | bash"}}' \
+  'MATCH:base64|shell pipe|memory/workflow/git-policy/memory.md'
+
+run_case \
+  "case-418-2: base64 decode without shell pipe → allow" \
+  0 \
+  '{"tool_input":{"command":"base64 -d fixture.b64"}}' \
+  EMPTY
+
+run_case \
+  "case-418-2b: base64 decode piped to quoted bash → block" \
+  1 \
+  '{"tool_input":{"command":"printf Z2l0IHB1c2ggLS1mb3JjZQo= | base64 -d | \"bash\""}}' \
+  'MATCH:base64|shell pipe|memory/workflow/git-policy/memory.md'
+
+run_case \
+  "case-418-2c: base64 decode piped to quoted /bin/bash → block" \
+  1 \
+  '{"tool_input":{"command":"printf Z2l0IHB1c2ggLS1mb3JjZQo= | base64 -d | /bin/\"bash\""}}' \
+  'MATCH:base64|shell pipe|memory/workflow/git-policy/memory.md'
+
+run_case \
+  "case-418-3: eval command substitution → block" \
+  1 \
+  '{"tool_input":{"command":"eval $(printf '\''git'\'')"}}' \
+  'MATCH:eval|command substitution|memory/workflow/git-policy/memory.md'
+
+run_case \
+  "case-418-4: git checkout origin/main → block" \
+  1 \
+  '{"tool_input":{"command":"git checkout origin/main"}}' \
+  'MATCH:git checkout|origin/main|memory/workflow/git-policy/memory.md'
+
+run_case \
+  "case-418-4b: git checkout upstream/main → block" \
+  1 \
+  '{"tool_input":{"command":"git checkout upstream/main"}}' \
+  'MATCH:git checkout|upstream/main|memory/workflow/git-policy/memory.md'
+
+run_case \
+  "case-418-4b2: git reset origin/main → block" \
+  1 \
+  '{"tool_input":{"command":"git reset origin/main"}}' \
+  'MATCH:git reset|origin/main|memory/workflow/git-policy/memory.md'
+
+run_case \
+  "case-418-4b3: git reset upstream/main → block" \
+  1 \
+  '{"tool_input":{"command":"git reset upstream/main"}}' \
+  'MATCH:git reset|upstream/main|memory/workflow/git-policy/memory.md'
+
+run_case \
+  "case-418-4c: git checkout -b scratch origin/main → allow" \
+  0 \
+  '{"tool_input":{"command":"git checkout -b scratch origin/main"}}' \
+  EMPTY
+
+run_case \
+  "case-418-4d: git reset pathspec origin/main → allow" \
+  0 \
+  '{"tool_input":{"command":"git reset -- origin/main"}}' \
+  EMPTY
+
+run_case \
+  "case-418-5: git log FETCH_HEAD → allow" \
+  0 \
+  '{"tool_input":{"command":"git log FETCH_HEAD"}}' \
+  EMPTY
+
 echo ""
 echo "==== smoke test summary ===="
 echo "PASS: $PASS_COUNT"
