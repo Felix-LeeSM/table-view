@@ -219,7 +219,7 @@ shadow 하되 request shape 은 MySQL / MariaDB / SQLite 를 처음부터 포함
 | Sprint | 단계 | 목적 |
 |---|---|---|
 | **420** | A | Completion request/result contract + SQL request builder + PLAN/phase 문서화 |
-| 421 | B | CodeMirror adapter shadow path — TS result 와 WASM-ready request 동시 생성 |
+| **421** | B | CodeMirror adapter shadow path — TS result 와 WASM-ready request 동시 생성, visible popup 은 기존 TS source 유지 |
 | 422 | C | PostgreSQL WASM completion core v0 — keyword/table/column/function provider |
 | 423 | D | PostgreSQL parity gate + WASM-first 전환, TS fallback 유지 |
 | 424 | E | MySQL/MariaDB dialect closure — backtick, `LIMIT offset,count`, `ON DUPLICATE KEY`, `SHOW/DESCRIBE/USE` |

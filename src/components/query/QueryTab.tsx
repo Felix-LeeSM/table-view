@@ -6,9 +6,11 @@ import {
 } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { databaseTypeToSqlDialect } from "@lib/sql/sqlDialect";
+import { buildSqlCompletionContext } from "@lib/sql/sqlCompletionContext";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
 import { assertNever } from "@/lib/paradigm";
 import SqlQueryEditor from "./SqlQueryEditor";
@@ -83,6 +85,34 @@ export default function QueryTab({ tab }: QueryTabProps) {
       dbType: connection?.dbType,
     },
   );
+  const schemas = useSchemaStore((s) => s.schemas);
+  const tables = useSchemaStore((s) => s.tables);
+  const views = useSchemaStore((s) => s.views);
+  const functions = useSchemaStore((s) => s.functions);
+  const tableColumnsCache = useSchemaStore((s) => s.tableColumnsCache);
+  const completionContext = useMemo(() => {
+    if (tab.paradigm !== "rdb") return undefined;
+    return buildSqlCompletionContext({
+      schemas,
+      tables,
+      views,
+      functions,
+      tableColumnsCache,
+      connectionId: tab.connectionId,
+      database: tab.database ?? "",
+      dbType: connection?.dbType,
+    });
+  }, [
+    schemas,
+    tables,
+    views,
+    functions,
+    tableColumnsCache,
+    tab.paradigm,
+    tab.connectionId,
+    tab.database,
+    connection?.dbType,
+  ]);
   // Cached Mongo field names for autocomplete. We project the single
   // cache slice for this tab to a string array so the hook's memo key is
   // stable against unrelated cache updates. RDB tabs compute `undefined`
@@ -202,6 +232,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
                   onDryRun={handleDryRun}
                   schemaNamespace={schemaNamespace}
                   sqlDialect={sqlDialect}
+                  completionContext={completionContext}
                 />
               );
             case "document":
