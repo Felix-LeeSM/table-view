@@ -1102,7 +1102,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
       inflight += 1;
       if (inflight > maxConcurrent) maxConcurrent = inflight;
       // Yield once so a parallel call would be observable.
-      await new Promise<void>((r) => setTimeout(r, 0));
+      await Promise.resolve();
       inflight -= 1;
       return {
         sql: `CREATE INDEX "${req.index_name}" ON "public"."users" USING btree ("email")`,

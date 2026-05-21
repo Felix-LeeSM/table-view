@@ -49,6 +49,11 @@ Hook 안 mutation 의 부수효과 cascade:
   자살 패턴.
 - 본 fetch 가 *자살의 연료* 제공. read-only `git merge-base` 로 교체 후
   부수효과 차단 (PR #41, 2026-05-19).
+- 예 (실제 발생, 2026-05-21): pre-push `cargo-deny` 가 advisory DB 갱신 중
+  nested Git 을 실행했고 hook 의 outer repo Git-local env 를 상속했다. nested
+  Git 이 outer worktree metadata 를 바라보며 `reset: moving to FETCH_HEAD` 를
+  만들었다. hook 안에서 nested Git 을 실행할 수 있는 도구는
+  `unset $(git rev-parse --local-env-vars)` 후 실행한다.
 
 ## How to apply
 
@@ -59,6 +64,8 @@ Hook 안 mutation 의 부수효과 cascade:
    - `git fetch origin <branch>` → `git merge-base HEAD origin/<branch>` 또는 local mirror 사용
    - `git pull` → hook 안에서는 절대 불필요. user task 로 분리
    - `git reset` → 검증 단계에서 reset 필요한 시나리오 없음
+   - nested Git 도구 (`cargo deny`, package manager, advisory DB updater 등)
+     → `unset $(git rev-parse --local-env-vars)` 로 outer repo env 차단
 3. Formatter 외 working-tree mutation 도 의심 — staged file 변형이 *의도된
    pre-commit 패턴* 인지 확인. 의도 외면 제거.
 

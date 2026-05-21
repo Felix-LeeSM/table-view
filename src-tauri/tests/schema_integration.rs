@@ -18,8 +18,16 @@ fn unique_table_name(prefix: &str) -> String {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_millis()
+            .as_nanos()
     )
+}
+
+fn unique_schema_name(prefix: &str) -> String {
+    unique_table_name(prefix)
+}
+
+fn qualified_ident(schema: &str, name: &str) -> String {
+    format!("\"{schema}\".\"{name}\"")
 }
 
 #[tokio::test]
@@ -1121,22 +1129,30 @@ async fn test_list_schema_columns_aggregates_multiple_tables() {
         Some(a) => a,
         None => return,
     };
+    let schema = unique_schema_name("lsc_schema");
     let t1 = unique_table_name("lsc_a");
     let t2 = unique_table_name("lsc_b");
+    let q1 = qualified_ident(&schema, &t1);
+    let q2 = qualified_ident(&schema, &t2);
+
+    adapter
+        .execute(&format!("CREATE SCHEMA \"{schema}\""))
+        .await
+        .expect("create schema");
 
     adapter
         .execute(&format!(
-            "CREATE TABLE \"{t1}\" (id INT PRIMARY KEY, label TEXT)"
+            "CREATE TABLE {q1} (id INT PRIMARY KEY, label TEXT)"
         ))
         .await
         .expect("create t1");
     adapter
-        .execute(&format!("CREATE TABLE \"{t2}\" (k INT, v BIGINT)"))
+        .execute(&format!("CREATE TABLE {q2} (k INT, v BIGINT)"))
         .await
         .expect("create t2");
 
     let map = adapter
-        .list_schema_columns("public")
+        .list_schema_columns(&schema)
         .await
         .expect("list_schema_columns");
     let cols_t1 = map.get(&t1).unwrap_or_else(|| panic!("t1 missing in map"));
@@ -1146,8 +1162,10 @@ async fn test_list_schema_columns_aggregates_multiple_tables() {
     assert!(cols_t1.iter().any(|c| c.name == "id"));
     assert!(cols_t2.iter().any(|c| c.name == "v"));
 
-    adapter.execute(&format!("DROP TABLE \"{t1}\"")).await.ok();
-    adapter.execute(&format!("DROP TABLE \"{t2}\"")).await.ok();
+    adapter
+        .execute(&format!("DROP SCHEMA \"{schema}\" CASCADE"))
+        .await
+        .ok();
     adapter.disconnect_pool().await.unwrap();
 }
 
@@ -1620,6 +1638,9 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
     let fn_name = format!("fn_{}", unique_table_name("trait_fn"));
     let trigger_name = format!("trg_{}", unique_table_name("trait_trg"));
     let idx_name = format!("{table_name}_idx");
+    let table_ident = format!("\"{table_name}\"");
+    let view_ident = format!("\"{view_name}\"");
+    let fn_ident = format!("\"{fn_name}\"");
 
     // create_table via trait.
     let create_req = CreateTableRequest {
@@ -1656,7 +1677,7 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
     // execute_sql / execute_sql_batch / dry_run_sql_batch.
     let _ = rdb
         .execute_sql(
-            &format!("INSERT INTO \"{table_name}\" (label) VALUES ('a')"),
+            &format!("INSERT INTO {table_ident} (label) VALUES ('a')"),
             None,
         )
         .await
@@ -1665,8 +1686,8 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
     let _ = rdb
         .execute_sql_batch(
             &[
-                format!("INSERT INTO \"{table_name}\" (label) VALUES ('b')"),
-                format!("INSERT INTO \"{table_name}\" (label) VALUES ('c')"),
+                format!("INSERT INTO {table_ident} (label) VALUES ('b')"),
+                format!("INSERT INTO {table_ident} (label) VALUES ('c')"),
             ],
             None,
         )
@@ -1674,7 +1695,7 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
         .expect("trait execute_sql_batch");
 
     let dry = rdb
-        .dry_run_sql_batch(&[format!("SELECT COUNT(*) FROM \"{table_name}\"")], None)
+        .dry_run_sql_batch(&[format!("SELECT COUNT(*) FROM {table_ident}")], None)
         .await
         .expect("trait dry_run_sql_batch");
     assert_eq!(dry.len(), 1);
@@ -1848,7 +1869,7 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
     // View introspection — create view, list/get/get_columns.
     let _ = rdb
         .execute_sql(
-            &format!("CREATE VIEW \"{view_name}\" AS SELECT id, label FROM \"{table_name}\""),
+            &format!("CREATE VIEW {view_ident} AS SELECT id, label FROM {table_ident}"),
             None,
         )
         .await
@@ -1866,22 +1887,42 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
         .expect("trait get_view_columns");
     assert_eq!(view_cols.len(), 2);
     let _ = rdb
-        .execute_sql(&format!("DROP VIEW \"{view_name}\""), None)
+        .execute_sql(&format!("DROP VIEW {view_ident}"), None)
         .await
         .ok();
 
-    // list_schema_columns.
+    // list_schema_columns. Use a private schema so this catalog-wide scan does
+    // not race with sibling tests dropping tables in public.
+    let schema_columns_schema = unique_schema_name("trait_lsc_schema");
+    let schema_columns_table = unique_table_name("trait_lsc");
+    let schema_columns_ident = qualified_ident(&schema_columns_schema, &schema_columns_table);
+    rdb.execute_sql(&format!("CREATE SCHEMA \"{schema_columns_schema}\""), None)
+        .await
+        .expect("create trait list_schema_columns schema");
+    rdb.execute_sql(
+        &format!("CREATE TABLE {schema_columns_ident} (id INT PRIMARY KEY)"),
+        None,
+    )
+    .await
+    .expect("create trait list_schema_columns table");
     let schema_map = rdb
-        .list_schema_columns("public")
+        .list_schema_columns(&schema_columns_schema)
         .await
         .expect("trait list_schema_columns");
-    assert!(schema_map.contains_key(&table_name));
+    assert!(schema_map.contains_key(&schema_columns_table));
+    let _ = rdb
+        .execute_sql(
+            &format!("DROP SCHEMA \"{schema_columns_schema}\" CASCADE"),
+            None,
+        )
+        .await
+        .ok();
 
     // Functions — create + list + get_function_source.
     let _ = rdb
         .execute_sql(
             &format!(
-                "CREATE FUNCTION \"{fn_name}\"(x INT) RETURNS INT \
+                "CREATE FUNCTION {fn_ident}(x INT) RETURNS INT \
                  LANGUAGE SQL AS $$ SELECT x + 1 $$"
             ),
             None,
@@ -2071,10 +2112,9 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
     }
     // Drop function (not via trait — no fn DDL in trait surface).
     let _ = rdb
-        .execute_sql(&format!("DROP FUNCTION \"{fn_name}\"(INT)"), None)
+        .execute_sql(&format!("DROP FUNCTION {fn_ident}(INT)"), None)
         .await
         .ok();
-
     // disconnect via DbAdapter trait.
     db.disconnect().await.expect("trait disconnect");
 }
