@@ -1,6 +1,6 @@
 # Query Language Support
 
-기준일: 2026-05-21. 이 문서는 사용자가 에디터에서 쓰는 언어 표면을 정리한다.
+기준일: 2026-05-22. 이 문서는 사용자가 에디터에서 쓰는 언어 표면을 정리한다.
 
 중요한 구분:
 
@@ -8,6 +8,9 @@
 - 자동완성과 Safe Mode 분석은 클라이언트가 이해하는 부분집합이다. 이 문서의 "지원/미지원 문법"은 주로 그 클라이언트 표면을 뜻한다.
 - MongoDB는 임의 JavaScript를 실행하지 않는다. 지원되는 `db....` 표현식만 파싱해 IPC 명령으로 dispatch 한다.
 - 자동완성 architecture decision은 ADR 0045가 source of truth다.
+- "100% completion coverage"는 현재 UI가 surface 하는 vocabulary group을
+  official reference 기준으로 빠짐없이 갖추는 것을 뜻한다. 서버 dialect 전체의
+  의미론 검증이나 arbitrary script execution 100%를 뜻하지 않는다.
 
 표기:
 
@@ -25,9 +28,9 @@
 | quoted identifier | ✅ `"schema"."table"` | ✅ `` `db`.`table` `` | ✅ `` `db`.`table` `` | ✅ `"table"` | 해당 없음 |
 | alias column | ✅ simple alias scan | ✅ simple alias scan | ✅ simple alias scan | ✅ simple alias scan | 해당 없음 |
 | CTE/derived fallback | ✅ TS fallback | ✅ TS fallback | ✅ TS fallback | ✅ TS fallback | 해당 없음 |
-| function candidates | ✅ common + PostgreSQL | ✅ common + MySQL | ✅ common + MySQL | ✅ common + SQLite | 해당 없음 |
-| shell/meta | ✅ `psql` commands | ✅ mysql client commands | ✅ mysql client commands | ✅ sqlite-cli commands | 해당 없음 |
-| operator candidates | SQL keyword/function surface | SQL keyword/function surface | SQL keyword/function surface | SQL keyword/function surface | ✅ query operators, aggregation stages, accumulators, BSON tags |
+| function candidates | ✅ Rust/WASM SOT + PostgreSQL | ✅ Rust/WASM SOT + MySQL | ✅ MySQL family | ✅ Rust/WASM SOT + SQLite | 해당 없음 |
+| shell/meta | ✅ Rust/WASM SOT `psql` commands | ✅ Rust/WASM SOT mysql client commands | ✅ mysql client commands | ✅ Rust/WASM SOT sqlite-cli commands | 해당 없음 |
+| operator candidates | SQL keyword/function surface | SQL keyword/function surface | SQL keyword/function surface | SQL keyword/function surface | ✅ Rust/WASM SOT query/projection/update operators, stages, accumulators, expressions, BSON tags |
 
 ## 자동완성 아키텍처 방향
 
@@ -52,7 +55,8 @@ Tauri IPC
 - **TS adapter**: 현재 tab, dialect profile, shell mode, catalog snapshot/slice
   를 completion request 로 정규화.
 - **Rust/WASM language core**: tolerant parse, cursor context, provider
-  dispatch, version/capability gate, candidate generation.
+  dispatch, version/capability gate, candidate generation, built-in
+  vocabulary ownership.
 
 SQL dialect와 shell/meta command는 별도 layer다.
 
@@ -71,6 +75,13 @@ SQL dialect와 shell/meta command는 별도 layer다.
   source. WASM 후보가 없으면 기존 TypeScript source set으로 fallback.
 - `src/lib/sql/sqlDialect.ts` — CodeMirror dialect mapping wrapper.
 - `src/lib/sql/sqlDialectKeywords.ts` — legacy import compatibility wrapper.
+- `src-tauri/sql-parser-core/src/completion/vocabulary.rs` — SQL
+  keyword/function/shell built-in vocabulary SOT.
+- `src-tauri/mongosh-parser-core/src/completion.rs` — Mongo MQL/mongosh/admin
+  completion vocabulary SOT.
+- `src/lib/mongo/mongoCompletionVocabulary.ts`,
+  `src/lib/mongo/mongoShellCompletionVocabulary.ts` — WASM load 전 fallback
+  mirror 와 CodeMirror metadata adapter.
 
 장기 구현 규칙:
 
@@ -78,6 +89,8 @@ SQL dialect와 shell/meta command는 별도 layer다.
   사용한다.
 - WASM request에는 `text`, cursor offset 정책, dialect, shell,
   `serverVersion`, normalized catalog slice를 명시한다.
+- built-in keyword/function/operator/shell vocabulary 는 Rust/WASM core 가
+  소유한다. TypeScript 에 남은 상수는 WASM load 전 fallback mirror 이다.
 - psql/mysql/sqlite shell command는 SQL parser grammar에 섞지 않는다.
 - 큰 catalog는 매 키 입력마다 통째로 직렬화하지 않고 active scope와 prefix
   기반 slice로 축소한다.
@@ -133,14 +146,15 @@ SQL dialect와 shell/meta command는 별도 layer다.
 ✅ 지원:
 
 - 공통 SQL 함수 후보는 PostgreSQL과 동일.
-- MySQL 전용 함수 후보: `IFNULL`, `DATE_FORMAT`, `STR_TO_DATE`, `CURDATE`, `CURTIME`, `UTC_TIMESTAMP`, `GROUP_CONCAT`, `JSON_EXTRACT`, `JSON_UNQUOTE`, `JSON_OBJECT`, `JSON_ARRAY`, `UUID`, `LAST_INSERT_ID`, `DATABASE`, `USER`, `VERSION`.
+- MySQL 전용 함수 후보: `IFNULL`, `DATE_FORMAT`, `STR_TO_DATE`, `CURDATE`, `CURTIME`, `UTC_TIMESTAMP`, `GROUP_CONCAT`, `JSON_EXTRACT`, `JSON_UNQUOTE`, `JSON_OBJECT`, `JSON_ARRAY`, `JSON_TABLE`, `JSON_VALUE`, `REGEXP_LIKE`, `REGEXP_REPLACE`, `UUID`, `UUID_TO_BIN`, `BIN_TO_UUID`, `LAST_INSERT_ID`, `DATABASE`, `VERSION`.
 - MySQL 키워드 후보: `SHOW`, `DESCRIBE`, `USE`, `AUTO_INCREMENT`, `REPLACE INTO`, `DUAL`, `ENGINE`, `ON DUPLICATE KEY UPDATE`, `DUPLICATE KEY UPDATE`.
 - backtick alias: `` `table` ``, fully-qualified `` `db`.`table` ``.
 - PostgreSQL-only 후보(`DATE_TRUNC`, `TO_CHAR`, `JSONB_BUILD_OBJECT` 등)는 `dbType: "mysql"`에서 제외된다.
 
 ⚠️ 제한:
 
-- 함수 후보는 MySQL에서 자주 쓰는 scalar/date/json/session surface 위주다. 모든 built-in function을 열거하지 않는다.
+- 함수 후보는 Rust/WASM SOT 의 MySQL built-in vocabulary 에서 온다. SQL 실행
+  가능 여부는 서버 version/capability 가 최종 판단한다.
 - SQL alias/CTE/column completion source는 PostgreSQL과 공유한다. MySQL-specific parser가 아니라 editor-level SQL source다.
 
 ### 실행 / adapter surface
@@ -189,17 +203,19 @@ SQL dialect와 shell/meta command는 별도 layer다.
 
 - `db.` 뒤 collection names.
 - `db.<collection>.` 뒤 collection method 후보: `find`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `distinct`, `insertOne`, `insertMany`, `updateOne`, `updateMany`, `replaceOne`, `deleteOne`, `deleteMany`, `createIndex`, `dropIndex`, `bulkWrite`.
-- db-level method 후보: `runCommand`, `adminCommand`.
-- query operators 18개: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$and`, `$or`, `$nor`, `$not`, `$exists`, `$type`, `$regex`, `$elemMatch`, `$size`, `$all`.
-- aggregation stages 14개: `$match`, `$project`, `$group`, `$sort`, `$limit`, `$skip`, `$unwind`, `$lookup`, `$count`, `$addFields`, `$replaceRoot`, `$facet`, `$out`, `$merge`.
-- accumulators 9개: `$sum`, `$avg`, `$min`, `$max`, `$push`, `$addToSet`, `$first`, `$last`, `$count`.
-- BSON extended JSON tags: `$oid`, `$date`, `$numberLong`, `$numberDouble`, `$numberInt`, `$numberDecimal`, `$binary`, `$regularExpression`, `$timestamp`, `$minKey`, `$maxKey`, `$symbol`, `$code`.
+- db-level method 후보: `runCommand`, `adminCommand`, `getCollection`, `getCollectionNames`, `getCollectionInfos`, `getProfilingStatus`, `setProfilingLevel`.
+- query/projection/update operator 후보는 Rust/WASM vocabulary snapshot 에서 온다. 예: `$jsonSchema`, `$bitsAllSet`, `$elemMatch`, `$setOnInsert`, `$[]`.
+- aggregation stage 후보는 Rust/WASM vocabulary snapshot 에서 온다. 예: `$vectorSearch`, `$search`, `$setWindowFields`, `$lookup`, `$merge`, `$queryStats`.
+- accumulator / expression operator 후보는 Rust/WASM vocabulary snapshot 에서 온다. 예: `$topN`, `$median`, `$dateTrunc`, `$toObjectId`, `$regexMatch`.
+- BSON extended JSON tags: `$oid`, `$date`, `$numberLong`, `$numberDouble`, `$numberInt`, `$numberDecimal`, `$binary`, `$regularExpression`, `$timestamp`, `$minKey`, `$maxKey`, `$symbol`, `$code`, `$uuid`.
 - `db.runCommand({` / `db.adminCommand({` 첫 key 위치에서 admin command literal 후보.
 
 ⚠️ 제한:
 
 - MongoDB는 schemaless라 field completion은 sampled/cache된 fieldNames 기반이다. 컬렉션의 모든 possible field를 보장하지 않는다.
-- operator 후보는 context-aware지만 MongoDB server의 모든 operator/stage를 열거하지 않는다.
+- operator 후보는 official-reference vocabulary group 기준으로 넓혔지만,
+  server version / Atlas-only stage / deployment capability 는 아직 후보 단계에서
+  세밀하게 gate 하지 않는다.
 
 ### 실행 parser / dispatch
 
@@ -231,10 +247,15 @@ SQL dialect와 shell/meta command는 별도 layer다.
 
 ## Coverage 판단
 
-현재 상태는 "PostgreSQL strong / MySQL·MariaDB·SQLite completion smoke open / MongoDB strong for whitelisted mongosh workflows"다.
+현재 상태는 "PostgreSQL strong / MySQL·MariaDB·SQLite completion smoke open /
+MongoDB strong for whitelisted mongosh workflows + Rust-owned vocabulary
+coverage"다.
 
 다음이 남아 있다:
 
 - MySQL client parser dialect closure: `ON DUPLICATE KEY UPDATE`, `LIMIT offset,count`, `CALL`, `LOAD DATA`, `DELIMITER`/procedure body, transaction scripting.
-- MySQL/MariaDB/SQLite autocomplete expansion: more built-in functions, variables, system/session functions, engine/storage-specific clauses.
-- Mongo full operator/stage coverage: current list is curated, not exhaustive.
+- MySQL/MariaDB/SQLite autocomplete expansion: version/capability-specific
+  gating, variables, system/session functions, engine/storage-specific clauses.
+- Mongo completion hardening: server-version/Atlas-only stage gating and
+  parser/dispatch semantic widening. Vocabulary list 자체는 Rust/WASM SOT 로
+  이동했다.

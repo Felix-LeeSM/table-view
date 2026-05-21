@@ -7,8 +7,11 @@ import {
   MONGO_ADMIN_COMMANDS,
   MONGO_AGGREGATE_STAGES,
   MONGO_ALL_OPERATORS,
+  MONGO_EXPRESSION_OPERATORS,
+  MONGO_PROJECTION_OPERATORS,
   MONGO_QUERY_OPERATORS,
   MONGO_TYPE_TAGS,
+  MONGO_UPDATE_OPERATORS,
   MONGOSH_DB_METHODS,
   MONGOSH_DB_LEVEL_METHODS,
   createMongoAdminCommandSource,
@@ -52,57 +55,36 @@ describe("mongoAutocomplete constants", () => {
     expect(labels).toEqual([...MONGOSH_METHOD_WHITELIST]);
   });
 
-  it("MONGO_QUERY_OPERATORS enumerates the 18 filter operators", () => {
+  it("MONGO_QUERY_OPERATORS covers official query predicate groups", () => {
     expect(MONGO_QUERY_OPERATORS).toContain("$eq");
-    expect(MONGO_QUERY_OPERATORS).toContain("$ne");
-    expect(MONGO_QUERY_OPERATORS).toContain("$gt");
-    expect(MONGO_QUERY_OPERATORS).toContain("$gte");
-    expect(MONGO_QUERY_OPERATORS).toContain("$lt");
-    expect(MONGO_QUERY_OPERATORS).toContain("$lte");
-    expect(MONGO_QUERY_OPERATORS).toContain("$in");
-    expect(MONGO_QUERY_OPERATORS).toContain("$nin");
     expect(MONGO_QUERY_OPERATORS).toContain("$and");
-    expect(MONGO_QUERY_OPERATORS).toContain("$or");
-    expect(MONGO_QUERY_OPERATORS).toContain("$nor");
-    expect(MONGO_QUERY_OPERATORS).toContain("$not");
     expect(MONGO_QUERY_OPERATORS).toContain("$exists");
-    expect(MONGO_QUERY_OPERATORS).toContain("$type");
-    expect(MONGO_QUERY_OPERATORS).toContain("$regex");
+    expect(MONGO_QUERY_OPERATORS).toContain("$jsonSchema");
+    expect(MONGO_QUERY_OPERATORS).toContain("$geoWithin");
+    expect(MONGO_QUERY_OPERATORS).toContain("$bitsAnySet");
     expect(MONGO_QUERY_OPERATORS).toContain("$elemMatch");
-    expect(MONGO_QUERY_OPERATORS).toContain("$size");
-    expect(MONGO_QUERY_OPERATORS).toContain("$all");
-    expect(MONGO_QUERY_OPERATORS.length).toBe(18);
+    expect(MONGO_QUERY_OPERATORS.length).toBeGreaterThanOrEqual(31);
   });
 
-  it("MONGO_AGGREGATE_STAGES enumerates the core pipeline stages", () => {
+  it("MONGO_AGGREGATE_STAGES covers modern pipeline stages", () => {
     expect(MONGO_AGGREGATE_STAGES).toContain("$match");
     expect(MONGO_AGGREGATE_STAGES).toContain("$project");
     expect(MONGO_AGGREGATE_STAGES).toContain("$group");
-    expect(MONGO_AGGREGATE_STAGES).toContain("$sort");
-    expect(MONGO_AGGREGATE_STAGES).toContain("$limit");
-    expect(MONGO_AGGREGATE_STAGES).toContain("$skip");
-    expect(MONGO_AGGREGATE_STAGES).toContain("$unwind");
-    expect(MONGO_AGGREGATE_STAGES).toContain("$lookup");
-    expect(MONGO_AGGREGATE_STAGES).toContain("$count");
-    expect(MONGO_AGGREGATE_STAGES).toContain("$addFields");
-    expect(MONGO_AGGREGATE_STAGES).toContain("$replaceRoot");
-    expect(MONGO_AGGREGATE_STAGES).toContain("$facet");
+    expect(MONGO_AGGREGATE_STAGES).toContain("$setWindowFields");
+    expect(MONGO_AGGREGATE_STAGES).toContain("$vectorSearch");
+    expect(MONGO_AGGREGATE_STAGES).toContain("$searchMeta");
     expect(MONGO_AGGREGATE_STAGES).toContain("$out");
     expect(MONGO_AGGREGATE_STAGES).toContain("$merge");
-    expect(MONGO_AGGREGATE_STAGES.length).toBe(14);
+    expect(MONGO_AGGREGATE_STAGES.length).toBeGreaterThanOrEqual(45);
   });
 
-  it("MONGO_ACCUMULATORS enumerates the standard group accumulators", () => {
+  it("MONGO_ACCUMULATORS covers modern accumulator/window operators", () => {
     expect(MONGO_ACCUMULATORS).toContain("$sum");
-    expect(MONGO_ACCUMULATORS).toContain("$avg");
-    expect(MONGO_ACCUMULATORS).toContain("$min");
-    expect(MONGO_ACCUMULATORS).toContain("$max");
-    expect(MONGO_ACCUMULATORS).toContain("$push");
-    expect(MONGO_ACCUMULATORS).toContain("$addToSet");
     expect(MONGO_ACCUMULATORS).toContain("$first");
-    expect(MONGO_ACCUMULATORS).toContain("$last");
-    expect(MONGO_ACCUMULATORS).toContain("$count");
-    expect(MONGO_ACCUMULATORS.length).toBe(9);
+    expect(MONGO_ACCUMULATORS).toContain("$topN");
+    expect(MONGO_ACCUMULATORS).toContain("$bottomN");
+    expect(MONGO_ACCUMULATORS).toContain("$percentile");
+    expect(MONGO_ACCUMULATORS.length).toBeGreaterThanOrEqual(28);
   });
 
   it("MONGO_TYPE_TAGS enumerates BSON extended-JSON tags", () => {
@@ -119,14 +101,27 @@ describe("mongoAutocomplete constants", () => {
     expect(MONGO_TYPE_TAGS).toContain("$maxKey");
     expect(MONGO_TYPE_TAGS).toContain("$symbol");
     expect(MONGO_TYPE_TAGS).toContain("$code");
-    expect(MONGO_TYPE_TAGS.length).toBe(13);
+    expect(MONGO_TYPE_TAGS).toContain("$uuid");
+    expect(MONGO_TYPE_TAGS.length).toBeGreaterThanOrEqual(14);
+  });
+
+  it("covers projection, update, and expression operator groups", () => {
+    expect(MONGO_PROJECTION_OPERATORS).toContain("$meta");
+    expect(MONGO_UPDATE_OPERATORS).toContain("$setOnInsert");
+    expect(MONGO_UPDATE_OPERATORS).toContain("$[]");
+    expect(MONGO_EXPRESSION_OPERATORS).toContain("$dateTrunc");
+    expect(MONGO_EXPRESSION_OPERATORS).toContain("$toObjectId");
+    expect(MONGO_EXPRESSION_OPERATORS).toContain("$regexFindAll");
   });
 
   it("MONGO_ALL_OPERATORS is the union of every operator list", () => {
     const expected = new Set([
       ...MONGO_QUERY_OPERATORS,
+      ...MONGO_PROJECTION_OPERATORS,
+      ...MONGO_UPDATE_OPERATORS,
       ...MONGO_AGGREGATE_STAGES,
       ...MONGO_ACCUMULATORS,
+      ...MONGO_EXPRESSION_OPERATORS,
       ...MONGO_TYPE_TAGS,
     ]);
     const actual = new Set(MONGO_ALL_OPERATORS);
@@ -203,6 +198,17 @@ describe("createMongoCompletionSource — aggregate mode", () => {
     for (const op of MONGO_QUERY_OPERATORS) {
       expect(got.has(op)).toBe(true);
     }
+  });
+
+  it("surfaces expression and update operators in unified mongosh nested bodies", () => {
+    const doc = '[{"$project":{"total":{"$';
+    const result = runSource(doc, doc.length, "aggregate");
+    const got = new Set(labels(result));
+
+    expect(got.has("$dateTrunc")).toBe(true);
+    expect(got.has("$toObjectId")).toBe(true);
+    expect(got.has("$setOnInsert")).toBe(true);
+    expect(got.has("$[]")).toBe(true);
   });
 
   it("aggregate stage set differs from find operator set", () => {

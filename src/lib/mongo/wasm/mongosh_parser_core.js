@@ -1,6 +1,14 @@
 /* @ts-self-types="./mongosh_parser_core.d.ts" */
 
 /**
+ * @returns {any}
+ */
+export function mongo_completion_vocabulary() {
+    const ret = wasm.mongo_completion_vocabulary();
+    return takeObject(ret);
+}
+
+/**
  * @param {string} input
  * @returns {any}
  */

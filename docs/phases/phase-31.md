@@ -1,8 +1,10 @@
 # Phase 31: Language Completion Architecture
 
-> **상태: 진행 (Sprint 427 완료).** ADR 0045 를 구현 계획으로 승격했다.
+> **상태: 진행 (Sprint 428).** ADR 0045 를 구현 계획으로 승격했다.
 > SQL popup 은 WASM-first + TypeScript fallback 구조로 전환됐고,
 > PostgreSQL/MySQL/MariaDB/SQLite completion core smoke 가 열린 상태다.
+> Sprint 428 부터 built-in vocabulary 의 SOT 는 Rust/WASM 이고, TypeScript 는
+> fallback mirror 와 CodeMirror adapter 로 제한한다.
 
 ## 배경
 
@@ -28,6 +30,12 @@ result contract 를 먼저 고정해야 한다.
   포함한다.
 - MongoDB 는 arbitrary JavaScript 를 지원하지 않는다. 기존 mongosh WASM
   parser / whitelist 정책을 completion context routing 에 연결한다.
+- Built-in completion vocabulary 는 Rust/WASM language core 가 소유한다.
+  SQL keyword/function/shell command 와 Mongo MQL/mongosh/admin command 후보가
+  여기에 포함된다. TypeScript 상수는 WASM load 전 fallback 과 legacy import
+  compatibility 를 위한 mirror 다.
+- Mongo vocabulary 는 WASM size budget 유지를 위해 packed string 으로 export
+  하고 TypeScript facade 에서 배열로 unpack 한다.
 
 ## 범위
 
@@ -59,6 +67,9 @@ result contract 를 먼저 고정해야 한다.
 - collection/method/operator/stage/BSON tag completion 유지.
 - mongosh WASM classifier 로 admin command / collection method context routing
   정리.
+- Mongo query/projection/update operators, aggregation stages, accumulators,
+  expression operators, BSON tags, whitelisted collection/db/admin command
+  labels 는 Rust/WASM vocabulary snapshot 에서 온다.
 - arbitrary JS, variables, callbacks, multiple statements 는 계속 out of
   scope.
 
@@ -74,6 +85,9 @@ result contract 를 먼저 고정해야 한다.
 | F | 425 | SQLite completion + sqlite-cli shell layer |
 | G | 426 | Mongo completion classifier alignment |
 | H | 427 | Shadow-only helper cleanup + docs support matrix 갱신 |
+| I | 428 | Rust/WASM vocabulary SOT + Mongo packed vocabulary export |
+| J | 429 | Official-reference coverage tests for Mongo/MySQL/psql vocabulary |
+| K | 430 | Support matrix hardening + parser semantic gap documentation |
 
 ## Acceptance Criteria
 
@@ -89,6 +103,10 @@ result contract 를 먼저 고정해야 한다.
 - **AC-31-07** Shell/meta command 는 SQL keyword vocabulary 에 들어가지 않는다.
 - **AC-31-08** Mongo completion 은 whitelist + WASM classifier 정책을 유지한다.
 - **AC-31-09** 각 slice 는 focused Vitest 와 `tsc --noEmit` 를 통과한다.
+- **AC-31-10** Built-in vocabulary 의 canonical owner 는 Rust/WASM 이며, TS
+  constant 는 fallback/mirror 로만 남는다.
+- **AC-31-11** WASM artifact 는 `pnpm wasm:size` 예산을 통과한다. 현재 budget 은
+  SQL 80 KiB gzip, Mongo 53 KiB gzip 이다.
 
 ## Out of Scope
 
@@ -113,6 +131,8 @@ result contract 를 먼저 고정해야 한다.
 - MySQL/MariaDB/SQLite dialect-specific completion smoke green.
 - Shell/meta command completion 이 SQL keyword/provider 와 분리.
 - Mongo whitelisted completion regression green.
+- Built-in vocabulary SOT 가 Rust/WASM 으로 정리되고 TS fallback mirror 와
+  drift test 가 유지된다.
 - `docs/query-language-support.md` support matrix 최신화.
 
 ## 관련

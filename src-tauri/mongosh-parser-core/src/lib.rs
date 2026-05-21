@@ -19,10 +19,12 @@
 #![deny(unsafe_code)]
 
 pub mod ast;
+pub mod completion;
 pub mod lexer;
 pub mod parser;
 
 pub use ast::{AdminCommandName, MongoshErrorKind, MongoshStatement};
+pub use completion::{completion_vocabulary, MongoshCompletionVocabulary};
 pub use parser::parse;
 
 /// Public entry — convenience wrapper around `parser::parse`. Both native
@@ -62,6 +64,11 @@ mod wasm_bridge {
         // rather than panicking the WASM module (which would kill the page).
         result.serialize(&serializer).unwrap_or(JsValue::NULL)
     }
+
+    #[wasm_bindgen]
+    pub fn mongo_completion_vocabulary() -> JsValue {
+        JsValue::from_str(super::completion_vocabulary())
+    }
 }
 
 #[cfg(test)]
@@ -91,5 +98,16 @@ mod tests {
         let json = serde_json::to_value(&result).expect("serialize");
         assert_eq!(json["kind"], "error");
         assert_eq!(json["errorKind"], "variable-declaration");
+    }
+
+    #[test]
+    fn smoke_completion_vocabulary_serialization_shape() {
+        let result = completion_vocabulary();
+        let groups: Vec<&str> = result.split('\u{1f}').collect();
+        assert_eq!(groups.len(), 10);
+        assert!(groups[0].contains("$eq"));
+        assert!(groups[3].contains("$match"));
+        assert!(groups[7].contains("find"));
+        assert!(groups[9].contains("serverStatus"));
     }
 }

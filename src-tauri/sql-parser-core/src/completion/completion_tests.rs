@@ -72,6 +72,15 @@ fn request_for_dialect(dialect: &str, shell: &str, text: &str) -> SqlCompletionR
     req
 }
 
+fn empty_vocabulary_request(dialect: &str, shell: &str, text: &str) -> SqlCompletionRequest {
+    let mut req = request(text, text.len(), text.len());
+    req.dialect = dialect.to_string();
+    req.shell = shell.to_string();
+    req.vocabulary.keywords.clear();
+    req.vocabulary.functions.clear();
+    req
+}
+
 fn column(schema: &str, table: &str, name: &str) -> SqlCompletionCatalogColumn {
     SqlCompletionCatalogColumn {
         schema: schema.to_string(),
@@ -142,6 +151,21 @@ fn mysql_family_returns_keywords_functions_and_shell_commands() {
         result.replace_range.from,
         CompletionCursorOffsets { utf16: 0, utf8: 0 }
     );
+}
+
+#[test]
+fn rust_builtin_vocabulary_does_not_depend_on_ts_request_lists() {
+    let result = complete_sql(empty_vocabulary_request("postgresql", "psql", "VAC"));
+    assert!(labels(&result).contains(&"VACUUM".to_string()));
+
+    let result = complete_sql(empty_vocabulary_request("postgresql", "psql", "\\wa"));
+    assert!(labels(&result).contains(&"\\watch".to_string()));
+
+    let result = complete_sql(empty_vocabulary_request("mysql", "mysql-client", "JSON_TA"));
+    assert!(labels(&result).contains(&"JSON_TABLE".to_string()));
+
+    let result = complete_sql(empty_vocabulary_request("mysql", "mysql-client", "\\C"));
+    assert!(labels(&result).contains(&"\\C".to_string()));
 }
 
 #[test]

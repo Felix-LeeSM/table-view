@@ -17,574 +17,35 @@ import {
   classifyMongoCompletionPosition,
   type MongoCompletionPositionKind,
 } from "./mongoCompletionPosition";
-import { MONGOSH_METHOD_WHITELIST } from "./mongoshParser";
+import { getMongoCompletionVocabulary } from "./mongoCompletionVocabulary";
+import {
+  getMongoAdminCommandCompletions,
+  getMongoshCollectionMethodCompletions,
+  getMongoshDbLevelMethodCompletions,
+} from "./mongoShellCompletionVocabulary";
+import { MONGO_OPERATOR_META } from "./mongoOperatorMeta";
 
 export { classifyMongoCompletionPosition } from "./mongoCompletionPosition";
 export type { MongoCompletionPositionKind } from "./mongoCompletionPosition";
-
-/**
- * MongoDB MQL vocabulary — pure module, no React / Zustand deps. Lists
- * are intentionally conservative; the candidate set stays deterministic
- * and testable, and can be extended as needs surface.
- */
-
-/**
- * Filter / query operators usable inside a `find` filter body or inside a
- * `$match` / `$expr` stage. The contract's AC-01 requires every entry in
- * this list to be surfaced as an autocomplete candidate when the editor
- * cursor sits at a `$`-prefixed key position in find mode.
- */
-export const MONGO_QUERY_OPERATORS = [
-  "$eq",
-  "$ne",
-  "$gt",
-  "$gte",
-  "$lt",
-  "$lte",
-  "$in",
-  "$nin",
-  "$and",
-  "$or",
-  "$nor",
-  "$not",
-  "$exists",
-  "$type",
-  "$regex",
-  "$elemMatch",
-  "$size",
-  "$all",
-] as const;
-
-/**
- * Aggregation pipeline stages. Offered at the top-level key position inside
- * the outermost pipeline array (aggregate mode) — AC-02.
- */
-export const MONGO_AGGREGATE_STAGES = [
-  "$match",
-  "$project",
-  "$group",
-  "$sort",
-  "$limit",
-  "$skip",
-  "$unwind",
-  "$lookup",
-  "$count",
-  "$addFields",
-  "$replaceRoot",
-  "$facet",
-  "$out",
-  "$merge",
-] as const;
-
-/**
- * Group accumulators (usable inside `$group`, `$addFields`, etc.). Offered
- * when the cursor is at a non-top-level key position in aggregate mode —
- * AC-03.
- */
-export const MONGO_ACCUMULATORS = [
-  "$sum",
-  "$avg",
-  "$min",
-  "$max",
-  "$push",
-  "$addToSet",
-  "$first",
-  "$last",
-  "$count",
-] as const;
-
-/**
- * BSON extended-JSON type tags. Offered at value positions (after a `:`)
- * in both modes so users can write `{ "_id": { "$oid": "..." } }` — AC-04.
- */
-export const MONGO_TYPE_TAGS = [
-  "$oid",
-  "$date",
-  "$numberLong",
-  "$numberDouble",
-  "$numberInt",
-  "$numberDecimal",
-  "$binary",
-  "$regularExpression",
-  "$timestamp",
-  "$minKey",
-  "$maxKey",
-  "$symbol",
-  "$code",
-] as const;
-
-/**
- * Flat union of every operator-like identifier the MQL vocabulary knows
- * about. Used by the operator highlight decoration to colour these
- * strings distinctly from ordinary JSON values.
- */
-export const MONGO_ALL_OPERATORS: readonly string[] = [
-  ...MONGO_QUERY_OPERATORS,
-  ...MONGO_AGGREGATE_STAGES,
-  ...MONGO_ACCUMULATORS,
-  ...MONGO_TYPE_TAGS,
-];
-
-/**
- * mongosh collection methods surfaced after `db.<collection>.`. Mirrors
- * the legacy `dbMethodCandidates` list in `src/lib/completion/mongo.ts`
- * (re-exported below for backward-compat) but now lives here because
- * the CodeMirror-friendly `createMongoshDbSource` is the only live
- * consumer and the older `createDbMethodCompletionSource` is no longer
- * wired to the editor. Kept aligned with the Phase 28 method whitelist
- * in `docs/phases/phase-28.md`.
- */
-export const MONGOSH_DB_METHODS: ReadonlyArray<{
-  label: string;
-  type: "function";
-  /** Inline signature surfaced as `Completion.detail`. */
-  detail: string;
-  /** One-liner surfaced in the right-side `Completion.info` panel. */
-  info: string;
-}> = [
-  {
-    label: "find",
-    type: "function",
-    detail: "(filter?, options?)",
-    info: "Return a cursor over documents matching the filter.",
-  },
-  {
-    label: "findOne",
-    type: "function",
-    detail: "(filter, options?)",
-    info: "Return the first document matching the filter, or null.",
-  },
-  {
-    label: "aggregate",
-    type: "function",
-    detail: "(pipeline, options?)",
-    info: "Run an aggregation pipeline and return the resulting cursor.",
-  },
-  {
-    label: "countDocuments",
-    type: "function",
-    detail: "(filter?, options?)",
-    info: "Exact count of documents matching the filter.",
-  },
-  {
-    label: "estimatedDocumentCount",
-    type: "function",
-    detail: "(options?)",
-    info: "Fast metadata-based count of all documents (no filter).",
-  },
-  {
-    label: "distinct",
-    type: "function",
-    detail: "(field, filter?, options?)",
-    info: "Distinct values of `field` for documents matching the filter.",
-  },
-  {
-    label: "insertOne",
-    type: "function",
-    detail: "(doc, options?)",
-    info: "Insert a single document; returns the inserted `_id`.",
-  },
-  {
-    label: "insertMany",
-    type: "function",
-    detail: "(docs[], options?)",
-    info: "Insert multiple documents in order (or unordered with options).",
-  },
-  {
-    label: "updateOne",
-    type: "function",
-    detail: "(filter, update, options?)",
-    info: "Update the first document matching the filter.",
-  },
-  {
-    label: "updateMany",
-    type: "function",
-    detail: "(filter, update, options?)",
-    info: "Update every document matching the filter.",
-  },
-  {
-    label: "replaceOne",
-    type: "function",
-    detail: "(filter, replacement, options?)",
-    info: "Replace the matched document wholesale (preserves `_id`).",
-  },
-  {
-    label: "deleteOne",
-    type: "function",
-    detail: "(filter, options?)",
-    info: "Delete the first document matching the filter.",
-  },
-  {
-    label: "deleteMany",
-    type: "function",
-    detail: "(filter, options?)",
-    info: "Delete every document matching the filter.",
-  },
-  {
-    label: "createIndex",
-    type: "function",
-    detail: "(keys, options?)",
-    info: "Create an index on the given key spec (e.g. `{ email: 1 }`).",
-  },
-  {
-    label: "dropIndex",
-    type: "function",
-    detail: "(indexName)",
-    info: "Drop the named index from the collection.",
-  },
-  {
-    label: "bulkWrite",
-    type: "function",
-    detail: "(operations, options?)",
-    info: "Run multiple write operations in one ordered or unordered batch.",
-  },
-];
-
-const MONGOSH_DB_METHOD_LABELS = new Set(
-  MONGOSH_DB_METHODS.map((method) => method.label),
-);
-
-for (const method of MONGOSH_METHOD_WHITELIST) {
-  if (!MONGOSH_DB_METHOD_LABELS.has(method)) {
-    throw new Error(
-      `mongosh autocomplete missing whitelisted method: ${method}`,
-    );
-  }
-}
-
-/**
- * Sprint 381 (2026-05-17) — mongosh top-level helpers that don't belong on
- * `db.<collection>.`. Surfaced when the user types `db.<prefix>` (no
- * second dot yet) so `runCommand` / `adminCommand` autocomplete the
- * generic admin-command path that bypasses the Phase 28 method
- * whitelist. The Phase 28 collection methods stay on
- * {@link MONGOSH_DB_METHODS}; this list is the *db-level* method set
- * (collection-context absent).
- */
-export const MONGOSH_DB_LEVEL_METHODS: ReadonlyArray<{
-  label: string;
-  type: "function";
-  detail: string;
-  info: string;
-}> = [
-  {
-    label: "runCommand",
-    type: "function",
-    detail: "({<cmd>: <arg>, …})",
-    info: "Send an arbitrary admin/diagnostic command to the bound database. mongosh's universal escape hatch — `serverStatus`, `dbStats`, `collStats`, `ping`, …",
-  },
-  {
-    label: "adminCommand",
-    type: "function",
-    detail: "({<cmd>: <arg>, …})",
-    info: "Send an admin command (always targets the `admin` database regardless of the toolbar chip).",
-  },
-  {
-    label: "getCollection",
-    type: "function",
-    detail: "(name)",
-    info: "Return a collection handle by name. Useful when the collection name is not a valid JS identifier.",
-  },
-  {
-    label: "getCollectionNames",
-    type: "function",
-    detail: "()",
-    info: "List collection names in the current database.",
-  },
-  {
-    label: "getCollectionInfos",
-    type: "function",
-    detail: "()",
-    info: "List collection metadata (name + options) in the current database.",
-  },
-  {
-    label: "getProfilingStatus",
-    type: "function",
-    detail: "()",
-    info: "Return the profiling level and slow-ms threshold for the current database.",
-  },
-  {
-    label: "setProfilingLevel",
-    type: "function",
-    detail: "(level, slowms?)",
-    info: "Enable / disable profiling. `level` ∈ {0=off, 1=slow ops, 2=all ops}.",
-  },
-];
-
-/**
- * Sprint 381 (2026-05-17) — admin / diagnostic commands the user can drop
- * inside `db.runCommand({...})` / `db.adminCommand({...})`. mongosh 의
- * 모든 admin helper 가 본질적으로 `runCommand` wrapper 이므로, 이 dict
- * 만 갖춰도 가장 흔한 진단 / 메타 시나리오를 cover.
- *
- * 각 entry 는 `apply` value 에 `name: 1` 을 박아넣어, 사용자가 한
- * keystroke 으로 valid command body 를 얻을 수 있게 한다.
- */
-export const MONGO_ADMIN_COMMANDS: ReadonlyArray<{
-  label: string;
-  apply: string;
-  detail: string;
-  info: string;
-}> = [
-  {
-    label: "ping",
-    apply: "ping: 1",
-    detail: "1",
-    info: "No-op health check. Returns `{ok: 1}` when the server is reachable.",
-  },
-  {
-    label: "serverStatus",
-    apply: "serverStatus: 1",
-    detail: "1",
-    info: "Comprehensive runtime stats (connections / mem / repl / network / …).",
-  },
-  {
-    label: "hostInfo",
-    apply: "hostInfo: 1",
-    detail: "1",
-    info: "OS / CPU / memory information about the host running mongod.",
-  },
-  {
-    label: "buildInfo",
-    apply: "buildInfo: 1",
-    detail: "1",
-    info: "mongod version, git commit, OS, modules, max bson size.",
-  },
-  {
-    label: "listDatabases",
-    apply: "listDatabases: 1",
-    detail: "1",
-    info: "Enumerate every database visible to the connected user (admin-context).",
-  },
-  {
-    label: "listCollections",
-    apply: "listCollections: 1",
-    detail: "1 | {filter, …}",
-    info: "Enumerate collections in the bound database (with optional filter).",
-  },
-  {
-    label: "dbStats",
-    apply: "dbStats: 1",
-    detail: "1 | {scale}",
-    info: "Storage size + index size + collection count for the bound database.",
-  },
-  {
-    label: "collStats",
-    apply: 'collStats: "<collection>"',
-    detail: '"<coll>"',
-    info: "Storage / index stats for a specific collection.",
-  },
-  {
-    label: "currentOp",
-    apply: 'currentOp: 1, "$all": true',
-    detail: "1",
-    info: "List currently running operations (admin-context).",
-  },
-  {
-    label: "killOp",
-    apply: "killOp: 1, op: <opid>",
-    detail: "1, op",
-    info: "Terminate a running operation by id (admin-context).",
-  },
-  {
-    label: "getCmdLineOpts",
-    apply: "getCmdLineOpts: 1",
-    detail: "1",
-    info: "Argv + parsed config the mongod process was started with.",
-  },
-  {
-    label: "setProfilingLevel",
-    apply: "profile: 1, slowms: 100",
-    detail: "0|1|2",
-    info: "Enable / disable the database profiler (0=off, 1=slow ops, 2=all).",
-  },
-  {
-    label: "getProfilingStatus",
-    apply: "profile: -1",
-    detail: "-1",
-    info: "Return current profiling level + slow-ms threshold for the bound database.",
-  },
-  {
-    label: "validate",
-    apply: 'validate: "<collection>"',
-    detail: '"<coll>"',
-    info: "Verify the on-disk integrity of a collection's data + indexes (slow).",
-  },
-  {
-    label: "create",
-    apply: 'create: "<collection>"',
-    detail: '"<coll>"',
-    info: "Create a new collection in the bound database (advanced — for options see MongoDB docs).",
-  },
-  {
-    label: "drop",
-    apply: 'drop: "<collection>"',
-    detail: '"<coll>"',
-    info: "Drop a collection from the bound database.",
-  },
-  {
-    label: "dropDatabase",
-    apply: "dropDatabase: 1",
-    detail: "1",
-    info: "Drop the bound database. **Destructive** — no undo.",
-  },
-  {
-    label: "isMaster",
-    apply: "isMaster: 1",
-    detail: "1",
-    info: "Legacy replica-set status probe (returns `ismaster`, `setName`, `hosts`, …).",
-  },
-  {
-    label: "hello",
-    apply: "hello: 1",
-    detail: "1",
-    info: "Modern replacement for `isMaster` — returns replica-set / sharding topology metadata.",
-  },
-  {
-    label: "replSetGetStatus",
-    apply: "replSetGetStatus: 1",
-    detail: "1",
-    info: "Replica-set member health + oplog progress (admin-context).",
-  },
-];
-
-/**
- * Per-operator metadata for `Completion.detail` (inline signature) and
- * `Completion.info` (right-side help panel). The list is intentionally a
- * lookup map so the per-operator entry is colocated with the trigger
- * token; missing entries fall through to a default surface (label only).
- */
-const OPERATOR_META: Record<string, { detail: string; info: string }> = {
-  // Query operators
-  $eq: { detail: "value", info: "Matches values equal to the operand." },
-  $ne: { detail: "value", info: "Matches values not equal to the operand." },
-  $gt: { detail: "value", info: "Strictly greater than the operand." },
-  $gte: { detail: "value", info: "Greater than or equal to the operand." },
-  $lt: { detail: "value", info: "Strictly less than the operand." },
-  $lte: { detail: "value", info: "Less than or equal to the operand." },
-  $in: { detail: "[…]", info: "Matches any value in the given array." },
-  $nin: { detail: "[…]", info: "Matches values not in the given array." },
-  $and: { detail: "[expr,…]", info: "All sub-expressions must match." },
-  $or: { detail: "[expr,…]", info: "At least one sub-expression must match." },
-  $nor: { detail: "[expr,…]", info: "None of the sub-expressions match." },
-  $not: { detail: "expr", info: "Negates the inner expression." },
-  $exists: { detail: "boolean", info: "Field exists (true) / absent (false)." },
-  $type: {
-    detail: "bsonType",
-    info: "Matches documents where the field has the given BSON type.",
-  },
-  $regex: {
-    detail: "regex",
-    info: "Matches strings against a regular expression.",
-  },
-  $elemMatch: {
-    detail: "{…}",
-    info: "At least one array element matches the inner expression.",
-  },
-  $size: {
-    detail: "number",
-    info: "Matches arrays of exactly the given length.",
-  },
-  $all: { detail: "[…]", info: "Array contains every listed value." },
-
-  // Aggregation stages
-  $match: {
-    detail: "{filter}",
-    info: "Filter documents to those matching the predicate.",
-  },
-  $project: {
-    detail: "{spec}",
-    info: "Reshape documents — include / exclude / compute fields.",
-  },
-  $group: {
-    detail: "{_id, …}",
-    info: "Group documents by `_id` and apply accumulators.",
-  },
-  $sort: {
-    detail: "{field: 1|-1}",
-    info: "Sort the pipeline (1 = asc, -1 = desc).",
-  },
-  $limit: { detail: "n", info: "Keep only the first n documents." },
-  $skip: { detail: "n", info: "Skip the first n documents." },
-  $unwind: {
-    detail: "$path",
-    info: "Emit one document per element of the array field.",
-  },
-  $lookup: {
-    detail: "{from, localField, …}",
-    info: "Left-outer join against another collection.",
-  },
-  $count: {
-    detail: '"name"',
-    info: "Replace the pipeline with a single doc of the given key = count.",
-  },
-  $addFields: {
-    detail: "{spec}",
-    info: "Append computed fields to each document.",
-  },
-  $replaceRoot: {
-    detail: "{newRoot}",
-    info: "Replace the document with the given subdocument.",
-  },
-  $facet: {
-    detail: "{name: [stages]}",
-    info: "Run multiple sub-pipelines in parallel.",
-  },
-  $out: {
-    detail: '"coll"',
-    info: "Write the pipeline output to a target collection (destructive).",
-  },
-  $merge: {
-    detail: "{into, …}",
-    info: "Upsert pipeline output into a target collection.",
-  },
-
-  // Accumulators
-  $sum: { detail: "expr", info: "Sum of numeric values across the group." },
-  $avg: { detail: "expr", info: "Mean of numeric values across the group." },
-  $min: { detail: "expr", info: "Minimum value across the group." },
-  $max: { detail: "expr", info: "Maximum value across the group." },
-  $push: {
-    detail: "expr",
-    info: "Append each expression to an array (preserves duplicates).",
-  },
-  $addToSet: {
-    detail: "expr",
-    info: "Append each expression to an array (deduplicated).",
-  },
-  $first: { detail: "expr", info: "First value encountered in the group." },
-  $last: { detail: "expr", info: "Last value encountered in the group." },
-
-  // BSON type tags
-  $oid: { detail: '"hex"', info: "ObjectId literal — 24-char hex string." },
-  $date: {
-    detail: "ISO|epoch",
-    info: 'ISO-8601 date string or `{ $numberLong: "ms" }`.',
-  },
-  $numberLong: { detail: '"int64"', info: "64-bit signed integer literal." },
-  $numberDouble: { detail: '"double"', info: "IEEE-754 double literal." },
-  $numberInt: { detail: '"int32"', info: "32-bit signed integer literal." },
-  $numberDecimal: { detail: '"decimal"', info: "IEEE-754 decimal128 literal." },
-  $binary: { detail: "{base64, subType}", info: "Binary blob with subtype." },
-  $regularExpression: {
-    detail: "{pattern, options}",
-    info: "BSON regex literal.",
-  },
-  $timestamp: {
-    detail: "{t, i}",
-    info: "Replication timestamp (seconds + increment).",
-  },
-  $minKey: {
-    detail: "1",
-    info: "Lower bound sentinel — sorts before any value.",
-  },
-  $maxKey: {
-    detail: "1",
-    info: "Upper bound sentinel — sorts after any value.",
-  },
-  $symbol: { detail: '"sym"', info: "Deprecated BSON symbol type." },
-  $code: { detail: '"js"', info: "Server-side JavaScript code literal." },
-};
+export {
+  MONGO_ACCUMULATORS,
+  MONGO_AGGREGATE_STAGES,
+  MONGO_ALL_OPERATORS,
+  MONGO_EXPRESSION_OPERATORS,
+  MONGO_PROJECTION_OPERATORS,
+  MONGO_QUERY_OPERATORS,
+  MONGO_TYPE_TAGS,
+  MONGO_UPDATE_OPERATORS,
+  getMongoCompletionVocabulary,
+} from "./mongoCompletionVocabulary";
+export {
+  getMongoAdminCommandCompletions,
+  getMongoshCollectionMethodCompletions,
+  getMongoshDbLevelMethodCompletions,
+  MONGO_ADMIN_COMMANDS,
+  MONGOSH_DB_LEVEL_METHODS,
+  MONGOSH_DB_METHODS,
+} from "./mongoShellCompletionVocabulary";
 
 export type MongoQueryMode = "find" | "aggregate";
 
@@ -666,30 +127,37 @@ function appendDollarCandidates(
   mode: MongoQueryMode,
   position: MongoCompletionPositionKind,
 ): void {
+  const vocabulary = getMongoCompletionVocabulary();
   if (position === "value") {
     // Value position → BSON extended JSON type tags (e.g. `{ "$oid": "..." }`).
-    pushOperators(out, MONGO_TYPE_TAGS, "type");
+    pushOperators(out, vocabulary.typeTags, "type");
     return;
   }
 
   if (mode === "aggregate") {
     if (position === "stage-key") {
-      pushOperators(out, MONGO_AGGREGATE_STAGES, "keyword");
+      pushOperators(out, vocabulary.aggregateStages, "keyword");
       return;
     }
     if (position === "accumulator-or-filter-key") {
       // In an aggregate pipeline but nested inside a stage: accumulators +
       // the standard query operators (for `$match`'s body, which re-uses
       // the find operator set).
-      pushOperators(out, MONGO_ACCUMULATORS, "function");
-      pushOperators(out, MONGO_QUERY_OPERATORS, "keyword");
+      pushOperators(out, vocabulary.accumulators, "function");
+      pushOperators(out, vocabulary.expressionOperators, "function");
+      pushOperators(out, vocabulary.updateOperators, "keyword");
+      pushOperators(out, vocabulary.projectionOperators, "keyword");
+      pushOperators(out, vocabulary.queryOperators, "keyword");
       return;
     }
     // Unknown: conservatively offer everything aggregate-aware so the user
     // always sees candidates instead of a silent empty popup.
-    pushOperators(out, MONGO_AGGREGATE_STAGES, "keyword");
-    pushOperators(out, MONGO_ACCUMULATORS, "function");
-    pushOperators(out, MONGO_QUERY_OPERATORS, "keyword");
+    pushOperators(out, vocabulary.aggregateStages, "keyword");
+    pushOperators(out, vocabulary.accumulators, "function");
+    pushOperators(out, vocabulary.expressionOperators, "function");
+    pushOperators(out, vocabulary.updateOperators, "keyword");
+    pushOperators(out, vocabulary.projectionOperators, "keyword");
+    pushOperators(out, vocabulary.queryOperators, "keyword");
     return;
   }
 
@@ -699,7 +167,7 @@ function appendDollarCandidates(
     position === "accumulator-or-filter-key" ||
     position === "unknown"
   ) {
-    pushOperators(out, MONGO_QUERY_OPERATORS, "keyword");
+    pushOperators(out, vocabulary.queryOperators, "keyword");
   }
 }
 
@@ -712,7 +180,7 @@ function pushOperators(
     // 2026-05-15 — UX 옵션 5/6: 알려진 operator 면 시그니처(detail)와
     // 한 줄 설명(info)을 같이 surface. 누락된 토큰은 label only 로 fall
     // through 해서 popup 이 깨지지 않는다.
-    const meta = OPERATOR_META[label];
+    const meta = MONGO_OPERATOR_META[label];
     out.push({
       label,
       apply: label,
@@ -759,13 +227,15 @@ export function createMongoshDbSource(
     if (methodMatch) {
       const prefix = methodMatch[2] ?? "";
       const from = context.pos - prefix.length;
-      const options: Completion[] = MONGOSH_DB_METHODS.map((cand) => ({
-        label: cand.label,
-        apply: cand.label,
-        type: cand.type,
-        detail: cand.detail,
-        info: cand.info,
-      }));
+      const options: Completion[] = getMongoshCollectionMethodCompletions().map(
+        (cand) => ({
+          label: cand.label,
+          apply: cand.label,
+          type: cand.type,
+          detail: cand.detail,
+          info: cand.info,
+        }),
+      );
       return {
         from,
         options,
@@ -783,13 +253,15 @@ export function createMongoshDbSource(
       // who types `db.r` lands directly on `runCommand` without having
       // to remember the parens trick. Collection names come *after* the
       // db-level helpers when both apply.
-      const dbLevel: Completion[] = MONGOSH_DB_LEVEL_METHODS.map((cand) => ({
-        label: cand.label,
-        apply: cand.label,
-        type: cand.type,
-        detail: cand.detail,
-        info: cand.info,
-      }));
+      const dbLevel: Completion[] = getMongoshDbLevelMethodCompletions().map(
+        (cand) => ({
+          label: cand.label,
+          apply: cand.label,
+          type: cand.type,
+          detail: cand.detail,
+          info: cand.info,
+        }),
+      );
       const options: Completion[] =
         collections.length > 0
           ? [
@@ -807,7 +279,7 @@ export function createMongoshDbSource(
             // affordance the user expects from a mongosh prompt.
             [
               ...dbLevel,
-              ...MONGOSH_DB_METHODS.map((cand) => ({
+              ...getMongoshCollectionMethodCompletions().map((cand) => ({
                 label: cand.label,
                 apply: cand.label,
                 type: cand.type,
@@ -854,13 +326,15 @@ export function createMongoAdminCommandSource(): CompletionSource {
     if (!m) return null;
     const prefix = m[2] ?? "";
     const from = context.pos - prefix.length;
-    const options: Completion[] = MONGO_ADMIN_COMMANDS.map((cand) => ({
-      label: cand.label,
-      apply: cand.apply,
-      type: "keyword",
-      detail: cand.detail,
-      info: cand.info,
-    }));
+    const options: Completion[] = getMongoAdminCommandCompletions().map(
+      (cand) => ({
+        label: cand.label,
+        apply: cand.apply,
+        type: "keyword",
+        detail: cand.detail,
+        info: cand.info,
+      }),
+    );
     return {
       from,
       options,
@@ -877,7 +351,7 @@ export function createMongoAdminCommandSource(): CompletionSource {
  * over the visible range only.
  */
 export function createMongoOperatorHighlight(): Extension {
-  const operatorSet = new Set(MONGO_ALL_OPERATORS);
+  const operatorSet = new Set(getMongoCompletionVocabulary().allOperators);
   const mark = Decoration.mark({ class: "cm-mql-operator" });
 
   function build(view: EditorView): DecorationSet {

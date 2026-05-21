@@ -46,6 +46,7 @@ interface MongoshWasmModule {
   default: (input?: unknown) => Promise<unknown>;
   initSync: (input: { module: BufferSource | WebAssembly.Module }) => unknown;
   parse_mongosh: (input: string) => unknown;
+  mongo_completion_vocabulary: () => unknown;
 }
 
 let wasmModule: MongoshWasmModule | null = null;
@@ -132,6 +133,28 @@ export function parseMongoshStatement(input: string): MongoshStatementResult {
   return raw;
 }
 
+export interface MongoshCompletionVocabulary {
+  queryOperators: readonly string[];
+  projectionOperators: readonly string[];
+  updateOperators: readonly string[];
+  aggregateStages: readonly string[];
+  accumulators: readonly string[];
+  expressionOperators: readonly string[];
+  typeTags: readonly string[];
+  allOperators: readonly string[];
+  mongoshCollectionMethods: readonly string[];
+  mongoshDbMethods: readonly string[];
+  mongoAdminCommands: readonly string[];
+}
+
+const MONGOSH_VOCABULARY_GROUP_SEPARATOR = "\u001f";
+
+export function getMongoshCompletionVocabulary(): MongoshCompletionVocabulary | null {
+  if (wasmModule === null) return null;
+  const raw = wasmModule.mongo_completion_vocabulary();
+  return parseMongoshCompletionVocabulary(raw);
+}
+
 // ---------------------------------------------------------------------------
 // Runtime guards + test escape hatch.
 // ---------------------------------------------------------------------------
@@ -146,6 +169,71 @@ function isMongoshStatementResult(
     kind === "collection-command" ||
     kind === "error"
   );
+}
+
+function parseMongoshCompletionVocabulary(
+  value: unknown,
+): MongoshCompletionVocabulary | null {
+  if (typeof value !== "string") return null;
+  const groups = value.split(MONGOSH_VOCABULARY_GROUP_SEPARATOR);
+  if (groups.length !== 10) return null;
+  const [
+    queryGroup,
+    projectionGroup,
+    updateGroup,
+    aggregateStageGroup,
+    accumulatorGroup,
+    expressionGroup,
+    typeTagGroup,
+    collectionMethodGroup,
+    dbMethodGroup,
+    adminCommandGroup,
+  ] = groups as [
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+  ];
+
+  const queryOperators = splitVocabulary(queryGroup);
+  const projectionOperators = splitVocabulary(projectionGroup);
+  const updateOperators = splitVocabulary(updateGroup);
+  const aggregateStages = splitVocabulary(aggregateStageGroup);
+  const accumulators = splitVocabulary(accumulatorGroup);
+  const expressionOperators = splitVocabulary(expressionGroup);
+  const typeTags = splitVocabulary(typeTagGroup);
+
+  return {
+    queryOperators,
+    projectionOperators,
+    updateOperators,
+    aggregateStages,
+    accumulators,
+    expressionOperators,
+    typeTags,
+    allOperators: [
+      ...queryOperators,
+      ...projectionOperators,
+      ...updateOperators,
+      ...aggregateStages,
+      ...accumulators,
+      ...expressionOperators,
+      ...typeTags,
+    ],
+    mongoshCollectionMethods: splitVocabulary(collectionMethodGroup),
+    mongoshDbMethods: splitVocabulary(dbMethodGroup),
+    mongoAdminCommands: splitVocabulary(adminCommandGroup),
+  };
+}
+
+function splitVocabulary(value: string): readonly string[] {
+  return value.length === 0 ? [] : value.split("\n");
 }
 
 /**
