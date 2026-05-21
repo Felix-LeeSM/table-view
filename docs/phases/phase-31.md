@@ -1,8 +1,8 @@
 # Phase 31: Language Completion Architecture
 
-> **상태: 진행 (Sprint 420 시작).** ADR 0045 를 구현 계획으로 승격한다.
-> 목표는 현 TS/CodeMirror 자동완성을 유지하면서, Rust/WASM completion core 로
-> 점진 전환 가능한 multi-dialect boundary 를 고정하는 것이다.
+> **상태: 진행 (Sprint 427 완료).** ADR 0045 를 구현 계획으로 승격했다.
+> SQL popup 은 WASM-first + TypeScript fallback 구조로 전환됐고,
+> PostgreSQL/MySQL/MariaDB/SQLite completion core smoke 가 열린 상태다.
 
 ## 배경
 
@@ -23,8 +23,9 @@ result contract 를 먼저 고정해야 한다.
   capabilities, catalog slice 만 받는다.
 - Cursor offset 은 UTF-16 과 UTF-8 byte offset 을 함께 싣는다.
 - SQL dialect 와 shell/meta command 는 분리한다.
-- PostgreSQL 먼저 shadow mode 로 검증하되 request/result shape 은 처음부터
-  MySQL/MariaDB/SQLite 를 포함한다.
+- PostgreSQL shadow mode 로 검증을 시작했고, live popup 은 WASM-first +
+  TS fallback 으로 전환한다. request/result shape 은 MySQL/MariaDB/SQLite 를
+  포함한다.
 - MongoDB 는 arbitrary JavaScript 를 지원하지 않는다. 기존 mongosh WASM
   parser / whitelist 정책을 completion context routing 에 연결한다.
 
@@ -68,11 +69,11 @@ result contract 를 먼저 고정해야 한다.
 | A | 420 | Contract + SQL request builder + PLAN/phase 문서화 |
 | B | 421 | CodeMirror adapter shadow path. current TS result 유지, request만 병렬 생성 |
 | C | 422 | PostgreSQL WASM completion core v0 |
-| D | 423 | PostgreSQL parity gate + WASM-first 전환, TS fallback 유지 |
-| E | 424 | MySQL/MariaDB dialect closure |
-| F | 425 | SQLite dialect + sqlite-cli shell layer |
+| D | 423 | SQL popup WASM-first 전환, TS fallback 유지 |
+| E | 424 | MySQL/MariaDB completion closure |
+| F | 425 | SQLite completion + sqlite-cli shell layer |
 | G | 426 | Mongo completion classifier alignment |
-| H | 427 | TS helper cleanup + docs support matrix 갱신 |
+| H | 427 | Shadow-only helper cleanup + docs support matrix 갱신 |
 
 ## Acceptance Criteria
 
@@ -81,8 +82,8 @@ result contract 를 먼저 고정해야 한다.
 - **AC-31-02** PostgreSQL/MySQL/MariaDB/SQLite request shape 이 동일하다.
 - **AC-31-03** Cursor offset 은 UTF-16 + UTF-8 byte offset 으로 고정된다.
 - **AC-31-04** Completion hot path 에 신규 IPC 가 없다.
-- **AC-31-05** PostgreSQL shadow mode 에서 current TS result 와 WASM result 를
-  비교할 수 있다.
+- **AC-31-05** SQL popup 은 WASM-first result 를 우선 사용하고, core 가
+  후보를 못 내거나 로드 실패하면 current TS source 로 fallback 한다.
 - **AC-31-06** MySQL/MariaDB/SQLite dialect delta 는 profile/capability 로
   표현되고 provider 내부 `dbType` 분산을 늘리지 않는다.
 - **AC-31-07** Shell/meta command 는 SQL keyword vocabulary 에 들어가지 않는다.

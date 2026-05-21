@@ -138,10 +138,14 @@ const POSTGRES_KEYWORDS: readonly string[] = [
 ];
 
 const MYSQL_KEYWORDS: readonly string[] = [
+  "SHOW",
+  "DESCRIBE",
+  "USE",
   "AUTO_INCREMENT",
   "REPLACE INTO",
   "DUAL",
   "ENGINE",
+  "ON DUPLICATE KEY UPDATE",
   "DUPLICATE KEY UPDATE",
 ];
 

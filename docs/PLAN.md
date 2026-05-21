@@ -221,11 +221,11 @@ shadow 하되 request shape 은 MySQL / MariaDB / SQLite 를 처음부터 포함
 | **420** | A | Completion request/result contract + SQL request builder + PLAN/phase 문서화 |
 | **421** | B | CodeMirror adapter shadow path — TS result 와 WASM-ready request 동시 생성, visible popup 은 기존 TS source 유지 |
 | **422** | C | PostgreSQL WASM completion core v0 — keyword/table/column/function provider |
-| 423 | D | PostgreSQL parity gate + WASM-first 전환, TS fallback 유지 |
-| 424 | E | MySQL/MariaDB dialect closure — backtick, `LIMIT offset,count`, `ON DUPLICATE KEY`, `SHOW/DESCRIBE/USE` |
-| 425 | F | SQLite dialect + shell — `PRAGMA`, `WITHOUT ROWID`, `.tables`, `.schema` |
-| 426 | G | Mongo completion alignment — mongosh WASM classifier 기반 context routing |
-| 427 | H | TS parser/helper cleanup — parity 완료 helper 부터 제거 |
+| **423** | D | SQL popup WASM-first 전환, 기존 TS source fallback 유지 |
+| **424** | E | MySQL/MariaDB completion closure — `SHOW/DESCRIBE/USE`, `ON DUPLICATE KEY UPDATE`, shell commands |
+| **425** | F | SQLite completion + sqlite-cli shell — `PRAGMA`, `WITHOUT ROWID`, `.tables`, `.schema` |
+| **426** | G | Mongo completion alignment — method whitelist parity + classifier export |
+| **427** | H | Shadow-only helper cleanup + docs support matrix 갱신 |
 
 **기준 문서**: [`docs/phases/phase-31.md`](phases/phase-31.md),
 [`docs/query-language-support.md`](query-language-support.md),

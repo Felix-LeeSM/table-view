@@ -50,6 +50,28 @@ fn request(text: &str, cursor_utf16: usize, cursor_utf8: usize) -> SqlCompletion
     }
 }
 
+fn request_for_dialect(dialect: &str, shell: &str, text: &str) -> SqlCompletionRequest {
+    let mut req = request(text, text.len(), text.len());
+    req.dialect = dialect.to_string();
+    req.shell = shell.to_string();
+    req.vocabulary.keywords.extend(
+        [
+            "SHOW",
+            "DESCRIBE",
+            "USE",
+            "ON DUPLICATE KEY UPDATE",
+            "PRAGMA",
+            "WITHOUT ROWID",
+        ]
+        .into_iter()
+        .map(str::to_string),
+    );
+    req.vocabulary
+        .functions
+        .extend(["JSON_EXTRACT", "STRFTIME"].into_iter().map(str::to_string));
+    req
+}
+
 fn column(schema: &str, table: &str, name: &str) -> SqlCompletionCatalogColumn {
     SqlCompletionCatalogColumn {
         schema: schema.to_string(),
@@ -107,13 +129,42 @@ fn preserves_utf16_and_utf8_replace_offsets() {
 }
 
 #[test]
-fn non_postgresql_returns_empty_result_with_metadata() {
+fn mysql_family_returns_keywords_functions_and_shell_commands() {
+    let result = complete_sql(request_for_dialect("mysql", "mysql-client", "SH"));
+    assert!(labels(&result).contains(&"SHOW".to_string()));
+
+    let result = complete_sql(request_for_dialect("mariadb", "mysql-client", "JSON_EX"));
+    assert!(labels(&result).contains(&"JSON_EXTRACT".to_string()));
+
+    let result = complete_sql(request_for_dialect("mysql", "mysql-client", "\\G"));
+    assert!(labels(&result).contains(&"\\G".to_string()));
+    assert_eq!(
+        result.replace_range.from,
+        CompletionCursorOffsets { utf16: 0, utf8: 0 }
+    );
+}
+
+#[test]
+fn sqlite_returns_keywords_and_dot_shell_commands() {
+    let result = complete_sql(request_for_dialect("sqlite", "sqlite-cli", "PRA"));
+    assert!(labels(&result).contains(&"PRAGMA".to_string()));
+
+    let result = complete_sql(request_for_dialect("sqlite", "sqlite-cli", ".s"));
+    assert!(labels(&result).contains(&".schema".to_string()));
+    assert_eq!(
+        result.replace_range.from,
+        CompletionCursorOffsets { utf16: 0, utf8: 0 }
+    );
+}
+
+#[test]
+fn unsupported_dialect_returns_empty_result_with_metadata() {
     let mut req = request("SELECT ", 7, 7);
-    req.dialect = "mysql".to_string();
+    req.dialect = "mssql".to_string();
 
     let result = complete_sql(req);
 
     assert!(result.items.is_empty());
     assert_eq!(result.metadata.engine, "wasm");
-    assert_eq!(result.metadata.dialect, "mysql");
+    assert_eq!(result.metadata.dialect, "mssql");
 }

@@ -1524,6 +1524,7 @@ impl<'a> Parser<'a> {
     ///   2. `ADD CONSTRAINT <name> <constraint-body>`
     ///   3. `ADD <bare-constraint>` — same as #2 but the constraint
     ///      name slot stays `None`.
+    ///
     /// The `ADD` keyword has been consumed by the caller.
     fn parse_alter_add_action(&mut self) -> Result<AlterAction, ParseError> {
         // ADD COLUMN — column-definition shape (shared with CREATE TABLE).
@@ -1563,6 +1564,7 @@ impl<'a> Parser<'a> {
     /// shapes are accepted:
     ///   1. `RENAME TO <new-name>` — rename the table itself.
     ///   2. `RENAME COLUMN <old> TO <new>` — rename a column.
+    ///
     /// The `RENAME` keyword has been consumed by the caller.
     fn parse_alter_rename_action(&mut self) -> Result<AlterAction, ParseError> {
         // RENAME COLUMN — qualified rename.
@@ -1656,6 +1658,7 @@ impl<'a> Parser<'a> {
     ///   - `CREATE TABLE …`
     ///   - `CREATE [UNIQUE] INDEX …`
     ///   - `CREATE [OR REPLACE] VIEW …`
+    ///
     /// Any other follow-up token (FUNCTION / TRIGGER / EXTENSION /
     /// TEMPORARY / MATERIALIZED / …) parses to `SyntaxError` per the
     /// sprint-394 out-of-scope list.
@@ -2049,6 +2052,7 @@ impl<'a> Parser<'a> {
     ///   - `UNIQUE ( <cols> )`.
     ///   - `FOREIGN KEY ( <cols> ) REFERENCES <table> [ ( <cols> ) ]`.
     ///   - `CHECK ( <expression> )`.
+    ///
     /// Caller already consumed an optional `CONSTRAINT <name>` prefix.
     fn parse_table_constraint_body(&mut self) -> Result<TableConstraintBody, ParseError> {
         let tok = self
@@ -3345,10 +3349,7 @@ impl<'a> Parser<'a> {
         // SyntaxError per the contract.
         let inner_tok = self.peek().cloned();
         let at = inner_tok.as_ref().map(|t| t.at);
-        let inner = match self.parse_statement() {
-            Ok(stmt) => stmt,
-            Err(e) => return Err(e),
-        };
+        let inner = self.parse_statement()?;
         let inner_kind = match inner {
             ParseResult::Select(s) => ExplainInner::Select(s),
             ParseResult::Insert(i) => ExplainInner::Insert(i),

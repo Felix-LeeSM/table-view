@@ -1,14 +1,11 @@
 import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   buildSqlCompletionContext,
   type SqlCompletionCatalogStoreSnapshot,
 } from "./sqlCompletionContext";
-import {
-  buildSqlCompletionRequestFromCodeMirror,
-  sqlCompletionShadowSource,
-} from "./sqlCodeMirrorCompletionAdapter";
+import { buildSqlCompletionRequestFromCodeMirror } from "./sqlCodeMirrorCompletionAdapter";
 
 const emptySnapshot = (): SqlCompletionCatalogStoreSnapshot => ({
   schemas: {},
@@ -44,43 +41,5 @@ describe("sql CodeMirror completion adapter", () => {
       cursor: { utf16: 10, utf8: 14 },
     });
     expect(request.catalog.revision).toBe("rev-1");
-  });
-
-  it("emits a shadow request without adding completion candidates", () => {
-    const completionContext = buildSqlCompletionContext({
-      ...emptySnapshot(),
-      connectionId: "conn1",
-      database: "app",
-      dbType: "sqlite",
-      catalogRevision: "sqlite-rev",
-    });
-    const onRequest = vi.fn();
-    const source = sqlCompletionShadowSource({
-      getCompletionContext: () => completionContext,
-      onRequest,
-    });
-
-    const result = source(contextFor("select * from users where "));
-
-    expect(result).toBeNull();
-    expect(onRequest).toHaveBeenCalledOnce();
-    expect(onRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        dialect: "sqlite",
-        shell: "sqlite-cli",
-        text: "select * from users where ",
-      }),
-    );
-  });
-
-  it("stays dormant until a completion context is available", () => {
-    const onRequest = vi.fn();
-    const source = sqlCompletionShadowSource({
-      getCompletionContext: () => undefined,
-      onRequest,
-    });
-
-    expect(source(contextFor("select "))).toBeNull();
-    expect(onRequest).not.toHaveBeenCalled();
   });
 });
