@@ -6,8 +6,14 @@ use table_view_lib::commands::connection::AppState;
 use table_view_lib::commands::query::{validate_cancel_inputs, validate_query_inputs};
 use table_view_lib::error::AppError;
 use table_view_lib::models::{DatabaseType, FilterCondition, FilterOperator, QueryType};
-use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
+
+async fn advance_cancel_start_window(duration: Duration) {
+    tokio::time::pause();
+    tokio::task::yield_now().await;
+    tokio::time::advance(duration).await;
+    tokio::time::resume();
+}
 
 /// Integration test for SELECT query execution
 #[tokio::test]
@@ -166,8 +172,8 @@ async fn test_query_cancellation_works() {
             .await
     });
 
-    // Give the query a moment to start
-    sleep(Duration::from_millis(100)).await;
+    // Give the query a deterministic virtual start window.
+    advance_cancel_start_window(Duration::from_millis(100)).await;
 
     // Cancel the query
     cancel_token.cancel();
@@ -471,8 +477,8 @@ async fn test_cancellation_token_aborts_select() {
             .await
     });
 
-    // Let the query start, then cancel
-    sleep(Duration::from_millis(50)).await;
+    // Let the query start, then cancel without burning wall-clock time.
+    advance_cancel_start_window(Duration::from_millis(50)).await;
     cancel_token.cancel();
 
     let outcome = handle.await.expect("task should join");
@@ -994,7 +1000,7 @@ async fn test_query_table_data_cancel_token_interrupts_in_flight_raw_where() {
             .await
     });
 
-    sleep(Duration::from_millis(100)).await;
+    advance_cancel_start_window(Duration::from_millis(100)).await;
     let wait_start = Instant::now();
     cancel_token.cancel();
 

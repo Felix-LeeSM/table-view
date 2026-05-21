@@ -46,7 +46,10 @@ async fn mysql_cancel_query_terminates_sleep_within_budget() {
         let pool = victim_pool.clone();
         tokio::spawn(async move { sqlx::query("SELECT SLEEP(60)").execute(&pool).await })
     };
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::pause();
+    tokio::task::yield_now().await;
+    tokio::time::advance(Duration::from_millis(100)).await;
+    tokio::time::resume();
 
     let cancel_start = Instant::now();
     adapter

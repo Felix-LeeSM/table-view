@@ -2107,7 +2107,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
         }) => {
           inflight += 1;
           if (inflight > maxConcurrent) maxConcurrent = inflight;
-          await new Promise<void>((r) => setTimeout(r, 0));
+          await Promise.resolve();
           inflight -= 1;
           return {
             sql: `ALTER TABLE "public"."orders" ADD CONSTRAINT "${req.constraint_name}" ${req.definition.type.toUpperCase()}`,

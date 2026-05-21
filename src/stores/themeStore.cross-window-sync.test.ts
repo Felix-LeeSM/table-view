@@ -107,13 +107,11 @@ import { THEME_STORAGE_KEY, DEFAULT_THEME_ID } from "@lib/themeBoot";
 // 등록되었음을 확인한다. 50ms 안에 등록 안 되면 명시적 실패 — 회귀 시
 // silent timeout 대신 즉각 노출.
 async function waitForBridgeAttach(): Promise<void> {
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 5; i++) {
+    await Promise.resolve();
     if ((bus.get("theme-sync")?.size ?? 0) > 0) return;
-    await new Promise((r) => setTimeout(r, 1));
   }
-  throw new Error(
-    "theme-sync bridge attach did not register a listener within 50ms",
-  );
+  throw new Error("theme-sync bridge attach did not register a listener");
 }
 
 beforeEach(async () => {
