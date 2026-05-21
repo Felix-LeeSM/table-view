@@ -174,6 +174,31 @@ async fn query_table_data_rejects_raw_where_semicolon() {
 }
 
 #[tokio::test]
+async fn query_table_data_rejects_raw_where_union_tail() {
+    let (_dir, adapter) = connected_adapter().await;
+
+    let result = adapter
+        .query_table_data(
+            "main",
+            "users",
+            1,
+            10,
+            None,
+            None,
+            Some("1 = 1 UNION SELECT password FROM users"),
+            None,
+        )
+        .await;
+
+    match result {
+        Err(AppError::Validation(message)) => {
+            assert!(message.contains("single boolean expression"))
+        }
+        other => panic!("Expected raw where validation error, got: {:?}", other),
+    }
+}
+
+#[tokio::test]
 async fn query_table_data_pre_cancel_short_circuits_before_pool_lookup() {
     let adapter = SqliteAdapter::new();
     let token = CancellationToken::new();

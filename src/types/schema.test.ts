@@ -95,6 +95,11 @@ describe("validateRawSql", () => {
     expect(validateRawSql("id = 1 AND DROP")).toBeNull();
   });
 
+  it("allows identifiers that start with dangerous keyword text", () => {
+    expect(validateRawSql("updated_at IS NOT NULL")).toBeNull();
+    expect(validateRawSql("drop_count > 0")).toBeNull();
+  });
+
   it("semicolon check takes priority over dangerous keyword check", () => {
     // Has semicolon → semicolon error, not dangerous keyword error
     expect(validateRawSql("DROP TABLE users;")).toBe(

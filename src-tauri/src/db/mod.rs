@@ -15,6 +15,7 @@ pub mod active;
 pub mod mongodb;
 pub mod mysql;
 pub mod postgres;
+pub(crate) mod raw_where;
 pub mod sqlite;
 pub mod traits;
 pub mod types;

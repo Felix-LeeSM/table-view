@@ -42,6 +42,9 @@ Backend 변경은 Tauri command / state / DB adapter contract 를 깨지 않는 
 - DDL/destructive command 는 request-shaped struct + `preview_only` 를
   우선하고, preview 와 execute 가 같은 SQL builder 를 공유하게 한다.
   execute branch 는 가능한 한 transaction 으로 감싼다.
+- 사용자 입력 SQL fragment (`raw_where` 등) 는 semicolon/prefix blocklist 에
+  의존하지 말고 DB dialect parser/AST 로 단일 expression/statement 형태를
+  검증한다. 기존 에러 copy 호환이 필요하면 parser 검증 앞의 narrow guard 로만 둔다.
 - Public Tauri/store-facing wire structs default to
   `#[serde(rename_all = "camelCase")]`. Legacy restore/import compatibility is
   explicit via `#[serde(alias = "...")]`, `#[serde(default)]`, or a documented

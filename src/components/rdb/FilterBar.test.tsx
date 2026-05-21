@@ -239,6 +239,22 @@ describe("FilterBar", () => {
     expect(onApply).not.toHaveBeenCalled();
   });
 
+  it("allows raw SQL identifiers that start with dangerous keyword text", async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    renderFilterBar({
+      filterMode: "raw",
+      rawSql: "updated_at IS NOT NULL",
+      onApply,
+    });
+
+    await user.click(screen.getByText("Apply"));
+    expect(
+      screen.queryByText(/must not start with UPDATE/),
+    ).not.toBeInTheDocument();
+    expect(onApply).toHaveBeenCalledTimes(1);
+  });
+
   // 14. Close button calls onClose
   it("calls onClose when close button is clicked", async () => {
     const user = userEvent.setup();
