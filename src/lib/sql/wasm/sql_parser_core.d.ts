@@ -1,6 +1,20 @@
 /* tslint:disable */
 /* eslint-disable */
 
+export function complete_sql(
+  text: string,
+  cursor_utf16: number,
+  cursor_utf8: number,
+  dialect: string,
+  shell: string,
+  catalog_revision: string,
+  keywords: string,
+  vocabulary_functions: string,
+  objects: string,
+  columns: string,
+  catalog_functions: string,
+): any;
+
 /**
  * Lazily called by `src/lib/sql/sqlAst.ts`. Returns a `JsValue`
  * representing the `ParseResult` tagged union. Errors are *not*
@@ -18,6 +32,28 @@ export type InitInput =
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  readonly complete_sql: (
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    e: number,
+    f: number,
+    g: number,
+    h: number,
+    i: number,
+    j: number,
+    k: number,
+    l: number,
+    m: number,
+    n: number,
+    o: number,
+    p: number,
+    q: number,
+    r: number,
+    s: number,
+    t: number,
+  ) => number;
   readonly parse_sql: (a: number, b: number) => number;
   readonly __wbindgen_export: (a: number, b: number) => number;
   readonly __wbindgen_export2: (

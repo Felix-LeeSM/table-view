@@ -1,0 +1,102 @@
+use super::{
+    complete_sql, CompletionCursorOffsets, SqlCompletionCatalogColumn,
+    SqlCompletionCatalogFunction, SqlCompletionCatalogObject, SqlCompletionCatalogSnapshot,
+    SqlCompletionCoreResult, SqlCompletionRequest, SqlCompletionVocabulary,
+};
+
+#[allow(clippy::too_many_arguments)]
+pub fn complete_sql_compact(
+    text: &str,
+    cursor_utf16: usize,
+    cursor_utf8: usize,
+    dialect: &str,
+    shell: &str,
+    catalog_revision: &str,
+    keywords: &str,
+    vocabulary_functions: &str,
+    objects: &str,
+    columns: &str,
+    catalog_functions: &str,
+) -> SqlCompletionCoreResult {
+    complete_sql(SqlCompletionRequest {
+        text: text.to_string(),
+        cursor: CompletionCursorOffsets {
+            utf16: cursor_utf16,
+            utf8: cursor_utf8,
+        },
+        dialect: dialect.to_string(),
+        shell: shell.to_string(),
+        vocabulary: SqlCompletionVocabulary {
+            keywords: split_lines(keywords),
+            functions: split_lines(vocabulary_functions),
+        },
+        catalog: SqlCompletionCatalogSnapshot {
+            revision: catalog_revision.to_string(),
+            objects: parse_objects(objects),
+            columns: parse_columns(columns),
+            functions: parse_functions(catalog_functions),
+        },
+    })
+}
+
+fn split_lines(input: &str) -> Vec<String> {
+    input
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn parse_objects(input: &str) -> Vec<SqlCompletionCatalogObject> {
+    input
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            Some(SqlCompletionCatalogObject {
+                kind: fields.next()?.to_string(),
+                schema: fields.next()?.to_string(),
+                name: fields.next()?.to_string(),
+                qualified_name: fields.next()?.to_string(),
+            })
+        })
+        .collect()
+}
+
+fn parse_columns(input: &str) -> Vec<SqlCompletionCatalogColumn> {
+    input
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            Some(SqlCompletionCatalogColumn {
+                schema: fields.next()?.to_string(),
+                table: fields.next()?.to_string(),
+                name: fields.next()?.to_string(),
+                qualified_table_name: fields.next()?.to_string(),
+            })
+        })
+        .collect()
+}
+
+fn parse_functions(input: &str) -> Vec<SqlCompletionCatalogFunction> {
+    input
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            Some(SqlCompletionCatalogFunction {
+                schema: fields.next()?.to_string(),
+                name: fields.next()?.to_string(),
+                qualified_name: fields.next()?.to_string(),
+                arguments: empty_to_none(fields.next()?),
+                return_type: empty_to_none(fields.next()?),
+            })
+        })
+        .collect()
+}
+
+fn empty_to_none(value: &str) -> Option<String> {
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
+}

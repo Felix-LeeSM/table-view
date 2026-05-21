@@ -21,20 +21,28 @@
 // distinction; the lint-level here just documents intent.
 
 pub mod ast;
+pub mod completion;
 pub mod lexer;
 pub mod parser;
 
 pub use ast::{
-    AlterAction, AlterTableStatement, CascadeBehavior, CaseWhen, ColumnRef, Columns, CommentStatement,
-    CommentTarget, CommentText, CompareOp, CopyDirection, CopySource, CopyStatement, CopyTarget,
-    CteDefinition, DeleteStatement, DropObjectType, DropStatement, ExplainInner, ExplainOption,
-    ExplainStatement, FrameBound, FrameUnit, FromItem, FromSource, GrantObject, GrantStatement,
-    InsertSource, InsertStatement, InsertValue, JoinDescriptor, JoinPredicate, LikeCase,
-    LimitClause, NullsPlacement, OnConflict, OrderDirection, OrderingItem, OverClause, ParseError,
-    ParseErrorKind, ParseResult, PrivilegeTag, RevokeStatement, RoleRef, SelectExpr,
-    SelectListItem, SelectStatement, SetOperationEntry, SetOperator, SetScope, SetStatement,
-    SetValue, ShowStatement, ShowTarget, SqlLiteral, TruncateStatement, UpdateAssignment,
-    UpdateStatement, WhereExpr, WindowArgument, WindowFrame, WithInner, WithStatement,
+    AlterAction, AlterTableStatement, CascadeBehavior, CaseWhen, ColumnRef, Columns,
+    CommentStatement, CommentTarget, CommentText, CompareOp, CopyDirection, CopySource,
+    CopyStatement, CopyTarget, CteDefinition, DeleteStatement, DropObjectType, DropStatement,
+    ExplainInner, ExplainOption, ExplainStatement, FrameBound, FrameUnit, FromItem, FromSource,
+    GrantObject, GrantStatement, InsertSource, InsertStatement, InsertValue, JoinDescriptor,
+    JoinPredicate, LikeCase, LimitClause, NullsPlacement, OnConflict, OrderDirection, OrderingItem,
+    OverClause, ParseError, ParseErrorKind, ParseResult, PrivilegeTag, RevokeStatement, RoleRef,
+    SelectExpr, SelectListItem, SelectStatement, SetOperationEntry, SetOperator, SetScope,
+    SetStatement, SetValue, ShowStatement, ShowTarget, SqlLiteral, TruncateStatement,
+    UpdateAssignment, UpdateStatement, WhereExpr, WindowArgument, WindowFrame, WithInner,
+    WithStatement,
+};
+pub use completion::{
+    complete_sql, complete_sql_compact, CompletionCursorOffsets, CompletionItem,
+    CompletionReplaceRange, CompletionResultMetadata, SqlCompletionCatalogColumn,
+    SqlCompletionCatalogFunction, SqlCompletionCatalogObject, SqlCompletionCatalogSnapshot,
+    SqlCompletionCoreResult, SqlCompletionRequest, SqlCompletionVocabulary,
 };
 pub use parser::parse;
 
@@ -73,6 +81,37 @@ mod wasm_bridge {
         // to a JS-side `null` so the TS facade can detect + report,
         // rather than panicking the WASM module (which would kill
         // the page).
+        serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[wasm_bindgen]
+    pub fn complete_sql(
+        text: &str,
+        cursor_utf16: usize,
+        cursor_utf8: usize,
+        dialect: &str,
+        shell: &str,
+        catalog_revision: &str,
+        keywords: &str,
+        vocabulary_functions: &str,
+        objects: &str,
+        columns: &str,
+        catalog_functions: &str,
+    ) -> JsValue {
+        let result = super::complete_sql_compact(
+            text,
+            cursor_utf16,
+            cursor_utf8,
+            dialect,
+            shell,
+            catalog_revision,
+            keywords,
+            vocabulary_functions,
+            objects,
+            columns,
+            catalog_functions,
+        );
         serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL)
     }
 }

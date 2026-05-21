@@ -47,4 +47,4 @@ strip = true
 # so newer rustc-emitted bulk-memory opcodes (`memory.fill` / `memory.copy`)
 # don't fail the bundled `wasm-opt` validator. Keep `-Oz` (size).
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-Oz", "--enable-bulk-memory"]
+wasm-opt = ["-Oz", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
