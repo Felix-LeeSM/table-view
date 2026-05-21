@@ -343,6 +343,18 @@ run_case \
   'MATCH:git checkout|upstream/main|memory/workflow/git-policy/memory.md'
 
 run_case \
+  "case-418-4b2: git reset origin/main → block" \
+  1 \
+  '{"tool_input":{"command":"git reset origin/main"}}' \
+  'MATCH:git reset|origin/main|memory/workflow/git-policy/memory.md'
+
+run_case \
+  "case-418-4b3: git reset upstream/main → block" \
+  1 \
+  '{"tool_input":{"command":"git reset upstream/main"}}' \
+  'MATCH:git reset|upstream/main|memory/workflow/git-policy/memory.md'
+
+run_case \
   "case-418-4c: git checkout -b scratch origin/main → allow" \
   0 \
   '{"tool_input":{"command":"git checkout -b scratch origin/main"}}' \
