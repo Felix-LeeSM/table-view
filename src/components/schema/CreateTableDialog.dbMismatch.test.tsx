@@ -9,7 +9,7 @@
 // 단일 surface 의 mismatch 경로를 박제 — DDL 11 commands 중 가장
 // 두꺼운 wrapper.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
@@ -43,6 +43,10 @@ beforeEach(() => {
     executeQueryDryRun: vi.fn(() => Promise.resolve([])),
     cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
   });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 vi.mock("@lib/toast", () => ({
@@ -148,6 +152,7 @@ describe("CreateTableDialog — DbMismatch (Sprint 271c)", () => {
   });
 
   it("non-mismatch preview error keeps catch silent (no sync, no toast)", async () => {
+    vi.useFakeTimers();
     mockCreateTablePlan.mockRejectedValueOnce(new Error("Connection refused"));
 
     render(
@@ -170,13 +175,11 @@ describe("CreateTableDialog — DbMismatch (Sprint 271c)", () => {
     const typeInput = within(columnsPanel).getAllByRole("combobox")[0]!;
     fireEvent.change(typeInput, { target: { value: "integer" } });
 
-    await waitFor(() => {
-      expect(mockCreateTablePlan).toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
     });
 
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
+    expect(mockCreateTablePlan).toHaveBeenCalled();
 
     expect(verifyActiveDbMock).not.toHaveBeenCalled();
     expect(toastWarningMock).not.toHaveBeenCalled();

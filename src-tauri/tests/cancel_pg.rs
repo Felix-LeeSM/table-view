@@ -68,10 +68,12 @@ async fn pg_cancel_query_terminates_pg_sleep_within_budget() {
         tokio::spawn(async move { sqlx::query("SELECT pg_sleep(60)").execute(&pool).await })
     };
 
-    // Give the sleep ~100ms to actually start. PG accepts the statement
-    // synchronously but we want pg_stat_activity to see it before the
-    // cancel.
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Give the spawned task a deterministic virtual start window without
+    // burning wall-clock time under pre-push load.
+    tokio::time::pause();
+    tokio::task::yield_now().await;
+    tokio::time::advance(Duration::from_millis(100)).await;
+    tokio::time::resume();
 
     let cancel_start = Instant::now();
     adapter

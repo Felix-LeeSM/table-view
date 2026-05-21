@@ -14,7 +14,7 @@
 // 하고 나머지 sync 경로는 production code 가 실제 실행 — toast +
 // connectionStore.setActiveDb side-effect 로 end-to-end 단언.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
@@ -45,6 +45,10 @@ beforeEach(() => {
     executeQueryDryRun: vi.fn(() => Promise.resolve([])),
     cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
   });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 vi.mock("@lib/toast", () => ({
@@ -140,6 +144,7 @@ describe("DropTableDialog — DbMismatch (Sprint 271c)", () => {
   });
 
   it("non-mismatch preview error keeps catch silent (no sync, no toast)", async () => {
+    vi.useFakeTimers();
     mockDropTableRequest.mockRejectedValueOnce(new Error("Connection refused"));
 
     render(
@@ -156,14 +161,11 @@ describe("DropTableDialog — DbMismatch (Sprint 271c)", () => {
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
 
-    await waitFor(() => {
-      expect(mockDropTableRequest).toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
     });
 
-    // Wait for catch to settle.
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
+    expect(mockDropTableRequest).toHaveBeenCalled();
 
     // Non-DbMismatch error keeps the recovery silent (no verifyActiveDb,
     // no toast). This is the silent-regression guard ensuring the

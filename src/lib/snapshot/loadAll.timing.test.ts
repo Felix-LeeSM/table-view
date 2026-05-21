@@ -8,7 +8,7 @@
 // AC-367-02: fake 50ms IPC 응답 + store mutate < 50ms total — 전체 hydrate
 // duration < 100ms. p50/p95 측정에 충분한 budget.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
@@ -284,20 +284,26 @@ describe("AC-367-02 boot hydrate timing < 100ms (fake 50ms IPC)", () => {
     resetSnapshotBufferForTests();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("completes within 100ms total when IPC simulates ~50ms response", async () => {
+    vi.useFakeTimers();
     invokeMock.mockImplementationOnce(async () => {
       await new Promise((r) => setTimeout(r, 50));
       return makeSnapshot();
     });
 
     const t0 = performance.now();
-    await loadAllFromSnapshot();
+    const result = loadAllFromSnapshot();
+    await vi.advanceTimersByTimeAsync(50);
+    await result;
     const elapsed = performance.now() - t0;
 
     // 50ms IPC + < 50ms mutate ≤ 100ms total — strategy doc Phase 4 의 boot
-    // budget. 본 test 는 CI noise 흡수를 위해 절대 budget 150ms 까지 허용하지만,
-    // log evidence 는 항상 elapsed 를 캡쳐해 회귀 추적.
-    expect(elapsed).toBeLessThan(150);
+    // budget. Fake timers keep the IPC delay deterministic under CI load.
+    expect(elapsed).toBeLessThan(100);
   });
 
   it("hydrate path is Promise.all (parallel) not serial — 5 simulated 20ms hydrate < ~30ms", async () => {

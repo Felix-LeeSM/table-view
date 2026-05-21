@@ -39,16 +39,16 @@ describe("bootInstrumentation", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   // Reason: AC-175-01-02 — every named milestone must be observable via
   // `performance.getEntriesByName(name)`. (2026-04-30)
   it("records each BOOT_MILESTONES name as a performance entry", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     markT0();
-    // Yield a tick so the wall-clock advances past T0 — keeps the deltas
-    // strictly positive on fast hosts where the loop below would otherwise
-    // record entries within the same `performance.now()` quantum.
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    // Advance virtual time so deltas stay positive without wall-clock sleep.
+    await vi.advanceTimersByTimeAsync(1);
     markBootMilestone("theme:applied");
     markBootMilestone("session:initialized");
     // Sprint 367 (Phase 4) — listener pre-register milestone inserted

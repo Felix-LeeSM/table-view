@@ -8,7 +8,7 @@
 // DbMismatch (Sprint 271c wire format) 에 대해 syncMismatchedActiveDb +
 // Sprint 269 passive Retry toast 가 emit 된다.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   render,
@@ -31,6 +31,10 @@ beforeEach(() => {
     executeQueryDryRun: vi.fn(() => Promise.resolve([])),
     cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
   });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 vi.mock("@lib/toast", () => ({
@@ -224,6 +228,7 @@ describe("CreateTriggerDialog — Sprint 273", () => {
   });
 
   it("Apply stays disabled when events selection is empty", async () => {
+    vi.useFakeTimers();
     renderDialog();
     const insertCheckbox = screen.getByRole("checkbox", {
       name: "Event INSERT",
@@ -242,7 +247,7 @@ describe("CreateTriggerDialog — Sprint 273", () => {
     // Even after a long wait, mockCreateTrigger must not fire because
     // canPreview is false (events.length === 0).
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      await vi.advanceTimersByTimeAsync(400);
     });
 
     expect(mockCreateTrigger).not.toHaveBeenCalled();
