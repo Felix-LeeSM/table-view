@@ -129,7 +129,9 @@ pre-push:
     4_cargo-deny:
       # license / advisory / banned crate 게이트. deny.toml 참조.
       tags: security rust
-      run: cd src-tauri && cargo deny check
+      run: |
+        unset $(git rev-parse --local-env-vars)
+        cd src-tauri && cargo deny check
     5_cargo-machete:
       # 사용되지 않는 cargo 의존성 검출. 가벼움 (~5s).
       tags: lint rust

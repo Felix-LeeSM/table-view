@@ -80,6 +80,11 @@ else
     exit 1
   fi
   git worktree add -b "$BRANCH" "$WORKTREE_PATH" "origin/$BASE"
+  # `git worktree add -b <branch> origin/main` configures the new local branch to
+  # track origin/main. Keep new branches independent until their own remote ref
+  # exists; otherwise hook fallbacks and status output can reason about the wrong
+  # upstream.
+  git -C "$WORKTREE_PATH" branch --unset-upstream "$BRANCH" >/dev/null 2>&1 || true
 fi
 
 # hook 활성화 (lefthook install 은 .git/hooks 가 worktree 별로 분리됨)
