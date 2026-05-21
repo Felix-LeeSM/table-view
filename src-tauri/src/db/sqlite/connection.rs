@@ -15,7 +15,7 @@ use crate::models::{ColumnCategory, ColumnInfo, ConnectionConfig, TableInfo};
 const SQLITE_POOL_MAX_CONNECTIONS: u32 = 5;
 const SQLITE_POOL_ACQUIRE_TIMEOUT_MAX_SECS: u64 = 30;
 const SQLITE_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS: u32 = 300;
-const SQLITE_NAMESPACE: &str = "main";
+pub(super) const SQLITE_NAMESPACE: &str = "main";
 
 #[derive(Default)]
 pub struct SqlitePoolState {
@@ -208,7 +208,7 @@ impl SqliteAdapter {
         guard.database_path.clone()
     }
 
-    async fn active_pool(&self) -> Result<SqlitePool, AppError> {
+    pub(super) async fn active_pool(&self) -> Result<SqlitePool, AppError> {
         let guard = self.inner.lock().await;
         guard
             .pool
@@ -308,7 +308,7 @@ impl SqliteAdapter {
     }
 }
 
-fn validate_namespace(namespace: &str) -> Result<(), AppError> {
+pub(super) fn validate_namespace(namespace: &str) -> Result<(), AppError> {
     if namespace.is_empty() || namespace == SQLITE_NAMESPACE {
         Ok(())
     } else {
@@ -318,7 +318,7 @@ fn validate_namespace(namespace: &str) -> Result<(), AppError> {
     }
 }
 
-fn quote_identifier(ident: &str) -> String {
+pub(super) fn quote_identifier(ident: &str) -> String {
     format!("\"{}\"", ident.replace('"', "\"\""))
 }
 
@@ -347,7 +347,7 @@ async fn sqlite_foreign_keys(
     Ok(map)
 }
 
-fn sqlite_column_category(data_type: &str) -> ColumnCategory {
+pub(super) fn sqlite_column_category(data_type: &str) -> ColumnCategory {
     let normalized = data_type.trim().to_ascii_lowercase();
     if normalized.is_empty() {
         return ColumnCategory::Unknown;
