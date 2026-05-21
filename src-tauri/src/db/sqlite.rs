@@ -1,12 +1,12 @@
 //! SQLite adapter entrypoint.
 //!
-//! SQLite adapter entrypoint.
-//!
 //! SQLite currently supports connection lifecycle, explicit file creation,
-//! baseline catalog reads, table preview, and single-statement query execution.
-//! Batch execution, dry-run, DDL, export, and richer PostgreSQL parity surfaces
-//! remain explicit `Unsupported` until their feature-order slices land.
+//! baseline catalog reads, table preview, single-statement query execution,
+//! transactional batch execution, and dry-run. DDL, export, and richer
+//! PostgreSQL parity surfaces remain explicit `Unsupported` until their
+//! feature-order slices land.
 
+mod batch;
 mod connection;
 mod queries;
 
@@ -103,6 +103,22 @@ impl RdbAdapter for SqliteAdapter {
         cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<RdbQueryResult, AppError>> + Send + 'a>> {
         Box::pin(async move { self.execute_query(sql, cancel).await })
+    }
+
+    fn execute_sql_batch<'a>(
+        &'a self,
+        statements: &'a [String],
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<RdbQueryResult>, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.execute_query_batch(statements, cancel).await })
+    }
+
+    fn dry_run_sql_batch<'a>(
+        &'a self,
+        statements: &'a [String],
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<RdbQueryResult>, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.dry_run_query_batch(statements, cancel).await })
     }
 
     #[allow(clippy::too_many_arguments)]

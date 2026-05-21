@@ -149,11 +149,9 @@ pub trait RdbAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>>;
 
-    /// Sprint 183 — execute a list of statements inside a single
-    /// transaction (BEGIN/COMMIT/ROLLBACK). All-or-nothing: a failure on
-    /// statement K rolls back statements 1..K-1. The default impl returns
-    /// `Unsupported` so adapters that have not yet wired transactional
-    /// commit (SQLite/MySQL placeholders) still type-check.
+    /// Execute statements inside one transaction. A failure on statement K
+    /// rolls back statements 1..K-1. Adapters that have not wired
+    /// transactional commit inherit `Unsupported`.
     fn execute_sql_batch<'a>(
         &'a self,
         _statements: &'a [String],
@@ -166,27 +164,11 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 247 (ADR 0022 Phase 3) — dry-run a list of statements inside
-    /// a single transaction without committing. Semantics: `BEGIN; <run
-    /// each statement>; ROLLBACK;`. The returned `Vec<RdbQueryResult>`
-    /// surfaces per-statement statistics (`total_count` = `rows_affected`,
-    /// `execution_time_ms`) just like `execute_sql_batch`, but the
-    /// transaction is unconditionally rolled back so the database is left
-    /// in its pre-call state.
-    ///
-    /// Used by the destructive-statement confirm dialog (Sprint 247) to
-    /// preview the impact of a commit before the user clicks Yes/No. The
-    /// failure message shape mirrors `execute_sql_batch` (`"statement K
-    /// of N failed: <msg>"`) so the preview pane and the eventual commit
-    /// path produce identical error copy.
-    ///
-    /// Default impl: `AppError::Unsupported`. PG overrides this in
-    /// `db/postgres/queries.rs::execute_query_dry_run` (Sprint 247);
-    /// MySQL/SQLite inherit the default until a dialect-specific
-    /// implementation lands. Mongo adapters are NOT expected to call
-    /// this method — the frontend hook (`useDryRun`) routes
-    /// `paradigm === "document"` to a disclaimer state without invoking
-    /// IPC.
+    /// Execute statements inside one transaction and roll back on success.
+    /// This gives destructive-change preview the same rows-affected stats
+    /// and statement-indexed errors as the commit path without persisting
+    /// changes. Dialect adapters override this when rollback semantics are
+    /// reliable; document adapters are routed away before this method.
     fn dry_run_sql_batch<'a>(
         &'a self,
         _statements: &'a [String],
