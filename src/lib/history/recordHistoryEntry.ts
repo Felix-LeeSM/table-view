@@ -80,8 +80,11 @@ function toDocumentQueryMode(mode: QueryMode | undefined): DocumentQueryMode {
     mode === "insertMany" ||
     mode === "updateOne" ||
     mode === "updateMany" ||
+    mode === "replaceOne" ||
     mode === "deleteOne" ||
     mode === "deleteMany" ||
+    mode === "createIndex" ||
+    mode === "dropIndex" ||
     mode === "bulkWrite"
   ) {
     return mode;

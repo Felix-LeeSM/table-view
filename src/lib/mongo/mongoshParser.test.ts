@@ -12,6 +12,7 @@ import {
   type ParsedMongoshCall,
   type ParsedMongoshError,
 } from "./mongoshParser";
+import { MONGOSH_DB_METHODS } from "./mongoAutocomplete";
 
 function expectSuccess(
   result: ParsedMongoshCall | ParsedMongoshError,
@@ -32,7 +33,7 @@ function expectError(
 }
 
 describe("MONGOSH_METHOD_WHITELIST", () => {
-  it("exposes the 13 frozen mongosh methods as the single source of truth", () => {
+  it("exposes the executable mongosh methods as the dispatch source of truth", () => {
     expect(MONGOSH_METHOD_WHITELIST).toEqual([
       "find",
       "findOne",
@@ -44,10 +45,22 @@ describe("MONGOSH_METHOD_WHITELIST", () => {
       "insertMany",
       "updateOne",
       "updateMany",
+      "replaceOne",
       "deleteOne",
       "deleteMany",
+      "createIndex",
+      "dropIndex",
       "bulkWrite",
     ]);
+  });
+
+  it("covers every db.<collection> autocomplete method", () => {
+    const executable = new Set<string>(MONGOSH_METHOD_WHITELIST);
+    const autocompleteOnly = MONGOSH_DB_METHODS.map((m) => m.label).filter(
+      (label) => !executable.has(label),
+    );
+
+    expect(autocompleteOnly).toEqual([]);
   });
 });
 
@@ -163,6 +176,19 @@ describe("parseMongoshExpression — happy path methods (AC-02)", () => {
     expect(result.args).toEqual([{ active: true }, { $inc: { n: 1 } }]);
   });
 
+  it("parses db.users.replaceOne({email}, replacement, {upsert})", () => {
+    const result = parseMongoshExpression(
+      'db.users.replaceOne({email: "a@example.com"}, {email: "a@example.com", active: true}, {upsert: true})',
+    );
+    expectSuccess(result);
+    expect(result.method).toBe("replaceOne");
+    expect(result.args).toEqual([
+      { email: "a@example.com" },
+      { email: "a@example.com", active: true },
+      { upsert: true },
+    ]);
+  });
+
   it('parses db.users.deleteOne({_id: "x"})', () => {
     const result = parseMongoshExpression('db.users.deleteOne({_id: "x"})');
     expectSuccess(result);
@@ -175,6 +201,25 @@ describe("parseMongoshExpression — happy path methods (AC-02)", () => {
     expectSuccess(result);
     expect(result.method).toBe("deleteMany");
     expect(result.args).toEqual([{ old: true }]);
+  });
+
+  it("parses db.users.createIndex({email: 1}, {unique: true})", () => {
+    const result = parseMongoshExpression(
+      'db.users.createIndex({email: 1}, {name: "email_1", unique: true})',
+    );
+    expectSuccess(result);
+    expect(result.method).toBe("createIndex");
+    expect(result.args).toEqual([
+      { email: 1 },
+      { name: "email_1", unique: true },
+    ]);
+  });
+
+  it('parses db.users.dropIndex("email_1")', () => {
+    const result = parseMongoshExpression('db.users.dropIndex("email_1")');
+    expectSuccess(result);
+    expect(result.method).toBe("dropIndex");
+    expect(result.args).toEqual(["email_1"]);
   });
 
   it("parses db.users.bulkWrite([...]) with insertOne + updateOne sub-ops", () => {

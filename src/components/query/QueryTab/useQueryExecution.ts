@@ -19,7 +19,10 @@ import {
   deleteDocument,
   deleteMany,
   bulkWriteDocuments,
+  createMongoIndex,
+  dropMongoIndex,
   runMongoCommand,
+  type CreateMongoIndexRequest,
 } from "@lib/tauri";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
@@ -54,6 +57,8 @@ import {
   dispatchDbMutationHint,
   idOnlyFilter,
   extractDollarSet,
+  buildCreateMongoIndexRequest,
+  parseReplaceOneOptions,
 } from "./queryHelpers";
 
 // Sprint 271a — `syncMismatchedActiveDb` extracted to
@@ -1148,6 +1153,70 @@ export function useQueryExecution({
         );
         return;
       }
+      if (parsed.method === "replaceOne") {
+        const filterArg = parsed.args[0];
+        const replacementArg = parsed.args[1];
+        if (!isRecord(filterArg) || !isRecord(replacementArg)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "replaceOne() requires a filter object and a replacement object.",
+          });
+          return;
+        }
+        if (Object.keys(replacementArg).some((key) => key.startsWith("$"))) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "replaceOne() replacement must be a document, not an update document.",
+          });
+          return;
+        }
+        const options = parseReplaceOneOptions(parsed.args[2]);
+        if (!options.ok) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: options.error,
+          });
+          return;
+        }
+        const op: BulkWriteOp = {
+          op: "replaceOne",
+          filter: filterArg,
+          replacement: replacementArg,
+        };
+        if (options.upsert !== undefined) op.upsert = options.upsert;
+        const analysis = analyzeMongoOperation({
+          kind: "bulkWrite",
+          ops: [op],
+        });
+        const decision = safeModeGate.decide(analysis);
+        const runner = () =>
+          runReplaceOne(connectionId, database, collection, op, rawSql);
+        if (decision.action === "block") {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: decision.reason,
+          });
+          return;
+        }
+        if (decision.action === "confirm") {
+          pendingWriteRunnerRef.current = runner;
+          setPendingMongoConfirm({
+            pipeline: [],
+            reason: decision.reason,
+            previewLines: [rawSql],
+          });
+          return;
+        }
+        if (analysis.severity === "warn") {
+          pendingWriteRunnerRef.current = runner;
+          setPendingMongoWarn({ pipeline: [], previewLines: [rawSql] });
+          return;
+        }
+        await runner();
+        return;
+      }
       if (parsed.method === "bulkWrite") {
         const opsRaw = parsed.args[0];
         if (!Array.isArray(opsRaw)) {
@@ -1181,6 +1250,64 @@ export function useQueryExecution({
         if (analysis.severity === "warn") {
           pendingWriteRunnerRef.current = runner;
           setPendingMongoWarn({ pipeline: [], previewLines: [rawSql] });
+          return;
+        }
+        await runner();
+        return;
+      }
+      if (parsed.method === "createIndex") {
+        const requestResult = buildCreateMongoIndexRequest(
+          parsed.args[0],
+          parsed.args[1],
+        );
+        if (!requestResult.ok) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: requestResult.error,
+          });
+          return;
+        }
+        await runCreateIndex(
+          connectionId,
+          database,
+          collection,
+          requestResult.request,
+          rawSql,
+        );
+        return;
+      }
+      if (parsed.method === "dropIndex") {
+        const nameArg = parsed.args[0];
+        if (typeof nameArg !== "string" || nameArg.trim().length === 0) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "dropIndex() requires a non-empty index name string.",
+          });
+          return;
+        }
+        const indexName = nameArg.trim();
+        const analysis = {
+          kind: "mongo-drop" as const,
+          severity: "danger" as const,
+          reasons: ["MongoDB dropIndex (index removal)"],
+        };
+        const decision = safeModeGate.decide(analysis);
+        const runner = () =>
+          runDropIndex(connectionId, database, collection, indexName, rawSql);
+        if (decision.action === "block") {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: decision.reason,
+          });
+          return;
+        }
+        if (decision.action === "confirm") {
+          pendingWriteRunnerRef.current = runner;
+          setPendingMongoConfirm({
+            pipeline: [],
+            reason: decision.reason,
+            previewLines: [rawSql],
+          });
           return;
         }
         await runner();
@@ -1671,6 +1798,111 @@ export function useQueryExecution({
       });
     },
     [runWriteHelper],
+  );
+
+  const runReplaceOne = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      op: Extract<BulkWriteOp, { op: "replaceOne" }>,
+      rawSql: string,
+    ) => {
+      await runWriteHelper("replaceOne", rawSql, async () => {
+        const result: BulkWriteResult = await bulkWriteDocuments(
+          connectionId,
+          database,
+          collection,
+          [op],
+        );
+        return { kind: "bulkWrite", result };
+      });
+    },
+    [runWriteHelper],
+  );
+
+  const runMongoIndexHelper = useCallback(
+    async (
+      queryMode: "createIndex" | "dropIndex",
+      rawSql: string,
+      writer: () => Promise<string>,
+    ) => {
+      const queryId = `${tab.id}-${Date.now()}`;
+      const startTime = Date.now();
+      updateQueryState(tab.id, { status: "running", queryId });
+      try {
+        const indexName = await writer();
+        const queryResult: import("@/types/query").QueryResult = {
+          columns: [
+            { name: "operation", dataType: "string", category: "text" },
+            { name: "index", dataType: "string", category: "text" },
+          ],
+          rows: [[queryMode, indexName]],
+          totalCount: 1,
+          executionTimeMs: Date.now() - startTime,
+          queryType: "ddl",
+        };
+        completeQuery(tab.id, queryId, queryResult);
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "success",
+          queryMode,
+        });
+      } catch (err) {
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "error",
+          queryMode,
+        });
+      }
+    },
+    [tab.id, updateQueryState, completeQuery, failQuery, recordHistory],
+  );
+
+  const runCreateIndex = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      request: CreateMongoIndexRequest,
+      rawSql: string,
+    ) => {
+      await runMongoIndexHelper("createIndex", rawSql, async () => {
+        const result = await createMongoIndex(
+          connectionId,
+          database,
+          collection,
+          request,
+        );
+        return result.name;
+      });
+    },
+    [runMongoIndexHelper],
+  );
+
+  const runDropIndex = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      indexName: string,
+      rawSql: string,
+    ) => {
+      await runMongoIndexHelper("dropIndex", rawSql, async () => {
+        await dropMongoIndex(connectionId, database, collection, indexName);
+        return indexName;
+      });
+    },
+    [runMongoIndexHelper],
   );
 
   // Sprint 311 — distinct → list QueryResult (1col `value`, N rows).

@@ -41,8 +41,11 @@ export type DocumentQueryMode =
   | "insertMany"
   | "updateOne"
   | "updateMany"
+  | "replaceOne"
   | "deleteOne"
   | "deleteMany"
+  | "createIndex"
+  | "dropIndex"
   | "bulkWrite";
 
 /**

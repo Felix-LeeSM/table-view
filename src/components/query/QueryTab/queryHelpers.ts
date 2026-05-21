@@ -9,6 +9,7 @@ import { toast } from "@lib/toast";
 import type { Paradigm } from "@/types/connection";
 import type { QueryTab } from "@stores/workspaceStore";
 import { documentIdFromRow, type DocumentId } from "@/types/documentMutate";
+import type { CreateMongoIndexRequest, MongoIndexDirection } from "@lib/tauri";
 
 /**
  * `QueryTab` module-top helpers:
@@ -36,6 +37,203 @@ export function readDocumentContext(
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+type BuildCreateMongoIndexRequestResult =
+  | { ok: true; request: CreateMongoIndexRequest }
+  | { ok: false; error: string };
+
+const CREATE_INDEX_OPTION_KEYS = new Set([
+  "name",
+  "unique",
+  "sparse",
+  "expireAfterSeconds",
+  "partialFilterExpression",
+  "collation",
+]);
+
+const REPLACE_ONE_OPTION_KEYS = new Set(["upsert"]);
+
+function parseMongoIndexDirection(value: unknown): MongoIndexDirection | null {
+  if (value === 1 || value === "1" || value === "asc") return "asc";
+  if (value === -1 || value === "-1" || value === "desc") return "desc";
+  return null;
+}
+
+export function buildCreateMongoIndexRequest(
+  keysArg: unknown,
+  optionsArg: unknown,
+): BuildCreateMongoIndexRequestResult {
+  if (!isRecord(keysArg)) {
+    return { ok: false, error: "createIndex() keys must be an object." };
+  }
+
+  const fields: CreateMongoIndexRequest["fields"] = [];
+  for (const [rawName, rawDirection] of Object.entries(keysArg)) {
+    const name = rawName.trim();
+    const direction = parseMongoIndexDirection(rawDirection);
+    if (name.length === 0) {
+      return {
+        ok: false,
+        error: "createIndex() field name must not be empty.",
+      };
+    }
+    if (direction === null) {
+      return {
+        ok: false,
+        error: "createIndex() only supports asc/desc key specs (1 or -1).",
+      };
+    }
+    fields.push({ name, direction });
+  }
+  if (fields.length === 0) {
+    return { ok: false, error: "createIndex() requires at least one field." };
+  }
+
+  const request: CreateMongoIndexRequest = { fields };
+  if (optionsArg === undefined) return { ok: true, request };
+  if (!isRecord(optionsArg)) {
+    return { ok: false, error: "createIndex() options must be an object." };
+  }
+
+  const unsupported = Object.keys(optionsArg).filter(
+    (key) => !CREATE_INDEX_OPTION_KEYS.has(key),
+  );
+  if (unsupported.length > 0) {
+    return {
+      ok: false,
+      error: `createIndex() option '${unsupported[0]}' is not supported yet.`,
+    };
+  }
+
+  const name = optionsArg.name;
+  if (name !== undefined) {
+    if (typeof name !== "string") {
+      return {
+        ok: false,
+        error: "createIndex() option 'name' must be a string.",
+      };
+    }
+    const trimmed = name.trim();
+    if (trimmed.length > 0) request.name = trimmed;
+  }
+
+  const unique = optionsArg.unique;
+  if (unique !== undefined) {
+    if (typeof unique !== "boolean") {
+      return {
+        ok: false,
+        error: "createIndex() option 'unique' must be a boolean.",
+      };
+    }
+    if (unique) request.unique = true;
+  }
+
+  const sparse = optionsArg.sparse;
+  if (sparse !== undefined) {
+    if (typeof sparse !== "boolean") {
+      return {
+        ok: false,
+        error: "createIndex() option 'sparse' must be a boolean.",
+      };
+    }
+    if (sparse) request.sparse = true;
+  }
+
+  const expireAfterSeconds = optionsArg.expireAfterSeconds;
+  if (expireAfterSeconds !== undefined) {
+    if (
+      typeof expireAfterSeconds !== "number" ||
+      !Number.isInteger(expireAfterSeconds) ||
+      expireAfterSeconds < 0
+    ) {
+      return {
+        ok: false,
+        error:
+          "createIndex() option 'expireAfterSeconds' must be a non-negative integer.",
+      };
+    }
+    request.expireAfterSeconds = expireAfterSeconds;
+  }
+
+  const partialFilterExpression = optionsArg.partialFilterExpression;
+  if (partialFilterExpression !== undefined) {
+    if (!isRecord(partialFilterExpression)) {
+      return {
+        ok: false,
+        error:
+          "createIndex() option 'partialFilterExpression' must be an object.",
+      };
+    }
+    request.partialFilterExpression = partialFilterExpression;
+  }
+
+  const collation = optionsArg.collation;
+  if (collation !== undefined) {
+    if (!isRecord(collation) || typeof collation.locale !== "string") {
+      return {
+        ok: false,
+        error: "createIndex() option 'collation' must include a string locale.",
+      };
+    }
+    const locale = collation.locale.trim();
+    if (locale.length === 0) {
+      return {
+        ok: false,
+        error: "createIndex() option 'collation.locale' must not be empty.",
+      };
+    }
+    const strength = collation.strength;
+    if (strength !== undefined) {
+      if (
+        typeof strength !== "number" ||
+        !Number.isInteger(strength) ||
+        strength < 1 ||
+        strength > 5
+      ) {
+        return {
+          ok: false,
+          error: "createIndex() option 'collation.strength' must be 1..=5.",
+        };
+      }
+      request.collation = { locale, strength };
+    } else {
+      request.collation = { locale };
+    }
+  }
+
+  return { ok: true, request };
+}
+
+type ReplaceOneOptionsResult =
+  | { ok: true; upsert?: boolean }
+  | { ok: false; error: string };
+
+export function parseReplaceOneOptions(
+  optionsArg: unknown,
+): ReplaceOneOptionsResult {
+  if (optionsArg === undefined) return { ok: true };
+  if (!isRecord(optionsArg)) {
+    return { ok: false, error: "replaceOne() options must be an object." };
+  }
+  const unsupported = Object.keys(optionsArg).filter(
+    (key) => !REPLACE_ONE_OPTION_KEYS.has(key),
+  );
+  if (unsupported.length > 0) {
+    return {
+      ok: false,
+      error: `replaceOne() option '${unsupported[0]}' is not supported yet.`,
+    };
+  }
+  const upsert = optionsArg.upsert;
+  if (upsert === undefined) return { ok: true };
+  if (typeof upsert !== "boolean") {
+    return {
+      ok: false,
+      error: "replaceOne() option 'upsert' must be a boolean.",
+    };
+  }
+  return { ok: true, upsert };
 }
 
 /**
