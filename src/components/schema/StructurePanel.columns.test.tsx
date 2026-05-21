@@ -16,7 +16,7 @@
 // assertions. The dialog internals themselves are exhaustively covered
 // by `AddColumnDialog.test.tsx` / `DropColumnDialog.test.tsx`.
 // Date: 2026-05-07.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import StructurePanel from "./StructurePanel";
 import * as tauri from "@lib/tauri";
@@ -59,6 +59,10 @@ describe("StructurePanel", () => {
       sql: 'ALTER TABLE "public"."users" DROP COLUMN "name"',
     });
     vi.spyOn(tauri, "listPostgresTypes").mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   // =======================================================================
@@ -687,6 +691,7 @@ describe("StructurePanel", () => {
   // a successful drop commit.
   // -----------------------------------------------------------------------
   it("[AC-236-08] DropColumnDialog commit triggers getTableColumns refresh", async () => {
+    vi.useFakeTimers();
     // Sprint 245 (ADR 0022 Phase 1) — pin Safe Mode to `warn` so the
     // destructive DROP COLUMN flows through. The default `strict` mode
     // would now open the M.1 non-production confirm dialog and short-
@@ -715,7 +720,7 @@ describe("StructurePanel", () => {
     // called at least once with previewOnly=true before clicking Apply.
     const dropColumnSpy = vi.mocked(tauri.dropColumnRequest);
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await vi.advanceTimersByTimeAsync(300);
     });
     expect(dropColumnSpy).toHaveBeenCalled();
     // Apply → commit closure runs → onRefresh → getTableColumns.

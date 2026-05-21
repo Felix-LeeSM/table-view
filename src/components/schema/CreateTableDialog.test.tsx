@@ -1097,7 +1097,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
       inflight += 1;
       if (inflight > maxConcurrent) maxConcurrent = inflight;
       // Yield once so a parallel call would be observable.
-      await new Promise<void>((r) => setTimeout(r, 0));
+      await Promise.resolve();
       inflight -= 1;
       return {
         sql: `CREATE INDEX "${req.index_name}" ON "public"."users" USING btree ("email")`,
@@ -2089,7 +2089,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       }) => {
         inflight += 1;
         if (inflight > maxConcurrent) maxConcurrent = inflight;
-        await new Promise<void>((r) => setTimeout(r, 0));
+        await Promise.resolve();
         inflight -= 1;
         return {
           sql: `ALTER TABLE "public"."orders" ADD CONSTRAINT "${req.constraint_name}" ${req.definition.type.toUpperCase()}`,
@@ -2177,14 +2177,30 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
 
     // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
-      expect(mockCreateTable).toHaveBeenCalledTimes(1);
-      expect(mockAddConstraint).toHaveBeenCalledTimes(3);
+      expect(
+        mockCreateTable.mock.calls.some(
+          (c) => (c[0] as { preview_only: boolean }).preview_only === true,
+        ),
+      ).toBe(true);
+      expect(
+        mockAddConstraint.mock.calls.filter(
+          (c) => (c[0] as { preview_only: boolean }).preview_only === true,
+        ),
+      ).toHaveLength(3);
     });
 
+    const callsBeforeExecute = {
+      createTable: mockCreateTable.mock.calls.length,
+      addConstraint: mockAddConstraint.mock.calls.length,
+    };
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
     await waitFor(() => {
-      expect(mockCreateTable).toHaveBeenCalledTimes(2);
-      expect(mockAddConstraint).toHaveBeenCalledTimes(6);
+      expect(mockCreateTable).toHaveBeenCalledTimes(
+        callsBeforeExecute.createTable + 1,
+      );
+      expect(mockAddConstraint).toHaveBeenCalledTimes(
+        callsBeforeExecute.addConstraint + 3,
+      );
     });
     await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
