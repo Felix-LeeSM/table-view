@@ -1,12 +1,13 @@
 # Query Language Support
 
-기준일: 2026-05-19. 이 문서는 사용자가 에디터에서 쓰는 언어 표면을 정리한다.
+기준일: 2026-05-21. 이 문서는 사용자가 에디터에서 쓰는 언어 표면을 정리한다.
 
 중요한 구분:
 
 - 실행은 각 DB 서버가 최종 판단한다. PostgreSQL/MySQL SQL은 가능한 한 원문을 서버에 보낸다.
 - 자동완성과 Safe Mode 분석은 클라이언트가 이해하는 부분집합이다. 이 문서의 "지원/미지원 문법"은 주로 그 클라이언트 표면을 뜻한다.
 - MongoDB는 임의 JavaScript를 실행하지 않는다. 지원되는 `db....` 표현식만 파싱해 IPC 명령으로 dispatch 한다.
+- 자동완성 architecture decision은 ADR 0045가 source of truth다.
 
 표기:
 
@@ -26,6 +27,57 @@
 | CTE/derived columns | ✅ `WITH c AS (...)`, `FROM (...) a` 일부 projection 추출 | ✅ 동일 SQL source 공유 | 해당 없음 |
 | function candidates | ✅ common + PostgreSQL 전용 | ✅ common + MySQL 전용 | 해당 없음 |
 | operator candidates | SQL keyword/function surface | SQL keyword/function surface | ✅ query operators, aggregation stages, accumulators, BSON tags |
+
+## 자동완성 아키텍처 방향
+
+현재 자동완성은 CodeMirror source와 client store cache 위에 구현되어 있다. 다음
+단계의 기준 구조는 ADR 0045에 따라 아래처럼 고정한다.
+
+```text
+Tauri IPC
+  -> catalog introspection
+  -> client catalog store
+  -> completion context builder
+  -> Rust/WASM language core
+  -> CodeMirror Completion[]
+```
+
+책임 분리:
+
+- **IPC/Tauri**: DB 접속, catalog fetch, query execution, cancellation,
+  active DB guard.
+- **client store**: `(connId, db)` 또는 `(connId, database, collection)` 별
+  catalog cache와 invalidation.
+- **TS adapter**: 현재 tab, dialect profile, shell mode, catalog snapshot/slice
+  를 completion request 로 정규화.
+- **Rust/WASM language core**: tolerant parse, cursor context, provider
+  dispatch, version/capability gate, candidate generation.
+
+SQL dialect와 shell/meta command는 별도 layer다.
+
+| Layer | 예시 | 비고 |
+|---|---|---|
+| SQL dialect | PostgreSQL, MySQL, MariaDB, SQLite, MSSQL, Oracle | keyword/function/type/operator/capability profile |
+| Shell/meta | `psql`, `mysql` client, `sqlite3` CLI | `\dt`, `\G`, `.tables` 등. SQL keyword가 아님 |
+
+초기 코드 SOT:
+
+- `src/lib/sql/sqlDialectProfile.ts` — SQL dialect profile, shell profile,
+  keyword/function vocabulary, capability flags.
+- `src/lib/sql/sqlDialect.ts` — CodeMirror dialect mapping wrapper.
+- `src/lib/sql/sqlDialectKeywords.ts` — legacy import compatibility wrapper.
+
+장기 구현 규칙:
+
+- completion hot path는 IPC를 타지 않는다. IPC는 background catalog fetch에만
+  사용한다.
+- WASM request에는 `text`, cursor offset 정책, dialect, shell,
+  `serverVersion`, normalized catalog slice를 명시한다.
+- psql/mysql/sqlite shell command는 SQL parser grammar에 섞지 않는다.
+- 큰 catalog는 매 키 입력마다 통째로 직렬화하지 않고 active scope와 prefix
+  기반 slice로 축소한다.
+- 기존 CodeMirror/lang-sql completion은 WASM source가 안정될 때까지 fallback
+  로 유지한다.
 
 ## PostgreSQL SQL
 

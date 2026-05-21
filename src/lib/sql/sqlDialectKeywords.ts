@@ -1,153 +1,18 @@
 import type { DatabaseType } from "@/types/connection";
-import { assertNever } from "@/lib/paradigm";
+import {
+  COMMON_SQL_KEYWORDS,
+  getSqlKeywordsForDatabaseType,
+} from "./sqlDialectProfile";
+
+export { COMMON_SQL_KEYWORDS };
 
 /**
- * Per-dialect SQL keyword sets. Returns the keywords appropriate for a
- * single `DatabaseType` so `useSqlAutocomplete` can swap candidates as
- * the active connection's `dbType` changes — without that, Postgres-
- * only keywords (`RETURNING`, `ILIKE`) would surface on MySQL tabs.
- *
- * Non-RDB DatabaseTypes (`mongodb`, `redis`) return an empty list because
- * `SqlQueryEditor` is only mounted for RDB-paradigm tabs. The empty branch
- * is kept defensively so any future code path that walks the helper for a
- * non-SQL connection type lands on a deterministic empty result instead of
- * an exception.
- */
-
-/**
- * ANSI / common SQL keywords shared across PG / MySQL / SQLite. Surfaced as
- * autocomplete candidates regardless of dialect.
- */
-export const COMMON_SQL_KEYWORDS: readonly string[] = [
-  "SELECT",
-  "FROM",
-  "WHERE",
-  "AND",
-  "OR",
-  "NOT",
-  "NULL",
-  "IS",
-  "IN",
-  "LIKE",
-  "BETWEEN",
-  "EXISTS",
-  "GROUP BY",
-  "ORDER BY",
-  "HAVING",
-  "LIMIT",
-  "OFFSET",
-  "JOIN",
-  "INNER JOIN",
-  "LEFT JOIN",
-  "RIGHT JOIN",
-  "FULL JOIN",
-  "OUTER JOIN",
-  "CROSS JOIN",
-  "ON",
-  "USING",
-  "AS",
-  "DISTINCT",
-  "UNION",
-  "INTERSECT",
-  "EXCEPT",
-  "CASE",
-  "WHEN",
-  "THEN",
-  "ELSE",
-  "END",
-  "INSERT",
-  "INTO",
-  "VALUES",
-  "UPDATE",
-  "SET",
-  "DELETE",
-  "CREATE",
-  "TABLE",
-  "VIEW",
-  "INDEX",
-  "DROP",
-  "ALTER",
-  "ADD",
-  "COLUMN",
-  "PRIMARY KEY",
-  "FOREIGN KEY",
-  "REFERENCES",
-  "DEFAULT",
-  "CHECK",
-  "CONSTRAINT",
-  "BEGIN",
-  "COMMIT",
-  "ROLLBACK",
-  "TRUNCATE",
-  "WITH",
-  "RECURSIVE",
-];
-
-/** PostgreSQL-only keywords. */
-const POSTGRES_KEYWORDS: readonly string[] = [
-  "RETURNING",
-  "ILIKE",
-  "SERIAL",
-  "BIGSERIAL",
-  "JSONB",
-  "EXCLUDED",
-  "ON CONFLICT",
-  "MATERIALIZED VIEW",
-];
-
-/** MySQL-only keywords. */
-const MYSQL_KEYWORDS: readonly string[] = [
-  "AUTO_INCREMENT",
-  "REPLACE INTO",
-  "DUAL",
-  "ENGINE",
-  "DUPLICATE KEY UPDATE",
-];
-
-/** SQLite-only keywords. */
-const SQLITE_KEYWORDS: readonly string[] = [
-  "PRAGMA",
-  "WITHOUT ROWID",
-  "IIF",
-  "GLOB",
-  "AUTOINCREMENT",
-];
-
-/**
- * Returns the keyword list appropriate for the given DatabaseType.
- *
- * RDB dialects return their dialect-specific keywords concatenated with the
- * common ANSI set. Non-RDB types return an empty array — the SQL editor is
- * never mounted for them, but the helper stays defensive.
- *
- * @param dbType DatabaseType of the active connection (or `undefined` when
- *               the connection has been deleted mid-session).
+ * Backwards-compatible keyword helper. The canonical keyword vocabulary now
+ * lives on `SqlDialectProfile`; this wrapper preserves the older import path
+ * used by tests and legacy completion modules.
  */
 export function getKeywordsForDialect(
   dbType: DatabaseType | undefined,
 ): readonly string[] {
-  if (dbType === undefined) {
-    // Deleted-connection or schema-less SQL fallback. Keep the common
-    // keyword set so users still get reasonable suggestions.
-    return COMMON_SQL_KEYWORDS;
-  }
-  switch (dbType) {
-    case "postgresql":
-      return [...POSTGRES_KEYWORDS, ...COMMON_SQL_KEYWORDS];
-    case "mysql":
-    case "mariadb":
-      return [...MYSQL_KEYWORDS, ...COMMON_SQL_KEYWORDS];
-    case "sqlite":
-      return [...SQLITE_KEYWORDS, ...COMMON_SQL_KEYWORDS];
-    case "mssql":
-    case "oracle":
-      return COMMON_SQL_KEYWORDS;
-    case "mongodb":
-    case "redis":
-      // SqlQueryEditor is never mounted for these paradigms. Defensive
-      // empty list keeps any future caller deterministic.
-      return [];
-    default:
-      return assertNever(dbType);
-  }
+  return getSqlKeywordsForDatabaseType(dbType);
 }

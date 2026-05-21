@@ -1,0 +1,78 @@
+import { describe, expect, it } from "vitest";
+import { MySQL, PostgreSQL, SQLite, StandardSQL } from "@codemirror/lang-sql";
+import {
+  COMMON_SQL_FUNCTIONS,
+  COMMON_SQL_KEYWORDS,
+  SQL_DIALECT_PROFILES,
+  SQL_SHELL_PROFILES,
+  codeMirrorDialectForDatabaseType,
+  getSqlDialectProfileForDatabaseType,
+  getSqlFunctionsForDatabaseType,
+  getSqlKeywordsForDatabaseType,
+  sqlDialectIdForDatabaseType,
+} from "./sqlDialectProfile";
+
+describe("sqlDialectProfile", () => {
+  it("maps database types to dialect profile ids", () => {
+    expect(sqlDialectIdForDatabaseType("postgresql")).toBe("postgresql");
+    expect(sqlDialectIdForDatabaseType("mysql")).toBe("mysql");
+    expect(sqlDialectIdForDatabaseType("mariadb")).toBe("mariadb");
+    expect(sqlDialectIdForDatabaseType("sqlite")).toBe("sqlite");
+    expect(sqlDialectIdForDatabaseType("mongodb")).toBeNull();
+    expect(sqlDialectIdForDatabaseType(undefined)).toBeNull();
+  });
+
+  it("keeps CodeMirror dialect mapping inside the profile", () => {
+    expect(codeMirrorDialectForDatabaseType("postgresql")).toBe(PostgreSQL);
+    expect(codeMirrorDialectForDatabaseType("mysql")).toBe(MySQL);
+    expect(codeMirrorDialectForDatabaseType("mariadb")).toBe(MySQL);
+    expect(codeMirrorDialectForDatabaseType("sqlite")).toBe(SQLite);
+    expect(codeMirrorDialectForDatabaseType("mssql")).toBe(StandardSQL);
+    expect(codeMirrorDialectForDatabaseType(undefined)).toBe(StandardSQL);
+  });
+
+  it("models capability differences without provider-level dbType branching", () => {
+    expect(SQL_DIALECT_PROFILES.postgresql.capabilities.returning).toBe(true);
+    expect(SQL_DIALECT_PROFILES.postgresql.capabilities.ilike).toBe(true);
+    expect(SQL_DIALECT_PROFILES.mysql.capabilities.returning).toBe(false);
+    expect(SQL_DIALECT_PROFILES.mysql.capabilities.limitOffsetComma).toBe(true);
+    expect(SQL_DIALECT_PROFILES.sqlite.capabilities.onConflict).toBe(true);
+  });
+
+  it("shares the MySQL family while keeping MariaDB a distinct dialect id", () => {
+    const mysql = getSqlDialectProfileForDatabaseType("mysql");
+    const mariadb = getSqlDialectProfileForDatabaseType("mariadb");
+
+    expect(mysql?.id).toBe("mysql");
+    expect(mariadb?.id).toBe("mariadb");
+    expect(mysql?.family).toBe("mysql");
+    expect(mariadb?.family).toBe("mysql");
+    expect(mariadb?.codeMirrorDialect).toBe(mysql?.codeMirrorDialect);
+  });
+
+  it("keeps psql/mysql/sqlite shell commands out of SQL dialect vocabulary", () => {
+    expect(SQL_SHELL_PROFILES.psql.commands).toContain("\\dt");
+    expect(SQL_SHELL_PROFILES["mysql-client"].commands).toContain("\\G");
+    expect(SQL_SHELL_PROFILES["sqlite-cli"].commands).toContain(".tables");
+
+    for (const profile of Object.values(SQL_DIALECT_PROFILES)) {
+      expect(profile.vocabulary.keywords).not.toContain("\\dt");
+      expect(profile.vocabulary.keywords).not.toContain("\\G");
+      expect(profile.vocabulary.keywords).not.toContain(".tables");
+    }
+  });
+
+  it("preserves legacy keyword and function surfaces", () => {
+    expect(getSqlKeywordsForDatabaseType(undefined)).toEqual(
+      COMMON_SQL_KEYWORDS,
+    );
+    expect(getSqlKeywordsForDatabaseType("mongodb")).toEqual([]);
+    expect(getSqlFunctionsForDatabaseType("mysql")).toContain("JSON_EXTRACT");
+    expect(getSqlFunctionsForDatabaseType("mysql")).not.toContain("DATE_TRUNC");
+    expect(getSqlFunctionsForDatabaseType(undefined)).toContain("DATE_TRUNC");
+
+    for (const fn of COMMON_SQL_FUNCTIONS) {
+      expect(getSqlFunctionsForDatabaseType("sqlite")).toContain(fn);
+    }
+  });
+});
