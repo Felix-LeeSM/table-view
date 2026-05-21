@@ -35,7 +35,7 @@ fn strip_leading_comments(sql: &str) -> &str {
     s
 }
 
-fn strip_trailing_terminator(sql: &str) -> &str {
+pub(super) fn strip_trailing_terminator(sql: &str) -> &str {
     sql.trim_end_matches(|c: char| c == ';' || c.is_whitespace())
 }
 

@@ -102,7 +102,7 @@ saved model:
   one `main` namespace, table names, exact table row counts, columns, primary
   key flags, and foreign-key references.
 - Batch execution, dry-run, DDL, export streaming, and richer SQLite
-  introspection remain unsupported until their own feature-order slices.
+  introspection remain separate feature-order slices.
 
 ## SQLite File Creation Slice
 
@@ -126,6 +126,21 @@ contract:
 - `query_table_data` supports pagination, validated `ORDER BY`, structured
   filters, raw `WHERE` validation, primary-key tiebreak ordering, and JSON cell
   projection.
-- Multi-statement batch execution, dry-run, native cancel, edit commit
-  semantics, DDL builders, export streaming, and richer introspection remain
-  separate parity slices.
+- Native cancel, edit commit semantics, DDL builders, export streaming, and
+  richer introspection remain separate parity slices.
+
+## SQLite Batch / Dry-Run Slice
+
+SQLite batch execution follows the shared RDB transaction contract:
+
+- `execute_sql_batch` runs all statements inside one transaction and commits
+  only after every statement succeeds.
+- A failure on statement K rolls back statements 1..K-1 and returns the same
+  statement-indexed error shape used by the PostgreSQL path.
+- `dry_run_sql_batch` executes the same statements inside one transaction but
+  rolls back on success, preserving per-statement rows-affected metadata for
+  the destructive-change preview flow.
+- Empty batches are no-ops, and a pre-cancelled token returns cancellation
+  before requiring an active SQLite connection.
+- Native driver cancellation, edit commit semantics, DDL builders, export
+  streaming, and richer introspection remain separate parity slices.

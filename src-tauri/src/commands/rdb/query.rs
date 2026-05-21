@@ -333,23 +333,20 @@ async fn execute_query_dry_run_inner(
     result
 }
 
-/// Sprint 247 (ADR 0022 Phase 3) — execute a batch of SQL statements
-/// inside a transaction that is unconditionally rolled back. Returns
-/// per-statement statistics (`rows_affected`, `execution_time_ms`) so
-/// the destructive-statement confirm dialog can preview impact before
-/// the user clicks Yes/No on the eventual commit.
+/// Execute a batch of SQL statements inside a transaction that is rolled
+/// back. Returns per-statement statistics so the destructive-statement
+/// confirm dialog can preview impact before the eventual commit.
 ///
 /// Behaviour mirrors `execute_query_batch` (input validation, paradigm
 /// guard, cancel-token registration, error message shape) — only the
 /// transaction outcome differs (ROLLBACK instead of COMMIT). Adapters
-/// that do not implement `dry_run_sql_batch` (MySQL/SQLite today)
-/// surface `AppError::Unsupported` from the trait default; Mongo
-/// connections fail at the paradigm guard with `AppError::Unsupported`
+/// that do not implement `dry_run_sql_batch` surface `AppError::Unsupported`
+/// from the trait default; Mongo connections fail at the paradigm guard
 /// before the trait method is reached.
 ///
-/// Sprint 271b — see `execute_query` doc on `expected_database`. Same
-/// opt-in semantics: `None` preserves the pre-271 fast-path, `Some`
-/// gates the dry-run dispatch on the adapter's active db.
+/// `expected_database` keeps the opt-in mismatch guard used by
+/// `execute_query`: `None` preserves the legacy fast path, `Some` gates
+/// dry-run dispatch on the adapter's active database.
 #[tauri::command]
 pub async fn execute_query_dry_run(
     state: State<'_, AppState>,
