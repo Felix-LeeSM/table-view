@@ -1,4 +1,10 @@
-import { useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import {
+  useRef,
+  useEffect,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
@@ -24,6 +30,9 @@ import { updateColumnCompletionSource } from "@lib/sql/updateColumnCompletion";
 import { aliasColumnCompletionSource } from "@lib/sql/aliasColumnCompletion";
 import { cteColumnCompletionSource } from "@lib/sql/cteColumnCompletion";
 import { wrappedSchemaCompletionSource } from "@lib/sql/schemaCompletionWrapper";
+import { sqlCompletionShadowSource } from "@lib/sql/sqlCodeMirrorCompletionAdapter";
+import type { SqlCompletionContext } from "@lib/sql/sqlCompletionContext";
+import type { SqlCompletionRequest } from "@lib/sql/sqlCompletionRequest";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 
@@ -61,11 +70,21 @@ export interface SqlQueryEditorProps {
    * `databaseTypeToSqlDialect`. When omitted falls back to `StandardSQL`.
    */
   sqlDialect?: SQLDialect;
+  /**
+   * Sprint 421 — shadow path for the future Rust/WASM completion core.
+   * The source builds a normalized request from CodeMirror state but
+   * returns `null`, so the visible autocomplete candidates remain owned by
+   * the existing TypeScript sources until the parity gate flips.
+   */
+  completionContext?: SqlCompletionContext;
+  onCompletionShadowRequest?: (request: SqlCompletionRequest) => void;
 }
 
 const buildSqlLang = (
   dialect: SQLDialect,
   ns: SQLNamespace | undefined,
+  getCompletionContext: () => SqlCompletionContext | null | undefined,
+  onCompletionShadowRequest: (request: SqlCompletionRequest) => void,
 ): Extension => [
   // Sprint 304 (2026-05-14) — `schema` 인자 *제거*. lang-sql 의 자동
   // schemaCompletionSource wire 는 ns top-level (table) 을 모든 컨텍스트
@@ -104,11 +123,26 @@ const buildSqlLang = (
   dialect.language.data.of({
     autocomplete: cteColumnCompletionSource(() => ns),
   }),
+  dialect.language.data.of({
+    autocomplete: sqlCompletionShadowSource({
+      getCompletionContext,
+      onRequest: onCompletionShadowRequest,
+    }),
+  }),
 ];
 
 const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
   function SqlQueryEditor(
-    { sql, onSqlChange, onExecute, onDryRun, schemaNamespace, sqlDialect },
+    {
+      sql,
+      onSqlChange,
+      onExecute,
+      onDryRun,
+      schemaNamespace,
+      sqlDialect,
+      completionContext,
+      onCompletionShadowRequest,
+    },
     ref,
   ) {
     // Resolve dialect once so ref + reconfigure paths share the same value.
@@ -142,6 +176,16 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
     schemaNamespaceRef.current = schemaNamespace;
     const dialectRef = useRef<SQLDialect>(effectiveDialect);
     dialectRef.current = effectiveDialect;
+    const completionContextRef = useRef(completionContext);
+    completionContextRef.current = completionContext;
+    const onCompletionShadowRequestRef = useRef(onCompletionShadowRequest);
+    onCompletionShadowRequestRef.current = onCompletionShadowRequest;
+    const emitCompletionShadowRequest = useCallback(
+      (request: SqlCompletionRequest) => {
+        onCompletionShadowRequestRef.current?.(request);
+      },
+      [],
+    );
 
     // Create the CodeMirror editor once.
     useEffect(() => {
@@ -155,7 +199,12 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
           indentOnInput(),
           bracketMatching(),
           langCompartment.current.of(
-            buildSqlLang(dialectRef.current, schemaNamespaceRef.current),
+            buildSqlLang(
+              dialectRef.current,
+              schemaNamespaceRef.current,
+              () => completionContextRef.current,
+              emitCompletionShadowRequest,
+            ),
           ),
           syntaxHighlighting(viewTableHighlightStyle),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -252,7 +301,7 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
         view.destroy();
         viewRef.current = null;
       };
-    }, []);
+    }, [emitCompletionShadowRequest]);
 
     // Reconfigure the SQL extension bundle in place when dialect or schema
     // identity changes — keeps cursor/selection intact.
@@ -261,10 +310,15 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
       if (!view) return;
       view.dispatch({
         effects: langCompartment.current.reconfigure(
-          buildSqlLang(effectiveDialect, schemaNamespace),
+          buildSqlLang(
+            effectiveDialect,
+            schemaNamespace,
+            () => completionContextRef.current,
+            emitCompletionShadowRequest,
+          ),
         ),
       });
-    }, [effectiveDialect, schemaNamespace]);
+    }, [effectiveDialect, schemaNamespace, emitCompletionShadowRequest]);
 
     // Sync external sql changes into the editor (e.g. when switching tabs).
     useEffect(() => {
