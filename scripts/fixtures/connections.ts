@@ -41,6 +41,7 @@ interface StoredConnection {
   user: string;
   password: string;
   database: string;
+  read_only?: boolean;
   group_id: string | null;
   color: string | null;
   connection_timeout: number | null;
@@ -86,6 +87,10 @@ function storageFilePath(): string {
 
 function keyFilePath(): string {
   return resolve(appDataPath(), ".key");
+}
+
+function sqliteFixturePath(fileName: string): string {
+  return resolve(appDataPath(), "fixtures", "sqlite", fileName);
 }
 
 // Mirrors `crypto::get_or_create_key` in src-tauri/src/storage/crypto.rs.
@@ -312,6 +317,31 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
       replica_set: null,
       tls_enabled: null,
     });
+  }
+
+  const sqliteFile = profile.database.sqlite;
+  if (sqliteFile) {
+    for (const c of profile.connections?.sqlite ?? []) {
+      out.push({
+        id: c.id,
+        name: c.name,
+        db_type: "sqlite",
+        host: "",
+        port: 0,
+        user: "",
+        password: "",
+        database: sqliteFixturePath(sqliteFile),
+        read_only: false,
+        group_id: FIXTURE_GROUP_ID,
+        color: c.color ?? null,
+        connection_timeout: null,
+        keep_alive_interval: null,
+        environment: c.environment ?? null,
+        auth_source: null,
+        replica_set: null,
+        tls_enabled: null,
+      });
+    }
   }
 
   return out;

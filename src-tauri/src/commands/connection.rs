@@ -207,6 +207,7 @@ pub(super) mod test_helpers {
             user: "postgres".to_string(),
             password: "secret".to_string(),
             database: "testdb".to_string(),
+            read_only: false,
             group_id: None,
             color: None,
             connection_timeout: None,

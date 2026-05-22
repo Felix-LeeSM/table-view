@@ -40,6 +40,20 @@ const BASE_DATA: TableData = {
 };
 
 describe("generateSql — UPDATE tri-state (null vs empty string vs text)", () => {
+  it("emits no row-write SQL when row writes are disabled", () => {
+    const statements = generateSql(
+      BASE_DATA,
+      "public",
+      "users",
+      new Map<string, string | null>([["0-1", "Alicia"]]),
+      new Set(["0"]),
+      [[3, "Carol"]],
+      { allowRowWrites: false },
+    );
+
+    expect(statements).toEqual([]);
+  });
+
   it("emits SET col = NULL when pending edit is null", () => {
     const edits = new Map<string, string | null>([["0-1", null]]);
     const statements = generateSql(

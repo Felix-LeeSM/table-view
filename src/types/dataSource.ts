@@ -273,6 +273,7 @@ export const SQLITE_CAPABILITIES = capabilities({
   connection: {
     test: true,
     filePicker: true,
+    readOnly: true,
   },
   query: {
     query: true,
@@ -282,9 +283,6 @@ export const SQLITE_CAPABILITIES = capabilities({
   catalog: {
     browse: true,
     schema: true,
-  },
-  edit: {
-    editRows: true,
   },
 });
 

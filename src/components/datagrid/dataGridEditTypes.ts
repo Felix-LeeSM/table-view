@@ -11,6 +11,7 @@ export interface UseDataGridEditParams {
   page: number;
   fetchData: () => void;
   paradigm?: "rdb" | "document" | "search" | "kv";
+  canEditRows?: boolean;
 }
 
 export interface DataGridEditState {

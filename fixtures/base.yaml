@@ -8,67 +8,72 @@
 # Sprint 288 — MySQL target placement. MySQL 은 database = schema 라
 # `pg.schema` 의 분기 개념이 없어 `mysql.table` 만 명시. PG 와 동일 row
 # data 를 dialect-correct DDL 로 적재한다.
+#
+# Sprint 452 — SQLite fixture strategy. SQLite is a user-managed local file,
+# not the app's internal state.db. Profile connections point at an app-data
+# fixture sqlite file; the canonical SQLite seed SQL lives under e2e fixtures.
 
 entities:
   customers:
-    targets: [pg, mongo, mysql]
+    targets: [pg, mongo, mysql, sqlite]
     pg: { schema: core, table: customers }
     mongo: { collection: core_customers }
     mysql: { table: customers }
     columns:
-      id:         { type: uuid, primary: true }
-      email:      { type: email, unique: true }
-      full_name:  { type: full_name, locale_aware: true, max_length: 200 }
-      phone:      { type: phone, nullable: true, max_length: 64 }
+      id: { type: uuid, primary: true }
+      email: { type: email, unique: true }
+      full_name: { type: full_name, locale_aware: true, max_length: 200 }
+      phone: { type: phone, nullable: true, max_length: 64 }
       created_at: { type: timestamp, range: [-365d, 0d] }
 
   products:
-    targets: [pg, mongo, mysql]
+    targets: [pg, mongo, mysql, sqlite]
     pg: { schema: catalog, table: products }
     mongo: { collection: catalog_products }
     mysql: { table: products }
     columns:
-      id:        { type: uuid, primary: true }
-      sku:       { type: sku, unique: true }
-      name:      { type: product_name, locale_aware: true, max_length: 200 }
-      price:     { type: decimal, range: [0.99, 999.99] }
-      tags:      { type: array_of, item: string, count: [0, 4] }
+      id: { type: uuid, primary: true }
+      sku: { type: sku, unique: true }
+      name: { type: product_name, locale_aware: true, max_length: 200 }
+      price: { type: decimal, range: [0.99, 999.99] }
+      tags: { type: array_of, item: string, count: [0, 4] }
 
   orders:
-    targets: [pg, mongo, mysql]
+    targets: [pg, mongo, mysql, sqlite]
     pg: { schema: sales, table: orders }
     mongo:
       collection: sales_orders
       embed:
-        items:    { from: order_items, kind: many }
+        items: { from: order_items, kind: many }
     mysql: { table: orders }
     columns:
-      id:          { type: uuid, primary: true }
+      id: { type: uuid, primary: true }
       customer_id: { type: ref, to: customers.id }
-      ordered_at:  { type: timestamp, range: [-90d, 0d] }
-      status:      { type: enum, values: [pending, paid, shipped, delivered, refunded] }
-      total:       { type: decimal, range: [0.99, 9999.99] }
+      ordered_at: { type: timestamp, range: [-90d, 0d] }
+      status:
+        { type: enum, values: [pending, paid, shipped, delivered, refunded] }
+      total: { type: decimal, range: [0.99, 9999.99] }
 
   order_items:
-    targets: [pg, mysql]   # mongo: embedded inside orders.items
+    targets: [pg, mysql, sqlite] # mongo: embedded inside orders.items
     pg: { schema: sales, table: order_items }
     mysql: { table: order_items }
     columns:
-      id:         { type: uuid, primary: true }
-      order_id:   { type: ref, to: orders.id }
+      id: { type: uuid, primary: true }
+      order_id: { type: ref, to: orders.id }
       product_id: { type: ref, to: products.id }
-      quantity:   { type: int, range: [1, 5] }
+      quantity: { type: int, range: [1, 5] }
       unit_price: { type: decimal, range: [0.99, 999.99] }
 
   support_tickets:
-    targets: [pg, mongo, mysql]
+    targets: [pg, mongo, mysql, sqlite]
     pg: { schema: support, table: tickets }
     mongo: { collection: support_tickets }
     mysql: { table: tickets }
     columns:
-      id:          { type: uuid, primary: true }
+      id: { type: uuid, primary: true }
       customer_id: { type: ref, to: customers.id, nullable: true }
-      subject:     { type: text, locale_aware: true, max_length: 200 }
-      body:        { type: text, locale_aware: true, max_length: 5000, nullable: true }
-      status:      { type: enum, values: [open, pending, resolved, closed] }
-      created_at:  { type: timestamp, range: [-180d, 0d] }
+      subject: { type: text, locale_aware: true, max_length: 200 }
+      body: { type: text, locale_aware: true, max_length: 5000, nullable: true }
+      status: { type: enum, values: [open, pending, resolved, closed] }
+      created_at: { type: timestamp, range: [-180d, 0d] }

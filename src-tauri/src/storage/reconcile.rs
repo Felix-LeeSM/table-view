@@ -250,10 +250,10 @@ async fn reconcile_connections(pool: &SqlitePool) -> Result<(), AppError> {
             }
             let res = sqlx::query(
                 "INSERT OR REPLACE INTO connections \
-                 (id, name, db_type, host, port, user, password_enc, database, group_id, color, \
+                 (id, name, db_type, host, port, user, password_enc, database, read_only, group_id, color, \
                  connection_timeout, keep_alive_interval, environment, auth_source, replica_set, \
                  tls_enabled, sort_order, created_at, updated_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(&c.id)
             .bind(&c.name)
@@ -268,6 +268,7 @@ async fn reconcile_connections(pool: &SqlitePool) -> Result<(), AppError> {
             .bind(&c.user)
             .bind("") // ciphertext from redacted view is cleared; reconcile 에선 keyring SOT 가 별개
             .bind(&c.database)
+            .bind(if c.read_only { 1i64 } else { 0i64 })
             .bind(&c.group_id)
             .bind(&c.color)
             .bind(c.connection_timeout.map(|v| v as i64))
@@ -465,6 +466,7 @@ mod tests {
             user: "u".into(),
             password: String::new(),
             database: "d".into(),
+            read_only: false,
             group_id: None,
             color: None,
             connection_timeout: None,

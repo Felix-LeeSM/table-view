@@ -91,6 +91,7 @@ export interface BuildContextMenuItemsArgs {
   contextMenu: ContextMenuPos;
   data: TableData;
   selectedRowIds: Set<number>;
+  canEditRows?: boolean;
   schema: string;
   table: string;
   setCellDetail: (
@@ -114,6 +115,7 @@ export function buildContextMenuItems(
     contextMenu,
     data,
     selectedRowIds,
+    canEditRows = true,
     schema,
     table,
     setCellDetail,
@@ -150,6 +152,7 @@ export function buildContextMenuItems(
     {
       label: "Edit Cell",
       icon: <Pencil size={14} />,
+      disabled: !canEditRows,
       onClick: () => {
         const cell = data.rows[contextMenu.rowIdx]?.[contextMenu.colIdx];
         const editVal = cellToEditValue(cell);
@@ -159,6 +162,7 @@ export function buildContextMenuItems(
     {
       label: "Set to NULL",
       icon: <CircleSlash size={14} />,
+      disabled: !canEditRows,
       onClick: () => {
         onStartEdit(contextMenu.rowIdx, contextMenu.colIdx, null);
         onSetEditNull();
@@ -168,11 +172,13 @@ export function buildContextMenuItems(
       label: "Delete Row",
       icon: <Trash2 size={14} />,
       danger: true,
+      disabled: !canEditRows,
       onClick: onDeleteRow,
     },
     {
       label: "Duplicate Row",
       icon: <Copy size={14} />,
+      disabled: !canEditRows,
       onClick: onDuplicateRow,
     },
     {

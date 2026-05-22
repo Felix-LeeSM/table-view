@@ -6,6 +6,7 @@ use table_view_lib::commands::connection::{
 };
 use table_view_lib::error::AppError;
 use table_view_lib::models::{ConnectionConfigPublic, DatabaseType};
+use table_view_lib::storage::local as app_sqlite_state;
 use tempfile::TempDir;
 
 fn sqlite_public(path: &str) -> ConnectionConfigPublic {
@@ -17,6 +18,7 @@ fn sqlite_public(path: &str) -> ConnectionConfigPublic {
         port: 0,
         user: String::new(),
         database: path.into(),
+        read_only: false,
         group_id: None,
         color: None,
         connection_timeout: None,
@@ -59,6 +61,31 @@ fn cleanup() {
 }
 
 #[test]
+fn sqlite_public_wire_preserves_read_only() {
+    let public: ConnectionConfigPublic = serde_json::from_value(serde_json::json!({
+        "id": "sqlite-ro",
+        "name": "SQLite read only",
+        "dbType": "sqlite",
+        "host": "",
+        "port": 0,
+        "user": "",
+        "database": "/tmp/user-owned.sqlite",
+        "groupId": null,
+        "color": null,
+        "hasPassword": false,
+        "paradigm": "rdb",
+        "readOnly": true
+    }))
+    .unwrap();
+
+    let stored = public.into_config_with_empty_password();
+    let returned = ConnectionConfigPublic::from(&stored);
+    let value = serde_json::to_value(returned).unwrap();
+
+    assert_eq!(value.get("readOnly").and_then(|v| v.as_bool()), Some(true));
+}
+
+#[test]
 #[serial]
 fn save_connection_accepts_sqlite_without_host() {
     let dir = setup();
@@ -97,6 +124,79 @@ fn save_connection_rejects_sqlite_without_file_path() {
     cleanup();
 }
 
+#[test]
+#[serial]
+fn save_connection_rejects_sqlite_relative_file_path() {
+    let _dir = setup();
+    let result = save_connection(SaveConnectionRequest {
+        connection: sqlite_public("relative.sqlite"),
+        password: Some(String::new()),
+        is_new: Some(false),
+    });
+
+    match result {
+        Err(AppError::Validation(msg)) => assert!(msg.contains("absolute")),
+        other => panic!(
+            "Expected SQLite absolute path validation error, got: {:?}",
+            other
+        ),
+    }
+
+    cleanup();
+}
+
+#[test]
+#[serial]
+fn save_connection_rejects_internal_app_state_db_path() {
+    let _dir = setup();
+    let state_path = app_sqlite_state::db_path().unwrap();
+
+    let result = save_connection(SaveConnectionRequest {
+        connection: sqlite_public(state_path.to_str().unwrap()),
+        password: Some(String::new()),
+        is_new: Some(false),
+    });
+
+    match result {
+        Err(AppError::Validation(message)) => {
+            assert!(message.contains("internal app SQLite state"))
+        }
+        other => panic!(
+            "Expected internal app SQLite state validation error, got: {:?}",
+            other
+        ),
+    }
+
+    cleanup();
+}
+
+#[test]
+#[serial]
+fn save_connection_rejects_normalized_internal_app_state_db_path_before_file_exists() {
+    let dir = setup();
+    let state_path = app_sqlite_state::db_path().unwrap();
+    assert!(!state_path.exists());
+    let normalized_equivalent = format!("{}/./state.db", dir.path().display());
+
+    let result = save_connection(SaveConnectionRequest {
+        connection: sqlite_public(&normalized_equivalent),
+        password: Some(String::new()),
+        is_new: Some(false),
+    });
+
+    match result {
+        Err(AppError::Validation(message)) => {
+            assert!(message.contains("internal app SQLite state"))
+        }
+        other => panic!(
+            "Expected normalized internal app SQLite state validation error, got: {:?}",
+            other
+        ),
+    }
+
+    cleanup();
+}
+
 #[tokio::test]
 #[serial]
 async fn test_connection_routes_sqlite_to_adapter() {
@@ -113,6 +213,35 @@ async fn test_connection_routes_sqlite_to_adapter() {
     .unwrap();
 
     assert_eq!(result, "Connection successful");
+
+    cleanup();
+}
+
+#[tokio::test]
+#[serial]
+async fn test_connection_rejects_internal_app_state_db_path() {
+    let _dir = setup();
+    let pool = app_sqlite_state::open_pool().await.unwrap();
+    let state_path = app_sqlite_state::db_path().unwrap();
+
+    let result = test_connection(TestConnectionRequest {
+        config: sqlite_public(state_path.to_str().unwrap()),
+        password: Some(String::new()),
+        existing_id: None,
+    })
+    .await;
+
+    pool.close().await;
+
+    match result {
+        Err(AppError::Validation(message)) => {
+            assert!(message.contains("internal app SQLite state"))
+        }
+        other => panic!(
+            "Expected internal app SQLite state validation error, got: {:?}",
+            other
+        ),
+    }
 
     cleanup();
 }

@@ -7,6 +7,9 @@ database:
   # Sprint 281 — MySQL Slice A. PG / Mongo 와 같은 이름을 의도적으로
   # 사용 (시각적 일관성). MySQL 의 database = schema 라 별도 분리할 이유 없음.
   mysql: table_view_development
+  # Sprint 452 — local SQLite file fixture. Resolved by fixture connection
+  # upsert to app-data fixtures/sqlite/table_view_development.sqlite.
+  sqlite: table_view_development.sqlite
 locale_mix:
   en: 0.70
   ko: 0.10
@@ -35,5 +38,10 @@ connections:
   mysql:
     - id: fixture-dev-mysql
       name: Dev (MySQL)
+      color: "#0891b2"
+      environment: development
+  sqlite:
+    - id: fixture-dev-sqlite
+      name: Dev (SQLite)
       color: "#0891b2"
       environment: development

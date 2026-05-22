@@ -36,6 +36,8 @@ pub struct PersistConnectionRequest {
     pub user: String,
     pub database: String,
     #[serde(default)]
+    pub read_only: bool,
+    #[serde(default)]
     pub group_id: Option<String>,
     #[serde(default)]
     pub color: Option<String>,
@@ -71,6 +73,7 @@ pub async fn persist_connection_inner(
         user: req.user.clone(),
         password: String::new(),
         database: req.database.clone(),
+        read_only: req.read_only,
         group_id: req.group_id.clone(),
         color: req.color.clone(),
         connection_timeout: req.connection_timeout,
@@ -103,13 +106,14 @@ async fn write_sqlite_mirror(
         .unwrap_or(0);
     sqlx::query(
         "INSERT INTO connections \
-         (id, name, db_type, host, port, user, password_enc, database, group_id, color, \
+         (id, name, db_type, host, port, user, password_enc, database, read_only, group_id, color, \
          connection_timeout, keep_alive_interval, environment, auth_source, replica_set, \
          tls_enabled, sort_order, created_at, updated_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
          ON CONFLICT(id) DO UPDATE SET \
             name=excluded.name, db_type=excluded.db_type, host=excluded.host, \
             port=excluded.port, user=excluded.user, database=excluded.database, \
+            read_only=excluded.read_only, \
             group_id=excluded.group_id, color=excluded.color, \
             connection_timeout=excluded.connection_timeout, \
             keep_alive_interval=excluded.keep_alive_interval, environment=excluded.environment, \
@@ -125,6 +129,7 @@ async fn write_sqlite_mirror(
     .bind(&req.user)
     .bind("") // password_enc = keyring SOT 가 별도; file/SQLite mirror 는 둘 다 빈 문자열로 둠.
     .bind(&req.database)
+    .bind(if req.read_only { 1i64 } else { 0i64 })
     .bind(&req.group_id)
     .bind(&req.color)
     .bind(req.connection_timeout.map(|v| v as i64))
@@ -187,6 +192,7 @@ mod tests {
             port: 5432,
             user: "u".into(),
             database: "d".into(),
+            read_only: false,
             group_id: None,
             color: None,
             connection_timeout: None,

@@ -44,6 +44,7 @@ export function useDataGridEdit({
   page,
   fetchData,
   paradigm = "rdb",
+  canEditRows = true,
 }: UseDataGridEditParams): DataGridEditState {
   const activeTabId = useActiveTabId();
   const workspaceKey = useCurrentWorkspaceKey();
@@ -162,10 +163,17 @@ export function useDataGridEdit({
     pendingEdits,
     pendingNewRows,
     pendingDeletedRowKeys,
+    canEditRows,
     setPendingEditErrors,
     clearAllPending,
     beginCommitFlash,
   });
+
+  useEffect(() => {
+    if (canEditRows) return;
+    clearAllPending();
+    resetPreviewState();
+  }, [canEditRows, clearAllPending, resetPreviewState]);
 
   // Clear the flash as soon as we have a real terminal signal: a preview
   // opened (sqlPreview / mqlPreview transitioned to non-null) or an executor
@@ -181,6 +189,11 @@ export function useDataGridEdit({
 
   const saveCurrentEdit = useCallback(() => {
     if (!editingCell) return;
+    if (!canEditRows) {
+      setEditingCell(null);
+      setEditValue("");
+      return;
+    }
     const key = editKey(editingCell.row, editingCell.col);
     const originalCell = data?.rows[editingCell.row]?.[editingCell.col];
     const originalValue = cellToEditValue(originalCell);
@@ -203,6 +216,7 @@ export function useDataGridEdit({
     pendingEdits,
     pushSnapshot,
     setPendingEdits,
+    canEditRows,
   ]);
 
   const cancelEdit = useCallback(() => {
@@ -243,6 +257,7 @@ export function useDataGridEdit({
 
   const handleStartEdit = useCallback(
     (rowIdx: number, colIdx: number, currentValue: string | null) => {
+      if (!canEditRows) return;
       // Save the existing edit first — `applyEditOrClear` skips the
       // pending entry when the value is unchanged.
       if (editingCell) {
@@ -276,6 +291,7 @@ export function useDataGridEdit({
       pendingEdits,
       pushSnapshot,
       setPendingEdits,
+      canEditRows,
     ],
   );
 
@@ -291,6 +307,7 @@ export function useDataGridEdit({
   }, [clearAllPending, resetPreviewState]);
 
   const handleAddRow = useCallback(() => {
+    if (!canEditRows) return;
     if (!data) return;
     // Sprint 249: deliberate user action — always snapshot.
     pushSnapshot();
@@ -298,9 +315,17 @@ export function useDataGridEdit({
     setPendingNewRows((prev) => [...prev, emptyRow]);
     // Promote preview tab on row add
     if (activeTabId) promoteTab(activeTabId);
-  }, [data, activeTabId, promoteTab, pushSnapshot, setPendingNewRows]);
+  }, [
+    canEditRows,
+    data,
+    activeTabId,
+    promoteTab,
+    pushSnapshot,
+    setPendingNewRows,
+  ]);
 
   const handleDeleteRow = useCallback(() => {
+    if (!canEditRows) return;
     if (selectedRowIds.size === 0) return;
     // Sprint 249: snapshot AFTER the empty-selection guard so a no-op
     // delete (no rows selected) doesn't pollute the stack.
@@ -324,9 +349,11 @@ export function useDataGridEdit({
     clearSelection,
     pushSnapshot,
     setPendingDeletedRowKeys,
+    canEditRows,
   ]);
 
   const handleDuplicateRow = useCallback(() => {
+    if (!canEditRows) return;
     if (!data || selectedRowIds.size === 0) return;
     // Sprint 249: same guard-then-snapshot ordering as `handleDeleteRow`.
     pushSnapshot();
@@ -346,16 +373,18 @@ export function useDataGridEdit({
     clearSelection,
     pushSnapshot,
     setPendingNewRows,
+    canEditRows,
   ]);
 
   const hasPendingChanges =
-    pendingEdits.size > 0 ||
-    pendingNewRows.length > 0 ||
-    pendingDeletedRowKeys.size > 0 ||
-    // The document paradigm parks its dispatch payload in `mqlPreview`
-    // until the user confirms — treat an open preview with pending
-    // commands as still-pending so commit / Cmd+S stay enabled.
-    (mqlPreview !== null && mqlPreview.commands.length > 0);
+    canEditRows &&
+    (pendingEdits.size > 0 ||
+      pendingNewRows.length > 0 ||
+      pendingDeletedRowKeys.size > 0 ||
+      // The document paradigm parks its dispatch payload in `mqlPreview`
+      // until the user confirms — treat an open preview with pending
+      // commands as still-pending so commit / Cmd+S stay enabled.
+      (mqlPreview !== null && mqlPreview.commands.length > 0));
 
   // Publish the active tab's dirty state to the tabStore. The dirty signal
   // is narrowed to the three pending diff fields — an open MQL preview
@@ -364,9 +393,10 @@ export function useDataGridEdit({
   useEffect(() => {
     if (!activeTabId) return;
     const isDirty =
-      pendingEdits.size > 0 ||
-      pendingNewRows.length > 0 ||
-      pendingDeletedRowKeys.size > 0;
+      canEditRows &&
+      (pendingEdits.size > 0 ||
+        pendingNewRows.length > 0 ||
+        pendingDeletedRowKeys.size > 0);
     setTabDirty(activeTabId, isDirty);
     return () => {
       setTabDirty(activeTabId, false);
@@ -377,6 +407,7 @@ export function useDataGridEdit({
     pendingNewRows,
     pendingDeletedRowKeys,
     setTabDirty,
+    canEditRows,
   ]);
 
   // Listen for global Cmd+S commit shortcut. Only the active tab's grid
@@ -384,6 +415,7 @@ export function useDataGridEdit({
   // existing. Otherwise the dispatch is silently ignored (idempotent).
   useEffect(() => {
     const handler = () => {
+      if (!canEditRows) return;
       // Cmd+S with nothing pending → toast instead of a silent no-op (the
       // silent path was inscrutable). No flash — the toast is the feedback.
       if (!hasPendingChanges) {
@@ -432,6 +464,7 @@ export function useDataGridEdit({
     handleCommit,
     beginCommitFlash,
     setPendingEdits,
+    canEditRows,
   ]);
 
   return {

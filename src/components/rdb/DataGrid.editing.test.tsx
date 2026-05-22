@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import { screen, fireEvent, act } from "@testing-library/react";
+import { useConnectionStore } from "@stores/connectionStore";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
   MOCK_DATA,
@@ -157,6 +158,41 @@ describe("DataGrid", () => {
     const input = nameCell.querySelector("input");
     expect(input).toBeInTheDocument();
     expect((input as HTMLInputElement).value).toBe("Alice");
+  });
+
+  it("does not enable row editing controls for SQLite when editRows is false", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "SQLite",
+          dbType: "sqlite",
+          host: "",
+          port: 0,
+          user: "",
+          database: "/tmp/user.sqlite",
+          readOnly: false,
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+    });
+
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    expect(screen.queryByLabelText("Add row")).not.toBeInTheDocument();
+
+    const cells = screen.getAllByRole("gridcell");
+    const nameCell = cells[1]!;
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    expect(nameCell.querySelector("input")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Commit changes")).not.toBeInTheDocument();
   });
 
   // 36. Enter saves edit and shows pending indicator
@@ -791,7 +827,7 @@ describe("DataGrid", () => {
         {
           id: "conn1",
           name: "prod-conn",
-          dbType: "postgres",
+          dbType: "postgresql",
           host: "localhost",
           port: 5432,
           database: "app",

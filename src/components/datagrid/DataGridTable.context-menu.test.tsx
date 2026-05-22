@@ -55,6 +55,7 @@ const defaultProps = {
   selectedRowIds: new Set<number>(),
   pendingDeletedRowKeys: new Set<string>(),
   pendingNewRows: [] as unknown[][],
+  canEditRows: true,
   page: 1,
   schema: "public",
   table: "users",
@@ -209,6 +210,34 @@ describe("DataGridTable — context menu", () => {
     });
 
     expect(defaultProps.onDuplicateRow).toHaveBeenCalled();
+  });
+
+  it("keeps row-write context menu actions disabled when row editing is unsupported", () => {
+    renderTable({ canEditRows: false });
+
+    contextClickFirstDataRow();
+
+    for (const label of [
+      "Edit Cell",
+      "Set to NULL",
+      "Delete Row",
+      "Duplicate Row",
+    ]) {
+      expect(screen.getByRole("menuitem", { name: label })).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
+    }
+
+    act(() => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Edit Cell" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Delete Row" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate Row" }));
+    });
+
+    expect(defaultProps.onStartEdit).not.toHaveBeenCalled();
+    expect(defaultProps.onDeleteRow).not.toHaveBeenCalled();
+    expect(defaultProps.onDuplicateRow).not.toHaveBeenCalled();
   });
 
   // AC-06: Copy as Plain Text

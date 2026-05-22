@@ -115,6 +115,32 @@ describe("DataGridToolbar — Duplicate Row button", () => {
     fireEvent.click(btn);
     expect(onDuplicateRow).not.toHaveBeenCalled();
   });
+
+  it("does not expose row-write controls when row editing is unsupported", () => {
+    renderToolbar({
+      canEditRows: false,
+      hasPendingChanges: true,
+      selectedRowIdsCount: 1,
+      onUndo: vi.fn(),
+      canUndo: true,
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Add row" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Delete row" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Duplicate row" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Commit changes" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Undo last pending change" }),
+    ).not.toBeInTheDocument();
+  });
 });
 
 // Sprint 98 — Cmd+S immediate visual feedback. The Commit button must

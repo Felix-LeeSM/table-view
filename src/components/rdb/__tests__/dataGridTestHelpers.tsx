@@ -24,6 +24,7 @@
 import { vi } from "vitest";
 import { render } from "@testing-library/react";
 import DataGrid from "../DataGrid";
+import { useConnectionStore } from "@stores/connectionStore";
 import type { TableData } from "@/types/schema";
 
 // ---------------------------------------------------------------------------
@@ -129,6 +130,31 @@ export const mockAddTab = vi.fn();
 // ---------------------------------------------------------------------------
 
 export function resetDataGridMocks(): void {
+  if (typeof useConnectionStore.setState === "function") {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "Postgres",
+          dbType: "postgresql",
+          host: "localhost",
+          port: 5432,
+          user: "postgres",
+          database: "db1",
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+      groups: [],
+      activeStatuses: {},
+      focusedConnId: "conn1",
+      loading: false,
+      hasLoadedOnce: true,
+      error: null,
+    });
+  }
   mockQueryTableData.mockReset();
   mockQueryTableData.mockResolvedValue({ ...MOCK_DATA });
   mockExecuteQuery.mockReset();

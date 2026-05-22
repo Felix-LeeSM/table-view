@@ -140,6 +140,7 @@ export interface RdbAdapterDeps {
     expectedDatabase?: string,
   ) => Promise<unknown>;
   history: HistoryRecorder;
+  canEditRows?: boolean;
   /**
    * Sprint 347 — DBMS dialect for the SQL generator. Postgres jsonb edits
    * stay on `jsonb_set`; MySQL JSON edits route through `JSON_SET` /
@@ -243,6 +244,7 @@ export function rdbEditAdapter(deps: RdbAdapterDeps): ParadigmEditAdapter {
           // emit (jsonb_set / JSON_SET) to use. Undefined falls back to
           // postgresql inside the generator for Sprint 343/344 callers.
           dialect: deps.dialect,
+          allowRowWrites: deps.canEditRows ?? true,
         },
       );
       if (statements.length === 0) {

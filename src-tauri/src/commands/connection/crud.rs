@@ -46,10 +46,8 @@ pub fn save_connection(req: SaveConnectionRequest) -> Result<ConnectionConfigPub
     if !is_sqlite && req.connection.host.trim().is_empty() {
         return Err(AppError::Validation("Host is required".into()));
     }
-    if is_sqlite && req.connection.database.trim().is_empty() {
-        return Err(AppError::Validation(
-            "SQLite database file is required".into(),
-        ));
+    if is_sqlite {
+        SqliteAdapter::validate_user_database_path(&req.connection.database)?;
     }
 
     let mut conn = req.connection.into_config_with_empty_password();

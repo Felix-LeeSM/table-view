@@ -8,7 +8,7 @@
  */
 import { useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { Database, FolderOpen } from "lucide-react";
+import { Database, FolderOpen, LockKeyhole } from "lucide-react";
 import { createSqliteDatabaseFile } from "@/lib/tauri/connection";
 import type { ConnectionDraft } from "@/types/connection";
 
@@ -109,6 +109,19 @@ export default function SqliteFormFields({
       <p className="mt-1 text-2xs text-muted-foreground">
         Absolute path to a SQLite database file.
       </p>
+      <label className="mt-3 flex items-center gap-2 text-xs text-secondary-foreground">
+        <input
+          type="checkbox"
+          checked={draft.readOnly === true}
+          onChange={(e) => onChange({ readOnly: e.target.checked })}
+          className="h-3.5 w-3.5 rounded border-border"
+        />
+        <LockKeyhole
+          className="h-3.5 w-3.5 text-muted-foreground"
+          aria-hidden="true"
+        />
+        Open read-only
+      </label>
       {createError && (
         <p className="mt-1 text-xs text-destructive" role="alert">
           {createError}

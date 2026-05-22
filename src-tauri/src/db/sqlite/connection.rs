@@ -5,12 +5,13 @@ use sqlx::{Row, SqlitePool};
 use std::collections::{HashMap, HashSet};
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::error::AppError;
 use crate::models::{ColumnCategory, ColumnInfo, ConnectionConfig, TableInfo};
+use crate::storage;
 
 const SQLITE_POOL_MAX_CONNECTIONS: u32 = 5;
 const SQLITE_POOL_ACQUIRE_TIMEOUT_MAX_SECS: u64 = 30;
@@ -41,22 +42,37 @@ impl SqliteAdapter {
         }
     }
 
-    fn database_path(config: &ConnectionConfig) -> Result<&str, AppError> {
-        let path = config.database.trim();
+    pub(crate) fn validate_user_database_path(path: &str) -> Result<&str, AppError> {
+        let path = path.trim();
         if path.is_empty() {
             return Err(AppError::Validation(
                 "SQLite database file is required".into(),
             ));
         }
+        let path_ref = Path::new(path);
+        if !path_ref.is_absolute() {
+            return Err(AppError::Validation(
+                "SQLite database file path must be absolute".into(),
+            ));
+        }
+        reject_internal_app_state_path(path_ref)?;
         Ok(path)
+    }
+
+    fn database_path(config: &ConnectionConfig) -> Result<&str, AppError> {
+        Self::validate_user_database_path(&config.database)
     }
 
     fn connect_options(config: &ConnectionConfig) -> Result<SqliteConnectOptions, AppError> {
         let path = Self::database_path(config)?;
-        Ok(SqliteConnectOptions::new()
+        let mut options = SqliteConnectOptions::new()
             .filename(Path::new(path))
             .create_if_missing(false)
-            .foreign_keys(true))
+            .foreign_keys(true);
+        if config.read_only {
+            options = options.read_only(true);
+        }
+        Ok(options)
     }
 
     pub async fn create_database_file(path: &str) -> Result<String, AppError> {
@@ -73,6 +89,7 @@ impl SqliteAdapter {
                 "SQLite database file path must be absolute".into(),
             ));
         }
+        reject_internal_app_state_path(path)?;
         let parent = path.parent().ok_or_else(|| {
             AppError::Validation("SQLite database file parent directory is required".into())
         })?;
@@ -306,6 +323,42 @@ impl SqliteAdapter {
         }
         Ok(result)
     }
+}
+
+fn reject_internal_app_state_path(path: &Path) -> Result<(), AppError> {
+    let internal = storage::local::db_path()?;
+    let direct_match = path == internal.as_path();
+    let normalized_match = normalize_absolute_path(path) == normalize_absolute_path(&internal);
+    let canonical_match = match (
+        std::fs::canonicalize(path),
+        std::fs::canonicalize(&internal),
+    ) {
+        (Ok(candidate), Ok(internal)) => candidate == internal,
+        _ => false,
+    };
+
+    if direct_match || normalized_match || canonical_match {
+        return Err(AppError::Validation(
+            "SQLite database file cannot target internal app SQLite state".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn normalize_absolute_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            Component::RootDir => normalized.push(component.as_os_str()),
+            Component::Normal(segment) => normalized.push(segment),
+        }
+    }
+    normalized
 }
 
 pub(super) fn validate_namespace(namespace: &str) -> Result<(), AppError> {

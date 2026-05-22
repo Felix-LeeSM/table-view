@@ -304,6 +304,7 @@ export interface GenerateSqlOptions {
    * message (`json1` extension dispatch is a follow-up sprint).
    */
   dialect?: SqlDialect;
+  allowRowWrites?: boolean;
 }
 
 /**
@@ -909,6 +910,8 @@ export function generateSqlWithKeys(
   pendingNewRows: unknown[][],
   options: GenerateSqlOptions = {},
 ): GeneratedSqlStatement[] {
+  if (options.allowRowWrites === false) return [];
+
   const pkCols = data.columns.filter((c) => c.is_primary_key);
   const statements: GeneratedSqlStatement[] = [];
   const qualifiedTable = schema ? `${schema}.${table}` : table;

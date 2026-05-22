@@ -68,6 +68,8 @@ export interface ConnectionConfig {
   port: number;
   user: string;
   database: string;
+  /** SQLite-only: open the user-managed database file without write access. */
+  readOnly?: boolean;
   groupId: string | null;
   color: string | null;
   connectionTimeout?: number;
@@ -197,6 +199,7 @@ export function createEmptyDraft(): ConnectionDraft {
     user: "postgres",
     password: "",
     database: "postgres",
+    readOnly: false,
     groupId: null,
     color: null,
     paradigm: "rdb",
@@ -215,6 +218,7 @@ export function draftFromConnection(conn: ConnectionConfig): ConnectionDraft {
     port: conn.port,
     user: conn.user,
     database: conn.database,
+    readOnly: conn.readOnly ?? false,
     groupId: conn.groupId,
     color: conn.color,
     connectionTimeout: conn.connectionTimeout,
@@ -245,6 +249,7 @@ export function parseConnectionUrl(
         user: "",
         password: "",
         database: path,
+        readOnly: false,
         paradigm: paradigmOf("sqlite"),
       };
     }
@@ -303,6 +308,7 @@ export function parseSqliteFilePath(
     user: "",
     password: "",
     database: trimmed,
+    readOnly: false,
     paradigm: paradigmOf("sqlite"),
   };
 }
