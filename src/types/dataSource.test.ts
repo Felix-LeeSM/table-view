@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   DATABASE_TYPE_LABELS,
+  SUPPORTED_DATABASE_TYPES,
   type DatabaseType,
   paradigmOf,
 } from "./connection";
+import { toWorkspaceQueryLanguage } from "@stores/workspaceStore/queryMode";
 import {
   createEmptyDataSourceCapabilities,
   DATA_SOURCE_PROFILES,
@@ -206,6 +208,24 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
     expect(isConnectionSupportedDatabaseType("redis")).toBe(false);
+  });
+
+  it("keeps legacy URL supported DBMS list aligned with profile-supported DBMS", () => {
+    expect(getConnectionSupportedDatabaseTypes()).toEqual(
+      SUPPORTED_DATABASE_TYPES,
+    );
+  });
+
+  it("keeps current query-tab language defaults aligned with source profiles", () => {
+    for (const dbType of SUPPORTED_DATABASE_TYPES) {
+      const profile = getDataSourceProfile(dbType);
+
+      expect(
+        toWorkspaceQueryLanguage({
+          paradigm: profile.paradigm,
+        }),
+      ).toBe(profile.languages[0]);
+    }
   });
 
   it("keeps switch-database capability enabled for RDBMS profiles and disabled for Mongo", () => {

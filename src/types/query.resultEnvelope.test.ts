@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DocumentQueryResult } from "./document";
+import { getDataSourceProfile } from "./dataSource";
 import {
   createDocumentResultEnvelope,
   createTabularResultEnvelope,
@@ -72,6 +73,37 @@ describe("result envelope compatibility layer", () => {
         message:
           "Result envelope kind 'metrics' does not have a QueryResult compatibility projection.",
       },
+    });
+  });
+
+  it("keeps current source profile result kinds compatible with the legacy renderer boundary", () => {
+    for (const dbType of [
+      "postgresql",
+      "mysql",
+      "mariadb",
+      "sqlite",
+    ] as const) {
+      const profile = getDataSourceProfile(dbType);
+
+      expect(profile.resultKinds).toEqual(["tabular"]);
+      expect(
+        toCompatibleQueryResult(createTabularResultEnvelope(tabularResult)),
+      ).toEqual({
+        ok: true,
+        queryResult: tabularResult,
+      });
+    }
+
+    const mongo = getDataSourceProfile("mongodb");
+    expect(mongo.resultKinds).toEqual(["document", "tabular"]);
+    expect(
+      toCompatibleQueryResult(createDocumentResultEnvelope(documentResult)).ok,
+    ).toBe(true);
+    expect(
+      toCompatibleQueryResult(createTabularResultEnvelope(tabularResult)),
+    ).toEqual({
+      ok: true,
+      queryResult: tabularResult,
     });
   });
 });
