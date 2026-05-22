@@ -9,6 +9,7 @@
 mod batch;
 mod connection;
 mod queries;
+mod sql_text;
 
 pub use connection::SqliteAdapter;
 

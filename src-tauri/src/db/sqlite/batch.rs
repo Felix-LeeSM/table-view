@@ -6,9 +6,8 @@ use crate::error::AppError;
 use crate::models::{QueryResult, QueryType};
 
 use super::connection::SqliteAdapter;
-use super::queries::{
-    sqlite_query_type, strip_trailing_terminator, validate_sqlite_write_guardrails,
-};
+use super::queries::validate_sqlite_write_guardrails;
+use super::sql_text::{sqlite_query_type, strip_trailing_terminator};
 
 enum BatchMode {
     Commit,

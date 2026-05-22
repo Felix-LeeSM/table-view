@@ -153,6 +153,23 @@ async fn execute_query_batch_rejects_read_only_sqlite_writes_clearly() {
 }
 
 #[tokio::test]
+async fn execute_query_batch_rejects_cte_prefixed_read_only_sqlite_writes_clearly() {
+    let (_dir, adapter) = connected_read_only_adapter().await;
+    let statements = vec!["WITH next_name(value) AS (SELECT 'Ada Readonly')
+         UPDATE users SET name = (SELECT value FROM next_name) WHERE id = 1"
+        .to_string()];
+
+    let result = adapter.execute_query_batch(&statements, None).await;
+
+    match result {
+        Err(AppError::Unsupported(message)) => {
+            assert!(message.contains("read-only SQLite connection"))
+        }
+        other => panic!("Expected read-only unsupported error, got: {:?}", other),
+    }
+}
+
+#[tokio::test]
 async fn execute_query_batch_rejects_sqlite_ddl_clearly() {
     let (_dir, adapter) = connected_adapter().await;
     let statements = vec!["ALTER TABLE users ADD COLUMN nickname TEXT".to_string()];

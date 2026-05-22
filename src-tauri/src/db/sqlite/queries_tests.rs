@@ -71,6 +71,32 @@ async fn connected_adapter() -> (tempfile::TempDir, SqliteAdapter) {
     (dir, adapter)
 }
 
+async fn connected_read_only_adapter() -> (tempfile::TempDir, SqliteAdapter) {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("app.sqlite");
+    seed_sqlite(&db_path).await;
+    let mut config = sqlite_config(db_path.to_str().unwrap());
+    config.read_only = true;
+    let adapter = SqliteAdapter::new();
+    adapter.connect_pool(&config).await.unwrap();
+    (dir, adapter)
+}
+
+#[test]
+fn sqlite_query_type_classifies_cte_prefixed_main_statement() {
+    assert!(matches!(
+        sqlite_query_type("WITH active AS (SELECT id FROM users) SELECT * FROM active"),
+        QueryType::Select
+    ));
+    assert!(matches!(
+        sqlite_query_type(
+            "WITH next_name(value) AS (SELECT 'Ada Readonly')
+             UPDATE users SET name = (SELECT value FROM next_name) WHERE id = 1"
+        ),
+        QueryType::Dml { .. }
+    ));
+}
+
 #[tokio::test]
 async fn execute_query_select_returns_columns_and_rows() {
     let (_dir, adapter) = connected_adapter().await;
@@ -114,6 +140,26 @@ async fn execute_query_dml_returns_rows_affected() {
         other => panic!("Expected DML result, got: {:?}", other),
     }
     assert_eq!(result.total_count, 1);
+}
+
+#[tokio::test]
+async fn execute_query_rejects_cte_prefixed_write_on_read_only_sqlite() {
+    let (_dir, adapter) = connected_read_only_adapter().await;
+
+    let result = adapter
+        .execute_query(
+            "WITH next_name(value) AS (SELECT 'Ada Readonly')
+             UPDATE users SET name = (SELECT value FROM next_name) WHERE id = 1",
+            None,
+        )
+        .await;
+
+    match result {
+        Err(AppError::Unsupported(message)) => {
+            assert!(message.contains("read-only SQLite connection"))
+        }
+        other => panic!("Expected read-only unsupported error, got: {:?}", other),
+    }
 }
 
 #[tokio::test]

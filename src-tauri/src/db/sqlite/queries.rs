@@ -13,32 +13,7 @@ use crate::models::{
 use super::connection::{
     quote_identifier, sqlite_column_category, validate_namespace, SqliteAdapter,
 };
-
-fn strip_leading_comments(sql: &str) -> &str {
-    let mut s = sql.trim_start();
-    loop {
-        if s.starts_with("--") {
-            if let Some(idx) = s.find('\n') {
-                s = s[idx + 1..].trim_start();
-            } else {
-                return "";
-            }
-        } else if s.starts_with("/*") {
-            if let Some(idx) = s.find("*/") {
-                s = s[idx + 2..].trim_start();
-            } else {
-                return "";
-            }
-        } else {
-            break;
-        }
-    }
-    s
-}
-
-pub(super) fn strip_trailing_terminator(sql: &str) -> &str {
-    sql.trim_end_matches(|c: char| c == ';' || c.is_whitespace())
-}
+use super::sql_text::{sqlite_query_type, strip_trailing_terminator};
 
 fn validate_raw_where(rw: &str) -> Result<(), AppError> {
     validate_raw_where_clause(RawWhereDialect::Sqlite, rw)
@@ -106,25 +81,6 @@ fn cell_to_json(row: &SqliteRow, idx: usize) -> serde_json::Value {
     )));
 
     serde_json::Value::Null
-}
-
-pub(super) fn sqlite_query_type(sql: &str) -> QueryType {
-    let stripped = strip_leading_comments(sql).to_uppercase();
-    if stripped.starts_with("SELECT")
-        || stripped.starts_with("WITH")
-        || stripped.starts_with("PRAGMA")
-        || stripped.starts_with("EXPLAIN")
-    {
-        QueryType::Select
-    } else if stripped.starts_with("INSERT")
-        || stripped.starts_with("UPDATE")
-        || stripped.starts_with("DELETE")
-        || stripped.starts_with("REPLACE")
-    {
-        QueryType::Dml { rows_affected: 0 }
-    } else {
-        QueryType::Ddl
-    }
 }
 
 pub(super) fn validate_sqlite_write_guardrails(
