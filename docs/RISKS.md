@@ -2,14 +2,14 @@
 
 잔여 위험 단일 추적 문서. 스프린트 handoff를 다시 읽지 않아도 됨.
 
-Last updated: 2026-05-22 (Sprint 435 — RISK-040 resolved)
+Last updated: 2026-05-22 (Sprint 438 — RISK-041 resolved)
 
 ## Summary
 
 | Status    | Count |
 |-----------|-------|
-| Active    | 27    |
-| Resolved  | 13    |
+| Active    | 26    |
+| Resolved  | 14    |
 | Deferred  | 1     |
 | **Total** | **41** |
 
@@ -59,7 +59,7 @@ Last updated: 2026-05-22 (Sprint 435 — RISK-040 resolved)
 | RISK-038 | Code smell audit 2026-05-15 Part A 12 candidate (god file / 룰 위반 / dialect 중복) 중 Sprint 353–376 state-management plan 범위 밖 잔여: #1 `useQueryExecution.ts` paradigm + Safe Mode split, #2 `postgres/mutations.rs` 도메인 분할 (+ mysql pair), #3 `rdb/DataGrid.tsx` column 메타 hook, #4 RDB command handler dispatch 매크로, #5 `CreateTableDialog.tsx` ColumnsTabBody, #6 B-1 위반 5건 store action, #7 `useDataGridEdit.ts` paradigm + undo lib, #8 `postgres/schema.rs` 도메인 분할, #9 identifier validation 공통화, #10 `useFormResetOnOpen`, #11 `workspaceStore` B-6 cross-store 의존 (ADR or signature 변경), #12 `DocumentDataGrid` MQL preview modal | active | refactor backlog | code-smell-audit-2026-05-15 | 종결: 12 candidate 각각 sprint 등록 + 처리 또는 audit 문서 retire 결정 |
 | RISK-039 | `dataGridEditStore.entryKey(connId, schema, table)` 가 `workspaceStore` 의 `(connId, db)` 키 공간보다 얕음 — db 차원 누락. 다중 db 에서 같은 `public.users` 존재 시 db1 의 pending edit 가 db2 에 잘못 commit 될 invariant 누수 (audit L1, 🔴 High). | resolved | frontend/logic | code-smell-audit-2026-05-15 (L1) | Sprint 433 — `entryKey(connId, db, schema, table)` 로 확장, RDB commit `expectedDatabase` 전파, hook remount / removeTab purge 회귀 테스트로 잠금 |
 | RISK-040 | Connection cleanup 책임 5 store × 5+ 호출처 분산 (audit L4, 🔴 High). `connectionStore` / `schemaStore` / `documentStore` / `workspaceStore` / `dataGridEditStore` cleanup 이 paired 호출 보장 없이 호출처별 일부만 trigger. `useConnectionLifecycle.disconnect()` 외 경로 (외부 IPC event 등) 에서 `workspaceStore.clearForConnection` 누락 시 유령 탭 / pendingEdits 잔존. Sprint 365 cross-window `state-changed` 가 일부 cleanup chain 자동화하지만 5 store paired invariant orchestrator 는 별도 작업 | resolved | frontend/logic | code-smell-audit-2026-05-15 (L4) | Sprint 435 — `cleanupConnectionFrontendState(connectionId)` 단일 진입점 + connection state-transition watcher로 disconnect/delete/status-event cleanup 수렴, workspace tab/dataGrid pending/idempotence coverage로 잠금 |
-| RISK-041 | Code smell audit 2026-05-15 Part B 잔여 6항목 (Sprint 353–376 범위 밖): L3 `schemaStore.clearSchema` ≡ `clearForConnection` dead alias, L6 `QueryMode` type alias 가 `workspaceStore` (legacy persisted hint) vs `queryHistoryStore` (dispatched method) 두 의미로 분열, L7 `workspaceStore` queryId stale guard 4 사이트 중복 (~30 LOC 절감 가능), L8 `workspaceStore.ts` 파일에 selector hook 9개 동거 (`selectors.ts` 분리 후보), L9 `paradigm` 정보 3 store cache (drift 0 — 메모 수준), L10 `EMPTY_ENTRY` shallow freeze (`pendingEdits: Map` mutable, 컨벤션 의존 fragile invariant) | active | refactor backlog | code-smell-audit-2026-05-15 | 종결: 6 항목 각각 sprint 등록 + 처리 또는 audit 문서 retire 결정 |
+| RISK-041 | Code smell audit 2026-05-15 Part B 잔여 6항목 (Sprint 353–376 범위 밖): L3 `schemaStore.clearSchema` dead alias, L6 workspace persisted query hint vs history dispatched method split, L7 `workspaceStore` stale-query guard duplication, L8 selector hook colocating risk, L9 `paradigm` cache drift memo, L10 `EMPTY_ENTRY` shallow freeze | resolved | refactor backlog | code-smell-audit-2026-05-15 | Sprint 436–438 — L3 alias removed; L6 mode boundaries split; L7 stale guard extracted; L8 already satisfied by `workspaceStore/selectors.ts`; L9 documented as memo-level drift 0; L10 sentinel hardened |
 
 ---
 
@@ -144,3 +144,9 @@ Details for every resolved risk.
 - **Origin**: code-smell-audit-2026-05-15 (L4)
 - **Resolved in**: Sprint 435 (2026-05-22)
 - **Fix**: Added a single frontend cleanup entry point for `connectionId` and routed connection disconnect/delete/status transitions through it. The cleanup clears schema caches, document catalog/query caches, workspace tabs, and dataGrid pending edits together. Regression coverage locks workspace tab removal, pending edit purge, and repeated-call idempotence.
+
+### RISK-041 — Code smell audit Part B 잔여 6항목
+
+- **Origin**: code-smell-audit-2026-05-15 (L3/L6/L7/L8/L9/L10)
+- **Resolved in**: Sprint 436–438 (2026-05-22)
+- **Fix**: Sprint 436 removed the dead `schemaStore.clearSchema` alias and locked `clearForConnection` as the public eviction API. Sprint 437 split workspace persisted query-mode hints from history dispatched modes, added a query-mode adapter, and extracted the repeated stale-query guard; its audit also confirmed selector hooks already live in `workspaceStore/selectors.ts`. Sprint 438 made `dataGridEditStore.EMPTY_ENTRY` readonly at the type boundary and guarded its shared empty Map/Set/Array containers against direct mutation. L9 stayed memo-level because the audit found drift 0 and no code action was warranted.

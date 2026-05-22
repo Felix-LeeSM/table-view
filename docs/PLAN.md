@@ -239,14 +239,20 @@ architecture 자체가 아니라 dialect semantic widening / capability gating /
 SQLite write parity 같은 개별 feature backlog 로 취급한다. Sprint 434 는
 MySQL/MariaDB `ON DUPLICATE KEY UPDATE` parser semantic gap 을 닫고, 남은
 MySQL-family widening 을 routine/scripting grammar 와 broader RHS expression
-coverage 로 축소했다.
+coverage 로 축소했다. Sprint 439 는 narrow `CALL` parser semantics 를 공통
+client parser behavior 로 열어 procedure dispatch gap 을 줄였다. 남은
+MySQL-family parser widening 은 broader CALL arguments, user variables,
+routine bodies, `DELIMITER`, `LOAD DATA`, transaction/control-flow scripting 이다.
 
-### Risk closure follow-up (Sprint 433–435)
+### Risk closure follow-up (Sprint 433–438)
 
 | Sprint | Risk | Outcome |
 |---|---|---|
 | **433** ✓ | RISK-039 | RDB pending edit keys now include database identity. |
 | **435** ✓ | RISK-040 | Connection teardown now flows through one frontend cleanup entry point for caches, workspace tabs, and pending edits. |
+| **436** ✓ | RISK-041/L3 | Removed the dead `schemaStore.clearSchema` alias. |
+| **437** ✓ | RISK-041/L6/L7/L8 | Split workspace query-mode hints from dispatched history modes, extracted the shared stale-query guard, and confirmed selector hooks already live in `workspaceStore/selectors.ts`. |
+| **438** ✓ | RISK-041/L10 | Hardened `dataGridEditStore.EMPTY_ENTRY` with readonly types and runtime mutation guards. |
 
 ## 문서 목차
 
