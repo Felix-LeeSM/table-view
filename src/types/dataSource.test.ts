@@ -15,6 +15,12 @@ describe("DataSourceProfile registry", () => {
     );
   });
 
+  function capabilityValues(dbType: DatabaseType): boolean[] {
+    return Object.values(getDataSourceProfile(dbType).capabilities).flatMap(
+      (group) => Object.values(group),
+    );
+  }
+
   it("keeps every profile aligned with the current DatabaseType identity", () => {
     for (const dbType of allDatabaseTypes) {
       const profile = getDataSourceProfile(dbType);
@@ -27,7 +33,76 @@ describe("DataSourceProfile registry", () => {
         (group) => Object.values(group),
       );
       expect(capabilityValues.length).toBeGreaterThan(0);
-      expect(capabilityValues.every((value) => value === false)).toBe(true);
+    }
+  });
+
+  it("describes PostgreSQL as the current RDBMS baseline", () => {
+    expect(getDataSourceProfile("postgresql").capabilities).toMatchObject({
+      connection: { test: true, switchDatabase: true, readOnly: false },
+      query: { query: true, multiStatement: true, cancel: true },
+      catalog: {
+        browse: true,
+        schema: true,
+        indexes: true,
+        constraints: true,
+        relationships: true,
+      },
+      edit: { editRows: true, editDocuments: false, editKeys: false },
+      ddl: {
+        createTable: true,
+        alterTable: true,
+        createIndex: true,
+        dropObject: true,
+      },
+    });
+  });
+
+  it("keeps MariaDB capability-compatible with the MySQL-family profile", () => {
+    expect(getDataSourceProfile("mariadb").capabilities).toEqual(
+      getDataSourceProfile("mysql").capabilities,
+    );
+  });
+
+  it("describes SQLite as a file RDBMS without switch-db or DDL parity", () => {
+    const sqlite = getDataSourceProfile("sqlite");
+
+    expect(sqlite.connectionKind).toBe("file");
+    expect(sqlite.capabilities).toMatchObject({
+      connection: { test: true, filePicker: true, switchDatabase: false },
+      query: { query: true, multiStatement: true },
+      catalog: { browse: true, schema: true, indexes: false },
+      ddl: {
+        createTable: false,
+        alterTable: false,
+        createIndex: false,
+        dropObject: false,
+      },
+    });
+  });
+
+  it("keeps MongoDB document-scoped and separate from global switch-db", () => {
+    const mongo = getDataSourceProfile("mongodb");
+
+    expect(mongo.paradigm).toBe("document");
+    expect(mongo.languages).toEqual(["mongosh"]);
+    expect(mongo.capabilities).toMatchObject({
+      connection: { test: true, switchDatabase: false },
+      query: { query: true, multiStatement: false, cancel: false },
+      catalog: { browse: true, schema: true, indexes: true },
+      edit: { editRows: false, editDocuments: true, bulkWrite: true },
+      ddl: { createIndex: true, dropObject: true },
+    });
+  });
+
+  it("keeps unsupported profiles structurally present but capability-empty", () => {
+    for (const dbType of [
+      "mssql",
+      "oracle",
+      "redis",
+    ] satisfies DatabaseType[]) {
+      expect(capabilityValues(dbType).every((value) => value === false)).toBe(
+        true,
+      );
     }
   });
 
