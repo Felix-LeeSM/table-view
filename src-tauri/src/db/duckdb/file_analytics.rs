@@ -56,6 +56,7 @@ impl DuckdbAdapter {
         let source = self.get_file_analytics_source(source_id).await?;
         let settings = self.active_settings().await?;
         let limit = normalize_preview_limit(limit)?;
+        let source = refresh_registered_file_source(&source)?;
         let redactions = redaction_needles(&settings, &source);
         let source_for_work = source.clone();
 
@@ -88,6 +89,7 @@ impl DuckdbAdapter {
         validate_file_analytics_sql(&sql)?;
         let source = self.get_file_analytics_source(source_id).await?;
         let settings = self.active_settings().await?;
+        let source = refresh_registered_file_source(&source)?;
         let mut redactions = redaction_needles(&settings, &source);
         redactions.extend(sql_path_literals(&sql));
         let source_for_work = source.clone();
@@ -215,11 +217,27 @@ fn validate_file_analytics_sql(sql: &str) -> Result<(), AppError> {
     }
     validate_supported_sql(sql)?;
     match first_sql_word(sql) {
-        Some("SELECT" | "WITH" | "VALUES") => Ok(()),
+        Some("SELECT" | "VALUES") => Ok(()),
         _ => Err(AppError::Unsupported(
             "DuckDB file analytics supports read-only SELECT queries".into(),
         )),
     }
+}
+
+fn refresh_registered_file_source(
+    source: &RegisteredFileAnalyticsSource,
+) -> Result<RegisteredFileAnalyticsSource, AppError> {
+    let validated = validate_local_file_source(&source.path)?;
+    if validated.path != source.path || validated.kind != source.public.kind {
+        return Err(AppError::Validation(
+            "Local file source changed since registration".into(),
+        ));
+    }
+
+    let mut refreshed = source.clone();
+    refreshed.public.file_name = validated.file_name;
+    refreshed.public.size_bytes = validated.size_bytes;
+    Ok(refreshed)
 }
 
 fn create_source_view(

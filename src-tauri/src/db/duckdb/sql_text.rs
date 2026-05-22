@@ -90,7 +90,9 @@ pub(super) fn validate_supported_sql(sql: &str) -> Result<(), AppError> {
         ));
     }
 
-    if contains_prefixed_function_call(&upper, "READ_") {
+    if contains_prefixed_function_call(&upper, "READ_")
+        || contains_quoted_prefixed_function_call(&upper, "READ_")
+    {
         return Err(AppError::Unsupported(
             "DuckDB CSV/Parquet/JSON local file access functions are not supported in this runtime slice".into(),
         ));
@@ -104,7 +106,9 @@ pub(super) fn validate_supported_sql(sql: &str) -> Result<(), AppError> {
         "PARQUET_FILE_METADATA",
         "PARQUET_KV_METADATA",
     ] {
-        if contains_function_call(&upper, function) {
+        if contains_function_call(&upper, function)
+            || contains_quoted_function_call(&upper, function)
+        {
             return Err(AppError::Unsupported(
                 "DuckDB CSV/Parquet/JSON local file access functions are not supported in this runtime slice".into(),
             ));
@@ -148,6 +152,29 @@ fn contains_string_table_reference(sql: &str) -> bool {
     false
 }
 
+fn contains_quoted_prefixed_function_call(sql: &str, prefix: &str) -> bool {
+    let mut start = 0;
+    while let Some(offset) = sql[start..].find('"') {
+        let idx = start + offset;
+        let name_start = idx + 1;
+        if !sql[name_start..].starts_with(prefix) {
+            start = name_start;
+            continue;
+        }
+
+        let Some(relative_end) = sql[name_start..].find('"') else {
+            break;
+        };
+        let end = name_start + relative_end;
+        if sql[name_start..end].chars().all(is_identifier_char) && is_followed_by_call(sql, end + 1)
+        {
+            return true;
+        }
+        start = end + 1;
+    }
+    false
+}
+
 fn contains_prefixed_function_call(sql: &str, prefix: &str) -> bool {
     let mut start = 0;
     while let Some(offset) = sql[start..].find(prefix) {
@@ -188,6 +215,19 @@ fn contains_prefixed_function_call(sql: &str, prefix: &str) -> bool {
     false
 }
 
+fn contains_quoted_function_call(sql: &str, function: &str) -> bool {
+    let quoted = format!("\"{function}\"");
+    let mut start = 0;
+    while let Some(offset) = sql[start..].find(&quoted) {
+        let idx = start + offset;
+        if is_followed_by_call(sql, idx + quoted.len()) {
+            return true;
+        }
+        start = idx + quoted.len();
+    }
+    false
+}
+
 fn contains_function_call(sql: &str, function: &str) -> bool {
     let mut start = 0;
     while let Some(offset) = sql[start..].find(function) {
@@ -211,6 +251,17 @@ fn contains_function_call(sql: &str, function: &str) -> bool {
             return true;
         }
         start = after_idx;
+    }
+    false
+}
+
+fn is_followed_by_call(sql: &str, index: usize) -> bool {
+    let mut chars = sql[index..].chars();
+    for ch in &mut chars {
+        if ch.is_whitespace() {
+            continue;
+        }
+        return ch == '(';
     }
     false
 }

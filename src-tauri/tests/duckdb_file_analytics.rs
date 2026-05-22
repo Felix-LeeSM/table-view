@@ -1,6 +1,6 @@
 use std::fs;
 
-use table_view_lib::db::{DbAdapter, DuckdbAdapter};
+use table_view_lib::db::{DbAdapter, DuckdbAdapter, RdbAdapter};
 use table_view_lib::error::AppError;
 use table_view_lib::models::{ConnectionConfig, DatabaseType, FileAnalyticsSourceKind};
 use tempfile::TempDir;
@@ -171,6 +171,25 @@ async fn duckdb_file_analytics_rejects_unsupported_and_oversized_inputs() {
         Err(AppError::Validation(message)) => assert!(message.contains("exceeds")),
         other => panic!("Expected oversized validation error, got: {other:?}"),
     }
+
+    let csv_path = dir.path().join("mutable.csv");
+    fs::write(&csv_path, "id,name\n1,Ada\n").unwrap();
+    let source = adapter
+        .register_file_analytics_source(csv_path.to_str().unwrap())
+        .await
+        .unwrap();
+    fs::File::create(&csv_path)
+        .unwrap()
+        .set_len(101 * 1024 * 1024)
+        .unwrap();
+
+    let stale_source = adapter
+        .preview_file_analytics_source(&source.id, Some(1))
+        .await;
+    match stale_source {
+        Err(AppError::Validation(message)) => assert!(message.contains("exceeds")),
+        other => panic!("Expected stale oversized source validation error, got: {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -193,8 +212,8 @@ async fn duckdb_file_analytics_redacts_paths_from_driver_errors() {
             let message = error.to_string();
             assert!(!message.contains(&csv_path_str), "leaked path: {message}");
             assert!(
-                message.contains("<local-file>"),
-                "missing redaction: {message}"
+                message.contains("<local-file>") || message.contains("does not exist"),
+                "missing safe local-file failure: {message}"
             );
         }
         Ok(_) => panic!("Expected missing file preview to fail"),
@@ -213,15 +232,23 @@ async fn duckdb_file_analytics_keeps_raw_file_functions_blocked() {
         .register_file_analytics_source(csv_path.to_str().unwrap())
         .await
         .unwrap();
+    adapter
+        .execute_sql("CREATE TABLE sink (id INTEGER)", None)
+        .await
+        .unwrap();
 
     for sql in [
         "SELECT * FROM read_csv_auto('people.csv')".to_string(),
+        format!("SELECT * FROM \"read_csv_auto\"('{secret_path}')"),
         format!("SELECT * FROM read_text('{secret_path}')"),
+        format!("SELECT * FROM \"read_text\"('{secret_path}')"),
         format!("SELECT * FROM read_blob('{secret_path}')"),
         format!("SELECT * FROM sniff_csv('{secret_path}')"),
         format!("SELECT * FROM glob('{secret_path}')"),
+        format!("SELECT * FROM \"glob\"('{secret_path}')"),
         format!("SELECT * FROM parquet_metadata('{secret_path}')"),
         format!("SELECT * FROM '{secret_path}'"),
+        "WITH rows AS (SELECT 1 AS id) INSERT INTO sink SELECT id FROM rows".to_string(),
     ] {
         let raw_read = adapter.execute_file_analytics_query(&source.id, &sql).await;
         assert!(
@@ -234,4 +261,10 @@ async fn duckdb_file_analytics_keeps_raw_file_functions_blocked() {
         .execute_file_analytics_query(&source.id, &format!("DELETE FROM \"{}\"", source.alias))
         .await;
     assert!(matches!(write, Err(AppError::Unsupported(_))));
+
+    let count = adapter
+        .execute_sql("SELECT COUNT(*) FROM sink", None)
+        .await
+        .unwrap();
+    assert_eq!(count.rows, vec![vec![serde_json::json!(0)]]);
 }
