@@ -28,7 +28,7 @@ Last updated: 2026-05-22
 
 | Phase | Current state | Reason |
 |---:|---|---|
-| 5-11 | legacy/partial | superseded by later phase split and sprint plans; legacy Phase 9 sketch removed |
+| 5-11 | legacy/partial | superseded by later phase split and sprint plans; legacy Phase 5-9 sketches removed |
 | 18 | deferred | MariaDB adapter decision pending |
 | 19 | deferred | SQLite DBMS adapter decision pending |
 | 20 | deferred | Oracle not current priority |
