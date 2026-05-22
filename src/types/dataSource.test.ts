@@ -4,10 +4,114 @@ import {
   type DatabaseType,
   paradigmOf,
 } from "./connection";
-import { DATA_SOURCE_PROFILES, getDataSourceProfile } from "./dataSource";
+import {
+  createEmptyDataSourceCapabilities,
+  DATA_SOURCE_PROFILES,
+  type DataSourceCapabilities,
+  getDataSourceProfile,
+} from "./dataSource";
 
 describe("DataSourceProfile registry", () => {
   const allDatabaseTypes = Object.keys(DATABASE_TYPE_LABELS) as DatabaseType[];
+
+  type CapabilityOverrides = {
+    readonly [Group in keyof DataSourceCapabilities]?: Partial<
+      DataSourceCapabilities[Group]
+    >;
+  };
+
+  function expectedCapabilities(
+    overrides: CapabilityOverrides = {},
+  ): DataSourceCapabilities {
+    const capabilities = createEmptyDataSourceCapabilities();
+
+    for (const [group, values] of Object.entries(overrides) as [
+      keyof DataSourceCapabilities,
+      Partial<DataSourceCapabilities[keyof DataSourceCapabilities]>,
+    ][]) {
+      Object.assign(capabilities[group], values);
+    }
+
+    return capabilities;
+  }
+
+  const mysqlFamilyCapabilities = expectedCapabilities({
+    connection: { test: true, switchDatabase: true },
+    query: { query: true, multiStatement: true, cancel: true },
+    catalog: {
+      browse: true,
+      schema: true,
+      indexes: true,
+      constraints: true,
+      relationships: true,
+    },
+    edit: { editRows: true },
+    ddl: {
+      createTable: true,
+      alterTable: true,
+      createIndex: true,
+      dropObject: true,
+    },
+  });
+
+  const expectedCapabilitiesByType: Record<
+    DatabaseType,
+    DataSourceCapabilities
+  > = {
+    postgresql: expectedCapabilities({
+      connection: { test: true, switchDatabase: true },
+      query: {
+        query: true,
+        multiStatement: true,
+        cancel: true,
+        explain: true,
+      },
+      catalog: {
+        browse: true,
+        schema: true,
+        indexes: true,
+        constraints: true,
+        relationships: true,
+      },
+      edit: { editRows: true },
+      ddl: {
+        createTable: true,
+        alterTable: true,
+        createIndex: true,
+        dropObject: true,
+      },
+      operations: {
+        activity: true,
+        slowQueries: true,
+        stats: true,
+        serverInfo: true,
+      },
+    }),
+    mysql: mysqlFamilyCapabilities,
+    mariadb: mysqlFamilyCapabilities,
+    sqlite: expectedCapabilities({
+      connection: { test: true, filePicker: true },
+      query: { query: true, multiStatement: true, cancel: true },
+      catalog: { browse: true, schema: true },
+      edit: { editRows: true },
+    }),
+    mssql: createEmptyDataSourceCapabilities(),
+    oracle: createEmptyDataSourceCapabilities(),
+    mongodb: expectedCapabilities({
+      connection: { test: true },
+      query: { query: true, cancel: true, explain: true },
+      catalog: { browse: true, schema: true, indexes: true },
+      edit: { editDocuments: true, bulkWrite: true },
+      ddl: { createIndex: true, dropObject: true },
+      operations: {
+        activity: true,
+        slowQueries: true,
+        stats: true,
+        serverInfo: true,
+      },
+    }),
+    redis: createEmptyDataSourceCapabilities(),
+  };
 
   it("contains exactly one profile for every DatabaseType", () => {
     expect(Object.keys(DATA_SOURCE_PROFILES).sort()).toEqual(
@@ -18,16 +122,63 @@ describe("DataSourceProfile registry", () => {
   it("keeps every profile aligned with the current DatabaseType identity", () => {
     for (const dbType of allDatabaseTypes) {
       const profile = getDataSourceProfile(dbType);
+      const capabilityValues = Object.values(profile.capabilities).flatMap(
+        (group) => Object.values(group),
+      );
 
       expect(profile.id).toBe(dbType);
       expect(profile.paradigm).toBe(paradigmOf(dbType));
       expect(profile.languages.length).toBeGreaterThan(0);
       expect(profile.resultKinds.length).toBeGreaterThan(0);
-      const capabilityValues = Object.values(profile.capabilities).flatMap(
-        (group) => Object.values(group),
-      );
       expect(capabilityValues.length).toBeGreaterThan(0);
-      expect(capabilityValues.every((value) => value === false)).toBe(true);
+    }
+  });
+
+  it("locks exact current-state capability matrices for every DatabaseType", () => {
+    for (const dbType of allDatabaseTypes) {
+      expect(getDataSourceProfile(dbType).capabilities).toEqual(
+        expectedCapabilitiesByType[dbType],
+      );
+    }
+  });
+
+  it("keeps PostgreSQL as the current RDBMS baseline", () => {
+    expect(getDataSourceProfile("postgresql").capabilities).toEqual(
+      expectedCapabilitiesByType.postgresql,
+    );
+  });
+
+  it("keeps MariaDB capability-compatible with the MySQL-family profile", () => {
+    expect(getDataSourceProfile("mariadb").capabilities).toEqual(
+      getDataSourceProfile("mysql").capabilities,
+    );
+  });
+
+  it("describes SQLite as a file RDBMS without switch-db or DDL parity", () => {
+    const sqlite = getDataSourceProfile("sqlite");
+
+    expect(sqlite.connectionKind).toBe("file");
+    expect(sqlite.capabilities).toEqual(expectedCapabilitiesByType.sqlite);
+  });
+
+  it("keeps MongoDB document-scoped and separate from global switch-db", () => {
+    const mongo = getDataSourceProfile("mongodb");
+
+    expect(mongo.paradigm).toBe("document");
+    expect(mongo.languages).toEqual(["mongosh"]);
+    expect(mongo.capabilities.connection.switchDatabase).toBe(false);
+    expect(mongo.capabilities).toEqual(expectedCapabilitiesByType.mongodb);
+  });
+
+  it("keeps unsupported profiles structurally present but capability-empty", () => {
+    for (const dbType of [
+      "mssql",
+      "oracle",
+      "redis",
+    ] satisfies DatabaseType[]) {
+      expect(getDataSourceProfile(dbType).capabilities).toEqual(
+        createEmptyDataSourceCapabilities(),
+      );
     }
   });
 

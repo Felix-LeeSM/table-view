@@ -183,6 +183,141 @@ function freezeCapabilities(
   return Object.freeze(capabilities);
 }
 
+type CapabilityOverrides = {
+  readonly [Group in keyof DataSourceCapabilities]?: Partial<
+    DataSourceCapabilities[Group]
+  >;
+};
+
+function capabilities(
+  overrides: CapabilityOverrides = {},
+): DataSourceCapabilities {
+  const base = createEmptyDataSourceCapabilities();
+
+  for (const [group, values] of Object.entries(overrides) as [
+    keyof DataSourceCapabilities,
+    Partial<DataSourceCapabilities[keyof DataSourceCapabilities]>,
+  ][]) {
+    Object.assign(base[group], values);
+  }
+
+  return freezeCapabilities(base);
+}
+
+export const UNSUPPORTED_CAPABILITIES = capabilities();
+
+export const POSTGRESQL_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+    switchDatabase: true,
+  },
+  query: {
+    query: true,
+    multiStatement: true,
+    cancel: true,
+    explain: true,
+  },
+  catalog: {
+    browse: true,
+    schema: true,
+    indexes: true,
+    constraints: true,
+    relationships: true,
+  },
+  edit: {
+    editRows: true,
+  },
+  ddl: {
+    createTable: true,
+    alterTable: true,
+    createIndex: true,
+    dropObject: true,
+  },
+  operations: {
+    activity: true,
+    slowQueries: true,
+    stats: true,
+    serverInfo: true,
+  },
+});
+
+export const MYSQL_FAMILY_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+    switchDatabase: true,
+  },
+  query: {
+    query: true,
+    multiStatement: true,
+    cancel: true,
+  },
+  catalog: {
+    browse: true,
+    schema: true,
+    indexes: true,
+    constraints: true,
+    relationships: true,
+  },
+  edit: {
+    editRows: true,
+  },
+  ddl: {
+    createTable: true,
+    alterTable: true,
+    createIndex: true,
+    dropObject: true,
+  },
+});
+
+export const SQLITE_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+    filePicker: true,
+  },
+  query: {
+    query: true,
+    multiStatement: true,
+    cancel: true,
+  },
+  catalog: {
+    browse: true,
+    schema: true,
+  },
+  edit: {
+    editRows: true,
+  },
+});
+
+export const MONGODB_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+  query: {
+    query: true,
+    cancel: true,
+    explain: true,
+  },
+  catalog: {
+    browse: true,
+    schema: true,
+    indexes: true,
+  },
+  edit: {
+    editDocuments: true,
+    bulkWrite: true,
+  },
+  ddl: {
+    createIndex: true,
+    dropObject: true,
+  },
+  operations: {
+    activity: true,
+    slowQueries: true,
+    stats: true,
+    serverInfo: true,
+  },
+});
+
 function profile(
   id: DatabaseType,
   connectionKind: ConnectionKind,
@@ -190,6 +325,7 @@ function profile(
   catalogModel: CatalogModelKind,
   resultKinds: readonly ResultEnvelopeKind[],
   safetyPolicy: SafetyPolicyId,
+  sourceCapabilities: DataSourceCapabilities = UNSUPPORTED_CAPABILITIES,
 ): DataSourceProfile {
   return Object.freeze({
     id,
@@ -198,7 +334,7 @@ function profile(
     languages: Object.freeze([...languages]),
     catalogModel,
     resultKinds: Object.freeze([...resultKinds]),
-    capabilities: freezeCapabilities(createEmptyDataSourceCapabilities()),
+    capabilities: sourceCapabilities,
     safetyPolicy,
   });
 }
@@ -211,8 +347,17 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "rdb",
     ["tabular"],
     "rdb-default",
+    POSTGRESQL_CAPABILITIES,
   ),
-  mysql: profile("mysql", "server", ["sql"], "rdb", ["tabular"], "rdb-default"),
+  mysql: profile(
+    "mysql",
+    "server",
+    ["sql"],
+    "rdb",
+    ["tabular"],
+    "rdb-default",
+    MYSQL_FAMILY_CAPABILITIES,
+  ),
   mariadb: profile(
     "mariadb",
     "server",
@@ -220,8 +365,17 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "rdb",
     ["tabular"],
     "rdb-default",
+    MYSQL_FAMILY_CAPABILITIES,
   ),
-  sqlite: profile("sqlite", "file", ["sql"], "rdb", ["tabular"], "rdb-default"),
+  sqlite: profile(
+    "sqlite",
+    "file",
+    ["sql"],
+    "rdb",
+    ["tabular"],
+    "rdb-default",
+    SQLITE_CAPABILITIES,
+  ),
   mssql: profile("mssql", "server", ["sql"], "rdb", ["tabular"], "rdb-default"),
   oracle: profile(
     "oracle",
@@ -238,6 +392,7 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "document",
     ["document", "tabular"],
     "document-default",
+    MONGODB_CAPABILITIES,
   ),
   redis: profile(
     "redis",
