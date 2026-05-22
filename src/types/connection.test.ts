@@ -403,3 +403,40 @@ describe("parseSqliteFilePath / sqlite URL fallback (Sprint 138)", () => {
     expect((result as { readOnly?: boolean }).readOnly).toBe(false);
   });
 });
+
+describe("DuckDB file connection metadata (Sprint 455)", () => {
+  it("declares DuckDB as an RDBMS identity without promoting it to the supported runtime list yet", () => {
+    expect((DATABASE_TYPE_LABELS as Record<string, string>).duckdb).toBe(
+      "DuckDB",
+    );
+    expect((DATABASE_DEFAULTS as Record<string, number>).duckdb).toBe(0);
+    expect(
+      (
+        DATABASE_DEFAULT_FIELDS as Record<
+          string,
+          { port: number; user: string; database: string }
+        >
+      ).duckdb,
+    ).toEqual({ port: 0, user: "", database: "" });
+    expect(
+      isSupportedDatabaseType(
+        "duckdb" as Parameters<typeof isSupportedDatabaseType>[0],
+      ),
+    ).toBe(false);
+  });
+
+  it("parses duckdb:/ paths as file-backed RDB drafts with read-only defaulted off", () => {
+    const result = parseConnectionUrl("duckdb:/data/analytics/lake.duckdb");
+
+    expect(result).toMatchObject({
+      dbType: "duckdb",
+      host: "",
+      port: 0,
+      user: "",
+      password: "",
+      database: "/data/analytics/lake.duckdb",
+      readOnly: false,
+      paradigm: "rdb",
+    });
+  });
+});

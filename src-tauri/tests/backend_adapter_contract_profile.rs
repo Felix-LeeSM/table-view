@@ -1,4 +1,4 @@
-use std::mem;
+use std::{mem, str::FromStr};
 
 use table_view_lib::{
     db::{
@@ -97,6 +97,30 @@ fn backend_profiles_encode_current_database_type_contracts() {
     );
     assert_eq!(redis.adapter_contract, KV_MARKER_CONTRACT);
     assert!(redis.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
+}
+
+#[test]
+fn duckdb_profile_is_file_backed_rdbms_metadata_without_runtime_query_contract() {
+    let duckdb = DatabaseType::from_str("duckdb").expect("duckdb identity must parse");
+    let profile = get_data_source_profile(&duckdb);
+
+    assert_eq!(profile.paradigm, Paradigm::Rdb);
+    assert_eq!(profile.connection_kind, ConnectionKind::File);
+    assert_eq!(profile.languages, [QueryLanguageId::Sql]);
+    assert_eq!(profile.catalog_model, CatalogModelKind::Rdb);
+    assert_eq!(profile.result_kinds, [ResultEnvelopeKind::Tabular]);
+    assert_eq!(profile.safety_policy, SafetyPolicyId::RdbDefault);
+    assert_eq!(
+        profile.adapter_contract.kind,
+        BackendAdapterContractKind::Rdb
+    );
+    assert_eq!(
+        profile.adapter_contract.state,
+        BackendAdapterContractState::DeclaredOnly
+    );
+    assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 }
 
 #[test]
