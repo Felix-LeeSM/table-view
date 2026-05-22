@@ -32,6 +32,7 @@ import type { QueryTab } from "@stores/workspaceStore";
 export interface UseQueryEventsArgs {
   tab: QueryTab;
   updateQuerySql: (tabId: string, sql: string) => void;
+  canCancelQuery: boolean;
 }
 
 export interface QueryEvents {
@@ -42,6 +43,7 @@ export interface QueryEvents {
 export function useQueryEvents({
   tab,
   updateQuerySql,
+  canCancelQuery,
 }: UseQueryEventsArgs): QueryEvents {
   const editorRef = useRef<EditorView | null>(null);
 
@@ -50,6 +52,7 @@ export function useQueryEvents({
     const handler = (e: Event) => {
       const { queryId } = (e as CustomEvent<{ queryId: string }>).detail;
       if (
+        canCancelQuery &&
         tab.queryState.status === "running" &&
         "queryId" in tab.queryState &&
         tab.queryState.queryId === queryId
@@ -61,7 +64,7 @@ export function useQueryEvents({
     };
     window.addEventListener("cancel-query", handler);
     return () => window.removeEventListener("cancel-query", handler);
-  }, [tab.id, tab.queryState]);
+  }, [canCancelQuery, tab.id, tab.queryState]);
 
   // Format SQL event listener (Cmd+I) — supports selection-only formatting.
   // Skipped on document paradigm tabs; JSON bodies should not be run through

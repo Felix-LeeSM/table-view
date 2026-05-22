@@ -6,6 +6,7 @@ import {
 } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { databaseTypeToSqlDialect } from "@lib/sql/sqlDialect";
+import { getDataSourceProfile } from "@/types/dataSource";
 import { buildSqlCompletionContext } from "@lib/sql/sqlCompletionContext";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
@@ -73,6 +74,13 @@ export default function QueryTab({ tab }: QueryTabProps) {
   const sqlDialect = useMemo(
     () => databaseTypeToSqlDialect(connection?.dbType),
     [connection?.dbType],
+  );
+  const canCancelQuery = useMemo(
+    () =>
+      connection
+        ? getDataSourceProfile(connection.dbType).capabilities.query.cancel
+        : true,
+    [connection],
   );
   // `dbType` flows in so the autocomplete namespace surfaces
   // dialect-specific keywords (PG: RETURNING/ILIKE; MySQL: AUTO_INCREMENT;
@@ -187,7 +195,11 @@ export default function QueryTab({ tab }: QueryTabProps) {
     confirmMongoWarn,
     cancelMongoWarn,
   } = useQueryExecution({ tab });
-  const { editorRef, handleFormat } = useQueryEvents({ tab, updateQuerySql });
+  const { editorRef, handleFormat } = useQueryEvents({
+    tab,
+    updateQuerySql,
+    canCancelQuery,
+  });
 
   // Resizable split state
   const containerRef = useRef<HTMLDivElement>(null);
@@ -206,6 +218,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
       <QueryTabToolbar
         tab={tab}
         isDocument={isDocument}
+        canCancelQuery={canCancelQuery}
         onExecute={handleExecute}
         onDryRun={handleDryRun}
         onFormat={handleFormat}
