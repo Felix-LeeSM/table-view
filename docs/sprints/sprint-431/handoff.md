@@ -2,6 +2,8 @@
 
 ## Intended Behavior
 
+- Pre-commit remains staged-path routed by Lefthook `glob` rules and runs in
+  parallel.
 - Pre-push routing is based on outgoing changed paths, not on the whole
   worktree.
 - Signed-commit verification and the TDD-cycle guard are invariants and always

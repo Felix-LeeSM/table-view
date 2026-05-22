@@ -12,6 +12,10 @@ surface: lefthook.yml, scripts/hooks/pre-push-path-router.sh, scripts/hooks/test
 push 비용이 과해진다. Sprint 431 은 outgoing commit range 의 changed path 로
 필요한 gate 만 고르는 routing layer 를 둔다.
 
+pre-commit 은 이미 Lefthook `glob` 기반 staged-file routing + parallel 실행을
+쓰므로 별도 router 로 대체하지 않는다. pre-push 만 push-time ref/range 를 해석하는
+router 가 필요하다.
+
 원인: 비용 최적화가 path classification 에 기대면 누락 위험도 같이 생긴다.
 특히 new branch 는 upstream ref 가 없을 수 있고, rename/delete 는 새 path 만
 보면 old source path 를 놓친다. hook/workflow/unknown path 를 docs-only 처럼

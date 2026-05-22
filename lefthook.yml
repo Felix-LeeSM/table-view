@@ -11,6 +11,10 @@ output:
   - execution_info
 
 pre-commit:
+  # pre-commit is already path-sensitive through Lefthook's staged-file `glob`
+  # routing. Keep these checks close to changed files; pre-push uses the
+  # outgoing-commit router below because push-time refs are not staged-file
+  # scoped.
   parallel: true
   commands:
     rust-format:
@@ -108,10 +112,9 @@ pre-push:
   # 이 blocking check 로 보장한다. `--no-verify` / `LEFTHOOK=0` 회피는
   # `scripts/hooks/check-dangerous-bash.sh`에서 차단.
   #
-  # 순서: signed-commit / 빠른 체크가 먼저 실패하면 무거운 체크 시간을 아낀다 (fail-fast).
-  # `piped: true`로 직렬 실행 — e2e는 cold start ~1-3분이라 다른 체크와
-  # 동시에 돌리면 docker boot 비용이 항상 부과됨. 직렬은 또한 실패 원인을
-  # 한눈에 짚게 한다.
+  # The router keeps cheap invariant checks first, then dispatches frontend and
+  # Rust stacks from outgoing changed paths. Mixed frontend+Rust routes run both
+  # stacks in parallel to avoid serial full-stack waits.
   piped: true
   commands:
     0_path-routed-gates:

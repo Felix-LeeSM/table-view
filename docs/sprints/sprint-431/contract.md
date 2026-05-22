@@ -8,6 +8,8 @@ frontend/Rust stack for documentation-only pushes.
 
 ## Scope
 
+- Preserve pre-commit staged-file routing through Lefthook `glob` rules; do not
+  replace it with a second router.
 - Determine changed paths from outgoing commits, including new-branch pushes.
 - Classify outgoing changes into docs-only, frontend, Rust, mixed
   frontend+Rust, workflow/hook, or unknown.
