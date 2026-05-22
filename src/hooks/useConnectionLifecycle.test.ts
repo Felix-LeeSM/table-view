@@ -95,15 +95,12 @@ describe("useConnectionLifecycle", () => {
     expect(returned).toBe(false);
   });
 
-  it("disconnect: backend disconnect 성공 후 두 cache를 같은 id로 clear한다", async () => {
+  it("disconnect: delegates to the store lifecycle action", async () => {
     const { result } = renderHook(() => useConnectionLifecycle());
     await act(async () => {
       await result.current.disconnect("c1");
     });
     expect(mockDisconnect).toHaveBeenCalledWith("c1");
-    expect(mockClearSchema).toHaveBeenCalledWith("c1");
-    expect(mockClearDocumentCatalog).toHaveBeenCalledWith("c1");
-    expect(mockClearDocumentQuery).toHaveBeenCalledWith("c1");
   });
 
   it("connect: backend가 reject하면 cache clear를 부르지 않는다", async () => {

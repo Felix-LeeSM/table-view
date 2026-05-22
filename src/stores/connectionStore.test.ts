@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import { useConnectionStore, SYNCED_KEYS } from "./connectionStore";
+import { entryKey, useDataGridEditStore } from "./dataGridEditStore";
+import { useWorkspaceStore } from "./workspaceStore";
 
 // Mock @tauri-apps/api/event. The Sprint 152 bridge attach inside
 // `connectionStore.ts` calls both `emit` (outbound) and `listen` (inbound)
@@ -18,21 +20,35 @@ vi.mock("@tauri-apps/api/event", () => ({
 // are no-ops.
 const mockPersistFocusedConnId = vi.fn();
 const mockPersistActiveStatuses = vi.fn();
+let mockSessionFocusedConnId: string | null = null;
+let mockSessionActiveStatuses: Record<string, unknown> | null = null;
+let mockSessionHasFocusedConnId = false;
+let mockSessionHasActiveStatuses = false;
 const mockReadConnectionSession = vi.fn(
   (): {
     focusedConnId: string | null;
     activeStatuses: Record<string, unknown> | null;
+    hasFocusedConnId: boolean;
+    hasActiveStatuses: boolean;
   } => ({
     focusedConnId: null,
     activeStatuses: null,
+    hasFocusedConnId: false,
+    hasActiveStatuses: false,
   }),
 );
 
 vi.mock("@lib/scopedLocalStorage", () => ({
-  persistFocusedConnId: (...args: unknown[]) =>
-    mockPersistFocusedConnId(...args),
-  persistActiveStatuses: (...args: unknown[]) =>
-    mockPersistActiveStatuses(...args),
+  persistFocusedConnId: (id: string | null) => {
+    mockSessionFocusedConnId = id;
+    mockSessionHasFocusedConnId = true;
+    return mockPersistFocusedConnId(id);
+  },
+  persistActiveStatuses: (statuses: Record<string, unknown>) => {
+    mockSessionActiveStatuses = statuses;
+    mockSessionHasActiveStatuses = true;
+    return mockPersistActiveStatuses(statuses);
+  },
   readConnectionSession: () => mockReadConnectionSession(),
 }));
 
@@ -55,6 +71,25 @@ vi.mock("@lib/window-label", async () => {
     getCurrentWindowLabel: () => "test",
   };
 });
+function seedWorkspaceAndPendingEdit(connectionId: string): string {
+  useWorkspaceStore.getState().addTab(connectionId, {
+    type: "table",
+    title: "users",
+    connectionId,
+    closable: true,
+    schema: "public",
+    table: "users",
+    subView: "records",
+    database: "db",
+    permanent: true,
+  });
+  const key = entryKey(connectionId, "db", "public", "users");
+  useDataGridEditStore
+    .getState()
+    .setSlice(key, "pendingEdits", new Map([["0-1", "dirty"]]));
+  return key;
+}
+
 beforeEach(() => {
   setupTauriMock({
     listConnections: vi.fn(() =>
@@ -110,10 +145,19 @@ describe("connectionStore", () => {
     vi.clearAllMocks();
     mockPersistFocusedConnId.mockClear();
     mockPersistActiveStatuses.mockClear();
-    mockReadConnectionSession.mockReturnValue({
-      focusedConnId: null,
-      activeStatuses: null,
-    });
+    mockSessionFocusedConnId = null;
+    mockSessionActiveStatuses = null;
+    mockSessionHasFocusedConnId = false;
+    mockSessionHasActiveStatuses = false;
+    mockReadConnectionSession.mockReset();
+    mockReadConnectionSession.mockImplementation(() => ({
+      focusedConnId: mockSessionFocusedConnId,
+      activeStatuses: mockSessionActiveStatuses,
+      hasFocusedConnId: mockSessionHasFocusedConnId,
+      hasActiveStatuses: mockSessionHasActiveStatuses,
+    }));
+    useWorkspaceStore.setState({ workspaces: {} });
+    useDataGridEditStore.setState({ entries: new Map() });
   });
 
   it("loads connections from backend", async () => {
@@ -208,9 +252,12 @@ describe("connectionStore", () => {
         },
       ],
     });
+    const pendingKey = seedWorkspaceAndPendingEdit("c1");
 
     await useConnectionStore.getState().removeConnection("c1");
     expect(useConnectionStore.getState().connections).toHaveLength(0);
+    expect(useWorkspaceStore.getState().workspaces.c1).toBeUndefined();
+    expect(useDataGridEditStore.getState().entries.has(pendingKey)).toBe(false);
   });
 
   it("sets connected status on connect", async () => {
@@ -264,11 +311,14 @@ describe("connectionStore", () => {
     useConnectionStore.setState({
       activeStatuses: { c1: { type: "connected" } },
     });
+    const pendingKey = seedWorkspaceAndPendingEdit("c1");
 
     await useConnectionStore.getState().disconnectFromDatabase("c1");
     expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
       type: "disconnected",
     });
+    expect(useWorkspaceStore.getState().workspaces.c1).toBeUndefined();
+    expect(useDataGridEditStore.getState().entries.has(pendingKey)).toBe(false);
   });
 
   it("moves connection to group", async () => {
@@ -508,6 +558,36 @@ describe("connectionStore", () => {
       expect(useConnectionStore.getState().focusedConnId).toBeNull();
     });
 
+    it("[RISK-040] removeConnection persists a cleared session mirror for focus hydration", async () => {
+      seedConnections();
+      mockSessionFocusedConnId = "c1";
+      mockSessionActiveStatuses = { c1: { type: "connected" } };
+      mockSessionHasFocusedConnId = true;
+      mockSessionHasActiveStatuses = true;
+      useConnectionStore.setState({
+        activeStatuses: { c1: { type: "disconnected" } },
+        focusedConnId: "c1",
+      });
+
+      await useConnectionStore.getState().removeConnection("c1");
+
+      expect(mockPersistActiveStatuses).toHaveBeenLastCalledWith({});
+      expect(mockPersistFocusedConnId).toHaveBeenLastCalledWith(null);
+
+      useConnectionStore.setState({
+        connections: [],
+        activeStatuses: { c1: { type: "connected" } },
+        focusedConnId: "c1",
+      });
+      useConnectionStore.getState().hydrateFromSession();
+
+      expect(useConnectionStore.getState().focusedConnId).toBeNull();
+      expect(useConnectionStore.getState().activeStatuses).toEqual({});
+      expect(
+        useConnectionStore.getState().activeStatuses["c1"],
+      ).toBeUndefined();
+    });
+
     it("falls back to another connected connection when the focused one is removed", async () => {
       seedConnections();
       useConnectionStore.setState({
@@ -571,6 +651,43 @@ describe("connectionStore", () => {
 
     expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
       type: "connected",
+    });
+    expect(mockPersistActiveStatuses).toHaveBeenLastCalledWith({
+      c1: { type: "connected" },
+    });
+  });
+
+  it("[RISK-040] connection-status disconnected event runs connection cleanup", async () => {
+    const { listen } = await import("@tauri-apps/api/event");
+    mockSessionActiveStatuses = { c1: { type: "connected" } };
+    mockSessionHasActiveStatuses = true;
+    useConnectionStore.setState({
+      activeStatuses: { c1: { type: "connected" } },
+    });
+    const pendingKey = seedWorkspaceAndPendingEdit("c1");
+
+    await useConnectionStore.getState().initEventListeners();
+
+    const handler = (listen as ReturnType<typeof vi.fn>).mock
+      .calls[0]![1] as (event: {
+      payload: { id: string; status: { type: string } };
+    }) => void;
+    handler({ payload: { id: "c1", status: { type: "disconnected" } } });
+
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      type: "disconnected",
+    });
+    expect(useWorkspaceStore.getState().workspaces.c1).toBeUndefined();
+    expect(useDataGridEditStore.getState().entries.has(pendingKey)).toBe(false);
+    expect(mockPersistActiveStatuses).toHaveBeenLastCalledWith({
+      c1: { type: "disconnected" },
+    });
+
+    useConnectionStore.setState({ activeStatuses: {} });
+    useConnectionStore.getState().hydrateFromSession();
+
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      type: "disconnected",
     });
   });
 

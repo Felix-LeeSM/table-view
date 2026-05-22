@@ -14,6 +14,7 @@ import {
   persistActiveStatuses,
 } from "@lib/scopedLocalStorage";
 import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
+import { cleanupConnectionFrontendState } from "@hooks/connectionCleanup";
 
 export interface ConnectionState {
   connections: ConnectionConfig[];
@@ -79,6 +80,38 @@ function pickFallbackFocus(
     (c) => c.id !== excludeId && statuses[c.id]?.type === "connected",
   );
   return next?.id ?? null;
+}
+
+function collectConnectionCleanupIds(
+  previous: Pick<ConnectionState, "connections" | "activeStatuses">,
+  current: Pick<ConnectionState, "connections" | "activeStatuses">,
+): string[] {
+  const ids = new Set<string>();
+  const currentConnectionIds = new Set(current.connections.map((c) => c.id));
+
+  for (const connection of previous.connections) {
+    if (!currentConnectionIds.has(connection.id)) {
+      ids.add(connection.id);
+    }
+  }
+
+  for (const [id, status] of Object.entries(current.activeStatuses)) {
+    const previousStatus = previous.activeStatuses[id];
+    if (
+      status.type === "disconnected" &&
+      previousStatus?.type !== "disconnected"
+    ) {
+      ids.add(id);
+    }
+  }
+
+  for (const id of Object.keys(previous.activeStatuses)) {
+    if (!(id in current.activeStatuses)) {
+      ids.add(id);
+    }
+  }
+
+  return [...ids];
 }
 
 /**
@@ -173,6 +206,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         focusedConnId: newFocused,
       };
     });
+    const { activeStatuses, focusedConnId } = get();
+    persistActiveStatuses(activeStatuses);
+    persistFocusedConnId(focusedConnId);
   },
 
   testConnection: async (draft, existingId = null) => {
@@ -298,10 +334,17 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         set((state) => ({
           activeStatuses: { ...state.activeStatuses, [id]: status },
         }));
+        persistActiveStatuses(get().activeStatuses);
       },
     );
   },
 }));
+
+useConnectionStore.subscribe((current, previous) => {
+  for (const id of collectConnectionCleanupIds(previous, current)) {
+    cleanupConnectionFrontendState(id);
+  }
+});
 
 /**
  * Symmetric module-load attach. Both windows attach unconditionally so

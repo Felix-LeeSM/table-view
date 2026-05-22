@@ -116,4 +116,27 @@ describe("scopedLocalStorage", () => {
     sessionRemove("k");
     expect(sessionGet("k")).toBeNull();
   });
+
+  it("[RISK-040] persists empty connection session mirrors as explicit clears", async () => {
+    mockInvoke.mockResolvedValue("sid");
+    const {
+      initSession,
+      persistFocusedConnId,
+      persistActiveStatuses,
+      readConnectionSession,
+    } = await import("@lib/scopedLocalStorage");
+    await initSession();
+
+    persistFocusedConnId("c1");
+    persistActiveStatuses({ c1: { type: "connected" } });
+    persistFocusedConnId(null);
+    persistActiveStatuses({});
+
+    expect(readConnectionSession()).toEqual({
+      focusedConnId: null,
+      activeStatuses: {},
+      hasFocusedConnId: true,
+      hasActiveStatuses: true,
+    });
+  });
 });

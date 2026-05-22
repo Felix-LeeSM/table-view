@@ -5,11 +5,13 @@ import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { useDocumentQueryStore } from "@stores/documentQueryStore";
 
 /**
- * connect/disconnect 시 schema/document cache를 함께 invalidate. connectionStore
- * action을 컴포넌트가 직접 호출하면 backend가 새로 연 default-DB sub-pool과
- * 이전 active DB 기준의 cached schema가 어긋나 재진입 화면이 "초기 DB"로
- * 잘못 노출된다. cross-store 호출은 React layer로 모아 store 간 직접
- * 의존(`useXStore.getState()`)을 만들지 않는다.
+ * connect 시 schema/document cache를 함께 invalidate. connectionStore action을
+ * 컴포넌트가 직접 호출하면 backend가 새로 연 default-DB sub-pool과 이전
+ * active DB 기준의 cached schema가 어긋나 재진입 화면이 "초기 DB"로 잘못
+ * 노출된다.
+ *
+ * disconnect/delete teardown은 connectionStore의 state-transition watcher가
+ * `cleanupConnectionFrontendState(connectionId)` 한 곳으로 수렴시킨다.
  */
 export function useConnectionLifecycle() {
   const storeConnect = useConnectionStore((s) => s.connectToDatabase);
@@ -38,11 +40,8 @@ export function useConnectionLifecycle() {
   const disconnect = useCallback(
     async (id: string) => {
       await storeDisconnect(id);
-      clearSchema(id);
-      clearDocumentCatalog(id);
-      clearDocumentQuery(id);
     },
-    [storeDisconnect, clearSchema, clearDocumentCatalog, clearDocumentQuery],
+    [storeDisconnect],
   );
 
   return { connect, disconnect };

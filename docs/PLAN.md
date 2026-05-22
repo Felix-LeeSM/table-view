@@ -241,6 +241,13 @@ MySQL/MariaDB `ON DUPLICATE KEY UPDATE` parser semantic gap 을 닫고, 남은
 MySQL-family widening 을 routine/scripting grammar 와 broader RHS expression
 coverage 로 축소했다.
 
+### Risk closure follow-up (Sprint 433–435)
+
+| Sprint | Risk | Outcome |
+|---|---|---|
+| **433** ✓ | RISK-039 | RDB pending edit keys now include database identity. |
+| **435** ✓ | RISK-040 | Connection teardown now flows through one frontend cleanup entry point for caches, workspace tabs, and pending edits. |
+
 ## 문서 목차
 
 | 문서 | 설명 |

@@ -82,6 +82,18 @@ export function sessionRemove(key: string): void {
   }
 }
 
+function sessionHasCurrentValue(key: string): boolean {
+  if (!_sessionId) return false;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return false;
+    const entry = JSON.parse(raw) as { sessionId: string };
+    return entry.sessionId === _sessionId;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Sprint 375 (Phase 6 cleanup, 2026-05-17) — test-only escape hatch for
  * the module-scope `_sessionId` cache. Each app process resolves the
@@ -102,20 +114,14 @@ const SESSION_KEY_STATUSES = "table-view-session:activeStatuses";
 
 /** Persist `focusedConnId` to session-scoped localStorage. */
 export function persistFocusedConnId(id: string | null): void {
-  if (id) {
-    sessionSet(SESSION_KEY_FOCUSED, id);
-  } else {
-    sessionRemove(SESSION_KEY_FOCUSED);
-  }
+  // `null` is an explicit clear mirror; a missing key means "do not hydrate".
+  sessionSet(SESSION_KEY_FOCUSED, id);
 }
 
 /** Persist `activeStatuses` to session-scoped localStorage. */
 export function persistActiveStatuses(statuses: Record<string, unknown>): void {
-  if (Object.keys(statuses).length > 0) {
-    sessionSet(SESSION_KEY_STATUSES, statuses);
-  } else {
-    sessionRemove(SESSION_KEY_STATUSES);
-  }
+  // `{}` is an explicit clear mirror; a missing key means "do not hydrate".
+  sessionSet(SESSION_KEY_STATUSES, statuses);
 }
 
 /**
@@ -127,9 +133,15 @@ export function persistActiveStatuses(statuses: Record<string, unknown>): void {
 export function readConnectionSession(): {
   focusedConnId: string | null;
   activeStatuses: Record<string, unknown> | null;
+  hasFocusedConnId: boolean;
+  hasActiveStatuses: boolean;
 } {
+  const hasFocusedConnId = sessionHasCurrentValue(SESSION_KEY_FOCUSED);
+  const hasActiveStatuses = sessionHasCurrentValue(SESSION_KEY_STATUSES);
   return {
-    focusedConnId: sessionGet<string>(SESSION_KEY_FOCUSED),
+    focusedConnId: sessionGet<string | null>(SESSION_KEY_FOCUSED),
     activeStatuses: sessionGet<Record<string, unknown>>(SESSION_KEY_STATUSES),
+    hasFocusedConnId,
+    hasActiveStatuses,
   };
 }

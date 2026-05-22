@@ -37,6 +37,8 @@ const { storeState, mockSetState, mockGetState, mockReadConnectionSession } =
         (): {
           focusedConnId: string | null;
           activeStatuses: Record<string, unknown> | null;
+          hasFocusedConnId?: boolean;
+          hasActiveStatuses?: boolean;
         } => ({
           focusedConnId: null,
           activeStatuses: null,
@@ -97,6 +99,8 @@ describe("useConnectionSessionHydration", () => {
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: null,
       activeStatuses: null,
+      hasFocusedConnId: false,
+      hasActiveStatuses: false,
     });
 
     hydrateConnectionSession();
@@ -116,6 +120,8 @@ describe("useConnectionSessionHydration", () => {
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: "c1",
       activeStatuses: null,
+      hasFocusedConnId: true,
+      hasActiveStatuses: false,
     });
     storeState.activeStatuses = { existing: { type: "connected" } };
 
@@ -136,6 +142,8 @@ describe("useConnectionSessionHydration", () => {
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: null,
       activeStatuses: { c1: { type: "connected" } },
+      hasFocusedConnId: false,
+      hasActiveStatuses: true,
     });
     storeState.focusedConnId = "previous";
 
@@ -146,6 +154,27 @@ describe("useConnectionSessionHydration", () => {
     expect(mockSetState).toHaveBeenCalledTimes(1);
     expect(mockSetState).toHaveBeenCalledWith({
       activeStatuses: { c1: { type: "connected" } },
+    });
+  });
+
+  it("[RISK-040] hydrateFromSession clears stale focus and statuses from an explicit empty mirror", () => {
+    storeState.focusedConnId = "c1";
+    storeState.activeStatuses = { c1: { type: "connected" } };
+    mockReadConnectionSession.mockReturnValue({
+      focusedConnId: null,
+      activeStatuses: {},
+      hasFocusedConnId: true,
+      hasActiveStatuses: true,
+    });
+
+    hydrateConnectionSession();
+
+    expect(storeState.focusedConnId).toBeNull();
+    expect(storeState.activeStatuses).toEqual({});
+    expect(mockSetState).toHaveBeenCalledTimes(1);
+    expect(mockSetState).toHaveBeenCalledWith({
+      focusedConnId: null,
+      activeStatuses: {},
     });
   });
 });
