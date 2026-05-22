@@ -6,6 +6,13 @@ import {
 } from "@stores/dataGridEditStore";
 import { UNDO_STACK_MAX, type EditSnapshot } from "./dataGridEditFsm";
 
+type PendingEdits = Map<string, string | null>;
+type PendingNewRows = unknown[][];
+type PendingDeletedRowKeys = Set<string>;
+type UndoStack = EditSnapshot[];
+type StoredPendingNewRows = ReadonlyArray<ReadonlyArray<unknown>>;
+type StoredUndoStack = ReadonlyArray<EditSnapshot>;
+
 interface UseDataGridEditPendingStateParams {
   connectionId: string;
   database: string;
@@ -33,10 +40,13 @@ export function useDataGridEditPendingState({
 
   const entry =
     useDataGridEditStore((s) => s.entries.get(storeKey)) ?? EMPTY_ENTRY;
-  const pendingEdits = entry.pendingEdits;
-  const pendingNewRows = entry.pendingNewRows;
-  const pendingDeletedRowKeys = entry.pendingDeletedRowKeys;
-  const undoStack = entry.undoStack;
+  // Keep the Sprint 251 hook surface stable for component callers; the
+  // store boundary is readonly and EMPTY_ENTRY mutators are runtime-guarded.
+  const pendingEdits = entry.pendingEdits as PendingEdits;
+  const pendingNewRows = entry.pendingNewRows as PendingNewRows;
+  const pendingDeletedRowKeys =
+    entry.pendingDeletedRowKeys as PendingDeletedRowKeys;
+  const undoStack = entry.undoStack as UndoStack;
 
   const storeSetSlice = useDataGridEditStore((s) => s.setSlice);
   const storeClearEntry = useDataGridEditStore((s) => s.clearEntry);
@@ -44,8 +54,8 @@ export function useDataGridEditPendingState({
   const setPendingEdits = useCallback(
     (
       next:
-        | Map<string, string | null>
-        | ((prev: Map<string, string | null>) => Map<string, string | null>),
+        | PendingEdits
+        | ((prev: ReadonlyMap<string, string | null>) => PendingEdits),
     ) => {
       const current = useDataGridEditStore
         .getState()
@@ -57,7 +67,11 @@ export function useDataGridEditPendingState({
   );
 
   const setPendingNewRows = useCallback(
-    (next: unknown[][] | ((prev: unknown[][]) => unknown[][])) => {
+    (
+      next:
+        | PendingNewRows
+        | ((prev: StoredPendingNewRows) => StoredPendingNewRows),
+    ) => {
       const current = useDataGridEditStore
         .getState()
         .getEntry(storeKey).pendingNewRows;
@@ -68,7 +82,11 @@ export function useDataGridEditPendingState({
   );
 
   const setPendingDeletedRowKeys = useCallback(
-    (next: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+    (
+      next:
+        | PendingDeletedRowKeys
+        | ((prev: ReadonlySet<string>) => PendingDeletedRowKeys),
+    ) => {
       const current = useDataGridEditStore
         .getState()
         .getEntry(storeKey).pendingDeletedRowKeys;
@@ -79,7 +97,7 @@ export function useDataGridEditPendingState({
   );
 
   const setUndoStack = useCallback(
-    (next: EditSnapshot[] | ((prev: EditSnapshot[]) => EditSnapshot[])) => {
+    (next: UndoStack | ((prev: StoredUndoStack) => StoredUndoStack)) => {
       const current = useDataGridEditStore
         .getState()
         .getEntry(storeKey).undoStack;
