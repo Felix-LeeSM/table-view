@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 type: memory
-updated: 2026-05-16
+updated: 2026-05-22
 ---
 
 # 로드맵
@@ -9,10 +9,16 @@ updated: 2026-05-16
 상세: [docs/PLAN.md](../../docs/PLAN.md). 비교 근거:
 [docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md](../../docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md).
 
-## 방향 (2026-05-01)
+## 방향 (2026-05-22)
 
-**TablePlus 패리티 우선, 신규 DBMS 추가는 보류.** Phase 17–20
-(MySQL/MariaDB/SQLite/Oracle) 은 패리티 7단계 (Phase 21–27) 종료까지 보류.
+Active ordering 은 `docs/PLAN.md` 가 SOT. 현재 기준은:
+
+1. MongoDB full support (Phase 28) — Rust/WASM parser/completion baseline 위에서
+   unified mongosh editor 부터.
+2. MySQL-family semantic widening — 이미 열린 parser/safety surface 확장.
+3. Capability-gated completion filtering.
+4. MariaDB / SQLite adapter 재평가 — 과거 sprint 번호 대신 slice 단위로 재진입.
+5. State-management migration — contracts 는 보존, 실제 재개 전 current code 재-audit.
 
 ## 현재 상태
 
@@ -36,8 +42,8 @@ updated: 2026-05-16
   `docs/state-management-strategy-2026-05-15.md` (11회 codex 외부 검토 0
   findings 수렴) 의 Phase 0~6 AC + Part F.1~F.6 wire contract 를 24
   sprint 단위로 split. contract.md 24개 작성 + 4회 codex 5.5 medium
-  consistency review. 상세는 본 문서 아래 [State-management 이주
-  sequencing] 섹션.
+  consistency review. 2026-05-22 기준 active order 에서는 DB support 뒤로
+  밀렸고, 재개 전 current code 재-audit 이 필요하다.
 
 ## 작업 순서 (Impact 큰 순) — Phase 21–27
 
@@ -82,10 +88,9 @@ contract.md 24개 작성 + 4회 codex 5.5 medium consistency review.
 | 5     | 371–373  | query history backend (Q5 privacy + VACUUM 분리 + discriminated union) + frontend + queryHistoryStore retire                  |
 | 6     | 374–376  | ADR 0032–0042 commit + cleanup (session-storage rename / `.legacy.json` cron) + Q21 reset-to-default UI 9 affordance          |
 
-의존성 그래프 (병렬 가능 묶음) 와 sprint 단위 목적은
-[`docs/PLAN.md`](../../docs/PLAN.md) "State management 이주" 섹션이
-authoritative. 각 contract.md 는 In Scope ≤ 5 파일군, AC ≤ 12, TDD
-red→green 명시.
+의존성 그래프와 sprint 단위 목적은 `docs/sprints/sprint-353` ~
+`docs/sprints/sprint-376` 의 contract.md 에 보존되어 있다. `docs/PLAN.md`
+에는 active ordering 만 둔다.
 
 ## 진행 중 / 대기 / 보류
 
@@ -104,12 +109,15 @@ red→green 명시.
   - [Phase 17](../../docs/archives/phases/completed/phase-17.md) — Sprint 296 closure
     (retrospective 2026-05-14). MysqlAdapter Slice A–G + ADR 0028 +
     testcontainers gate 합류 (coverage 84.23/79.74/85.66).
-- 보류 (2026-05-01, 재평가 대기):
+- 보류 -> 재평가 대기 (2026-05-22 re-baseline):
   [18](../../docs/phases/phase-18.md), [19](../../docs/phases/phase-19.md),
-  [20](../../docs/phases/phase-20.md). Phase 27 종료 (2026-05-13) 로
-  재개 평가 트리거 발동.
-- **Phase 28 (MongoDB Full Support) 계획 (2026-05-14)** — grill-me
-  세션으로 카테고리 20+ 결정 lock. 13 slice (A–M). 정의서
+  [20](../../docs/phases/phase-20.md). Phase 18/19 는 과거 sprint 번호를
+  버리고 slice 단위로 재진입한다. Phase 20 은 현 priority 아님.
+- **Phase 28 (MongoDB Full Support) 계획 / current candidate
+  (2026-05-22 re-baseline)** — grill-me 세션으로 카테고리 20+ 결정 lock.
+  Sprint 420–430 의 completion architecture 이후 Slice A 는 existing
+  Rust/WASM mongosh parser/completion core 를 Query Editor routing 에
+  연결하는 방향으로 재정렬. 정의서
   [`docs/phases/phase-28.md`](../../docs/phases/phase-28.md), 결정 dict
   [phase-28-mongo-full-support](./phase-28-mongo-full-support/memory.md).
 - **Phase 29 후보 — RDB+Mongo Unified Followups** — U1 server activity

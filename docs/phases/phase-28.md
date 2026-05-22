@@ -1,10 +1,24 @@
 # Phase 28: MongoDB Full Support
 
-> **상태: 계획 (2026-05-14 grill 종료).** Phase 21–27 TablePlus 패리티
-> 마일스톤 (2026-05-13) 직후 착수. 본 Phase 의 grill 결정 dict 는
+> **상태: 계획 / current candidate (2026-05-22 re-baseline).** 2026-05-14
+> grill 결정은 유지하되, Sprint 420–430 의 language completion architecture
+> 와 ADR 0045 이후 기준으로 Slice A 를 재정렬했다. 본 Phase 의 grill 결정
+> dict 는
 > [`memory/roadmap/phase-28-mongo-full-support/memory.md`](../../memory/roadmap/phase-28-mongo-full-support/memory.md)
 > 에 동결. RDB+Mongo paradigm 통합 후속 묶음 (U1–U5) 은 별도 phase 후보 —
 > [`memory/roadmap/unified-followups/memory.md`](../../memory/roadmap/unified-followups/memory.md).
+
+## 2026-05-22 Re-baseline
+
+- Rust/WASM completion SOT 는 이미 있다:
+  `src-tauri/mongosh-parser-core/src/completion.rs`.
+- TypeScript Mongo completion vocabulary 는 WASM load 전 fallback mirror 로만
+  유지한다.
+- 자동완성 architecture SOT 는 ADR 0045 + `docs/query-language-support.md`.
+- Slice A 는 greenfield external parser 도입이 아니다. 기존 Rust/WASM
+  parser/completion core 를 Query Editor routing 에 연결하는 작업이다.
+- 임의 JavaScript execution 은 계속 금지한다. 지원 method whitelist 와 typed
+  dispatch 만 확장한다.
 
 ## 배경
 
@@ -58,9 +72,9 @@ MongoDB 연결에서도 끊김 없이 반복할 수 있는가" — 단, paradigm
 ### Query 입력 surface
 
 - **Unified mongosh editor** — Find/Aggregate toggle 제거.
-  `db.coll.method(args)` 입력. mini parser (mongosh LSP sidecar/WASM,
-  Q14 의 옵션 2+ — JS eval 안 함). toolbar 에 `+ Insert ▾` dropdown 4
-  section (Methods / Mutations / Operators / Stages).
+  `db.coll.method(args)` 입력. 기존 Rust/WASM mongosh parser/completion core
+  기반 routing. JS eval 없음. toolbar 에 `+ Insert ▾` dropdown 4 section
+  (Methods / Mutations / Operators / Stages).
 - **지원 method** — find, findOne, aggregate, countDocuments,
   estimatedDocumentCount, distinct, insertOne, insertMany, updateOne,
   updateMany, deleteOne, deleteMany, bulkWrite + cursor chain
@@ -93,7 +107,7 @@ MongoDB 연결에서도 끊김 없이 반복할 수 있는가" — 단, paradigm
 
 | Slice | 범위 | 핵심 |
 |-------|------|------|
-| **A** | Unified mongosh editor (Q14+15+Find) | toggle 제거, mini parser, `+ Insert ▾` dropdown. **architectural shift — 가장 먼저** |
+| **A** | Unified mongosh editor (Q14+15+Find) | toggle 제거, existing Rust/WASM parser/completion routing, `+ Insert ▾` dropdown. **architectural shift — 가장 먼저** |
 | **B** | DataGrid Filter Bar 13 operators (Q7) | RDB Filter Bar 와 layout 공유 |
 | **C** | Sort multi-column + context menu (Q8) | RDB+Mongo 통합 |
 | **D** | Hide column hybrid (Q9+Q10) | per-collection persist, store slice |
@@ -108,16 +122,26 @@ MongoDB 연결에서도 끊김 없이 반복할 수 있는가" — 단, paradigm
 | **M** | DB create wrapper + drop confirmation (Q18) | 사이드바 |
 
 선후관계:
-- A 가 먼저 (Query Editor 구조 변경, 다른 slice 의 mini parser 의존).
+- A 가 먼저 (Query Editor 구조 변경, 다른 slice 의 parser/routing 의존).
 - E 가 F 전에 (schema 가 nested expand 의 입력).
 - B 와 C 는 RDB 와 paradigm 통합이라 별도 RDB 수정도 같이.
 - G 의 ISODate picker 는 RDB TIMESTAMP cell editor 의 component-extract 가 선행.
 
+### Slice A 내부 순서
+
+| Sub-slice | 목적 |
+|---|---|
+| **A1** | Find/Aggregate toggle 제거 준비: editor mode/routing boundary 를 Rust/WASM parse result 로 바꾼다. UI toggle 은 feature flag/compat path 로 유지. |
+| **A2** | Supported method whitelist 와 typed dispatch 를 `find/findOne/aggregate/countDocuments/distinct` 중심으로 통합한다. |
+| **A3** | Mutation methods (`insert*`, `update*`, `delete*`, `bulkWrite`) routing 을 Safe Mode / confirmation flow 와 연결한다. |
+| **A4** | `+ Insert ▾` dropdown 을 Rust/WASM vocabulary groups 에서 생성한다. TS constant 는 fallback mirror 만 허용한다. |
+| **A5** | Toggle 제거 + legacy tests 정리 + Phase 28 B 진입 gate. |
+
 ## Acceptance Criteria
 
 - **AC-28-01** Unified mongosh editor — `db.coll.method(args)` 패턴
-  지원, 13+ method, mini parser 가 Find/Aggregate toggle 제거 후 자동
-  분기.
+  지원, 13+ method, Rust/WASM parser result 가 Find/Aggregate toggle 제거
+  후 자동 분기.
 - **AC-28-02** DataGrid Filter Bar 13 operators 모두 동작 (RDB filter
   와 layout 통일).
 - **AC-28-03** Multi-column sort — header context menu (RDB 동시
@@ -143,7 +167,8 @@ MongoDB 연결에서도 끊김 없이 반복할 수 있는가" — 단, paradigm
 
 ## TDD 정책
 
-- Slice A 의 mini parser — Rust 단위 테스트 + React parser wrapper 테스트.
+- Slice A 의 Rust/WASM parser routing — Rust 단위 테스트 + React parser
+  wrapper 테스트.
   파서가 11 method × 표준 인자 형태를 빠짐없이 추출.
 - 각 slice 표준 RED → GREEN. UI 변경은 RTL 단위 테스트.
 - Mongo backend → 기존 `MongoAdapter` 단위 + integration (testcontainers)
@@ -168,8 +193,9 @@ MongoDB 연결에서도 끊김 없이 반복할 수 있는가" — 단, paradigm
 
 ## 위험 / 미정
 
-- **R28.1** mongosh LSP 의 sidecar/WASM 통합 비용 — node 의존 회피 위해
-  WASM 우선. 어려우면 mini parser 우리 작성 (operator/method 화이트리스트만).
+- **R28.1** parser/completion SOT 는 Rust/WASM 으로 이미 정리됐지만 Query
+  Editor dispatch path 는 아직 legacy toggle / TS wrapper 의존이 남아 있을 수
+  있음 — Slice A1 에서 boundary audit.
 - **R28.2** ISODate picker 의 RDB TIMESTAMP 컴포넌트 공유 — 현재 RDB 의
   TIMESTAMP cell editor 가 별도 컴포넌트로 분리되어 있는지 확인. 아니면
   분리 작업 선행.
