@@ -6,7 +6,8 @@ updated: 2026-05-22
 
 # 로드맵
 
-상세: [docs/PLAN.md](../../docs/PLAN.md). 비교 근거:
+Active 실행 순서: [docs/PLAN.md](../../docs/PLAN.md). 장기 roadmap:
+[docs/ROADMAP.md](../../docs/ROADMAP.md). 비교 근거:
 [docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md](../../docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md).
 
 ## 방향 (2026-05-22)
@@ -19,6 +20,8 @@ Active ordering 은 `docs/PLAN.md` 가 SOT. 현재 기준은:
 3. Capability-gated completion filtering.
 4. MariaDB / SQLite adapter 재평가 — 과거 sprint 번호 대신 slice 단위로 재진입.
 5. State-management migration — contracts 는 보존, 실제 재개 전 current code 재-audit.
+
+장기 horizon / decision gate 는 `docs/ROADMAP.md` 가 SOT.
 
 ## 현재 상태
 
