@@ -3,6 +3,8 @@
 ## Implemented Behavior
 
 - The Rust SQL parser now accepts MySQL-family `LIMIT offset, count`.
+- The checked-in SQL WASM artifact has been regenerated, so frontend
+  `parseSql` / `parseSqlPreloaded` sees the same behavior.
 - The existing `LimitClause` AST is reused:
   - comma first value -> `offset`
   - comma second value -> `count`
@@ -26,6 +28,9 @@
 - `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml ac_393a_e09 -- --nocapture`
 - `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml`
 - `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`
+- `pnpm build:sql-wasm`
+- `pnpm exec vitest run src/lib/sql/sqlWasmArtifact.test.ts`
+- `pnpm wasm:size`
 - `pnpm exec prettier --check docs/PLAN.md docs/query-language-support.md docs/sprints/sprint-432/contract.md docs/sprints/sprint-432/handoff.md`
 - `git diff --check`
 - `pnpm exec lefthook validate`

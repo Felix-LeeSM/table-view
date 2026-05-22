@@ -25,6 +25,8 @@ client parser semantics.
 - AC-432-04: Existing `LIMIT 10` and `LIMIT 10 OFFSET 20` tests remain green.
 - AC-432-05: `docs/query-language-support.md` no longer lists MySQL
   `LIMIT offset, count` as unsupported.
+- AC-432-06: The checked-in SQL WASM artifact parses `LIMIT offset, count`
+  through the frontend `parseSql` / `parseSqlPreloaded` facade.
 
 ## Out of Scope
 
@@ -38,4 +40,5 @@ client parser semantics.
 
 1. Focused parser tests for the comma form.
 2. Full `sql-parser-core` test suite.
-3. Formatting, diff, and hook validation before delivery.
+3. Regenerate `src/lib/sql/wasm/` and run a real-WASM frontend regression.
+4. Formatting, diff, and hook validation before delivery.
