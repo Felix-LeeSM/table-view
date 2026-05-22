@@ -2,15 +2,16 @@ use std::mem;
 
 use table_view_lib::{
     db::{
-        ActiveAdapter, BoxFuture, DbAdapter, KvAdapter, MongoAdapter, PostgresAdapter,
-        SearchAdapter,
+        ActiveAdapter, BoxFuture, DbAdapter, KvAdapter, MongoAdapter, MysqlAdapter,
+        PostgresAdapter, SearchAdapter,
     },
     error::AppError,
     models::{
-        get_data_source_profile, BackendAdapterCapability, BackendAdapterContractKind,
-        BackendAdapterContractState, CatalogModelKind, ConnectionConfig, ConnectionKind,
-        DatabaseType, Paradigm, QueryLanguageId, ResultEnvelopeKind, SafetyPolicyId,
-        KV_MARKER_CONTRACT, SEARCH_MARKER_CONTRACT,
+        get_data_source_profile, BackendAdapterCapability, BackendAdapterCapabilitySource,
+        BackendAdapterContractKind, BackendAdapterContractState, BackendAdapterId,
+        CatalogModelKind, ConnectionConfig, ConnectionKind, DataSourceDialectFamily,
+        DataSourceDialectId, DatabaseType, Paradigm, QueryLanguageId, ResultEnvelopeKind,
+        SafetyPolicyId, ServerVersionProbeId, KV_MARKER_CONTRACT, SEARCH_MARKER_CONTRACT,
     },
 };
 
@@ -100,6 +101,52 @@ fn backend_profiles_encode_current_database_type_contracts() {
 }
 
 #[test]
+fn mariadb_profile_keeps_identity_while_exposing_mysql_family_runtime_metadata() {
+    let mysql = get_data_source_profile(&DatabaseType::Mysql);
+    let mariadb = get_data_source_profile(&DatabaseType::Mariadb);
+
+    assert_eq!(
+        mem::discriminant(&mysql.id),
+        mem::discriminant(&DatabaseType::Mysql)
+    );
+    assert_eq!(
+        mem::discriminant(&mariadb.id),
+        mem::discriminant(&DatabaseType::Mariadb)
+    );
+    assert_eq!(mariadb.adapter_contract, mysql.adapter_contract);
+    assert_eq!(
+        mariadb.adapter_contract.kind,
+        BackendAdapterContractKind::Rdb
+    );
+    assert_eq!(
+        mariadb.adapter_contract.state,
+        BackendAdapterContractState::FactoryBacked
+    );
+    assert_eq!(mariadb.backend_adapter, mysql.backend_adapter);
+    assert_eq!(mariadb.backend_adapter.id, BackendAdapterId::MysqlFamily);
+    assert_eq!(
+        mariadb.backend_adapter.kind,
+        BackendAdapterContractKind::Rdb
+    );
+    assert_eq!(
+        mariadb.backend_adapter.capability_source,
+        BackendAdapterCapabilitySource::MysqlFamily
+    );
+    assert_eq!(mysql.dialect.id, DataSourceDialectId::Mysql);
+    assert_eq!(mysql.dialect.family, DataSourceDialectFamily::Mysql);
+    assert_eq!(
+        mysql.dialect.version_probe,
+        ServerVersionProbeId::MysqlFamilyVersion
+    );
+    assert_eq!(mariadb.dialect.id, DataSourceDialectId::Mariadb);
+    assert_eq!(mariadb.dialect.family, DataSourceDialectFamily::Mysql);
+    assert_eq!(
+        mariadb.dialect.version_probe,
+        ServerVersionProbeId::MysqlFamilyVersion
+    );
+}
+
+#[test]
 fn marker_contracts_remain_marker_only_without_redis_or_search_implementation() {
     assert_eq!(
         KV_MARKER_CONTRACT.state,
@@ -143,6 +190,24 @@ fn active_adapter_profile_resolves_from_kind_and_variant_contract_is_explicit() 
 
     let kv = ActiveAdapter::Kv(Box::new(StubKvAdapter));
     assert_eq!(kv.adapter_contract_kind(), BackendAdapterContractKind::Kv);
+}
+
+#[test]
+fn active_mariadb_adapter_reports_mariadb_profile_over_mysql_family_adapter() {
+    let mariadb = ActiveAdapter::Rdb(Box::new(MysqlAdapter::new_mariadb()));
+    let profile = mariadb.data_source_profile();
+
+    assert_eq!(
+        mem::discriminant(&mariadb.kind()),
+        mem::discriminant(&DatabaseType::Mariadb)
+    );
+    assert_eq!(
+        mem::discriminant(&profile.id),
+        mem::discriminant(&DatabaseType::Mariadb)
+    );
+    assert_eq!(profile.backend_adapter.id, BackendAdapterId::MysqlFamily);
+    assert_eq!(profile.dialect.id, DataSourceDialectId::Mariadb);
+    assert_eq!(profile.dialect.family, DataSourceDialectFamily::Mysql);
 }
 
 struct StubSearchAdapter;
