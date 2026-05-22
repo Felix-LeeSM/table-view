@@ -42,7 +42,7 @@ Strategic constraints:
 
 | Horizon | Goal | Why It Comes Here | Exit Signal |
 |---:|---|---|---|
-| H1 | Data-source extension architecture | RDBMS + DuckDB + Redis/Search/Graph/Vector expansion will otherwise create switch sprawl. | `docs/data-source-architecture.md` + ADR 0046 are followed by implementation phases; new DBMS contracts answer the required profile/capability questions. |
+| H1 | Current code -> data-source architecture alignment | RDBMS + DuckDB + Redis/Search/Graph/Vector expansion will otherwise create switch sprawl. The existing code must enter the new shape before more feature work. | Current `DatabaseType`/`Paradigm`/`ActiveAdapter`/workspace query/result paths are wrapped by profiles, capabilities, query languages, and result envelopes without user-facing regression. |
 | H2 | RDBMS parity | Current architecture is strongest here and user-visible gaps are direct TablePlus migration blockers. | MySQL semantic gaps shrink; MariaDB reuse/delta is locked; SQLite user DBMS adapter is green. |
 | H3 | DuckDB + file analytics | Local-first file analytics extends RDBMS work without a new paradigm. | `.duckdb`, CSV, Parquet, JSON preview/query basics and file privacy rules are green. |
 | H4 | RDBMS intelligence | ERD/schema diff/data compare/migration preview reuse the same RDB catalog graph. | `SchemaGraph` powers ERD, FK navigation, dependency view, and migration impact analysis. |
@@ -127,14 +127,17 @@ Before promoting a roadmap item into active implementation:
 
 The next likely promotions, in order:
 
-1. Data-source profile/capability foundation.
-2. MySQL-family semantic widening continuation.
-3. MariaDB Slice 18A.
-4. SQLite Slice 19A.
-5. DuckDB + file analytics phase definition.
-6. RDBMS ERD / `SchemaGraph`.
-7. Redis/Valkey `KvAdapter` contract.
-8. Elasticsearch/OpenSearch `SearchAdapter` contract.
-9. MongoDB Phase 28 resume.
+1. Current code -> data-source architecture alignment.
+2. Data-source profile/capability foundation.
+3. Query language / result envelope migration.
+4. Adapter contract normalization.
+5. MySQL-family semantic widening continuation.
+6. MariaDB Slice 18A.
+7. SQLite Slice 19A.
+8. DuckDB + file analytics phase definition.
+9. RDBMS ERD / `SchemaGraph`.
+10. Redis/Valkey `KvAdapter` contract.
+11. Elasticsearch/OpenSearch `SearchAdapter` contract.
+12. MongoDB Phase 28 resume.
 
 Changes to this order should update this file and `docs/PLAN.md` together.

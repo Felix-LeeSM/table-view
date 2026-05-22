@@ -219,11 +219,24 @@ Before implementation starts, the phase contract must answer:
 
 Near-term:
 
-1. RDBMS parity: MySQL semantic depth, MariaDB, SQLite.
-2. DuckDB + file analytics as `rdb` + `file` connection kind.
-3. ERD / schema graph on top of RDB catalog data.
-4. Redis/Valkey by making `KvAdapter` real.
-5. Elasticsearch/OpenSearch by making `SearchAdapter` real.
-6. MongoDB full support remains document-paradigm backlog.
-7. Cassandra/DynamoDB/graph/vector/stream wait until profile + capability +
+1. Current code alignment: wrap existing `DatabaseType`, `Paradigm`,
+   `ActiveAdapter`, workspace query state, and query result state in the
+   profile/capability/queryLanguage/result-envelope model without changing user
+   behavior.
+2. Profile foundation: declare profiles for existing PostgreSQL, MySQL,
+   MariaDB, SQLite, and MongoDB before adding new DBMS types.
+3. Capability migration: move feature enablement from `dbType` switch checks to
+   capability lookup, preserving existing UI.
+4. Query/result migration: demote legacy `queryMode` to compatibility and add
+   `queryLanguage` plus typed result envelopes at boundaries.
+5. Adapter normalization: expose current `RdbAdapter` behavior through profile
+   capabilities and define real `KvAdapter`/`SearchAdapter` contracts before
+   Redis/Search implementation.
+6. RDBMS parity: MySQL semantic depth, MariaDB, SQLite.
+7. DuckDB + file analytics as `rdb` + `file` connection kind.
+8. ERD / schema graph on top of RDB catalog data.
+9. Redis/Valkey by making `KvAdapter` real.
+10. Elasticsearch/OpenSearch by making `SearchAdapter` real.
+11. MongoDB full support remains document-paradigm backlog.
+12. Cassandra/DynamoDB/graph/vector/stream wait until profile + capability +
    result envelope contracts are implemented.
