@@ -115,18 +115,18 @@ root 이고, 448-459 는 RDBMS-first 실행 구간이다. 460 이후는 worktree
 | 462 | ERD renderer foundation | erd/ui | 461 |
 | 463 | ERD navigation and layout polish | erd/ui | 462 |
 | 464 | SchemaGraph integration gate | erd/join | 463 |
-| 465 | MongoDB profile/capability normalization | document/mongo | 447 |
-| 466 | MongoDB catalog/result envelope | document/mongo | 465 |
-| 467 | MongoDB edit/safety semantics | document/mongo | 466 |
-| 468 | MongoDB integration gate | document/join | 467 |
-| 469 | KV adapter contract | kv/foundation | 447 |
-| 470 | Redis/Valkey connection/catalog/key browser | kv/redis | 469 |
-| 471 | Redis/Valkey values, TTL, streams | kv/redis | 470 |
-| 472 | Redis/Valkey integration gate | kv/join | 471 |
-| 473 | Search adapter contract | search/foundation | 447 |
-| 474 | Elasticsearch/OpenSearch connection/catalog | search/elastic | 473 |
-| 475 | Search DSL execution/result envelopes | search/elastic | 474 |
-| 476 | Elasticsearch/OpenSearch integration gate | search/join | 475 |
+| 465 | KV adapter contract | kv/foundation | 447 |
+| 466 | Redis/Valkey connection/catalog/key browser | kv/redis | 465 |
+| 467 | Redis/Valkey values, TTL, streams | kv/redis | 466 |
+| 468 | Redis/Valkey integration gate | kv/join | 467 |
+| 469 | Search adapter contract | search/foundation | 447 |
+| 470 | Elasticsearch/OpenSearch connection/catalog | search/elastic | 469 |
+| 471 | Search DSL execution/result envelopes | search/elastic | 470 |
+| 472 | Elasticsearch/OpenSearch integration gate | search/join | 471 |
+| 473 | MongoDB profile/capability normalization | document/mongo | 447 |
+| 474 | MongoDB catalog/result envelope | document/mongo | 473 |
+| 475 | MongoDB edit/safety semantics | document/mongo | 474 |
+| 476 | MongoDB integration gate | document/join | 475 |
 | 477 | Cross-paradigm fixture harness | quality/foundation | 447 |
 | 478 | Adapter conformance test matrix | quality/conformance | 477 |
 | 479 | Language registry and completion ownership matrix | language/shared | 443, 477 |

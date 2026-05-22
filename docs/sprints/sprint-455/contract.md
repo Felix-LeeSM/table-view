@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 455 Contract: DuckDB Connection And File Contract
 
 ## Goal
@@ -38,3 +42,9 @@ work without adding a new paradigm prematurely.
 1. Profile/connection tests.
 2. Fixture strategy smoke.
 3. Docs check.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

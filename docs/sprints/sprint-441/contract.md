@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 441 Contract: Existing Data Source Profiles
 
 ## Goal
@@ -41,3 +45,9 @@ gate migration begins.
 1. Profile fixture tests.
 2. Snapshot or table-driven tests for each current source.
 3. Typecheck.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

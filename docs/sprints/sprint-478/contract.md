@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 478 Contract: Adapter Conformance Test Matrix
 
 ## Goal
@@ -37,3 +41,9 @@ declared support level.
 1. Conformance matrix tests.
 2. Pilot adapter checks.
 3. Docs update check.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

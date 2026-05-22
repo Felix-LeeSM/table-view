@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 462 Contract: ERD Renderer Foundation
 
 ## Goal
@@ -37,3 +41,9 @@ basic relationship display.
 1. Component tests for rendered nodes/edges.
 2. Playwright or screenshot smoke if the UI surface requires it.
 3. Typecheck.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

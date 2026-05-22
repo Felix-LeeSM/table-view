@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 477 Contract: Cross-Paradigm Fixture Harness
 
 ## Goal
@@ -37,3 +41,9 @@ can be tested consistently without bespoke one-off setup.
 1. Harness unit tests.
 2. One RDBMS fixture migration pilot.
 3. Documentation review.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

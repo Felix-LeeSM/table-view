@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 442 Contract: Capability Gating Compatibility
 
 ## Goal
@@ -37,3 +41,9 @@ profile capability lookup without changing user-visible behavior.
 1. Focused UI/helper tests.
 2. Existing affected component tests.
 3. Typecheck.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

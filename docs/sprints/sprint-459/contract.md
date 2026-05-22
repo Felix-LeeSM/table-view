@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 459 Contract: RDBMS Integration Gate
 
 ## Goal
@@ -38,3 +42,9 @@ non-RDBMS implementation.
 2. Fixture smoke for each RDBMS lane available locally.
 3. Typecheck/lint/hook gate.
 4. Documentation/risk review.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

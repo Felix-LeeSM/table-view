@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 452 Contract: SQLite DBMS Connection Contract
 
 ## Goal
@@ -37,3 +41,9 @@ lock the file-source connection contract.
 1. Profile and connection contract tests.
 2. Fixture creation smoke.
 3. Documentation review.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

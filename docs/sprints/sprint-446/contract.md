@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 446 Contract: Connection Kind Compatibility
 
 ## Goal
@@ -37,3 +41,9 @@ without changing the connection dialog behavior.
 1. Connection profile tests.
 2. Focused connection UI tests.
 3. Typecheck.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

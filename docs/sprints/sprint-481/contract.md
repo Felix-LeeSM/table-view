@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 481 Contract: Cross-Paradigm Release Gate
 
 ## Goal
@@ -41,3 +45,9 @@ lanes have landed.
 2. Adapter conformance matrix.
 3. Manual release checklist for support claims.
 4. Documentation and risk register review.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

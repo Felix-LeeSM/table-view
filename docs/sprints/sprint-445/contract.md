@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 445 Contract: Backend Adapter Contract Normalization
 
 ## Goal
@@ -39,3 +43,9 @@ changing runtime behavior.
 1. Focused Rust tests for new helpers, if any.
 2. Existing adapter tests.
 3. Cargo check/test for touched crates.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

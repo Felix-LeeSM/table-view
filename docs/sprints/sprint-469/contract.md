@@ -1,39 +1,50 @@
-# Sprint 469 Contract: KV Adapter Contract
+---
+review-profile: code
+---
+
+# Sprint 469 Contract: Search Adapter Contract
 
 ## Goal
 
-Promote `KvAdapter` from marker concept to a real contract before Redis/Valkey
-implementation begins.
+Promote `SearchAdapter` from marker concept to a real contract before
+Elasticsearch/OpenSearch implementation begins.
 
 ## Dependencies
 
 - Depends on: 447.
-- Parallel lane: kv/foundation.
+- Parallel lane: search/foundation.
 - Blocks: 470-472.
 
 ## Scope
 
-- Define key scan, get/set, delete, TTL, type inspection, stream basics, and
-  safety boundaries as contract methods or explicit deferred gaps.
-- Define key-value and stream result envelopes.
-- Define fixture strategy for Redis/Valkey.
-- Add contract tests or mock conformance tests.
+- Define index browse, mapping retrieval, alias/template basics, search
+  execution, aggregation result handling, document edit boundaries, and safety
+  hooks.
+- Define search hit and aggregation result envelopes.
+- Define fixture/testcontainer strategy for Elasticsearch and OpenSearch.
+- Add contract or mock conformance tests.
 
 ## Acceptance Criteria
 
-- AC-469-01: Redis/Valkey implementation has a real adapter target.
-- AC-469-02: KV result envelopes are typed.
-- AC-469-03: Dangerous operations have safety policy hooks.
-- AC-469-04: Marker-only traits do not pretend to be support.
+- AC-469-01: Search implementation has a real adapter target.
+- AC-469-02: Search result envelopes are typed.
+- AC-469-03: Delete-by-query/wildcard destructive operations have safety hooks.
+- AC-469-04: Elasticsearch/OpenSearch deltas can be represented.
 
 ## Out of Scope
 
-- Redis UI implementation.
-- Cluster support.
-- Pub/sub UI.
+- Search UI implementation.
+- Cluster administration.
+- Observability dashboards.
 
 ## Verification Plan
 
 1. Adapter contract tests.
 2. Mock conformance tests.
 3. Typecheck/cargo check for touched surfaces.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

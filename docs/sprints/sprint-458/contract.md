@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 458 Contract: RDBMS Version Capability Gates
 
 ## Goal
@@ -36,3 +40,9 @@ MariaDB, SQLite, and DuckDB can differ without scattered `dbType` checks.
 1. Capability helper tests.
 2. Fixture/profile tests for known and unknown versions.
 3. Typecheck.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

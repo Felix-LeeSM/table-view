@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 440 Contract: Data Source Alignment Core
 
 ## Goal
@@ -42,3 +46,9 @@ sprawl.
    the canonical type surface lands.
 2. Existing typecheck.
 3. `git diff --check`.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

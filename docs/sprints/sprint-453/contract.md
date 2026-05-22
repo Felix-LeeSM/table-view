@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 453 Contract: SQLite Browse And Query Adapter
 
 ## Goal
@@ -37,3 +41,9 @@ run read/query workflows through the RDBMS surface.
 1. SQLite fixture adapter tests.
 2. Focused frontend connection/catalog/query tests.
 3. Typecheck and cargo tests for touched crates.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

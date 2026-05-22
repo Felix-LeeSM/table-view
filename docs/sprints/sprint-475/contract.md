@@ -1,39 +1,48 @@
-# Sprint 475 Contract: Search DSL Execution And Result Envelopes
+---
+review-profile: code
+---
+
+# Sprint 475 Contract: MongoDB Edit And Safety Semantics
 
 ## Goal
 
-Add bounded Elasticsearch/OpenSearch query execution with typed search-hit and
-aggregation result envelopes.
+Define safe MongoDB edit semantics for documents, indexes, and destructive
+operations before calling MongoDB support complete.
 
 ## Dependencies
 
 - Depends on: 474.
-- Parallel lane: search/elastic.
+- Parallel lane: document/mongo.
 - Blocks: 476.
 
 ## Scope
 
-- Execute selected Search DSL requests through the Search adapter.
-- Render hits and aggregations through search result envelopes.
-- Gate destructive operations and broad wildcard requests.
-- Add syntax/help/completion ownership notes for Search DSL.
+- Define allowed document edit operations and identity assumptions.
+- Keep transaction behavior explicit for standalone vs replica set servers.
+- Gate destructive collection/index operations through preview or confirmation.
+- Add tests for blocked and allowed paths.
 
 ## Acceptance Criteria
 
-- AC-475-01: Search queries return typed hits/aggregation envelopes.
-- AC-475-02: Dangerous requests are blocked or require explicit confirmation.
-- AC-475-03: Result rendering does not force search data into RDBMS grid-only
-  semantics.
-- AC-475-04: Unsupported DSL features fail clearly.
+- AC-475-01: Document edits have deterministic identity and conflict behavior.
+- AC-475-02: Standalone transaction limitations fail friendly.
+- AC-475-03: Destructive operations cannot bypass safety policy.
+- AC-475-04: Unsupported shell behavior remains blocked.
 
 ## Out of Scope
 
-- Full Kibana parity.
-- Query builder UI.
-- Cluster admin APIs.
+- Full shell compatibility.
+- Aggregation pipeline builder.
+- Advanced role/user management.
 
 ## Verification Plan
 
-1. Search execution fixture tests.
+1. Document edit tests.
 2. Safety policy tests.
-3. Result renderer UI tests.
+3. MongoDB fixture smoke where available.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

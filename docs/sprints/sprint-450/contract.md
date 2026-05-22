@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 450 Contract: MariaDB Adapter Identity Slice
 
 ## Goal
@@ -36,3 +40,9 @@ adapter path unless concrete incompatibility is proven.
 1. Profile and connection tests.
 2. Adapter selection tests.
 3. Focused runtime smoke with existing MySQL-family fixture strategy.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

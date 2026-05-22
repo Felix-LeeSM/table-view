@@ -1,3 +1,7 @@
+---
+review-profile: docs
+---
+
 # Sprint 480 Contract: Capability Documentation And Developer Guide
 
 ## Goal
@@ -38,3 +42,8 @@ work starts from profile/capability/adapter/language/result/safety contracts.
 1. Documentation link check.
 2. Markdown formatting.
 3. Review against ADR 0046.
+
+### Required Checks
+
+1. `npx prettier --check docs/data-source-architecture.md docs/PLAN.md docs/ROADMAP.md docs/sprints/sprint-480/contract.md`
+2. `git diff --check`

@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 457 Contract: DuckDB File Analytics Import And Preview
 
 ## Goal
@@ -36,3 +40,9 @@ and query without weakening privacy boundaries.
 1. File analytics fixture tests.
 2. Privacy/history regression tests.
 3. Focused UI smoke.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

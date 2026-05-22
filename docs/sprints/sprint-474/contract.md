@@ -1,38 +1,49 @@
-# Sprint 474 Contract: Elasticsearch/OpenSearch Connection And Catalog
+---
+review-profile: code
+---
+
+# Sprint 474 Contract: MongoDB Catalog And Result Envelope
 
 ## Goal
 
-Implement the first Search slice: connect, inspect cluster/index metadata, and
-browse mappings safely.
+Make MongoDB collection browse and query results flow through document-aware
+catalog and result envelope contracts.
 
 ## Dependencies
 
 - Depends on: 473.
-- Parallel lane: search/elastic.
+- Parallel lane: document/mongo.
 - Blocks: 475 and 476.
 
 ## Scope
 
-- Add Elasticsearch/OpenSearch profiles and URL/server connection fields.
-- Browse indexes, aliases, mappings, and templates selected for the first slice.
-- Preserve product identity and version/capability differences.
-- Add fixture-backed tests.
+- Represent databases, collections, indexes, validators, and views through the
+  document catalog model.
+- Return find/aggregate results through document envelopes with compatible
+  tabular projection where the current UI needs it.
+- Preserve current whitelisted mongosh/MQL safety boundary.
 
 ## Acceptance Criteria
 
-- AC-474-01: Elasticsearch and OpenSearch identities are distinct where needed.
-- AC-474-02: Index/mapping browse works through the Search adapter.
-- AC-474-03: Unsupported cluster/admin surfaces are not exposed as working.
-- AC-474-04: Connection/auth failures are user-visible and safe.
+- AC-474-01: Collection catalog data does not masquerade as RDBMS schema data.
+- AC-474-02: MongoDB query results have typed document envelopes.
+- AC-474-03: Current table-like rendering remains available where supported.
+- AC-474-04: Unsupported result shapes fail visibly.
 
 ## Out of Scope
 
-- Search DSL execution.
-- Document editing.
-- Cluster admin.
+- Document edit parity.
+- Transaction UX.
+- Arbitrary shell.
 
 ## Verification Plan
 
-1. Search fixture adapter tests.
-2. Connection/catalog UI tests.
-3. Version/capability tests.
+1. Document catalog tests.
+2. Result envelope conversion tests.
+3. Focused MongoDB query UI tests.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

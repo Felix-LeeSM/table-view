@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 461 Contract: SchemaGraph Relationship Normalizer
 
 ## Goal
@@ -37,3 +41,9 @@ SchemaGraph consumers do not need DBMS-specific relationship logic.
 1. Relationship normalizer tests.
 2. Dialect fixture tests.
 3. Typecheck.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

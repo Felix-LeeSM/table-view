@@ -1,39 +1,48 @@
-# Sprint 470 Contract: Redis/Valkey Connection, Catalog, And Key Browser
+---
+review-profile: code
+---
+
+# Sprint 470 Contract: Elasticsearch/OpenSearch Connection And Catalog
 
 ## Goal
 
-Implement the first Redis/Valkey slice: connect, inspect databases/keyspaces,
-and browse keys safely.
+Implement the first Search slice: connect, inspect cluster/index metadata, and
+browse mappings safely.
 
 ## Dependencies
 
 - Depends on: 469.
-- Parallel lane: kv/redis.
+- Parallel lane: search/elastic.
 - Blocks: 471 and 472.
 
 ## Scope
 
-- Add Redis/Valkey profiles and server connection fields.
-- Implement database/key browser using safe scan behavior, not blocking full key
-  enumeration.
-- Show key type, TTL, and size metadata where available.
+- Add Elasticsearch/OpenSearch profiles and URL/server connection fields.
+- Browse indexes, aliases, mappings, and templates selected for the first slice.
+- Preserve product identity and version/capability differences.
 - Add fixture-backed tests.
 
 ## Acceptance Criteria
 
-- AC-470-01: Redis/Valkey can connect through the KV profile.
-- AC-470-02: Key browsing uses bounded scan behavior.
-- AC-470-03: TTL/type metadata is visible without mutating data.
-- AC-470-04: Large keyspaces do not freeze the UI.
+- AC-470-01: Elasticsearch and OpenSearch identities are distinct where needed.
+- AC-470-02: Index/mapping browse works through the Search adapter.
+- AC-470-03: Unsupported cluster/admin surfaces are not exposed as working.
+- AC-470-04: Connection/auth failures are user-visible and safe.
 
 ## Out of Scope
 
-- Value editing.
-- Streams UI.
-- Cluster topology.
+- Search DSL execution.
+- Document editing.
+- Cluster admin.
 
 ## Verification Plan
 
-1. Redis fixture adapter tests.
-2. Key browser UI tests.
-3. Performance smoke for bounded scan behavior.
+1. Search fixture adapter tests.
+2. Connection/catalog UI tests.
+3. Version/capability tests.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

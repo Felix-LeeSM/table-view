@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 454 Contract: SQLite Write-Parity Guardrails
 
 ## Goal
@@ -38,3 +42,9 @@ parity.
 1. SQLite write fixture tests.
 2. Read-only mode tests.
 3. Focused row edit UI tests.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

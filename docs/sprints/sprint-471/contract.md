@@ -1,39 +1,49 @@
-# Sprint 471 Contract: Redis/Valkey Values, TTL, And Streams
+---
+review-profile: code
+---
+
+# Sprint 471 Contract: Search DSL Execution And Result Envelopes
 
 ## Goal
 
-Add practical Redis/Valkey value inspection/editing and the first stream
-workflows under the KV adapter contract.
+Add bounded Elasticsearch/OpenSearch query execution with typed search-hit and
+aggregation result envelopes.
 
 ## Dependencies
 
 - Depends on: 470.
-- Parallel lane: kv/redis.
+- Parallel lane: search/elastic.
 - Blocks: 472.
 
 ## Scope
 
-- Render common Redis value types: string, hash, list, set, sorted set, JSON if
-  supported by capability, and stream entries.
-- Implement safe edit paths for selected types.
-- Support TTL update/delete with explicit confirmation where destructive.
-- Add stream read basics without claiming full consumer-group management.
+- Execute selected Search DSL requests through the Search adapter.
+- Render hits and aggregations through search result envelopes.
+- Gate destructive operations and broad wildcard requests.
+- Add syntax/help/completion ownership notes for Search DSL.
 
 ## Acceptance Criteria
 
-- AC-471-01: Common value types render through typed KV envelopes.
-- AC-471-02: Enabled edits are type-aware and tested.
-- AC-471-03: TTL changes are explicit and reversible where possible.
-- AC-471-04: Stream support is scoped and documented.
+- AC-471-01: Search queries return typed hits/aggregation envelopes.
+- AC-471-02: Dangerous requests are blocked or require explicit confirmation.
+- AC-471-03: Result rendering does not force search data into RDBMS grid-only
+  semantics.
+- AC-471-04: Unsupported DSL features fail clearly.
 
 ## Out of Scope
 
-- Full Redis module ecosystem.
-- Cluster resharding/topology UI.
-- Pub/sub live console.
+- Full Kibana parity.
+- Query builder UI.
+- Cluster admin APIs.
 
 ## Verification Plan
 
-1. Redis value fixture tests.
-2. TTL/edit safety tests.
-3. Focused key browser UI tests.
+1. Search execution fixture tests.
+2. Safety policy tests.
+3. Result renderer UI tests.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

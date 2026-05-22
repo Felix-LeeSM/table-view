@@ -1,39 +1,49 @@
-# Sprint 466 Contract: MongoDB Catalog And Result Envelope
+---
+review-profile: code
+---
+
+# Sprint 466 Contract: Redis/Valkey Connection, Catalog, And Key Browser
 
 ## Goal
 
-Make MongoDB collection browse and query results flow through document-aware
-catalog and result envelope contracts.
+Implement the first Redis/Valkey slice: connect, inspect databases/keyspaces,
+and browse keys safely.
 
 ## Dependencies
 
 - Depends on: 465.
-- Parallel lane: document/mongo.
+- Parallel lane: kv/redis.
 - Blocks: 467 and 468.
 
 ## Scope
 
-- Represent databases, collections, indexes, validators, and views through the
-  document catalog model.
-- Return find/aggregate results through document envelopes with compatible
-  tabular projection where the current UI needs it.
-- Preserve current whitelisted mongosh/MQL safety boundary.
+- Add Redis/Valkey profiles and server connection fields.
+- Implement database/key browser using safe scan behavior, not blocking full key
+  enumeration.
+- Show key type, TTL, and size metadata where available.
+- Add fixture-backed tests.
 
 ## Acceptance Criteria
 
-- AC-466-01: Collection catalog data does not masquerade as RDBMS schema data.
-- AC-466-02: MongoDB query results have typed document envelopes.
-- AC-466-03: Current table-like rendering remains available where supported.
-- AC-466-04: Unsupported result shapes fail visibly.
+- AC-466-01: Redis/Valkey can connect through the KV profile.
+- AC-466-02: Key browsing uses bounded scan behavior.
+- AC-466-03: TTL/type metadata is visible without mutating data.
+- AC-466-04: Large keyspaces do not freeze the UI.
 
 ## Out of Scope
 
-- Document edit parity.
-- Transaction UX.
-- Arbitrary shell.
+- Value editing.
+- Streams UI.
+- Cluster topology.
 
 ## Verification Plan
 
-1. Document catalog tests.
-2. Result envelope conversion tests.
-3. Focused MongoDB query UI tests.
+1. Redis fixture adapter tests.
+2. Key browser UI tests.
+3. Performance smoke for bounded scan behavior.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

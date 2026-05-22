@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 463 Contract: ERD Navigation And Layout Polish
 
 ## Goal
@@ -37,3 +41,9 @@ layout affordances.
 1. Component interaction tests.
 2. Browser smoke on desktop and narrow viewport if ERD is visible.
 3. Typecheck.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

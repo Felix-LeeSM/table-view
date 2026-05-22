@@ -1,40 +1,50 @@
-# Sprint 473 Contract: Search Adapter Contract
+---
+review-profile: code
+---
+
+# Sprint 473 Contract: MongoDB Profile And Capability Normalization
 
 ## Goal
 
-Promote `SearchAdapter` from marker concept to a real contract before
-Elasticsearch/OpenSearch implementation begins.
+Resume MongoDB work by aligning it to the data-source architecture rather than
+expanding the old `queryMode` path.
 
 ## Dependencies
 
 - Depends on: 447.
-- Parallel lane: search/foundation.
-- Blocks: 474-476.
+- Parallel lane: document/mongo.
+- Can run after RDBMS-first work only with user approval.
 
 ## Scope
 
-- Define index browse, mapping retrieval, alias/template basics, search
-  execution, aggregation result handling, document edit boundaries, and safety
-  hooks.
-- Define search hit and aggregation result envelopes.
-- Define fixture/testcontainer strategy for Elasticsearch and OpenSearch.
-- Add contract or mock conformance tests.
+- Normalize MongoDB profile, capabilities, query language, catalog model, result
+  kinds, and safety policy.
+- Preserve existing subagent/Phase 28 findings as input without auto-merging
+  unrelated code.
+- Identify old RDBMS assumptions still leaking into MongoDB UI.
+- Add focused tests for profile/capability behavior.
 
 ## Acceptance Criteria
 
-- AC-473-01: Search implementation has a real adapter target.
-- AC-473-02: Search result envelopes are typed.
-- AC-473-03: Delete-by-query/wildcard destructive operations have safety hooks.
-- AC-473-04: Elasticsearch/OpenSearch deltas can be represented.
+- AC-473-01: MongoDB is a document source with explicit capabilities.
+- AC-473-02: `queryLanguage` owns future routing; `queryMode` remains legacy.
+- AC-473-03: Existing MongoDB behavior does not regress.
+- AC-473-04: Remaining MongoDB gaps are tracked.
 
 ## Out of Scope
 
-- Search UI implementation.
-- Cluster administration.
-- Observability dashboards.
+- Arbitrary JavaScript shell execution.
+- Broad document editor changes.
+- Automatic integration of earlier subagent work.
 
 ## Verification Plan
 
-1. Adapter contract tests.
-2. Mock conformance tests.
-3. Typecheck/cargo check for touched surfaces.
+1. Mongo profile/capability tests.
+2. Focused query tab compatibility tests.
+3. Documentation gap review.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 449 Contract: MySQL-Family Scripting Boundary
 
 ## Goal
@@ -39,3 +43,9 @@ scripting features without pretending full MySQL CLI compatibility exists.
 1. Parser/splitter tests.
 2. Safe Mode tests.
 3. Affected frontend query execution tests.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

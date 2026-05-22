@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 447 Contract: Data Source Alignment Integration Gate
 
 ## Goal
@@ -41,3 +45,9 @@ architecture with no user-facing regression.
 2. Affected Rust test set.
 3. Typecheck/lint/hook gate.
 4. Documentation diff review.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

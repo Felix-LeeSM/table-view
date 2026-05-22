@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 448 Contract: MySQL-Family Routine And User-Variable Semantics
 
 ## Goal
@@ -38,3 +42,9 @@ slice after common `CALL`: routine arguments and user-variable recognition.
 1. Focused parser/safety tests.
 2. WASM facade regression tests if exports change.
 3. Query-language support doc check.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

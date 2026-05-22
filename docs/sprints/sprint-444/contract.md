@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 444 Contract: Result Envelope Compatibility Layer
 
 ## Goal
@@ -38,3 +42,9 @@ without changing rendering behavior.
 1. Result conversion tests.
 2. Existing query result UI tests.
 3. Typecheck.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 443 Contract: Query Language Compatibility Layer
 
 ## Goal
@@ -38,3 +42,9 @@ Introduce `queryLanguage` as the forward routing key while preserving legacy
 1. Query tab state tests.
 2. Legacy hydration tests.
 3. Typecheck.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

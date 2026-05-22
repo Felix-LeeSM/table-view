@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 479 Contract: Language Registry And Completion Ownership Matrix
 
 ## Goal
@@ -38,3 +42,9 @@ long-term vocabulary source.
 1. Language registry tests.
 2. Query-language support docs check.
 3. Typecheck.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 451 Contract: MariaDB Semantic Delta Slice
 
 ## Goal
@@ -37,3 +41,9 @@ adapter identity is stable.
 1. Focused parser/runtime/profile tests for the selected delta.
 2. Regression tests proving MySQL behavior stays stable.
 3. Docs update check.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

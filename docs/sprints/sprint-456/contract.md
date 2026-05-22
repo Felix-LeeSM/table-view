@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 456 Contract: DuckDB Catalog And Query Basics
 
 ## Goal
@@ -36,3 +40,9 @@ and execute SQL returning tabular results.
 1. DuckDB adapter fixture tests.
 2. Focused frontend catalog/query tests.
 3. Typecheck and backend tests for touched crates.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`

@@ -1,3 +1,7 @@
+---
+review-profile: code
+---
+
 # Sprint 464 Contract: SchemaGraph Integration Gate
 
 ## Goal
@@ -37,3 +41,9 @@ schema diff, FK navigation, and migration impact features.
 1. SchemaGraph test suite.
 2. ERD UI smoke.
 3. Typecheck/lint/hook gate.
+
+### Required Checks
+
+1. `pnpm exec tsc -b --pretty false`
+2. `cargo check --manifest-path src-tauri/Cargo.toml`
+3. `git diff --check`
