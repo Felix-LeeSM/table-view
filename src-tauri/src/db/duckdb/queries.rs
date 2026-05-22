@@ -250,7 +250,10 @@ fn get_table_columns_for_query(
     })
 }
 
-fn duckdb_query_columns(stmt: &duckdb::Statement<'_>, column_count: usize) -> Vec<QueryColumn> {
+pub(super) fn duckdb_query_columns(
+    stmt: &duckdb::Statement<'_>,
+    column_count: usize,
+) -> Vec<QueryColumn> {
     (0..column_count)
         .map(|idx| {
             let name = stmt
@@ -267,7 +270,7 @@ fn duckdb_query_columns(stmt: &duckdb::Statement<'_>, column_count: usize) -> Ve
         .collect()
 }
 
-fn collect_rows(
+pub(super) fn collect_rows(
     rows: &mut duckdb::Rows<'_>,
     column_count: usize,
 ) -> Result<Vec<Vec<serde_json::Value>>, AppError> {

@@ -355,33 +355,39 @@ const SQLITE_FILE_CONNECTION: FileConnectionContract = FileConnectionContract {
     deferred_inputs: &[],
 };
 
-const DUCKDB_SUPPORTED_FILE_INPUTS: &[FileConnectionInputContract] =
-    &[FileConnectionInputContract {
+const DUCKDB_SUPPORTED_FILE_INPUTS: &[FileConnectionInputContract] = &[
+    FileConnectionInputContract {
         id: "duckdb-database",
         kind: FileConnectionInputKind::Database,
         extensions: &[".duckdb"],
         status: FileConnectionInputStatus::Supported,
-    }];
-const DUCKDB_DEFERRED_FILE_INPUTS: &[FileConnectionInputContract] = &[
+    },
     FileConnectionInputContract {
         id: "csv",
         kind: FileConnectionInputKind::Analytics,
         extensions: &[".csv"],
-        status: FileConnectionInputStatus::Deferred,
+        status: FileConnectionInputStatus::Supported,
     },
     FileConnectionInputContract {
         id: "parquet",
         kind: FileConnectionInputKind::Analytics,
         extensions: &[".parquet"],
-        status: FileConnectionInputStatus::Deferred,
+        status: FileConnectionInputStatus::Supported,
     },
     FileConnectionInputContract {
         id: "json",
         kind: FileConnectionInputKind::Analytics,
-        extensions: &[".json", ".ndjson"],
-        status: FileConnectionInputStatus::Deferred,
+        extensions: &[".json"],
+        status: FileConnectionInputStatus::Supported,
+    },
+    FileConnectionInputContract {
+        id: "ndjson",
+        kind: FileConnectionInputKind::Analytics,
+        extensions: &[".ndjson"],
+        status: FileConnectionInputStatus::Supported,
     },
 ];
+const DUCKDB_DEFERRED_FILE_INPUTS: &[FileConnectionInputContract] = &[];
 const DUCKDB_FILE_CONNECTION: FileConnectionContract = FileConnectionContract {
     path_field: "database",
     read_only_field: "readOnly",

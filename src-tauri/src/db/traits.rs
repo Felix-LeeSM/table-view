@@ -14,9 +14,9 @@ use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest,
     CreateTriggerRequest, DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
-    DropTableRequest, DropTriggerRequest, FilterCondition, FunctionInfo, IndexInfo,
-    PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo,
-    ViewInfo,
+    DropTableRequest, DropTriggerRequest, FileAnalyticsPreview, FileAnalyticsQueryResponse,
+    FileAnalyticsSource, FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo,
+    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::types::{
@@ -194,6 +194,41 @@ pub trait RdbAdapter: DbAdapter {
         raw_where: Option<&'a str>,
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<TableData, AppError>>;
+
+    fn register_file_analytics_source<'a>(
+        &'a self,
+        _path: &'a str,
+    ) -> BoxFuture<'a, Result<FileAnalyticsSource, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support local file analytics".into(),
+            ))
+        })
+    }
+
+    fn preview_file_analytics_source<'a>(
+        &'a self,
+        _source_id: &'a str,
+        _limit: Option<u32>,
+    ) -> BoxFuture<'a, Result<FileAnalyticsPreview, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support local file analytics".into(),
+            ))
+        })
+    }
+
+    fn execute_file_analytics_query<'a>(
+        &'a self,
+        _source_id: &'a str,
+        _sql: &'a str,
+    ) -> BoxFuture<'a, Result<FileAnalyticsQueryResponse, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support local file analytics".into(),
+            ))
+        })
+    }
 
     // DDL
     /// Sprint 235 — request-shaped `DROP TABLE` matching `create_table` /

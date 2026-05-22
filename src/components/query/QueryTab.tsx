@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { QueryTab } from "@stores/workspaceStore";
 import {
   useCurrentWorkspaceKey,
@@ -21,6 +21,7 @@ import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDi
 import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import QueryTabToolbar from "./QueryTab/Toolbar";
+import DuckdbFileAnalyticsDialog from "./DuckdbFileAnalyticsDialog";
 // sprint-373 (2026-05-17) — legacy in-memory HistoryPanel retired. The
 // sprint-372 backend-driven `QueryHistoryPanel` consumes `list_history`
 // IPC via `useQueryHistory` hook + cross-window events.
@@ -82,6 +83,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
         : true,
     [connection],
   );
+  const canPreviewLocalFile = connection?.dbType === "duckdb";
+  const [showFileAnalytics, setShowFileAnalytics] = useState(false);
   // `dbType` flows in so the autocomplete namespace surfaces
   // dialect-specific keywords (PG: RETURNING/ILIKE; MySQL: AUTO_INCREMENT;
   // SQLite: PRAGMA / WITHOUT ROWID).
@@ -222,6 +225,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
         onExecute={handleExecute}
         onDryRun={handleDryRun}
         onFormat={handleFormat}
+        showFileAnalytics={canPreviewLocalFile}
+        onOpenFileAnalytics={() => setShowFileAnalytics(true)}
         favorites={favorites}
       />
 
@@ -322,6 +327,13 @@ export default function QueryTab({ tab }: QueryTabProps) {
       </div>
 
       <QueryHistoryPanel connectionId={tab.connectionId} tabId={tab.id} />
+
+      {canPreviewLocalFile && showFileAnalytics && (
+        <DuckdbFileAnalyticsDialog
+          connectionId={tab.connectionId}
+          onClose={() => setShowFileAnalytics(false)}
+        />
+      )}
 
       {pendingMongoConfirm && (
         <ConfirmDestructiveDialog

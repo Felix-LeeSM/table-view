@@ -8,7 +8,10 @@ use duckdb::{params, AccessMode, Config, Connection};
 use tokio::sync::Mutex;
 
 use crate::error::AppError;
-use crate::models::{ColumnCategory, ColumnInfo, ConnectionConfig, TableInfo, ViewInfo};
+use crate::models::{
+    ColumnCategory, ColumnInfo, ConnectionConfig, FileAnalyticsSource, FileAnalyticsSourceKind,
+    TableInfo, ViewInfo,
+};
 
 use super::sql_text::quote_identifier;
 use super::NamespaceInfo;
@@ -24,11 +27,19 @@ pub(super) struct DuckdbConnectionSettings {
 #[derive(Default)]
 struct DuckdbState {
     settings: Option<DuckdbConnectionSettings>,
+    file_sources: HashMap<String, RegisteredFileAnalyticsSource>,
+    next_file_source_id: u64,
 }
 
 #[derive(Clone)]
 pub struct DuckdbAdapter {
     inner: Arc<Mutex<DuckdbState>>,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct RegisteredFileAnalyticsSource {
+    pub path: String,
+    pub public: FileAnalyticsSource,
 }
 
 impl Default for DuckdbAdapter {
@@ -105,12 +116,16 @@ impl DuckdbAdapter {
 
         let mut guard = self.inner.lock().await;
         guard.settings = Some(settings);
+        guard.file_sources.clear();
+        guard.next_file_source_id = 0;
         Ok(())
     }
 
     pub async fn disconnect_file(&self) -> Result<(), AppError> {
         let mut guard = self.inner.lock().await;
         guard.settings = None;
+        guard.file_sources.clear();
+        guard.next_file_source_id = 0;
         Ok(())
     }
 
@@ -152,6 +167,58 @@ impl DuckdbAdapter {
             .settings
             .clone()
             .ok_or_else(|| AppError::Connection("Not connected".into()))
+    }
+
+    pub(super) async fn store_file_analytics_source(
+        &self,
+        path: String,
+        file_name: String,
+        kind: FileAnalyticsSourceKind,
+        size_bytes: u64,
+    ) -> Result<FileAnalyticsSource, AppError> {
+        let mut guard = self.inner.lock().await;
+        guard
+            .settings
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+        guard.next_file_source_id = guard
+            .next_file_source_id
+            .checked_add(1)
+            .ok_or_else(|| AppError::Database("DuckDB file analytics source id overflow".into()))?;
+        let sequence = guard.next_file_source_id;
+        let source = FileAnalyticsSource {
+            id: format!("duckdb-file-{sequence}"),
+            alias: format!("file_{sequence:08x}"),
+            file_name,
+            kind,
+            size_bytes,
+        };
+        guard.file_sources.insert(
+            source.id.clone(),
+            RegisteredFileAnalyticsSource {
+                path,
+                public: source.clone(),
+            },
+        );
+        Ok(source)
+    }
+
+    pub(super) async fn get_file_analytics_source(
+        &self,
+        source_id: &str,
+    ) -> Result<RegisteredFileAnalyticsSource, AppError> {
+        let source_id = source_id.trim();
+        if source_id.is_empty() {
+            return Err(AppError::Validation(
+                "File source ID cannot be empty".into(),
+            ));
+        }
+        let guard = self.inner.lock().await;
+        guard
+            .file_sources
+            .get(source_id)
+            .cloned()
+            .ok_or_else(|| AppError::NotFound(format!("File source '{source_id}' not found")))
     }
 
     pub(super) async fn with_connection<T, F>(&self, work: F) -> Result<T, AppError>
@@ -383,6 +450,19 @@ where
 }
 
 fn open_connection(settings: &DuckdbConnectionSettings) -> Result<Connection, AppError> {
+    open_connection_with_external_access(settings, false)
+}
+
+pub(super) fn open_file_analytics_connection(
+    settings: &DuckdbConnectionSettings,
+) -> Result<Connection, AppError> {
+    open_connection_with_external_access(settings, true)
+}
+
+fn open_connection_with_external_access(
+    settings: &DuckdbConnectionSettings,
+    external_access: bool,
+) -> Result<Connection, AppError> {
     let access_mode = if settings.read_only {
         AccessMode::ReadOnly
     } else {
@@ -390,7 +470,7 @@ fn open_connection(settings: &DuckdbConnectionSettings) -> Result<Connection, Ap
     };
     let config = Config::default()
         .access_mode(access_mode)
-        .and_then(|config| config.enable_external_access(false))
+        .and_then(|config| config.enable_external_access(external_access))
         .and_then(|config| config.enable_autoload_extension(false))
         .map_err(|e| AppError::Connection(e.to_string()))?;
     Connection::open_with_flags(&settings.path, config)

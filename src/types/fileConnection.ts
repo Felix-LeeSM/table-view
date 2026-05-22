@@ -56,11 +56,10 @@ export const SQLITE_FILE_CONNECTION = fileConnectionContract([
   ),
 ]);
 
-export const DUCKDB_FILE_CONNECTION = fileConnectionContract(
-  [fileInput("duckdb-database", "database", [".duckdb"], "supported")],
-  [
-    fileInput("csv", "analytics", [".csv"], "deferred"),
-    fileInput("parquet", "analytics", [".parquet"], "deferred"),
-    fileInput("json", "analytics", [".json", ".ndjson"], "deferred"),
-  ],
-);
+export const DUCKDB_FILE_CONNECTION = fileConnectionContract([
+  fileInput("duckdb-database", "database", [".duckdb"], "supported"),
+  fileInput("csv", "analytics", [".csv"], "supported"),
+  fileInput("parquet", "analytics", [".parquet"], "supported"),
+  fileInput("json", "analytics", [".json"], "supported"),
+  fileInput("ndjson", "analytics", [".ndjson"], "supported"),
+]);
