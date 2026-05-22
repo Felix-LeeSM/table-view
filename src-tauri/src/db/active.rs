@@ -7,7 +7,7 @@
 //! is unchanged — `crate::db::ActiveAdapter` is preserved via `pub use`.
 
 use crate::error::AppError;
-use crate::models::DatabaseType;
+use crate::models::{BackendAdapterContractKind, DataSourceProfile, DatabaseType};
 
 use super::traits::{DbAdapter, DocumentAdapter, KvAdapter, RdbAdapter, SearchAdapter};
 
@@ -26,6 +26,19 @@ pub enum ActiveAdapter {
 impl ActiveAdapter {
     pub fn kind(&self) -> DatabaseType {
         self.lifecycle().kind()
+    }
+
+    pub fn data_source_profile(&self) -> DataSourceProfile {
+        self.kind().data_source_profile()
+    }
+
+    pub fn adapter_contract_kind(&self) -> BackendAdapterContractKind {
+        match self {
+            ActiveAdapter::Rdb(_) => BackendAdapterContractKind::Rdb,
+            ActiveAdapter::Document(_) => BackendAdapterContractKind::Document,
+            ActiveAdapter::Search(_) => BackendAdapterContractKind::Search,
+            ActiveAdapter::Kv(_) => BackendAdapterContractKind::Kv,
+        }
     }
 
     pub fn lifecycle(&self) -> &dyn DbAdapter {
