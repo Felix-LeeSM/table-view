@@ -68,9 +68,11 @@ const EmbedSchema = z.object({
   kind: z.enum(["one", "many"]),
 });
 
+const EntityTargetSchema = z.enum(["pg", "mongo", "mysql", "sqlite"]);
+
 const EntitySchema = z
   .object({
-    targets: z.array(z.enum(["pg", "mongo", "mysql"])).nonempty(),
+    targets: z.array(EntityTargetSchema).nonempty(),
     pg: z.object({ schema: z.string(), table: z.string() }).optional(),
     mongo: z
       .object({
@@ -112,6 +114,8 @@ const ProfileSpecSchema = z
       // database 명을 따로 지정할 수 있게 (PG 와 동일한 이름을 쓸지,
       // `*_mysql` 처럼 분리할지는 profile 측 결정).
       mysql: z.string().optional(),
+      // Sprint 452 — SQLite fixture DB is a local file under app-data.
+      sqlite: z.string().optional(),
     }),
     locale_mix: z.record(z.string(), z.number().min(0).max(1)),
     rows: z.record(z.string(), z.number().int().nonnegative()),
@@ -122,6 +126,7 @@ const ProfileSpecSchema = z
         // Sprint 281 — fixture 가 MySQL connection 도 storage 에 upsert
         // 할 수 있게. yaml 미지정 시 buildConnections 는 mysql 항목 skip.
         mysql: z.array(ConnectionSpec).optional(),
+        sqlite: z.array(ConnectionSpec).optional(),
       })
       .optional(),
   })

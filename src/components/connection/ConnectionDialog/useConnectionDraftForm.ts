@@ -122,6 +122,7 @@ export function useConnectionDraftForm(
         port: defaults.port,
         user: defaults.user,
         database: defaults.database,
+        readOnly: false,
         paradigm: paradigmOf(dbType),
       };
     });

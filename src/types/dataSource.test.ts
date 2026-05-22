@@ -98,7 +98,6 @@ describe("DataSourceProfile registry", () => {
       connection: { test: true, filePicker: true, readOnly: true },
       query: { query: true, multiStatement: true, cancel: true },
       catalog: { browse: true, schema: true },
-      edit: { editRows: true },
     }),
     mssql: createEmptyDataSourceCapabilities(),
     oracle: createEmptyDataSourceCapabilities(),
@@ -167,11 +166,12 @@ describe("DataSourceProfile registry", () => {
     expect(getDataSourceProfile("sqlite").connectionKind).toBe("file");
   });
 
-  it("describes SQLite as a file RDBMS without switch-db or DDL parity", () => {
+  it("describes SQLite as a file RDBMS without switch-db, row-edit, or DDL parity", () => {
     const sqlite = getDataSourceProfile("sqlite");
 
     expect(sqlite.connectionKind).toBe("file");
     expect(sqlite.capabilities).toEqual(expectedCapabilitiesByType.sqlite);
+    expect(sqlite.capabilities.edit.editRows).toBe(false);
   });
 
   it("keeps MongoDB document-scoped and separate from global switch-db", () => {

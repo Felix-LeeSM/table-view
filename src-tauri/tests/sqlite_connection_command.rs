@@ -18,6 +18,7 @@ fn sqlite_public(path: &str) -> ConnectionConfigPublic {
         port: 0,
         user: String::new(),
         database: path.into(),
+        read_only: false,
         group_id: None,
         color: None,
         connection_timeout: None,
@@ -118,6 +119,52 @@ fn save_connection_rejects_sqlite_without_file_path() {
     match result {
         Err(AppError::Validation(msg)) => assert!(msg.contains("SQLite database file")),
         other => panic!("Expected SQLite validation error, got: {:?}", other),
+    }
+
+    cleanup();
+}
+
+#[test]
+#[serial]
+fn save_connection_rejects_sqlite_relative_file_path() {
+    let _dir = setup();
+    let result = save_connection(SaveConnectionRequest {
+        connection: sqlite_public("relative.sqlite"),
+        password: Some(String::new()),
+        is_new: Some(false),
+    });
+
+    match result {
+        Err(AppError::Validation(msg)) => assert!(msg.contains("absolute")),
+        other => panic!(
+            "Expected SQLite absolute path validation error, got: {:?}",
+            other
+        ),
+    }
+
+    cleanup();
+}
+
+#[test]
+#[serial]
+fn save_connection_rejects_internal_app_state_db_path() {
+    let _dir = setup();
+    let state_path = app_sqlite_state::db_path().unwrap();
+
+    let result = save_connection(SaveConnectionRequest {
+        connection: sqlite_public(state_path.to_str().unwrap()),
+        password: Some(String::new()),
+        is_new: Some(false),
+    });
+
+    match result {
+        Err(AppError::Validation(message)) => {
+            assert!(message.contains("internal app SQLite state"))
+        }
+        other => panic!(
+            "Expected internal app SQLite state validation error, got: {:?}",
+            other
+        ),
     }
 
     cleanup();

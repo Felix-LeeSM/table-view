@@ -224,6 +224,7 @@ export function normalizeConnectionConfig(value: unknown): ConnectionConfig {
     port: numberOr(r.port),
     user: stringOr(r.user),
     database: stringOr(r.database),
+    readOnly: r.readOnly === true || r.read_only === true,
     groupId: nullableString(pick(r, "groupId", "group_id")),
     color: nullableString(r.color),
     connectionTimeout: optionalNumber(

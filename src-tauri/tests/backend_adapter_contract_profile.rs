@@ -62,6 +62,8 @@ fn backend_profiles_encode_current_database_type_contracts() {
         sqlite.adapter_contract.state,
         BackendAdapterContractState::FactoryBacked
     );
+    assert!(sqlite.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(!sqlite.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let mssql = get_data_source_profile(&DatabaseType::Mssql);
     assert_eq!(

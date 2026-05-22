@@ -12,6 +12,7 @@ fn sqlite_config(path: &str) -> ConnectionConfig {
         user: String::new(),
         password: String::new(),
         database: path.to_string(),
+        read_only: false,
         group_id: None,
         color: None,
         connection_timeout: None,
@@ -129,6 +130,44 @@ async fn test_sqlite_connection_opens_existing_file() {
     SqliteAdapter::test(&sqlite_config(db_path.to_str().unwrap()))
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn test_sqlite_connection_requires_absolute_path() {
+    let result = SqliteAdapter::test(&sqlite_config("relative.sqlite")).await;
+
+    match result {
+        Err(AppError::Validation(message)) => assert!(message.contains("absolute")),
+        other => panic!("Expected absolute path validation error, got: {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_sqlite_read_only_connection_rejects_writes() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("app.sqlite");
+    seed_sqlite(&db_path).await;
+    let mut config = sqlite_config(db_path.to_str().unwrap());
+    config.read_only = true;
+    let adapter = SqliteAdapter::new();
+
+    adapter.connect_pool(&config).await.unwrap();
+    adapter
+        .execute_query("SELECT COUNT(*) FROM users", None)
+        .await
+        .unwrap();
+    let result = adapter
+        .execute_query(
+            "INSERT INTO users(id, email, name) VALUES (2, 'ro@example.test', 'Read Only')",
+            None,
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(AppError::Database(_))),
+        "read-only SQLite connection must reject writes: {:?}",
+        result
+    );
 }
 
 #[tokio::test]

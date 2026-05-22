@@ -14,6 +14,7 @@ fn sqlite_config(path: &str) -> ConnectionConfig {
         user: String::new(),
         password: String::new(),
         database: path.to_string(),
+        read_only: false,
         group_id: None,
         color: None,
         connection_timeout: None,

@@ -259,7 +259,7 @@ async fn read_connections(
     // connections → ConnectionConfigPublic shape. password_enc 는 has_password
     // boolean 으로만 노출 — plaintext / ciphertext 절대 wire 에 안 보냄.
     let conn_rows = sqlx::query_as::<_, ConnectionRow>(
-        "SELECT id, name, db_type, host, port, user, password_enc, database, group_id, color, \
+        "SELECT id, name, db_type, host, port, user, password_enc, database, read_only, group_id, color, \
          connection_timeout, keep_alive_interval, environment, auth_source, replica_set, \
          tls_enabled \
          FROM connections ORDER BY sort_order ASC, id ASC",
@@ -304,6 +304,7 @@ struct ConnectionRow {
     user: String,
     password_enc: String,
     database: String,
+    read_only: i64,
     group_id: Option<String>,
     color: Option<String>,
     connection_timeout: Option<i64>,
@@ -336,6 +337,7 @@ impl ConnectionRow {
             port: self.port as u16,
             user: self.user,
             database: self.database,
+            read_only: self.read_only != 0,
             group_id: self.group_id,
             color: self.color,
             connection_timeout: self.connection_timeout.map(|v| v as u32),

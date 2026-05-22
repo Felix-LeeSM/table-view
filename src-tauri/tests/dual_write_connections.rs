@@ -64,6 +64,7 @@ fn sample_connection_req(id: &str, name: &str) -> PersistConnectionRequest {
         port: 5432,
         user: "postgres".into(),
         database: "testdb".into(),
+        read_only: false,
         group_id: None,
         color: None,
         connection_timeout: None,

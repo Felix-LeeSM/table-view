@@ -134,6 +134,11 @@ const RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalQuery,
     BackendAdapterCapability::RelationalSchemaMutation,
 ];
+const SQLITE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
+    BackendAdapterCapability::Lifecycle,
+    BackendAdapterCapability::RelationalCatalog,
+    BackendAdapterCapability::RelationalQuery,
+];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::DocumentCatalog,
@@ -153,6 +158,11 @@ const FACTORY_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
     state: BackendAdapterContractState::FactoryBacked,
     capabilities: RDB_CAPABILITIES,
+};
+const SQLITE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+    kind: BackendAdapterContractKind::Rdb,
+    state: BackendAdapterContractState::FactoryBacked,
+    capabilities: SQLITE_RDB_CAPABILITIES,
 };
 const DECLARED_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
@@ -188,7 +198,7 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             catalog_model: CatalogModelKind::Rdb,
             result_kinds: TABULAR_RESULT,
             safety_policy: SafetyPolicyId::RdbDefault,
-            adapter_contract: FACTORY_RDB_CONTRACT,
+            adapter_contract: SQLITE_RDB_CONTRACT,
         },
         DatabaseType::Mssql => rdb_profile(DatabaseType::Mssql, DECLARED_RDB_CONTRACT),
         DatabaseType::Oracle => rdb_profile(DatabaseType::Oracle, DECLARED_RDB_CONTRACT),

@@ -161,6 +161,8 @@ fn truncate_hash(hex: &str) -> &str {
 // row count + canonical content hash 비교.
 // ---------------------------------------------------------------------------
 
+type ConnectionMirrorRow = (String, String, String, String, i64, String, String, i64);
+
 async fn measure_connections(pool: &SqlitePool) -> DomainResult {
     let file_data = match load_storage_redacted() {
         Ok(d) => d,
@@ -178,14 +180,15 @@ async fn measure_connections(pool: &SqlitePool) -> DomainResult {
         .iter()
         .map(|c| {
             let canonical = format!(
-                "{}|{}|{}|{}|{}|{}|{}",
+                "{}|{}|{}|{}|{}|{}|{}|{}",
                 c.id,
                 c.name,
                 serde_json::to_string(&c.db_type).unwrap_or_default(),
                 c.host,
                 c.port,
                 c.user,
-                c.database
+                c.database,
+                c.read_only
             );
             (c.id.clone(), canonical)
         })
@@ -194,38 +197,46 @@ async fn measure_connections(pool: &SqlitePool) -> DomainResult {
     let file_count = file_payload.len();
     let file_hash = hash_pairs(&file_payload);
 
-    let sqlite_rows: Vec<(String, String, String, String, i64, String, String)> =
-        match sqlx::query_as(
-            "SELECT id, name, db_type, host, port, user, database FROM connections ORDER BY id ASC",
-        )
-        .fetch_all(pool)
-        .await
-        {
-            Ok(rows) => rows,
-            Err(e) => {
-                warn!(target: "mismatch_metric", error = %e, "skip connections — SQLite read failed");
-                return DomainResult::Ok {
-                    domain: "connections",
-                    rows: file_count,
-                };
-            }
-        };
+    let sqlite_rows_result = sqlx::query_as::<_, ConnectionMirrorRow>(
+        "SELECT id, name, db_type, host, port, user, database, read_only FROM connections ORDER BY id ASC",
+    )
+    .fetch_all(pool)
+    .await;
+    let sqlite_rows = match sqlite_rows_result {
+        Ok(rows) => rows,
+        Err(e) => {
+            warn!(target: "mismatch_metric", error = %e, "skip connections — SQLite read failed");
+            return DomainResult::Ok {
+                domain: "connections",
+                rows: file_count,
+            };
+        }
+    };
 
     let mut sqlite_payload: Vec<(String, String)> = sqlite_rows
         .into_iter()
-        .map(|(id, name, db_type, host, port, user, database)| {
-            // serialize db_type to match `serde_json::to_string(&c.db_type)` of
-            // the file path. The file uses serde's PascalCase tag — the SQLite
-            // column stores the literal lowercase tag, so we wrap it in
-            // explicit quotes to match `serde_json::to_string` output for a
-            // bare enum variant.
-            let db_type_quoted = format!("\"{}\"", db_type);
-            let canonical = format!(
-                "{}|{}|{}|{}|{}|{}|{}",
-                id, name, db_type_quoted, host, port, user, database
-            );
-            (id, canonical)
-        })
+        .map(
+            |(id, name, db_type, host, port, user, database, read_only)| {
+                // serialize db_type to match `serde_json::to_string(&c.db_type)` of
+                // the file path. The file uses serde's PascalCase tag — the SQLite
+                // column stores the literal lowercase tag, so we wrap it in
+                // explicit quotes to match `serde_json::to_string` output for a
+                // bare enum variant.
+                let db_type_quoted = format!("\"{}\"", db_type);
+                let canonical = format!(
+                    "{}|{}|{}|{}|{}|{}|{}|{}",
+                    id,
+                    name,
+                    db_type_quoted,
+                    host,
+                    port,
+                    user,
+                    database,
+                    read_only != 0
+                );
+                (id, canonical)
+            },
+        )
         .collect();
     sqlite_payload.sort_by(|a, b| a.0.cmp(&b.0));
     let sqlite_count = sqlite_payload.len();
@@ -659,6 +670,7 @@ mod tests {
             user: "u".into(),
             password: String::new(),
             database: "d".into(),
+            read_only: false,
             group_id: None,
             color: None,
             connection_timeout: None,
