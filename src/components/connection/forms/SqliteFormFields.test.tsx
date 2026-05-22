@@ -57,6 +57,7 @@ describe("SqliteFormFields", () => {
         onChange={vi.fn()}
         inputClass={inputClass}
         labelClass={labelClass}
+        filePickerEnabled={true}
       />,
     );
     expect(screen.getByLabelText("Database file")).toBeInTheDocument();
@@ -75,6 +76,7 @@ describe("SqliteFormFields", () => {
         onChange={onChange}
         inputClass={inputClass}
         labelClass={labelClass}
+        filePickerEnabled={true}
       />,
     );
     act(() => {
@@ -94,6 +96,7 @@ describe("SqliteFormFields", () => {
         onChange={vi.fn()}
         inputClass={inputClass}
         labelClass={labelClass}
+        filePickerEnabled={true}
       />,
     );
     expect(
@@ -108,11 +111,31 @@ describe("SqliteFormFields", () => {
         onChange={vi.fn()}
         inputClass={inputClass}
         labelClass={labelClass}
+        filePickerEnabled={true}
       />,
     );
     expect(
       screen.getByLabelText("Create SQLite database file"),
     ).toBeInTheDocument();
+  });
+
+  it("hides file picker buttons when the profile capability is disabled", () => {
+    render(
+      <SqliteFormFields
+        draft={makeDraft()}
+        onChange={vi.fn()}
+        inputClass={inputClass}
+        labelClass={labelClass}
+        filePickerEnabled={false}
+      />,
+    );
+    expect(screen.getByLabelText("Database file")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Browse for database file"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Create SQLite database file"),
+    ).not.toBeInTheDocument();
   });
 
   // AC-143-3 — clicking Browse opens the Tauri file picker; the chosen
@@ -126,6 +149,7 @@ describe("SqliteFormFields", () => {
         onChange={onChange}
         inputClass={inputClass}
         labelClass={labelClass}
+        filePickerEnabled={true}
       />,
     );
 
@@ -152,6 +176,7 @@ describe("SqliteFormFields", () => {
         onChange={onChange}
         inputClass={inputClass}
         labelClass={labelClass}
+        filePickerEnabled={true}
       />,
     );
 
@@ -175,6 +200,7 @@ describe("SqliteFormFields", () => {
         onChange={onChange}
         inputClass={inputClass}
         labelClass={labelClass}
+        filePickerEnabled={true}
       />,
     );
 
@@ -205,6 +231,7 @@ describe("SqliteFormFields", () => {
         onChange={onChange}
         inputClass={inputClass}
         labelClass={labelClass}
+        filePickerEnabled={true}
       />,
     );
 
@@ -228,6 +255,7 @@ describe("SqliteFormFields", () => {
         onChange={vi.fn()}
         inputClass={inputClass}
         labelClass={labelClass}
+        filePickerEnabled={true}
       />,
     );
 

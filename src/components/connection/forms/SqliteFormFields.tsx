@@ -15,6 +15,7 @@ import type { ConnectionDraft } from "@/types/connection";
 export interface SqliteFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
+  filePickerEnabled: boolean;
   inputClass: string;
   labelClass: string;
 }
@@ -22,6 +23,7 @@ export interface SqliteFormFieldsProps {
 export default function SqliteFormFields({
   draft,
   onChange,
+  filePickerEnabled,
   inputClass,
   labelClass,
 }: SqliteFormFieldsProps) {
@@ -80,25 +82,29 @@ export default function SqliteFormFields({
           placeholder="/absolute/path/to/database.sqlite"
           aria-label="Database file"
         />
-        <button
-          type="button"
-          aria-label="Browse for database file"
-          onClick={handleBrowse}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs hover:bg-muted"
-        >
-          <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
-          Browse
-        </button>
-        <button
-          type="button"
-          aria-label="Create SQLite database file"
-          onClick={handleCreate}
-          disabled={creating}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <Database className="h-3.5 w-3.5" aria-hidden="true" />
-          {creating ? "Creating" : "Create"}
-        </button>
+        {filePickerEnabled && (
+          <>
+            <button
+              type="button"
+              aria-label="Browse for database file"
+              onClick={handleBrowse}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs hover:bg-muted"
+            >
+              <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
+              Browse
+            </button>
+            <button
+              type="button"
+              aria-label="Create SQLite database file"
+              onClick={handleCreate}
+              disabled={creating}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Database className="h-3.5 w-3.5" aria-hidden="true" />
+              {creating ? "Creating" : "Create"}
+            </button>
+          </>
+        )}
       </div>
       <p className="mt-1 text-2xs text-muted-foreground">
         Absolute path to a SQLite database file.
