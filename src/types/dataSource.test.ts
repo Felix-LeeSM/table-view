@@ -23,7 +23,11 @@ describe("DataSourceProfile registry", () => {
       expect(profile.paradigm).toBe(paradigmOf(dbType));
       expect(profile.languages.length).toBeGreaterThan(0);
       expect(profile.resultKinds.length).toBeGreaterThan(0);
-      expect(profile.capabilities).toBeDefined();
+      const capabilityValues = Object.values(profile.capabilities).flatMap(
+        (group) => Object.values(group),
+      );
+      expect(capabilityValues.length).toBeGreaterThan(0);
+      expect(capabilityValues.every((value) => value === false)).toBe(true);
     }
   });
 
@@ -37,7 +41,9 @@ describe("DataSourceProfile registry", () => {
       expect(Object.isFrozen(profile.languages)).toBe(true);
       expect(Object.isFrozen(profile.resultKinds)).toBe(true);
       expect(Object.isFrozen(profile.capabilities)).toBe(true);
-      expect(Object.isFrozen(profile.capabilities.connection)).toBe(true);
+      for (const group of Object.values(profile.capabilities)) {
+        expect(Object.isFrozen(group)).toBe(true);
+      }
     }
   });
 

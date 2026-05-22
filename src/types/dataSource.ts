@@ -91,7 +91,7 @@ export interface DataSourceCapabilities {
     readonly stats: boolean;
     readonly serverInfo: boolean;
   };
-  readonly paradigm: {
+  readonly paradigmSpecific: {
     readonly keyBrowser: boolean;
     readonly searchDocuments: boolean;
     readonly vectorSearch: boolean;
@@ -158,7 +158,7 @@ export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
       stats: false,
       serverInfo: false,
     },
-    paradigm: {
+    paradigmSpecific: {
       keyBrowser: false,
       searchDocuments: false,
       vectorSearch: false,
@@ -179,7 +179,7 @@ function freezeCapabilities(
   Object.freeze(capabilities.ddl);
   Object.freeze(capabilities.intelligence);
   Object.freeze(capabilities.operations);
-  Object.freeze(capabilities.paradigm);
+  Object.freeze(capabilities.paradigmSpecific);
   return Object.freeze(capabilities);
 }
 
