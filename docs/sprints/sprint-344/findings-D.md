@@ -40,6 +40,6 @@ Generator 가 이번엔 scope 준수. `src/lib/jsonTree.ts` 와 `src/lib/jsonTre
 
 - Slice A + D = `src/lib/jsonTree.{ts,test.ts}` + `src/components/document/DocumentTreePanel.{tsx,test.tsx}`
 - 사용자 parallel 작업 (건드리지 않음): `src/lib/editor/autocompleteTheme.ts`, `src/lib/mongo/mongoAutocomplete.ts`
-- 사용자 untracked (건드리지 않음): `docs/code-smell-audit-2026-05-15.md`, `docs/explorations/`
+- 사용자 untracked (건드리지 않음): `docs/archives/audits/code-smell-audit-2026-05-15.md`, `docs/explorations/`
 - Stash@{0}: Slice A 의 off-scope (preserve, 사용자 결정 대기)
 - Stash@{1}: 사용자 parallel src-tauri 작업 (touch 금지)

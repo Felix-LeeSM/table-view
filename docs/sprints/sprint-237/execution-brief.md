@@ -113,7 +113,7 @@
 ## References
 
 - **Contract**: `docs/sprints/sprint-237/contract.md`
-- **Phase spec**: `docs/phases/phase-27.md`
+- **Phase spec**: `docs/archives/phases/completed/phase-27.md`
 - **Prior contract style reference**: `docs/sprints/sprint-271/contract.md`
   (Sprint 271c DbMismatch pattern).
 - **Findings (sprint-local — current)**: `docs/sprints/sprint-237/findings.md`

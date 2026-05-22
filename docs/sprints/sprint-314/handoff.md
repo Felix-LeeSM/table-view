@@ -27,7 +27,7 @@
     `aria-pressed`, `aria-label="Negate filter"` (D-28).
   - Structured → Raw prefill 도 matchMode 반영.
 - `src/components/document/DocumentFilterBar.test.tsx`: 4 신규 case.
-- `docs/phases/phase-28-decisions.md`: D-25..D-28 append.
+- `docs/phases/phase-28-decision-log.md`: D-25..D-28 append.
 
 ## Per-AC evidence
 

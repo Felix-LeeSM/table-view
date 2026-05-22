@@ -96,7 +96,7 @@ A second motive is the password-leak guard (AC-178-05). Once paste detection is 
 
 - Contract: `docs/sprints/sprint-178/contract.md`
 - Spec: `docs/sprints/sprint-176/spec.md` (Sprint 178 section, lines 52–70; spec hosts all five sprints; see also Discrepancies §C.5 and §C.6)
-- Action plan: `docs/ux-laws-action-plan.md` §C
+- Action plan: `docs/archives/action-plans/ux-laws-action-plan-2026-04-30.md` §C
 - Sprint-177 contract (style template only): `docs/sprints/sprint-177/contract.md`
 - Findings (to be created): `docs/sprints/sprint-178/findings.md`
 - Relevant files:

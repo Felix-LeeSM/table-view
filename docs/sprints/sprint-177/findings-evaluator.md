@@ -163,7 +163,7 @@ Browser smoke (Verification Plan §5) deferred to operator per contract — the 
 - **Suggestion**: One of:
   - **(a)** revert `docs/ux-laws-mapping.md` to its `main` version (`git checkout main -- docs/ux-laws-mapping.md`) — cleanest fix.
   - **(b)** acknowledge the edit in `findings.md` §Out-of-scope confirmations with a note like "the planning doc was updated for downstream sprints and is not part of the Sprint 177 deliverable; will be folded into a separate docs commit." Acceptable only if the operator/orchestrator agrees the doc-edit doesn't need to live inside the 177 commit.
-- The unrelated untracked file `docs/ux-laws-action-plan.md` is referenced by `execution-brief.md` so it is in-scope as a planning artifact and not flagged.
+- The unrelated untracked file `docs/archives/action-plans/ux-laws-action-plan-2026-04-30.md` is referenced by `execution-brief.md` so it is in-scope as a planning artifact and not flagged.
 
 ### P2-02 — `findings.md` accuracy nit on AC-177-04 seed
 

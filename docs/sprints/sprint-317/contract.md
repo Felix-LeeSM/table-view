@@ -78,7 +78,7 @@
 - `src/components/document/DocumentDataGrid.tsx` — hook 호출 + visibleOrder
   + 배지
 - `src/components/document/DocumentDataGrid.hide.test.tsx` (NEW)
-- `docs/phases/phase-28-decisions.md` — D-35..D-38
+- `docs/phases/phase-28-decision-log.md` — D-35..D-38
 - `docs/sprints/sprint-317/handoff.md`
 
 ## Residual Risk

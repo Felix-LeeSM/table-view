@@ -72,7 +72,7 @@ io.rs 751 = AC contract ~300-600 초과. encrypted 4 + plain import 5 + export 2
 
 ## Cycle 199-209 종료
 
-본 sprint 가 cycle 의 마지막. 종료 시 [`/CODE_SMELLS.md`](../../../CODE_SMELLS.md) retire 패턴 적용 (이전 cycle `refactoring-{plan,smells}.md` 처리 = commit `0c64a1b`):
+본 sprint 가 cycle 의 마지막. 종료 시 `/CODE_SMELLS.md` retire 패턴 적용 (이전 cycle `refactoring-{plan,smells}.md` 처리 = commit `0c64a1b`):
 
 - `CODE_SMELLS.md` 삭제.
 - `docs/PLAN.md` sequencing 표 헤더 "(종료)" + plain-text retire 사실 1줄.

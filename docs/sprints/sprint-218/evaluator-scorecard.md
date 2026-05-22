@@ -151,5 +151,5 @@ model — option 1 (entry removal) + option B (Sprint 188 nested preserved).
 
 5. **Follow-up sprints**: P11 step 3 (`tabStore.test.ts` 2,234 lines), step
    4 (`StructurePanel.test.tsx` 2,156), step 5 (`DataGrid.test.tsx` 1,906)
-   are the remaining candidates per `docs/refactoring-candidates.md` §P11.
+   are the remaining candidates per `docs/archives/backlogs/refactoring-candidates-2026-05-06.md` §P11.
    Apply the same Sprint 216 / Sprint 218 model.

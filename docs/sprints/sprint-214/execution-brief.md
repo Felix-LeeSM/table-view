@@ -85,4 +85,4 @@
   - `src/lib/sql/sqlSafety.ts` (`analyzeStatement` 사전 사용)
 - 이전 cross-component DRY 참고: `src/hooks/useResizablePanel.ts` (Sprint 211 분리 example)
 - 인접 sprint 문서: `docs/sprints/sprint-213/{contract,findings,handoff}.md`
-- 후속 candidates: `docs/refactoring-candidates.md` §P8 (Sprint 215), §P10/P11 (Sprint 216/218).
+- 후속 candidates: `docs/archives/backlogs/refactoring-candidates-2026-05-06.md` §P8 (Sprint 215), §P10/P11 (Sprint 216/218).

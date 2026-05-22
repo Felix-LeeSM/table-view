@@ -41,5 +41,5 @@ avoid struct/array serialization overhead.
   vocabulary snapshot.
 - AC-428-04: `pnpm wasm:size`, `pnpm exec tsc -b --pretty false`, `pnpm lint`,
   and `pnpm test` pass.
-- AC-428-05: `docs/PLAN.md`, `docs/phases/phase-31.md`, and
+- AC-428-05: `docs/PLAN.md`, `docs/archives/phases/completed/phase-31.md`, and
   `docs/query-language-support.md` reflect the Rust vocabulary SOT.

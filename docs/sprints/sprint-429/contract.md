@@ -50,7 +50,7 @@ MongoDB, MySQL/MariaDB, PostgreSQL psql, and SQLite CLI vocabulary groups.
 - AC-429-04: Mongo tests fail if Rust/WASM vocabulary drifts from TypeScript
   fallback mirrors.
 - AC-429-05: Mongo tests cover official-reference sentinel operators/stages.
-- AC-429-06: `docs/PLAN.md`, `docs/phases/phase-31.md`, and
+- AC-429-06: `docs/PLAN.md`, `docs/archives/phases/completed/phase-31.md`, and
   `docs/query-language-support.md` retain the long-term Phase 31 plan.
 
 ## Out of Scope

@@ -4,7 +4,7 @@ Sprint: `sprint-207` (refactor — Rust prod `expect` 정책 결정 후 처리).
 Date: 2026-05-05.
 Type: refactor (행동 변경 0; panic → 명시적 종료 / invariant 디펜시브).
 
-[`docs/PLAN.md`](../../PLAN.md) Sprint 207 row + [`/CODE_SMELLS.md`](../../../CODE_SMELLS.md) §7.
+[`docs/PLAN.md`](../../PLAN.md) Sprint 207 row + `/CODE_SMELLS.md` §7.
 짧은 sprint. prod `expect` 5곳 정리.
 
 ## 배경

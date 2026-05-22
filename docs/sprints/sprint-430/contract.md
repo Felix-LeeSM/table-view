@@ -12,7 +12,7 @@ layers.
 - Update `docs/query-language-support.md` with completion coverage layers.
 - Add explicit MariaDB and SQLite sections.
 - Document parser/runtime semantic gaps for SQL and MongoDB.
-- Update `docs/phases/phase-31.md` and `docs/PLAN.md` so the long-term plan
+- Update `docs/archives/phases/completed/phase-31.md` and `docs/PLAN.md` so the long-term plan
   does not lose Phase 31 closure criteria.
 
 ## Acceptance Criteria

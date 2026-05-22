@@ -29,7 +29,7 @@ case 합계 = lifecycle 16 + sort 10 + filters-pagination 11 + refetch-overlay 9
 
 post-209 cycle 의 P1..P11 후보 중 P11 (mega test split) 완료. 잔여 candidate:
 - **P10** (Sprint 219) — `connectionStore` / `schemaStore` 의 toast / session / IPC orchestration → use-case hook 점진 이동. risk 높음 — 사용자 hooks/lib 작업 안정 후 진입.
-- `docs/refactoring-candidates.md` retire (별도 ops 작업, P10 종료 후 또는 사용자 결정 시).
+- `docs/archives/backlogs/refactoring-candidates-2026-05-06.md` retire (별도 ops 작업, P10 종료 후 또는 사용자 결정 시).
 
 ## 검증 결과
 

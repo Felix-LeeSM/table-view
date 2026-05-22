@@ -42,7 +42,7 @@
   seed connection + grid mount + 토글 부재 lock + seeded row 렌더).
 - `docs/sprints/sprint-312/contract.md`, `execution-brief.md`, `handoff.md`
   (sprint docs).
-- `docs/phases/phase-28-decisions.md` — D-16 ~ D-20 append.
+- `docs/phases/phase-28-decision-log.md` — D-16 ~ D-20 append.
 
 ## Per-AC evidence
 
@@ -103,7 +103,7 @@
 - **D-20** KV / Search placeholder 의 `data-query-mode` 속성 제거 (Slice
   A 마감 cleanup).
 
-모두 `docs/phases/phase-28-decisions.md` 에 append.
+모두 `docs/phases/phase-28-decision-log.md` 에 append.
 
 ## Tests added
 

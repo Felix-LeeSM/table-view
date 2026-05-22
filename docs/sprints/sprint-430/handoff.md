@@ -12,7 +12,7 @@
 
 ## Verification
 
-- `pnpm exec prettier --check docs/query-language-support.md docs/phases/phase-31.md docs/PLAN.md docs/sprints/sprint-430/contract.md docs/sprints/sprint-430/handoff.md`
+- `pnpm exec prettier --check docs/query-language-support.md docs/archives/phases/completed/phase-31.md docs/PLAN.md docs/sprints/sprint-430/contract.md docs/sprints/sprint-430/handoff.md`
 - `git diff --check`
 
 ## Follow-Up

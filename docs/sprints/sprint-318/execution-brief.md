@@ -13,7 +13,7 @@ Mongo 패턴 1:1 복제). HeaderRow 의 `onHideColumn` 을 wire, 상단
 - `src/components/datagrid/DataGridTable.hide.test.tsx` (NEW)
 - `src/components/rdb/DataGrid.tsx`
 - `src/components/rdb/DataGrid.hide.test.tsx` (NEW)
-- `docs/phases/phase-28-decisions.md` (D-39..D-??)
+- `docs/phases/phase-28-decision-log.md` (D-39..D-??)
 - `docs/sprints/sprint-318/handoff.md`
 
 미변경:

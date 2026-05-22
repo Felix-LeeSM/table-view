@@ -151,7 +151,7 @@
 ## Recommended next sprint actions
 
 1. **본 sprint commit + handoff.md** — Sprint 213 완료 처리. open P1/P2 finding 0.
-2. **post-209 cycle 다음 candidate 선정** — `docs/refactoring-candidates.md` §P7-§P11 잔여 검토. 우선순위 높은 후보:
+2. **post-209 cycle 다음 candidate 선정** — `docs/archives/backlogs/refactoring-candidates-2026-05-06.md` §P7-§P11 잔여 검토. 우선순위 높은 후보:
    - `src/stores/queryStore.ts` (split 후보 검토 가능 — 800+ 라인이면)
    - `src/components/datagrid/DataGridToolbar.tsx` (현재 modified 상태, 본 sprint 외 작업)
 3. **Sprint spec template 개선 (cross-sprint)** — F-002 와 F-001 의 buffer 정확도 개선:

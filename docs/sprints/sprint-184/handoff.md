@@ -7,7 +7,7 @@
 | AC-184-03 | RDB 100 UPDATE perf smoke | 같은 파일 `[AC-184-03]`. `handleCommit` < 1000ms + `sqlPreview.length === 100` + 모든 entry `^UPDATE `. 실측 ~10–30ms (M-series 로컬). |
 | AC-184-04 | RDB 100 DELETE perf smoke | 같은 파일 `[AC-184-04]`. budget < 1000ms + 길이 100 + 모두 `^DELETE FROM `. 실측 ~5–20ms. |
 | AC-184-05 | RDB 100 INSERT perf smoke (duplicate-based) | 같은 파일 `[AC-184-05]`. budget < 1000ms + 길이 100 + 모두 `^INSERT INTO `. setup 비용 회피 위해 `handleDuplicateRow` × 100. 실측 ~15–40ms. |
-| AC-184-06 | Phase 22 종료 마킹 | `docs/phases/phase-22.md`: status `계획 → 완료 (2026-05-01, Sprint 181~184)`, 작업 단위 표에 sprint 별 실측 + commit `51d6406` 인용, Exit Criteria 4 항목에 evidence 매핑. |
+| AC-184-06 | Phase 22 종료 마킹 | `docs/archives/phases/completed/phase-22.md`: status `계획 → 완료 (2026-05-01, Sprint 181~184)`, 작업 단위 표에 sprint 별 실측 + commit `51d6406` 인용, Exit Criteria 4 항목에 evidence 매핑. |
 | AC-184-07 | 회귀 (코드 무수정) | `git diff src-tauri/` → empty. `git diff src/components/datagrid/useDataGridEdit.ts` → empty. `git diff src/components/query/PendingChangesTray.tsx src/components/query/EditableQueryResultGrid.tsx src/components/datagrid/sqlGenerator.ts src/components/datagrid/mqlGenerator.ts src/lib/tauri.ts` → empty. 본 sprint 는 *production 코드 0줄* 변경. |
 
 ## Check matrix
@@ -30,7 +30,7 @@
 - `src/components/datagrid/useDataGridEdit.mixed-batch.test.ts` (new) —
   AC-184-01 ~ AC-184-05 단일 파일에 5 cases (mixed-batch RDB / Mongo +
   100건 UPDATE / DELETE / INSERT perf smoke). Sprint 별 cohesion 우선.
-- `docs/phases/phase-22.md` — status `완료` 마킹, 작업 단위 표 sprint
+- `docs/archives/phases/completed/phase-22.md` — status `완료` 마킹, 작업 단위 표 sprint
   별 실측 갱신, Exit Criteria 4 항목에 evidence 매핑. *결정* 부분 무수정.
 - `docs/sprints/sprint-184/contract.md` (new) — sprint contract.
 - `docs/sprints/sprint-184/findings.md` (new) — *코드 변경 0* 결정,

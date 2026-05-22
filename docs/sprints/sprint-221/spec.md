@@ -4,7 +4,7 @@
 
 `src/stores/tabStore.test.ts` (2,234 lines, 1 root `describe("tabStore")` + 11 L1 nested describe + 2 L2 nested describe = 14 describe blocks total, 102 `it` cases) 가 단일 파일에 `tabStore` (post-Sprint 208 entry, 596 lines) 의 모든 회귀 가드를 누적 보유한다. Sprint section 헤더 (Sprint 25/29/38/45/66/73/76/84/97/129/130/136/153/158/195/209/212) + AC label (AC-S136-01..04, AC-158-01..03, AC-06..AC-10, AC-153-06, [AC-195-01-1..6], [AC-195-02-1..3]) 로 axis 추출 경계가 명확.
 
-본 sprint 는 P11 candidate (`docs/refactoring-candidates.md` §P11) 의 **fourth step**. Sprint 216 (P11 step 1, SchemaTree.test 2,891 / 104 cases → 6 axis + helper) / Sprint 218 (P11 step 2, QueryTab.test 2,308 / 80 cases → 6 axis + helper) / Sprint 220 (P11 step 3, StructurePanel.test 2,156 / 84 cases → 4 axis + helper) 의 model implementation 패턴 답습. 후속 P11 step 5 (`DataGrid.test.tsx` 1,906) 는 별도 sprint candidate.
+본 sprint 는 P11 candidate (`docs/archives/backlogs/refactoring-candidates-2026-05-06.md` §P11) 의 **fourth step**. Sprint 216 (P11 step 1, SchemaTree.test 2,891 / 104 cases → 6 axis + helper) / Sprint 218 (P11 step 2, QueryTab.test 2,308 / 80 cases → 6 axis + helper) / Sprint 220 (P11 step 3, StructurePanel.test 2,156 / 84 cases → 4 axis + helper) 의 model implementation 패턴 답습. 후속 P11 step 5 (`DataGrid.test.tsx` 1,906) 는 별도 sprint candidate.
 
 행동 변경 0 강제. `tabStore.ts` (596 lines, post-Sprint 208 entry) + `tabStore/{types,persistence,tracker}.ts` (Sprint 208 sub-files) 변경 금지. test 만 axis 파일 split. 사전 102 case 모두 사후 통과. case 텍스트 / matcher / fixture / `useTabStore.setState(...)` reset pattern / 모든 verbatim AC string 사전과 byte-equivalent.
 

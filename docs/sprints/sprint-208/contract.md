@@ -4,7 +4,7 @@ Sprint: `sprint-208` (refactor — `tabStore.ts` god file 분해).
 Date: 2026-05-05.
 Type: refactor (행동 변경 0; entry-pattern 답습).
 
-[`docs/PLAN.md`](../../PLAN.md) Sprint 208 row + [`/CODE_SMELLS.md`](../../../CODE_SMELLS.md) §1-1.
+[`docs/PLAN.md`](../../PLAN.md) Sprint 208 row + `/CODE_SMELLS.md` §1-1.
 
 ## 배경
 

@@ -63,7 +63,7 @@ Out: anything in sprints 176 / 178 / 179 / 180; refactoring `QuerySyntax` / `Mon
 
 - Contract: `docs/sprints/sprint-177/contract.md`
 - Spec: `docs/sprints/sprint-176/spec.md` (Sprint 177 section, lines 32–49; spec hosts all five sprints)
-- Action plan: `docs/ux-laws-action-plan.md` §B
+- Action plan: `docs/archives/action-plans/ux-laws-action-plan-2026-04-30.md` §B
 - Findings (to be created): `docs/sprints/sprint-177/findings.md`
 - Relevant files:
   - `src/components/query/QueryLog.tsx` (plain-text render at line 115)

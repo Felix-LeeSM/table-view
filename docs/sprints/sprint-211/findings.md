@@ -160,7 +160,7 @@
 
 1. **handoff.md 작성** (sprint-211/handoff.md) — 5 변경 파일 + 6번째 추가 파일 사실 + 12 check exit code + AC-01..05 evidence + F-001/F-002/F-003 link + post-211 baseline (189 files / 2725 tests) 적시.
 2. **(선택) Sprint 211 commit** — 사용자가 명시 요청 시. assistant 자동 커밋 금지 (feedback_git_ops 정책).
-3. **sprint-212 candidate 1** — `docs/refactoring-candidates.md` §P2 의 다음 god-file 후보 advance. Sprint 211 의 entry-pattern 패턴을 그대로 답습.
+3. **sprint-212 candidate 1** — `docs/archives/backlogs/refactoring-candidates-2026-05-06.md` §P2 의 다음 god-file 후보 advance. Sprint 211 의 entry-pattern 패턴을 그대로 답습.
 4. **sprint-212 candidate 2 (planner protocol 보강)** — F-001 lesson 을 `memory/lessons/` 에 등록 (`spec 에 "live in helpers.ts" 표현이 있을 때 plugin/loader JSX-parse 제약 사전 검토`). spec 작성 시 `JSX-bearing module 은 반드시 .tsx`, `pure-helper module 은 .ts` 분리 의도 명시. 후속 spec author 가 같은 함정 피하도록.
 5. **sprint-212 candidate 3 (minor cleanup, optional)** — F-002 의 entry early-return + F-003 의 mode-reset effect. 두 개 모두 행동 변경 0 의 cosmetic refactor, sprint 1 task 로 합칠 수 있음.
 

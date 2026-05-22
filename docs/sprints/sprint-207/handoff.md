@@ -47,5 +47,5 @@ CODE_SMELLS 7 카테고리 처리 진행:
 - §1-1 frontend god #4 → Sprint 208
 - §1-2 backend god #2 → Sprint 209
 
-본 cycle 종료 시 [`/CODE_SMELLS.md`](../../../CODE_SMELLS.md) retire
+본 cycle 종료 시 `/CODE_SMELLS.md` retire
 예정 (Sprint 209 종료 시점).

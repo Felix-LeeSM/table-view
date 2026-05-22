@@ -79,4 +79,4 @@
   - `src/stores/connectionStore.ts` (addConnection / updateConnection / testConnection 동결)
   - 이전 entry-pattern 참고: `src/components/document/DocumentDataGrid.tsx` (Sprint 210), `src/stores/tabStore.ts` (Sprint 212)
 - 인접 sprint 문서: `docs/sprints/sprint-212/{contract,findings,handoff}.md`
-- 후속 candidates: `docs/refactoring-candidates.md` §P6 (본 sprint), §P7-§P11 (잔여).
+- 후속 candidates: `docs/archives/backlogs/refactoring-candidates-2026-05-06.md` §P6 (본 sprint), §P7-§P11 (잔여).

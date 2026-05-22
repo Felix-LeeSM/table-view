@@ -64,7 +64,7 @@
 - Required evidence:
   - 변경 파일 + 1 줄 목적
   - 신규 테스트 이름 + assertion 요약
-  - 자율 결정 D-25..D-28 — `docs/phases/phase-28-decisions.md` append
+  - 자율 결정 D-25..D-28 — `docs/phases/phase-28-decision-log.md` append
 
 ## 자율 결정 가이드라인
 
@@ -89,7 +89,7 @@
 - `src/components/document/DocumentFilterBar.tsx` — Match toggle +
   NOT button + matchMode state + buildMqlFilter 호출 시 mode 전달
 - `src/components/document/DocumentFilterBar.test.tsx` — RTL
-- `docs/phases/phase-28-decisions.md` — D-25..D-28 append
+- `docs/phases/phase-28-decision-log.md` — D-25..D-28 append
 - `docs/sprints/sprint-314/handoff.md`
 
 ## Residual Risk

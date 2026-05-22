@@ -85,7 +85,7 @@ P1 / P2 finding 0 → exit criteria 충족.
 
 ## Residual Risk
 - 23 regression cases (450 + 268 = 718 lines) 가 source-of-truth — hook 안의 새 race / 상태 변형은 잡지 못할 수 있음 (generator 동의).
-- P8 second step (`useDataGridPreviewCommit` 와의 commit runner / history writer 공유) 미처리 — 후속 sprint candidate (`docs/refactoring-candidates.md` §P8 second step).
+- P8 second step (`useDataGridPreviewCommit` 와의 commit runner / history writer 공유) 미처리 — 후속 sprint candidate (`docs/archives/backlogs/refactoring-candidates-2026-05-06.md` §P8 second step).
 
 ## Next Steps
 - 본 sprint 의 commit / push 는 사용자가 직접 (assistant 는 변경 요약만 보고; 사용자 feedback 정책).

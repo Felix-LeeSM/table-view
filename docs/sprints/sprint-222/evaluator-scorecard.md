@@ -78,7 +78,7 @@ checks all PASS.
 ## Recommendations
 
 1. **Commit the work** — All 22 contract checks PASS; no P1 / P2 findings; AC-01..05 all PASS; Reliability 10/10 (vitest + tsc + lint all clean).
-2. **P11 cycle retire** — Sprint 222 is the final P11 step. The orchestrator can now proceed to retire `docs/refactoring-candidates.md` §P11 in a follow-up ops sprint as noted in the contract Exit Criteria.
+2. **P11 cycle retire** — Sprint 222 is the final P11 step. The orchestrator can now proceed to retire `docs/archives/backlogs/refactoring-candidates-2026-05-06.md` §P11 in a follow-up ops sprint as noted in the contract Exit Criteria.
 3. **Optional cleanup** — Generator could add a 1-line note inside `__tests__/dataGridTestHelpers.tsx` documenting the `mockUpdateTabSorts` impl-deferred pattern (the existing comments at L82-85 already note "Each axis file's `vi.mock(...)` factory references these by reading the helper module from its closure"; an explicit mention of the impl handoff would close the loop). Not required for sprint pass.
 
 ## Evidence References

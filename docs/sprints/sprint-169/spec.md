@@ -86,7 +86,7 @@ This is an **infrastructure / build feature**: nearly every acceptance criterion
 - `scripts/setup-e2e.sh`: rewritten to point to the docker flow; obsolete instructions removed.
 - A canonical seed source (one file, referenced by both local and CI paths).
 - `memory/decisions/...`: new or updated ADR capturing the standardisation.
-- `README.md` or `docs/architecture.md` (whichever already documents test commands): one-line update pointing at `pnpm test:e2e:docker`.
+- `README.md` or `docs/archives/design-snapshots/architecture-legacy.md` (whichever already documents test commands): one-line update pointing at `pnpm test:e2e:docker`.
 
 ---
 

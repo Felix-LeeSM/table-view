@@ -13,7 +13,7 @@
   - `src/lib/session-storage.ts` → `src/lib/scopedLocalStorage.ts`. 내부 함수 시그니처 그대로 (semantic rename only).
   - 모든 import 사이트 갱신 (`rg "from .*session-storage"` 결과 file:line 모두).
 - (b) 모듈 변수 정리:
-  - Generator 가 audit (`docs/code-smell-audit-2026-05-15.md` Part B 의 모듈 변수 8개 정확 식별) → 각각:
+  - Generator 가 audit (`docs/archives/audits/code-smell-audit-2026-05-15.md` Part B 의 모듈 변수 8개 정확 식별) → 각각:
     - Store internal field 로 이전 (예: `let cachedFoo = null` → `useFooStore` 의 state slot)
     - 또는 reset API 제공 (예: `__resetForTests`).
   - Inventory + before/after 표 handoff.

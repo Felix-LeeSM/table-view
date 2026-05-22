@@ -6,7 +6,7 @@ Document and start the ADR 0045 migration: keep current CodeMirror/TS
 completion running, but introduce the stable request/result boundary that a
 future Rust/WASM completion core will consume.
 
-Phase source: [`docs/phases/phase-31.md`](../../phases/phase-31.md).
+Phase source: [`docs/archives/phases/completed/phase-31.md`](../../archives/phases/completed/phase-31.md).
 
 ## Plan
 

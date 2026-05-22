@@ -6,7 +6,7 @@ Date: 2026-05-02.
 Type: refactor (행동 변경 0; 컴포넌트 재구성).
 
 `docs/PLAN.md` 의 "리팩토링 sequencing (Sprint 199–..., post-198 cycle)"
-두 번째 항목. [`/CODE_SMELLS.md`](../../../CODE_SMELLS.md) §1-1 frontend
+두 번째 항목. `/CODE_SMELLS.md` §1-1 frontend
 god file #2 (1071 라인) 의 just-in-time refactor — 다음 feature sprint
 가 DataGridTable 에 손댈 때 회귀 risk 를 낮추기 위한 토대. Sprint 199
 (`SchemaTree.tsx` 2105 → entry + 5 sub-file) entry-pattern 답습.

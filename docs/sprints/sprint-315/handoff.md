@@ -24,7 +24,7 @@
   case: 초기 fetch 에는 sort 없음 / primary click → ASC / 같은 column
   click → DESC / 3 번째 click → clear / shift+click secondary / 헤더에
   ▲ indicator.
-- `docs/phases/phase-28-decisions.md` — D-29..D-31 append.
+- `docs/phases/phase-28-decision-log.md` — D-29..D-31 append.
 - `docs/sprints/sprint-315/{contract,execution-brief,handoff}.md`.
 
 ## Per-AC evidence

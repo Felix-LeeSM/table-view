@@ -32,18 +32,18 @@ real PG smoke (사용자 수행) — payment_accounts 같은 sequence 의존
 ### 진입점 / API
 
 - Backend handler: `commands::export::export_schema_dump`
-  ([src-tauri/src/lib.rs:157](../../src-tauri/src/lib.rs)).
+  ([src-tauri/src/lib.rs:157](../../../src-tauri/src/lib.rs)).
 - Trait method: `RdbAdapter::stream_table_rows`
-  ([src-tauri/src/db/mod.rs:289](../../src-tauri/src/db/mod.rs)) — Phase
+  ([src-tauri/src/db/mod.rs:289](../../../src-tauri/src/db/mod.rs)) — Phase
   9 의 MySQL/SQLite adapter 합류 시 default `Unsupported` 만 override.
 - TS wrapper: `exportSchemaDump`
-  ([src/lib/tauri.ts:572](../../src/lib/tauri.ts)).
+  ([src/lib/tauri/export.ts:82](../../../src/lib/tauri/export.ts)).
 - Hook: `useMigrationExport`
-  ([src/hooks/useMigrationExport.ts](../../src/hooks/useMigrationExport.ts))
+  ([src/hooks/useMigrationExport.ts](../../../src/hooks/useMigrationExport.ts))
   — `exportSchema(connId, schema, include)` / `exportDatabase(connId,
   schemas[], include)`.
 - DDL helpers: `generateMigrationDDL` + `buildSequenceResets`
-  ([src/lib/sql/ddlGenerator.ts](../../src/lib/sql/ddlGenerator.ts)).
+  ([src/lib/sql/ddlGenerator.ts](../../../src/lib/sql/ddlGenerator.ts)).
 
 ### 한계 / 후속 작업 후보
 

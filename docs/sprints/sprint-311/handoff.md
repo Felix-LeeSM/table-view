@@ -42,7 +42,7 @@ date 2026-05-14.
 - `src/components/query/QueryTab.warn-dialog.test.tsx` — Mongo
   aggregate / find dialog cases (`[AC-255-07a/b/c]`) now feed mongosh
   expressions; assertions unchanged.
-- `docs/phases/phase-28-decisions.md` — appended D-10 through D-15
+- `docs/phases/phase-28-decision-log.md` — appended D-10 through D-15
   (dispatch location, cursor-chain projection scope, findOne empty
   render, history queryMode rule, mismatch wording, pending payload
   shape).
@@ -93,7 +93,7 @@ date 2026-05-14.
 
 ## Autonomous decisions
 
-Logged in `docs/phases/phase-28-decisions.md` (D-10..D-15):
+Logged in `docs/phases/phase-28-decision-log.md` (D-10..D-15):
 
 - **D-10** Dispatch logic stays inline in `useQueryExecution.ts`.
   Helper extraction deferred to A6+ where 5 more methods join.

@@ -387,7 +387,7 @@ Code-quality invariants:
     hook extraction.
   - `docs/sprints/sprint-189/contract.md` — `useSafeModeGate` /
     `decideSafeModeAction` matrix.
-- **Phase doc:** `docs/phases/phase-27.md`.
+- **Phase doc:** `docs/archives/phases/completed/phase-27.md`.
 - **Master plan:** `docs/PLAN.md`.
 
 ### Relevant files (READ before implementing)

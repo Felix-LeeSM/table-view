@@ -14,7 +14,7 @@
   2. **N=100+ pending changes 성능 smoke** — `handleCommit` 의 SQL/MQL
      preview 빌드가 1초 이내에 완료되고, `sqlPreview` (또는
      `mqlPreview.commands`) 길이가 정확히 입력 N 과 같음을 단언.
-  추가로 **Phase 22 종료 마킹** — `docs/phases/phase-22.md` 의 상태를
+  추가로 **Phase 22 종료 마킹** — `docs/archives/phases/completed/phase-22.md` 의 상태를
   "계획" → "완료" 로 갱신하면서 Exit Criteria 별 sprint 매핑을 기록.
 - **Audience**: Generator (single agent) — implements; Evaluator — verifies AC.
 - **Owner**: harness orchestrator
@@ -67,7 +67,7 @@
   PK 충돌이 나지만, 본 테스트는 SQL 문자열 *생성* 만 검증 (실행 안 함)
   하므로 회귀 가드가 정당하다.
 
-- `AC-184-06`: **Phase 22 종료 마킹** — `docs/phases/phase-22.md` 갱신.
+- `AC-184-06`: **Phase 22 종료 마킹** — `docs/archives/phases/completed/phase-22.md` 갱신.
   - 상단 status: `> **상태: 계획**` → `> **상태: 완료** (2026-05-01,
     Sprint 181~184)`.
   - "작업 단위 (sprint 추정)" 섹션 끝에 sprint 별 commit 인용 추가
@@ -114,7 +114,7 @@
   AC-184-01, AC-184-02, AC-184-03, AC-184-04, AC-184-05 모두 단일 파일에
   묶음 (시나리오들이 동일 hook + 동일 fixture 패턴을 공유하므로 분리
   비용이 더 높음).
-- `docs/phases/phase-22.md` — AC-184-06 (status + sprint 매핑).
+- `docs/archives/phases/completed/phase-22.md` — AC-184-06 (status + sprint 매핑).
 - `docs/sprints/sprint-184/contract.md` (this file).
 - `docs/sprints/sprint-184/findings.md` (new).
 - `docs/sprints/sprint-184/handoff.md` (new).
@@ -271,4 +271,4 @@
 - `docs/sprints/sprint-184/findings.md` 존재 + 사양대로 섹션 채움.
 - `docs/sprints/sprint-184/handoff.md` 에 AC 별 evidence 행 (한 행 =
   한 AC).
-- `docs/phases/phase-22.md` 의 status 가 "완료" 로 마킹됨.
+- `docs/archives/phases/completed/phase-22.md` 의 status 가 "완료" 로 마킹됨.

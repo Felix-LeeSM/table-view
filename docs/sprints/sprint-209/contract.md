@@ -4,7 +4,7 @@ Sprint: `sprint-209` (refactor — `commands/connection.rs` god file 분해).
 Date: 2026-05-05.
 Type: refactor (행동 변경 0; entry-pattern 답습).
 
-[`docs/PLAN.md`](../../PLAN.md) Sprint 209 row + [`/CODE_SMELLS.md`](../../../CODE_SMELLS.md) §1-2.
+[`docs/PLAN.md`](../../PLAN.md) Sprint 209 row + `/CODE_SMELLS.md` §1-2.
 
 ## 배경
 
@@ -124,4 +124,4 @@ grep -rn "commands::connection::" src-tauri/src/ | wc -l
 
 ## Cycle 종료 처리
 
-본 sprint 는 cycle 199-209 의 마지막. 종료 후 [`/CODE_SMELLS.md`](../../../CODE_SMELLS.md) retire (이전 cycle `refactoring-{plan,smells}.md` 처리와 동일 — `0c64a1b` commit 패턴).
+본 sprint 는 cycle 199-209 의 마지막. 종료 후 `/CODE_SMELLS.md` retire (이전 cycle `refactoring-{plan,smells}.md` 처리와 동일 — `0c64a1b` commit 패턴).
