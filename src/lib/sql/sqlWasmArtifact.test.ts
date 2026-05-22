@@ -111,4 +111,51 @@ describe("checked-in SQL WASM artifact", () => {
       },
     ]);
   });
+
+  it("[AC-439-W01] parseSql accepts MySQL CALL through real WASM", async () => {
+    const result = await parseSql(
+      "CALL reporting.refresh_user_stats(?, 'x', 1)",
+    );
+
+    expect(result.kind).toBe("call");
+    if (result.kind !== "call") return;
+    expect(result.procedure).toEqual({
+      schema: "reporting",
+      name: "refresh_user_stats",
+    });
+    expect(result.arguments).toEqual([
+      { kind: "placeholder", name: "" },
+      { kind: "literal", value: { kind: "string", value: "x" } },
+      { kind: "literal", value: { kind: "integer", value: 1 } },
+    ]);
+  });
+
+  it("[AC-439-W02] parseSql emits schema null for bare CALL through real WASM", async () => {
+    const result = await parseSql("CALL refresh_user_stats()");
+
+    expect(result.kind).toBe("call");
+    if (result.kind !== "call") return;
+    expect(result.procedure).toEqual({
+      schema: null,
+      name: "refresh_user_stats",
+    });
+    expect(result.arguments).toEqual([]);
+  });
+
+  it.each([
+    ["function call", "CALL refresh_user_stats(NOW())"],
+    ["arithmetic", "CALL refresh_user_stats(1 + 2)"],
+    ["subquery", "CALL refresh_user_stats((SELECT id FROM users))"],
+    ["bare identifier", "CALL refresh_user_stats(user_id)"],
+    ["user variable", "CALL refresh_user_stats(@user_id)"],
+  ])(
+    "[AC-439-W03] rejects unsupported CALL argument form: %s",
+    async (_label, sql) => {
+      const result = await parseSql(sql);
+
+      expect(result.kind).toBe("error");
+      if (result.kind !== "error") return;
+      expect(["syntax-error", "lex-error"]).toContain(result.error_kind);
+    },
+  );
 });

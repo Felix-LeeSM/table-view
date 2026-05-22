@@ -78,6 +78,7 @@ export type StatementKind =
   | "config-write"
   | "data-movement"
   | "metadata"
+  | "routine-call"
   // Mongo variants share this union so `useSafeModeGate` is
   // paradigm-agnostic. `*-all` (empty filter) is danger; `*-many`
   // (non-empty filter) is `warn` (Sprint 254); `mongo-drop` / `mongo-out`
@@ -281,6 +282,12 @@ function statementAnalysisFromAst(
     // Sprint-392 — DML write triad.
     case "insert":
       return { kind: "dml-insert", severity: "info", reasons: [] };
+    case "call":
+      return {
+        kind: "routine-call",
+        severity: "warn",
+        reasons: ["CALL — stored routine execution"],
+      };
     case "update":
       if (ast.where_clause === null) {
         return {
@@ -408,10 +415,11 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   // `error` variant lets the regex SELECT branch below handle them.
   // Sprint 395 — extended to GRANT / REVOKE / EXPLAIN / SHOW / SET / COPY /
   // COMMENT. EXPLAIN inherits the inner statement's classification (D1);
-  // COPY / GRANT / REVOKE classify per the misc-grammar table; SHOW / SET /
-  // COMMENT classify as info-tier metadata-like reads/writes.
+  // CALL is warn-tier because routine side effects are opaque to the client
+  // parser. COPY / GRANT / REVOKE classify per the misc-grammar table;
+  // SHOW / SET / COMMENT classify as info-tier metadata-like reads/writes.
   if (
-    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|UPDATE|DELETE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT)\b/.test(
+    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|CALL|UPDATE|DELETE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT)\b/.test(
       upper,
     )
   ) {
@@ -449,6 +457,14 @@ export function analyzeStatement(sql: string): StatementAnalysis {
     }
     // Sprint 254 — bounded UPDATE WHERE = WARN tier.
     return { kind: "dml-update", severity: "warn", reasons: [] };
+  }
+
+  if (/^CALL\b/.test(upper)) {
+    return {
+      kind: "routine-call",
+      severity: "warn",
+      reasons: ["CALL — stored routine execution"],
+    };
   }
 
   if (/^DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|TRIGGER)\b/.test(upper)) {

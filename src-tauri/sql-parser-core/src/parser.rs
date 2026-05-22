@@ -33,7 +33,7 @@
 //! - `LexError` — surfaced verbatim from `lexer::lex`.
 
 use crate::ast::{
-    AlterAction, AlterTableStatement, CascadeBehavior, CaseWhen, ColumnConstraint,
+    AlterAction, AlterTableStatement, CallStatement, CascadeBehavior, CaseWhen, ColumnConstraint,
     ColumnConstraintBody, ColumnDefinition, ColumnRef, ColumnType, Columns, CommentStatement,
     CommentTarget, CommentText, CompareOp, CopyDirection, CopySource, CopyStatement, CopyTarget,
     CreateIndexStatement, CreateTableStatement, CreateViewBody, CreateViewStatement, CteDefinition,
@@ -42,7 +42,7 @@ use crate::ast::{
     InsertStatement, InsertValue, JoinDescriptor, JoinPredicate, LikeCase, LimitClause,
     NullsPlacement, OnConflict, OnDuplicateKeyUpdate, OnDuplicateKeyUpdateAssignment,
     OnDuplicateKeyUpdateValue, OrderDirection, OrderingItem, OverClause, ParseError,
-    ParseErrorKind, ParseResult, PrivilegeTag, RevokeStatement, RoleRef, SelectExpr,
+    ParseErrorKind, ParseResult, PrivilegeTag, ProcedureRef, RevokeStatement, RoleRef, SelectExpr,
     SelectListItem, SelectStatement, SetOperationEntry, SetOperator, SetScope, SetStatement,
     SetValue, ShowStatement, ShowTarget, SqlLiteral, TableConstraint, TableConstraintBody,
     TableRef, TruncateStatement, UpdateAssignment, UpdateStatement, WindowArgument, WindowFrame,
@@ -167,6 +167,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(ParseResult::Insert(self.parse_insert()?))
             }
+            Token::Ident(name) if name.eq_ignore_ascii_case("call") => {
+                self.advance();
+                Ok(ParseResult::Call(self.parse_call()?))
+            }
             Token::Update => {
                 self.advance();
                 Ok(ParseResult::Update(self.parse_update()?))
@@ -241,7 +245,7 @@ impl<'a> Parser<'a> {
             }
             _ => Err(syntax_err(
                 Some(first.at),
-                "expected SELECT/INSERT/UPDATE/DELETE/DROP/TRUNCATE/ALTER at start",
+                "expected SELECT/INSERT/CALL/UPDATE/DELETE/DROP/TRUNCATE/ALTER at start",
             )),
         }
     }
@@ -2466,6 +2470,67 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a MySQL/MariaDB `CALL` statement after the `CALL` verb.
+    fn parse_call(&mut self) -> Result<CallStatement, ParseError> {
+        let procedure = self.parse_procedure_ref()?;
+        self.expect_token(Token::LParen, "expected '(' after procedure name")?;
+
+        let mut arguments: Vec<InsertValue> = Vec::new();
+        if matches!(self.peek().map(|t| &t.token), Some(Token::RParen)) {
+            self.advance();
+            return Ok(CallStatement {
+                procedure,
+                arguments,
+            });
+        }
+
+        loop {
+            arguments.push(self.parse_insert_value()?);
+            match self.peek().map(|t| &t.token) {
+                Some(Token::Comma) => {
+                    self.advance();
+                }
+                Some(Token::RParen) => {
+                    self.advance();
+                    break;
+                }
+                Some(_) => {
+                    let at = self.peek().map(|t| t.at);
+                    return Err(syntax_err(at, "expected ',' or ')'"));
+                }
+                None => return Err(syntax_err(None, "expected ')'")),
+            }
+        }
+
+        Ok(CallStatement {
+            procedure,
+            arguments,
+        })
+    }
+
+    /// Bare or schema-qualified procedure reference. Three-part names and
+    /// quoted identifiers remain outside the local parser subset.
+    fn parse_procedure_ref(&mut self) -> Result<ProcedureRef, ParseError> {
+        let first = self.expect_ident("expected procedure name")?;
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Dot)) {
+            self.advance();
+            let name = self.expect_ident("expected procedure name after '.'")?;
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Dot)) {
+                let at = self.peek().map(|t| t.at);
+                return Err(syntax_err(at, "three-dot procedure qualifier unsupported"));
+            }
+            Ok(ProcedureRef {
+                schema: Some(first),
+                name,
+            })
+        } else {
+            Ok(ProcedureRef {
+                schema: None,
+                name: first,
+            })
+        }
+    }
+
     /// `<col> = <value>[, <col> = <value>]*`. Used by UPDATE SET and
     /// ON CONFLICT DO UPDATE SET.
     fn parse_assignment_list(&mut self) -> Result<Vec<UpdateAssignment>, ParseError> {
@@ -3909,6 +3974,7 @@ fn is_known_sql_verb(name: &str) -> bool {
         name.to_ascii_uppercase().as_str(),
         "SELECT"
             | "INSERT"
+            | "CALL"
             | "UPDATE"
             | "DELETE"
             | "CREATE"
@@ -3938,6 +4004,7 @@ fn is_supported_sql_verb(name: &str) -> bool {
     matches!(
         name.to_ascii_uppercase().as_str(),
         "SELECT"
+            | "CALL"
             | "DROP"
             | "TRUNCATE"
             | "ALTER"
@@ -5569,6 +5636,77 @@ mod tests {
         match parse(input) {
             ParseResult::Delete(d) => d,
             other => panic!("expected Delete, got: {:?}", other),
+        }
+    }
+
+    fn ok_call(input: &str) -> CallStatement {
+        match parse(input) {
+            ParseResult::Call(c) => c,
+            other => panic!("expected Call, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn call_no_args_parses_as_top_level_statement() {
+        let s = ok_call("CALL refresh_user_stats()");
+        assert_eq!(s.procedure.schema, None);
+        assert_eq!(s.procedure.name, "refresh_user_stats");
+        assert!(s.arguments.is_empty());
+    }
+
+    #[test]
+    fn call_qualified_procedure_with_literal_and_placeholder_args() {
+        let s = ok_call("CALL reporting.refresh_user_stats(?, 'x', 1)");
+        assert_eq!(s.procedure.schema.as_deref(), Some("reporting"));
+        assert_eq!(s.procedure.name, "refresh_user_stats");
+        assert_eq!(s.arguments.len(), 3);
+        assert!(matches!(
+            &s.arguments[0],
+            InsertValue::Placeholder { name } if name.is_empty()
+        ));
+        assert!(matches!(
+            &s.arguments[1],
+            InsertValue::Literal {
+                value: SqlLiteral::String { value }
+            } if value == "x"
+        ));
+        assert!(matches!(
+            &s.arguments[2],
+            InsertValue::Literal {
+                value: SqlLiteral::Integer { value: 1 }
+            }
+        ));
+    }
+
+    #[test]
+    fn call_default_argument_uses_local_value_surface() {
+        let s = ok_call("CALL refresh_user_stats(DEFAULT)");
+        assert!(matches!(s.arguments[0], InsertValue::Default));
+    }
+
+    #[test]
+    fn call_rejects_named_argument_forms_outside_value_surface() {
+        let cases = [
+            ("function call", "CALL refresh_user_stats(NOW())"),
+            ("arithmetic", "CALL refresh_user_stats(1 + 2)"),
+            (
+                "subquery",
+                "CALL refresh_user_stats((SELECT id FROM users))",
+            ),
+            ("bare identifier", "CALL refresh_user_stats(user_id)"),
+            ("user variable", "CALL refresh_user_stats(@user_id)"),
+        ];
+
+        for (label, sql) in cases {
+            let e = err(sql);
+            assert!(
+                matches!(
+                    e.error_kind,
+                    ParseErrorKind::SyntaxError | ParseErrorKind::LexError
+                ),
+                "{label}: expected syntax/lex rejection, got {:?}",
+                e
+            );
         }
     }
 

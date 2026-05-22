@@ -556,6 +556,17 @@ export interface SqlInsertStatement {
   returning: string[];
 }
 
+export interface SqlProcedureRef {
+  schema: string | null;
+  name: string;
+}
+
+export interface SqlCallStatement {
+  kind: "call";
+  procedure: SqlProcedureRef;
+  arguments: SqlInsertValue[];
+}
+
 export interface SqlUpdateStatement {
   kind: "update";
   table: string;
@@ -784,6 +795,7 @@ export type SqlParseResult =
   | SqlCreateIndexStatement
   | SqlCreateViewStatement
   | SqlInsertStatement
+  | SqlCallStatement
   | SqlUpdateStatement
   | SqlDeleteStatement
   | SqlWithStatement
@@ -917,6 +929,7 @@ const SQL_PARSE_RESULT_KINDS = new Set<string>([
   "alter-table",
   // Sprint-392 — DML write triad.
   "insert",
+  "call",
   "update",
   "delete",
   // Sprint-393b — CTE-wrap top-level.

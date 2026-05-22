@@ -352,6 +352,38 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           returning: [],
         } satisfies SqlParseResult;
       }
+      if (sql === "CALL reporting.refresh_user_stats(?, 'x', 1)") {
+        return {
+          kind: "call",
+          procedure: {
+            schema: "reporting",
+            name: "refresh_user_stats",
+          },
+          arguments: [
+            { kind: "placeholder", name: "" },
+            { kind: "literal", value: { kind: "string", value: "x" } },
+            { kind: "literal", value: { kind: "integer", value: 1 } },
+          ],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "CALL refresh_user_stats()") {
+        return {
+          kind: "call",
+          procedure: {
+            schema: null,
+            name: "refresh_user_stats",
+          },
+          arguments: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "CALL refresh_user_stats(user_id)") {
+        return {
+          kind: "error",
+          error_kind: "syntax-error",
+          message: "expected value",
+          at: 24,
+        } satisfies SqlParseResult;
+      }
       if (sql === "UPDATE users SET name = 'a' WHERE id = 1") {
         return {
           kind: "update",
@@ -1098,6 +1130,43 @@ describe("parseSql (sprint-385 facade)", () => {
         },
       ],
     });
+  });
+
+  it("[AC-439-F01] parses MySQL CALL into a call statement", async () => {
+    const result = await parseSql(
+      "CALL reporting.refresh_user_stats(?, 'x', 1)",
+    );
+    expect(result.kind).toBe("call");
+    if (result.kind !== "call") return;
+
+    expect(result.procedure).toEqual({
+      schema: "reporting",
+      name: "refresh_user_stats",
+    });
+    expect(result.arguments).toEqual([
+      { kind: "placeholder", name: "" },
+      { kind: "literal", value: { kind: "string", value: "x" } },
+      { kind: "literal", value: { kind: "integer", value: 1 } },
+    ]);
+  });
+
+  it("[AC-439-F02] parses bare CALL with schema null", async () => {
+    const result = await parseSql("CALL refresh_user_stats()");
+    expect(result.kind).toBe("call");
+    if (result.kind !== "call") return;
+
+    expect(result.procedure).toEqual({
+      schema: null,
+      name: "refresh_user_stats",
+    });
+    expect(result.arguments).toEqual([]);
+  });
+
+  it("[AC-439-F03] CALL bare identifier argument returns an error union", async () => {
+    const result = await parseSql("CALL refresh_user_stats(user_id)");
+    expect(result.kind).toBe("error");
+    if (result.kind !== "error") return;
+    expect(result.error_kind).toBe("syntax-error");
   });
 
   it("[AC-392-F04] parses `UPDATE users SET name = 'a' WHERE id = 1` with where_clause", async () => {

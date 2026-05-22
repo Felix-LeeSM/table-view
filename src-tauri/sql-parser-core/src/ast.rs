@@ -53,6 +53,9 @@ pub enum ParseResult {
     CreateView(CreateViewStatement),
     /// `INSERT INTO <table> …` (sprint-392).
     Insert(InsertStatement),
+    /// MySQL/MariaDB `CALL proc(...)`. Stored routine bodies and
+    /// DELIMITER scripting remain out of scope.
+    Call(CallStatement),
     /// `UPDATE <table> SET …` (sprint-392).
     Update(UpdateStatement),
     /// `DELETE FROM <table> …` (sprint-392).
@@ -880,6 +883,21 @@ pub enum InsertValue {
     Placeholder {
         name: String,
     },
+}
+
+/// Schema-qualified or bare stored procedure reference for MySQL/MariaDB
+/// `CALL`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProcedureRef {
+    pub schema: Option<String>,
+    pub name: String,
+}
+
+/// `CALL <procedure>(<literal/default/placeholder>, ...)`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CallStatement {
+    pub procedure: ProcedureRef,
+    pub arguments: Vec<InsertValue>,
 }
 
 /// Sprint-392 widened literal set (sprint-385's `Literal` covered only
