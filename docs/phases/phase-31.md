@@ -1,12 +1,13 @@
 # Phase 31: Language Completion Architecture
 
-> **상태: 진행 (Sprint 429).** ADR 0045 를 구현 계획으로 승격했다.
+> **상태: 완료 (Sprint 430).** ADR 0045 를 구현 계획으로 승격했다.
 > SQL popup 은 WASM-first + TypeScript fallback 구조로 전환됐고,
 > PostgreSQL/MySQL/MariaDB/SQLite completion core smoke 가 열린 상태다.
 > Sprint 428 부터 built-in vocabulary 의 SOT 는 Rust/WASM 이고, TypeScript 는
 > fallback mirror 와 CodeMirror adapter 로 제한한다. Sprint 429 는 공식
 > 레퍼런스 sentinel 과 Rust/WASM↔TS fallback drift test 로 vocabulary surface
-> 를 고정한다.
+> 를 고정한다. Sprint 430 은 "100% completion coverage" 의 의미를 vocabulary
+> coverage 로 한정하고 parser/runtime semantic gap을 support matrix에 고정한다.
 
 ## 배경
 
@@ -48,6 +49,8 @@ result contract 를 먼저 고정해야 한다.
 - UTF-16 ↔ UTF-8 byte offset policy.
 - `dialect`, `family`, `shell`, `serverVersion`, `capabilities`,
   `catalog.revision`, cache state 포함.
+- `serverVersion` / `capabilities` 는 contract 필드로 유지하지만 Sprint 430
+  기준 built-in 후보 세부 filtering은 하지 않는다.
 
 ### SQL dialect surface
 
@@ -109,10 +112,14 @@ result contract 를 먼저 고정해야 한다.
   constant 는 fallback/mirror 로만 남는다.
 - **AC-31-11** WASM artifact 는 `pnpm wasm:size` 예산을 통과한다. 현재 budget 은
   SQL 80 KiB gzip, Mongo 53 KiB gzip 이다.
+- **AC-31-12** "100% completion coverage" 는 current UI vocabulary coverage로
+  제한하고, context routing / parser semantics / runtime execution coverage와
+  분리해 문서화한다.
 
 ## Out of Scope
 
-- 서버가 지원하는 모든 SQL 문법을 completion 이 100% 이해하는 것.
+- 서버가 지원하는 모든 SQL 문법을 completion/parser가 100% 이해하는 것.
+- server-version / deployment capability 별 completion 후보 gating.
 - 신규 DB adapter 구현.
 - arbitrary mongosh JavaScript.
 - runtime query execution 변경.
@@ -138,6 +145,8 @@ result contract 를 먼저 고정해야 한다.
 - Official-reference sentinel tests 가 SQL shell/function/keyword 와 Mongo
   operator/stage/expression vocabulary drift 를 잡는다.
 - `docs/query-language-support.md` support matrix 최신화.
+- "100%" 정의와 semantic gap이 `docs/query-language-support.md`에 명확히
+  분리돼 있다.
 
 ## 관련
 
