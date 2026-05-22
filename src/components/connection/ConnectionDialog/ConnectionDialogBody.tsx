@@ -3,9 +3,12 @@ import {
   DATABASE_TYPE_LABELS,
   ENVIRONMENT_META,
   ENVIRONMENT_OPTIONS,
-  SUPPORTED_DATABASE_TYPES,
-  isSupportedDatabaseType,
 } from "@/types/connection";
+import {
+  getConnectionSupportedDatabaseTypes,
+  hasConnectionCapability,
+  isConnectionSupportedDatabaseType,
+} from "@/types/dataSource";
 import { Button } from "@components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import {
@@ -27,6 +30,7 @@ import RedisFormFields from "../forms/RedisFormFields";
 // sentinel string `__none__` to represent the "None" environment option.
 // The form's `environment` field still stores `null` (canonical empty).
 const ENV_NONE_SENTINEL = "__none__";
+const CONNECTION_DIALOG_DATABASE_TYPES = getConnectionSupportedDatabaseTypes();
 
 export interface ConnectionDialogBodyProps {
   isEditing: boolean;
@@ -128,6 +132,10 @@ export default function ConnectionDialogBody({
           <SqliteFormFields
             draft={form}
             onChange={onChange}
+            filePickerEnabled={hasConnectionCapability(
+              form.dbType,
+              "filePicker",
+            )}
             inputClass={inputClass}
             labelClass={labelClass}
           />
@@ -254,16 +262,17 @@ export default function ConnectionDialogBody({
                     만 노출. 편집 모드에서 기존 connection 의 dbType 이
                     unsupported 라면 그 항목도 예외적으로 추가해 Select 가
                     빈값으로 보이지 않게 한다. */}
-                {SUPPORTED_DATABASE_TYPES.map((t) => (
+                {CONNECTION_DIALOG_DATABASE_TYPES.map((t) => (
                   <SelectItem key={t} value={t}>
                     {DATABASE_TYPE_LABELS[t]}
                   </SelectItem>
                 ))}
-                {isEditing && !isSupportedDatabaseType(form.dbType) && (
-                  <SelectItem value={form.dbType}>
-                    {DATABASE_TYPE_LABELS[form.dbType]}
-                  </SelectItem>
-                )}
+                {isEditing &&
+                  !isConnectionSupportedDatabaseType(form.dbType) && (
+                    <SelectItem value={form.dbType}>
+                      {DATABASE_TYPE_LABELS[form.dbType]}
+                    </SelectItem>
+                  )}
               </SelectContent>
             </Select>
           </div>

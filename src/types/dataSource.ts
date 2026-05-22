@@ -407,24 +407,37 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
 export type ConnectionCapabilityName =
   keyof DataSourceCapabilities["connection"];
 
+function maybeGetDataSourceProfile(
+  dbType: DatabaseType | null | undefined,
+): DataSourceProfile | null {
+  if (!dbType) return null;
+  return (
+    (DATA_SOURCE_PROFILES as Partial<Record<DatabaseType, DataSourceProfile>>)[
+      dbType
+    ] ?? null
+  );
+}
+
 export function hasConnectionCapability(
   dbType: DatabaseType | null | undefined,
   capability: ConnectionCapabilityName,
 ): boolean {
-  void dbType;
-  void capability;
-  return false;
+  return (
+    maybeGetDataSourceProfile(dbType)?.capabilities.connection[capability] ===
+    true
+  );
 }
 
 export function getConnectionSupportedDatabaseTypes(): readonly DatabaseType[] {
-  return [];
+  return (Object.keys(DATA_SOURCE_PROFILES) as DatabaseType[]).filter(
+    (dbType) => hasConnectionCapability(dbType, "test"),
+  );
 }
 
 export function isConnectionSupportedDatabaseType(
   dbType: DatabaseType | null | undefined,
 ): boolean {
-  void dbType;
-  return false;
+  return hasConnectionCapability(dbType, "test");
 }
 
 export function getDataSourceProfile(dbType: DatabaseType): DataSourceProfile {

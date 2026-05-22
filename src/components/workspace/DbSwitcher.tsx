@@ -20,10 +20,12 @@ import { switchActiveDb } from "@/lib/api/switchActiveDb";
 import { toast } from "@/lib/toast";
 import type { DatabaseInfo } from "@/types/document";
 import type { DatabaseType, Paradigm } from "@/types/connection";
+import { hasConnectionCapability } from "@/types/dataSource";
 
 /**
- * DB switcher in the workspace toolbar. For `rdb` / `document` paradigms on
- * a connected tab it's a click-to-fetch picker; clicking an entry dispatches
+ * DB switcher in the workspace toolbar. For connected profiles that expose the
+ * switch-database capability it's a click-to-fetch picker; clicking an entry
+ * dispatches
  * `switch_active_db(connection_id, db_name)`, then:
  *   1. updates `connectionStore.activeStatuses[id].activeDb`
  *   2. clears the schema cache for the connection (sidebar re-loads against
@@ -98,9 +100,10 @@ export default function DbSwitcher() {
   const status = activeConn ? activeStatuses[activeConn.id] : undefined;
   const isConnected = status?.type === "connected";
   const paradigm = activeConn?.paradigm ?? null;
-  const supportsSwitching =
-    (paradigm === "rdb" && activeConn?.dbType !== "sqlite") ||
-    paradigm === "document";
+  const supportsSwitching = hasConnectionCapability(
+    activeConn?.dbType,
+    "switchDatabase",
+  );
   const enabled = supportsSwitching && isConnected;
   // RDB connections expose the active sub-pool via
   // `activeStatuses[id].activeDb`. We pick that as the primary label
