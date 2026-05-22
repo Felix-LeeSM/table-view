@@ -1,4 +1,4 @@
-# Phase 28 + Phase 29 자율 의사결정 로그
+# Phase 28 + Phase 29 Decision Log
 
 > **목적**: 2026-05-14 사용자 directive — "mongodb 관련 변경사항 모두
 > 구현하고, 그 다음에 rdbms와 함께 하기로 했던 것들까지 모두 구현해.

@@ -6,21 +6,23 @@ updated: 2026-05-20
 
 # 시스템 구조
 
-상세 설계: [docs/architecture.md](../../docs/architecture.md). 여기는 AI 탐색용 요약.
+레거시 설계 snapshot:
+[docs/archives/design-snapshots/architecture-legacy.md](../../docs/archives/design-snapshots/architecture-legacy.md).
+현재 AI 탐색용 요약은 이 memory가 SOT.
 
 ## 기술 스택
 
-| 영역 | 기술 |
-|------|------|
-| Desktop Framework | Tauri 2.0 |
-| Frontend | React 19 + TypeScript 5 (strict) |
-| State Management | Zustand |
-| Styling | Tailwind CSS 4 (다크 모드 지원 필수) |
-| Backend | Rust (Tauri commands) |
-| DB Drivers | sqlx (PostgreSQL / MySQL), mongodb |
-| App Storage | SQLite via sqlx |
-| Build Tool | Vite 6 (frontend), Cargo (backend) |
-| Testing | Vitest (frontend), cargo test (backend), Playwright (e2e) |
+| 영역              | 기술                                                      |
+| ----------------- | --------------------------------------------------------- |
+| Desktop Framework | Tauri 2.0                                                 |
+| Frontend          | React 19 + TypeScript 5 (strict)                          |
+| State Management  | Zustand                                                   |
+| Styling           | Tailwind CSS 4 (다크 모드 지원 필수)                      |
+| Backend           | Rust (Tauri commands)                                     |
+| DB Drivers        | sqlx (PostgreSQL / MySQL), mongodb                        |
+| App Storage       | SQLite via sqlx                                           |
+| Build Tool        | Vite 6 (frontend), Cargo (backend)                        |
+| Testing           | Vitest (frontend), cargo test (backend), Playwright (e2e) |
 
 ## 디렉토리 구조
 

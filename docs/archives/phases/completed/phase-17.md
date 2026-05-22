@@ -5,7 +5,7 @@
 > 도착하기 전에 이미 Sprint 276~296 sequence 로 작업이 진행돼 묻혀 있었다.
 > ADR 0028 (sqlx::mysql 채택) + 통합 coverage 84.23/79.74/85.66 (임계
 > 80/74/81 통과). closure handoff:
-> [`docs/sprints/sprint-296/handoff.md`](../sprints/sprint-296/handoff.md)
+> [`docs/sprints/sprint-296/handoff.md`](../../../sprints/sprint-296/handoff.md)
 > (retrospective, 2026-05-14). 본문 동결.
 
 ## 배경

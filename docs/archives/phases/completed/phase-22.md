@@ -12,7 +12,7 @@
 게이트로 통과시키는 패턴**을 도입한다. 이 게이트는 Phase 23 (Safe Mode) 의
 부착점이고 Phase 24~27 의 모든 DDL UI 가 그 위에 얹힌다.
 
-근거: [`docs/tableplus-comparison.md`](../tableplus-comparison.md) Section H#2,
+근거: [`docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md`](../../product-snapshots/tableplus-comparison-2026-05-01.md) Section H#2,
 TablePlus `gui-tools/code-review-and-safemode/{commit-changes,discard-changes}.md`.
 
 ## 범위

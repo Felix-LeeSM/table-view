@@ -13,7 +13,7 @@ NestedExpandPopover entry → inline edit → mqlGenerator dot-notation $set.
 - `src/components/document/NestedExpandPopover.test.tsx` (확장)
 - `src/components/document/DocumentDataGrid.tsx`
 - `src/components/document/DocumentDataGrid.nested.test.tsx` (확장)
-- `docs/phases/phase-28-decisions.md`
+- `docs/phases/phase-28-decision-log.md`
 - `docs/sprints/sprint-322/handoff.md`
 
 미변경:

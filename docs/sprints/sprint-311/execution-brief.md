@@ -88,7 +88,7 @@ guardrail 이라 dispatch 교체 중에도 절대 회귀해선 안 됨.
 
 - `docs/sprints/sprint-311/contract.md`
 - `docs/sprints/sprint-307/spec.md` (A5 섹션)
-- `docs/phases/phase-28-decisions.md` — D-10+ 부터
+- `docs/phases/phase-28-decision-log.md` — D-10+ 부터
 - `src/lib/mongo/mongoshParser.ts` (A1)
 - `src/lib/tauri/document.ts` — 6 IPC wrapper (A2 산출물)
 - `src/lib/mongo/mongoSafety.ts` — `analyzeMongoPipeline`

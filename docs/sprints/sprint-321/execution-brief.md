@@ -14,7 +14,7 @@ Sentinel cell 1-depth expand popover (read-only). Edit flow 은 Sprint
 - `src/components/document/NestedExpandPopover.test.tsx` (NEW)
 - `src/components/document/DocumentDataGrid.tsx`
 - `src/components/document/DocumentDataGrid.nested.test.tsx` (NEW)
-- `docs/phases/phase-28-decisions.md`
+- `docs/phases/phase-28-decision-log.md`
 - `docs/sprints/sprint-321/handoff.md`
 
 미변경:

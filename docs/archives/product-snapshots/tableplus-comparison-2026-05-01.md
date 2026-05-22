@@ -1,8 +1,11 @@
-# Table View ↔ TablePlus 기능 비교
+# Table View ↔ TablePlus 기능 비교 (2026-05-01 snapshot)
+
+> **Archive status**: retired product comparison. Current execution order lives
+> in `docs/PLAN.md`.
 
 > **기준일**: 2026-05-01
 > **TablePlus 문서 출처**: `docs/table_plus/` (2026-04-06 fetch, 63 docs)
-> **Table View 출처**: `docs/features.md` + 소스 코드
+> **Table View 출처**: `docs/archives/product-snapshots/features-inventory-2026-05-01.md` + 소스 코드
 >
 > TablePlus 공식 문서의 디렉토리 구조(`getting-started`, `gui-tools`,
 > `query-editor`, `preferences`, `utilities`)를 그대로 비교 축으로 사용한다.

@@ -4,7 +4,7 @@ Sprint: `sprint-204` (refactor — logger 중앙화 + DEV-only gate).
 Date: 2026-05-05.
 Type: refactor (행동 변경 0; DEV gate 통일 + prod console 노이즈 제거).
 
-[`docs/PLAN.md`](../../PLAN.md) Sprint 204 row + [`/CODE_SMELLS.md`](../../../CODE_SMELLS.md) §4–5.
+[`docs/PLAN.md`](../../PLAN.md) Sprint 204 row + `/CODE_SMELLS.md` §4–5.
 짧은 sprint. 신규 `src/lib/logger.ts` + 14 console.* 중 13곳 마이그레이션.
 
 ## Sprint 안에서 끝낼 단위
@@ -34,7 +34,7 @@ export const logger = {
 
 ### console.* 13곳 마이그레이션
 
-[`/CODE_SMELLS.md`](../../../CODE_SMELLS.md) 부록 C 의 14곳 중 13곳 →
+`/CODE_SMELLS.md` 부록 C 의 14곳 중 13곳 →
 `logger.*` 호출로 변경. 1곳 (`bootInstrumentation.ts:187` =
 sprint-175 의도적 prod 단일 라인) 은 유지.
 

@@ -20,7 +20,7 @@ DocumentDataGrid 의 `sorts={[]}` stub 이 RDB 와의 paradigm parity 를
 - `src/components/document/DocumentDataGrid.sort.test.tsx` (신규)
 - 기존 DocumentDataGrid 테스트들 (sort 호출 shape 적응 — `sorts` prop
   추가 필수일 경우)
-- `docs/phases/phase-28-decisions.md` (D-29..D-31)
+- `docs/phases/phase-28-decision-log.md` (D-29..D-31)
 - `docs/sprints/sprint-315/handoff.md`
 
 미변경:

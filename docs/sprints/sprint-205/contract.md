@@ -4,7 +4,7 @@ Sprint: `sprint-205` (refactor — `catch {}` audit + 사유 주석 정합).
 Date: 2026-05-05.
 Type: refactor (행동 변경 0; audit + 주석 추가만).
 
-[`docs/PLAN.md`](../../PLAN.md) Sprint 205 row + [`/CODE_SMELLS.md`](../../../CODE_SMELLS.md) §4 / 부록 A.
+[`docs/PLAN.md`](../../PLAN.md) Sprint 205 row + `/CODE_SMELLS.md` §4 / 부록 A.
 짧은 sprint. silent `catch {}` 37곳 audit + 분류 + 주석 누락된 13곳에 사유 한 줄 추가.
 
 ## 배경

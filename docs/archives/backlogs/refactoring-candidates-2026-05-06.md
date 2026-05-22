@@ -5,8 +5,8 @@
 > 3b/4) 로 종료. retire 사유 = 이전 cycle 의 `CODE_SMELLS.md` retire 패턴
 > 답습 (commit `0c64a1b`). 본 문서는 history 보존용이며 다음 wide-net 스캔
 > 결과는 새 시한부 candidate 문서로 작성. P10 step 3b/4 의 deferred 사유는
-> [`docs/PLAN.md`](PLAN.md) row 16 + lesson
-> [`broadcast/persist 비대칭`](../memory/lessons/boot-windows/2026-05-06-broadcast-persist-asymmetry-store-extraction-limit/memory.md)
+> [`docs/PLAN.md`](../../PLAN.md) row 16 + lesson
+> [`broadcast/persist 비대칭`](../../../memory/lessons/boot-windows/2026-05-06-broadcast-persist-asymmetry-store-extraction-limit/memory.md)
 > 참조. 본문은 history 보존.
 
 Last updated: 2026-05-05 (retired 2026-05-06)

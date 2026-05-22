@@ -6,7 +6,7 @@
 
 ## Task Why
 
-- `docs/archives/etc/refactoring-candidates.md` § P10 step 3 — connectionStore session persistence 를 use-case hook 으로 이동. 단 step 3 의 4 site 중 read-only `hydrateFromSession` 만 본 sprint scope.
+- `docs/archives/backlogs/refactoring-candidates-2026-05-06.md` § P10 step 3 — connectionStore session persistence 를 use-case hook 으로 이동. 단 step 3 의 4 site 중 read-only `hydrateFromSession` 만 본 sprint scope.
 - Sprint 219 (P10 step 1, evaluator 9.20/10) + Sprint 223 (P10 step 2, evaluator 8.35/10) narrow-scope pattern 답습.
 - persist 3 site 는 cross-window broadcast / IPC bridge ordering 과 결합 + 5 callers update 필요 + Sprint 219 freeze 영역 (`useConnectionLifecycle`) 충돌 — risk 매우 높음. 별도 sprint (3b) 로 분리.
 - 본 sprint 의 `hydrateFromSession` 은 read-only — risk 낮음, callers 2 곳뿐.

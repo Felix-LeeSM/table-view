@@ -11,7 +11,7 @@
 패턴을 Phase 25 (Constraint), Phase 26 (Trigger), Phase 27 (Table/Column)
 이 그대로 답습한다.
 
-근거: [`docs/tableplus-comparison.md`](../tableplus-comparison.md) Section H#4,
+근거: [`docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md`](../../product-snapshots/tableplus-comparison-2026-05-01.md) Section H#4,
 TablePlus `gui-tools/working-with-table/index.md`.
 
 ## 범위

@@ -20,7 +20,7 @@
 - `src/components/document/DocumentFilterBar.test.tsx` — 3 case
   추가 (IN/NOT IN dropdown 노출 / $in CSV → array / $nin mixed
   token).
-- `docs/phases/phase-28-decisions.md` — D-21..D-24 append.
+- `docs/phases/phase-28-decision-log.md` — D-21..D-24 append.
 - `docs/sprints/sprint-313/{contract,execution-brief,handoff}.md`.
 
 ## Per-AC evidence
@@ -67,7 +67,7 @@
 - **D-24** `$in`/`$nin` placeholder = `"1, 2, 3"`. row layout 변경
   없이 grammar 전달. `$regex` 도 동일 패턴으로 `"^pattern"` 명시화.
 
-모두 `docs/phases/phase-28-decisions.md` 에 append.
+모두 `docs/phases/phase-28-decision-log.md` 에 append.
 
 ## Tests added
 

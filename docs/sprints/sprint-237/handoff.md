@@ -7,7 +7,7 @@ Status: PASS (with required follow-up in Sprint 238)
 Sprint 237 — Fixture data workflow vertical slice (development + e2e profiles, PG + Mongo).
 
 ## Contract
-`docs/fixture-data-workflow-handoff.md` (locked at `154a1ff`).
+`docs/archives/workflows/fixture-data-workflow-2026-05-09.md` (locked at `154a1ff`).
 
 ## Implementation under review
 - `38ba73d` — vertical slice (initial commit)

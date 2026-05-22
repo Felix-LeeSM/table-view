@@ -94,4 +94,4 @@ Generator's hook + 3 editor changes.
 
 - **Optional follow-up**: the generator chose the closure-factory pattern (`() => () => Promise<void>`) over a direct closure (`() => Promise<void>`) so the commit closure is materialized only after the preview succeeds. This matches the spec's "hook holds the closure until attemptExecute" semantics and is the right call. A short JSDoc note on the rationale would help future readers (currently L80-89 explains *what*, but not *why factory vs direct*).
 
-- **Optional follow-up**: F-003 / F-004 / F-005 are eligible candidates for future P-tier candidates in `docs/archives/etc/refactoring-candidates.md` if `pendingExecuteRef` race or `runCommit` identity churn surfaces user-visible flake.
+- **Optional follow-up**: F-003 / F-004 / F-005 are eligible candidates for future P-tier candidates in `docs/archives/backlogs/refactoring-candidates-2026-05-06.md` if `pendingExecuteRef` race or `runCommit` identity churn surfaces user-visible flake.

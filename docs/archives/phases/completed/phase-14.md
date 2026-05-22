@@ -4,7 +4,7 @@
 > 에 ThemePicker 마운트 (`WorkspacePage.tsx:11,150`), `Cmd+Shift+L` /
 > `Ctrl+Shift+L` 키보드 단축키 (`App.tsx:309-326`). AC-14-05 (E2E 양창
 > 동시 토글) DEFERRED — tauri-driver. closure handoff:
-> [`docs/sprints/sprint-162/handoff.md`](../sprints/sprint-162/handoff.md)
+> [`docs/sprints/sprint-162/handoff.md`](../../../sprints/sprint-162/handoff.md)
 > (retrospective, 2026-05-14). 본문 동결.
 
 ## 배경

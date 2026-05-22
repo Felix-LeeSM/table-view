@@ -1,4 +1,7 @@
-# Architecture — Table View
+# Legacy Architecture Snapshot — Table View
+
+> **Archive status**: legacy design snapshot. Current AI-facing architecture
+> summary lives in `memory/architecture/memory.md`.
 
 Tauri 2.0 + React + Rust 기반 데스크톱 데이터베이스 관리 도구.
 

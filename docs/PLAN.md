@@ -14,10 +14,11 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 | 영역 | SOT |
 |---|---|
 | 현재 실행 순서 | `docs/PLAN.md` |
-| 완료된 plan / sprint sequence | `docs/archives/completed-plan.md` |
+| 완료된 plan / sprint sequence | `docs/archives/plans/completed-roadmap.md` |
 | 완료된 phase index | `docs/archives/phases/README.md` |
 | Active/deferred risks | `docs/RISKS.md` |
-| Resolved risks | `docs/archives/risks/resolved.md` |
+| Resolved risks | `docs/archives/risks/resolved-risks.md` |
+| Archived inactive references | `docs/archives/README.md` |
 | 상세 sprint evidence | `docs/sprints/sprint-N/` |
 
 ## Sorting Rule
@@ -32,8 +33,8 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 
 - `Active Roadmap` 은 논의용 ordering 이다. 새 implementation phase 진입 전 사용자와
   범위/순서 합의가 필요하다.
-- 완료된 항목은 `docs/archives/completed-plan.md`, `docs/archives/phases/README.md`,
-  `docs/archives/risks/resolved.md` 로 이동한다.
+- 완료된 항목은 `docs/archives/plans/completed-roadmap.md`, `docs/archives/phases/README.md`,
+  `docs/archives/risks/resolved-risks.md` 로 이동한다.
 - transient docs 는 sprint/phase SOT 로 흡수되면 삭제한다. Historical sprint
   artifacts (`docs/sprints/**`) 는 evidence 이므로 삭제하지 않는다.
 

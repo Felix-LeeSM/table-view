@@ -21,7 +21,7 @@
 
 > | 3 | 212 | refactor | P3 (tabStore cross-store) | tabStore 의 schemaStore / queryHistoryStore 직접 import 끊고 dispatcher 패턴 도입. |
 
-[`docs/archives/etc/refactoring-candidates.md`](../../archives/etc/refactoring-candidates.md) §P3 가 입력값.
+[`docs/archives/backlogs/refactoring-candidates-2026-05-06.md`](../../archives/backlogs/refactoring-candidates-2026-05-06.md) §P3 가 입력값.
 
 ## 검증 결과
 

@@ -17,7 +17,7 @@
 
 > | 11 | 209 | refactor | §1-2 (backend god file #2) | `commands/connection.rs` (1710) 분할 — postgres.rs 패턴 답습. |
 
-마지막 sprint of refactor cycle 199-209. 종료 시 [`/CODE_SMELLS.md`](../../../CODE_SMELLS.md) retire (이전 cycle `refactoring-{plan,smells}.md` 처리와 동일).
+마지막 sprint of refactor cycle 199-209. 종료 시 `/CODE_SMELLS.md` retire (이전 cycle `refactoring-{plan,smells}.md` 처리와 동일).
 
 ## 주의 사항
 

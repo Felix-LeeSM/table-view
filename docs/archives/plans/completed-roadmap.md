@@ -19,7 +19,7 @@ Last updated: 2026-05-22
 | Refactor cycle 210-224 | complete except deferred P10 3b/4 | `docs/sprints/sprint-210/` through `sprint-224/` |
 | DDL UI parity surfaces | closed | Phases 24-27, Sprint 226-237 |
 | Language completion architecture | complete | Phase 31, Sprint 420-430 |
-| Risk closure follow-up | complete | Sprint 433-438, `docs/archives/risks/resolved.md` |
+| Risk closure follow-up | complete | Sprint 433-438, `docs/archives/risks/resolved-risks.md` |
 
 ## Completed Semantic-Widening Slices
 
@@ -35,9 +35,11 @@ Last updated: 2026-05-22
 |---|---|
 | Long historical PLAN sections | this archive + sprint handoffs |
 | Completed phase list | `docs/archives/phases/README.md` |
-| Resolved risk table/log | `docs/archives/risks/resolved.md` |
+| Resolved risk table/log | `docs/archives/risks/resolved-risks.md` |
 | Active ordering | `docs/PLAN.md` |
 | UX law action plan | preserved as retired reference; sprint-176-180 artifacts + `docs/ux-laws-mapping.md` remain current |
 | Legacy Phase 5-9 sketches | preserved under `docs/archives/phases/retired/`; indexed in `docs/archives/phases/README.md` |
-| Archived 2026-04-10 test improvement snapshot | preserved under `docs/archives/etc/`; superseded by later sprint evidence |
-| 2026-05-19 refactor backlog draft | preserved under `docs/archives/etc/refactor-backlog/2026-05-19/`; active refactor tracking remains RISK-038 + `docs/archives/etc/code-smell-audit-2026-05-15.md` |
+| Archived 2026-04-10 test improvement snapshot | preserved under `docs/archives/test-plans/`; superseded by later sprint evidence |
+| 2026-05-19 refactor backlog draft | preserved under `docs/archives/backlogs/refactor-audit-2026-05-19/`; active refactor tracking remains RISK-038 + `docs/archives/audits/code-smell-audit-2026-05-15.md` |
+| 2026-05-01 product support/comparison snapshots | preserved under `docs/archives/product-snapshots/`; superseded by `docs/PLAN.md` + `docs/query-language-support.md` |
+| 2026-05-09 fixture workflow planning handoff | preserved under `docs/archives/workflows/`; not active unless re-linked from `docs/PLAN.md` |

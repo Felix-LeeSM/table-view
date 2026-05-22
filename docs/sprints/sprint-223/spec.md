@@ -2,7 +2,7 @@
 
 ## Description
 
-`src/stores/schemaStore.ts` 의 `dropTable` / `renameTable` 두 action 은 (a) Tauri mutation 호출, (b) 성공 후 `tauri.listTables` reload, (c) reload 실패 시 cache 를 optimistic 하게 patch 하는 fallback — 세 단계를 한 store 본문에서 동시에 소유한다 (`docs/archives/etc/refactoring-candidates.md` § P10). 이로 인해 store unit test 가 cache state transition 뿐 아니라 reload-then-fallback orchestration policy 까지 같이 검증하게 되고, 같은 use-case 가 hook 으로 분리된 다른 mutation flow 들 (e.g. Sprint 219 의 `useConnectionMutations`) 과 경계가 어긋난다.
+`src/stores/schemaStore.ts` 의 `dropTable` / `renameTable` 두 action 은 (a) Tauri mutation 호출, (b) 성공 후 `tauri.listTables` reload, (c) reload 실패 시 cache 를 optimistic 하게 patch 하는 fallback — 세 단계를 한 store 본문에서 동시에 소유한다 (`docs/archives/backlogs/refactoring-candidates-2026-05-06.md` § P10). 이로 인해 store unit test 가 cache state transition 뿐 아니라 reload-then-fallback orchestration policy 까지 같이 검증하게 되고, 같은 use-case 가 hook 으로 분리된 다른 mutation flow 들 (e.g. Sprint 219 의 `useConnectionMutations`) 과 경계가 어긋난다.
 
 본 sprint 는 P10 candidate 의 **second step** — Sprint 219 (P10 step 1, `connectionStore` toast extraction, evaluator 9.20/10) 의 narrow-scope pattern 을 그대로 답습한다. 이번 step 의 narrow scope 는 `schemaStore` 의 **`dropTable` / `renameTable` 2 action 의 `try { reload } catch { fallback }` orchestration 한 흐름**을 신규 use-case hook (`useSchemaTableMutations`) 으로 이동. store action 본문은 Tauri mutation 호출 1 줄 (≤ 2-3 LOC) 까지 축소.
 

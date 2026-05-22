@@ -1,7 +1,7 @@
 # Code Smell Audit — 2026-05-15
 
 > **Scope**: 정적 분석(Part A) + frontend 상태 관리 논리적 분석(Part B).
-> 이전 [`refactoring-candidates.md`](refactoring-candidates.md) (retired
+> 이전 [`refactoring-candidates-2026-05-06.md`](../backlogs/refactoring-candidates-2026-05-06.md) (retired
 > 2026-05-06) 의 후속이지만 그 문서를 대체하거나 sprint 계약을 대체하지
 > 않는다. 다음 작업 단위를 고를 때 참고하는 backlog.
 
@@ -694,7 +694,7 @@ deepening — 작은 인터페이스 뒤에 같은 동작을 묶음.
 
 - [`memory/conventions/refactoring/memory.md`](../../../memory/conventions/refactoring/memory.md)
   — B/D/C/A 4 카테고리 정의.
-- [`docs/archives/etc/refactoring-candidates.md`](refactoring-candidates.md)
+- [`docs/archives/backlogs/refactoring-candidates-2026-05-06.md`](../backlogs/refactoring-candidates-2026-05-06.md)
   (retired 2026-05-06) — 이전 wide-net scan, 본 문서가 후속.
 - ADR 0025 — DataGrid self-managed (tanstack 미도입).
 - ADR 0027 — per-workspace state store.

@@ -11,7 +11,7 @@ Phase 22 게이트 / Phase 23 Safe Mode / Phase 24~26 의 DDL 패턴이 모두
 이 Phase 가 끝나면 TablePlus `gui-tools/working-with-table/{table,column,row,
 constraint,index,trigger}.md` 6 영역 모두 동등 수준 도달.
 
-근거: [`docs/tableplus-comparison.md`](../tableplus-comparison.md) Section H#7,
+근거: [`docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md`](../../product-snapshots/tableplus-comparison-2026-05-01.md) Section H#7,
 TablePlus `gui-tools/working-with-table/{table,column}.md`.
 
 ## 범위

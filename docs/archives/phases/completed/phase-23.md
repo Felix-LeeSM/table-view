@@ -11,7 +11,7 @@ TablePlus 의 차별 기능 중 가장 정량적 가치가 큰 것이 Safe Mode 
 게이트. Phase 22 가 모든 mutation 을 "Preview SQL → Commit" 으로 통과시
 키므로, 그 위에 색상 기반 룰 한 겹만 더하면 사실상 패리티 달성.
 
-근거: [`docs/tableplus-comparison.md`](../tableplus-comparison.md) Section H#3,
+근거: [`docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md`](../../product-snapshots/tableplus-comparison-2026-05-01.md) Section H#3,
 TablePlus `gui-tools/code-review-and-safemode/safe-mode.md`.
 
 ## 범위

@@ -9,7 +9,7 @@
 UI 의 패턴을 굳혀준다. 본 Phase 는 그 패턴을 PK / FK / Check / Unique 4종
 constraint 의 추가/삭제 UI 에 그대로 답습.
 
-근거: [`docs/tableplus-comparison.md`](../tableplus-comparison.md) Section H#5,
+근거: [`docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md`](../../product-snapshots/tableplus-comparison-2026-05-01.md) Section H#5,
 TablePlus `gui-tools/working-with-table/constraint.md`.
 
 ## 범위

@@ -5,7 +5,7 @@
 > 미적용, 의존성 0). AC-15-05 (drop indicator placeholder line) PARTIAL,
 > AC-15-06 (키보드 DnD) / AC-15-07 (다중 선택) / AC-15-08 (E2E) DEFERRED.
 > closure handoff:
-> [`docs/sprints/sprint-164/handoff.md`](../sprints/sprint-164/handoff.md)
+> [`docs/sprints/sprint-164/handoff.md`](../../../sprints/sprint-164/handoff.md)
 > (retrospective, 2026-05-14). 본문 동결.
 
 ## 배경

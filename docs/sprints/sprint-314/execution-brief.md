@@ -17,7 +17,7 @@
 - `src/lib/mongo/mqlFilterBuilder.test.ts`
 - `src/components/document/DocumentFilterBar.tsx`
 - `src/components/document/DocumentFilterBar.test.tsx`
-- `docs/phases/phase-28-decisions.md` (D-25..D-28)
+- `docs/phases/phase-28-decision-log.md` (D-25..D-28)
 - `docs/sprints/sprint-314/handoff.md`
 
 미변경:

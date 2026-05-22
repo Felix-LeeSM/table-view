@@ -1,4 +1,7 @@
-# Table View — 지원 기능 인벤토리
+# Table View — 지원 기능 인벤토리 (2026-05-01 snapshot)
+
+> **Archive status**: retired product snapshot. Current support scope lives in
+> `docs/PLAN.md` and `docs/query-language-support.md`.
 
 > **기준일**: 2026-05-01 (Phase 5 Sprint 175 종료, Sprint 180 진행 중)
 > **검증 방식**: `src-tauri/src/commands/`, `src/components/`, `src/stores/`, `src/hooks/`,

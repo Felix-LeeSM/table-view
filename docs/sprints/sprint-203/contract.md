@@ -4,7 +4,7 @@ Sprint: `sprint-203` (refactor — `any` / `as unknown as` 정리).
 Date: 2026-05-05.
 Type: refactor (행동 변경 0; 타입 narrowing only).
 
-`docs/PLAN.md` Sprint 203 row + [`/CODE_SMELLS.md`](../../../CODE_SMELLS.md) §3.
+`docs/PLAN.md` Sprint 203 row + `/CODE_SMELLS.md` §3.
 짧은 sprint. `useSqlAutocomplete.ts` 7곳 + `mongoAutocomplete.ts` 2곳.
 
 ## Sprint 안에서 끝낼 단위

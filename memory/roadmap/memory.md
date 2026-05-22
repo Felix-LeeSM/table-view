@@ -7,7 +7,7 @@ updated: 2026-05-16
 # 로드맵
 
 상세: [docs/PLAN.md](../../docs/PLAN.md). 비교 근거:
-[docs/tableplus-comparison.md](../../docs/tableplus-comparison.md).
+[docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md](../../docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md).
 
 ## 방향 (2026-05-01)
 
@@ -69,7 +69,7 @@ Sprint 198 종료로 sequencing 완료.
 ## State-management 이주 sequencing (Sprint 353–376, 24 sprint, 2026-05-16)
 
 기준 문서: [`docs/state-management-strategy-2026-05-15.md`](../../docs/state-management-strategy-2026-05-15.md)
-(11회 codex 외부 검토 0 findings 수렴) + [`docs/archives/etc/code-smell-audit-2026-05-15.md`](../../docs/archives/etc/code-smell-audit-2026-05-15.md).
+(11회 codex 외부 검토 0 findings 수렴) + [`docs/archives/audits/code-smell-audit-2026-05-15.md`](../../docs/archives/audits/code-smell-audit-2026-05-15.md).
 contract.md 24개 작성 + 4회 codex 5.5 medium consistency review.
 
 | Phase | Sprints  | 핵심                                                                                                                          |

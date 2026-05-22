@@ -6,7 +6,7 @@
 
 ## Task Why
 
-- `docs/archives/etc/refactoring-candidates.md` § P10 — `connectionStore` / `schemaStore` 의 toast / session / IPC orchestration 을 use-case hook 으로 점진 이동.
+- `docs/archives/backlogs/refactoring-candidates-2026-05-06.md` § P10 — `connectionStore` / `schemaStore` 의 toast / session / IPC orchestration 을 use-case hook 으로 점진 이동.
 - Sprint 219 (P10 step 1, evaluator 9.20/10) 의 narrow-scope pattern 답습.
 - store unit test 가 cache state transition + reload-then-fallback orchestration policy 까지 같이 검증하는 entanglement 해소.
 - store action 본문 thin 화 → 같은 use-case (mutation + optimistic refresh) 가 hook 에서 일관 owner.

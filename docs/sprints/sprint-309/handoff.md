@@ -56,7 +56,7 @@ intentionally untouched (Sprint A5 target).
 - `src/components/query/QueryTab.dialect.test.tsx` — delete the
   "queryMode flip rebuilds mongoExtensions" case (no longer reachable;
   hook signature dropped the queryMode arg). (modify)
-- `docs/phases/phase-28-decisions.md` — append D-04 / D-05 under a new
+- `docs/phases/phase-28-decision-log.md` — append D-04 / D-05 under a new
   Sprint 309 section. (modify)
 
 ## Per-AC evidence
@@ -131,15 +131,15 @@ intentionally untouched (Sprint A5 target).
   cleaned up at compile time) + type system catches dead args.
   Underlying `createMongoCompletionSource` keeps `MongoQueryMode` for
   its own unit tests. (See
-  `docs/phases/phase-28-decisions.md#d-04`.)
+  `docs/phases/phase-28-decision-log.md#d-04`.)
 - **D-05** — Make `QueryTab.queryMode` optional and drop the document
   `"find"` default in `addQueryTab`. Spec invariant ("신규 tab
   queryMode 미설정") is only expressible if the type allows undefined.
   IDE clean-up surface for Sprint A5 improves dramatically. Legacy
   persistence migration backfill kept intact (load-throw-free for
-  legacy payloads). (See `docs/phases/phase-28-decisions.md#d-05`.)
+  legacy payloads). (See `docs/phases/phase-28-decision-log.md#d-05`.)
 
-(both appended to `docs/phases/phase-28-decisions.md` under the new
+(both appended to `docs/phases/phase-28-decision-log.md` under the new
 "Phase 28 Slice A3 (Sprint 309 — 2026-05-14)" header.)
 
 ## Tests added / modified / deleted

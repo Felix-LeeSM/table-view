@@ -4,7 +4,7 @@
 
 `src/components/rdb/DataGrid.test.tsx` (1,906 lines, 1 root `describe("DataGrid")`, 75 `it` cases) 가 단일 파일에 RDB 그리드 컴포넌트의 다수 behavior axis (initial-render lifecycle / sort cycle + per-tab Sprint 76 / filter toggle + pagination + Sprint 26 / refetch-overlay loading-flicker + race + column-resize / inline editing + commit + row CRUD / multi-row selection + promoteTab triggers + Sprint 44 UX + production env stripe + dangerous-confirm) 의 모든 회귀 가드를 누적 보유한다. Sprint section 헤더 (Regression: loading flicker fix / Sprint 26 / Sprint 30 / Sprint 31 / Sprint 32 / Sprint 43 / Sprint 44 / Sprint 50 / Sprint 76 / Sprint 101) + AC label ([AC-181-10], (AC-180-01), (Sprint 99 AC-01/AC-03), AC-02/AC-03 (Sprint 76), [AC-185-06], [AC-186-06]) 로 axis 추출 경계가 명확.
 
-본 sprint 는 P11 candidate (`docs/archives/etc/refactoring-candidates.md` §P11) 의 **fifth step (last)**. Sprint 216 (P11 step 1) / Sprint 218 (P11 step 2) / Sprint 220 (P11 step 3) / Sprint 221 (P11 step 4) 의 model implementation 패턴 답습. 본 sprint 후 P11 cycle 종료 — `refactoring-candidates.md` 의 §P11 retire 가능. 후속 P11 step 없음.
+본 sprint 는 P11 candidate (`docs/archives/backlogs/refactoring-candidates-2026-05-06.md` §P11) 의 **fifth step (last)**. Sprint 216 (P11 step 1) / Sprint 218 (P11 step 2) / Sprint 220 (P11 step 3) / Sprint 221 (P11 step 4) 의 model implementation 패턴 답습. 본 sprint 후 P11 cycle 종료 — `refactoring-candidates.md` 의 §P11 retire 가능. 후속 P11 step 없음.
 
 행동 변경 0 강제. `DataGrid.tsx` 본체 (628 lines) + sibling `FilterBar.tsx` (323 lines) + `FilterBar.test.tsx` (437 lines) 변경 금지. test 만 axis 파일 split. 사전 75 case 모두 사후 통과. case 텍스트 / matcher / fixture / `vi.mock(...)` factory / 모든 verbatim AC string 사전과 byte-equivalent.
 
