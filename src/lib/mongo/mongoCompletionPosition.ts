@@ -21,13 +21,15 @@ export function classifyMongoCompletionPosition(
   const { state, pos } = context;
   const tree = syntaxTree(state);
   const node: MinimalSyntaxNode = tree.resolveInner(pos, -1);
+  const upToCursor = state.doc.sliceString(0, pos);
+  const objectIsInArrayByText = closestObjectIsInArrayByText(upToCursor);
 
   for (let cur: MinimalSyntaxNode | null = node; cur; cur = cur.parent) {
     if (cur.name === "String") {
       if (cur.parent && cur.parent.name === "Property") {
         const propName = cur.parent.firstChild;
         if (propName && propName.from === cur.from && propName.to === cur.to) {
-          return nearestObjectIsInArray(cur)
+          return nearestObjectIsInArray(cur) || objectIsInArrayByText
             ? "stage-key"
             : "accumulator-or-filter-key";
         }
@@ -35,19 +37,18 @@ export function classifyMongoCompletionPosition(
       return "value";
     }
     if (cur.name === "PropertyName") {
-      return nearestObjectIsInArray(cur)
+      return nearestObjectIsInArray(cur) || objectIsInArrayByText
         ? "stage-key"
         : "accumulator-or-filter-key";
     }
     if (cur.name === "Object" || cur.name === "Array") break;
   }
 
-  const upToCursor = state.doc.sliceString(0, pos);
   const lastChar = lastMeaningfulChar(upToCursor);
 
   if (lastChar === ":") return "value";
   if (lastChar === "{" || lastChar === ",") {
-    return closestObjectIsInArray(tree, pos)
+    return objectIsInArrayByText || closestObjectIsInArray(tree, pos)
       ? "stage-key"
       : "accumulator-or-filter-key";
   }
@@ -87,5 +88,48 @@ function closestObjectIsInArray(
       return parent?.name === "Array";
     }
   }
+  return false;
+}
+
+function closestObjectIsInArrayByText(upToCursor: string): boolean {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < upToCursor.length; i++) {
+    const ch = upToCursor[i]!;
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === "{" || ch === "[") {
+      stack.push(ch);
+      continue;
+    }
+
+    if (ch === "}" || ch === "]") {
+      const expected = ch === "}" ? "{" : "[";
+      if (stack[stack.length - 1] === expected) stack.pop();
+    }
+  }
+
+  for (let i = stack.length - 1; i >= 0; i--) {
+    if (stack[i] !== "{") continue;
+    return stack[i - 1] === "[";
+  }
+
   return false;
 }
