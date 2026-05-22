@@ -2,9 +2,9 @@
 //!
 //! SQLite currently supports connection lifecycle, explicit file creation,
 //! baseline catalog reads, table preview, single-statement query execution,
-//! transactional batch execution, and dry-run. DDL, export, and richer
-//! PostgreSQL parity surfaces remain explicit `Unsupported` until their
-//! feature-order slices land.
+//! transactional DML batch execution, dry-run, and PK-scoped row edits for
+//! writable files. DDL, export, and richer PostgreSQL parity surfaces remain
+//! explicit `Unsupported` until their feature-order slices land.
 
 mod batch;
 mod connection;

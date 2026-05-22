@@ -6,7 +6,9 @@ use crate::error::AppError;
 use crate::models::{QueryResult, QueryType};
 
 use super::connection::SqliteAdapter;
-use super::queries::strip_trailing_terminator;
+use super::queries::{
+    sqlite_query_type, strip_trailing_terminator, validate_sqlite_write_guardrails,
+};
 
 enum BatchMode {
     Commit,
@@ -54,7 +56,11 @@ impl SqliteAdapter {
             }
         }
 
-        let pool = self.active_pool().await?;
+        let (pool, read_only) = self.active_pool_with_mode().await?;
+        for raw in statements {
+            let statement_type = sqlite_query_type(strip_trailing_terminator(raw));
+            validate_sqlite_write_guardrails(&statement_type, read_only)?;
+        }
         let total = statements.len();
         let work = async {
             let mut tx = pool

@@ -23,10 +23,12 @@ import {
   parseSingleTableSelect,
 } from "@lib/sql/queryAnalyzer";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useConnectionStore } from "@stores/connectionStore";
 import CellDetailDialog from "@components/datagrid/CellDetailDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { ExportButton } from "@components/shared/ExportButton";
 import type { ExportContext, ExportFormat } from "@/lib/tauri";
+import { getDataSourceProfile } from "@/types/dataSource";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
 import ScalarOrListPanel from "./ScalarOrListPanel";
 import WriteSummaryPanel from "./WriteSummaryPanel";
@@ -290,6 +292,12 @@ function SelectResultArea({
 }) {
   const tableColumnsCache = useSchemaStore((s) => s.tableColumnsCache);
   const getTableColumns = useSchemaStore((s) => s.getTableColumns);
+  const connection = useConnectionStore((s) =>
+    connectionId
+      ? s.connections.find((candidate) => candidate.id === connectionId)
+      : undefined,
+  );
+  const defaultSchema = connection?.dbType === "sqlite" ? "main" : "public";
 
   // Identify the source table once per SQL so we can fetch + look up its
   // primary-key metadata. Resolution falls back to "public" because that's
@@ -298,8 +306,8 @@ function SelectResultArea({
     if (!sql) return null;
     const info = parseSingleTableSelect(sql);
     if (!info) return null;
-    return { schema: info.schema ?? "public", table: info.table };
-  }, [sql]);
+    return { schema: info.schema ?? defaultSchema, table: info.table };
+  }, [defaultSchema, sql]);
 
   useEffect(() => {
     if (!parsed || !connectionId || !database) return;
@@ -331,9 +339,27 @@ function SelectResultArea({
 
   const editability = useMemo(
     () =>
-      sql ? analyzeResultEditability(sql, result.columns, tableColumns) : null,
-    [sql, result.columns, tableColumns],
+      sql
+        ? analyzeResultEditability(
+            sql,
+            result.columns,
+            tableColumns,
+            defaultSchema,
+          )
+        : null,
+    [sql, result.columns, tableColumns, defaultSchema],
   );
+  const rowEditBlockReason = useMemo(() => {
+    if (!connection) return null;
+    const profile = getDataSourceProfile(connection.dbType);
+    if (!profile.capabilities.edit.editRows) {
+      return `${profile.id} row editing is not supported.`;
+    }
+    if (connection.dbType === "sqlite" && connection.readOnly) {
+      return "read-only SQLite connection";
+    }
+    return null;
+  }, [connection]);
 
   const exportContext: ExportContext = {
     kind: "query",
@@ -350,7 +376,7 @@ function SelectResultArea({
     />
   );
 
-  if (editability && editability.editable) {
+  if (editability && editability.editable && rowEditBlockReason === null) {
     return (
       <>
         <div className="flex items-center justify-between gap-2 border-b border-border bg-success/10 px-3 py-0.5 text-xs text-success">
@@ -383,7 +409,10 @@ function SelectResultArea({
         <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-3 py-0.5 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Info size={12} />
-            <span>Read-only — {editability.reason}</span>
+            <span>
+              Read-only —{" "}
+              {editability.editable ? rowEditBlockReason : editability.reason}
+            </span>
           </span>
           {exportButton}
         </div>

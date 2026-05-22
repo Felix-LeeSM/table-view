@@ -108,7 +108,7 @@ fn cell_to_json(row: &SqliteRow, idx: usize) -> serde_json::Value {
     serde_json::Value::Null
 }
 
-fn sqlite_query_type(sql: &str) -> QueryType {
+pub(super) fn sqlite_query_type(sql: &str) -> QueryType {
     let stripped = strip_leading_comments(sql).to_uppercase();
     if stripped.starts_with("SELECT")
         || stripped.starts_with("WITH")
@@ -124,6 +124,21 @@ fn sqlite_query_type(sql: &str) -> QueryType {
         QueryType::Dml { rows_affected: 0 }
     } else {
         QueryType::Ddl
+    }
+}
+
+pub(super) fn validate_sqlite_write_guardrails(
+    query_type: &QueryType,
+    read_only: bool,
+) -> Result<(), AppError> {
+    match query_type {
+        QueryType::Ddl => Err(AppError::Unsupported(
+            "SQLite DDL is not supported by the SQLite adapter yet; use read/query workflows or a future explicit rebuild workflow.".into(),
+        )),
+        QueryType::Dml { .. } if read_only => Err(AppError::Unsupported(
+            "Cannot execute write statements on a read-only SQLite connection.".into(),
+        )),
+        QueryType::Dml { .. } | QueryType::Select => Ok(()),
     }
 }
 
@@ -145,8 +160,9 @@ impl SqliteAdapter {
             ));
         }
 
-        let pool = self.active_pool().await?;
+        let (pool, read_only) = self.active_pool_with_mode().await?;
         let query_type = sqlite_query_type(query);
+        validate_sqlite_write_guardrails(&query_type, read_only)?;
 
         let work = async {
             match query_type {

@@ -70,6 +70,17 @@ async fn connected_adapter() -> (tempfile::TempDir, SqliteAdapter) {
     (dir, adapter)
 }
 
+async fn connected_read_only_adapter() -> (tempfile::TempDir, SqliteAdapter) {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("app.sqlite");
+    seed_sqlite(&db_path).await;
+    let mut config = sqlite_config(db_path.to_str().unwrap());
+    config.read_only = true;
+    let adapter = SqliteAdapter::new();
+    adapter.connect_pool(&config).await.unwrap();
+    (dir, adapter)
+}
+
 async fn scalar_count(adapter: &SqliteAdapter, sql: &str) -> i64 {
     let result = adapter.execute_query(sql, None).await.unwrap();
     result.rows[0][0].as_i64().unwrap()
@@ -124,6 +135,36 @@ async fn execute_query_batch_rolls_back_on_statement_failure() {
         scalar_count(&adapter, "SELECT COUNT(*) FROM users WHERE id = 3").await,
         0
     );
+}
+
+#[tokio::test]
+async fn execute_query_batch_rejects_read_only_sqlite_writes_clearly() {
+    let (_dir, adapter) = connected_read_only_adapter().await;
+    let statements = vec!["UPDATE users SET name = 'Ada Readonly' WHERE id = 1".to_string()];
+
+    let result = adapter.execute_query_batch(&statements, None).await;
+
+    match result {
+        Err(AppError::Unsupported(message)) => {
+            assert!(message.contains("read-only SQLite connection"))
+        }
+        other => panic!("Expected read-only unsupported error, got: {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn execute_query_batch_rejects_sqlite_ddl_clearly() {
+    let (_dir, adapter) = connected_adapter().await;
+    let statements = vec!["ALTER TABLE users ADD COLUMN nickname TEXT".to_string()];
+
+    let result = adapter.execute_query_batch(&statements, None).await;
+
+    match result {
+        Err(AppError::Unsupported(message)) => {
+            assert!(message.contains("SQLite DDL is not supported"))
+        }
+        other => panic!("Expected SQLite DDL unsupported error, got: {:?}", other),
+    }
 }
 
 #[tokio::test]

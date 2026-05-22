@@ -117,6 +117,22 @@ async fn execute_query_dml_returns_rows_affected() {
 }
 
 #[tokio::test]
+async fn execute_query_rejects_sqlite_ddl_clearly() {
+    let (_dir, adapter) = connected_adapter().await;
+
+    let result = adapter
+        .execute_query("ALTER TABLE users ADD COLUMN nickname TEXT", None)
+        .await;
+
+    match result {
+        Err(AppError::Unsupported(message)) => {
+            assert!(message.contains("SQLite DDL is not supported"))
+        }
+        other => panic!("Expected SQLite DDL unsupported error, got: {:?}", other),
+    }
+}
+
+#[tokio::test]
 async fn query_table_data_filters_sorts_and_paginates() {
     let (_dir, adapter) = connected_adapter().await;
     let filters = vec![FilterCondition {
