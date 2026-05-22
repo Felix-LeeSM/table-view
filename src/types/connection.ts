@@ -19,7 +19,7 @@ export type DatabaseType =
  * tables / columns) 만 동작 — DDL / queries / streaming 은 Slice B~G
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
- * 미포함 어댑터 (DuckDB/MSSQL/Oracle/Redis) 는 connection 생성 dialog 의
+ * 미포함 어댑터 (MSSQL/Oracle/Redis) 는 connection 생성 dialog 의
  * Select option 에 노출되지 않고, URL paste / Parse & Continue 로 들어와도
  * 거부된다.
  */
@@ -28,6 +28,7 @@ export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "mysql",
   "mariadb",
   "sqlite",
+  "duckdb",
   "mongodb",
 ];
 

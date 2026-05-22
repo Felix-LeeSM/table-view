@@ -1,0 +1,426 @@
+//! DuckDB adapter entrypoint.
+//!
+//! First runtime slice: file-backed `.duckdb` lifecycle, baseline catalog
+//! reads, table preview, and single-statement query execution. CSV/Parquet/JSON
+//! analytics shortcuts, extension install/load, DDL helpers, and write parity
+//! stay explicit unsupported surfaces until their follow-up sprints.
+
+use std::future::Future;
+use std::pin::Pin;
+
+use crate::error::AppError;
+use crate::models::{
+    AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
+    ConstraintInfo, CreateIndexRequest, CreateTableRequest, DropColumnRequest,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, IndexInfo,
+    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
+};
+
+use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
+
+mod connection;
+mod queries;
+mod sql_text;
+mod value;
+
+pub use connection::DuckdbAdapter;
+
+fn duckdb_unsupported(feature: &str) -> AppError {
+    AppError::Unsupported(format!("DuckDB adapter does not support {feature} yet"))
+}
+
+impl DbAdapter for DuckdbAdapter {
+    fn kind(&self) -> crate::models::DatabaseType {
+        crate::models::DatabaseType::Duckdb
+    }
+
+    fn connect<'a>(
+        &'a self,
+        config: &'a ConnectionConfig,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.connect_file(config).await })
+    }
+
+    fn disconnect<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.disconnect_file().await })
+    }
+
+    fn ping<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.ping().await })
+    }
+}
+
+impl RdbAdapter for DuckdbAdapter {
+    fn namespace_label(&self) -> NamespaceLabel {
+        NamespaceLabel::Schema
+    }
+
+    fn list_namespaces<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<NamespaceInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move { DuckdbAdapter::list_namespaces(self).await })
+    }
+
+    fn current_database<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<String>, AppError>> + Send + 'a>> {
+        Box::pin(async move { Ok(self.current_database_path().await) })
+    }
+
+    fn list_tables<'a>(
+        &'a self,
+        namespace: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<TableInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move { DuckdbAdapter::list_tables(self, namespace).await })
+    }
+
+    fn get_columns<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ColumnInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move {
+            if let Some(token) = cancel {
+                tokio::select! {
+                    result = DuckdbAdapter::get_table_columns(self, namespace, table) => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                }
+            } else {
+                DuckdbAdapter::get_table_columns(self, namespace, table).await
+            }
+        })
+    }
+
+    fn execute_sql<'a>(
+        &'a self,
+        sql: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<RdbQueryResult, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.execute_query(sql, cancel).await })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn query_table_data<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&'a str>,
+        filters: Option<&'a [FilterCondition]>,
+        raw_where: Option<&'a str>,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<TableData, AppError>> + Send + 'a>> {
+        Box::pin(async move {
+            self.query_table_data(
+                namespace, table, page, page_size, order_by, filters, raw_where, cancel,
+            )
+            .await
+        })
+    }
+
+    fn drop_table<'a>(
+        &'a self,
+        _req: &'a DropTableRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async { Err(duckdb_unsupported("table drop")) })
+    }
+
+    fn rename_table<'a>(
+        &'a self,
+        _req: &'a RenameTableRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async { Err(duckdb_unsupported("table rename")) })
+    }
+
+    fn alter_table<'a>(
+        &'a self,
+        _req: &'a AlterTableRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async { Err(duckdb_unsupported("table alteration")) })
+    }
+
+    fn add_column<'a>(
+        &'a self,
+        _req: &'a AddColumnRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async { Err(duckdb_unsupported("column creation")) })
+    }
+
+    fn drop_column<'a>(
+        &'a self,
+        _req: &'a DropColumnRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async { Err(duckdb_unsupported("column drop")) })
+    }
+
+    fn create_table<'a>(
+        &'a self,
+        _req: &'a CreateTableRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async { Err(duckdb_unsupported("table creation")) })
+    }
+
+    fn create_index<'a>(
+        &'a self,
+        _req: &'a CreateIndexRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async { Err(duckdb_unsupported("index creation")) })
+    }
+
+    fn drop_index<'a>(
+        &'a self,
+        _req: &'a DropIndexRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async { Err(duckdb_unsupported("index drop")) })
+    }
+
+    fn add_constraint<'a>(
+        &'a self,
+        _req: &'a AddConstraintRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async { Err(duckdb_unsupported("constraint creation")) })
+    }
+
+    fn drop_constraint<'a>(
+        &'a self,
+        _req: &'a DropConstraintRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async { Err(duckdb_unsupported("constraint drop")) })
+    }
+
+    fn get_table_indexes<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<IndexInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    fn get_table_constraints<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ConstraintInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    fn list_views<'a>(
+        &'a self,
+        namespace: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ViewInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move { DuckdbAdapter::list_views(self, namespace).await })
+    }
+
+    fn get_view_definition<'a>(
+        &'a self,
+        namespace: &'a str,
+        view: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<String, AppError>> + Send + 'a>> {
+        Box::pin(async move { DuckdbAdapter::get_view_definition(self, namespace, view).await })
+    }
+
+    fn get_view_columns<'a>(
+        &'a self,
+        namespace: &'a str,
+        view: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ColumnInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move { DuckdbAdapter::get_table_columns(self, namespace, view).await })
+    }
+
+    fn list_schema_columns<'a>(
+        &'a self,
+        namespace: &'a str,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError>,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move { self.list_schema_columns(namespace).await })
+    }
+
+    fn get_function_source<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _function: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<String, AppError>> + Send + 'a>> {
+        Box::pin(async { Err(duckdb_unsupported("function source introspection")) })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::TempDir;
+
+    use super::*;
+    use crate::db::{DbAdapter, RdbAdapter};
+    use crate::models::{ConnectionConfig, DatabaseType, QueryType};
+
+    fn duckdb_config(path: &str, read_only: bool) -> ConnectionConfig {
+        ConnectionConfig {
+            id: "duckdb-unit".to_string(),
+            name: "DuckDB unit".to_string(),
+            db_type: DatabaseType::Duckdb,
+            host: String::new(),
+            port: 0,
+            user: String::new(),
+            password: String::new(),
+            database: path.to_string(),
+            read_only,
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+            environment: None,
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: None,
+        }
+    }
+
+    fn seed_duckdb(path: &std::path::Path) {
+        let conn = duckdb::Connection::open(path).unwrap();
+        conn.execute_batch(
+            "CREATE SCHEMA app;
+             CREATE TABLE app.users (
+                 id INTEGER PRIMARY KEY,
+                 email VARCHAR NOT NULL,
+                 name VARCHAR NOT NULL,
+                 active BOOLEAN NOT NULL DEFAULT true
+             );
+             CREATE TABLE app.orders (
+                 id INTEGER,
+                 user_id INTEGER NOT NULL,
+                 total_cents INTEGER NOT NULL
+             );
+             CREATE VIEW app.active_users AS
+                 SELECT id, email FROM app.users WHERE active = true;
+             INSERT INTO app.users VALUES
+                 (1, 'ada@example.test', 'Ada', true),
+                 (2, 'bob@example.test', 'Bob', false);
+             INSERT INTO app.orders VALUES (1, 1, 1250);",
+        )
+        .unwrap();
+    }
+
+    async fn connected_fixture(read_only: bool) -> (TempDir, DuckdbAdapter) {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("fixture.duckdb");
+        seed_duckdb(&db_path);
+
+        let adapter = DuckdbAdapter::new();
+        adapter
+            .connect(&duckdb_config(db_path.to_str().unwrap(), read_only))
+            .await
+            .unwrap();
+
+        (dir, adapter)
+    }
+
+    #[tokio::test]
+    async fn duckdb_unit_browses_catalog_and_view_columns() {
+        let (_dir, adapter) = connected_fixture(false).await;
+
+        let schemas = adapter.list_namespaces().await.unwrap();
+        assert!(schemas.iter().any(|schema| schema.name == "app"));
+
+        let tables = adapter.list_tables("app").await.unwrap();
+        assert_eq!(
+            tables
+                .iter()
+                .map(|table| table.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["orders", "users"]
+        );
+        assert_eq!(
+            tables
+                .iter()
+                .find(|table| table.name == "orders")
+                .unwrap()
+                .row_count,
+            Some(1)
+        );
+
+        let columns = adapter.get_columns("app", "users", None).await.unwrap();
+        assert_eq!(
+            columns
+                .iter()
+                .map(|column| column.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["id", "email", "name", "active"]
+        );
+
+        let views = <DuckdbAdapter as RdbAdapter>::list_views(&adapter, "app")
+            .await
+            .unwrap();
+        assert!(views.iter().any(|view| view.name == "active_users"));
+
+        let view_columns =
+            <DuckdbAdapter as RdbAdapter>::get_view_columns(&adapter, "app", "active_users")
+                .await
+                .unwrap();
+        assert_eq!(
+            view_columns
+                .iter()
+                .map(|column| column.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["id", "email"]
+        );
+    }
+
+    #[tokio::test]
+    async fn duckdb_unit_executes_query_and_table_page() {
+        let (_dir, adapter) = connected_fixture(false).await;
+
+        let query_result = adapter
+            .execute_sql("SELECT id, email FROM app.active_users ORDER BY id", None)
+            .await
+            .unwrap();
+        assert!(matches!(query_result.query_type, QueryType::Select));
+        assert_eq!(query_result.total_count, 1);
+        assert_eq!(
+            query_result.rows[0][1],
+            serde_json::json!("ada@example.test")
+        );
+
+        let page = adapter
+            .query_table_data("app", "users", 1, 1, Some("id DESC"), None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(page.total_count, 2);
+        assert_eq!(page.rows[0][0], serde_json::json!(2));
+    }
+
+    #[tokio::test]
+    async fn duckdb_unit_read_only_and_deferred_features_fail_clearly() {
+        let (_dir, adapter) = connected_fixture(true).await;
+        let result = adapter
+            .execute_sql(
+                "INSERT INTO app.users VALUES (3, 'new@example.test', 'New', true)",
+                None,
+            )
+            .await;
+        match result {
+            Err(AppError::Database(message)) => assert!(
+                message.to_ascii_lowercase().contains("read-only")
+                    || message.to_ascii_lowercase().contains("read only"),
+            ),
+            other => panic!("Expected read-only database error, got: {other:?}"),
+        }
+
+        let (_dir, adapter) = connected_fixture(false).await;
+        let extension_result = adapter.execute_sql("INSTALL httpfs", None).await;
+        assert!(matches!(extension_result, Err(AppError::Unsupported(_))));
+
+        let analytics_result = adapter
+            .execute_sql("SELECT * FROM read_csv_auto('users.csv')", None)
+            .await;
+        assert!(matches!(analytics_result, Err(AppError::Unsupported(_))));
+    }
+}

@@ -70,6 +70,7 @@ tauri-plugin-single-instance = "2"
 # and to WASM (frontend lazy-load via wasm-pack).
 sql-parser-core = { path = "sql-parser-core", version = "0.1.0" }
 sqlparser = "0.62.0"
+duckdb = { version = "1.10503.1", features = ["bundled"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", default-features = false, features = ["apple-native"] }

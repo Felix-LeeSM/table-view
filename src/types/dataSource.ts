@@ -313,8 +313,17 @@ export const SQLITE_CAPABILITIES = capabilities({
 
 export const DUCKDB_CAPABILITIES = capabilities({
   connection: {
+    test: true,
     filePicker: true,
     readOnly: true,
+  },
+  query: {
+    query: true,
+    cancel: true,
+  },
+  catalog: {
+    browse: true,
+    schema: true,
   },
 });
 
