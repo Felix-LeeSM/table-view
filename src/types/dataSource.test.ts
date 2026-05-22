@@ -154,6 +154,14 @@ describe("DataSourceProfile registry", () => {
     );
   });
 
+  it("sets connection-kind defaults for the current connection forms", () => {
+    expect(getDataSourceProfile("postgresql").connectionKind).toBe("server");
+    expect(getDataSourceProfile("mysql").connectionKind).toBe("server");
+    expect(getDataSourceProfile("mariadb").connectionKind).toBe("server");
+    expect(getDataSourceProfile("mongodb").connectionKind).toBe("server");
+    expect(getDataSourceProfile("sqlite").connectionKind).toBe("file");
+  });
+
   it("describes SQLite as a file RDBMS without switch-db or DDL parity", () => {
     const sqlite = getDataSourceProfile("sqlite");
 
