@@ -6,6 +6,8 @@ import {
   SUPPORTED_DATABASE_TYPES,
   isSupportedDatabaseType,
 } from "@/types/connection";
+import * as dataSourceProfiles from "@/types/dataSource";
+import type { ConnectionKind } from "@/types/dataSource";
 import { Button } from "@components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import {
@@ -108,40 +110,87 @@ export default function ConnectionDialogBody({
     const onChange = (patch: Partial<ConnectionDraft>) =>
       setForm((f) => ({ ...f, ...patch }));
 
-    switch (form.dbType) {
-      case "postgresql":
-        return (
-          <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
-        );
-      case "mysql":
-      case "mariadb":
-        return (
-          <MysqlFormFields draft={form} onChange={onChange} {...sharedAuth} />
-        );
-      case "mssql":
-      case "oracle":
-        return (
-          <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
-        );
-      case "sqlite":
-        return (
-          <SqliteFormFields
-            draft={form}
-            onChange={onChange}
-            inputClass={inputClass}
-            labelClass={labelClass}
-          />
-        );
-      case "mongodb":
-        return (
-          <MongoFormFields draft={form} onChange={onChange} {...sharedAuth} />
-        );
-      case "redis":
-        return (
-          <RedisFormFields draft={form} onChange={onChange} {...sharedAuth} />
+    const profile = dataSourceProfiles.getDataSourceProfile(form.dbType);
+
+    switch (profile.connectionKind) {
+      case "server":
+        switch (form.dbType) {
+          case "postgresql":
+            return (
+              <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
+            );
+          case "mysql":
+          case "mariadb":
+            return (
+              <MysqlFormFields
+                draft={form}
+                onChange={onChange}
+                {...sharedAuth}
+              />
+            );
+          case "mssql":
+          case "oracle":
+            return (
+              <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
+            );
+          case "mongodb":
+            return (
+              <MongoFormFields
+                draft={form}
+                onChange={onChange}
+                {...sharedAuth}
+              />
+            );
+          case "redis":
+            return (
+              <RedisFormFields
+                draft={form}
+                onChange={onChange}
+                {...sharedAuth}
+              />
+            );
+          case "sqlite":
+            throw unsupportedConnectionKindForForm(
+              form.dbType,
+              profile.connectionKind,
+            );
+          default:
+            return assertNever(form.dbType);
+        }
+      case "file":
+        switch (form.dbType) {
+          case "sqlite":
+            return (
+              <SqliteFormFields
+                draft={form}
+                onChange={onChange}
+                inputClass={inputClass}
+                labelClass={labelClass}
+              />
+            );
+          case "postgresql":
+          case "mysql":
+          case "mariadb":
+          case "mssql":
+          case "oracle":
+          case "mongodb":
+          case "redis":
+            throw unsupportedConnectionKindForForm(
+              form.dbType,
+              profile.connectionKind,
+            );
+          default:
+            return assertNever(form.dbType);
+        }
+      case "url":
+      case "cloud-api":
+      case "cluster":
+        throw unsupportedConnectionKindForForm(
+          form.dbType,
+          profile.connectionKind,
         );
       default:
-        return assertNever(form.dbType);
+        return assertNeverConnectionKind(profile.connectionKind);
     }
   };
 
@@ -376,5 +425,20 @@ export default function ConnectionDialogBody({
         </div>
       )}
     </div>
+  );
+}
+
+function unsupportedConnectionKindForForm(
+  dbType: DatabaseType,
+  connectionKind: ConnectionKind,
+): Error {
+  return new Error(
+    `Unsupported connection kind "${connectionKind}" for ${dbType} connection form`,
+  );
+}
+
+function assertNeverConnectionKind(connectionKind: never): never {
+  throw new Error(
+    `Unsupported connection kind ${JSON.stringify(connectionKind)} for connection form`,
   );
 }
