@@ -20,7 +20,7 @@ use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, DropColumnRequest,
     DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, IndexInfo,
-    RenameTableRequest, SchemaChangeResult, TableData, TableInfo,
+    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -213,11 +213,20 @@ impl RdbAdapter for SqliteAdapter {
 
     fn get_table_indexes<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _cancel: Option<&'a tokio_util::sync::CancellationToken>,
+        namespace: &'a str,
+        table: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<IndexInfo>, AppError>> + Send + 'a>> {
-        Box::pin(async { Ok(Vec::new()) })
+        Box::pin(async move {
+            if let Some(token) = cancel {
+                tokio::select! {
+                    result = SqliteAdapter::get_table_indexes(self, namespace, table) => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                }
+            } else {
+                SqliteAdapter::get_table_indexes(self, namespace, table).await
+            }
+        })
     }
 
     fn get_table_constraints<'a>(
@@ -229,20 +238,27 @@ impl RdbAdapter for SqliteAdapter {
         Box::pin(async { Ok(Vec::new()) })
     }
 
+    fn list_views<'a>(
+        &'a self,
+        namespace: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ViewInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move { SqliteAdapter::list_views(self, namespace).await })
+    }
+
     fn get_view_definition<'a>(
         &'a self,
-        _namespace: &'a str,
-        _view: &'a str,
+        namespace: &'a str,
+        view: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<String, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("view definition introspection")) })
+        Box::pin(async move { SqliteAdapter::get_view_definition(self, namespace, view).await })
     }
 
     fn get_view_columns<'a>(
         &'a self,
-        _namespace: &'a str,
-        _view: &'a str,
+        namespace: &'a str,
+        view: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<ColumnInfo>, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("view column introspection")) })
+        Box::pin(async move { SqliteAdapter::get_view_columns(self, namespace, view).await })
     }
 
     fn list_schema_columns<'a>(

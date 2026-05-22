@@ -161,6 +161,30 @@ describe("DataSourceProfile registry", () => {
     );
   });
 
+  it("keeps MariaDB identity while exposing MySQL-family adapter and dialect metadata", () => {
+    const mysql = getDataSourceProfile("mysql");
+    const mariadb = getDataSourceProfile("mariadb");
+
+    expect(mysql.id).toBe("mysql");
+    expect(mariadb.id).toBe("mariadb");
+    expect(mariadb.backendAdapter).toBe(mysql.backendAdapter);
+    expect(mariadb.backendAdapter).toEqual({
+      id: "mysql-family",
+      kind: "rdb",
+      capabilitySource: "mysql-family",
+    });
+    expect(mysql.dialect).toEqual({
+      id: "mysql",
+      family: "mysql",
+      versionProbe: "mysql-family-version",
+    });
+    expect(mariadb.dialect).toEqual({
+      id: "mariadb",
+      family: "mysql",
+      versionProbe: "mysql-family-version",
+    });
+  });
+
   it("sets connection-kind defaults for the current connection forms", () => {
     expect(getDataSourceProfile("postgresql").connectionKind).toBe("server");
     expect(getDataSourceProfile("mysql").connectionKind).toBe("server");
@@ -264,6 +288,8 @@ describe("DataSourceProfile registry", () => {
       expect(Object.isFrozen(profile.languages)).toBe(true);
       expect(Object.isFrozen(profile.resultKinds)).toBe(true);
       expect(Object.isFrozen(profile.capabilities)).toBe(true);
+      expect(Object.isFrozen(profile.backendAdapter)).toBe(true);
+      expect(Object.isFrozen(profile.dialect)).toBe(true);
       for (const group of Object.values(profile.capabilities)) {
         expect(Object.isFrozen(group)).toBe(true);
       }
@@ -297,6 +323,16 @@ describe("DataSourceProfile registry", () => {
     expect(duckdb.capabilities.query.query).toBe(false);
     expect(duckdb.capabilities.edit.editRows).toBe(false);
     expect(duckdb.capabilities.ddl.createTable).toBe(false);
+    expect(duckdb.backendAdapter).toEqual({
+      id: "declared-rdb",
+      kind: "rdb",
+      capabilitySource: "declared-rdb",
+    });
+    expect(duckdb.dialect).toEqual({
+      id: "duckdb",
+      family: "duckdb",
+      versionProbe: "none",
+    });
   });
 
   it("keeps DuckDB file analytics local-first and defers CSV/Parquet/JSON behind .duckdb", () => {

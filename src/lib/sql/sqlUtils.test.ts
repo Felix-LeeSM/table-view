@@ -67,6 +67,22 @@ INSERT INTO t (col) VALUES ('a;b')`;
     expect(result[1]).toContain("DELETE FROM logs");
     expect(result[2]).toContain("a;b");
   });
+
+  it("keeps LOAD DATA isolated when splitting MySQL-family batches", () => {
+    const result = splitSqlStatements(
+      [
+        "SELECT 1",
+        "LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users",
+        "SELECT 'still;literal'",
+      ].join(";\n"),
+    );
+
+    expect(result).toEqual([
+      "SELECT 1",
+      "LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users",
+      "SELECT 'still;literal'",
+    ]);
+  });
 });
 
 // -- Sprint 40: SQL Formatting --

@@ -5,8 +5,23 @@ import {
   SQLITE_FILE_CONNECTION,
   type FileConnectionContract,
 } from "./fileConnection";
+import {
+  BACKEND_ADAPTER_BY_TYPE,
+  DIALECT_METADATA,
+  type BackendAdapterProfile,
+  type DataSourceDialectMetadata,
+} from "./dataSourceRuntime";
 
 export type { FileConnectionContract } from "./fileConnection";
+export type {
+  BackendAdapterCapabilitySource,
+  BackendAdapterProfile,
+  BackendAdapterProfileId,
+  DataSourceDialectFamily,
+  DataSourceDialectId,
+  DataSourceDialectMetadata,
+  ServerVersionProbeId,
+} from "./dataSourceRuntime";
 
 export type DataParadigm = Paradigm;
 export type ConnectionKind =
@@ -117,6 +132,8 @@ export interface DataSourceProfile {
   readonly resultKinds: readonly ResultEnvelopeKind[];
   readonly capabilities: DataSourceCapabilities;
   readonly safetyPolicy: SafetyPolicyId;
+  readonly backendAdapter: BackendAdapterProfile;
+  readonly dialect: DataSourceDialectMetadata;
   readonly fileConnection?: FileConnectionContract;
 }
 
@@ -350,6 +367,8 @@ function profile(
     resultKinds: Object.freeze([...resultKinds]),
     capabilities: sourceCapabilities,
     safetyPolicy,
+    backendAdapter: BACKEND_ADAPTER_BY_TYPE[id],
+    dialect: DIALECT_METADATA[id],
     fileConnection,
   });
 }

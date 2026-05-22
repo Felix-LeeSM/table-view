@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::error::AppError;
-use crate::models::{ColumnCategory, ColumnInfo, ConnectionConfig, TableInfo};
+use crate::models::{ColumnCategory, ColumnInfo, ConnectionConfig, IndexInfo, TableInfo, ViewInfo};
 use crate::storage;
 
 const SQLITE_POOL_MAX_CONNECTIONS: u32 = 5;
@@ -309,6 +309,113 @@ impl SqliteAdapter {
             });
         }
         Ok(columns)
+    }
+
+    pub async fn get_table_indexes(
+        &self,
+        namespace: &str,
+        table: &str,
+    ) -> Result<Vec<IndexInfo>, AppError> {
+        validate_namespace(namespace)?;
+        let pool = self.active_pool().await?;
+        let table_ident = quote_identifier(table);
+        let index_list_sql = format!("PRAGMA index_list({table_ident})");
+        let rows = sqlx::query(&index_list_sql)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        let mut indexes = Vec::with_capacity(rows.len());
+        for row in rows {
+            let name: String = row
+                .try_get("name")
+                .map_err(|e| AppError::Database(e.to_string()))?;
+            let unique: i64 = row
+                .try_get("unique")
+                .map_err(|e| AppError::Database(e.to_string()))?;
+            let origin: Option<String> = row.try_get("origin").ok();
+            let index_ident = quote_identifier(&name);
+            let column_sql = format!("PRAGMA index_info({index_ident})");
+            let column_rows = sqlx::query(&column_sql)
+                .fetch_all(&pool)
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?;
+
+            let mut columns = Vec::with_capacity(column_rows.len());
+            for column_row in column_rows {
+                let column_name: Option<String> = column_row
+                    .try_get("name")
+                    .map_err(|e| AppError::Database(e.to_string()))?;
+                if let Some(column_name) = column_name {
+                    columns.push(column_name);
+                }
+            }
+
+            indexes.push(IndexInfo {
+                name,
+                columns,
+                index_type: "BTREE".to_string(),
+                is_unique: unique != 0,
+                is_primary: origin.as_deref() == Some("pk"),
+            });
+        }
+        indexes.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(indexes)
+    }
+
+    pub async fn list_views(&self, namespace: &str) -> Result<Vec<ViewInfo>, AppError> {
+        validate_namespace(namespace)?;
+        let pool = self.active_pool().await?;
+        let rows: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT name, sql FROM sqlite_schema \
+             WHERE type = 'view' AND name NOT LIKE 'sqlite_%' \
+             ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(name, definition)| ViewInfo {
+                name,
+                schema: SQLITE_NAMESPACE.to_string(),
+                definition,
+            })
+            .collect())
+    }
+
+    pub async fn get_view_definition(
+        &self,
+        namespace: &str,
+        view: &str,
+    ) -> Result<String, AppError> {
+        validate_namespace(namespace)?;
+        let pool = self.active_pool().await?;
+        let row: Option<(Option<String>,)> = sqlx::query_as(
+            "SELECT sql FROM sqlite_schema \
+             WHERE type = 'view' AND name = ?",
+        )
+        .bind(view)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        match row {
+            Some((Some(definition),)) => Ok(definition),
+            Some((None,)) => Ok(String::new()),
+            None => Err(AppError::Connection(format!(
+                "View {namespace}.{view} not found"
+            ))),
+        }
+    }
+
+    pub async fn get_view_columns(
+        &self,
+        namespace: &str,
+        view: &str,
+    ) -> Result<Vec<ColumnInfo>, AppError> {
+        self.get_table_columns(namespace, view).await
     }
 
     pub async fn list_schema_columns(
