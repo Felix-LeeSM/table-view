@@ -11,6 +11,14 @@
 - "100% completion coverage"는 현재 UI가 surface 하는 vocabulary group을
   official reference 기준으로 빠짐없이 갖추는 것을 뜻한다. 서버 dialect 전체의
   의미론 검증이나 arbitrary script execution 100%를 뜻하지 않는다.
+- 아래 3개 layer는 분리해서 판단한다.
+  - **Vocabulary coverage**: 후보 label 목록이 Rust/WASM SOT에 존재하는가.
+  - **Context routing**: cursor 위치에서 맞는 후보 group을 띄우는가.
+  - **Semantic support**: client parser / Safe Mode / typed dispatch가 문법을
+    구조적으로 이해하는가.
+
+Sprint 430 기준 "100%"는 vocabulary coverage에만 쓰는 말이다. Context routing과
+semantic support는 각 섹션의 제한/미지원 목록을 따른다.
 
 표기:
 
@@ -31,6 +39,16 @@
 | function candidates | ✅ Rust/WASM SOT + PostgreSQL | ✅ Rust/WASM SOT + MySQL | ✅ MySQL family | ✅ Rust/WASM SOT + SQLite | 해당 없음 |
 | shell/meta | ✅ Rust/WASM SOT `psql` commands | ✅ Rust/WASM SOT mysql client commands | ✅ mysql client commands | ✅ Rust/WASM SOT sqlite-cli commands | 해당 없음 |
 | operator candidates | SQL keyword/function surface | SQL keyword/function surface | SQL keyword/function surface | SQL keyword/function surface | ✅ Rust/WASM SOT query/projection/update operators, stages, accumulators, expressions, BSON tags |
+
+### Completion Coverage Matrix
+
+| 영역 | 100% 의미 | 현재 gate |
+|---|---|---|
+| SQL keyword/function/shell vocabulary | current UI가 제안하는 PostgreSQL/MySQL/MariaDB/SQLite keyword/function/shell group이 Rust SOT에 있고 Sprint 429 smoke가 대표 token을 고정한다 | dialect/shell id. server version 세부 gate 없음 |
+| SQL table/view/column/function catalog | 현재 connection cache에 들어온 object를 request catalog로 넘기고 WASM-first source가 제안한다 | catalog cache freshness와 active database/schema에 의존 |
+| SQL parser/Safe Mode semantics | 아래 각 SQL 섹션의 지원 문법만 구조적으로 이해한다 | PostgreSQL/ANSI 중심 parser. MySQL/MariaDB/SQLite vendor syntax는 부분 지원 |
+| Mongo operator/stage/expression/BSON vocabulary | query/projection/update/stage/accumulator/expression/type tag group이 Rust/WASM snapshot에 있고 TS fallback mirror와 drift test가 맞는다 | server version / Atlas-only / deployment capability gate 없음 |
+| Mongo collection/db/admin methods | executable whitelist와 db/admin completion label이 Rust/WASM snapshot에 있다 | arbitrary JS, shell helpers, non-whitelisted methods 제외 |
 
 ## 자동완성 아키텍처 방향
 
@@ -82,6 +100,8 @@ SQL dialect와 shell/meta command는 별도 layer다.
 - `src/lib/mongo/mongoCompletionVocabulary.ts`,
   `src/lib/mongo/mongoShellCompletionVocabulary.ts` — WASM load 전 fallback
   mirror 와 CodeMirror metadata adapter.
+- `src/lib/mongo/mongoCompletionVocabulary.test.ts` — Rust/WASM vocabulary 와
+  TypeScript fallback mirror drift test.
 
 장기 구현 규칙:
 
@@ -93,6 +113,9 @@ SQL dialect와 shell/meta command는 별도 layer다.
   소유한다. TypeScript 에 남은 상수는 WASM load 전 fallback mirror 이다.
 - Rust/WASM vocabulary 와 TypeScript fallback mirror 는 Sprint 429
   official-reference drift tests 로 고정한다.
+- `serverVersion` 과 `capabilities` 는 contract surface에 있지만 Sprint 430
+  기준 built-in vocabulary 후보를 세밀하게 filter하지 않는다. 오래된 서버나
+  deployment가 특정 함수/stage를 거부할 수 있다.
 - psql/mysql/sqlite shell command는 SQL parser grammar에 섞지 않는다.
 - 큰 catalog는 매 키 입력마다 통째로 직렬화하지 않고 active scope와 prefix
   기반 slice로 축소한다.
@@ -197,6 +220,102 @@ SQL dialect와 shell/meta command는 별도 layer다.
 - stored procedure/function/event body, `DELIMITER`, `CALL`, `LOAD DATA`, `LOCK/UNLOCK TABLES`, transaction/control-flow scripting.
 - MySQL dialect 전체를 의미론적으로 validate하는 기능. 서버가 받을 수 있는 SQL이라도 client parser는 모를 수 있다.
 
+## MariaDB SQL
+
+### 자동완성
+
+✅ 지원:
+
+- MySQL family profile을 공유한다. keyword/function/shell 후보는
+  `dialect: "mariadb"`에서 Rust/WASM SOT의 MySQL family vocabulary를 사용한다.
+- MySQL 섹션의 공통 함수, JSON/regexp/UUID 함수 후보, `SHOW`/`DESCRIBE`/`USE`,
+  `ON DUPLICATE KEY UPDATE`, mysql-client shell command 후보를 제안한다.
+- backtick identifier와 database-qualified table path를 MySQL과 동일하게 다룬다.
+
+⚠️ 제한:
+
+- MariaDB-only 함수/문법 delta는 아직 별도 vocabulary group으로 분리하지 않았다.
+- server version / storage engine / SQL mode별 후보 filtering은 없다.
+
+### 실행 / adapter surface
+
+✅ 지원:
+
+- MySQL adapter의 `new_mariadb()` kind를 사용한다. 연결, ping, cancel, database
+  list/switch, catalog read, table grid, free-form SQL, batch/dry-run, DDL UI
+  backend는 MySQL path와 같은 구조다.
+
+⚠️ 제한:
+
+- MySQL과 MariaDB의 문법 divergence는 서버 실행 결과가 최종 판단한다.
+- trigger create/drop은 MySQL과 동일하게 unsupported다.
+
+### 클라이언트 SQL 파서 / Safe Mode
+
+현재 parser 의미 지원은 MySQL 섹션과 같다.
+
+❌ 미지원:
+
+- MariaDB-specific stored routine/event/sequence/package syntax.
+- `RETURNING` 등 MariaDB version-dependent DML extension의 의미론적 판별.
+- SQL mode별 quoting/escape 차이의 완전 반영.
+
+## SQLite SQL
+
+### 자동완성
+
+✅ 지원:
+
+- Rust/WASM SOT keyword/function 후보: `PRAGMA`, `WITHOUT ROWID`,
+  `AUTOINCREMENT`, `INSERT OR IGNORE`, `INSERT OR REPLACE`, `STRFTIME`,
+  `JULIANDAY`, `JSON_EXTRACT`, `JSON_OBJECT`, `TYPEOF` 등.
+- sqlite-cli dot command 후보: `.tables`, `.schema`, `.mode`, `.headers`,
+  `.recover`, `.expert` 등.
+- cached table/view/column 후보와 double-quoted identifier path.
+
+⚠️ 제한:
+
+- SQLite compile option / extension / JSON1 availability 별 후보 filtering은 없다.
+- sqlite-cli dot command는 completion 후보일 뿐 query execution path에서 shell
+  command로 실행하지 않는다.
+
+### 실행 / adapter surface
+
+✅ 지원:
+
+- SQLite file connection lifecycle, explicit file creation, baseline catalog
+  reads, table preview/grid, single-statement query execution, batch execution,
+  dry-run, paging/filter/raw-where 일부.
+
+⚠️ 제한:
+
+- SQLite adapter의 DDL write UI family는 아직 명시적 unsupported다:
+  table create/drop/rename/alter, column add/drop, index create/drop,
+  constraint add/drop.
+- view definition/column introspection, function source introspection도
+  unsupported다.
+
+### 클라이언트 SQL 파서 / Safe Mode
+
+✅ 지원:
+
+- PostgreSQL/ANSI 중심 공통 parser subset.
+
+⚠️ 부분 지원:
+
+- `PRAGMA`, `VACUUM`, `INSERT OR IGNORE/REPLACE`, `WITHOUT ROWID` 같은 SQLite
+  후보는 completion vocabulary에 있지만 모두 client parser semantic support를
+  뜻하지는 않는다.
+- SQLite execution은 서버(sqlite engine)가 최종 판단한다. parser가 SQLite의
+  전체 expression grammar나 virtual table/module syntax를 의미론적으로
+  validate하지 않는다.
+
+❌ 미지원:
+
+- sqlite-cli dot command 실행.
+- `CREATE VIRTUAL TABLE`, FTS/RTREE module syntax, trigger body, recursive
+  trigger semantics, extension-specific functions의 semantic validation.
+
 ## MongoDB Mongosh / MQL
 
 ### 자동완성
@@ -249,15 +368,26 @@ SQL dialect와 shell/meta command는 별도 layer다.
 
 ## Coverage 판단
 
-현재 상태는 "PostgreSQL strong / MySQL·MariaDB·SQLite completion smoke open /
-MongoDB strong for whitelisted mongosh workflows + Rust-owned vocabulary
-coverage"다.
+Sprint 430 기준 Phase 31의 completion architecture 목표는 닫혔다. 현재 상태:
+
+- PostgreSQL: completion + parser/Safe Mode 모두 가장 강한 surface.
+- MySQL: completion vocabulary는 current UI group 기준 100%; runtime adapter는
+  넓음; client parser semantics는 PostgreSQL/ANSI 중심 subset.
+- MariaDB: MySQL family completion/runtime path 공유; MariaDB-only delta는 후속.
+- SQLite: completion vocabulary는 current UI group 기준 100%; runtime adapter는
+  read/query 중심; DDL write UI backend는 후속.
+- MongoDB: Rust-owned vocabulary는 current UI group 기준 100%; execution은
+  whitelisted mongosh workflow만 지원.
 
 다음이 남아 있다:
 
-- MySQL client parser dialect closure: `ON DUPLICATE KEY UPDATE`, `LIMIT offset,count`, `CALL`, `LOAD DATA`, `DELIMITER`/procedure body, transaction scripting.
-- MySQL/MariaDB/SQLite autocomplete expansion: version/capability-specific
-  gating, variables, system/session functions, engine/storage-specific clauses.
+- SQL semantic widening: MySQL/MariaDB `ON DUPLICATE KEY UPDATE`,
+  `LIMIT offset,count`, `CALL`, `LOAD DATA`, `DELIMITER`/procedure body,
+  transaction/control-flow scripting.
+- SQLite write parity: DDL UI backend, view/function introspection, virtual table
+  grammar.
+- Version/capability gates: SQL server version, MariaDB delta, SQLite compile
+  options/extensions, MongoDB server version/Atlas-only/deployment capability.
 - Mongo completion hardening: server-version/Atlas-only stage gating and
   parser/dispatch semantic widening. Vocabulary list 자체는 Rust/WASM SOT 로
   이동했다.
