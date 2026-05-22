@@ -1,10 +1,9 @@
 /**
- * SQLite-specific form fields. SQLite is file-backed: there is no host,
- * port, user, or password. The form exposes a single file path input and
- * (sprint 146 — AC-143-3) a Browse button that pops the OS-native file
- * picker via `@tauri-apps/plugin-dialog`. The `database` column on
- * `ConnectionDraft` carries the chosen path so the backend
- * `connection_test`/`addConnection` command shapes don't change.
+ * File-backed SQL form fields. SQLite and DuckDB have no host, port, user,
+ * or password; the form exposes a single file path input and a Browse button
+ * that pops the OS-native file picker via `@tauri-apps/plugin-dialog`. The
+ * `database` column on `ConnectionDraft` carries the chosen path so the
+ * backend `connection_test`/`addConnection` command shapes don't change.
  */
 import { useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
@@ -18,6 +17,10 @@ export interface SqliteFormFieldsProps {
   filePickerEnabled: boolean;
   inputClass: string;
   labelClass: string;
+  databaseLabel?: string;
+  defaultPath?: string;
+  fileExtensions?: string[];
+  createEnabled?: boolean;
 }
 
 export default function SqliteFormFields({
@@ -26,15 +29,21 @@ export default function SqliteFormFields({
   filePickerEnabled,
   inputClass,
   labelClass,
+  databaseLabel = "SQLite",
+  defaultPath = "database.sqlite",
+  fileExtensions = ["sqlite", "sqlite3", "db"],
+  createEnabled = true,
 }: SqliteFormFieldsProps) {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const selectTitle = `Select ${databaseLabel} database file`;
+  const createTitle = `Create ${databaseLabel} database file`;
 
   const handleBrowse = async () => {
     const picked = await open({
       multiple: false,
       directory: false,
-      title: "Select SQLite database file",
+      title: selectTitle,
     });
     if (typeof picked === "string" && picked.length > 0) {
       onChange({ database: picked });
@@ -45,12 +54,12 @@ export default function SqliteFormFields({
     setCreateError(null);
     try {
       const picked = await save({
-        title: "Create SQLite database file",
-        defaultPath: draft.database || "database.sqlite",
+        title: createTitle,
+        defaultPath: draft.database || defaultPath,
         filters: [
           {
-            name: "SQLite database",
-            extensions: ["sqlite", "sqlite3", "db"],
+            name: `${databaseLabel} database`,
+            extensions: fileExtensions,
           },
         ],
       });
@@ -79,7 +88,7 @@ export default function SqliteFormFields({
           className={`${inputClass} flex-1`}
           value={draft.database}
           onChange={(e) => onChange({ database: e.target.value })}
-          placeholder="/absolute/path/to/database.sqlite"
+          placeholder={`/absolute/path/to/${defaultPath}`}
           aria-label="Database file"
         />
         {filePickerEnabled && (
@@ -93,21 +102,23 @@ export default function SqliteFormFields({
               <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
               Browse
             </button>
-            <button
-              type="button"
-              aria-label="Create SQLite database file"
-              onClick={handleCreate}
-              disabled={creating}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Database className="h-3.5 w-3.5" aria-hidden="true" />
-              {creating ? "Creating" : "Create"}
-            </button>
+            {createEnabled && (
+              <button
+                type="button"
+                aria-label={createTitle}
+                onClick={handleCreate}
+                disabled={creating}
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Database className="h-3.5 w-3.5" aria-hidden="true" />
+                {creating ? "Creating" : "Create"}
+              </button>
+            )}
           </>
         )}
       </div>
       <p className="mt-1 text-2xs text-muted-foreground">
-        Absolute path to a SQLite database file.
+        Absolute path to a {databaseLabel} database file.
       </p>
       <label className="mt-3 flex items-center gap-2 text-xs text-secondary-foreground">
         <input

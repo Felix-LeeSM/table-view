@@ -8,6 +8,7 @@ import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { useConnectionStore } from "@stores/connectionStore";
 import {
   MOCK_RESULT,
   mockExecuteQuery,
@@ -16,6 +17,7 @@ import {
   mockAggregateDocuments,
   mockVerifyActiveDb,
   mockEditorProps,
+  makeConn,
   makeQueryTab,
   resetQueryTabStores,
 } from "./__tests__/queryTabTestHelpers";
@@ -158,6 +160,20 @@ describe("QueryTab — toolbar", () => {
 
     const cancelBtn = screen.getByLabelText("Cancel query");
     expect(cancelBtn).toBeInTheDocument();
+  });
+
+  it("renders non-cancellable running state for DuckDB", () => {
+    const tab = makeQueryTab({
+      connectionId: "duckdb-conn",
+      queryState: { status: "running", queryId: "query-1-1234" },
+    });
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "duckdb-conn", dbType: "duckdb" })],
+    });
+    render(<QueryTab tab={tab} />);
+
+    expect(screen.queryByLabelText("Cancel query")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Query running")).toBeDisabled();
   });
 
   it("disables Run button when sql is empty", () => {

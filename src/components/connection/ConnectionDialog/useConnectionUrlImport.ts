@@ -2,8 +2,8 @@ import { useState } from "react";
 import type { ConnectionDraft, DatabaseType } from "@/types/connection";
 import {
   DATABASE_TYPE_LABELS,
+  parseFileConnectionPath,
   parseConnectionUrl,
-  parseSqliteFilePath,
 } from "@/types/connection";
 import * as dataSourceProfiles from "@/types/dataSource";
 
@@ -25,8 +25,8 @@ const unsupportedDbTypeMessage = (dbType: DatabaseType): string => {
  *   - `urlValue` / `urlError` (URL-mode input + parse failure message).
  *   - `detectedScheme` (Sprint 178 form-mode advisory affordance).
  *   - `parseAndApply` — URL-mode `Parse & Continue` orchestration: try
- *     `parseConnectionUrl`, fall back to `parseSqliteFilePath` when the
- *     currently-selected DBMS is sqlite. Sets `urlError` on failure.
+ *     `parseConnectionUrl`, fall back to a file path when the currently
+ *     selected DBMS is file-backed. Sets `urlError` on failure.
  *   - `handleHostPaste` — Sprint 178 AC-178-01: detect a recognised URL
  *     scheme pasted into `#conn-host`, parse, prevent the literal paste
  *     from landing in the field, and merge the parsed result via the
@@ -54,16 +54,19 @@ const RECOGNISED_SCHEMES = [
   "mongodb+srv",
   "redis",
   "sqlite",
+  "duckdb",
 ] as const;
 
 const looksLikeRecognisedUrl = (text: string): boolean => {
   const trimmed = text.trim();
-  return RECOGNISED_SCHEMES.some(
-    (scheme) =>
+  return RECOGNISED_SCHEMES.some((scheme) => {
+    const isFileBackedScheme = scheme === "sqlite" || scheme === "duckdb";
+    return (
       trimmed.startsWith(`${scheme}://`) ||
-      // sqlite uses `sqlite:/path` (single slash), so accept that too.
-      (scheme === "sqlite" && trimmed.startsWith("sqlite:")),
-  );
+      // File-backed DBMS URLs use `sqlite:/path` / `duckdb:/path`.
+      (isFileBackedScheme && trimmed.startsWith(`${scheme}:`))
+    );
+  });
 };
 
 // AC-178-03: on blur of the host field, split a single-`:`-then-digits
@@ -115,12 +118,14 @@ export function useConnectionUrlImport({
   const [detectedScheme, setDetectedScheme] = useState<string | null>(null);
 
   const parseAndApply = (): boolean => {
-    // Sprint 138 — try URL parse first; if SQLite is the currently-selected
-    // DBMS or the URL doesn't look like a recognised scheme, fall back to
-    // treating the input as a SQLite file path.
+    // Sprint 138 — try URL parse first; if a file-backed DBMS is currently
+    // selected or the URL doesn't look like a recognised scheme, fall back to
+    // treating the input as that DBMS' local file path.
     const parsed =
       parseConnectionUrl(urlValue) ??
-      (dbType === "sqlite" ? parseSqliteFilePath(urlValue) : null);
+      (dbType === "sqlite" || dbType === "duckdb"
+        ? parseFileConnectionPath(dbType, urlValue)
+        : null);
     if (!parsed) {
       setUrlError(
         "Invalid URL. Use format: postgresql://user:password@host:port/database.",

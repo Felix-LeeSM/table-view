@@ -117,6 +117,7 @@ pub enum BackendAdapterId {
     Postgresql,
     MysqlFamily,
     Sqlite,
+    Duckdb,
     Mongodb,
     DeclaredRdb,
     Marker,
@@ -127,6 +128,7 @@ pub enum BackendAdapterCapabilitySource {
     Postgresql,
     MysqlFamily,
     Sqlite,
+    Duckdb,
     Mongodb,
     DeclaredRdb,
     Marker,
@@ -260,8 +262,11 @@ const SQLITE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
 ];
-const DUCKDB_DECLARED_FILE_CAPABILITIES: &[BackendAdapterCapability] =
-    &[BackendAdapterCapability::Lifecycle];
+const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
+    BackendAdapterCapability::Lifecycle,
+    BackendAdapterCapability::RelationalCatalog,
+    BackendAdapterCapability::RelationalQuery,
+];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::DocumentCatalog,
@@ -300,10 +305,10 @@ const SQLITE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
 };
 const DUCKDB_FILE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
-    state: BackendAdapterContractState::DeclaredOnly,
-    implementation: BackendAdapterId::DeclaredRdb,
-    capability_source: BackendAdapterCapabilitySource::DeclaredRdb,
-    capabilities: DUCKDB_DECLARED_FILE_CAPABILITIES,
+    state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::Duckdb,
+    capability_source: BackendAdapterCapabilitySource::Duckdb,
+    capabilities: DUCKDB_RDB_CAPABILITIES,
 };
 const DECLARED_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,

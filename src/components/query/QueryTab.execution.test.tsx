@@ -13,6 +13,7 @@ import {
 import { render, screen, waitFor, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { useConnectionStore } from "@stores/connectionStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import type { QueryResult } from "@/types/query";
@@ -24,6 +25,7 @@ import {
   mockAggregateDocuments,
   mockVerifyActiveDb,
   mockEditorProps,
+  makeConn,
   makeQueryTab,
   resetQueryTabStores,
 } from "./__tests__/queryTabTestHelpers";
@@ -423,6 +425,28 @@ describe("QueryTab — execution", () => {
     });
 
     expect(mockCancelQuery).toHaveBeenCalledWith("query-1-1234");
+  });
+
+  it("ignores cancel-query event for DuckDB because cancel is unsupported", async () => {
+    const tab = makeQueryTab({
+      connectionId: "duckdb-conn",
+      queryState: { status: "running", queryId: "query-1-1234" },
+    });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "duckdb-conn", dbType: "duckdb" })],
+    });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("cancel-query", {
+          detail: { queryId: "query-1-1234" },
+        }),
+      );
+    });
+
+    expect(mockCancelQuery).not.toHaveBeenCalled();
   });
 
   // ── Multi-statement history recording ──

@@ -430,6 +430,29 @@ describe("ConnectionDialog", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("accepts duckdb:/path URL and switches to the DuckDB file form", async () => {
+    renderDialog();
+    await act(async () => {
+      fireEvent.click(screen.getByText("URL"));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Connection URL"), {
+        target: { value: "duckdb:/data/warehouse.duckdb" },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Parse & Continue"));
+    });
+
+    expect(screen.getByLabelText("Database file")).toHaveValue(
+      "/data/warehouse.duckdb",
+    );
+    expect(
+      screen.queryByLabelText("Create SQLite database file"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   // URL parser 가 인식한 DBMS scheme 이지만 백엔드 어댑터가 아직 wire-up
   // 되지 않은 경우 Parse & Continue 는 명시적 거부 메시지를 노출한다.
   it.each([
@@ -1541,6 +1564,27 @@ describe("ConnectionDialog", () => {
       ).toBeInTheDocument();
 
       // Network/auth fields are not rendered.
+      expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Port")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("User")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
+    });
+
+    it("DuckDB: file path field present, host/port/user/password absent", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      const trigger = screen.getByLabelText("Database Type");
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "DuckDB" }));
+
+      expect(screen.getByLabelText("Database file")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Browse for database file"),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByLabelText("Create SQLite database file"),
+      ).not.toBeInTheDocument();
+
       expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();
       expect(screen.queryByLabelText("Port")).not.toBeInTheDocument();
       expect(screen.queryByLabelText("User")).not.toBeInTheDocument();

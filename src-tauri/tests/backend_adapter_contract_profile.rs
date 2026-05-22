@@ -104,7 +104,7 @@ fn backend_profiles_encode_current_database_type_contracts() {
 }
 
 #[test]
-fn duckdb_profile_is_file_backed_rdbms_metadata_without_runtime_query_contract() {
+fn duckdb_profile_is_file_backed_rdbms_with_runtime_catalog_query_contract() {
     let duckdb = DatabaseType::from_str("duckdb").expect("duckdb identity must parse");
     let profile = get_data_source_profile(&duckdb);
 
@@ -120,12 +120,12 @@ fn duckdb_profile_is_file_backed_rdbms_metadata_without_runtime_query_contract()
     );
     assert_eq!(
         profile.adapter_contract.state,
-        BackendAdapterContractState::DeclaredOnly
+        BackendAdapterContractState::FactoryBacked
     );
-    assert_eq!(profile.backend_adapter.id, BackendAdapterId::DeclaredRdb);
+    assert_eq!(profile.backend_adapter.id, BackendAdapterId::Duckdb);
     assert_eq!(
         profile.backend_adapter.capability_source,
-        BackendAdapterCapabilitySource::DeclaredRdb
+        BackendAdapterCapabilitySource::Duckdb
     );
     assert_eq!(profile.dialect.id, DataSourceDialectId::Duckdb);
     assert_eq!(profile.dialect.family, DataSourceDialectFamily::Duckdb);
@@ -166,7 +166,8 @@ fn duckdb_profile_is_file_backed_rdbms_metadata_without_runtime_query_contract()
         }
     );
     assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
-    assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 }
 

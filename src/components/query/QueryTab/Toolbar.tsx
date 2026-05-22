@@ -42,6 +42,7 @@ import {
 export interface QueryTabToolbarProps {
   tab: QueryTab;
   isDocument: boolean;
+  canCancelQuery?: boolean;
   onExecute: () => void;
   /**
    * Wraps the editor SQL in a transaction that is unconditionally
@@ -57,6 +58,7 @@ export interface QueryTabToolbarProps {
 export default function QueryTabToolbar({
   tab,
   isDocument,
+  canCancelQuery = true,
   onExecute,
   onDryRun,
   onFormat,
@@ -110,7 +112,7 @@ export default function QueryTabToolbar({
           connectionId={tab.connectionId}
         />
       )}
-      {tab.queryState.status === "running" ? (
+      {tab.queryState.status === "running" && canCancelQuery ? (
         <Button
           variant="ghost"
           size="xs"
@@ -120,6 +122,17 @@ export default function QueryTabToolbar({
           <Square className="text-destructive" />
           <Loader2 className="animate-spin" />
           <span>Cancel</span>
+        </Button>
+      ) : tab.queryState.status === "running" ? (
+        <Button
+          variant="ghost"
+          size="xs"
+          disabled
+          aria-label="Query running"
+          title="Query cancellation is not supported for this database."
+        >
+          <Loader2 className="animate-spin" />
+          <span>Running</span>
         </Button>
       ) : (
         <Button

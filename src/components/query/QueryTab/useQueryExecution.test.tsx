@@ -441,6 +441,21 @@ describe("useQueryExecution scaffold", () => {
     });
   });
 
+  it("does not cancel a running DuckDB query because cancel is unsupported", async () => {
+    const tab = seedRdbTab(
+      "SELECT 1",
+      { queryState: { status: "running", queryId: "query-1-1234" } },
+      { dbType: "duckdb" },
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(cancelQueryMock).not.toHaveBeenCalled();
+  });
+
   it("syncs activeDb and surfaces a retry toast on DbMismatch", async () => {
     executeQueryMock.mockRejectedValueOnce(
       new Error(

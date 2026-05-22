@@ -12,6 +12,7 @@
 //! `crate::db::ActiveAdapter`, `crate::db::DocumentId`, etc. unchanged.
 
 pub mod active;
+pub mod duckdb;
 pub mod mongodb;
 pub mod mysql;
 pub mod postgres;
@@ -20,6 +21,7 @@ pub mod sqlite;
 pub mod traits;
 pub mod types;
 
+pub use duckdb::DuckdbAdapter;
 pub use mongodb::MongoAdapter;
 pub use mysql::MysqlAdapter;
 pub use postgres::PostgresAdapter;

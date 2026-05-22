@@ -4,6 +4,7 @@ export type BackendAdapterProfileId =
   | "postgresql"
   | "mysql-family"
   | "sqlite"
+  | "duckdb"
   | "mongodb"
   | "declared-rdb"
   | "marker";
@@ -12,6 +13,7 @@ export type BackendAdapterCapabilitySource =
   | "postgresql"
   | "mysql-family"
   | "sqlite"
+  | "duckdb"
   | "mongodb"
   | "declared-rdb"
   | "marker";
@@ -62,6 +64,7 @@ const BACKEND_ADAPTER_PROFILES = Object.freeze({
   postgresql: backendAdapterProfile("postgresql", "rdb", "postgresql"),
   mysqlFamily: backendAdapterProfile("mysql-family", "rdb", "mysql-family"),
   sqlite: backendAdapterProfile("sqlite", "rdb", "sqlite"),
+  duckdb: backendAdapterProfile("duckdb", "rdb", "duckdb"),
   mongodb: backendAdapterProfile("mongodb", "document", "mongodb"),
   declaredRdb: backendAdapterProfile("declared-rdb", "rdb", "declared-rdb"),
   markerKv: backendAdapterProfile("marker", "kv", "marker"),
@@ -100,7 +103,7 @@ export const BACKEND_ADAPTER_BY_TYPE = Object.freeze({
   mysql: BACKEND_ADAPTER_PROFILES.mysqlFamily,
   mariadb: BACKEND_ADAPTER_PROFILES.mysqlFamily,
   sqlite: BACKEND_ADAPTER_PROFILES.sqlite,
-  duckdb: BACKEND_ADAPTER_PROFILES.declaredRdb,
+  duckdb: BACKEND_ADAPTER_PROFILES.duckdb,
   mssql: BACKEND_ADAPTER_PROFILES.declaredRdb,
   oracle: BACKEND_ADAPTER_PROFILES.declaredRdb,
   mongodb: BACKEND_ADAPTER_PROFILES.mongodb,

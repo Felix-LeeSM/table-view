@@ -45,7 +45,7 @@ export interface UseConnectionDraftFormReturn {
   setClearPassword: React.Dispatch<React.SetStateAction<boolean>>;
   isEditing: boolean;
   hadPassword: boolean;
-  isSqlite: boolean;
+  isFileConnection: boolean;
   /**
    * Sprint 381 (2026-05-17) — true when the draft targets MongoDB.
    * Mongo's `database` is *optional* (the user can leave it blank and
@@ -61,7 +61,7 @@ export interface UseConnectionDraftFormReturn {
   trimDraft: (draft: ConnectionDraft) => ConnectionDraft;
   /**
    * Merge a parsed connection into the draft. `parsed` matches the
-   * return shape of `parseConnectionUrl` / `parseSqliteFilePath` —
+   * return shape of `parseConnectionUrl` / `parseFileConnectionPath` —
    * `Partial<ConnectionDraft>` (e.g. `authSource` is omitted on
    * non-Mongo URLs).
    *
@@ -99,7 +99,7 @@ export function useConnectionDraftForm(
     to: DatabaseType;
   } | null>(null);
 
-  const isSqlite = form.dbType === "sqlite";
+  const isFileConnection = form.dbType === "sqlite" || form.dbType === "duckdb";
   // Sprint 381 (2026-05-17) — Mongo db-contract α: `database` is optional
   // on Mongo (default DB landing field, not connection-required) so the
   // Save validator skips the "Database is required" branch when true.
@@ -168,8 +168,8 @@ export function useConnectionDraftForm(
   // Sprint 178 (AC-178-02): trim user-pasteable string fields at the
   // save/test boundary, NEVER on keystroke. The list is narrowly scoped:
   // `password` is excluded per ADR-0005 (some legacy systems require
-  // whitespace in the password) and `database` for SQLite is treated as
-  // a file path which `parseSqliteFilePath` already trims at parse time.
+  // whitespace in the password) and `database` for file-backed DBMSes is
+  // treated as a file path which the file parser already trims at parse time.
   // Future SSH-key-path or SSH-host fields can extend this list when
   // they are introduced.
   const trimDraft = (draft: ConnectionDraft): ConnectionDraft => ({
@@ -227,7 +227,7 @@ export function useConnectionDraftForm(
     setClearPassword,
     isEditing,
     hadPassword,
-    isSqlite,
+    isFileConnection,
     isMongo,
     pendingDbTypeChange,
     handleDbTypeChange,

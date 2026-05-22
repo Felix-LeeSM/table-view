@@ -16,6 +16,7 @@ use crate::db::mongodb::MongoAdapter;
 use crate::db::mysql::MysqlAdapter;
 use crate::db::postgres::PostgresAdapter;
 use crate::db::sqlite::SqliteAdapter;
+use crate::db::DuckdbAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
 use crate::storage;
@@ -42,12 +43,21 @@ pub fn save_connection(req: SaveConnectionRequest) -> Result<ConnectionConfigPub
     if req.connection.name.trim().is_empty() {
         return Err(AppError::Validation("Connection name is required".into()));
     }
-    let is_sqlite = matches!(&req.connection.db_type, DatabaseType::Sqlite);
-    if !is_sqlite && req.connection.host.trim().is_empty() {
+    let is_file_backed = matches!(
+        &req.connection.db_type,
+        DatabaseType::Sqlite | DatabaseType::Duckdb
+    );
+    if !is_file_backed && req.connection.host.trim().is_empty() {
         return Err(AppError::Validation("Host is required".into()));
     }
-    if is_sqlite {
-        SqliteAdapter::validate_user_database_path(&req.connection.database)?;
+    match &req.connection.db_type {
+        DatabaseType::Sqlite => {
+            SqliteAdapter::validate_user_database_path(&req.connection.database)?;
+        }
+        DatabaseType::Duckdb => {
+            DuckdbAdapter::validate_user_database_path(&req.connection.database)?;
+        }
+        _ => {}
     }
 
     let mut conn = req.connection.into_config_with_empty_password();
@@ -98,6 +108,9 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         }
         DatabaseType::Sqlite => {
             SqliteAdapter::test(&full).await?;
+        }
+        DatabaseType::Duckdb => {
+            DuckdbAdapter::test(&full).await?;
         }
         DatabaseType::Mongodb => {
             MongoAdapter::test(&full).await?;

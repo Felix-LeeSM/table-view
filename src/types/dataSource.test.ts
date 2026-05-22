@@ -101,7 +101,9 @@ describe("DataSourceProfile registry", () => {
       edit: { editRows: true },
     }),
     duckdb: expectedCapabilities({
-      connection: { filePicker: true, readOnly: true },
+      connection: { test: true, filePicker: true, readOnly: true },
+      query: { query: true },
+      catalog: { browse: true, schema: true },
     }),
     mssql: createEmptyDataSourceCapabilities(),
     oracle: createEmptyDataSourceCapabilities(),
@@ -234,11 +236,12 @@ describe("DataSourceProfile registry", () => {
       "mysql",
       "mariadb",
       "sqlite",
+      "duckdb",
       "mongodb",
     ]);
     expect(isConnectionSupportedDatabaseType("postgresql")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mongodb")).toBe(true);
-    expect(isConnectionSupportedDatabaseType("duckdb")).toBe(false);
+    expect(isConnectionSupportedDatabaseType("duckdb")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
     expect(isConnectionSupportedDatabaseType("redis")).toBe(false);
@@ -307,7 +310,7 @@ describe("DataSourceProfile registry", () => {
     ).toThrowError(/Unknown data source profile/);
   });
 
-  it("models DuckDB as a file-backed RDBMS profile before runtime execution is added", () => {
+  it("models DuckDB as a file-backed RDBMS profile with catalog/query runtime", () => {
     const duckdb = getDataSourceProfile("duckdb");
 
     expect(duckdb).toMatchObject({
@@ -320,18 +323,20 @@ describe("DataSourceProfile registry", () => {
       safetyPolicy: "rdb-default",
     });
     expect(duckdb.capabilities.connection).toMatchObject({
-      test: false,
+      test: true,
       switchDatabase: false,
       readOnly: true,
       filePicker: true,
     });
-    expect(duckdb.capabilities.query.query).toBe(false);
+    expect(duckdb.capabilities.query.query).toBe(true);
+    expect(duckdb.capabilities.catalog.browse).toBe(true);
+    expect(duckdb.capabilities.catalog.schema).toBe(true);
     expect(duckdb.capabilities.edit.editRows).toBe(false);
     expect(duckdb.capabilities.ddl.createTable).toBe(false);
     expect(duckdb.backendAdapter).toEqual({
-      id: "declared-rdb",
+      id: "duckdb",
       kind: "rdb",
-      capabilitySource: "declared-rdb",
+      capabilitySource: "duckdb",
     });
     expect(duckdb.dialect).toEqual({
       id: "duckdb",

@@ -42,6 +42,7 @@ import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/toast";
+import { getDataSourceProfile } from "@/types/dataSource";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";
 import type { BulkWriteOp, BulkWriteResult } from "@/types/documentMutate";
@@ -192,6 +193,9 @@ export function useQueryExecution({
   const dbType = useConnectionStore(
     (s) => s.connections.find((c) => c.id === tab.connectionId)?.dbType,
   );
+  const canCancelQuery = dbType
+    ? getDataSourceProfile(dbType).capabilities.query.cancel
+    : true;
   const wsConnId = tab.connectionId;
   const updateQueryStateAction = useWorkspaceStore((s) => s.updateQueryState);
   const completeQueryAction = useWorkspaceStore((s) => s.completeQuery);
@@ -1992,6 +1996,7 @@ export function useQueryExecution({
 
     // If already running, cancel
     if (tab.queryState.status === "running") {
+      if (!canCancelQuery) return;
       try {
         await cancelQuery(tab.queryState.queryId);
       } catch (err) {
@@ -2314,6 +2319,7 @@ export function useQueryExecution({
     tab.paradigm,
     tab.database,
     tab.collection,
+    canCancelQuery,
     dbType,
     dispatchMongoshCall,
     runRdbSingleNow,
