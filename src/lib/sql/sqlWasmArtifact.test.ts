@@ -76,4 +76,39 @@ describe("checked-in SQL WASM artifact", () => {
     if (result === null) return;
     expect(result.kind).toBe("select");
   });
+
+  it("[AC-434-W01] parseSql accepts MySQL ON DUPLICATE KEY UPDATE through real WASM", async () => {
+    const result = await parseSql(
+      "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = VALUES(name), id = ?",
+    );
+
+    expect(result.kind).toBe("insert");
+    if (result.kind !== "insert") return;
+    expect(result.on_conflict ?? null).toBeNull();
+    expect(result.on_duplicate_key_update?.assignments).toEqual([
+      {
+        column: "name",
+        value: { kind: "values-column", column: "name" },
+      },
+      {
+        column: "id",
+        value: { kind: "placeholder", name: "" },
+      },
+    ]);
+  });
+
+  it("[AC-434-W02] parseSql accepts DEFAULT RHS in ON DUPLICATE KEY UPDATE through real WASM", async () => {
+    const result = await parseSql(
+      "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = DEFAULT",
+    );
+
+    expect(result.kind).toBe("insert");
+    if (result.kind !== "insert") return;
+    expect(result.on_duplicate_key_update?.assignments).toEqual([
+      {
+        column: "name",
+        value: { kind: "default" },
+      },
+    ]);
+  });
 });

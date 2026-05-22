@@ -11,7 +11,8 @@
  * <op> <literal>]`. Sprint-391 adds DDL destructive — `DROP …`,
  * `TRUNCATE …`, `ALTER TABLE … DROP COLUMN/CONSTRAINT/INDEX`. Sprint-392
  * adds the DML write triad — `INSERT INTO <table> [(cols)] (VALUES /
- * DEFAULT VALUES / SELECT) [ON CONFLICT …] [RETURNING …]`,
+ * DEFAULT VALUES / SELECT) [ON CONFLICT …] [ON DUPLICATE KEY UPDATE …]
+ * [RETURNING …]`,
  * `UPDATE <table> SET … [FROM] [WHERE] [RETURNING]`,
  * `DELETE FROM <table> [USING] [WHERE] [RETURNING]`. WHERE is the narrow
  * `column-op-literal + AND/OR/NOT/IS NULL` slice; richer expressions
@@ -524,6 +525,19 @@ export interface SqlUpdateAssignment {
   value: SqlInsertValue;
 }
 
+export type SqlOnDuplicateKeyUpdateValue =
+  | SqlInsertValue
+  | { kind: "values-column"; column: string };
+
+export interface SqlOnDuplicateKeyUpdateAssignment {
+  column: string;
+  value: SqlOnDuplicateKeyUpdateValue;
+}
+
+export interface SqlOnDuplicateKeyUpdate {
+  assignments: SqlOnDuplicateKeyUpdateAssignment[];
+}
+
 export type SqlOnConflict =
   | { kind: "do-nothing" }
   | {
@@ -538,6 +552,7 @@ export interface SqlInsertStatement {
   columns: string[];
   source: SqlInsertSource;
   on_conflict: SqlOnConflict | null;
+  on_duplicate_key_update: SqlOnDuplicateKeyUpdate | null;
   returning: string[];
 }
 

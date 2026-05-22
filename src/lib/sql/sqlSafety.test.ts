@@ -248,6 +248,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           columns: [],
           source: { kind: "values", rows: [[]] },
           on_conflict: null,
+          on_duplicate_key_update: null,
           returning: [],
         };
       }
@@ -345,6 +346,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
                 columns: [],
                 source: { kind: "values", rows: [[]] },
                 on_conflict: null,
+                on_duplicate_key_update: null,
                 returning: [],
               };
             }
@@ -514,6 +516,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
               columns: [],
               source: { kind: "values", rows: [[]] },
               on_conflict: null,
+              on_duplicate_key_update: null,
               returning: [],
             };
           } else if (innerUpper.startsWith("UPDATE")) {

@@ -236,7 +236,10 @@ shadow 하되 request shape 은 MySQL / MariaDB / SQLite 를 처음부터 포함
 
 Sprint 430 종료 기준: Phase 31 architecture slice 는 완료. 후속은 completion
 architecture 자체가 아니라 dialect semantic widening / capability gating /
-SQLite write parity 같은 개별 feature backlog 로 취급한다.
+SQLite write parity 같은 개별 feature backlog 로 취급한다. Sprint 434 는
+MySQL/MariaDB `ON DUPLICATE KEY UPDATE` parser semantic gap 을 닫고, 남은
+MySQL-family widening 을 routine/scripting grammar 와 broader RHS expression
+coverage 로 축소했다.
 
 ## 문서 목차
 
