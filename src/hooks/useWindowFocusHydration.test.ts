@@ -5,6 +5,7 @@ import {
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { renderHook, act } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
+import { entryKey, useDataGridEditStore } from "@stores/dataGridEditStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
 import { useWindowFocusHydration } from "./useWindowFocusHydration";
@@ -15,6 +16,8 @@ const mockReadConnectionSession = vi.fn(
   (): {
     focusedConnId: string | null;
     activeStatuses: Record<string, unknown> | null;
+    hasFocusedConnId?: boolean;
+    hasActiveStatuses?: boolean;
   } => ({
     focusedConnId: null,
     activeStatuses: null,
@@ -84,9 +87,12 @@ describe("useWindowFocusHydration", () => {
       activeStatuses: {},
     });
     useWorkspaceStore.setState({ workspaces: {} });
+    useDataGridEditStore.setState({ entries: new Map() });
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: null,
       activeStatuses: null,
+      hasFocusedConnId: false,
+      hasActiveStatuses: false,
     });
   });
 
@@ -181,6 +187,8 @@ describe("useWindowFocusHydration", () => {
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: "conn-42",
       activeStatuses: { "conn-42": { type: "connected" } },
+      hasFocusedConnId: true,
+      hasActiveStatuses: true,
     });
 
     const { unmount } = renderHook(() => useWindowFocusHydration());
@@ -200,6 +208,8 @@ describe("useWindowFocusHydration", () => {
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: "c1",
       activeStatuses: null,
+      hasFocusedConnId: true,
+      hasActiveStatuses: false,
     });
     const { unmount } = renderHook(() => useWindowFocusHydration());
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
@@ -208,6 +218,8 @@ describe("useWindowFocusHydration", () => {
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: "c2",
       activeStatuses: { c2: { type: "connected", activeDb: "mydb" } },
+      hasFocusedConnId: true,
+      hasActiveStatuses: true,
     });
 
     act(() => {
@@ -302,6 +314,8 @@ describe("useWindowFocusHydration", () => {
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: "conn-mongo",
       activeStatuses: { "conn-mongo": { type: "connected" } },
+      hasFocusedConnId: true,
+      hasActiveStatuses: true,
     });
 
     renderHook(() => useWindowFocusHydration());
@@ -345,6 +359,8 @@ describe("useWindowFocusHydration", () => {
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: "conn-pg",
       activeStatuses: { "conn-pg": { type: "connected" } },
+      hasFocusedConnId: true,
+      hasActiveStatuses: true,
     });
 
     renderHook(() => useWindowFocusHydration());
@@ -383,6 +399,8 @@ describe("useWindowFocusHydration", () => {
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: "conn-pg",
       activeStatuses: { "conn-pg": { type: "connected" } },
+      hasFocusedConnId: true,
+      hasActiveStatuses: true,
     });
 
     const { unmount } = renderHook(() => useWindowFocusHydration());
@@ -392,6 +410,8 @@ describe("useWindowFocusHydration", () => {
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: "conn-mongo",
       activeStatuses: { "conn-mongo": { type: "connected" } },
+      hasFocusedConnId: true,
+      hasActiveStatuses: true,
     });
 
     act(() => {
@@ -403,5 +423,51 @@ describe("useWindowFocusHydration", () => {
     expect(useConnectionStore.getState().focusedConnId).toBe("conn-mongo");
 
     unmount();
+  });
+
+  it("[RISK-040] clears stale hidden-window state from an explicit last-removal session mirror", () => {
+    useConnectionStore.setState({
+      focusedConnId: "c1",
+      activeStatuses: { c1: { type: "connected" } },
+    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            id: "tab-c1",
+            connectionId: "c1",
+            title: "public.users",
+            type: "table",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+            isPreview: false,
+            paradigm: "rdb",
+            sorts: [],
+          },
+        ],
+        "tab-c1",
+        "c1",
+        "db1",
+      ),
+    );
+    const pendingKey = entryKey("c1", "db1", "public", "users");
+    useDataGridEditStore
+      .getState()
+      .setSlice(pendingKey, "pendingEdits", new Map([["0-1", "dirty"]]));
+    mockReadConnectionSession.mockReturnValue({
+      focusedConnId: null,
+      activeStatuses: {},
+      hasFocusedConnId: true,
+      hasActiveStatuses: true,
+    });
+
+    renderHook(() => useWindowFocusHydration());
+
+    expect(useConnectionStore.getState().focusedConnId).toBeNull();
+    expect(useConnectionStore.getState().activeStatuses).toEqual({});
+    expect(getTestWorkspace("c1", "db1").tabs).toHaveLength(0);
+    expect(useDataGridEditStore.getState().entries.has(pendingKey)).toBe(false);
   });
 });

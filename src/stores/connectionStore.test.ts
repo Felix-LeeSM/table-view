@@ -22,24 +22,31 @@ const mockPersistFocusedConnId = vi.fn();
 const mockPersistActiveStatuses = vi.fn();
 let mockSessionFocusedConnId: string | null = null;
 let mockSessionActiveStatuses: Record<string, unknown> | null = null;
+let mockSessionHasFocusedConnId = false;
+let mockSessionHasActiveStatuses = false;
 const mockReadConnectionSession = vi.fn(
   (): {
     focusedConnId: string | null;
     activeStatuses: Record<string, unknown> | null;
+    hasFocusedConnId: boolean;
+    hasActiveStatuses: boolean;
   } => ({
     focusedConnId: null,
     activeStatuses: null,
+    hasFocusedConnId: false,
+    hasActiveStatuses: false,
   }),
 );
 
 vi.mock("@lib/scopedLocalStorage", () => ({
   persistFocusedConnId: (id: string | null) => {
     mockSessionFocusedConnId = id;
+    mockSessionHasFocusedConnId = true;
     return mockPersistFocusedConnId(id);
   },
   persistActiveStatuses: (statuses: Record<string, unknown>) => {
-    mockSessionActiveStatuses =
-      Object.keys(statuses).length > 0 ? statuses : null;
+    mockSessionActiveStatuses = statuses;
+    mockSessionHasActiveStatuses = true;
     return mockPersistActiveStatuses(statuses);
   },
   readConnectionSession: () => mockReadConnectionSession(),
@@ -140,10 +147,14 @@ describe("connectionStore", () => {
     mockPersistActiveStatuses.mockClear();
     mockSessionFocusedConnId = null;
     mockSessionActiveStatuses = null;
+    mockSessionHasFocusedConnId = false;
+    mockSessionHasActiveStatuses = false;
     mockReadConnectionSession.mockReset();
     mockReadConnectionSession.mockImplementation(() => ({
       focusedConnId: mockSessionFocusedConnId,
       activeStatuses: mockSessionActiveStatuses,
+      hasFocusedConnId: mockSessionHasFocusedConnId,
+      hasActiveStatuses: mockSessionHasActiveStatuses,
     }));
     useWorkspaceStore.setState({ workspaces: {} });
     useDataGridEditStore.setState({ entries: new Map() });
@@ -551,6 +562,8 @@ describe("connectionStore", () => {
       seedConnections();
       mockSessionFocusedConnId = "c1";
       mockSessionActiveStatuses = { c1: { type: "connected" } };
+      mockSessionHasFocusedConnId = true;
+      mockSessionHasActiveStatuses = true;
       useConnectionStore.setState({
         activeStatuses: { c1: { type: "disconnected" } },
         focusedConnId: "c1",
@@ -563,12 +576,13 @@ describe("connectionStore", () => {
 
       useConnectionStore.setState({
         connections: [],
-        activeStatuses: {},
-        focusedConnId: null,
+        activeStatuses: { c1: { type: "connected" } },
+        focusedConnId: "c1",
       });
       useConnectionStore.getState().hydrateFromSession();
 
       expect(useConnectionStore.getState().focusedConnId).toBeNull();
+      expect(useConnectionStore.getState().activeStatuses).toEqual({});
       expect(
         useConnectionStore.getState().activeStatuses["c1"],
       ).toBeUndefined();
@@ -646,6 +660,7 @@ describe("connectionStore", () => {
   it("[RISK-040] connection-status disconnected event runs connection cleanup", async () => {
     const { listen } = await import("@tauri-apps/api/event");
     mockSessionActiveStatuses = { c1: { type: "connected" } };
+    mockSessionHasActiveStatuses = true;
     useConnectionStore.setState({
       activeStatuses: { c1: { type: "connected" } },
     });

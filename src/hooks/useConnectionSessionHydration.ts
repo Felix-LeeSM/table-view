@@ -18,9 +18,10 @@ import { normalizeActiveStatuses } from "@lib/wireCamelCase";
  * Behaviour change 0 — for every `readConnectionSession()` shape (empty /
  * `focusedConnId`-only / `activeStatuses`-only / both) the post-call store
  * snapshot is byte-equivalent to the pre-extraction store body:
- *   - Empty session ⇒ `setState` is NOT called (no-op).
- *   - Partial / both ⇒ exactly ONE `setState(patch)` call with the same
- *     partial-key shape the store used to apply.
+ *   - Missing session keys ⇒ `setState` is NOT called (no-op).
+ *   - Present keys, including explicit `null` / `{}` cleanup mirrors ⇒
+ *     exactly ONE `setState(patch)` call with the partial-key shape needed
+ *     to replay the latest session state.
  *
  * Two exports:
  *   - `hydrateConnectionSession()` — plain function, callable outside the
@@ -39,10 +40,14 @@ export function hydrateConnectionSession(): void {
   const patch: Partial<
     Pick<ConnectionState, "focusedConnId" | "activeStatuses">
   > = {};
-  if (session.focusedConnId) patch.focusedConnId = session.focusedConnId;
-  if (session.activeStatuses)
+  const hasFocusedConnId =
+    session.hasFocusedConnId ?? Boolean(session.focusedConnId);
+  const hasActiveStatuses =
+    session.hasActiveStatuses ?? session.activeStatuses !== null;
+  if (hasFocusedConnId) patch.focusedConnId = session.focusedConnId;
+  if (hasActiveStatuses)
     patch.activeStatuses = normalizeActiveStatuses(
-      session.activeStatuses,
+      session.activeStatuses ?? {},
     ) as Record<string, ConnectionStatus>;
   if (Object.keys(patch).length > 0) useConnectionStore.setState(patch);
 }
