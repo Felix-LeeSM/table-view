@@ -173,70 +173,88 @@ describe("useQueryExecution scaffold", () => {
     });
   });
 
-  it.fails(
-    "rejects MySQL DELIMITER scripts before any SQL reaches IPC",
-    async () => {
-      executeQueryMock.mockResolvedValue(SELECT_RESULT);
-      const tab = seedRdbTab(
-        [
-          "DELIMITER //",
-          "CREATE PROCEDURE refresh_users()",
-          "BEGIN",
-          "  UPDATE users SET touched = 1;",
-          "END //",
-          "DELIMITER ;",
-        ].join("\n"),
-        {},
-        { dbType: "mysql" },
-      );
-      const { result } = renderHook(() => useQueryExecution({ tab }));
+  it("rejects MySQL DELIMITER scripts before any SQL reaches IPC", async () => {
+    executeQueryMock.mockResolvedValue(SELECT_RESULT);
+    const tab = seedRdbTab(
+      [
+        "DELIMITER //",
+        "CREATE PROCEDURE refresh_users()",
+        "BEGIN",
+        "  UPDATE users SET touched = 1;",
+        "END //",
+        "DELIMITER ;",
+      ].join("\n"),
+      {},
+      { dbType: "mysql" },
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
 
-      await act(async () => {
-        await result.current.handleExecute();
-      });
+    await act(async () => {
+      await result.current.handleExecute();
+    });
 
-      expect(executeQueryMock).not.toHaveBeenCalled();
-      await waitFor(() => {
-        expect(getSeededRdbTab().queryState.status).toBe("error");
-      });
-      const state = getSeededRdbTab().queryState;
-      if (state.status !== "error") {
-        throw new Error(`Expected error state, got ${state.status}`);
-      }
-      expect(state.error).toContain("DELIMITER");
-    },
-  );
+    expect(executeQueryMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(getSeededRdbTab().queryState.status).toBe("error");
+    });
+    const state = getSeededRdbTab().queryState;
+    if (state.status !== "error") {
+      throw new Error(`Expected error state, got ${state.status}`);
+    }
+    expect(state.error).toContain("DELIMITER");
+  });
 
-  it.fails(
-    "rejects MySQL LOAD DATA inside a multi-statement batch before IPC",
-    async () => {
-      executeQueryMock.mockResolvedValue(SELECT_RESULT);
-      const tab = seedRdbTab(
-        [
-          "SELECT 1",
-          "LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users",
-          "SELECT 2",
-        ].join(";\n"),
-        {},
-        { dbType: "mysql" },
-      );
-      const { result } = renderHook(() => useQueryExecution({ tab }));
+  it("rejects MySQL LOAD DATA inside a multi-statement batch before IPC", async () => {
+    executeQueryMock.mockResolvedValue(SELECT_RESULT);
+    const tab = seedRdbTab(
+      [
+        "SELECT 1",
+        "LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users",
+        "SELECT 2",
+      ].join(";\n"),
+      {},
+      { dbType: "mysql" },
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
 
-      await act(async () => {
-        await result.current.handleExecute();
-      });
+    await act(async () => {
+      await result.current.handleExecute();
+    });
 
-      expect(executeQueryMock).not.toHaveBeenCalled();
-      await waitFor(() => {
-        expect(getSeededRdbTab().queryState.status).toBe("error");
-      });
-      const state = getSeededRdbTab().queryState;
-      if (state.status !== "error") {
-        throw new Error(`Expected error state, got ${state.status}`);
-      }
-      expect(state.error).toContain("LOAD DATA");
-    },
-  );
+    expect(executeQueryMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(getSeededRdbTab().queryState.status).toBe("error");
+    });
+    const state = getSeededRdbTab().queryState;
+    if (state.status !== "error") {
+      throw new Error(`Expected error state, got ${state.status}`);
+    }
+    expect(state.error).toContain("LOAD DATA");
+  });
+
+  it("rejects MySQL LOAD DATA dry-runs before any SQL reaches IPC", async () => {
+    executeQueryDryRunMock.mockResolvedValue([SELECT_RESULT]);
+    const tab = seedRdbTab(
+      "LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users",
+      {},
+      { dbType: "mysql" },
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleDryRun();
+    });
+
+    expect(executeQueryDryRunMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(getSeededRdbTab().queryState.status).toBe("error");
+    });
+    const state = getSeededRdbTab().queryState;
+    if (state.status !== "error") {
+      throw new Error(`Expected error state, got ${state.status}`);
+    }
+    expect(state.error).toContain("LOAD DATA");
+  });
 
   it("routes destructive RDB SQL to the Safe Mode confirm branch", async () => {
     const tab = seedRdbTab(

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useConnectionStore } from "@stores/connectionStore";
 import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import {
@@ -31,6 +32,7 @@ import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { stripSqlComments } from "@lib/sql/stripSqlComments";
+import { findMysqlScriptingBoundaryViolation } from "@lib/sql/mysqlScriptingBoundary";
 import {
   analyzeMongoPipeline,
   analyzeMongoOperation,
@@ -186,6 +188,9 @@ export function useQueryExecution({
   const workspaceDb = useMemo(
     () => tab.database ?? resolveActiveDb(tab.connectionId),
     [tab.database, tab.connectionId],
+  );
+  const dbType = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === tab.connectionId)?.dbType,
   );
   const wsConnId = tab.connectionId;
   const updateQueryStateAction = useWorkspaceStore((s) => s.updateQueryState);
@@ -2157,6 +2162,24 @@ export function useQueryExecution({
     });
     if (statements.length === 0) return;
 
+    const scriptingViolation = findMysqlScriptingBoundaryViolation(
+      statements,
+      dbType,
+    );
+    if (scriptingViolation) {
+      updateQueryState(tab.id, {
+        status: "error",
+        error: scriptingViolation.message,
+      });
+      recordHistory({
+        sql,
+        executedAt: Date.now(),
+        duration: 0,
+        status: "error",
+      });
+      return;
+    }
+
     // Sprint 231 — Safe Mode gate for raw RDB query path. Single pass
     // analyzes every statement; the matrix decision priority is
     // `block > confirm > allow`, and we record the first dangerous
@@ -2290,6 +2313,7 @@ export function useQueryExecution({
     tab.paradigm,
     tab.database,
     tab.collection,
+    dbType,
     dispatchMongoshCall,
     runRdbSingleNow,
     runRdbBatchNow,
@@ -2326,6 +2350,18 @@ export function useQueryExecution({
       return stripSqlComments(stmt).trim().length > 0;
     });
     if (statements.length === 0) return;
+
+    const scriptingViolation = findMysqlScriptingBoundaryViolation(
+      statements,
+      dbType,
+    );
+    if (scriptingViolation) {
+      updateQueryState(tab.id, {
+        status: "error",
+        error: scriptingViolation.message,
+      });
+      return;
+    }
 
     const queryId = `dry:${tab.id}-${Date.now()}`;
     updateQueryState(tab.id, { status: "running", queryId });
@@ -2392,6 +2428,7 @@ export function useQueryExecution({
     tab.connectionId,
     tab.paradigm,
     workspaceDb,
+    dbType,
   ]);
 
   return {

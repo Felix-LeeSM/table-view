@@ -11,7 +11,7 @@ use tracing::{info, warn};
 use crate::commands::connection::AppState;
 use crate::db::postgres::validate_identifier;
 use crate::error::AppError;
-use crate::models::{FilterCondition, QueryResult, TableData};
+use crate::models::{DatabaseType, FilterCondition, QueryResult, TableData};
 
 use super::{ensure_expected_db, not_connected, register_cancel_token, release_cancel_token};
 
@@ -39,6 +39,169 @@ pub fn validate_cancel_inputs(query_id: &str) -> Result<(), AppError> {
         return Err(AppError::Validation("Query ID cannot be empty".into()));
     }
     Ok(())
+}
+
+#[derive(Clone, Copy)]
+enum MysqlScriptingFeature {
+    Delimiter,
+    LoadData,
+}
+
+fn validate_mysql_scripting_boundary(sql: &str, db_type: &DatabaseType) -> Result<(), AppError> {
+    if !matches!(db_type, DatabaseType::Mysql | DatabaseType::Mariadb) {
+        return Ok(());
+    }
+
+    match mysql_scripting_feature(sql) {
+        Some(MysqlScriptingFeature::Delimiter) => {
+            Err(AppError::Unsupported(
+                "DELIMITER is a mysql-client directive and is not supported in the query editor. Submit a single server SQL statement without DELIMITER; stored routine body parsing is not implemented.".into(),
+            ))
+        }
+        Some(MysqlScriptingFeature::LoadData) => Err(AppError::Unsupported(
+            "LOAD DATA is not supported in the query editor. Use an external MySQL client or import workflow; this app does not provide an explicit file-import confirmation path yet.".into(),
+        )),
+        None => Ok(()),
+    }
+}
+
+fn validate_mysql_scripting_boundary_batch(
+    statements: &[String],
+    db_type: &DatabaseType,
+) -> Result<(), AppError> {
+    for sql in statements {
+        validate_mysql_scripting_boundary(sql, db_type)?;
+    }
+    Ok(())
+}
+
+fn mysql_scripting_feature(sql: &str) -> Option<MysqlScriptingFeature> {
+    if let Some(feature) = leading_executable_comment_feature(sql) {
+        return Some(feature);
+    }
+
+    let words = leading_sql_words(sql, 2);
+    if words.first().is_some_and(|word| word == "DELIMITER") {
+        return Some(MysqlScriptingFeature::Delimiter);
+    }
+    if words.first().is_some_and(|word| word == "LOAD")
+        && words.get(1).is_some_and(|word| word == "DATA")
+    {
+        return Some(MysqlScriptingFeature::LoadData);
+    }
+
+    None
+}
+
+fn leading_executable_comment_feature(sql: &str) -> Option<MysqlScriptingFeature> {
+    let bytes = sql.as_bytes();
+    let mut index = 0;
+
+    while index < bytes.len() {
+        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+
+        if bytes.get(index) == Some(&b'-') && bytes.get(index + 1) == Some(&b'-') {
+            index += 2;
+            while index < bytes.len() && bytes[index] != b'\n' {
+                index += 1;
+            }
+            continue;
+        }
+
+        if bytes.get(index) == Some(&b'/') && bytes.get(index + 1) == Some(&b'*') {
+            let close = find_block_comment_close(bytes, index + 2);
+            if bytes.get(index + 2) == Some(&b'!') {
+                let mut body_start = index + 3;
+                while body_start < bytes.len() && bytes[body_start].is_ascii_digit() {
+                    body_start += 1;
+                }
+                let body_end = close.unwrap_or(bytes.len());
+                if let Some(feature) = mysql_scripting_feature(&sql[body_start..body_end]) {
+                    return Some(feature);
+                }
+            }
+            if let Some(close_index) = close {
+                index = close_index + 2;
+                continue;
+            }
+            return None;
+        }
+
+        break;
+    }
+
+    None
+}
+
+fn find_block_comment_close(bytes: &[u8], mut index: usize) -> Option<usize> {
+    while index + 1 < bytes.len() {
+        if bytes[index] == b'*' && bytes[index + 1] == b'/' {
+            return Some(index);
+        }
+        index += 1;
+    }
+    None
+}
+
+fn leading_sql_words(sql: &str, limit: usize) -> Vec<String> {
+    let bytes = sql.as_bytes();
+    let mut words = Vec::new();
+    let mut index = 0;
+
+    while words.len() < limit {
+        index = skip_whitespace_and_comments(bytes, index);
+        if index >= bytes.len() || !is_word_start(bytes[index]) {
+            break;
+        }
+
+        let start = index;
+        index += 1;
+        while index < bytes.len() && is_word_continue(bytes[index]) {
+            index += 1;
+        }
+        words.push(sql[start..index].to_ascii_uppercase());
+    }
+
+    words
+}
+
+fn skip_whitespace_and_comments(bytes: &[u8], mut index: usize) -> usize {
+    while index < bytes.len() {
+        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+
+        if bytes.get(index) == Some(&b'-') && bytes.get(index + 1) == Some(&b'-') {
+            index += 2;
+            while index < bytes.len() && bytes[index] != b'\n' {
+                index += 1;
+            }
+            continue;
+        }
+
+        if bytes.get(index) == Some(&b'/') && bytes.get(index + 1) == Some(&b'*') {
+            index += 2;
+            if let Some(close_index) = find_block_comment_close(bytes, index) {
+                index = close_index + 2;
+                continue;
+            }
+            return bytes.len();
+        }
+
+        break;
+    }
+
+    index
+}
+
+fn is_word_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic()
+}
+
+fn is_word_continue(byte: u8) -> bool {
+    is_word_start(byte) || byte.is_ascii_digit() || byte == b'_'
 }
 
 async fn execute_query_inner(
@@ -72,6 +235,10 @@ async fn execute_query_inner(
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
+        if let Err(err) = validate_mysql_scripting_boundary(sql, &active.kind()) {
+            release_cancel_token(state, &cancel_handle).await;
+            return Err(err);
+        }
         let adapter = active.as_rdb()?;
         // Sprint 266 — opt-in db-mismatch guard. When the caller passes
         // `expected_database` we sample the adapter's current db inside
@@ -186,6 +353,10 @@ async fn execute_query_batch_inner(
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
+        if let Err(err) = validate_mysql_scripting_boundary_batch(statements, &active.kind()) {
+            release_cancel_token(state, &cancel_handle).await;
+            return Err(err);
+        }
         let adapter = active.as_rdb()?;
         // Sprint 266 — opt-in db-mismatch guard. Sampled once at batch
         // start; mid-batch `USE other_db` style stateful statements stay
@@ -291,6 +462,10 @@ async fn execute_query_dry_run_inner(
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
+        if let Err(err) = validate_mysql_scripting_boundary_batch(statements, &active.kind()) {
+            release_cancel_token(state, &cancel_handle).await;
+            return Err(err);
+        }
         let adapter = active.as_rdb()?;
         // Sprint 271b — opt-in db-mismatch guard. Byte-equivalent to the
         // Sprint 266 reference at `execute_query_inner:83–92`: probe
@@ -838,7 +1013,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "execute_sql must not run for unsupported MySQL DELIMITER scripts")]
     async fn execute_query_mysql_delimiter_returns_unsupported_before_dispatch() {
         let mut s = StubRdbAdapter {
             kind_value: DatabaseType::Mysql,
@@ -1012,7 +1186,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "execute_sql_batch must not run for unsupported MySQL LOAD DATA")]
     async fn execute_query_batch_mariadb_load_data_returns_unsupported_before_dispatch() {
         let mut s = StubRdbAdapter {
             kind_value: DatabaseType::Mariadb,
@@ -1028,6 +1201,31 @@ mod tests {
         ];
 
         match execute_query_batch_inner(&state, "c", &stmts, "qb-load-data", None).await {
+            Err(AppError::Unsupported(msg)) => assert!(msg.contains("LOAD DATA")),
+            other => panic!("Expected Unsupported(LOAD DATA), got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn execute_query_mysql_executable_comment_load_data_returns_unsupported() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Mysql,
+            ..StubRdbAdapter::default()
+        };
+        s.execute_sql_fn = Some(Box::new(|_| {
+            panic!("execute_sql must not run for unsupported MySQL LOAD DATA")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+
+        match execute_query_inner(
+            &state,
+            "c",
+            "/*!40101 LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users */",
+            "q-load-data-comment",
+            None,
+        )
+        .await
+        {
             Err(AppError::Unsupported(msg)) => assert!(msg.contains("LOAD DATA")),
             other => panic!("Expected Unsupported(LOAD DATA), got: {:?}", other),
         }
@@ -1131,6 +1329,24 @@ mod tests {
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].total_count, 3);
         assert_eq!(r[0].execution_time_ms, 7);
+    }
+
+    #[tokio::test]
+    async fn dry_run_mysql_load_data_returns_unsupported_before_dispatch() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Mysql,
+            ..StubRdbAdapter::default()
+        };
+        s.dry_run_sql_batch_fn = Some(Box::new(|_| {
+            panic!("dry_run_sql_batch must not run for unsupported MySQL LOAD DATA")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts = vec!["LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users".to_string()];
+
+        match execute_query_dry_run_inner(&state, "c", &stmts, "qd-load-data", None).await {
+            Err(AppError::Unsupported(msg)) => assert!(msg.contains("LOAD DATA")),
+            other => panic!("Expected Unsupported(LOAD DATA), got: {:?}", other),
+        }
     }
 
     // ── Sprint 271b — execute_query_dry_run mismatch guard ───────────────
