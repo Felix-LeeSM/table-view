@@ -16,6 +16,7 @@ Implementation sprint 번호는 실행 직전에 새 번호를 배정한다. Act
 | 영역 | SOT |
 |---|---|
 | 현재 실행 순서 | `docs/PLAN.md` |
+| 장기 product / architecture roadmap | `docs/ROADMAP.md` |
 | 완료된 plan / sprint sequence | `docs/archives/plans/completed-roadmap.md` |
 | 완료된 phase index | `docs/archives/phases/README.md` |
 | Active/deferred risks | `docs/RISKS.md` |
@@ -35,6 +36,8 @@ Implementation sprint 번호는 실행 직전에 새 번호를 배정한다. Act
 
 - `Active Roadmap` 은 논의용 ordering 이다. 새 implementation phase 진입 전 사용자와
   범위/순서 합의가 필요하다.
+- 장기 방향과 horizon 은 `docs/ROADMAP.md` 에 둔다. 본 파일은 active ordering
+  만 유지한다.
 - 완료된 항목은 `docs/archives/plans/completed-roadmap.md`, `docs/archives/phases/README.md`,
   `docs/archives/risks/resolved-risks.md` 로 이동한다.
 - transient docs 는 sprint/phase SOT 로 흡수되면 삭제한다. Historical sprint
