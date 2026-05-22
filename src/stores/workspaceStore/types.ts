@@ -9,6 +9,11 @@ import type {
   QueryStatementResult,
 } from "@/types/query";
 import type { FilterCondition, SortInfo } from "@/types/schema";
+import type {
+  DocumentWorkspaceQueryModeInput,
+  WorkspaceQueryMode,
+} from "./queryMode";
+export type { WorkspaceQueryMode } from "./queryMode";
 
 // ---------------------------------------------------------------------------
 // Tab types — discriminated union so consumers can narrow on `tab.type`
@@ -71,39 +76,6 @@ export interface TableTab {
   sorts?: SortInfo[];
 }
 
-/**
- * Execution mode for a query tab. SQL statements belong to `"sql"`;
- * document paradigms historically split into a MongoDB `find` body and
- * an aggregation `pipeline`.
- *
- * Sprint 311 (Phase 28 Slice A5) — the parser-driven Run dispatch can
- * now classify any of the 6 read-path mongosh methods (`find`,
- * `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`,
- * `distinct`) and writes them through the history `queryMode` field for
- * filter/search backward-compat. Write-path methods (Sprint 312 / A6)
- * extend the union further. The field itself is no longer used to
- * route dispatch — the parser decides — but persisted legacy tabs may
- * still carry `"find" | "aggregate"`.
- */
-export type QueryMode =
-  | "sql"
-  | "find"
-  | "findOne"
-  | "aggregate"
-  | "countDocuments"
-  | "estimatedDocumentCount"
-  | "distinct"
-  | "insertOne"
-  | "insertMany"
-  | "updateOne"
-  | "updateMany"
-  | "replaceOne"
-  | "deleteOne"
-  | "deleteMany"
-  | "createIndex"
-  | "dropIndex"
-  | "bulkWrite";
-
 /** A tab that hosts the SQL / document query editor. */
 export interface QueryTab {
   type: "query";
@@ -126,7 +98,7 @@ export interface QueryTab {
    * default find dispatch. The type union itself will be removed in a
    * later sprint once A5 lands and no consumer remains.
    */
-  queryMode?: QueryMode;
+  queryMode?: WorkspaceQueryMode;
   database?: string;
   collection?: string;
 }
@@ -154,7 +126,7 @@ export type TableTabInit = Omit<TableTab, "id" | "isPreview"> & {
 
 export type QueryTabOptions = {
   paradigm?: Paradigm;
-  queryMode?: QueryMode;
+  queryMode?: WorkspaceQueryMode;
   database?: string;
   collection?: string;
 };
@@ -162,7 +134,7 @@ export type QueryTabOptions = {
 export type LoadQueryPayload = {
   connectionId: string;
   paradigm: Paradigm;
-  queryMode: QueryMode;
+  queryMode?: WorkspaceQueryMode | DocumentWorkspaceQueryModeInput;
   database?: string;
   collection?: string;
   sql: string;
@@ -234,7 +206,7 @@ export interface WorkspaceStoreState {
     connId: string,
     db: string,
     tabId: string,
-    mode: QueryMode,
+    mode: WorkspaceQueryMode,
   ) => void;
   completeQuery: (
     connId: string,

@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useSchemaStore } from "@stores/schemaStore";
-import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
+import {
+  recordHistoryEntry,
+  type DocumentRecordHistoryQueryMode,
+} from "@lib/history/recordHistoryEntry";
 import {
   executeQuery,
   executeQueryDryRun,
@@ -37,7 +40,7 @@ import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/toast";
-import type { QueryTab, QueryMode } from "@stores/workspaceStore";
+import type { QueryTab } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";
 import type { BulkWriteOp, BulkWriteResult } from "@/types/documentMutate";
 import type { WriteSummaryData } from "@/types/query";
@@ -273,7 +276,7 @@ export function useQueryExecution({
   // sprint-373 (2026-05-17) — `addHistoryEntry` (in-memory) retired.
   // `recordHistoryEntry` 가 (1) `query_history_enabled` 검사 + (2) wire
   // shape normalise + (3) `addOptimisticEntry` 호출을 한 번에 처리한다.
-  // tab paradigm 이 `"kv"` / `"search"` 면 helper 내부에서 silent skip
+  // tab paradigm 이 `"kv"` / `"search"` 면 여기서 skip
   // (해당 paradigm 의 backend wire 가 미정).
   const recordHistory = useCallback(
     (payload: {
@@ -281,20 +284,36 @@ export function useQueryExecution({
       executedAt: number;
       duration: number;
       status: "success" | "error" | "cancelled";
-      queryMode?: QueryMode;
+      queryMode?: DocumentRecordHistoryQueryMode;
     }) => {
-      recordHistoryEntry({
+      const common = {
         sql: payload.sql,
         executedAt: payload.executedAt,
         duration: payload.duration,
         status: payload.status,
-        source: "raw",
+        source: "raw" as const,
         connectionId: tab.connectionId,
-        paradigm: tab.paradigm,
-        queryMode: payload.queryMode ?? tab.queryMode,
         database: tab.database,
         collection: tab.collection,
         tabId: tab.id,
+      };
+      if (tab.paradigm === "rdb") {
+        recordHistoryEntry({
+          ...common,
+          paradigm: "rdb",
+          queryMode: "sql",
+        });
+        return;
+      }
+      if (tab.paradigm !== "document") {
+        return;
+      }
+      recordHistoryEntry({
+        ...common,
+        paradigm: tab.paradigm,
+        queryMode:
+          payload.queryMode ??
+          (tab.queryMode === "aggregate" ? "aggregate" : "find"),
       });
     },
     [
@@ -1573,7 +1592,7 @@ export function useQueryExecution({
    */
   const runWriteHelper = useCallback(
     async (
-      queryMode: QueryMode,
+      queryMode: DocumentRecordHistoryQueryMode,
       rawSql: string,
       writer: () => Promise<WriteSummaryData>,
     ) => {

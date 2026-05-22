@@ -254,7 +254,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
               return (
                 // Sprint 312 — KV / Search placeholders shed their
                 // `data-query-mode` attribute. They never carried a mongosh
-                // mode and the legacy QueryMode union has been deprecated.
+                // mode and the legacy workspace query-mode hint is deprecated.
                 <div
                   className="flex h-full w-full items-center justify-center overflow-hidden bg-background p-4 text-center text-sm text-muted-foreground"
                   role="textbox"

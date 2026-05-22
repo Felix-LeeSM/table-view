@@ -6,7 +6,7 @@
  *
  *   1. `useHistorySettingsStore.queryHistoryEnabled` 가 false 면 early
  *      return — IPC 호출 자체를 skip 한다 (AC-373-03 invariant).
- *   2. 호출자가 넘긴 legacy in-memory shape (`paradigm` + `queryMode` +
+ *   2. 호출자가 넘긴 history input shape (`paradigm` + `queryMode` +
  *      `duration` + 기타) 을 backend wire shape (discriminated union +
  *      `durationMs`) 으로 normalise.
  *   3. `useQueryHistoryStore.addOptimisticEntry` 에 위임 — optimistic
@@ -25,7 +25,6 @@
  */
 
 import type { Paradigm } from "@/types/connection";
-import type { QueryMode } from "@stores/workspaceStore";
 import {
   useQueryHistoryStore,
   type QueryHistorySource,
@@ -34,14 +33,16 @@ import { useHistorySettingsStore } from "@stores/historySettingsStore";
 import type {
   AddHistoryEntryRequest,
   DocumentQueryMode,
+  RdbQueryMode,
 } from "@lib/tauri/history";
 
-export interface RecordHistoryEntryArgs {
+export type DocumentRecordHistoryQueryMode =
+  | DocumentQueryMode
+  | "countDocuments";
+
+interface RecordHistoryEntryCommonArgs {
   /** Connection id; required (snapshot truth from tab/grid context). */
   connectionId: string;
-  paradigm: Paradigm;
-  /** Optional override of `tab.queryMode`; default → tab's mode. */
-  queryMode?: QueryMode;
   /** Optional db/collection (document paradigm 의 경우 거의 항상 set). */
   database?: string;
   collection?: string;
@@ -62,37 +63,54 @@ export interface RecordHistoryEntryArgs {
   serverPid?: number;
 }
 
+export type RecordHistoryEntryArgs = RecordHistoryEntryCommonArgs &
+  (
+    | { paradigm: "rdb"; queryMode?: RdbQueryMode }
+    | {
+        paradigm: "document";
+        queryMode?: DocumentRecordHistoryQueryMode;
+      }
+    | {
+        paradigm: Exclude<Paradigm, "rdb" | "document">;
+        queryMode?: never;
+      }
+  );
+
 /**
- * Legacy `QueryMode` → backend `DocumentQueryMode` 매핑. `countDocuments`
- * 가 유일한 정정 — 나머지는 1:1. `kv` / `search` paradigm 은 본 sprint
- * 범위 밖이라 호출자가 `paradigm: "rdb" | "document"` 만 넘긴다 (외 paradigm
- * 은 호출 site 가 없음).
+ * Frontend history input → backend `DocumentQueryMode` 매핑.
+ * `countDocuments` 가 유일한 legacy method-name 정정 — 나머지는 1:1.
+ * `kv` / `search` paradigm 은 본 sprint 범위 밖이라 호출자가
+ * `paradigm: "rdb" | "document"` 만 넘긴다 (외 paradigm 은 호출 site 가 없음).
  */
-function toDocumentQueryMode(mode: QueryMode | undefined): DocumentQueryMode {
-  if (mode === "countDocuments") return "count";
-  if (
-    mode === "find" ||
-    mode === "findOne" ||
-    mode === "aggregate" ||
-    mode === "estimatedDocumentCount" ||
-    mode === "distinct" ||
-    mode === "insertOne" ||
-    mode === "insertMany" ||
-    mode === "updateOne" ||
-    mode === "updateMany" ||
-    mode === "replaceOne" ||
-    mode === "deleteOne" ||
-    mode === "deleteMany" ||
-    mode === "createIndex" ||
-    mode === "dropIndex" ||
-    mode === "bulkWrite"
-  ) {
-    return mode;
+function toDocumentQueryMode(
+  mode: DocumentRecordHistoryQueryMode | undefined,
+): DocumentQueryMode | null {
+  if (mode === undefined) {
+    return "find";
   }
-  // Legacy / unset (`"sql"` 잘못 들어옴 / undefined) — default to `"find"`
-  // (가장 빈번한 document query). Backend serde 가 empty string 을 reject 하므로
-  // safe fallback.
-  return "find";
+  switch (mode) {
+    case "countDocuments":
+      return "count";
+    case "find":
+    case "findOne":
+    case "aggregate":
+    case "count":
+    case "estimatedDocumentCount":
+    case "distinct":
+    case "insertOne":
+    case "insertMany":
+    case "updateOne":
+    case "updateMany":
+    case "replaceOne":
+    case "deleteOne":
+    case "deleteMany":
+    case "createIndex":
+    case "dropIndex":
+    case "bulkWrite":
+      return mode;
+    default:
+      return null;
+  }
 }
 
 /**
@@ -124,16 +142,23 @@ export function recordHistoryEntry(args: RecordHistoryEntryArgs): void {
 
   let req: AddHistoryEntryRequest;
   if (args.paradigm === "rdb") {
+    if (args.queryMode !== undefined && args.queryMode !== "sql") {
+      return;
+    }
     req = {
       ...common,
       paradigm: "rdb",
       queryMode: "sql",
     };
   } else if (args.paradigm === "document") {
+    const queryMode = toDocumentQueryMode(args.queryMode);
+    if (!queryMode) {
+      return;
+    }
     req = {
       ...common,
       paradigm: "document",
-      queryMode: toDocumentQueryMode(args.queryMode),
+      queryMode,
     };
   } else {
     // kv / search — no backend wire support today. silent skip to avoid

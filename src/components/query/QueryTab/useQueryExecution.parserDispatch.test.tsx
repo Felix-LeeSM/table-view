@@ -600,7 +600,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       expect(useQueryHistoryStore.getState().recentVisible.length).toBe(1);
     });
     // sprint-373 (2026-05-17) — backend wire `DocumentQueryMode` 는
-    // `"count"` 만 허용 (legacy `"countDocuments"` 는 frontend `QueryMode`
+    // `"count"` 만 허용 (legacy `"countDocuments"` 는 record-history input
     // 타입에는 살아있지만 `recordHistoryEntry` 의 매핑이 backend wire 로
     // narrow 함). 사용자가 history panel 에서 보는 표기도 `"count"`.
     expect(useQueryHistoryStore.getState().recentVisible[0]!.queryMode).toBe(
