@@ -149,6 +149,8 @@ const MYSQL_KEYWORDS: readonly string[] = [
   "DUPLICATE KEY UPDATE",
 ];
 
+const MARIADB_KEYWORDS: readonly string[] = [...MYSQL_KEYWORDS, "RETURNING"];
+
 const SQLITE_KEYWORDS: readonly string[] = [
   "PRAGMA",
   "WITHOUT ROWID",
@@ -276,10 +278,11 @@ export const SQL_DIALECT_PROFILES: Record<SqlDialectId, SqlDialectProfile> = {
     capabilities: {
       ...COMMON_CAPABILITIES,
       schemas: false,
+      returning: true,
       limitOffsetComma: true,
       backslashEscapes: true,
     },
-    vocabulary: vocabulary(MYSQL_KEYWORDS, MYSQL_SQL_FUNCTIONS),
+    vocabulary: vocabulary(MARIADB_KEYWORDS, MYSQL_SQL_FUNCTIONS),
   },
   sqlite: {
     id: "sqlite",

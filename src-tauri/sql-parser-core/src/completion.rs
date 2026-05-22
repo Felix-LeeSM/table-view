@@ -9,7 +9,9 @@ mod vocabulary;
 
 use aliases::{resolve_alias, scan_aliases};
 use token::completion_token_at;
-use vocabulary::{builtin_functions, builtin_keywords, builtin_shell_commands};
+use vocabulary::{
+    builtin_functions, builtin_keyword_deltas, builtin_keywords, builtin_shell_commands,
+};
 
 pub use compact::complete_sql_compact;
 
@@ -162,6 +164,18 @@ fn add_keywords(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest,
                 apply: Some((*keyword).to_string()),
                 detail: Some(keyword_detail(&request.dialect)),
                 boost: Some(12),
+            });
+        }
+    }
+
+    for keyword in builtin_keyword_deltas(&request.dialect) {
+        if matches_prefix(keyword, prefix) {
+            items.push(CompletionItem {
+                label: (*keyword).to_string(),
+                kind: "keyword".to_string(),
+                apply: Some((*keyword).to_string()),
+                detail: Some(keyword_detail(&request.dialect)),
+                boost: Some(13),
             });
         }
     }

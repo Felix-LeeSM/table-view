@@ -7,6 +7,13 @@ pub(super) fn builtin_keywords(dialect: &str) -> &'static [&'static str] {
     }
 }
 
+pub(super) fn builtin_keyword_deltas(dialect: &str) -> &'static [&'static str] {
+    match dialect {
+        "mariadb" => MARIADB_KEYWORD_DELTAS,
+        _ => &[],
+    }
+}
+
 pub(super) fn builtin_functions(dialect: &str) -> &'static [&'static str] {
     match dialect {
         "postgresql" => POSTGRESQL_FUNCTIONS,
@@ -33,6 +40,9 @@ const POSTGRESQL_KEYWORDS: &[&str] = &["ABORT", "ANALYZE", "ATTACH", "CALL", "CH
 
 #[rustfmt::skip]
 const MYSQL_KEYWORDS: &[&str] = &["ACCESSIBLE", "ACCOUNT", "ACTION", "AFTER", "AGAINST", "ALGORITHM", "ANALYZE", "AUTO_INCREMENT", "BEFORE", "CALL", "CHANGE", "DATABASE", "DATABASES", "DELAYED", "DESCRIBE", "DETERMINISTIC", "DUAL", "DUPLICATE KEY UPDATE", "ENGINE", "EVENT", "EXPLAIN", "FULLTEXT", "GENERATED", "HIGH_PRIORITY", "IGNORE", "INFILE", "JSON_TABLE", "KEY", "KEYS", "KILL", "LIMIT", "LOAD", "LOCK", "LOW_PRIORITY", "MATCH", "ON DUPLICATE KEY UPDATE", "OPTIMIZE", "OUTFILE", "PARTITION", "PROCEDURE", "PURGE", "QUALIFY", "RENAME", "REPAIR", "REPLACE", "REPLACE INTO", "REQUIRE", "RESIGNAL", "RLIKE", "SCHEMA", "SCHEMAS", "SEPARATOR", "SHOW", "SIGNAL", "SPATIAL", "STRAIGHT_JOIN", "TABLESAMPLE", "TERMINATED", "TRIGGER", "UNLOCK", "UNSIGNED", "USE", "ZEROFILL"];
+
+#[rustfmt::skip]
+const MARIADB_KEYWORD_DELTAS: &[&str] = &["RETURNING"];
 
 #[rustfmt::skip]
 const SQLITE_KEYWORDS: &[&str] = &["ABORT", "AUTOINCREMENT", "CONFLICT", "FAIL", "GLOB", "IIF", "IGNORE", "INDEXED BY", "INSERT OR IGNORE", "INSERT OR REPLACE", "PRAGMA", "RAISE", "REPLACE", "ROWID", "VACUUM", "WITHOUT ROWID"];
