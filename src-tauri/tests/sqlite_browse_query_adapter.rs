@@ -138,7 +138,9 @@ async fn sqlite_contract_opens_user_file_and_browses_tables_and_columns() {
 async fn sqlite_contract_browses_views_and_view_columns() {
     let (_dir, adapter) = connected_fixture().await;
 
-    let views = adapter.list_views("main").await.unwrap();
+    let views = <SqliteAdapter as RdbAdapter>::list_views(&adapter, "main")
+        .await
+        .unwrap();
     let view = views
         .iter()
         .find(|view| view.name == "active_users")
@@ -151,8 +153,7 @@ async fn sqlite_contract_browses_views_and_view_columns() {
         "view definition should include SQLite create-view SQL: {view:?}"
     );
 
-    let columns = adapter
-        .get_view_columns("main", "active_users")
+    let columns = <SqliteAdapter as RdbAdapter>::get_view_columns(&adapter, "main", "active_users")
         .await
         .unwrap();
     assert_eq!(
@@ -168,8 +169,7 @@ async fn sqlite_contract_browses_views_and_view_columns() {
 async fn sqlite_contract_browses_table_indexes() {
     let (_dir, adapter) = connected_fixture().await;
 
-    let indexes = adapter
-        .get_table_indexes("main", "users", None)
+    let indexes = <SqliteAdapter as RdbAdapter>::get_table_indexes(&adapter, "main", "users", None)
         .await
         .unwrap();
     let index = indexes
