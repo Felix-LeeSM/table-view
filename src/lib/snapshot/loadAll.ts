@@ -46,9 +46,11 @@ import { logger } from "@lib/logger";
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { toWorkspaceQueryLanguage } from "@stores/workspaceStore/queryMode";
 import { useMruStore, type MruEntry } from "@stores/mruStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useSafeModeStore, type SafeMode } from "@stores/safeModeStore";
+import type { Paradigm } from "@/types/connection";
 import type { ThemeMode } from "@lib/themeBoot";
 import { DEFAULT_THEME_ID, isThemeId } from "@lib/themeCatalog";
 import {
@@ -250,10 +252,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function normalizeWorkspaceTab(value: unknown): unknown {
   if (!isRecord(value) || value.type !== "query") return value;
+  const paradigm = normalizeWorkspaceTabParadigm(value.paradigm);
   return {
     ...value,
     queryState: normalizeQueryState(value.queryState),
+    queryLanguage: toWorkspaceQueryLanguage({
+      paradigm,
+      queryLanguage: value.queryLanguage,
+    }),
   };
+}
+
+function normalizeWorkspaceTabParadigm(value: unknown): Paradigm {
+  return value === "document" || value === "search" || value === "kv"
+    ? value
+    : "rdb";
 }
 
 function normalizeWorkspaceState(value: unknown): unknown {

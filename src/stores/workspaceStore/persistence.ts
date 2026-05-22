@@ -18,7 +18,10 @@
  */
 import type { Paradigm } from "@/types/connection";
 import type { Tab, WorkspaceQueryMode, WorkspaceState } from "./types";
-import { sanitizeWorkspaceQueryMode } from "./queryMode";
+import {
+  sanitizeWorkspaceQueryMode,
+  toWorkspaceQueryLanguage,
+} from "./queryMode";
 
 export const STORAGE_KEY = "table-view-workspaces";
 
@@ -114,11 +117,16 @@ function migrateTab(t: Tab, workspaceDb: string): Tab {
       paradigm,
       t.queryMode,
     );
+    const queryLanguage = toWorkspaceQueryLanguage({
+      paradigm,
+      queryLanguage: t.queryLanguage,
+    });
     return {
       ...t,
       queryState: { status: "idle" as const },
       paradigm,
       queryMode,
+      queryLanguage,
     };
   }
   if (t.type === "table") {

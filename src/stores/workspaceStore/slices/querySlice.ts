@@ -6,7 +6,7 @@ import type {
   WorkspaceState,
   WorkspaceStoreState,
 } from "../types";
-import { toWorkspaceQueryMode } from "../queryMode";
+import { toWorkspaceQueryLanguage, toWorkspaceQueryMode } from "../queryMode";
 import {
   nextQueryTabIdentity,
   patchExistingWorkspace,
@@ -61,6 +61,25 @@ function patchRunningQueryTab(
   };
 }
 
+function patchQueryLanguage(
+  ws: WorkspaceState,
+  tabId: string,
+  queryLanguage: QueryTab["queryLanguage"],
+): WorkspaceState {
+  if (queryLanguage === undefined) {
+    return ws;
+  }
+
+  let changed = false;
+  const tabs = ws.tabs.map((t) => {
+    if (t.id !== tabId || t.type !== "query") return t;
+    if (t.queryLanguage === queryLanguage) return t;
+    changed = true;
+    return { ...t, queryLanguage };
+  });
+  return changed ? { ...ws, tabs } : ws;
+}
+
 export function createQuerySlice(
   set: WorkspaceSet,
   get: WorkspaceGet,
@@ -74,6 +93,10 @@ export function createQuerySlice(
       // `"sql"`; document tabs leave the field undefined on new tabs.
       const queryMode: WorkspaceQueryMode | undefined =
         paradigm === "rdb" ? "sql" : opts.queryMode;
+      const queryLanguage = toWorkspaceQueryLanguage({
+        paradigm,
+        queryLanguage: opts.queryLanguage,
+      });
       set((state) => {
         const next = withWorkspace(state, connId, db, (ws) => {
           const newTab: QueryTab = {
@@ -86,6 +109,7 @@ export function createQuerySlice(
             queryState: { status: "idle" } as QueryState,
             paradigm,
             queryMode,
+            queryLanguage,
             database: opts.database ?? (paradigm === "rdb" ? db : undefined),
             collection: opts.collection,
           };
@@ -263,12 +287,23 @@ export function createQuerySlice(
     },
 
     loadQueryIntoTab: (payload) => {
-      const { connectionId, paradigm, queryMode, database, collection, sql } =
-        payload;
+      const {
+        connectionId,
+        paradigm,
+        queryMode,
+        queryLanguage,
+        database,
+        collection,
+        sql,
+      } = payload;
       const resolvedDb = database ?? resolveActiveDb(connectionId);
       const workspaceQueryMode = toWorkspaceQueryMode({
         paradigm,
         queryMode,
+      });
+      const workspaceQueryLanguage = toWorkspaceQueryLanguage({
+        paradigm,
+        queryLanguage,
       });
       const ws = get().workspaces[connectionId]?.[resolvedDb];
       const activeTab =
@@ -286,6 +321,7 @@ export function createQuerySlice(
         get().addQueryTab(connectionId, resolvedDb, {
           paradigm,
           queryMode: workspaceQueryMode,
+          queryLanguage: workspaceQueryLanguage,
           database,
           collection,
         });
@@ -305,6 +341,16 @@ export function createQuerySlice(
         targetId,
         workspaceQueryMode,
       );
+      set((state) => {
+        const next = patchExistingWorkspace(
+          state,
+          connectionId,
+          resolvedDb,
+          (workspace) =>
+            patchQueryLanguage(workspace, targetId, workspaceQueryLanguage),
+        );
+        return next ? { workspaces: next } : state;
+      });
     },
   };
 }
