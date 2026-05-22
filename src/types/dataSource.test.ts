@@ -98,6 +98,7 @@ describe("DataSourceProfile registry", () => {
       connection: { test: true, filePicker: true, readOnly: true },
       query: { query: true, multiStatement: true, cancel: true },
       catalog: { browse: true, schema: true },
+      edit: { editRows: true },
     }),
     duckdb: expectedCapabilities({
       connection: { test: true, filePicker: true, readOnly: true },
@@ -196,12 +197,16 @@ describe("DataSourceProfile registry", () => {
     expect(getDataSourceProfile("duckdb").connectionKind).toBe("file");
   });
 
-  it("describes SQLite as a file RDBMS without switch-db, row-edit, or DDL parity", () => {
+  it("describes SQLite as a file RDBMS with scoped row-edit but no switch-db or DDL parity", () => {
     const sqlite = getDataSourceProfile("sqlite");
 
     expect(sqlite.connectionKind).toBe("file");
     expect(sqlite.capabilities).toEqual(expectedCapabilitiesByType.sqlite);
-    expect(sqlite.capabilities.edit.editRows).toBe(false);
+    expect(sqlite.capabilities.edit.editRows).toBe(true);
+    expect(sqlite.capabilities.ddl.createTable).toBe(false);
+    expect(sqlite.capabilities.ddl.alterTable).toBe(false);
+    expect(sqlite.capabilities.ddl.createIndex).toBe(false);
+    expect(sqlite.capabilities.ddl.dropObject).toBe(false);
   });
 
   it("keeps MongoDB document-scoped and separate from global switch-db", () => {

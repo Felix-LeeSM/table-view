@@ -96,6 +96,26 @@ function escapeSqlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+function quoteSqlIdentifier(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function sqlIdentifier(value: string, dialect: SqlDialect): string {
+  if (dialect === "sqlite") return quoteSqlIdentifier(value);
+  return value;
+}
+
+function qualifiedTableName(
+  schema: string,
+  table: string,
+  dialect: SqlDialect,
+): string {
+  if (dialect !== "sqlite") return schema ? `${schema}.${table}` : table;
+  return schema
+    ? `${quoteSqlIdentifier(schema)}.${quoteSqlIdentifier(table)}`
+    : quoteSqlIdentifier(table);
+}
+
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // Accepts `YYYY-MM-DDTHH:MM[:SS[.fff]][Z|±HH:MM]` — the `T` may also be a space
 // to match SQL-style inputs the user might copy in from psql.
@@ -222,13 +242,14 @@ function buildWhereClause(
   row: unknown[],
   columns: ColumnInfo[],
   pkCols: ColumnInfo[],
+  dialect: SqlDialect,
 ): string {
   // Sprint 305 — pk / 비-pk 값이 Decimal 인 경우 `String(decimal)` → `[object
   // Object]` 가 되는 회귀 가드. BigInt 는 String() 으로 digit 보존되지만
   // Decimal 은 명시 분기 필요.
   const literal = (v: unknown): string => {
     if (v == null) return "NULL";
-    if (typeof v === "string") return `'${v}'`;
+    if (typeof v === "string") return escapeSqlString(v);
     if (typeof v === "object" && "toString" in (v as object))
       return (v as { toString(): string }).toString();
     return String(v);
@@ -237,11 +258,13 @@ function buildWhereClause(
     return pkCols
       .map((pk) => {
         const pkIdx = columns.indexOf(pk);
-        return `${pk.name} = ${literal(row[pkIdx])}`;
+        return `${sqlIdentifier(pk.name, dialect)} = ${literal(row[pkIdx])}`;
       })
       .join(" AND ");
   }
-  return columns.map((c, i) => `${c.name} = ${literal(row[i])}`).join(" AND ");
+  return columns
+    .map((c, i) => `${sqlIdentifier(c.name, dialect)} = ${literal(row[i])}`)
+    .join(" AND ");
 }
 
 /**
@@ -914,7 +937,8 @@ export function generateSqlWithKeys(
 
   const pkCols = data.columns.filter((c) => c.is_primary_key);
   const statements: GeneratedSqlStatement[] = [];
-  const qualifiedTable = schema ? `${schema}.${table}` : table;
+  const dialect = options.dialect ?? "postgresql";
+  const qualifiedTable = qualifiedTableName(schema, table, dialect);
 
   // Sprint 343 (2026-05-15) — UPDATE path now supports inline-tree
   // nested edits (`"rowIdx-colIdx:dot.path"`) alongside the flat
@@ -953,7 +977,8 @@ export function generateSqlWithKeys(
 
     const topLevel = entries.find((e) => e.path === null);
     const nested = entries.filter((e) => e.path !== null);
-    const whereClause = buildWhereClause(row, data.columns, pkCols);
+    const whereClause = buildWhereClause(row, data.columns, pkCols, dialect);
+    const columnName = sqlIdentifier(col.name, dialect);
 
     // Top-level cell edit takes precedence — it replaces the entire
     // column value, so any concurrent nested edit on the same cell
@@ -971,7 +996,7 @@ export function generateSqlWithKeys(
         return;
       }
       statements.push({
-        sql: `UPDATE ${qualifiedTable} SET ${col.name} = ${coerced.sql} WHERE ${whereClause};`,
+        sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${coerced.sql} WHERE ${whereClause};`,
         key: topLevel.key,
       });
       return;
@@ -1000,19 +1025,18 @@ export function generateSqlWithKeys(
         return;
       }
       statements.push({
-        sql: `UPDATE ${qualifiedTable} SET ${col.name} = ${coerced.sql} WHERE ${whereClause};`,
+        sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${coerced.sql} WHERE ${whereClause};`,
         key: topLevel.key,
       });
       return;
     }
 
     // Nested-only branch — dispatch by column type + dialect.
-    const dialect = options.dialect ?? "postgresql";
     if (isStructuralJsonColumn(col.data_type, dialect)) {
       const emitted =
         dialect === "mysql"
-          ? emitMysqlJsonUpdate(col.name, row[colIdx], nested)
-          : emitJsonbUpdate(col.name, row[colIdx], nested);
+          ? emitMysqlJsonUpdate(columnName, row[colIdx], nested)
+          : emitJsonbUpdate(columnName, row[colIdx], nested);
       if (emitted.kind === "error") {
         options.onCoerceError?.({
           key: nested[0]!.key,
@@ -1023,7 +1047,7 @@ export function generateSqlWithKeys(
         return;
       }
       statements.push({
-        sql: `UPDATE ${qualifiedTable} SET ${col.name} = ${emitted.expr} WHERE ${whereClause};`,
+        sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${emitted.expr} WHERE ${whereClause};`,
         key: nested[0]!.key,
       });
       return;
@@ -1044,7 +1068,7 @@ export function generateSqlWithKeys(
 
     if (isArrayColumn(col.data_type) && dialect === "postgresql") {
       const emitted = emitArrayUpdate(
-        col.name,
+        columnName,
         col.data_type,
         row[colIdx],
         nested,
@@ -1059,7 +1083,7 @@ export function generateSqlWithKeys(
         return;
       }
       statements.push({
-        sql: `UPDATE ${qualifiedTable} SET ${col.name} = ${emitted.expr} WHERE ${whereClause};`,
+        sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${emitted.expr} WHERE ${whereClause};`,
         key: nested[0]!.key,
       });
       return;
@@ -1082,7 +1106,7 @@ export function generateSqlWithKeys(
     const row = data.rows[rowIdx] as unknown[];
     if (!row) return;
 
-    const whereClause = buildWhereClause(row, data.columns, pkCols);
+    const whereClause = buildWhereClause(row, data.columns, pkCols, dialect);
     statements.push({
       sql: `DELETE FROM ${qualifiedTable} WHERE ${whereClause};`,
       key: delKey,
@@ -1113,7 +1137,9 @@ export function generateSqlWithKeys(
       literals.push(coerced.sql);
     });
     if (rowHasError) return;
-    const colList = data.columns.map((c) => c.name).join(", ");
+    const colList = data.columns
+      .map((c) => sqlIdentifier(c.name, dialect))
+      .join(", ");
     statements.push({
       sql: `INSERT INTO ${qualifiedTable} (${colList}) VALUES (${literals.join(", ")});`,
       key: `new-${newRowIdx}-0`,

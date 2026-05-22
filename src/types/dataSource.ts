@@ -309,6 +309,9 @@ export const SQLITE_CAPABILITIES = capabilities({
     browse: true,
     schema: true,
   },
+  edit: {
+    editRows: true,
+  },
 });
 
 export const DUCKDB_CAPABILITIES = capabilities({
