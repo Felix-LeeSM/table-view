@@ -1,6 +1,7 @@
-# Completed Phase Index
+# Phase Archive
 
-Completed/closed phase index. Current execution order lives in `../PLAN.md`.
+Completed/closed and retired/superseded phase index. Current execution order
+lives in `../PLAN.md`.
 
 Last updated: 2026-05-22
 
@@ -24,13 +25,17 @@ Last updated: 2026-05-22
 | 27 | Table / Column DDL UI | closed | `phase-27.md` |
 | 31 | Language completion architecture | complete | `phase-31.md` |
 
-## Not Completed Here
+## Retired / Superseded Drafts
 
-| Phase | Current state | Reason |
-|---:|---|---|
-| 5-11 | legacy/partial | superseded by later phase split and sprint plans; legacy Phase 5-9 sketches removed |
-| 18 | deferred | MariaDB adapter decision pending |
-| 19 | deferred | SQLite DBMS adapter decision pending |
-| 20 | deferred | Oracle not current priority |
-| 24-26 | planned/backlog | DDL surface leftovers; not current top priority |
-| 28 | planned/current candidate | MongoDB full support |
+| Phase | Scope | Status | Current home |
+|---:|---|---|---|
+| 5 | Extended features | retired/partial | `phase-5.md`; active gaps live in `../PLAN.md` / `../RISKS.md` |
+| 6 | Legacy MongoDB support sketch | superseded | `phase-6.md`; current MongoDB plan is `phase-28.md` |
+| 7 | Elasticsearch sketch | retired/future | `phase-7.md`; paradigm summary is `../../memory/architecture/paradigms/memory.md` |
+| 8 | Redis sketch | retired/future | `phase-8.md`; paradigm summary is `../../memory/architecture/paradigms/memory.md` |
+| 9 | Legacy RDBMS split sketch | superseded | `phase-9.md`; current DBMS split is Phase 17-20 |
+
+## Deferred / Planned
+
+Deferred/planned phases stay in `../PLAN.md` so active ordering remains one
+place.

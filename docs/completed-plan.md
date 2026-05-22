@@ -37,10 +37,7 @@ Last updated: 2026-05-22
 | Completed phase list | `docs/phases/completed.md` |
 | Resolved risk table/log | `docs/RISKS.resolved.md` |
 | Active ordering | `docs/PLAN.md` |
-| UX law action plan | removed; sprint-176-180 artifacts + `docs/ux-laws-mapping.md` remain |
-| Legacy Phase 5 extended-features sketch | removed; completed pieces are covered by later sprint evidence and current gaps live in `docs/PLAN.md` / `docs/RISKS.md` |
-| Legacy Phase 6 MongoDB sketch | removed; superseded by Phase 28 and `memory/roadmap/phase-28-mongo-full-support/memory.md` |
-| Legacy Phase 7/8 ES/Redis sketches | removed; current paradigm summary lives in `memory/architecture/paradigms/memory.md`; not active roadmap |
-| Legacy Phase 9 RDBMS sketch | removed; superseded by Phase 17-20 split and `docs/PLAN.md` |
-| Archived 2026-04-10 test improvement snapshot | removed; superseded by later sprint evidence |
-| 2026-05-19 refactor backlog draft | removed; active refactor tracking remains RISK-038 + `docs/code-smell-audit-2026-05-15.md` |
+| UX law action plan | preserved as retired reference; sprint-176-180 artifacts + `docs/ux-laws-mapping.md` remain current |
+| Legacy Phase 5-9 sketches | preserved in `docs/phases/`; archived in `docs/phases/completed.md` |
+| Archived 2026-04-10 test improvement snapshot | preserved under `docs/archive/`; superseded by later sprint evidence |
+| 2026-05-19 refactor backlog draft | preserved under `docs/refactor-backlog/2026-05-19/`; active refactor tracking remains RISK-038 + `docs/code-smell-audit-2026-05-15.md` |
