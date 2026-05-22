@@ -29,11 +29,11 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
     expect(kws).not.toContain("PRAGMA");
   });
 
-  it("MariaDB reuses the MySQL keyword surface", () => {
+  it("MariaDB extends the MySQL keyword surface with RETURNING", () => {
     const kws = getKeywordsForDialect("mariadb");
     expect(kws).toContain("AUTO_INCREMENT");
     expect(kws).toContain("REPLACE INTO");
-    expect(kws).not.toContain("RETURNING");
+    expect(kws).toContain("RETURNING");
   });
 
   // AC-S139-03: SQLite dialect includes PRAGMA + WITHOUT ROWID and excludes
@@ -93,16 +93,18 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
     }
   });
 
-  // Cross-dialect contamination guard: PG's RETURNING never leaks into
-  // MySQL or SQLite; MySQL's AUTO_INCREMENT never leaks into PG or SQLite;
-  // SQLite's PRAGMA never leaks into PG or MySQL.
-  it("does not cross-contaminate between PG / MySQL / SQLite", () => {
+  // Cross-dialect contamination guard: RETURNING stays out of MySQL while
+  // MariaDB exposes its own delta; MySQL's AUTO_INCREMENT never leaks into PG
+  // or SQLite; SQLite's PRAGMA never leaks into PG or MySQL.
+  it("does not cross-contaminate between PG / MySQL / MariaDB / SQLite", () => {
     const pg = getKeywordsForDialect("postgresql");
     const mysql = getKeywordsForDialect("mysql");
+    const mariadb = getKeywordsForDialect("mariadb");
     const sqlite = getKeywordsForDialect("sqlite");
 
-    // PG-only
+    // RETURNING is PG + MariaDB, but not MySQL.
     expect(mysql).not.toContain("RETURNING");
+    expect(mariadb).toContain("RETURNING");
     expect(sqlite).not.toContain("RETURNING");
     expect(mysql).not.toContain("JSONB");
     expect(sqlite).not.toContain("JSONB");

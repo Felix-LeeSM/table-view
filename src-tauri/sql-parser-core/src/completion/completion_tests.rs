@@ -104,6 +104,16 @@ fn assert_builtin_completion_contains(dialect: &str, shell: &str, text: &str, la
     );
 }
 
+fn assert_builtin_completion_excludes(dialect: &str, shell: &str, text: &str, label: &str) {
+    let result = complete_sql(empty_vocabulary_request(dialect, shell, text));
+    let result_labels = labels(&result);
+
+    assert!(
+        !result_labels.contains(&label.to_string()),
+        "{dialect}/{shell} completion for {text:?} unexpectedly contained {label:?}; got {result_labels:?}"
+    );
+}
+
 #[test]
 fn returns_keyword_table_column_and_function_candidates() {
     let result = complete_sql(request("SEL", 3, 3));
@@ -204,6 +214,12 @@ fn mysql_family_reference_vocabulary_smoke() {
     assert_builtin_completion_contains("mysql", "mysql-client", "query_a", "query_attributes");
     assert_builtin_completion_contains("mysql", "mysql-client", "delim", "delimiter");
     assert_builtin_completion_contains("mysql", "mysql-client", "sour", "source");
+}
+
+#[test]
+fn mariadb_returning_keyword_is_dialect_specific() {
+    assert_builtin_completion_contains("mariadb", "mysql-client", "RET", "RETURNING");
+    assert_builtin_completion_excludes("mysql", "mysql-client", "RET", "RETURNING");
 }
 
 #[test]
