@@ -36,6 +36,8 @@ describe("sqlDialectProfile", () => {
     expect(SQL_DIALECT_PROFILES.postgresql.capabilities.ilike).toBe(true);
     expect(SQL_DIALECT_PROFILES.mysql.capabilities.returning).toBe(false);
     expect(SQL_DIALECT_PROFILES.mysql.capabilities.limitOffsetComma).toBe(true);
+    expect(SQL_DIALECT_PROFILES.mariadb.capabilities.returning).toBe(true);
+    expect(SQL_DIALECT_PROFILES.mariadb.capabilities.ilike).toBe(false);
     expect(SQL_DIALECT_PROFILES.sqlite.capabilities.onConflict).toBe(true);
   });
 
@@ -48,6 +50,10 @@ describe("sqlDialectProfile", () => {
     expect(mysql?.family).toBe("mysql");
     expect(mariadb?.family).toBe("mysql");
     expect(mariadb?.codeMirrorDialect).toBe(mysql?.codeMirrorDialect);
+    expect(mysql?.capabilities.returning).toBe(false);
+    expect(mariadb?.capabilities.returning).toBe(true);
+    expect(mysql?.vocabulary.keywords).not.toContain("RETURNING");
+    expect(mariadb?.vocabulary.keywords).toContain("RETURNING");
   });
 
   it("keeps psql/mysql/sqlite shell commands out of SQL dialect vocabulary", () => {

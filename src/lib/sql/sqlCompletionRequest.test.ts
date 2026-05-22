@@ -79,6 +79,7 @@ describe("buildSqlCompletionRequest", () => {
   it("keeps dialect capabilities and vocabulary on the request boundary", () => {
     const pg = requestFor("postgresql");
     const mysql = requestFor("mysql");
+    const mariadb = requestFor("mariadb");
     const sqlite = requestFor("sqlite");
 
     expect(pg.capabilities.returning).toBe(true);
@@ -87,8 +88,14 @@ describe("buildSqlCompletionRequest", () => {
 
     expect(mysql.capabilities.limitOffsetComma).toBe(true);
     expect(mysql.capabilities.ilike).toBe(false);
+    expect(mysql.capabilities.returning).toBe(false);
     expect(mysql.vocabulary.functions).toContain("JSON_EXTRACT");
     expect(mysql.vocabulary.functions).not.toContain("DATE_TRUNC");
+    expect(mysql.vocabulary.keywords).not.toContain("RETURNING");
+
+    expect(mariadb.capabilities.returning).toBe(true);
+    expect(mariadb.capabilities.ilike).toBe(false);
+    expect(mariadb.vocabulary.keywords).toContain("RETURNING");
 
     expect(sqlite.capabilities.onConflict).toBe(true);
     expect(sqlite.vocabulary.keywords).toContain("PRAGMA");
