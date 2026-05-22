@@ -20,4 +20,4 @@
 
 ## Risks
 
-- `loadQueryIntoTab` remains a legacy/backward-compat action and now accepts only the workspace tab hint type, not arbitrary history method names. No current call sites were found.
+- `loadQueryIntoTab` remains a legacy/backward-compat action; it now accepts document history modes and maps them to the narrow workspace tab hint before storing. No current call sites were found.
