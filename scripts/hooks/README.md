@@ -16,4 +16,5 @@ Current dispatchers:
 - `check-dangerous-bash.sh` — Bash command policy.
 - `check-main-worktree-source-edit.sh` — primary-worktree source/app edit guard.
 - `check-signed-commits.sh` — pre-push outgoing signed-commit gate.
+- `pre-push-path-router.sh` — path-sensitive pre-push TS/Rust gate router.
 - `post-tool-use.sh` — post-edit formatter/check dispatcher.
