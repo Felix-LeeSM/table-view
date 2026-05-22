@@ -15,15 +15,18 @@ Active 실행 순서: [docs/PLAN.md](../../docs/PLAN.md). 장기 roadmap:
 
 Active ordering 은 `docs/PLAN.md` 가 SOT. 현재 기준은:
 
-1. Data-source profile/capability foundation — 새 DBMS 는 profile, adapter,
+1. Current code -> data-source architecture alignment — 기존
+   `DatabaseType`/`Paradigm`/`ActiveAdapter`/query/result path 를 profile,
+   capability, queryLanguage, result envelope 로 감싼다. 기능 확장 금지.
+2. Data-source profile/capability foundation — 새 DBMS 는 profile, adapter,
    queryLanguage, catalog, result envelope, safety contract 없이 추가하지 않는다.
-2. RDBMS-first — MySQL-family semantic widening, MariaDB, SQLite.
-3. DuckDB + file analytics — SQLite file contract 뒤 RDBMS/file analytics 로 진입.
-4. RDBMS intelligence — ERD 는 재사용 가능한 `SchemaGraph` 로 구현.
-5. Non-RDBMS — Redis/Valkey, Elasticsearch/OpenSearch, MongoDB full support.
-6. Broader paradigms — Cassandra/DynamoDB/graph/vector/stream 은 workflow +
+3. RDBMS-first — MySQL-family semantic widening, MariaDB, SQLite.
+4. DuckDB + file analytics — SQLite file contract 뒤 RDBMS/file analytics 로 진입.
+5. RDBMS intelligence — ERD 는 재사용 가능한 `SchemaGraph` 로 구현.
+6. Non-RDBMS — Redis/Valkey, Elasticsearch/OpenSearch, MongoDB full support.
+7. Broader paradigms — Cassandra/DynamoDB/graph/vector/stream 은 workflow +
    profile contract lock 전 active 승격 금지.
-7. State-management migration — contracts 는 보존, 실제 재개 전 current code 재-audit.
+8. State-management migration — contracts 는 보존, 실제 재개 전 current code 재-audit.
 
 장기 horizon / decision gate 는 `docs/ROADMAP.md` 가 SOT.
 

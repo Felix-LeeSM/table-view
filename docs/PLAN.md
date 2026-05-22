@@ -27,13 +27,15 @@ Implementation sprint 번호는 실행 직전에 새 번호를 배정한다. Act
 
 ## Sorting Rule
 
-1. RDBMS support gap 먼저 닫는다.
-2. 새 DBMS 는 `docs/data-source-architecture.md` 의 profile/capability contract 를
+1. 현재 코드를 `docs/data-source-architecture.md` 의 profile/capability 구조에
+   먼저 끼운다.
+2. RDBMS support gap 먼저 닫는다.
+3. 새 DBMS 는 `docs/data-source-architecture.md` 의 profile/capability contract 를
    먼저 정의한다.
-3. 이미 열린 runtime/parser/completion surface 의 semantic correctness 를 넓힌다.
-4. capability/version gating 은 vocabulary coverage 이후에 붙인다.
-5. 큰 state-management migration 은 DB support 흐름과 충돌하지 않을 때 재개한다.
-6. 완료 이력은 본 파일에 다시 누적하지 않고 completed 문서로 이동한다.
+4. 이미 열린 runtime/parser/completion surface 의 semantic correctness 를 넓힌다.
+5. capability/version gating 은 vocabulary coverage 이후에 붙인다.
+6. 큰 state-management migration 은 DB support 흐름과 충돌하지 않을 때 재개한다.
+7. 완료 이력은 본 파일에 다시 누적하지 않고 completed 문서로 이동한다.
 
 ## Planning Protocol
 
@@ -63,18 +65,21 @@ Implementation sprint 번호는 실행 직전에 새 번호를 배정한다. Act
 
 | Order | Track | Status | Next move | SOT |
 |---:|---|---|---|---|
-| 1 | Data-source profile/capability foundation | planned/current candidate | `DataSourceProfile`, capability profile, queryLanguage, result envelope 구현 범위 audit 후 최소 contract 부터 고정 | `docs/data-source-architecture.md`, ADR 0046 |
-| 2 | MySQL-family semantic widening | active follow-up | broader `CALL` args, user variables, routine scripting, `DELIMITER`, `LOAD DATA` 순서로 parser/safety gap 축소 | `docs/query-language-support.md`, `docs/sprints/sprint-439/` |
-| 3 | MariaDB adapter decision | deferred -> re-evaluate | Slice 18A: MySQL adapter reuse + MariaDB identity/dialect flag 를 default 로 검증. 전용 adapter 는 evidence 있을 때만 ADR | `docs/phases/phase-18.md` |
-| 4 | SQLite DBMS adapter / write parity | deferred -> re-evaluate | Slice 19A: user DBMS adapter 범위를 internal app SQLite state-management 와 분리해 connection/file-picker contract 부터 고정 | `docs/phases/phase-19.md`, `docs/state-management-strategy-2026-05-15.md` |
-| 5 | DuckDB + file analytics | planned | SQLite file contract 재사용. `.duckdb`, CSV, Parquet, JSON preview/query/import 후보 phase 작성 | `docs/data-source-architecture.md`, `docs/ROADMAP.md` |
-| 6 | RDBMS ERD / SchemaGraph | planned | FK/constraint catalog 를 재사용 가능한 `SchemaGraph` 로 승격. ERD는 첫 renderer | `docs/data-source-architecture.md` |
-| 7 | Redis/Valkey | deferred candidate | `KvAdapter` 를 marker 에서 key/type/TTL/stream contract 로 승격 후 phase 작성 | `docs/data-source-architecture.md` |
-| 8 | Elasticsearch/OpenSearch | deferred candidate | `SearchAdapter` 를 marker 에서 index/mapping/search/aggregation contract 로 승격 후 phase 작성 | `docs/data-source-architecture.md` |
-| 9 | MongoDB full support | deferred/current subagent audit only | Phase 28 Slice A 는 보존하되 RDBMS-first 후 재개. `queryMode` 는 execution SOT 로 되살리지 않음 | `docs/phases/phase-28.md` |
-| 10 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md` |
-| 11 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |
-| 12 | State-management migration | planned contracts | Sprint 353-376 contracts 는 보존. 실제 재개 전 current code와 재-audit 필요 | `docs/state-management-strategy-2026-05-15.md` |
+| 1 | Current code -> data-source architecture alignment | planned/current candidate | 현재 `DatabaseType`/`Paradigm`/`ActiveAdapter`/workspace query/result 코드를 profile, capability, queryLanguage, result envelope 의 thin compatibility layer 로 감싼다. 기능 확장 금지 | `docs/data-source-architecture.md`, ADR 0046 |
+| 2 | Data-source profile/capability foundation | planned | 기존 PostgreSQL/MySQL/MariaDB/SQLite/MongoDB 프로필을 먼저 선언하고 UI feature gating 을 `dbType` switch 에서 capability 조회로 이동 | `docs/data-source-architecture.md`, ADR 0046 |
+| 3 | Query language / result envelope migration | planned | legacy `queryMode` 는 호환 필드로 낮추고 `queryLanguage` + typed result envelope 를 query/editor/result boundary 에 도입 | `docs/data-source-architecture.md`, ADR 0046 |
+| 4 | Adapter contract normalization | planned | `RdbAdapter` 는 현 기능을 profile 로 노출하고, `KvAdapter`/`SearchAdapter` marker trait 승격 전 필요한 contract shape 를 고정 | `docs/data-source-architecture.md`, ADR 0046 |
+| 5 | MySQL-family semantic widening | active follow-up | broader `CALL` args, user variables, routine scripting, `DELIMITER`, `LOAD DATA` 순서로 parser/safety gap 축소 | `docs/query-language-support.md`, `docs/sprints/sprint-439/` |
+| 6 | MariaDB adapter decision | deferred -> re-evaluate | Slice 18A: MySQL adapter reuse + MariaDB identity/dialect flag 를 default 로 검증. 전용 adapter 는 evidence 있을 때만 ADR | `docs/phases/phase-18.md` |
+| 7 | SQLite DBMS adapter / write parity | deferred -> re-evaluate | Slice 19A: user DBMS adapter 범위를 internal app SQLite state-management 와 분리해 connection/file-picker contract 부터 고정 | `docs/phases/phase-19.md`, `docs/state-management-strategy-2026-05-15.md` |
+| 8 | DuckDB + file analytics | planned | SQLite file contract 재사용. `.duckdb`, CSV, Parquet, JSON preview/query/import 후보 phase 작성 | `docs/data-source-architecture.md`, `docs/ROADMAP.md` |
+| 9 | RDBMS ERD / SchemaGraph | planned | FK/constraint catalog 를 재사용 가능한 `SchemaGraph` 로 승격. ERD는 첫 renderer | `docs/data-source-architecture.md` |
+| 10 | Redis/Valkey | deferred candidate | `KvAdapter` 를 marker 에서 key/type/TTL/stream contract 로 승격 후 phase 작성 | `docs/data-source-architecture.md` |
+| 11 | Elasticsearch/OpenSearch | deferred candidate | `SearchAdapter` 를 marker 에서 index/mapping/search/aggregation contract 로 승격 후 phase 작성 | `docs/data-source-architecture.md` |
+| 12 | MongoDB full support | deferred/current subagent audit only | Phase 28 Slice A 는 보존하되 RDBMS-first 후 재개. `queryMode` 는 execution SOT 로 되살리지 않음 | `docs/phases/phase-28.md` |
+| 13 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md` |
+| 14 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |
+| 15 | State-management migration | planned contracts | Sprint 353-376 contracts 는 보존. 실제 재개 전 current code와 재-audit 필요 | `docs/state-management-strategy-2026-05-15.md` |
 
 ## Recently Closed
 
