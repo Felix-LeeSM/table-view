@@ -178,6 +178,8 @@ pub enum Token {
     PlaceholderAnonymous,
     /// `:name` — named placeholder (`@`/sqlite styles also accepted via `:`).
     PlaceholderNamed(String),
+    /// `@name` — bounded MySQL/MariaDB user variable token.
+    UserVariable(String),
 
     // --- punctuation ---
     Star,
@@ -321,6 +323,35 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 std::str::from_utf8(&bytes[i + 1..end]).map_err(|_| lex_err(start, "utf-8"))?;
             tokens.push(Spanned {
                 token: Token::PlaceholderNamed(slice.to_string()),
+                at: start,
+            });
+            i = end;
+            continue;
+        }
+
+        // Bounded MySQL/MariaDB user variables. The parser only accepts
+        // this token in CALL argument positions.
+        if c == b'@' {
+            let Some(next) = bytes.get(i + 1).copied() else {
+                return Err(lex_err(
+                    start,
+                    "expected identifier after '@' for user variable",
+                ));
+            };
+            if !(next.is_ascii_alphabetic() || next == b'_') {
+                return Err(lex_err(
+                    start,
+                    "expected identifier after '@' for user variable",
+                ));
+            }
+            let mut end = i + 2;
+            while end < bytes.len() && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_') {
+                end += 1;
+            }
+            let slice =
+                std::str::from_utf8(&bytes[i + 1..end]).map_err(|_| lex_err(start, "utf-8"))?;
+            tokens.push(Spanned {
+                token: Token::UserVariable(slice.to_string()),
                 at: start,
             });
             i = end;
@@ -783,6 +814,14 @@ mod tests {
     fn ac_l7_unknown_char_is_lex_error() {
         let err = lex("SELECT @").unwrap_err();
         assert_eq!(err.error_kind, ParseErrorKind::LexError);
+    }
+
+    #[test]
+    fn user_variable_lexes_as_bounded_mysql_family_token() {
+        assert_eq!(
+            lex_ok("@user_id"),
+            vec![Token::UserVariable("user_id".into())]
+        );
     }
 
     #[test]

@@ -561,10 +561,16 @@ export interface SqlProcedureRef {
   name: string;
 }
 
+export type SqlCallArgument =
+  | { kind: "literal"; value: SqlLiteralValue }
+  | { kind: "default" }
+  | { kind: "placeholder"; name: string }
+  | { kind: "user-variable"; name: string };
+
 export interface SqlCallStatement {
   kind: "call";
   procedure: SqlProcedureRef;
-  arguments: SqlInsertValue[];
+  arguments: SqlCallArgument[];
 }
 
 export interface SqlUpdateStatement {

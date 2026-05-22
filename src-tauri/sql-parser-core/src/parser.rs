@@ -33,20 +33,20 @@
 //! - `LexError` — surfaced verbatim from `lexer::lex`.
 
 use crate::ast::{
-    AlterAction, AlterTableStatement, CallStatement, CascadeBehavior, CaseWhen, ColumnConstraint,
-    ColumnConstraintBody, ColumnDefinition, ColumnRef, ColumnType, Columns, CommentStatement,
-    CommentTarget, CommentText, CompareOp, CopyDirection, CopySource, CopyStatement, CopyTarget,
-    CreateIndexStatement, CreateTableStatement, CreateViewBody, CreateViewStatement, CteDefinition,
-    DeleteStatement, DropObjectType, DropStatement, ExplainInner, ExplainOption, ExplainStatement,
-    FrameBound, FrameUnit, FromItem, FromSource, GrantObject, GrantStatement, InsertSource,
-    InsertStatement, InsertValue, JoinDescriptor, JoinPredicate, LikeCase, LimitClause,
-    NullsPlacement, OnConflict, OnDuplicateKeyUpdate, OnDuplicateKeyUpdateAssignment,
-    OnDuplicateKeyUpdateValue, OrderDirection, OrderingItem, OverClause, ParseError,
-    ParseErrorKind, ParseResult, PrivilegeTag, ProcedureRef, RevokeStatement, RoleRef, SelectExpr,
-    SelectListItem, SelectStatement, SetOperationEntry, SetOperator, SetScope, SetStatement,
-    SetValue, ShowStatement, ShowTarget, SqlLiteral, TableConstraint, TableConstraintBody,
-    TableRef, TruncateStatement, UpdateAssignment, UpdateStatement, WindowArgument, WindowFrame,
-    WithInner, WithStatement,
+    AlterAction, AlterTableStatement, CallArgument, CallStatement, CascadeBehavior, CaseWhen,
+    ColumnConstraint, ColumnConstraintBody, ColumnDefinition, ColumnRef, ColumnType, Columns,
+    CommentStatement, CommentTarget, CommentText, CompareOp, CopyDirection, CopySource,
+    CopyStatement, CopyTarget, CreateIndexStatement, CreateTableStatement, CreateViewBody,
+    CreateViewStatement, CteDefinition, DeleteStatement, DropObjectType, DropStatement,
+    ExplainInner, ExplainOption, ExplainStatement, FrameBound, FrameUnit, FromItem, FromSource,
+    GrantObject, GrantStatement, InsertSource, InsertStatement, InsertValue, JoinDescriptor,
+    JoinPredicate, LikeCase, LimitClause, NullsPlacement, OnConflict, OnDuplicateKeyUpdate,
+    OnDuplicateKeyUpdateAssignment, OnDuplicateKeyUpdateValue, OrderDirection, OrderingItem,
+    OverClause, ParseError, ParseErrorKind, ParseResult, PrivilegeTag, ProcedureRef,
+    RevokeStatement, RoleRef, SelectExpr, SelectListItem, SelectStatement, SetOperationEntry,
+    SetOperator, SetScope, SetStatement, SetValue, ShowStatement, ShowTarget, SqlLiteral,
+    TableConstraint, TableConstraintBody, TableRef, TruncateStatement, UpdateAssignment,
+    UpdateStatement, WindowArgument, WindowFrame, WithInner, WithStatement,
 };
 use crate::lexer::{lex, Spanned, Token};
 
@@ -2475,7 +2475,7 @@ impl<'a> Parser<'a> {
         let procedure = self.parse_procedure_ref()?;
         self.expect_token(Token::LParen, "expected '(' after procedure name")?;
 
-        let mut arguments: Vec<InsertValue> = Vec::new();
+        let mut arguments: Vec<CallArgument> = Vec::new();
         if matches!(self.peek().map(|t| &t.token), Some(Token::RParen)) {
             self.advance();
             return Ok(CallStatement {
@@ -2485,7 +2485,7 @@ impl<'a> Parser<'a> {
         }
 
         loop {
-            arguments.push(self.parse_insert_value()?);
+            arguments.push(self.parse_call_argument()?);
             match self.peek().map(|t| &t.token) {
                 Some(Token::Comma) => {
                     self.advance();
@@ -2506,6 +2506,21 @@ impl<'a> Parser<'a> {
             procedure,
             arguments,
         })
+    }
+
+    fn parse_call_argument(&mut self) -> Result<CallArgument, ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected CALL argument"))?
+            .clone();
+
+        match tok.token {
+            Token::UserVariable(name) => {
+                self.advance();
+                Ok(CallArgument::UserVariable { name })
+            }
+            _ => self.parse_insert_value().map(Into::into),
+        }
     }
 
     /// Bare or schema-qualified procedure reference. Three-part names and
@@ -5662,17 +5677,17 @@ mod tests {
         assert_eq!(s.arguments.len(), 3);
         assert!(matches!(
             &s.arguments[0],
-            InsertValue::Placeholder { name } if name.is_empty()
+            CallArgument::Placeholder { name } if name.is_empty()
         ));
         assert!(matches!(
             &s.arguments[1],
-            InsertValue::Literal {
+            CallArgument::Literal {
                 value: SqlLiteral::String { value }
             } if value == "x"
         ));
         assert!(matches!(
             &s.arguments[2],
-            InsertValue::Literal {
+            CallArgument::Literal {
                 value: SqlLiteral::Integer { value: 1 }
             }
         ));
@@ -5681,13 +5696,23 @@ mod tests {
     #[test]
     fn call_default_argument_uses_local_value_surface() {
         let s = ok_call("CALL refresh_user_stats(DEFAULT)");
-        assert!(matches!(s.arguments[0], InsertValue::Default));
+        assert!(matches!(s.arguments[0], CallArgument::Default));
     }
 
     #[test]
     fn call_user_variable_argument_parses_for_mysql_family_routines() {
         let s = ok_call("CALL refresh_user_stats(@user_id)");
         assert_eq!(s.arguments.len(), 1);
+        assert!(matches!(
+            &s.arguments[0],
+            CallArgument::UserVariable { name } if name == "user_id"
+        ));
+    }
+
+    #[test]
+    fn user_variable_remains_rejected_outside_call_arguments() {
+        let e = err("INSERT INTO audit_log VALUES (@user_id)");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
     }
 
     #[test]
@@ -5700,7 +5725,7 @@ mod tests {
                 "CALL refresh_user_stats((SELECT id FROM users))",
             ),
             ("bare identifier", "CALL refresh_user_stats(user_id)"),
-            ("user variable", "CALL refresh_user_stats(@user_id)"),
+            ("system variable", "CALL refresh_user_stats(@@session_sql_mode)"),
         ];
 
         for (label, sql) in cases {

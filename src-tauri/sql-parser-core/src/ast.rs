@@ -885,6 +885,34 @@ pub enum InsertValue {
     },
 }
 
+/// MySQL/MariaDB `CALL` argument. This deliberately stays separate from
+/// `InsertValue` so user variables do not become valid DML values.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum CallArgument {
+    Literal {
+        value: SqlLiteral,
+    },
+    Default,
+    Placeholder {
+        name: String,
+    },
+    /// `@name` — user variable reference used by MySQL-family routines.
+    UserVariable {
+        name: String,
+    },
+}
+
+impl From<InsertValue> for CallArgument {
+    fn from(value: InsertValue) -> Self {
+        match value {
+            InsertValue::Literal { value } => CallArgument::Literal { value },
+            InsertValue::Default => CallArgument::Default,
+            InsertValue::Placeholder { name } => CallArgument::Placeholder { name },
+        }
+    }
+}
+
 /// Schema-qualified or bare stored procedure reference for MySQL/MariaDB
 /// `CALL`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -897,7 +925,7 @@ pub struct ProcedureRef {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CallStatement {
     pub procedure: ProcedureRef,
-    pub arguments: Vec<InsertValue>,
+    pub arguments: Vec<CallArgument>,
 }
 
 /// Sprint-392 widened literal set (sprint-385's `Literal` covered only
