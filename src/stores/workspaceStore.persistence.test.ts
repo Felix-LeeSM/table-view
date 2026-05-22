@@ -91,4 +91,57 @@ describe("workspaceStore — persistence", () => {
     expect(ws!.tabs).toHaveLength(1);
     expect((ws!.tabs[0] as { table?: string }).table).toBe("users");
   });
+
+  it("[RISK-039] legacy RDB table tabs without database inherit the workspace db on rehydrate", () => {
+    // Older persisted table tabs were keyed under workspaces[connId][db] but
+    // did not always carry `tab.database`. Sprint 433 needs that identity for
+    // pending edit keys and RDB commit `expectedDatabase`.
+    window.localStorage.setItem(
+      "table-view-workspaces",
+      JSON.stringify({
+        workspaces: {
+          conn1: {
+            dbA: {
+              tabs: [
+                {
+                  type: "table",
+                  id: "t-legacy-no-db",
+                  title: "users",
+                  connectionId: "conn1",
+                  closable: true,
+                  schema: "public",
+                  table: "users",
+                  subView: "records",
+                },
+              ],
+              activeTabId: "t-legacy-no-db",
+              closedTabHistory: [
+                {
+                  type: "table",
+                  id: "t-closed-no-db",
+                  title: "orders",
+                  connectionId: "conn1",
+                  closable: true,
+                  schema: "public",
+                  table: "orders",
+                  subView: "records",
+                },
+              ],
+              dirtyTabIds: [],
+              sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+            },
+          },
+        },
+      }),
+    );
+
+    useWorkspaceStore.getState().loadPersistedWorkspaces();
+
+    const ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];
+    expect(ws?.tabs[0]).toMatchObject({ type: "table", database: "dbA" });
+    expect(ws?.closedTabHistory[0]).toMatchObject({
+      type: "table",
+      database: "dbA",
+    });
+  });
 });

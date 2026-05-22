@@ -18,6 +18,8 @@ identity.
   `executeQueryBatch`, matching the row-fetch db-mismatch guard.
 - The shared edit hook type now requires `database`, so future callers cannot
   compile with the old three-part identity shape.
+- Legacy persisted RDB table tabs that lack `database` now inherit the
+  workspace db during rehydration, including closed-tab history.
 - `workspaceStore.removeTab` computes a database-aware pending edit key and
   only treats same-database table tabs as consumers of that key.
 - RISK-039 regression tests cover store isolation, hook remount isolation, and
@@ -45,6 +47,8 @@ Failures included:
   - Pass: 3 files, 24 tests.
 - `pnpm exec vitest run src/lib/datagrid/paradigmEditAdapter.test.ts src/components/datagrid/useDataGridEdit.commit-error.test.ts src/components/datagrid/useDataGridEdit.mixed-batch.test.ts src/components/datagrid/useDataGridEdit.safe-mode.test.ts`
   - Pass: RDB commit path forwards `expectedDatabase`.
+- `pnpm exec vitest run src/stores/workspaceStore.persistence.test.ts`
+  - Pass: legacy tabs without `database` backfill from workspace db.
 - `pnpm exec tsc --noEmit`
   - Pass.
 

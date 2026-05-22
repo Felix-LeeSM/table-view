@@ -21,6 +21,8 @@ active database differs.
 - Update tab removal purge logic so closing one database tab purges only that
   database's pending edit key and does not purge a same-name table in another
   database.
+- Backfill missing `tab.database` from the workspace `(connId, db)` key during
+  legacy workspace rehydration.
 
 ## Acceptance Criteria
 
@@ -39,6 +41,8 @@ active database differs.
   database identity used for the pending-edit key.
 - AC-433-08: The shared edit hook type requires `database`, so new callers
   cannot silently fall back to the old three-part key shape.
+- AC-433-09: Legacy persisted RDB table tabs without `database` rehydrate with
+  the workspace db, including closed-tab history.
 
 ## Out Of Scope
 
@@ -53,5 +57,6 @@ active database differs.
 1. Add failing regression tests for the RISK-039 leak.
 2. Implement the database-aware key and caller migration.
 3. Run focused Vitest suites for the pending edit store, edit hook persistence,
-   workspace tab lifecycle, and RDB commit expected-database threading.
+   workspace tab lifecycle, workspace rehydration, and RDB commit
+   expected-database threading.
 4. Run TypeScript and lint checks for signature fallout.
