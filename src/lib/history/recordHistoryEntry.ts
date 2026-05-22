@@ -36,17 +36,13 @@ import type {
   RdbQueryMode,
 } from "@lib/tauri/history";
 
-export type RecordHistoryQueryMode =
-  | RdbQueryMode
+export type DocumentRecordHistoryQueryMode =
   | DocumentQueryMode
   | "countDocuments";
 
-export interface RecordHistoryEntryArgs {
+interface RecordHistoryEntryCommonArgs {
   /** Connection id; required (snapshot truth from tab/grid context). */
   connectionId: string;
-  paradigm: Paradigm;
-  /** Optional dispatched method override; callers may fall back to tab hint. */
-  queryMode?: RecordHistoryQueryMode;
   /** Optional db/collection (document paradigm 의 경우 거의 항상 set). */
   database?: string;
   collection?: string;
@@ -67,6 +63,19 @@ export interface RecordHistoryEntryArgs {
   serverPid?: number;
 }
 
+export type RecordHistoryEntryArgs = RecordHistoryEntryCommonArgs &
+  (
+    | { paradigm: "rdb"; queryMode?: RdbQueryMode }
+    | {
+        paradigm: "document";
+        queryMode?: DocumentRecordHistoryQueryMode;
+      }
+    | {
+        paradigm: Exclude<Paradigm, "rdb" | "document">;
+        queryMode?: never;
+      }
+  );
+
 /**
  * Frontend history input → backend `DocumentQueryMode` 매핑.
  * `countDocuments` 가 유일한 legacy method-name 정정 — 나머지는 1:1.
@@ -74,8 +83,11 @@ export interface RecordHistoryEntryArgs {
  * `paradigm: "rdb" | "document"` 만 넘긴다 (외 paradigm 은 호출 site 가 없음).
  */
 function toDocumentQueryMode(
-  mode: RecordHistoryQueryMode | undefined,
-): DocumentQueryMode {
+  mode: DocumentRecordHistoryQueryMode | undefined,
+): DocumentQueryMode | null {
+  if (mode === undefined) {
+    return "find";
+  }
   switch (mode) {
     case "countDocuments":
       return "count";
@@ -97,10 +109,7 @@ function toDocumentQueryMode(
     case "bulkWrite":
       return mode;
     default:
-      // Legacy / unset (`"sql"` 잘못 들어옴 / undefined) — default to `"find"`
-      // (가장 빈번한 document query). Backend serde 가 empty string 을 reject 하므로
-      // safe fallback.
-      return "find";
+      return null;
   }
 }
 
@@ -133,16 +142,23 @@ export function recordHistoryEntry(args: RecordHistoryEntryArgs): void {
 
   let req: AddHistoryEntryRequest;
   if (args.paradigm === "rdb") {
+    if (args.queryMode !== undefined && args.queryMode !== "sql") {
+      return;
+    }
     req = {
       ...common,
       paradigm: "rdb",
       queryMode: "sql",
     };
   } else if (args.paradigm === "document") {
+    const queryMode = toDocumentQueryMode(args.queryMode);
+    if (!queryMode) {
+      return;
+    }
     req = {
       ...common,
       paradigm: "document",
-      queryMode: toDocumentQueryMode(args.queryMode),
+      queryMode,
     };
   } else {
     // kv / search — no backend wire support today. silent skip to avoid

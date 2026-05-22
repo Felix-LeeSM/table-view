@@ -9,6 +9,11 @@ import type {
   QueryStatementResult,
 } from "@/types/query";
 import type { FilterCondition, SortInfo } from "@/types/schema";
+import type {
+  DocumentWorkspaceQueryModeInput,
+  WorkspaceQueryMode,
+} from "./queryMode";
+export type { WorkspaceQueryMode } from "./queryMode";
 
 // ---------------------------------------------------------------------------
 // Tab types — discriminated union so consumers can narrow on `tab.type`
@@ -71,13 +76,6 @@ export interface TableTab {
   sorts?: SortInfo[];
 }
 
-/**
- * Deprecated persisted hint for a query tab. SQL tabs still carry `"sql"`;
- * legacy document tabs may carry `"find" | "aggregate"`. Parser-driven
- * execution and history recording use history-owned query-mode types instead.
- */
-export type WorkspaceQueryMode = "sql" | "find" | "aggregate";
-
 /** A tab that hosts the SQL / document query editor. */
 export interface QueryTab {
   type: "query";
@@ -136,7 +134,7 @@ export type QueryTabOptions = {
 export type LoadQueryPayload = {
   connectionId: string;
   paradigm: Paradigm;
-  queryMode: WorkspaceQueryMode;
+  queryMode?: WorkspaceQueryMode | DocumentWorkspaceQueryModeInput;
   database?: string;
   collection?: string;
   sql: string;

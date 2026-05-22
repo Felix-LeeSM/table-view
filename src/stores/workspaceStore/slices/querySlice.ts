@@ -6,6 +6,7 @@ import type {
   WorkspaceState,
   WorkspaceStoreState,
 } from "../types";
+import { toWorkspaceQueryMode } from "../queryMode";
 import {
   nextQueryTabIdentity,
   patchExistingWorkspace,
@@ -265,6 +266,10 @@ export function createQuerySlice(
       const { connectionId, paradigm, queryMode, database, collection, sql } =
         payload;
       const resolvedDb = database ?? resolveActiveDb(connectionId);
+      const workspaceQueryMode = toWorkspaceQueryMode({
+        paradigm,
+        queryMode,
+      });
       const ws = get().workspaces[connectionId]?.[resolvedDb];
       const activeTab =
         ws && ws.activeTabId
@@ -280,7 +285,7 @@ export function createQuerySlice(
       if (!canInPlace) {
         get().addQueryTab(connectionId, resolvedDb, {
           paradigm,
-          queryMode,
+          queryMode: workspaceQueryMode,
           database,
           collection,
         });
@@ -294,7 +299,12 @@ export function createQuerySlice(
 
       const targetId = activeTab.id;
       get().updateQuerySql(connectionId, resolvedDb, targetId, sql);
-      get().setQueryMode(connectionId, resolvedDb, targetId, queryMode);
+      get().setQueryMode(
+        connectionId,
+        resolvedDb,
+        targetId,
+        workspaceQueryMode,
+      );
     },
   };
 }

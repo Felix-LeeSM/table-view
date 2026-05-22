@@ -18,6 +18,7 @@
  */
 import type { Paradigm } from "@/types/connection";
 import type { Tab, WorkspaceQueryMode, WorkspaceState } from "./types";
+import { sanitizeWorkspaceQueryMode } from "./queryMode";
 
 export const STORAGE_KEY = "table-view-workspaces";
 
@@ -109,8 +110,10 @@ export function debouncePersistWorkspaces(workspaces: WorkspacesShape): void {
 function migrateTab(t: Tab, workspaceDb: string): Tab {
   if (t.type === "query") {
     const paradigm: Paradigm = t.paradigm ?? "rdb";
-    const queryMode: WorkspaceQueryMode =
-      t.queryMode ?? (paradigm === "rdb" ? "sql" : "find");
+    const queryMode: WorkspaceQueryMode = sanitizeWorkspaceQueryMode(
+      paradigm,
+      t.queryMode,
+    );
     return {
       ...t,
       queryState: { status: "idle" as const },

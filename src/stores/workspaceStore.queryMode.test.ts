@@ -186,4 +186,120 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
       expect(tab.queryMode).toBe("find");
     }
   });
+
+  it.each([
+    ["findOne", "find"],
+    ["countDocuments", "find"],
+    ["deleteMany", "find"],
+    ["aggregate", "aggregate"],
+  ] as const)(
+    "loadPersistedWorkspaces sanitizes raw document queryMode '%s' to workspace hint '%s'",
+    (rawQueryMode, expectedQueryMode) => {
+      const persistedPayload = {
+        workspaces: {
+          "conn-mongo": {
+            appdb: {
+              tabs: [
+                {
+                  type: "query",
+                  id: `query-${rawQueryMode}`,
+                  title: "Query 1",
+                  connectionId: "conn-mongo",
+                  closable: true,
+                  sql: "db.users.find({})",
+                  queryState: { status: "idle" },
+                  paradigm: "document",
+                  queryMode: rawQueryMode,
+                  database: "appdb",
+                  collection: "users",
+                },
+              ],
+              activeTabId: `query-${rawQueryMode}`,
+              closedTabHistory: [],
+              dirtyTabIds: [],
+              sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+            },
+          },
+        },
+      };
+      window.localStorage.setItem(
+        "table-view-workspaces",
+        JSON.stringify(persistedPayload),
+      );
+
+      useWorkspaceStore.getState().loadPersistedWorkspaces();
+
+      const tab =
+        useWorkspaceStore.getState().workspaces["conn-mongo"]?.["appdb"]
+          ?.tabs[0];
+      if (tab?.type !== "query") throw new Error("Expected query tab");
+      expect(tab.queryMode).toBe(expectedQueryMode);
+    },
+  );
+
+  it("loadPersistedWorkspaces sanitizes raw rdb queryMode to sql", () => {
+    const persistedPayload = {
+      workspaces: {
+        "conn-pg": {
+          appdb: {
+            tabs: [
+              {
+                type: "query",
+                id: "query-rdb-raw-mode",
+                title: "Query 1",
+                connectionId: "conn-pg",
+                closable: true,
+                sql: "SELECT 1",
+                queryState: { status: "idle" },
+                paradigm: "rdb",
+                queryMode: "deleteMany",
+                database: "appdb",
+              },
+            ],
+            activeTabId: "query-rdb-raw-mode",
+            closedTabHistory: [],
+            dirtyTabIds: [],
+            sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+          },
+        },
+      },
+    };
+    window.localStorage.setItem(
+      "table-view-workspaces",
+      JSON.stringify(persistedPayload),
+    );
+
+    useWorkspaceStore.getState().loadPersistedWorkspaces();
+
+    const tab =
+      useWorkspaceStore.getState().workspaces["conn-pg"]?.["appdb"]?.tabs[0];
+    if (tab?.type !== "query") throw new Error("Expected query tab");
+    expect(tab.queryMode).toBe("sql");
+  });
+
+  it.each([
+    ["findOne", "find"],
+    ["count", "find"],
+    ["insertOne", "find"],
+    ["aggregate", "aggregate"],
+  ] as const)(
+    "loadQueryIntoTab maps history/document queryMode '%s' to workspace hint '%s'",
+    (historyQueryMode, expectedQueryMode) => {
+      useWorkspaceStore.getState().loadQueryIntoTab({
+        connectionId: "conn-mongo",
+        paradigm: "document",
+        queryMode: historyQueryMode,
+        database: "appdb",
+        collection: "users",
+        sql: "db.users.find({})",
+      });
+
+      const tab =
+        useWorkspaceStore.getState().workspaces["conn-mongo"]?.["appdb"]
+          ?.tabs[0];
+      if (tab?.type !== "query") throw new Error("Expected query tab");
+      expect(tab.queryMode).toBe(expectedQueryMode);
+      expect(tab.sql).toBe("db.users.find({})");
+    },
+  );
 });
