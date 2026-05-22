@@ -227,7 +227,7 @@ shadow 하되 request shape 은 MySQL / MariaDB / SQLite 를 처음부터 포함
 | **426** | G | Mongo completion alignment — method whitelist parity + classifier export |
 | **427** | H | Shadow-only helper cleanup + docs support matrix 갱신 |
 | **428** | I | Rust/WASM vocabulary SOT — SQL keyword/function/shell + Mongo MQL/mongosh/admin vocabulary ownership 정리 |
-| **429** | J | Official-reference coverage closure — Mongo operator/stage/expression, MySQL/MariaDB built-ins, psql/mysql/sqlite shell smoke |
+| **429** | J | Official-reference coverage closure — Mongo operator/stage/expression drift tests, MySQL/MariaDB built-ins, psql/mysql/sqlite shell smoke |
 | **430** | K | Completion support matrix hardening — "100%" 의미를 current UI vocabulary surface 로 고정하고 parser semantic gap 문서화 |
 
 **기준 문서**: [`docs/phases/phase-31.md`](phases/phase-31.md),

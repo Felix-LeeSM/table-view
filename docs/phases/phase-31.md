@@ -1,10 +1,12 @@
 # Phase 31: Language Completion Architecture
 
-> **상태: 진행 (Sprint 428).** ADR 0045 를 구현 계획으로 승격했다.
+> **상태: 진행 (Sprint 429).** ADR 0045 를 구현 계획으로 승격했다.
 > SQL popup 은 WASM-first + TypeScript fallback 구조로 전환됐고,
 > PostgreSQL/MySQL/MariaDB/SQLite completion core smoke 가 열린 상태다.
 > Sprint 428 부터 built-in vocabulary 의 SOT 는 Rust/WASM 이고, TypeScript 는
-> fallback mirror 와 CodeMirror adapter 로 제한한다.
+> fallback mirror 와 CodeMirror adapter 로 제한한다. Sprint 429 는 공식
+> 레퍼런스 sentinel 과 Rust/WASM↔TS fallback drift test 로 vocabulary surface
+> 를 고정한다.
 
 ## 배경
 
@@ -86,7 +88,7 @@ result contract 를 먼저 고정해야 한다.
 | G | 426 | Mongo completion classifier alignment |
 | H | 427 | Shadow-only helper cleanup + docs support matrix 갱신 |
 | I | 428 | Rust/WASM vocabulary SOT + Mongo packed vocabulary export |
-| J | 429 | Official-reference coverage tests for Mongo/MySQL/psql vocabulary |
+| J | 429 | Official-reference coverage tests for Mongo/MySQL/psql/sqlite vocabulary |
 | K | 430 | Support matrix hardening + parser semantic gap documentation |
 
 ## Acceptance Criteria
@@ -133,6 +135,8 @@ result contract 를 먼저 고정해야 한다.
 - Mongo whitelisted completion regression green.
 - Built-in vocabulary SOT 가 Rust/WASM 으로 정리되고 TS fallback mirror 와
   drift test 가 유지된다.
+- Official-reference sentinel tests 가 SQL shell/function/keyword 와 Mongo
+  operator/stage/expression vocabulary drift 를 잡는다.
 - `docs/query-language-support.md` support matrix 최신화.
 
 ## 관련

@@ -91,6 +91,8 @@ SQL dialect와 shell/meta command는 별도 layer다.
   `serverVersion`, normalized catalog slice를 명시한다.
 - built-in keyword/function/operator/shell vocabulary 는 Rust/WASM core 가
   소유한다. TypeScript 에 남은 상수는 WASM load 전 fallback mirror 이다.
+- Rust/WASM vocabulary 와 TypeScript fallback mirror 는 Sprint 429
+  official-reference drift tests 로 고정한다.
 - psql/mysql/sqlite shell command는 SQL parser grammar에 섞지 않는다.
 - 큰 catalog는 매 키 입력마다 통째로 직렬화하지 않고 active scope와 prefix
   기반 slice로 축소한다.
