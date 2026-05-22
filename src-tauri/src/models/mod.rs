@@ -8,9 +8,11 @@ pub use connection::{
     Paradigm, StorageData,
 };
 pub use data_source::{
-    get_data_source_profile, BackendAdapterCapability, BackendAdapterContract,
-    BackendAdapterContractKind, BackendAdapterContractState, CatalogModelKind, ConnectionKind,
-    DataSourceProfile, QueryLanguageId, ResultEnvelopeKind, SafetyPolicyId, KV_MARKER_CONTRACT,
+    get_data_source_profile, BackendAdapterCapability, BackendAdapterCapabilitySource,
+    BackendAdapterContract, BackendAdapterContractKind, BackendAdapterContractState,
+    BackendAdapterId, BackendAdapterProfile, CatalogModelKind, ConnectionKind,
+    DataSourceDialectFamily, DataSourceDialectId, DataSourceDialectMetadata, DataSourceProfile,
+    QueryLanguageId, ResultEnvelopeKind, SafetyPolicyId, ServerVersionProbeId, KV_MARKER_CONTRACT,
     SEARCH_MARKER_CONTRACT,
 };
 pub use query::{

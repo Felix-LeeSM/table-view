@@ -159,25 +159,12 @@ describe("DataSourceProfile registry", () => {
   });
 
   it("keeps MariaDB identity while exposing MySQL-family adapter and dialect metadata", () => {
-    type RuntimeProfile = ReturnType<typeof getDataSourceProfile> & {
-      readonly backendAdapter: {
-        readonly id: string;
-        readonly kind: string;
-        readonly capabilitySource: string;
-      };
-      readonly dialect: {
-        readonly id: string;
-        readonly family: string;
-        readonly versionProbe: string;
-      };
-    };
-
-    const mysql = getDataSourceProfile("mysql") as RuntimeProfile;
-    const mariadb = getDataSourceProfile("mariadb") as RuntimeProfile;
+    const mysql = getDataSourceProfile("mysql");
+    const mariadb = getDataSourceProfile("mariadb");
 
     expect(mysql.id).toBe("mysql");
     expect(mariadb.id).toBe("mariadb");
-    expect(mariadb.backendAdapter).toEqual(mysql.backendAdapter);
+    expect(mariadb.backendAdapter).toBe(mysql.backendAdapter);
     expect(mariadb.backendAdapter).toEqual({
       id: "mysql-family",
       kind: "rdb",
@@ -294,6 +281,8 @@ describe("DataSourceProfile registry", () => {
       expect(Object.isFrozen(profile.languages)).toBe(true);
       expect(Object.isFrozen(profile.resultKinds)).toBe(true);
       expect(Object.isFrozen(profile.capabilities)).toBe(true);
+      expect(Object.isFrozen(profile.backendAdapter)).toBe(true);
+      expect(Object.isFrozen(profile.dialect)).toBe(true);
       for (const group of Object.values(profile.capabilities)) {
         expect(Object.isFrozen(group)).toBe(true);
       }

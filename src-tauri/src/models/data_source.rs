@@ -73,6 +73,33 @@ pub enum BackendAdapterContractState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackendAdapterId {
+    Postgresql,
+    MysqlFamily,
+    Sqlite,
+    Mongodb,
+    DeclaredRdb,
+    Marker,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackendAdapterCapabilitySource {
+    Postgresql,
+    MysqlFamily,
+    Sqlite,
+    Mongodb,
+    DeclaredRdb,
+    Marker,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BackendAdapterProfile {
+    pub id: BackendAdapterId,
+    pub kind: BackendAdapterContractKind,
+    pub capability_source: BackendAdapterCapabilitySource,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendAdapterCapability {
     Lifecycle,
     RelationalCatalog,
@@ -89,6 +116,8 @@ pub enum BackendAdapterCapability {
 pub struct BackendAdapterContract {
     pub kind: BackendAdapterContractKind,
     pub state: BackendAdapterContractState,
+    pub implementation: BackendAdapterId,
+    pub capability_source: BackendAdapterCapabilitySource,
     pub capabilities: &'static [BackendAdapterCapability],
 }
 
@@ -96,6 +125,53 @@ impl BackendAdapterContract {
     pub fn has_capability(&self, capability: BackendAdapterCapability) -> bool {
         self.capabilities.contains(&capability)
     }
+
+    pub fn profile(&self) -> BackendAdapterProfile {
+        BackendAdapterProfile {
+            id: self.implementation,
+            kind: self.kind,
+            capability_source: self.capability_source,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataSourceDialectId {
+    Postgresql,
+    Mysql,
+    Mariadb,
+    Sqlite,
+    Mssql,
+    Oracle,
+    Mongodb,
+    Redis,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataSourceDialectFamily {
+    Postgres,
+    Mysql,
+    Sqlite,
+    Mssql,
+    Oracle,
+    Mongodb,
+    Redis,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServerVersionProbeId {
+    PostgresVersionSettings,
+    MysqlFamilyVersion,
+    SqliteVersion,
+    MongodbBuildInfo,
+    None,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DataSourceDialectMetadata {
+    pub id: DataSourceDialectId,
+    pub family: DataSourceDialectFamily,
+    pub version_probe: ServerVersionProbeId,
 }
 
 #[derive(Debug, Clone)]
@@ -107,6 +183,8 @@ pub struct DataSourceProfile {
     pub catalog_model: CatalogModelKind,
     pub result_kinds: &'static [ResultEnvelopeKind],
     pub safety_policy: SafetyPolicyId,
+    pub backend_adapter: BackendAdapterProfile,
+    pub dialect: DataSourceDialectMetadata,
     pub adapter_contract: BackendAdapterContract,
 }
 
@@ -154,42 +232,114 @@ const SEARCH_MARKER_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::SearchMarker,
 ];
 
-const FACTORY_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+const POSTGRES_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
     state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::Postgresql,
+    capability_source: BackendAdapterCapabilitySource::Postgresql,
+    capabilities: RDB_CAPABILITIES,
+};
+const MYSQL_FAMILY_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+    kind: BackendAdapterContractKind::Rdb,
+    state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::MysqlFamily,
+    capability_source: BackendAdapterCapabilitySource::MysqlFamily,
     capabilities: RDB_CAPABILITIES,
 };
 const SQLITE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
     state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::Sqlite,
+    capability_source: BackendAdapterCapabilitySource::Sqlite,
     capabilities: SQLITE_RDB_CAPABILITIES,
 };
 const DECLARED_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
     state: BackendAdapterContractState::DeclaredOnly,
+    implementation: BackendAdapterId::DeclaredRdb,
+    capability_source: BackendAdapterCapabilitySource::DeclaredRdb,
     capabilities: RDB_CAPABILITIES,
 };
 const FACTORY_DOCUMENT_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Document,
     state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::Mongodb,
+    capability_source: BackendAdapterCapabilitySource::Mongodb,
     capabilities: DOCUMENT_CAPABILITIES,
 };
 pub const KV_MARKER_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Kv,
     state: BackendAdapterContractState::MarkerOnly,
+    implementation: BackendAdapterId::Marker,
+    capability_source: BackendAdapterCapabilitySource::Marker,
     capabilities: KV_MARKER_CAPABILITIES,
 };
 pub const SEARCH_MARKER_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Search,
     state: BackendAdapterContractState::MarkerOnly,
+    implementation: BackendAdapterId::Marker,
+    capability_source: BackendAdapterCapabilitySource::Marker,
     capabilities: SEARCH_MARKER_CAPABILITIES,
+};
+
+const POSTGRES_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
+    id: DataSourceDialectId::Postgresql,
+    family: DataSourceDialectFamily::Postgres,
+    version_probe: ServerVersionProbeId::PostgresVersionSettings,
+};
+const MYSQL_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
+    id: DataSourceDialectId::Mysql,
+    family: DataSourceDialectFamily::Mysql,
+    version_probe: ServerVersionProbeId::MysqlFamilyVersion,
+};
+const MARIADB_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
+    id: DataSourceDialectId::Mariadb,
+    family: DataSourceDialectFamily::Mysql,
+    version_probe: ServerVersionProbeId::MysqlFamilyVersion,
+};
+const SQLITE_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
+    id: DataSourceDialectId::Sqlite,
+    family: DataSourceDialectFamily::Sqlite,
+    version_probe: ServerVersionProbeId::SqliteVersion,
+};
+const MSSQL_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
+    id: DataSourceDialectId::Mssql,
+    family: DataSourceDialectFamily::Mssql,
+    version_probe: ServerVersionProbeId::None,
+};
+const ORACLE_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
+    id: DataSourceDialectId::Oracle,
+    family: DataSourceDialectFamily::Oracle,
+    version_probe: ServerVersionProbeId::None,
+};
+const MONGODB_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
+    id: DataSourceDialectId::Mongodb,
+    family: DataSourceDialectFamily::Mongodb,
+    version_probe: ServerVersionProbeId::MongodbBuildInfo,
+};
+const REDIS_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
+    id: DataSourceDialectId::Redis,
+    family: DataSourceDialectFamily::Redis,
+    version_probe: ServerVersionProbeId::None,
 };
 
 pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
     match db_type {
-        DatabaseType::Postgresql => rdb_profile(DatabaseType::Postgresql, FACTORY_RDB_CONTRACT),
-        DatabaseType::Mysql => rdb_profile(DatabaseType::Mysql, FACTORY_RDB_CONTRACT),
-        DatabaseType::Mariadb => rdb_profile(DatabaseType::Mariadb, FACTORY_RDB_CONTRACT),
+        DatabaseType::Postgresql => rdb_profile(
+            DatabaseType::Postgresql,
+            POSTGRES_RDB_CONTRACT,
+            POSTGRES_DIALECT,
+        ),
+        DatabaseType::Mysql => rdb_profile(
+            DatabaseType::Mysql,
+            MYSQL_FAMILY_RDB_CONTRACT,
+            MYSQL_DIALECT,
+        ),
+        DatabaseType::Mariadb => rdb_profile(
+            DatabaseType::Mariadb,
+            MYSQL_FAMILY_RDB_CONTRACT,
+            MARIADB_DIALECT,
+        ),
         DatabaseType::Sqlite => DataSourceProfile {
             id: DatabaseType::Sqlite,
             paradigm: Paradigm::Rdb,
@@ -198,10 +348,16 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             catalog_model: CatalogModelKind::Rdb,
             result_kinds: TABULAR_RESULT,
             safety_policy: SafetyPolicyId::RdbDefault,
+            backend_adapter: SQLITE_RDB_CONTRACT.profile(),
+            dialect: SQLITE_DIALECT,
             adapter_contract: SQLITE_RDB_CONTRACT,
         },
-        DatabaseType::Mssql => rdb_profile(DatabaseType::Mssql, DECLARED_RDB_CONTRACT),
-        DatabaseType::Oracle => rdb_profile(DatabaseType::Oracle, DECLARED_RDB_CONTRACT),
+        DatabaseType::Mssql => {
+            rdb_profile(DatabaseType::Mssql, DECLARED_RDB_CONTRACT, MSSQL_DIALECT)
+        }
+        DatabaseType::Oracle => {
+            rdb_profile(DatabaseType::Oracle, DECLARED_RDB_CONTRACT, ORACLE_DIALECT)
+        }
         DatabaseType::Mongodb => DataSourceProfile {
             id: DatabaseType::Mongodb,
             paradigm: Paradigm::Document,
@@ -210,6 +366,8 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             catalog_model: CatalogModelKind::Document,
             result_kinds: DOCUMENT_RESULTS,
             safety_policy: SafetyPolicyId::DocumentDefault,
+            backend_adapter: FACTORY_DOCUMENT_CONTRACT.profile(),
+            dialect: MONGODB_DIALECT,
             adapter_contract: FACTORY_DOCUMENT_CONTRACT,
         },
         DatabaseType::Redis => DataSourceProfile {
@@ -220,6 +378,8 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             catalog_model: CatalogModelKind::Kv,
             result_kinds: KV_RESULTS,
             safety_policy: SafetyPolicyId::KvDefault,
+            backend_adapter: KV_MARKER_CONTRACT.profile(),
+            dialect: REDIS_DIALECT,
             adapter_contract: KV_MARKER_CONTRACT,
         },
     }
@@ -231,7 +391,11 @@ impl DatabaseType {
     }
 }
 
-fn rdb_profile(id: DatabaseType, adapter_contract: BackendAdapterContract) -> DataSourceProfile {
+fn rdb_profile(
+    id: DatabaseType,
+    adapter_contract: BackendAdapterContract,
+    dialect: DataSourceDialectMetadata,
+) -> DataSourceProfile {
     DataSourceProfile {
         id,
         paradigm: Paradigm::Rdb,
@@ -240,6 +404,8 @@ fn rdb_profile(id: DatabaseType, adapter_contract: BackendAdapterContract) -> Da
         catalog_model: CatalogModelKind::Rdb,
         result_kinds: TABULAR_RESULT,
         safety_policy: SafetyPolicyId::RdbDefault,
+        backend_adapter: adapter_contract.profile(),
+        dialect,
         adapter_contract,
     }
 }

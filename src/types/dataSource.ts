@@ -1,5 +1,21 @@
 import type { DatabaseType, Paradigm } from "./connection";
 import { paradigmOf } from "./connection";
+import {
+  BACKEND_ADAPTER_BY_TYPE,
+  DIALECT_METADATA,
+  type BackendAdapterProfile,
+  type DataSourceDialectMetadata,
+} from "./dataSourceRuntime";
+
+export type {
+  BackendAdapterCapabilitySource,
+  BackendAdapterProfile,
+  BackendAdapterProfileId,
+  DataSourceDialectFamily,
+  DataSourceDialectId,
+  DataSourceDialectMetadata,
+  ServerVersionProbeId,
+} from "./dataSourceRuntime";
 
 export type DataParadigm = Paradigm;
 export type ConnectionKind =
@@ -110,6 +126,8 @@ export interface DataSourceProfile {
   readonly resultKinds: readonly ResultEnvelopeKind[];
   readonly capabilities: DataSourceCapabilities;
   readonly safetyPolicy: SafetyPolicyId;
+  readonly backendAdapter: BackendAdapterProfile;
+  readonly dialect: DataSourceDialectMetadata;
 }
 
 export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
@@ -334,6 +352,8 @@ function profile(
     resultKinds: Object.freeze([...resultKinds]),
     capabilities: sourceCapabilities,
     safetyPolicy,
+    backendAdapter: BACKEND_ADAPTER_BY_TYPE[id],
+    dialect: DIALECT_METADATA[id],
   });
 }
 
