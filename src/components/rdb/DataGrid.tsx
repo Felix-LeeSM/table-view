@@ -46,12 +46,9 @@ export default function DataGrid({
   const connectionLabel = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name ?? null,
   );
-  const canEditRows = useConnectionStore((s) => {
-    const dbType = s.connections.find((c) => c.id === connectionId)?.dbType;
-    return dbType
-      ? getDataSourceProfile(dbType).capabilities.edit.editRows
-      : false;
-  });
+  const rowEditConnection = useConnectionStore((s) =>
+    s.connections.find((c) => c.id === connectionId),
+  );
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -80,6 +77,15 @@ export default function DataGrid({
       appliedFilters: filters.appliedFilters,
       appliedRawSql: filters.appliedRawSql,
     });
+  const sqliteRequiresPrimaryKey =
+    rowEditConnection?.dbType === "sqlite" &&
+    data !== null &&
+    !data.columns.some((column) => column.is_primary_key);
+  const canEditRows =
+    rowEditConnection !== undefined &&
+    getDataSourceProfile(rowEditConnection.dbType).capabilities.edit.editRows &&
+    !(rowEditConnection.dbType === "sqlite" && rowEditConnection.readOnly) &&
+    !sqliteRequiresPrimaryKey;
 
   const columnOrder = useRdbColumnOrder({
     connectionId,

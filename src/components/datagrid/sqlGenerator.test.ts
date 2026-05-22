@@ -842,6 +842,56 @@ describe("generateSql — SQLite JSON nested edits (Sprint 347)", () => {
   });
 });
 
+describe("generateSql — SQLite row-write quoting (Sprint 454)", () => {
+  const SQLITE_QUOTED_DATA: TableData = {
+    columns: [
+      {
+        name: "user id",
+        data_type: "TEXT",
+        nullable: false,
+        default_value: null,
+        is_primary_key: true,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+      {
+        name: "select",
+        data_type: "TEXT",
+        nullable: true,
+        default_value: null,
+        is_primary_key: false,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+    ],
+    rows: [["O'Brien", "old"]],
+    total_count: 1,
+    page: 1,
+    page_size: 100,
+    executed_query: 'SELECT * FROM "main"."order detail"',
+  };
+
+  it("quotes SQLite identifiers and escapes string PK row identity", () => {
+    const statements = generateSql(
+      SQLITE_QUOTED_DATA,
+      "main",
+      "order detail",
+      new Map<string, string | null>([["0-1", "new"]]),
+      new Set(["row-1-0"]),
+      [["N'1", "fresh"]],
+      { dialect: "sqlite" },
+    );
+
+    expect(statements).toEqual([
+      `UPDATE "main"."order detail" SET "select" = 'new' WHERE "user id" = 'O''Brien';`,
+      `DELETE FROM "main"."order detail" WHERE "user id" = 'O''Brien';`,
+      `INSERT INTO "main"."order detail" ("user id", "select") VALUES ('N''1', 'fresh');`,
+    ]);
+  });
+});
+
 // Sprint 348 (2026-05-15) — jsonb[] inner-path edit. Sprint 343 deferred
 // the element edit on jsonb[] / json[] columns; the path syntax for an
 // inner edit is `[N].inner.path`. The emit reassigns the whole array

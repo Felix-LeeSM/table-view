@@ -22,6 +22,7 @@ pub(super) const SQLITE_NAMESPACE: &str = "main";
 pub struct SqlitePoolState {
     pool: Option<SqlitePool>,
     database_path: Option<String>,
+    read_only: bool,
 }
 
 #[derive(Clone)]
@@ -188,6 +189,7 @@ impl SqliteAdapter {
             let mut guard = self.inner.lock().await;
             let old_pool = guard.pool.replace(pool);
             guard.database_path = Some(Self::database_path(config)?.to_string());
+            guard.read_only = config.read_only;
             old_pool
         };
         if let Some(old_pool) = old_pool {
@@ -200,6 +202,7 @@ impl SqliteAdapter {
         let mut guard = self.inner.lock().await;
         let pool = guard.pool.take();
         guard.database_path = None;
+        guard.read_only = false;
         drop(guard);
         if let Some(pool) = pool {
             pool.close().await;
@@ -231,6 +234,15 @@ impl SqliteAdapter {
             .pool
             .clone()
             .ok_or_else(|| AppError::Connection("Not connected".into()))
+    }
+
+    pub(super) async fn active_pool_with_mode(&self) -> Result<(SqlitePool, bool), AppError> {
+        let guard = self.inner.lock().await;
+        let pool = guard
+            .pool
+            .clone()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+        Ok((pool, guard.read_only))
     }
 
     pub async fn list_tables(&self, namespace: &str) -> Result<Vec<TableInfo>, AppError> {

@@ -10,6 +10,7 @@ import {
 import QueryResultGrid from "./QueryResultGrid";
 import type { QueryResult } from "@/types/query";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useConnectionStore } from "@stores/connectionStore";
 beforeEach(() => {
   setupTauriMock({
     getTableColumns: vi.fn(async () => [
@@ -75,6 +76,7 @@ describe("QueryResultGrid", () => {
     // Reset the per-connection PK metadata cache between tests so the
     // editable-vs-read-only paths fetch fresh.
     useSchemaStore.setState({ tableColumnsCache: {} });
+    useConnectionStore.setState({ connections: [] });
   });
 
   it("shows idle prompt when status is idle", () => {
@@ -189,6 +191,44 @@ describe("QueryResultGrid", () => {
     await waitFor(() => {
       expect(screen.getByText(/Editable/)).toBeInTheDocument();
     });
+  });
+
+  it("keeps SQLite read-only query results non-editable even when primary key metadata is available", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-sqlite",
+          name: "SQLite read-only",
+          dbType: "sqlite",
+          host: "",
+          port: 0,
+          user: "",
+          database: "/tmp/user.sqlite",
+          readOnly: true,
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+    });
+
+    render(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: SELECT_RESULT }}
+        connectionId="conn-sqlite"
+        database="/tmp/user.sqlite"
+        sql="SELECT id, name FROM users"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Read-only/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Editable/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/read-only SQLite connection/i),
+    ).toBeInTheDocument();
   });
 
   it("shows Read-only banner when SQL contains a JOIN", () => {

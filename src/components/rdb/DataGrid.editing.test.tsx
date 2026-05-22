@@ -160,7 +160,7 @@ describe("DataGrid", () => {
     expect((input as HTMLInputElement).value).toBe("Alice");
   });
 
-  it("does not enable row editing controls for SQLite when editRows is false", async () => {
+  it("enables row editing controls for writable SQLite tables with a primary key", async () => {
     useConnectionStore.setState({
       connections: [
         {
@@ -183,6 +183,40 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
+    expect(screen.getByLabelText("Add row")).toBeInTheDocument();
+
+    const cells = screen.getAllByRole("gridcell");
+    const nameCell = cells[1]!;
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    expect(nameCell.querySelector("input")).toBeInTheDocument();
+  });
+
+  it("does not enable row editing controls for read-only SQLite connections", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "SQLite read-only",
+          dbType: "sqlite",
+          host: "",
+          port: 0,
+          user: "",
+          database: "/tmp/user.sqlite",
+          readOnly: true,
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+    });
+
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
     expect(screen.queryByLabelText("Add row")).not.toBeInTheDocument();
 
     const cells = screen.getAllByRole("gridcell");
@@ -193,6 +227,47 @@ describe("DataGrid", () => {
 
     expect(nameCell.querySelector("input")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Commit changes")).not.toBeInTheDocument();
+  });
+
+  it("does not enable row editing controls for SQLite tables without primary keys", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "SQLite",
+          dbType: "sqlite",
+          host: "",
+          port: 0,
+          user: "",
+          database: "/tmp/user.sqlite",
+          readOnly: false,
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+    });
+    mockQueryTableData.mockResolvedValueOnce({
+      ...MOCK_DATA,
+      columns: MOCK_DATA.columns.map((column) => ({
+        ...column,
+        is_primary_key: false,
+      })),
+    });
+
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    expect(screen.queryByLabelText("Add row")).not.toBeInTheDocument();
+
+    const cells = screen.getAllByRole("gridcell");
+    const nameCell = cells[1]!;
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    expect(nameCell.querySelector("input")).not.toBeInTheDocument();
   });
 
   // 36. Enter saves edit and shows pending indicator

@@ -163,11 +163,15 @@ async fn test_sqlite_read_only_connection_rejects_writes() {
         )
         .await;
 
-    assert!(
-        matches!(result, Err(AppError::Database(_))),
-        "read-only SQLite connection must reject writes: {:?}",
-        result
-    );
+    match result {
+        Err(AppError::Unsupported(message)) => {
+            assert!(message.contains("read-only SQLite connection"))
+        }
+        other => panic!(
+            "read-only SQLite connection must reject writes clearly: {:?}",
+            other
+        ),
+    }
 }
 
 #[tokio::test]
