@@ -141,11 +141,13 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
       );
 
       if (closingTab.type === "table") {
+        const closingDatabase = closingTab.database ?? db;
         const closingSchema = closingTab.schema;
         const closingTable = closingTab.table;
-        if (closingSchema && closingTable) {
+        if (closingDatabase && closingSchema && closingTable) {
           const key = makeDataGridEditKey(
             closingTab.connectionId,
+            closingDatabase,
             closingSchema,
             closingTable,
           );
@@ -153,6 +155,7 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
             (t) =>
               t.type === "table" &&
               t.connectionId === closingTab.connectionId &&
+              (t.database ?? db) === closingDatabase &&
               t.schema === closingSchema &&
               t.table === closingTable,
           );

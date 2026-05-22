@@ -82,6 +82,7 @@ export default function DataGrid({
   });
   const editState = useRdbDataGridEdit({
     data,
+    database,
     schema,
     table,
     connectionId,

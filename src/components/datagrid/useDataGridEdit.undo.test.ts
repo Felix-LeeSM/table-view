@@ -73,6 +73,7 @@ function renderEditHook() {
   return renderHook(() =>
     useDataGridEdit({
       data: MOCK_DATA,
+      database: "db1",
       schema: "public",
       table: "users",
       connectionId: "conn1",

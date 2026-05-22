@@ -73,6 +73,7 @@ function renderEditHook(overrides: { page?: number } = {}) {
     ({ page }: { page: number }) =>
       useDataGridEdit({
         data: MOCK_DATA,
+        database: "db1",
         schema: "public",
         table: "users",
         connectionId: "conn1",

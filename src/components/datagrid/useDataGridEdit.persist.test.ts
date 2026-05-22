@@ -5,9 +5,10 @@
 // The hook used to keep its four pending slices (`pendingEdits`,
 // `pendingNewRows`, `pendingDeletedRowKeys`, `undoStack`) in `useState`,
 // so a tab switch (which unmounts the grid) discarded all in-flight work.
-// Sprint 251 lifts those four slices to a `(connectionId, schema, table)`-
-// keyed in-memory store so the next mount of the *same* tab re-binds the
-// same pending state.
+// Sprint 251 lifts those four slices to an in-memory store. Sprint 433
+// keys that store by `(connectionId, database, schema, table)` so the next
+// mount of the *same* table re-binds the same pending state without
+// crossing database boundaries.
 //
 // Out of scope for this file (covered elsewhere):
 // - Cross-window sync / localStorage persistence — intentionally excluded.
@@ -79,17 +80,20 @@ function renderEditHook(
   overrides: Partial<{
     schema: string;
     table: string;
+    database: string;
     connectionId: string;
   }> = {},
 ) {
   const schema = overrides.schema ?? "public";
   const table = overrides.table ?? "users";
+  const database = overrides.database ?? "db1";
   const connectionId = overrides.connectionId ?? "conn1";
   return renderHook(() =>
     useDataGridEdit({
       data: MOCK_DATA,
       schema,
       table,
+      database,
       connectionId,
       page: 1,
       fetchData: mockFetchData,
@@ -137,8 +141,8 @@ describe("useDataGridEdit — Sprint 251 store-backed persistence", () => {
 
     first.unmount();
 
-    // Re-mount with the SAME (connectionId, schema, table). The four
-    // slices must rehydrate from the store.
+    // Re-mount with the SAME (connectionId, database, schema, table). The
+    // four slices must rehydrate from the store.
     const second = renderEditHook();
     expect(second.result.current.pendingEdits.get("0-1")).toBe("Alicia");
     expect(second.result.current.pendingNewRows.length).toBe(1);
@@ -162,6 +166,30 @@ describe("useDataGridEdit — Sprint 251 store-backed persistence", () => {
     expect(other.result.current.pendingNewRows.length).toBe(0);
     expect(other.result.current.pendingDeletedRowKeys.size).toBe(0);
     expect(other.result.current.canUndo).toBe(false);
+  });
+
+  it("[RISK-039] same connection/schema/table in a different database starts with empty pending state", () => {
+    // Reason: Sprint 433 RISK-039 — db1.public.users pending edits must not
+    // appear when the user switches to db2.public.users on the same
+    // connection. (2026-05-22)
+    const db1 = renderEditHook({ database: "db1" });
+    act(() => {
+      db1.result.current.handleStartEdit(0, 1, "Alice");
+    });
+    act(() => {
+      db1.result.current.setEditValue("Alicia");
+    });
+    act(() => {
+      db1.result.current.saveCurrentEdit();
+    });
+    expect(db1.result.current.pendingEdits.get("0-1")).toBe("Alicia");
+    db1.unmount();
+
+    const db2 = renderEditHook({ database: "db2" });
+    expect(db2.result.current.pendingEdits.size).toBe(0);
+    expect(db2.result.current.pendingNewRows.length).toBe(0);
+    expect(db2.result.current.pendingDeletedRowKeys.size).toBe(0);
+    expect(db2.result.current.canUndo).toBe(false);
   });
 
   it("[AC-251-H3] two hook instances on the same key share state (set on one is read by the other)", () => {
@@ -196,7 +224,7 @@ describe("useDataGridEdit — Sprint 251 store-backed persistence", () => {
 
     // Store entry should be either purged or cleared — either way the
     // re-mount must observe empty slices.
-    const key = entryKey("conn1", "public", "users");
+    const key = entryKey("conn1", "db1", "public", "users");
     const entry = useDataGridEditStore.getState().getEntry(key);
     expect(entry.pendingEdits.size).toBe(0);
     expect(entry.pendingNewRows.length).toBe(0);

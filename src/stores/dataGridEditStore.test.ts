@@ -2,9 +2,11 @@
 // pending-edit slices. Maps to AC-251-S1..S5 from
 // `docs/sprints/sprint-251/contract.md`. Date 2026-05-09.
 //
-// The store is keyed by `${connectionId}::${schema}::${table}` and lives
-// only for the lifetime of the workspace window — no localStorage, no
-// cross-window broadcast (out of scope per contract). The five actions
+// Sprint 433 extends the key to
+// `${connectionId}::${database}::${schema}::${table}` so same-name RDB
+// tables in different databases do not share pending edits. The store
+// lives only for the lifetime of the workspace window — no localStorage,
+// no cross-window broadcast (out of scope per contract). The five actions
 // (`getEntry`, `setSlice`, `clearEntry`, `purgeKey`, `purgeForConnection`)
 // must produce immutable Map / Set / Array replacements so React selectors
 // detect the change.
@@ -20,9 +22,10 @@ function resetStore(): void {
   useDataGridEditStore.setState({ entries: new Map() });
 }
 
-const KEY_A = entryKey("conn1", "public", "users");
-const KEY_B = entryKey("conn1", "public", "orders");
-const KEY_OTHER_CONN = entryKey("conn2", "public", "users");
+const KEY_A = entryKey("conn1", "db1", "public", "users");
+const KEY_B = entryKey("conn1", "db1", "public", "orders");
+const KEY_OTHER_DB = entryKey("conn1", "db2", "public", "users");
+const KEY_OTHER_CONN = entryKey("conn2", "db1", "public", "users");
 
 describe("dataGridEditStore — Sprint 251 in-memory pending-edit lift", () => {
   beforeEach(() => {
@@ -44,6 +47,28 @@ describe("dataGridEditStore — Sprint 251 in-memory pending-edit lift", () => {
     // Cross-key isolation: B's edits never bleed into A.
     expect(entryA.pendingEdits.size).toBe(1);
     expect(entryB.pendingEdits.size).toBe(1);
+  });
+
+  it("[RISK-039] same connection/schema/table in two databases uses isolated pending entries", () => {
+    // Reason: Sprint 433 RISK-039 — users can open db1.public.users and
+    // db2.public.users at the same time; pending edits must not bleed
+    // across the active database boundary. (2026-05-22)
+    useDataGridEditStore
+      .getState()
+      .setSlice(KEY_A, "pendingEdits", new Map([["0-1", "db1 edit"]]));
+    useDataGridEditStore
+      .getState()
+      .setSlice(KEY_OTHER_DB, "pendingEdits", new Map([["0-1", "db2 edit"]]));
+
+    expect(
+      useDataGridEditStore.getState().getEntry(KEY_A).pendingEdits.get("0-1"),
+    ).toBe("db1 edit");
+    expect(
+      useDataGridEditStore
+        .getState()
+        .getEntry(KEY_OTHER_DB)
+        .pendingEdits.get("0-1"),
+    ).toBe("db2 edit");
   });
 
   it("[AC-251-S2] setSlice on one slice preserves the other three slices on the same key", () => {
@@ -133,8 +158,10 @@ describe("dataGridEditStore — Sprint 251 in-memory pending-edit lift", () => {
     expect(entries.has(KEY_OTHER_CONN)).toBe(true);
   });
 
-  it("entryKey helper composes the canonical `${cid}::${schema}::${table}` shape", () => {
-    expect(entryKey("conn1", "public", "users")).toBe("conn1::public::users");
-    expect(entryKey("c", "s", "t")).toBe("c::s::t");
+  it("entryKey helper composes the canonical `${cid}::${database}::${schema}::${table}` shape", () => {
+    expect(entryKey("conn1", "db1", "public", "users")).toBe(
+      "conn1::db1::public::users",
+    );
+    expect(entryKey("c", "d", "s", "t")).toBe("c::d::s::t");
   });
 });

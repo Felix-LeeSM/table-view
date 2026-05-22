@@ -131,11 +131,13 @@ export interface HistoryRecorder {
 
 export interface RdbAdapterDeps {
   connectionId: string;
+  expectedDatabase?: string;
   safeModeGate: SafeModeGate;
   executeQueryBatch: (
     connectionId: string,
     sqls: string[],
     correlationId: string,
+    expectedDatabase?: string,
   ) => Promise<unknown>;
   history: HistoryRecorder;
   /**
@@ -180,7 +182,12 @@ async function executeRdbBatch(
   const joinedSql = sqls.join(";\n");
   const count = sqls.length;
   try {
-    await deps.executeQueryBatch(deps.connectionId, sqls, `edit-${Date.now()}`);
+    await deps.executeQueryBatch(
+      deps.connectionId,
+      sqls,
+      `edit-${Date.now()}`,
+      deps.expectedDatabase,
+    );
     toast.success(`${count} ${count === 1 ? "change" : "changes"} committed.`);
     deps.history.recordSuccess({
       sql: joinedSql,

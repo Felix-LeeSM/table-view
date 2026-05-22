@@ -37,6 +37,7 @@ export type {
 
 export function useDataGridEdit({
   data,
+  database,
   schema,
   table,
   connectionId,
@@ -95,7 +96,12 @@ export function useDataGridEdit({
     pushSnapshot,
     undo,
     canUndo,
-  } = useDataGridEditPendingState({ connectionId, schema, table });
+  } = useDataGridEditPendingState({
+    connectionId,
+    database,
+    schema,
+    table,
+  });
 
   // Multi-row selection lives in `useDataGridSelection` so the facade
   // stays paradigm-agnostic.
@@ -146,6 +152,7 @@ export function useDataGridEdit({
     resetPreviewState,
   } = useDataGridPreviewCommit({
     data,
+    database,
     schema,
     table,
     connectionId,

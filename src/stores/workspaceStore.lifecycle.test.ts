@@ -12,6 +12,7 @@
  * code → next test. No batch test authoring.
  */
 import { describe, it, expect, beforeEach } from "vitest";
+import { entryKey, useDataGridEditStore } from "./dataGridEditStore";
 import { useWorkspaceStore } from "./workspaceStore";
 import type { TableTabInit } from "./workspaceStore/types";
 
@@ -32,6 +33,7 @@ function makeTableInit(overrides: Partial<TableTabInit> = {}): TableTabInit {
 describe("workspaceStore — lifecycle", () => {
   beforeEach(() => {
     useWorkspaceStore.setState({ workspaces: {} });
+    useDataGridEditStore.setState({ entries: new Map() });
   });
 
   it("tracer bullet — addTab puts the tab into workspaces[connId][db] and sets activeTabId", () => {
@@ -261,6 +263,48 @@ describe("workspaceStore — lifecycle", () => {
     expect(ws.tabs).toHaveLength(1);
     expect(ws.tabs[0]!.id).toBe(activeId);
     expect(ws.activeTabId).toBe(activeId);
+  });
+
+  it("[RISK-039] removeTab purges only the closing database's pending edit key", () => {
+    // Reason: Sprint 433 RISK-039 — same conn/schema/table can be open in
+    // dbA and dbB; closing dbA must not discard dbB pending edits.
+    // (2026-05-22)
+    const store = useWorkspaceStore.getState();
+    store.addTab(
+      "conn1",
+      makeTableInit({
+        database: "dbA",
+        table: "users",
+        title: "users",
+        permanent: true,
+      }),
+    );
+    store.addTab(
+      "conn1",
+      makeTableInit({
+        database: "dbB",
+        table: "users",
+        title: "users",
+        permanent: true,
+      }),
+    );
+
+    const dbATabId =
+      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.tabs[0]!.id;
+    const dbAKey = entryKey("conn1", "dbA", "public", "users");
+    const dbBKey = entryKey("conn1", "dbB", "public", "users");
+    useDataGridEditStore
+      .getState()
+      .setSlice(dbAKey, "pendingEdits", new Map([["0-1", "dbA edit"]]));
+    useDataGridEditStore
+      .getState()
+      .setSlice(dbBKey, "pendingEdits", new Map([["0-1", "dbB edit"]]));
+
+    useWorkspaceStore.getState().removeTab("conn1", "dbA", dbATabId);
+
+    const entries = useDataGridEditStore.getState().entries;
+    expect(entries.has(dbAKey)).toBe(false);
+    expect(entries.get(dbBKey)?.pendingEdits.get("0-1")).toBe("dbB edit");
   });
 
   // Sprint 353 (AC-353-05, 2026-05-16) — in-memory closedTabHistory cap

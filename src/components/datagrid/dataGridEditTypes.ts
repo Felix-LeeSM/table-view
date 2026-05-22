@@ -4,6 +4,7 @@ import type { CommitError } from "./dataGridEditFsm";
 
 export interface UseDataGridEditParams {
   data: TableData | null;
+  database: string;
   schema: string;
   table: string;
   connectionId: string;

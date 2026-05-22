@@ -106,7 +106,7 @@ export function debouncePersistWorkspaces(workspaces: WorkspacesShape): void {
   }, 200);
 }
 
-function migrateTab(t: Tab): Tab {
+function migrateTab(t: Tab, workspaceDb: string): Tab {
   if (t.type === "query") {
     const paradigm: Paradigm = t.paradigm ?? "rdb";
     const queryMode: QueryMode =
@@ -121,7 +121,9 @@ function migrateTab(t: Tab): Tab {
   if (t.type === "table") {
     const paradigm = t.paradigm ?? ("rdb" as const);
     const isDocument = paradigm === "document";
-    const database = isDocument ? (t.database ?? t.schema) : t.database;
+    const database = isDocument
+      ? (t.database ?? t.schema ?? workspaceDb)
+      : (t.database ?? workspaceDb);
     const collection = isDocument ? (t.collection ?? t.table) : t.collection;
     return {
       ...t,
@@ -135,11 +137,16 @@ function migrateTab(t: Tab): Tab {
   return t;
 }
 
-function migrateWorkspace(raw: Partial<WorkspaceState>): WorkspaceState {
+function migrateWorkspace(
+  raw: Partial<WorkspaceState>,
+  workspaceDb: string,
+): WorkspaceState {
   return {
-    tabs: (raw.tabs ?? []).map(migrateTab),
+    tabs: (raw.tabs ?? []).map((tab) => migrateTab(tab, workspaceDb)),
     activeTabId: raw.activeTabId ?? null,
-    closedTabHistory: raw.closedTabHistory ?? [],
+    closedTabHistory: (raw.closedTabHistory ?? []).map((tab) =>
+      migrateTab(tab, workspaceDb),
+    ),
     dirtyTabIds: raw.dirtyTabIds ?? [],
     sidebar: {
       selectedNode: raw.sidebar?.selectedNode ?? null,
@@ -160,7 +167,7 @@ export function migrateLoadedWorkspaces(
     for (const db of Object.keys(byDb)) {
       const ws = byDb[db];
       if (!ws) continue;
-      conn[db] = migrateWorkspace(ws);
+      conn[db] = migrateWorkspace(ws, db);
     }
     out[connId] = conn;
   }
