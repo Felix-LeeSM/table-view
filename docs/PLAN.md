@@ -17,6 +17,7 @@ Implementation sprint 번호는 실행 직전에 새 번호를 배정한다. Act
 |---|---|
 | 현재 실행 순서 | `docs/PLAN.md` |
 | 장기 product / architecture roadmap | `docs/ROADMAP.md` |
+| data-source extension architecture | `docs/data-source-architecture.md`, ADR 0046 |
 | 완료된 plan / sprint sequence | `docs/archives/plans/completed-roadmap.md` |
 | 완료된 phase index | `docs/archives/phases/README.md` |
 | Active/deferred risks | `docs/RISKS.md` |
@@ -26,11 +27,13 @@ Implementation sprint 번호는 실행 직전에 새 번호를 배정한다. Act
 
 ## Sorting Rule
 
-1. 사용자 visible DBMS support gap 먼저 닫는다.
-2. 이미 열린 runtime/parser/completion surface 의 semantic correctness 를 넓힌다.
-3. capability/version gating 은 vocabulary coverage 이후에 붙인다.
-4. 큰 state-management migration 은 DB support 흐름과 충돌하지 않을 때 재개한다.
-5. 완료 이력은 본 파일에 다시 누적하지 않고 completed 문서로 이동한다.
+1. RDBMS support gap 먼저 닫는다.
+2. 새 DBMS 는 `docs/data-source-architecture.md` 의 profile/capability contract 를
+   먼저 정의한다.
+3. 이미 열린 runtime/parser/completion surface 의 semantic correctness 를 넓힌다.
+4. capability/version gating 은 vocabulary coverage 이후에 붙인다.
+5. 큰 state-management migration 은 DB support 흐름과 충돌하지 않을 때 재개한다.
+6. 완료 이력은 본 파일에 다시 누적하지 않고 completed 문서로 이동한다.
 
 ## Planning Protocol
 
@@ -48,24 +51,30 @@ Implementation sprint 번호는 실행 직전에 새 번호를 배정한다. Act
 | DBMS | Runtime | Parser / safety | Completion | 현재 판단 |
 |---|---|---|---|---|
 | PostgreSQL | strong | strong | WASM-first | 기준선. 회귀 gate 유지 |
-| MongoDB | partial/full-support backlog | whitelisted mongosh | Rust/WASM vocabulary | Phase 28 이 "100%" 본체 |
+| MongoDB | partial/full-support backlog | whitelisted mongosh | Rust/WASM vocabulary | RDBMS-first 이후 재개 |
 | MySQL | Phase 17 complete | widening in progress | Rust/WASM vocabulary | adapter 완료. semantic gap 계속 축소 |
 | MariaDB | deferred adapter | MySQL-family profile 일부 | Rust/WASM vocabulary | runtime 재개 결정 필요 |
 | SQLite | deferred adapter | parser/write parity gap | Rust/WASM vocabulary | DBMS adapter vs internal SQLite state 분리 필요 |
+| DuckDB | not started | SQL/file analytics profile 필요 | SQL vocabulary 확장 필요 | SQLite 이후 RDBMS/file analytics 후보 |
+| Redis/Valkey | not started | `KvAdapter` contract 필요 | redis-command 필요 | non-RDBMS 1차 후보 |
+| Elasticsearch/OpenSearch | not started | `SearchAdapter` contract 필요 | search DSL 필요 | non-RDBMS 1차 후보 |
 
 ## Active Roadmap
 
 | Order | Track | Status | Next move | SOT |
 |---:|---|---|---|---|
-| 1 | MongoDB full support | planned/current candidate | Phase 28 Slice A1: existing Rust/WASM mongosh parser/completion core 위에서 unified editor routing 시작 | `docs/phases/phase-28.md` |
+| 1 | Data-source profile/capability foundation | planned/current candidate | `DataSourceProfile`, capability profile, queryLanguage, result envelope 구현 범위 audit 후 최소 contract 부터 고정 | `docs/data-source-architecture.md`, ADR 0046 |
 | 2 | MySQL-family semantic widening | active follow-up | broader `CALL` args, user variables, routine scripting, `DELIMITER`, `LOAD DATA` 순서로 parser/safety gap 축소 | `docs/query-language-support.md`, `docs/sprints/sprint-439/` |
-| 3 | Capability-gated completion filtering | backlog | `serverVersion` / `capabilities` 기반 후보 filtering. vocabulary SOT 는 이미 Rust/WASM | `docs/archives/phases/completed/phase-31.md` |
-| 4 | MariaDB adapter decision | deferred -> re-evaluate | Slice 18A: MySQL adapter reuse + MariaDB identity/dialect flag 를 default 로 검증. 전용 adapter 는 evidence 있을 때만 ADR | `docs/phases/phase-18.md` |
-| 5 | SQLite DBMS adapter / write parity | deferred -> re-evaluate | Slice 19A: user DBMS adapter 범위를 internal app SQLite state-management 와 분리해 connection/file-picker contract 부터 고정 | `docs/phases/phase-19.md`, `docs/state-management-strategy-2026-05-15.md` |
-| 6 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |
-| 7 | State-management migration | planned contracts | Sprint 353-376 contracts 는 보존. 실제 재개 전 current code와 재-audit 필요 | `docs/state-management-strategy-2026-05-15.md` |
-| 8 | TablePlus DDL surface leftovers | planned/backlog | archived Phase 24-26 context 를 기준으로 DB support 우선순위 뒤에서 재평가 | `docs/archives/phases/completed/phase-24.md`, `docs/archives/phases/completed/phase-25.md`, `docs/archives/phases/completed/phase-26.md` |
-| 9 | Oracle / non-current DBMS | deferred | Phase 20 은 현 priority 아님 | `docs/phases/phase-20.md` |
+| 3 | MariaDB adapter decision | deferred -> re-evaluate | Slice 18A: MySQL adapter reuse + MariaDB identity/dialect flag 를 default 로 검증. 전용 adapter 는 evidence 있을 때만 ADR | `docs/phases/phase-18.md` |
+| 4 | SQLite DBMS adapter / write parity | deferred -> re-evaluate | Slice 19A: user DBMS adapter 범위를 internal app SQLite state-management 와 분리해 connection/file-picker contract 부터 고정 | `docs/phases/phase-19.md`, `docs/state-management-strategy-2026-05-15.md` |
+| 5 | DuckDB + file analytics | planned | SQLite file contract 재사용. `.duckdb`, CSV, Parquet, JSON preview/query/import 후보 phase 작성 | `docs/data-source-architecture.md`, `docs/ROADMAP.md` |
+| 6 | RDBMS ERD / SchemaGraph | planned | FK/constraint catalog 를 재사용 가능한 `SchemaGraph` 로 승격. ERD는 첫 renderer | `docs/data-source-architecture.md` |
+| 7 | Redis/Valkey | deferred candidate | `KvAdapter` 를 marker 에서 key/type/TTL/stream contract 로 승격 후 phase 작성 | `docs/data-source-architecture.md` |
+| 8 | Elasticsearch/OpenSearch | deferred candidate | `SearchAdapter` 를 marker 에서 index/mapping/search/aggregation contract 로 승격 후 phase 작성 | `docs/data-source-architecture.md` |
+| 9 | MongoDB full support | deferred/current subagent audit only | Phase 28 Slice A 는 보존하되 RDBMS-first 후 재개. `queryMode` 는 execution SOT 로 되살리지 않음 | `docs/phases/phase-28.md` |
+| 10 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md` |
+| 11 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |
+| 12 | State-management migration | planned contracts | Sprint 353-376 contracts 는 보존. 실제 재개 전 current code와 재-audit 필요 | `docs/state-management-strategy-2026-05-15.md` |
 
 ## Recently Closed
 
@@ -85,7 +94,7 @@ Implementation sprint 번호는 실행 직전에 새 번호를 배정한다. Act
 | 18 | MariaDB adapter | deferred | `docs/phases/phase-18.md` |
 | 19 | SQLite adapter | deferred | `docs/phases/phase-19.md` |
 | 20 | Oracle adapter | deferred | `docs/phases/phase-20.md` |
-| 28 | MongoDB Full Support | planned/current candidate | `docs/phases/phase-28.md` |
+| 28 | MongoDB Full Support | deferred/current subagent audit only | `docs/phases/phase-28.md` |
 | 31 follow-up | semantic widening / capability gating | active follow-up | `docs/archives/phases/completed/phase-31.md` |
 
 Completed/closed phases live in `docs/archives/phases/README.md`.
