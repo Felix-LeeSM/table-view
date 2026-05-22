@@ -20,6 +20,8 @@ vi.mock("@tauri-apps/api/event", () => ({
 // are no-ops.
 const mockPersistFocusedConnId = vi.fn();
 const mockPersistActiveStatuses = vi.fn();
+let mockSessionFocusedConnId: string | null = null;
+let mockSessionActiveStatuses: Record<string, unknown> | null = null;
 const mockReadConnectionSession = vi.fn(
   (): {
     focusedConnId: string | null;
@@ -31,10 +33,15 @@ const mockReadConnectionSession = vi.fn(
 );
 
 vi.mock("@lib/scopedLocalStorage", () => ({
-  persistFocusedConnId: (...args: unknown[]) =>
-    mockPersistFocusedConnId(...args),
-  persistActiveStatuses: (...args: unknown[]) =>
-    mockPersistActiveStatuses(...args),
+  persistFocusedConnId: (id: string | null) => {
+    mockSessionFocusedConnId = id;
+    return mockPersistFocusedConnId(id);
+  },
+  persistActiveStatuses: (statuses: Record<string, unknown>) => {
+    mockSessionActiveStatuses =
+      Object.keys(statuses).length > 0 ? statuses : null;
+    return mockPersistActiveStatuses(statuses);
+  },
   readConnectionSession: () => mockReadConnectionSession(),
 }));
 
@@ -131,10 +138,13 @@ describe("connectionStore", () => {
     vi.clearAllMocks();
     mockPersistFocusedConnId.mockClear();
     mockPersistActiveStatuses.mockClear();
-    mockReadConnectionSession.mockReturnValue({
-      focusedConnId: null,
-      activeStatuses: null,
-    });
+    mockSessionFocusedConnId = null;
+    mockSessionActiveStatuses = null;
+    mockReadConnectionSession.mockReset();
+    mockReadConnectionSession.mockImplementation(() => ({
+      focusedConnId: mockSessionFocusedConnId,
+      activeStatuses: mockSessionActiveStatuses,
+    }));
     useWorkspaceStore.setState({ workspaces: {} });
     useDataGridEditStore.setState({ entries: new Map() });
   });
@@ -537,6 +547,33 @@ describe("connectionStore", () => {
       expect(useConnectionStore.getState().focusedConnId).toBeNull();
     });
 
+    it("[RISK-040] removeConnection persists a cleared session mirror for focus hydration", async () => {
+      seedConnections();
+      mockSessionFocusedConnId = "c1";
+      mockSessionActiveStatuses = { c1: { type: "connected" } };
+      useConnectionStore.setState({
+        activeStatuses: { c1: { type: "disconnected" } },
+        focusedConnId: "c1",
+      });
+
+      await useConnectionStore.getState().removeConnection("c1");
+
+      expect(mockPersistActiveStatuses).toHaveBeenLastCalledWith({});
+      expect(mockPersistFocusedConnId).toHaveBeenLastCalledWith(null);
+
+      useConnectionStore.setState({
+        connections: [],
+        activeStatuses: {},
+        focusedConnId: null,
+      });
+      useConnectionStore.getState().hydrateFromSession();
+
+      expect(useConnectionStore.getState().focusedConnId).toBeNull();
+      expect(
+        useConnectionStore.getState().activeStatuses["c1"],
+      ).toBeUndefined();
+    });
+
     it("falls back to another connected connection when the focused one is removed", async () => {
       seedConnections();
       useConnectionStore.setState({
@@ -601,10 +638,14 @@ describe("connectionStore", () => {
     expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
       type: "connected",
     });
+    expect(mockPersistActiveStatuses).toHaveBeenLastCalledWith({
+      c1: { type: "connected" },
+    });
   });
 
   it("[RISK-040] connection-status disconnected event runs connection cleanup", async () => {
     const { listen } = await import("@tauri-apps/api/event");
+    mockSessionActiveStatuses = { c1: { type: "connected" } };
     useConnectionStore.setState({
       activeStatuses: { c1: { type: "connected" } },
     });
@@ -623,6 +664,16 @@ describe("connectionStore", () => {
     });
     expect(useWorkspaceStore.getState().workspaces.c1).toBeUndefined();
     expect(useDataGridEditStore.getState().entries.has(pendingKey)).toBe(false);
+    expect(mockPersistActiveStatuses).toHaveBeenLastCalledWith({
+      c1: { type: "disconnected" },
+    });
+
+    useConnectionStore.setState({ activeStatuses: {} });
+    useConnectionStore.getState().hydrateFromSession();
+
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      type: "disconnected",
+    });
   });
 
   // -- Sprint 130 — activeDb tracking + setActiveDb action --

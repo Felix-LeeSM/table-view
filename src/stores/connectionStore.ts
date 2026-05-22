@@ -206,6 +206,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         focusedConnId: newFocused,
       };
     });
+    const { activeStatuses, focusedConnId } = get();
+    persistActiveStatuses(activeStatuses);
+    persistFocusedConnId(focusedConnId);
   },
 
   testConnection: async (draft, existingId = null) => {
@@ -331,6 +334,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         set((state) => ({
           activeStatuses: { ...state.activeStatuses, [id]: status },
         }));
+        persistActiveStatuses(get().activeStatuses);
       },
     );
   },
