@@ -4,7 +4,7 @@
 
 `src/components/schema/SchemaTree.test.tsx` (2,891 lines, 1 root `describe("SchemaTree")`, 104 `it` cases) 가 단일 파일에 7+ behavior axis (mount lifecycle / expand-collapse / refresh / search / context-menu actions / a11y / icons) 의 모든 회귀 가드를 누적해 보유한다. 사전 구조는 AC-01~AC-XX label 로 그룹핑되어 axis 추출이 명확. 동일 디렉토리에 사전 5 axis-test (`SchemaTree.dbms-shape.test.tsx` 10 cases / `SchemaTree.preview.test.tsx` 5 / `SchemaTree.preview.entrypoints.test.tsx` 9 / `SchemaTree.rowcount.test.tsx` 4 / `SchemaTree.virtualization.test.tsx` 7) 가 존재해 split convention 확립.
 
-본 sprint 는 P11 candidate (`docs/refactoring-candidates.md` §P11) 의 **first step**. 5개 mega test 중 **`SchemaTree.test.tsx` 만** behavior axis 별로 split, 나머지 4개 (tabStore/QueryTab/StructurePanel/DataGrid) 는 후속 sprint candidate. P10 은 risk 가 더 높아 P11 다음으로 미룸.
+본 sprint 는 P11 candidate (`docs/archives/etc/refactoring-candidates.md` §P11) 의 **first step**. 5개 mega test 중 **`SchemaTree.test.tsx` 만** behavior axis 별로 split, 나머지 4개 (tabStore/QueryTab/StructurePanel/DataGrid) 는 후속 sprint candidate. P10 은 risk 가 더 높아 P11 다음으로 미룸.
 
 행동 변경 0 강제. `SchemaTree.tsx` 본체 + sub-file 5 (Sprint 199 분해) 변경 금지. test 만 axis 파일 split. 사전 104 case 모두 사후 통과. case 텍스트 / matcher / fixture / mock setup / 모든 inline data shape 사전과 byte-equivalent.
 
@@ -293,4 +293,4 @@ beforeEach (모든 axis 파일):
 - /Users/felix/Desktop/study/view-table/src/components/schema/SchemaTree.tsx
 - /Users/felix/Desktop/study/view-table/src/components/schema/SchemaTree.preview.entrypoints.test.tsx
 - /Users/felix/Desktop/study/view-table/src/components/schema/SchemaTree.rowcount.test.tsx
-- /Users/felix/Desktop/study/view-table/docs/refactoring-candidates.md
+- /Users/felix/Desktop/study/view-table/docs/archives/etc/refactoring-candidates.md

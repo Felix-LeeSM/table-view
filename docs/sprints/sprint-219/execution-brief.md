@@ -6,7 +6,7 @@
 
 ## Task Why
 
-- `docs/refactoring-candidates.md` § P10 — `connectionStore` / `schemaStore` 의 toast / session / IPC orchestration 을 use-case hook 으로 점진 이동. § P10 의 명시적 권고: "한 번에 전체 store architecture 를 바꾸지 말고 connection lifecycle 한 흐름씩 이동".
+- `docs/archives/etc/refactoring-candidates.md` § P10 — `connectionStore` / `schemaStore` 의 toast / session / IPC orchestration 을 use-case hook 으로 점진 이동. § P10 의 명시적 권고: "한 번에 전체 store architecture 를 바꾸지 말고 connection lifecycle 한 흐름씩 이동".
 - post-209 cycle 의 마지막 candidate. P11 cycle (Sprint 216/218/220/221/222) 종료 후 진입.
 - store unit test 가 API orchestration + UI notification 을 같이 검증하는 entanglement 해소 — toast 를 use-case 로 빼면 store test 는 순수 state transition 검증.
 - narrow scope (3 toast 호출만) — risk 낮음. 후속 P10 step (Sprint 223+) 은 별도 sprint 로 분리.

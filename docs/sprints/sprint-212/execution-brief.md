@@ -77,4 +77,4 @@
 - 인접 sprint 문서:
   - `docs/sprints/sprint-208/{contract,findings,handoff}.md` (tabStore entry split)
   - `docs/sprints/sprint-211/{contract,findings,handoff}.md` (직전 entry-pattern split)
-- 후속 candidates: `docs/refactoring-candidates.md` §P3 (본 sprint), §P10 (stores side-effects, post-212 잔여).
+- 후속 candidates: `docs/archives/etc/refactoring-candidates.md` §P3 (본 sprint), §P10 (stores side-effects, post-212 잔여).

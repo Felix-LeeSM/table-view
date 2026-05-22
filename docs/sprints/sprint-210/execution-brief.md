@@ -75,4 +75,4 @@
   - `src/stores/queryHistoryStore.ts` (`addHistoryEntry`)
   - 이전 entry-pattern 참고: `src/stores/tabStore.ts` (Sprint 208), `src/components/schema/SchemaTree.tsx` (Sprint 199)
 - 인접 sprint 문서: `docs/sprints/sprint-208/{contract,findings,handoff}.md`
-- 후속 candidates: `docs/refactoring-candidates.md` §P1
+- 후속 candidates: `docs/archives/etc/refactoring-candidates.md` §P1

@@ -1,8 +1,8 @@
 # Phase 5: Extended Features
 
 > **Archive status (2026-05-22)**: retired/partial phase sketch. Current
-> execution order lives in `../PLAN.md`; completed/retired phase indexing lives
-> in `completed.md`.
+> execution order lives in `../../../PLAN.md`; completed/retired phase indexing
+> lives in `../README.md`.
 >
 > Phase 1-4 완료 후 점진적 추가 — **진행 중** (Sprint 55-59 완료)
 

@@ -18,7 +18,7 @@
 
 > | 5 | 214 | refactor | P7 (Structure editors) | `useDdlPreviewExecution` 공통 hook + 3 editor (columns/indexes/constraints) 적용 |
 
-[`docs/refactoring-candidates.md`](../../refactoring-candidates.md) §P7 가 입력값.
+[`docs/archives/etc/refactoring-candidates.md`](../../archives/etc/refactoring-candidates.md) §P7 가 입력값.
 
 ## 검증 결과
 

@@ -22,10 +22,10 @@ updated: 2026-05-16
   split, ADR 0012, RISK-025 resolved.
 - **Phase 21–27 (TablePlus 패리티 7단계) 종료 (2026-05-13, Sprint 237
   closure)** — Sprint 226 CREATE TABLE → Sprint 237 Column MODIFY USING
-  + NULL-rows 사전 표시까지 7단계 모두 마감. TablePlus
-  `working-with-table/{table,column,row,constraint,index,trigger}` 6
-  surface 의 동등 워크플로우 도달. 회고:
-  [`memory/lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`](../lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md).
+  - NULL-rows 사전 표시까지 7단계 모두 마감. TablePlus
+    `working-with-table/{table,column,row,constraint,index,trigger}` 6
+    surface 의 동등 워크플로우 도달. 회고:
+    [`memory/lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`](../lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md).
 - **Phase 17–20 재개 평가 트리거 발동 (2026-05-13)** — Phase 27 종료
   exit criterion 에 따라 신규 DBMS 추가 비용/가치 재산정 시점.
 - **Phase 13–16 retroactive closure (2026-05-14)** — audit 결과 모두
@@ -41,15 +41,15 @@ updated: 2026-05-16
 
 ## 작업 순서 (Impact 큰 순) — Phase 21–27
 
-| # | Phase | 실제 sprint | 핵심 |
-|---|-------|-------------|------|
-| 1 | [Phase 21](../../docs/phases/phase-21.md) CSV/SQL/JSON Export | 181 | 단판승, 의존 0 |
-| 2 | [Phase 22](../../docs/phases/phase-22.md) Row 인라인 + Preview/Commit/Discard 게이트 | 182–184 | **#3~#7 공통 인프라** |
-| 3 | [Phase 23](../../docs/phases/phase-23.md) Safe Mode | **종료 (185–188)** | production 가드 + Mongo aggregate 가드 + `useSafeModeGate` |
-| 4 | [Phase 24](../../docs/phases/phase-24.md) Index Write UI | **종료 (226–229)** | CREATE/Drop INDEX + create_table_plan |
-| 5 | [Phase 25](../../docs/phases/phase-25.md) Constraint Write UI | **종료 (229–230)** | PK/FK/UNIQUE/CHECK + ON DELETE/UPDATE whitelist |
-| 6 | [Phase 26](../../docs/phases/phase-26.md) Trigger 관리 | **종료 (272–275)** | list/create/drop trigger + WHEN/EXECUTE FUNCTION |
-| 7 | [Phase 27](../../docs/phases/phase-27.md) Table/Column DDL UI | **종료 (226–237, 2026-05-13)** | **패리티 마일스톤 달성** — Sprint 237 closure 가 USING + NULL-rows 사전 표시까지 마무리 |
+| #   | Phase                                                                                                   | 실제 sprint                    | 핵심                                                                                    |
+| --- | ------------------------------------------------------------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------- |
+| 1   | [Phase 21](../../docs/archives/phases/completed/phase-21.md) CSV/SQL/JSON Export                        | 181                            | 단판승, 의존 0                                                                          |
+| 2   | [Phase 22](../../docs/archives/phases/completed/phase-22.md) Row 인라인 + Preview/Commit/Discard 게이트 | 182–184                        | **#3~#7 공통 인프라**                                                                   |
+| 3   | [Phase 23](../../docs/archives/phases/completed/phase-23.md) Safe Mode                                  | **종료 (185–188)**             | production 가드 + Mongo aggregate 가드 + `useSafeModeGate`                              |
+| 4   | [Phase 24](../../docs/archives/phases/completed/phase-24.md) Index Write UI                             | **종료 (226–229)**             | CREATE/Drop INDEX + create_table_plan                                                   |
+| 5   | [Phase 25](../../docs/archives/phases/completed/phase-25.md) Constraint Write UI                        | **종료 (229–230)**             | PK/FK/UNIQUE/CHECK + ON DELETE/UPDATE whitelist                                         |
+| 6   | [Phase 26](../../docs/archives/phases/completed/phase-26.md) Trigger 관리                               | **종료 (272–275)**             | list/create/drop trigger + WHEN/EXECUTE FUNCTION                                        |
+| 7   | [Phase 27](../../docs/archives/phases/completed/phase-27.md) Table/Column DDL UI                        | **종료 (226–237, 2026-05-13)** | **패리티 마일스톤 달성** — Sprint 237 closure 가 USING + NULL-rows 사전 표시까지 마무리 |
 
 ## Sprint 189–198 sequencing (refactoring + feature 인터리브, 종료 2026-05-02)
 
@@ -69,18 +69,18 @@ Sprint 198 종료로 sequencing 완료.
 ## State-management 이주 sequencing (Sprint 353–376, 24 sprint, 2026-05-16)
 
 기준 문서: [`docs/state-management-strategy-2026-05-15.md`](../../docs/state-management-strategy-2026-05-15.md)
-(11회 codex 외부 검토 0 findings 수렴) + [`docs/code-smell-audit-2026-05-15.md`](../../docs/code-smell-audit-2026-05-15.md).
+(11회 codex 외부 검토 0 findings 수렴) + [`docs/archives/etc/code-smell-audit-2026-05-15.md`](../../docs/archives/etc/code-smell-audit-2026-05-15.md).
 contract.md 24개 작성 + 4회 codex 5.5 medium consistency review.
 
-| Phase | Sprints | 핵심 |
-|-------|---------|------|
-| 0 | 353, 354 | dehydration (Q16~Q19, Q19 cap 25) + counter seed + L2 schemaStore retire |
-| 1 | 355–358 | SQLite 9 table + Q22 keyring file-key 3 path + F.2 snapshot + dual-write |
-| 2 | 359, 360 | 탭 affinity (Q5.1–Q5.6) + introspection_pool + Q23 self-window invalidate |
-| 3 | 361–365 | window label per-conn + single-instance + Q13 same-conn focus + ConnectionStatus 확장 + cross-window `state-changed` 9 domain |
-| 4 | 366–370 | hook + snapshot hydration + Q12 theme/safeMode + Q20 datagrid prefs (non-store LS 5 site retire) + W2→W3 gate |
-| 5 | 371–373 | query history backend (Q5 privacy + VACUUM 분리 + discriminated union) + frontend + queryHistoryStore retire |
-| 6 | 374–376 | ADR 0032–0042 commit + cleanup (session-storage rename / `.legacy.json` cron) + Q21 reset-to-default UI 9 affordance |
+| Phase | Sprints  | 핵심                                                                                                                          |
+| ----- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 0     | 353, 354 | dehydration (Q16~Q19, Q19 cap 25) + counter seed + L2 schemaStore retire                                                      |
+| 1     | 355–358  | SQLite 9 table + Q22 keyring file-key 3 path + F.2 snapshot + dual-write                                                      |
+| 2     | 359, 360 | 탭 affinity (Q5.1–Q5.6) + introspection_pool + Q23 self-window invalidate                                                     |
+| 3     | 361–365  | window label per-conn + single-instance + Q13 same-conn focus + ConnectionStatus 확장 + cross-window `state-changed` 9 domain |
+| 4     | 366–370  | hook + snapshot hydration + Q12 theme/safeMode + Q20 datagrid prefs (non-store LS 5 site retire) + W2→W3 gate                 |
+| 5     | 371–373  | query history backend (Q5 privacy + VACUUM 분리 + discriminated union) + frontend + queryHistoryStore retire                  |
+| 6     | 374–376  | ADR 0032–0042 commit + cleanup (session-storage rename / `.legacy.json` cron) + Q21 reset-to-default UI 9 affordance          |
 
 의존성 그래프 (병렬 가능 묶음) 와 sprint 단위 목적은
 [`docs/PLAN.md`](../../docs/PLAN.md) "State management 이주" 섹션이
@@ -91,17 +91,17 @@ red→green 명시.
 
 - **Phase 13–17 종료 (2026-05-14 audit)** — 작업이 phase 미식별 sprint 들에
   묻혀 진행됐다. closure 매핑:
-  - [Phase 13](../../docs/phases/phase-13.md) — Sprint 160 closure (2026-
+  - [Phase 13](../../docs/archives/phases/completed/phase-13.md) — Sprint 160 closure (2026-
     04-28). Connection 활성화 회귀 + PG/Mongo preview-tab parity.
-  - [Phase 14](../../docs/phases/phase-14.md) — Sprint 162 closure
+  - [Phase 14](../../docs/archives/phases/completed/phase-14.md) — Sprint 162 closure
     (retrospective 2026-05-14). Workspace ThemePicker + `Cmd+Shift+L`
     단축키.
-  - [Phase 15](../../docs/phases/phase-15.md) — Sprint 164 closure
+  - [Phase 15](../../docs/archives/phases/completed/phase-15.md) — Sprint 164 closure
     (retrospective 2026-05-14). Native HTML5 DnD 로 connection group
     이동 + nested indent + collapse persist (`@dnd-kit` 미도입).
-  - [Phase 16](../../docs/phases/phase-16.md) — Sprint 168 closure
+  - [Phase 16](../../docs/archives/phases/completed/phase-16.md) — Sprint 168 closure
     (2026-04-29). MRU 리스트 + RecentConnections + cross-window sync.
-  - [Phase 17](../../docs/phases/phase-17.md) — Sprint 296 closure
+  - [Phase 17](../../docs/archives/phases/completed/phase-17.md) — Sprint 296 closure
     (retrospective 2026-05-14). MysqlAdapter Slice A–G + ADR 0028 +
     testcontainers gate 합류 (coverage 84.23/79.74/85.66).
 - 보류 (2026-05-01, 재평가 대기):

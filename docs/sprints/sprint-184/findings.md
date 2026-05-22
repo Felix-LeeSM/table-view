@@ -68,7 +68,7 @@ PK 충돌 위험 없음.
 
 ### AC-184-06: Phase 22 종료 마킹
 
-`docs/phases/phase-22.md` 의 status 줄이 "계획" → "완료 (2026-05-01,
+`docs/archives/phases/completed/phase-22.md` 의 status 줄이 "계획" → "완료 (2026-05-01,
 Sprint 181~184)" 로 갱신됐고, "작업 단위" 섹션에 sprint 별 실측 결과 +
 commit 인용이 들어갔으며, "Exit Criteria" 4 항목 각각에 evidence
 (어느 sprint 의 어느 AC) 가 매핑됐다. Phase 본문의 *결정* 부분은
@@ -118,7 +118,7 @@ CI runner (GitHub Actions M-series 가 아닐 수 있음) 의 jitter 흡수를
 | AC-184-03 | 같은 파일 `[AC-184-03]` | Vitest (perf) |
 | AC-184-04 | 같은 파일 `[AC-184-04]` | Vitest (perf) |
 | AC-184-05 | 같은 파일 `[AC-184-05]` | Vitest (perf) |
-| AC-184-06 | `docs/phases/phase-22.md` (status + 매핑 표 + Exit evidence) | doc |
+| AC-184-06 | `docs/archives/phases/completed/phase-22.md` (status + 매핑 표 + Exit evidence) | doc |
 | AC-184-07 | `git diff` 절 (Verification Plan §8) | static |
 
 ## 6. Evidence index

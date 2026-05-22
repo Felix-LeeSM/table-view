@@ -2,7 +2,7 @@
 
 ## Description
 
-`src/stores/connectionStore.ts` (329 lines) 는 Zustand state transition + cache mutation 외에도 Tauri call orchestration / user-facing toast notification / session-scoped localStorage persistence / cross-window IPC bridge attach 를 한 모듈에서 동시에 소유한다 (`docs/refactoring-candidates.md` § P10). 이로 인해 store unit test 가 API orchestration 과 UI notification policy 를 같이 검증하게 되고, hook-level orchestration (`useConnectionLifecycle`) 과 store-level side-effect 의 경계가 일관적이지 않다.
+`src/stores/connectionStore.ts` (329 lines) 는 Zustand state transition + cache mutation 외에도 Tauri call orchestration / user-facing toast notification / session-scoped localStorage persistence / cross-window IPC bridge attach 를 한 모듈에서 동시에 소유한다 (`docs/archives/etc/refactoring-candidates.md` § P10). 이로 인해 store unit test 가 API orchestration 과 UI notification policy 를 같이 검증하게 되고, hook-level orchestration (`useConnectionLifecycle`) 과 store-level side-effect 의 경계가 일관적이지 않다.
 
 본 sprint 는 P10 candidate 의 **first step** — risk 높음 candidate 에서 가장 좁은 한 흐름만 이동. § P10 의 명시적 권고 ("한 번에 전체 store architecture 를 바꾸지 말고 connection lifecycle 한 흐름씩 이동") 를 따른다. 이번 step 의 narrow scope 는 `connectionStore` 의 **mutation 3 action (`addConnection` / `updateConnection` / `removeConnection`) 의 `toast.success(...)` 호출 1개씩, 합 3개**를 use-case hook (`useConnectionMutations`) 으로 이동.
 

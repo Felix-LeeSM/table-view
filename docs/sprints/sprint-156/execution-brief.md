@@ -49,7 +49,7 @@
 ## References
 
 - Contract: `docs/sprints/sprint-156/contract.md`
-- Phase spec: `docs/phases/phase-13.md`
+- Phase spec: `docs/archives/phases/completed/phase-13.md`
 - Key existing tests:
   - `src/__tests__/window-transitions.test.tsx` (Sprint 154, AC-154-01~05)
   - `src/__tests__/window-lifecycle.ac141.test.tsx` (AC-141-1~5)

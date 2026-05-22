@@ -1,7 +1,7 @@
 # Active Risk Register — Table View
 
 Active/deferred risk 단일 추적 문서. Resolved risk 는
-`docs/RISKS.resolved.md` 에서 관리한다.
+`docs/archives/risks/resolved.md` 에서 관리한다.
 
 Last updated: 2026-05-22 (active/resolved split)
 
@@ -41,7 +41,7 @@ Last updated: 2026-05-22 (active/resolved split)
 | RISK-032 | `MainArea` EmptyState MRU policy undecided | active | frontend/ux | UI eval | MRU decision + rationale |
 | RISK-034 | `pendingEditErrors` in narrow columns may clip | active | frontend/ui | UI eval | tooltip/hover or layout proof |
 | RISK-037 | `hickory-proto` CVEs pinned through `mongodb 3.6.0`; deny ignore in place | active | backend/security | hooks setup | migrate to `mongodb 4.x` or `hickory-proto 0.25.3+` |
-| RISK-038 | Code smell audit Part A 12 candidates remain outside state-management plan | active | refactor backlog | code-smell-audit-2026-05-15 | register each candidate as sprint or retire audit |
+| RISK-038 | Code smell audit Part A 12 candidates remain outside state-management plan | active | refactor backlog | `docs/archives/etc/code-smell-audit-2026-05-15.md` | register each candidate as sprint or retire audit |
 
 ## Notes
 

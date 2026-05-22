@@ -4,7 +4,7 @@
 
 `src/components/query/QueryTab.test.tsx` (2,308 lines, 1 root `describe("QueryTab")` + 1 nested `describe("Sprint 188 — Mongo aggregate safe-mode gate")`, 74 root + 6 nested = 80 total `it` cases) 가 단일 파일에 다수 behavior axis (idle/execute lifecycle / Toolbar / Multi-statement / History record + restore / Format-SQL / Cancel / Document paradigm routing / Dialect routing / Mongo autocomplete + fieldsCache / S132 raw-query DB-change / S188 Mongo aggregate safe-mode gate) 의 모든 회귀 가드를 누적 보유한다. Sprint 별 section 헤더 (Sprint 25/34/36/53/73/82/83/84/85/132/188) 와 AC label (AC-01..11 / AC-S139-04 / AC-188-03[a-f] / AC-190-01-5) 로 axis 추출 경계가 명확.
 
-본 sprint 는 P11 candidate (`docs/refactoring-candidates.md` §P11) 의 **second step**. Sprint 216 (P11 step 1) 에서 `SchemaTree.test.tsx` (2,891 / 104 cases) 를 6 axis + helper 로 split 한 model implementation 패턴 답습. 후속 P11 step 3-5 (`tabStore.test.ts` 2,234 / `StructurePanel.test.tsx` 2,156 / `DataGrid.test.tsx` 1,906) 는 별도 sprint candidate.
+본 sprint 는 P11 candidate (`docs/archives/etc/refactoring-candidates.md` §P11) 의 **second step**. Sprint 216 (P11 step 1) 에서 `SchemaTree.test.tsx` (2,891 / 104 cases) 를 6 axis + helper 로 split 한 model implementation 패턴 답습. 후속 P11 step 3-5 (`tabStore.test.ts` 2,234 / `StructurePanel.test.tsx` 2,156 / `DataGrid.test.tsx` 1,906) 는 별도 sprint candidate.
 
 행동 변경 0 강제. `QueryTab.tsx` 본체 (228 lines) + `QueryTab/` sub-file 6개 변경 금지. test 만 axis 파일 split. 사전 80 case 모두 사후 통과. case 텍스트 / matcher / fixture / mock setup / 24 verbatim AC string 사전과 byte-equivalent.
 
@@ -330,4 +330,4 @@ beforeEach:
 - /Users/felix/Desktop/study/view-table/src/components/query/QueryTab.tsx
 - /Users/felix/Desktop/study/view-table/docs/sprints/sprint-216/spec.md
 - /Users/felix/Desktop/study/view-table/docs/sprints/sprint-216/evaluator-scorecard.md
-- /Users/felix/Desktop/study/view-table/docs/refactoring-candidates.md
+- /Users/felix/Desktop/study/view-table/docs/archives/etc/refactoring-candidates.md

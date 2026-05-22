@@ -1,7 +1,7 @@
 # Phase 6: MongoDB 지원
 
 > **Archive status (2026-05-22)**: superseded legacy MongoDB sketch. Current
-> MongoDB full-support plan lives in `phase-28.md`.
+> MongoDB full-support plan lives in `../../../phases/phase-28.md`.
 >
 > Document DB 어댑터 + 컬렉션/문서 뷰 — **계획**
 

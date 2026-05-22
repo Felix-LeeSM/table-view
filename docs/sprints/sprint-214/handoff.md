@@ -16,7 +16,7 @@
 
 > | 6 | 215 | refactor | P8 (Raw-query edit grid) | `useRawQueryGridEdit` hook 추출 + commit runner 공유 |
 
-[`docs/refactoring-candidates.md`](../../refactoring-candidates.md) §P8 가 입력값.
+[`docs/archives/etc/refactoring-candidates.md`](../../archives/etc/refactoring-candidates.md) §P8 가 입력값.
 
 ## 검증 결과
 

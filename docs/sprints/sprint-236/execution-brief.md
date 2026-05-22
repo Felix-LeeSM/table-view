@@ -479,7 +479,7 @@ Code-quality invariants:
   - `docs/sprints/sprint-229/contract.md` — CHECK constraint
     free-text contract (mirror for `add_column` CHECK
     expression scope).
-- **Phase doc:** `docs/phases/phase-27.md`.
+- **Phase doc:** `docs/archives/phases/completed/phase-27.md`.
 - **Master plan:** `docs/PLAN.md`.
 
 ### Relevant files (READ before implementing)

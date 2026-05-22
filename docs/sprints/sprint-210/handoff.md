@@ -18,7 +18,7 @@
 
 > | 2 | 211 | refactor | P2 (QuickLookPanel) | `QuickLookShell` 분리 + RDB / Document body 분리 + helpers 이동. |
 
-[`docs/refactoring-candidates.md`](../../refactoring-candidates.md) §P2 가 입력값.
+[`docs/archives/etc/refactoring-candidates.md`](../../archives/etc/refactoring-candidates.md) §P2 가 입력값.
 
 ## 검증 결과
 

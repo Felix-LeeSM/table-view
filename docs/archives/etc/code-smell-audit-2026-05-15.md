@@ -5,8 +5,8 @@
 > 2026-05-06) 의 후속이지만 그 문서를 대체하거나 sprint 계약을 대체하지
 > 않는다. 다음 작업 단위를 고를 때 참고하는 backlog.
 
-> **Status**: Open. 사용 후 retire 시점에 본 문서 상단에 retire 메모 추가
-> (`refactoring-candidates.md` 패턴).
+> **Status**: archived/inactive (2026-05-22). Active tracking is RISK-038 in
+> `docs/RISKS.md`.
 
 ## Inspection Method
 
@@ -692,10 +692,10 @@ deepening — 작은 인터페이스 뒤에 같은 동작을 묶음.
 
 ## Related
 
-- [`memory/conventions/refactoring/memory.md`](../memory/conventions/refactoring/memory.md)
+- [`memory/conventions/refactoring/memory.md`](../../../memory/conventions/refactoring/memory.md)
   — B/D/C/A 4 카테고리 정의.
-- [`docs/refactoring-candidates.md`](refactoring-candidates.md) (retired
-  2026-05-06) — 이전 wide-net scan, 본 문서가 후속.
+- [`docs/archives/etc/refactoring-candidates.md`](refactoring-candidates.md)
+  (retired 2026-05-06) — 이전 wide-net scan, 본 문서가 후속.
 - ADR 0025 — DataGrid self-managed (tanstack 미도입).
 - ADR 0027 — per-workspace state store.
 - ADR 0028 — MySQL adapter sqlx.

@@ -83,4 +83,4 @@
   - `src/components/shared/BlobViewerDialog.tsx`
   - 이전 entry-pattern 참고: `src/components/document/DocumentDataGrid.tsx` (Sprint 210), `src/components/rdb/DataGridTable.tsx` (Sprint 200), `src/components/schema/SchemaTree.tsx` (Sprint 199)
 - 인접 sprint 문서: `docs/sprints/sprint-210/{contract,findings,handoff}.md`
-- 후속 candidates: `docs/refactoring-candidates.md` §P2
+- 후속 candidates: `docs/archives/etc/refactoring-candidates.md` §P2

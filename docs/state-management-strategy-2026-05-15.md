@@ -5,7 +5,7 @@
 > invariant 누수를 표면화하고, 새 state 가 어디 갈지 판단할 결정 트리를
 > 제시.
 >
-> **Related**: [`code-smell-audit-2026-05-15.md`](code-smell-audit-2026-05-15.md)
+> **Related**: [`code-smell-audit-2026-05-15.md`](archives/etc/code-smell-audit-2026-05-15.md)
 > Part B (L1–L10) — store 책임 / invariant 누수 발견과 본 문서가 같이
 > 봐야 할 페어.
 
@@ -1686,7 +1686,7 @@ type ClearHistoryResponse = {
 
 ## Related
 
-- [`code-smell-audit-2026-05-15.md`](code-smell-audit-2026-05-15.md) Part B
+- [`code-smell-audit-2026-05-15.md`](archives/etc/code-smell-audit-2026-05-15.md) Part B
   — store 책임 mismatch / invariant 누수 (L1–L10).
 - ADR 0001 — Desktop stack Tauri v2 + sqlx (현재 sqlite feature 미사용 — Phase 1 에서 추가).
 - ADR 0002 — Zustand 채택.

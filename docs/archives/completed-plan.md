@@ -17,9 +17,9 @@ Last updated: 2026-05-22
 | Refactor cycle 189-198 | complete | `docs/sprints/sprint-189/` through `sprint-198/` |
 | Refactor cycle 199-209 | complete | `docs/sprints/sprint-199/` through `sprint-209/` |
 | Refactor cycle 210-224 | complete except deferred P10 3b/4 | `docs/sprints/sprint-210/` through `sprint-224/` |
-| Table / Column DDL UI | closed | Phase 27, Sprint 226-237 |
+| DDL UI parity surfaces | closed | Phases 24-27, Sprint 226-237 |
 | Language completion architecture | complete | Phase 31, Sprint 420-430 |
-| Risk closure follow-up | complete | Sprint 433-438, `docs/RISKS.resolved.md` |
+| Risk closure follow-up | complete | Sprint 433-438, `docs/archives/risks/resolved.md` |
 
 ## Completed Semantic-Widening Slices
 
@@ -34,10 +34,10 @@ Last updated: 2026-05-22
 | Old content | Current home |
 |---|---|
 | Long historical PLAN sections | this archive + sprint handoffs |
-| Completed phase list | `docs/phases/completed.md` |
-| Resolved risk table/log | `docs/RISKS.resolved.md` |
+| Completed phase list | `docs/archives/phases/README.md` |
+| Resolved risk table/log | `docs/archives/risks/resolved.md` |
 | Active ordering | `docs/PLAN.md` |
 | UX law action plan | preserved as retired reference; sprint-176-180 artifacts + `docs/ux-laws-mapping.md` remain current |
-| Legacy Phase 5-9 sketches | preserved in `docs/phases/`; archived in `docs/phases/completed.md` |
-| Archived 2026-04-10 test improvement snapshot | preserved under `docs/archive/`; superseded by later sprint evidence |
-| 2026-05-19 refactor backlog draft | preserved under `docs/refactor-backlog/2026-05-19/`; active refactor tracking remains RISK-038 + `docs/code-smell-audit-2026-05-15.md` |
+| Legacy Phase 5-9 sketches | preserved under `docs/archives/phases/retired/`; indexed in `docs/archives/phases/README.md` |
+| Archived 2026-04-10 test improvement snapshot | preserved under `docs/archives/etc/`; superseded by later sprint evidence |
+| 2026-05-19 refactor backlog draft | preserved under `docs/archives/etc/refactor-backlog/2026-05-19/`; active refactor tracking remains RISK-038 + `docs/archives/etc/code-smell-audit-2026-05-15.md` |

@@ -85,4 +85,4 @@
   - `src/components/datagrid/useDataGridEdit.ts` (`editKey` / `cellToEditString` / `getInputTypeForColumn` 사전 사용)
 - 이전 hook extraction 참고: Sprint 214 `src/components/structure/useDdlPreviewExecution.ts`
 - 인접 sprint 문서: `docs/sprints/sprint-214/{contract,findings,handoff}.md`
-- 후속 candidates: `docs/refactoring-candidates.md` §P10 (Sprint 216), §P11 (Sprint 218).
+- 후속 candidates: `docs/archives/etc/refactoring-candidates.md` §P10 (Sprint 216), §P11 (Sprint 218).

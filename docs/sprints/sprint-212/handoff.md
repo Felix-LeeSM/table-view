@@ -35,7 +35,7 @@
 
 > | 3 | 213 | refactor | P5 step 2 | `db/mod.rs` (551) trait/DTO 분리 + `export.rs` (879) writer 분리. |
 
-[`docs/refactoring-candidates.md`](../../refactoring-candidates.md) §P5 가 입력값. P5 step 1 (tests block hoist) 은 사용자 commit `a60074d` 로 완료, step 2 만 잔여.
+[`docs/archives/etc/refactoring-candidates.md`](../../archives/etc/refactoring-candidates.md) §P5 가 입력값. P5 step 1 (tests block hoist) 은 사용자 commit `a60074d` 로 완료, step 2 만 잔여.
 
 ## 검증 결과
 

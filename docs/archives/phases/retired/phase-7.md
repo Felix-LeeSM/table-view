@@ -1,7 +1,7 @@
 # Phase 7: Elasticsearch 지원
 
 > **Archive status (2026-05-22)**: retired/future sketch. Current paradigm
-> summary lives in `../../memory/architecture/paradigms/memory.md`; this phase
+> summary lives in `../../../../memory/architecture/paradigms/memory.md`; this phase
 > is not active roadmap.
 >
 > Search DSL 어댑터 + 로그/검색 운영자 경험 — **계획 v2 (2026-04-24 재설계)**
