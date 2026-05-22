@@ -201,7 +201,7 @@ SQL dialect와 shell/meta command는 별도 layer다.
 
 ### 클라이언트 SQL 파서 / Safe Mode
 
-현재 SQL parser는 PostgreSQL/ANSI 중심의 공통 parser다. MySQL 실행은 서버에 맡기지만, Safe Mode 분류와 일부 editor 분석은 아래 부분집합만 구조적으로 이해한다.
+현재 SQL parser는 PostgreSQL/ANSI 중심의 공통 parser다. MySQL 실행은 서버에 맡기지만, Safe Mode 분류와 일부 editor 분석은 아래 부분집합만 구조적으로 이해한다. parser 자체는 dialect gate를 갖지 않으므로, 아래 MySQL/MariaDB 동기 문법도 client parser가 호출되는 곳에서는 공통 parser behavior로 인식된다.
 
 ✅ 지원:
 
@@ -212,11 +212,11 @@ SQL dialect와 shell/meta command는 별도 layer다.
   comma-separated assignments. RHS values supported by the client parser are
   literals, `DEFAULT`, placeholders (`?`, `$1`, `:name`), and
   `VALUES(column)`.
-- MySQL/MariaDB procedure call dispatch: `CALL proc()` and
-  `CALL schema.proc(?, 'x', 1)`. Argument values supported by the client
-  parser are literals, `DEFAULT`, and placeholders (`?`, `$1`, `:name`);
-  server execution remains the final judge for routine signature and argument
-  validity.
+- MySQL/MariaDB 동기로 추가된 common parser procedure call dispatch:
+  `CALL proc()` and `CALL schema.proc(?, 'x', 1)`. Argument values supported
+  by the client parser are literals, `DEFAULT`, and placeholders (`?`, `$1`,
+  `:name`); server execution remains the final judge for routine signature and
+  argument validity.
 - MySQL identifier quoting은 autocomplete/editor path에서 backtick으로 처리.
 
 ⚠️ 부분 지원:
@@ -229,6 +229,8 @@ SQL dialect와 shell/meta command는 별도 layer다.
 - `CALL` argument grammar is intentionally narrow: arithmetic, function calls,
   subqueries, bare identifiers, MySQL user variables (`@name`), and OUT/INOUT
   parameter semantics are not modeled by the client parser.
+- Safe Mode classifies `CALL` as `routine-call` / `warn` because stored routine
+  side effects are opaque to the client parser.
 
 ❌ 미지원:
 

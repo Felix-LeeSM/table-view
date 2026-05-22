@@ -65,6 +65,7 @@ pub fn parse_sql(sql: &str) -> ParseResult {
 /// rewrite stand for one less attribute.
 #[cfg(feature = "wasm")]
 mod wasm_bridge {
+    use serde::Serialize;
     use wasm_bindgen::prelude::*;
 
     /// Lazily called by `src/lib/sql/sqlAst.ts`. Returns a `JsValue`
@@ -74,15 +75,10 @@ mod wasm_bridge {
     #[wasm_bindgen]
     pub fn parse_sql(sql: &str) -> JsValue {
         let result = super::parse_sql(sql);
-        // `serde_wasm_bindgen::to_value` returns a `Result<JsValue,
-        // serde_wasm_bindgen::Error>`. The only failure path is a
-        // serialization bug in our own AST — there is no user-input
-        // failure mode here (a malformed SQL string surfaces as a
-        // `ParseResult::Error` variant earlier). We map any such bug
-        // to a JS-side `null` so the TS facade can detect + report,
-        // rather than panicking the WASM module (which would kill
-        // the page).
-        serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL)
+        // `json_compatible()` preserves the TS wire contract where
+        // absent optional fields are explicit `null`, not `undefined`.
+        let serializer = serde_wasm_bindgen::Serializer::json_compatible();
+        result.serialize(&serializer).unwrap_or(JsValue::NULL)
     }
 
     #[allow(clippy::too_many_arguments)]

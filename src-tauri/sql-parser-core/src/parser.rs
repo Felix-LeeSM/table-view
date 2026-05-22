@@ -5685,9 +5685,29 @@ mod tests {
     }
 
     #[test]
-    fn call_rejects_function_argument_outside_value_surface() {
-        let e = err("CALL refresh_user_stats(NOW())");
-        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    fn call_rejects_named_argument_forms_outside_value_surface() {
+        let cases = [
+            ("function call", "CALL refresh_user_stats(NOW())"),
+            ("arithmetic", "CALL refresh_user_stats(1 + 2)"),
+            (
+                "subquery",
+                "CALL refresh_user_stats((SELECT id FROM users))",
+            ),
+            ("bare identifier", "CALL refresh_user_stats(user_id)"),
+            ("user variable", "CALL refresh_user_stats(@user_id)"),
+        ];
+
+        for (label, sql) in cases {
+            let e = err(sql);
+            assert!(
+                matches!(
+                    e.error_kind,
+                    ParseErrorKind::SyntaxError | ParseErrorKind::LexError
+                ),
+                "{label}: expected syntax/lex rejection, got {:?}",
+                e
+            );
+        }
     }
 
     // ── INSERT — AC-392-I ────────────────────────────────────────────

@@ -1,16 +1,22 @@
-# Sprint 439 Contract: MySQL/MariaDB CALL Parser Semantics
+# Sprint 439 Contract: Common CALL Parser Semantics
 
 ## Goal
 
-Move narrow MySQL/MariaDB `CALL` statements from the documented parser semantic
-gap to supported top-level client parser semantics.
+Move narrow `CALL` statements, motivated by MySQL/MariaDB procedure dispatch,
+from the documented parser semantic gap to supported top-level client parser
+semantics.
 
 ## Scope
 
 - Parse `CALL proc()` as a top-level `call` AST result.
 - Parse schema-qualified procedure names such as `CALL schema.proc(...)`.
+- Keep the parser dialectless: this is common client parser behavior, not a
+  MySQL-only dialect gate.
 - Parse comma-separated arguments using the existing local value surface:
   literals, `DEFAULT`, and placeholders (`?`, `$1`, `:name`).
+- Serialize bare procedure names with `procedure.schema: null`.
+- Classify parsed `CALL` statements as `routine-call` / `warn` in Safe Mode
+  because stored routine side effects are opaque to the client parser.
 - Add Rust AST/parser coverage, TypeScript facade typing, and real checked-in
   WASM regression coverage.
 - Regenerate the checked-in SQL WASM artifact because the exported AST shape
@@ -27,7 +33,7 @@ gap to supported top-level client parser semantics.
   parser subset.
 - AC-439-04: Existing parser tests remain green.
 - AC-439-05: The checked-in SQL WASM artifact parses the same `call` shape
-  through `parseSql`.
+  through `parseSql`, including `schema: null` for bare calls.
 - AC-439-06: Docs move narrow MySQL/MariaDB `CALL` semantics out of the
   unsupported parser bucket while preserving stored routine body, `DELIMITER`,
   `LOAD DATA`, and control-flow gaps.

@@ -252,6 +252,13 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           returning: [],
         };
       }
+      if (/^CALL\b/i.test(trimmed)) {
+        return {
+          kind: "call",
+          procedure: { schema: null, name: "stub" },
+          arguments: [],
+        };
+      }
       // UPDATE — detect WHERE presence so sqlSafety can branch on
       // where_clause === null. Use a coarse `\bWHERE\b` test against the
       // upper-cased string.
@@ -656,6 +663,14 @@ describe("sqlSafety.analyzeStatement", () => {
     const a = analyzeStatement("INSERT INTO users (id, name) VALUES (1, 'a')");
     expect(a.kind).toBe("dml-insert");
     expect(a.severity).toBe("info");
+  });
+
+  it("[AC-439-X01] CALL fallback → routine-call / warn", () => {
+    const a = analyzeStatement("CALL refresh_user_stats()");
+    expect(a.kind).toBe("routine-call");
+    expect(a.severity).toBe("warn");
+    expect(a.reasons).toEqual(["CALL — stored routine execution"]);
+    expect(isDangerous(a)).toBe(false);
   });
 
   it("[AC-185-01i] SELECT → info (Sprint 254: read tier)", () => {
@@ -1265,6 +1280,13 @@ describe("sqlSafety.analyzeStatement", () => {
       // `warn` severity → not dangerous, not info.
       expect(isDangerous(a)).toBe(false);
       expect(isInfoStatement(a)).toBe(false);
+    });
+
+    it("[AC-439-X02] CALL AST path → routine-call / warn", () => {
+      const a = analyzeStatement("CALL refresh_user_stats()");
+      expect(a.kind).toBe("routine-call");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["CALL — stored routine execution"]);
     });
   });
 
