@@ -110,10 +110,17 @@ fn leading_executable_comment_feature(sql: &str) -> Option<MysqlScriptingFeature
             continue;
         }
 
+        if bytes.get(index) == Some(&b'#') {
+            index += 1;
+            while index < bytes.len() && bytes[index] != b'\n' {
+                index += 1;
+            }
+            continue;
+        }
+
         if bytes.get(index) == Some(&b'/') && bytes.get(index + 1) == Some(&b'*') {
             let close = find_block_comment_close(bytes, index + 2);
-            if bytes.get(index + 2) == Some(&b'!') {
-                let mut body_start = index + 3;
+            if let Some(mut body_start) = executable_comment_body_start(bytes, index) {
                 while body_start < bytes.len() && bytes[body_start].is_ascii_digit() {
                     body_start += 1;
                 }
@@ -132,6 +139,23 @@ fn leading_executable_comment_feature(sql: &str) -> Option<MysqlScriptingFeature
         break;
     }
 
+    None
+}
+
+fn executable_comment_body_start(bytes: &[u8], index: usize) -> Option<usize> {
+    if bytes.get(index) == Some(&b'/')
+        && bytes.get(index + 1) == Some(&b'*')
+        && bytes.get(index + 2) == Some(&b'!')
+    {
+        return Some(index + 3);
+    }
+    if bytes.get(index) == Some(&b'/')
+        && bytes.get(index + 1) == Some(&b'*')
+        && matches!(bytes.get(index + 2), Some(b'M') | Some(b'm'))
+        && bytes.get(index + 3) == Some(&b'!')
+    {
+        return Some(index + 4);
+    }
     None
 }
 
@@ -175,6 +199,14 @@ fn skip_whitespace_and_comments(bytes: &[u8], mut index: usize) -> usize {
 
         if bytes.get(index) == Some(&b'-') && bytes.get(index + 1) == Some(&b'-') {
             index += 2;
+            while index < bytes.len() && bytes[index] != b'\n' {
+                index += 1;
+            }
+            continue;
+        }
+
+        if bytes.get(index) == Some(&b'#') {
+            index += 1;
             while index < bytes.len() && bytes[index] != b'\n' {
                 index += 1;
             }
@@ -1231,6 +1263,25 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn execute_query_batch_mariadb_executable_comment_load_data_returns_unsupported() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Mariadb,
+            ..StubRdbAdapter::default()
+        };
+        s.execute_sql_batch_fn = Some(Box::new(|_| {
+            panic!("execute_sql_batch must not run for unsupported MariaDB LOAD DATA")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts =
+            vec!["/*M!100100 LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users */".to_string()];
+
+        match execute_query_batch_inner(&state, "c", &stmts, "qb-load-data-comment", None).await {
+            Err(AppError::Unsupported(msg)) => assert!(msg.contains("LOAD DATA")),
+            other => panic!("Expected Unsupported(LOAD DATA), got: {:?}", other),
+        }
+    }
+
     // ── Sprint 247 (ADR 0022 Phase 3) — dry-run dispatch tests ───────────
     //
     // 작성 이유 (2026-05-09): execute_query_dry_run_inner 의 input
@@ -1344,6 +1395,25 @@ mod tests {
         let stmts = vec!["LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users".to_string()];
 
         match execute_query_dry_run_inner(&state, "c", &stmts, "qd-load-data", None).await {
+            Err(AppError::Unsupported(msg)) => assert!(msg.contains("LOAD DATA")),
+            other => panic!("Expected Unsupported(LOAD DATA), got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn dry_run_mysql_hash_comment_load_data_returns_unsupported_before_dispatch() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Mysql,
+            ..StubRdbAdapter::default()
+        };
+        s.dry_run_sql_batch_fn = Some(Box::new(|_| {
+            panic!("dry_run_sql_batch must not run for unsupported MySQL LOAD DATA")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts =
+            vec!["# import\nLOAD DATA INFILE '/tmp/users.csv' INTO TABLE users".to_string()];
+
+        match execute_query_dry_run_inner(&state, "c", &stmts, "qd-load-data-hash", None).await {
             Err(AppError::Unsupported(msg)) => assert!(msg.contains("LOAD DATA")),
             other => panic!("Expected Unsupported(LOAD DATA), got: {:?}", other),
         }

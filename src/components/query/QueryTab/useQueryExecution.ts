@@ -2155,15 +2155,9 @@ export function useQueryExecution({
       return;
     }
 
-    const statements = splitSqlStatements(sql).filter((stmt) => {
-      // Strip SQL comments and whitespace to detect statements that are
-      // effectively empty (e.g. "-- comment only" or "/* block */").
-      return stripSqlComments(stmt).trim().length > 0;
-    });
-    if (statements.length === 0) return;
-
+    const rawStatements = splitSqlStatements(sql);
     const scriptingViolation = findMysqlScriptingBoundaryViolation(
-      statements,
+      rawStatements,
       dbType,
     );
     if (scriptingViolation) {
@@ -2179,6 +2173,13 @@ export function useQueryExecution({
       });
       return;
     }
+
+    const statements = rawStatements.filter((stmt) => {
+      // Strip SQL comments and whitespace to detect statements that are
+      // effectively empty (e.g. "-- comment only" or "/* block */").
+      return stripSqlComments(stmt).trim().length > 0;
+    });
+    if (statements.length === 0) return;
 
     // Sprint 231 — Safe Mode gate for raw RDB query path. Single pass
     // analyzes every statement; the matrix decision priority is
@@ -2344,15 +2345,9 @@ export function useQueryExecution({
     const sql = tab.sql.trim();
     if (!sql) return;
 
-    const statements = splitSqlStatements(sql).filter((stmt) => {
-      // Mirror the comment-strip-then-non-empty filter used by
-      // `handleExecute` so dry-run treats `-- comment` only as empty.
-      return stripSqlComments(stmt).trim().length > 0;
-    });
-    if (statements.length === 0) return;
-
+    const rawStatements = splitSqlStatements(sql);
     const scriptingViolation = findMysqlScriptingBoundaryViolation(
-      statements,
+      rawStatements,
       dbType,
     );
     if (scriptingViolation) {
@@ -2362,6 +2357,13 @@ export function useQueryExecution({
       });
       return;
     }
+
+    const statements = rawStatements.filter((stmt) => {
+      // Mirror the comment-strip-then-non-empty filter used by
+      // `handleExecute` so dry-run treats `-- comment` only as empty.
+      return stripSqlComments(stmt).trim().length > 0;
+    });
+    if (statements.length === 0) return;
 
     const queryId = `dry:${tab.id}-${Date.now()}`;
     updateQueryState(tab.id, { status: "running", queryId });

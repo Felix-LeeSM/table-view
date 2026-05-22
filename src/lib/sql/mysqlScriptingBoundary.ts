@@ -67,10 +67,18 @@ function leadingExecutableCommentFeature(
       continue;
     }
 
+    if (sql[index] === "#") {
+      const newline = sql.indexOf("\n", index + 1);
+      if (newline === -1) return null;
+      index = newline + 1;
+      continue;
+    }
+
     if (sql.startsWith("/*", index)) {
       const close = sql.indexOf("*/", index + 2);
-      if (sql.startsWith("/*!", index)) {
-        let bodyStart = index + 3;
+      const executableBodyStart = executableCommentBodyStart(sql, index);
+      if (executableBodyStart !== null) {
+        let bodyStart = executableBodyStart;
         while (bodyStart < sql.length && /[0-9]/.test(sql[bodyStart]!)) {
           bodyStart += 1;
         }
@@ -126,6 +134,13 @@ function skipWhitespaceAndComments(sql: string, start: number): number {
       continue;
     }
 
+    if (sql[index] === "#") {
+      const newline = sql.indexOf("\n", index + 1);
+      if (newline === -1) return sql.length;
+      index = newline + 1;
+      continue;
+    }
+
     if (sql.startsWith("/*", index)) {
       const close = sql.indexOf("*/", index + 2);
       if (close === -1) return sql.length;
@@ -137,6 +152,14 @@ function skipWhitespaceAndComments(sql: string, start: number): number {
   }
 
   return index;
+}
+
+function executableCommentBodyStart(sql: string, index: number): number | null {
+  if (sql.startsWith("/*!", index)) return index + 3;
+  if (sql.startsWith("/*M!", index) || sql.startsWith("/*m!", index)) {
+    return index + 4;
+  }
+  return null;
 }
 
 function isWordStart(charCode: number): boolean {
