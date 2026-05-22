@@ -3,6 +3,7 @@ pub mod connection;
 pub mod datagrid_prefs;
 pub mod document;
 pub mod export;
+pub mod file_analytics;
 pub mod groups_collapsed;
 pub mod guard;
 pub mod history;

@@ -1,5 +1,6 @@
 pub mod connection;
 pub mod data_source;
+pub mod file_analytics;
 pub mod query;
 pub mod schema;
 
@@ -16,6 +17,9 @@ pub use data_source::{
     FileConnectionInputStatus, FileConnectionPermissionScope, FileConnectionPrivacyPolicyId,
     QueryLanguageId, ResultEnvelopeKind, SafetyPolicyId, ServerVersionProbeId, KV_MARKER_CONTRACT,
     SEARCH_MARKER_CONTRACT,
+};
+pub use file_analytics::{
+    FileAnalyticsPreview, FileAnalyticsQueryResponse, FileAnalyticsSource, FileAnalyticsSourceKind,
 };
 pub use query::{
     CollectionStatsRow, ColumnCategory, QueryColumn, QueryResult, QueryType, ServerActivityRow,

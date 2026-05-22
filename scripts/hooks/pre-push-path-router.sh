@@ -197,7 +197,7 @@ run_cargo_deny() {
 
 run_rust_coverage() {
 	if [ "$DRY_RUN" = "1" ]; then
-		echo "RUN rust-test-and-coverage: rustup component check && (cd src-tauri && cargo llvm-cov --lib --test storage_integration --test query_integration --test schema_integration --test fixture_loading --test mongo_integration --test mysql_integration --summary-only --fail-under-lines 79 --fail-under-functions 74 --fail-under-regions 80)"
+		echo "RUN rust-test-and-coverage: rustup component check && (cd src-tauri && cargo llvm-cov --lib --test storage_integration --test query_integration --test schema_integration --test fixture_loading --test mongo_integration --test mysql_integration --test duckdb_file_analytics --summary-only --fail-under-lines 79 --fail-under-functions 74 --fail-under-regions 80)"
 		return 0
 	fi
 
@@ -216,6 +216,7 @@ run_rust_coverage() {
 			--test fixture_loading \
 			--test mongo_integration \
 			--test mysql_integration \
+			--test duckdb_file_analytics \
 			--summary-only \
 			--fail-under-lines 79 \
 			--fail-under-functions 74 \

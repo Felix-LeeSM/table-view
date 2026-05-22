@@ -12,13 +12,15 @@ use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, IndexInfo,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, FileAnalyticsPreview,
+    FileAnalyticsQueryResponse, FileAnalyticsSource, FilterCondition, IndexInfo,
     RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
 
 mod connection;
+mod file_analytics;
 mod queries;
 mod sql_text;
 mod value;
@@ -114,6 +116,30 @@ impl RdbAdapter for DuckdbAdapter {
             )
             .await
         })
+    }
+
+    fn register_file_analytics_source<'a>(
+        &'a self,
+        path: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<FileAnalyticsSource, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.register_file_analytics_source(path).await })
+    }
+
+    fn preview_file_analytics_source<'a>(
+        &'a self,
+        source_id: &'a str,
+        limit: Option<u32>,
+    ) -> Pin<Box<dyn Future<Output = Result<FileAnalyticsPreview, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.preview_file_analytics_source(source_id, limit).await })
+    }
+
+    fn execute_file_analytics_query<'a>(
+        &'a self,
+        source_id: &'a str,
+        sql: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<FileAnalyticsQueryResponse, AppError>> + Send + 'a>>
+    {
+        Box::pin(async move { self.execute_file_analytics_query(source_id, sql).await })
     }
 
     fn drop_table<'a>(

@@ -8,6 +8,7 @@ import {
   Save,
   X,
   FlaskConical,
+  FileSearch,
 } from "lucide-react";
 import FavoritesPanel from "../FavoritesPanel";
 import TabDbChip from "./TabDbChip";
@@ -52,6 +53,8 @@ export interface QueryTabToolbarProps {
    */
   onDryRun: () => void;
   onFormat: () => void;
+  showFileAnalytics?: boolean;
+  onOpenFileAnalytics?: () => void;
   favorites: QueryFavoritesState;
 }
 
@@ -62,6 +65,8 @@ export default function QueryTabToolbar({
   onExecute,
   onDryRun,
   onFormat,
+  showFileAnalytics = false,
+  onOpenFileAnalytics,
   favorites,
 }: QueryTabToolbarProps) {
   const {
@@ -173,6 +178,19 @@ export default function QueryTabToolbar({
         >
           <Paintbrush />
           <span>Format</span>
+        </Button>
+      )}
+      {showFileAnalytics && (
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={onOpenFileAnalytics}
+          disabled={tab.queryState.status === "running"}
+          aria-label="Preview local file"
+          title="Preview local file"
+        >
+          <FileSearch />
+          <span>Local File</span>
         </Button>
       )}
       <div className="ml-auto flex items-center gap-1 relative">
