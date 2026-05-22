@@ -3,6 +3,7 @@
  * ADR 0027.
  */
 import type { Paradigm } from "@/types/connection";
+import type { QueryLanguageId } from "@/types/dataSource";
 import type {
   QueryResult,
   QueryState,
@@ -99,6 +100,8 @@ export interface QueryTab {
    * later sprint once A5 lands and no consumer remains.
    */
   queryMode?: WorkspaceQueryMode;
+  /** Canonical query language metadata for future routing. */
+  queryLanguage?: QueryLanguageId;
   database?: string;
   collection?: string;
 }
@@ -127,6 +130,7 @@ export type TableTabInit = Omit<TableTab, "id" | "isPreview"> & {
 export type QueryTabOptions = {
   paradigm?: Paradigm;
   queryMode?: WorkspaceQueryMode;
+  queryLanguage?: QueryLanguageId;
   database?: string;
   collection?: string;
 };
@@ -135,6 +139,7 @@ export type LoadQueryPayload = {
   connectionId: string;
   paradigm: Paradigm;
   queryMode?: WorkspaceQueryMode | DocumentWorkspaceQueryModeInput;
+  queryLanguage?: QueryLanguageId;
   database?: string;
   collection?: string;
   sql: string;

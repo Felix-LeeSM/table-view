@@ -29,10 +29,6 @@ import {
   restoreLocalStorage,
 } from "./__tests__/workspaceStoreTestHelpers";
 
-function queryLanguageOf(tab: unknown): string | undefined {
-  return (tab as { queryLanguage?: string }).queryLanguage;
-}
-
 describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
   beforeEach(() => {
     installFakeLocalStorage();
@@ -278,11 +274,11 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
     }
 
     expect(rdbTab.queryMode).toBe("sql");
-    expect(queryLanguageOf(rdbTab)).toBe("sql");
+    expect(rdbTab.queryLanguage).toBe("sql");
     expect(documentTab.queryMode).toBe("find");
-    expect(queryLanguageOf(documentTab)).toBe("mongosh");
+    expect(documentTab.queryLanguage).toBe("mongosh");
     expect(closedDocumentTab.queryMode).toBe("aggregate");
-    expect(queryLanguageOf(closedDocumentTab)).toBe("mongosh");
+    expect(closedDocumentTab.queryLanguage).toBe("mongosh");
   });
 
   it.each([
@@ -397,6 +393,7 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
           ?.tabs[0];
       if (tab?.type !== "query") throw new Error("Expected query tab");
       expect(tab.queryMode).toBe(expectedQueryMode);
+      expect(tab.queryLanguage).toBe("mongosh");
       expect(tab.sql).toBe("db.users.find({})");
     },
   );

@@ -84,6 +84,7 @@ describe("workspaceStore.addQueryTab — paradigm auto-detection", () => {
     // Document tabs must not carry the legacy `sql` queryMode — the
     // editor surface is mongosh-flavoured (Sprint 309 lock).
     expect(tab.queryMode).toBeUndefined();
+    expect(tab.queryLanguage).toBe("mongosh");
   });
 
   it("keeps the rdb paradigm for Postgres connections (regression guard)", () => {
@@ -96,6 +97,7 @@ describe("workspaceStore.addQueryTab — paradigm auto-detection", () => {
     const tab = getQueryTab(getTestWorkspace("conn-pg", "appdb"), 0);
     expect(tab.paradigm).toBe("rdb");
     expect(tab.queryMode).toBe("sql");
+    expect(tab.queryLanguage).toBe("sql");
   });
 
   it("infers kv paradigm for Redis connections", () => {
@@ -123,6 +125,7 @@ describe("workspaceStore.addQueryTab — paradigm auto-detection", () => {
 
     const tab = getQueryTab(getTestWorkspace("conn-mongo", "appdb"), 0);
     expect(tab.paradigm).toBe("document");
+    expect(tab.queryLanguage).toBe("mongosh");
   });
 
   it("falls back to rdb when the connection is missing", () => {

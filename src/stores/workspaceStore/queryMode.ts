@@ -1,4 +1,5 @@
 import type { Paradigm } from "@/types/connection";
+import type { QueryLanguageId } from "@/types/dataSource";
 import type {
   DocumentQueryMode,
   HistoryQueryMode,
@@ -38,4 +39,17 @@ export function sanitizeWorkspaceQueryMode(
   queryMode: unknown,
 ): WorkspaceQueryMode {
   return toWorkspaceQueryMode({ paradigm, queryMode });
+}
+
+export function toWorkspaceQueryLanguage(input: {
+  paradigm: Paradigm;
+  queryLanguage?: QueryLanguageId;
+}): QueryLanguageId | undefined {
+  if (input.paradigm === "rdb") {
+    return "sql";
+  }
+  if (input.paradigm === "document") {
+    return "mongosh";
+  }
+  return input.queryLanguage;
 }
