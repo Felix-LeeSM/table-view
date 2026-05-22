@@ -12,6 +12,8 @@ pub use data_source::{
     BackendAdapterContract, BackendAdapterContractKind, BackendAdapterContractState,
     BackendAdapterId, BackendAdapterProfile, CatalogModelKind, ConnectionKind,
     DataSourceDialectFamily, DataSourceDialectId, DataSourceDialectMetadata, DataSourceProfile,
+    FileConnectionContract, FileConnectionInputContract, FileConnectionInputKind,
+    FileConnectionInputStatus, FileConnectionPermissionScope, FileConnectionPrivacyPolicyId,
     QueryLanguageId, ResultEnvelopeKind, SafetyPolicyId, ServerVersionProbeId, KV_MARKER_CONTRACT,
     SEARCH_MARKER_CONTRACT,
 };

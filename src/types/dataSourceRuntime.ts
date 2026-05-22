@@ -27,6 +27,7 @@ export type DataSourceDialectFamily =
   | "postgres"
   | "mysql"
   | "sqlite"
+  | "duckdb"
   | "mssql"
   | "oracle"
   | "mongodb"
@@ -87,6 +88,7 @@ export const DIALECT_METADATA = Object.freeze({
   mysql: dialectMetadata("mysql", "mysql", "mysql-family-version"),
   mariadb: dialectMetadata("mariadb", "mysql", "mysql-family-version"),
   sqlite: dialectMetadata("sqlite", "sqlite", "sqlite-version"),
+  duckdb: dialectMetadata("duckdb", "duckdb", "none"),
   mssql: dialectMetadata("mssql", "mssql", "none"),
   oracle: dialectMetadata("oracle", "oracle", "none"),
   mongodb: dialectMetadata("mongodb", "mongodb", "mongodb-build-info"),
@@ -98,6 +100,7 @@ export const BACKEND_ADAPTER_BY_TYPE = Object.freeze({
   mysql: BACKEND_ADAPTER_PROFILES.mysqlFamily,
   mariadb: BACKEND_ADAPTER_PROFILES.mysqlFamily,
   sqlite: BACKEND_ADAPTER_PROFILES.sqlite,
+  duckdb: BACKEND_ADAPTER_PROFILES.declaredRdb,
   mssql: BACKEND_ADAPTER_PROFILES.declaredRdb,
   oracle: BACKEND_ADAPTER_PROFILES.declaredRdb,
   mongodb: BACKEND_ADAPTER_PROFILES.mongodb,

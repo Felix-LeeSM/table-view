@@ -40,6 +40,13 @@ describe("getSidebarObjectLabel", () => {
     });
   });
 
+  it("duckdb → table/tables", () => {
+    expect(getSidebarObjectLabel("duckdb")).toEqual({
+      single: "table",
+      plural: "tables",
+    });
+  });
+
   it("mssql → schema/schemas", () => {
     expect(getSidebarObjectLabel("mssql")).toEqual({
       single: "schema",

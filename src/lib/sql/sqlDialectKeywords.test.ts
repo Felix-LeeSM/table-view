@@ -49,6 +49,13 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
     expect(kws).not.toContain("RETURNING");
   });
 
+  it("DuckDB dialect has its own placeholder vocabulary without SQLite PRAGMA leakage", () => {
+    const kws = getKeywordsForDialect("duckdb");
+    expect(kws).toContain("ATTACH");
+    expect(kws).toContain("SUMMARIZE");
+    expect(kws).not.toContain("PRAGMA");
+  });
+
   // AC-S139-03: MongoDB / Redis non-SQL paradigms return an empty list. The
   // SqlQueryEditor never mounts for these, but the helper stays defensive.
   it("MongoDB returns an empty keyword list", () => {
@@ -77,6 +84,7 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
       "mysql",
       "mariadb",
       "sqlite",
+      "duckdb",
     ] as const) {
       const kws = getKeywordsForDialect(dbType);
       for (const common of COMMON_SQL_KEYWORDS) {

@@ -58,6 +58,46 @@ pub enum SafetyPolicyId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileConnectionPermissionScope {
+    LocalFile,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileConnectionPrivacyPolicyId {
+    LocalFirst,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileConnectionInputKind {
+    Database,
+    Analytics,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileConnectionInputStatus {
+    Supported,
+    Deferred,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileConnectionInputContract {
+    pub id: &'static str,
+    pub kind: FileConnectionInputKind,
+    pub extensions: &'static [&'static str],
+    pub status: FileConnectionInputStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileConnectionContract {
+    pub path_field: &'static str,
+    pub read_only_field: &'static str,
+    pub permission_scope: FileConnectionPermissionScope,
+    pub privacy_policy: FileConnectionPrivacyPolicyId,
+    pub supported_inputs: &'static [FileConnectionInputContract],
+    pub deferred_inputs: &'static [FileConnectionInputContract],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendAdapterContractKind {
     Rdb,
     Document,
@@ -141,6 +181,7 @@ pub enum DataSourceDialectId {
     Mysql,
     Mariadb,
     Sqlite,
+    Duckdb,
     Mssql,
     Oracle,
     Mongodb,
@@ -152,6 +193,7 @@ pub enum DataSourceDialectFamily {
     Postgres,
     Mysql,
     Sqlite,
+    Duckdb,
     Mssql,
     Oracle,
     Mongodb,
@@ -186,6 +228,7 @@ pub struct DataSourceProfile {
     pub backend_adapter: BackendAdapterProfile,
     pub dialect: DataSourceDialectMetadata,
     pub adapter_contract: BackendAdapterContract,
+    pub file_connection: Option<FileConnectionContract>,
 }
 
 impl DataSourceProfile {
@@ -217,6 +260,8 @@ const SQLITE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
 ];
+const DUCKDB_DECLARED_FILE_CAPABILITIES: &[BackendAdapterCapability] =
+    &[BackendAdapterCapability::Lifecycle];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::DocumentCatalog,
@@ -253,6 +298,13 @@ const SQLITE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     capability_source: BackendAdapterCapabilitySource::Sqlite,
     capabilities: SQLITE_RDB_CAPABILITIES,
 };
+const DUCKDB_FILE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+    kind: BackendAdapterContractKind::Rdb,
+    state: BackendAdapterContractState::DeclaredOnly,
+    implementation: BackendAdapterId::DeclaredRdb,
+    capability_source: BackendAdapterCapabilitySource::DeclaredRdb,
+    capabilities: DUCKDB_DECLARED_FILE_CAPABILITIES,
+};
 const DECLARED_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
     state: BackendAdapterContractState::DeclaredOnly,
@@ -282,6 +334,58 @@ pub const SEARCH_MARKER_CONTRACT: BackendAdapterContract = BackendAdapterContrac
     capabilities: SEARCH_MARKER_CAPABILITIES,
 };
 
+const SQLITE_SUPPORTED_FILE_INPUTS: &[FileConnectionInputContract] =
+    &[FileConnectionInputContract {
+        id: "sqlite-database",
+        kind: FileConnectionInputKind::Database,
+        extensions: &[".sqlite", ".sqlite3", ".db"],
+        status: FileConnectionInputStatus::Supported,
+    }];
+const SQLITE_FILE_CONNECTION: FileConnectionContract = FileConnectionContract {
+    path_field: "database",
+    read_only_field: "readOnly",
+    permission_scope: FileConnectionPermissionScope::LocalFile,
+    privacy_policy: FileConnectionPrivacyPolicyId::LocalFirst,
+    supported_inputs: SQLITE_SUPPORTED_FILE_INPUTS,
+    deferred_inputs: &[],
+};
+
+const DUCKDB_SUPPORTED_FILE_INPUTS: &[FileConnectionInputContract] =
+    &[FileConnectionInputContract {
+        id: "duckdb-database",
+        kind: FileConnectionInputKind::Database,
+        extensions: &[".duckdb"],
+        status: FileConnectionInputStatus::Supported,
+    }];
+const DUCKDB_DEFERRED_FILE_INPUTS: &[FileConnectionInputContract] = &[
+    FileConnectionInputContract {
+        id: "csv",
+        kind: FileConnectionInputKind::Analytics,
+        extensions: &[".csv"],
+        status: FileConnectionInputStatus::Deferred,
+    },
+    FileConnectionInputContract {
+        id: "parquet",
+        kind: FileConnectionInputKind::Analytics,
+        extensions: &[".parquet"],
+        status: FileConnectionInputStatus::Deferred,
+    },
+    FileConnectionInputContract {
+        id: "json",
+        kind: FileConnectionInputKind::Analytics,
+        extensions: &[".json", ".ndjson"],
+        status: FileConnectionInputStatus::Deferred,
+    },
+];
+const DUCKDB_FILE_CONNECTION: FileConnectionContract = FileConnectionContract {
+    path_field: "database",
+    read_only_field: "readOnly",
+    permission_scope: FileConnectionPermissionScope::LocalFile,
+    privacy_policy: FileConnectionPrivacyPolicyId::LocalFirst,
+    supported_inputs: DUCKDB_SUPPORTED_FILE_INPUTS,
+    deferred_inputs: DUCKDB_DEFERRED_FILE_INPUTS,
+};
+
 const POSTGRES_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
     id: DataSourceDialectId::Postgresql,
     family: DataSourceDialectFamily::Postgres,
@@ -301,6 +405,11 @@ const SQLITE_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
     id: DataSourceDialectId::Sqlite,
     family: DataSourceDialectFamily::Sqlite,
     version_probe: ServerVersionProbeId::SqliteVersion,
+};
+const DUCKDB_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
+    id: DataSourceDialectId::Duckdb,
+    family: DataSourceDialectFamily::Duckdb,
+    version_probe: ServerVersionProbeId::None,
 };
 const MSSQL_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
     id: DataSourceDialectId::Mssql,
@@ -351,6 +460,20 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             backend_adapter: SQLITE_RDB_CONTRACT.profile(),
             dialect: SQLITE_DIALECT,
             adapter_contract: SQLITE_RDB_CONTRACT,
+            file_connection: Some(SQLITE_FILE_CONNECTION),
+        },
+        DatabaseType::Duckdb => DataSourceProfile {
+            id: DatabaseType::Duckdb,
+            paradigm: Paradigm::Rdb,
+            connection_kind: ConnectionKind::File,
+            languages: SQL,
+            catalog_model: CatalogModelKind::Rdb,
+            result_kinds: TABULAR_RESULT,
+            safety_policy: SafetyPolicyId::RdbDefault,
+            backend_adapter: DUCKDB_FILE_RDB_CONTRACT.profile(),
+            dialect: DUCKDB_DIALECT,
+            adapter_contract: DUCKDB_FILE_RDB_CONTRACT,
+            file_connection: Some(DUCKDB_FILE_CONNECTION),
         },
         DatabaseType::Mssql => {
             rdb_profile(DatabaseType::Mssql, DECLARED_RDB_CONTRACT, MSSQL_DIALECT)
@@ -369,6 +492,7 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             backend_adapter: FACTORY_DOCUMENT_CONTRACT.profile(),
             dialect: MONGODB_DIALECT,
             adapter_contract: FACTORY_DOCUMENT_CONTRACT,
+            file_connection: None,
         },
         DatabaseType::Redis => DataSourceProfile {
             id: DatabaseType::Redis,
@@ -381,6 +505,7 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             backend_adapter: KV_MARKER_CONTRACT.profile(),
             dialect: REDIS_DIALECT,
             adapter_contract: KV_MARKER_CONTRACT,
+            file_connection: None,
         },
     }
 }
@@ -407,5 +532,6 @@ fn rdb_profile(
         backend_adapter: adapter_contract.profile(),
         dialect,
         adapter_contract,
+        file_connection: None,
     }
 }

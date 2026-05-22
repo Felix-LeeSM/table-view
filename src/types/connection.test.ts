@@ -286,6 +286,14 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
     });
   });
 
+  it("DuckDB defaults: port=0, user='', database=''", () => {
+    expect(DATABASE_DEFAULT_FIELDS.duckdb).toEqual({
+      port: 0,
+      user: "",
+      database: "",
+    });
+  });
+
   it("MSSQL defaults: port=1433, user=sa, database=master", () => {
     expect(DATABASE_DEFAULT_FIELDS.mssql).toEqual({
       port: 1433,
@@ -325,6 +333,7 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
     expect(DATABASE_DEFAULT_FIELDS.mysql.user).not.toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.mariadb.user).not.toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.sqlite.user).not.toBe("postgres");
+    expect(DATABASE_DEFAULT_FIELDS.duckdb.user).not.toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.mssql.user).not.toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.mongodb.user).not.toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.redis.user).not.toBe("postgres");
@@ -353,6 +362,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("mysql")).toBe(true);
     expect(isSupportedDatabaseType("mariadb")).toBe(true);
     expect(isSupportedDatabaseType("sqlite")).toBe(true);
+    expect(isSupportedDatabaseType("duckdb")).toBe(false);
     expect(isSupportedDatabaseType("mongodb")).toBe(true);
     expect(isSupportedDatabaseType("mssql")).toBe(false);
     expect(isSupportedDatabaseType("oracle")).toBe(false);
@@ -366,6 +376,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(DATABASE_TYPE_LABELS.mysql).toBe("MySQL");
     expect(DATABASE_TYPE_LABELS.mariadb).toBe("MariaDB");
     expect(DATABASE_TYPE_LABELS.sqlite).toBe("SQLite");
+    expect(DATABASE_TYPE_LABELS.duckdb).toBe("DuckDB");
     expect(DATABASE_TYPE_LABELS.mssql).toBe("Microsoft SQL Server");
     expect(DATABASE_TYPE_LABELS.oracle).toBe("Oracle");
     expect(DATABASE_TYPE_LABELS.mongodb).toBe("MongoDB");
@@ -401,5 +412,33 @@ describe("parseSqliteFilePath / sqlite URL fallback (Sprint 138)", () => {
     expect(result!.dbType).toBe("sqlite");
     expect(result!.database).toBe("/data/app.sqlite");
     expect((result as { readOnly?: boolean }).readOnly).toBe(false);
+  });
+});
+
+describe("DuckDB file connection metadata (Sprint 455)", () => {
+  it("declares DuckDB as an RDBMS identity without promoting it to the supported runtime list yet", () => {
+    expect(DATABASE_TYPE_LABELS.duckdb).toBe("DuckDB");
+    expect(DATABASE_DEFAULTS.duckdb).toBe(0);
+    expect(DATABASE_DEFAULT_FIELDS.duckdb).toEqual({
+      port: 0,
+      user: "",
+      database: "",
+    });
+    expect(isSupportedDatabaseType("duckdb")).toBe(false);
+  });
+
+  it("parses duckdb:/ paths as file-backed RDB drafts with read-only defaulted off", () => {
+    const result = parseConnectionUrl("duckdb:/data/analytics/lake.duckdb");
+
+    expect(result).toMatchObject({
+      dbType: "duckdb",
+      host: "",
+      port: 0,
+      user: "",
+      password: "",
+      database: "/data/analytics/lake.duckdb",
+      readOnly: false,
+      paradigm: "rdb",
+    });
   });
 });

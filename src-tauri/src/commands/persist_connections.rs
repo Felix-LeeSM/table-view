@@ -225,6 +225,10 @@ mod tests {
             DatabaseType::Sqlite
         ));
         assert!(matches!(
+            DatabaseType::from_str("duckdb").unwrap_or_default(),
+            DatabaseType::Duckdb
+        ));
+        assert!(matches!(
             DatabaseType::from_str("mssql").unwrap_or_default(),
             DatabaseType::Mssql
         ));

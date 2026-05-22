@@ -49,6 +49,7 @@ describe("buildSqlCompletionRequest", () => {
     ["mysql", "mysql", "mysql-client"],
     ["mariadb", "mysql", "mysql-client"],
     ["sqlite", "sqlite", "sqlite-cli"],
+    ["duckdb", "duckdb", "none"],
   ] as const)(
     "builds one WASM-ready request shape for %s",
     (dbType, family, shell) => {

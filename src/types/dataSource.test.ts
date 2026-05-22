@@ -99,6 +99,9 @@ describe("DataSourceProfile registry", () => {
       query: { query: true, multiStatement: true, cancel: true },
       catalog: { browse: true, schema: true },
     }),
+    duckdb: expectedCapabilities({
+      connection: { filePicker: true, readOnly: true },
+    }),
     mssql: createEmptyDataSourceCapabilities(),
     oracle: createEmptyDataSourceCapabilities(),
     mongodb: expectedCapabilities({
@@ -188,6 +191,7 @@ describe("DataSourceProfile registry", () => {
     expect(getDataSourceProfile("mariadb").connectionKind).toBe("server");
     expect(getDataSourceProfile("mongodb").connectionKind).toBe("server");
     expect(getDataSourceProfile("sqlite").connectionKind).toBe("file");
+    expect(getDataSourceProfile("duckdb").connectionKind).toBe("file");
   });
 
   it("describes SQLite as a file RDBMS without switch-db, row-edit, or DDL parity", () => {
@@ -229,6 +233,7 @@ describe("DataSourceProfile registry", () => {
     ]);
     expect(isConnectionSupportedDatabaseType("postgresql")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mongodb")).toBe(true);
+    expect(isConnectionSupportedDatabaseType("duckdb")).toBe(false);
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
     expect(isConnectionSupportedDatabaseType("redis")).toBe(false);
@@ -263,6 +268,8 @@ describe("DataSourceProfile registry", () => {
   it("keeps SQLite file picker and read-only capabilities explicit while missing profiles stay disabled", () => {
     expect(hasConnectionCapability("sqlite", "filePicker")).toBe(true);
     expect(hasConnectionCapability("sqlite", "readOnly")).toBe(true);
+    expect(hasConnectionCapability("duckdb", "filePicker")).toBe(true);
+    expect(hasConnectionCapability("duckdb", "readOnly")).toBe(true);
     expect(hasConnectionCapability("postgresql", "filePicker")).toBe(false);
     expect(hasConnectionCapability("postgresql", "readOnly")).toBe(false);
     expect(
@@ -293,5 +300,106 @@ describe("DataSourceProfile registry", () => {
     expect(() =>
       getDataSourceProfile("unknown-db" as DatabaseType),
     ).toThrowError(/Unknown data source profile/);
+  });
+
+  it("models DuckDB as a file-backed RDBMS profile before runtime execution is added", () => {
+    const duckdb = getDataSourceProfile("duckdb");
+
+    expect(duckdb).toMatchObject({
+      id: "duckdb",
+      paradigm: "rdb",
+      connectionKind: "file",
+      languages: ["sql"],
+      catalogModel: "rdb",
+      resultKinds: ["tabular"],
+      safetyPolicy: "rdb-default",
+    });
+    expect(duckdb.capabilities.connection).toMatchObject({
+      test: false,
+      switchDatabase: false,
+      readOnly: true,
+      filePicker: true,
+    });
+    expect(duckdb.capabilities.query.query).toBe(false);
+    expect(duckdb.capabilities.edit.editRows).toBe(false);
+    expect(duckdb.capabilities.ddl.createTable).toBe(false);
+    expect(duckdb.backendAdapter).toEqual({
+      id: "declared-rdb",
+      kind: "rdb",
+      capabilitySource: "declared-rdb",
+    });
+    expect(duckdb.dialect).toEqual({
+      id: "duckdb",
+      family: "duckdb",
+      versionProbe: "none",
+    });
+  });
+
+  it("keeps DuckDB file analytics local-first and defers CSV/Parquet/JSON behind .duckdb", () => {
+    const duckdb = getDataSourceProfile("duckdb");
+
+    expect(duckdb.fileConnection).toMatchObject({
+      pathField: "database",
+      readOnlyField: "readOnly",
+      permissionScope: "local-file",
+      privacyPolicy: "local-first",
+      supportedInputs: [
+        {
+          id: "duckdb-database",
+          kind: "database",
+          extensions: [".duckdb"],
+          status: "supported",
+        },
+      ],
+      deferredInputs: [
+        {
+          id: "csv",
+          kind: "analytics",
+          extensions: [".csv"],
+          status: "deferred",
+        },
+        {
+          id: "parquet",
+          kind: "analytics",
+          extensions: [".parquet"],
+          status: "deferred",
+        },
+        {
+          id: "json",
+          kind: "analytics",
+          extensions: [".json", ".ndjson"],
+          status: "deferred",
+        },
+      ],
+    });
+  });
+
+  it("reuses the file contract fields for SQLite and DuckDB without collapsing their identities", () => {
+    const sqlite = getDataSourceProfile("sqlite") as ReturnType<
+      typeof getDataSourceProfile
+    > & {
+      fileConnection?: {
+        pathField: string;
+        readOnlyField: string;
+        supportedInputs: readonly {
+          id: string;
+          extensions: readonly string[];
+        }[];
+      };
+    };
+    const duckdb = getDataSourceProfile("duckdb") as typeof sqlite;
+
+    expect(sqlite.fileConnection?.pathField).toBe("database");
+    expect(duckdb.fileConnection?.pathField).toBe("database");
+    expect(sqlite.fileConnection?.readOnlyField).toBe("readOnly");
+    expect(duckdb.fileConnection?.readOnlyField).toBe("readOnly");
+    expect(sqlite.fileConnection?.supportedInputs[0]).toMatchObject({
+      id: "sqlite-database",
+      extensions: [".sqlite", ".sqlite3", ".db"],
+    });
+    expect(duckdb.fileConnection?.supportedInputs[0]).toMatchObject({
+      id: "duckdb-database",
+      extensions: [".duckdb"],
+    });
   });
 });

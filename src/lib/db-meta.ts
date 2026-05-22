@@ -16,6 +16,7 @@ export const DB_TYPE_META: Record<DatabaseType, DbMeta> = {
   mysql: { label: "MySQL", short: "MY", color: "#4479A1" },
   mariadb: { label: "MariaDB", short: "MA", color: "#C0765A" },
   sqlite: { label: "SQLite", short: "SQ", color: "#003B57" },
+  duckdb: { label: "DuckDB", short: "DK", color: "#FFF000" },
   mssql: { label: "Microsoft SQL Server", short: "MS", color: "#CC2927" },
   oracle: { label: "Oracle", short: "OR", color: "#F80000" },
   mongodb: { label: "MongoDB", short: "MG", color: "#47A248" },

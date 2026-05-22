@@ -1,12 +1,18 @@
 import type { DatabaseType, Paradigm } from "./connection";
 import { paradigmOf } from "./connection";
 import {
+  DUCKDB_FILE_CONNECTION,
+  SQLITE_FILE_CONNECTION,
+  type FileConnectionContract,
+} from "./fileConnection";
+import {
   BACKEND_ADAPTER_BY_TYPE,
   DIALECT_METADATA,
   type BackendAdapterProfile,
   type DataSourceDialectMetadata,
 } from "./dataSourceRuntime";
 
+export type { FileConnectionContract } from "./fileConnection";
 export type {
   BackendAdapterCapabilitySource,
   BackendAdapterProfile,
@@ -128,6 +134,7 @@ export interface DataSourceProfile {
   readonly safetyPolicy: SafetyPolicyId;
   readonly backendAdapter: BackendAdapterProfile;
   readonly dialect: DataSourceDialectMetadata;
+  readonly fileConnection?: FileConnectionContract;
 }
 
 export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
@@ -304,6 +311,13 @@ export const SQLITE_CAPABILITIES = capabilities({
   },
 });
 
+export const DUCKDB_CAPABILITIES = capabilities({
+  connection: {
+    filePicker: true,
+    readOnly: true,
+  },
+});
+
 export const MONGODB_CAPABILITIES = capabilities({
   connection: {
     test: true,
@@ -342,6 +356,7 @@ function profile(
   resultKinds: readonly ResultEnvelopeKind[],
   safetyPolicy: SafetyPolicyId,
   sourceCapabilities: DataSourceCapabilities = UNSUPPORTED_CAPABILITIES,
+  fileConnection?: FileConnectionContract,
 ): DataSourceProfile {
   return Object.freeze({
     id,
@@ -354,6 +369,7 @@ function profile(
     safetyPolicy,
     backendAdapter: BACKEND_ADAPTER_BY_TYPE[id],
     dialect: DIALECT_METADATA[id],
+    fileConnection,
   });
 }
 
@@ -393,6 +409,17 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     ["tabular"],
     "rdb-default",
     SQLITE_CAPABILITIES,
+    SQLITE_FILE_CONNECTION,
+  ),
+  duckdb: profile(
+    "duckdb",
+    "file",
+    ["sql"],
+    "rdb",
+    ["tabular"],
+    "rdb-default",
+    DUCKDB_CAPABILITIES,
+    DUCKDB_FILE_CONNECTION,
   ),
   mssql: profile("mssql", "server", ["sql"], "rdb", ["tabular"], "rdb-default"),
   oracle: profile(

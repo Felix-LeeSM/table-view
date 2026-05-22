@@ -23,6 +23,8 @@ const SIDEBAR_OBJECT_LABELS: Record<DatabaseType, SidebarObjectLabel> = {
   mariadb: { single: "table", plural: "tables" },
   // SQLite 는 schema 개념 없음 — 최상위 노드는 table.
   sqlite: { single: "table", plural: "tables" },
+  // DuckDB stays RDB/file-backed here; top-level browsing remains table-like.
+  duckdb: { single: "table", plural: "tables" },
   mssql: { single: "schema", plural: "schemas" },
   oracle: { single: "schema", plural: "schemas" },
   // MongoDB 는 database > collection 구조이지만 sidebar 의 "전부" 단위는

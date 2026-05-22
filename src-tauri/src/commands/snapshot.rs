@@ -321,7 +321,9 @@ impl ConnectionRow {
         let db_type = match self.db_type.as_str() {
             "postgresql" => DatabaseType::Postgresql,
             "mysql" => DatabaseType::Mysql,
+            "mariadb" => DatabaseType::Mariadb,
             "sqlite" => DatabaseType::Sqlite,
+            "duckdb" => DatabaseType::Duckdb,
             "mongodb" => DatabaseType::Mongodb,
             "redis" => DatabaseType::Redis,
             // unknown DBMS — default to postgresql to keep deserialization

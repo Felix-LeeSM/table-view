@@ -9,6 +9,7 @@ pub enum DatabaseType {
     Mysql,
     Mariadb,
     Sqlite,
+    Duckdb,
     Mssql,
     Oracle,
     Mongodb,
@@ -23,6 +24,7 @@ impl DatabaseType {
             DatabaseType::Mysql => 3306,
             DatabaseType::Mariadb => 3306,
             DatabaseType::Sqlite => 0,
+            DatabaseType::Duckdb => 0,
             DatabaseType::Mssql => 1433,
             DatabaseType::Oracle => 1521,
             DatabaseType::Mongodb => 27017,
@@ -40,6 +42,7 @@ impl DatabaseType {
             | DatabaseType::Mysql
             | DatabaseType::Mariadb
             | DatabaseType::Sqlite
+            | DatabaseType::Duckdb
             | DatabaseType::Mssql
             | DatabaseType::Oracle => Paradigm::Rdb,
             DatabaseType::Mongodb => Paradigm::Document,
@@ -57,6 +60,7 @@ impl FromStr for DatabaseType {
             "mysql" => Ok(DatabaseType::Mysql),
             "mariadb" => Ok(DatabaseType::Mariadb),
             "sqlite" => Ok(DatabaseType::Sqlite),
+            "duckdb" => Ok(DatabaseType::Duckdb),
             "mssql" | "sqlserver" | "sqlsrv" => Ok(DatabaseType::Mssql),
             "oracle" => Ok(DatabaseType::Oracle),
             "mongodb" => Ok(DatabaseType::Mongodb),
@@ -280,6 +284,7 @@ mod tests {
         assert_eq!(DatabaseType::Mysql.default_port(), 3306);
         assert_eq!(DatabaseType::Mariadb.default_port(), 3306);
         assert_eq!(DatabaseType::Sqlite.default_port(), 0);
+        assert_eq!(DatabaseType::Duckdb.default_port(), 0);
         assert_eq!(DatabaseType::Mssql.default_port(), 1433);
         assert_eq!(DatabaseType::Oracle.default_port(), 1521);
         assert_eq!(DatabaseType::Mongodb.default_port(), 27017);
@@ -301,6 +306,7 @@ mod tests {
             DatabaseType::Mysql,
             DatabaseType::Mariadb,
             DatabaseType::Sqlite,
+            DatabaseType::Duckdb,
             DatabaseType::Mssql,
             DatabaseType::Oracle,
             DatabaseType::Mongodb,
@@ -321,6 +327,8 @@ mod tests {
         assert_eq!(json, "\"mysql\"");
         let json = serde_json::to_string(&DatabaseType::Mariadb).unwrap();
         assert_eq!(json, "\"mariadb\"");
+        let json = serde_json::to_string(&DatabaseType::Duckdb).unwrap();
+        assert_eq!(json, "\"duckdb\"");
         let json = serde_json::to_string(&DatabaseType::Mssql).unwrap();
         assert_eq!(json, "\"mssql\"");
         let json = serde_json::to_string(&DatabaseType::Oracle).unwrap();
@@ -333,6 +341,7 @@ mod tests {
         assert_eq!(DatabaseType::Mysql.paradigm(), Paradigm::Rdb);
         assert_eq!(DatabaseType::Mariadb.paradigm(), Paradigm::Rdb);
         assert_eq!(DatabaseType::Sqlite.paradigm(), Paradigm::Rdb);
+        assert_eq!(DatabaseType::Duckdb.paradigm(), Paradigm::Rdb);
         assert_eq!(DatabaseType::Mssql.paradigm(), Paradigm::Rdb);
         assert_eq!(DatabaseType::Oracle.paradigm(), Paradigm::Rdb);
         assert_eq!(DatabaseType::Mongodb.paradigm(), Paradigm::Document);

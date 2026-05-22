@@ -1,4 +1,4 @@
-use std::mem;
+use std::{mem, str::FromStr};
 
 use table_view_lib::{
     db::{
@@ -10,8 +10,10 @@ use table_view_lib::{
         get_data_source_profile, BackendAdapterCapability, BackendAdapterCapabilitySource,
         BackendAdapterContractKind, BackendAdapterContractState, BackendAdapterId,
         CatalogModelKind, ConnectionConfig, ConnectionKind, DataSourceDialectFamily,
-        DataSourceDialectId, DatabaseType, Paradigm, QueryLanguageId, ResultEnvelopeKind,
-        SafetyPolicyId, ServerVersionProbeId, KV_MARKER_CONTRACT, SEARCH_MARKER_CONTRACT,
+        DataSourceDialectId, DatabaseType, FileConnectionInputKind, FileConnectionInputStatus,
+        FileConnectionPermissionScope, FileConnectionPrivacyPolicyId, Paradigm, QueryLanguageId,
+        ResultEnvelopeKind, SafetyPolicyId, ServerVersionProbeId, KV_MARKER_CONTRACT,
+        SEARCH_MARKER_CONTRACT,
     },
 };
 
@@ -22,6 +24,7 @@ fn backend_adapter_contract_profiles_are_encoded() {
         DatabaseType::Mysql,
         DatabaseType::Mariadb,
         DatabaseType::Sqlite,
+        DatabaseType::Duckdb,
         DatabaseType::Mssql,
         DatabaseType::Oracle,
         DatabaseType::Mongodb,
@@ -98,6 +101,73 @@ fn backend_profiles_encode_current_database_type_contracts() {
     );
     assert_eq!(redis.adapter_contract, KV_MARKER_CONTRACT);
     assert!(redis.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
+}
+
+#[test]
+fn duckdb_profile_is_file_backed_rdbms_metadata_without_runtime_query_contract() {
+    let duckdb = DatabaseType::from_str("duckdb").expect("duckdb identity must parse");
+    let profile = get_data_source_profile(&duckdb);
+
+    assert_eq!(profile.paradigm, Paradigm::Rdb);
+    assert_eq!(profile.connection_kind, ConnectionKind::File);
+    assert_eq!(profile.languages, [QueryLanguageId::Sql]);
+    assert_eq!(profile.catalog_model, CatalogModelKind::Rdb);
+    assert_eq!(profile.result_kinds, [ResultEnvelopeKind::Tabular]);
+    assert_eq!(profile.safety_policy, SafetyPolicyId::RdbDefault);
+    assert_eq!(
+        profile.adapter_contract.kind,
+        BackendAdapterContractKind::Rdb
+    );
+    assert_eq!(
+        profile.adapter_contract.state,
+        BackendAdapterContractState::DeclaredOnly
+    );
+    assert_eq!(profile.backend_adapter.id, BackendAdapterId::DeclaredRdb);
+    assert_eq!(
+        profile.backend_adapter.capability_source,
+        BackendAdapterCapabilitySource::DeclaredRdb
+    );
+    assert_eq!(profile.dialect.id, DataSourceDialectId::Duckdb);
+    assert_eq!(profile.dialect.family, DataSourceDialectFamily::Duckdb);
+    assert_eq!(profile.dialect.version_probe, ServerVersionProbeId::None);
+    assert_eq!(
+        profile.file_connection.expect("duckdb file contract"),
+        table_view_lib::models::FileConnectionContract {
+            path_field: "database",
+            read_only_field: "readOnly",
+            permission_scope: FileConnectionPermissionScope::LocalFile,
+            privacy_policy: FileConnectionPrivacyPolicyId::LocalFirst,
+            supported_inputs: &[table_view_lib::models::FileConnectionInputContract {
+                id: "duckdb-database",
+                kind: FileConnectionInputKind::Database,
+                extensions: &[".duckdb"],
+                status: FileConnectionInputStatus::Supported,
+            }],
+            deferred_inputs: &[
+                table_view_lib::models::FileConnectionInputContract {
+                    id: "csv",
+                    kind: FileConnectionInputKind::Analytics,
+                    extensions: &[".csv"],
+                    status: FileConnectionInputStatus::Deferred,
+                },
+                table_view_lib::models::FileConnectionInputContract {
+                    id: "parquet",
+                    kind: FileConnectionInputKind::Analytics,
+                    extensions: &[".parquet"],
+                    status: FileConnectionInputStatus::Deferred,
+                },
+                table_view_lib::models::FileConnectionInputContract {
+                    id: "json",
+                    kind: FileConnectionInputKind::Analytics,
+                    extensions: &[".json", ".ndjson"],
+                    status: FileConnectionInputStatus::Deferred,
+                },
+            ],
+        }
+    );
+    assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 }
 
 #[test]
