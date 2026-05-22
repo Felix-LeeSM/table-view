@@ -552,7 +552,7 @@ export interface SqlInsertStatement {
   columns: string[];
   source: SqlInsertSource;
   on_conflict: SqlOnConflict | null;
-  on_duplicate_key_update?: SqlOnDuplicateKeyUpdate | null;
+  on_duplicate_key_update: SqlOnDuplicateKeyUpdate | null;
   returning: string[];
 }
 

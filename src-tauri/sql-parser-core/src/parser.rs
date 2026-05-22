@@ -5824,6 +5824,20 @@ mod tests {
     }
 
     #[test]
+    fn ac_434_i04_insert_on_duplicate_key_update_default_rhs() {
+        let s = ok_insert(
+            "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = DEFAULT",
+        );
+        let clause = s
+            .on_duplicate_key_update
+            .expect("expected ON DUPLICATE KEY UPDATE");
+        assert!(matches!(
+            &clause.assignments[0].value,
+            OnDuplicateKeyUpdateValue::Default
+        ));
+    }
+
+    #[test]
     fn ac_392_i14_insert_returning() {
         let s = ok_insert("INSERT INTO users (id) VALUES (1) RETURNING id, name");
         assert_eq!(s.returning, vec!["id".to_string(), "name".to_string()]);

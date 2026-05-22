@@ -38,11 +38,11 @@ as the remaining semantic widening work instead of blocking this slice.
 - `cd src-tauri && cargo fmt --check`
   - Pass.
 - `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml`
-  - Pass: 518 tests.
+  - Pass: 519 tests.
 - `pnpm build:sql-wasm`
   - Pass; regenerated `src/lib/sql/wasm/`.
 - `pnpm exec vitest run src/lib/sql/sqlAst.test.ts src/lib/sql/sqlWasmArtifact.test.ts`
-  - Pass: 2 files, 54 tests.
+  - Pass: 2 files, 56 tests.
 - `pnpm wasm:size`
   - Pass: SQL wasm gzip 78,781 bytes / 81,920 byte budget; Mongo wasm gzip
     52,169 bytes / 54,272 byte budget.
