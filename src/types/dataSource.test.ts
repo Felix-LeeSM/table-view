@@ -158,6 +158,43 @@ describe("DataSourceProfile registry", () => {
     );
   });
 
+  it("keeps MariaDB identity while exposing MySQL-family adapter and dialect metadata", () => {
+    type RuntimeProfile = ReturnType<typeof getDataSourceProfile> & {
+      readonly backendAdapter: {
+        readonly id: string;
+        readonly kind: string;
+        readonly capabilitySource: string;
+      };
+      readonly dialect: {
+        readonly id: string;
+        readonly family: string;
+        readonly versionProbe: string;
+      };
+    };
+
+    const mysql = getDataSourceProfile("mysql") as RuntimeProfile;
+    const mariadb = getDataSourceProfile("mariadb") as RuntimeProfile;
+
+    expect(mysql.id).toBe("mysql");
+    expect(mariadb.id).toBe("mariadb");
+    expect(mariadb.backendAdapter).toEqual(mysql.backendAdapter);
+    expect(mariadb.backendAdapter).toEqual({
+      id: "mysql-family",
+      kind: "rdb",
+      capabilitySource: "mysql-family",
+    });
+    expect(mysql.dialect).toEqual({
+      id: "mysql",
+      family: "mysql",
+      versionProbe: "mysql-family-version",
+    });
+    expect(mariadb.dialect).toEqual({
+      id: "mariadb",
+      family: "mysql",
+      versionProbe: "mysql-family-version",
+    });
+  });
+
   it("sets connection-kind defaults for the current connection forms", () => {
     expect(getDataSourceProfile("postgresql").connectionKind).toBe("server");
     expect(getDataSourceProfile("mysql").connectionKind).toBe("server");

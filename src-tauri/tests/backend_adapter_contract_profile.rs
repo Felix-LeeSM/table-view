@@ -100,6 +100,40 @@ fn backend_profiles_encode_current_database_type_contracts() {
 }
 
 #[test]
+fn mariadb_profile_keeps_identity_while_exposing_mysql_family_runtime_metadata() {
+    let mysql = get_data_source_profile(&DatabaseType::Mysql);
+    let mariadb = get_data_source_profile(&DatabaseType::Mariadb);
+
+    assert_eq!(
+        mem::discriminant(&mysql.id),
+        mem::discriminant(&DatabaseType::Mysql)
+    );
+    assert_eq!(
+        mem::discriminant(&mariadb.id),
+        mem::discriminant(&DatabaseType::Mariadb)
+    );
+    assert_eq!(mariadb.adapter_contract, mysql.adapter_contract);
+    assert_eq!(
+        mariadb.adapter_contract.kind,
+        BackendAdapterContractKind::Rdb
+    );
+    assert_eq!(
+        mariadb.adapter_contract.state,
+        BackendAdapterContractState::FactoryBacked
+    );
+
+    let rendered = format!("{mariadb:?}");
+    assert!(
+        rendered.contains("MysqlFamily"),
+        "MariaDB profile should expose MySQL-family adapter reuse metadata: {rendered}"
+    );
+    assert!(
+        rendered.contains("Mariadb") && rendered.contains("MysqlFamilyVersion"),
+        "MariaDB profile should expose a MariaDB dialect with MySQL-family version probing: {rendered}"
+    );
+}
+
+#[test]
 fn marker_contracts_remain_marker_only_without_redis_or_search_implementation() {
     assert_eq!(
         KV_MARKER_CONTRACT.state,
