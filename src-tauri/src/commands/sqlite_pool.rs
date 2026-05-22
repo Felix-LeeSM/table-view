@@ -62,7 +62,8 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn get_or_init_pool_is_idempotent() {
-        let _dir = TempDir::new().unwrap();
+        let dir = TempDir::new().unwrap();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
         let pool_a = get_or_init_pool().await.unwrap();
         let pool_b = get_or_init_pool().await.unwrap();
         // Two clones must point at the same underlying pool — verifiable by
