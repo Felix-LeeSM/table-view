@@ -200,15 +200,8 @@ fn contains_prefixed_function_call(sql: &str, prefix: &str) -> bool {
             after_idx += ch.len_utf8();
         }
 
-        let mut chars = sql[after_idx..].chars();
-        for ch in &mut chars {
-            if ch.is_whitespace() {
-                continue;
-            }
-            if ch == '(' {
-                return true;
-            }
-            break;
+        if is_followed_by_call(sql, after_idx) {
+            return true;
         }
         start = after_idx;
     }
@@ -238,16 +231,7 @@ fn contains_function_call(sql: &str, function: &str) -> bool {
                 .next_back()
                 .is_none_or(|ch| !is_identifier_char(ch));
         let after_idx = idx + function.len();
-        let mut chars = sql[after_idx..].chars();
-        let mut after_ok = false;
-        for ch in &mut chars {
-            if ch.is_whitespace() {
-                continue;
-            }
-            after_ok = ch == '(';
-            break;
-        }
-        if before_ok && after_ok {
+        if before_ok && is_followed_by_call(sql, after_idx) {
             return true;
         }
         start = after_idx;
@@ -256,14 +240,9 @@ fn contains_function_call(sql: &str, function: &str) -> bool {
 }
 
 fn is_followed_by_call(sql: &str, index: usize) -> bool {
-    let mut chars = sql[index..].chars();
-    for ch in &mut chars {
-        if ch.is_whitespace() {
-            continue;
-        }
-        return ch == '(';
-    }
-    false
+    let bytes = sql.as_bytes();
+    let index = skip_whitespace_and_comments(bytes, index);
+    bytes.get(index) == Some(&b'(')
 }
 
 fn leading_sql_words(sql: &str, limit: usize) -> Vec<String> {
