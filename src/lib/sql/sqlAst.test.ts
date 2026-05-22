@@ -254,6 +254,71 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           returning: [],
         } satisfies SqlParseResult;
       }
+      if (
+        sql ===
+        "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = 'b'"
+      ) {
+        return {
+          kind: "insert",
+          table: "users",
+          columns: ["id", "name"],
+          source: {
+            kind: "values",
+            rows: [
+              [
+                { kind: "literal", value: { kind: "integer", value: 1 } },
+                { kind: "literal", value: { kind: "string", value: "a" } },
+              ],
+            ],
+          },
+          on_conflict: null,
+          on_duplicate_key_update: {
+            assignments: [
+              {
+                column: "name",
+                value: {
+                  kind: "literal",
+                  value: { kind: "string", value: "b" },
+                },
+              },
+            ],
+          },
+          returning: [],
+        } satisfies SqlParseResult;
+      }
+      if (
+        sql ===
+        "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = VALUES(name), id = ?"
+      ) {
+        return {
+          kind: "insert",
+          table: "users",
+          columns: ["id", "name"],
+          source: {
+            kind: "values",
+            rows: [
+              [
+                { kind: "literal", value: { kind: "integer", value: 1 } },
+                { kind: "literal", value: { kind: "string", value: "a" } },
+              ],
+            ],
+          },
+          on_conflict: null,
+          on_duplicate_key_update: {
+            assignments: [
+              {
+                column: "name",
+                value: { kind: "values-column", column: "name" },
+              },
+              {
+                column: "id",
+                value: { kind: "placeholder", name: "" },
+              },
+            ],
+          },
+          returning: [],
+        } satisfies SqlParseResult;
+      }
       if (sql === "UPDATE users SET name = 'a' WHERE id = 1") {
         return {
           kind: "update",
@@ -942,6 +1007,47 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(result.kind).toBe("insert");
     if (result.kind !== "insert") return;
     expect(result.on_conflict).toEqual({ kind: "do-nothing" });
+    expect(result.on_duplicate_key_update ?? null).toBeNull();
+  });
+
+  it("[AC-434-F01] parses `INSERT … ON DUPLICATE KEY UPDATE` into the MySQL upsert slot", async () => {
+    const result = await parseSql(
+      "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = 'b'",
+    );
+    expect(result.kind).toBe("insert");
+    if (result.kind !== "insert") return;
+
+    expect(result.on_conflict).toBeNull();
+    expect(result.on_duplicate_key_update).toEqual({
+      assignments: [
+        {
+          column: "name",
+          value: {
+            kind: "literal",
+            value: { kind: "string", value: "b" },
+          },
+        },
+      ],
+    });
+  });
+
+  it("[AC-434-F02] preserves multiple ON DUPLICATE assignments with VALUES(col) and placeholder RHS", async () => {
+    const result = await parseSql(
+      "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = VALUES(name), id = ?",
+    );
+    expect(result.kind).toBe("insert");
+    if (result.kind !== "insert") return;
+
+    expect(result.on_duplicate_key_update?.assignments).toEqual([
+      {
+        column: "name",
+        value: { kind: "values-column", column: "name" },
+      },
+      {
+        column: "id",
+        value: { kind: "placeholder", name: "" },
+      },
+    ]);
   });
 
   it("[AC-392-F04] parses `UPDATE users SET name = 'a' WHERE id = 1` with where_clause", async () => {

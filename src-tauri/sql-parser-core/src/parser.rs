@@ -40,7 +40,8 @@ use crate::ast::{
     DeleteStatement, DropObjectType, DropStatement, ExplainInner, ExplainOption, ExplainStatement,
     FrameBound, FrameUnit, FromItem, FromSource, GrantObject, GrantStatement, InsertSource,
     InsertStatement, InsertValue, JoinDescriptor, JoinPredicate, LikeCase, LimitClause,
-    NullsPlacement, OnConflict, OrderDirection, OrderingItem, OverClause, ParseError,
+    NullsPlacement, OnConflict, OnDuplicateKeyUpdate, OnDuplicateKeyUpdateAssignment,
+    OnDuplicateKeyUpdateValue, OrderDirection, OrderingItem, OverClause, ParseError,
     ParseErrorKind, ParseResult, PrivilegeTag, RevokeStatement, RoleRef, SelectExpr,
     SelectListItem, SelectStatement, SetOperationEntry, SetOperator, SetScope, SetStatement,
     SetValue, ShowStatement, ShowTarget, SqlLiteral, TableConstraint, TableConstraintBody,
@@ -1175,12 +1176,12 @@ impl<'a> Parser<'a> {
             if !matches!(self.peek().map(|t| &t.token), Some(Token::When)) {
                 break;
             }
-            self.advance(); // consume WHEN
             // For simple CASE the condition is a value compared against
             // the operand (literal/column/expr); for searched CASE the
             // condition is a boolean expression. Both flow through the
             // same value-or-expression parser because the boolean form
             // is a superset.
+            self.advance(); // consume WHEN
             let condition = if operand.is_some() {
                 self.parse_case_value_expression()?
             } else {
@@ -1898,15 +1899,14 @@ impl<'a> Parser<'a> {
             Token::KwTimestamp => {
                 self.advance();
                 // `TIMESTAMP WITH TIME ZONE` — three-token suffix.
-                let with_time_zone =
-                    if matches!(self.peek().map(|t| &t.token), Some(Token::With)) {
-                        self.advance();
-                        self.expect_keyword(Token::Time, "expected TIME after WITH")?;
-                        self.expect_keyword(Token::Zone, "expected ZONE after TIME")?;
-                        true
-                    } else {
-                        false
-                    };
+                let with_time_zone = if matches!(self.peek().map(|t| &t.token), Some(Token::With)) {
+                    self.advance();
+                    self.expect_keyword(Token::Time, "expected TIME after WITH")?;
+                    self.expect_keyword(Token::Zone, "expected ZONE after TIME")?;
+                    true
+                } else {
+                    false
+                };
                 Ok(ColumnType::Timestamp { with_time_zone })
             }
             Token::KwNumeric => {
@@ -2015,15 +2015,14 @@ impl<'a> Parser<'a> {
                     self.advance();
                     let table = self.parse_table_ref()?;
                     // Optional `(<col>)`.
-                    let column =
-                        if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
-                            self.advance();
-                            let c = self.expect_ident("expected referenced column")?;
-                            self.expect_token(Token::RParen, "expected ')'")?;
-                            Some(c)
-                        } else {
-                            None
-                        };
+                    let column = if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+                        self.advance();
+                        let c = self.expect_ident("expected referenced column")?;
+                        self.expect_token(Token::RParen, "expected ')'")?;
+                        Some(c)
+                    } else {
+                        None
+                    };
                     ColumnConstraintBody::References { table, column }
                 }
                 Some(Token::Check) => {
@@ -2079,12 +2078,12 @@ impl<'a> Parser<'a> {
                 let columns = self.parse_parenthesized_ident_list()?;
                 self.expect_keyword(Token::References, "expected REFERENCES")?;
                 let target_table = self.parse_table_ref()?;
-                let target_columns =
-                    if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
-                        self.parse_parenthesized_ident_list()?
-                    } else {
-                        Vec::new()
-                    };
+                let target_columns = if matches!(self.peek().map(|t| &t.token), Some(Token::LParen))
+                {
+                    self.parse_parenthesized_ident_list()?
+                } else {
+                    Vec::new()
+                };
                 Ok(TableConstraintBody::References {
                     columns,
                     target_table,
@@ -2228,8 +2227,8 @@ impl<'a> Parser<'a> {
     // ---------------------------------------------------------------
 
     /// `INSERT INTO <table> [(cols)] (VALUES … | DEFAULT VALUES | SELECT …)
-    ///  [ON CONFLICT …] [RETURNING …]`. Assumes `INSERT` has been
-    /// consumed.
+    ///  [ON CONFLICT …] [ON DUPLICATE KEY UPDATE …] [RETURNING …]`.
+    /// Assumes `INSERT` has been consumed.
     fn parse_insert(&mut self) -> Result<InsertStatement, ParseError> {
         // INTO
         self.expect_keyword(Token::Into, "expected INTO")?;
@@ -2272,14 +2271,25 @@ impl<'a> Parser<'a> {
             }
         };
 
-        // optional ON CONFLICT
-        let on_conflict = if matches!(self.peek().map(|t| &t.token), Some(Token::On)) {
+        // optional ON CONFLICT / ON DUPLICATE KEY UPDATE
+        let mut on_conflict = None;
+        let mut on_duplicate_key_update = None;
+        if matches!(self.peek().map(|t| &t.token), Some(Token::On)) {
             self.advance();
-            self.expect_keyword(Token::Conflict, "expected CONFLICT")?;
-            Some(self.parse_on_conflict_action()?)
-        } else {
-            None
-        };
+            match self.peek().map(|t| &t.token) {
+                Some(Token::Conflict) => {
+                    self.advance();
+                    on_conflict = Some(self.parse_on_conflict_action()?);
+                }
+                Some(Token::Ident(name)) if name.eq_ignore_ascii_case("duplicate") => {
+                    on_duplicate_key_update = Some(self.parse_on_duplicate_key_update()?);
+                }
+                Some(_) | None => {
+                    let at = self.peek().map(|t| t.at);
+                    return Err(syntax_err(at, "expected CONFLICT or DUPLICATE"));
+                }
+            }
+        }
 
         // optional RETURNING
         let returning = self.parse_optional_returning()?;
@@ -2289,6 +2299,7 @@ impl<'a> Parser<'a> {
             columns,
             source,
             on_conflict,
+            on_duplicate_key_update,
             returning,
         })
     }
@@ -2471,6 +2482,50 @@ impl<'a> Parser<'a> {
             break;
         }
         Ok(out)
+    }
+
+    /// Parse `DUPLICATE KEY UPDATE <col> = <value>[, …]` after `ON`.
+    /// The `ON` token has been consumed and the cursor is on `DUPLICATE`.
+    fn parse_on_duplicate_key_update(&mut self) -> Result<OnDuplicateKeyUpdate, ParseError> {
+        self.expect_ident_kw("duplicate", "expected DUPLICATE")?;
+        self.expect_keyword(Token::Key, "expected KEY")?;
+        self.expect_keyword(Token::Update, "expected UPDATE")?;
+        let assignments = self.parse_on_duplicate_key_update_assignments()?;
+        Ok(OnDuplicateKeyUpdate { assignments })
+    }
+
+    /// `<col> = <value>[, <col> = <value>]*` for MySQL/MariaDB upsert.
+    fn parse_on_duplicate_key_update_assignments(
+        &mut self,
+    ) -> Result<Vec<OnDuplicateKeyUpdateAssignment>, ParseError> {
+        let mut out: Vec<OnDuplicateKeyUpdateAssignment> = Vec::new();
+        loop {
+            let column = self.expect_ident("expected column name")?;
+            self.expect_token(Token::Eq, "expected '='")?;
+            let value = self.parse_on_duplicate_key_update_value()?;
+            out.push(OnDuplicateKeyUpdateAssignment { column, value });
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        Ok(out)
+    }
+
+    /// Literal/default/placeholder RHS plus MySQL's `VALUES(column)`.
+    fn parse_on_duplicate_key_update_value(
+        &mut self,
+    ) -> Result<OnDuplicateKeyUpdateValue, ParseError> {
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Values)) {
+            self.advance();
+            self.expect_token(Token::LParen, "expected '('")?;
+            let column = self.expect_ident("expected column name")?;
+            self.expect_token(Token::RParen, "expected ')'")?;
+            return Ok(OnDuplicateKeyUpdateValue::ValuesColumn { column });
+        }
+
+        self.parse_insert_value().map(Into::into)
     }
 
     /// Parse `ON CONFLICT` action — `DO NOTHING` or `DO UPDATE SET … [WHERE …]`.
@@ -3078,15 +3133,14 @@ impl<'a> Parser<'a> {
         let object = self.parse_grant_object()?;
         self.expect_keyword(Token::To, "expected TO")?;
         let grantees = self.parse_role_list()?;
-        let with_grant_option =
-            if matches!(self.peek().map(|t| &t.token), Some(Token::With)) {
-                self.advance();
-                self.expect_keyword(Token::Grant, "expected GRANT")?;
-                self.expect_ident_kw("option", "expected OPTION")?;
-                true
-            } else {
-                false
-            };
+        let with_grant_option = if matches!(self.peek().map(|t| &t.token), Some(Token::With)) {
+            self.advance();
+            self.expect_keyword(Token::Grant, "expected GRANT")?;
+            self.expect_ident_kw("option", "expected OPTION")?;
+            true
+        } else {
+            false
+        };
         Ok(GrantStatement {
             privileges,
             object,
@@ -3158,12 +3212,27 @@ impl<'a> Parser<'a> {
             .ok_or_else(|| syntax_err(None, "expected privilege"))?
             .clone();
         let (base, accepts_columns) = match tok.token {
-            Token::Select => (PrivilegeTag::Select { columns: Vec::new() }, true),
+            Token::Select => (
+                PrivilegeTag::Select {
+                    columns: Vec::new(),
+                },
+                true,
+            ),
             Token::Insert => (PrivilegeTag::Insert, false),
-            Token::Update => (PrivilegeTag::Update { columns: Vec::new() }, true),
+            Token::Update => (
+                PrivilegeTag::Update {
+                    columns: Vec::new(),
+                },
+                true,
+            ),
             Token::Delete => (PrivilegeTag::Delete, false),
             Token::Truncate => (PrivilegeTag::Truncate, false),
-            Token::References => (PrivilegeTag::References { columns: Vec::new() }, true),
+            Token::References => (
+                PrivilegeTag::References {
+                    columns: Vec::new(),
+                },
+                true,
+            ),
             Token::Ident(ref name) if name.eq_ignore_ascii_case("trigger") => {
                 (PrivilegeTag::Trigger, false)
             }
@@ -3194,9 +3263,7 @@ impl<'a> Parser<'a> {
             return Ok(match base {
                 PrivilegeTag::Select { .. } => PrivilegeTag::Select { columns: cols },
                 PrivilegeTag::Update { .. } => PrivilegeTag::Update { columns: cols },
-                PrivilegeTag::References { .. } => {
-                    PrivilegeTag::References { columns: cols }
-                }
+                PrivilegeTag::References { .. } => PrivilegeTag::References { columns: cols },
                 // `accepts_columns` is true only for the three above —
                 // the match is exhaustive in practice.
                 other => other,
@@ -3388,9 +3455,8 @@ impl<'a> Parser<'a> {
                 .peek()
                 .ok_or_else(|| syntax_err(None, "expected option name"))?
                 .clone();
-            let name_text = token_word(&name_tok.token).ok_or_else(|| {
-                syntax_err(Some(name_tok.at), "expected option name")
-            })?;
+            let name_text = token_word(&name_tok.token)
+                .ok_or_else(|| syntax_err(Some(name_tok.at), "expected option name"))?;
             self.advance();
             let value = self.parse_explain_option_value()?;
             out.push(ExplainOption {
@@ -3619,7 +3685,10 @@ impl<'a> Parser<'a> {
         let source = match src_tok.token {
             Token::Stdin => {
                 if direction == CopyDirection::To {
-                    return Err(syntax_err(Some(src_tok.at), "STDIN is only valid with FROM"));
+                    return Err(syntax_err(
+                        Some(src_tok.at),
+                        "STDIN is only valid with FROM",
+                    ));
                 }
                 self.advance();
                 CopySource::Stdin
@@ -3635,7 +3704,12 @@ impl<'a> Parser<'a> {
                 self.advance();
                 CopySource::File { path }
             }
-            _ => return Err(syntax_err(Some(src_tok.at), "expected source path / STDIN / STDOUT")),
+            _ => {
+                return Err(syntax_err(
+                    Some(src_tok.at),
+                    "expected source path / STDIN / STDOUT",
+                ))
+            }
         };
 
         // Optional `WITH (options)` trailer.
@@ -5671,6 +5745,7 @@ mod tests {
     fn ac_392_i12_insert_on_conflict_do_nothing() {
         let s = ok_insert("INSERT INTO users (id) VALUES (1) ON CONFLICT DO NOTHING");
         assert!(matches!(s.on_conflict, Some(OnConflict::DoNothing)));
+        assert!(s.on_duplicate_key_update.is_none());
     }
 
     #[test]
@@ -5688,6 +5763,64 @@ mod tests {
             }
             _ => panic!("expected DoUpdate"),
         }
+    }
+
+    #[test]
+    fn ac_434_i01_insert_on_duplicate_key_update_literal() {
+        let s = ok_insert(
+            "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = 'b'",
+        );
+        assert!(s.on_conflict.is_none());
+        match s.on_duplicate_key_update {
+            Some(OnDuplicateKeyUpdate { assignments }) => {
+                assert_eq!(assignments.len(), 1);
+                assert_eq!(assignments[0].column, "name");
+                assert!(matches!(
+                    &assignments[0].value,
+                    OnDuplicateKeyUpdateValue::Literal {
+                        value: SqlLiteral::String { value }
+                    } if value == "b"
+                ));
+            }
+            _ => panic!("expected ON DUPLICATE KEY UPDATE"),
+        }
+    }
+
+    #[test]
+    fn ac_434_i02_insert_on_duplicate_key_update_preserves_assignment_order() {
+        let s = ok_insert(
+            "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = VALUES(name), id = 2",
+        );
+        let clause = s
+            .on_duplicate_key_update
+            .expect("expected ON DUPLICATE KEY UPDATE");
+        assert_eq!(clause.assignments.len(), 2);
+        assert_eq!(clause.assignments[0].column, "name");
+        assert!(matches!(
+            &clause.assignments[0].value,
+            OnDuplicateKeyUpdateValue::ValuesColumn { column } if column == "name"
+        ));
+        assert_eq!(clause.assignments[1].column, "id");
+        assert!(matches!(
+            &clause.assignments[1].value,
+            OnDuplicateKeyUpdateValue::Literal {
+                value: SqlLiteral::Integer { value: 2 }
+            }
+        ));
+    }
+
+    #[test]
+    fn ac_434_i03_insert_on_duplicate_key_update_placeholder_rhs() {
+        let s = ok_insert(
+            "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = ?",
+        );
+        let clause = s
+            .on_duplicate_key_update
+            .expect("expected ON DUPLICATE KEY UPDATE");
+        assert!(matches!(
+            &clause.assignments[0].value,
+            OnDuplicateKeyUpdateValue::Placeholder { name } if name.is_empty()
+        ));
     }
 
     #[test]
@@ -5897,7 +6030,10 @@ mod tests {
         // FROM parses + WHERE with column-op-literal also parses cleanly.
         let s = ok_update("UPDATE users SET name = 'a' FROM other WHERE id = 1");
         assert_eq!(s.from, vec!["other".to_string()]);
-        assert!(matches!(s.where_clause, Some(SelectExpr::Comparison { .. })));
+        assert!(matches!(
+            s.where_clause,
+            Some(SelectExpr::Comparison { .. })
+        ));
     }
 
     // ── DELETE — AC-392-D ────────────────────────────────────────────
@@ -5914,7 +6050,10 @@ mod tests {
     #[test]
     fn ac_392_d02_delete_with_where() {
         let s = ok_delete("DELETE FROM users WHERE id = 1");
-        assert!(matches!(s.where_clause, Some(SelectExpr::Comparison { .. })));
+        assert!(matches!(
+            s.where_clause,
+            Some(SelectExpr::Comparison { .. })
+        ));
     }
 
     #[test]
@@ -6159,7 +6298,10 @@ mod tests {
         );
         match *w.inner_statement {
             WithInner::Update(u) => {
-                assert!(matches!(u.where_clause, Some(SelectExpr::InSubquery { .. })));
+                assert!(matches!(
+                    u.where_clause,
+                    Some(SelectExpr::InSubquery { .. })
+                ));
             }
             other => panic!("expected Update inner, got {:?}", other),
         }
@@ -6167,9 +6309,8 @@ mod tests {
 
     #[test]
     fn ac_393b_w07_with_delete_inner() {
-        let w = ok_with(
-            "WITH t AS (SELECT id FROM x) DELETE FROM y WHERE y.id IN (SELECT id FROM t)",
-        );
+        let w =
+            ok_with("WITH t AS (SELECT id FROM x) DELETE FROM y WHERE y.id IN (SELECT id FROM t)");
         assert!(matches!(*w.inner_statement, WithInner::Delete(_)));
     }
 
@@ -6279,8 +6420,7 @@ mod tests {
 
     #[test]
     fn ac_393b_q04_not_exists() {
-        let s =
-            ok_select("SELECT a FROM x WHERE NOT EXISTS (SELECT b FROM y WHERE y.x_id = x.id)");
+        let s = ok_select("SELECT a FROM x WHERE NOT EXISTS (SELECT b FROM y WHERE y.x_id = x.id)");
         match s.where_clause {
             Some(SelectExpr::Not { inner }) => {
                 assert!(matches!(*inner, SelectExpr::Exists { .. }));
@@ -6651,10 +6791,7 @@ mod tests {
                 "SELECT a FROM x WHERE id IN (SELECT id FROM y)",
                 "in-subquery",
             ),
-            (
-                "SELECT a FROM x WHERE EXISTS (SELECT id FROM y)",
-                "exists",
-            ),
+            ("SELECT a FROM x WHERE EXISTS (SELECT id FROM y)", "exists"),
         ];
         for (sql, expected_kind) in inputs {
             let r = parse(sql);
@@ -6749,9 +6886,7 @@ mod tests {
     #[test]
     fn ac_393b_extra_intersect_chain_left_to_right_preserved() {
         // INTERSECT + EXCEPT chain — verify order is preserved verbatim.
-        let s = ok_select(
-            "SELECT a FROM x INTERSECT SELECT a FROM y EXCEPT SELECT a FROM z",
-        );
+        let s = ok_select("SELECT a FROM x INTERSECT SELECT a FROM y EXCEPT SELECT a FROM z");
         assert_eq!(s.set_operation.len(), 2);
         assert_eq!(s.set_operation[0].operator, SetOperator::Intersect);
         assert_eq!(s.set_operation[1].operator, SetOperator::Except);
@@ -6796,8 +6931,7 @@ mod tests {
 
     #[test]
     fn ac_393b_extra_scalar_subquery_comparison_with_qualified_lhs() {
-        let s =
-            ok_select("SELECT a FROM x WHERE x.b = (SELECT max_b FROM y_summary LIMIT 1)");
+        let s = ok_select("SELECT a FROM x WHERE x.b = (SELECT max_b FROM y_summary LIMIT 1)");
         match s.where_clause {
             Some(SelectExpr::ScalarSubqueryComparison { left, op, .. }) => {
                 assert_eq!(left.table.as_deref(), Some("x"));
@@ -6871,9 +7005,7 @@ mod tests {
 
     #[test]
     fn ac_393b_extra_subquery_in_from_with_chained_join() {
-        let s = ok_select(
-            "SELECT a FROM (SELECT a FROM x) AS s JOIN y ON s.id = y.id",
-        );
+        let s = ok_select("SELECT a FROM (SELECT a FROM x) AS s JOIN y ON s.id = y.id");
         assert_eq!(s.from.len(), 2);
         assert!(matches!(s.from[0].source, FromSource::Subquery { .. }));
         assert!(matches!(s.from[1].join, JoinDescriptor::InnerJoin { .. }));
@@ -6948,7 +7080,8 @@ mod tests {
     fn ac_393b_extra_cte_dml_kind_serialization() {
         // For a DELETE-wrapped CTE, the inner statement's `kind` is
         // `"delete"`.
-        let r = parse("WITH t AS (SELECT id FROM x) DELETE FROM y WHERE y.id IN (SELECT id FROM t)");
+        let r =
+            parse("WITH t AS (SELECT id FROM x) DELETE FROM y WHERE y.id IN (SELECT id FROM t)");
         let json = serde_json::to_value(&r).expect("serialize");
         assert_eq!(json["inner_statement"]["kind"], "delete");
     }
@@ -6975,7 +7108,9 @@ mod tests {
 
     #[test]
     fn ac_393b_extra_with_inner_update_kind_serializes_kebab() {
-        let r = parse("WITH t AS (SELECT id FROM x) UPDATE y SET a = 1 WHERE y.id IN (SELECT id FROM t)");
+        let r = parse(
+            "WITH t AS (SELECT id FROM x) UPDATE y SET a = 1 WHERE y.id IN (SELECT id FROM t)",
+        );
         let json = serde_json::to_value(&r).expect("serialize");
         assert_eq!(json["kind"], "with");
         assert_eq!(json["inner_statement"]["kind"], "update");
@@ -6984,9 +7119,7 @@ mod tests {
     #[test]
     fn ac_393b_extra_set_operation_chain_with_intermediate_clauses() {
         // First SELECT body has WHERE; second has GROUP BY.
-        let s = ok_select(
-            "SELECT a FROM x WHERE x.flag = 1 UNION SELECT a FROM y GROUP BY y.a",
-        );
+        let s = ok_select("SELECT a FROM x WHERE x.flag = 1 UNION SELECT a FROM y GROUP BY y.a");
         assert!(s.where_clause.is_some());
         assert_eq!(s.set_operation.len(), 1);
         assert_eq!(s.set_operation[0].statement.group_by.len(), 1);
@@ -6994,9 +7127,7 @@ mod tests {
 
     #[test]
     fn ac_393b_extra_cte_with_dml_insert_inherits_kind() {
-        let w = ok_with(
-            "WITH t AS (SELECT a FROM x) INSERT INTO y (a) SELECT a FROM t",
-        );
+        let w = ok_with("WITH t AS (SELECT a FROM x) INSERT INTO y (a) SELECT a FROM t");
         match *w.inner_statement {
             WithInner::Insert(i) => {
                 assert_eq!(i.table, "y");
@@ -7008,9 +7139,7 @@ mod tests {
     #[test]
     fn ac_393b_extra_exists_in_dml_where() {
         // DML WHERE supports EXISTS via the unified `SelectExpr` shape.
-        let s = match parse(
-            "DELETE FROM x WHERE EXISTS (SELECT 1 FROM y WHERE y.x_id = x.id)",
-        ) {
+        let s = match parse("DELETE FROM x WHERE EXISTS (SELECT 1 FROM y WHERE y.x_id = x.id)") {
             ParseResult::Delete(d) => d,
             other => panic!("expected Delete, got {:?}", other),
         };
@@ -7039,9 +7168,7 @@ mod tests {
 
     #[test]
     fn ac_393b_extra_two_cte_round_trips() {
-        let r = parse(
-            "WITH a AS (SELECT x FROM s), b AS (SELECT y FROM t) SELECT a FROM a, b",
-        );
+        let r = parse("WITH a AS (SELECT x FROM s), b AS (SELECT y FROM t) SELECT a FROM a, b");
         let json = serde_json::to_string(&r).expect("serialize");
         let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(r, back);
@@ -7281,9 +7408,7 @@ mod tests {
 
     #[test]
     fn ac_394_t18_create_table_table_foreign_key() {
-        let s = ok_create_table(
-            "CREATE TABLE t (a INTEGER, FOREIGN KEY (a) REFERENCES other(id))",
-        );
+        let s = ok_create_table("CREATE TABLE t (a INTEGER, FOREIGN KEY (a) REFERENCES other(id))");
         match &s.table_constraints[0].body {
             TableConstraintBody::References {
                 columns,
@@ -7300,9 +7425,7 @@ mod tests {
 
     #[test]
     fn ac_394_t19_create_table_named_constraint() {
-        let s = ok_create_table(
-            "CREATE TABLE t (a INTEGER, CONSTRAINT pk PRIMARY KEY (a))",
-        );
+        let s = ok_create_table("CREATE TABLE t (a INTEGER, CONSTRAINT pk PRIMARY KEY (a))");
         assert_eq!(s.table_constraints[0].name.as_deref(), Some("pk"));
     }
 
@@ -7342,8 +7465,7 @@ mod tests {
 
     #[test]
     fn ac_394_t_bigint_serial_date_boolean_types() {
-        let s =
-            ok_create_table("CREATE TABLE t (a BIGINT, b SERIAL, c DATE, d BOOLEAN)");
+        let s = ok_create_table("CREATE TABLE t (a BIGINT, b SERIAL, c DATE, d BOOLEAN)");
         assert!(matches!(s.columns[0].data_type, ColumnType::Bigint));
         assert!(matches!(s.columns[1].data_type, ColumnType::Serial));
         assert!(matches!(s.columns[2].data_type, ColumnType::Date));
@@ -7397,9 +7519,7 @@ mod tests {
 
     #[test]
     fn ac_394_v01_create_view_select_body() {
-        let s = ok_create_view(
-            "CREATE VIEW v_active AS SELECT * FROM users WHERE active = 1",
-        );
+        let s = ok_create_view("CREATE VIEW v_active AS SELECT * FROM users WHERE active = 1");
         assert!(!s.or_replace);
         assert_eq!(s.name.table, "v_active");
         assert!(matches!(s.body, CreateViewBody::Select(_)));
@@ -7420,16 +7540,13 @@ mod tests {
 
     #[test]
     fn ac_394_v04_create_view_with_cte_body() {
-        let s = ok_create_view(
-            "CREATE VIEW v AS WITH t AS (SELECT a FROM x) SELECT a FROM t",
-        );
+        let s = ok_create_view("CREATE VIEW v AS WITH t AS (SELECT a FROM x) SELECT a FROM t");
         assert!(matches!(s.body, CreateViewBody::With(_)));
     }
 
     #[test]
     fn ac_394_v05_create_view_set_operation_body() {
-        let s =
-            ok_create_view("CREATE VIEW v AS SELECT a FROM x UNION SELECT a FROM y");
+        let s = ok_create_view("CREATE VIEW v AS SELECT a FROM x UNION SELECT a FROM y");
         match s.body {
             CreateViewBody::Select(sel) => assert_eq!(sel.set_operation.len(), 1),
             other => panic!("expected select body, got {:?}", other),
@@ -7502,8 +7619,7 @@ mod tests {
 
     #[test]
     fn ac_394_a04_alter_add_constraint_named_primary_key() {
-        let s =
-            ok_alter("ALTER TABLE users ADD CONSTRAINT users_pk PRIMARY KEY (id)");
+        let s = ok_alter("ALTER TABLE users ADD CONSTRAINT users_pk PRIMARY KEY (id)");
         match s.action {
             AlterAction::AddConstraint { constraint } => {
                 assert_eq!(constraint.name.as_deref(), Some("users_pk"));
@@ -7609,8 +7725,16 @@ mod tests {
         let json = serde_json::to_value(&r).expect("serialize");
         let cols = &json["columns"];
         let expected = [
-            "integer", "bigint", "varchar", "text", "timestamp", "date", "boolean",
-            "numeric", "serial", "uuid",
+            "integer",
+            "bigint",
+            "varchar",
+            "text",
+            "timestamp",
+            "date",
+            "boolean",
+            "numeric",
+            "serial",
+            "uuid",
         ];
         for (i, kind) in expected.iter().enumerate() {
             assert_eq!(
@@ -7718,9 +7842,7 @@ mod tests {
 
     #[test]
     fn ac_394_extra_create_table_unique_inline_and_table_level_mixed() {
-        let s = ok_create_table(
-            "CREATE TABLE t (a INTEGER UNIQUE, b INTEGER, UNIQUE (b))",
-        );
+        let s = ok_create_table("CREATE TABLE t (a INTEGER UNIQUE, b INTEGER, UNIQUE (b))");
         assert_eq!(s.columns.len(), 2);
         assert!(matches!(
             s.columns[0].constraints[0].body,
@@ -7740,9 +7862,7 @@ mod tests {
         // `CONSTRAINT <name> NOT NULL` inline — the spec wording in §AST
         // additions / Column-level constraint says each constraint may
         // optionally carry a name slot set by `CONSTRAINT name …`.
-        let s = ok_create_table(
-            "CREATE TABLE t (a INTEGER CONSTRAINT a_nn NOT NULL)",
-        );
+        let s = ok_create_table("CREATE TABLE t (a INTEGER CONSTRAINT a_nn NOT NULL)");
         assert_eq!(s.columns[0].constraints[0].name.as_deref(), Some("a_nn"));
         assert!(matches!(
             s.columns[0].constraints[0].body,
@@ -7781,10 +7901,7 @@ mod tests {
         match s.action {
             AlterAction::AddConstraint { constraint } => {
                 assert_eq!(constraint.name, None);
-                assert!(matches!(
-                    constraint.body,
-                    TableConstraintBody::Check { .. }
-                ));
+                assert!(matches!(constraint.body, TableConstraintBody::Check { .. }));
             }
             other => panic!("expected add-constraint, got {:?}", other),
         }
@@ -7831,9 +7948,7 @@ mod tests {
 
     #[test]
     fn ac_394_extra_create_table_named_check_constraint() {
-        let s = ok_create_table(
-            "CREATE TABLE t (a INTEGER, CONSTRAINT positive CHECK (a > 0))",
-        );
+        let s = ok_create_table("CREATE TABLE t (a INTEGER, CONSTRAINT positive CHECK (a > 0))");
         assert_eq!(s.table_constraints[0].name.as_deref(), Some("positive"));
         assert!(matches!(
             s.table_constraints[0].body,
@@ -7970,9 +8085,7 @@ mod tests {
     fn ac_394_extra_create_table_compound_check_expression() {
         // CHECK predicate widened by sprint-393a/b's expression grammar
         // — confirm an AND-joined check expression parses.
-        let s = ok_create_table(
-            "CREATE TABLE t (a INTEGER, b INTEGER, CHECK (a > 0 AND b > 0))",
-        );
+        let s = ok_create_table("CREATE TABLE t (a INTEGER, b INTEGER, CHECK (a > 0 AND b > 0))");
         match &s.table_constraints[0].body {
             TableConstraintBody::Check { expression } => {
                 assert!(matches!(expression, SelectExpr::And { .. }));
@@ -7983,9 +8096,7 @@ mod tests {
 
     #[test]
     fn ac_394_extra_create_unique_index_if_not_exists() {
-        let s = ok_create_index(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx ON users (email)",
-        );
+        let s = ok_create_index("CREATE UNIQUE INDEX IF NOT EXISTS idx ON users (email)");
         assert!(s.unique);
         assert!(s.if_not_exists);
     }
@@ -8067,7 +8178,9 @@ mod tests {
     fn ac_395_g01_grant_select_table_to_role() {
         let g = ok_grant("GRANT SELECT ON users TO alice");
         assert_eq!(g.privileges.len(), 1);
-        assert!(matches!(g.privileges[0], PrivilegeTag::Select { ref columns } if columns.is_empty()));
+        assert!(
+            matches!(g.privileges[0], PrivilegeTag::Select { ref columns } if columns.is_empty())
+        );
         match &g.object {
             GrantObject::Table { tables } => {
                 assert_eq!(tables.len(), 1);
@@ -8713,8 +8826,7 @@ mod tests {
         for input in inputs {
             let r = parse(input);
             let json = serde_json::to_string(&r).expect("serialize");
-            let back: ParseResult =
-                serde_json::from_str(&json).expect("deserialize");
+            let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
             assert_eq!(r, back, "round trip failed for: {}", input);
         }
     }

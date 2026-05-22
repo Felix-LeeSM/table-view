@@ -720,10 +720,14 @@ pub enum ColumnType {
     Uuid,
     /// `VARCHAR(<length>)`. The length argument is required by the
     /// sprint-394 grammar; bare `VARCHAR` parses to `SyntaxError`.
-    Varchar { length: i64 },
+    Varchar {
+        length: i64,
+    },
     /// `TIMESTAMP [WITH TIME ZONE]`. The `with_time_zone` flag defaults
     /// to false when the user wrote bare `TIMESTAMP`.
-    Timestamp { with_time_zone: bool },
+    Timestamp {
+        with_time_zone: bool,
+    },
     /// `NUMERIC[(precision[, scale])]`. Both slots are `None` when the
     /// user wrote bare `NUMERIC`; `precision` is set and `scale` is
     /// `None` when only one argument is supplied.
@@ -834,7 +838,7 @@ pub enum CreateViewBody {
 // ---- sprint-392 DML write triad AST nodes ----------------------------
 
 /// `INSERT INTO <table> [(cols)] (VALUES (...) | DEFAULT VALUES | SELECT …)
-///   [ON CONFLICT …] [RETURNING …]`.
+///   [ON CONFLICT …] [ON DUPLICATE KEY UPDATE …] [RETURNING …]`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InsertStatement {
     pub table: String,
@@ -843,6 +847,8 @@ pub struct InsertStatement {
     pub columns: Vec<String>,
     pub source: InsertSource,
     pub on_conflict: Option<OnConflict>,
+    #[serde(default)]
+    pub on_duplicate_key_update: Option<OnDuplicateKeyUpdate>,
     /// Empty when `RETURNING` is absent.
     pub returning: Vec<String>,
 }
@@ -900,8 +906,7 @@ pub enum SqlLiteral {
 }
 
 /// `ON CONFLICT { DO NOTHING | DO UPDATE SET … [WHERE …] }` — PG-only
-/// UPSERT semantic. MySQL's `ON DUPLICATE KEY UPDATE` is *not* covered
-/// (sprint-395+ dialect work).
+/// UPSERT semantic.
 ///
 /// Sprint-393b — the `where_clause` slot now uses the unified `SelectExpr`
 /// shape (with IN-list / IN-subquery / EXISTS / CASE support) so the DML
@@ -914,6 +919,42 @@ pub enum OnConflict {
         set: Vec<UpdateAssignment>,
         where_clause: Option<SelectExpr>,
     },
+}
+
+/// MySQL/MariaDB `ON DUPLICATE KEY UPDATE <col> = <value>[, …]`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OnDuplicateKeyUpdate {
+    pub assignments: Vec<OnDuplicateKeyUpdateAssignment>,
+}
+
+/// `<column> = <value>` inside `ON DUPLICATE KEY UPDATE`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OnDuplicateKeyUpdateAssignment {
+    pub column: String,
+    pub value: OnDuplicateKeyUpdateValue,
+}
+
+/// RHS values accepted in MySQL/MariaDB `ON DUPLICATE KEY UPDATE`.
+///
+/// Literal/default/placeholder variants intentionally keep the same wire
+/// shape as `InsertValue`; `values-column` records MySQL's `VALUES(col)`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum OnDuplicateKeyUpdateValue {
+    Literal { value: SqlLiteral },
+    Default,
+    Placeholder { name: String },
+    ValuesColumn { column: String },
+}
+
+impl From<InsertValue> for OnDuplicateKeyUpdateValue {
+    fn from(value: InsertValue) -> Self {
+        match value {
+            InsertValue::Literal { value } => OnDuplicateKeyUpdateValue::Literal { value },
+            InsertValue::Default => OnDuplicateKeyUpdateValue::Default,
+            InsertValue::Placeholder { name } => OnDuplicateKeyUpdateValue::Placeholder { name },
+        }
+    }
 }
 
 /// `UPDATE <table> SET <col> = <value>[, …] [FROM …] [WHERE …] [RETURNING …]`.
