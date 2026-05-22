@@ -347,12 +347,13 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
 // Date 2026-05-13.
 // ---------------------------------------------------------------------------
 describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
-  it("exposes PG / MySQL / MariaDB / SQLite / Mongo", () => {
+  it("exposes PG / MySQL / MariaDB / SQLite / DuckDB / Mongo", () => {
     expect([...SUPPORTED_DATABASE_TYPES]).toEqual([
       "postgresql",
       "mysql",
       "mariadb",
       "sqlite",
+      "duckdb",
       "mongodb",
     ]);
   });
@@ -362,7 +363,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("mysql")).toBe(true);
     expect(isSupportedDatabaseType("mariadb")).toBe(true);
     expect(isSupportedDatabaseType("sqlite")).toBe(true);
-    expect(isSupportedDatabaseType("duckdb")).toBe(false);
+    expect(isSupportedDatabaseType("duckdb")).toBe(true);
     expect(isSupportedDatabaseType("mongodb")).toBe(true);
     expect(isSupportedDatabaseType("mssql")).toBe(false);
     expect(isSupportedDatabaseType("oracle")).toBe(false);
@@ -416,7 +417,7 @@ describe("parseSqliteFilePath / sqlite URL fallback (Sprint 138)", () => {
 });
 
 describe("DuckDB file connection metadata (Sprint 455)", () => {
-  it("declares DuckDB as an RDBMS identity without promoting it to the supported runtime list yet", () => {
+  it("declares DuckDB as a supported file-backed RDBMS identity", () => {
     expect(DATABASE_TYPE_LABELS.duckdb).toBe("DuckDB");
     expect(DATABASE_DEFAULTS.duckdb).toBe(0);
     expect(DATABASE_DEFAULT_FIELDS.duckdb).toEqual({
@@ -424,7 +425,7 @@ describe("DuckDB file connection metadata (Sprint 455)", () => {
       user: "",
       database: "",
     });
-    expect(isSupportedDatabaseType("duckdb")).toBe(false);
+    expect(isSupportedDatabaseType("duckdb")).toBe(true);
   });
 
   it("parses duckdb:/ paths as file-backed RDB drafts with read-only defaulted off", () => {
