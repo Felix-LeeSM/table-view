@@ -15,12 +15,12 @@ task: ux-review, persistence-reset, merge-gate
 
 ### 위치 룰
 
-| 영속 단위 | Reset 위치 |
-|---|---|
-| Tiny UI 가구 (collapse / width) | 더블클릭 또는 우클릭 메뉴 "Reset" |
-| Per-entity prefs (table column widths / hidden columns) | 그 entity 의 헤더 우클릭 메뉴 |
-| Global settings (theme / safe mode / retention 등) | 설정 패널 안 "Reset to defaults" 버튼 |
-| Workspace layout (sidebar expand 상태 등) | sidebar 헤더 메뉴 |
+| 영속 단위                                               | Reset 위치                            |
+| ------------------------------------------------------- | ------------------------------------- |
+| Tiny UI 가구 (collapse / width)                         | 더블클릭 또는 우클릭 메뉴 "Reset"     |
+| Per-entity prefs (table column widths / hidden columns) | 그 entity 의 헤더 우클릭 메뉴         |
+| Global settings (theme / safe mode / retention 등)      | 설정 패널 안 "Reset to defaults" 버튼 |
+| Workspace layout (sidebar expand 상태 등)               | sidebar 헤더 메뉴                     |
 
 ### Why
 
@@ -37,4 +37,5 @@ Phase 6 audit (`docs/state-management-strategy-2026-05-15.md` F.6) 에 사이트
 - [decisions](../decisions/memory.md) — 영속 상태 ADR (0032 SQLite atomic snapshot, 0035 corrupt recovery, 0038 theme/safemode SOT, 0040 file-key keyring, 0042 query history)
 - [conventions](../conventions/memory.md) — TS/React 코드 룰
 - [workflow/delivery](../workflow/delivery/memory.md) — 머지 직전 checkpoint
-- `docs/ux-laws-action-plan.md`, `docs/ux-laws-mapping.md` — UX 법칙 매핑 source
+- `docs/ux-laws-mapping.md` — UX 법칙 매핑 source. Action plan 은
+  sprint-176~180 분해 완료 후 retire 됨.

@@ -37,3 +37,6 @@ Last updated: 2026-05-22
 | Completed phase list | `docs/phases/completed.md` |
 | Resolved risk table/log | `docs/RISKS.resolved.md` |
 | Active ordering | `docs/PLAN.md` |
+| UX law action plan | removed; sprint-176-180 artifacts + `docs/ux-laws-mapping.md` remain |
+| Legacy Phase 9 RDBMS sketch | removed; superseded by Phase 17-20 split and `docs/PLAN.md` |
+| Archived 2026-04-10 test improvement snapshot | removed; superseded by later sprint evidence |

@@ -28,6 +28,15 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 4. 큰 state-management migration 은 DB support 흐름과 충돌하지 않을 때 재개한다.
 5. 완료 이력은 본 파일에 다시 누적하지 않고 completed 문서로 이동한다.
 
+## Planning Protocol
+
+- `Active Roadmap` 은 논의용 ordering 이다. 새 implementation phase 진입 전 사용자와
+  범위/순서 합의가 필요하다.
+- 완료된 항목은 `docs/completed-plan.md`, `docs/phases/completed.md`,
+  `docs/RISKS.resolved.md` 로 이동한다.
+- transient docs 는 sprint/phase SOT 로 흡수되면 삭제한다. Historical sprint
+  artifacts (`docs/sprints/**`) 는 evidence 이므로 삭제하지 않는다.
+
 ## Support Snapshot
 
 | DBMS | Runtime | Parser / safety | Completion | 현재 판단 |
@@ -42,7 +51,7 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 
 | Order | Track | Status | Next move | SOT |
 |---:|---|---|---|---|
-| 1 | MongoDB full support | planned | Phase 28 Slice A: unified mongosh editor / parser routing 부터 시작 | `docs/phases/phase-28.md` |
+| 1 | MongoDB full support | planned | 논의 필요: Phase 28 Slice A unified mongosh editor / parser routing 부터 시작할지 확정 | `docs/phases/phase-28.md` |
 | 2 | MySQL-family semantic widening | active follow-up | broader `CALL` args, user variables, routine scripting, `DELIMITER`, `LOAD DATA` 순서로 parser/safety gap 축소 | `docs/query-language-support.md`, `docs/sprints/sprint-439/` |
 | 3 | Capability-gated completion filtering | backlog | `serverVersion` / `capabilities` 기반 후보 filtering. vocabulary SOT 는 이미 Rust/WASM | `docs/phases/phase-31.md` |
 | 4 | MariaDB adapter decision | deferred -> re-evaluate | MySQL adapter reuse vs dedicated adapter ADR 결정 | `docs/phases/phase-18.md` |

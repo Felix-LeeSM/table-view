@@ -22,7 +22,8 @@ Phase 17 진입 전 Sprint 1-2개로 다음 추상화 마무리:
 - `AlterTableRequest`, `FilterCondition` 등 PG-shaped DTO를 dialect-agnostic 추상화.
 - `make_adapter` factory가 paradigm + dialect 모두 분기.
 
-Phase 9 초안 F-Refactor 섹션 참조.
+Legacy Phase 9 초안은 retired/deleted. 본 Phase 17 문서와 Sprint 296
+handoff가 MySQL adapter closure source다.
 
 ## 구현 항목
 
