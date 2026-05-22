@@ -9,6 +9,7 @@ import {
 import ConnectionDialog from "./ConnectionDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
+import * as dataSourceProfiles from "@/types/dataSource";
 
 // ---------------------------------------------------------------------------
 // ConnectionDialog — URL-form input handling (Postel's Law).
@@ -544,6 +545,36 @@ describe("[Sprint 281] unsupported DBMS paste is silent (no form change)", () =>
       );
     });
   }
+});
+
+describe("[Sprint 447] URL import support follows data-source profiles", () => {
+  it("uses profile support instead of the legacy supported-type constant", async () => {
+    const originalIsSupported =
+      dataSourceProfiles.isConnectionSupportedDatabaseType;
+    const supportSpy = vi
+      .spyOn(dataSourceProfiles, "isConnectionSupportedDatabaseType")
+      .mockImplementation((dbType) =>
+        dbType === "redis" ? true : originalIsSupported(dbType),
+      );
+
+    try {
+      renderDialog();
+
+      await act(async () => {
+        pasteIntoHost("redis://rediu:redip@redis.local:6379/0");
+      });
+
+      expect(supportSpy).toHaveBeenCalledWith("redis");
+      expect(screen.getByTestId("connection-url-detected")).toHaveTextContent(
+        "Detected redis URL",
+      );
+      expect(screen.getByLabelText("Redis database index (0-15)")).toHaveValue(
+        0,
+      );
+    } finally {
+      supportSpy.mockRestore();
+    }
+  });
 });
 
 describe("[AC-178-04] malformed URL paste is silent", () => {

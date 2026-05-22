@@ -2,19 +2,19 @@ import { useState } from "react";
 import type { ConnectionDraft, DatabaseType } from "@/types/connection";
 import {
   DATABASE_TYPE_LABELS,
-  SUPPORTED_DATABASE_TYPES,
-  isSupportedDatabaseType,
   parseConnectionUrl,
   parseSqliteFilePath,
 } from "@/types/connection";
+import * as dataSourceProfiles from "@/types/dataSource";
 
 // Sprint 276 — URL parser 가 인식한 scheme 의 DBMS 가 아직 wire-up 되지
-// 않았을 때 사용자에게 보여줄 거부 메시지. `SUPPORTED_DATABASE_TYPES` 와
-// 동기 — supported 리스트가 바뀌면 메시지도 자동 반영된다.
+// 않았을 때 사용자에게 보여줄 거부 메시지. Sprint 447 이후 profile
+// connection support 와 동기화한다.
 const unsupportedDbTypeMessage = (dbType: DatabaseType): string => {
-  const supportedLabels = SUPPORTED_DATABASE_TYPES.map(
-    (t) => DATABASE_TYPE_LABELS[t],
-  ).join(" / ");
+  const supportedLabels = dataSourceProfiles
+    .getConnectionSupportedDatabaseTypes()
+    .map((t) => DATABASE_TYPE_LABELS[t])
+    .join(" / ");
   return `${DATABASE_TYPE_LABELS[dbType]} is not yet supported. Currently only ${supportedLabels} can be added.`;
 };
 
@@ -130,7 +130,10 @@ export function useConnectionUrlImport({
     // Sprint 276 — parser 가 인식한 DBMS 가 아직 wire-up 되지 않았다면
     // 명시적으로 거부. URL 모드는 의도된 사용자 액션이므로 silent 가 아니라
     // urlError 로 알린다 (form-mode paste 는 AC-178-04 에 따라 silent).
-    if (parsed.dbType && !isSupportedDatabaseType(parsed.dbType)) {
+    if (
+      parsed.dbType &&
+      !dataSourceProfiles.isConnectionSupportedDatabaseType(parsed.dbType)
+    ) {
       setUrlError(unsupportedDbTypeMessage(parsed.dbType));
       return false;
     }
@@ -159,7 +162,10 @@ export function useConnectionUrlImport({
     // 의 silent 룰을 따라 form 을 건드리지 않고 paste 만 흘려보낸다 (사용자가
     // 직접 host 에 텍스트가 들어가는 걸 보면 인식 자체가 안 됐다고 자연스레
     // 깨닫는다). URL 모드 (Parse & Continue) 에서는 명시 거부.
-    if (parsed.dbType && !isSupportedDatabaseType(parsed.dbType)) {
+    if (
+      parsed.dbType &&
+      !dataSourceProfiles.isConnectionSupportedDatabaseType(parsed.dbType)
+    ) {
       return;
     }
     // Successful parse: prevent the literal URL from also landing in the
