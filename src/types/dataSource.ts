@@ -277,6 +277,7 @@ export const SQLITE_CAPABILITIES = capabilities({
   query: {
     query: true,
     multiStatement: true,
+    cancel: true,
   },
   catalog: {
     browse: true,
@@ -293,6 +294,8 @@ export const MONGODB_CAPABILITIES = capabilities({
   },
   query: {
     query: true,
+    cancel: true,
+    explain: true,
   },
   catalog: {
     browse: true,
