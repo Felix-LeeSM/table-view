@@ -104,6 +104,43 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it("upserts SQLite as a local file connection without password ciphertext", async () => {
+    await upsertConnections(loadSpec("e2e"));
+    const data = JSON.parse(
+      readFileSync(resolve(tempDir, "connections.json"), "utf8"),
+    ) as {
+      connections: {
+        id: string;
+        db_type: string;
+        host: string;
+        port: number;
+        user: string;
+        password: string;
+        database: string;
+        read_only: boolean;
+      }[];
+    };
+
+    const sqlite = data.connections.find((c) => c.id === "fixture-e2e-sqlite");
+
+    expect(sqlite).toEqual(
+      expect.objectContaining({
+        db_type: "sqlite",
+        host: "",
+        port: 0,
+        user: "",
+        password: "",
+        database: resolve(
+          tempDir,
+          "fixtures",
+          "sqlite",
+          "table_view_e2e.sqlite",
+        ),
+        read_only: false,
+      }),
+    );
+  });
+
   it("clear removes only fixture-* connections, leaving user entries intact", async () => {
     await upsertConnections(loadSpec("e2e"));
     // Inject a non-fixture entry the user might have added.

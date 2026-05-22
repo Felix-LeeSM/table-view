@@ -119,6 +119,23 @@ describe("SqliteFormFields", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders an Open read-only checkbox and propagates readOnly changes", () => {
+    const onChange = vi.fn();
+    render(
+      <SqliteFormFields
+        draft={makeDraft()}
+        onChange={onChange}
+        inputClass={inputClass}
+        labelClass={labelClass}
+        filePickerEnabled={true}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Open read-only" }));
+
+    expect(onChange).toHaveBeenCalledWith({ readOnly: true });
+  });
+
   it("hides file picker buttons when the profile capability is disabled", () => {
     render(
       <SqliteFormFields

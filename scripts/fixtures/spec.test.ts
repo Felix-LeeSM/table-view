@@ -100,6 +100,22 @@ describe("spec — loadSpec validation", () => {
     expect(spec.profileSpec.rows.customers).toBe(200);
   });
 
+  it("loads the SQLite local-file fixture strategy for e2e", () => {
+    const spec = loadSpec("e2e");
+    const database = spec.profileSpec.database as { sqlite?: string };
+    const connections = spec.profileSpec.connections as
+      | { sqlite?: { id: string; name: string }[] }
+      | undefined;
+
+    expect(database.sqlite).toBe("table_view_e2e.sqlite");
+    expect(connections?.sqlite).toEqual([
+      expect.objectContaining({
+        id: "fixture-e2e-sqlite",
+        name: "E2E (SQLite)",
+      }),
+    ]);
+  });
+
   it("fails fast on an unknown profile name", () => {
     expect(() => loadSpec("__nonexistent__")).toThrow(
       /fixture profile not found/,

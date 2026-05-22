@@ -6,6 +6,7 @@ use table_view_lib::commands::connection::{
 };
 use table_view_lib::error::AppError;
 use table_view_lib::models::{ConnectionConfigPublic, DatabaseType};
+use table_view_lib::storage::local as app_sqlite_state;
 use tempfile::TempDir;
 
 fn sqlite_public(path: &str) -> ConnectionConfigPublic {
@@ -56,6 +57,31 @@ fn setup() -> TempDir {
 
 fn cleanup() {
     std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+}
+
+#[test]
+fn sqlite_public_wire_preserves_read_only() {
+    let public: ConnectionConfigPublic = serde_json::from_value(serde_json::json!({
+        "id": "sqlite-ro",
+        "name": "SQLite read only",
+        "dbType": "sqlite",
+        "host": "",
+        "port": 0,
+        "user": "",
+        "database": "/tmp/user-owned.sqlite",
+        "groupId": null,
+        "color": null,
+        "hasPassword": false,
+        "paradigm": "rdb",
+        "readOnly": true
+    }))
+    .unwrap();
+
+    let stored = public.into_config_with_empty_password();
+    let returned = ConnectionConfigPublic::from(&stored);
+    let value = serde_json::to_value(returned).unwrap();
+
+    assert_eq!(value.get("readOnly").and_then(|v| v.as_bool()), Some(true));
 }
 
 #[test]
@@ -113,6 +139,35 @@ async fn test_connection_routes_sqlite_to_adapter() {
     .unwrap();
 
     assert_eq!(result, "Connection successful");
+
+    cleanup();
+}
+
+#[tokio::test]
+#[serial]
+async fn test_connection_rejects_internal_app_state_db_path() {
+    let _dir = setup();
+    let pool = app_sqlite_state::open_pool().await.unwrap();
+    let state_path = app_sqlite_state::db_path().unwrap();
+
+    let result = test_connection(TestConnectionRequest {
+        config: sqlite_public(state_path.to_str().unwrap()),
+        password: Some(String::new()),
+        existing_id: None,
+    })
+    .await;
+
+    pool.close().await;
+
+    match result {
+        Err(AppError::Validation(message)) => {
+            assert!(message.contains("internal app SQLite state"))
+        }
+        other => panic!(
+            "Expected internal app SQLite state validation error, got: {:?}",
+            other
+        ),
+    }
 
     cleanup();
 }

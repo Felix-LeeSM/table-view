@@ -381,6 +381,7 @@ describe("parseSqliteFilePath / sqlite URL fallback (Sprint 138)", () => {
     expect(result!.database).toBe("/data/app.sqlite");
     expect(result!.host).toBe("");
     expect(result!.port).toBe(0);
+    expect((result as { readOnly?: boolean }).readOnly).toBe(false);
     expect(result!.paradigm).toBe("rdb");
   });
 
@@ -399,5 +400,6 @@ describe("parseSqliteFilePath / sqlite URL fallback (Sprint 138)", () => {
     expect(result).not.toBeNull();
     expect(result!.dbType).toBe("sqlite");
     expect(result!.database).toBe("/data/app.sqlite");
+    expect((result as { readOnly?: boolean }).readOnly).toBe(false);
   });
 });
