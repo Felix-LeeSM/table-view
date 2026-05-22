@@ -26,8 +26,9 @@ pub mod lexer;
 pub mod parser;
 
 pub use ast::{
-    AlterAction, AlterTableStatement, CallStatement, CascadeBehavior, CaseWhen, ColumnRef, Columns,
-    CommentStatement, CommentTarget, CommentText, CompareOp, CopyDirection, CopySource,
+    AlterAction, AlterTableStatement, CallArgument, CallStatement, CascadeBehavior, CaseWhen,
+    ColumnRef, Columns, CommentStatement, CommentTarget, CommentText, CompareOp, CopyDirection,
+    CopySource,
     CopyStatement, CopyTarget, CteDefinition, DeleteStatement, DropObjectType, DropStatement,
     ExplainInner, ExplainOption, ExplainStatement, FrameBound, FrameUnit, FromItem, FromSource,
     GrantObject, GrantStatement, InsertSource, InsertStatement, InsertValue, JoinDescriptor,

@@ -376,6 +376,16 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           arguments: [],
         } satisfies SqlParseResult;
       }
+      if (sql === "CALL refresh_user_stats(@user_id)") {
+        return {
+          kind: "call",
+          procedure: {
+            schema: null,
+            name: "refresh_user_stats",
+          },
+          arguments: [{ kind: "user-variable", name: "user_id" }],
+        } satisfies SqlParseResult;
+      }
       if (sql === "CALL refresh_user_stats(user_id)") {
         return {
           kind: "error",
@@ -1162,7 +1172,17 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(result.arguments).toEqual([]);
   });
 
-  it("[AC-439-F03] CALL bare identifier argument returns an error union", async () => {
+  it("[AC-448-F01] parses bounded MySQL user-variable CALL arguments", async () => {
+    const result = await parseSql("CALL refresh_user_stats(@user_id)");
+    expect(result.kind).toBe("call");
+    if (result.kind !== "call") return;
+
+    expect(result.arguments).toEqual([
+      { kind: "user-variable", name: "user_id" },
+    ]);
+  });
+
+  it("[AC-448-F02] CALL bare identifier argument returns an error union", async () => {
     const result = await parseSql("CALL refresh_user_stats(user_id)");
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;

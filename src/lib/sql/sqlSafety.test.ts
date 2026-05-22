@@ -673,6 +673,14 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(isDangerous(a)).toBe(false);
   });
 
+  it("[AC-448-X01] CALL user-variable fallback stays routine-call / warn", () => {
+    const a = analyzeStatement("CALL refresh_user_stats(@user_id)");
+    expect(a.kind).toBe("routine-call");
+    expect(a.severity).toBe("warn");
+    expect(a.reasons).toEqual(["CALL — stored routine execution"]);
+    expect(isDangerous(a)).toBe(false);
+  });
+
   it("[AC-185-01i] SELECT → info (Sprint 254: read tier)", () => {
     const a = analyzeStatement("SELECT * FROM users");
     expect(a.kind).toBe("select");
@@ -1284,6 +1292,13 @@ describe("sqlSafety.analyzeStatement", () => {
 
     it("[AC-439-X02] CALL AST path → routine-call / warn", () => {
       const a = analyzeStatement("CALL refresh_user_stats()");
+      expect(a.kind).toBe("routine-call");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["CALL — stored routine execution"]);
+    });
+
+    it("[AC-448-X02] CALL user-variable AST path → routine-call / warn", () => {
+      const a = analyzeStatement("CALL refresh_user_stats(@user_id)");
       expect(a.kind).toBe("routine-call");
       expect(a.severity).toBe("warn");
       expect(a.reasons).toEqual(["CALL — stored routine execution"]);

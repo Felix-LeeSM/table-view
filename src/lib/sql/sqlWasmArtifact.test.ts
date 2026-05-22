@@ -142,14 +142,24 @@ describe("checked-in SQL WASM artifact", () => {
     expect(result.arguments).toEqual([]);
   });
 
+  it("[AC-448-W01] parseSql accepts bounded MySQL user-variable CALL arguments through real WASM", async () => {
+    const result = await parseSql("CALL refresh_user_stats(@user_id)");
+
+    expect(result.kind).toBe("call");
+    if (result.kind !== "call") return;
+    expect(result.arguments).toEqual([
+      { kind: "user-variable", name: "user_id" },
+    ]);
+  });
+
   it.each([
     ["function call", "CALL refresh_user_stats(NOW())"],
     ["arithmetic", "CALL refresh_user_stats(1 + 2)"],
     ["subquery", "CALL refresh_user_stats((SELECT id FROM users))"],
     ["bare identifier", "CALL refresh_user_stats(user_id)"],
-    ["user variable", "CALL refresh_user_stats(@user_id)"],
+    ["system variable", "CALL refresh_user_stats(@@session_sql_mode)"],
   ])(
-    "[AC-439-W03] rejects unsupported CALL argument form: %s",
+    "[AC-448-W02] rejects unsupported CALL argument form: %s",
     async (_label, sql) => {
       const result = await parseSql(sql);
 
