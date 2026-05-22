@@ -1,4 +1,5 @@
 import type { Paradigm } from "@/types/connection";
+import type { QueryLanguageId } from "@/types/dataSource";
 import type {
   DocumentQueryMode,
   HistoryQueryMode,
@@ -38,4 +39,35 @@ export function sanitizeWorkspaceQueryMode(
   queryMode: unknown,
 ): WorkspaceQueryMode {
   return toWorkspaceQueryMode({ paradigm, queryMode });
+}
+
+export function toWorkspaceQueryLanguage(input: {
+  paradigm: Paradigm;
+  queryLanguage?: unknown;
+}): QueryLanguageId | undefined {
+  if (input.paradigm === "rdb") {
+    return "sql";
+  }
+  if (input.paradigm === "document") {
+    return "mongosh";
+  }
+  return isQueryLanguageId(input.queryLanguage)
+    ? input.queryLanguage
+    : undefined;
+}
+
+function isQueryLanguageId(value: unknown): value is QueryLanguageId {
+  return (
+    value === "sql" ||
+    value === "mongosh" ||
+    value === "redis-command" ||
+    value === "search-dsl" ||
+    value === "cql" ||
+    value === "partiql" ||
+    value === "cypher" ||
+    value === "gql" ||
+    value === "gremlin" ||
+    value === "vector-query" ||
+    value === "stream-command"
+  );
 }

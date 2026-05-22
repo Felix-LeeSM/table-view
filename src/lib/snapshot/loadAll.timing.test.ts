@@ -255,6 +255,87 @@ describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
     expect(tab.queryState.result.columns[0]?.dataType).toBe("int4");
   });
 
+  it("backfills sql queryLanguage for active and closed SQLite query tabs in workspace snapshots", async () => {
+    const snap = makeSnapshot();
+    const legacyQueryState = {
+      status: "completed",
+      result: {
+        columns: [{ name: "answer", data_type: "int4", category: "int" }],
+        rows: [[42]],
+        total_count: 1,
+        execution_time_ms: 7,
+        query_type: "select",
+      },
+    };
+    snap.stores.workspaces = {
+      byConnectionId: {
+        "conn-sqlite": {
+          main: {
+            tabs: [
+              {
+                type: "query",
+                id: "query-active",
+                title: "Query",
+                connectionId: "conn-sqlite",
+                closable: true,
+                sql: "SELECT 1",
+                paradigm: "rdb",
+                queryMode: "sql",
+                queryState: legacyQueryState,
+              },
+            ],
+            activeTabId: "query-active",
+            closedTabHistory: [
+              {
+                type: "query",
+                id: "query-closed",
+                title: "Query",
+                connectionId: "conn-sqlite",
+                closable: true,
+                sql: "SELECT 2",
+                paradigm: "rdb",
+                queryMode: "sql",
+                queryState: legacyQueryState,
+              },
+            ],
+            sidebar: { expanded: [] },
+          },
+        },
+      },
+    } as never;
+    invokeMock.mockResolvedValueOnce(snap);
+
+    await loadAllFromSnapshot();
+
+    const workspace =
+      useWorkspaceStore.getState().workspaces["conn-sqlite"]?.main;
+    const activeTab = workspace?.tabs[0];
+    const closedTab = workspace?.closedTabHistory[0];
+
+    if (activeTab?.type !== "query") {
+      throw new Error("expected active query tab");
+    }
+    if (closedTab?.type !== "query") {
+      throw new Error("expected closed query tab");
+    }
+
+    expect(activeTab.queryMode).toBe("sql");
+    expect(activeTab.queryLanguage).toBe("sql");
+    expect(closedTab.queryMode).toBe("sql");
+    expect(closedTab.queryLanguage).toBe("sql");
+
+    expect(activeTab.queryState.status).toBe("completed");
+    expect(closedTab.queryState.status).toBe("completed");
+    if (
+      activeTab.queryState.status !== "completed" ||
+      closedTab.queryState.status !== "completed"
+    ) {
+      throw new Error("expected completed query states");
+    }
+    expect(activeTab.queryState.result.executionTimeMs).toBe(7);
+    expect(closedTab.queryState.result.totalCount).toBe(1);
+  });
+
   it("does NOT hydrate favorites / queryHistory / datagrid_prefs (lazy via mount IPC)", async () => {
     invokeMock.mockResolvedValueOnce(makeSnapshot());
 

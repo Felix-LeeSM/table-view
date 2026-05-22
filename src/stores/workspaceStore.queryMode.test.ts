@@ -187,6 +187,100 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
     }
   });
 
+  it("loadPersistedWorkspaces backfills queryLanguage metadata without changing legacy queryMode", () => {
+    const legacyPayload = {
+      workspaces: {
+        "conn-pg": {
+          appdb: {
+            tabs: [
+              {
+                type: "query",
+                id: "query-rdb",
+                title: "Query 1",
+                connectionId: "conn-pg",
+                closable: true,
+                sql: "SELECT 1",
+                queryState: { status: "completed" },
+                paradigm: "rdb",
+                queryMode: "sql",
+                database: "appdb",
+              },
+            ],
+            activeTabId: "query-rdb",
+            closedTabHistory: [],
+            dirtyTabIds: [],
+            sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+          },
+        },
+        "conn-mongo": {
+          appdb: {
+            tabs: [
+              {
+                type: "query",
+                id: "query-document",
+                title: "Query 2",
+                connectionId: "conn-mongo",
+                closable: true,
+                sql: "db.users.find({})",
+                queryState: { status: "completed" },
+                paradigm: "document",
+                queryMode: "find",
+                database: "appdb",
+                collection: "users",
+              },
+            ],
+            activeTabId: "query-document",
+            closedTabHistory: [
+              {
+                type: "query",
+                id: "query-closed-aggregate",
+                title: "Query 3",
+                connectionId: "conn-mongo",
+                closable: true,
+                sql: "db.users.aggregate([])",
+                queryState: { status: "completed" },
+                paradigm: "document",
+                queryMode: "aggregate",
+                database: "appdb",
+                collection: "users",
+              },
+            ],
+            dirtyTabIds: [],
+            sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+          },
+        },
+      },
+    };
+    window.localStorage.setItem(
+      "table-view-workspaces",
+      JSON.stringify(legacyPayload),
+    );
+
+    useWorkspaceStore.getState().loadPersistedWorkspaces();
+
+    const rdbTab =
+      useWorkspaceStore.getState().workspaces["conn-pg"]?.["appdb"]?.tabs[0];
+    const documentWs =
+      useWorkspaceStore.getState().workspaces["conn-mongo"]?.["appdb"];
+    const documentTab = documentWs?.tabs[0];
+    const closedDocumentTab = documentWs?.closedTabHistory[0];
+
+    if (rdbTab?.type !== "query") throw new Error("Expected RDB query tab");
+    if (documentTab?.type !== "query") {
+      throw new Error("Expected document query tab");
+    }
+    if (closedDocumentTab?.type !== "query") {
+      throw new Error("Expected closed document query tab");
+    }
+
+    expect(rdbTab.queryMode).toBe("sql");
+    expect(rdbTab.queryLanguage).toBe("sql");
+    expect(documentTab.queryMode).toBe("find");
+    expect(documentTab.queryLanguage).toBe("mongosh");
+    expect(closedDocumentTab.queryMode).toBe("aggregate");
+    expect(closedDocumentTab.queryLanguage).toBe("mongosh");
+  });
+
   it.each([
     ["findOne", "find"],
     ["countDocuments", "find"],
@@ -299,6 +393,7 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
           ?.tabs[0];
       if (tab?.type !== "query") throw new Error("Expected query tab");
       expect(tab.queryMode).toBe(expectedQueryMode);
+      expect(tab.queryLanguage).toBe("mongosh");
       expect(tab.sql).toBe("db.users.find({})");
     },
   );

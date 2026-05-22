@@ -10,6 +10,8 @@ import userEvent from "@testing-library/user-event";
 import ConnectionDialog from "./ConnectionDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
+import * as dataSourceProfiles from "@/types/dataSource";
+import type { DataSourceProfile } from "@/types/dataSource";
 import { expectNodeStable } from "@/__tests__/utils/expectNodeStable";
 
 // ---------------------------------------------------------------------------
@@ -1605,6 +1607,109 @@ describe("ConnectionDialog", () => {
           ) as HTMLInputElement
         ).value,
       ).toBe("0");
+    });
+  });
+
+  describe("Sprint 446: profile connection-kind compatibility", () => {
+    it("preserves server-profile field visibility for the current network DBMS forms", async () => {
+      for (const { label, dbType, userLabel, passwordLabel, databaseLabel } of [
+        {
+          label: "PostgreSQL",
+          dbType: "postgresql",
+          userLabel: "User",
+          passwordLabel: "Password",
+          databaseLabel: "Database",
+        },
+        {
+          label: "MySQL",
+          dbType: "mysql",
+          userLabel: "User",
+          passwordLabel: "Password",
+          databaseLabel: "Database",
+        },
+        {
+          label: "MariaDB",
+          dbType: "mariadb",
+          userLabel: "User",
+          passwordLabel: "Password",
+          databaseLabel: "Database",
+        },
+        {
+          label: "MongoDB",
+          dbType: "mongodb",
+          userLabel: "User (optional)",
+          passwordLabel: "Password (optional)",
+          databaseLabel: "Database (optional)",
+        },
+      ] as const) {
+        expect(
+          dataSourceProfiles.getDataSourceProfile(dbType).connectionKind,
+        ).toBe("server");
+
+        const user = userEvent.setup();
+        const { unmount } = renderDialog();
+        const trigger = screen.getByLabelText("Database Type");
+        await user.click(trigger);
+        await user.click(screen.getByRole("option", { name: label }));
+
+        expect(screen.getByLabelText("Host")).toBeInTheDocument();
+        expect(screen.getByLabelText("Port")).toBeInTheDocument();
+        expect(screen.getByLabelText(userLabel)).toBeInTheDocument();
+        expect(screen.getByLabelText(passwordLabel)).toBeInTheDocument();
+        expect(screen.getByLabelText(databaseLabel)).toBeInTheDocument();
+
+        if (dbType === "mongodb") {
+          expect(screen.getByLabelText("Auth Source")).toBeInTheDocument();
+          expect(screen.getByLabelText("Replica Set")).toBeInTheDocument();
+          expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
+        }
+
+        expect(
+          screen.queryByLabelText("Database file"),
+        ).not.toBeInTheDocument();
+        unmount();
+      }
+    });
+
+    it("preserves SQLite as the file-profile form without network/auth fields", async () => {
+      expect(
+        dataSourceProfiles.getDataSourceProfile("sqlite").connectionKind,
+      ).toBe("file");
+
+      const user = userEvent.setup();
+      renderDialog();
+      await user.click(screen.getByLabelText("Database Type"));
+      await user.click(screen.getByRole("option", { name: "SQLite" }));
+
+      expect(screen.getByLabelText("Database file")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Browse for database file"),
+      ).toBeInTheDocument();
+      expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Port")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("User")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
+    });
+
+    it("does not silently render a form when profile metadata advertises an unsupported connection kind", () => {
+      const originalGetProfile = dataSourceProfiles.getDataSourceProfile;
+      const unsupportedProfile: DataSourceProfile = {
+        ...originalGetProfile("postgresql"),
+        connectionKind: "cloud-api",
+      };
+      const getProfileSpy = vi
+        .spyOn(dataSourceProfiles, "getDataSourceProfile")
+        .mockImplementation((dbType) =>
+          dbType === "postgresql"
+            ? unsupportedProfile
+            : originalGetProfile(dbType),
+        );
+
+      try {
+        expect(() => renderDialog()).toThrow(/Unsupported connection kind/);
+      } finally {
+        getProfileSpy.mockRestore();
+      }
     });
   });
 });
