@@ -6,8 +6,10 @@ Long-term 방향을 잃지 않기 위한 전략 문서. `docs/PLAN.md` 는 activ
 실행 순서이고, 이 문서는 그 뒤에 남는 product / architecture horizon 을
 관리한다.
 
-본 문서는 sprint 번호를 배정하지 않는다. Implementation sprint 번호는 실행
-직전에 `docs/PLAN.md` 와 `docs/sprints/sprint-N/` 에서 배정한다.
+본 문서는 sprint 번호를 배정하지 않는다. Implementation sprint 번호는
+`docs/PLAN.md` 와 `docs/sprints/sprint-N/` 에서 배정한다. 기본은 실행 직전
+배정이지만, 사용자가 sequencing 을 명시 요청하면 `docs/PLAN.md` 가 active
+contract queue 로 번호와 의존성을 먼저 잡을 수 있다.
 
 ## North Star
 
@@ -29,8 +31,8 @@ Strategic constraints:
   local unless user explicitly exports them.
 - RDBMS parity comes first: PostgreSQL, MySQL, MariaDB, SQLite, then DuckDB/file
   analytics.
-- MongoDB, Redis/Valkey, and Elasticsearch/OpenSearch are first-class
-  non-RDBMS targets after the data-source extension architecture is in place.
+- Redis/Valkey, Elasticsearch/OpenSearch, and MongoDB are first-class non-RDBMS
+  targets after the data-source extension architecture is in place.
 - Cassandra/Scylla, DynamoDB, graph DB, vector DB, and stream sources remain
   candidate paradigms until their workflow and adapter contracts are explicit.
 - SQL and mongosh completion/parser vocabulary live in Rust/WASM. TypeScript
@@ -46,7 +48,7 @@ Strategic constraints:
 | H2 | RDBMS parity | Current architecture is strongest here and user-visible gaps are direct TablePlus migration blockers. | MySQL semantic gaps shrink; MariaDB reuse/delta is locked; SQLite user DBMS adapter is green. |
 | H3 | DuckDB + file analytics | Local-first file analytics extends RDBMS work without a new paradigm. | `.duckdb`, CSV, Parquet, JSON preview/query basics and file privacy rules are green. |
 | H4 | RDBMS intelligence | ERD/schema diff/data compare/migration preview reuse the same RDB catalog graph. | `SchemaGraph` powers ERD, FK navigation, dependency view, and migration impact analysis. |
-| H5 | First-class non-RDBMS | MongoDB, Redis/Valkey, Elasticsearch/OpenSearch cover the clearest non-RDBMS user workflows. | Document/KV/Search adapter contracts are real, not marker traits; paradigm-specific workbenches are green. |
+| H5 | First-class non-RDBMS | Redis/Valkey, Elasticsearch/OpenSearch, and MongoDB cover the clearest non-RDBMS user workflows. | KV/Search/Document adapter contracts are real, not marker traits; paradigm-specific workbenches are green. |
 | H6 | Broader paradigms | Cassandra, DynamoDB, graph DB, vector DB, and stream sources need explicit workflow proof before active work. | Each candidate has profile, connection kind, language, catalog model, result envelope, safety policy, and fixture strategy. |
 | H7 | Operations, security, reliability | Broad source support must be inspectable, safe, and routinely verified. | Active risk register shrinks; key ops/security/a11y/perf smoke paths become routine gates. |
 
@@ -56,7 +58,7 @@ Strategic constraints:
 |---|---|---|
 | Data-source architecture | New DBMS/support surfaces enter through profile, capability, adapter, language, catalog, result envelope, and safety contracts. | `docs/data-source-architecture.md`, ADR 0046 |
 | RDBMS runtime | Strong support for PostgreSQL, MySQL, MariaDB, SQLite, and DuckDB/file analytics before widening to uncertain paradigms. | `docs/PLAN.md`, `docs/phases/phase-18.md`, `docs/phases/phase-19.md` |
-| Non-RDBMS runtime | MongoDB, Redis/Valkey, and Elasticsearch/OpenSearch are first-class non-RDBMS targets; Cassandra/DynamoDB/graph/vector are gated candidates. | `docs/data-source-architecture.md`, `docs/phases/phase-28.md` |
+| Non-RDBMS runtime | Redis/Valkey, Elasticsearch/OpenSearch, and MongoDB are first-class non-RDBMS targets; Cassandra/DynamoDB/graph/vector are gated candidates. | `docs/data-source-architecture.md`, `docs/phases/phase-28.md` |
 | Language core | Rust/WASM owns hot-path parse/completion vocabulary, context routing, and capability gates where practical. | ADR 0045, `docs/query-language-support.md`, `docs/archives/phases/completed/phase-31.md` |
 | Query editor | Query surface is selected by `queryLanguage` and workbench paradigm, not legacy `queryMode`. | `docs/data-source-architecture.md`, `docs/phases/phase-28.md` Slice A |
 | Data editing | Preview/commit/discard, bulk operations, and per-paradigm edit semantics. | completed Phases 22-23, Phase 28 |
