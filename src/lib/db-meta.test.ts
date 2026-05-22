@@ -8,6 +8,7 @@ describe("DB_TYPE_META", () => {
     "mysql",
     "mariadb",
     "sqlite",
+    "duckdb",
     "mssql",
     "oracle",
     "mongodb",

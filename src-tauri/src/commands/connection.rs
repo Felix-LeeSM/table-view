@@ -58,8 +58,8 @@ pub use sqlite_file::create_sqlite_database_file;
 /// surfaces still return `AppError::Unsupported` until Slice B~G land.
 /// MariaDB shares the MySQL protocol adapter while preserving its distinct
 /// `DatabaseType` on the active adapter. SQLite has a file-backed adapter;
-/// MSSQL / Oracle remain explicit unsupported variants until their adapter
-/// slices land.
+/// DuckDB / MSSQL / Oracle remain explicit unsupported variants until their
+/// adapter slices land.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
@@ -336,6 +336,14 @@ mod tests {
     fn test_make_adapter_redis_returns_unsupported() {
         assert!(matches!(
             make_adapter(&DatabaseType::Redis),
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[test]
+    fn test_make_adapter_duckdb_returns_unsupported() {
+        assert!(matches!(
+            make_adapter(&DatabaseType::Duckdb),
             Err(AppError::Unsupported(_))
         ));
     }

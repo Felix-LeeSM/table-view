@@ -9,8 +9,8 @@ import type { DatabaseType } from "@/types/connection";
  *   - `no-schema`   — MySQL/MariaDB: schema row suppressed (MySQL
  *     conflates schema with database) but categories and items still
  *     render under each backend-returned schema.
- *   - `flat`        — SQLite: file *is* the database, so just one level
- *     of tables under the sidebar root.
+ *   - `flat`        — SQLite/DuckDB: file *is* the database, so just one
+ *     level of tables under the sidebar root.
  *
  * MongoDB/Redis route elsewhere via `pickSidebar` and are deliberately
  * excluded from the union.
@@ -33,6 +33,7 @@ export function resolveRdbTreeShape(dbType: DatabaseType): RdbTreeShape {
     case "mariadb":
       return "no-schema";
     case "sqlite":
+    case "duckdb":
       return "flat";
     case "mongodb":
     case "redis":

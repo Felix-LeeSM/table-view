@@ -12,6 +12,7 @@ export type SqlDialectId =
   | "mysql"
   | "mariadb"
   | "sqlite"
+  | "duckdb"
   | "mssql"
   | "oracle"
   | "ansi";
@@ -20,6 +21,7 @@ export type SqlDialectFamily =
   | "postgres"
   | "mysql"
   | "sqlite"
+  | "duckdb"
   | "mssql"
   | "oracle"
   | "ansi";
@@ -157,6 +159,14 @@ const SQLITE_KEYWORDS: readonly string[] = [
   "AUTOINCREMENT",
 ];
 
+const DUCKDB_KEYWORDS: readonly string[] = [
+  "ATTACH",
+  "DETACH",
+  "DESCRIBE",
+  "SUMMARIZE",
+  "COPY",
+];
+
 export const COMMON_SQL_FUNCTIONS: readonly string[] = [
   "COUNT",
   "SUM",
@@ -212,6 +222,14 @@ const SQLITE_SQL_FUNCTIONS: readonly string[] = [
   "STRFTIME",
   "JULIANDAY",
   "IFNULL",
+];
+
+const DUCKDB_SQL_FUNCTIONS: readonly string[] = [
+  "DATE_TRUNC",
+  "STRFTIME",
+  "IFNULL",
+  "LIST",
+  "STRUCT_PACK",
 ];
 
 const COMMON_CAPABILITIES: SqlDialectCapabilities = {
@@ -295,6 +313,15 @@ export const SQL_DIALECT_PROFILES: Record<SqlDialectId, SqlDialectProfile> = {
     },
     vocabulary: vocabulary(SQLITE_KEYWORDS, SQLITE_SQL_FUNCTIONS),
   },
+  duckdb: {
+    id: "duckdb",
+    family: "duckdb",
+    codeMirrorDialect: StandardSQL,
+    identifierQuote: '"',
+    defaultShell: "none",
+    capabilities: { ...COMMON_CAPABILITIES },
+    vocabulary: vocabulary(DUCKDB_KEYWORDS, DUCKDB_SQL_FUNCTIONS),
+  },
   mssql: {
     id: "mssql",
     family: "mssql",
@@ -333,6 +360,7 @@ export const SQL_SHELL_PROFILES: Record<SqlShellId, SqlShellProfile> = {
       "mysql",
       "mariadb",
       "sqlite",
+      "duckdb",
       "mssql",
       "oracle",
     ],
@@ -376,6 +404,7 @@ export function sqlDialectIdForDatabaseType(
     case "mysql":
     case "mariadb":
     case "sqlite":
+    case "duckdb":
     case "mssql":
     case "oracle":
       return dbType;

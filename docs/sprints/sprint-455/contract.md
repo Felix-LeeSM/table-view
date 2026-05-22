@@ -43,6 +43,10 @@ work without adding a new paradigm prematurely.
 2. Fixture strategy smoke.
 3. Docs check.
 
+## Evidence
+
+- DuckDB connection and fixture strategy: `duckdb-connection-contract.md`.
+
 ### Required Checks
 
 1. `pnpm exec tsc -b --pretty false`

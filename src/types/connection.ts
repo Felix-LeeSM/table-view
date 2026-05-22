@@ -3,6 +3,7 @@ export type DatabaseType =
   | "mysql"
   | "mariadb"
   | "sqlite"
+  | "duckdb"
   | "mssql"
   | "oracle"
   | "mongodb"
@@ -18,8 +19,9 @@ export type DatabaseType =
  * tables / columns) 만 동작 — DDL / queries / streaming 은 Slice B~G
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
- * 미포함 어댑터 (MSSQL/Oracle/Redis) 는 connection 생성 dialog 의 Select
- * option 에 노출되지 않고, URL paste / Parse & Continue 로 들어와도 거부된다.
+ * 미포함 어댑터 (DuckDB/MSSQL/Oracle/Redis) 는 connection 생성 dialog 의
+ * Select option 에 노출되지 않고, URL paste / Parse & Continue 로 들어와도
+ * 거부된다.
  */
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",
@@ -40,6 +42,7 @@ export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
   mysql: "MySQL",
   mariadb: "MariaDB",
   sqlite: "SQLite",
+  duckdb: "DuckDB",
   mssql: "Microsoft SQL Server",
   oracle: "Oracle",
   mongodb: "MongoDB",
@@ -68,7 +71,7 @@ export interface ConnectionConfig {
   port: number;
   user: string;
   database: string;
-  /** SQLite-only: open the user-managed database file without write access. */
+  /** File-backed DBMS only: open the user-managed database file without write access. */
   readOnly?: boolean;
   groupId: string | null;
   color: string | null;
@@ -129,6 +132,7 @@ export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
   mysql: 3306,
   mariadb: 3306,
   sqlite: 0,
+  duckdb: 0,
   mssql: 1433,
   oracle: 1521,
   mongodb: 27017,
@@ -143,8 +147,8 @@ export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
  *
  * - `postgresql`: classic super-user/db pair.
  * - `mysql` / `mariadb`: standard root user, system DB default.
- * - `sqlite`: file-based; the form swaps host/port/user/password for a
- *   file path field.
+ * - `sqlite` / `duckdb`: file-based; the form swaps host/port/user/password
+ *   for a file path field when the runtime is exposed.
  * - `mssql`: `sa` / `master` default.
  * - `oracle`: common local Oracle Free service default.
  * - `mongodb`: optional auth — empty user/db.
@@ -165,6 +169,7 @@ export const DATABASE_DEFAULT_FIELDS: Record<
   mysql: { port: 3306, user: "root", database: "mysql" },
   mariadb: { port: 3306, user: "root", database: "mysql" },
   sqlite: { port: 0, user: "", database: "" },
+  duckdb: { port: 0, user: "", database: "" },
   mssql: { port: 1433, user: "sa", database: "master" },
   oracle: { port: 1521, user: "system", database: "FREEPDB1" },
   mongodb: { port: 27017, user: "", database: "admin" },
@@ -179,6 +184,7 @@ export function paradigmOf(dbType: DatabaseType): Paradigm {
     case "mysql":
     case "mariadb":
     case "sqlite":
+    case "duckdb":
     case "mssql":
     case "oracle":
       return "rdb";
@@ -187,6 +193,30 @@ export function paradigmOf(dbType: DatabaseType): Paradigm {
     case "redis":
       return "kv";
   }
+}
+
+export type FileConnectionDatabaseType = Extract<
+  DatabaseType,
+  "sqlite" | "duckdb"
+>;
+
+export function parseFileConnectionPath(
+  dbType: FileConnectionDatabaseType,
+  raw: string,
+): Partial<ConnectionDraft> | null {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  const defaults = DATABASE_DEFAULT_FIELDS[dbType];
+  return {
+    dbType,
+    host: "",
+    port: defaults.port,
+    user: "",
+    password: "",
+    database: trimmed,
+    readOnly: false,
+    paradigm: paradigmOf(dbType),
+  };
 }
 
 export function createEmptyDraft(): ConnectionDraft {
@@ -240,18 +270,11 @@ export function parseConnectionUrl(
     // SQLite uses a file path, not a URL. Accept `sqlite:/absolute/path.db`
     // here; plain paths fall through to `parseSqliteFilePath` via the
     // catch branch.
-    if (parsed.protocol === "sqlite:") {
+    if (parsed.protocol === "sqlite:" || parsed.protocol === "duckdb:") {
+      const dbType: FileConnectionDatabaseType =
+        parsed.protocol === "sqlite:" ? "sqlite" : "duckdb";
       const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
-      return {
-        dbType: "sqlite",
-        host: "",
-        port: DATABASE_DEFAULT_FIELDS.sqlite.port,
-        user: "",
-        password: "",
-        database: path,
-        readOnly: false,
-        paradigm: paradigmOf("sqlite"),
-      };
+      return parseFileConnectionPath(dbType, path);
     }
     // URL-scheme aliases. `postgres` is legacy shorthand for `postgresql`;
     // SQL Server clients use several scheme names; `mongodb+srv` is the
@@ -299,18 +322,7 @@ export function parseConnectionUrl(
 export function parseSqliteFilePath(
   raw: string,
 ): Partial<ConnectionDraft> | null {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return null;
-  return {
-    dbType: "sqlite",
-    host: "",
-    port: DATABASE_DEFAULT_FIELDS.sqlite.port,
-    user: "",
-    password: "",
-    database: trimmed,
-    readOnly: false,
-    paradigm: paradigmOf("sqlite"),
-  };
+  return parseFileConnectionPath("sqlite", raw);
 }
 
 /** Supported environment tags for connections. */

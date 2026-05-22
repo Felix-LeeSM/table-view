@@ -18,7 +18,7 @@ describe("sqlDialectProfile", () => {
     expect(sqlDialectIdForDatabaseType("mysql")).toBe("mysql");
     expect(sqlDialectIdForDatabaseType("mariadb")).toBe("mariadb");
     expect(sqlDialectIdForDatabaseType("sqlite")).toBe("sqlite");
-    expect(sqlDialectIdForDatabaseType("duckdb" as never)).toBe("duckdb");
+    expect(sqlDialectIdForDatabaseType("duckdb")).toBe("duckdb");
     expect(sqlDialectIdForDatabaseType("mongodb")).toBeNull();
     expect(sqlDialectIdForDatabaseType(undefined)).toBeNull();
   });
@@ -28,9 +28,7 @@ describe("sqlDialectProfile", () => {
     expect(codeMirrorDialectForDatabaseType("mysql")).toBe(MySQL);
     expect(codeMirrorDialectForDatabaseType("mariadb")).toBe(MySQL);
     expect(codeMirrorDialectForDatabaseType("sqlite")).toBe(SQLite);
-    expect(codeMirrorDialectForDatabaseType("duckdb" as never)).toBe(
-      StandardSQL,
-    );
+    expect(codeMirrorDialectForDatabaseType("duckdb")).toBe(StandardSQL);
     expect(codeMirrorDialectForDatabaseType("mssql")).toBe(StandardSQL);
     expect(codeMirrorDialectForDatabaseType(undefined)).toBe(StandardSQL);
   });
@@ -44,7 +42,7 @@ describe("sqlDialectProfile", () => {
   });
 
   it("keeps DuckDB as its own SQL dialect placeholder instead of aliasing SQLite", () => {
-    const duckdb = getSqlDialectProfileForDatabaseType("duckdb" as never);
+    const duckdb = getSqlDialectProfileForDatabaseType("duckdb");
 
     expect(duckdb).toMatchObject({
       id: "duckdb",

@@ -9,8 +9,9 @@ use table_view_lib::{
     models::{
         get_data_source_profile, BackendAdapterCapability, BackendAdapterContractKind,
         BackendAdapterContractState, CatalogModelKind, ConnectionConfig, ConnectionKind,
-        DatabaseType, Paradigm, QueryLanguageId, ResultEnvelopeKind, SafetyPolicyId,
-        KV_MARKER_CONTRACT, SEARCH_MARKER_CONTRACT,
+        DatabaseType, FileConnectionInputKind, FileConnectionInputStatus,
+        FileConnectionPermissionScope, FileConnectionPrivacyPolicyId, Paradigm, QueryLanguageId,
+        ResultEnvelopeKind, SafetyPolicyId, KV_MARKER_CONTRACT, SEARCH_MARKER_CONTRACT,
     },
 };
 
@@ -21,6 +22,7 @@ fn backend_adapter_contract_profiles_are_encoded() {
         DatabaseType::Mysql,
         DatabaseType::Mariadb,
         DatabaseType::Sqlite,
+        DatabaseType::Duckdb,
         DatabaseType::Mssql,
         DatabaseType::Oracle,
         DatabaseType::Mongodb,
@@ -117,6 +119,41 @@ fn duckdb_profile_is_file_backed_rdbms_metadata_without_runtime_query_contract()
     assert_eq!(
         profile.adapter_contract.state,
         BackendAdapterContractState::DeclaredOnly
+    );
+    assert_eq!(
+        profile.file_connection.expect("duckdb file contract"),
+        table_view_lib::models::FileConnectionContract {
+            path_field: "database",
+            read_only_field: "readOnly",
+            permission_scope: FileConnectionPermissionScope::LocalFile,
+            privacy_policy: FileConnectionPrivacyPolicyId::LocalFirst,
+            supported_inputs: &[table_view_lib::models::FileConnectionInputContract {
+                id: "duckdb-database",
+                kind: FileConnectionInputKind::Database,
+                extensions: &[".duckdb"],
+                status: FileConnectionInputStatus::Supported,
+            }],
+            deferred_inputs: &[
+                table_view_lib::models::FileConnectionInputContract {
+                    id: "csv",
+                    kind: FileConnectionInputKind::Analytics,
+                    extensions: &[".csv"],
+                    status: FileConnectionInputStatus::Deferred,
+                },
+                table_view_lib::models::FileConnectionInputContract {
+                    id: "parquet",
+                    kind: FileConnectionInputKind::Analytics,
+                    extensions: &[".parquet"],
+                    status: FileConnectionInputStatus::Deferred,
+                },
+                table_view_lib::models::FileConnectionInputContract {
+                    id: "json",
+                    kind: FileConnectionInputKind::Analytics,
+                    extensions: &[".json", ".ndjson"],
+                    status: FileConnectionInputStatus::Deferred,
+                },
+            ],
+        }
     );
     assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));

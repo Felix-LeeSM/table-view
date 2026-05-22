@@ -319,6 +319,7 @@ function inferDefaultSchema(
 ): string | null {
   if (dialect === "postgresql" && schemas.includes("public")) return "public";
   if (dialect === "sqlite" && schemas.includes("main")) return "main";
+  if (dialect === "duckdb" && schemas.includes("main")) return "main";
   return schemas[0] ?? null;
 }
 

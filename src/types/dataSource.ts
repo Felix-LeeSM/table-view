@@ -1,5 +1,12 @@
 import type { DatabaseType, Paradigm } from "./connection";
 import { paradigmOf } from "./connection";
+import {
+  DUCKDB_FILE_CONNECTION,
+  SQLITE_FILE_CONNECTION,
+  type FileConnectionContract,
+} from "./fileConnection";
+
+export type { FileConnectionContract } from "./fileConnection";
 
 export type DataParadigm = Paradigm;
 export type ConnectionKind =
@@ -110,6 +117,7 @@ export interface DataSourceProfile {
   readonly resultKinds: readonly ResultEnvelopeKind[];
   readonly capabilities: DataSourceCapabilities;
   readonly safetyPolicy: SafetyPolicyId;
+  readonly fileConnection?: FileConnectionContract;
 }
 
 export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
@@ -286,6 +294,13 @@ export const SQLITE_CAPABILITIES = capabilities({
   },
 });
 
+export const DUCKDB_CAPABILITIES = capabilities({
+  connection: {
+    filePicker: true,
+    readOnly: true,
+  },
+});
+
 export const MONGODB_CAPABILITIES = capabilities({
   connection: {
     test: true,
@@ -324,6 +339,7 @@ function profile(
   resultKinds: readonly ResultEnvelopeKind[],
   safetyPolicy: SafetyPolicyId,
   sourceCapabilities: DataSourceCapabilities = UNSUPPORTED_CAPABILITIES,
+  fileConnection?: FileConnectionContract,
 ): DataSourceProfile {
   return Object.freeze({
     id,
@@ -334,6 +350,7 @@ function profile(
     resultKinds: Object.freeze([...resultKinds]),
     capabilities: sourceCapabilities,
     safetyPolicy,
+    fileConnection,
   });
 }
 
@@ -373,6 +390,17 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     ["tabular"],
     "rdb-default",
     SQLITE_CAPABILITIES,
+    SQLITE_FILE_CONNECTION,
+  ),
+  duckdb: profile(
+    "duckdb",
+    "file",
+    ["sql"],
+    "rdb",
+    ["tabular"],
+    "rdb-default",
+    DUCKDB_CAPABILITIES,
+    DUCKDB_FILE_CONNECTION,
   ),
   mssql: profile("mssql", "server", ["sql"], "rdb", ["tabular"], "rdb-default"),
   oracle: profile(

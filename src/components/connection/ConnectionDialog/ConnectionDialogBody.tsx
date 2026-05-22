@@ -158,6 +158,11 @@ export default function ConnectionDialogBody({
               form.dbType,
               profile.connectionKind,
             );
+          case "duckdb":
+            throw unsupportedConnectionKindForForm(
+              form.dbType,
+              profile.connectionKind,
+            );
           default:
             return assertNever(form.dbType);
         }
@@ -175,6 +180,11 @@ export default function ConnectionDialogBody({
                 inputClass={inputClass}
                 labelClass={labelClass}
               />
+            );
+          case "duckdb":
+            throw unsupportedConnectionKindForForm(
+              form.dbType,
+              profile.connectionKind,
             );
           case "postgresql":
           case "mysql":
