@@ -37,6 +37,7 @@ export type {
 
 export function useDataGridEdit({
   data,
+  database,
   schema,
   table,
   connectionId,
@@ -46,6 +47,7 @@ export function useDataGridEdit({
 }: UseDataGridEditParams): DataGridEditState {
   const activeTabId = useActiveTabId();
   const workspaceKey = useCurrentWorkspaceKey();
+  const pendingDatabase = database ?? workspaceKey?.db ?? "";
   const promoteTabAction = useWorkspaceStore((s) => s.promoteTab);
   const setTabDirtyAction = useWorkspaceStore((s) => s.setTabDirty);
   const promoteTab = useCallback(
@@ -95,7 +97,12 @@ export function useDataGridEdit({
     pushSnapshot,
     undo,
     canUndo,
-  } = useDataGridEditPendingState({ connectionId, schema, table });
+  } = useDataGridEditPendingState({
+    connectionId,
+    database: pendingDatabase,
+    schema,
+    table,
+  });
 
   // Multi-row selection lives in `useDataGridSelection` so the facade
   // stays paradigm-agnostic.

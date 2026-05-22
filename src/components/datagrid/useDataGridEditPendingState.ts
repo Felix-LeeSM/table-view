@@ -8,12 +8,14 @@ import { UNDO_STACK_MAX, type EditSnapshot } from "./dataGridEditFsm";
 
 interface UseDataGridEditPendingStateParams {
   connectionId: string;
+  database: string;
   schema: string;
   table: string;
 }
 
 export function useDataGridEditPendingState({
   connectionId,
+  database,
   schema,
   table,
 }: UseDataGridEditPendingStateParams) {
@@ -23,11 +25,11 @@ export function useDataGridEditPendingState({
   }
 
   const storeKey = useMemo(() => {
-    if (!connectionId || !schema || !table) {
+    if (!connectionId || !database || !schema || !table) {
       return fallbackInstanceKeyRef.current!;
     }
-    return makeStoreEntryKey(connectionId, schema, table);
-  }, [connectionId, schema, table]);
+    return makeStoreEntryKey(connectionId, database, schema, table);
+  }, [connectionId, database, schema, table]);
 
   const entry =
     useDataGridEditStore((s) => s.entries.get(storeKey)) ?? EMPTY_ENTRY;

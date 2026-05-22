@@ -4,8 +4,9 @@
  * Lifts `pendingEdits` / `pendingNewRows` / `pendingDeletedRowKeys` /
  * `undoStack` out of `useDataGridEdit`'s `useState` so a tab switch
  * (which unmounts the grid component tree) no longer discards the user's
- * in-flight work. The next mount of the SAME `(connectionId, schema, table)`
- * key re-binds to the same entry; a different key starts empty.
+ * in-flight work. The next mount of the SAME
+ * `(connectionId, database, schema, table)` key re-binds to the same
+ * entry; a different key starts empty.
  *
  * Lifecycle:
  * - `getEntry(key)` returns the entry for `key` if present, otherwise the
@@ -106,10 +107,11 @@ export interface DataGridEditStore {
  */
 export function entryKey(
   connectionId: string,
+  database: string,
   schema: string,
   table: string,
 ): string {
-  return `${connectionId}::${schema}::${table}`;
+  return `${connectionId}::${database}::${schema}::${table}`;
 }
 
 /** Build a fresh empty entry — used by `clearEntry` so the entry is not the frozen default. */

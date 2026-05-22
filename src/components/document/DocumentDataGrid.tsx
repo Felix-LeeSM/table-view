@@ -216,6 +216,7 @@ export default function DocumentDataGrid({
   // as the Mongo database name and `table` as the collection name.
   const editState = useDocumentDataGridEdit({
     data,
+    database,
     schema: database,
     table: collection,
     connectionId,
