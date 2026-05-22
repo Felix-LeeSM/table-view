@@ -137,32 +137,39 @@ fn duckdb_profile_is_file_backed_rdbms_with_runtime_catalog_query_contract() {
             read_only_field: "readOnly",
             permission_scope: FileConnectionPermissionScope::LocalFile,
             privacy_policy: FileConnectionPrivacyPolicyId::LocalFirst,
-            supported_inputs: &[table_view_lib::models::FileConnectionInputContract {
-                id: "duckdb-database",
-                kind: FileConnectionInputKind::Database,
-                extensions: &[".duckdb"],
-                status: FileConnectionInputStatus::Supported,
-            }],
-            deferred_inputs: &[
+            supported_inputs: &[
+                table_view_lib::models::FileConnectionInputContract {
+                    id: "duckdb-database",
+                    kind: FileConnectionInputKind::Database,
+                    extensions: &[".duckdb"],
+                    status: FileConnectionInputStatus::Supported,
+                },
                 table_view_lib::models::FileConnectionInputContract {
                     id: "csv",
                     kind: FileConnectionInputKind::Analytics,
                     extensions: &[".csv"],
-                    status: FileConnectionInputStatus::Deferred,
+                    status: FileConnectionInputStatus::Supported,
                 },
                 table_view_lib::models::FileConnectionInputContract {
                     id: "parquet",
                     kind: FileConnectionInputKind::Analytics,
                     extensions: &[".parquet"],
-                    status: FileConnectionInputStatus::Deferred,
+                    status: FileConnectionInputStatus::Supported,
                 },
                 table_view_lib::models::FileConnectionInputContract {
                     id: "json",
                     kind: FileConnectionInputKind::Analytics,
-                    extensions: &[".json", ".ndjson"],
-                    status: FileConnectionInputStatus::Deferred,
+                    extensions: &[".json"],
+                    status: FileConnectionInputStatus::Supported,
+                },
+                table_view_lib::models::FileConnectionInputContract {
+                    id: "ndjson",
+                    kind: FileConnectionInputKind::Analytics,
+                    extensions: &[".ndjson"],
+                    status: FileConnectionInputStatus::Supported,
                 },
             ],
+            deferred_inputs: &[],
         }
     );
     assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));

@@ -155,4 +155,28 @@ describe("QueryTabToolbar — sprint-381 Mongo db-contract α", () => {
     const runBtn = screen.getByRole("button", { name: /run query/i });
     expect(runBtn).toBeDisabled();
   });
+
+  it("renders DuckDB local file preview action only when enabled", () => {
+    const tab = makeMongoTab({
+      paradigm: "rdb",
+      sql: "SELECT 1",
+      database: "main",
+    });
+    const onOpenFileAnalytics = vi.fn();
+    render(
+      <QueryTabToolbar
+        tab={tab}
+        isDocument={false}
+        showFileAnalytics
+        onOpenFileAnalytics={onOpenFileAnalytics}
+        onExecute={vi.fn()}
+        onDryRun={vi.fn()}
+        onFormat={vi.fn()}
+        favorites={makeFavorites()}
+      />,
+    );
+
+    screen.getByRole("button", { name: /preview local file/i }).click();
+    expect(onOpenFileAnalytics).toHaveBeenCalledTimes(1);
+  });
 });

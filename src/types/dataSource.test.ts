@@ -345,7 +345,7 @@ describe("DataSourceProfile registry", () => {
     });
   });
 
-  it("keeps DuckDB file analytics local-first and defers CSV/Parquet/JSON behind .duckdb", () => {
+  it("keeps DuckDB file analytics local-first and supports CSV/Parquet/JSON/NDJSON", () => {
     const duckdb = getDataSourceProfile("duckdb");
 
     expect(duckdb.fileConnection).toMatchObject({
@@ -360,27 +360,32 @@ describe("DataSourceProfile registry", () => {
           extensions: [".duckdb"],
           status: "supported",
         },
-      ],
-      deferredInputs: [
         {
           id: "csv",
           kind: "analytics",
           extensions: [".csv"],
-          status: "deferred",
+          status: "supported",
         },
         {
           id: "parquet",
           kind: "analytics",
           extensions: [".parquet"],
-          status: "deferred",
+          status: "supported",
         },
         {
           id: "json",
           kind: "analytics",
-          extensions: [".json", ".ndjson"],
-          status: "deferred",
+          extensions: [".json"],
+          status: "supported",
+        },
+        {
+          id: "ndjson",
+          kind: "analytics",
+          extensions: [".ndjson"],
+          status: "supported",
         },
       ],
+      deferredInputs: [],
     });
   });
 
