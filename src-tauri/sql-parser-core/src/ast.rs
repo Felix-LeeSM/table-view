@@ -921,7 +921,7 @@ pub struct ProcedureRef {
     pub name: String,
 }
 
-/// `CALL <procedure>(<literal/default/placeholder>, ...)`.
+/// `CALL <procedure>(<literal/default/placeholder/user-variable>, ...)`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CallStatement {
     pub procedure: ProcedureRef,
