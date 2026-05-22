@@ -681,7 +681,7 @@ mod tests {
     use crate::commands::test_util::{document_default, state_with};
     use crate::db::testing::{clone_app_error, StubRdbAdapter};
     use crate::db::{ActiveAdapter, RdbQueryResult};
-    use crate::models::{ColumnCategory, QueryColumn, QueryType, TableData};
+    use crate::models::{ColumnCategory, DatabaseType, QueryColumn, QueryType, TableData};
     use tokio_util::sync::CancellationToken;
 
     // ── execute_query — 5 contract scenarios ─────────────────────────────
@@ -838,6 +838,32 @@ mod tests {
     }
 
     #[tokio::test]
+    #[should_panic(expected = "execute_sql must not run for unsupported MySQL DELIMITER scripts")]
+    async fn execute_query_mysql_delimiter_returns_unsupported_before_dispatch() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Mysql,
+            ..StubRdbAdapter::default()
+        };
+        s.execute_sql_fn = Some(Box::new(|_| {
+            panic!("execute_sql must not run for unsupported MySQL DELIMITER scripts")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+
+        match execute_query_inner(
+            &state,
+            "c",
+            "DELIMITER //\nCREATE PROCEDURE p() BEGIN SELECT 1; END //",
+            "q-delimiter",
+            None,
+        )
+        .await
+        {
+            Err(AppError::Unsupported(msg)) => assert!(msg.contains("DELIMITER")),
+            other => panic!("Expected Unsupported(DELIMITER), got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
     async fn execute_query_expected_db_mismatch_releases_cancel_token() {
         // 가드가 일찍 short-circuit 해도 register 된 token 은 release 되어야
         // 다음 시도가 깨끗하게 가능.
@@ -983,6 +1009,28 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(r.len(), 2);
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "execute_sql_batch must not run for unsupported MySQL LOAD DATA")]
+    async fn execute_query_batch_mariadb_load_data_returns_unsupported_before_dispatch() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Mariadb,
+            ..StubRdbAdapter::default()
+        };
+        s.execute_sql_batch_fn = Some(Box::new(|_| {
+            panic!("execute_sql_batch must not run for unsupported MySQL LOAD DATA")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts = vec![
+            "SELECT 1".to_string(),
+            "LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users".to_string(),
+        ];
+
+        match execute_query_batch_inner(&state, "c", &stmts, "qb-load-data", None).await {
+            Err(AppError::Unsupported(msg)) => assert!(msg.contains("LOAD DATA")),
+            other => panic!("Expected Unsupported(LOAD DATA), got: {:?}", other),
+        }
     }
 
     // ── Sprint 247 (ADR 0022 Phase 3) — dry-run dispatch tests ───────────
