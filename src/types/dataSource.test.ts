@@ -27,6 +27,20 @@ describe("DataSourceProfile registry", () => {
     }
   });
 
+  it("exposes a read-only profile registry", () => {
+    expect(Object.isFrozen(DATA_SOURCE_PROFILES)).toBe(true);
+
+    for (const dbType of allDatabaseTypes) {
+      const profile = getDataSourceProfile(dbType);
+
+      expect(Object.isFrozen(profile)).toBe(true);
+      expect(Object.isFrozen(profile.languages)).toBe(true);
+      expect(Object.isFrozen(profile.resultKinds)).toBe(true);
+      expect(Object.isFrozen(profile.capabilities)).toBe(true);
+      expect(Object.isFrozen(profile.capabilities.connection)).toBe(true);
+    }
+  });
+
   it("fails deterministically for an unknown DatabaseType", () => {
     expect(() =>
       getDataSourceProfile("unknown-db" as DatabaseType),
