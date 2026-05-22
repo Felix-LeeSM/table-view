@@ -38,7 +38,22 @@ mod tests {
     //! `serial_test` 로 격리.
     use super::*;
     use serial_test::serial;
-    use tempfile::TempDir;
+    use std::path::PathBuf;
+    use std::sync::OnceLock;
+
+    static TEST_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+    fn set_test_data_dir() {
+        let dir = TEST_DATA_DIR.get_or_init(|| {
+            let dir = std::env::temp_dir().join(format!(
+                "table-view-sqlite-pool-test-{}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&dir).expect("test data dir must be creatable");
+            dir
+        });
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir);
+    }
 
     #[tokio::test]
     #[serial]
@@ -48,8 +63,7 @@ mod tests {
         // trivial query. The process-wide nature of OnceCell means subsequent
         // tests in the same binary will hit the cached pool, which is the
         // contract.
-        let dir = TempDir::new().unwrap();
-        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+        set_test_data_dir();
         let pool = get_or_init_pool().await.expect("first init must succeed");
         // Trivial query to confirm the pool is healthy.
         let one: i64 = sqlx::query_scalar("SELECT 1")
@@ -62,7 +76,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn get_or_init_pool_is_idempotent() {
-        let _dir = TempDir::new().unwrap();
+        set_test_data_dir();
         let pool_a = get_or_init_pool().await.unwrap();
         let pool_b = get_or_init_pool().await.unwrap();
         // Two clones must point at the same underlying pool — verifiable by
