@@ -42,30 +42,72 @@ import { create } from "zustand";
  */
 export interface EditSnapshot {
   pendingEdits: ReadonlyMap<string, string | null>;
-  pendingNewRows: ReadonlyArray<unknown[]>;
+  pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
   pendingDeletedRowKeys: ReadonlySet<string>;
 }
 
 export interface PendingEntry {
+  pendingEdits: ReadonlyMap<string, string | null>;
+  pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
+  pendingDeletedRowKeys: ReadonlySet<string>;
+  undoStack: ReadonlyArray<EditSnapshot>;
+}
+
+type MutablePendingEntry = {
   pendingEdits: Map<string, string | null>;
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
   undoStack: EditSnapshot[];
-}
+};
 
 /**
  * Shared default entry. `getEntry(key)` returns this *exact* reference
  * for any missing key so React selectors that compare by reference
- * don't see a fresh object every render. Callers MUST treat it as
- * read-only — every write goes through `setSlice` / `clearEntry`, both
- * of which allocate fresh Map / Set / Array values.
+ * don't see a fresh object every render. The nested containers are
+ * hardened too: Map/Set mutators throw and arrays are frozen. Every write
+ * goes through `setSlice` / `clearEntry`, both of which allocate fresh
+ * Map / Set / Array values.
  */
+function throwReadOnlyMutation(label: string): never {
+  throw new TypeError(
+    `${label} belongs to EMPTY_ENTRY and cannot be mutated directly`,
+  );
+}
+
+function readonlyEmptyMap<K, V>(label: string): ReadonlyMap<K, V> {
+  return new Proxy(new Map<K, V>(), {
+    get(target, property) {
+      if (property === "set" || property === "delete" || property === "clear") {
+        return () => throwReadOnlyMutation(label);
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+function readonlyEmptySet<T>(label: string): ReadonlySet<T> {
+  return new Proxy(new Set<T>(), {
+    get(target, property) {
+      if (property === "add" || property === "delete" || property === "clear") {
+        return () => throwReadOnlyMutation(label);
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 export const EMPTY_ENTRY: PendingEntry = Object.freeze({
-  pendingEdits: new Map<string, string | null>(),
-  pendingNewRows: [] as unknown[][],
-  pendingDeletedRowKeys: new Set<string>(),
-  undoStack: [] as EditSnapshot[],
-}) as PendingEntry;
+  pendingEdits: readonlyEmptyMap<string, string | null>(
+    "EMPTY_ENTRY.pendingEdits",
+  ),
+  pendingNewRows: Object.freeze([]) as ReadonlyArray<ReadonlyArray<unknown>>,
+  pendingDeletedRowKeys: readonlyEmptySet<string>(
+    "EMPTY_ENTRY.pendingDeletedRowKeys",
+  ),
+  undoStack: Object.freeze([]) as ReadonlyArray<EditSnapshot>,
+});
 
 export interface DataGridEditStore {
   entries: ReadonlyMap<string, PendingEntry>;
@@ -115,7 +157,7 @@ export function entryKey(
 }
 
 /** Build a fresh empty entry — used by `clearEntry` so the entry is not the frozen default. */
-function freshEntry(): PendingEntry {
+function freshEntry(): MutablePendingEntry {
   return {
     pendingEdits: new Map(),
     pendingNewRows: [],

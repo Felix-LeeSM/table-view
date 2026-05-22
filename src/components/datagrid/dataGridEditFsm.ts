@@ -162,7 +162,7 @@ export interface CommitError {
  */
 export type EditSnapshot = {
   pendingEdits: ReadonlyMap<string, string | null>;
-  pendingNewRows: ReadonlyArray<unknown[]>;
+  pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
   pendingDeletedRowKeys: ReadonlySet<string>;
 };
 

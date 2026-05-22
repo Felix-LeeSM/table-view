@@ -32,6 +32,44 @@ describe("dataGridEditStore — Sprint 251 in-memory pending-edit lift", () => {
     resetStore();
   });
 
+  it("[AC-438-01] getEntry returns one stable hardened EMPTY_ENTRY for missing keys", () => {
+    const missingA = useDataGridEditStore.getState().getEntry("missing-a");
+    const missingAAgain = useDataGridEditStore.getState().getEntry("missing-a");
+    const missingB = useDataGridEditStore.getState().getEntry("missing-b");
+
+    expect(missingA).toBe(EMPTY_ENTRY);
+    expect(missingAAgain).toBe(EMPTY_ENTRY);
+    expect(missingB).toBe(EMPTY_ENTRY);
+  });
+
+  it("[AC-438-02] EMPTY_ENTRY nested containers reject direct mutation attempts", () => {
+    const pendingEdits = EMPTY_ENTRY.pendingEdits as Map<string, string | null>;
+    const pendingDeletedRowKeys =
+      EMPTY_ENTRY.pendingDeletedRowKeys as Set<string>;
+    const pendingNewRows = EMPTY_ENTRY.pendingNewRows as unknown[][];
+    const undoStack = EMPTY_ENTRY.undoStack as EditSnapshot[];
+
+    expect(() => pendingEdits.set("0-1", "x")).toThrow(
+      /EMPTY_ENTRY\.pendingEdits/,
+    );
+    expect(() => pendingDeletedRowKeys.add("row-1")).toThrow(
+      /EMPTY_ENTRY\.pendingDeletedRowKeys/,
+    );
+    expect(() => pendingNewRows.push(["x"])).toThrow(TypeError);
+    expect(() =>
+      undoStack.push({
+        pendingEdits: new Map(),
+        pendingNewRows: [],
+        pendingDeletedRowKeys: new Set(),
+      }),
+    ).toThrow(TypeError);
+
+    expect(EMPTY_ENTRY.pendingEdits.size).toBe(0);
+    expect(EMPTY_ENTRY.pendingDeletedRowKeys.size).toBe(0);
+    expect(EMPTY_ENTRY.pendingNewRows.length).toBe(0);
+    expect(EMPTY_ENTRY.undoStack.length).toBe(0);
+  });
+
   it("[AC-251-S1] two different keys are isolated — getEntry returns the slice set on its own key only", () => {
     const editsA = new Map<string, string | null>([["0-1", "Alice'"]]);
     const editsB = new Map<string, string | null>([["0-1", "Bob'"]]);
