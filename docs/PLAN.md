@@ -10,8 +10,9 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 ## Current Snapshot
 
 2026-05-22 기준 current plan 은 완료 이력을 실행 계획에서 분리한다.
-Implementation sprint 번호는 실행 직전에 새 번호를 배정한다. Active phase 문서의
-과거 sprint 번호는 history 가 아니면 쓰지 않는다.
+Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequencing 을 명시
+요청할 때 새 번호를 배정한다. Active phase 문서의 과거 sprint 번호는 history 가
+아니면 쓰지 않는다.
 
 | 영역 | SOT |
 |---|---|
@@ -80,6 +81,57 @@ Implementation sprint 번호는 실행 직전에 새 번호를 배정한다. Act
 | 13 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md` |
 | 14 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |
 | 15 | State-management migration | planned contracts | Sprint 353-376 contracts 는 보존. 실제 재개 전 current code와 재-audit 필요 | `docs/state-management-strategy-2026-05-15.md` |
+
+## Active Sprint Sequence
+
+본 순서는 병렬 실행을 위한 contract queue 다. 440-447 은 architecture alignment
+root 이고, 448-459 는 RDBMS-first 실행 구간이다. 460 이후는 worktree/subagent 로
+병렬 준비 가능하지만, 사용자 승인 전 RDBMS 순서를 앞지르지 않는다.
+
+| Sprint | Track | Parallel lane | Depends on |
+|---:|---|---|---|
+| 440 | Data source alignment core | root | none |
+| 441 | Existing data source profiles | profile | 440 |
+| 442 | Capability gating compatibility | frontend capability | 441 |
+| 443 | Query language compatibility layer | query boundary | 440 |
+| 444 | Result envelope compatibility layer | result boundary | 440 |
+| 445 | Backend adapter contract normalization | backend adapter | 440 |
+| 446 | Connection kind compatibility | connection UI/profile | 441 |
+| 447 | Data source alignment integration gate | join | 442-446 |
+| 448 | MySQL-family routine/user-variable semantics | rdbms/mysql | 447 |
+| 449 | MySQL-family scripting boundary | rdbms/mysql | 448 |
+| 450 | MariaDB adapter identity slice | rdbms/mariadb | 447 |
+| 451 | MariaDB semantic delta slice | rdbms/mariadb | 450 |
+| 452 | SQLite DBMS connection contract | rdbms/sqlite | 447 |
+| 453 | SQLite browse/query adapter | rdbms/sqlite | 452 |
+| 454 | SQLite write-parity guardrails | rdbms/sqlite | 453 |
+| 455 | DuckDB connection/file contract | rdbms/duckdb | 452 |
+| 456 | DuckDB catalog/query basics | rdbms/duckdb | 455 |
+| 457 | DuckDB file analytics import/preview | rdbms/duckdb | 456 |
+| 458 | RDBMS version capability gates | rdbms/shared | 441, 450, 452, 455 |
+| 459 | RDBMS integration gate | rdbms/join | 449, 451, 454, 457, 458 |
+| 460 | SchemaGraph catalog extraction | erd/schema | 459 |
+| 461 | SchemaGraph relationship normalizer | erd/schema | 460 |
+| 462 | ERD renderer foundation | erd/ui | 461 |
+| 463 | ERD navigation and layout polish | erd/ui | 462 |
+| 464 | SchemaGraph integration gate | erd/join | 463 |
+| 465 | MongoDB profile/capability normalization | document/mongo | 447 |
+| 466 | MongoDB catalog/result envelope | document/mongo | 465 |
+| 467 | MongoDB edit/safety semantics | document/mongo | 466 |
+| 468 | MongoDB integration gate | document/join | 467 |
+| 469 | KV adapter contract | kv/foundation | 447 |
+| 470 | Redis/Valkey connection/catalog/key browser | kv/redis | 469 |
+| 471 | Redis/Valkey values, TTL, streams | kv/redis | 470 |
+| 472 | Redis/Valkey integration gate | kv/join | 471 |
+| 473 | Search adapter contract | search/foundation | 447 |
+| 474 | Elasticsearch/OpenSearch connection/catalog | search/elastic | 473 |
+| 475 | Search DSL execution/result envelopes | search/elastic | 474 |
+| 476 | Elasticsearch/OpenSearch integration gate | search/join | 475 |
+| 477 | Cross-paradigm fixture harness | quality/foundation | 447 |
+| 478 | Adapter conformance test matrix | quality/conformance | 477 |
+| 479 | Language registry and completion ownership matrix | language/shared | 443, 477 |
+| 480 | Capability documentation/developer guide | docs/shared | 442, 477 |
+| 481 | Cross-paradigm release gate | release/join | 459, 464, 468, 472, 476, 478-480 |
 
 ## Recently Closed
 
