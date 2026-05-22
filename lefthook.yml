@@ -112,9 +112,10 @@ pre-push:
   # 이 blocking check 로 보장한다. `--no-verify` / `LEFTHOOK=0` 회피는
   # `scripts/hooks/check-dangerous-bash.sh`에서 차단.
   #
-  # The router keeps cheap invariant checks first, then dispatches frontend and
-  # Rust stacks from outgoing changed paths. Mixed frontend+Rust routes run both
-  # stacks in parallel to avoid serial full-stack waits.
+  # The router verifies signed commits first, dispatches frontend/Rust stacks
+  # from outgoing changed paths, then runs the TDD-cycle invariant. Mixed
+  # frontend+Rust routes run both stacks in parallel to avoid serial full-stack
+  # waits.
   piped: true
   commands:
     0_path-routed-gates:
