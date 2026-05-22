@@ -9,14 +9,14 @@ import { renderHook, act } from "@testing-library/react";
 const {
   mockConnect,
   mockDisconnect,
-  mockClearSchema,
+  mockClearConnectionSchemaCache,
   mockClearDocumentCatalog,
   mockClearDocumentQuery,
   mockGetState,
 } = vi.hoisted(() => ({
   mockConnect: vi.fn(() => Promise.resolve()),
   mockDisconnect: vi.fn(() => Promise.resolve()),
-  mockClearSchema: vi.fn(),
+  mockClearConnectionSchemaCache: vi.fn(),
   mockClearDocumentCatalog: vi.fn(),
   mockClearDocumentQuery: vi.fn(),
   mockGetState: vi.fn(() => ({
@@ -40,7 +40,7 @@ vi.mock("@stores/connectionStore", () => ({
 
 vi.mock("@stores/schemaStore", () => ({
   useSchemaStore: (selector: (s: unknown) => unknown) =>
-    selector({ clearForConnection: mockClearSchema }),
+    selector({ clearForConnection: mockClearConnectionSchemaCache }),
 }));
 
 vi.mock("@stores/documentCatalogStore", () => ({
@@ -59,7 +59,7 @@ describe("useConnectionLifecycle", () => {
   beforeEach(() => {
     mockConnect.mockClear();
     mockDisconnect.mockClear();
-    mockClearSchema.mockClear();
+    mockClearConnectionSchemaCache.mockClear();
     mockClearDocumentCatalog.mockClear();
     mockClearDocumentQuery.mockClear();
     mockGetState.mockReturnValue({
@@ -74,7 +74,7 @@ describe("useConnectionLifecycle", () => {
       returned = await result.current.connect("c1");
     });
     expect(mockConnect).toHaveBeenCalledWith("c1");
-    expect(mockClearSchema).toHaveBeenCalledWith("c1");
+    expect(mockClearConnectionSchemaCache).toHaveBeenCalledWith("c1");
     expect(mockClearDocumentCatalog).toHaveBeenCalledWith("c1");
     expect(mockClearDocumentQuery).toHaveBeenCalledWith("c1");
     expect(returned).toBe(true);
@@ -111,7 +111,7 @@ describe("useConnectionLifecycle", () => {
     await act(async () => {
       await expect(result.current.connect("c1")).rejects.toThrow("boom");
     });
-    expect(mockClearSchema).not.toHaveBeenCalled();
+    expect(mockClearConnectionSchemaCache).not.toHaveBeenCalled();
     expect(mockClearDocumentCatalog).not.toHaveBeenCalled();
     expect(mockClearDocumentQuery).not.toHaveBeenCalled();
   });

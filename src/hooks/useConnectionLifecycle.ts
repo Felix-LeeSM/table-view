@@ -16,7 +16,9 @@ import { useDocumentQueryStore } from "@stores/documentQueryStore";
 export function useConnectionLifecycle() {
   const storeConnect = useConnectionStore((s) => s.connectToDatabase);
   const storeDisconnect = useConnectionStore((s) => s.disconnectFromDatabase);
-  const clearSchema = useSchemaStore((s) => s.clearForConnection);
+  const clearConnectionSchemaCache = useSchemaStore(
+    (s) => s.clearForConnection,
+  );
   const clearDocumentCatalog = useDocumentCatalogStore(
     (s) => s.clearConnection,
   );
@@ -25,7 +27,7 @@ export function useConnectionLifecycle() {
   const connect = useCallback(
     async (id: string): Promise<boolean> => {
       await storeConnect(id);
-      clearSchema(id);
+      clearConnectionSchemaCache(id);
       clearDocumentCatalog(id);
       clearDocumentQuery(id);
       // connectionStore action은 throw 대신 status를 error 변형에 기록하므로
@@ -34,7 +36,12 @@ export function useConnectionLifecycle() {
       const status = useConnectionStore.getState().activeStatuses[id];
       return status?.type === "connected";
     },
-    [storeConnect, clearSchema, clearDocumentCatalog, clearDocumentQuery],
+    [
+      storeConnect,
+      clearConnectionSchemaCache,
+      clearDocumentCatalog,
+      clearDocumentQuery,
+    ],
   );
 
   const disconnect = useCallback(
