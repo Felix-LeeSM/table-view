@@ -121,7 +121,7 @@ export default function ConnectionDialog({
     setClearPassword,
     isEditing,
     hadPassword,
-    isSqlite,
+    isFileConnection,
     isMongo,
     pendingDbTypeChange,
     handleDbTypeChange,
@@ -187,13 +187,13 @@ export default function ConnectionDialog({
       setError("Name is required");
       return;
     }
-    // SQLite uses `database` as the file path; host is irrelevant. The
-    // host check applies only to network DBMSes.
-    if (!isSqlite && !trimmed.host) {
+    // File-backed DBMSes use `database` as the file path; host is irrelevant.
+    // The host check applies only to network DBMSes.
+    if (!isFileConnection && !trimmed.host) {
       setError("Host is required");
       return;
     }
-    if (isSqlite && !trimmed.database) {
+    if (isFileConnection && !trimmed.database) {
       setError("Database file is required");
       return;
     }
@@ -209,7 +209,7 @@ export default function ConnectionDialog({
     // per-tab database at runtime, and admin commands
     // (`db.runCommand({...})`) target the admin DB context regardless of
     // any pre-bound default. RDB connections still require it.
-    if (!isSqlite && !isMongo && !trimmed.database) {
+    if (!isFileConnection && !isMongo && !trimmed.database) {
       setError("Database is required");
       return;
     }

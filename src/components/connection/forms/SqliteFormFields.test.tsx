@@ -155,6 +155,36 @@ describe("SqliteFormFields", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders DuckDB file copy without the SQLite create action", () => {
+    render(
+      <SqliteFormFields
+        draft={makeDraft({ dbType: "duckdb" })}
+        onChange={vi.fn()}
+        inputClass={inputClass}
+        labelClass={labelClass}
+        filePickerEnabled={true}
+        databaseLabel="DuckDB"
+        defaultPath="database.duckdb"
+        fileExtensions={["duckdb"]}
+        createEnabled={false}
+      />,
+    );
+
+    expect(screen.getByLabelText("Database file")).toHaveAttribute(
+      "placeholder",
+      "/absolute/path/to/database.duckdb",
+    );
+    expect(
+      screen.getByText("Absolute path to a DuckDB database file."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Create SQLite database file"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Create DuckDB database file"),
+    ).not.toBeInTheDocument();
+  });
+
   // AC-143-3 — clicking Browse opens the Tauri file picker; the chosen
   // path lands in `draft.database` via onChange.
   it("clicking Browse opens the dialog plugin and writes the picked path into onChange", async () => {

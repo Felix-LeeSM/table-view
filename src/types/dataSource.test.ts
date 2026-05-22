@@ -102,7 +102,7 @@ describe("DataSourceProfile registry", () => {
     }),
     duckdb: expectedCapabilities({
       connection: { test: true, filePicker: true, readOnly: true },
-      query: { query: true, cancel: true },
+      query: { query: true },
       catalog: { browse: true, schema: true },
     }),
     mssql: createEmptyDataSourceCapabilities(),

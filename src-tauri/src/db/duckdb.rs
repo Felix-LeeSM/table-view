@@ -81,14 +81,10 @@ impl RdbAdapter for DuckdbAdapter {
         cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<ColumnInfo>, AppError>> + Send + 'a>> {
         Box::pin(async move {
-            if let Some(token) = cancel {
-                tokio::select! {
-                    result = DuckdbAdapter::get_table_columns(self, namespace, table) => result,
-                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
-                }
-            } else {
-                DuckdbAdapter::get_table_columns(self, namespace, table).await
+            if cancel.is_some_and(tokio_util::sync::CancellationToken::is_cancelled) {
+                return Err(AppError::Database("Operation cancelled".into()));
             }
+            DuckdbAdapter::get_table_columns(self, namespace, table).await
         })
     }
 
@@ -422,5 +418,12 @@ mod tests {
             .execute_sql("SELECT * FROM read_csv_auto('users.csv')", None)
             .await;
         assert!(matches!(analytics_result, Err(AppError::Unsupported(_))));
+    }
+
+    #[tokio::test]
+    async fn duckdb_unit_native_cancel_is_unsupported_until_interrupt_is_wired() {
+        let (_dir, adapter) = connected_fixture(false).await;
+        let result = adapter.cancel_query(1).await;
+        assert!(matches!(result, Err(AppError::Unsupported(_))));
     }
 }

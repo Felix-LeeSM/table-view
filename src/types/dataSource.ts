@@ -322,7 +322,6 @@ export const DUCKDB_CAPABILITIES = capabilities({
   },
   query: {
     query: true,
-    cancel: true,
   },
   catalog: {
     browse: true,

@@ -191,6 +191,17 @@ const PASTE_CASES: PasteCase[] = [
     },
   },
   {
+    scheme: "duckdb",
+    url: "duckdb:/data/warehouse.duckdb",
+    expected: {
+      dbType: "duckdb",
+      host: "",
+      port: 0,
+      database: "/data/warehouse.duckdb",
+      password: "",
+    },
+  },
+  {
     scheme: "mongodb",
     url: "mongodb://mu:mp@mongo.local:27018/logs",
     expected: {
@@ -233,9 +244,9 @@ describe("[AC-178-01] form-mode host paste detection", () => {
       });
 
       // After paste, all parsed fields should be present on the form.
-      // For SQLite, the dbtype switch unmounts Host/Port/User/Password
+      // For file-backed DBMSes, the dbtype switch unmounts Host/Port/User/Password
       // and renders the file-path field in their place — assert that.
-      if (c.expected.dbType === "sqlite") {
+      if (c.expected.dbType === "sqlite" || c.expected.dbType === "duckdb") {
         // Database file field renders; host/port/user/password absent.
         expect(screen.getByLabelText("Database file")).toHaveValue(
           c.expected.database!,

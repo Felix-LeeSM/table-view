@@ -41,17 +41,8 @@ impl DuckdbAdapter {
         validate_supported_sql(&query)?;
         let query_type = duckdb_query_type(&query);
 
-        let work = self.with_connection(move |conn| {
-            execute_query_uncancelled(conn, &query, query_type, start)
-        });
-
-        match cancel_token {
-            Some(token) => tokio::select! {
-                result = work => result,
-                _ = token.cancelled() => Err(AppError::Database("Query cancelled".into())),
-            },
-            None => work.await,
-        }
+        self.with_connection(move |conn| execute_query_uncancelled(conn, &query, query_type, start))
+            .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -76,7 +67,7 @@ impl DuckdbAdapter {
         let filters = filters.map(|filters| filters.to_vec());
         let raw_where = raw_where.map(str::to_string);
 
-        let work = self.with_connection(move |conn| {
+        self.with_connection(move |conn| {
             query_table_data_uncancelled(
                 conn,
                 &namespace,
@@ -87,15 +78,8 @@ impl DuckdbAdapter {
                 filters.as_deref(),
                 raw_where.as_deref(),
             )
-        });
-
-        match cancel_token {
-            Some(token) => tokio::select! {
-                result = work => result,
-                _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
-            },
-            None => work.await,
-        }
+        })
+        .await
     }
 }
 

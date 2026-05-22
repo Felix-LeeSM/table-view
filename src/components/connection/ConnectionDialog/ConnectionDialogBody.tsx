@@ -182,9 +182,21 @@ export default function ConnectionDialogBody({
               />
             );
           case "duckdb":
-            throw unsupportedConnectionKindForForm(
-              form.dbType,
-              profile.connectionKind,
+            return (
+              <SqliteFormFields
+                draft={form}
+                onChange={onChange}
+                filePickerEnabled={hasConnectionCapability(
+                  form.dbType,
+                  "filePicker",
+                )}
+                inputClass={inputClass}
+                labelClass={labelClass}
+                databaseLabel="DuckDB"
+                defaultPath="database.duckdb"
+                fileExtensions={["duckdb"]}
+                createEnabled={false}
+              />
             );
           case "postgresql":
           case "mysql":
