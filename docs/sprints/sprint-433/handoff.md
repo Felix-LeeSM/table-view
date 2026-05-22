@@ -14,6 +14,10 @@ identity.
   missing.
 - RDB and document data grid edit callers pass their known database into
   `useDataGridEdit`.
+- RDB grid edit commits pass that database as `expectedDatabase` to
+  `executeQueryBatch`, matching the row-fetch db-mismatch guard.
+- The shared edit hook type now requires `database`, so future callers cannot
+  compile with the old three-part identity shape.
 - `workspaceStore.removeTab` computes a database-aware pending edit key and
   only treats same-database table tabs as consumers of that key.
 - RISK-039 regression tests cover store isolation, hook remount isolation, and
@@ -39,6 +43,8 @@ Failures included:
 
 - `pnpm exec vitest run src/stores/dataGridEditStore.test.ts src/components/datagrid/useDataGridEdit.persist.test.ts src/stores/workspaceStore.lifecycle.test.ts`
   - Pass: 3 files, 24 tests.
+- `pnpm exec vitest run src/lib/datagrid/paradigmEditAdapter.test.ts src/components/datagrid/useDataGridEdit.commit-error.test.ts src/components/datagrid/useDataGridEdit.mixed-batch.test.ts src/components/datagrid/useDataGridEdit.safe-mode.test.ts`
+  - Pass: RDB commit path forwards `expectedDatabase`.
 - `pnpm exec tsc --noEmit`
   - Pass.
 

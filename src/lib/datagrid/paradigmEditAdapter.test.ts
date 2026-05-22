@@ -146,6 +146,7 @@ describe("buildRdbSession + execute", () => {
       ["0-1"],
       {
         connectionId: "conn-1",
+        expectedDatabase: "db1",
         safeModeGate: gateAllowAll(),
         executeQueryBatch,
         history,
@@ -163,6 +164,7 @@ describe("buildRdbSession + execute", () => {
       "conn-1",
       ["UPDATE users SET name='bob' WHERE id=1"],
       expect.stringMatching(/^edit-/),
+      "db1",
     );
     expect(toastSuccess).toHaveBeenCalledWith("1 change committed.");
     expect(history.recordSuccess).toHaveBeenCalledTimes(1);

@@ -47,7 +47,6 @@ export function useDataGridEdit({
 }: UseDataGridEditParams): DataGridEditState {
   const activeTabId = useActiveTabId();
   const workspaceKey = useCurrentWorkspaceKey();
-  const pendingDatabase = database ?? workspaceKey?.db ?? "";
   const promoteTabAction = useWorkspaceStore((s) => s.promoteTab);
   const setTabDirtyAction = useWorkspaceStore((s) => s.setTabDirty);
   const promoteTab = useCallback(
@@ -99,7 +98,7 @@ export function useDataGridEdit({
     canUndo,
   } = useDataGridEditPendingState({
     connectionId,
-    database: pendingDatabase,
+    database,
     schema,
     table,
   });
@@ -153,6 +152,7 @@ export function useDataGridEdit({
     resetPreviewState,
   } = useDataGridPreviewCommit({
     data,
+    database,
     schema,
     table,
     connectionId,

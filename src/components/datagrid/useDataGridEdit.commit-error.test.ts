@@ -101,6 +101,7 @@ function renderEditHook(data: TableData | null = MOCK_DATA) {
   return renderHook(() =>
     useDataGridEdit({
       data,
+      database: "db1",
       schema: "public",
       table: "users",
       connectionId: "conn1",
@@ -332,8 +333,10 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
     expect(result.current.commitError).toBeNull();
     expect(mockFetchData).toHaveBeenCalledTimes(1);
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
-    const [, statementsArg] = mockExecuteQueryBatch.mock.calls[0]!;
+    const [, statementsArg, , expectedDatabaseArg] =
+      mockExecuteQueryBatch.mock.calls[0]!;
     expect(statementsArg).toHaveLength(2);
+    expect(expectedDatabaseArg).toBe("db1");
     // legacy single-statement loop must NOT be hit anymore.
     expect(mockExecuteQuery).not.toHaveBeenCalled();
   });

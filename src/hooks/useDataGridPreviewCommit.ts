@@ -41,6 +41,7 @@ function dialectFromDbType(dbType: string | undefined): SqlDialect | undefined {
 
 export interface UseDataGridPreviewCommitParams {
   data: TableData | null;
+  database: string;
   schema: string;
   table: string;
   connectionId: string;
@@ -122,6 +123,7 @@ export function useDataGridPreviewCommit(
 ): UseDataGridPreviewCommitReturn {
   const {
     data,
+    database,
     schema,
     table,
     connectionId,
@@ -199,6 +201,7 @@ export function useDataGridPreviewCommit(
     }
     const deps: RdbAdapterDeps = {
       connectionId,
+      expectedDatabase: database || undefined,
       safeModeGate,
       executeQueryBatch,
       dialect,
@@ -212,6 +215,7 @@ export function useDataGridPreviewCommit(
             connectionId,
             paradigm: "rdb",
             queryMode: "sql",
+            database,
             source: "grid-edit",
           }),
         recordError: ({ sql, startedAt, duration }) =>
@@ -223,6 +227,7 @@ export function useDataGridPreviewCommit(
             connectionId,
             paradigm: "rdb",
             queryMode: "sql",
+            database,
             source: "grid-edit",
           }),
       },
@@ -231,6 +236,7 @@ export function useDataGridPreviewCommit(
   }, [
     paradigm,
     connectionId,
+    database,
     schema,
     table,
     safeModeGate,
@@ -260,6 +266,7 @@ export function useDataGridPreviewCommit(
       }
       const deps: RdbAdapterDeps = {
         connectionId,
+        expectedDatabase: database || undefined,
         safeModeGate,
         executeQueryBatch,
         dialect,
@@ -273,6 +280,7 @@ export function useDataGridPreviewCommit(
               connectionId,
               paradigm: "rdb",
               queryMode: "sql",
+              database,
               source: "grid-edit",
             }),
           recordError: ({ sql, startedAt, duration }) =>
@@ -284,6 +292,7 @@ export function useDataGridPreviewCommit(
               connectionId,
               paradigm: "rdb",
               queryMode: "sql",
+              database,
               source: "grid-edit",
             }),
         },
@@ -296,7 +305,7 @@ export function useDataGridPreviewCommit(
       setSession(synth);
       setCommitError(null);
     },
-    [connectionId, safeModeGate, executeQueryBatch, dialect],
+    [connectionId, database, safeModeGate, executeQueryBatch, dialect],
   );
 
   // `setMqlPreview(null)` dismisses the preview dialog. Non-null sets

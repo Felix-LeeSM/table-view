@@ -147,6 +147,7 @@ function renderRdbHook(data: TableData = RDB_DATA) {
   return renderHook(() =>
     useDataGridEdit({
       data,
+      database: "db1",
       schema: "public",
       table: "users",
       connectionId: "conn-pg",
@@ -160,6 +161,7 @@ function renderDocHook() {
   return renderHook(() =>
     useDataGridEdit({
       data: DOC_DATA,
+      database: "app",
       schema: "app",
       table: "users",
       connectionId: "conn-mongo",
@@ -269,9 +271,11 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
     expect(mockExecuteQuery).not.toHaveBeenCalled();
 
-    const [, statementsArg] = mockExecuteQueryBatch.mock.calls[0]!;
+    const [, statementsArg, , expectedDatabaseArg] =
+      mockExecuteQueryBatch.mock.calls[0]!;
     expect(Array.isArray(statementsArg)).toBe(true);
     expect(statementsArg).toHaveLength(3);
+    expect(expectedDatabaseArg).toBe("db1");
 
     const kinds = (statementsArg as string[]).map(
       (sql) => sql.split(/\s+/)[0]!,

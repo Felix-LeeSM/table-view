@@ -112,6 +112,7 @@ function renderDocHook() {
   return renderHook(() =>
     useDocumentDataGridEdit({
       data: DOC_DATA,
+      database: "app",
       schema: "app",
       table: "users",
       connectionId: "conn-mongo",

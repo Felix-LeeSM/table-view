@@ -96,6 +96,7 @@ function renderHookFor(env: string | null, mode: "strict" | "warn" | "off") {
   return renderHook(() =>
     useDataGridEdit({
       data: RDB_DATA,
+      database: "db1",
       schema: "public",
       table: "users",
       connectionId: "conn-pg",
@@ -152,6 +153,7 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
     });
 
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+    expect(mockExecuteQueryBatch.mock.calls[0]?.[3]).toBe("db1");
     expect(result.current.commitError).toBeNull();
     expect(result.current.pendingConfirm).toBeNull();
   });

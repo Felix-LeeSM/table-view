@@ -70,6 +70,7 @@ describe("useDataGridEdit — document paradigm edit permission (Sprint 86)", ()
     const { result } = renderHook(() =>
       useDocumentDataGridEdit({
         data: MOCK_DATA,
+        database: "app",
         schema: "app",
         table: "users",
         connectionId: "conn-mongo",
@@ -92,6 +93,7 @@ describe("useDataGridEdit — document paradigm edit permission (Sprint 86)", ()
     const { result } = renderHook(() =>
       useRdbDataGridEdit({
         data: MOCK_DATA,
+        database: "db1",
         schema: "public",
         table: "users",
         connectionId: "conn-pg",
