@@ -94,6 +94,16 @@ fn labels(result: &SqlCompletionCoreResult) -> Vec<String> {
     result.items.iter().map(|item| item.label.clone()).collect()
 }
 
+fn assert_builtin_completion_contains(dialect: &str, shell: &str, text: &str, label: &str) {
+    let result = complete_sql(empty_vocabulary_request(dialect, shell, text));
+    let result_labels = labels(&result);
+
+    assert!(
+        result_labels.contains(&label.to_string()),
+        "{dialect}/{shell} completion for {text:?} did not contain {label:?}; got {result_labels:?}"
+    );
+}
+
 #[test]
 fn returns_keyword_table_column_and_function_candidates() {
     let result = complete_sql(request("SEL", 3, 3));
@@ -166,6 +176,44 @@ fn rust_builtin_vocabulary_does_not_depend_on_ts_request_lists() {
 
     let result = complete_sql(empty_vocabulary_request("mysql", "mysql-client", "\\C"));
     assert!(labels(&result).contains(&"\\C".to_string()));
+}
+
+#[test]
+fn postgresql_psql_reference_vocabulary_smoke() {
+    assert_builtin_completion_contains("postgresql", "psql", "ON", "ON CONFLICT");
+    assert_builtin_completion_contains("postgresql", "psql", "JSONB_BUILD_O", "JSONB_BUILD_OBJECT");
+    assert_builtin_completion_contains(
+        "postgresql",
+        "psql",
+        "PG_TERMINATE",
+        "PG_TERMINATE_BACKEND",
+    );
+    assert_builtin_completion_contains("postgresql", "psql", "\\bi", "\\bind");
+    assert_builtin_completion_contains("postgresql", "psql", "\\par", "\\parse");
+    assert_builtin_completion_contains("postgresql", "psql", "\\wa", "\\watch");
+}
+
+#[test]
+fn mysql_family_reference_vocabulary_smoke() {
+    assert_builtin_completion_contains("mysql", "mysql-client", "ON", "ON DUPLICATE KEY UPDATE");
+    assert_builtin_completion_contains("mysql", "mysql-client", "JSON_TA", "JSON_TABLE");
+    assert_builtin_completion_contains("mysql", "mysql-client", "JSON_VAL", "JSON_VALUE");
+    assert_builtin_completion_contains("mysql", "mysql-client", "REGEXP_LI", "REGEXP_LIKE");
+    assert_builtin_completion_contains("mysql", "mysql-client", "UUID_TO", "UUID_TO_BIN");
+    assert_builtin_completion_contains("mysql", "mysql-client", "BIN_TO", "BIN_TO_UUID");
+    assert_builtin_completion_contains("mysql", "mysql-client", "query_a", "query_attributes");
+    assert_builtin_completion_contains("mysql", "mysql-client", "delim", "delimiter");
+    assert_builtin_completion_contains("mysql", "mysql-client", "sour", "source");
+}
+
+#[test]
+fn sqlite_reference_vocabulary_smoke() {
+    assert_builtin_completion_contains("sqlite", "sqlite-cli", "WITHO", "WITHOUT ROWID");
+    assert_builtin_completion_contains("sqlite", "sqlite-cli", "JSON_EX", "JSON_EXTRACT");
+    assert_builtin_completion_contains("sqlite", "sqlite-cli", "STRF", "STRFTIME");
+    assert_builtin_completion_contains("sqlite", "sqlite-cli", ".rec", ".recover");
+    assert_builtin_completion_contains("sqlite", "sqlite-cli", ".exp", ".expert");
+    assert_builtin_completion_contains("sqlite", "sqlite-cli", ".sch", ".schema");
 }
 
 #[test]
