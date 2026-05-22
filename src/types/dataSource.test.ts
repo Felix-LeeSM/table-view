@@ -8,7 +8,10 @@ import {
   createEmptyDataSourceCapabilities,
   DATA_SOURCE_PROFILES,
   type DataSourceCapabilities,
+  getConnectionSupportedDatabaseTypes,
   getDataSourceProfile,
+  hasConnectionCapability,
+  isConnectionSupportedDatabaseType,
 } from "./dataSource";
 
 describe("DataSourceProfile registry", () => {
@@ -180,6 +183,38 @@ describe("DataSourceProfile registry", () => {
         createEmptyDataSourceCapabilities(),
       );
     }
+  });
+
+  it("derives connection-dialog supported DBMS options from the profile test capability", () => {
+    expect(getConnectionSupportedDatabaseTypes()).toEqual([
+      "postgresql",
+      "mysql",
+      "mariadb",
+      "sqlite",
+      "mongodb",
+    ]);
+    expect(isConnectionSupportedDatabaseType("postgresql")).toBe(true);
+    expect(isConnectionSupportedDatabaseType("mongodb")).toBe(true);
+    expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
+    expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
+    expect(isConnectionSupportedDatabaseType("redis")).toBe(false);
+  });
+
+  it("keeps switch-database capability enabled for RDBMS profiles and disabled for Mongo", () => {
+    expect(hasConnectionCapability("postgresql", "switchDatabase")).toBe(true);
+    expect(hasConnectionCapability("mysql", "switchDatabase")).toBe(true);
+    expect(hasConnectionCapability("mariadb", "switchDatabase")).toBe(true);
+    expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
+    expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);
+  });
+
+  it("keeps SQLite file picker capability explicit and missing profiles disabled", () => {
+    expect(hasConnectionCapability("sqlite", "filePicker")).toBe(true);
+    expect(hasConnectionCapability("postgresql", "filePicker")).toBe(false);
+    expect(
+      hasConnectionCapability("unknown-db" as DatabaseType, "filePicker"),
+    ).toBe(false);
+    expect(isConnectionSupportedDatabaseType(null)).toBe(false);
   });
 
   it("exposes a read-only profile registry", () => {

@@ -404,6 +404,29 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
   ),
 }) satisfies Readonly<Record<DatabaseType, DataSourceProfile>>;
 
+export type ConnectionCapabilityName =
+  keyof DataSourceCapabilities["connection"];
+
+export function hasConnectionCapability(
+  dbType: DatabaseType | null | undefined,
+  capability: ConnectionCapabilityName,
+): boolean {
+  void dbType;
+  void capability;
+  return false;
+}
+
+export function getConnectionSupportedDatabaseTypes(): readonly DatabaseType[] {
+  return [];
+}
+
+export function isConnectionSupportedDatabaseType(
+  dbType: DatabaseType | null | undefined,
+): boolean {
+  void dbType;
+  return false;
+}
+
 export function getDataSourceProfile(dbType: DatabaseType): DataSourceProfile {
   const profile = DATA_SOURCE_PROFILES[dbType];
   if (!profile) {
