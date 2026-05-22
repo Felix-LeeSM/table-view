@@ -7,19 +7,23 @@ updated: 2026-05-22
 # 로드맵
 
 Active 실행 순서: [docs/PLAN.md](../../docs/PLAN.md). 장기 roadmap:
-[docs/ROADMAP.md](../../docs/ROADMAP.md). 비교 근거:
+[docs/ROADMAP.md](../../docs/ROADMAP.md). Data-source extension architecture:
+[docs/data-source-architecture.md](../../docs/data-source-architecture.md). 비교 근거:
 [docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md](../../docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md).
 
 ## 방향 (2026-05-22)
 
 Active ordering 은 `docs/PLAN.md` 가 SOT. 현재 기준은:
 
-1. MongoDB full support (Phase 28) — Rust/WASM parser/completion baseline 위에서
-   unified mongosh editor 부터.
-2. MySQL-family semantic widening — 이미 열린 parser/safety surface 확장.
-3. Capability-gated completion filtering.
-4. MariaDB / SQLite adapter 재평가 — 과거 sprint 번호 대신 slice 단위로 재진입.
-5. State-management migration — contracts 는 보존, 실제 재개 전 current code 재-audit.
+1. Data-source profile/capability foundation — 새 DBMS 는 profile, adapter,
+   queryLanguage, catalog, result envelope, safety contract 없이 추가하지 않는다.
+2. RDBMS-first — MySQL-family semantic widening, MariaDB, SQLite.
+3. DuckDB + file analytics — SQLite file contract 뒤 RDBMS/file analytics 로 진입.
+4. RDBMS intelligence — ERD 는 재사용 가능한 `SchemaGraph` 로 구현.
+5. Non-RDBMS — Redis/Valkey, Elasticsearch/OpenSearch, MongoDB full support.
+6. Broader paradigms — Cassandra/DynamoDB/graph/vector/stream 은 workflow +
+   profile contract lock 전 active 승격 금지.
+7. State-management migration — contracts 는 보존, 실제 재개 전 current code 재-audit.
 
 장기 horizon / decision gate 는 `docs/ROADMAP.md` 가 SOT.
 

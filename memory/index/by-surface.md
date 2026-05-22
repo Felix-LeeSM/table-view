@@ -1,7 +1,7 @@
 ---
 title: By-surface 인덱스
 type: index
-generated: 2026-05-21
+generated: 2026-05-22
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -42,6 +42,7 @@ generator: scripts/regenerate-indexes.sh
 ### `lefthook.yml`
 
 - [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
+- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
 
 ### `memory/workflow/review`
 
@@ -50,6 +51,14 @@ generator: scripts/regenerate-indexes.sh
 ### `scripts/hooks/check-dangerous-bash.sh`
 
 - [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
+
+### `scripts/hooks/pre-push-path-router.sh`
+
+- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
+
+### `scripts/hooks/test-pre-push-path-router.sh`
+
+- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
 
 ### `scripts/hooks/test-worktree-push-ref-safety.sh`
 
