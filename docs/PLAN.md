@@ -238,6 +238,13 @@ Sprint 430 종료 기준: Phase 31 architecture slice 는 완료. 후속은 comp
 architecture 자체가 아니라 dialect semantic widening / capability gating /
 SQLite write parity 같은 개별 feature backlog 로 취급한다.
 
+### Risk closure follow-up (Sprint 433–435)
+
+| Sprint | Risk | Outcome |
+|---|---|---|
+| **433** ✓ | RISK-039 | RDB pending edit keys now include database identity. |
+| **435** ✓ | RISK-040 | Connection teardown now flows through one frontend cleanup entry point for caches, workspace tabs, and pending edits. |
+
 ## 문서 목차
 
 | 문서 | 설명 |
