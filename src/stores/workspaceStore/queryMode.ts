@@ -43,7 +43,7 @@ export function sanitizeWorkspaceQueryMode(
 
 export function toWorkspaceQueryLanguage(input: {
   paradigm: Paradigm;
-  queryLanguage?: QueryLanguageId;
+  queryLanguage?: unknown;
 }): QueryLanguageId | undefined {
   if (input.paradigm === "rdb") {
     return "sql";
@@ -51,5 +51,23 @@ export function toWorkspaceQueryLanguage(input: {
   if (input.paradigm === "document") {
     return "mongosh";
   }
-  return input.queryLanguage;
+  return isQueryLanguageId(input.queryLanguage)
+    ? input.queryLanguage
+    : undefined;
+}
+
+function isQueryLanguageId(value: unknown): value is QueryLanguageId {
+  return (
+    value === "sql" ||
+    value === "mongosh" ||
+    value === "redis-command" ||
+    value === "search-dsl" ||
+    value === "cql" ||
+    value === "partiql" ||
+    value === "cypher" ||
+    value === "gql" ||
+    value === "gremlin" ||
+    value === "vector-query" ||
+    value === "stream-command"
+  );
 }
