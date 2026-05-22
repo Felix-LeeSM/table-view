@@ -10,6 +10,8 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 ## Current Snapshot
 
 2026-05-22 기준 current plan 은 완료 이력을 실행 계획에서 분리한다.
+Implementation sprint 번호는 실행 직전에 새 번호를 배정한다. Active phase 문서의
+과거 sprint 번호는 history 가 아니면 쓰지 않는다.
 
 | 영역 | SOT |
 |---|---|
@@ -52,11 +54,11 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 
 | Order | Track | Status | Next move | SOT |
 |---:|---|---|---|---|
-| 1 | MongoDB full support | planned | 논의 필요: Phase 28 Slice A unified mongosh editor / parser routing 부터 시작할지 확정 | `docs/phases/phase-28.md` |
+| 1 | MongoDB full support | planned/current candidate | Phase 28 Slice A1: existing Rust/WASM mongosh parser/completion core 위에서 unified editor routing 시작 | `docs/phases/phase-28.md` |
 | 2 | MySQL-family semantic widening | active follow-up | broader `CALL` args, user variables, routine scripting, `DELIMITER`, `LOAD DATA` 순서로 parser/safety gap 축소 | `docs/query-language-support.md`, `docs/sprints/sprint-439/` |
 | 3 | Capability-gated completion filtering | backlog | `serverVersion` / `capabilities` 기반 후보 filtering. vocabulary SOT 는 이미 Rust/WASM | `docs/archives/phases/completed/phase-31.md` |
-| 4 | MariaDB adapter decision | deferred -> re-evaluate | MySQL adapter reuse vs dedicated adapter ADR 결정 | `docs/phases/phase-18.md` |
-| 5 | SQLite DBMS adapter / write parity | deferred -> re-evaluate | Phase 19 adapter 재개 여부와 internal app SQLite state-management 를 분리해서 결정 | `docs/phases/phase-19.md`, `docs/state-management-strategy-2026-05-15.md` |
+| 4 | MariaDB adapter decision | deferred -> re-evaluate | Slice 18A: MySQL adapter reuse + MariaDB identity/dialect flag 를 default 로 검증. 전용 adapter 는 evidence 있을 때만 ADR | `docs/phases/phase-18.md` |
+| 5 | SQLite DBMS adapter / write parity | deferred -> re-evaluate | Slice 19A: user DBMS adapter 범위를 internal app SQLite state-management 와 분리해 connection/file-picker contract 부터 고정 | `docs/phases/phase-19.md`, `docs/state-management-strategy-2026-05-15.md` |
 | 6 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |
 | 7 | State-management migration | planned contracts | Sprint 353-376 contracts 는 보존. 실제 재개 전 current code와 재-audit 필요 | `docs/state-management-strategy-2026-05-15.md` |
 | 8 | TablePlus DDL surface leftovers | planned/backlog | archived Phase 24-26 context 를 기준으로 DB support 우선순위 뒤에서 재평가 | `docs/archives/phases/completed/phase-24.md`, `docs/archives/phases/completed/phase-25.md`, `docs/archives/phases/completed/phase-26.md` |
