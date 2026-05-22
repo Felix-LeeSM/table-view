@@ -52,6 +52,7 @@ export interface UseDataGridPreviewCommitParams {
   pendingEdits: Map<string, string | null>;
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
+  canEditRows?: boolean;
   /**
    * 성공 / discard 등에서 facade 가 보유한 모든 pending state 와
    * editing cell / selection 을 한 번에 비우는 cleanup. RDB / MQL 양쪽
@@ -133,6 +134,7 @@ export function useDataGridPreviewCommit(
     pendingEdits,
     pendingNewRows,
     pendingDeletedRowKeys,
+    canEditRows = true,
     clearAllPending,
     setPendingEditErrors,
     beginCommitFlash,
@@ -205,6 +207,7 @@ export function useDataGridPreviewCommit(
       safeModeGate,
       executeQueryBatch,
       dialect,
+      canEditRows,
       history: {
         recordSuccess: ({ sql, startedAt, duration }) =>
           recordHistoryEntry({
@@ -242,6 +245,7 @@ export function useDataGridPreviewCommit(
     safeModeGate,
     executeQueryBatch,
     dialect,
+    canEditRows,
   ]);
 
   const [session, setSession] = useState<PreviewSession | null>(null);
@@ -264,12 +268,14 @@ export function useDataGridPreviewCommit(
         setCommitError(null);
         return;
       }
+      if (!canEditRows) return;
       const deps: RdbAdapterDeps = {
         connectionId,
         expectedDatabase: database || undefined,
         safeModeGate,
         executeQueryBatch,
         dialect,
+        canEditRows,
         history: {
           recordSuccess: ({ sql, startedAt, duration }) =>
             recordHistoryEntry({
@@ -305,7 +311,14 @@ export function useDataGridPreviewCommit(
       setSession(synth);
       setCommitError(null);
     },
-    [connectionId, database, safeModeGate, executeQueryBatch, dialect],
+    [
+      connectionId,
+      database,
+      safeModeGate,
+      executeQueryBatch,
+      dialect,
+      canEditRows,
+    ],
   );
 
   // `setMqlPreview(null)` dismisses the preview dialog. Non-null sets
@@ -358,6 +371,7 @@ export function useDataGridPreviewCommit(
   const handleCommit = useCallback(
     (overrides?: HandleCommitOverrides): HandleCommitResult => {
       if (!data) return { opened: false };
+      if (!canEditRows) return { opened: false };
       // Always begin the flash; the 400ms safety guard caps it for the
       // empty-preview / no-op branches that never resolve a commit.
       beginCommitFlash();
@@ -390,6 +404,7 @@ export function useDataGridPreviewCommit(
       schema,
       table,
       page,
+      canEditRows,
       beginCommitFlash,
       setPendingEditErrors,
     ],

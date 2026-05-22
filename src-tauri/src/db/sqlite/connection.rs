@@ -5,7 +5,7 @@ use sqlx::{Row, SqlitePool};
 use std::collections::{HashMap, HashSet};
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -328,6 +328,7 @@ impl SqliteAdapter {
 fn reject_internal_app_state_path(path: &Path) -> Result<(), AppError> {
     let internal = storage::local::db_path()?;
     let direct_match = path == internal.as_path();
+    let normalized_match = normalize_absolute_path(path) == normalize_absolute_path(&internal);
     let canonical_match = match (
         std::fs::canonicalize(path),
         std::fs::canonicalize(&internal),
@@ -336,12 +337,28 @@ fn reject_internal_app_state_path(path: &Path) -> Result<(), AppError> {
         _ => false,
     };
 
-    if direct_match || canonical_match {
+    if direct_match || normalized_match || canonical_match {
         return Err(AppError::Validation(
             "SQLite database file cannot target internal app SQLite state".into(),
         ));
     }
     Ok(())
+}
+
+fn normalize_absolute_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            Component::RootDir => normalized.push(component.as_os_str()),
+            Component::Normal(segment) => normalized.push(segment),
+        }
+    }
+    normalized
 }
 
 pub(super) fn validate_namespace(namespace: &str) -> Result<(), AppError> {

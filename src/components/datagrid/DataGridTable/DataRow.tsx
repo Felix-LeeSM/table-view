@@ -70,6 +70,7 @@ export interface DataGridRowContext {
   pendingEditErrors?: Map<string, string>;
   pendingDeletedRowKeys: Set<string>;
   selectedRowIds: Set<number>;
+  canEditRows: boolean;
   editorFocusRef: React.RefObject<HTMLElement | null>;
   moveEditCursor: (
     currentRow: number,
@@ -128,6 +129,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
     pendingEditErrors,
     pendingDeletedRowKeys,
     selectedRowIds,
+    canEditRows,
     editorFocusRef,
     moveEditCursor,
     handleContextMenu,
@@ -234,11 +236,12 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
             }`}
             title={isNestedCapable ? undefined : renderCellTitle(cell)}
             onDoubleClick={() => {
+              if (!canEditRows) return;
               if (isNestedCapable) return; // expand via the toggle button
               onStartEdit(rowIdx, dIdx, editStartValue);
             }}
             onClick={() => {
-              if (editingCell) {
+              if (canEditRows && editingCell) {
                 onSaveCurrentEdit();
               }
             }}

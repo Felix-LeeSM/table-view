@@ -17,6 +17,7 @@ interface RdbDataGridContentProps {
   sorts: SortInfo[];
   columnOrder: number[];
   editState: DataGridEditState;
+  canEditRows: boolean;
   page: number;
   hiddenColumnNames: ReadonlySet<string>;
   activeFilterCount: number;
@@ -55,6 +56,7 @@ export const RdbDataGridContent = forwardRef<
     sorts,
     columnOrder,
     editState,
+    canEditRows,
     page,
     hiddenColumnNames,
     activeFilterCount,
@@ -102,6 +104,7 @@ export const RdbDataGridContent = forwardRef<
           selectedRowIds={editState.selectedRowIds}
           pendingDeletedRowKeys={editState.pendingDeletedRowKeys}
           pendingNewRows={editState.pendingNewRows}
+          canEditRows={canEditRows}
           page={page}
           schema={schema}
           table={table}

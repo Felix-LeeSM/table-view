@@ -59,6 +59,7 @@ export interface DataGridTableProps {
   selectedRowIds: Set<number>;
   pendingDeletedRowKeys: Set<string>;
   pendingNewRows: unknown[][];
+  canEditRows?: boolean;
   page: number;
   schema: string;
   table: string;
@@ -168,6 +169,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       selectedRowIds,
       pendingDeletedRowKeys,
       pendingNewRows,
+      canEditRows = true,
       page,
       schema,
       table,
@@ -449,6 +451,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         onNavigateToFk,
         expandedNested,
         onToggleNested: handleToggleNested,
+        canEditRows,
       }),
       [
         data,
@@ -471,6 +474,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         onNavigateToFk,
         expandedNested,
         handleToggleNested,
+        canEditRows,
       ],
     );
 
@@ -593,28 +597,32 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
                                 rowIdx,
                                 expandedNested!.colIdx,
                               )}
-                              onCommitEdit={(path, value) => {
-                                if (!setPendingEdits) return;
-                                const next = new Map(pendingEdits);
-                                // The panel hands us `string |
-                                // Record<…>` but the RDB pendingEdits
-                                // map is `string | null`. Convert any
-                                // object value to its JSON literal so
-                                // the SQL generator sees a string.
-                                // Objects are only ever produced by
-                                // the BSON branch (Mongo-only), which
-                                // doesn't apply here — but keep the
-                                // safe stringify as a guard.
-                                const serialized: string =
-                                  typeof value === "string"
-                                    ? value
-                                    : safeStringifyCell(value);
-                                next.set(
-                                  `${rowIdx}-${expandedNested!.colIdx}:${path}`,
-                                  serialized,
-                                );
-                                setPendingEdits(next);
-                              }}
+                              onCommitEdit={
+                                canEditRows
+                                  ? (path, value) => {
+                                      if (!setPendingEdits) return;
+                                      const next = new Map(pendingEdits);
+                                      // The panel hands us `string |
+                                      // Record<…>` but the RDB pendingEdits
+                                      // map is `string | null`. Convert any
+                                      // object value to its JSON literal so
+                                      // the SQL generator sees a string.
+                                      // Objects are only ever produced by
+                                      // the BSON branch (Mongo-only), which
+                                      // doesn't apply here — but keep the
+                                      // safe stringify as a guard.
+                                      const serialized: string =
+                                        typeof value === "string"
+                                          ? value
+                                          : safeStringifyCell(value);
+                                      next.set(
+                                        `${rowIdx}-${expandedNested!.colIdx}:${path}`,
+                                        serialized,
+                                      );
+                                      setPendingEdits(next);
+                                    }
+                                  : undefined
+                              }
                               onClose={() => setExpandedNested(null)}
                             />
                           </div>
@@ -698,6 +706,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
               contextMenu,
               data,
               selectedRowIds,
+              canEditRows,
               schema,
               table,
               setCellDetail,

@@ -51,6 +51,7 @@ export interface DataGridToolbarProps {
   showFilters: boolean;
   showQuickLook: boolean;
   hasPendingChanges: boolean;
+  canEditRows?: boolean;
   /**
    * Short-lived flash from `useDataGridEdit`. When `true`, Commit swaps
    * its Check icon for a spinning Loader2 and advertises `aria-busy` +
@@ -118,6 +119,7 @@ export default function DataGridToolbar({
   showFilters,
   showQuickLook,
   hasPendingChanges,
+  canEditRows = true,
   isCommitFlashing = false,
   pendingEditsSize,
   pendingNewRowsCount,
@@ -169,7 +171,7 @@ export default function DataGridToolbar({
                   `${pendingDeletedRowKeysSize} del`}
               </span>
             )}
-            {hasPendingChanges && (
+            {canEditRows && hasPendingChanges && (
               <>
                 <Button
                   variant="ghost"
@@ -205,7 +207,7 @@ export default function DataGridToolbar({
                 </Button>
               </>
             )}
-            {onUndo && (
+            {canEditRows && onUndo && (
               // Sprint 249 (ADR 0022 Phase 5) — discoverable Undo for users
               // who don't know the Cmd+Z binding. Disabled when the undo
               // stack is empty so a click never silently no-ops.
@@ -227,7 +229,7 @@ export default function DataGridToolbar({
         )}
       </div>
       <div className="flex items-center gap-2">
-        {data && (
+        {data && canEditRows && (
           <>
             <Button
               variant="ghost"

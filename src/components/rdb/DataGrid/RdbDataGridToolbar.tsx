@@ -15,6 +15,7 @@ interface RdbDataGridToolbarProps {
   showFilters: boolean;
   showQuickLook: boolean;
   editState: DataGridEditState;
+  canEditRows: boolean;
   onSetPage: (page: number) => void;
   onSetPageSize: (size: number) => void;
   onToggleFilters: () => void;
@@ -34,6 +35,7 @@ export function RdbDataGridToolbar({
   showFilters,
   showQuickLook,
   editState,
+  canEditRows,
   onSetPage,
   onSetPageSize,
   onToggleFilters,
@@ -52,6 +54,7 @@ export function RdbDataGridToolbar({
       activeFilterCount={activeFilterCount}
       showFilters={showFilters}
       hasPendingChanges={editState.hasPendingChanges}
+      canEditRows={canEditRows}
       isCommitFlashing={editState.isCommitFlashing}
       pendingEditsSize={editState.pendingEdits.size}
       pendingNewRowsCount={editState.pendingNewRows.length}

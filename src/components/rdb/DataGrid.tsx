@@ -20,6 +20,7 @@ import { useRdbDataGridShortcuts } from "./DataGrid/useRdbDataGridShortcuts";
 import { useRdbDataGridSortHandlers } from "./DataGrid/useRdbDataGridSortHandlers";
 import { useRdbDataGridSorts } from "./DataGrid/useRdbDataGridSorts";
 import { useRdbTableData } from "./DataGrid/useRdbTableData";
+import { getDataSourceProfile } from "@/types/dataSource";
 
 interface DataGridProps {
   connectionId: string;
@@ -45,6 +46,12 @@ export default function DataGrid({
   const connectionLabel = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name ?? null,
   );
+  const canEditRows = useConnectionStore((s) => {
+    const dbType = s.connections.find((c) => c.id === connectionId)?.dbType;
+    return dbType
+      ? getDataSourceProfile(dbType).capabilities.edit.editRows
+      : false;
+  });
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -88,6 +95,7 @@ export default function DataGrid({
     connectionId,
     page,
     fetchData,
+    canEditRows,
   });
   const hiddenColumns = useHiddenColumns({
     connectionId,
@@ -195,6 +203,7 @@ export default function DataGrid({
         showFilters={filters.showFilters}
         showQuickLook={showQuickLook}
         editState={editState}
+        canEditRows={canEditRows}
         onSetPage={setPage}
         onSetPageSize={handleSetPageSize}
         onToggleFilters={filters.toggleFilters}
@@ -234,6 +243,7 @@ export default function DataGrid({
         sorts={sorts}
         columnOrder={columnOrder}
         editState={editState}
+        canEditRows={canEditRows}
         page={page}
         hiddenColumnNames={hiddenColumns.hidden}
         activeFilterCount={filters.activeFilterCount}

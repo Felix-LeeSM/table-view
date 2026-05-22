@@ -170,6 +170,33 @@ fn save_connection_rejects_internal_app_state_db_path() {
     cleanup();
 }
 
+#[test]
+#[serial]
+fn save_connection_rejects_normalized_internal_app_state_db_path_before_file_exists() {
+    let dir = setup();
+    let state_path = app_sqlite_state::db_path().unwrap();
+    assert!(!state_path.exists());
+    let normalized_equivalent = format!("{}/./state.db", dir.path().display());
+
+    let result = save_connection(SaveConnectionRequest {
+        connection: sqlite_public(&normalized_equivalent),
+        password: Some(String::new()),
+        is_new: Some(false),
+    });
+
+    match result {
+        Err(AppError::Validation(message)) => {
+            assert!(message.contains("internal app SQLite state"))
+        }
+        other => panic!(
+            "Expected normalized internal app SQLite state validation error, got: {:?}",
+            other
+        ),
+    }
+
+    cleanup();
+}
+
 #[tokio::test]
 #[serial]
 async fn test_connection_routes_sqlite_to_adapter() {
