@@ -1,4 +1,6 @@
 import type { ColumnCategory } from "@/lib/columnCategory";
+import type { ResultEnvelopeKind } from "@/types/dataSource";
+import type { DocumentQueryResult } from "@/types/document";
 import type { BulkWriteResult, DocumentId } from "@/types/documentMutate";
 
 /**
@@ -78,6 +80,98 @@ export type WriteSummaryData =
   | { kind: "update"; matchedCount: number; modifiedCount: number }
   | { kind: "delete"; deletedCount: number }
   | { kind: "bulkWrite"; result: BulkWriteResult };
+
+/**
+ * Compatibility envelopes let new result boundaries carry canonical
+ * `ResultEnvelopeKind` discriminators while existing renderers keep
+ * consuming the stable `QueryResult` shape.
+ */
+export type TabularResultEnvelopeKind = Extract<ResultEnvelopeKind, "tabular">;
+export type DocumentResultEnvelopeKind = Extract<
+  ResultEnvelopeKind,
+  "document"
+>;
+export type OpaqueResultEnvelopeKind = Exclude<
+  ResultEnvelopeKind,
+  TabularResultEnvelopeKind | DocumentResultEnvelopeKind
+>;
+
+export interface TabularResultEnvelope {
+  kind: TabularResultEnvelopeKind;
+  queryResult: QueryResult;
+}
+
+export interface DocumentResultEnvelope {
+  kind: DocumentResultEnvelopeKind;
+  documentResult: DocumentQueryResult;
+}
+
+export interface OpaqueResultEnvelope {
+  kind: OpaqueResultEnvelopeKind;
+  payload: unknown;
+}
+
+export type ResultEnvelope =
+  | TabularResultEnvelope
+  | DocumentResultEnvelope
+  | OpaqueResultEnvelope;
+
+export interface UnsupportedResultEnvelopeConversionError {
+  kind: "unsupported-envelope-kind";
+  envelopeKind: OpaqueResultEnvelopeKind;
+  message: string;
+}
+
+export type ResultEnvelopeConversionError =
+  UnsupportedResultEnvelopeConversionError;
+
+export type ResultEnvelopeCompatibilityResult =
+  | { ok: true; queryResult: QueryResult }
+  | { ok: false; error: ResultEnvelopeConversionError };
+
+export function createTabularResultEnvelope(
+  queryResult: QueryResult,
+): TabularResultEnvelope {
+  return { kind: "tabular", queryResult };
+}
+
+export function createDocumentResultEnvelope(
+  documentResult: DocumentQueryResult,
+): DocumentResultEnvelope {
+  return {
+    kind: "document",
+    documentResult,
+  };
+}
+
+export function toCompatibleQueryResult(
+  envelope: ResultEnvelope,
+): ResultEnvelopeCompatibilityResult {
+  switch (envelope.kind) {
+    case "tabular":
+      return { ok: true, queryResult: envelope.queryResult };
+    case "document":
+      return {
+        ok: true,
+        queryResult: {
+          columns: envelope.documentResult.columns,
+          rows: envelope.documentResult.rows,
+          totalCount: envelope.documentResult.totalCount,
+          executionTimeMs: envelope.documentResult.executionTimeMs,
+          queryType: "select",
+        },
+      };
+    default:
+      return {
+        ok: false,
+        error: {
+          kind: "unsupported-envelope-kind",
+          envelopeKind: envelope.kind,
+          message: `Result envelope kind '${envelope.kind}' does not have a QueryResult compatibility projection.`,
+        },
+      };
+  }
+}
 
 /**
  * Result of a single statement inside a multi-statement execution.
