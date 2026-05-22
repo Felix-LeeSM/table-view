@@ -283,9 +283,10 @@ pub enum NullsPlacement {
     Unspecified,
 }
 
-/// `LIMIT <count> [OFFSET <offset>]`. Both slots accept the same
-/// literal-or-placeholder shape as the existing `InsertValue`. The
-/// `offset` slot is `None` when the user did not write `OFFSET`.
+/// `LIMIT <count> [OFFSET <offset>]`, also used for MySQL-family
+/// `LIMIT <offset>, <count>`. Both slots accept the same literal-or-
+/// placeholder shape as the existing `InsertValue`. The `offset` slot is
+/// `None` when the user did not write an offset.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LimitClause {
     pub count: InsertValue,

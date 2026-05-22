@@ -808,21 +808,20 @@ impl<'a> Parser<'a> {
         Ok(out)
     }
 
-    /// `LIMIT <value> [ OFFSET <value> ]`. The `LIMIT` keyword has been
-    /// consumed by the caller.
+    /// `LIMIT <count> [ OFFSET <offset> ]` or MySQL-family
+    /// `LIMIT <offset>, <count>`. The `LIMIT` keyword has been consumed by
+    /// the caller.
     fn parse_limit_clause(&mut self) -> Result<LimitClause, ParseError> {
         // `LIMIT` requires a value — `parse_insert_value` surfaces the
         // SyntaxError if the next token is not a literal/placeholder.
-        let count = self.parse_insert_value()?;
-        // Reject MySQL legacy `LIMIT n, m` form (a comma after the count
-        // would be an offset position; sprint-393a accepts only ANSI
-        // `LIMIT n [OFFSET m]`).
+        let first = self.parse_insert_value()?;
         if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
-            let at = self.peek().map(|t| t.at);
-            return Err(syntax_err(
-                at,
-                "MySQL `LIMIT n, m` form unsupported (use OFFSET)",
-            ));
+            self.advance();
+            let count = self.parse_insert_value()?;
+            return Ok(LimitClause {
+                count,
+                offset: Some(first),
+            });
         }
         let offset = if matches!(self.peek().map(|t| &t.token), Some(Token::Offset)) {
             self.advance();
@@ -830,7 +829,10 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(LimitClause { count, offset })
+        Ok(LimitClause {
+            count: first,
+            offset,
+        })
     }
 
     // ----- widened expression parser (SELECT WHERE / HAVING / JOIN ON) ----
@@ -4623,9 +4625,35 @@ mod tests {
     }
 
     #[test]
-    fn ac_393a_e09_mysql_legacy_limit_comma_form_is_syntax_error() {
-        let e = err("SELECT a FROM x LIMIT 10, 20");
-        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    fn ac_393a_e09_mysql_legacy_limit_comma_form_maps_offset_and_count() {
+        let s = ok_select("SELECT a FROM x LIMIT 10, 20");
+        let lim = s.limit.expect("LIMIT");
+        assert!(matches!(
+            lim.offset,
+            Some(InsertValue::Literal {
+                value: SqlLiteral::Integer { value: 10 }
+            })
+        ));
+        assert!(matches!(
+            lim.count,
+            InsertValue::Literal {
+                value: SqlLiteral::Integer { value: 20 }
+            }
+        ));
+    }
+
+    #[test]
+    fn ac_393a_e09b_mysql_legacy_limit_comma_form_accepts_placeholders() {
+        let s = ok_select("SELECT a FROM x LIMIT ?, ?");
+        let lim = s.limit.expect("LIMIT");
+        assert!(matches!(
+            lim.offset,
+            Some(InsertValue::Placeholder { name }) if name.is_empty()
+        ));
+        assert!(matches!(
+            lim.count,
+            InsertValue::Placeholder { name } if name.is_empty()
+        ));
     }
 
     #[test]
