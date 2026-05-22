@@ -5685,6 +5685,12 @@ mod tests {
     }
 
     #[test]
+    fn call_user_variable_argument_parses_for_mysql_family_routines() {
+        let s = ok_call("CALL refresh_user_stats(@user_id)");
+        assert_eq!(s.arguments.len(), 1);
+    }
+
+    #[test]
     fn call_rejects_named_argument_forms_outside_value_surface() {
         let cases = [
             ("function call", "CALL refresh_user_stats(NOW())"),
