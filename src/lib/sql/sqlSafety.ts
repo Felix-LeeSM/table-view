@@ -281,6 +281,10 @@ function statementAnalysisFromAst(
     // Sprint-392 — DML write triad.
     case "insert":
       return { kind: "dml-insert", severity: "info", reasons: [] };
+    case "call":
+      // The parser recognizes CALL dispatch, but does not inspect stored
+      // routine side effects. Keep classification on the legacy fallback.
+      return null;
     case "update":
       if (ast.where_clause === null) {
         return {

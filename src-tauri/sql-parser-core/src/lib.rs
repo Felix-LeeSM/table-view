@@ -26,18 +26,18 @@ pub mod lexer;
 pub mod parser;
 
 pub use ast::{
-    AlterAction, AlterTableStatement, CascadeBehavior, CaseWhen, ColumnRef, Columns,
+    AlterAction, AlterTableStatement, CallStatement, CascadeBehavior, CaseWhen, ColumnRef, Columns,
     CommentStatement, CommentTarget, CommentText, CompareOp, CopyDirection, CopySource,
     CopyStatement, CopyTarget, CteDefinition, DeleteStatement, DropObjectType, DropStatement,
     ExplainInner, ExplainOption, ExplainStatement, FrameBound, FrameUnit, FromItem, FromSource,
     GrantObject, GrantStatement, InsertSource, InsertStatement, InsertValue, JoinDescriptor,
     JoinPredicate, LikeCase, LimitClause, NullsPlacement, OnConflict, OnDuplicateKeyUpdate,
     OnDuplicateKeyUpdateAssignment, OnDuplicateKeyUpdateValue, OrderDirection, OrderingItem,
-    OverClause, ParseError, ParseErrorKind, ParseResult, PrivilegeTag, RevokeStatement, RoleRef,
-    SelectExpr, SelectListItem, SelectStatement, SetOperationEntry, SetOperator, SetScope,
-    SetStatement, SetValue, ShowStatement, ShowTarget, SqlLiteral, TruncateStatement,
-    UpdateAssignment, UpdateStatement, WhereExpr, WindowArgument, WindowFrame, WithInner,
-    WithStatement,
+    OverClause, ParseError, ParseErrorKind, ParseResult, PrivilegeTag, ProcedureRef,
+    RevokeStatement, RoleRef, SelectExpr, SelectListItem, SelectStatement, SetOperationEntry,
+    SetOperator, SetScope, SetStatement, SetValue, ShowStatement, ShowTarget, SqlLiteral,
+    TruncateStatement, UpdateAssignment, UpdateStatement, WhereExpr, WindowArgument, WindowFrame,
+    WithInner, WithStatement,
 };
 pub use completion::{
     complete_sql, complete_sql_compact, CompletionCursorOffsets, CompletionItem,

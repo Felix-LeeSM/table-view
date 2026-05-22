@@ -111,4 +111,22 @@ describe("checked-in SQL WASM artifact", () => {
       },
     ]);
   });
+
+  it("[AC-439-W01] parseSql accepts MySQL CALL through real WASM", async () => {
+    const result = await parseSql(
+      "CALL reporting.refresh_user_stats(?, 'x', 1)",
+    );
+
+    expect(result.kind).toBe("call");
+    if (result.kind !== "call") return;
+    expect(result.procedure).toEqual({
+      schema: "reporting",
+      name: "refresh_user_stats",
+    });
+    expect(result.arguments).toEqual([
+      { kind: "placeholder", name: "" },
+      { kind: "literal", value: { kind: "string", value: "x" } },
+      { kind: "literal", value: { kind: "integer", value: 1 } },
+    ]);
+  });
 });
