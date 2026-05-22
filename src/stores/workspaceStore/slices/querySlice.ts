@@ -1,6 +1,11 @@
 import type { Paradigm } from "@/types/connection";
 import type { QueryState } from "@/types/query";
-import type { QueryMode, QueryTab, WorkspaceStoreState } from "../types";
+import type {
+  QueryTab,
+  WorkspaceQueryMode,
+  WorkspaceState,
+  WorkspaceStoreState,
+} from "../types";
 import {
   nextQueryTabIdentity,
   patchExistingWorkspace,
@@ -25,6 +30,36 @@ type QuerySlice = Pick<
   | "loadQueryIntoTab"
 >;
 
+function isRunningQueryTab(
+  tab: WorkspaceState["tabs"][number] | undefined,
+  queryId: string,
+): tab is QueryTab {
+  return (
+    tab?.type === "query" &&
+    tab.queryState.status === "running" &&
+    tab.queryState.queryId === queryId
+  );
+}
+
+function patchRunningQueryTab(
+  ws: WorkspaceState,
+  tabId: string,
+  queryId: string,
+  update: (tab: QueryTab) => QueryTab,
+): WorkspaceState {
+  const current = ws.tabs.find((t) => t.id === tabId);
+  if (!isRunningQueryTab(current, queryId)) {
+    return ws;
+  }
+
+  return {
+    ...ws,
+    tabs: ws.tabs.map((t) =>
+      t.id === tabId && t.type === "query" ? update(t) : t,
+    ),
+  };
+}
+
 export function createQuerySlice(
   set: WorkspaceSet,
   get: WorkspaceGet,
@@ -36,7 +71,7 @@ export function createQuerySlice(
         opts.paradigm ?? resolveParadigmForConnection(connId);
       // Sprint 309 — Find/Aggregate toggle removed. RDB tabs still need
       // `"sql"`; document tabs leave the field undefined on new tabs.
-      const queryMode: QueryMode | undefined =
+      const queryMode: WorkspaceQueryMode | undefined =
         paradigm === "rdb" ? "sql" : opts.queryMode;
       set((state) => {
         const next = withWorkspace(state, connId, db, (ws) => {
@@ -136,22 +171,10 @@ export function createQuerySlice(
     completeQuery: (connId, db, tabId, queryId, result) => {
       set((state) => {
         const next = patchExistingWorkspace(state, connId, db, (ws) => {
-          const current = ws.tabs.find((t) => t.id === tabId);
-          if (
-            !current ||
-            current.type !== "query" ||
-            current.queryState.status !== "running" ||
-            !("queryId" in current.queryState) ||
-            current.queryState.queryId !== queryId
-          ) {
-            return ws;
-          }
-          const tabs = ws.tabs.map((t) =>
-            t.id === tabId && t.type === "query"
-              ? { ...t, queryState: { status: "completed" as const, result } }
-              : t,
-          );
-          return { ...ws, tabs };
+          return patchRunningQueryTab(ws, tabId, queryId, (tab) => ({
+            ...tab,
+            queryState: { status: "completed" as const, result },
+          }));
         });
         return next ? { workspaces: next } : state;
       });
@@ -160,28 +183,13 @@ export function createQuerySlice(
     failQuery: (connId, db, tabId, queryId, errorMessage) => {
       set((state) => {
         const next = patchExistingWorkspace(state, connId, db, (ws) => {
-          const current = ws.tabs.find((t) => t.id === tabId);
-          if (
-            !current ||
-            current.type !== "query" ||
-            current.queryState.status !== "running" ||
-            !("queryId" in current.queryState) ||
-            current.queryState.queryId !== queryId
-          ) {
-            return ws;
-          }
-          const tabs = ws.tabs.map((t) =>
-            t.id === tabId && t.type === "query"
-              ? {
-                  ...t,
-                  queryState: {
-                    status: "error" as const,
-                    error: errorMessage,
-                  },
-                }
-              : t,
-          );
-          return { ...ws, tabs };
+          return patchRunningQueryTab(ws, tabId, queryId, (tab) => ({
+            ...tab,
+            queryState: {
+              status: "error" as const,
+              error: errorMessage,
+            },
+          }));
         });
         return next ? { workspaces: next } : state;
       });
@@ -190,27 +198,16 @@ export function createQuerySlice(
     completeMultiStatementQuery: (connId, db, tabId, queryId, payload) => {
       set((state) => {
         const next = patchExistingWorkspace(state, connId, db, (ws) => {
-          const current = ws.tabs.find((t) => t.id === tabId);
-          if (
-            !current ||
-            current.type !== "query" ||
-            current.queryState.status !== "running" ||
-            !("queryId" in current.queryState) ||
-            current.queryState.queryId !== queryId
-          ) {
-            return ws;
-          }
           const {
             statementResults,
             lastResult,
             allFailed,
             joinedErrorMessage,
           } = payload;
-          const tabs = ws.tabs.map((t) => {
-            if (t.id !== tabId || t.type !== "query") return t;
+          return patchRunningQueryTab(ws, tabId, queryId, (tab) => {
             if (allFailed) {
               return {
-                ...t,
+                ...tab,
                 queryState: {
                   status: "error" as const,
                   error: joinedErrorMessage,
@@ -219,7 +216,7 @@ export function createQuerySlice(
             }
             if (!lastResult) {
               return {
-                ...t,
+                ...tab,
                 queryState: {
                   status: "error" as const,
                   error: joinedErrorMessage,
@@ -227,7 +224,7 @@ export function createQuerySlice(
               };
             }
             return {
-              ...t,
+              ...tab,
               queryState: {
                 status: "completed" as const,
                 result: lastResult,
@@ -235,7 +232,6 @@ export function createQuerySlice(
               },
             };
           });
-          return { ...ws, tabs };
         });
         return next ? { workspaces: next } : state;
       });
@@ -244,37 +240,22 @@ export function createQuerySlice(
     completeQueryDryRun: (connId, db, tabId, queryId, result, statements) => {
       set((state) => {
         const next = patchExistingWorkspace(state, connId, db, (ws) => {
-          const current = ws.tabs.find((t) => t.id === tabId);
-          if (
-            !current ||
-            current.type !== "query" ||
-            current.queryState.status !== "running" ||
-            !("queryId" in current.queryState) ||
-            current.queryState.queryId !== queryId
-          ) {
-            return ws;
-          }
-          const tabs = ws.tabs.map((t) =>
-            t.id === tabId && t.type === "query"
-              ? {
-                  ...t,
-                  queryState:
-                    statements === undefined
-                      ? {
-                          status: "completed" as const,
-                          result,
-                          isDryRun: true,
-                        }
-                      : {
-                          status: "completed" as const,
-                          result,
-                          statements,
-                          isDryRun: true,
-                        },
-                }
-              : t,
-          );
-          return { ...ws, tabs };
+          return patchRunningQueryTab(ws, tabId, queryId, (tab) => ({
+            ...tab,
+            queryState:
+              statements === undefined
+                ? {
+                    status: "completed" as const,
+                    result,
+                    isDryRun: true,
+                  }
+                : {
+                    status: "completed" as const,
+                    result,
+                    statements,
+                    isDryRun: true,
+                  },
+          }));
         });
         return next ? { workspaces: next } : state;
       });

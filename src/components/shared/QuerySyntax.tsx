@@ -1,5 +1,5 @@
 import type { Paradigm } from "@/types/connection";
-import type { QueryMode } from "@stores/workspaceStore";
+import type { HistoryQueryMode } from "@lib/tauri/history";
 import SqlSyntax from "./SqlSyntax";
 import MongoSyntax from "./MongoSyntax";
 
@@ -20,7 +20,7 @@ interface QuerySyntaxProps {
    * today means callers can thread `entry.queryMode` through without
    * another refactor when the mode-aware renderer lands.
    */
-  queryMode?: QueryMode;
+  queryMode?: HistoryQueryMode["queryMode"];
   className?: string;
 }
 

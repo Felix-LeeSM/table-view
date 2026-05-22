@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useSchemaStore } from "@stores/schemaStore";
-import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
+import {
+  recordHistoryEntry,
+  type RecordHistoryQueryMode,
+} from "@lib/history/recordHistoryEntry";
 import {
   executeQuery,
   executeQueryDryRun,
@@ -37,7 +40,7 @@ import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/toast";
-import type { QueryTab, QueryMode } from "@stores/workspaceStore";
+import type { QueryTab } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";
 import type { BulkWriteOp, BulkWriteResult } from "@/types/documentMutate";
 import type { WriteSummaryData } from "@/types/query";
@@ -281,7 +284,7 @@ export function useQueryExecution({
       executedAt: number;
       duration: number;
       status: "success" | "error" | "cancelled";
-      queryMode?: QueryMode;
+      queryMode?: RecordHistoryQueryMode;
     }) => {
       recordHistoryEntry({
         sql: payload.sql,
@@ -1573,7 +1576,7 @@ export function useQueryExecution({
    */
   const runWriteHelper = useCallback(
     async (
-      queryMode: QueryMode,
+      queryMode: RecordHistoryQueryMode,
       rawSql: string,
       writer: () => Promise<WriteSummaryData>,
     ) => {

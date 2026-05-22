@@ -34,7 +34,6 @@ import { createTabSlice } from "./workspaceStore/slices/tabSlice";
 /* eslint-enable no-restricted-imports */
 
 export type {
-  QueryMode,
   QueryTab,
   SidebarState,
   Tab,
@@ -42,6 +41,7 @@ export type {
   TableTabInit,
   TabObjectKind,
   TabSubView,
+  WorkspaceQueryMode,
   WorkspaceState,
   WorkspaceStoreState,
 } from "./workspaceStore/types";

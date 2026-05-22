@@ -6,7 +6,7 @@
  *
  *   1. `useHistorySettingsStore.queryHistoryEnabled` 가 false 면 early
  *      return — IPC 호출 자체를 skip 한다 (AC-373-03 invariant).
- *   2. 호출자가 넘긴 legacy in-memory shape (`paradigm` + `queryMode` +
+ *   2. 호출자가 넘긴 history input shape (`paradigm` + `queryMode` +
  *      `duration` + 기타) 을 backend wire shape (discriminated union +
  *      `durationMs`) 으로 normalise.
  *   3. `useQueryHistoryStore.addOptimisticEntry` 에 위임 — optimistic
@@ -25,7 +25,6 @@
  */
 
 import type { Paradigm } from "@/types/connection";
-import type { QueryMode } from "@stores/workspaceStore";
 import {
   useQueryHistoryStore,
   type QueryHistorySource,
@@ -34,14 +33,20 @@ import { useHistorySettingsStore } from "@stores/historySettingsStore";
 import type {
   AddHistoryEntryRequest,
   DocumentQueryMode,
+  RdbQueryMode,
 } from "@lib/tauri/history";
+
+export type RecordHistoryQueryMode =
+  | RdbQueryMode
+  | DocumentQueryMode
+  | "countDocuments";
 
 export interface RecordHistoryEntryArgs {
   /** Connection id; required (snapshot truth from tab/grid context). */
   connectionId: string;
   paradigm: Paradigm;
-  /** Optional override of `tab.queryMode`; default → tab's mode. */
-  queryMode?: QueryMode;
+  /** Optional dispatched method override; callers may fall back to tab hint. */
+  queryMode?: RecordHistoryQueryMode;
   /** Optional db/collection (document paradigm 의 경우 거의 항상 set). */
   database?: string;
   collection?: string;
@@ -63,36 +68,40 @@ export interface RecordHistoryEntryArgs {
 }
 
 /**
- * Legacy `QueryMode` → backend `DocumentQueryMode` 매핑. `countDocuments`
- * 가 유일한 정정 — 나머지는 1:1. `kv` / `search` paradigm 은 본 sprint
- * 범위 밖이라 호출자가 `paradigm: "rdb" | "document"` 만 넘긴다 (외 paradigm
- * 은 호출 site 가 없음).
+ * Frontend history input → backend `DocumentQueryMode` 매핑.
+ * `countDocuments` 가 유일한 legacy method-name 정정 — 나머지는 1:1.
+ * `kv` / `search` paradigm 은 본 sprint 범위 밖이라 호출자가
+ * `paradigm: "rdb" | "document"` 만 넘긴다 (외 paradigm 은 호출 site 가 없음).
  */
-function toDocumentQueryMode(mode: QueryMode | undefined): DocumentQueryMode {
-  if (mode === "countDocuments") return "count";
-  if (
-    mode === "find" ||
-    mode === "findOne" ||
-    mode === "aggregate" ||
-    mode === "estimatedDocumentCount" ||
-    mode === "distinct" ||
-    mode === "insertOne" ||
-    mode === "insertMany" ||
-    mode === "updateOne" ||
-    mode === "updateMany" ||
-    mode === "replaceOne" ||
-    mode === "deleteOne" ||
-    mode === "deleteMany" ||
-    mode === "createIndex" ||
-    mode === "dropIndex" ||
-    mode === "bulkWrite"
-  ) {
-    return mode;
+function toDocumentQueryMode(
+  mode: RecordHistoryQueryMode | undefined,
+): DocumentQueryMode {
+  switch (mode) {
+    case "countDocuments":
+      return "count";
+    case "find":
+    case "findOne":
+    case "aggregate":
+    case "count":
+    case "estimatedDocumentCount":
+    case "distinct":
+    case "insertOne":
+    case "insertMany":
+    case "updateOne":
+    case "updateMany":
+    case "replaceOne":
+    case "deleteOne":
+    case "deleteMany":
+    case "createIndex":
+    case "dropIndex":
+    case "bulkWrite":
+      return mode;
+    default:
+      // Legacy / unset (`"sql"` 잘못 들어옴 / undefined) — default to `"find"`
+      // (가장 빈번한 document query). Backend serde 가 empty string 을 reject 하므로
+      // safe fallback.
+      return "find";
   }
-  // Legacy / unset (`"sql"` 잘못 들어옴 / undefined) — default to `"find"`
-  // (가장 빈번한 document query). Backend serde 가 empty string 을 reject 하므로
-  // safe fallback.
-  return "find";
 }
 
 /**
