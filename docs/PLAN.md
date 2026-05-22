@@ -12,11 +12,11 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 
 Phase 1–4 완료 (Sprint 24–54 PASS). Phase 5–11 부분 진행. **Phase 12 완료(2026-04-27, Sprint 150–155)** — launcher/workspace 별도 `WebviewWindow` + 5 store cross-window IPC sync + 실제 lifecycle wiring + ADR 0011 → 0012 supersede + RISK-025 resolved.
 
-최근 closure 기준: **Phase 13–17, 21–23, 27 종료**. Phase 18–20
+최근 closure 기준: **Phase 13–17, 21–23, 27, 31 종료**. Phase 18–20
 (MariaDB / SQLite / Oracle) 은 보류. 현재 다음 후보는 Phase 28 (MongoDB
-Full Support 후속 / parser consolidation), Phase 31 (Language Completion
-Architecture), 2026-05-19 refactor backlog
-(`docs/refactor-backlog/2026-05-19/`) 이다.
+Full Support 후속 / parser consolidation), Phase 31 후속 semantic widening /
+capability gating, 2026-05-19 refactor backlog (`docs/refactor-backlog/2026-05-19/`)
+이다.
 
 ## 방향 결정 (2026-05-01)
 
@@ -277,7 +277,7 @@ SQLite write parity 같은 개별 feature backlog 로 취급한다.
 | 26 | Trigger 관리 | 계획 | [phase-26.md](phases/phase-26.md) |
 | 27 | Table / Column DDL UI | 종료 (Sprint 237 closure, 2026-05-13) | [phase-27.md](phases/phase-27.md) |
 | 28 | MongoDB Full Support | 진행/후속 판단 (Slice A–M 대부분 구현, parser consolidation 후보) | [phase-28.md](phases/phase-28.md) |
-| 31 | Language Completion Architecture | 진행 (Sprint 428: Rust vocabulary SOT + coverage closure) | [phase-31.md](phases/phase-31.md) |
+| 31 | Language Completion Architecture | 완료 (Sprint 430; 후속은 semantic widening / capability gating) | [phase-31.md](phases/phase-31.md) |
 
 > Phase 9–11은 본 phase 분할 이전의 임시 스케치(`phase-9.md` 등). Phase 17–20이 phase-9의 RDBMS 확장 계획을 승계해 분할 — 2026-05-01 결정으로 패리티 달성 시까지 보류. Phase 21–27 이 그 자리를 차지하고, 본 7단계 종료 시점에 Phase 17–20 재개를 재평가. Phase 29/30 은 기존 후보(통합 후속 / 보안 surface) 로 남겨두고, completion 은 충돌 회피를 위해 Phase 31 로 배치한다.
 
