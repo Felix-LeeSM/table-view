@@ -215,13 +215,13 @@ describe("schemaStore", () => {
     expect(list![0]!.row_count).toBe(42);
   });
 
-  it("clears schema data", async () => {
+  it("clearForConnection clears schema data", async () => {
     // Load some data first
     await useSchemaStore.getState().loadSchemas("conn1", "db1");
     await useSchemaStore.getState().loadTables("conn1", "db1", "public");
 
     // Clear
-    useSchemaStore.getState().clearSchema("conn1");
+    useSchemaStore.getState().clearForConnection("conn1");
 
     const state = useSchemaStore.getState();
     expect(state.schemas.conn1?.db1).toBeUndefined();
@@ -269,30 +269,12 @@ describe("schemaStore", () => {
     );
   });
 
-  it("clearSchema also drops cached columns for that connection", async () => {
-    useSchemaStore.setState({
-      tableColumnsCache: {
-        conn1: { db1: { public: { users: [], orders: [] } } },
-        conn2: { db1: { public: { items: [] } } },
-      },
-    });
-
-    useSchemaStore.getState().clearSchema("conn1");
-
-    const state = useSchemaStore.getState();
-    expect(state.tableColumnsCache.conn1?.db1?.public?.users).toBeUndefined();
-    expect(state.tableColumnsCache.conn1?.db1?.public?.orders).toBeUndefined();
-    // Other connection preserved
-    expect(state.tableColumnsCache.conn2?.db1?.public?.items).toBeDefined();
-  });
-
   // 작성 이유 (2026-05-13, Sprint 272 attempt 2): Evaluator P2b —
-  // `clearSchema` is the connection-scope eviction (the same operation
-  // that runs when a connection disconnects). Until Sprint 272 added the
-  // `triggers` slice, this test was implicit; pin it now so a future
-  // refactor that forgets to update the `clearSchema` spread can't leak
-  // stale triggers across connection rebinds.
-  it("clearSchema removes triggers for the connection and preserves siblings", async () => {
+  // `clearForConnection` is the connection-scope eviction. Until Sprint
+  // 272 added the `triggers` slice, this test was implicit; pin it now
+  // so a future refactor that forgets to update the eviction spread
+  // can't leak stale triggers across connection rebinds.
+  it("clearForConnection removes triggers for the connection and preserves siblings", async () => {
     useSchemaStore.setState({
       triggers: {
         conn1: {
@@ -326,7 +308,7 @@ describe("schemaStore", () => {
       },
     });
 
-    useSchemaStore.getState().clearSchema("conn1");
+    useSchemaStore.getState().clearForConnection("conn1");
 
     const state = useSchemaStore.getState();
     // Targeted connection: triggers slice cleared.
@@ -442,35 +424,6 @@ describe("schemaStore", () => {
     expect(state.tables.conn2?.db1?.public).toHaveLength(1);
   });
 
-  it("clearSchema removes connection-related tables", async () => {
-    // Set up tables for multiple schemas of same connection
-    useSchemaStore.setState({
-      schemas: { conn1: { db1: [{ name: "public" }] } },
-      tables: {
-        conn1: {
-          db1: {
-            public: [{ name: "users", schema: "public", row_count: 1 }],
-            private: [{ name: "secrets", schema: "private", row_count: 5 }],
-          },
-        },
-        conn2: {
-          db1: {
-            public: [{ name: "orders", schema: "public", row_count: 10 }],
-          },
-        },
-      },
-    });
-
-    useSchemaStore.getState().clearSchema("conn1");
-
-    const state = useSchemaStore.getState();
-    expect(state.schemas.conn1?.db1).toBeUndefined();
-    expect(state.tables.conn1?.db1?.public).toBeUndefined();
-    expect(state.tables.conn1?.db1?.private).toBeUndefined();
-    // Other connection should be unaffected
-    expect(state.tables.conn2?.db1?.public).toHaveLength(1);
-  });
-
   // Sprint 354 (L2 fix) — `executeQuery` removed from schemaStore;
   // direct tauri.executeQuery calls already lived in
   // `useQueryExecution.ts`, so this delegate test no longer fits.
@@ -580,57 +533,6 @@ describe("schemaStore", () => {
     expect(state.error).toContain("Functions not accessible");
   });
 
-  it("clearSchema removes views and functions for connection", async () => {
-    useSchemaStore.setState({
-      schemas: { conn1: { db1: [{ name: "public" }] } },
-      tables: {
-        conn1: {
-          db1: {
-            public: [{ name: "users", schema: "public", row_count: 1 }],
-          },
-        },
-      },
-      views: {
-        conn1: {
-          db1: {
-            public: [
-              {
-                name: "active_users",
-                schema: "public",
-                definition: "SELECT 1",
-              },
-            ],
-          },
-        },
-      },
-      functions: {
-        conn1: {
-          db1: {
-            public: [
-              {
-                name: "calc",
-                schema: "public",
-                arguments: null,
-                returnType: null,
-                language: "sql",
-                source: "SELECT 1",
-                kind: "function",
-              },
-            ],
-          },
-        },
-      },
-    });
-
-    useSchemaStore.getState().clearSchema("conn1");
-
-    const state = useSchemaStore.getState();
-    expect(state.schemas.conn1?.db1).toBeUndefined();
-    expect(state.tables.conn1?.db1?.public).toBeUndefined();
-    expect(state.views.conn1?.db1?.public).toBeUndefined();
-    expect(state.functions.conn1?.db1?.public).toBeUndefined();
-  });
-
   it("delegates getViewColumns", async () => {
     const { getViewColumns } = await import("@lib/tauri");
     const columns = await useSchemaStore
@@ -679,7 +581,7 @@ describe("schemaStore", () => {
     ).rejects.toThrow("View does not exist");
   });
 
-  it("clearSchema only removes matching connection views/functions", async () => {
+  it("clearForConnection only removes matching connection views/functions", async () => {
     useSchemaStore.setState({
       views: {
         conn1: {
@@ -727,7 +629,7 @@ describe("schemaStore", () => {
       },
     });
 
-    useSchemaStore.getState().clearSchema("conn1");
+    useSchemaStore.getState().clearForConnection("conn1");
 
     const state = useSchemaStore.getState();
     expect(state.views.conn1?.db1?.public).toBeUndefined();

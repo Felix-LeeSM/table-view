@@ -98,8 +98,9 @@ describe("schemaStore — scope (L2 fix)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("AC-354-06 — schema-fetching surface preserved (loadSchemas / loadTables / loadViews / loadFunctions / getTableColumns)", () => {
+  it("AC-354-06 — schema-fetching surface preserved and clearSchema alias retired", () => {
     const state = useSchemaStore.getState();
+    const publicState = state as unknown as Record<string, unknown>;
     expect(typeof state.loadSchemas).toBe("function");
     expect(typeof state.loadTables).toBe("function");
     expect(typeof state.loadViews).toBe("function");
@@ -111,7 +112,7 @@ describe("schemaStore — scope (L2 fix)", () => {
     expect(typeof state.refreshTableTriggers).toBe("function");
     expect(typeof state.getViewColumns).toBe("function");
     expect(typeof state.getViewDefinition).toBe("function");
-    expect(typeof state.clearSchema).toBe("function");
+    expect(publicState.clearSchema).toBeUndefined();
     expect(typeof state.clearForConnection).toBe("function");
     expect(typeof state.clearForWorkspace).toBe("function");
     expect(typeof state.evictSchemaForName).toBe("function");

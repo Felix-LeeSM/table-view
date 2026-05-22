@@ -122,12 +122,7 @@ interface SchemaState {
     schema: string,
     viewName: string,
   ) => Promise<string>;
-  /**
-   * Drop every cached entry keyed under `connId` (all DBs). Used on
-   * connection delete / disconnect. Same body as `clearForConnection`
-   * — the alias survives for caller intent ("disconnect" vs "DB switch").
-   */
-  clearSchema: (connId: string) => void;
+  /** Drop every cached entry keyed under `connId` across all DBs. */
   clearForConnection: (connId: string) => void;
   /**
    * Sprint 263 — evict a single `(connId, db)` slot. DbSwitcher does NOT
@@ -440,17 +435,6 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       handleDbMismatch(connId, e);
       throw e;
     }
-  },
-
-  clearSchema: (connId) => {
-    set((state) => ({
-      schemas: deleteConn(state.schemas, connId),
-      tables: deleteConn(state.tables, connId),
-      views: deleteConn(state.views, connId),
-      functions: deleteConn(state.functions, connId),
-      tableColumnsCache: deleteConn(state.tableColumnsCache, connId),
-      triggers: deleteConn(state.triggers, connId),
-    }));
   },
 
   clearForConnection: (connId) => {
