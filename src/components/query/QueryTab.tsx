@@ -83,7 +83,16 @@ export default function QueryTab({ tab }: QueryTabProps) {
         : true,
     [connection],
   );
-  const canPreviewLocalFile = connection?.dbType === "duckdb";
+  const canPreviewLocalFile = useMemo(() => {
+    if (!connection) return false;
+    return (
+      getDataSourceProfile(
+        connection.dbType,
+      ).fileConnection?.supportedInputs.some(
+        (input) => input.kind === "analytics" && input.status === "supported",
+      ) ?? false
+    );
+  }, [connection]);
   const [showFileAnalytics, setShowFileAnalytics] = useState(false);
   // `dbType` flows in so the autocomplete namespace surfaces
   // dialect-specific keywords (PG: RETURNING/ILIKE; MySQL: AUTO_INCREMENT;

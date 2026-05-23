@@ -55,10 +55,10 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 |---|---|---|---|---|
 | PostgreSQL | strong | strong | WASM-first | 기준선. 회귀 gate 유지 |
 | MongoDB | partial/full-support backlog | whitelisted mongosh | Rust/WASM vocabulary | RDBMS-first 이후 재개 |
-| MySQL | Phase 17 complete | widening in progress | Rust/WASM vocabulary | adapter 완료. semantic gap 계속 축소 |
-| MariaDB | deferred adapter | MySQL-family profile 일부 | Rust/WASM vocabulary | runtime 재개 결정 필요 |
-| SQLite | deferred adapter | parser/write parity gap | Rust/WASM vocabulary | DBMS adapter vs internal SQLite state 분리 필요 |
-| DuckDB | not started | SQL/file analytics profile 필요 | SQL vocabulary 확장 필요 | SQLite 이후 RDBMS/file analytics 후보 |
+| MySQL | adapter complete | widening in progress | Rust/WASM vocabulary | adapter 완료. semantic gap 계속 축소 |
+| MariaDB | MySQL-adapter reuse | MySQL-family profile + MariaDB delta | Rust/WASM vocabulary | runtime path 존재. MariaDB-engine fixture gap은 active risk |
+| SQLite | file adapter complete | parser/write parity guardrails | Rust/WASM vocabulary | user DBMS adapter는 internal SQLite state와 분리됨. DDL UI는 unsupported |
+| DuckDB | file adapter + local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM vocabulary | local `.duckdb`/CSV/Parquet/JSON/NDJSON preview/query 지원. DDL/write는 unsupported |
 | Redis/Valkey | not started | `KvAdapter` contract 필요 | redis-command 필요 | non-RDBMS 1차 후보 |
 | Elasticsearch/OpenSearch | not started | `SearchAdapter` contract 필요 | search DSL 필요 | non-RDBMS 1차 후보 |
 
@@ -71,9 +71,9 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | 3 | Query language / result envelope migration | planned | legacy `queryMode` 는 호환 필드로 낮추고 `queryLanguage` + typed result envelope 를 query/editor/result boundary 에 도입 | `docs/data-source-architecture.md`, ADR 0046 |
 | 4 | Adapter contract normalization | planned | `RdbAdapter` 는 현 기능을 profile 로 노출하고, `KvAdapter`/`SearchAdapter` marker trait 승격 전 필요한 contract shape 를 고정 | `docs/data-source-architecture.md`, ADR 0046 |
 | 5 | MySQL-family semantic widening | active follow-up | broader `CALL` args, user variables, routine scripting. `DELIMITER`/`LOAD DATA` 는 현재 explicit unsupported boundary 이며, future work 는 procedure body parser 또는 import UX 를 별도 결정 | `docs/query-language-support.md`, `docs/sprints/sprint-449/contract.md` |
-| 6 | MariaDB adapter decision | deferred -> re-evaluate | Slice 18A: MySQL adapter reuse + MariaDB identity/dialect flag 를 default 로 검증. 전용 adapter 는 evidence 있을 때만 ADR | `docs/phases/phase-18.md` |
-| 7 | SQLite DBMS adapter / write parity | deferred -> re-evaluate | Slice 19A: user DBMS adapter 범위를 internal app SQLite state-management 와 분리해 connection/file-picker contract 부터 고정 | `docs/phases/phase-19.md`, `docs/state-management-strategy-2026-05-15.md` |
-| 8 | DuckDB + file analytics | planned | SQLite file contract 재사용. `.duckdb`, CSV, Parquet, JSON preview/query/import 후보 phase 작성 | `docs/data-source-architecture.md`, `docs/ROADMAP.md` |
+| 6 | MariaDB adapter evidence | active follow-up | MySQL adapter reuse + MariaDB identity/dialect flag 는 default. MariaDB-engine fixture/CI evidence 는 별도 risk 로 추적 | `docs/query-language-support.md`, `docs/RISKS.md` |
+| 7 | SQLite DBMS adapter / write parity | active follow-up | user DBMS adapter 범위는 internal app SQLite state-management 와 분리됨. 남은 DDL UI/runtime family 는 unsupported boundary 유지 | `docs/query-language-support.md`, `docs/state-management-strategy-2026-05-15.md` |
+| 8 | DuckDB + file analytics hardening | active follow-up | `.duckdb`, CSV, Parquet, JSON, NDJSON preview/query 는 local-first runtime path 존재. analytics import/history/favorites 확대는 별도 결정 | `docs/data-source-architecture.md`, `docs/ROADMAP.md`, `docs/sprints/sprint-457/contract.md` |
 | 9 | RDBMS ERD / SchemaGraph | planned | FK/constraint catalog 를 재사용 가능한 `SchemaGraph` 로 승격. ERD는 첫 renderer | `docs/data-source-architecture.md` |
 | 10 | Redis/Valkey | deferred candidate | `KvAdapter` 를 marker 에서 key/type/TTL/stream contract 로 승격 후 phase 작성 | `docs/data-source-architecture.md` |
 | 11 | Elasticsearch/OpenSearch | deferred candidate | `SearchAdapter` 를 marker 에서 index/mapping/search/aggregation contract 로 승격 후 phase 작성 | `docs/data-source-architecture.md` |
