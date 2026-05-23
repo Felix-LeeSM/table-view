@@ -76,6 +76,7 @@ done < <(git log "${base}..HEAD" --format="%s" 2>/dev/null)
 
 if [ "$red_found" = "0" ]; then
 	echo "BLOCKED: code profile sprint (${sprint_num}) 에 RED commit 없음." >&2
+	echo "SOT: memory/workflow/tdd/memory.md" >&2
 	echo "TDD 사이클: RED → GREEN → (Refactor). RED commit subject 표식:" >&2
 	echo "  - '[RED] ...' / 'RED: ...' / 'test: RED ...' / 'test ... failing'" >&2
 	echo "긴급 hotfix 면 'SKIP_TDD_CYCLE=1 git push' (사용자 명시 시 한정)." >&2

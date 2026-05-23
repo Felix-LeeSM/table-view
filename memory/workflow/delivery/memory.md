@@ -24,7 +24,7 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 ## Pipeline (T0~T7)
 
 1. **T1 Commit** — `git add <specific files>` + `git commit -m "..."`. pre-commit hook 통과 책임.
-2. **T2 Push** — `git push`. pre-push stage 통과.
+2. **T2 Push** — `git push`. pre-push stage 통과. `sprint-N/*` branch 의 contract 가 `review-profile: code` 면 [tdd](../tdd/memory.md) 의 RED evidence 를 push 전 확인한다.
 3. **T3 PR** — `gh pr create`. body 는 Summary / Changes / Invariants / Test plan / Smoke impact / Documentation impact / Links.
 4. **T4 Review** — `pr-reviewer` agent spawn (1회, default 자동):
    - 정량은 자동 layer (hook / lint / pre-push / scripts/review/run-checks.sh) 가 이미 함
@@ -37,8 +37,8 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
    - `gh pr checks` SUCCESS (CI green)
    - `gh pr view` 가 mergeable 이고 branch policy block 없음
    - 사용자 명시 거부 없음
-   → `gh pr merge --squash --delete-branch` 자율 실행
-   조건 미달 시 원인(PR conflict / CI / policy / review)을 사용자에게 보고.
+     → `gh pr merge --squash --delete-branch` 자율 실행
+     조건 미달 시 원인(PR conflict / CI / policy / review)을 사용자에게 보고.
 7. **T7 Cleanup** — merge/blocked 이후 agent close + worktree cleanup 또는 보존 사유 기록.
 
 ## PR body gates
@@ -66,6 +66,8 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 - hook 실패 시 회피 X, 근본 원인 fix.
 - GPG signing pinentry timeout 시 즉시 중단. 사용자에게 cache warm-up 필요를
   보고하고, unsigned commit 으로 진행하지 않음.
+- TDD-cycle hook 실패 시 skip env 를 쓰지 않는다. code-profile sprint 의
+  RED evidence 요구는 [tdd](../tdd/memory.md) 를 따른다.
 
 ## Agent spawn 권장
 
@@ -86,4 +88,5 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 - [review](../review/memory.md) — T4 review 룰 (정성 차원 + profile)
 - [documentation](../documentation/memory.md) — 문서화 impact + evidence portability
 - [implementation](../implementation/memory.md) — 직전 phase
+- [tdd](../tdd/memory.md) — code-profile sprint RED evidence
 - [conventions](../../conventions/memory.md) — Conventional Commits 형식 (`feat(scope): description`)

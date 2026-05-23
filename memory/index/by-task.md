@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-05-22
+generated: 2026-05-23
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -70,6 +70,7 @@ generator: scripts/regenerate-indexes.sh
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
+- [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
 ### docs
 
@@ -193,6 +194,7 @@ generator: scripts/regenerate-indexes.sh
 - [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 - [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
 - [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
+- [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
 ### profile
 
@@ -278,6 +280,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [/split-memory skill](../../memory/skills/split-memory/memory.md)
 
+### sprint
+
+- [TDD Evidence](../../memory/workflow/tdd/memory.md)
+
 ### sprint-388
 
 - [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
@@ -285,6 +291,10 @@ generator: scripts/regenerate-indexes.sh
 ### tauri
 
 - [Backend Guidance](../../memory/conventions/backend/memory.md)
+
+### tdd
+
+- [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
 ### test-writing
 
