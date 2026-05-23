@@ -18,6 +18,9 @@ export const RUNTIME_RDBMS_DATABASE_TYPES = Object.freeze([
   "duckdb",
 ] as const satisfies readonly DatabaseType[]);
 
+export type RuntimeRdbmsDatabaseType =
+  (typeof RUNTIME_RDBMS_DATABASE_TYPES)[number];
+
 export const SERVER_RDBMS_DATABASE_TYPES = Object.freeze([
   "postgresql",
   "mysql",
