@@ -141,6 +141,49 @@ describe("SchemaGraph relationship normalizer", () => {
     ]);
   });
 
+  it("skips unsafe FK edges when constraint and column references conflict", () => {
+    const graph = extractSchemaGraph({
+      source: { dbType: "postgresql", database: "app" },
+      schemas: [{ name: "public" }],
+      tablesBySchema: {
+        public: [
+          table("public", "accounts"),
+          table("public", "orders"),
+          table("public", "users"),
+        ],
+      },
+      columnsByTable: {
+        public: {
+          accounts: [column("id")],
+          orders: [
+            column("user_id", {
+              is_foreign_key: true,
+              fk_reference: "public.accounts(id)",
+            }),
+          ],
+          users: [column("id")],
+        },
+      },
+      constraintsByTable: {
+        public: {
+          orders: [
+            constraint("orders_user_fk", "FOREIGN KEY", ["user_id"], {
+              reference_table: "public.users",
+              reference_columns: ["id"],
+            }),
+          ],
+        },
+      },
+    });
+
+    expect(graph.edges.some((edge) => edge.kind === "foreign-key-table")).toBe(
+      false,
+    );
+    expect(graph.diagnostics.map((diagnostic) => diagnostic.kind)).toEqual([
+      "conflicting-fk-reference",
+    ]);
+  });
+
   it("normalizes unnamed constraints into deterministic graph identities", () => {
     const graph = extractSchemaGraph({
       source: { dbType: "postgresql", database: "app" },
