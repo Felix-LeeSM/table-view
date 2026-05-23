@@ -17,6 +17,7 @@ import {
   MongoStructurePanel,
   type MongoStructureSubTab,
 } from "@components/document/MongoStructurePanel";
+import SchemaErdPanel from "@components/schema/SchemaErdPanel";
 import StructurePanel from "@components/schema/StructurePanel";
 import ViewStructurePanel from "@components/schema/ViewStructurePanel";
 import QueryTab from "@components/query/QueryTab";
@@ -175,10 +176,36 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
             >
               Structure
             </button>
+            {paradigm === "rdb" && (
+              <button
+                role="tab"
+                aria-selected={tab.subView === "erd"}
+                tabIndex={tab.subView === "erd" ? 0 : -1}
+                className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+                  tab.subView === "erd"
+                    ? "border-b-2 border-primary text-foreground"
+                    : "text-muted-foreground hover:text-secondary-foreground"
+                }`}
+                onClick={() => onSubViewChange("erd")}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                    e.preventDefault();
+                    onSubViewChange("records");
+                  }
+                }}
+              >
+                ERD
+              </button>
+            )}
           </div>
 
           {/* Content */}
-          {tab.subView === "records" ? (
+          {tab.subView === "erd" && paradigm === "rdb" ? (
+            <SchemaErdPanel
+              connectionId={tab.connectionId}
+              database={tab.database ?? ""}
+            />
+          ) : tab.subView === "records" ? (
             <DataGrid
               connectionId={tab.connectionId}
               database={tab.database ?? ""}

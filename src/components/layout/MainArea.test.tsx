@@ -87,6 +87,22 @@ vi.mock("@components/schema/ViewStructurePanel", () => ({
   ),
 }));
 
+vi.mock("@components/schema/SchemaErdPanel", () => ({
+  default: ({
+    connectionId,
+    database,
+  }: {
+    connectionId: string;
+    database: string;
+  }) => (
+    <div
+      data-testid="mock-erd"
+      data-connection={connectionId}
+      data-database={database}
+    />
+  ),
+}));
+
 vi.mock("@components/query/QueryTab", () => ({
   default: ({ tab }: { tab: unknown }) => (
     <div data-testid="mock-querytab" data-tab={JSON.stringify(tab)} />
@@ -371,7 +387,7 @@ describe("MainArea", () => {
     );
   });
 
-  it("renders sub-tab bar with Records and Structure tabs for table tab", () => {
+  it("renders sub-tab bar with Records, Structure, and ERD tabs for table tab", () => {
     const tab = makeTableTab({ subView: "records" });
     useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
@@ -383,9 +399,10 @@ describe("MainArea", () => {
 
     // Get tabs within the sub-tab list specifically (TabBar also has tabs)
     const tabs = tablist.querySelectorAll("[role='tab']");
-    expect(tabs).toHaveLength(2);
+    expect(tabs).toHaveLength(3);
     expect(tabs[0]).toHaveTextContent("Records");
     expect(tabs[1]).toHaveTextContent("Structure");
+    expect(tabs[2]).toHaveTextContent("ERD");
   });
 
   it("marks Records tab as selected when subView is records", () => {
@@ -396,8 +413,10 @@ describe("MainArea", () => {
 
     const recordsTab = screen.getByRole("tab", { name: "Records" });
     const structureTab = screen.getByRole("tab", { name: "Structure" });
+    const erdTab = screen.getByRole("tab", { name: "ERD" });
     expect(recordsTab).toHaveAttribute("aria-selected", "true");
     expect(structureTab).toHaveAttribute("aria-selected", "false");
+    expect(erdTab).toHaveAttribute("aria-selected", "false");
   });
 
   it("marks Structure tab as selected when subView is structure", () => {
@@ -408,8 +427,45 @@ describe("MainArea", () => {
 
     const recordsTab = screen.getByRole("tab", { name: "Records" });
     const structureTab = screen.getByRole("tab", { name: "Structure" });
+    const erdTab = screen.getByRole("tab", { name: "ERD" });
     expect(recordsTab).toHaveAttribute("aria-selected", "false");
     expect(structureTab).toHaveAttribute("aria-selected", "true");
+    expect(erdTab).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("renders SchemaErdPanel for a table tab with erd subView", () => {
+    const tab = makeTableTab({ subView: "erd", database: "app" });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+    render(<MainArea />);
+
+    expect(screen.getByTestId("mock-erd")).toHaveAttribute(
+      "data-connection",
+      "conn1",
+    );
+    expect(screen.getByTestId("mock-erd")).toHaveAttribute(
+      "data-database",
+      "app",
+    );
+  });
+
+  it("switches to erd subView when ERD tab is clicked", () => {
+    const tab = makeTableTab({ subView: "records" });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+    render(<MainArea />);
+
+    const erdTab = screen.getByRole("tab", { name: "ERD" });
+    act(() => {
+      fireEvent.click(erdTab);
+    });
+
+    const state = getTestWorkspace();
+    const updatedTab = state.tabs.find((t) => t.id === tab.id);
+    expect(updatedTab).toBeDefined();
+    if (updatedTab && updatedTab.type === "table") {
+      expect(updatedTab.subView).toBe("erd");
+    }
   });
 
   it("switches to structure subView when Structure tab is clicked", () => {

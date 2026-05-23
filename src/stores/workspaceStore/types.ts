@@ -20,7 +20,7 @@ export type { WorkspaceQueryMode } from "./queryMode";
 // Tab types — discriminated union so consumers can narrow on `tab.type`
 // ---------------------------------------------------------------------------
 
-export type TabSubView = "records" | "structure";
+export type TabSubView = "records" | "structure" | "erd";
 
 /**
  * Sprint 272 — sub-tab of the Structure pane. Extends the
