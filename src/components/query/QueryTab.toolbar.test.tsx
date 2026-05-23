@@ -176,6 +176,35 @@ describe("QueryTab — toolbar", () => {
     expect(screen.getByLabelText("Query running")).toBeDisabled();
   });
 
+  it("derives local file preview visibility from file analytics profile inputs", () => {
+    const duckdbTab = makeQueryTab({
+      connectionId: "duckdb-conn",
+      database: "main",
+    });
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "duckdb-conn", dbType: "duckdb" })],
+    });
+    const { unmount } = render(<QueryTab tab={duckdbTab} />);
+
+    expect(
+      screen.getByRole("button", { name: /preview local file/i }),
+    ).toBeInTheDocument();
+
+    unmount();
+    const sqliteTab = makeQueryTab({
+      connectionId: "sqlite-conn",
+      database: "main",
+    });
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "sqlite-conn", dbType: "sqlite" })],
+    });
+    render(<QueryTab tab={sqliteTab} />);
+
+    expect(
+      screen.queryByRole("button", { name: /preview local file/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("disables Run button when sql is empty", () => {
     const tab = makeQueryTab({ sql: "" });
     render(<QueryTab tab={tab} />);

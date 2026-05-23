@@ -57,7 +57,10 @@ fn backend_adapter_contract_profiles_are_encoded() {
         assert_eq!(profile.paradigm, db_type.paradigm());
         assert!(!profile.languages.is_empty());
         assert!(!profile.result_kinds.is_empty());
-        assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
+        assert_eq!(
+            profile.has_backend_capability(BackendAdapterCapability::Lifecycle),
+            profile.adapter_contract.state != BackendAdapterContractState::DeclaredOnly
+        );
     }
 }
 
@@ -258,6 +261,10 @@ fn rdbms_integration_gate_profiles_are_coherent() {
             profile.backend_adapter.capability_source,
             BackendAdapterCapabilitySource::DeclaredRdb
         );
+        assert!(!profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
+        assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+        assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+        assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
     }
 }
 

@@ -267,6 +267,7 @@ const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
 ];
+const NO_BACKEND_CAPABILITIES: &[BackendAdapterCapability] = &[];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::DocumentCatalog,
@@ -315,7 +316,7 @@ const DECLARED_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     state: BackendAdapterContractState::DeclaredOnly,
     implementation: BackendAdapterId::DeclaredRdb,
     capability_source: BackendAdapterCapabilitySource::DeclaredRdb,
-    capabilities: RDB_CAPABILITIES,
+    capabilities: NO_BACKEND_CAPABILITIES,
 };
 const FACTORY_DOCUMENT_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Document,
