@@ -48,7 +48,12 @@ export function normalizeForeignKeyRelationship({
     sourceColumns,
     getSourceColumn,
   );
-  if (referenceChoice.conflict) diagnostics.push(referenceChoice.conflict);
+  if (referenceChoice.conflict) {
+    return {
+      relationship: null,
+      diagnostics: [referenceChoice.conflict],
+    };
+  }
 
   const referenceColumns = chooseReferenceColumns(
     payload,
