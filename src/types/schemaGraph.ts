@@ -77,6 +77,7 @@ export interface SchemaGraphConstraintPayload {
   readonly referenceTable: string | null;
   readonly referenceColumns: readonly string[] | null;
   readonly checkExpression?: string;
+  readonly foreignKey?: SchemaGraphForeignKeyRelationship;
   readonly synthetic: boolean;
   readonly data?: ConstraintInfo;
 }
@@ -115,6 +116,31 @@ export interface SchemaGraphEdge {
   readonly constraintId?: string;
   readonly columns?: readonly string[];
   readonly referenceColumns?: readonly string[];
+  readonly foreignKey?: SchemaGraphForeignKeyRelationship;
+}
+
+export interface SchemaGraphForeignKeyEndpoint {
+  readonly schema: string;
+  readonly table: string;
+  readonly columns: readonly string[];
+}
+
+export interface SchemaGraphForeignKeyRawMetadata {
+  readonly constraintName: string;
+  readonly constraintType: string;
+  readonly sourceColumns: readonly string[];
+  readonly referenceTable: string | null;
+  readonly referenceColumns: readonly string[] | null;
+  readonly columnReferences: readonly string[];
+  readonly synthetic: boolean;
+}
+
+export interface SchemaGraphForeignKeyRelationship {
+  readonly kind: "foreign-key";
+  readonly direction: "source-to-target";
+  readonly source: SchemaGraphForeignKeyEndpoint;
+  readonly target: SchemaGraphForeignKeyEndpoint;
+  readonly rawMetadata: SchemaGraphForeignKeyRawMetadata;
 }
 
 export type SchemaGraphDiagnosticKind =
@@ -124,7 +150,9 @@ export type SchemaGraphDiagnosticKind =
   | "missing-reference-column"
   | "missing-source-column"
   | "missing-index-column"
-  | "missing-constraint-column";
+  | "missing-constraint-column"
+  | "mismatched-fk-column-count"
+  | "conflicting-fk-reference";
 
 export interface SchemaGraphDiagnostic {
   readonly id: string;

@@ -80,13 +80,64 @@ export function tableConstraints(
 export function constraintPayload(
   constraint: ConstraintInfo,
 ): SchemaGraphConstraintPayload {
+  const columns = normalizeNameList(constraint.columns);
+  const referenceColumns = normalizeNullableNameList(
+    constraint.reference_columns,
+  );
+  const referenceTable = normalizeNullableText(constraint.reference_table);
   return {
-    name: constraint.name,
-    constraintType: constraint.constraint_type,
-    columns: constraint.columns,
-    referenceTable: constraint.reference_table,
-    referenceColumns: constraint.reference_columns,
+    name: normalizeConstraintName(
+      constraint.name,
+      constraint.constraint_type,
+      columns,
+      referenceTable,
+    ),
+    constraintType: constraint.constraint_type.trim(),
+    columns,
+    referenceTable,
+    referenceColumns,
     synthetic: false,
     data: constraint,
   };
+}
+
+function normalizeConstraintName(
+  name: string,
+  constraintType: string,
+  columns: readonly string[],
+  referenceTable: string | null,
+): string {
+  const trimmed = name.trim();
+  if (trimmed) return trimmed;
+  const typePart = stableNamePart(constraintType) || "constraint";
+  const columnPart = columns.map(stableNamePart).filter(Boolean).join("_");
+  const referencePart = referenceTable
+    ? `_${stableNamePart(referenceTable)}`
+    : "";
+  return `__unnamed_${typePart}_${columnPart || "table"}${referencePart}`;
+}
+
+function normalizeNameList(values: readonly string[]): readonly string[] {
+  return values.map((value) => value.trim()).filter(Boolean);
+}
+
+function normalizeNullableNameList(
+  values: readonly string[] | null,
+): readonly string[] | null {
+  if (!values) return null;
+  const normalized = normalizeNameList(values);
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeNullableText(value: string | null): string | null {
+  const trimmed = value?.trim() ?? "";
+  return trimmed ? trimmed : null;
+}
+
+function stableNamePart(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }

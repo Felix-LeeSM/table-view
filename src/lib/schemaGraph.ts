@@ -30,8 +30,6 @@ import {
   isForeignKeyConstraint as isForeignKey,
   isPrimaryKeyConstraint as isPrimaryKey,
   parseFkReference,
-  parseReferenceTable,
-  type ParsedFkReference,
   schemaGraphColumnId,
   schemaGraphConstraintId,
   schemaGraphIndexId,
@@ -40,6 +38,7 @@ import {
   sortById,
   sortByName,
 } from "./schemaGraphSupport";
+import { normalizeForeignKeyRelationship } from "./schemaGraphRelationships";
 
 interface Context {
   readonly snapshot: SchemaGraphCatalogSnapshot;
@@ -287,6 +286,28 @@ function addConstraint(
     table.table,
     payload.name,
   );
+  const normalizedForeignKey = isForeignKey(payload.constraintType)
+    ? normalizeForeignKeyRelationship({
+        table,
+        payload,
+        getSourceColumn: (column) =>
+          context.columns.get(
+            schemaGraphColumnId(table.schema, table.table, column),
+          ),
+      })
+    : null;
+  normalizedForeignKey?.diagnostics.forEach((diagnostic) => {
+    addDiagnostic(
+      context.diagnostics,
+      diagnostic.kind,
+      constraintId,
+      diagnostic.details,
+    );
+  });
+  const nodePayload = normalizedForeignKey?.relationship
+    ? { ...payload, foreignKey: normalizedForeignKey.relationship }
+    : payload;
+
   context.nodes.set(constraintId, {
     id: constraintId,
     kind: "constraint",
@@ -294,7 +315,7 @@ function addConstraint(
     schema: table.schema,
     table: table.table,
     constraint: payload.name,
-    data: payload,
+    data: nodePayload,
   });
   addEdge(context.edges, "table-constraint", tableId, constraintId);
 
@@ -321,70 +342,59 @@ function addConstraint(
     }
   }
 
-  if (isForeignKey(payload.constraintType)) {
-    addForeignKeyEdges(table, payload, constraintId, context);
+  if (normalizedForeignKey?.relationship) {
+    addForeignKeyEdges(
+      normalizedForeignKey.relationship,
+      constraintId,
+      context,
+    );
   }
 }
 
 function addForeignKeyEdges(
-  table: TableRef,
-  payload: SchemaGraphConstraintPayload,
+  relationship: NonNullable<SchemaGraphConstraintPayload["foreignKey"]>,
   constraintId: string,
   context: Context,
 ) {
-  const reference = resolveForeignKeyReference(table, payload, context);
-  if (!reference) {
-    addDiagnostic(context.diagnostics, "invalid-fk-reference", constraintId, {
-      schema: table.schema,
-      table: table.table,
-    });
-    return;
-  }
-
-  const referenceSchema = reference.schema ?? table.schema;
-  const referenceTableId = schemaGraphTableId(referenceSchema, reference.table);
-  if (!reference.schema) {
-    addDiagnostic(
-      context.diagnostics,
-      "inferred-reference-schema",
-      constraintId,
-      {
-        schema: table.schema,
-        table: table.table,
-        referenceTable: reference.table,
-      },
-    );
-  }
+  const referenceTableId = schemaGraphTableId(
+    relationship.target.schema,
+    relationship.target.table,
+  );
   if (!context.tables.has(referenceTableId)) {
     addDiagnostic(
       context.diagnostics,
       "missing-reference-table",
       constraintId,
       {
-        schema: table.schema,
-        table: table.table,
-        referenceSchema,
-        referenceTable: reference.table,
+        schema: relationship.source.schema,
+        table: relationship.source.table,
+        referenceSchema: relationship.target.schema,
+        referenceTable: relationship.target.table,
       },
     );
     return;
   }
 
-  const tableId = schemaGraphTableId(table.schema, table.table);
+  const tableId = schemaGraphTableId(
+    relationship.source.schema,
+    relationship.source.table,
+  );
   addEdge(context.edges, "foreign-key-table", tableId, referenceTableId, {
     constraintId,
-    columns: payload.columns,
-    referenceColumns: reference.columns,
+    columns: relationship.source.columns,
+    referenceColumns: relationship.target.columns,
+    foreignKey: relationship,
   });
-  payload.columns.forEach((sourceColumn, index) => {
-    const referenceColumn = reference.columns[index];
+  relationship.source.columns.forEach((sourceColumn, index) => {
+    const referenceColumn = relationship.target.columns[index];
     addForeignKeyColumnEdge(
-      table,
+      { schema: relationship.source.schema, table: relationship.source.table },
       sourceColumn,
-      referenceSchema,
-      reference.table,
+      relationship.target.schema,
+      relationship.target.table,
       referenceColumn,
       constraintId,
+      relationship,
       context,
     );
   });
@@ -397,6 +407,7 @@ function addForeignKeyColumnEdge(
   referenceTable: string,
   referenceColumn: string | undefined,
   constraintId: string,
+  relationship: NonNullable<SchemaGraphConstraintPayload["foreignKey"]>,
   context: Context,
 ) {
   const sourceColumnId = schemaGraphColumnId(
@@ -455,36 +466,7 @@ function addForeignKeyColumnEdge(
       constraintId,
       columns: [sourceColumn],
       referenceColumns: [referenceColumn],
+      foreignKey: relationship,
     },
   );
-}
-
-function resolveForeignKeyReference(
-  table: TableRef,
-  payload: SchemaGraphConstraintPayload,
-  context: Context,
-): ParsedFkReference | null {
-  const firstColumn = payload.columns[0];
-  const columnInfo = firstColumn
-    ? context.columns.get(
-        schemaGraphColumnId(table.schema, table.table, firstColumn),
-      )
-    : undefined;
-  const columnReference = columnInfo?.fk_reference
-    ? parseFkReference(columnInfo.fk_reference)
-    : null;
-  const tableReference = payload.referenceTable
-    ? parseReferenceTable(payload.referenceTable)
-    : null;
-  const referenceTable = tableReference ?? columnReference;
-  const referenceColumns = payload.referenceColumns ?? columnReference?.columns;
-
-  if (!referenceTable || !referenceColumns || referenceColumns.length === 0) {
-    return null;
-  }
-  return {
-    schema: referenceTable.schema ?? columnReference?.schema,
-    table: referenceTable.table,
-    columns: referenceColumns,
-  };
 }
