@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DocumentQueryResult } from "./document";
 import { getDataSourceProfile } from "./dataSource";
+import { RUNTIME_RDBMS_DATABASE_TYPES } from "./rdbmsDataSources";
 import {
   createDocumentResultEnvelope,
   createTabularResultEnvelope,
@@ -77,12 +78,7 @@ describe("result envelope compatibility layer", () => {
   });
 
   it("keeps current source profile result kinds compatible with the legacy renderer boundary", () => {
-    for (const dbType of [
-      "postgresql",
-      "mysql",
-      "mariadb",
-      "sqlite",
-    ] as const) {
+    for (const dbType of RUNTIME_RDBMS_DATABASE_TYPES) {
       const profile = getDataSourceProfile(dbType);
 
       expect(profile.resultKinds).toEqual(["tabular"]);

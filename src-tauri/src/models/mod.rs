@@ -2,6 +2,7 @@ pub mod connection;
 pub mod data_source;
 pub mod file_analytics;
 pub mod query;
+pub mod rdbms_data_sources;
 pub mod schema;
 
 pub use connection::{
@@ -24,6 +25,10 @@ pub use file_analytics::{
 pub use query::{
     CollectionStatsRow, ColumnCategory, QueryColumn, QueryResult, QueryType, ServerActivityRow,
     ServerInfoRow, SlowQueryRow,
+};
+pub use rdbms_data_sources::{
+    FILE_RDBMS_DATABASE_TYPES, RDBMS_DATABASE_TYPES, RUNTIME_RDBMS_DATABASE_TYPES,
+    SERVER_RDBMS_DATABASE_TYPES,
 };
 pub use schema::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
