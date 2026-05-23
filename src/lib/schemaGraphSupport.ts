@@ -147,6 +147,10 @@ function diagnosticMessage(
       return `Index references missing column '${details.column}'.`;
     case "missing-constraint-column":
       return `Constraint references missing column '${details.column}'.`;
+    case "mismatched-fk-column-count":
+      return `Foreign key source/reference column count mismatch (${details.sourceCount} source, ${details.referenceCount} reference).`;
+    case "conflicting-fk-reference":
+      return `Foreign key metadata disagrees between constraint and column reference (${details.constraintReference} vs ${details.columnReference}).`;
   }
 }
 
