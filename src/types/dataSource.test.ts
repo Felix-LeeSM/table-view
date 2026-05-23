@@ -15,6 +15,12 @@ import {
   hasConnectionCapability,
   isConnectionSupportedDatabaseType,
 } from "./dataSource";
+import {
+  FILE_RDBMS_DATABASE_TYPES,
+  RDBMS_DATABASE_TYPES,
+  RUNTIME_RDBMS_DATABASE_TYPES,
+  SERVER_RDBMS_DATABASE_TYPES,
+} from "./rdbmsDataSources";
 
 describe("DataSourceProfile registry", () => {
   const allDatabaseTypes = Object.keys(DATABASE_TYPE_LABELS) as DatabaseType[];
@@ -251,6 +257,59 @@ describe("DataSourceProfile registry", () => {
     expect(getConnectionSupportedDatabaseTypes()).toEqual(
       SUPPORTED_DATABASE_TYPES,
     );
+  });
+
+  it("locks the Sprint 459 RDBMS integration gate matrix", () => {
+    expect(RDBMS_DATABASE_TYPES).toEqual([
+      "postgresql",
+      "mysql",
+      "mariadb",
+      "sqlite",
+      "duckdb",
+      "mssql",
+      "oracle",
+    ]);
+    expect(RUNTIME_RDBMS_DATABASE_TYPES).toEqual([
+      "postgresql",
+      "mysql",
+      "mariadb",
+      "sqlite",
+      "duckdb",
+    ]);
+    expect(SERVER_RDBMS_DATABASE_TYPES).toEqual([
+      "postgresql",
+      "mysql",
+      "mariadb",
+    ]);
+    expect(FILE_RDBMS_DATABASE_TYPES).toEqual(["sqlite", "duckdb"]);
+
+    for (const dbType of RUNTIME_RDBMS_DATABASE_TYPES) {
+      const profile = getDataSourceProfile(dbType);
+
+      expect(profile.paradigm).toBe("rdb");
+      expect(profile.languages).toEqual(["sql"]);
+      expect(profile.catalogModel).toBe("rdb");
+      expect(profile.resultKinds).toEqual(["tabular"]);
+      expect(profile.safetyPolicy).toBe("rdb-default");
+      expect(profile.backendAdapter.kind).toBe("rdb");
+      expect(profile.capabilities.connection.test).toBe(true);
+      expect(profile.capabilities.query.query).toBe(true);
+      expect(profile.capabilities.catalog.browse).toBe(true);
+      expect(profile.capabilities.catalog.schema).toBe(true);
+    }
+
+    for (const dbType of ["mssql", "oracle"] satisfies DatabaseType[]) {
+      const profile = getDataSourceProfile(dbType);
+
+      expect(profile.paradigm).toBe("rdb");
+      expect(profile.backendAdapter).toEqual({
+        id: "declared-rdb",
+        kind: "rdb",
+        capabilitySource: "declared-rdb",
+      });
+      expect(profile.capabilities).toEqual(createEmptyDataSourceCapabilities());
+      expect(isConnectionSupportedDatabaseType(dbType)).toBe(false);
+    }
   });
 
   it("keeps current query-tab language defaults aligned with source profiles", () => {

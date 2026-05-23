@@ -12,10 +12,29 @@ use table_view_lib::{
         CatalogModelKind, ConnectionConfig, ConnectionKind, DataSourceDialectFamily,
         DataSourceDialectId, DatabaseType, FileConnectionInputKind, FileConnectionInputStatus,
         FileConnectionPermissionScope, FileConnectionPrivacyPolicyId, Paradigm, QueryLanguageId,
-        ResultEnvelopeKind, SafetyPolicyId, ServerVersionProbeId, KV_MARKER_CONTRACT,
-        SEARCH_MARKER_CONTRACT,
+        ResultEnvelopeKind, SafetyPolicyId, ServerVersionProbeId, FILE_RDBMS_DATABASE_TYPES,
+        KV_MARKER_CONTRACT, RDBMS_DATABASE_TYPES, RUNTIME_RDBMS_DATABASE_TYPES,
+        SEARCH_MARKER_CONTRACT, SERVER_RDBMS_DATABASE_TYPES,
     },
 };
+
+fn database_type_label(db_type: &DatabaseType) -> &'static str {
+    match db_type {
+        DatabaseType::Postgresql => "postgresql",
+        DatabaseType::Mysql => "mysql",
+        DatabaseType::Mariadb => "mariadb",
+        DatabaseType::Sqlite => "sqlite",
+        DatabaseType::Duckdb => "duckdb",
+        DatabaseType::Mssql => "mssql",
+        DatabaseType::Oracle => "oracle",
+        DatabaseType::Mongodb => "mongodb",
+        DatabaseType::Redis => "redis",
+    }
+}
+
+fn database_type_labels(db_types: &[DatabaseType]) -> Vec<&'static str> {
+    db_types.iter().map(database_type_label).collect()
+}
 
 #[test]
 fn backend_adapter_contract_profiles_are_encoded() {
@@ -176,6 +195,70 @@ fn duckdb_profile_is_file_backed_rdbms_with_runtime_catalog_query_contract() {
     assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+}
+
+#[test]
+fn rdbms_integration_gate_profiles_are_coherent() {
+    assert_eq!(
+        database_type_labels(RDBMS_DATABASE_TYPES),
+        vec![
+            "postgresql",
+            "mysql",
+            "mariadb",
+            "sqlite",
+            "duckdb",
+            "mssql",
+            "oracle",
+        ]
+    );
+    assert_eq!(
+        database_type_labels(RUNTIME_RDBMS_DATABASE_TYPES),
+        vec!["postgresql", "mysql", "mariadb", "sqlite", "duckdb"]
+    );
+    assert_eq!(
+        database_type_labels(SERVER_RDBMS_DATABASE_TYPES),
+        vec!["postgresql", "mysql", "mariadb"]
+    );
+    assert_eq!(
+        database_type_labels(FILE_RDBMS_DATABASE_TYPES),
+        vec!["sqlite", "duckdb"]
+    );
+
+    for db_type in RUNTIME_RDBMS_DATABASE_TYPES {
+        let profile = get_data_source_profile(db_type);
+
+        assert_eq!(profile.paradigm, Paradigm::Rdb);
+        assert_eq!(profile.languages, [QueryLanguageId::Sql]);
+        assert_eq!(profile.catalog_model, CatalogModelKind::Rdb);
+        assert_eq!(profile.result_kinds, [ResultEnvelopeKind::Tabular]);
+        assert_eq!(profile.safety_policy, SafetyPolicyId::RdbDefault);
+        assert_eq!(
+            profile.adapter_contract.kind,
+            BackendAdapterContractKind::Rdb
+        );
+        assert_eq!(
+            profile.adapter_contract.state,
+            BackendAdapterContractState::FactoryBacked
+        );
+        assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
+        assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+        assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    }
+
+    for db_type in [DatabaseType::Mssql, DatabaseType::Oracle] {
+        let profile = get_data_source_profile(&db_type);
+
+        assert_eq!(profile.paradigm, Paradigm::Rdb);
+        assert_eq!(
+            profile.adapter_contract.state,
+            BackendAdapterContractState::DeclaredOnly
+        );
+        assert_eq!(profile.backend_adapter.id, BackendAdapterId::DeclaredRdb);
+        assert_eq!(
+            profile.backend_adapter.capability_source,
+            BackendAdapterCapabilitySource::DeclaredRdb
+        );
+    }
 }
 
 #[test]
