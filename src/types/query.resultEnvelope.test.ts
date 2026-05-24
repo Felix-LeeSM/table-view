@@ -4,11 +4,13 @@ import { getDataSourceProfile } from "./dataSource";
 import { RUNTIME_RDBMS_DATABASE_TYPES } from "./rdbmsDataSources";
 import {
   createDocumentResultEnvelope,
+  createSearchHitsResultEnvelope,
   createTabularResultEnvelope,
   toCompatibleQueryResult,
   type OpaqueResultEnvelope,
   type QueryResult,
 } from "./query";
+import type { SearchResultEnvelope } from "./search";
 
 const tabularResult: QueryResult = {
   columns: [{ name: "id", dataType: "integer", category: "int" }],
@@ -27,6 +29,28 @@ const documentResult: DocumentQueryResult = {
   rawDocuments: [{ _id: "507f1f77bcf86cd799439011", name: "Alice" }],
   totalCount: 1,
   executionTimeMs: 8,
+};
+
+const searchResult: SearchResultEnvelope = {
+  tookMs: 3,
+  timedOut: false,
+  total: { value: 1, relation: "eq" },
+  hits: [
+    {
+      index: "logs-2026.05.24",
+      id: "doc-1",
+      score: 1,
+      source: { message: "fixture log", status: "ok" },
+      sort: [],
+    },
+  ],
+  aggregations: [
+    {
+      name: "by_status",
+      kind: "terms",
+      value: { buckets: [{ key: "ok", doc_count: 1 }] },
+    },
+  ],
 };
 
 describe("result envelope compatibility layer", () => {
@@ -73,6 +97,24 @@ describe("result envelope compatibility layer", () => {
         envelopeKind: "metrics",
         message:
           "Result envelope kind 'metrics' does not have a QueryResult compatibility projection.",
+      },
+    });
+  });
+
+  it("keeps Search DSL hits on a typed renderer path instead of projecting to QueryResultGrid", () => {
+    const envelope = createSearchHitsResultEnvelope(searchResult);
+
+    expect(envelope.kind).toBe("searchHits");
+    expect(envelope.searchResult.hits[0]?.source).toEqual(
+      searchResult.hits[0]?.source,
+    );
+    expect(toCompatibleQueryResult(envelope)).toEqual({
+      ok: false,
+      error: {
+        kind: "unsupported-envelope-kind",
+        envelopeKind: "searchHits",
+        message:
+          "Search hit envelopes require the search result renderer and cannot be projected into QueryResultGrid.",
       },
     });
   });
