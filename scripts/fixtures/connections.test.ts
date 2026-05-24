@@ -190,6 +190,71 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
     expect(data.connections.map((c) => c.db_type)).not.toContain("oracle");
   });
 
+  it("does not rewrite user-created SQLite or DuckDB file connections", async () => {
+    const path = resolve(tempDir, "connections.json");
+    writeFileSync(
+      path,
+      JSON.stringify(
+        {
+          connections: [
+            {
+              id: "user-sqlite",
+              name: "User SQLite",
+              db_type: "sqlite",
+              host: "",
+              port: 0,
+              user: "",
+              password: "",
+              database: "/user/data/main.sqlite",
+              group_id: null,
+              color: null,
+              connection_timeout: null,
+              keep_alive_interval: null,
+              environment: null,
+              auth_source: null,
+              replica_set: null,
+              tls_enabled: null,
+            },
+            {
+              id: "user-duckdb",
+              name: "User DuckDB",
+              db_type: "duckdb",
+              host: "",
+              port: 0,
+              user: "",
+              password: "",
+              database: "/user/data/main.duckdb",
+              group_id: null,
+              color: null,
+              connection_timeout: null,
+              keep_alive_interval: null,
+              environment: null,
+              auth_source: null,
+              replica_set: null,
+              tls_enabled: null,
+            },
+          ],
+          groups: [],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    await upsertConnections(loadSpec("e2e"));
+
+    const data = JSON.parse(readFileSync(path, "utf8")) as {
+      connections: { id: string; database: string }[];
+    };
+    expect(data.connections.find((c) => c.id === "user-sqlite")?.database).toBe(
+      "/user/data/main.sqlite",
+    );
+    expect(data.connections.find((c) => c.id === "user-duckdb")?.database).toBe(
+      "/user/data/main.duckdb",
+    );
+  });
+
   it("clear removes only fixture-* connections, leaving user entries intact", async () => {
     await upsertConnections(loadSpec("e2e"));
     // Inject a non-fixture entry the user might have added.

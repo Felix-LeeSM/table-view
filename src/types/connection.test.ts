@@ -373,8 +373,6 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
       "duckdb",
       "mongodb",
       "redis",
-      "elasticsearch",
-      "opensearch",
     ]);
   });
 
@@ -386,8 +384,8 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("duckdb")).toBe(true);
     expect(isSupportedDatabaseType("mongodb")).toBe(true);
     expect(isSupportedDatabaseType("redis")).toBe(true);
-    expect(isSupportedDatabaseType("elasticsearch")).toBe(true);
-    expect(isSupportedDatabaseType("opensearch")).toBe(true);
+    expect(isSupportedDatabaseType("elasticsearch")).toBe(false);
+    expect(isSupportedDatabaseType("opensearch")).toBe(false);
     expect(isSupportedDatabaseType("mssql")).toBe(false);
     expect(isSupportedDatabaseType("oracle")).toBe(false);
   });

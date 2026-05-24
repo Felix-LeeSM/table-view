@@ -136,12 +136,8 @@ describe("DataSourceProfile registry", () => {
       edit: { editKeys: true },
       paradigmSpecific: { keyBrowser: true },
     }),
-    elasticsearch: expectedCapabilities({
-      connection: { test: true },
-    }),
-    opensearch: expectedCapabilities({
-      connection: { test: true },
-    }),
+    elasticsearch: expectedCapabilities(),
+    opensearch: expectedCapabilities(),
   };
 
   it("contains exactly one profile for every DatabaseType", () => {
@@ -294,8 +290,6 @@ describe("DataSourceProfile registry", () => {
       "duckdb",
       "mongodb",
       "redis",
-      "elasticsearch",
-      "opensearch",
     ]);
     expect(isConnectionSupportedDatabaseType("postgresql")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mongodb")).toBe(true);
@@ -303,18 +297,18 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("redis")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
-    expect(isConnectionSupportedDatabaseType("elasticsearch")).toBe(true);
-    expect(isConnectionSupportedDatabaseType("opensearch")).toBe(true);
+    expect(isConnectionSupportedDatabaseType("elasticsearch")).toBe(false);
+    expect(isConnectionSupportedDatabaseType("opensearch")).toBe(false);
   });
 
-  it("keeps search profiles connection-only until live HTTP catalog lands", () => {
+  it("keeps search profiles fixture-backed only until live HTTP catalog lands", () => {
     for (const dbType of [
       "elasticsearch",
       "opensearch",
     ] satisfies DatabaseType[]) {
       const profile = getDataSourceProfile(dbType);
 
-      expect(profile.capabilities.connection.test).toBe(true);
+      expect(profile.capabilities.connection.test).toBe(false);
       expect(profile.capabilities.catalog.browse).toBe(false);
       expect(profile.capabilities.query.query).toBe(false);
       expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);

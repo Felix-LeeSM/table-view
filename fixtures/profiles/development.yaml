@@ -59,11 +59,15 @@ connections:
       name: Dev (MSSQL)
       color: "#dc2626"
       environment: development
+      status: planned
+      disabledReason: "MSSQL is a known deferred DBMS identity; no runtime adapter is wired."
   oracle:
     - id: fixture-dev-oracle
       name: Dev (Oracle)
       color: "#f97316"
       environment: development
+      status: planned
+      disabledReason: "Oracle is a known deferred DBMS identity; no runtime adapter is wired."
   redis:
     - id: fixture-dev-redis
       name: Dev (Redis)

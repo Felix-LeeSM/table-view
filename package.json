@@ -1,7 +1,7 @@
 {
   "name": "table-view",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "engines": {
     "node": ">=22.14.0",
@@ -27,7 +27,7 @@
     "test:e2e:smoke": "wdio run wdio.smoke.conf.ts",
     "tauri": "tauri",
     "icons:build": "./scripts/build-icons.sh",
-    "db:up": "docker compose up -d postgres mongo mysql && ./scripts/db/wait.sh",
+    "db:up": "docker compose up -d postgres mongo mysql redis && ./scripts/db/wait.sh",
     "db:down": "docker compose down",
     "db:seed": "tsx scripts/fixtures/index.ts seed",
     "db:reset": "tsx scripts/fixtures/index.ts reset",

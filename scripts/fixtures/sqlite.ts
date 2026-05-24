@@ -4,7 +4,7 @@
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { homedir, platform } from "node:os";
+import { tmpdir } from "node:os";
 import type { BaseSpec, Column, ResolvedSpec } from "./spec.js";
 import type { EntityRows } from "./generator.js";
 import { entityOrder } from "./spec.js";
@@ -24,32 +24,7 @@ export function sqliteEnvPath(): SqliteFixturePath {
 function defaultFixtureDir(): string {
   if (process.env.TABLE_VIEW_TEST_DATA_DIR)
     return resolve(process.env.TABLE_VIEW_TEST_DATA_DIR, "fixtures", "sqlite");
-  const home = homedir();
-  switch (platform()) {
-    case "darwin":
-      return resolve(
-        home,
-        "Library",
-        "Application Support",
-        "table-view",
-        "fixtures",
-        "sqlite",
-      );
-    case "win32":
-      return resolve(
-        process.env.APPDATA ?? home,
-        "table-view",
-        "fixtures",
-        "sqlite",
-      );
-    default:
-      return resolve(
-        process.env.XDG_DATA_HOME ?? resolve(home, ".local", "share"),
-        "table-view",
-        "fixtures",
-        "sqlite",
-      );
-  }
+  return resolve(tmpdir(), "table-view-fixtures", "sqlite");
 }
 
 function resolveDbPath(path: SqliteFixturePath, fileName: string): string {

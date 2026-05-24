@@ -32,7 +32,7 @@ Sprint 479 기준 active query language는
 | `sql` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` from `rust-wasm-language-core` through `typescript-runtime-adapter`; TypeScript fallback mirrors are compatibility only, not source of truth | `rust-wasm-language-core` | `docs/query-language-support.md` |
 | `mongosh` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` from `rust-wasm-language-core` through `typescript-runtime-adapter`; TypeScript fallback mirrors are compatibility only, not source of truth | `rust-wasm-language-core` | `docs/query-language-support.md` |
 | `redis-command` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented`; no TypeScript source-of-truth fallback | `profile-safety-policy` | `docs/query-language-support.md` |
-| `search-dsl` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented`; no TypeScript source-of-truth fallback | `profile-safety-policy` | `docs/query-language-support.md` |
+| `search-dsl` | `future-language-core-contract` | `future-language-core-contract` | `deferred`; fixture-backed only until live HTTP execution lands | `profile-safety-policy` | `docs/query-language-support.md` |
 
 Deferred language ids (`cql`, `partiql`, `cypher`, `gql`, `gremlin`,
 `vector-query`, `stream-command`) stay in the registry with

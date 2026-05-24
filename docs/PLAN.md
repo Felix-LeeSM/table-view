@@ -9,7 +9,7 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 
 ## Current Snapshot
 
-2026-05-22 기준 current plan 은 완료 이력을 실행 계획에서 분리한다.
+2026-05-25 기준 current plan 은 완료 이력을 실행 계획에서 분리한다.
 Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequencing 을 명시
 요청할 때 새 번호를 배정한다. Active phase 문서의 과거 sprint 번호는 history 가
 아니면 쓰지 않는다.
@@ -60,8 +60,19 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | MariaDB | MySQL-adapter reuse | MySQL-family profile + MariaDB delta | Rust/WASM vocabulary | runtime path 존재. MariaDB-engine fixture gap은 active risk |
 | SQLite | file adapter complete | parser/write parity guardrails | Rust/WASM vocabulary | user DBMS adapter는 internal SQLite state와 분리됨. DDL UI는 unsupported |
 | DuckDB | file adapter + local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM vocabulary | local `.duckdb`/CSV/Parquet/JSON/NDJSON preview/query 지원. DDL/write는 unsupported |
-| Redis | Redis first slice live | key/type/TTL/stream guardrails | redis-command profile | Redis key browser, value reads, TTL mutation, guarded string writes, and bounded stream reads live. Valkey parity/support is unverified follow-up. Cluster/pubsub/modules/consumer-group management deferred |
-| Elasticsearch/OpenSearch | fixture-backed Search slice live | index/mapping/search envelope guardrails | bounded fixture DSL only | Search identities/catalog, bounded fixture DSL execution, and typed result rendering live; live HTTP/admin/observability deferred |
+| Redis | Redis first slice live | key/type/TTL/stream guardrails | redis-command profile | Redis key browser, value reads, TTL mutation, guarded string writes, and bounded stream reads are covered by adapter tests plus a Redis testcontainer smoke. Valkey parity/support is unverified follow-up. Cluster/pubsub/modules/consumer-group management deferred |
+| Elasticsearch/OpenSearch | fixture-backed Search slice only | index/mapping/search envelope guardrails | bounded fixture DSL only | Search identities/catalog, bounded fixture DSL execution, and typed result rendering are fixture-verified. Live connection UI, HTTP catalog/query execution, admin, and observability stay disabled/deferred |
+| MSSQL/Oracle | unsupported/deferred | declared SQL identity only | deferred | Known planned RDBMS identities. They remain in profile/docs/URL parsing but are not runtime-supported and are not emitted as active dev/e2e fixture connections |
+
+Sprint 481 release-gate decision: do not promote Cassandra/DynamoDB/graph/vector/
+stream yet. The next promotion requires a profile/capability/fixture decision
+under `docs/adding-a-data-source.md`; near-term work should harden Redis/Valkey
+parity and Search live HTTP before adding another paradigm.
+
+Fixture evidence boundary: CI integration services cover PostgreSQL and MongoDB;
+Redis has a Rust testcontainer smoke in CI. MySQL/MariaDB/Redis are available in
+local `docker compose` fixture stack, but MariaDB-engine CI evidence remains an
+active risk.
 
 ## Active Roadmap
 
@@ -76,8 +87,8 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | 7 | SQLite DBMS adapter / write parity | active follow-up | user DBMS adapter 범위는 internal app SQLite state-management 와 분리됨. 남은 DDL UI/runtime family 는 unsupported boundary 유지 | `docs/query-language-support.md`, `docs/state-management-strategy-2026-05-15.md` |
 | 8 | DuckDB + file analytics hardening | active follow-up | `.duckdb`, CSV, Parquet, JSON, NDJSON preview/query 는 local-first runtime path 존재. analytics import/history/favorites 확대는 별도 결정 | `docs/data-source-architecture.md`, `docs/ROADMAP.md`, `docs/sprints/sprint-457/contract.md` |
 | 9 | RDBMS ERD / SchemaGraph | planned | FK/constraint catalog 를 재사용 가능한 `SchemaGraph` 로 승격. ERD는 첫 renderer | `docs/data-source-architecture.md` |
-| 10 | Redis | active Redis first slice | Redis adapter, KV sidebar, key scan, value read, guarded string write, TTL mutation, and bounded stream read paths are live. Valkey parity/support is unverified follow-up. Cluster/pubsub/modules/consumer-group management remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-468/handoff.md` |
-| 11 | Elasticsearch/OpenSearch | active fixture-backed slice | Search adapter contract, Elasticsearch/OpenSearch identities, fixture catalog, bounded fixture DSL execution, and `searchHits` result UI are live. Live HTTP catalog/query execution, cluster administration, and observability remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-472/handoff.md` |
+| 10 | Redis | active Redis first slice | Redis adapter, KV sidebar, key scan, value read, guarded string write, TTL mutation, and bounded stream read paths are live and covered by a Redis testcontainer smoke. Valkey parity/support is unverified follow-up. Cluster/pubsub/modules/consumer-group management remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-468/handoff.md` |
+| 11 | Elasticsearch/OpenSearch | fixture-backed only | Search adapter contract, Elasticsearch/OpenSearch identities, fixture catalog, bounded fixture DSL execution, and `searchHits` result UI are fixture-backed. Live connection UI waits for HTTP catalog/query execution, cluster administration, and observability | `docs/data-source-architecture.md`, `docs/sprints/sprint-472/handoff.md`, `docs/RISKS.md` |
 | 12 | MongoDB full support | deferred/current subagent audit only | Phase 28 Slice A 는 보존하되 RDBMS-first 후 재개. `queryMode` 는 execution SOT 로 되살리지 않음 | `docs/phases/phase-28.md` |
 | 13 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md`, `docs/adding-a-data-source.md` |
 | 14 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |

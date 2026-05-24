@@ -60,11 +60,15 @@ connections:
       name: E2E (MSSQL)
       color: "#dc2626"
       environment: testing
+      status: planned
+      disabledReason: "MSSQL is a known deferred DBMS identity; no runtime adapter is wired."
   oracle:
     - id: fixture-e2e-oracle
       name: E2E (Oracle)
       color: "#dc2626"
       environment: testing
+      status: planned
+      disabledReason: "Oracle is a known deferred DBMS identity; no runtime adapter is wired."
   redis:
     - id: fixture-e2e-redis
       name: E2E (Redis)
