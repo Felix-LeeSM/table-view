@@ -13,6 +13,8 @@ describe("DB_TYPE_META", () => {
     "oracle",
     "mongodb",
     "redis",
+    "elasticsearch",
+    "opensearch",
   ];
 
   it("contains metadata for every DatabaseType", () => {
