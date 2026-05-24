@@ -16,7 +16,8 @@ HTTP remains unsupported and is tracked as a follow-up risk.
   the Sprint 471 handoff.
 - Confirmed Search results render through `SearchResultView` and are not
   projected through the RDB grid compatibility path.
-- Kept live HTTP, cluster administration, and observability explicitly deferred.
+- Kept live HTTP, cluster administration, and observability explicitly deferred
+  as `RISK-049`.
 
 ## Acceptance Criteria
 
@@ -25,7 +26,7 @@ HTTP remains unsupported and is tracked as a follow-up risk.
 | AC-472-01 | Fixture-backed identities/catalog and bounded DSL execution are verified; live HTTP remains `Unsupported`. |
 | AC-472-02 | `searchHits` envelopes render through `SearchResultView`, with QueryResult projection rejecting the envelope kind. |
 | AC-472-03 | Wildcard/raw-path search targets and delete-by-query planning remain gated by validation/confirmation. |
-| AC-472-04 | `docs/PLAN.md`, `docs/RISKS.md`, and `docs/data-source-architecture.md` document live HTTP/admin/observability deferrals. |
+| AC-472-04 | `docs/PLAN.md`, `docs/RISKS.md` (`RISK-049`), and `docs/data-source-architecture.md` document live HTTP/admin/observability deferrals. |
 
 ## Verification
 

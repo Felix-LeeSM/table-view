@@ -62,21 +62,20 @@ function patchRunningQueryTab(
   };
 }
 
-function patchQueryLanguage(
+function patchQueryCompatibilityMetadata(
   ws: WorkspaceState,
   tabId: string,
+  queryMode: QueryTab["queryMode"],
   queryLanguage: QueryTab["queryLanguage"],
 ): WorkspaceState {
-  if (queryLanguage === undefined) {
-    return ws;
-  }
-
   let changed = false;
   const tabs = ws.tabs.map((t) => {
     if (t.id !== tabId || t.type !== "query") return t;
-    if (t.queryLanguage === queryLanguage) return t;
+    if (t.queryMode === queryMode && t.queryLanguage === queryLanguage) {
+      return t;
+    }
     changed = true;
-    return { ...t, queryLanguage };
+    return { ...t, queryMode, queryLanguage };
   });
   return changed ? { ...ws, tabs } : ws;
 }
@@ -310,10 +309,10 @@ export function createQuerySlice(
         sql,
       } = payload;
       const resolvedDb = database ?? resolveActiveDb(connectionId);
-      const workspaceQueryMode = toWorkspaceQueryMode({
-        paradigm,
-        queryMode,
-      });
+      const workspaceQueryMode =
+        paradigm === "rdb"
+          ? toWorkspaceQueryMode({ paradigm, queryMode })
+          : undefined;
       const workspaceQueryLanguage = toWorkspaceQueryLanguage({
         paradigm,
         queryLanguage,
@@ -348,19 +347,18 @@ export function createQuerySlice(
 
       const targetId = activeTab.id;
       get().updateQuerySql(connectionId, resolvedDb, targetId, sql);
-      get().setQueryMode(
-        connectionId,
-        resolvedDb,
-        targetId,
-        workspaceQueryMode,
-      );
       set((state) => {
         const next = patchExistingWorkspace(
           state,
           connectionId,
           resolvedDb,
           (workspace) =>
-            patchQueryLanguage(workspace, targetId, workspaceQueryLanguage),
+            patchQueryCompatibilityMetadata(
+              workspace,
+              targetId,
+              workspaceQueryMode,
+              workspaceQueryLanguage,
+            ),
         );
         return next ? { workspaces: next } : state;
       });

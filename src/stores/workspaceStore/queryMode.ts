@@ -24,20 +24,22 @@ export type WorkspaceQueryModeInput =
 export function toWorkspaceQueryMode(input: {
   paradigm: Paradigm;
   queryMode?: unknown;
-}): WorkspaceQueryMode {
+}): WorkspaceQueryMode | undefined {
   if (input.paradigm === "rdb") {
     return "sql";
   }
   if (input.paradigm === "document") {
-    return input.queryMode === "aggregate" ? "aggregate" : "find";
+    return input.queryMode === "find" || input.queryMode === "aggregate"
+      ? input.queryMode
+      : undefined;
   }
-  return "sql";
+  return undefined;
 }
 
 export function sanitizeWorkspaceQueryMode(
   paradigm: Paradigm,
   queryMode: unknown,
-): WorkspaceQueryMode {
+): WorkspaceQueryMode | undefined {
   return toWorkspaceQueryMode({ paradigm, queryMode });
 }
 
