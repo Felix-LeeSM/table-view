@@ -355,6 +355,12 @@ async fn redis_adapter_runtime_covers_values_ttl_mutations_and_streams() {
             .await,
         Err(AppError::Validation(_))
     ));
+    assert!(matches!(
+        adapter
+            .set_string(set_string_request("beta", KvWriteSafety::AllowOverwrite))
+            .await,
+        Err(AppError::Validation(message)) if message.contains("hash")
+    ));
 
     let set_result = adapter
         .set_string(set_string_request(

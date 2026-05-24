@@ -130,7 +130,7 @@ describe("DataSourceProfile registry", () => {
       connection: { test: true },
       catalog: { browse: true },
       edit: { editKeys: true },
-      paradigmSpecific: { keyBrowser: true, streamConsumer: true },
+      paradigmSpecific: { keyBrowser: true },
     }),
     elasticsearch: expectedCapabilities({
       connection: { test: true },
@@ -250,7 +250,7 @@ describe("DataSourceProfile registry", () => {
     expect(redis.resultKinds).toEqual(["keyValue", "streamRecords"]);
     expect(redis.capabilities.connection.switchDatabase).toBe(false);
     expect(redis.capabilities.edit.editKeys).toBe(true);
-    expect(redis.capabilities.paradigmSpecific.streamConsumer).toBe(true);
+    expect(redis.capabilities.paradigmSpecific.streamConsumer).toBe(false);
   });
 
   it("keeps unsupported profiles structurally present but capability-empty", () => {

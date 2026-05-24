@@ -114,6 +114,7 @@ fn redis_stub_response(command: &[String]) -> Vec<u8> {
         Some("SELECT") => "+OK\r\n",
         Some("SCAN") => "*2\r\n$1\r\n0\r\n*2\r\n$5\r\nalpha\r\n$4\r\nbeta\r\n",
         Some("TYPE") => return type_response(command.get(1).map(String::as_str)),
+        Some("EXISTS") => return exists_response(command.get(1).map(String::as_str)),
         Some("TTL") => return ttl_response(command.get(1).map(String::as_str)),
         Some("STRLEN") => ":5\r\n",
         Some("LLEN") | Some("SCARD") | Some("ZCARD") | Some("HLEN") => ":2\r\n",
@@ -157,6 +158,14 @@ fn type_response(key: Option<&str>) -> Vec<u8> {
         _ => "string",
     };
     format!("+{key_type}\r\n").into_bytes()
+}
+
+fn exists_response(key: Option<&str>) -> Vec<u8> {
+    let exists = match key {
+        Some("missing") => 0,
+        _ => 1,
+    };
+    format!(":{exists}\r\n").into_bytes()
 }
 
 fn ttl_response(key: Option<&str>) -> Vec<u8> {

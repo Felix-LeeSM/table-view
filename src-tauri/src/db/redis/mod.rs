@@ -268,6 +268,7 @@ impl KvAdapter for RedisAdapter {
             validate_key(&request.key)?;
             let cmd = build_set_string_command(&request)?;
             self.ensure_database(request.database).await?;
+            ensure_string_write_allowed(self, &request).await?;
             let changed = self
                 .with_connection(async |connection| {
                     let result: Option<String> = cmd
@@ -369,6 +370,57 @@ fn build_set_string_command(request: &KvSetStringRequest) -> Result<::redis::Cmd
         cmd.arg("EX").arg(seconds);
     }
     Ok(cmd)
+}
+
+async fn ensure_string_write_allowed(
+    adapter: &RedisAdapter,
+    request: &KvSetStringRequest,
+) -> Result<(), AppError> {
+    if request.safety != KvWriteSafety::AllowOverwrite {
+        return Ok(());
+    }
+
+    let (key_type, exists) = adapter
+        .with_connection(async |connection| {
+            let key_type = read_key_type(connection, &request.key).await?;
+            let exists = if key_type == KvKeyType::Unknown {
+                ::redis::cmd("EXISTS")
+                    .arg(&request.key)
+                    .query_async::<u64>(connection)
+                    .await
+                    .map_err(redis_database_error)?
+                    > 0
+            } else {
+                true
+            };
+            Ok((key_type, exists))
+        })
+        .await?;
+
+    match (key_type, exists) {
+        (KvKeyType::String, _) | (KvKeyType::Unknown, false) => Ok(()),
+        (KvKeyType::Unknown, true) => Err(AppError::Validation(
+            "Cannot overwrite existing Redis key of unsupported type with a string".into(),
+        )),
+        (existing_type, true) => Err(AppError::Validation(format!(
+            "Cannot overwrite existing Redis {} key with a string",
+            key_type_label(existing_type)
+        ))),
+        (_, false) => Ok(()),
+    }
+}
+
+fn key_type_label(key_type: KvKeyType) -> &'static str {
+    match key_type {
+        KvKeyType::String => "string",
+        KvKeyType::List => "list",
+        KvKeyType::Set => "set",
+        KvKeyType::ZSet => "zset",
+        KvKeyType::Hash => "hash",
+        KvKeyType::Stream => "stream",
+        KvKeyType::Json => "json",
+        KvKeyType::Unknown => "unknown",
+    }
 }
 
 async fn expire_key(adapter: &RedisAdapter, key: &str, seconds: u64) -> Result<bool, AppError> {

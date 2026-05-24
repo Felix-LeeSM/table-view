@@ -371,7 +371,7 @@ export const REDIS_CAPABILITIES = capabilities({
   },
   paradigmSpecific: {
     keyBrowser: true,
-    streamConsumer: true,
+    streamConsumer: false,
   },
 });
 
