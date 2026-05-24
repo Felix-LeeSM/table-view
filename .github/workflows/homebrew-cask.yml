@@ -1,0 +1,103 @@
+name: Homebrew Cask Sync
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish-cask:
+    name: Update Homebrew tap
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v6
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ vars.HOMEBREW_TAP_REPO }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.14.0
+
+      - name: Generate updated cask file
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          HOMEBREW_TAP_PATH: Casks/table-view.rb
+          HOMEBREW_TAP_REPO_PATH: ${{ github.workspace }}/homebrew-tap
+          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+          HOMEBREW_CASK_NAME: table-view
+          HOMEBREW_APP_NAME: Table View.app
+          HOMEBREW_APP_TITLE: Table View
+          HOMEBREW_DESCRIPTION: Table View for MongoDB and SQL databases.
+          HOMEBREW_HOMEPAGE: https://github.com/${{ github.repository }}
+        run: |
+          node scripts/release/update-homebrew-cask.mjs
+
+      - name: Open PR in tap repo
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+          HOMEBREW_TAP_BASE_BRANCH: ${{ vars.HOMEBREW_TAP_BASE_BRANCH || 'main' }}
+        working-directory: homebrew-tap
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet; then
+            echo "No changes for Homebrew cask for ${RELEASE_TAG}."
+            exit 0
+          fi
+
+          base_branch="${HOMEBREW_TAP_BASE_BRANCH:-main}"
+          version="${RELEASE_TAG#v}"
+          branch="chore/table-view-${version}"
+          tap_file="Casks/table-view.rb"
+
+          if git ls-remote --exit-code --heads origin "${branch}" > /dev/null 2>&1; then
+            git fetch --quiet origin "${branch}"
+            if git show-ref --verify --quiet "refs/heads/${branch}"; then
+              git switch --quiet "${branch}"
+              git reset --hard "origin/${branch}"
+            else
+              git switch --quiet -c "${branch}" --track "origin/${branch}"
+            fi
+          else
+            git switch --quiet -c "${branch}"
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${tap_file}"
+
+          if git diff --cached --quiet; then
+            echo "No local tap changes for ${RELEASE_TAG}."
+            if gh pr view --repo "${HOMEBREW_TAP_REPO}" "${branch}" > /dev/null 2>&1; then
+              echo "PR already exists for ${branch}."
+            else
+              echo "No PR exists for ${branch}, but there are no tap changes."
+            fi
+            exit 0
+          fi
+
+          git commit -m "feat(homebrew): bump table-view to ${RELEASE_TAG}"
+          git push -u origin "${branch}"
+
+          if gh pr view --repo "${HOMEBREW_TAP_REPO}" "${branch}" > /dev/null 2>&1; then
+            echo "PR already exists for ${branch}."
+            exit 0
+          fi
+
+          gh pr create \
+            --repo "${HOMEBREW_TAP_REPO}" \
+            --title "chore(homebrew): update table-view cask ${RELEASE_TAG}" \
+            --body "## Summary\n\nAutomatically updated Homebrew cask for ${RELEASE_TAG}.\n\n## Changes\n\n- Updated version/url/checksums in Casks/table-view.rb\n\n## Smoke impact\n\nNo app tests run; this is packaging metadata only.\n\n## Documentation impact\n\nNo runtime docs changed." \
+            --base "${base_branch}" \
+            --head "${branch}"
