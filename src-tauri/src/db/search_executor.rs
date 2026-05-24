@@ -107,7 +107,7 @@ fn validate_query_clause(query: &Value) -> Result<(), AppError> {
         .as_object()
         .ok_or_else(|| AppError::Validation("Search DSL query must be a JSON object".into()))?;
     for key in query.keys() {
-        if !matches!(key.as_str(), "match_all" | "term" | "match") {
+        if !matches!(key.as_str(), "match_all" | "term" | "terms" | "match") {
             return Err(AppError::Unsupported(format!(
                 "Search DSL query clause '{}' is not supported",
                 key
@@ -132,6 +132,27 @@ fn filter_fixture_hits(
     }
     if let Some(term) = query.get("term") {
         return filter_by_exact_field(hits, term);
+    }
+    if let Some(terms) = query.get("terms") {
+        let terms = terms.as_object().ok_or_else(|| {
+            AppError::Validation("Search DSL terms query must be an object".into())
+        })?;
+        let Some((field, expected_values)) = terms.iter().next() else {
+            return Err(AppError::Validation(
+                "Search DSL terms query requires a field".into(),
+            ));
+        };
+        let expected_values = expected_values.as_array().ok_or_else(|| {
+            AppError::Unsupported("Search DSL terms query only supports value arrays".into())
+        })?;
+        return Ok(hits
+            .iter()
+            .filter(|hit| {
+                source_field_value(&hit.source, field)
+                    .is_some_and(|actual| expected_values.iter().any(|expected| expected == actual))
+            })
+            .cloned()
+            .collect());
     }
     if let Some(match_query) = query.get("match") {
         return filter_by_text_field(hits, match_query);
@@ -424,6 +445,20 @@ mod tests {
         assert!(
             matches!(result, Err(AppError::Unsupported(message)) if message.contains("suggest"))
         );
+    }
+
+    #[test]
+    fn fixture_search_supports_terms_query_claimed_by_contract() {
+        let result = execute_fixture_search(
+            &fixture(),
+            &request(json!({
+                "query": { "terms": { "status.keyword": ["ok", "missing"] } }
+            })),
+        )
+        .unwrap();
+
+        assert_eq!(result.total.value, 1);
+        assert_eq!(result.hits[0].id, "doc-1");
     }
 
     #[test]
