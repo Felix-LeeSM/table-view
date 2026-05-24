@@ -10,7 +10,7 @@ describe("pickSidebar", () => {
     expect(pickSidebar("document")).toBe("document");
   });
 
-  it("maps 'kv' paradigm to the kv placeholder kind", () => {
+  it("maps 'kv' paradigm to the kv sidebar kind", () => {
     expect(pickSidebar("kv")).toBe("kv");
   });
 

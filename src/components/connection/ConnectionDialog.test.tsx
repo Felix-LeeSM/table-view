@@ -109,10 +109,11 @@ describe("ConnectionDialog", () => {
     expect(screen.getByRole("option", { name: "MariaDB" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "MongoDB" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Redis" })).toBeInTheDocument();
 
     // Unsupported — 안 보임.
     expect(
-      screen.queryByRole("option", { name: "Redis" }),
+      screen.queryByRole("option", { name: "Oracle" }),
     ).not.toBeInTheDocument();
   });
 
@@ -132,7 +133,7 @@ describe("ConnectionDialog", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
     expect(
-      screen.queryByRole("option", { name: "Redis" }),
+      screen.queryByRole("option", { name: "Oracle" }),
     ).not.toBeInTheDocument();
   });
 
@@ -453,12 +454,32 @@ describe("ConnectionDialog", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("accepts redis URLs and switches to the Redis form", async () => {
+    renderDialog();
+    await act(async () => {
+      fireEvent.click(screen.getByText("URL"));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Connection URL"), {
+        target: { value: "rediss://u:p@redis.local:6380/5" },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Parse & Continue"));
+    });
+
+    expect(screen.getByLabelText("Host")).toHaveValue("redis.local");
+    expect(screen.getByLabelText("Port")).toHaveValue(6380);
+    expect(screen.getByLabelText("Redis database index (0-15)")).toHaveValue(5);
+    expect(screen.getByLabelText("Enable TLS")).toBeChecked();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   // URL parser 가 인식한 DBMS scheme 이지만 백엔드 어댑터가 아직 wire-up
   // 되지 않은 경우 Parse & Continue 는 명시적 거부 메시지를 노출한다.
   it.each([
     ["mssql", "mssql://sa:pw@mssql.local:1433/master", "Microsoft SQL Server"],
     ["oracle", "oracle://system:pw@oracle.local:1521/FREEPDB1", "Oracle"],
-    ["redis", "redis://u:p@redis.local:6379/0", "Redis"],
   ])(
     "rejects unsupported %s URL with explanatory error",
     async (_scheme, url, label) => {
