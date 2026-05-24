@@ -78,6 +78,183 @@ import {
 // (schemaStore) reuse the same verify + sync logic. Behaviour unchanged.
 import { logger } from "@lib/logger";
 
+const BULK_WRITE_OP_NAMES = [
+  "insertOne",
+  "updateOne",
+  "updateMany",
+  "deleteOne",
+  "deleteMany",
+  "replaceOne",
+] as const satisfies readonly BulkWriteOp["op"][];
+
+type NormalizeBulkWriteOpsResult =
+  | { ok: true; ops: BulkWriteOp[] }
+  | { ok: false; error: string };
+
+type NormalizeBulkWriteOpResult =
+  | { ok: true; op: BulkWriteOp }
+  | { ok: false; error: string };
+
+function isBulkWriteOpName(value: string): value is BulkWriteOp["op"] {
+  return (BULK_WRITE_OP_NAMES as readonly string[]).includes(value);
+}
+
+function readBulkWriteRecordField(
+  record: Record<string, unknown>,
+  field: string,
+  label: string,
+): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  const value = record[field];
+  if (!isRecord(value)) {
+    return { ok: false, error: `bulkWrite ${label} must be an object.` };
+  }
+  return { ok: true, value };
+}
+
+function readOptionalBulkWriteBoolean(
+  record: Record<string, unknown>,
+  field: string,
+  label: string,
+): { ok: true; value?: boolean } | { ok: false; error: string } {
+  const value = record[field];
+  if (value === undefined) return { ok: true };
+  if (typeof value !== "boolean") {
+    return { ok: false, error: `bulkWrite ${label} must be a boolean.` };
+  }
+  return { ok: true, value };
+}
+
+function normalizeBulkWriteSpec(
+  op: BulkWriteOp["op"],
+  spec: Record<string, unknown>,
+): NormalizeBulkWriteOpResult {
+  if (op === "insertOne") {
+    const document = readBulkWriteRecordField(
+      spec,
+      "document",
+      "insertOne.document",
+    );
+    if (!document.ok) return document;
+    return { ok: true, op: { op, document: document.value } };
+  }
+
+  if (op === "deleteOne" || op === "deleteMany") {
+    const filter = readBulkWriteRecordField(spec, "filter", `${op}.filter`);
+    if (!filter.ok) return filter;
+    return { ok: true, op: { op, filter: filter.value } };
+  }
+
+  if (op === "replaceOne") {
+    const filter = readBulkWriteRecordField(
+      spec,
+      "filter",
+      "replaceOne.filter",
+    );
+    if (!filter.ok) return filter;
+    const replacement = readBulkWriteRecordField(
+      spec,
+      "replacement",
+      "replaceOne.replacement",
+    );
+    if (!replacement.ok) return replacement;
+    const upsert = readOptionalBulkWriteBoolean(
+      spec,
+      "upsert",
+      "replaceOne.upsert",
+    );
+    if (!upsert.ok) return upsert;
+    const normalized: Extract<BulkWriteOp, { op: "replaceOne" }> = {
+      op,
+      filter: filter.value,
+      replacement: replacement.value,
+    };
+    if (upsert.value !== undefined) normalized.upsert = upsert.value;
+    return { ok: true, op: normalized };
+  }
+
+  const filter = readBulkWriteRecordField(spec, "filter", `${op}.filter`);
+  if (!filter.ok) return filter;
+  const update = readBulkWriteRecordField(spec, "update", `${op}.update`);
+  if (!update.ok) return update;
+  const upsert = readOptionalBulkWriteBoolean(spec, "upsert", `${op}.upsert`);
+  if (!upsert.ok) return upsert;
+  const normalized: Extract<BulkWriteOp, { op: "updateOne" | "updateMany" }> = {
+    op,
+    filter: filter.value,
+    update: update.value,
+  };
+  if (upsert.value !== undefined) normalized.upsert = upsert.value;
+  return { ok: true, op: normalized };
+}
+
+function normalizeBulkWriteOperation(
+  raw: unknown,
+  index: number,
+): NormalizeBulkWriteOpResult {
+  if (!isRecord(raw)) {
+    return {
+      ok: false,
+      error: `bulkWrite operation ${index} must be an object.`,
+    };
+  }
+
+  const internalOp = raw["op"];
+  if (typeof internalOp === "string") {
+    if (!isBulkWriteOpName(internalOp)) {
+      return {
+        ok: false,
+        error: `unsupported bulkWrite operation: ${internalOp}`,
+      };
+    }
+    return normalizeBulkWriteSpec(internalOp, raw);
+  }
+
+  const keys = Object.keys(raw);
+  if (keys.length !== 1) {
+    return {
+      ok: false,
+      error: `bulkWrite operation ${index} must contain exactly one operation name.`,
+    };
+  }
+  const op = keys[0]!;
+  if (!isBulkWriteOpName(op)) {
+    return { ok: false, error: `unsupported bulkWrite operation: ${op}` };
+  }
+  const spec = raw[op];
+  if (!isRecord(spec)) {
+    return { ok: false, error: `bulkWrite ${op} must be an object.` };
+  }
+  return normalizeBulkWriteSpec(op, spec);
+}
+
+function normalizeBulkWriteOperations(
+  rawOps: readonly unknown[],
+): NormalizeBulkWriteOpsResult {
+  const ops: BulkWriteOp[] = [];
+  for (const [index, raw] of rawOps.entries()) {
+    const normalized = normalizeBulkWriteOperation(raw, index);
+    if (!normalized.ok) return normalized;
+    ops.push(normalized.op);
+  }
+  return { ok: true, ops };
+}
+
+function findNonDeterministicBulkWriteOp(
+  ops: readonly BulkWriteOp[],
+): string | null {
+  for (const op of ops) {
+    if (
+      (op.op === "updateOne" ||
+        op.op === "deleteOne" ||
+        op.op === "replaceOne") &&
+      idOnlyFilter(op.filter) === null
+    ) {
+      return `${op.op} in bulkWrite() requires an _id-only filter for deterministic document identity.`;
+    }
+  }
+  return null;
+}
+
 /**
  * `QueryTab` query-execution hook covering four `handleExecute` branches
  * (cancel-running / document find+aggregate / SQL single / SQL multi),
@@ -1189,6 +1366,14 @@ export function useQueryExecution({
           });
           return;
         }
+        if (idOnlyFilter(filterArg) === null) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "deleteOne() requires an _id-only filter for deterministic document identity.",
+          });
+          return;
+        }
         await runDeleteOne(
           connectionId,
           database,
@@ -1214,6 +1399,14 @@ export function useQueryExecution({
             status: "error",
             error:
               "updateOne() update document must use `$set` with a non-_id patch.",
+          });
+          return;
+        }
+        if (idOnlyFilter(filterArg) === null) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "updateOne() requires an _id-only filter for deterministic document identity.",
           });
           return;
         }
@@ -1243,6 +1436,14 @@ export function useQueryExecution({
             status: "error",
             error:
               "replaceOne() replacement must be a document, not an update document.",
+          });
+          return;
+        }
+        if (idOnlyFilter(filterArg) === null) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "replaceOne() requires an _id-only filter for deterministic document identity.",
           });
           return;
         }
@@ -1300,7 +1501,23 @@ export function useQueryExecution({
           });
           return;
         }
-        const ops = opsRaw as readonly BulkWriteOp[];
+        const normalized = normalizeBulkWriteOperations(opsRaw);
+        if (!normalized.ok) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: normalized.error,
+          });
+          return;
+        }
+        const ops = normalized.ops;
+        const identityError = findNonDeterministicBulkWriteOp(ops);
+        if (identityError !== null) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: identityError,
+          });
+          return;
+        }
         const analysis = analyzeMongoOperation({ kind: "bulkWrite", ops });
         const decision = safeModeGate.decide(analysis);
         const runner = () =>
@@ -1743,6 +1960,7 @@ export function useQueryExecution({
           database,
           collection,
           filter,
+          true,
         );
         return { kind: "delete", deletedCount };
       });
@@ -1766,6 +1984,7 @@ export function useQueryExecution({
           collection,
           filter,
           patch,
+          true,
         );
         // The IPC currently surfaces only `modifiedCount`; we expose it
         // as both matched and modified counts (the lower-bound estimate)
@@ -1802,6 +2021,7 @@ export function useQueryExecution({
           database,
           collection,
           [{ op: "deleteOne", filter }],
+          true,
         );
         return { kind: "delete", deletedCount: result.deleted_count };
       });
@@ -1838,6 +2058,7 @@ export function useQueryExecution({
           database,
           collection,
           [{ op: "updateOne", filter, update: { $set: patch } }],
+          true,
         );
         return {
           kind: "update",
@@ -1863,6 +2084,7 @@ export function useQueryExecution({
           database,
           collection,
           ops as BulkWriteOp[],
+          true,
         );
         return { kind: "bulkWrite", result };
       });
@@ -1884,6 +2106,7 @@ export function useQueryExecution({
           database,
           collection,
           [op],
+          true,
         );
         return { kind: "bulkWrite", result };
       });
@@ -1968,7 +2191,13 @@ export function useQueryExecution({
       rawSql: string,
     ) => {
       await runMongoIndexHelper("dropIndex", rawSql, async () => {
-        await dropMongoIndex(connectionId, database, collection, indexName);
+        await dropMongoIndex(
+          connectionId,
+          database,
+          collection,
+          indexName,
+          true,
+        );
         return indexName;
       });
     },
@@ -2144,6 +2373,7 @@ export function useQueryExecution({
               tab.connectionId,
               dbArg,
               body,
+              adminAnalysis.severity !== "info",
             );
             const responseJson = JSON.stringify(response, null, 2);
             const queryResult: import("@/types/query").QueryResult = {

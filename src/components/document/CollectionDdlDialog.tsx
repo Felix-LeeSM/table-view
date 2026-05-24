@@ -95,7 +95,7 @@ export function CollectionDdlDialog({
           setSaving(false);
           return;
         }
-        await dropCollection(connectionId, database, collection);
+        await dropCollection(connectionId, database, collection, true);
       }
       onSuccess?.();
       onClose();

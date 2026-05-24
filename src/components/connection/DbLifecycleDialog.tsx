@@ -64,7 +64,7 @@ export function DbLifecycleDialog({
           await dropRdbDatabase(connectionId, target.trim());
         }
       } else {
-        await dropMongoDatabase(connectionId, target.trim());
+        await dropMongoDatabase(connectionId, target.trim(), true);
       }
       onSuccess?.();
       onClose();

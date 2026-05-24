@@ -8,10 +8,8 @@
 //
 // Tests are written before / alongside the implementation in vertical
 // slices — one write method per `describe`. D-16 (autonomous):
-// `updateOne` / `deleteOne` with non-`_id` filter is translated to a
-// single-op `bulkWrite` IPC; `_id`-only filters go through the existing
-// `updateDocument` / `deleteDocument` fast path. Both paths verified
-// here.
+// Sprint 475 tightens single-document writes: `updateOne` / `deleteOne` /
+// `replaceOne` require `_id`-only filters for deterministic identity.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
@@ -221,6 +219,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       "table_view_test",
       "users",
       { archived: true },
+      true,
     );
     await waitFor(() => {
       const r = getCompletedResult(tab.id);
@@ -284,6 +283,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       "users",
       { active: false },
       { reviewed: true },
+      true,
     );
     await waitFor(() => {
       const r = getCompletedResult(tab.id);
@@ -323,30 +323,21 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     });
   });
 
-  // [AC-312-write-07] deleteOne with non-_id filter → D-16 bulkWrite fallback.
-  it("deleteOne with non-_id filter → bulkWrite([{op:'deleteOne'}]) (D-16)", async () => {
-    bulkWriteDocumentsMock.mockResolvedValueOnce({
-      ...EMPTY_BULK_RESULT,
-      deleted_count: 1,
-    });
+  it("deleteOne with non-_id filter is rejected before IPC", async () => {
     const tab = seedDocTab('db.users.deleteOne({email:"x@y.com"})');
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
     await actAsync(result.current.handleExecute);
 
-    await waitFor(() => {
-      expect(bulkWriteDocumentsMock).toHaveBeenCalledTimes(1);
-    });
-    expect(bulkWriteDocumentsMock).toHaveBeenCalledWith(
-      "conn-mongo",
-      "table_view_test",
-      "users",
-      [{ op: "deleteOne", filter: { email: "x@y.com" } }],
-    );
     expect(deleteDocumentMock).not.toHaveBeenCalled();
+    expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
     await waitFor(() => {
-      const r = getCompletedResult(tab.id);
-      expect(r.writeSummary).toEqual({ kind: "delete", deletedCount: 1 });
+      const state = getTestWorkspace("conn-mongo", "table_view_test");
+      const updated = state.tabs.find((t) => t.id === tab.id);
+      expect(updated?.type).toBe("query");
+      if (updated?.type === "query") {
+        expect(updated.queryState.status).toBe("error");
+      }
     });
   });
 
@@ -373,13 +364,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
   });
 
-  // [AC-312-write-09] updateOne with non-_id filter → D-16 bulkWrite fallback.
-  it("updateOne with non-_id filter → bulkWrite([{op:'updateOne'}]) (D-16)", async () => {
-    bulkWriteDocumentsMock.mockResolvedValueOnce({
-      ...EMPTY_BULK_RESULT,
-      matched_count: 1,
-      modified_count: 1,
-    });
+  it("updateOne with non-_id filter is rejected before IPC", async () => {
     const tab = seedDocTab(
       'db.users.updateOne({email:"x@y.com"}, {$set:{verified:true}})',
     );
@@ -387,34 +372,20 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
 
     await actAsync(result.current.handleExecute);
 
-    await waitFor(() => {
-      expect(bulkWriteDocumentsMock).toHaveBeenCalledTimes(1);
-    });
-    expect(bulkWriteDocumentsMock).toHaveBeenCalledWith(
-      "conn-mongo",
-      "table_view_test",
-      "users",
-      [
-        {
-          op: "updateOne",
-          filter: { email: "x@y.com" },
-          update: { $set: { verified: true } },
-        },
-      ],
-    );
     expect(updateDocumentMock).not.toHaveBeenCalled();
+    expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
     await waitFor(() => {
-      const r = getCompletedResult(tab.id);
-      expect(r.writeSummary).toEqual({
-        kind: "update",
-        matchedCount: 1,
-        modifiedCount: 1,
-      });
+      const state = getTestWorkspace("conn-mongo", "table_view_test");
+      const updated = state.tabs.find((t) => t.id === tab.id);
+      expect(updated?.type).toBe("query");
+      if (updated?.type === "query") {
+        expect(updated.queryState.status).toBe("error");
+      }
     });
   });
 
   // [AC-312-write-10] bulkWrite with INFO sub-ops → direct IPC call.
-  it("dispatches bulkWrite to bulkWriteDocuments (INFO sub-ops only)", async () => {
+  it("normalizes real mongosh bulkWrite insertOne before dispatch", async () => {
     const bulkResult: BulkWriteResult = {
       inserted_count: 1,
       matched_count: 1,
@@ -424,7 +395,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     };
     bulkWriteDocumentsMock.mockResolvedValueOnce(bulkResult);
     const tab = seedDocTab(
-      'db.users.bulkWrite([{op:"insertOne", document:{n:1}}])',
+      "db.users.bulkWrite([{insertOne:{document:{n:1}}}])",
     );
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
@@ -438,6 +409,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       "table_view_test",
       "users",
       [{ op: "insertOne", document: { n: 1 } }],
+      true,
     );
     await waitFor(() => {
       const r = getCompletedResult(tab.id);
@@ -448,6 +420,28 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     );
   });
 
+  it("rejects real mongosh bulkWrite updateOne without an _id-only filter before IPC", async () => {
+    const tab = seedDocTab(
+      'db.users.bulkWrite([{updateOne:{filter:{email:"x@y.com"}, update:{$set:{verified:true}}}}])',
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await actAsync(result.current.handleExecute);
+
+    expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      const state = getTestWorkspace("conn-mongo", "table_view_test");
+      const updated = state.tabs.find((t) => t.id === tab.id);
+      expect(updated?.type).toBe("query");
+      if (updated?.type === "query") {
+        expect(updated.queryState.status).toBe("error");
+        if (updated.queryState.status === "error") {
+          expect(updated.queryState.error).toMatch(/_id-only filter/i);
+        }
+      }
+    });
+  });
+
   it("dispatches replaceOne through bulkWriteDocuments", async () => {
     const bulkResult: BulkWriteResult = {
       ...EMPTY_BULK_RESULT,
@@ -456,7 +450,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     };
     bulkWriteDocumentsMock.mockResolvedValueOnce(bulkResult);
     const tab = seedDocTab(
-      'db.users.replaceOne({email:"x@y.com"}, {email:"x@y.com", verified:true}, {upsert:true})',
+      'db.users.replaceOne({_id:"abc"}, {_id:"abc", email:"x@y.com", verified:true}, {upsert:true})',
     );
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
@@ -472,11 +466,12 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       [
         {
           op: "replaceOne",
-          filter: { email: "x@y.com" },
-          replacement: { email: "x@y.com", verified: true },
+          filter: { _id: "abc" },
+          replacement: { _id: "abc", email: "x@y.com", verified: true },
           upsert: true,
         },
       ],
+      true,
     );
     await waitFor(() => {
       const r = getCompletedResult(tab.id);
@@ -534,6 +529,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       "table_view_test",
       "users",
       "email_1",
+      true,
     );
     await waitFor(() => {
       const r = getCompletedResult(tab.id);
@@ -545,11 +541,53 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     );
   });
 
+  it("rejects updateOne without an _id-only filter before IPC", async () => {
+    const tab = seedDocTab(
+      'db.users.updateOne({email:"x@y.com"}, {$set:{verified:true}})',
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await actAsync(result.current.handleExecute);
+
+    expect(updateDocumentMock).not.toHaveBeenCalled();
+    expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      const state = getTestWorkspace("conn-mongo", "table_view_test");
+      const updated = state.tabs.find((t) => t.id === tab.id);
+      expect(updated?.type).toBe("query");
+      if (updated?.type === "query") {
+        expect(updated.queryState.status).toBe("error");
+        if (updated.queryState.status === "error") {
+          expect(updated.queryState.error).toMatch(/_id-only filter/i);
+        }
+      }
+    });
+  });
+
+  it("rejects deleteOne without an _id-only filter before IPC", async () => {
+    const tab = seedDocTab('db.users.deleteOne({email:"x@y.com"})');
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await actAsync(result.current.handleExecute);
+
+    expect(deleteDocumentMock).not.toHaveBeenCalled();
+    expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      const state = getTestWorkspace("conn-mongo", "table_view_test");
+      const updated = state.tabs.find((t) => t.id === tab.id);
+      expect(updated?.type).toBe("query");
+      if (updated?.type === "query") {
+        expect(updated.queryState.status).toBe("error");
+        if (updated.queryState.status === "error") {
+          expect(updated.queryState.error).toMatch(/_id-only filter/i);
+        }
+      }
+    });
+  });
+
   // [AC-312-write-11] bulkWrite with empty-filter `*-many` sub-op → STOP.
   it("bulkWrite with empty-filter *-many sub-op → STOP confirm", async () => {
-    const tab = seedDocTab(
-      'db.users.bulkWrite([{op:"deleteMany", filter:{}}])',
-    );
+    const tab = seedDocTab("db.users.bulkWrite([{deleteMany:{filter:{}}}])");
     useConnectionStore.setState({
       connections: [
         makeConn({

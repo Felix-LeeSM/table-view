@@ -160,6 +160,7 @@ describe("CollectionDdlDialog (Sprint 334 — Slice L live wire)", () => {
         "conn-mongo",
         "app",
         "users",
+        true,
       );
     });
     expect(onClose).toHaveBeenCalled();

@@ -356,13 +356,9 @@ describe("isInfoMongoOperation (Sprint 255)", () => {
   });
 });
 
-// Sprint 381 (2026-05-18) — `db.runCommand({...})` / `db.adminCommand({...})`
-// destructive 5-keyword whitelist. autocomplete 가 `drop` / `dropDatabase` /
-// `dropIndexes` / `killOp` / `renameCollection` 를 1-click 추천하므로,
-// admin-command dispatch path 가 `safeModeGate.decide` 를 호출하기 전에
-// classifier 가 정확히 본 5개를 danger 로 분류해야 한다. 다른 command
-// (`ping` / `serverStatus` / `dbStats` 등 read-only / introspection) 은
-// INFO 로 흘려야 false-positive 막음.
+// Sprint 381/475 — `db.runCommand({...})` / `db.adminCommand({...})` safety.
+// Only a small read-only allowlist is INFO; write-capable or unknown commands
+// are danger so the UI sends a backend safety acknowledgment.
 describe("analyzeMongoRunCommand (sprint-381)", () => {
   it("[AC-381-S1] empty body → info (no command key)", () => {
     const a = analyzeMongoRunCommand({});
@@ -424,5 +420,36 @@ describe("analyzeMongoRunCommand (sprint-381)", () => {
     // false-positive 가 나지 않는지 확인.
     const a = analyzeMongoRunCommand({ ping: 1, drop: "irrelevant" });
     expect(a.severity).toBe("info");
+  });
+
+  it("[SPRINT-475] write-capable runCommand names are danger", () => {
+    for (const body of [
+      { delete: "users", deletes: [{ q: { active: false }, limit: 0 }] },
+      {
+        update: "users",
+        updates: [
+          {
+            q: { active: false },
+            u: { $set: { reviewed: true } },
+            multi: true,
+          },
+        ],
+      },
+      {
+        findAndModify: "users",
+        query: { _id: 1 },
+        update: { $set: { reviewed: true } },
+      },
+    ]) {
+      const a = analyzeMongoRunCommand(body);
+      expect(a.severity).toBe("danger");
+      expect(a.reasons.join(" ")).toMatch(/runCommand/i);
+    }
+  });
+
+  it("[SPRINT-475] unknown runCommand names are danger by default", () => {
+    const a = analyzeMongoRunCommand({ customWriteCapableCommand: 1 });
+    expect(a.severity).toBe("danger");
+    expect(a.reasons.join(" ")).toMatch(/not in the read-only allowlist/i);
   });
 });

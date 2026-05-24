@@ -144,6 +144,7 @@ describe("DbLifecycleDialog (Sprint 335 — Slice M live wire)", () => {
       expect(dropMongoDatabaseMock).toHaveBeenCalledWith(
         "conn-mongo",
         "staging",
+        true,
       );
     });
     expect(onClose).toHaveBeenCalled();

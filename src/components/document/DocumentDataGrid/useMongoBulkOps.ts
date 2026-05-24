@@ -93,6 +93,7 @@ export function useMongoBulkOps({
         database,
         collection,
         activeFilter,
+        true,
       );
       toast.success(`Deleted ${deletedCount} document(s)`);
       setDeleteManyDialogOpen(false);
@@ -183,6 +184,7 @@ export function useMongoBulkOps({
         collection,
         activeFilter,
         patch,
+        true,
       );
       toast.success(`Updated ${modifiedCount} document(s)`);
       setUpdateManyDialogOpen(false);

@@ -477,13 +477,51 @@ async fn run_mongo_command_inner(
     connection_id: &str,
     database: Option<&str>,
     command: serde_json::Value,
+    safety_confirmed: bool,
 ) -> Result<serde_json::Value, AppError> {
     let command = extjson_to_bson_document(command)?;
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active.as_document()?.run_command(database, command).await
+    let adapter = active.as_document()?;
+    require_run_command_safety(&command, safety_confirmed)?;
+    adapter.run_command(database, command).await
+}
+
+fn require_run_command_safety(command: &bson::Document, confirmed: bool) -> Result<(), AppError> {
+    const READ_ONLY_COMMANDS: &[&str] = &[
+        "buildInfo",
+        "collStats",
+        "connectionStatus",
+        "count",
+        "currentOp",
+        "dbStats",
+        "distinct",
+        "explain",
+        "find",
+        "getCmdLineOpts",
+        "getLog",
+        "getParameter",
+        "hello",
+        "hostInfo",
+        "isMaster",
+        "listCollections",
+        "listDatabases",
+        "listIndexes",
+        "ping",
+        "serverStatus",
+        "whatsmyuri",
+    ];
+    let Some(first_key) = command.keys().next() else {
+        return Ok(());
+    };
+    if READ_ONLY_COMMANDS.contains(&first_key.as_str()) || confirmed {
+        return Ok(());
+    }
+    Err(AppError::Validation(format!(
+        "runCommand {first_key} requires safety confirmation because it is not in the read-only allowlist"
+    )))
 }
 
 /// Sprint 381 — execute `db.runCommand({...})` / `db.adminCommand({...})`.
@@ -502,8 +540,16 @@ pub async fn run_mongo_command(
     connection_id: String,
     database: Option<String>,
     command: serde_json::Value,
+    safety_confirmed: Option<bool>,
 ) -> Result<serde_json::Value, AppError> {
-    run_mongo_command_inner(state.inner(), &connection_id, database.as_deref(), command).await
+    run_mongo_command_inner(
+        state.inner(),
+        &connection_id,
+        database.as_deref(),
+        command,
+        safety_confirmed.unwrap_or(false),
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -921,7 +967,7 @@ mod tests {
     async fn run_mongo_command_unknown_connection_returns_notfound() {
         let state = AppState::new();
         let cmd = serde_json::json!({ "ping": 1 });
-        match run_mongo_command_inner(&state, "absent", None, cmd).await {
+        match run_mongo_command_inner(&state, "absent", None, cmd, false).await {
             Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
             other => panic!("Expected NotFound, got: {:?}", other),
         }
@@ -932,7 +978,7 @@ mod tests {
         let state = state_with("rdb", rdb_default()).await;
         let cmd = serde_json::json!({ "ping": 1 });
         assert!(matches!(
-            run_mongo_command_inner(&state, "rdb", None, cmd).await,
+            run_mongo_command_inner(&state, "rdb", None, cmd, false).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -958,7 +1004,7 @@ mod tests {
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
 
         let cmd = serde_json::json!({ "serverStatus": 1 });
-        let r = run_mongo_command_inner(&state, "d", None, cmd)
+        let r = run_mongo_command_inner(&state, "d", None, cmd, false)
             .await
             .expect("should succeed");
         assert_eq!(r["ok"], serde_json::Value::from(1));
@@ -987,7 +1033,7 @@ mod tests {
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
 
         let cmd = serde_json::json!({ "dbStats": 1 });
-        let r = run_mongo_command_inner(&state, "d", Some("myapp"), cmd)
+        let r = run_mongo_command_inner(&state, "d", Some("myapp"), cmd, false)
             .await
             .expect("should succeed");
         assert_eq!(r["db"], serde_json::Value::from("myapp"));
@@ -997,6 +1043,56 @@ mod tests {
             Some(Some("myapp".to_string())),
             "expected database=Some(\"myapp\") routing"
         );
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_destructive_without_safety_ack_is_validation_error() {
+        let state = state_with("d", document_default()).await;
+        let body = serde_json::json!({ "drop": "users" });
+        match run_mongo_command_inner(&state, "d", Some("myapp"), body, false).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("safety confirmation"),
+                    "unexpected validation message: {msg}"
+                );
+            }
+            other => panic!("expected AppError::Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_write_commands_without_safety_ack_are_validation_errors() {
+        let state = state_with("d", document_default()).await;
+        for body in [
+            serde_json::json!({ "delete": "users", "deletes": [{ "q": { "active": false }, "limit": 0 }] }),
+            serde_json::json!({ "update": "users", "updates": [{ "q": { "active": false }, "u": { "$set": { "reviewed": true } }, "multi": true }] }),
+            serde_json::json!({ "findAndModify": "users", "query": { "_id": 1 }, "update": { "$set": { "reviewed": true } } }),
+        ] {
+            match run_mongo_command_inner(&state, "d", Some("myapp"), body, false).await {
+                Err(AppError::Validation(msg)) => {
+                    assert!(
+                        msg.contains("safety confirmation"),
+                        "unexpected validation message: {msg}"
+                    );
+                }
+                other => panic!("expected AppError::Validation, got: {:?}", other),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_unknown_command_without_safety_ack_is_validation_error() {
+        let state = state_with("d", document_default()).await;
+        let body = serde_json::json!({ "customWriteCapableCommand": 1 });
+        match run_mongo_command_inner(&state, "d", Some("myapp"), body, false).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("safety confirmation"),
+                    "unexpected validation message: {msg}"
+                );
+            }
+            other => panic!("expected AppError::Validation, got: {:?}", other),
+        }
     }
 
     // ── Sprint 384 (2026-05-17) — extended-JSON → BSON conversion ───────
@@ -1030,7 +1126,7 @@ mod tests {
             Ok(serde_json::json!({ "ok": 1 }))
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
-        let r = run_mongo_command_inner(&state, "d", None, body).await;
+        let r = run_mongo_command_inner(&state, "d", None, body, true).await;
         let captured = captured.lock().unwrap().clone();
         (r, captured)
     }
@@ -1123,6 +1219,7 @@ mod tests {
             "d",
             None,
             serde_json::json!({ "ping": 1, "host": "example.com" }),
+            false,
         )
         .await
         .expect("ok");
@@ -1143,7 +1240,7 @@ mod tests {
         // AppError::Validation, not a panic, not a Database error.
         let state = state_with("d", document_default()).await;
         let body = serde_json::json!({ "_id": {"$oid": "not-24-hex"} });
-        match run_mongo_command_inner(&state, "d", None, body).await {
+        match run_mongo_command_inner(&state, "d", None, body, false).await {
             Err(AppError::Validation(msg)) => {
                 assert!(
                     msg.contains("extended-JSON") || msg.contains("oid") || msg.contains("hex"),
@@ -1162,7 +1259,7 @@ mod tests {
         // smuggle a primitive past the type system.
         let state = state_with("d", document_default()).await;
         let body = serde_json::json!([{ "ping": 1 }]);
-        match run_mongo_command_inner(&state, "d", None, body).await {
+        match run_mongo_command_inner(&state, "d", None, body, false).await {
             Err(AppError::Validation(msg)) => {
                 assert!(
                     msg.contains("JSON object") || msg.contains("array"),

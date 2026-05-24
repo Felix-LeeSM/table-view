@@ -79,6 +79,13 @@ export interface ParsedMongoshError {
 export function parseMongoshExpression(
   input: string,
 ): ParsedMongoshCall | ParsedMongoshError {
+  if (looksLikeTransactionHelper(input)) {
+    return makeError(
+      "unsupported-method",
+      "Transactions are not supported for mongosh expressions in Table View. Use explicit single-document writes; standalone MongoDB servers do not support multi-document transactions.",
+    );
+  }
+
   const parsed = parseMongoshStatement(input);
   if (parsed.kind === "error") return mapParseError(parsed);
   if (parsed.kind !== "collection-command") {
@@ -111,6 +118,12 @@ export function parseMongoshExpression(
     args: parsed.args,
     cursorChain,
   };
+}
+
+function looksLikeTransactionHelper(input: string): boolean {
+  return /\b(startSession|startTransaction|withTransaction|commitTransaction|abortTransaction)\s*\(/.test(
+    input,
+  );
 }
 
 function isMongoshMethod(name: string): name is MongoshMethod {
