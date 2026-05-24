@@ -163,6 +163,17 @@ Required language contract:
 Hot-path parser/completion should follow ADR 0045: Rust/WASM language core where
 practical, with TypeScript adapters at UI boundaries.
 
+### MongoDB Current Profile
+
+MongoDB is the live `document` source in the profile registry. Its canonical
+query language is `mongosh`, its catalog model is `document`, its declared
+result envelopes are `document` and grid-compatible `tabular`, and its safety
+policy is `document-default`.
+
+Workspace tabs must use `queryLanguage: "mongosh"` for routing metadata. Legacy
+`queryMode` may survive only on rehydrated old tabs as `find` or `aggregate`;
+history/load paths must not promote method names back into tab routing state.
+
 ## Result Envelope
 
 Query execution must return one of the declared result envelopes.

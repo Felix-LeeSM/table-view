@@ -282,12 +282,13 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
   });
 
   it.each([
-    ["findOne", "find"],
-    ["countDocuments", "find"],
-    ["deleteMany", "find"],
+    ["findOne", undefined],
+    ["countDocuments", undefined],
+    ["deleteMany", undefined],
+    ["find", "find"],
     ["aggregate", "aggregate"],
   ] as const)(
-    "loadPersistedWorkspaces sanitizes raw document queryMode '%s' to workspace hint '%s'",
+    "loadPersistedWorkspaces keeps only legacy document tab queryMode '%s' as workspace compat '%s'",
     (rawQueryMode, expectedQueryMode) => {
       const persistedPayload = {
         workspaces: {
@@ -371,14 +372,9 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
     expect(tab.queryMode).toBe("sql");
   });
 
-  it.each([
-    ["findOne", "find"],
-    ["count", "find"],
-    ["insertOne", "find"],
-    ["aggregate", "aggregate"],
-  ] as const)(
-    "loadQueryIntoTab maps history/document queryMode '%s' to workspace hint '%s'",
-    (historyQueryMode, expectedQueryMode) => {
+  it.each([["findOne"], ["count"], ["insertOne"], ["aggregate"]] as const)(
+    "loadQueryIntoTab routes Mongo history queryMode '%s' through queryLanguage only",
+    (historyQueryMode) => {
       useWorkspaceStore.getState().loadQueryIntoTab({
         connectionId: "conn-mongo",
         paradigm: "document",
@@ -392,7 +388,7 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
         useWorkspaceStore.getState().workspaces["conn-mongo"]?.["appdb"]
           ?.tabs[0];
       if (tab?.type !== "query") throw new Error("Expected query tab");
-      expect(tab.queryMode).toBe(expectedQueryMode);
+      expect(tab.queryMode).toBeUndefined();
       expect(tab.queryLanguage).toBe("mongosh");
       expect(tab.sql).toBe("db.users.find({})");
     },

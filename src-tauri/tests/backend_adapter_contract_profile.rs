@@ -103,22 +103,43 @@ fn backend_profiles_encode_current_database_type_contracts() {
 
     let mongodb = get_data_source_profile(&DatabaseType::Mongodb);
     assert_eq!(mongodb.paradigm, Paradigm::Document);
+    assert_eq!(mongodb.connection_kind, ConnectionKind::Server);
     assert_eq!(mongodb.languages, [QueryLanguageId::Mongosh]);
     assert_eq!(mongodb.catalog_model, CatalogModelKind::Document);
     assert_eq!(
         mongodb.result_kinds,
         [ResultEnvelopeKind::Document, ResultEnvelopeKind::Tabular]
     );
+    assert_eq!(mongodb.safety_policy, SafetyPolicyId::DocumentDefault);
+    assert_eq!(mongodb.backend_adapter.id, BackendAdapterId::Mongodb);
+    assert_eq!(
+        mongodb.backend_adapter.capability_source,
+        BackendAdapterCapabilitySource::Mongodb
+    );
     assert_eq!(
         mongodb.adapter_contract.kind,
         BackendAdapterContractKind::Document
     );
+    assert_eq!(
+        mongodb.adapter_contract.state,
+        BackendAdapterContractState::FactoryBacked
+    );
+    assert!(mongodb.has_backend_capability(BackendAdapterCapability::DocumentCatalog));
     assert!(mongodb.has_backend_capability(BackendAdapterCapability::DocumentQuery));
+    assert!(mongodb.has_backend_capability(BackendAdapterCapability::DocumentMutation));
+    assert!(!mongodb.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(!mongodb.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
 
     let redis = get_data_source_profile(&DatabaseType::Redis);
     assert_eq!(redis.paradigm, Paradigm::Kv);
     assert_eq!(redis.languages, [QueryLanguageId::RedisCommand]);
-    assert_eq!(redis.result_kinds, [ResultEnvelopeKind::KeyValue]);
+    assert_eq!(
+        redis.result_kinds,
+        [
+            ResultEnvelopeKind::KeyValue,
+            ResultEnvelopeKind::StreamRecords
+        ]
+    );
     assert_eq!(redis.adapter_contract.kind, BackendAdapterContractKind::Kv);
     assert_eq!(
         redis.adapter_contract.state,
