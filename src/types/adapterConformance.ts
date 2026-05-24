@@ -40,6 +40,14 @@ export interface AdapterConformanceEntry {
   readonly areas: Readonly<Record<ConformanceArea, AdapterConformanceClaim>>;
 }
 
+export interface AdapterConformanceView {
+  readonly dbType: DatabaseType;
+  readonly level: ConformanceLevel;
+  readonly areas: Readonly<
+    Partial<Record<ConformanceArea, AdapterConformanceClaim>>
+  >;
+}
+
 export interface AdapterConformanceFocus {
   readonly dbTypes?: readonly DatabaseType[];
   readonly areas?: readonly ConformanceArea[];
@@ -201,7 +209,7 @@ export const ADAPTER_CONFORMANCE_MATRIX = Object.freeze(
 
 export function getAdapterConformanceMatrix(
   focus: AdapterConformanceFocus = {},
-): readonly AdapterConformanceEntry[] {
+): readonly AdapterConformanceView[] {
   const dbTypes = focus.dbTypes ?? allDatabaseTypes();
   const areas = focus.areas ?? CONFORMANCE_AREAS;
 
@@ -209,12 +217,12 @@ export function getAdapterConformanceMatrix(
     .map((dbType) => ADAPTER_CONFORMANCE_MATRIX[dbType])
     .filter((entry) => includesLevel(entry.level, focus.minLevel))
     .map((entry) =>
-      freezeEntry({
+      freezeView({
         dbType: entry.dbType,
         level: entry.level,
         areas: Object.fromEntries(
           areas.map((area) => [area, entry.areas[area]]),
-        ) as Readonly<Record<ConformanceArea, AdapterConformanceClaim>>,
+        ),
       }),
     );
 }
@@ -290,6 +298,11 @@ function allDatabaseTypes(): readonly DatabaseType[] {
 }
 
 function freezeEntry(entry: AdapterConformanceEntry): AdapterConformanceEntry {
+  Object.freeze(entry.areas);
+  return Object.freeze(entry);
+}
+
+function freezeView(entry: AdapterConformanceView): AdapterConformanceView {
   Object.freeze(entry.areas);
   return Object.freeze(entry);
 }
