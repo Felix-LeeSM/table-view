@@ -183,3 +183,10 @@ pnpm tauri build --debug
 ```
 
 macOS debug 앱 번들은 `src-tauri/target/debug/bundle/macos/Table View.app`에 생성됩니다. 배포용 패키징 상태와 남은 계획은 [`docs/PLAN.md`](./docs/PLAN.md)와 [`docs/RISKS.md`](./docs/RISKS.md)를 기준으로 확인합니다.
+
+## 🍺 Homebrew 배포 (Homebrew)
+
+`release` 이벤트가 `published`로 바뀌면 이 저장소의 워크플로가 Homebrew tap을 갱신합니다.
+현재 절차는 `publish` 수동 승인 후 반영됩니다.
+
+설치 방법은 [`docs/homebrew-cask.md`](./docs/homebrew-cask.md)를 확인하세요.
