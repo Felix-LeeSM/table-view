@@ -104,6 +104,21 @@ describe("SchemaErdRenderer", () => {
     );
   });
 
+  it("exposes no-match search feedback inside the search result list", () => {
+    render(<SchemaErdRenderer graph={extractSchemaGraph(ordersSnapshot())} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: /search erd/i }), {
+      target: { value: "missing" },
+    });
+
+    const results = screen.getByRole("listbox", {
+      name: /erd table search results/i,
+    });
+    expect(
+      within(results).getByRole("option", { name: /no matching tables/i }),
+    ).toHaveAttribute("aria-disabled", "true");
+  });
+
   it("highlights only relationships connected to the focused table", () => {
     render(
       <SchemaErdRenderer
