@@ -109,11 +109,7 @@ describe("ConnectionDialog", () => {
     expect(screen.getByRole("option", { name: "MariaDB" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "MongoDB" })).toBeInTheDocument();
-
-    // Unsupported — 안 보임.
-    expect(
-      screen.queryByRole("option", { name: "Redis" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Redis" })).toBeInTheDocument();
   });
 
   // 편집 모드에서 unsupported DBMS connection 의 dbType 도 그대로 표시되도록
@@ -131,9 +127,7 @@ describe("ConnectionDialog", () => {
       screen.getByRole("option", { name: "Microsoft SQL Server" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("option", { name: "Redis" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Redis" })).toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -1610,8 +1604,7 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
     });
 
-    // Sprint 276 — Redis 옵션 hide. Redis 어댑터 합류 시 unskip.
-    it.skip("AC-S138-01 Redis: database index defaults to 0 and clamps to 0..15", async () => {
+    it("AC-S138-01 Redis: database index defaults to 0 and clamps to 0..15", async () => {
       const user = userEvent.setup();
       renderDialog();
       const trigger = screen.getByLabelText("Database Type");
