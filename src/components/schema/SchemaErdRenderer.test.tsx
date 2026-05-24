@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { extractSchemaGraph } from "@/lib/schemaGraph";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
@@ -62,6 +68,81 @@ describe("SchemaErdRenderer", () => {
       /no relationships yet/i,
     );
   });
+
+  it("filters search results and focuses a matching table", async () => {
+    const handleSelect = vi.fn();
+    render(
+      <SchemaErdRenderer
+        graph={extractSchemaGraph(ordersSnapshot())}
+        onSelectedTableIdChange={handleSelect}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("textbox", { name: /search erd/i }), {
+      target: { value: "pay" },
+    });
+
+    const results = screen.getByRole("listbox", {
+      name: /erd table search results/i,
+    });
+    expect(
+      within(results).getByRole("option", { name: "public.payments" }),
+    ).toBeInTheDocument();
+    expect(
+      within(results).queryByRole("option", { name: "public.users" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      within(results).getByRole("option", { name: "public.payments" }),
+    );
+
+    expect(handleSelect).toHaveBeenCalledWith("table:public.payments");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /public\.payments table/i }),
+      ).toHaveFocus(),
+    );
+  });
+
+  it("highlights only relationships connected to the focused table", () => {
+    render(
+      <SchemaErdRenderer
+        graph={extractSchemaGraph(ordersSnapshot())}
+        selectedTableId="table:public.users"
+      />,
+    );
+
+    expect(
+      screen.getByLabelText("public.orders.user_id references public.users.id"),
+    ).toHaveAttribute("data-highlighted", "true");
+    expect(
+      screen.getByLabelText(
+        "public.payments.order_id references public.orders.id",
+      ),
+    ).toHaveAttribute("data-highlighted", "false");
+    expect(
+      screen.getByRole("button", { name: /public\.orders table/i }),
+    ).toHaveAttribute("data-related", "true");
+    expect(
+      screen.getByRole("button", { name: /public\.payments table/i }),
+    ).toHaveAttribute("data-related", "false");
+  });
+
+  it("keeps zoom and focus controls local to the ERD surface", () => {
+    render(<SchemaErdRenderer graph={extractSchemaGraph(ordersSnapshot())} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /public\.orders/i }));
+    fireEvent.click(screen.getByRole("button", { name: /zoom in erd/i }));
+    expect(screen.getByText("110%")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /fit selected table/i }),
+    );
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /public\.orders table/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
 });
 
 function ordersSnapshot(): SchemaGraphCatalogSnapshot {
@@ -69,7 +150,11 @@ function ordersSnapshot(): SchemaGraphCatalogSnapshot {
     source: { dbType: "postgresql", database: "app" },
     schemas: [{ name: "public" }],
     tablesBySchema: {
-      public: [table("public", "users"), table("public", "orders")],
+      public: [
+        table("public", "users"),
+        table("public", "orders"),
+        table("public", "payments"),
+      ],
     },
     columnsByTable: {
       public: {
@@ -84,6 +169,14 @@ function ordersSnapshot(): SchemaGraphCatalogSnapshot {
             fk_reference: "public.users(id)",
           }),
           column("total", { data_type: "numeric" }),
+        ],
+        payments: [
+          column("id", { is_primary_key: true }),
+          column("order_id", {
+            is_foreign_key: true,
+            fk_reference: "public.orders(id)",
+          }),
+          column("status", { data_type: "text" }),
         ],
       },
     },
