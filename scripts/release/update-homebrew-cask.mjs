@@ -129,11 +129,14 @@ function pickDmgAssets(assets) {
   const dmgs = assets.filter((asset) =>
     asset.name.toLowerCase().endsWith(".dmg"),
   );
-  const candidates = dmgs
+  const sortedDmgs = dmgs.toSorted((a, b) =>
+    a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
+  );
+  const candidates = sortedDmgs
     .map((asset) => ({ ...asset, arch: detectArchFromName(asset.name) }))
     .filter((asset) => asset.arch !== "unknown");
 
-  const unknownDmgs = dmgs.filter(
+  const unknownDmgs = sortedDmgs.filter(
     (asset) => detectArchFromName(asset.name) === "unknown",
   );
 
@@ -144,6 +147,14 @@ function pickDmgAssets(assets) {
       intel: null,
       universal: null,
     };
+  }
+
+  if (candidates.length === 0 && unknownDmgs.length > 1) {
+    throw new Error(
+      `Multiple macOS dmg assets found for ${GITHUB_REPOSITORY}, but no arm64/x86_64 pattern match in names: ${unknownDmgs
+        .map((asset) => asset.name)
+        .join(", ")}`,
+    );
   }
 
   const arm = candidates.find((asset) => asset.arch === "arm") || null;
