@@ -59,7 +59,7 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | MariaDB | MySQL-adapter reuse | MySQL-family profile + MariaDB delta | Rust/WASM vocabulary | runtime path 존재. MariaDB-engine fixture gap은 active risk |
 | SQLite | file adapter complete | parser/write parity guardrails | Rust/WASM vocabulary | user DBMS adapter는 internal SQLite state와 분리됨. DDL UI는 unsupported |
 | DuckDB | file adapter + local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM vocabulary | local `.duckdb`/CSV/Parquet/JSON/NDJSON preview/query 지원. DDL/write는 unsupported |
-| Redis/Valkey | not started | `KvAdapter` contract 필요 | redis-command 필요 | non-RDBMS 1차 후보 |
+| Redis/Valkey | first slice live | key/type/TTL/stream guardrails | redis-command profile | Redis adapter + KV sidebar live; cluster/pubsub/modules deferred |
 | Elasticsearch/OpenSearch | not started | `SearchAdapter` contract 필요 | search DSL 필요 | non-RDBMS 1차 후보 |
 
 ## Active Roadmap
@@ -75,7 +75,7 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | 7 | SQLite DBMS adapter / write parity | active follow-up | user DBMS adapter 범위는 internal app SQLite state-management 와 분리됨. 남은 DDL UI/runtime family 는 unsupported boundary 유지 | `docs/query-language-support.md`, `docs/state-management-strategy-2026-05-15.md` |
 | 8 | DuckDB + file analytics hardening | active follow-up | `.duckdb`, CSV, Parquet, JSON, NDJSON preview/query 는 local-first runtime path 존재. analytics import/history/favorites 확대는 별도 결정 | `docs/data-source-architecture.md`, `docs/ROADMAP.md`, `docs/sprints/sprint-457/contract.md` |
 | 9 | RDBMS ERD / SchemaGraph | planned | FK/constraint catalog 를 재사용 가능한 `SchemaGraph` 로 승격. ERD는 첫 renderer | `docs/data-source-architecture.md` |
-| 10 | Redis/Valkey | deferred candidate | `KvAdapter` 를 marker 에서 key/type/TTL/stream contract 로 승격 후 phase 작성 | `docs/data-source-architecture.md` |
+| 10 | Redis/Valkey | active first slice | Redis adapter, KV sidebar, key scan/read/write/TTL/stream paths live. Cluster/pubsub/modules/consumer-groups remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-468/handoff.md` |
 | 11 | Elasticsearch/OpenSearch | deferred candidate | `SearchAdapter` 를 marker 에서 index/mapping/search/aggregation contract 로 승격 후 phase 작성 | `docs/data-source-architecture.md` |
 | 12 | MongoDB full support | deferred/current subagent audit only | Phase 28 Slice A 는 보존하되 RDBMS-first 후 재개. `queryMode` 는 execution SOT 로 되살리지 않음 | `docs/phases/phase-28.md` |
 | 13 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md` |
