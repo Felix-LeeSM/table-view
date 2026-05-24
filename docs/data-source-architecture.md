@@ -173,6 +173,15 @@ query language is `mongosh`, its catalog model is `document`, its declared
 result envelopes are `document` and grid-compatible `tabular`, and its safety
 policy is `document-default`.
 
+Sprint 476 integration gate treats MongoDB as first-class for the tested
+whitelisted workflows: server connection, database/collection/index catalog
+reads, typed mongosh collection dispatch, grid-compatible document result
+projection, document edit/bulk-write dispatch, index create/drop, explain, and
+safe-mode gates for destructive admin/collection operations. Document results
+may project into the shared grid for compatibility, but that projection must
+preserve document semantics such as document count wording and must not run
+RDBMS-only row editability analysis.
+
 Workspace tabs must use `queryLanguage: "mongosh"` for routing metadata. Legacy
 `queryMode` may survive only on rehydrated old tabs as `find` or `aggregate`;
 history/load paths must not promote method names back into tab routing state.
@@ -259,6 +268,8 @@ Near-term:
    broader KV workflows remain follow-up until explicitly verified.
 10. Elasticsearch/OpenSearch live HTTP catalog/search execution, admin, and
     observability on top of the fixture-verified `SearchAdapter` slice.
-11. MongoDB full support remains document-paradigm backlog.
+11. MongoDB whitelisted document workflows are live; arbitrary JavaScript
+    shell execution, version/deployment-aware gates, and richer native document
+    rendering remain document-paradigm backlog.
 12. Cassandra/DynamoDB/graph/vector/stream wait until profile + capability +
    result envelope contracts are implemented.

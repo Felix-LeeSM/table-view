@@ -1696,6 +1696,7 @@ export function useQueryExecution({
                 totalCount: 0,
                 executionTimeMs: Date.now() - startTime,
                 queryType: "select",
+                resultUnit: "document",
               }
             : {
                 columns: docRow.columns,
@@ -1703,6 +1704,7 @@ export function useQueryExecution({
                 totalCount: 1,
                 executionTimeMs: Date.now() - startTime,
                 queryType: "select",
+                resultUnit: "document",
               };
         completeQuery(tab.id, queryId, queryResult);
         recordHistory({

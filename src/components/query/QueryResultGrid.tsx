@@ -250,6 +250,11 @@ function ResultTable({ result }: { result: QueryResult }) {
   );
 }
 
+function resultUnitNoun(result: QueryResult): string {
+  const singular = result.resultUnit === "document" ? "document" : "row";
+  return result.totalCount === 1 ? singular : `${singular}s`;
+}
+
 function DmlMessage({ result }: { result: QueryResult }) {
   const qt = result.queryType;
   const rowsAffected =
@@ -299,16 +304,18 @@ function SelectResultArea({
       : undefined,
   );
   const defaultSchema = connection?.dbType === "sqlite" ? "main" : "public";
+  const isDocumentResult = result.resultUnit === "document";
 
   // Identify the source table once per SQL so we can fetch + look up its
   // primary-key metadata. Resolution falls back to "public" because that's
   // the default schema in PostgreSQL.
   const parsed = useMemo(() => {
+    if (isDocumentResult) return null;
     if (!sql) return null;
     const info = parseSingleTableSelect(sql);
     if (!info) return null;
     return { schema: info.schema ?? defaultSchema, table: info.table };
-  }, [defaultSchema, sql]);
+  }, [defaultSchema, isDocumentResult, sql]);
 
   useEffect(() => {
     if (!parsed || !connectionId || !database) return;
@@ -340,15 +347,17 @@ function SelectResultArea({
 
   const editability = useMemo(
     () =>
-      sql
-        ? analyzeResultEditability(
-            sql,
-            result.columns,
-            tableColumns,
-            defaultSchema,
-          )
-        : null,
-    [sql, result.columns, tableColumns, defaultSchema],
+      isDocumentResult
+        ? null
+        : sql
+          ? analyzeResultEditability(
+              sql,
+              result.columns,
+              tableColumns,
+              defaultSchema,
+            )
+          : null,
+    [isDocumentResult, sql, result.columns, tableColumns, defaultSchema],
   );
   const rowEditBlockReason = useMemo(() => {
     if (!connection) return null;
@@ -505,8 +514,8 @@ function CompletedSingleResult({
           {result.queryType === "select" && (
             <>
               {" "}
-              &mdash; {result.totalCount.toLocaleString()} row
-              {result.totalCount !== 1 ? "s" : ""}
+              &mdash; {result.totalCount.toLocaleString()}{" "}
+              {resultUnitNoun(result)}
             </>
           )}
         </span>

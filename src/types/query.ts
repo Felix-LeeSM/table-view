@@ -47,6 +47,12 @@ export interface QueryResult {
   executionTimeMs: number;
   queryType: QueryType;
   /**
+   * Semantic unit represented by SELECT-like rows. RDBMS results omit this
+   * and keep the historical "row" wording; document envelopes set
+   * `"document"` so shared grid chrome does not leak RDBMS assumptions.
+   */
+  resultUnit?: "document";
+  /**
    * Sprint 312 (Phase 28 Slice A6, 2026-05-14) — `"writeSummary"` joins
    * the discriminator union. The 7 Mongo write methods (`insertOne` /
    * `insertMany` / `updateOne` / `updateMany` / `deleteOne` /
@@ -179,6 +185,7 @@ export function toCompatibleQueryResult(
           totalCount: envelope.documentResult.totalCount,
           executionTimeMs: envelope.documentResult.executionTimeMs,
           queryType: "select",
+          resultUnit: "document",
         },
       };
     case "searchHits":

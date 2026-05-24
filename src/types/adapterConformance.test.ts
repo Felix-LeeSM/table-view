@@ -108,4 +108,32 @@ describe("adapter conformance matrix", () => {
       "catalog",
     ]);
   });
+
+  it("locks the MongoDB integration-gate support claim to tested workflow areas", () => {
+    const mongo = ADAPTER_CONFORMANCE_MATRIX.mongodb;
+
+    expect(mongo.level).toBe("runtime");
+    expect(mongo.areas.connection.checks).toEqual(["connection.test"]);
+    expect(mongo.areas.catalog.checks).toEqual([
+      "catalog.browse",
+      "catalog.schema",
+      "catalog.indexes",
+    ]);
+    expect(mongo.areas.query.checks).toEqual([
+      "query.query",
+      "query.cancel",
+      "query.explain",
+    ]);
+    expect(mongo.areas.result.checks).toEqual(["result.envelope"]);
+    expect(mongo.areas.edit.checks).toEqual([
+      "edit.editDocuments",
+      "edit.bulkWrite",
+    ]);
+    expect(mongo.areas.safety.checks).toEqual(["safety.policy"]);
+    expect(mongo.areas.query.deferred).toEqual(["query.multiStatement"]);
+    expect(mongo.areas.edit.deferred).toEqual([
+      "edit.editRows",
+      "edit.editKeys",
+    ]);
+  });
 });
