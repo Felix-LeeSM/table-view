@@ -37,6 +37,8 @@ export function resolveRdbTreeShape(dbType: DatabaseType): RdbTreeShape {
       return "flat";
     case "mongodb":
     case "redis":
+    case "elasticsearch":
+    case "opensearch":
       return "with-schema";
   }
 }

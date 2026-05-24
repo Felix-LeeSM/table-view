@@ -134,6 +134,8 @@ export default function ConnectionDialogBody({
             );
           case "mssql":
           case "oracle":
+          case "elasticsearch":
+          case "opensearch":
             return (
               <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
             );
@@ -205,6 +207,8 @@ export default function ConnectionDialogBody({
           case "oracle":
           case "mongodb":
           case "redis":
+          case "elasticsearch":
+          case "opensearch":
             throw unsupportedConnectionKindForForm(
               form.dbType,
               profile.connectionKind,

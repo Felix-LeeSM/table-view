@@ -7,7 +7,9 @@ export type DatabaseType =
   | "mssql"
   | "oracle"
   | "mongodb"
-  | "redis";
+  | "redis"
+  | "elasticsearch"
+  | "opensearch";
 
 /**
  * Sprint 276 — 사용자에게 노출되는 어댑터의 단일 source of truth.
@@ -30,6 +32,8 @@ export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "sqlite",
   "duckdb",
   "mongodb",
+  "elasticsearch",
+  "opensearch",
 ];
 
 export function isSupportedDatabaseType(t: DatabaseType): boolean {
@@ -48,6 +52,8 @@ export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
   oracle: "Oracle",
   mongodb: "MongoDB",
   redis: "Redis",
+  elasticsearch: "Elasticsearch",
+  opensearch: "OpenSearch",
 };
 
 /**
@@ -138,6 +144,8 @@ export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
   oracle: 1521,
   mongodb: 27017,
   redis: 6379,
+  elasticsearch: 9200,
+  opensearch: 9200,
 };
 
 /**
@@ -175,6 +183,8 @@ export const DATABASE_DEFAULT_FIELDS: Record<
   oracle: { port: 1521, user: "system", database: "FREEPDB1" },
   mongodb: { port: 27017, user: "", database: "admin" },
   redis: { port: 6379, user: "", database: "0" },
+  elasticsearch: { port: 9200, user: "", database: "" },
+  opensearch: { port: 9200, user: "", database: "" },
 };
 
 /** Map a DatabaseType to its paradigm tag. Mirrors
@@ -193,6 +203,9 @@ export function paradigmOf(dbType: DatabaseType): Paradigm {
       return "document";
     case "redis":
       return "kv";
+    case "elasticsearch":
+    case "opensearch":
+      return "search";
   }
 }
 
@@ -292,6 +305,10 @@ export function parseConnectionUrl(
       mongodb: "mongodb",
       "mongodb+srv": "mongodb",
       redis: "redis",
+      elasticsearch: "elasticsearch",
+      elastic: "elasticsearch",
+      es: "elasticsearch",
+      opensearch: "opensearch",
     };
     const dbType = dbTypeMap[parsed.protocol.replace(":", "")];
     if (!dbType) return null;

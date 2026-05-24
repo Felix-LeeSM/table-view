@@ -1,0 +1,107 @@
+export type SearchProductKind = "elasticsearch" | "opensearch";
+
+export interface SearchProductDelta {
+  product: SearchProductKind;
+  supportsElasticLicenseApi: boolean;
+  supportsOpensearchPluginsApi: boolean;
+  defaultTemplateEndpoint: "legacyIndexTemplate" | "composableIndexTemplate";
+}
+
+export interface SearchClusterIdentity {
+  product: SearchProductKind;
+  clusterName: string;
+  clusterUuid?: string;
+  version: {
+    number: string;
+    distribution?: string;
+    lucene?: string;
+    buildFlavor?: string;
+  };
+  capabilities: {
+    search: boolean;
+    aggregations: boolean;
+    aliases: boolean;
+    mappings: boolean;
+    legacyIndexTemplates: boolean;
+    composableIndexTemplates: boolean;
+    deleteByQuery: boolean;
+  };
+  productDelta: SearchProductDelta;
+}
+
+export interface SearchIndexInfo {
+  name: string;
+  uuid?: string;
+  health: "green" | "yellow" | "red" | "unknown";
+  open: boolean;
+  docsCount?: number;
+  storeSizeBytes?: number;
+  aliases: string[];
+  primaryShards?: number;
+  replicaShards?: number;
+}
+
+export interface SearchAliasInfo {
+  name: string;
+  index: string;
+  filter?: unknown;
+  routing?: string;
+  writeIndex: boolean;
+}
+
+export interface SearchMappingField {
+  path: string;
+  fieldType: string;
+  searchable: boolean;
+  aggregatable: boolean;
+  analyzer?: string;
+}
+
+export interface SearchIndexMapping {
+  index: string;
+  fields: SearchMappingField[];
+  raw: unknown;
+}
+
+export interface SearchIndexTemplateInfo {
+  name: string;
+  endpoint: "legacyIndexTemplate" | "composableIndexTemplate";
+  indexPatterns: string[];
+  priority?: number;
+  raw: unknown;
+}
+
+export interface SearchQueryRequest {
+  index: string;
+  body: unknown;
+  from?: number;
+  size?: number;
+  trackTotalHits?: boolean;
+}
+
+export interface SearchHitEnvelope {
+  index: string;
+  id: string;
+  score?: number;
+  source: unknown;
+  fields?: unknown;
+  highlight?: unknown;
+  sort: unknown[];
+}
+
+export interface SearchAggregationEnvelope {
+  name: string;
+  kind: string;
+  value: unknown;
+}
+
+export interface SearchResultEnvelope {
+  tookMs: number;
+  timedOut: boolean;
+  total: {
+    value: number;
+    relation: "eq" | "gte";
+  };
+  hits: SearchHitEnvelope[];
+  aggregations: SearchAggregationEnvelope[];
+}

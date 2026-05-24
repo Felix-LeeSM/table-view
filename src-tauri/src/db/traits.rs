@@ -16,7 +16,10 @@ use crate::models::{
     CreateTriggerRequest, DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
     DropTableRequest, DropTriggerRequest, FileAnalyticsPreview, FileAnalyticsQueryResponse,
     FileAnalyticsSource, FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo,
-    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo, ViewInfo,
+    RenameTableRequest, SchemaChangeResult, SearchAliasInfo, SearchClusterIdentity,
+    SearchDeleteByQueryRequest, SearchDestructiveOperationPlan, SearchIndexInfo,
+    SearchIndexMapping, SearchIndexTemplateInfo, SearchQueryRequest, SearchResultEnvelope,
+    TableData, TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::types::{
@@ -1071,8 +1074,76 @@ pub trait DocumentAdapter: DbAdapter {
     ) -> BoxFuture<'a, Result<serde_json::Value, AppError>>;
 }
 
-// ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────
+// ── SearchAdapter / KvAdapter ─────────────────────────────────────────────
 
-pub trait SearchAdapter: DbAdapter {}
+pub trait SearchAdapter: DbAdapter {
+    fn cluster_identity<'a>(&'a self) -> BoxFuture<'a, Result<SearchClusterIdentity, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This search adapter does not expose cluster identity".into(),
+            ))
+        })
+    }
+
+    fn list_indexes<'a>(&'a self) -> BoxFuture<'a, Result<Vec<SearchIndexInfo>, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This search adapter does not expose index catalog".into(),
+            ))
+        })
+    }
+
+    fn list_aliases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<SearchAliasInfo>, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This search adapter does not expose aliases".into(),
+            ))
+        })
+    }
+
+    fn get_index_mapping<'a>(
+        &'a self,
+        _index: &'a str,
+    ) -> BoxFuture<'a, Result<SearchIndexMapping, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This search adapter does not expose mappings".into(),
+            ))
+        })
+    }
+
+    fn list_index_templates<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<SearchIndexTemplateInfo>, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This search adapter does not expose index templates".into(),
+            ))
+        })
+    }
+
+    fn search<'a>(
+        &'a self,
+        _request: &'a SearchQueryRequest,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<SearchResultEnvelope, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "Search DSL execution is not wired for this adapter".into(),
+            ))
+        })
+    }
+
+    fn plan_delete_by_query<'a>(
+        &'a self,
+        _request: &'a SearchDeleteByQueryRequest,
+    ) -> BoxFuture<'a, Result<SearchDestructiveOperationPlan, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "Delete-by-query safety planning is not wired for this adapter".into(),
+            ))
+        })
+    }
+}
 
 pub trait KvAdapter: DbAdapter {}
