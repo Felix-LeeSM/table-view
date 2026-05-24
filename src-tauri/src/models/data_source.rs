@@ -260,10 +260,7 @@ const SEARCH_DSL: &[QueryLanguageId] = &[QueryLanguageId::SearchDsl];
 const TABULAR_RESULT: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::Tabular];
 const DOCUMENT_RESULTS: &[ResultEnvelopeKind] =
     &[ResultEnvelopeKind::Document, ResultEnvelopeKind::Tabular];
-const KV_RESULTS: &[ResultEnvelopeKind] = &[
-    ResultEnvelopeKind::KeyValue,
-    ResultEnvelopeKind::StreamRecords,
-];
+const KV_RESULTS: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::KeyValue];
 const SEARCH_RESULTS: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::SearchHits];
 
 const RDB_CAPABILITIES: &[BackendAdapterCapability] = &[

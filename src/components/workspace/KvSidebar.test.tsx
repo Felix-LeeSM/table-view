@@ -4,16 +4,10 @@ import KvSidebar from "./KvSidebar";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig } from "@/types/connection";
 
-const listKvDatabasesMock = vi.fn();
-const currentKvDatabaseMock = vi.fn();
-const switchKvDatabaseMock = vi.fn();
-const scanKvKeysMock = vi.fn();
+const invokeMock = vi.fn();
 
-vi.mock("@lib/tauri/kv", () => ({
-  listKvDatabases: (...args: unknown[]) => listKvDatabasesMock(...args),
-  currentKvDatabase: (...args: unknown[]) => currentKvDatabaseMock(...args),
-  switchKvDatabase: (...args: unknown[]) => switchKvDatabaseMock(...args),
-  scanKvKeys: (...args: unknown[]) => scanKvKeysMock(...args),
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
 function redisConnection(): ConnectionConfig {
@@ -39,29 +33,21 @@ describe("KvSidebar", () => {
       connections: [redisConnection()],
       activeStatuses: { "redis-1": { type: "connected", activeDb: "0" } },
     });
-    listKvDatabasesMock.mockResolvedValue([
-      { name: "0", index: 0, keyCount: 1 },
-      { name: "1", index: 1, keyCount: 0 },
-    ]);
-    currentKvDatabaseMock.mockResolvedValue(0);
-    switchKvDatabaseMock.mockImplementation(
-      async (_connectionId: string, database: number) => database,
-    );
-    scanKvKeysMock.mockResolvedValue({
-      database: 0,
-      cursor: "0",
-      nextCursor: "0",
-      done: true,
-      limit: 100,
-      keys: [
-        {
-          key: "user:1",
-          keyType: "hash",
-          ttl: { state: "persistent" },
-          length: 2,
-          memoryBytes: 128,
-        },
-      ],
+    invokeMock.mockImplementation((command: string, payload?: unknown) => {
+      if (command === "list_kv_databases") {
+        return Promise.resolve([
+          { name: "0", index: 0, keyCount: 1 },
+          { name: "1", index: 1, keyCount: 0 },
+        ]);
+      }
+      if (command === "current_kv_database") return Promise.resolve(0);
+      if (command === "switch_kv_database") {
+        return Promise.resolve((payload as { database: number }).database);
+      }
+      if (command === "scan_kv_keys") {
+        return Promise.resolve(defaultKeyPage());
+      }
+      return Promise.reject(new Error(`Unhandled command: ${command}`));
     });
   });
 
@@ -69,13 +55,21 @@ describe("KvSidebar", () => {
     render(<KvSidebar connectionId="redis-1" />);
 
     await waitFor(() => {
-      expect(listKvDatabasesMock).toHaveBeenCalledWith("redis-1");
-      expect(currentKvDatabaseMock).toHaveBeenCalledWith("redis-1");
-      expect(scanKvKeysMock).toHaveBeenCalledWith("redis-1", {
-        database: 0,
-        cursor: "0",
-        pattern: "*",
-        limit: 100,
+      expect(invokeMock).toHaveBeenCalledWith("list_kv_databases", {
+        connectionId: "redis-1",
+      });
+      expect(invokeMock).toHaveBeenCalledWith("current_kv_database", {
+        connectionId: "redis-1",
+      });
+      expect(invokeMock).toHaveBeenCalledWith("scan_kv_keys", {
+        connectionId: "redis-1",
+        queryId: undefined,
+        request: {
+          database: 0,
+          cursor: "0",
+          pattern: "*",
+          limit: 100,
+        },
       });
     });
     expect(
@@ -100,8 +94,12 @@ describe("KvSidebar", () => {
     fireEvent.click(await screen.findByRole("option", { name: /DB 1/ }));
 
     await waitFor(() => {
-      expect(switchKvDatabaseMock).toHaveBeenCalledWith("redis-1", 1);
-      expect(scanKvKeysMock).toHaveBeenLastCalledWith("redis-1", {
+      expect(invokeMock).toHaveBeenCalledWith("switch_kv_database", {
+        connectionId: "redis-1",
+        database: 1,
+      });
+      const requests = scanRequests();
+      expect(requests[requests.length - 1]).toMatchObject({
         database: 1,
         cursor: "0",
         pattern: "*",
@@ -111,13 +109,15 @@ describe("KvSidebar", () => {
   });
 
   it("names the pattern when a filtered key scan returns empty", async () => {
-    scanKvKeysMock.mockResolvedValue({
-      database: 0,
-      cursor: "0",
-      nextCursor: "0",
-      done: true,
-      limit: 100,
-      keys: [],
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_kv_databases") {
+        return Promise.resolve([{ name: "0", index: 0, keyCount: 0 }]);
+      }
+      if (command === "current_kv_database") return Promise.resolve(0);
+      if (command === "scan_kv_keys") {
+        return Promise.resolve({ ...defaultKeyPage(), keys: [] });
+      }
+      return Promise.reject(new Error(`Unhandled command: ${command}`));
     });
 
     render(<KvSidebar connectionId="redis-1" />);
@@ -129,7 +129,8 @@ describe("KvSidebar", () => {
     );
 
     await waitFor(() => {
-      expect(scanKvKeysMock).toHaveBeenLastCalledWith("redis-1", {
+      const requests = scanRequests();
+      expect(requests[requests.length - 1]).toMatchObject({
         database: 0,
         cursor: "0",
         pattern: "session:*",
@@ -141,3 +142,28 @@ describe("KvSidebar", () => {
     );
   });
 });
+
+function defaultKeyPage() {
+  return {
+    database: 0,
+    cursor: "0",
+    nextCursor: "0",
+    done: true,
+    limit: 100,
+    keys: [
+      {
+        key: "user:1",
+        keyType: "hash",
+        ttl: { state: "persistent" },
+        length: 2,
+        memoryBytes: 128,
+      },
+    ],
+  };
+}
+
+function scanRequests() {
+  return invokeMock.mock.calls
+    .filter(([command]) => command === "scan_kv_keys")
+    .map(([, payload]) => (payload as { request: unknown }).request);
+}

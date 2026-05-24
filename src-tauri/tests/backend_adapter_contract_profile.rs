@@ -118,13 +118,7 @@ fn backend_profiles_encode_current_database_type_contracts() {
     let redis = get_data_source_profile(&DatabaseType::Redis);
     assert_eq!(redis.paradigm, Paradigm::Kv);
     assert_eq!(redis.languages, [QueryLanguageId::RedisCommand]);
-    assert_eq!(
-        redis.result_kinds,
-        [
-            ResultEnvelopeKind::KeyValue,
-            ResultEnvelopeKind::StreamRecords
-        ]
-    );
+    assert_eq!(redis.result_kinds, [ResultEnvelopeKind::KeyValue]);
     assert_eq!(redis.adapter_contract.kind, BackendAdapterContractKind::Kv);
     assert_eq!(
         redis.adapter_contract.state,

@@ -473,7 +473,7 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "server",
     ["redis-command"],
     "kv",
-    ["keyValue", "streamRecords"],
+    ["keyValue"],
     "kv-default",
     REDIS_CAPABILITIES,
   ),
