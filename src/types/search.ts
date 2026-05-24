@@ -89,10 +89,25 @@ export interface SearchHitEnvelope {
   sort: unknown[];
 }
 
-export interface SearchAggregationEnvelope {
+export interface SearchTermsBucket {
+  key: string;
+  docCount: number;
+}
+
+export type SearchAggregationEnvelope =
+  | SearchTermsAggregationEnvelope
+  | SearchValueCountAggregationEnvelope;
+
+export interface SearchTermsAggregationEnvelope {
+  kind: "terms";
   name: string;
-  kind: string;
-  value: unknown;
+  buckets: SearchTermsBucket[];
+}
+
+export interface SearchValueCountAggregationEnvelope {
+  kind: "value_count";
+  name: string;
+  value: number;
 }
 
 export interface SearchResultEnvelope {

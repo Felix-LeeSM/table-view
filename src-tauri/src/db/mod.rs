@@ -21,6 +21,7 @@ pub mod postgres;
 pub(crate) mod raw_where;
 pub mod redis;
 pub mod search;
+pub(crate) mod search_executor;
 pub mod sqlite;
 pub mod traits;
 pub mod types;

@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 
-use crate::error::AppError;
+use crate::error::{AppError, CancelError};
 use crate::models::{
     validate_search_destructive_request, ConnectionConfig, DatabaseType, SearchAliasInfo,
     SearchClusterCapabilities, SearchClusterIdentity, SearchDeleteByQueryRequest,
@@ -10,6 +10,7 @@ use crate::models::{
     SearchTotalHits, SearchTotalHitsRelation, SearchVersionInfo,
 };
 
+use super::search_executor::execute_fixture_search;
 use super::traits::{DbAdapter, SearchAdapter};
 use super::types::BoxFuture;
 
@@ -148,10 +149,15 @@ impl SearchAdapter for SearchEngineAdapter {
 
     fn search<'a>(
         &'a self,
-        _request: &'a SearchQueryRequest,
-        _cancel: Option<&'a tokio_util::sync::CancellationToken>,
+        request: &'a SearchQueryRequest,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> BoxFuture<'a, Result<SearchResultEnvelope, AppError>> {
-        Box::pin(async move { Ok(self.fixture()?.search_result.clone()) })
+        Box::pin(async move {
+            if cancel.is_some_and(|token| token.is_cancelled()) {
+                return Err(AppError::Cancel(CancelError::AlreadyCompleted));
+            }
+            execute_fixture_search(self.fixture()?, request)
+        })
     }
 
     fn plan_delete_by_query<'a>(
@@ -257,6 +263,13 @@ impl SearchCatalogFixture {
                         aggregatable: false,
                         analyzer: Some("standard".into()),
                     },
+                    SearchMappingField {
+                        path: "status".into(),
+                        field_type: "keyword".into(),
+                        searchable: true,
+                        aggregatable: true,
+                        analyzer: None,
+                    },
                 ],
                 raw: mapping_raw(),
             }],
@@ -277,18 +290,34 @@ impl SearchCatalogFixture {
                     value: 1,
                     relation: SearchTotalHitsRelation::Eq,
                 },
-                hits: vec![SearchHitEnvelope {
-                    index: index_name.into(),
-                    id: "doc-1".into(),
-                    score: Some(1.0),
-                    source: json!({
-                        "@timestamp": "2026-05-24T00:00:00Z",
-                        "message": "fixture log"
-                    }),
-                    fields: None,
-                    highlight: None,
-                    sort: Vec::<Value>::new(),
-                }],
+                hits: vec![
+                    SearchHitEnvelope {
+                        index: index_name.into(),
+                        id: "doc-1".into(),
+                        score: Some(1.0),
+                        source: json!({
+                            "@timestamp": "2026-05-24T00:00:00Z",
+                            "message": "fixture log",
+                            "status": "ok"
+                        }),
+                        fields: None,
+                        highlight: None,
+                        sort: Vec::<Value>::new(),
+                    },
+                    SearchHitEnvelope {
+                        index: index_name.into(),
+                        id: "doc-2".into(),
+                        score: Some(0.8),
+                        source: json!({
+                            "@timestamp": "2026-05-24T00:01:00Z",
+                            "message": "fixture error",
+                            "status": "error"
+                        }),
+                        fields: None,
+                        highlight: None,
+                        sort: Vec::<Value>::new(),
+                    },
+                ],
                 aggregations: Vec::new(),
             },
         }
@@ -299,7 +328,11 @@ fn mapping_raw() -> Value {
     json!({
         "properties": {
             "@timestamp": { "type": "date" },
-            "message": { "type": "text", "analyzer": "standard" }
+            "message": { "type": "text", "analyzer": "standard" },
+            "status": {
+                "type": "keyword",
+                "fields": { "keyword": { "type": "keyword" } }
+            }
         }
     })
 }

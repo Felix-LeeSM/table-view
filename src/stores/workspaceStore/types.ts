@@ -9,6 +9,7 @@ import type {
   QueryState,
   QueryStatementResult,
 } from "@/types/query";
+import type { SearchResultEnvelope } from "@/types/search";
 import type { FilterCondition, SortInfo } from "@/types/schema";
 import type {
   DocumentWorkspaceQueryModeInput,
@@ -219,6 +220,13 @@ export interface WorkspaceStoreState {
     tabId: string,
     queryId: string,
     result: QueryResult,
+  ) => void;
+  completeSearchQuery: (
+    connId: string,
+    db: string,
+    tabId: string,
+    queryId: string,
+    result: SearchResultEnvelope,
   ) => void;
   failQuery: (
     connId: string,

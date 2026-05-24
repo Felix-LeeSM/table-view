@@ -1,0 +1,162 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { useConnectionStore } from "@stores/connectionStore";
+import {
+  useWorkspaceStore,
+  type QueryTab as QueryTabType,
+} from "@stores/workspaceStore";
+import type { ConnectionConfig } from "@/types/connection";
+import QueryTab from "./QueryTab";
+
+const invokeMock = vi.hoisted(() => vi.fn());
+
+vi.unmock("@lib/tauri");
+vi.unmock("@/lib/tauri");
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => invokeMock(...args),
+}));
+
+vi.mock("@lib/window-label", async () => {
+  const actual =
+    await vi.importActual<typeof import("@lib/window-label")>(
+      "@lib/window-label",
+    );
+  return {
+    ...actual,
+    getCurrentWindowLabel: () => "workspace-search-1",
+  };
+});
+
+function makeSearchConnection(): ConnectionConfig {
+  return {
+    id: "search-1",
+    name: "Search",
+    dbType: "elasticsearch",
+    host: "localhost",
+    port: 9200,
+    user: "",
+    database: "db1",
+    groupId: null,
+    color: null,
+    hasPassword: false,
+    paradigm: "search",
+  };
+}
+
+function makeSearchTab(): QueryTabType {
+  return {
+    type: "query",
+    id: "query-search",
+    title: "Search Query",
+    connectionId: "search-1",
+    closable: true,
+    paradigm: "search",
+    queryLanguage: "search-dsl",
+    sql: JSON.stringify({
+      index: "logs-elastic-2026.05.24",
+      body: {
+        query: { match_all: {} },
+        aggs: {
+          by_status: { terms: { field: "status.keyword" } },
+        },
+      },
+      size: 10,
+      trackTotalHits: true,
+    }),
+    queryState: { status: "idle" },
+  };
+}
+
+function LiveQueryTab() {
+  const tab = useWorkspaceStore(
+    (state) =>
+      state.workspaces["search-1"]?.db1?.tabs.find(
+        (candidate) => candidate.id === "query-search",
+      ) as QueryTabType | undefined,
+  );
+  if (!tab) return null;
+  return <QueryTab tab={tab} />;
+}
+
+describe("QueryTab search route", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    useWorkspaceStore.setState({ workspaces: {} });
+    useConnectionStore.setState({
+      connections: [makeSearchConnection()],
+      activeStatuses: {
+        "search-1": { type: "connected", activeDb: "db1" },
+      },
+      focusedConnId: "search-1",
+    });
+  });
+
+  it("dispatches Search DSL through the Tauri wrapper and renders SearchResultView", async () => {
+    const tab = makeSearchTab();
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id, "search-1", "db1"));
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_history") {
+        return Promise.resolve({ rows: [] });
+      }
+      if (command === "execute_search_query") {
+        return Promise.resolve({
+          tookMs: 3,
+          timedOut: false,
+          total: { value: 2, relation: "eq" },
+          hits: [
+            {
+              index: "logs-elastic-2026.05.24",
+              id: "doc-1",
+              score: 1,
+              source: { message: "fixture log", status: "ok" },
+              sort: [],
+            },
+          ],
+          aggregations: [
+            {
+              kind: "terms",
+              name: "by_status",
+              buckets: [{ key: "ok", docCount: 1 }],
+            },
+          ],
+        });
+      }
+      throw new Error(`unexpected invoke: ${command}`);
+    });
+
+    render(<LiveQueryTab />);
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("execute_search_query", {
+        connectionId: "search-1",
+        request: {
+          index: "logs-elastic-2026.05.24",
+          body: {
+            query: { match_all: {} },
+            aggs: {
+              by_status: { terms: { field: "status.keyword" } },
+            },
+          },
+          from: undefined,
+          size: 10,
+          trackTotalHits: true,
+        },
+        queryId: expect.stringMatching(/^query-search-/),
+      });
+    });
+
+    expect(await screen.findByLabelText("Search results")).toHaveTextContent(
+      "2 hits",
+    );
+    expect(screen.getByLabelText("Search hits")).toHaveTextContent(
+      "fixture log",
+    );
+    expect(screen.getByLabelText("Search aggregations")).toHaveTextContent(
+      "by_status",
+    );
+    expect(screen.queryByRole("grid")).not.toBeInTheDocument();
+  });
+});

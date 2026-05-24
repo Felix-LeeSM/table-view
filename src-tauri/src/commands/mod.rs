@@ -22,6 +22,7 @@ pub mod query;
 pub mod rdb;
 pub mod registry;
 pub mod release_tab_connection;
+pub mod search;
 pub mod single_instance;
 pub mod snapshot;
 // Sprint 385 (2026-05-17) — backend SQL parser IPC, mirrors the frontend

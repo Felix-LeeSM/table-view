@@ -208,12 +208,33 @@ pub struct SearchHitEnvelope {
     pub sort: Vec<Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SearchAggregationEnvelope {
-    pub name: String,
-    pub kind: String,
-    pub value: Value,
+pub struct SearchTermsBucket {
+    pub key: String,
+    pub doc_count: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SearchAggregationEnvelope {
+    Terms {
+        name: String,
+        buckets: Vec<SearchTermsBucket>,
+    },
+    ValueCount {
+        name: String,
+        value: u64,
+    },
+}
+
+impl SearchAggregationEnvelope {
+    pub fn name(&self) -> &str {
+        match self {
+            SearchAggregationEnvelope::Terms { name, .. }
+            | SearchAggregationEnvelope::ValueCount { name, .. } => name,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
