@@ -24,6 +24,15 @@ use crate::models::{ColumnInfo, IndexInfo};
 
 use super::{not_connected, register_cancel_token, release_cancel_token};
 
+fn require_safety_confirmation(confirmed: bool, operation: &str) -> Result<(), AppError> {
+    if confirmed {
+        return Ok(());
+    }
+    Err(AppError::Validation(format!(
+        "{operation} requires safety confirmation"
+    )))
+}
+
 /// Wire shape for `list_mongo_databases`. The backend `NamespaceInfo`
 /// already has `{ name: String }` — this alias exists purely so the
 /// frontend type lives under an adapter-neutral name (`DatabaseInfo`).
@@ -272,6 +281,7 @@ async fn drop_mongo_index_inner(
     database: &str,
     collection: &str,
     name: &str,
+    safety_confirmed: bool,
 ) -> Result<(), AppError> {
     // The `_id_` guard fires before the adapter round-trip so the UX
     // contract holds even when the UI is bypassed (programmatic
@@ -282,13 +292,13 @@ async fn drop_mongo_index_inner(
             "The _id_ index cannot be dropped".into(),
         ));
     }
-
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active
-        .as_document()?
+    let adapter = active.as_document()?;
+    require_safety_confirmation(safety_confirmed, "drop_mongo_index")?;
+    adapter
         .drop_collection_index(database, collection, name)
         .await
 }
@@ -304,8 +314,17 @@ pub async fn drop_mongo_index(
     database: String,
     collection: String,
     name: String,
+    safety_confirmed: Option<bool>,
 ) -> Result<(), AppError> {
-    drop_mongo_index_inner(state.inner(), &connection_id, &database, &collection, &name).await
+    drop_mongo_index_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        &name,
+        safety_confirmed.unwrap_or(false),
+    )
+    .await
 }
 
 async fn get_mongo_validator_inner(
@@ -498,12 +517,15 @@ async fn drop_mongo_database_inner(
     state: &AppState,
     connection_id: &str,
     name: &str,
+    safety_confirmed: bool,
 ) -> Result<(), AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active.as_document()?.drop_database(name).await
+    let adapter = active.as_document()?;
+    require_safety_confirmation(safety_confirmed, "drop_mongo_database")?;
+    adapter.drop_database(name).await
 }
 
 /// Sprint 335 (Slice M live wire) — drop the entire Mongo database
@@ -514,8 +536,15 @@ pub async fn drop_mongo_database(
     state: tauri::State<'_, AppState>,
     connection_id: String,
     name: String,
+    safety_confirmed: Option<bool>,
 ) -> Result<(), AppError> {
-    drop_mongo_database_inner(state.inner(), &connection_id, &name).await
+    drop_mongo_database_inner(
+        state.inner(),
+        &connection_id,
+        &name,
+        safety_confirmed.unwrap_or(false),
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -722,7 +751,7 @@ mod tests {
     #[tokio::test]
     async fn drop_mongo_database_unknown_connection_returns_notfound() {
         let state = AppState::new();
-        match drop_mongo_database_inner(&state, "absent", "staging").await {
+        match drop_mongo_database_inner(&state, "absent", "staging", false).await {
             Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
             other => panic!("Expected NotFound, got: {:?}", other),
         }
@@ -731,7 +760,7 @@ mod tests {
     #[tokio::test]
     async fn drop_mongo_database_rdb_paradigm_returns_unsupported() {
         let state = state_with("rdb", rdb_default()).await;
-        match drop_mongo_database_inner(&state, "rdb", "staging").await {
+        match drop_mongo_database_inner(&state, "rdb", "staging", false).await {
             Err(AppError::Unsupported(msg)) => assert!(msg.contains("document")),
             other => panic!("Expected Unsupported, got: {:?}", other),
         }
@@ -748,7 +777,7 @@ mod tests {
             Ok(())
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
-        drop_mongo_database_inner(&state, "d", "staging")
+        drop_mongo_database_inner(&state, "d", "staging", true)
             .await
             .unwrap();
     }
@@ -873,7 +902,7 @@ mod tests {
     #[tokio::test]
     async fn drop_mongo_index_blocks_id_index() {
         let state = state_with("d", document_default()).await;
-        match drop_mongo_index_inner(&state, "d", "app", "users", "_id_").await {
+        match drop_mongo_index_inner(&state, "d", "app", "users", "_id_", false).await {
             Err(AppError::Validation(msg)) => assert!(msg.contains("_id_")),
             other => panic!("Expected Validation, got: {:?}", other),
         }
@@ -882,7 +911,7 @@ mod tests {
     #[tokio::test]
     async fn drop_mongo_index_unknown_connection_returns_notfound() {
         let state = AppState::new();
-        match drop_mongo_index_inner(&state, "absent", "app", "users", "email_1").await {
+        match drop_mongo_index_inner(&state, "absent", "app", "users", "email_1", false).await {
             Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
             other => panic!("Expected NotFound, got: {:?}", other),
         }
@@ -891,7 +920,7 @@ mod tests {
     #[tokio::test]
     async fn drop_mongo_index_rdb_paradigm_returns_unsupported() {
         let state = state_with("rdb", rdb_default()).await;
-        match drop_mongo_index_inner(&state, "rdb", "app", "users", "email_1").await {
+        match drop_mongo_index_inner(&state, "rdb", "app", "users", "email_1", false).await {
             Err(AppError::Unsupported(msg)) => assert!(msg.contains("document")),
             other => panic!("Expected Unsupported, got: {:?}", other),
         }
@@ -907,7 +936,7 @@ mod tests {
             Ok(())
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
-        drop_mongo_index_inner(&state, "d", "app", "users", "email_1")
+        drop_mongo_index_inner(&state, "d", "app", "users", "email_1", true)
             .await
             .unwrap();
     }

@@ -398,6 +398,13 @@ describe("parseMongoshExpression — refusal kinds (AC-04)", () => {
     expectError(result);
     expect(result.errorKind).toBe("invalid-cursor-chain");
   });
+
+  it("transaction shell helper → unsupported-method with friendly message", () => {
+    const result = parseMongoshExpression("db.getMongo().startSession()");
+    expectError(result);
+    expect(result.errorKind).toBe("unsupported-method");
+    expect(result.message).toMatch(/Transactions are not supported/i);
+  });
 });
 
 describe("parseMongoshExpression — invariants", () => {

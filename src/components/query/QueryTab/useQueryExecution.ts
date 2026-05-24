@@ -78,6 +78,22 @@ import {
 // (schemaStore) reuse the same verify + sync logic. Behaviour unchanged.
 import { logger } from "@lib/logger";
 
+function findNonDeterministicBulkWriteOp(
+  ops: readonly BulkWriteOp[],
+): string | null {
+  for (const op of ops) {
+    if (
+      (op.op === "updateOne" ||
+        op.op === "deleteOne" ||
+        op.op === "replaceOne") &&
+      idOnlyFilter(op.filter) === null
+    ) {
+      return `${op.op} in bulkWrite() requires an _id-only filter for deterministic document identity.`;
+    }
+  }
+  return null;
+}
+
 /**
  * `QueryTab` query-execution hook covering four `handleExecute` branches
  * (cancel-running / document find+aggregate / SQL single / SQL multi),
@@ -1189,6 +1205,14 @@ export function useQueryExecution({
           });
           return;
         }
+        if (idOnlyFilter(filterArg) === null) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "deleteOne() requires an _id-only filter for deterministic document identity.",
+          });
+          return;
+        }
         await runDeleteOne(
           connectionId,
           database,
@@ -1214,6 +1238,14 @@ export function useQueryExecution({
             status: "error",
             error:
               "updateOne() update document must use `$set` with a non-_id patch.",
+          });
+          return;
+        }
+        if (idOnlyFilter(filterArg) === null) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "updateOne() requires an _id-only filter for deterministic document identity.",
           });
           return;
         }
@@ -1243,6 +1275,14 @@ export function useQueryExecution({
             status: "error",
             error:
               "replaceOne() replacement must be a document, not an update document.",
+          });
+          return;
+        }
+        if (idOnlyFilter(filterArg) === null) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "replaceOne() requires an _id-only filter for deterministic document identity.",
           });
           return;
         }
@@ -1301,6 +1341,14 @@ export function useQueryExecution({
           return;
         }
         const ops = opsRaw as readonly BulkWriteOp[];
+        const identityError = findNonDeterministicBulkWriteOp(ops);
+        if (identityError !== null) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: identityError,
+          });
+          return;
+        }
         const analysis = analyzeMongoOperation({ kind: "bulkWrite", ops });
         const decision = safeModeGate.decide(analysis);
         const runner = () =>
@@ -1743,6 +1791,7 @@ export function useQueryExecution({
           database,
           collection,
           filter,
+          true,
         );
         return { kind: "delete", deletedCount };
       });
@@ -1766,6 +1815,7 @@ export function useQueryExecution({
           collection,
           filter,
           patch,
+          true,
         );
         // The IPC currently surfaces only `modifiedCount`; we expose it
         // as both matched and modified counts (the lower-bound estimate)
@@ -1802,6 +1852,7 @@ export function useQueryExecution({
           database,
           collection,
           [{ op: "deleteOne", filter }],
+          true,
         );
         return { kind: "delete", deletedCount: result.deleted_count };
       });
@@ -1838,6 +1889,7 @@ export function useQueryExecution({
           database,
           collection,
           [{ op: "updateOne", filter, update: { $set: patch } }],
+          true,
         );
         return {
           kind: "update",
@@ -1863,6 +1915,7 @@ export function useQueryExecution({
           database,
           collection,
           ops as BulkWriteOp[],
+          true,
         );
         return { kind: "bulkWrite", result };
       });
@@ -1884,6 +1937,7 @@ export function useQueryExecution({
           database,
           collection,
           [op],
+          true,
         );
         return { kind: "bulkWrite", result };
       });
@@ -1968,7 +2022,13 @@ export function useQueryExecution({
       rawSql: string,
     ) => {
       await runMongoIndexHelper("dropIndex", rawSql, async () => {
-        await dropMongoIndex(connectionId, database, collection, indexName);
+        await dropMongoIndex(
+          connectionId,
+          database,
+          collection,
+          indexName,
+          true,
+        );
         return indexName;
       });
     },
@@ -2144,6 +2204,7 @@ export function useQueryExecution({
               tab.connectionId,
               dbArg,
               body,
+              adminAnalysis.severity !== "info",
             );
             const responseJson = JSON.stringify(response, null, 2);
             const queryResult: import("@/types/query").QueryResult = {

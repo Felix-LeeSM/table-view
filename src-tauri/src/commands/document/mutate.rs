@@ -43,6 +43,45 @@ use crate::error::AppError;
 use super::bulk_write_parse::parse_bulk_write_operations;
 use super::not_connected;
 
+fn require_safety_confirmation(confirmed: bool, operation: &str) -> Result<(), AppError> {
+    if confirmed {
+        return Ok(());
+    }
+    Err(AppError::Validation(format!(
+        "{operation} requires safety confirmation"
+    )))
+}
+
+fn bulk_write_requires_safety(operations: &[BulkWriteOp]) -> bool {
+    operations.iter().any(|op| match op {
+        BulkWriteOp::UpdateMany { filter, .. } | BulkWriteOp::DeleteMany { filter } => {
+            filter.is_empty()
+        }
+        _ => false,
+    })
+}
+
+fn is_id_only_filter(filter: &bson::Document) -> bool {
+    filter.len() == 1 && filter.contains_key("_id")
+}
+
+fn validate_bulk_write_identity(operations: &[BulkWriteOp]) -> Result<(), AppError> {
+    for op in operations {
+        let (name, filter) = match op {
+            BulkWriteOp::UpdateOne { filter, .. } => ("updateOne", filter),
+            BulkWriteOp::DeleteOne { filter } => ("deleteOne", filter),
+            BulkWriteOp::ReplaceOne { filter, .. } => ("replaceOne", filter),
+            _ => continue,
+        };
+        if !is_id_only_filter(filter) {
+            return Err(AppError::Validation(format!(
+                "{name} requires an _id-only filter for deterministic document identity"
+            )));
+        }
+    }
+    Ok(())
+}
+
 async fn insert_document_inner(
     state: &AppState,
     connection_id: &str,
@@ -177,15 +216,17 @@ async fn delete_many_inner(
     database: &str,
     collection: &str,
     filter: bson::Document,
+    safety_confirmed: bool,
 ) -> Result<u64, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active
-        .as_document()?
-        .delete_many(database, collection, filter)
-        .await
+    let adapter = active.as_document()?;
+    if filter.is_empty() {
+        require_safety_confirmation(safety_confirmed, "delete_many without filter")?;
+    }
+    adapter.delete_many(database, collection, filter).await
 }
 
 /// Sprint 198 — bulk delete every document matching `filter`. Returns the
@@ -202,6 +243,7 @@ pub async fn delete_many(
     database: String,
     collection: String,
     filter: bson::Document,
+    safety_confirmed: Option<bool>,
 ) -> Result<u64, AppError> {
     delete_many_inner(
         state.inner(),
@@ -209,6 +251,7 @@ pub async fn delete_many(
         &database,
         &collection,
         filter,
+        safety_confirmed.unwrap_or(false),
     )
     .await
 }
@@ -220,13 +263,17 @@ async fn update_many_inner(
     collection: &str,
     filter: bson::Document,
     patch: bson::Document,
+    safety_confirmed: bool,
 ) -> Result<u64, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active
-        .as_document()?
+    let adapter = active.as_document()?;
+    if filter.is_empty() {
+        require_safety_confirmation(safety_confirmed, "update_many without filter")?;
+    }
+    adapter
         .update_many(database, collection, filter, patch)
         .await
 }
@@ -242,6 +289,7 @@ pub async fn update_many(
     collection: String,
     filter: bson::Document,
     patch: bson::Document,
+    safety_confirmed: Option<bool>,
 ) -> Result<u64, AppError> {
     update_many_inner(
         state.inner(),
@@ -250,6 +298,7 @@ pub async fn update_many(
         &collection,
         filter,
         patch,
+        safety_confirmed.unwrap_or(false),
     )
     .await
 }
@@ -259,15 +308,15 @@ async fn drop_collection_inner(
     connection_id: &str,
     database: &str,
     collection: &str,
+    safety_confirmed: bool,
 ) -> Result<(), AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active
-        .as_document()?
-        .drop_collection(database, collection)
-        .await
+    let adapter = active.as_document()?;
+    require_safety_confirmation(safety_confirmed, "drop_collection")?;
+    adapter.drop_collection(database, collection).await
 }
 
 /// Sprint 198 — drop the entire collection. Mongo parallel of RDB
@@ -278,8 +327,16 @@ pub async fn drop_collection(
     connection_id: String,
     database: String,
     collection: String,
+    safety_confirmed: Option<bool>,
 ) -> Result<(), AppError> {
-    drop_collection_inner(state.inner(), &connection_id, &database, &collection).await
+    drop_collection_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        safety_confirmed.unwrap_or(false),
+    )
+    .await
 }
 
 // ── Sprint 308 (2026-05-14) — 2 new write commands ──────────────────────
@@ -335,11 +392,16 @@ async fn bulk_write_documents_inner(
     database: &str,
     collection: &str,
     operations: Vec<BulkWriteOp>,
+    safety_confirmed: bool,
 ) -> Result<BulkWriteResult, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
+    validate_bulk_write_identity(&operations)?;
+    if bulk_write_requires_safety(&operations) {
+        require_safety_confirmation(safety_confirmed, "bulk_write destructive operation")?;
+    }
     active
         .as_document()?
         .bulk_write(database, collection, operations)
@@ -360,6 +422,7 @@ pub async fn bulk_write_documents(
     database: String,
     collection: String,
     operations: Vec<serde_json::Value>,
+    safety_confirmed: Option<bool>,
 ) -> Result<BulkWriteResult, AppError> {
     let operations = parse_bulk_write_operations(operations)?;
     bulk_write_documents_inner(
@@ -368,6 +431,7 @@ pub async fn bulk_write_documents(
         &database,
         &collection,
         operations,
+        safety_confirmed.unwrap_or(false),
     )
     .await
 }
@@ -502,16 +566,30 @@ mod tests {
     async fn delete_many_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            delete_many_inner(&state, "absent", "db", "c", bson::Document::new()).await,
+            delete_many_inner(&state, "absent", "db", "c", bson::Document::new(), false).await,
             Err(AppError::NotFound(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn delete_many_empty_filter_without_safety_ack_is_validation_error() {
+        let state = state_with("d", document_default()).await;
+        match delete_many_inner(&state, "d", "db", "c", bson::Document::new(), false).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("safety confirmation"),
+                    "unexpected message: {msg}"
+                );
+            }
+            other => panic!("expected Validation error, got: {:?}", other),
+        }
     }
 
     #[tokio::test]
     async fn delete_many_rdb_paradigm_returns_unsupported() {
         let state = state_with("rdb", rdb_default()).await;
         assert!(matches!(
-            delete_many_inner(&state, "rdb", "db", "c", bson::Document::new()).await,
+            delete_many_inner(&state, "rdb", "db", "c", bson::Document::new(), false).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -520,7 +598,7 @@ mod tests {
     async fn delete_many_default_returns_zero() {
         let state = state_with("d", document_default()).await;
         assert_eq!(
-            delete_many_inner(&state, "d", "db", "c", bson::Document::new())
+            delete_many_inner(&state, "d", "db", "c", bson::Document::new(), true)
                 .await
                 .unwrap(),
             0
@@ -537,7 +615,8 @@ mod tests {
                 "db",
                 "c",
                 bson::Document::new(),
-                bson::Document::new()
+                bson::Document::new(),
+                false
             )
             .await,
             Err(AppError::NotFound(_))
@@ -554,7 +633,8 @@ mod tests {
                 "db",
                 "c",
                 bson::Document::new(),
-                bson::Document::new()
+                bson::Document::new(),
+                false
             )
             .await,
             Err(AppError::Unsupported(_))
@@ -571,7 +651,8 @@ mod tests {
                 "db",
                 "c",
                 bson::Document::new(),
-                bson::Document::new()
+                bson::Document::new(),
+                true
             )
             .await
             .unwrap(),
@@ -585,16 +666,30 @@ mod tests {
     async fn drop_collection_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            drop_collection_inner(&state, "absent", "db", "c").await,
+            drop_collection_inner(&state, "absent", "db", "c", false).await,
             Err(AppError::NotFound(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn drop_collection_without_safety_ack_is_validation_error() {
+        let state = state_with("d", document_default()).await;
+        match drop_collection_inner(&state, "d", "db", "c", false).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("safety confirmation"),
+                    "unexpected message: {msg}"
+                );
+            }
+            other => panic!("expected Validation error, got: {:?}", other),
+        }
     }
 
     #[tokio::test]
     async fn drop_collection_rdb_paradigm_returns_unsupported() {
         let state = state_with("rdb", rdb_default()).await;
         assert!(matches!(
-            drop_collection_inner(&state, "rdb", "db", "c").await,
+            drop_collection_inner(&state, "rdb", "db", "c", false).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -612,7 +707,9 @@ mod tests {
             }
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
-        assert!(drop_collection_inner(&state, "d", "DB", "C").await.is_ok());
+        assert!(drop_collection_inner(&state, "d", "DB", "C", true)
+            .await
+            .is_ok());
     }
 
     // ── Sprint 308 — insert_many_documents ─────────────────────────────
@@ -675,7 +772,7 @@ mod tests {
     async fn bulk_write_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            bulk_write_documents_inner(&state, "absent", "db", "c", Vec::new()).await,
+            bulk_write_documents_inner(&state, "absent", "db", "c", Vec::new(), false).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -684,7 +781,7 @@ mod tests {
     async fn bulk_write_rdb_paradigm_returns_unsupported() {
         let state = state_with("rdb", rdb_default()).await;
         assert!(matches!(
-            bulk_write_documents_inner(&state, "rdb", "db", "c", Vec::new()).await,
+            bulk_write_documents_inner(&state, "rdb", "db", "c", Vec::new(), false).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -692,7 +789,7 @@ mod tests {
     #[tokio::test]
     async fn bulk_write_default_returns_default_result() {
         let state = state_with("d", document_default()).await;
-        let r = bulk_write_documents_inner(&state, "d", "db", "c", Vec::new())
+        let r = bulk_write_documents_inner(&state, "d", "db", "c", Vec::new(), false)
             .await
             .unwrap();
         // BulkWriteResult::default() — all counts zero, no upserted ids.
@@ -724,6 +821,7 @@ mod tests {
             vec![BulkWriteOp::InsertOne {
                 document: bson::Document::new(),
             }],
+            false,
         )
         .await
         .unwrap();

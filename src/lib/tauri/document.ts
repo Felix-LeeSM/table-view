@@ -125,12 +125,14 @@ export async function dropMongoIndex(
   database: string,
   collection: string,
   name: string,
+  safetyConfirmed = false,
 ): Promise<void> {
   return invoke<void>("drop_mongo_index", {
     connectionId,
     database,
     collection,
     name,
+    safetyConfirmed,
   });
 }
 
@@ -256,8 +258,13 @@ export async function renameCollection(
 export async function dropMongoDatabase(
   connectionId: string,
   name: string,
+  safetyConfirmed = false,
 ): Promise<void> {
-  return invoke<void>("drop_mongo_database", { connectionId, name });
+  return invoke<void>("drop_mongo_database", {
+    connectionId,
+    name,
+    safetyConfirmed,
+  });
 }
 
 /**
@@ -397,12 +404,14 @@ export async function deleteMany(
   database: string,
   collection: string,
   filter: Record<string, unknown>,
+  safetyConfirmed = false,
 ): Promise<number> {
   return invoke<number>("delete_many", {
     connectionId,
     database,
     collection,
     filter,
+    safetyConfirmed,
   });
 }
 
@@ -417,6 +426,7 @@ export async function updateMany(
   collection: string,
   filter: Record<string, unknown>,
   patch: Record<string, unknown>,
+  safetyConfirmed = false,
 ): Promise<number> {
   return invoke<number>("update_many", {
     connectionId,
@@ -424,6 +434,7 @@ export async function updateMany(
     collection,
     filter,
     patch,
+    safetyConfirmed,
   });
 }
 
@@ -435,11 +446,13 @@ export async function dropCollection(
   connectionId: string,
   database: string,
   collection: string,
+  safetyConfirmed = false,
 ): Promise<void> {
   return invoke<void>("drop_collection", {
     connectionId,
     database,
     collection,
+    safetyConfirmed,
   });
 }
 
@@ -568,12 +581,14 @@ export async function bulkWriteDocuments(
   database: string,
   collection: string,
   operations: BulkWriteOp[],
+  safetyConfirmed = false,
 ): Promise<BulkWriteResult> {
   const result = await invoke<unknown>("bulk_write_documents", {
     connectionId,
     database,
     collection,
     operations,
+    safetyConfirmed,
   });
   return normalizeBulkWriteResult(result);
 }
@@ -596,10 +611,12 @@ export async function runMongoCommand(
   connectionId: string,
   database: string | null,
   command: Record<string, unknown>,
+  safetyConfirmed = false,
 ): Promise<unknown> {
   return invoke<unknown>("run_mongo_command", {
     connectionId,
     database,
     command,
+    safetyConfirmed,
   });
 }

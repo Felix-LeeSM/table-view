@@ -46,7 +46,7 @@ export function useDocumentDatabaseDrop(connectionId: string) {
     const recordedSql = `db.${collection}.drop()`;
     const startedAt = Date.now();
     try {
-      await dropCollection(connectionId, database, collection);
+      await dropCollection(connectionId, database, collection, true);
       recordHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,

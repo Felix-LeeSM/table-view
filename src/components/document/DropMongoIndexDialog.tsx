@@ -66,7 +66,7 @@ export function DropMongoIndexDialog({
     setError(null);
     setSubmitting(true);
     try {
-      await dropMongoIndex(connectionId, database, collection, indexName);
+      await dropMongoIndex(connectionId, database, collection, indexName, true);
       toast.success(`Index "${indexName}" dropped`);
       await onDropped(indexName);
       onClose();

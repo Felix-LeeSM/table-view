@@ -271,6 +271,7 @@ describe("MongoIndexesPanel (Sprint 351 — CRUD affordances)", () => {
         "app",
         "users",
         "email_1",
+        true,
       );
     });
     await waitFor(() => {

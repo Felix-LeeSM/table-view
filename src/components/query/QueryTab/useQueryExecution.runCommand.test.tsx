@@ -137,9 +137,14 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     await waitFor(() => {
       expect(runMongoCommandMock).toHaveBeenCalledTimes(1);
     });
-    expect(runMongoCommandMock).toHaveBeenCalledWith("conn-mongo", null, {
-      ping: 1,
-    });
+    expect(runMongoCommandMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      null,
+      {
+        ping: 1,
+      },
+      false,
+    );
     // Other dispatch paths must NOT fire.
     expect(findDocumentsMock).not.toHaveBeenCalled();
     expect(aggregateDocumentsMock).not.toHaveBeenCalled();
@@ -174,9 +179,14 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     await waitFor(() => {
       expect(runMongoCommandMock).toHaveBeenCalledTimes(1);
     });
-    expect(runMongoCommandMock).toHaveBeenCalledWith("conn-mongo", null, {
-      serverStatus: 1,
-    });
+    expect(runMongoCommandMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      null,
+      {
+        serverStatus: 1,
+      },
+      false,
+    );
   });
 
   // AC-381-08: chip = "myapp" 상태에서 `db.runCommand({dbStats: 1})`
@@ -196,9 +206,14 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     await waitFor(() => {
       expect(runMongoCommandMock).toHaveBeenCalledTimes(1);
     });
-    expect(runMongoCommandMock).toHaveBeenCalledWith("conn-mongo", "myapp", {
-      dbStats: 1,
-    });
+    expect(runMongoCommandMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      "myapp",
+      {
+        dbStats: 1,
+      },
+      false,
+    );
   });
 
   // Sprint 381 hardening (2026-05-18) — destructive runCommand 5-keyword
@@ -265,6 +280,12 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     await waitFor(() => {
       expect(runMongoCommandMock).toHaveBeenCalledTimes(1);
     });
+    expect(runMongoCommandMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      "scratch",
+      { dropDatabase: 1 },
+      true,
+    );
     expect(result.current.pendingMongoConfirm).toBeNull();
   });
 

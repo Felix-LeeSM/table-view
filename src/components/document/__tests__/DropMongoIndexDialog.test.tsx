@@ -82,6 +82,7 @@ describe("DropMongoIndexDialog", () => {
         "app",
         "users",
         "email_1",
+        true,
       );
     });
     await waitFor(() => {
