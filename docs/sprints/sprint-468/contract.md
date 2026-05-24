@@ -1,5 +1,5 @@
 ---
-review-profile: code
+review-profile: docs
 ---
 
 # Sprint 468 Contract: Redis/Valkey Integration Gate
