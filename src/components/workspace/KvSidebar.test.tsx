@@ -112,4 +112,36 @@ describe("KvSidebar", () => {
     expect(screen.getByText(/name: Ada/)).toBeInTheDocument();
     expect(screen.getByText(/persistent/)).toBeInTheDocument();
   });
+
+  it("names the pattern when a filtered key scan returns empty", async () => {
+    // Reason: empty SCAN results must distinguish an empty DB from an over-specific pattern (2026-05-24).
+    scanKvKeysMock.mockResolvedValue({
+      database: 0,
+      cursor: "0",
+      nextCursor: "0",
+      done: true,
+      limit: 100,
+      keys: [],
+    });
+
+    render(<KvSidebar connectionId="redis-1" />);
+    fireEvent.change(
+      screen.getByRole("textbox", { name: /redis key pattern/i }),
+      {
+        target: { value: "session:*" },
+      },
+    );
+
+    await waitFor(() => {
+      expect(scanKvKeysMock).toHaveBeenLastCalledWith("redis-1", {
+        database: 0,
+        cursor: "0",
+        pattern: "session:*",
+        limit: 100,
+      });
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /no keys match pattern session:\*/i,
+    );
+  });
 });
