@@ -213,6 +213,13 @@ Before implementation starts, the phase contract must answer:
 10. Which docs are updated: `docs/PLAN.md`, `docs/ROADMAP.md`,
     `docs/query-language-support.md`, and phase docs.
 
+Adapter-level fixture strategy should be expressed through
+`table_view_lib::db::fixtures` where possible. Tests can request an opt-in
+fixture by data-source profile, dialect family, or paradigm, then require
+capability and local-first labels. Missing fixtures must fail with diagnostics
+that name the requested selector and available candidates; paid cloud services
+remain out of scope unless a local emulator or mock exists.
+
 ## Anti-Patterns
 
 - Adding a DBMS by only extending `DatabaseType` and switch statements.
