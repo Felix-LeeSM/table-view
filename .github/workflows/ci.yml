@@ -100,6 +100,7 @@ jobs:
         with:
           workspaces: src-tauri -> target
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run cargo tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration
@@ -174,6 +175,7 @@ jobs:
         with:
           workspaces: src-tauri -> target
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run integration tests
         env:
