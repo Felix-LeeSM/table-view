@@ -26,8 +26,11 @@ task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 # 새 worktree + branch
 bash scripts/worktree-spawn.sh sprint-388/foo
 
-# 새 worktree + 기본 의존성 warm-start
-bash scripts/worktree-spawn.sh --with-deps sprint-388/foo
+# cold spawn (deps 복사 생략)
+bash scripts/worktree-spawn.sh --no-deps sprint-388/foo
+
+# src-tauri/target 전체 복사 (기본은 pruned copy)
+bash scripts/worktree-spawn.sh --full-target sprint-388/foo
 
 # 머지 끝난 worktree 정리
 bash scripts/worktree-cleanup.sh sprint-388/foo
@@ -53,12 +56,18 @@ bash scripts/worktree-cleanup.sh --prune
 
 ## 의존성 warm-start
 
-`--with-deps` (alias: `--bootstrap`) 를 주면 spawn 직후 현재 worktree 의
-`node_modules/` 와 `src-tauri/target/` 을 새 worktree 로 복사하고, 새
-worktree 기준으로 `pnpm install --frozen-lockfile` 와 `cargo fetch
---manifest-path src-tauri/Cargo.toml` 를 실행한다. 복사는 빠른 시작용이고,
-install/fetch 가 branch 별 lockfile 차이를 보정한다. 기본 spawn 은 여전히
-의존성 복사 없이 빠르게 생성한다.
+기본 spawn 은 현재 worktree 의 `node_modules/` 와 pruned
+`src-tauri/target/` 을 새 worktree 로 복사하고, 새 worktree 기준으로
+`pnpm install --frozen-lockfile` 와 `cargo fetch --manifest-path
+src-tauri/Cargo.toml` 를 실행한다. 복사는 빠른 시작용이고, install/fetch 가
+branch 별 lockfile 차이를 보정한다. `--no-deps` 를 주면 의존성 복사/보정을
+생략한다.
+
+`src-tauri/target/` 기본 복사는 `llvm-cov-target/`, `release/`, `tmp/`,
+`*/incremental/`, coverage raw/profile, `debug/*.a`, `debug/deps/*.a`,
+`libduckdb-sys` 의 `out/*.o` 를 제외한다. 목적은 DuckDB/Rust 의존성 산출물은
+가져오되 coverage 전용 target, 큰 최종 산출물, 정적 라이브러리에 이미 묶인
+C++ object 복사는 피하는 것. 전체 target 이 필요하면 `--full-target` 을 쓴다.
 
 ## 책임
 
