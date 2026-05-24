@@ -170,20 +170,11 @@ impl FixtureHarness {
     }
 
     pub fn request(&self, request: FixtureRequest) -> Result<AdapterFixture, FixtureHarnessError> {
-        let registration = REGISTERED_FIXTURES
-            .iter()
-            .find(|fixture| matches_selector(&fixture.profile, &request.selector))
-            .filter(|fixture| {
-                request.required_capabilities.iter().all(|required| {
-                    fixture
-                        .capabilities
-                        .iter()
-                        .any(|capability| capability == required)
-                })
-            })
-            .ok_or_else(|| FixtureHarnessError::NoFixture {
+        let registration = find_registration(REGISTERED_FIXTURES, &request).ok_or_else(|| {
+            FixtureHarnessError::NoFixture {
                 diagnostic: missing_fixture_diagnostic(&request),
-            })?;
+            }
+        })?;
 
         let definition = registration.definition();
         if request.require_local_first && !definition.privacy.satisfies_local_first() {
@@ -316,6 +307,28 @@ const REGISTERED_FIXTURES: &[RegisteredFixture] = &[
     },
 ];
 
+fn find_registration<'a>(
+    fixtures: &'a [RegisteredFixture],
+    request: &FixtureRequest,
+) -> Option<&'a RegisteredFixture> {
+    fixtures.iter().find(|fixture| {
+        matches_selector(&fixture.profile, &request.selector)
+            && has_required_capabilities(fixture, &request.required_capabilities)
+    })
+}
+
+fn has_required_capabilities(
+    fixture: &RegisteredFixture,
+    required_capabilities: &[FixtureCapabilityLabel],
+) -> bool {
+    required_capabilities.iter().all(|required| {
+        fixture
+            .capabilities
+            .iter()
+            .any(|capability| capability == required)
+    })
+}
+
 fn matches_selector(profile: &DatabaseType, selector: &FixtureSelector) -> bool {
     let data_source_profile = profile.data_source_profile();
     match selector {
@@ -357,6 +370,9 @@ fn missing_fixture_diagnostic(request: &FixtureRequest) -> String {
 mod tests {
     use super::*;
 
+    const FIRST_CAPABILITIES: &[FixtureCapabilityLabel] = &[FixtureCapabilityLabel::Catalog];
+    const SECOND_CAPABILITIES: &[FixtureCapabilityLabel] = &[FixtureCapabilityLabel::Query];
+
     #[test]
     fn diagnostic_names_required_capability_filter() {
         let request = FixtureRequest::by_paradigm(Paradigm::Rdb)
@@ -366,5 +382,46 @@ mod tests {
         assert!(diagnostic.contains("Paradigm(Rdb)"));
         assert!(diagnostic.contains("Required capabilities: local-first"));
         assert!(diagnostic.contains("available fixtures"));
+    }
+
+    #[test]
+    fn selector_match_without_required_capability_does_not_shadow_later_match() {
+        let fixtures = [
+            RegisteredFixture {
+                id: "search.first.catalog-only",
+                profile: DatabaseType::Elasticsearch,
+                lifecycle: FixtureLifecycle {
+                    kind: FixtureLifecycleKind::EmbeddedStatic,
+                    seed: "first",
+                    cleanup: FixtureCleanupPolicy::Noop,
+                },
+                capabilities: FIRST_CAPABILITIES,
+                privacy: LOCAL_FIRST_EMBEDDED_PRIVACY,
+                factory: || {
+                    ActiveAdapter::Search(Box::new(SearchEngineAdapter::fixture_elasticsearch()))
+                },
+            },
+            RegisteredFixture {
+                id: "search.second.query",
+                profile: DatabaseType::Opensearch,
+                lifecycle: FixtureLifecycle {
+                    kind: FixtureLifecycleKind::EmbeddedStatic,
+                    seed: "second",
+                    cleanup: FixtureCleanupPolicy::Noop,
+                },
+                capabilities: SECOND_CAPABILITIES,
+                privacy: LOCAL_FIRST_EMBEDDED_PRIVACY,
+                factory: || {
+                    ActiveAdapter::Search(Box::new(SearchEngineAdapter::fixture_opensearch()))
+                },
+            },
+        ];
+        let request = FixtureRequest::by_paradigm(Paradigm::Search)
+            .require_capability(FixtureCapabilityLabel::Query);
+
+        let registration = find_registration(&fixtures, &request)
+            .expect("second matching selector should satisfy required capability");
+
+        assert_eq!(registration.id, "search.second.query");
     }
 }
