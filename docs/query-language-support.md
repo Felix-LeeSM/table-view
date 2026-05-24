@@ -20,6 +20,25 @@
 Sprint 430 기준 "100%"는 vocabulary coverage에만 쓰는 말이다. Context routing과
 semantic support는 각 섹션의 제한/미지원 목록을 따른다.
 
+## Query Language Ownership Registry
+
+Sprint 479 기준 active query language는
+`src/types/queryLanguage.ts`의 `QUERY_LANGUAGE_REGISTRY`가 소유권 matrix를
+고정한다. `DataSourceProfile.languages`에 active profile이 참조하는 언어는
+반드시 이 registry에서 `active` owner record를 가져야 한다.
+
+| QueryLanguageId | Parser owner | Completion owner | Fallback policy | Safety analyzer | Syntax docs |
+|---|---|---|---|---|---|
+| `sql` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` from `rust-wasm-language-core` through `typescript-runtime-adapter`; TypeScript fallback mirrors are compatibility only, not source of truth | `rust-wasm-language-core` | `docs/query-language-support.md` |
+| `mongosh` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` from `rust-wasm-language-core` through `typescript-runtime-adapter`; TypeScript fallback mirrors are compatibility only, not source of truth | `rust-wasm-language-core` | `docs/query-language-support.md` |
+| `redis-command` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented`; no TypeScript source-of-truth fallback | `profile-safety-policy` | `docs/query-language-support.md` |
+| `search-dsl` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented`; no TypeScript source-of-truth fallback | `profile-safety-policy` | `docs/query-language-support.md` |
+
+Deferred language ids (`cql`, `partiql`, `cypher`, `gql`, `gremlin`,
+`vector-query`, `stream-command`) stay in the registry with
+`future-language-core-contract` ownership so future active profiles cannot
+silently introduce parser/completion vocabulary without an owner decision.
+
 표기:
 
 - ✅ 지원: 자동완성 또는 클라이언트 파서가 구조적으로 다룬다.
