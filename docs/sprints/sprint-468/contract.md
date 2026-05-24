@@ -2,12 +2,13 @@
 review-profile: docs
 ---
 
-# Sprint 468 Contract: Redis/Valkey Integration Gate
+# Sprint 468 Contract: Redis Integration Gate; Valkey Follow-Up
 
 ## Goal
 
-Verify Redis/Valkey support is coherent enough to become the first-class KV
-paradigm baseline.
+Verify Redis support is coherent enough to become the first-class KV paradigm
+baseline. Valkey remains a protocol-compatible follow-up candidate until it has
+explicit adapter and test evidence.
 
 ## Dependencies
 
@@ -20,11 +21,13 @@ paradigm baseline.
 - Review KV profile, adapter contract, connection, key browser, result
   envelopes, value editing, TTL, streams, and safety policy together.
 - Verify large-keyspace behavior and read-only safety assumptions.
-- Update risks/docs for deferred KV features.
+- Update risks/docs for deferred KV features, including unverified Valkey
+  parity/support.
 
 ## Acceptance Criteria
 
-- AC-468-01: Redis/Valkey support claims match tested workflows.
+- AC-468-01: Redis support claims match verified workflows; Valkey is documented
+  as follow-up/unverified.
 - AC-468-02: KV UI does not rely on RDBMS table assumptions.
 - AC-468-03: Large keyspaces remain bounded.
 - AC-468-04: Deferred cluster/pubsub/module gaps are documented.
@@ -37,7 +40,7 @@ paradigm baseline.
 
 ## Verification Plan
 
-1. Full affected Redis/Valkey tests.
+1. Full affected Redis tests.
 2. Cross-paradigm query/result regression tests.
 3. Typecheck/lint/hook gate.
 

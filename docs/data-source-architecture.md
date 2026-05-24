@@ -126,10 +126,12 @@ not optimistic runtime failure.
 
 `RdbAdapter` remains the mature contract for SQL/table/schema/DDL/edit. Redis
 now has the first live `KvAdapter` slice for key browsing, value reads, guarded
-string writes, TTL mutation, delete plumbing, and bounded stream reads. Bounded
-stream reads can return the `streamRecords` result envelope, but this does not
-enable the broader `streamConsumer` capability; consumer groups, pub/sub,
-cluster administration, and module-specific management remain follow-up.
+string writes, TTL mutation, delete plumbing, and bounded stream reads. Valkey
+is a protocol-compatible candidate, but parity/support remains unverified until
+it has explicit adapter and test evidence. Bounded stream reads can return the
+`streamRecords` result envelope, but this does not enable the broader
+`streamConsumer` capability; consumer groups, pub/sub, cluster administration,
+and module-specific management remain follow-up.
 `SearchAdapter` has a live contract/profile slice for Elasticsearch/OpenSearch,
 with HTTP catalog/search execution still deferred.
 
@@ -137,7 +139,7 @@ Future adapter families:
 
 - `RdbAdapter`: SQL, table browse, DDL, row edit, ERD.
 - `DocumentAdapter`: collection browse, document query/edit, index/validator.
-- `KvAdapter`: Redis first slice live; broader Valkey/KV support follows.
+- `KvAdapter`: Redis first slice live; Valkey parity and broader KV support follow after explicit verification.
 - `SearchAdapter`: index/mapping browse, search, aggregations, document edit.
 - `WideColumnAdapter`: keyspace/table browse, CQL, partition-key safety.
 - `CloudDocumentAdapter`: table/index/capacity model, native API, PartiQL.
@@ -241,8 +243,8 @@ Near-term:
 6. RDBMS parity: MySQL semantic depth, MariaDB, SQLite.
 7. DuckDB + file analytics as `rdb` + `file` connection kind.
 8. ERD / schema graph on top of RDB catalog data.
-9. Redis first slice is live through `KvAdapter`; Valkey parity and broader KV
-   workflows remain follow-up.
+9. Redis first slice is live through `KvAdapter`; Valkey parity/support and
+   broader KV workflows remain follow-up until explicitly verified.
 10. Elasticsearch/OpenSearch HTTP catalog/search execution on the live
     `SearchAdapter` contract slice.
 11. MongoDB full support remains document-paradigm backlog.

@@ -59,7 +59,7 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | MariaDB | MySQL-adapter reuse | MySQL-family profile + MariaDB delta | Rust/WASM vocabulary | runtime path 존재. MariaDB-engine fixture gap은 active risk |
 | SQLite | file adapter complete | parser/write parity guardrails | Rust/WASM vocabulary | user DBMS adapter는 internal SQLite state와 분리됨. DDL UI는 unsupported |
 | DuckDB | file adapter + local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM vocabulary | local `.duckdb`/CSV/Parquet/JSON/NDJSON preview/query 지원. DDL/write는 unsupported |
-| Redis/Valkey | first slice live | key/type/TTL/stream guardrails | redis-command profile | Redis key browser, value reads, TTL mutation, guarded string writes, and bounded stream reads live. Cluster/pubsub/modules/consumer-group management deferred |
+| Redis | Redis first slice live | key/type/TTL/stream guardrails | redis-command profile | Redis key browser, value reads, TTL mutation, guarded string writes, and bounded stream reads live. Valkey parity/support is unverified follow-up. Cluster/pubsub/modules/consumer-group management deferred |
 | Elasticsearch/OpenSearch | contract slice live | index/mapping/search envelope guardrails | search DSL deferred | Search adapter + identities live; HTTP catalog/query UI deferred |
 
 ## Active Roadmap
@@ -75,7 +75,7 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | 7 | SQLite DBMS adapter / write parity | active follow-up | user DBMS adapter 범위는 internal app SQLite state-management 와 분리됨. 남은 DDL UI/runtime family 는 unsupported boundary 유지 | `docs/query-language-support.md`, `docs/state-management-strategy-2026-05-15.md` |
 | 8 | DuckDB + file analytics hardening | active follow-up | `.duckdb`, CSV, Parquet, JSON, NDJSON preview/query 는 local-first runtime path 존재. analytics import/history/favorites 확대는 별도 결정 | `docs/data-source-architecture.md`, `docs/ROADMAP.md`, `docs/sprints/sprint-457/contract.md` |
 | 9 | RDBMS ERD / SchemaGraph | planned | FK/constraint catalog 를 재사용 가능한 `SchemaGraph` 로 승격. ERD는 첫 renderer | `docs/data-source-architecture.md` |
-| 10 | Redis/Valkey | active first slice | Redis adapter, KV sidebar, key scan, value read, guarded string write, TTL mutation, and bounded stream read paths are live. Cluster/pubsub/modules/consumer-group management remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-468/handoff.md` |
+| 10 | Redis | active Redis first slice | Redis adapter, KV sidebar, key scan, value read, guarded string write, TTL mutation, and bounded stream read paths are live. Valkey parity/support is unverified follow-up. Cluster/pubsub/modules/consumer-group management remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-468/handoff.md` |
 | 11 | Elasticsearch/OpenSearch | active contract slice | Search adapter contract and Elasticsearch/OpenSearch identities are live. HTTP catalog, DSL execution, and result UI remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-470/handoff.md` |
 | 12 | MongoDB full support | deferred/current subagent audit only | Phase 28 Slice A 는 보존하되 RDBMS-first 후 재개. `queryMode` 는 execution SOT 로 되살리지 않음 | `docs/phases/phase-28.md` |
 | 13 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md` |
@@ -116,9 +116,9 @@ root 이고, 448-459 는 RDBMS-first 실행 구간이다. 460 이후는 worktree
 | 463 | ERD navigation and layout polish | erd/ui | 462 |
 | 464 | SchemaGraph integration gate | erd/join | 463 |
 | 465 | KV adapter contract | kv/foundation | 447 |
-| 466 | Redis/Valkey connection/catalog/key browser | kv/redis | 465 |
-| 467 | Redis/Valkey values, TTL, streams | kv/redis | 466 |
-| 468 | Redis/Valkey integration gate | kv/join | 467 |
+| 466 | Redis connection/catalog/key browser; Valkey follow-up | kv/redis | 465 |
+| 467 | Redis values, TTL, streams; Valkey follow-up | kv/redis | 466 |
+| 468 | Redis integration gate; Valkey follow-up | kv/join | 467 |
 | 469 | Search adapter contract | search/foundation | 447 |
 | 470 | Elasticsearch/OpenSearch connection/catalog | search/elastic | 469 |
 | 471 | Search DSL execution/result envelopes | search/elastic | 470 |
@@ -144,9 +144,9 @@ root 이고, 448-459 는 RDBMS-first 실행 구간이다. 460 이후는 worktree
 | 438 | RISK-041/L10 `EMPTY_ENTRY` hardened |
 | 439 | Narrow common `CALL` parser semantics |
 | 465 | KV adapter contract |
-| 466 | Redis/Valkey connection, catalog, and key browser |
-| 467 | Redis/Valkey values, TTL, and bounded streams |
-| 468 | Redis/Valkey integration gate docs/status alignment |
+| 466 | Redis connection, catalog, and key browser; Valkey support unverified |
+| 467 | Redis values, TTL, and bounded streams; Valkey support unverified |
+| 468 | Redis integration gate docs/status alignment; Valkey parity follow-up |
 
 ## Phase Index
 
