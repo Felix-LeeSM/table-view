@@ -13,10 +13,13 @@
 
 pub mod active;
 pub mod duckdb;
+pub mod kv_trait;
+pub mod kv_types;
 pub mod mongodb;
 pub mod mysql;
 pub mod postgres;
 pub(crate) mod raw_where;
+pub mod redis;
 pub mod sqlite;
 pub mod traits;
 pub mod types;
@@ -25,10 +28,20 @@ pub use duckdb::DuckdbAdapter;
 pub use mongodb::MongoAdapter;
 pub use mysql::MysqlAdapter;
 pub use postgres::PostgresAdapter;
+pub use redis::RedisAdapter;
 pub use sqlite::SqliteAdapter;
 
 pub use active::ActiveAdapter;
-pub use traits::{DbAdapter, DocumentAdapter, KvAdapter, RdbAdapter, SearchAdapter};
+pub use kv_trait::KvAdapter;
+pub use kv_types::{
+    bytes_to_kv_string, KvDatabaseInfo, KvDeleteRequest, KvHashField, KvHashValue, KvIndexedValue,
+    KvJsonValue, KvKeyMetadata, KvKeyScanPage, KvKeyScanRequest, KvKeyType, KvListValue,
+    KvMutationResult, KvScoredValue, KvSetStringRequest, KvSetValue, KvStreamEntry,
+    KvStreamReadRequest, KvStreamReadResult, KvStringEncoding, KvStringValue, KvTtl, KvTtlState,
+    KvTtlUpdate, KvTtlUpdateRequest, KvValue, KvValueEnvelope, KvValueReadRequest, KvWriteSafety,
+    KvZSetValue,
+};
+pub use traits::{DbAdapter, DocumentAdapter, RdbAdapter, SearchAdapter};
 pub use types::{
     BoxFuture, BulkWriteOp, BulkWriteResult, CollectionValidatorRead, CreateMongoIndexRequest,
     CreateMongoIndexResult, DocumentId, DocumentQueryResult, DocumentRow, FindBody,

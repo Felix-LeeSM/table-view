@@ -3,11 +3,8 @@
 //! Houses the unified `list_databases` Tauri command — a thin dispatcher
 //! that branches on `ActiveAdapter` so the workspace toolbar's
 //! `<DbSwitcher>` can fetch the current connection's database list without
-//! caring which paradigm is wired underneath. The four-variant match is
-//! exhaustive on purpose: `Search` and `Kv` paradigms intentionally return
-//! an empty list rather than `AppError::Unsupported` so the frontend can
-//! safely call this command for any connected adapter and render the
-//! existing read-only fallback UI when the result is empty.
+//! caring which paradigm is wired underneath. `Search` still returns an
+//! empty list; `Kv` now dispatches to Redis/Valkey numeric DB indexes.
 //!
 //! The Mongo-specific `list_mongo_databases` (`commands/document/browse.rs`)
 //! stays as-is — Sprint 128 introduces this unified entry point alongside
@@ -30,7 +27,7 @@ use crate::models::ServerActivityRow;
 ///   - `Search`   → `Ok(vec![])` — Phase 7 ES adapter has no per-connection
 ///                  database concept; the toolbar treats an empty result as
 ///                  "switcher stays read-only".
-///   - `Kv`       → `Ok(vec![])` — Phase 8 Redis adapter likewise.
+///   - `Kv`       → `KvAdapter::list_databases` (Redis numeric DB indexes).
 ///
 /// Returns `AppError::NotFound` when the connection id has no live adapter.
 #[tauri::command]
@@ -46,15 +43,13 @@ pub async fn list_databases(
     let namespaces = match active {
         ActiveAdapter::Rdb(adapter) => adapter.list_databases().await?,
         ActiveAdapter::Document(adapter) => adapter.list_databases().await?,
-        // Phase 7/8 paradigms — the trait is empty, so we cannot dispatch
-        // through it. The contract (sprint-128) explicitly requires a
-        // graceful empty list rather than an `Unsupported` error: the
-        // frontend keeps the existing read-only `<DbSwitcher>` chrome
-        // when the response is empty, so propagating an error here would
-        // turn a benign "no databases to switch between" state into a
-        // user-facing toast. Phase 9 promotes these arms to real impls.
         ActiveAdapter::Search(_) => Vec::new(),
-        ActiveAdapter::Kv(_) => Vec::new(),
+        ActiveAdapter::Kv(adapter) => adapter
+            .list_databases()
+            .await?
+            .into_iter()
+            .map(|db| crate::db::NamespaceInfo { name: db.name })
+            .collect(),
     };
 
     Ok(namespaces
@@ -75,8 +70,8 @@ pub async fn list_databases(
 ///                  after a cheap `list_database_names` probe. Other
 ///                  document adapters keep the default `Unsupported` until
 ///                  they ship `use_db` semantics.
-///   - `Search`/`Kv` → `Err(Unsupported)` — no per-connection database
-///                  concept (Phase 7/8 paradigms).
+///   - `Search`   → `Err(Unsupported)` — no per-connection database concept.
+///   - `Kv`       → `KvAdapter::switch_database` (Redis `SELECT <index>`).
 ///
 /// Returns `AppError::NotFound` when the connection id has no live adapter,
 /// matching `list_databases` semantics.
@@ -97,9 +92,12 @@ pub async fn switch_active_db(
         ActiveAdapter::Search(_) => Err(AppError::Unsupported(
             "Search paradigm has no per-connection database concept".into(),
         )),
-        ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
-            "Key-value paradigm has no per-connection database concept".into(),
-        )),
+        ActiveAdapter::Kv(adapter) => {
+            let db = db_name.parse::<u16>().map_err(|_| {
+                AppError::Validation("Redis database must be a numeric index".into())
+            })?;
+            adapter.switch_database(db).await
+        }
     }
 }
 
@@ -116,8 +114,8 @@ pub async fn switch_active_db(
 ///   - `Document` → `DocumentAdapter::current_database` (Mongo override
 ///                  surfaces the in-memory `active_db` accessor — no
 ///                  driver round-trip required).
-///   - `Search`/`Kv` → `Err(Unsupported)` — no per-connection database
-///                  concept (Phase 7/8 paradigms).
+///   - `Search`   → `Err(Unsupported)` — no per-connection database concept.
+///   - `Kv`       → `KvAdapter::current_database` (Redis numeric DB index).
 ///
 /// Returns `AppError::NotFound` when the connection id has no live adapter,
 /// matching `list_databases` / `switch_active_db` semantics.
@@ -139,9 +137,11 @@ pub async fn verify_active_db(
         ActiveAdapter::Search(_) => Err(AppError::Unsupported(
             "verify_active_db not supported for Search paradigm".into(),
         )),
-        ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
-            "verify_active_db not supported for key-value paradigm".into(),
-        )),
+        ActiveAdapter::Kv(adapter) => Ok(adapter
+            .current_database()
+            .await?
+            .map(|db| db.to_string())
+            .unwrap_or_default()),
     }
 }
 

@@ -15,6 +15,7 @@ use super::{make_adapter, AppState, SaveConnectionRequest, TestConnectionRequest
 use crate::db::mongodb::MongoAdapter;
 use crate::db::mysql::MysqlAdapter;
 use crate::db::postgres::PostgresAdapter;
+use crate::db::redis::RedisAdapter;
 use crate::db::sqlite::SqliteAdapter;
 use crate::db::DuckdbAdapter;
 use crate::error::AppError;
@@ -114,6 +115,9 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         }
         DatabaseType::Mongodb => {
             MongoAdapter::test(&full).await?;
+        }
+        DatabaseType::Redis => {
+            RedisAdapter::test(&full).await?;
         }
         other => {
             return Err(AppError::Unsupported(format!(

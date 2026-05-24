@@ -109,6 +109,14 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         commands::document::query::estimated_document_count,
         commands::document::query::distinct_documents,
         commands::document::query::run_mongo_command,
+        // KV / Redis browse, value, TTL, and streams
+        commands::kv::list_kv_databases,
+        commands::kv::scan_kv_keys,
+        commands::kv::get_kv_value,
+        commands::kv::set_kv_string_value,
+        commands::kv::delete_kv_key,
+        commands::kv::update_kv_ttl,
+        commands::kv::read_kv_stream,
         // Mongo mutation and export
         commands::document::mutate::insert_document,
         commands::document::mutate::update_document,

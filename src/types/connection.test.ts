@@ -347,7 +347,7 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
 // Date 2026-05-13.
 // ---------------------------------------------------------------------------
 describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
-  it("exposes PG / MySQL / MariaDB / SQLite / DuckDB / Mongo", () => {
+  it("exposes PG / MySQL / MariaDB / SQLite / DuckDB / Mongo / Redis", () => {
     expect([...SUPPORTED_DATABASE_TYPES]).toEqual([
       "postgresql",
       "mysql",
@@ -355,6 +355,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
       "sqlite",
       "duckdb",
       "mongodb",
+      "redis",
     ]);
   });
 
@@ -365,9 +366,9 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("sqlite")).toBe(true);
     expect(isSupportedDatabaseType("duckdb")).toBe(true);
     expect(isSupportedDatabaseType("mongodb")).toBe(true);
+    expect(isSupportedDatabaseType("redis")).toBe(true);
     expect(isSupportedDatabaseType("mssql")).toBe(false);
     expect(isSupportedDatabaseType("oracle")).toBe(false);
-    expect(isSupportedDatabaseType("redis")).toBe(false);
   });
 
   it("DATABASE_TYPE_LABELS covers every DatabaseType variant", () => {

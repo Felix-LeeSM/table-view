@@ -547,3 +547,57 @@ fn rdb_profile(
         file_connection: None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redis_profile_exposes_kv_marker_contract() {
+        let profile = DatabaseType::Redis.data_source_profile();
+
+        assert_eq!(profile.paradigm, Paradigm::Kv);
+        assert_eq!(profile.connection_kind, ConnectionKind::Server);
+        assert_eq!(profile.languages, REDIS_COMMAND);
+        assert_eq!(profile.catalog_model, CatalogModelKind::Kv);
+        assert_eq!(profile.result_kinds, KV_RESULTS);
+        assert_eq!(profile.safety_policy, SafetyPolicyId::KvDefault);
+        assert_eq!(
+            profile.adapter_contract.kind,
+            BackendAdapterContractKind::Kv
+        );
+        assert_eq!(
+            profile.adapter_contract.state,
+            BackendAdapterContractState::MarkerOnly
+        );
+        assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
+        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
+        assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+        assert_eq!(profile.backend_adapter.id, BackendAdapterId::Marker);
+        assert_eq!(profile.dialect.id, DataSourceDialectId::Redis);
+        assert_eq!(profile.dialect.family, DataSourceDialectFamily::Redis);
+        assert_eq!(profile.dialect.version_probe, ServerVersionProbeId::None);
+        assert!(profile.file_connection.is_none());
+    }
+
+    #[test]
+    fn rdb_profile_helper_preserves_declared_contract_metadata() {
+        let profile = get_data_source_profile(&DatabaseType::Mssql);
+        let contract_profile = profile.adapter_contract.profile();
+
+        assert_eq!(profile.paradigm, Paradigm::Rdb);
+        assert_eq!(profile.languages, SQL);
+        assert_eq!(profile.result_kinds, TABULAR_RESULT);
+        assert_eq!(
+            profile.adapter_contract.state,
+            BackendAdapterContractState::DeclaredOnly
+        );
+        assert_eq!(contract_profile.kind, BackendAdapterContractKind::Rdb);
+        assert_eq!(contract_profile.id, BackendAdapterId::DeclaredRdb);
+        assert_eq!(
+            contract_profile.capability_source,
+            BackendAdapterCapabilitySource::DeclaredRdb
+        );
+        assert!(!profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    }
+}

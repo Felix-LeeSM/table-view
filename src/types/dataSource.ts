@@ -359,6 +359,24 @@ export const MONGODB_CAPABILITIES = capabilities({
   },
 });
 
+export const REDIS_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+    switchDatabase: true,
+  },
+  catalog: {
+    browse: true,
+    schema: true,
+  },
+  edit: {
+    editKeys: true,
+  },
+  paradigmSpecific: {
+    keyBrowser: true,
+    streamConsumer: true,
+  },
+});
+
 function profile(
   id: DatabaseType,
   connectionKind: ConnectionKind,
@@ -457,6 +475,7 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "kv",
     ["keyValue", "streamRecords"],
     "kv-default",
+    REDIS_CAPABILITIES,
   ),
 }) satisfies Readonly<Record<DatabaseType, DataSourceProfile>>;
 

@@ -6,6 +6,7 @@ export type BackendAdapterProfileId =
   | "sqlite"
   | "duckdb"
   | "mongodb"
+  | "redis"
   | "declared-rdb"
   | "marker";
 
@@ -15,6 +16,7 @@ export type BackendAdapterCapabilitySource =
   | "sqlite"
   | "duckdb"
   | "mongodb"
+  | "redis"
   | "declared-rdb"
   | "marker";
 
@@ -66,6 +68,7 @@ const BACKEND_ADAPTER_PROFILES = Object.freeze({
   sqlite: backendAdapterProfile("sqlite", "rdb", "sqlite"),
   duckdb: backendAdapterProfile("duckdb", "rdb", "duckdb"),
   mongodb: backendAdapterProfile("mongodb", "document", "mongodb"),
+  redis: backendAdapterProfile("redis", "kv", "redis"),
   declaredRdb: backendAdapterProfile("declared-rdb", "rdb", "declared-rdb"),
   markerKv: backendAdapterProfile("marker", "kv", "marker"),
 });
@@ -107,5 +110,5 @@ export const BACKEND_ADAPTER_BY_TYPE = Object.freeze({
   mssql: BACKEND_ADAPTER_PROFILES.declaredRdb,
   oracle: BACKEND_ADAPTER_PROFILES.declaredRdb,
   mongodb: BACKEND_ADAPTER_PROFILES.mongodb,
-  redis: BACKEND_ADAPTER_PROFILES.markerKv,
+  redis: BACKEND_ADAPTER_PROFILES.redis,
 }) satisfies Readonly<Record<DatabaseType, BackendAdapterProfile>>;

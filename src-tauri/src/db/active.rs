@@ -9,7 +9,8 @@
 use crate::error::AppError;
 use crate::models::{BackendAdapterContractKind, DataSourceProfile, DatabaseType};
 
-use super::traits::{DbAdapter, DocumentAdapter, KvAdapter, RdbAdapter, SearchAdapter};
+use super::traits::{DbAdapter, DocumentAdapter, RdbAdapter, SearchAdapter};
+use super::KvAdapter;
 
 /// Runtime-dispatched adapter handle stored per active connection.
 ///

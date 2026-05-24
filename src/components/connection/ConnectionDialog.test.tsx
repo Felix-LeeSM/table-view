@@ -458,7 +458,6 @@ describe("ConnectionDialog", () => {
   it.each([
     ["mssql", "mssql://sa:pw@mssql.local:1433/master", "Microsoft SQL Server"],
     ["oracle", "oracle://system:pw@oracle.local:1521/FREEPDB1", "Oracle"],
-    ["redis", "redis://u:p@redis.local:6379/0", "Redis"],
   ])(
     "rejects unsupported %s URL with explanatory error",
     async (_scheme, url, label) => {

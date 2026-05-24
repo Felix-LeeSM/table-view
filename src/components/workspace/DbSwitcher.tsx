@@ -35,8 +35,8 @@ import { hasConnectionCapability } from "@/types/dataSource";
  * On failure (Document `Unsupported`, PG sub-pool open error) the popover
  * stays open so the error chip stays visible alongside the toast.
  *
- * Other paradigms (`search`, `kv`) and disconnected tabs render the
- * read-only chrome — `aria-disabled="true"`, not in keyboard tab order.
+ * Unsupported paradigms and disconnected tabs render the read-only chrome —
+ * `aria-disabled="true"`, not in keyboard tab order.
  *
  * Resolution rules for the trigger label:
  *   - Connected RDB connection → `activeStatuses[id].activeDb`
@@ -62,7 +62,7 @@ function readOnlyTooltipCopy(args: {
   if (!args.hasActiveTab) {
     return "Open a connection to switch databases.";
   }
-  if (args.paradigm === "kv" || args.paradigm === "search") {
+  if (args.paradigm === "search") {
     return "Database switching isn't supported for this connection type.";
   }
   if (args.dbType === "sqlite") {
@@ -246,9 +246,8 @@ export default function DbSwitcher() {
     return null;
   }
 
-  // Read-only fallback — Search/Kv paradigms, no connection, or
-  // disconnected tab. Preserves chrome footprint so the toolbar doesn't
-  // shift when paradigm/state changes.
+  // Read-only fallback — unsupported paradigm, no connection, or disconnected
+  // tab. Preserves chrome footprint so the toolbar doesn't shift.
   if (!enabled) {
     // Paradigm/state-aware copy via Radix Tooltip only — the native HTML
     // `title` attribute is omitted to avoid the "stuck tooltip" bug

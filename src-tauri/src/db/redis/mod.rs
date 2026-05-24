@@ -1,0 +1,408 @@
+mod helpers;
+mod values;
+
+use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
+
+use crate::db::{
+    BoxFuture, DbAdapter, KvAdapter, KvDatabaseInfo, KvDeleteRequest, KvKeyMetadata, KvKeyScanPage,
+    KvKeyScanRequest, KvKeyType, KvMutationResult, KvSetStringRequest, KvStreamReadRequest,
+    KvStreamReadResult, KvTtlState, KvTtlUpdate, KvTtlUpdateRequest, KvValue, KvValueEnvelope,
+    KvValueReadRequest, KvWriteSafety,
+};
+use crate::error::AppError;
+use crate::models::{ConnectionConfig, DatabaseType};
+
+use helpers::{
+    bounded_limit, connection_url, ensure_not_cancelled, redis_connection_error,
+    redis_database_error, require_confirm_key, validate_key, RedisConnection,
+    DEFAULT_REDIS_DATABASES,
+};
+use values::{
+    read_database_count, read_hash, read_json, read_key_length, read_key_type,
+    read_keyspace_counts, read_list, read_memory_usage, read_set, read_stream_range, read_string,
+    read_zset, ttl_from_seconds,
+};
+
+#[derive(Debug, Default)]
+pub struct RedisAdapter {
+    connection: Mutex<Option<RedisConnection>>,
+    current_database: Mutex<u16>,
+    database_count: Mutex<u16>,
+}
+
+impl RedisAdapter {
+    pub fn new() -> Self {
+        Self {
+            connection: Mutex::new(None),
+            current_database: Mutex::new(0),
+            database_count: Mutex::new(DEFAULT_REDIS_DATABASES),
+        }
+    }
+
+    pub async fn test(config: &ConnectionConfig) -> Result<(), AppError> {
+        let (url, _) = connection_url(config)?;
+        let client = ::redis::Client::open(url).map_err(redis_connection_error)?;
+        let mut connection = client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(redis_connection_error)?;
+        let _: String = ::redis::cmd("PING")
+            .query_async(&mut connection)
+            .await
+            .map_err(redis_connection_error)?;
+        Ok(())
+    }
+
+    pub(super) async fn with_connection<T, F>(&self, f: F) -> Result<T, AppError>
+    where
+        F: AsyncFnOnce(&mut RedisConnection) -> Result<T, AppError>,
+    {
+        let mut guard = self.connection.lock().await;
+        let connection = guard
+            .as_mut()
+            .ok_or_else(|| AppError::Connection("Redis connection is not open".into()))?;
+        f(connection).await
+    }
+
+    async fn ensure_database(&self, database: Option<u16>) -> Result<u16, AppError> {
+        let target = database.unwrap_or(*self.current_database.lock().await);
+        let mut current = self.current_database.lock().await;
+        if *current == target {
+            return Ok(target);
+        }
+        self.with_connection(async |connection| {
+            let _: () = ::redis::cmd("SELECT")
+                .arg(target)
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)?;
+            Ok(())
+        })
+        .await?;
+        *current = target;
+        Ok(target)
+    }
+
+    async fn key_metadata(&self, key: &str) -> Result<KvKeyMetadata, AppError> {
+        self.with_connection(async |connection| {
+            let key_type = read_key_type(connection, key).await?;
+            let ttl_seconds: i64 = ::redis::cmd("TTL")
+                .arg(key)
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)?;
+            let length = read_key_length(connection, key, key_type).await?;
+            let memory_bytes = read_memory_usage(connection, key).await;
+            Ok(KvKeyMetadata {
+                key: key.to_string(),
+                key_type,
+                ttl: ttl_from_seconds(ttl_seconds),
+                length,
+                memory_bytes,
+            })
+        })
+        .await
+    }
+
+    async fn key_exists(&self, key: &str) -> Result<bool, AppError> {
+        self.with_connection(async |connection| {
+            ::redis::cmd("EXISTS")
+                .arg(key)
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)
+        })
+        .await
+    }
+}
+
+impl DbAdapter for RedisAdapter {
+    fn kind(&self) -> DatabaseType {
+        DatabaseType::Redis
+    }
+
+    fn connect<'a>(&'a self, config: &'a ConnectionConfig) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move {
+            let (url, database) = connection_url(config)?;
+            let client = ::redis::Client::open(url).map_err(redis_connection_error)?;
+            let mut connection = client
+                .get_multiplexed_async_connection()
+                .await
+                .map_err(redis_connection_error)?;
+            let _: String = ::redis::cmd("PING")
+                .query_async(&mut connection)
+                .await
+                .map_err(redis_connection_error)?;
+
+            *self.database_count.lock().await = read_database_count(&mut connection).await;
+            *self.current_database.lock().await = database;
+            *self.connection.lock().await = Some(connection);
+            Ok(())
+        })
+    }
+
+    fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move {
+            *self.connection.lock().await = None;
+            Ok(())
+        })
+    }
+
+    fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move {
+            self.with_connection(async |connection| {
+                let _: String = ::redis::cmd("PING")
+                    .query_async(connection)
+                    .await
+                    .map_err(redis_connection_error)?;
+                Ok(())
+            })
+            .await
+        })
+    }
+}
+
+impl KvAdapter for RedisAdapter {
+    fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<KvDatabaseInfo>, AppError>> {
+        Box::pin(async move {
+            let count = *self.database_count.lock().await;
+            let key_counts = self
+                .with_connection(async |connection| Ok(read_keyspace_counts(connection).await))
+                .await
+                .unwrap_or_default();
+            Ok((0..count)
+                .map(|index| KvDatabaseInfo {
+                    name: index.to_string(),
+                    index,
+                    key_count: key_counts.get(index as usize).copied().flatten(),
+                })
+                .collect())
+        })
+    }
+
+    fn switch_database<'a>(&'a self, database: u16) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move {
+            self.ensure_database(Some(database)).await?;
+            Ok(())
+        })
+    }
+
+    fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<u16>, AppError>> {
+        Box::pin(async move { Ok(Some(*self.current_database.lock().await)) })
+    }
+
+    fn scan_keys<'a>(
+        &'a self,
+        request: KvKeyScanRequest,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<KvKeyScanPage, AppError>> {
+        Box::pin(async move {
+            ensure_not_cancelled(cancel)?;
+            let database = self.ensure_database(request.database).await?;
+            let limit = bounded_limit(request.limit);
+            let cursor = request.cursor.unwrap_or_else(|| "0".into());
+            let pattern = request.pattern.unwrap_or_else(|| "*".into());
+            let (next_cursor, mut keys): (String, Vec<String>) = self
+                .with_connection(async |connection| {
+                    ::redis::cmd("SCAN")
+                        .arg(&cursor)
+                        .arg("MATCH")
+                        .arg(&pattern)
+                        .arg("COUNT")
+                        .arg(limit)
+                        .query_async(connection)
+                        .await
+                        .map_err(redis_database_error)
+                })
+                .await?;
+            keys.truncate(limit as usize);
+
+            let mut metadata = Vec::with_capacity(keys.len());
+            for key in keys {
+                ensure_not_cancelled(cancel)?;
+                metadata.push(self.key_metadata(&key).await?);
+            }
+            Ok(KvKeyScanPage {
+                database,
+                cursor,
+                done: next_cursor == "0",
+                next_cursor,
+                limit,
+                keys: metadata,
+            })
+        })
+    }
+
+    fn read_value<'a>(
+        &'a self,
+        request: KvValueReadRequest,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<KvValueEnvelope, AppError>> {
+        Box::pin(async move {
+            ensure_not_cancelled(cancel)?;
+            self.ensure_database(request.database).await?;
+            let limit = bounded_limit(request.limit);
+            let cursor = request.cursor.unwrap_or_else(|| "0".into());
+            let metadata = self.key_metadata(&request.key).await?;
+            let value = match metadata.key_type {
+                KvKeyType::String => KvValue::String(read_string(self, &request.key).await?),
+                KvKeyType::List => KvValue::List(read_list(self, &request.key, limit).await?),
+                KvKeyType::Set => KvValue::Set(read_set(self, &request.key, &cursor, limit).await?),
+                KvKeyType::ZSet => KvValue::ZSet(read_zset(self, &request.key, limit).await?),
+                KvKeyType::Hash => {
+                    KvValue::Hash(read_hash(self, &request.key, &cursor, limit).await?)
+                }
+                KvKeyType::Stream => {
+                    KvValue::Stream(read_stream_range(self, &request.key, "-", "+", limit).await?)
+                }
+                KvKeyType::Json => KvValue::Json(read_json(self, &request.key).await?),
+                KvKeyType::Unknown if metadata.ttl.state == KvTtlState::Missing => KvValue::Missing,
+                KvKeyType::Unknown => KvValue::Unsupported {
+                    message: "Unsupported Redis key type".into(),
+                },
+            };
+            Ok(KvValueEnvelope {
+                key: request.key,
+                metadata,
+                value,
+            })
+        })
+    }
+
+    fn set_string<'a>(
+        &'a self,
+        request: KvSetStringRequest,
+    ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
+        Box::pin(async move {
+            validate_key(&request.key)?;
+            self.ensure_database(request.database).await?;
+            if request.safety == KvWriteSafety::RejectOverwrite
+                && self.key_exists(&request.key).await?
+            {
+                return Err(AppError::Validation(
+                    "Key already exists; enable overwrite to replace it".into(),
+                ));
+            }
+            self.with_connection(async |connection| {
+                let mut cmd = ::redis::cmd("SET");
+                cmd.arg(&request.key).arg(&request.value);
+                if let Some(seconds) = request.ttl_seconds {
+                    if seconds == 0 {
+                        return Err(AppError::Validation(
+                            "ttlSeconds must be greater than zero".into(),
+                        ));
+                    }
+                    cmd.arg("EX").arg(seconds);
+                }
+                let _: String = cmd
+                    .query_async(connection)
+                    .await
+                    .map_err(redis_database_error)?;
+                Ok(())
+            })
+            .await?;
+            Ok(KvMutationResult {
+                key: request.key.clone(),
+                changed: true,
+                ttl: Some(self.key_metadata(&request.key).await?.ttl),
+            })
+        })
+    }
+
+    fn delete_key<'a>(
+        &'a self,
+        request: KvDeleteRequest,
+    ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
+        Box::pin(async move {
+            validate_key(&request.key)?;
+            require_confirm_key(&request.key, &request.confirm_key)?;
+            self.ensure_database(request.database).await?;
+            let changed = self
+                .with_connection(async |connection| {
+                    let deleted: u64 = ::redis::cmd("DEL")
+                        .arg(&request.key)
+                        .query_async(connection)
+                        .await
+                        .map_err(redis_database_error)?;
+                    Ok(deleted > 0)
+                })
+                .await?;
+            Ok(KvMutationResult {
+                key: request.key,
+                changed,
+                ttl: None,
+            })
+        })
+    }
+
+    fn update_ttl<'a>(
+        &'a self,
+        request: KvTtlUpdateRequest,
+    ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
+        Box::pin(async move {
+            validate_key(&request.key)?;
+            self.ensure_database(request.database).await?;
+            let changed = match &request.update {
+                KvTtlUpdate::Expire { seconds } => expire_key(self, &request.key, *seconds).await?,
+                KvTtlUpdate::Persist { confirm_key } => {
+                    require_confirm_key(&request.key, confirm_key)?;
+                    persist_key(self, &request.key).await?
+                }
+            };
+            Ok(KvMutationResult {
+                key: request.key.clone(),
+                changed,
+                ttl: Some(self.key_metadata(&request.key).await?.ttl),
+            })
+        })
+    }
+
+    fn read_stream<'a>(
+        &'a self,
+        request: KvStreamReadRequest,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<KvStreamReadResult, AppError>> {
+        Box::pin(async move {
+            ensure_not_cancelled(cancel)?;
+            self.ensure_database(request.database).await?;
+            let limit = bounded_limit(request.limit);
+            let start = request.start.as_deref().unwrap_or("-");
+            let end = request.end.as_deref().unwrap_or("+");
+            read_stream_range(self, &request.key, start, end, limit).await
+        })
+    }
+}
+
+async fn expire_key(adapter: &RedisAdapter, key: &str, seconds: u64) -> Result<bool, AppError> {
+    if seconds == 0 {
+        return Err(AppError::Validation(
+            "TTL seconds must be greater than zero".into(),
+        ));
+    }
+    adapter
+        .with_connection(async |connection| {
+            ::redis::cmd("EXPIRE")
+                .arg(key)
+                .arg(seconds)
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)
+        })
+        .await
+}
+
+async fn persist_key(adapter: &RedisAdapter, key: &str) -> Result<bool, AppError> {
+    adapter
+        .with_connection(async |connection| {
+            ::redis::cmd("PERSIST")
+                .arg(key)
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)
+        })
+        .await
+}
+
+#[cfg(test)]
+mod tests;

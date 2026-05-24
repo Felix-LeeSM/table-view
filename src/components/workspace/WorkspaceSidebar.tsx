@@ -7,6 +7,7 @@ import { useActiveTab } from "@stores/workspaceStore";
 import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
 import { assertNever } from "@lib/paradigm";
 import DocumentSidebar from "./DocumentSidebar";
+import KvSidebar from "./KvSidebar";
 import RdbSidebar from "./RdbSidebar";
 import UnsupportedShellNotice from "./UnsupportedShellNotice";
 import { pickSidebar, type SidebarKind } from "./pickSidebar";
@@ -190,7 +191,7 @@ function renderKind(kind: SidebarKind, connectionId: string): ReactNode {
     case "document":
       return <DocumentSidebar connectionId={connectionId} />;
     case "kv":
-      return <UnsupportedShellNotice paradigm="kv" />;
+      return <KvSidebar connectionId={connectionId} />;
     case "search":
       return <UnsupportedShellNotice paradigm="search" />;
     default:

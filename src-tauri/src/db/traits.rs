@@ -1071,8 +1071,6 @@ pub trait DocumentAdapter: DbAdapter {
     ) -> BoxFuture<'a, Result<serde_json::Value, AppError>>;
 }
 
-// ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────
+// ── SearchAdapter placeholder ──────────────────────────────────────────────
 
 pub trait SearchAdapter: DbAdapter {}
-
-pub trait KvAdapter: DbAdapter {}

@@ -126,7 +126,12 @@ describe("DataSourceProfile registry", () => {
         serverInfo: true,
       },
     }),
-    redis: createEmptyDataSourceCapabilities(),
+    redis: expectedCapabilities({
+      connection: { test: true, switchDatabase: true },
+      catalog: { browse: true, schema: true },
+      edit: { editKeys: true },
+      paradigmSpecific: { keyBrowser: true, streamConsumer: true },
+    }),
   };
 
   it("contains exactly one profile for every DatabaseType", () => {
@@ -199,6 +204,7 @@ describe("DataSourceProfile registry", () => {
     expect(getDataSourceProfile("mysql").connectionKind).toBe("server");
     expect(getDataSourceProfile("mariadb").connectionKind).toBe("server");
     expect(getDataSourceProfile("mongodb").connectionKind).toBe("server");
+    expect(getDataSourceProfile("redis").connectionKind).toBe("server");
     expect(getDataSourceProfile("sqlite").connectionKind).toBe("file");
     expect(getDataSourceProfile("duckdb").connectionKind).toBe("file");
   });
@@ -224,12 +230,22 @@ describe("DataSourceProfile registry", () => {
     expect(mongo.capabilities).toEqual(expectedCapabilitiesByType.mongodb);
   });
 
+  it("exposes Redis as a supported KV key-browser profile", () => {
+    const redis = getDataSourceProfile("redis");
+
+    expect(redis.paradigm).toBe("kv");
+    expect(redis.languages).toEqual(["redis-command"]);
+    expect(redis.backendAdapter).toEqual({
+      id: "redis",
+      kind: "kv",
+      capabilitySource: "redis",
+    });
+    expect(redis.capabilities.paradigmSpecific.keyBrowser).toBe(true);
+    expect(redis.capabilities.edit.editKeys).toBe(true);
+  });
+
   it("keeps unsupported profiles structurally present but capability-empty", () => {
-    for (const dbType of [
-      "mssql",
-      "oracle",
-      "redis",
-    ] satisfies DatabaseType[]) {
+    for (const dbType of ["mssql", "oracle"] satisfies DatabaseType[]) {
       expect(getDataSourceProfile(dbType).capabilities).toEqual(
         createEmptyDataSourceCapabilities(),
       );
@@ -244,13 +260,14 @@ describe("DataSourceProfile registry", () => {
       "sqlite",
       "duckdb",
       "mongodb",
+      "redis",
     ]);
     expect(isConnectionSupportedDatabaseType("postgresql")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mongodb")).toBe(true);
     expect(isConnectionSupportedDatabaseType("duckdb")).toBe(true);
+    expect(isConnectionSupportedDatabaseType("redis")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
-    expect(isConnectionSupportedDatabaseType("redis")).toBe(false);
   });
 
   it("keeps legacy URL supported DBMS list aligned with profile-supported DBMS", () => {

@@ -218,16 +218,17 @@ describe("DbSwitcher", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("stays read-only for kv paradigm even when connected", () => {
+  it("renders an active switcher for kv paradigm when Redis is connected", () => {
     setStores({
       paradigm: "kv",
       connected: true,
       dbType: "redis",
-      tab: makeQueryTab({ paradigm: "kv" }),
+      tab: makeQueryTab({ paradigm: "kv", database: "0" }),
+      activeDb: "0",
     });
     render(<DbSwitcher />);
     expect(
-      screen.getByRole("button", { name: /active database \(read-only\)/i }),
+      screen.getByRole("button", { name: /active database switcher/i }),
     ).toBeInTheDocument();
   });
 

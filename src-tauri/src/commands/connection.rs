@@ -27,6 +27,7 @@ use tokio_util::sync::CancellationToken;
 use crate::db::mongodb::MongoAdapter;
 use crate::db::mysql::MysqlAdapter;
 use crate::db::postgres::PostgresAdapter;
+use crate::db::redis::RedisAdapter;
 use crate::db::sqlite::SqliteAdapter;
 use crate::db::ActiveAdapter;
 use crate::db::DuckdbAdapter;
@@ -69,6 +70,7 @@ pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppE
         DatabaseType::Sqlite => Ok(ActiveAdapter::Rdb(Box::new(SqliteAdapter::new()))),
         DatabaseType::Duckdb => Ok(ActiveAdapter::Rdb(Box::new(DuckdbAdapter::new()))),
         DatabaseType::Mongodb => Ok(ActiveAdapter::Document(Box::new(MongoAdapter::new()))),
+        DatabaseType::Redis => Ok(ActiveAdapter::Kv(Box::new(RedisAdapter::new()))),
         other => Err(AppError::Unsupported(format!(
             "Database type {:?} is not supported yet",
             other
@@ -335,11 +337,13 @@ mod tests {
     }
 
     #[test]
-    fn test_make_adapter_redis_returns_unsupported() {
-        assert!(matches!(
-            make_adapter(&DatabaseType::Redis),
-            Err(AppError::Unsupported(_))
-        ));
+    fn test_make_adapter_redis_returns_kv_variant() {
+        let adapter = make_adapter(&DatabaseType::Redis).expect("redis should succeed");
+        assert!(
+            matches!(adapter, ActiveAdapter::Kv(_)),
+            "expected Kv variant"
+        );
+        assert!(matches!(adapter.kind(), DatabaseType::Redis));
     }
 
     #[test]
