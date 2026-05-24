@@ -158,6 +158,45 @@ describe("SchemaErdRenderer", () => {
       screen.getByRole("button", { name: /public\.orders table/i }),
     ).toHaveAttribute("aria-pressed", "true");
   });
+
+  it("scrolls an externally selected table into view", async () => {
+    const scrollIntoView = vi.fn();
+    const proto = HTMLElement.prototype;
+    const original = proto.scrollIntoView;
+    Object.defineProperty(proto, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    try {
+      render(
+        <SchemaErdRenderer
+          graph={extractSchemaGraph(ordersSnapshot())}
+          selectedTableId="table:public.users"
+        />,
+      );
+
+      fireEvent.click(
+        screen.getByRole("button", { name: /fit selected table/i }),
+      );
+
+      await waitFor(() =>
+        expect(scrollIntoView).toHaveBeenCalledWith({
+          block: "center",
+          inline: "center",
+        }),
+      );
+    } finally {
+      if (original) {
+        Object.defineProperty(proto, "scrollIntoView", {
+          configurable: true,
+          value: original,
+        });
+      } else {
+        Reflect.deleteProperty(proto, "scrollIntoView");
+      }
+    }
+  });
 });
 
 function ordersSnapshot(): SchemaGraphCatalogSnapshot {

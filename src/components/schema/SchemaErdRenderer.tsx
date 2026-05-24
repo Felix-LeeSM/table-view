@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Crosshair,
   Maximize2,
@@ -49,10 +49,6 @@ export default function SchemaErdRenderer({
   const selectedTableLabel = selected
     ? layout.tables.find(({ table }) => table.id === selected)?.table.label
     : null;
-
-  useEffect(() => {
-    tableRefs.current.clear();
-  }, [layout.tables]);
 
   if (layout.tables.length === 0) {
     return (
