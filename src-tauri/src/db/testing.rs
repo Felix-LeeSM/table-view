@@ -23,12 +23,13 @@
 use std::collections::HashMap;
 use tokio_util::sync::CancellationToken;
 
-use super::traits::{DbAdapter, DocumentAdapter, KvAdapter, RdbAdapter, SearchAdapter};
+use super::traits::{DbAdapter, DocumentAdapter, RdbAdapter, SearchAdapter};
 use super::types::{
     BoxFuture, BulkWriteOp, BulkWriteResult, CollectionValidatorRead, CreateMongoIndexRequest,
     CreateMongoIndexResult, DocumentId, DocumentQueryResult, DocumentRow, FindBody, NamespaceInfo,
     NamespaceLabel, RdbQueryResult,
 };
+use super::KvAdapter;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
@@ -1268,7 +1269,7 @@ impl DocumentAdapter for StubDocumentAdapter {
     }
 }
 
-// ── StubSearchAdapter / StubKvAdapter (marker traits) ────────────────────
+// ── StubSearchAdapter / StubKvAdapter ─────────────────────────────────────
 
 pub(crate) struct StubSearchAdapter {
     pub kind_value: DatabaseType,

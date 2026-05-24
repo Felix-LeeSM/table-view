@@ -9,7 +9,8 @@
 use crate::error::AppError;
 use crate::models::{BackendAdapterContractKind, DataSourceProfile, DatabaseType};
 
-use super::traits::{DbAdapter, DocumentAdapter, KvAdapter, RdbAdapter, SearchAdapter};
+use super::traits::{DbAdapter, DocumentAdapter, RdbAdapter, SearchAdapter};
+use super::KvAdapter;
 
 /// Runtime-dispatched adapter handle stored per active connection.
 ///
@@ -97,7 +98,7 @@ mod tests {
     use super::*;
     use crate::db::{MongoAdapter, PostgresAdapter};
 
-    // SearchAdapter / KvAdapter 는 marker trait 라 별도 stub 으로 만족시킨다.
+    // Search/KV variants use small stubs here; contract behavior is tested elsewhere.
     struct StubSearchAdapter;
     impl DbAdapter for StubSearchAdapter {
         fn kind(&self) -> DatabaseType {
