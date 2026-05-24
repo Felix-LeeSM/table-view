@@ -15,9 +15,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::commands::connection::AppState;
-use crate::db::{CollectionValidatorRead, CreateMongoIndexRequest, CreateMongoIndexResult};
+use crate::db::{
+    CollectionValidatorRead, CreateMongoIndexRequest, CreateMongoIndexResult,
+    DocumentCollectionInfo, DocumentCollectionType,
+};
 use crate::error::AppError;
-use crate::models::{ColumnInfo, IndexInfo, TableInfo};
+use crate::models::{ColumnInfo, IndexInfo};
 
 use super::{not_connected, register_cancel_token, release_cancel_token};
 
@@ -29,22 +32,28 @@ pub struct DatabaseInfo {
     pub name: String,
 }
 
-/// Wire shape for `list_mongo_collections`. Mirrors `TableInfo` so the
-/// frontend can render collections in the same tree nodes it already uses
-/// for RDB tables (name + schema + optional count).
+/// Wire shape for `list_mongo_collections`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CollectionInfo {
     pub name: String,
     pub database: String,
+    pub collection_type: DocumentCollectionType,
     pub document_count: Option<i64>,
+    pub read_only: bool,
+    pub options: serde_json::Value,
+    pub id_index: Option<serde_json::Value>,
 }
 
-impl From<TableInfo> for CollectionInfo {
-    fn from(value: TableInfo) -> Self {
+impl From<DocumentCollectionInfo> for CollectionInfo {
+    fn from(value: DocumentCollectionInfo) -> Self {
         Self {
             name: value.name,
-            database: value.schema,
-            document_count: value.row_count,
+            database: value.database,
+            collection_type: value.collection_type,
+            document_count: value.document_count,
+            read_only: value.read_only,
+            options: value.options,
+            id_index: value.id_index,
         }
     }
 }
@@ -84,7 +93,7 @@ async fn list_mongo_collections_inner(
 ) -> Result<Vec<CollectionInfo>, AppError> {
     let cancel_handle = register_cancel_token(state, query_id).await;
 
-    let result: Result<Vec<TableInfo>, AppError> = {
+    let result: Result<Vec<DocumentCollectionInfo>, AppError> = {
         let connections = state.active_connections.lock().await;
         let active = connections
             .get(connection_id)
@@ -613,10 +622,14 @@ mod tests {
     async fn list_collections_doc_ok_maps_tableinfo_to_collectioninfo_with_db_arg() {
         let mut s = StubDocumentAdapter::default();
         s.list_collections_fn = Some(Box::new(|db: &str| {
-            Ok(vec![TableInfo {
+            Ok(vec![DocumentCollectionInfo {
                 name: format!("coll-of-{db}"),
-                schema: db.to_string(),
-                row_count: Some(42),
+                database: db.to_string(),
+                collection_type: DocumentCollectionType::Collection,
+                document_count: Some(42),
+                read_only: false,
+                options: serde_json::json!({}),
+                id_index: None,
             }])
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
@@ -626,7 +639,12 @@ mod tests {
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].name, "coll-of-ns_x");
         assert_eq!(r[0].database, "ns_x");
+        assert!(matches!(
+            r[0].collection_type,
+            DocumentCollectionType::Collection
+        ));
         assert_eq!(r[0].document_count, Some(42));
+        assert_eq!(r[0].options, serde_json::json!({}));
     }
 
     #[tokio::test]

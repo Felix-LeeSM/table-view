@@ -203,6 +203,16 @@ export function toCompatibleQueryResult(
   }
 }
 
+export function requireCompatibleQueryResult(
+  envelope: ResultEnvelope,
+): QueryResult {
+  const converted = toCompatibleQueryResult(envelope);
+  if (converted.ok) {
+    return converted.queryResult;
+  }
+  throw new Error(converted.error.message);
+}
+
 /**
  * Result of a single statement inside a multi-statement execution.
  *

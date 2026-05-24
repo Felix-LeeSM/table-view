@@ -47,7 +47,11 @@ import { getDataSourceProfile } from "@/types/dataSource";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";
 import type { BulkWriteOp, BulkWriteResult } from "@/types/documentMutate";
-import type { WriteSummaryData } from "@/types/query";
+import {
+  createDocumentResultEnvelope,
+  requireCompatibleQueryResult,
+  type WriteSummaryData,
+} from "@/types/query";
 import type { SearchQueryRequest } from "@/types/search";
 import {
   parseMongoshExpression,
@@ -462,13 +466,9 @@ export function useQueryExecution({
           resolvedCollection,
           pipeline,
         );
-        const queryResult: import("@/types/query").QueryResult = {
-          columns: docResult.columns,
-          rows: docResult.rows,
-          totalCount: docResult.totalCount,
-          executionTimeMs: docResult.executionTimeMs,
-          queryType: "select",
-        };
+        const queryResult = requireCompatibleQueryResult(
+          createDocumentResultEnvelope(docResult),
+        );
         completeQuery(tab.id, queryId, queryResult);
         recordHistory({
           sql: tab.sql,
@@ -1421,13 +1421,9 @@ export function useQueryExecution({
           collection,
           body,
         );
-        const queryResult: import("@/types/query").QueryResult = {
-          columns: docResult.columns,
-          rows: docResult.rows,
-          totalCount: docResult.totalCount,
-          executionTimeMs: docResult.executionTimeMs,
-          queryType: "select",
-        };
+        const queryResult = requireCompatibleQueryResult(
+          createDocumentResultEnvelope(docResult),
+        );
         completeQuery(tab.id, queryId, queryResult);
         recordHistory({
           sql: rawSql,

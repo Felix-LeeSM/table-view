@@ -9,15 +9,31 @@ import {
   useDocumentStore,
   __resetDocumentStoreForTests,
 } from "@/test-utils/documentStore";
+import type { CollectionInfo } from "@/types/document";
+
+function collectionFixture(
+  name: string,
+  database: string,
+  documentCount: number,
+): CollectionInfo {
+  return {
+    name,
+    database,
+    collection_type: "collection",
+    document_count: documentCount,
+    read_only: false,
+    options: {},
+    id_index: null,
+  };
+}
+
 beforeEach(() => {
   setupTauriMock({
     listMongoDatabases: vi.fn(() =>
       Promise.resolve([{ name: "admin" }, { name: "table_view_test" }]),
     ),
     listMongoCollections: vi.fn(() =>
-      Promise.resolve([
-        { name: "users", database: "table_view_test", document_count: 3 },
-      ]),
+      Promise.resolve([collectionFixture("users", "table_view_test", 3)]),
     ),
     inferCollectionFields: vi.fn(() =>
       Promise.resolve([
@@ -100,9 +116,7 @@ describe("documentStore", () => {
     });
     vi.mocked(tauri.listMongoCollections)
       .mockImplementationOnce(() => slow as Promise<never>)
-      .mockResolvedValueOnce([
-        { name: "fresh", database: "db", document_count: 99 },
-      ]);
+      .mockResolvedValueOnce([collectionFixture("fresh", "db", 99)]);
 
     const p1 = useDocumentStore.getState().loadCollections("conn-1", "db");
     const p2 = useDocumentStore.getState().loadCollections("conn-1", "db");
@@ -112,7 +126,7 @@ describe("documentStore", () => {
     ).toBe("fresh");
 
     // Now let the slow call resolve — its stale write should be dropped.
-    resolveSlow([{ name: "stale", database: "db", document_count: 0 }]);
+    resolveSlow([collectionFixture("stale", "db", 0)]);
     await p1;
     expect(
       useDocumentStore.getState().collections["conn-1"]?.["db"]?.[0]?.name,
@@ -369,12 +383,8 @@ describe("documentStore", () => {
 
   it("loadCollections for different connections don't share cache slots (AC-265-01)", async () => {
     vi.mocked(tauri.listMongoCollections)
-      .mockResolvedValueOnce([
-        { name: "users", database: "db", document_count: 1 },
-      ])
-      .mockResolvedValueOnce([
-        { name: "products", database: "db", document_count: 2 },
-      ]);
+      .mockResolvedValueOnce([collectionFixture("users", "db", 1)])
+      .mockResolvedValueOnce([collectionFixture("products", "db", 2)]);
 
     await useDocumentStore.getState().loadCollections("conn-A", "db");
     await useDocumentStore.getState().loadCollections("conn-B", "db");

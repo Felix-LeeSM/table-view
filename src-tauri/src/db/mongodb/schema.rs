@@ -9,14 +9,16 @@ use std::collections::HashMap;
 
 use bson::{doc, Bson, Document};
 use futures_util::stream::StreamExt;
+use mongodb::results::{CollectionSpecification, CollectionType};
 use serde_json::Value as JsonValue;
 
 use crate::error::AppError;
-use crate::models::{ColumnInfo, IndexInfo, TableInfo};
+use crate::models::{ColumnInfo, IndexInfo};
 
 use super::super::{
-    CollectionValidatorRead, CreateMongoIndexRequest, CreateMongoIndexResult, MongoIndexCollation,
-    MongoIndexDirection, NamespaceInfo,
+    CollectionValidatorRead, CreateMongoIndexRequest, CreateMongoIndexResult,
+    DocumentCollectionInfo, DocumentCollectionType, MongoIndexCollation, MongoIndexDirection,
+    NamespaceInfo,
 };
 use super::category::map_mongo_data_type;
 use super::queries::{bson_type_name, validate_ns};
@@ -44,26 +46,30 @@ impl MongoAdapter {
     /// name, that name still wins (preserves the original Sprint 65
     /// per-row expand contract). Falls back to the connection's
     /// `default_db` only when no `switch_active_db` has ever been called.
-    pub(super) async fn list_collections_impl(&self, db: &str) -> Result<Vec<TableInfo>, AppError> {
+    pub(super) async fn list_collections_impl(
+        &self,
+        db: &str,
+    ) -> Result<Vec<DocumentCollectionInfo>, AppError> {
         let requested = if db.trim().is_empty() { None } else { Some(db) };
         let resolved = self
             .resolved_db_name(requested)
             .await
             .ok_or_else(|| AppError::Validation("Database name must not be empty".into()))?;
         let client = self.current_client().await?;
-        let names = client
+        let mut cursor = client
             .database(&resolved)
-            .list_collection_names()
+            .list_collections()
             .await
-            .map_err(|e| AppError::Database(format!("list_collection_names failed: {e}")))?;
-        Ok(names
-            .into_iter()
-            .map(|name| TableInfo {
-                name,
-                schema: resolved.clone(),
-                row_count: None,
-            })
-            .collect())
+            .map_err(|e| AppError::Database(format!("list_collections failed: {e}")))?;
+
+        let mut collections = Vec::new();
+        while let Some(next) = cursor.next().await {
+            let spec =
+                next.map_err(|e| AppError::Database(format!("list_collections cursor: {e}")))?;
+            collections.push(collection_info_from_spec(&resolved, spec));
+        }
+
+        Ok(collections)
     }
 
     /// Sprint 197 — body of `DocumentAdapter::infer_collection_fields`.
@@ -943,6 +949,36 @@ fn map_index_model(model: &mongodb::IndexModel) -> IndexInfo {
         is_unique,
         is_primary,
     }
+}
+
+fn collection_info_from_spec(
+    database: &str,
+    spec: CollectionSpecification,
+) -> DocumentCollectionInfo {
+    let collection_type = match spec.collection_type {
+        CollectionType::View => DocumentCollectionType::View,
+        CollectionType::Timeseries => DocumentCollectionType::Timeseries,
+        CollectionType::Collection => DocumentCollectionType::Collection,
+        _ => DocumentCollectionType::Collection,
+    };
+    let options = bson_to_json_value(bson::to_bson(&spec.options).unwrap_or(Bson::Null));
+    let id_index = spec
+        .id_index
+        .map(|doc| bson_to_json_value(Bson::Document(doc)));
+
+    DocumentCollectionInfo {
+        name: spec.name,
+        database: database.to_string(),
+        collection_type,
+        document_count: None,
+        read_only: spec.info.read_only,
+        options,
+        id_index,
+    }
+}
+
+fn bson_to_json_value(value: Bson) -> serde_json::Value {
+    serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
 }
 
 /// Sprint 351 — build a `mongodb::options::Collation` from the wire-side

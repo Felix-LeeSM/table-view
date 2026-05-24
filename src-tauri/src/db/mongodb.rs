@@ -60,12 +60,12 @@ pub use connection::MongoAdapter;
 use bson::Document;
 
 use crate::error::AppError;
-use crate::models::{ColumnInfo, TableInfo};
+use crate::models::ColumnInfo;
 
 use super::{
     BoxFuture, BulkWriteOp, BulkWriteResult, CollectionValidatorRead, CreateMongoIndexRequest,
-    CreateMongoIndexResult, DocumentAdapter, DocumentId, DocumentQueryResult, DocumentRow,
-    FindBody, NamespaceInfo,
+    CreateMongoIndexResult, DocumentAdapter, DocumentCollectionInfo, DocumentId,
+    DocumentQueryResult, DocumentRow, FindBody, NamespaceInfo,
 };
 
 impl DocumentAdapter for MongoAdapter {
@@ -94,7 +94,7 @@ impl DocumentAdapter for MongoAdapter {
         &'a self,
         db: &'a str,
         cancel: Option<&'a tokio_util::sync::CancellationToken>,
-    ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+    ) -> BoxFuture<'a, Result<Vec<DocumentCollectionInfo>, AppError>> {
         // Sprint 180 (AC-180-04): the `tokio::select!` races driver work
         // against the cancel-token's `cancelled()` future. On cancel we
         // return the same `AppError::Database("Operation cancelled")`

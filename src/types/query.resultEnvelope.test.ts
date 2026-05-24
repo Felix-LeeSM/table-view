@@ -6,6 +6,7 @@ import {
   createDocumentResultEnvelope,
   createSearchHitsResultEnvelope,
   createTabularResultEnvelope,
+  requireCompatibleQueryResult,
   toCompatibleQueryResult,
   type OpaqueResultEnvelope,
   type QueryResult,
@@ -106,6 +107,17 @@ describe("result envelope compatibility layer", () => {
           "Result envelope kind 'metrics' does not have a QueryResult compatibility projection.",
       },
     });
+  });
+
+  it("throws a visible error when callers require a grid projection for unsupported envelopes", () => {
+    const envelope: OpaqueResultEnvelope = {
+      kind: "metrics",
+      payload: { scanned: 42 },
+    };
+
+    expect(() => requireCompatibleQueryResult(envelope)).toThrow(
+      "Result envelope kind 'metrics' does not have a QueryResult compatibility projection.",
+    );
   });
 
   it("keeps Search DSL hits on a typed renderer path instead of projecting to QueryResultGrid", () => {

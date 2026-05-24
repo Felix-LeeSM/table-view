@@ -47,7 +47,8 @@ pub use kv_types::{
 pub use traits::{DbAdapter, DocumentAdapter, RdbAdapter, SearchAdapter};
 pub use types::{
     BoxFuture, BulkWriteOp, BulkWriteResult, CollectionValidatorRead, CreateMongoIndexRequest,
-    CreateMongoIndexResult, DocumentId, DocumentQueryResult, DocumentRow, FindBody,
+    CreateMongoIndexResult, DocumentCollectionInfo, DocumentCollectionType, DocumentId,
+    DocumentQueryResult, DocumentResultEnvelope, DocumentResultEnvelopeKind, DocumentRow, FindBody,
     MongoIndexCollation, MongoIndexDirection, MongoIndexField, NamespaceInfo, NamespaceLabel,
     RdbQueryResult,
 };
