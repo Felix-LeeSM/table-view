@@ -226,6 +226,30 @@ const PASTE_CASES: PasteCase[] = [
       password: "srvp",
     },
   },
+  {
+    scheme: "elasticsearch",
+    url: "elasticsearch://esu:esp@elastic.local:9201",
+    expected: {
+      dbType: "elasticsearch",
+      host: "elastic.local",
+      port: 9201,
+      user: "esu",
+      database: "",
+      password: "esp",
+    },
+  },
+  {
+    scheme: "opensearch",
+    url: "opensearch://osu:osp@open.local:9202",
+    expected: {
+      dbType: "opensearch",
+      host: "open.local",
+      port: 9202,
+      user: "osu",
+      database: "",
+      password: "osp",
+    },
+  },
 ];
 
 describe("[AC-178-01] form-mode host paste detection", () => {
