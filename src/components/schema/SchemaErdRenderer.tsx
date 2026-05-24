@@ -201,7 +201,12 @@ export default function SchemaErdRenderer({
               </button>
             ))
           ) : (
-            <div className="text-xs text-muted-foreground">
+            <div
+              role="option"
+              aria-disabled="true"
+              aria-selected="false"
+              className="text-xs text-muted-foreground"
+            >
               No matching tables
             </div>
           )}
