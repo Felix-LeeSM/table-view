@@ -347,7 +347,7 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
 // Date 2026-05-13.
 // ---------------------------------------------------------------------------
 describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
-  it("exposes PG / MySQL / MariaDB / SQLite / DuckDB / Mongo", () => {
+  it("exposes runtime-backed connection types", () => {
     expect([...SUPPORTED_DATABASE_TYPES]).toEqual([
       "postgresql",
       "mysql",
@@ -355,6 +355,8 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
       "sqlite",
       "duckdb",
       "mongodb",
+      "elasticsearch",
+      "opensearch",
     ]);
   });
 
@@ -365,6 +367,8 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("sqlite")).toBe(true);
     expect(isSupportedDatabaseType("duckdb")).toBe(true);
     expect(isSupportedDatabaseType("mongodb")).toBe(true);
+    expect(isSupportedDatabaseType("elasticsearch")).toBe(true);
+    expect(isSupportedDatabaseType("opensearch")).toBe(true);
     expect(isSupportedDatabaseType("mssql")).toBe(false);
     expect(isSupportedDatabaseType("oracle")).toBe(false);
     expect(isSupportedDatabaseType("redis")).toBe(false);
@@ -382,6 +386,8 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(DATABASE_TYPE_LABELS.oracle).toBe("Oracle");
     expect(DATABASE_TYPE_LABELS.mongodb).toBe("MongoDB");
     expect(DATABASE_TYPE_LABELS.redis).toBe("Redis");
+    expect(DATABASE_TYPE_LABELS.elasticsearch).toBe("Elasticsearch");
+    expect(DATABASE_TYPE_LABELS.opensearch).toBe("OpenSearch");
   });
 });
 

@@ -51,6 +51,12 @@ export function toWorkspaceQueryLanguage(input: {
   if (input.paradigm === "document") {
     return "mongosh";
   }
+  if (input.paradigm === "kv") {
+    return "redis-command";
+  }
+  if (input.paradigm === "search") {
+    return "search-dsl";
+  }
   return isQueryLanguageId(input.queryLanguage)
     ? input.queryLanguage
     : undefined;

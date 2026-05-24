@@ -17,6 +17,7 @@ pub mod mongodb;
 pub mod mysql;
 pub mod postgres;
 pub(crate) mod raw_where;
+pub mod search;
 pub mod sqlite;
 pub mod traits;
 pub mod types;
@@ -25,6 +26,7 @@ pub use duckdb::DuckdbAdapter;
 pub use mongodb::MongoAdapter;
 pub use mysql::MysqlAdapter;
 pub use postgres::PostgresAdapter;
+pub use search::SearchEngineAdapter;
 pub use sqlite::SqliteAdapter;
 
 pub use active::ActiveAdapter;

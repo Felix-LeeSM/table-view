@@ -120,6 +120,7 @@ pub enum BackendAdapterId {
     Duckdb,
     Mongodb,
     DeclaredRdb,
+    SearchEngine,
     Marker,
 }
 
@@ -131,6 +132,7 @@ pub enum BackendAdapterCapabilitySource {
     Duckdb,
     Mongodb,
     DeclaredRdb,
+    SearchEngine,
     Marker,
 }
 
@@ -152,6 +154,9 @@ pub enum BackendAdapterCapability {
     DocumentMutation,
     KeyValueMarker,
     SearchMarker,
+    SearchCatalog,
+    SearchQuery,
+    SearchSafetyPlan,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,6 +193,8 @@ pub enum DataSourceDialectId {
     Oracle,
     Mongodb,
     Redis,
+    Elasticsearch,
+    Opensearch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -200,6 +207,8 @@ pub enum DataSourceDialectFamily {
     Oracle,
     Mongodb,
     Redis,
+    Elasticsearch,
+    Opensearch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -208,6 +217,7 @@ pub enum ServerVersionProbeId {
     MysqlFamilyVersion,
     SqliteVersion,
     MongodbBuildInfo,
+    SearchRoot,
     None,
 }
 
@@ -242,6 +252,7 @@ impl DataSourceProfile {
 const SQL: &[QueryLanguageId] = &[QueryLanguageId::Sql];
 const MONGOSH: &[QueryLanguageId] = &[QueryLanguageId::Mongosh];
 const REDIS_COMMAND: &[QueryLanguageId] = &[QueryLanguageId::RedisCommand];
+const SEARCH_DSL: &[QueryLanguageId] = &[QueryLanguageId::SearchDsl];
 
 const TABULAR_RESULT: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::Tabular];
 const DOCUMENT_RESULTS: &[ResultEnvelopeKind] =
@@ -250,6 +261,7 @@ const KV_RESULTS: &[ResultEnvelopeKind] = &[
     ResultEnvelopeKind::KeyValue,
     ResultEnvelopeKind::StreamRecords,
 ];
+const SEARCH_RESULTS: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::SearchHits];
 
 const RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
@@ -281,6 +293,12 @@ const KV_MARKER_CAPABILITIES: &[BackendAdapterCapability] = &[
 const SEARCH_MARKER_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::SearchMarker,
+];
+const SEARCH_ENGINE_CAPABILITIES: &[BackendAdapterCapability] = &[
+    BackendAdapterCapability::Lifecycle,
+    BackendAdapterCapability::SearchCatalog,
+    BackendAdapterCapability::SearchQuery,
+    BackendAdapterCapability::SearchSafetyPlan,
 ];
 
 const POSTGRES_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
@@ -338,6 +356,13 @@ pub const SEARCH_MARKER_CONTRACT: BackendAdapterContract = BackendAdapterContrac
     implementation: BackendAdapterId::Marker,
     capability_source: BackendAdapterCapabilitySource::Marker,
     capabilities: SEARCH_MARKER_CAPABILITIES,
+};
+pub const SEARCH_ENGINE_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+    kind: BackendAdapterContractKind::Search,
+    state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::SearchEngine,
+    capability_source: BackendAdapterCapabilitySource::SearchEngine,
+    capabilities: SEARCH_ENGINE_CAPABILITIES,
 };
 
 const SQLITE_SUPPORTED_FILE_INPUTS: &[FileConnectionInputContract] =
@@ -443,6 +468,16 @@ const REDIS_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
     family: DataSourceDialectFamily::Redis,
     version_probe: ServerVersionProbeId::None,
 };
+const ELASTICSEARCH_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
+    id: DataSourceDialectId::Elasticsearch,
+    family: DataSourceDialectFamily::Elasticsearch,
+    version_probe: ServerVersionProbeId::SearchRoot,
+};
+const OPENSEARCH_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
+    id: DataSourceDialectId::Opensearch,
+    family: DataSourceDialectFamily::Opensearch,
+    version_probe: ServerVersionProbeId::SearchRoot,
+};
 
 pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
     match db_type {
@@ -519,6 +554,10 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             adapter_contract: KV_MARKER_CONTRACT,
             file_connection: None,
         },
+        DatabaseType::Elasticsearch => {
+            search_profile(DatabaseType::Elasticsearch, ELASTICSEARCH_DIALECT)
+        }
+        DatabaseType::Opensearch => search_profile(DatabaseType::Opensearch, OPENSEARCH_DIALECT),
     }
 }
 
@@ -544,6 +583,22 @@ fn rdb_profile(
         backend_adapter: adapter_contract.profile(),
         dialect,
         adapter_contract,
+        file_connection: None,
+    }
+}
+
+fn search_profile(id: DatabaseType, dialect: DataSourceDialectMetadata) -> DataSourceProfile {
+    DataSourceProfile {
+        id,
+        paradigm: Paradigm::Search,
+        connection_kind: ConnectionKind::Server,
+        languages: SEARCH_DSL,
+        catalog_model: CatalogModelKind::Search,
+        result_kinds: SEARCH_RESULTS,
+        safety_policy: SafetyPolicyId::SearchDefault,
+        backend_adapter: SEARCH_ENGINE_CONTRACT.profile(),
+        dialect,
+        adapter_contract: SEARCH_ENGINE_CONTRACT,
         file_connection: None,
     }
 }

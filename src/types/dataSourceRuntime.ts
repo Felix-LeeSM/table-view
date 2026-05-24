@@ -7,6 +7,7 @@ export type BackendAdapterProfileId =
   | "duckdb"
   | "mongodb"
   | "declared-rdb"
+  | "search-engine"
   | "marker";
 
 export type BackendAdapterCapabilitySource =
@@ -16,6 +17,7 @@ export type BackendAdapterCapabilitySource =
   | "duckdb"
   | "mongodb"
   | "declared-rdb"
+  | "search-engine"
   | "marker";
 
 export interface BackendAdapterProfile {
@@ -33,13 +35,16 @@ export type DataSourceDialectFamily =
   | "mssql"
   | "oracle"
   | "mongodb"
-  | "redis";
+  | "redis"
+  | "elasticsearch"
+  | "opensearch";
 
 export type ServerVersionProbeId =
   | "postgres-version-settings"
   | "mysql-family-version"
   | "sqlite-version"
   | "mongodb-build-info"
+  | "search-root"
   | "none";
 
 export interface DataSourceDialectMetadata {
@@ -67,6 +72,11 @@ const BACKEND_ADAPTER_PROFILES = Object.freeze({
   duckdb: backendAdapterProfile("duckdb", "rdb", "duckdb"),
   mongodb: backendAdapterProfile("mongodb", "document", "mongodb"),
   declaredRdb: backendAdapterProfile("declared-rdb", "rdb", "declared-rdb"),
+  searchEngine: backendAdapterProfile(
+    "search-engine",
+    "search",
+    "search-engine",
+  ),
   markerKv: backendAdapterProfile("marker", "kv", "marker"),
 });
 
@@ -96,6 +106,12 @@ export const DIALECT_METADATA = Object.freeze({
   oracle: dialectMetadata("oracle", "oracle", "none"),
   mongodb: dialectMetadata("mongodb", "mongodb", "mongodb-build-info"),
   redis: dialectMetadata("redis", "redis", "none"),
+  elasticsearch: dialectMetadata(
+    "elasticsearch",
+    "elasticsearch",
+    "search-root",
+  ),
+  opensearch: dialectMetadata("opensearch", "opensearch", "search-root"),
 }) satisfies Readonly<Record<DatabaseType, DataSourceDialectMetadata>>;
 
 export const BACKEND_ADAPTER_BY_TYPE = Object.freeze({
@@ -108,4 +124,6 @@ export const BACKEND_ADAPTER_BY_TYPE = Object.freeze({
   oracle: BACKEND_ADAPTER_PROFILES.declaredRdb,
   mongodb: BACKEND_ADAPTER_PROFILES.mongodb,
   redis: BACKEND_ADAPTER_PROFILES.markerKv,
+  elasticsearch: BACKEND_ADAPTER_PROFILES.searchEngine,
+  opensearch: BACKEND_ADAPTER_PROFILES.searchEngine,
 }) satisfies Readonly<Record<DatabaseType, BackendAdapterProfile>>;

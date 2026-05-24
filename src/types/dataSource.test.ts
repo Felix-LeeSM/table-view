@@ -127,6 +127,12 @@ describe("DataSourceProfile registry", () => {
       },
     }),
     redis: createEmptyDataSourceCapabilities(),
+    elasticsearch: expectedCapabilities({
+      connection: { test: true },
+    }),
+    opensearch: expectedCapabilities({
+      connection: { test: true },
+    }),
   };
 
   it("contains exactly one profile for every DatabaseType", () => {
@@ -244,6 +250,8 @@ describe("DataSourceProfile registry", () => {
       "sqlite",
       "duckdb",
       "mongodb",
+      "elasticsearch",
+      "opensearch",
     ]);
     expect(isConnectionSupportedDatabaseType("postgresql")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mongodb")).toBe(true);
@@ -251,6 +259,22 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
     expect(isConnectionSupportedDatabaseType("redis")).toBe(false);
+    expect(isConnectionSupportedDatabaseType("elasticsearch")).toBe(true);
+    expect(isConnectionSupportedDatabaseType("opensearch")).toBe(true);
+  });
+
+  it("keeps search profiles connection-only until live HTTP catalog lands", () => {
+    for (const dbType of [
+      "elasticsearch",
+      "opensearch",
+    ] satisfies DatabaseType[]) {
+      const profile = getDataSourceProfile(dbType);
+
+      expect(profile.capabilities.connection.test).toBe(true);
+      expect(profile.capabilities.catalog.browse).toBe(false);
+      expect(profile.capabilities.query.query).toBe(false);
+      expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);
+    }
   });
 
   it("keeps legacy URL supported DBMS list aligned with profile-supported DBMS", () => {

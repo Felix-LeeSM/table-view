@@ -1021,6 +1021,34 @@ describe("ConnectionDialog", () => {
       );
       expect(mockAddConnection).not.toHaveBeenCalled();
     });
+
+    it("accepts empty database for Elasticsearch connection on save", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText("Name"), {
+          target: { value: "Elastic no db" },
+        });
+        fireEvent.change(screen.getByLabelText("Host"), {
+          target: { value: "search.local" },
+        });
+      });
+
+      await user.click(screen.getByLabelText("Database Type"));
+      await user.click(screen.getByRole("option", { name: "Elasticsearch" }));
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Save"));
+      });
+
+      expect(
+        screen.queryByText("Database is required"),
+      ).not.toBeInTheDocument();
+      expect(mockAddConnection).toHaveBeenCalledTimes(1);
+      const draft = mockAddConnection.mock.calls[0]![0] as ConnectionDraft;
+      expect(draft.dbType).toBe("elasticsearch");
+      expect(draft.database).toBe("");
+    });
   });
 
   // -----------------------------------------------------------------------

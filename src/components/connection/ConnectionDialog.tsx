@@ -123,6 +123,7 @@ export default function ConnectionDialog({
     hadPassword,
     isFileConnection,
     isMongo,
+    isSearch,
     pendingDbTypeChange,
     handleDbTypeChange,
     handleConfirmDbTypeReplace,
@@ -209,7 +210,7 @@ export default function ConnectionDialog({
     // per-tab database at runtime, and admin commands
     // (`db.runCommand({...})`) target the admin DB context regardless of
     // any pre-bound default. RDB connections still require it.
-    if (!isFileConnection && !isMongo && !trimmed.database) {
+    if (!isFileConnection && !isMongo && !isSearch && !trimmed.database) {
       setError("Database is required");
       return;
     }

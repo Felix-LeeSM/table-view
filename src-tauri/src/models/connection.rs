@@ -14,6 +14,8 @@ pub enum DatabaseType {
     Oracle,
     Mongodb,
     Redis,
+    Elasticsearch,
+    Opensearch,
 }
 
 impl DatabaseType {
@@ -29,6 +31,7 @@ impl DatabaseType {
             DatabaseType::Oracle => 1521,
             DatabaseType::Mongodb => 27017,
             DatabaseType::Redis => 6379,
+            DatabaseType::Elasticsearch | DatabaseType::Opensearch => 9200,
         }
     }
 
@@ -47,6 +50,7 @@ impl DatabaseType {
             | DatabaseType::Oracle => Paradigm::Rdb,
             DatabaseType::Mongodb => Paradigm::Document,
             DatabaseType::Redis => Paradigm::Kv,
+            DatabaseType::Elasticsearch | DatabaseType::Opensearch => Paradigm::Search,
         }
     }
 }
@@ -65,6 +69,8 @@ impl FromStr for DatabaseType {
             "oracle" => Ok(DatabaseType::Oracle),
             "mongodb" => Ok(DatabaseType::Mongodb),
             "redis" => Ok(DatabaseType::Redis),
+            "elasticsearch" | "elastic" | "es" => Ok(DatabaseType::Elasticsearch),
+            "opensearch" | "os" => Ok(DatabaseType::Opensearch),
             _ => Err(()),
         }
     }

@@ -53,6 +53,7 @@ export interface UseConnectionDraftFormReturn {
    * non-empty database. ConnectionDialog.handleSave branches on this.
    */
   isMongo: boolean;
+  isSearch: boolean;
   pendingDbTypeChange: { to: DatabaseType } | null;
   handleDbTypeChange: (newDbType: DatabaseType) => void;
   handleConfirmDbTypeReplace: () => void;
@@ -104,6 +105,8 @@ export function useConnectionDraftForm(
   // on Mongo (default DB landing field, not connection-required) so the
   // Save validator skips the "Database is required" branch when true.
   const isMongo = form.dbType === "mongodb";
+  const isSearch =
+    form.dbType === "elasticsearch" || form.dbType === "opensearch";
 
   /**
    * Sprint 138 — when the user changes `dbType`, reset the DBMS-specific
@@ -229,6 +232,7 @@ export function useConnectionDraftForm(
     hadPassword,
     isFileConnection,
     isMongo,
+    isSearch,
     pendingDbTypeChange,
     handleDbTypeChange,
     handleConfirmDbTypeReplace,

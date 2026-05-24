@@ -60,7 +60,7 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | SQLite | file adapter complete | parser/write parity guardrails | Rust/WASM vocabulary | user DBMS adapter는 internal SQLite state와 분리됨. DDL UI는 unsupported |
 | DuckDB | file adapter + local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM vocabulary | local `.duckdb`/CSV/Parquet/JSON/NDJSON preview/query 지원. DDL/write는 unsupported |
 | Redis/Valkey | not started | `KvAdapter` contract 필요 | redis-command 필요 | non-RDBMS 1차 후보 |
-| Elasticsearch/OpenSearch | not started | `SearchAdapter` contract 필요 | search DSL 필요 | non-RDBMS 1차 후보 |
+| Elasticsearch/OpenSearch | contract slice live | index/mapping/search envelope guardrails | search DSL deferred | Search adapter + identities live; HTTP catalog/query UI deferred |
 
 ## Active Roadmap
 
@@ -76,7 +76,7 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | 8 | DuckDB + file analytics hardening | active follow-up | `.duckdb`, CSV, Parquet, JSON, NDJSON preview/query 는 local-first runtime path 존재. analytics import/history/favorites 확대는 별도 결정 | `docs/data-source-architecture.md`, `docs/ROADMAP.md`, `docs/sprints/sprint-457/contract.md` |
 | 9 | RDBMS ERD / SchemaGraph | planned | FK/constraint catalog 를 재사용 가능한 `SchemaGraph` 로 승격. ERD는 첫 renderer | `docs/data-source-architecture.md` |
 | 10 | Redis/Valkey | deferred candidate | `KvAdapter` 를 marker 에서 key/type/TTL/stream contract 로 승격 후 phase 작성 | `docs/data-source-architecture.md` |
-| 11 | Elasticsearch/OpenSearch | deferred candidate | `SearchAdapter` 를 marker 에서 index/mapping/search/aggregation contract 로 승격 후 phase 작성 | `docs/data-source-architecture.md` |
+| 11 | Elasticsearch/OpenSearch | active contract slice | Search adapter contract and Elasticsearch/OpenSearch identities are live. HTTP catalog, DSL execution, and result UI remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-470/handoff.md` |
 | 12 | MongoDB full support | deferred/current subagent audit only | Phase 28 Slice A 는 보존하되 RDBMS-first 후 재개. `queryMode` 는 execution SOT 로 되살리지 않음 | `docs/phases/phase-28.md` |
 | 13 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md` |
 | 14 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |

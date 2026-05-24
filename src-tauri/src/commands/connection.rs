@@ -27,6 +27,7 @@ use tokio_util::sync::CancellationToken;
 use crate::db::mongodb::MongoAdapter;
 use crate::db::mysql::MysqlAdapter;
 use crate::db::postgres::PostgresAdapter;
+use crate::db::search::SearchEngineAdapter;
 use crate::db::sqlite::SqliteAdapter;
 use crate::db::ActiveAdapter;
 use crate::db::DuckdbAdapter;
@@ -69,6 +70,12 @@ pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppE
         DatabaseType::Sqlite => Ok(ActiveAdapter::Rdb(Box::new(SqliteAdapter::new()))),
         DatabaseType::Duckdb => Ok(ActiveAdapter::Rdb(Box::new(DuckdbAdapter::new()))),
         DatabaseType::Mongodb => Ok(ActiveAdapter::Document(Box::new(MongoAdapter::new()))),
+        DatabaseType::Elasticsearch => Ok(ActiveAdapter::Search(Box::new(
+            SearchEngineAdapter::new_elasticsearch(),
+        ))),
+        DatabaseType::Opensearch => Ok(ActiveAdapter::Search(Box::new(
+            SearchEngineAdapter::new_opensearch(),
+        ))),
         other => Err(AppError::Unsupported(format!(
             "Database type {:?} is not supported yet",
             other

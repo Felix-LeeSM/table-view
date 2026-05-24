@@ -33,6 +33,9 @@ const SIDEBAR_OBJECT_LABELS: Record<DatabaseType, SidebarObjectLabel> = {
   // Redis 는 현재 connection dialog 에 노출되지 않지만 DatabaseType variant
   // 이므로 매핑은 정의. KEYS 명령 단위 = key.
   redis: { single: "key", plural: "keys" },
+  // Search engines browse index/catalog objects outside the RDB tree.
+  elasticsearch: { single: "index", plural: "indexes" },
+  opensearch: { single: "index", plural: "indexes" },
 };
 
 /**

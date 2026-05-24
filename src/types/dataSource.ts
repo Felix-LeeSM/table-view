@@ -359,6 +359,12 @@ export const MONGODB_CAPABILITIES = capabilities({
   },
 });
 
+export const SEARCH_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+});
+
 function profile(
   id: DatabaseType,
   connectionKind: ConnectionKind,
@@ -457,6 +463,24 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "kv",
     ["keyValue", "streamRecords"],
     "kv-default",
+  ),
+  elasticsearch: profile(
+    "elasticsearch",
+    "server",
+    ["search-dsl"],
+    "search",
+    ["searchHits"],
+    "search-default",
+    SEARCH_CAPABILITIES,
+  ),
+  opensearch: profile(
+    "opensearch",
+    "server",
+    ["search-dsl"],
+    "search",
+    ["searchHits"],
+    "search-default",
+    SEARCH_CAPABILITIES,
   ),
 }) satisfies Readonly<Record<DatabaseType, DataSourceProfile>>;
 

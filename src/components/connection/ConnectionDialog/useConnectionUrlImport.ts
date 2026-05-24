@@ -53,6 +53,10 @@ const RECOGNISED_SCHEMES = [
   "mongodb",
   "mongodb+srv",
   "redis",
+  "elasticsearch",
+  "elastic",
+  "es",
+  "opensearch",
   "sqlite",
   "duckdb",
 ] as const;

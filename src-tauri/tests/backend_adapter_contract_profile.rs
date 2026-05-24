@@ -29,6 +29,8 @@ fn database_type_label(db_type: &DatabaseType) -> &'static str {
         DatabaseType::Oracle => "oracle",
         DatabaseType::Mongodb => "mongodb",
         DatabaseType::Redis => "redis",
+        DatabaseType::Elasticsearch => "elasticsearch",
+        DatabaseType::Opensearch => "opensearch",
     }
 }
 
@@ -48,6 +50,8 @@ fn backend_adapter_contract_profiles_are_encoded() {
         DatabaseType::Oracle,
         DatabaseType::Mongodb,
         DatabaseType::Redis,
+        DatabaseType::Elasticsearch,
+        DatabaseType::Opensearch,
     ];
 
     for db_type in all_database_types {
@@ -123,6 +127,31 @@ fn backend_profiles_encode_current_database_type_contracts() {
     );
     assert_eq!(redis.adapter_contract, KV_MARKER_CONTRACT);
     assert!(redis.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
+
+    let elasticsearch = get_data_source_profile(&DatabaseType::Elasticsearch);
+    assert_eq!(elasticsearch.paradigm, Paradigm::Search);
+    assert_eq!(elasticsearch.languages, [QueryLanguageId::SearchDsl]);
+    assert_eq!(elasticsearch.catalog_model, CatalogModelKind::Search);
+    assert_eq!(elasticsearch.result_kinds, [ResultEnvelopeKind::SearchHits]);
+    assert_eq!(
+        elasticsearch.adapter_contract.state,
+        BackendAdapterContractState::FactoryBacked
+    );
+    assert_eq!(
+        elasticsearch.backend_adapter.id,
+        BackendAdapterId::SearchEngine
+    );
+    assert!(elasticsearch.has_backend_capability(BackendAdapterCapability::SearchCatalog));
+    assert!(elasticsearch.has_backend_capability(BackendAdapterCapability::SearchSafetyPlan));
+
+    let opensearch = get_data_source_profile(&DatabaseType::Opensearch);
+    assert_eq!(opensearch.paradigm, Paradigm::Search);
+    assert_eq!(opensearch.dialect.id, DataSourceDialectId::Opensearch);
+    assert_eq!(
+        opensearch.dialect.family,
+        DataSourceDialectFamily::Opensearch
+    );
+    assert_eq!(opensearch.backend_adapter, elasticsearch.backend_adapter);
 }
 
 #[test]
@@ -315,7 +344,7 @@ fn mariadb_profile_keeps_identity_while_exposing_mysql_family_runtime_metadata()
 }
 
 #[test]
-fn marker_contracts_remain_marker_only_without_redis_or_search_implementation() {
+fn marker_contracts_stay_distinct_from_factory_backed_search_implementation() {
     assert_eq!(
         KV_MARKER_CONTRACT.state,
         BackendAdapterContractState::MarkerOnly
@@ -329,6 +358,14 @@ fn marker_contracts_remain_marker_only_without_redis_or_search_implementation() 
         BackendAdapterContractState::MarkerOnly
     );
     assert!(SEARCH_MARKER_CONTRACT.has_capability(BackendAdapterCapability::SearchMarker));
+
+    let search = get_data_source_profile(&DatabaseType::Elasticsearch);
+    assert_eq!(
+        search.adapter_contract.state,
+        BackendAdapterContractState::FactoryBacked
+    );
+    assert!(search.has_backend_capability(BackendAdapterCapability::SearchCatalog));
+    assert!(!search.has_backend_capability(BackendAdapterCapability::SearchMarker));
 }
 
 #[test]
@@ -354,6 +391,10 @@ fn active_adapter_profile_resolves_from_kind_and_variant_contract_is_explicit() 
     assert_eq!(
         search.adapter_contract_kind(),
         BackendAdapterContractKind::Search
+    );
+    assert_eq!(
+        search.data_source_profile().backend_adapter.id,
+        BackendAdapterId::SearchEngine
     );
 
     let kv = ActiveAdapter::Kv(Box::new(StubKvAdapter));
@@ -382,7 +423,7 @@ struct StubSearchAdapter;
 
 impl DbAdapter for StubSearchAdapter {
     fn kind(&self) -> DatabaseType {
-        DatabaseType::Postgresql
+        DatabaseType::Elasticsearch
     }
 
     fn connect<'a>(&'a self, _config: &'a ConnectionConfig) -> BoxFuture<'a, Result<(), AppError>> {
