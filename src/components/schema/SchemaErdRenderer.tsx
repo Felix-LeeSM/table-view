@@ -38,16 +38,22 @@ export default function SchemaErdRenderer({
   const tableRefs = useRef(new Map<string, HTMLButtonElement>());
   const selected = selectedTableId ?? internalSelectedTableId;
   const layout = useMemo(() => buildErdLayout(graph), [graph]);
+  const activeSelected = layout.tables.some(
+    ({ table }) => table.id === selected,
+  )
+    ? selected
+    : null;
   const selectedNeighborhood = useMemo(
-    () => buildSelectedNeighborhood(layout.relationships, selected),
-    [layout.relationships, selected],
+    () => buildSelectedNeighborhood(layout.relationships, activeSelected),
+    [layout.relationships, activeSelected],
   );
   const searchMatches = useMemo(
     () => filterTables(layout.tables, searchTerm),
     [layout.tables, searchTerm],
   );
-  const selectedTableLabel = selected
-    ? layout.tables.find(({ table }) => table.id === selected)?.table.label
+  const selectedTableLabel = activeSelected
+    ? layout.tables.find(({ table }) => table.id === activeSelected)?.table
+        .label
     : null;
 
   if (layout.tables.length === 0) {
@@ -91,11 +97,11 @@ export default function SchemaErdRenderer({
   };
 
   const fitSelectedTable = () => {
-    if (!selected) return;
+    if (!activeSelected) return;
     setZoom(1);
     runAfterPaint(() => {
       tableRefs.current
-        .get(selected)
+        .get(activeSelected)
         ?.scrollIntoView?.({ block: "center", inline: "center" });
     });
   };
@@ -159,7 +165,7 @@ export default function SchemaErdRenderer({
             size="icon-xs"
             aria-label="Fit selected table"
             title="Fit selected table"
-            disabled={!selected}
+            disabled={!activeSelected}
             onClick={fitSelectedTable}
           >
             <Crosshair />
@@ -189,7 +195,7 @@ export default function SchemaErdRenderer({
                 key={table.id}
                 type="button"
                 role="option"
-                aria-selected={selected === table.id}
+                aria-selected={activeSelected === table.id}
                 onClick={() => focusTable(table.id)}
                 className="max-w-48 truncate rounded border border-border bg-background px-2 py-1 text-xs text-foreground hover:border-primary/60 aria-selected:border-primary aria-selected:bg-primary/10"
               >
@@ -254,7 +260,7 @@ export default function SchemaErdRenderer({
             </defs>
             {layout.relationships.map(({ edge, from, to, label }) => {
               const highlighted =
-                !selected ||
+                !activeSelected ||
                 selectedNeighborhood.highlightedEdgeIds.has(edge.id);
               return (
                 <path
@@ -276,9 +282,9 @@ export default function SchemaErdRenderer({
           </svg>
 
           {layout.tables.map(({ table, columns, x, y }) => {
-            const isSelected = selected === table.id;
+            const isSelected = activeSelected === table.id;
             const isRelated =
-              !selected ||
+              !activeSelected ||
               isSelected ||
               selectedNeighborhood.relatedTableIds.has(table.id);
             const isSearchMatch = searchMatches.some(
@@ -300,7 +306,7 @@ export default function SchemaErdRenderer({
                 type="button"
                 aria-label={`${table.schema}.${table.table} table`}
                 aria-pressed={isSelected}
-                aria-current={selected === table.id ? "true" : undefined}
+                aria-current={activeSelected === table.id ? "true" : undefined}
                 data-related={isRelated}
                 data-search-match={searchTerm.trim() ? isSearchMatch : true}
                 onClick={() => handleSelect(table.id)}

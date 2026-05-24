@@ -143,6 +143,40 @@ describe("SchemaErdRenderer", () => {
     ).toHaveAttribute("data-related", "false");
   });
 
+  it("treats a stale selected table id as no active selection", () => {
+    render(
+      <SchemaErdRenderer
+        graph={extractSchemaGraph(ordersSnapshot())}
+        selectedTableId="table:public.missing"
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /fit selected table/i }),
+    ).toBeDisabled();
+    expect(screen.queryByText(/focused table:/i)).not.toBeInTheDocument();
+
+    for (const label of [
+      /public\.users table/i,
+      /public\.orders table/i,
+      /public\.payments table/i,
+    ]) {
+      const tableButton = screen.getByRole("button", { name: label });
+      expect(tableButton).toHaveAttribute("aria-pressed", "false");
+      expect(tableButton).not.toHaveAttribute("aria-current");
+      expect(tableButton).toHaveAttribute("data-related", "true");
+    }
+
+    expect(
+      screen.getByLabelText("public.orders.user_id references public.users.id"),
+    ).toHaveAttribute("data-highlighted", "true");
+    expect(
+      screen.getByLabelText(
+        "public.payments.order_id references public.orders.id",
+      ),
+    ).toHaveAttribute("data-highlighted", "true");
+  });
+
   it("keeps zoom and focus controls local to the ERD surface", () => {
     render(<SchemaErdRenderer graph={extractSchemaGraph(ordersSnapshot())} />);
 
