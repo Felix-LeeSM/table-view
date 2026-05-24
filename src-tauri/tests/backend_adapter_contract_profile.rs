@@ -118,15 +118,19 @@ fn backend_profiles_encode_current_database_type_contracts() {
     let redis = get_data_source_profile(&DatabaseType::Redis);
     assert_eq!(redis.paradigm, Paradigm::Kv);
     assert_eq!(redis.languages, [QueryLanguageId::RedisCommand]);
+    assert_eq!(redis.result_kinds, [ResultEnvelopeKind::KeyValue]);
+    assert_eq!(redis.adapter_contract.kind, BackendAdapterContractKind::Kv);
     assert_eq!(
-        redis.result_kinds,
-        [
-            ResultEnvelopeKind::KeyValue,
-            ResultEnvelopeKind::StreamRecords
-        ]
+        redis.adapter_contract.state,
+        BackendAdapterContractState::FactoryBacked
     );
-    assert_eq!(redis.adapter_contract, KV_MARKER_CONTRACT);
-    assert!(redis.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
+    assert_eq!(redis.backend_adapter.id, BackendAdapterId::Redis);
+    assert_eq!(
+        redis.backend_adapter.capability_source,
+        BackendAdapterCapabilitySource::Redis
+    );
+    assert!(redis.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
+    assert!(!redis.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
 
     let elasticsearch = get_data_source_profile(&DatabaseType::Elasticsearch);
     assert_eq!(elasticsearch.paradigm, Paradigm::Search);
@@ -349,6 +353,16 @@ fn marker_contracts_stay_distinct_from_factory_backed_search_implementation() {
         KV_MARKER_CONTRACT.state,
         BackendAdapterContractState::MarkerOnly
     );
+    assert!(KV_MARKER_CONTRACT.has_capability(BackendAdapterCapability::KeyValueMarker));
+
+    let redis = get_data_source_profile(&DatabaseType::Redis);
+    assert_eq!(
+        redis.adapter_contract.state,
+        BackendAdapterContractState::FactoryBacked
+    );
+    assert!(redis.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
+    assert!(!redis.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
+
     assert_eq!(
         SEARCH_MARKER_CONTRACT.kind,
         BackendAdapterContractKind::Search

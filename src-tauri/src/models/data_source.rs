@@ -119,6 +119,7 @@ pub enum BackendAdapterId {
     Sqlite,
     Duckdb,
     Mongodb,
+    Redis,
     DeclaredRdb,
     SearchEngine,
     Marker,
@@ -131,6 +132,7 @@ pub enum BackendAdapterCapabilitySource {
     Sqlite,
     Duckdb,
     Mongodb,
+    Redis,
     DeclaredRdb,
     SearchEngine,
     Marker,
@@ -153,6 +155,7 @@ pub enum BackendAdapterCapability {
     DocumentQuery,
     DocumentMutation,
     KeyValueMarker,
+    KeyValueCatalog,
     SearchMarker,
     SearchCatalog,
     SearchQuery,
@@ -257,10 +260,7 @@ const SEARCH_DSL: &[QueryLanguageId] = &[QueryLanguageId::SearchDsl];
 const TABULAR_RESULT: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::Tabular];
 const DOCUMENT_RESULTS: &[ResultEnvelopeKind] =
     &[ResultEnvelopeKind::Document, ResultEnvelopeKind::Tabular];
-const KV_RESULTS: &[ResultEnvelopeKind] = &[
-    ResultEnvelopeKind::KeyValue,
-    ResultEnvelopeKind::StreamRecords,
-];
+const KV_RESULTS: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::KeyValue];
 const SEARCH_RESULTS: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::SearchHits];
 
 const RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
@@ -289,6 +289,10 @@ const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
 const KV_MARKER_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::KeyValueMarker,
+];
+const REDIS_KV_CAPABILITIES: &[BackendAdapterCapability] = &[
+    BackendAdapterCapability::Lifecycle,
+    BackendAdapterCapability::KeyValueCatalog,
 ];
 const SEARCH_MARKER_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
@@ -342,6 +346,13 @@ const FACTORY_DOCUMENT_CONTRACT: BackendAdapterContract = BackendAdapterContract
     implementation: BackendAdapterId::Mongodb,
     capability_source: BackendAdapterCapabilitySource::Mongodb,
     capabilities: DOCUMENT_CAPABILITIES,
+};
+const FACTORY_REDIS_KV_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+    kind: BackendAdapterContractKind::Kv,
+    state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::Redis,
+    capability_source: BackendAdapterCapabilitySource::Redis,
+    capabilities: REDIS_KV_CAPABILITIES,
 };
 pub const KV_MARKER_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Kv,
@@ -549,9 +560,9 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             catalog_model: CatalogModelKind::Kv,
             result_kinds: KV_RESULTS,
             safety_policy: SafetyPolicyId::KvDefault,
-            backend_adapter: KV_MARKER_CONTRACT.profile(),
+            backend_adapter: FACTORY_REDIS_KV_CONTRACT.profile(),
             dialect: REDIS_DIALECT,
-            adapter_contract: KV_MARKER_CONTRACT,
+            adapter_contract: FACTORY_REDIS_KV_CONTRACT,
             file_connection: None,
         },
         DatabaseType::Elasticsearch => {

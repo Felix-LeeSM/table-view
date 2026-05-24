@@ -9,6 +9,7 @@ pub mod guard;
 pub mod history;
 pub mod import_legacy;
 pub mod keyring;
+pub mod kv;
 pub mod meta;
 pub mod meta_sentinel;
 pub mod open_workspace_window;

@@ -21,7 +21,7 @@ export type DatabaseType =
  * tables / columns) 만 동작 — DDL / queries / streaming 은 Slice B~G
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
- * 미포함 어댑터 (MSSQL/Oracle/Redis) 는 connection 생성 dialog 의
+ * 미포함 어댑터 (MSSQL/Oracle) 는 connection 생성 dialog 의
  * Select option 에 노출되지 않고, URL paste / Parse & Continue 로 들어와도
  * 거부된다.
  */
@@ -32,6 +32,7 @@ export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "sqlite",
   "duckdb",
   "mongodb",
+  "redis",
   "elasticsearch",
   "opensearch",
 ];
@@ -305,6 +306,7 @@ export function parseConnectionUrl(
       mongodb: "mongodb",
       "mongodb+srv": "mongodb",
       redis: "redis",
+      rediss: "redis",
       elasticsearch: "elasticsearch",
       elastic: "elasticsearch",
       es: "elasticsearch",
@@ -317,13 +319,15 @@ export function parseConnectionUrl(
     // handler treat it as "no recognised paste" and leave the form
     // unchanged (silent best-effort, no alert).
     if (!parsed.hostname) return null;
+    const database = parsed.pathname.replace(/^\//, "");
     return {
       dbType,
       host: parsed.hostname,
       port: parsed.port ? parseInt(parsed.port, 10) : DATABASE_DEFAULTS[dbType],
       user: decodeURIComponent(parsed.username),
       password: decodeURIComponent(parsed.password),
-      database: parsed.pathname.replace(/^\//, ""),
+      database: dbType === "redis" && database === "" ? "0" : database,
+      ...(parsed.protocol === "rediss:" ? { tlsEnabled: true } : {}),
       paradigm: paradigmOf(dbType),
     };
   } catch {

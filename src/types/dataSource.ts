@@ -359,6 +359,18 @@ export const MONGODB_CAPABILITIES = capabilities({
   },
 });
 
+export const REDIS_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+  catalog: {
+    browse: true,
+  },
+  paradigmSpecific: {
+    keyBrowser: true,
+  },
+});
+
 export const SEARCH_CAPABILITIES = capabilities({
   connection: {
     test: true,
@@ -461,8 +473,9 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "server",
     ["redis-command"],
     "kv",
-    ["keyValue", "streamRecords"],
+    ["keyValue"],
     "kv-default",
+    REDIS_CAPABILITIES,
   ),
   elasticsearch: profile(
     "elasticsearch",

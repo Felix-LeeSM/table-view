@@ -53,6 +53,9 @@ csv = "1"
 # (quoted/numeric literal → `?`). 같은 crate 가 `tracing-subscriber` /
 # `globset` / `mongodb` 의 transitive 로 이미 잠겨 있어 build cost 추가 0.
 regex = "1"
+# Sprint 466 — Redis/Valkey KV adapter. `tokio-rustls-comp` gives async
+# command support on the existing Tokio runtime and `rediss://` TLS.
+redis = { version = "0.32", features = ["tokio-rustls-comp"] }
 # Sprint 356 (2026-05-16) — Q22 keyring file-key migration.
 # Cross-platform abstraction lives in `storage::crypto::KeyringBackend`;
 # the in-memory backend used by tests means we never link against the

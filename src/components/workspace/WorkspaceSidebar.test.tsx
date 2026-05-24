@@ -7,6 +7,12 @@ import { useWorkspaceStore } from "@stores/workspaceStore";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 import type { TableTab } from "@stores/workspaceStore";
 
+const invokeMock = vi.fn();
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => invokeMock(...args),
+}));
+
 // Mock the heavy paradigm-specific trees so this suite stays fast and
 // doesn't pull in network / virtualization machinery. The wrappers
 // (RdbSidebar, DocumentSidebar) defer to these directly so it's the
@@ -102,6 +108,23 @@ function setActiveTab(tab: TableTab | null) {
 describe("WorkspaceSidebar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_kv_databases") {
+        return Promise.resolve([{ name: "0", index: 0, keyCount: 0 }]);
+      }
+      if (command === "current_kv_database") return Promise.resolve(0);
+      if (command === "scan_kv_keys") {
+        return Promise.resolve({
+          database: 0,
+          cursor: "0",
+          nextCursor: "0",
+          done: true,
+          limit: 100,
+          keys: [],
+        });
+      }
+      return Promise.reject(new Error(`Unhandled command: ${command}`));
+    });
     setupStore({});
     setActiveTab(null);
   });
@@ -241,20 +264,14 @@ describe("WorkspaceSidebar", () => {
     expect(screen.queryByTestId("schema-tree")).toBeNull();
   });
 
-  it("renders the kv placeholder for paradigm 'kv'", () => {
+  it("renders KvSidebar for paradigm 'kv'", () => {
     setupStore({
       connections: [makeConn("k1", { dbType: "redis", paradigm: "kv" })],
       active: ["k1"],
     });
     render(<WorkspaceSidebar selectedId="k1" />);
-    const placeholder = screen.getByRole("status", {
-      name: /key-value workspace placeholder/i,
-    });
-    expect(placeholder).toBeInTheDocument();
     expect(
-      screen.getByText(
-        /key-value database support is planned but not yet implemented/i,
-      ),
+      screen.getByRole("tree", { name: /redis keys/i }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("schema-tree")).toBeNull();
     expect(screen.queryByTestId("document-database-tree")).toBeNull();

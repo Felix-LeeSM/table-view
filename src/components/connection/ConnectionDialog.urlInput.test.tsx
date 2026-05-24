@@ -126,6 +126,7 @@ interface PasteCase {
     user?: string;
     database?: string;
     password?: string;
+    tlsEnabled?: boolean;
   };
 }
 
@@ -227,6 +228,31 @@ const PASTE_CASES: PasteCase[] = [
     },
   },
   {
+    scheme: "redis",
+    url: "redis://rediu:redip@redis.local:6379",
+    expected: {
+      dbType: "redis",
+      host: "redis.local",
+      port: 6379,
+      user: "rediu",
+      database: "0",
+      password: "redip",
+    },
+  },
+  {
+    scheme: "rediss",
+    url: "rediss://rediu:redip@secure.redis.local:6380/5",
+    expected: {
+      dbType: "redis",
+      host: "secure.redis.local",
+      port: 6380,
+      user: "rediu",
+      database: "5",
+      password: "redip",
+      tlsEnabled: true,
+    },
+  },
+  {
     scheme: "elasticsearch",
     url: "elasticsearch://esu:esp@elastic.local:9201",
     expected: {
@@ -312,6 +338,12 @@ describe("[AC-178-01] form-mode host paste detection", () => {
               .getAllByLabelText(/^Database( \(optional\))?$/)
               .find((el) => el.tagName === "INPUT") as HTMLInputElement);
       expect(dbInput.value).toBe(c.expected.database ?? "");
+      if (c.expected.dbType === "redis") {
+        const tlsInput = screen.getByLabelText(
+          "Enable TLS",
+        ) as HTMLInputElement;
+        expect(tlsInput.checked).toBe(!!c.expected.tlsEnabled);
+      }
       // Password is not directly readable — we save and inspect the
       // outgoing payload instead. Skip here unless the AC explicitly
       // covers it; AC-178-02 below covers the password verbatim case.
@@ -543,12 +575,11 @@ describe("[AC-178-03] host:port blur split", () => {
 // 경로이므로 alert 없이 단순히 form 을 건드리지 않음). URL 모드의 Parse &
 // Continue 는 명시적 사용자 액션이라 거부 메시지를 노출 — 별도 그룹.
 //
-// MySQL/MariaDB/SQLite 는 supported 이므로 본 silent-reject list 에서 제외.
+// MySQL/MariaDB/SQLite/Redis 는 supported 이므로 본 silent-reject list 에서 제외.
 // ===========================================================================
 
 describe("[Sprint 281] unsupported DBMS paste is silent (no form change)", () => {
   const unsupportedPastes = [
-    { scheme: "redis", url: "redis://rediu:redip@redis.local:6379/0" },
     { scheme: "mssql", url: "mssql://sa:pw@mssql.local:1433/master" },
     { scheme: "oracle", url: "oracle://system:pw@oracle.local:1521/FREEPDB1" },
   ];

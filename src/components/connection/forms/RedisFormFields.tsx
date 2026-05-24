@@ -9,9 +9,8 @@
  *     configuration). Stored as string in `ConnectionDraft.database` for
  *     parity with the existing schema; the input type is `number` and we
  *     clamp to the 0–15 range.
- *   - `tlsEnabled` is shared with Mongo's TLS toggle for code reuse —
- *     this sprint only ships the form-side field; backend support is
- *     deferred to Phase 8 (see master spec non-goals).
+ *   - `tlsEnabled` is shared with Mongo's TLS toggle for code reuse and
+ *     maps to `rediss://` in the Redis adapter.
  */
 import type { ConnectionDraft } from "@/types/connection";
 

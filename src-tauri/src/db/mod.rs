@@ -19,6 +19,7 @@ pub mod mongodb;
 pub mod mysql;
 pub mod postgres;
 pub(crate) mod raw_where;
+pub mod redis;
 pub mod search;
 pub mod sqlite;
 pub mod traits;
@@ -28,6 +29,7 @@ pub use duckdb::DuckdbAdapter;
 pub use mongodb::MongoAdapter;
 pub use mysql::MysqlAdapter;
 pub use postgres::PostgresAdapter;
+pub use redis::RedisAdapter;
 pub use search::SearchEngineAdapter;
 pub use sqlite::SqliteAdapter;
 
