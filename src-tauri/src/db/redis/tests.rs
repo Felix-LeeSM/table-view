@@ -9,11 +9,13 @@ use super::values::{
 use super::{build_set_string_command, RedisAdapter};
 use crate::db::{
     DbAdapter, KvAdapter, KvDeleteRequest, KvKeyScanRequest, KvKeyType, KvSetStringRequest,
-    KvStreamReadRequest, KvTtlState, KvTtlUpdate, KvTtlUpdateRequest, KvValueReadRequest,
+    KvStreamReadRequest, KvTtlState, KvTtlUpdate, KvTtlUpdateRequest, KvValue, KvValueReadRequest,
     KvWriteSafety,
 };
 use crate::error::AppError;
 use crate::models::{ConnectionConfig, DatabaseType};
+use testcontainers::runners::AsyncRunner;
+use testcontainers_modules::redis::{Redis as RedisImage, REDIS_PORT};
 use tokio_util::sync::CancellationToken;
 
 // Purpose: Redis adapter pure contract guards before fixture I/O is layered on
@@ -278,4 +280,206 @@ async fn disconnected_value_readers_return_connection_error() {
         read_stream_range(&adapter, "k", "-", "+", 10).await,
         Err(AppError::Connection(_))
     ));
+}
+
+#[tokio::test]
+async fn live_redis_adapter_covers_scan_read_write_ttl_and_delete() {
+    let container = match RedisImage::default().start().await {
+        Ok(container) => container,
+        Err(err) => {
+            println!("SKIP: Redis testcontainer start failed ({err})");
+            return;
+        }
+    };
+    let port = match container.get_host_port_ipv4(REDIS_PORT).await {
+        Ok(port) => port,
+        Err(err) => {
+            println!("SKIP: Redis testcontainer port lookup failed ({err})");
+            return;
+        }
+    };
+
+    let mut redis_config = config("0");
+    redis_config.host = "127.0.0.1".into();
+    redis_config.port = port;
+    redis_config.user.clear();
+    redis_config.password.clear();
+
+    RedisAdapter::test(&redis_config).await.unwrap();
+    let adapter = RedisAdapter::new();
+    adapter.connect(&redis_config).await.unwrap();
+    adapter.ping().await.unwrap();
+
+    adapter
+        .with_connection(async |connection| {
+            let _: () = ::redis::cmd("FLUSHDB")
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)?;
+            let _: () = ::redis::cmd("SET")
+                .arg("kv:string")
+                .arg("hello")
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)?;
+            let _: () = ::redis::cmd("RPUSH")
+                .arg("kv:list")
+                .arg("a")
+                .arg("b")
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)?;
+            let _: () = ::redis::cmd("SADD")
+                .arg("kv:set")
+                .arg("a")
+                .arg("b")
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)?;
+            let _: () = ::redis::cmd("ZADD")
+                .arg("kv:zset")
+                .arg(1)
+                .arg("a")
+                .arg(2)
+                .arg("b")
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)?;
+            let _: () = ::redis::cmd("HSET")
+                .arg("kv:hash")
+                .arg("field")
+                .arg("value")
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)?;
+            let _: String = ::redis::cmd("XADD")
+                .arg("kv:stream")
+                .arg("*")
+                .arg("field")
+                .arg("value")
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+    let databases = adapter.list_databases().await.unwrap();
+    assert_eq!(databases[0].index, 0);
+    assert!(databases[0].key_count.unwrap_or_default() >= 6);
+
+    let page = adapter
+        .scan_keys(
+            KvKeyScanRequest {
+                database: Some(0),
+                cursor: None,
+                pattern: Some("kv:*".into()),
+                limit: Some(50),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.database, 0);
+    assert!(page.keys.iter().any(|metadata| metadata.key == "kv:string"));
+
+    assert!(matches!(
+        read_value(&adapter, "kv:string").await.value,
+        KvValue::String(_)
+    ));
+    assert!(matches!(
+        read_value(&adapter, "kv:list").await.value,
+        KvValue::List(_)
+    ));
+    assert!(matches!(
+        read_value(&adapter, "kv:set").await.value,
+        KvValue::Set(_)
+    ));
+    assert!(matches!(
+        read_value(&adapter, "kv:zset").await.value,
+        KvValue::ZSet(_)
+    ));
+    assert!(matches!(
+        read_value(&adapter, "kv:hash").await.value,
+        KvValue::Hash(_)
+    ));
+    assert!(matches!(
+        read_value(&adapter, "kv:stream").await.value,
+        KvValue::Stream(_)
+    ));
+
+    let stream = adapter
+        .read_stream(
+            KvStreamReadRequest {
+                key: "kv:stream".into(),
+                database: Some(0),
+                start: None,
+                end: None,
+                limit: Some(10),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(stream.entries.len(), 1);
+
+    assert!(matches!(
+        adapter
+            .set_string(KvSetStringRequest {
+                key: "kv:string".into(),
+                value: "new".into(),
+                database: Some(0),
+                ttl_seconds: None,
+                safety: KvWriteSafety::RejectOverwrite,
+            })
+            .await,
+        Err(AppError::Validation(_))
+    ));
+    adapter
+        .set_string(KvSetStringRequest {
+            key: "kv:string".into(),
+            value: "new".into(),
+            database: Some(0),
+            ttl_seconds: Some(60),
+            safety: KvWriteSafety::AllowOverwrite,
+        })
+        .await
+        .unwrap();
+    let ttl = adapter
+        .update_ttl(KvTtlUpdateRequest {
+            key: "kv:string".into(),
+            database: Some(0),
+            update: KvTtlUpdate::Persist {
+                confirm_key: "kv:string".into(),
+            },
+        })
+        .await
+        .unwrap();
+    assert_eq!(ttl.ttl.unwrap().state, KvTtlState::Persistent);
+
+    let deleted = adapter
+        .delete_key(KvDeleteRequest {
+            key: "kv:string".into(),
+            database: Some(0),
+            confirm_key: "kv:string".into(),
+        })
+        .await
+        .unwrap();
+    assert!(deleted.changed);
+}
+
+async fn read_value(adapter: &RedisAdapter, key: &str) -> crate::db::KvValueEnvelope {
+    adapter
+        .read_value(
+            KvValueReadRequest {
+                key: key.into(),
+                database: Some(0),
+                limit: Some(10),
+                cursor: None,
+            },
+            None,
+        )
+        .await
+        .unwrap()
 }

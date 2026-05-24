@@ -14,6 +14,7 @@
 //! Docker daemon이 없는 환경에서는 testcontainers가 즉시 실패하고 helper
 //! 가 `None` 을 반환해 기존 통합 테스트의 silent-skip 시맨틱을 보존한다.
 
+use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -115,6 +116,8 @@ async fn sweep_dead_owners() {
         }
         let alive = tokio::process::Command::new("kill")
             .args(["-0", pid_str])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .status()
             .await
             .map(|s| s.success())
@@ -122,6 +125,8 @@ async fn sweep_dead_owners() {
         if !alive {
             let _ = tokio::process::Command::new("docker")
                 .args(["rm", "-f", id])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
                 .status()
                 .await;
         }
