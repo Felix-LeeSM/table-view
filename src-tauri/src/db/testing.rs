@@ -26,8 +26,8 @@ use tokio_util::sync::CancellationToken;
 use super::traits::{DbAdapter, DocumentAdapter, RdbAdapter, SearchAdapter};
 use super::types::{
     BoxFuture, BulkWriteOp, BulkWriteResult, CollectionValidatorRead, CreateMongoIndexRequest,
-    CreateMongoIndexResult, DocumentId, DocumentQueryResult, DocumentRow, FindBody, NamespaceInfo,
-    NamespaceLabel, RdbQueryResult,
+    CreateMongoIndexResult, DocumentCollectionInfo, DocumentId, DocumentQueryResult, DocumentRow,
+    FindBody, NamespaceInfo, NamespaceLabel, RdbQueryResult,
 };
 use super::KvAdapter;
 use crate::error::AppError;
@@ -691,7 +691,7 @@ pub(crate) struct StubDocumentAdapter {
     pub current_database_fn: Option<FnZero<Option<String>>>,
     pub switch_database_fn: Option<FnOne<str, ()>>,
 
-    pub list_collections_fn: Option<FnOne<str, Vec<TableInfo>>>,
+    pub list_collections_fn: Option<FnOne<str, Vec<DocumentCollectionInfo>>>,
     pub infer_collection_fields_fn: Option<FnTwo<str, str, Vec<ColumnInfo>>>,
 
     pub drop_collection_fn: Option<FnTwo<str, str, ()>>,
@@ -870,7 +870,7 @@ impl DocumentAdapter for StubDocumentAdapter {
         &'a self,
         db: &'a str,
         _: Option<&'a CancellationToken>,
-    ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+    ) -> BoxFuture<'a, Result<Vec<DocumentCollectionInfo>, AppError>> {
         let r = self
             .list_collections_fn
             .as_ref()

@@ -47,7 +47,11 @@ export function isMongoSystemDatabase(name: string): boolean {
 export interface CollectionInfo {
   name: string;
   database: string;
+  collection_type: "collection" | "view" | "timeseries";
   document_count: number | null;
+  read_only: boolean;
+  options: Record<string, unknown>;
+  id_index: Record<string, unknown> | null;
 }
 
 /**

@@ -44,6 +44,32 @@ impl From<SchemaInfo> for NamespaceInfo {
 /// paradigm-named.
 pub type RdbQueryResult = QueryResult;
 
+/// Document-store collection kind returned by the catalog path.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DocumentCollectionType {
+    Collection,
+    View,
+    Timeseries,
+}
+
+/// Document-native collection catalog metadata.
+///
+/// This intentionally does not reuse `TableInfo`: Mongo collections are not
+/// RDBMS tables, and view/validator/options metadata must stay visible at the
+/// document catalog boundary.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentCollectionInfo {
+    pub name: String,
+    pub database: String,
+    pub collection_type: DocumentCollectionType,
+    pub document_count: Option<i64>,
+    pub read_only: bool,
+    pub options: serde_json::Value,
+    pub id_index: Option<serde_json::Value>,
+}
+
 /// MongoDB document identifier (Phase 6).
 ///
 /// Sprint 65 promotes this from a `serde_json::Value`-backed placeholder to a
@@ -93,6 +119,29 @@ pub struct DocumentQueryResult {
     pub raw_documents: Vec<bson::Document>,
     pub total_count: i64,
     pub execution_time_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DocumentResultEnvelopeKind {
+    Document,
+}
+
+/// Typed envelope for document read results.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentResultEnvelope {
+    pub kind: DocumentResultEnvelopeKind,
+    pub document_result: DocumentQueryResult,
+}
+
+impl DocumentResultEnvelope {
+    pub fn document(document_result: DocumentQueryResult) -> Self {
+        Self {
+            kind: DocumentResultEnvelopeKind::Document,
+            document_result,
+        }
+    }
 }
 
 /// Sprint 308 — single-document projection for `find_one`.
@@ -151,6 +200,51 @@ mod wire_shape_tests {
         assert!(json.get("total_count").is_none());
         assert_eq!(json["executionTimeMs"], 7);
         assert!(json.get("execution_time_ms").is_none());
+    }
+
+    #[test]
+    fn document_collection_info_is_not_rdb_table_info_on_the_wire() {
+        let collection = DocumentCollectionInfo {
+            name: "users".into(),
+            database: "app".into(),
+            collection_type: DocumentCollectionType::Collection,
+            document_count: Some(12),
+            read_only: false,
+            options: serde_json::json!({ "validator": { "$jsonSchema": {} } }),
+            id_index: Some(serde_json::json!({ "name": "_id_" })),
+        };
+
+        let json = serde_json::to_value(collection).unwrap();
+        assert_eq!(json["collectionType"], "collection");
+        assert_eq!(json["documentCount"], 12);
+        assert_eq!(
+            json["options"]["validator"],
+            serde_json::json!({ "$jsonSchema": {} })
+        );
+        assert!(json.get("schema").is_none());
+        assert!(json.get("row_count").is_none());
+        assert!(json.get("rowCount").is_none());
+    }
+
+    #[test]
+    fn document_result_envelope_wraps_document_query_result() {
+        let result = DocumentQueryResult {
+            columns: vec![QueryColumn {
+                name: "_id".into(),
+                data_type: "ObjectId".into(),
+                category: ColumnCategory::Uuid,
+            }],
+            rows: vec![vec![serde_json::json!("507f")]],
+            raw_documents: vec![bson::doc! { "_id": "507f" }],
+            total_count: 1,
+            execution_time_ms: 7,
+        };
+
+        let json = serde_json::to_value(DocumentResultEnvelope::document(result)).unwrap();
+        assert_eq!(json["kind"], "document");
+        assert_eq!(json["documentResult"]["columns"][0]["dataType"], "ObjectId");
+        assert_eq!(json["documentResult"]["rawDocuments"][0]["_id"], "507f");
+        assert!(json.get("queryResult").is_none());
     }
 
     #[test]

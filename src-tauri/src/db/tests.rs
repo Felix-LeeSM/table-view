@@ -71,7 +71,7 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
             &'a self,
             _db: &'a str,
             _cancel: Option<&'a CancellationToken>,
-        ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+        ) -> BoxFuture<'a, Result<Vec<DocumentCollectionInfo>, AppError>> {
             Box::pin(async { Ok(Vec::new()) })
         }
         fn infer_collection_fields<'a>(
@@ -645,7 +645,7 @@ impl DocumentAdapter for FakeCancellableDocument {
         &'a self,
         _db: &'a str,
         cancel: Option<&'a CancellationToken>,
-    ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+    ) -> BoxFuture<'a, Result<Vec<DocumentCollectionInfo>, AppError>> {
         Box::pin(async move {
             let work = async {
                 tokio::time::sleep(Duration::from_secs(60)).await;

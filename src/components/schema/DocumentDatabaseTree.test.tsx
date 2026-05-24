@@ -13,8 +13,26 @@ import {
   useDocumentStore,
   __resetDocumentStoreForTests,
 } from "@/test-utils/documentStore";
+import type { CollectionInfo } from "@/types/document";
 import { useWorkspaceStore, type TableTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
+
+function collectionFixture(
+  name: string,
+  database: string,
+  documentCount: number,
+): CollectionInfo {
+  return {
+    name,
+    database,
+    collection_type: "collection",
+    document_count: documentCount,
+    read_only: false,
+    options: {},
+    id_index: null,
+  };
+}
+
 beforeEach(() => {
   setupTauriMock({
     listMongoDatabases: vi.fn(() =>
@@ -23,29 +41,11 @@ beforeEach(() => {
     listMongoCollections: vi.fn((_conn: string, db: string) =>
       Promise.resolve(
         db === "table_view_test"
-          ? [
-              {
-                name: "users",
-                database: "table_view_test",
-                document_count: 3,
-              },
-            ]
+          ? [collectionFixture("users", "table_view_test", 3)]
           : db === "dbX"
-            ? [
-                {
-                  name: "x_collection",
-                  database: "dbX",
-                  document_count: 7,
-                },
-              ]
+            ? [collectionFixture("x_collection", "dbX", 7)]
             : db === "dbY"
-              ? [
-                  {
-                    name: "y_collection",
-                    database: "dbY",
-                    document_count: 11,
-                  },
-                ]
+              ? [collectionFixture("y_collection", "dbY", 11)]
               : [],
       ),
     ),

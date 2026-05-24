@@ -24,8 +24,8 @@ use crate::models::{
 
 use super::types::{
     BoxFuture, BulkWriteOp, BulkWriteResult, CollectionValidatorRead, CreateMongoIndexRequest,
-    CreateMongoIndexResult, DocumentId, DocumentQueryResult, DocumentRow, FindBody, NamespaceInfo,
-    NamespaceLabel, RdbQueryResult,
+    CreateMongoIndexResult, DocumentCollectionInfo, DocumentId, DocumentQueryResult, DocumentRow,
+    FindBody, NamespaceInfo, NamespaceLabel, RdbQueryResult,
 };
 
 // ── Lifecycle trait ───────────────────────────────────────────────────────
@@ -734,7 +734,7 @@ pub trait DocumentAdapter: DbAdapter {
         &'a self,
         db: &'a str,
         cancel: Option<&'a CancellationToken>,
-    ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>>;
+    ) -> BoxFuture<'a, Result<Vec<DocumentCollectionInfo>, AppError>>;
 
     /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
     fn infer_collection_fields<'a>(
