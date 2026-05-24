@@ -4,12 +4,13 @@ seed: 4242
 database:
   pg: table_view_development
   mongo: table_view_development
-  # Sprint 281 — MySQL Slice A. PG / Mongo 와 같은 이름을 의도적으로
-  # 사용 (시각적 일관성). MySQL 의 database = schema 라 별도 분리할 이유 없음.
   mysql: table_view_development
-  # Sprint 452 — local SQLite file fixture. Resolved by fixture connection
-  # upsert to app-data fixtures/sqlite/table_view_development.sqlite.
   sqlite: table_view_development.sqlite
+  duckdb: table_view_development.duckdb
+  mariadb: table_view_development
+  mssql: table_view_development
+  oracle: table_view_development
+  redis: 0
 locale_mix:
   en: 0.70
   ko: 0.10
@@ -33,8 +34,6 @@ connections:
       name: Dev (Mongo)
       color: "#16a34a"
       environment: development
-  # Sprint 281 — MySQL Slice A. read path 만 동작 — query editor / DDL
-  # 은 Slice B~D 이전엔 Unsupported 메시지가 surface 된다.
   mysql:
     - id: fixture-dev-mysql
       name: Dev (MySQL)
@@ -44,4 +43,29 @@ connections:
     - id: fixture-dev-sqlite
       name: Dev (SQLite)
       color: "#0891b2"
+      environment: development
+  duckdb:
+    - id: fixture-dev-duckdb
+      name: Dev (DuckDB)
+      color: "#ea580c"
+      environment: development
+  mariadb:
+    - id: fixture-dev-mariadb
+      name: Dev (MariaDB)
+      color: "#c026d3"
+      environment: development
+  mssql:
+    - id: fixture-dev-mssql
+      name: Dev (MSSQL)
+      color: "#dc2626"
+      environment: development
+  oracle:
+    - id: fixture-dev-oracle
+      name: Dev (Oracle)
+      color: "#f97316"
+      environment: development
+  redis:
+    - id: fixture-dev-redis
+      name: Dev (Redis)
+      color: "#16a34a"
       environment: development

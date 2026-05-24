@@ -5,12 +5,13 @@ seed: 42
 database:
   pg: table_view_e2e
   mongo: table_view_e2e
-  # Sprint 281 — MySQL Slice A. e2e specs 는 현재 dormant (ADR 0019)
-  # 라 본 fixture connection 은 화면 노출만 검증하는 용도.
   mysql: table_view_e2e
-  # Sprint 452 — local SQLite file fixture. Resolved by fixture connection
-  # upsert to app-data fixtures/sqlite/table_view_e2e.sqlite.
   sqlite: table_view_e2e.sqlite
+  duckdb: table_view_e2e.duckdb
+  mariadb: table_view_e2e
+  mssql: table_view_e2e
+  oracle: table_view_e2e
+  redis: 1
 locale_mix:
   en: 0.95
   ko: 0.02
@@ -42,5 +43,30 @@ connections:
   sqlite:
     - id: fixture-e2e-sqlite
       name: E2E (SQLite)
+      color: "#dc2626"
+      environment: testing
+  duckdb:
+    - id: fixture-e2e-duckdb
+      name: E2E (DuckDB)
+      color: "#dc2626"
+      environment: testing
+  mariadb:
+    - id: fixture-e2e-mariadb
+      name: E2E (MariaDB)
+      color: "#dc2626"
+      environment: testing
+  mssql:
+    - id: fixture-e2e-mssql
+      name: E2E (MSSQL)
+      color: "#dc2626"
+      environment: testing
+  oracle:
+    - id: fixture-e2e-oracle
+      name: E2E (Oracle)
+      color: "#dc2626"
+      environment: testing
+  redis:
+    - id: fixture-e2e-redis
+      name: E2E (Redis)
       color: "#dc2626"
       environment: testing

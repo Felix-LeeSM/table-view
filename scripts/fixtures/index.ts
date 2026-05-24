@@ -24,7 +24,55 @@ import {
   mysqlIsPopulated,
   mysqlRootEnvConn,
 } from "./mysql.js";
+import {
+  applySqlite,
+  dropSqliteDatabase,
+  ensureSqliteDatabase,
+  sqliteEnvPath,
+  sqliteIsPopulated,
+} from "./sqlite.js";
+import {
+  applyDuckdb,
+  dropDuckdbDatabase,
+  duckdbEnvPath,
+  duckdbIsPopulated,
+  ensureDuckdbDatabase,
+} from "./duckdb.js";
+import {
+  applyMariadb,
+  dropMariadbDatabase,
+  ensureMariadbDatabaseAndGrant,
+  mariadbEnvConn,
+  mariadbIsPopulated,
+  mariadbRootEnvConn,
+} from "./mariadb.js";
+import {
+  applyMssql,
+  dropMssqlDatabase,
+  ensureMssqlDatabase,
+  mssqlEnvConn,
+  mssqlIsPopulated,
+} from "./mssql.js";
+import {
+  applyOracle,
+  dropOracleTables,
+  ensureOracleSchema,
+  oracleEnvConn,
+  oracleIsPopulated,
+} from "./oracle.js";
+import {
+  applyRedis,
+  dropRedisDatabase,
+  ensureRedisDatabase,
+  redisEnvConn,
+  redisIsPopulated,
+} from "./redis.js";
 import { clearConnections, upsertConnections } from "./connections.js";
+import {
+  shouldRunTarget,
+  targetMode,
+  type Target,
+} from "./target-selection.js";
 
 interface ParsedArgs {
   subcommand: string;
@@ -54,42 +102,29 @@ function parse(argv: string[]): ParsedArgs {
   return { subcommand: subcommand ?? "", positional, options };
 }
 
-function targetMode(
-  options: Record<string, string | boolean>,
-): "all" | "pg" | "mongo" | "mysql" {
-  const t = options.target;
-  if (t === "pg" || t === "postgres" || t === "postgresql") return "pg";
-  if (t === "mongo" || t === "mongodb") return "mongo";
-  if (t === "mysql" || t === "mariadb") return "mysql";
-  return "all";
-}
-
 function quiet(options: Record<string, string | boolean>): boolean {
   return options.quiet === true || options.quiet === "true";
 }
 
+type Counts = Record<string, number>;
+
 async function cmdSeed(
   profile: string,
-  target: "all" | "pg" | "mongo" | "mysql",
+  target: Target,
   isQuiet: boolean,
 ): Promise<void> {
   const spec = loadSpec(profile);
   console.log(`db:seed ${profile} (target=${target})`);
 
-  let pgRows = 0;
-  let mongoDocs = 0;
-  let mysqlRows = 0;
+  const counts: Counts = {};
   const t0 = Date.now();
-  const wantPg = target === "all" || target === "pg";
-  const wantMongo = target === "all" || target === "mongo";
-  const wantMysql = target === "all" || target === "mysql";
 
-  if (wantPg) {
+  if (shouldRunTarget(target, "pg")) {
     const conn = pgEnvConn();
     await ensurePgDatabase(conn, spec.profileSpec.database.pg);
     if (await pgIsPopulated(conn, spec.profileSpec.database.pg, spec)) {
       console.log(
-        `  postgres → ${spec.profileSpec.database.pg}: already seeded — use 'db:reset' to refill`,
+        `  postgres → ${spec.profileSpec.database.pg}: already seeded`,
       );
     } else {
       const rows = generateAll(spec);
@@ -101,17 +136,17 @@ async function cmdSeed(
         rows,
         (e, n, ms) => {
           if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
-          pgRows += n;
+          counts.pg = (counts.pg ?? 0) + n;
         },
       );
     }
   }
 
-  if (wantMongo) {
+  if (shouldRunTarget(target, "mongo")) {
     const conn = mongoEnvConn();
     if (await mongoIsPopulated(conn, spec.profileSpec.database.mongo, spec)) {
       console.log(
-        `  mongodb → ${spec.profileSpec.database.mongo}: already seeded — use 'db:reset' to refill`,
+        `  mongodb → ${spec.profileSpec.database.mongo}: already seeded`,
       );
     } else {
       const rows = generateAll(spec);
@@ -123,50 +158,167 @@ async function cmdSeed(
         rows,
         (e, n, ms) => {
           if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "docs")}`);
-          mongoDocs += n;
+          counts.mongo = (counts.mongo ?? 0) + n;
         },
       );
     }
   }
 
-  if (wantMysql) {
+  if (shouldRunTarget(target, "mysql")) {
     const conn = mysqlEnvConn();
     const mysqlDb =
       spec.profileSpec.database.mysql ?? spec.profileSpec.database.pg;
-    // root 권한으로 DB ensure + testuser GRANT (1044 Access denied 방지).
     await ensureMysqlDatabaseAndGrant(mysqlRootEnvConn(), mysqlDb, conn.user);
     if (await mysqlIsPopulated(conn, mysqlDb, spec)) {
-      console.log(
-        `  mysql → ${mysqlDb}: already seeded — use 'db:reset' to refill`,
-      );
+      console.log(`  mysql → ${mysqlDb}: already seeded`);
     } else {
       const rows = generateAll(spec);
       console.log(`  mysql → ${mysqlDb}`);
       await applyMysql(conn, mysqlDb, spec, rows, (e, n, ms) => {
         if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
-        mysqlRows += n;
+        counts.mysql = (counts.mysql ?? 0) + n;
       });
     }
   }
+
+  if (shouldRunTarget(target, "sqlite")) {
+    const path = sqliteEnvPath();
+    const file = spec.profileSpec.database.sqlite;
+    if (!file) {
+      if (target !== "all")
+        throw new Error("profile has no sqlite database configured");
+    } else {
+      await ensureSqliteDatabase(path, file);
+      if (await sqliteIsPopulated(path, file, spec)) {
+        console.log(`  sqlite → ${file}: already seeded`);
+      } else {
+        const rows = generateAll(spec);
+        console.log(`  sqlite → ${file}`);
+        await applySqlite(path, file, spec, rows, (e, n, ms) => {
+          if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
+          counts.sqlite = (counts.sqlite ?? 0) + n;
+        });
+      }
+    }
+  }
+
+  if (shouldRunTarget(target, "duckdb")) {
+    const path = duckdbEnvPath();
+    const file = spec.profileSpec.database.duckdb;
+    if (!file) {
+      if (target !== "all")
+        throw new Error("profile has no duckdb database configured");
+    } else {
+      await ensureDuckdbDatabase(path, file);
+      if (await duckdbIsPopulated(path, file, spec)) {
+        console.log(`  duckdb → ${file}: already seeded`);
+      } else {
+        const rows = generateAll(spec);
+        console.log(`  duckdb → ${file}`);
+        await applyDuckdb(path, file, spec, rows, (e, n, ms) => {
+          if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
+          counts.duckdb = (counts.duckdb ?? 0) + n;
+        });
+      }
+    }
+  }
+
+  if (shouldRunTarget(target, "mariadb")) {
+    const conn = mariadbEnvConn();
+    const db = spec.profileSpec.database.mariadb;
+    if (!db) {
+      throw new Error("profile has no mariadb database configured");
+    } else {
+      await ensureMariadbDatabaseAndGrant(mariadbRootEnvConn(), db, conn.user);
+      if (await mariadbIsPopulated(conn, db, spec)) {
+        console.log(`  mariadb → ${db}: already seeded`);
+      } else {
+        const rows = generateAll(spec);
+        console.log(`  mariadb → ${db}`);
+        await applyMariadb(conn, db, spec, rows, (e, n, ms) => {
+          if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
+          counts.mariadb = (counts.mariadb ?? 0) + n;
+        });
+      }
+    }
+  }
+
+  if (shouldRunTarget(target, "mssql")) {
+    const conn = mssqlEnvConn();
+    const db = spec.profileSpec.database.mssql;
+    if (!db) {
+      throw new Error("profile has no mssql database configured");
+    } else {
+      await ensureMssqlDatabase(conn, db);
+      if (await mssqlIsPopulated(conn, db, spec)) {
+        console.log(`  mssql → ${db}: already seeded`);
+      } else {
+        const rows = generateAll(spec);
+        console.log(`  mssql → ${db}`);
+        await applyMssql(conn, db, spec, rows, (e, n, ms) => {
+          if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
+          counts.mssql = (counts.mssql ?? 0) + n;
+        });
+      }
+    }
+  }
+
+  if (shouldRunTarget(target, "oracle")) {
+    const conn = oracleEnvConn();
+    const db = spec.profileSpec.database.oracle;
+    if (!db) {
+      throw new Error("profile has no oracle database configured");
+    } else {
+      await ensureOracleSchema(conn, db);
+      if (await oracleIsPopulated(conn, db, spec)) {
+        console.log(`  oracle → ${db}: already seeded`);
+      } else {
+        const rows = generateAll(spec);
+        console.log(`  oracle → ${db}`);
+        await applyOracle(conn, db, spec, rows, (e, n, ms) => {
+          if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
+          counts.oracle = (counts.oracle ?? 0) + n;
+        });
+      }
+    }
+  }
+
+  if (shouldRunTarget(target, "redis")) {
+    const dbNum = spec.profileSpec.database.redis ?? 0;
+    const conn = redisEnvConn(dbNum);
+    await ensureRedisDatabase(conn);
+    if (await redisIsPopulated(conn, spec)) {
+      console.log(`  redis → db${dbNum}: already seeded`);
+    } else {
+      const rows = generateAll(spec);
+      console.log(`  redis → db${dbNum}`);
+      await applyRedis(conn, spec, rows, (e, n, ms) => {
+        if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "keys")}`);
+        counts.redis = (counts.redis ?? 0) + n;
+      });
+    }
+  }
+
+  const summary = Object.entries(counts)
+    .map(([k, v]) => `${v.toLocaleString()} ${k}`)
+    .join(" + ");
   console.log(
-    `done — ${pgRows.toLocaleString()} pg + ${mongoDocs.toLocaleString()} mongo + ${mysqlRows.toLocaleString()} mysql in ${((Date.now() - t0) / 1000).toFixed(1)}s`,
+    `done — ${summary || "nothing to seed"} in ${((Date.now() - t0) / 1000).toFixed(1)}s`,
   );
 }
 
 async function cmdReset(
   profile: string,
-  target: "all" | "pg" | "mongo" | "mysql",
+  target: Target,
   isQuiet: boolean,
 ): Promise<void> {
   const spec = loadSpec(profile);
   console.log(`db:reset ${profile} (target=${target})`);
 
-  let pgRows = 0;
-  let mongoDocs = 0;
-  let mysqlRows = 0;
+  const counts: Counts = {};
   const t0 = Date.now();
 
-  if (target === "all" || target === "pg") {
+  if (shouldRunTarget(target, "pg")) {
     const conn = pgEnvConn();
     await dropPgDatabase(conn, spec.profileSpec.database.pg);
     await ensurePgDatabase(conn, spec.profileSpec.database.pg);
@@ -179,12 +331,12 @@ async function cmdReset(
       rows,
       (e, n, ms) => {
         if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
-        pgRows += n;
+        counts.pg = (counts.pg ?? 0) + n;
       },
     );
   }
 
-  if (target === "all" || target === "mongo") {
+  if (shouldRunTarget(target, "mongo")) {
     const conn = mongoEnvConn();
     await dropMongoDatabase(conn, spec.profileSpec.database.mongo);
     const rows = generateAll(spec);
@@ -196,36 +348,132 @@ async function cmdReset(
       rows,
       (e, n, ms) => {
         if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "docs")}`);
-        mongoDocs += n;
+        counts.mongo = (counts.mongo ?? 0) + n;
       },
     );
   }
 
-  if (target === "all" || target === "mysql") {
+  if (shouldRunTarget(target, "mysql")) {
     const conn = mysqlEnvConn();
     const mysqlDb =
       spec.profileSpec.database.mysql ?? spec.profileSpec.database.pg;
-    // drop 은 root 권한으로 (testuser 가 DROP DATABASE 권한 없을 수 있음).
     await dropMysqlDatabase(mysqlRootEnvConn(), mysqlDb);
     await ensureMysqlDatabaseAndGrant(mysqlRootEnvConn(), mysqlDb, conn.user);
     const rows = generateAll(spec);
     console.log(`  mysql → ${mysqlDb}`);
     await applyMysql(conn, mysqlDb, spec, rows, (e, n, ms) => {
       if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
-      mysqlRows += n;
+      counts.mysql = (counts.mysql ?? 0) + n;
     });
   }
+
+  if (shouldRunTarget(target, "sqlite")) {
+    const path = sqliteEnvPath();
+    const file = spec.profileSpec.database.sqlite;
+    if (!file) {
+      if (target !== "all")
+        throw new Error("profile has no sqlite database configured");
+    } else {
+      await dropSqliteDatabase(path, file);
+      const rows = generateAll(spec);
+      console.log(`  sqlite → ${file}`);
+      await applySqlite(path, file, spec, rows, (e, n, ms) => {
+        if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
+        counts.sqlite = (counts.sqlite ?? 0) + n;
+      });
+    }
+  }
+
+  if (shouldRunTarget(target, "duckdb")) {
+    const path = duckdbEnvPath();
+    const file = spec.profileSpec.database.duckdb;
+    if (!file) {
+      if (target !== "all")
+        throw new Error("profile has no duckdb database configured");
+    } else {
+      await dropDuckdbDatabase(path, file);
+      const rows = generateAll(spec);
+      console.log(`  duckdb → ${file}`);
+      await applyDuckdb(path, file, spec, rows, (e, n, ms) => {
+        if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
+        counts.duckdb = (counts.duckdb ?? 0) + n;
+      });
+    }
+  }
+
+  if (shouldRunTarget(target, "mariadb")) {
+    const conn = mariadbEnvConn();
+    const db = spec.profileSpec.database.mariadb;
+    if (!db) {
+      throw new Error("profile has no mariadb database configured");
+    } else {
+      await dropMariadbDatabase(mariadbRootEnvConn(), db);
+      await ensureMariadbDatabaseAndGrant(mariadbRootEnvConn(), db, conn.user);
+      const rows = generateAll(spec);
+      console.log(`  mariadb → ${db}`);
+      await applyMariadb(conn, db, spec, rows, (e, n, ms) => {
+        if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
+        counts.mariadb = (counts.mariadb ?? 0) + n;
+      });
+    }
+  }
+
+  if (shouldRunTarget(target, "mssql")) {
+    const conn = mssqlEnvConn();
+    const db = spec.profileSpec.database.mssql;
+    if (!db) {
+      throw new Error("profile has no mssql database configured");
+    } else {
+      await dropMssqlDatabase(conn, db);
+      await ensureMssqlDatabase(conn, db);
+      const rows = generateAll(spec);
+      console.log(`  mssql → ${db}`);
+      await applyMssql(conn, db, spec, rows, (e, n, ms) => {
+        if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
+        counts.mssql = (counts.mssql ?? 0) + n;
+      });
+    }
+  }
+
+  if (shouldRunTarget(target, "oracle")) {
+    const conn = oracleEnvConn();
+    const db = spec.profileSpec.database.oracle;
+    if (!db) {
+      throw new Error("profile has no oracle database configured");
+    } else {
+      await dropOracleTables(conn, db, spec);
+      const rows = generateAll(spec);
+      console.log(`  oracle → ${db}`);
+      await applyOracle(conn, db, spec, rows, (e, n, ms) => {
+        if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
+        counts.oracle = (counts.oracle ?? 0) + n;
+      });
+    }
+  }
+
+  if (shouldRunTarget(target, "redis")) {
+    const dbNum = spec.profileSpec.database.redis ?? 0;
+    const conn = redisEnvConn(dbNum);
+    await dropRedisDatabase(conn);
+    const rows = generateAll(spec);
+    console.log(`  redis → db${dbNum}`);
+    await applyRedis(conn, spec, rows, (e, n, ms) => {
+      if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "keys")}`);
+      counts.redis = (counts.redis ?? 0) + n;
+    });
+  }
+
+  const summary = Object.entries(counts)
+    .map(([k, v]) => `${v.toLocaleString()} ${k}`)
+    .join(" + ");
   console.log(
-    `done — ${pgRows.toLocaleString()} pg + ${mongoDocs.toLocaleString()} mongo + ${mysqlRows.toLocaleString()} mysql in ${((Date.now() - t0) / 1000).toFixed(1)}s`,
+    `done — ${summary || "nothing to reset"} in ${((Date.now() - t0) / 1000).toFixed(1)}s`,
   );
 }
 
 async function cmdConnections(action: string, profile: string): Promise<void> {
   if (action === "upsert") {
     const spec = loadSpec(profile);
-    // Sprint 281 — CLI 는 항상 ensureMysql=true 로 호출. 사용자가 다음에
-    // mysql connection 을 클릭했을 때 1044 (Access denied) 를 만나지 않도록
-    // root 권한으로 GRANT 를 미리 부여한다.
     const r = await upsertConnections(spec, { ensureMysql: true });
     console.log(
       `db:connections upsert ${profile} — added=${r.added}, updated=${r.updated}`,
@@ -236,9 +484,6 @@ async function cmdConnections(action: string, profile: string): Promise<void> {
       `db:connections clear — removed=${r.removed} fixture-* connection(s)`,
     );
   } else if (action === "") {
-    // 인자 없이 호출 → 친절한 usage 안내 (2026-05-13 Sprint 280).
-    // pnpm 은 `--` 없이 인자를 못 넘기는 경우가 잦아 `pnpm db:connections`
-    // 만 친 사용자가 cryptic error 만 보던 회귀를 차단.
     console.error(
       [
         "Usage:",
@@ -263,7 +508,7 @@ async function cmdConnections(action: string, profile: string): Promise<void> {
   }
 }
 
-function cmdGenerate(profile: string, target: "all" | "pg" | "mongo"): void {
+function cmdGenerate(profile: string, target: Target): void {
   const spec = loadSpec(profile);
   const rows = generateAll(spec);
   console.log(`# db:generate ${profile} (target=${target})`);
@@ -304,11 +549,13 @@ function formatEntity(
 function usage(): string {
   return [
     "Usage:",
-    "  pnpm db:seed <profile> [--target pg|mongo|all] [--quiet]",
-    "  pnpm db:reset <profile> [--target pg|mongo|all] [--quiet]",
+    "  pnpm db:seed <profile> [--target <db>] [--quiet]",
+    "  pnpm db:reset <profile> [--target <db>] [--quiet]",
     "  pnpm db:connections upsert <profile>",
     "  pnpm db:connections clear",
-    "  pnpm db:generate <profile> [--target pg|mongo|all]",
+    "  pnpm db:generate <profile> [--target <db>]",
+    "",
+    "Targets: all (pg + mongo + mysql + sqlite + duckdb) | pg | mongo | mysql | sqlite | duckdb | mariadb | mssql | oracle | redis",
   ].join("\n");
 }
 
@@ -316,8 +563,6 @@ async function main(): Promise<void> {
   const { subcommand, positional, options } = parse(process.argv.slice(2));
   const target = targetMode(options);
   const isQuiet = quiet(options);
-
-  void target;
 
   switch (subcommand) {
     case "seed": {

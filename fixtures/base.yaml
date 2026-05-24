@@ -4,21 +4,19 @@
 # Profiles override `seed`, `locale_mix`, and per-entity row counts.
 # Defaults: nullable=false, unique=false, primary=false. PK auto-implies
 # nullable=false + unique=true and is never edge-injected.
-#
-# Sprint 288 — MySQL target placement. MySQL 은 database = schema 라
-# `pg.schema` 의 분기 개념이 없어 `mysql.table` 만 명시. PG 와 동일 row
-# data 를 dialect-correct DDL 로 적재한다.
-#
-# Sprint 452 — SQLite fixture strategy. SQLite is a user-managed local file,
-# not the app's internal state.db. Profile connections point at an app-data
-# fixture sqlite file; the canonical SQLite seed SQL lives under e2e fixtures.
 
 entities:
   customers:
-    targets: [pg, mongo, mysql, sqlite]
+    targets: [pg, mongo, mysql, sqlite, duckdb, mariadb, mssql, oracle, redis]
     pg: { schema: core, table: customers }
     mongo: { collection: core_customers }
     mysql: { table: customers }
+    sqlite: { table: customers }
+    duckdb: { schema: core, table: customers }
+    mariadb: { table: customers }
+    mssql: { schema: dbo, table: customers }
+    oracle: { table: customers }
+    redis: { key_prefix: "customer" }
     columns:
       id: { type: uuid, primary: true }
       email: { type: email, unique: true }
@@ -27,10 +25,16 @@ entities:
       created_at: { type: timestamp, range: [-365d, 0d] }
 
   products:
-    targets: [pg, mongo, mysql, sqlite]
+    targets: [pg, mongo, mysql, sqlite, duckdb, mariadb, mssql, oracle, redis]
     pg: { schema: catalog, table: products }
     mongo: { collection: catalog_products }
     mysql: { table: products }
+    sqlite: { table: products }
+    duckdb: { schema: catalog, table: products }
+    mariadb: { table: products }
+    mssql: { schema: dbo, table: products }
+    oracle: { table: products }
+    redis: { key_prefix: "product" }
     columns:
       id: { type: uuid, primary: true }
       sku: { type: sku, unique: true }
@@ -39,13 +43,19 @@ entities:
       tags: { type: array_of, item: string, count: [0, 4] }
 
   orders:
-    targets: [pg, mongo, mysql, sqlite]
+    targets: [pg, mongo, mysql, sqlite, duckdb, mariadb, mssql, oracle, redis]
     pg: { schema: sales, table: orders }
     mongo:
       collection: sales_orders
       embed:
         items: { from: order_items, kind: many }
     mysql: { table: orders }
+    sqlite: { table: orders }
+    duckdb: { schema: sales, table: orders }
+    mariadb: { table: orders }
+    mssql: { schema: dbo, table: orders }
+    oracle: { table: orders }
+    redis: { key_prefix: "order" }
     columns:
       id: { type: uuid, primary: true }
       customer_id: { type: ref, to: customers.id }
@@ -55,9 +65,16 @@ entities:
       total: { type: decimal, range: [0.99, 9999.99] }
 
   order_items:
-    targets: [pg, mysql, sqlite] # mongo: embedded inside orders.items
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    # mongo: embedded inside orders.items
+    # redis: embedded inside order hash
     pg: { schema: sales, table: order_items }
     mysql: { table: order_items }
+    sqlite: { table: order_items }
+    duckdb: { schema: sales, table: order_items }
+    mariadb: { table: order_items }
+    mssql: { schema: dbo, table: order_items }
+    oracle: { table: order_items }
     columns:
       id: { type: uuid, primary: true }
       order_id: { type: ref, to: orders.id }
@@ -66,10 +83,16 @@ entities:
       unit_price: { type: decimal, range: [0.99, 999.99] }
 
   support_tickets:
-    targets: [pg, mongo, mysql, sqlite]
+    targets: [pg, mongo, mysql, sqlite, duckdb, mariadb, mssql, oracle, redis]
     pg: { schema: support, table: tickets }
     mongo: { collection: support_tickets }
     mysql: { table: tickets }
+    sqlite: { table: tickets }
+    duckdb: { schema: support, table: tickets }
+    mariadb: { table: tickets }
+    mssql: { schema: dbo, table: tickets }
+    oracle: { table: tickets }
+    redis: { key_prefix: "ticket" }
     columns:
       id: { type: uuid, primary: true }
       customer_id: { type: ref, to: customers.id, nullable: true }

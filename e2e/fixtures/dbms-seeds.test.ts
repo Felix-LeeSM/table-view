@@ -7,6 +7,7 @@ const DBMS_SEED_FILES = [
   ["mysql", "seed.mysql.sql"],
   ["mariadb", "seed.mariadb.sql"],
   ["sqlite", "seed.sqlite.sql"],
+  ["duckdb", "seed.duckdb.sql"],
   ["mssql", "seed.mssql.sql"],
   ["oracle", "seed.oracle.sql"],
 ] as const;

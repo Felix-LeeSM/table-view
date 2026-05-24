@@ -328,14 +328,39 @@ function validateRowConstraints(
   }
 }
 
+type FixtureTarget =
+  | "pg"
+  | "mongo"
+  | "mysql"
+  | "sqlite"
+  | "duckdb"
+  | "mariadb"
+  | "mssql"
+  | "oracle"
+  | "redis";
+
 export function flattenConnections(profile: ProfileSpec): Array<{
   spec: FixtureConnection;
-  target: "pg" | "mongo";
+  target: FixtureTarget;
 }> {
-  const out: Array<{ spec: FixtureConnection; target: "pg" | "mongo" }> = [];
+  const out: Array<{ spec: FixtureConnection; target: FixtureTarget }> = [];
   for (const c of profile.connections?.pg ?? [])
     out.push({ spec: c, target: "pg" });
   for (const c of profile.connections?.mongo ?? [])
     out.push({ spec: c, target: "mongo" });
+  for (const c of profile.connections?.mysql ?? [])
+    out.push({ spec: c, target: "mysql" });
+  for (const c of profile.connections?.sqlite ?? [])
+    out.push({ spec: c, target: "sqlite" });
+  for (const c of profile.connections?.duckdb ?? [])
+    out.push({ spec: c, target: "duckdb" });
+  for (const c of profile.connections?.mariadb ?? [])
+    out.push({ spec: c, target: "mariadb" });
+  for (const c of profile.connections?.mssql ?? [])
+    out.push({ spec: c, target: "mssql" });
+  for (const c of profile.connections?.oracle ?? [])
+    out.push({ spec: c, target: "oracle" });
+  for (const c of profile.connections?.redis ?? [])
+    out.push({ spec: c, target: "redis" });
   return out;
 }

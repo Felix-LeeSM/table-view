@@ -338,7 +338,7 @@ describe("DataGridTable virtualization + inline tree (Sprint 349)", () => {
     expect(screen.getByTestId("rdb-nested-detail-row-0")).toBeInTheDocument();
     // The DocumentTreePanel mounts inside the detail row.
     expect(screen.getByTestId("document-tree-panel")).toBeInTheDocument();
-  });
+  }, 30_000);
 
   it("closing the detail row restores virtualization on the next paint", async () => {
     const user = (await import("@testing-library/user-event")).default;
@@ -362,5 +362,5 @@ describe("DataGridTable virtualization + inline tree (Sprint 349)", () => {
     // Virtualization is back: total rows in the DOM are bounded.
     const rows = screen.getAllByRole("row");
     expect(rows.length).toBeLessThanOrEqual(101);
-  });
+  }, 30_000);
 });

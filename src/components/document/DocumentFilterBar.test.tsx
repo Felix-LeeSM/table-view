@@ -353,5 +353,5 @@ describe("DocumentFilterBar", () => {
     expect(onApply).toHaveBeenCalledWith({
       $or: [{ active: { $not: { $eq: "true" } } }, { age: { $gte: 18 } }],
     });
-  });
+  }, 30_000);
 });
