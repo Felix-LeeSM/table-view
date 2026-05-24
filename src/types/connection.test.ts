@@ -113,6 +113,22 @@ describe("parseConnectionUrl paradigm tagging (Sprint 65)", () => {
     expect(result).not.toBeNull();
     expect(result!.dbType).toBe("redis");
     expect(result!.paradigm).toBe("kv");
+    expect(result!.database).toBe("0");
+  });
+
+  it("parses rediss URLs as Redis and preserves explicit database index", () => {
+    const result = parseConnectionUrl(
+      "rediss://user:pw@cache.example.com:6380/4",
+    );
+    expect(result).toEqual({
+      dbType: "redis",
+      host: "cache.example.com",
+      port: 6380,
+      user: "user",
+      password: "pw",
+      database: "4",
+      paradigm: "kv",
+    });
   });
 });
 

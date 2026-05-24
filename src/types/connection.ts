@@ -293,6 +293,7 @@ export function parseConnectionUrl(
       mongodb: "mongodb",
       "mongodb+srv": "mongodb",
       redis: "redis",
+      rediss: "redis",
     };
     const dbType = dbTypeMap[parsed.protocol.replace(":", "")];
     if (!dbType) return null;
@@ -301,13 +302,14 @@ export function parseConnectionUrl(
     // handler treat it as "no recognised paste" and leave the form
     // unchanged (silent best-effort, no alert).
     if (!parsed.hostname) return null;
+    const database = parsed.pathname.replace(/^\//, "");
     return {
       dbType,
       host: parsed.hostname,
       port: parsed.port ? parseInt(parsed.port, 10) : DATABASE_DEFAULTS[dbType],
       user: decodeURIComponent(parsed.username),
       password: decodeURIComponent(parsed.password),
-      database: parsed.pathname.replace(/^\//, ""),
+      database: dbType === "redis" && database === "" ? "0" : database,
       paradigm: paradigmOf(dbType),
     };
   } catch {

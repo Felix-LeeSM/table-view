@@ -1269,7 +1269,7 @@ impl DocumentAdapter for StubDocumentAdapter {
     }
 }
 
-// ── StubSearchAdapter / StubKvAdapter (marker traits) ────────────────────
+// ── StubSearchAdapter / StubKvAdapter ────────────────────────────────────
 
 pub(crate) struct StubSearchAdapter {
     pub kind_value: DatabaseType,

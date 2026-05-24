@@ -105,7 +105,7 @@ beforeEach(() => {
 });
 
 // ===========================================================================
-// AC-178-01: Pasting any of the 8 recognised URLs into the form-mode host
+// AC-178-01: Pasting any recognised URL into the form-mode host
 // field populates dbType / host / port / user / database / password and
 // surfaces a non-modal "detected" affordance.
 //
@@ -224,6 +224,30 @@ const PASTE_CASES: PasteCase[] = [
       user: "srvu",
       database: "mydb",
       password: "srvp",
+    },
+  },
+  {
+    scheme: "redis",
+    url: "redis://rediu:redip@redis.local:6379",
+    expected: {
+      dbType: "redis",
+      host: "redis.local",
+      port: 6379,
+      user: "rediu",
+      database: "0",
+      password: "redip",
+    },
+  },
+  {
+    scheme: "rediss",
+    url: "rediss://rediu:redip@secure.redis.local:6380/5",
+    expected: {
+      dbType: "redis",
+      host: "secure.redis.local",
+      port: 6380,
+      user: "rediu",
+      database: "5",
+      password: "redip",
     },
   },
 ];

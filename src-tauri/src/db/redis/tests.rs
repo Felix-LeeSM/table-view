@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use super::helpers::{
     bounded_limit, connection_url, ensure_not_cancelled, redis_connection_error,
     redis_database_error, require_confirm_key, validate_key, DEFAULT_SCAN_LIMIT, MAX_SCAN_LIMIT,
@@ -467,6 +469,108 @@ async fn live_redis_adapter_covers_scan_read_write_ttl_and_delete() {
         .await
         .unwrap();
     assert!(deleted.changed);
+}
+
+#[tokio::test]
+async fn live_redis_scan_keeps_every_key_returned_by_consumed_cursor() {
+    let container = match RedisImage::default().start().await {
+        Ok(container) => container,
+        Err(err) => {
+            println!("SKIP: Redis testcontainer start failed ({err})");
+            return;
+        }
+    };
+    let port = match container.get_host_port_ipv4(REDIS_PORT).await {
+        Ok(port) => port,
+        Err(err) => {
+            println!("SKIP: Redis testcontainer port lookup failed ({err})");
+            return;
+        }
+    };
+
+    let mut redis_config = config("0");
+    redis_config.host = "127.0.0.1".into();
+    redis_config.port = port;
+    redis_config.user.clear();
+    redis_config.password.clear();
+
+    let adapter = RedisAdapter::new();
+    adapter.connect(&redis_config).await.unwrap();
+
+    let expected_keys: Vec<String> = (0..128)
+        .map(|i| format!("kv:scan-overreturn:{i:03}"))
+        .collect();
+    adapter
+        .with_connection(async |connection| {
+            let _: () = ::redis::cmd("FLUSHDB")
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)?;
+            for key in &expected_keys {
+                let _: () = ::redis::cmd("SET")
+                    .arg(key)
+                    .arg("v")
+                    .query_async(connection)
+                    .await
+                    .map_err(redis_database_error)?;
+            }
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+    let mut raw_cursor = "0".to_string();
+    let mut redis_overreturned_for_count_hint = false;
+    loop {
+        let (next_cursor, keys): (String, Vec<String>) = adapter
+            .with_connection(async |connection| {
+                ::redis::cmd("SCAN")
+                    .arg(&raw_cursor)
+                    .arg("MATCH")
+                    .arg("kv:scan-overreturn:*")
+                    .arg("COUNT")
+                    .arg(1)
+                    .query_async(connection)
+                    .await
+                    .map_err(redis_database_error)
+            })
+            .await
+            .unwrap();
+        redis_overreturned_for_count_hint |= keys.len() > 1;
+        if next_cursor == "0" {
+            break;
+        }
+        raw_cursor = next_cursor;
+    }
+    if !redis_overreturned_for_count_hint {
+        println!("SKIP: Redis did not over-return for SCAN COUNT 1 in this run");
+        return;
+    }
+
+    let mut cursor = None;
+    let mut seen = BTreeSet::new();
+    loop {
+        let page = adapter
+            .scan_keys(
+                KvKeyScanRequest {
+                    database: Some(0),
+                    cursor,
+                    pattern: Some("kv:scan-overreturn:*".into()),
+                    limit: Some(1),
+                },
+                None,
+            )
+            .await
+            .unwrap();
+        seen.extend(page.keys.into_iter().map(|metadata| metadata.key));
+        if page.done {
+            break;
+        }
+        cursor = Some(page.next_cursor);
+    }
+
+    let expected = expected_keys.into_iter().collect::<BTreeSet<_>>();
+    assert_eq!(seen, expected);
 }
 
 async fn read_value(adapter: &RedisAdapter, key: &str) -> crate::db::KvValueEnvelope {

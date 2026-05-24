@@ -98,7 +98,7 @@ mod tests {
     use super::*;
     use crate::db::{MongoAdapter, PostgresAdapter};
 
-    // SearchAdapter / KvAdapter 는 marker trait 라 별도 stub 으로 만족시킨다.
+    // Search/KV variants use small stubs here; contract behavior is tested elsewhere.
     struct StubSearchAdapter;
     impl DbAdapter for StubSearchAdapter {
         fn kind(&self) -> DatabaseType {

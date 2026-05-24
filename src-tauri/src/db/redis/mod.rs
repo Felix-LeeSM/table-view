@@ -192,7 +192,7 @@ impl KvAdapter for RedisAdapter {
             let limit = bounded_limit(request.limit);
             let cursor = request.cursor.unwrap_or_else(|| "0".into());
             let pattern = request.pattern.unwrap_or_else(|| "*".into());
-            let (next_cursor, mut keys): (String, Vec<String>) = self
+            let (next_cursor, keys): (String, Vec<String>) = self
                 .with_connection(async |connection| {
                     ::redis::cmd("SCAN")
                         .arg(&cursor)
@@ -205,7 +205,6 @@ impl KvAdapter for RedisAdapter {
                         .map_err(redis_database_error)
                 })
                 .await?;
-            keys.truncate(limit as usize);
 
             let mut metadata = Vec::with_capacity(keys.len());
             for key in keys {

@@ -121,8 +121,19 @@ fn backend_profiles_encode_current_database_type_contracts() {
             ResultEnvelopeKind::StreamRecords
         ]
     );
-    assert_eq!(redis.adapter_contract, KV_MARKER_CONTRACT);
-    assert!(redis.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
+    assert_eq!(redis.adapter_contract.kind, BackendAdapterContractKind::Kv);
+    assert_eq!(
+        redis.adapter_contract.state,
+        BackendAdapterContractState::FactoryBacked
+    );
+    assert_eq!(redis.backend_adapter.id, BackendAdapterId::Redis);
+    assert_eq!(
+        redis.backend_adapter.capability_source,
+        BackendAdapterCapabilitySource::Redis
+    );
+    assert!(redis.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
+    assert!(redis.has_backend_capability(BackendAdapterCapability::KeyValueRead));
+    assert!(redis.has_backend_capability(BackendAdapterCapability::KeyValueMutation));
 }
 
 #[test]
@@ -315,11 +326,14 @@ fn mariadb_profile_keeps_identity_while_exposing_mysql_family_runtime_metadata()
 }
 
 #[test]
-fn marker_contracts_remain_marker_only_without_redis_or_search_implementation() {
+fn marker_contracts_remain_marker_only_for_deferred_adapter_families() {
     assert_eq!(
         KV_MARKER_CONTRACT.state,
         BackendAdapterContractState::MarkerOnly
     );
+    assert!(!KV_MARKER_CONTRACT.has_capability(BackendAdapterCapability::KeyValueCatalog));
+    assert!(!KV_MARKER_CONTRACT.has_capability(BackendAdapterCapability::KeyValueRead));
+    assert!(!KV_MARKER_CONTRACT.has_capability(BackendAdapterCapability::KeyValueMutation));
     assert_eq!(
         SEARCH_MARKER_CONTRACT.kind,
         BackendAdapterContractKind::Search

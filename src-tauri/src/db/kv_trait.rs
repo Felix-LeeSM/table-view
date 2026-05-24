@@ -135,8 +135,8 @@ mod tests {
     impl KvAdapter for UnsupportedKvAdapter {}
 
     #[tokio::test]
-    async fn marker_defaults_return_explicit_unsupported() {
-        // Reason: marker-only adapters must not silently look supported (2026-05-24).
+    async fn default_methods_return_explicit_unsupported() {
+        // Reason: partial KV adapters must not silently look supported (2026-05-24).
         let adapter = UnsupportedKvAdapter;
         assert!(matches!(
             adapter.list_databases().await,

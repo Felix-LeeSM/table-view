@@ -119,6 +119,7 @@ pub enum BackendAdapterId {
     Sqlite,
     Duckdb,
     Mongodb,
+    Redis,
     DeclaredRdb,
     Marker,
 }
@@ -130,6 +131,7 @@ pub enum BackendAdapterCapabilitySource {
     Sqlite,
     Duckdb,
     Mongodb,
+    Redis,
     DeclaredRdb,
     Marker,
 }
@@ -150,7 +152,9 @@ pub enum BackendAdapterCapability {
     DocumentCatalog,
     DocumentQuery,
     DocumentMutation,
-    KeyValueMarker,
+    KeyValueCatalog,
+    KeyValueRead,
+    KeyValueMutation,
     SearchMarker,
 }
 
@@ -274,9 +278,11 @@ const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::DocumentQuery,
     BackendAdapterCapability::DocumentMutation,
 ];
-const KV_MARKER_CAPABILITIES: &[BackendAdapterCapability] = &[
+const REDIS_KV_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
-    BackendAdapterCapability::KeyValueMarker,
+    BackendAdapterCapability::KeyValueCatalog,
+    BackendAdapterCapability::KeyValueRead,
+    BackendAdapterCapability::KeyValueMutation,
 ];
 const SEARCH_MARKER_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
@@ -325,12 +331,19 @@ const FACTORY_DOCUMENT_CONTRACT: BackendAdapterContract = BackendAdapterContract
     capability_source: BackendAdapterCapabilitySource::Mongodb,
     capabilities: DOCUMENT_CAPABILITIES,
 };
+const FACTORY_REDIS_KV_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+    kind: BackendAdapterContractKind::Kv,
+    state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::Redis,
+    capability_source: BackendAdapterCapabilitySource::Redis,
+    capabilities: REDIS_KV_CAPABILITIES,
+};
 pub const KV_MARKER_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Kv,
     state: BackendAdapterContractState::MarkerOnly,
     implementation: BackendAdapterId::Marker,
     capability_source: BackendAdapterCapabilitySource::Marker,
-    capabilities: KV_MARKER_CAPABILITIES,
+    capabilities: NO_BACKEND_CAPABILITIES,
 };
 pub const SEARCH_MARKER_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Search,
@@ -514,9 +527,9 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             catalog_model: CatalogModelKind::Kv,
             result_kinds: KV_RESULTS,
             safety_policy: SafetyPolicyId::KvDefault,
-            backend_adapter: KV_MARKER_CONTRACT.profile(),
+            backend_adapter: FACTORY_REDIS_KV_CONTRACT.profile(),
             dialect: REDIS_DIALECT,
-            adapter_contract: KV_MARKER_CONTRACT,
+            adapter_contract: FACTORY_REDIS_KV_CONTRACT,
             file_connection: None,
         },
     }
@@ -553,7 +566,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn redis_profile_exposes_kv_marker_contract() {
+    fn redis_profile_exposes_factory_backed_kv_contract() {
         let profile = DatabaseType::Redis.data_source_profile();
 
         assert_eq!(profile.paradigm, Paradigm::Kv);
@@ -568,12 +581,18 @@ mod tests {
         );
         assert_eq!(
             profile.adapter_contract.state,
-            BackendAdapterContractState::MarkerOnly
+            BackendAdapterContractState::FactoryBacked
         );
         assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
-        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
+        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
+        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueRead));
+        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueMutation));
         assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-        assert_eq!(profile.backend_adapter.id, BackendAdapterId::Marker);
+        assert_eq!(profile.backend_adapter.id, BackendAdapterId::Redis);
+        assert_eq!(
+            profile.backend_adapter.capability_source,
+            BackendAdapterCapabilitySource::Redis
+        );
         assert_eq!(profile.dialect.id, DataSourceDialectId::Redis);
         assert_eq!(profile.dialect.family, DataSourceDialectFamily::Redis);
         assert_eq!(profile.dialect.version_probe, ServerVersionProbeId::None);
