@@ -401,6 +401,21 @@ fn active_adapter_profile_resolves_from_kind_and_variant_contract_is_explicit() 
     assert_eq!(kv.adapter_contract_kind(), BackendAdapterContractKind::Kv);
 }
 
+#[tokio::test]
+async fn kv_adapter_defaults_are_explicit_until_runtime_wiring() {
+    let adapter = StubKvAdapter;
+
+    assert!(matches!(
+        adapter.list_databases().await,
+        Err(AppError::Unsupported(_))
+    ));
+    assert!(matches!(
+        adapter.switch_database(1).await,
+        Err(AppError::Unsupported(_))
+    ));
+    assert_eq!(adapter.current_database().await.unwrap(), None);
+}
+
 #[test]
 fn active_mariadb_adapter_reports_mariadb_profile_over_mysql_family_adapter() {
     let mariadb = ActiveAdapter::Rdb(Box::new(MysqlAdapter::new_mariadb()));

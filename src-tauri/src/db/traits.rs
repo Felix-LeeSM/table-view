@@ -1074,7 +1074,7 @@ pub trait DocumentAdapter: DbAdapter {
     ) -> BoxFuture<'a, Result<serde_json::Value, AppError>>;
 }
 
-// ── SearchAdapter / KvAdapter ─────────────────────────────────────────────
+// ── SearchAdapter ─────────────────────────────────────────────────────────
 
 pub trait SearchAdapter: DbAdapter {
     fn cluster_identity<'a>(&'a self) -> BoxFuture<'a, Result<SearchClusterIdentity, AppError>> {
@@ -1145,5 +1145,3 @@ pub trait SearchAdapter: DbAdapter {
         })
     }
 }
-
-pub trait KvAdapter: DbAdapter {}
