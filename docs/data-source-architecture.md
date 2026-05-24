@@ -124,15 +124,22 @@ not optimistic runtime failure.
 
 ## Adapter Contracts
 
-`RdbAdapter` remains the mature contract for SQL/table/schema/DDL/edit. Existing
-`SearchAdapter` and `KvAdapter` marker traits must become real contracts before
-Elasticsearch/OpenSearch or Redis/Valkey are promoted to active implementation.
+`RdbAdapter` remains the mature contract for SQL/table/schema/DDL/edit. Redis
+now has the first live `KvAdapter` slice for key browsing, value reads, guarded
+string writes, TTL mutation, delete plumbing, and bounded stream reads. Valkey
+is a protocol-compatible candidate, but parity/support remains unverified until
+it has explicit adapter and test evidence. Bounded stream reads can return the
+`streamRecords` result envelope, but this does not enable the broader
+`streamConsumer` capability; consumer groups, pub/sub, cluster administration,
+and module-specific management remain follow-up.
+`SearchAdapter` has a live contract/profile slice for Elasticsearch/OpenSearch,
+with HTTP catalog/search execution still deferred.
 
 Future adapter families:
 
 - `RdbAdapter`: SQL, table browse, DDL, row edit, ERD.
 - `DocumentAdapter`: collection browse, document query/edit, index/validator.
-- `KvAdapter`: key scan, get/set, TTL, type-specific render/edit, streams.
+- `KvAdapter`: Redis first slice live; Valkey parity and broader KV support follow after explicit verification.
 - `SearchAdapter`: index/mapping browse, search, aggregations, document edit.
 - `WideColumnAdapter`: keyspace/table browse, CQL, partition-key safety.
 - `CloudDocumentAdapter`: table/index/capacity model, native API, PartiQL.
@@ -230,13 +237,16 @@ Near-term:
 4. Query/result migration: demote legacy `queryMode` to compatibility and add
    `queryLanguage` plus typed result envelopes at boundaries.
 5. Adapter normalization: expose current `RdbAdapter` behavior through profile
-   capabilities and define real `KvAdapter`/`SearchAdapter` contracts before
-   Redis/Search implementation.
+   capabilities, keep Redis mapped to the live `KvAdapter` slice, and keep
+   Search implementation scoped to the live `SearchAdapter` contract slice until
+   HTTP catalog/search execution lands.
 6. RDBMS parity: MySQL semantic depth, MariaDB, SQLite.
 7. DuckDB + file analytics as `rdb` + `file` connection kind.
 8. ERD / schema graph on top of RDB catalog data.
-9. Redis/Valkey by making `KvAdapter` real.
-10. Elasticsearch/OpenSearch by making `SearchAdapter` real.
+9. Redis first slice is live through `KvAdapter`; Valkey parity/support and
+   broader KV workflows remain follow-up until explicitly verified.
+10. Elasticsearch/OpenSearch HTTP catalog/search execution on the live
+    `SearchAdapter` contract slice.
 11. MongoDB full support remains document-paradigm backlog.
 12. Cassandra/DynamoDB/graph/vector/stream wait until profile + capability +
    result envelope contracts are implemented.
