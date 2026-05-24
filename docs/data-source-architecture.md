@@ -132,18 +132,19 @@ it has explicit adapter and test evidence. Bounded stream reads can return the
 `streamRecords` result envelope, but this does not enable the broader
 `streamConsumer` capability; consumer groups, pub/sub, cluster administration,
 and module-specific management remain follow-up.
-`SearchAdapter` has a live contract/profile slice for Elasticsearch/OpenSearch:
+`SearchAdapter` has a fixture-backed contract/profile slice for Elasticsearch/OpenSearch:
 fixture-backed identities, index/alias/mapping/template catalog reads, bounded
 Search DSL execution, delete-by-query safety planning, and typed `searchHits`
-rendering. Live HTTP catalog/search execution, cluster administration, and
-observability are deferred.
+rendering. Live connection UI, HTTP catalog/search execution, cluster
+administration, and observability are deferred until a real HTTP fixture/client
+gate exists.
 
 Future adapter families:
 
 - `RdbAdapter`: SQL, table browse, DDL, row edit, ERD.
 - `DocumentAdapter`: collection browse, document query/edit, index/validator.
 - `KvAdapter`: Redis first slice live; Valkey parity and broader KV support follow after explicit verification.
-- `SearchAdapter`: index/mapping browse, search, aggregations, document edit.
+- `SearchAdapter`: fixture-backed index/mapping browse, search, and aggregations now; live HTTP and document edit later.
 - `WideColumnAdapter`: keyspace/table browse, CQL, partition-key safety.
 - `CloudDocumentAdapter`: table/index/capacity model, native API, PartiQL.
 - `GraphAdapter`: graph catalog, Cypher/GQL/Gremlin execution, graph result.
@@ -259,15 +260,16 @@ Near-term:
    `queryLanguage` plus typed result envelopes at boundaries.
 5. Adapter normalization: expose current `RdbAdapter` behavior through profile
    capabilities, keep Redis mapped to the live `KvAdapter` slice, and keep
-   Search implementation scoped to the live `SearchAdapter` contract slice until
-   HTTP catalog/search execution lands.
+   Search implementation scoped to the fixture-backed `SearchAdapter` contract
+   slice until HTTP catalog/search execution lands.
 6. RDBMS parity: MySQL semantic depth, MariaDB, SQLite.
 7. DuckDB + file analytics as `rdb` + `file` connection kind.
 8. ERD / schema graph on top of RDB catalog data.
 9. Redis first slice is live through `KvAdapter`; Valkey parity/support and
    broader KV workflows remain follow-up until explicitly verified.
-10. Elasticsearch/OpenSearch live HTTP catalog/search execution, admin, and
-    observability on top of the fixture-verified `SearchAdapter` slice.
+10. Elasticsearch/OpenSearch live connection UI, HTTP catalog/search execution,
+    admin, and observability on top of the fixture-verified `SearchAdapter`
+    slice.
 11. MongoDB whitelisted document workflows are live; arbitrary JavaScript
     shell execution, version/deployment-aware gates, and richer native document
     rendering remain document-paradigm backlog.

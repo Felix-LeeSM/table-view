@@ -34,6 +34,7 @@ const DEFAULT_TARGETS = new Set<ConcreteTarget>([
   "mysql",
   "sqlite",
   "duckdb",
+  "redis",
 ]);
 
 export function targetMode(options: Record<string, string | boolean>): Target {

@@ -3,7 +3,7 @@
 Active/deferred risk 단일 추적 문서. Resolved risk 는
 `docs/archives/risks/resolved-risks.md` 에서 관리한다.
 
-Last updated: 2026-05-25 (Sprint 476 MongoDB integration gate; Sprint 472 Search risk renumbered)
+Last updated: 2026-05-25 (Sprint 481 cross-paradigm release gate)
 
 ## Summary
 
@@ -46,10 +46,10 @@ Last updated: 2026-05-25 (Sprint 476 MongoDB integration gate; Sprint 472 Search
 | RISK-043 | MariaDB runtime support reuses the MySQL adapter path without a MariaDB-engine integration fixture in CI | active | backend/testing | Sprint 451, Sprint 459 | add MariaDB service fixture smoke or narrow public support claim |
 | RISK-044 | Result envelope migration remains a compatibility layer; IPC still returns legacy `QueryResult` for RDBMS runtimes | active | query/results | Sprint 444, Sprint 459 | move query IPC boundary to typed result envelopes |
 | RISK-045 | ERD navigation/layout has component coverage but no automated desktop+narrow viewport screenshot smoke | active | frontend/ui | Sprint 463, Sprint 464 | add Playwright/browser visual smoke for ERD dense-schema view |
-| RISK-046 | Redis first slice includes base KV browsing/editing and bounded stream reads; Valkey parity/support is unverified follow-up, and cluster, pub/sub, modules, and consumer-group management are also out of scope | active | kv/runtime | Sprint 468 | scope follow-up contracts before broader Redis and future Valkey capability claims |
+| RISK-046 | Redis first slice includes base KV browsing/editing and bounded stream reads with Redis testcontainer coverage; Valkey parity/support is unverified follow-up, and cluster, pub/sub, modules, and consumer-group management are also out of scope | active | kv/runtime | Sprint 468, Sprint 481 | scope follow-up contracts before broader Redis and future Valkey capability claims |
 | RISK-047 | Production ERD snapshot feeds table/column caches only; constraint/index graph nodes remain fixture-covered but not wired from live schema-store caches | active | frontend/schema | Sprint 464 | wire constraints/indexes into `buildSchemaGraphCatalogSnapshot` inputs from schema-store caches |
 | RISK-048 | MongoDB support is now limited to tested whitelisted document workflows; arbitrary JavaScript shell execution, server-version/Atlas/deployment gates, and native document-first result panels remain out of scope despite grid-compatible document projection | active | document/mongo | Sprint 473, Sprint 476 | scope follow-up contracts before broader MongoDB/full-shell support claims |
-| RISK-049 | Elasticsearch/OpenSearch support is fixture-backed only: live HTTP auth/TLS/response parsing, admin APIs, and observability are not implemented despite the Search adapter/result path being live | active | search/runtime | Sprint 472 | add live HTTP client contract, product/version gates, and explicit admin/observability scopes before broader Search support claims |
+| RISK-049 | Elasticsearch/OpenSearch support is fixture-backed only: live connection UI, HTTP auth/TLS/response parsing, admin APIs, and observability are not implemented despite the Search adapter/result path being fixture-verified | active | search/runtime | Sprint 472, Sprint 481 | add live HTTP client contract, product/version gates, and explicit admin/observability scopes before broader Search support claims |
 
 ## Notes
 
@@ -58,7 +58,7 @@ Last updated: 2026-05-25 (Sprint 476 MongoDB integration gate; Sprint 472 Search
 - `RISK-039`-`RISK-041` moved to resolved after Sprint 433-438 follow-ups.
 - `RISK-042`-`RISK-044` added by Sprint 459 RDBMS integration gate.
 - `RISK-045` added by Sprint 464 ERD integration gate.
-- `RISK-046` added by Sprint 468 Redis integration gate; Valkey support remains unverified follow-up.
+- `RISK-046` added by Sprint 468 Redis integration gate and narrowed by Sprint 481 after Redis testcontainer coverage; Valkey support remains unverified follow-up.
 - `RISK-047` added by Sprint 464 to track production ERD graph-source coverage.
 - `RISK-048` added by Sprint 473 and narrowed by Sprint 476 after the MongoDB integration gate verified the whitelisted connection/catalog/query/result/edit/safety workflows.
-- `RISK-049` added by Sprint 472 Search integration gate; fixture Search workflows are verified, live HTTP/admin/observability remain deferred.
+- `RISK-049` added by Sprint 472 Search integration gate and narrowed by Sprint 481; fixture Search workflows are verified, live connection UI/HTTP/admin/observability remain deferred.

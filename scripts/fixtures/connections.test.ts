@@ -15,7 +15,13 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDecipheriv, randomBytes as nodeRandomBytes } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { upsertConnections, clearConnections } from "./connections.js";
@@ -142,6 +148,110 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
         ),
         read_only: false,
       }),
+    );
+  });
+
+  it("creates idempotent file-backed SQLite and DuckDB fixture databases", async () => {
+    await upsertConnections(loadSpec("e2e"));
+    await upsertConnections(loadSpec("e2e"));
+
+    const data = JSON.parse(
+      readFileSync(resolve(tempDir, "connections.json"), "utf8"),
+    ) as {
+      connections: {
+        id: string;
+        db_type: string;
+        database: string;
+      }[];
+    };
+
+    const sqlite = data.connections.find((c) => c.id === "fixture-e2e-sqlite");
+    const duckdb = data.connections.find((c) => c.id === "fixture-e2e-duckdb");
+
+    expect(sqlite?.database).toContain("table_view_e2e.sqlite");
+    expect(duckdb?.database).toContain("table_view_e2e.duckdb");
+    expect(existsSync(sqlite?.database ?? "")).toBe(true);
+    expect(existsSync(duckdb?.database ?? "")).toBe(true);
+  });
+
+  it("does not surface declared-only MSSQL or Oracle as default fixture connections", async () => {
+    await upsertConnections(loadSpec("e2e"));
+
+    const data = JSON.parse(
+      readFileSync(resolve(tempDir, "connections.json"), "utf8"),
+    ) as {
+      connections: {
+        id: string;
+        db_type: string;
+      }[];
+    };
+
+    expect(data.connections.map((c) => c.db_type)).not.toContain("mssql");
+    expect(data.connections.map((c) => c.db_type)).not.toContain("oracle");
+  });
+
+  it("does not rewrite user-created SQLite or DuckDB file connections", async () => {
+    const path = resolve(tempDir, "connections.json");
+    writeFileSync(
+      path,
+      JSON.stringify(
+        {
+          connections: [
+            {
+              id: "user-sqlite",
+              name: "User SQLite",
+              db_type: "sqlite",
+              host: "",
+              port: 0,
+              user: "",
+              password: "",
+              database: "/user/data/main.sqlite",
+              group_id: null,
+              color: null,
+              connection_timeout: null,
+              keep_alive_interval: null,
+              environment: null,
+              auth_source: null,
+              replica_set: null,
+              tls_enabled: null,
+            },
+            {
+              id: "user-duckdb",
+              name: "User DuckDB",
+              db_type: "duckdb",
+              host: "",
+              port: 0,
+              user: "",
+              password: "",
+              database: "/user/data/main.duckdb",
+              group_id: null,
+              color: null,
+              connection_timeout: null,
+              keep_alive_interval: null,
+              environment: null,
+              auth_source: null,
+              replica_set: null,
+              tls_enabled: null,
+            },
+          ],
+          groups: [],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    await upsertConnections(loadSpec("e2e"));
+
+    const data = JSON.parse(readFileSync(path, "utf8")) as {
+      connections: { id: string; database: string }[];
+    };
+    expect(data.connections.find((c) => c.id === "user-sqlite")?.database).toBe(
+      "/user/data/main.sqlite",
+    );
+    expect(data.connections.find((c) => c.id === "user-duckdb")?.database).toBe(
+      "/user/data/main.duckdb",
     );
   });
 

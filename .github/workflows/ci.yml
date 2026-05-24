@@ -130,6 +130,8 @@ jobs:
     # pg_endpoint/mongo_endpoint helper 가 PGHOST/MONGO_HOST 가 있으면
     # testcontainers 를 띄우지 않고 외부 인스턴스를 그대로 재사용하므로,
     # GHA service 와 testcontainers 가 자연스럽게 swap-in/out 된다.
+    # Redis는 별도 GHA service 없이 `redis_integration` testcontainer 가
+    # 자체 lifecycle 을 소유한다.
     services:
       postgres:
         image: postgres:16-alpine
@@ -186,7 +188,7 @@ jobs:
           PGDATABASE: table_view_test
           MONGO_HOST: localhost
           MONGO_PORT: 27017
-        run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration
 
   # Runtime E2E smoke lives in .github/workflows/e2e-smoke.yml as a
   # blocking remote check on pull requests and main. This workflow keeps

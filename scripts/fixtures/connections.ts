@@ -20,7 +20,7 @@ import {
 import { createCipheriv, randomBytes } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { homedir, platform } from "node:os";
-import type { ProfileSpec, ResolvedSpec } from "./spec.js";
+import type { FixtureConnection, ProfileSpec, ResolvedSpec } from "./spec.js";
 import { pgEnvConn } from "./postgres.js";
 import { mongoEnvConn } from "./mongo.js";
 import {
@@ -32,6 +32,8 @@ import { mariadbEnvConn } from "./mariadb.js";
 import { mssqlEnvConn } from "./mssql.js";
 import { oracleEnvConn } from "./oracle.js";
 import { redisEnvConn } from "./redis.js";
+import { ensureSqliteDatabase, sqliteEnvPath } from "./sqlite.js";
+import { duckdbEnvPath, ensureDuckdbDatabase } from "./duckdb.js";
 
 const FIXTURE_GROUP_ID = "fixture-group";
 const FIXTURE_GROUP_NAME = "Fixtures";
@@ -100,10 +102,6 @@ function storageFilePath(): string {
 
 function keyFilePath(): string {
   return resolve(appDataPath(), ".key");
-}
-
-function sqliteFixturePath(fileName: string): string {
-  return resolve(appDataPath(), "fixtures", "sqlite", fileName);
 }
 
 // Mirrors `crypto::get_or_create_key` in src-tauri/src/storage/crypto.rs.
@@ -225,6 +223,7 @@ export async function upsertConnections(
   }
 
   const key = loadOrCreateAppKey();
+  await ensureFileFixtureDatabases(profile);
   for (const conn of buildConnections(spec, key)) {
     const existingIdx = data.connections.findIndex((c) => c.id === conn.id);
     if (existingIdx >= 0) {
@@ -238,6 +237,21 @@ export async function upsertConnections(
 
   saveStorage(data);
   return { added, updated };
+}
+
+async function ensureFileFixtureDatabases(profile: ProfileSpec): Promise<void> {
+  if (
+    profile.database.sqlite &&
+    (profile.connections?.sqlite?.length ?? 0) > 0
+  ) {
+    await ensureSqliteDatabase(sqliteEnvPath(), profile.database.sqlite);
+  }
+  if (
+    profile.database.duckdb &&
+    (profile.connections?.duckdb?.length ?? 0) > 0
+  ) {
+    await ensureDuckdbDatabase(duckdbEnvPath(), profile.database.duckdb);
+  }
 }
 
 export function clearConnections(): { removed: number } {
@@ -257,6 +271,14 @@ export function clearConnections(): { removed: number } {
   return { removed: before - data.connections.length };
 }
 
+function activeFixtureConnections(
+  connections: readonly FixtureConnection[] | undefined,
+): FixtureConnection[] {
+  return (connections ?? []).filter(
+    (conn) => (conn.status ?? "active") === "active",
+  );
+}
+
 function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
   const out: StoredConnection[] = [];
   const pg = pgEnvConn();
@@ -264,7 +286,7 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
   const mysql = mysqlEnvConn();
   const profile = spec.profileSpec as ProfileSpec;
 
-  for (const c of profile.connections?.pg ?? []) {
+  for (const c of activeFixtureConnections(profile.connections?.pg)) {
     out.push({
       id: c.id,
       name: c.name,
@@ -285,7 +307,7 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
     });
   }
 
-  for (const c of profile.connections?.mongo ?? []) {
+  for (const c of activeFixtureConnections(profile.connections?.mongo)) {
     out.push({
       id: c.id,
       name: c.name,
@@ -311,7 +333,7 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
   // 실 사용자 connection 은 `pnpm db:seed mysql` 합류(Slice B+) 시 자동
   // populated 된다. 현재는 빈 schema 의 connection 만 etablish.
   const mysqlDb = profile.database.mysql ?? profile.database.pg;
-  for (const c of profile.connections?.mysql ?? []) {
+  for (const c of activeFixtureConnections(profile.connections?.mysql)) {
     out.push({
       id: c.id,
       name: c.name,
@@ -334,7 +356,7 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
 
   const sqliteFile = profile.database.sqlite;
   if (sqliteFile) {
-    for (const c of profile.connections?.sqlite ?? []) {
+    for (const c of activeFixtureConnections(profile.connections?.sqlite)) {
       out.push({
         id: c.id,
         name: c.name,
@@ -343,7 +365,7 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
         port: 0,
         user: "",
         password: "",
-        database: sqliteFixturePath(sqliteFile),
+        database: resolve(sqliteEnvPath().directory, sqliteFile),
         read_only: false,
         group_id: FIXTURE_GROUP_ID,
         color: c.color ?? null,
@@ -360,7 +382,7 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
   // DuckDB — file-based, same pattern as SQLite.
   const duckdbFile = profile.database.duckdb;
   if (duckdbFile) {
-    for (const c of profile.connections?.duckdb ?? []) {
+    for (const c of activeFixtureConnections(profile.connections?.duckdb)) {
       out.push({
         id: c.id,
         name: c.name,
@@ -369,7 +391,7 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
         port: 0,
         user: "",
         password: "",
-        database: resolve(appDataPath(), "fixtures", "duckdb", duckdbFile),
+        database: resolve(duckdbEnvPath().directory, duckdbFile),
         read_only: false,
         group_id: FIXTURE_GROUP_ID,
         color: c.color ?? null,
@@ -387,7 +409,7 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
   const mariadb = mariadbEnvConn();
   const mariadbDb = profile.database.mariadb;
   if (mariadbDb) {
-    for (const c of profile.connections?.mariadb ?? []) {
+    for (const c of activeFixtureConnections(profile.connections?.mariadb)) {
       out.push({
         id: c.id,
         name: c.name,
@@ -413,7 +435,7 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
   const mssql = mssqlEnvConn();
   const mssqlDb = profile.database.mssql;
   if (mssqlDb) {
-    for (const c of profile.connections?.mssql ?? []) {
+    for (const c of activeFixtureConnections(profile.connections?.mssql)) {
       out.push({
         id: c.id,
         name: c.name,
@@ -439,7 +461,7 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
   const oracle = oracleEnvConn();
   const oracleDb = profile.database.oracle;
   if (oracleDb) {
-    for (const c of profile.connections?.oracle ?? []) {
+    for (const c of activeFixtureConnections(profile.connections?.oracle)) {
       out.push({
         id: c.id,
         name: c.name,
@@ -464,7 +486,7 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
   // Redis
   const redisDbNum = profile.database.redis ?? 0;
   const redis = redisEnvConn(redisDbNum);
-  for (const c of profile.connections?.redis ?? []) {
+  for (const c of activeFixtureConnections(profile.connections?.redis)) {
     out.push({
       id: c.id,
       name: c.name,

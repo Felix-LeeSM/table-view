@@ -356,11 +356,17 @@ export function flattenConnections(profile: ProfileSpec): Array<{
     out.push({ spec: c, target: "duckdb" });
   for (const c of profile.connections?.mariadb ?? [])
     out.push({ spec: c, target: "mariadb" });
-  for (const c of profile.connections?.mssql ?? [])
+  for (const c of activeConnections(profile.connections?.mssql))
     out.push({ spec: c, target: "mssql" });
-  for (const c of profile.connections?.oracle ?? [])
+  for (const c of activeConnections(profile.connections?.oracle))
     out.push({ spec: c, target: "oracle" });
   for (const c of profile.connections?.redis ?? [])
     out.push({ spec: c, target: "redis" });
   return out;
+}
+
+function activeConnections(
+  connections: FixtureConnection[] | undefined,
+): FixtureConnection[] {
+  return (connections ?? []).filter((c) => (c.status ?? "active") === "active");
 }

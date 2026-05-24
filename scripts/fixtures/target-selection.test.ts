@@ -14,7 +14,7 @@ describe("fixture target selection", () => {
     expect(shouldRunTarget(target, "mariadb")).toBe(false);
     expect(shouldRunTarget(target, "mssql")).toBe(false);
     expect(shouldRunTarget(target, "oracle")).toBe(false);
-    expect(shouldRunTarget(target, "redis")).toBe(false);
+    expect(shouldRunTarget(target, "redis")).toBe(true);
   });
 
   it("keeps optional network targets explicit", () => {

@@ -15,7 +15,7 @@
 // 코드 경로이므로 e2e 의 200-row 스케일로 빠르게 실행.
 
 import { describe, it, expect } from "vitest";
-import { generateAll } from "./generator.js";
+import { flattenConnections, generateAll } from "./generator.js";
 import { loadSpec } from "./spec.js";
 
 const spec = loadSpec("e2e");
@@ -113,5 +113,13 @@ describe("generator — determinism", () => {
     });
     expect(pick(a.customers![0]!)).toEqual(pick(b.customers![0]!));
     expect(a.products![0]!.sku).toEqual(b.products![0]!.sku);
+  });
+});
+
+describe("generator — connection flattening", () => {
+  it("excludes planned MSSQL and Oracle fixture identities from active generated connections", () => {
+    const flattened = flattenConnections(spec.profileSpec);
+    expect(flattened.map((c) => c.target)).not.toContain("mssql");
+    expect(flattened.map((c) => c.target)).not.toContain("oracle");
   });
 });

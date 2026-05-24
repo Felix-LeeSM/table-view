@@ -252,30 +252,6 @@ const PASTE_CASES: PasteCase[] = [
       tlsEnabled: true,
     },
   },
-  {
-    scheme: "elasticsearch",
-    url: "elasticsearch://esu:esp@elastic.local:9201",
-    expected: {
-      dbType: "elasticsearch",
-      host: "elastic.local",
-      port: 9201,
-      user: "esu",
-      database: "",
-      password: "esp",
-    },
-  },
-  {
-    scheme: "opensearch",
-    url: "opensearch://osu:osp@open.local:9202",
-    expected: {
-      dbType: "opensearch",
-      host: "open.local",
-      port: 9202,
-      user: "osu",
-      database: "",
-      password: "osp",
-    },
-  },
 ];
 
 describe("[AC-178-01] form-mode host paste detection", () => {
@@ -576,12 +552,15 @@ describe("[AC-178-03] host:port blur split", () => {
 // Continue 는 명시적 사용자 액션이라 거부 메시지를 노출 — 별도 그룹.
 //
 // MySQL/MariaDB/SQLite/Redis 는 supported 이므로 본 silent-reject list 에서 제외.
+// Search 는 fixture-backed only 이므로 live connection paste 를 거부한다.
 // ===========================================================================
 
 describe("[Sprint 281] unsupported DBMS paste is silent (no form change)", () => {
   const unsupportedPastes = [
     { scheme: "mssql", url: "mssql://sa:pw@mssql.local:1433/master" },
     { scheme: "oracle", url: "oracle://system:pw@oracle.local:1521/FREEPDB1" },
+    { scheme: "elasticsearch", url: "elasticsearch://elastic.local:9200" },
+    { scheme: "opensearch", url: "opensearch://open.local:9200" },
   ];
 
   for (const c of unsupportedPastes) {

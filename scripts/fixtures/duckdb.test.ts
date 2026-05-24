@@ -2,21 +2,39 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { applyDuckdb, ensureDuckdbDatabase } from "./duckdb.js";
+import { applyDuckdb, duckdbEnvPath, ensureDuckdbDatabase } from "./duckdb.js";
 import { generateAll } from "./generator.js";
 import { loadSpec } from "./spec.js";
 
 let tempDir: string;
+let originalTableViewDataDir: string | undefined;
+let originalDuckdbFixtureDir: string | undefined;
 
 beforeEach(() => {
   tempDir = mkdtempSync(resolve(tmpdir(), "fixture-duckdb-"));
+  originalTableViewDataDir = process.env.TABLE_VIEW_TEST_DATA_DIR;
+  originalDuckdbFixtureDir = process.env.DUCKDB_FIXTURE_DIR;
 });
 
 afterEach(() => {
+  restoreEnv("TABLE_VIEW_TEST_DATA_DIR", originalTableViewDataDir);
+  restoreEnv("DUCKDB_FIXTURE_DIR", originalDuckdbFixtureDir);
   rmSync(tempDir, { recursive: true, force: true });
 });
 
 describe("duckdb fixture file lifecycle", () => {
+  it("defaults fixture files to OS temp rather than app data", () => {
+    delete process.env.TABLE_VIEW_TEST_DATA_DIR;
+    delete process.env.DUCKDB_FIXTURE_DIR;
+
+    const path = duckdbEnvPath();
+
+    expect(path.directory).toBe(
+      resolve(tmpdir(), "table-view-fixtures", "duckdb"),
+    );
+    expect(path.directory).not.toContain("Application Support");
+  });
+
   it("creates a database using the supported duckdb Database API", async () => {
     await ensureDuckdbDatabase(
       { directory: tempDir, fileName: "" },
@@ -40,3 +58,8 @@ describe("duckdb fixture file lifecycle", () => {
     expect(existsSync(resolve(tempDir, "fixture.duckdb"))).toBe(true);
   });
 });
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}

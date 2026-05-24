@@ -79,12 +79,13 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
   "search-dsl": {
     id: "search-dsl",
     label: "Search DSL",
-    lifecycle: "active",
+    lifecycle: "deferred",
     parserOwner: "future-language-core-contract",
     completionOwner: "future-language-core-contract",
     fallbackPolicy: {
       kind: "not-implemented",
-      reason: "Search query execution is not active yet.",
+      reason:
+        "Search DSL is fixture-backed only until live HTTP execution lands.",
     },
     safetyAnalyzer: "profile-safety-policy",
     supportedSyntaxDocs: QUERY_LANGUAGE_SUPPORT_DOCS,

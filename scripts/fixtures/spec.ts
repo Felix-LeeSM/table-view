@@ -123,6 +123,8 @@ const ConnectionSpec = z
     name: z.string(),
     color: z.string().optional(),
     environment: z.string().optional(),
+    status: z.enum(["active", "planned", "disabled"]).optional(),
+    disabledReason: z.string().optional(),
   })
   .strict();
 

@@ -375,11 +375,7 @@ export const REDIS_CAPABILITIES = capabilities({
   },
 });
 
-export const SEARCH_CAPABILITIES = capabilities({
-  connection: {
-    test: true,
-  },
-});
+export const SEARCH_CAPABILITIES = capabilities();
 
 function profile(
   id: DatabaseType,
