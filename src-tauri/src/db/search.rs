@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 
-use crate::error::AppError;
+use crate::error::{AppError, CancelError};
 use crate::models::{
     validate_search_destructive_request, ConnectionConfig, DatabaseType, SearchAliasInfo,
     SearchClusterCapabilities, SearchClusterIdentity, SearchDeleteByQueryRequest,
@@ -10,6 +10,7 @@ use crate::models::{
     SearchTotalHits, SearchTotalHitsRelation, SearchVersionInfo,
 };
 
+use super::search_executor::execute_fixture_search;
 use super::traits::{DbAdapter, SearchAdapter};
 use super::types::BoxFuture;
 
@@ -148,10 +149,15 @@ impl SearchAdapter for SearchEngineAdapter {
 
     fn search<'a>(
         &'a self,
-        _request: &'a SearchQueryRequest,
-        _cancel: Option<&'a tokio_util::sync::CancellationToken>,
+        request: &'a SearchQueryRequest,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> BoxFuture<'a, Result<SearchResultEnvelope, AppError>> {
-        Box::pin(async move { Ok(self.fixture()?.search_result.clone()) })
+        Box::pin(async move {
+            if cancel.is_some_and(|token| token.is_cancelled()) {
+                return Err(AppError::Cancel(CancelError::AlreadyCompleted));
+            }
+            execute_fixture_search(self.fixture()?, request)
+        })
     }
 
     fn plan_delete_by_query<'a>(
@@ -257,6 +263,13 @@ impl SearchCatalogFixture {
                         aggregatable: false,
                         analyzer: Some("standard".into()),
                     },
+                    SearchMappingField {
+                        path: "status".into(),
+                        field_type: "keyword".into(),
+                        searchable: true,
+                        aggregatable: true,
+                        analyzer: None,
+                    },
                 ],
                 raw: mapping_raw(),
             }],
@@ -283,7 +296,8 @@ impl SearchCatalogFixture {
                     score: Some(1.0),
                     source: json!({
                         "@timestamp": "2026-05-24T00:00:00Z",
-                        "message": "fixture log"
+                        "message": "fixture log",
+                        "status": "ok"
                     }),
                     fields: None,
                     highlight: None,
@@ -299,7 +313,11 @@ fn mapping_raw() -> Value {
     json!({
         "properties": {
             "@timestamp": { "type": "date" },
-            "message": { "type": "text", "analyzer": "standard" }
+            "message": { "type": "text", "analyzer": "standard" },
+            "status": {
+                "type": "keyword",
+                "fields": { "keyword": { "type": "keyword" } }
+            }
         }
     })
 }
@@ -338,5 +356,110 @@ mod tests {
             adapter.ping().await,
             Err(AppError::Unsupported(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn fixture_search_returns_typed_aggregation_envelopes() {
+        let adapter = SearchEngineAdapter::fixture_elasticsearch();
+
+        let result = adapter
+            .search(
+                &SearchQueryRequest {
+                    index: "logs-elastic-2026.05.24".into(),
+                    body: json!({
+                        "query": { "match_all": {} },
+                        "aggs": {
+                            "by_status": {
+                                "terms": { "field": "status.keyword" }
+                            }
+                        }
+                    }),
+                    from: None,
+                    size: Some(10),
+                    track_total_hits: Some(true),
+                },
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.hits[0].id, "doc-1");
+        assert_eq!(result.aggregations.len(), 1);
+        assert_eq!(result.aggregations[0].name, "by_status");
+        assert_eq!(result.aggregations[0].kind, "terms");
+    }
+
+    #[tokio::test]
+    async fn fixture_search_blocks_broad_wildcard_targets_by_default() {
+        let adapter = SearchEngineAdapter::fixture_elasticsearch();
+
+        let result = adapter
+            .search(
+                &SearchQueryRequest {
+                    index: "*".into(),
+                    body: json!({ "query": { "match_all": {} } }),
+                    from: None,
+                    size: Some(10),
+                    track_total_hits: None,
+                },
+                None,
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(AppError::Validation(message)) if message.contains("wildcard"))
+        );
+    }
+
+    #[tokio::test]
+    async fn fixture_search_blocks_destructive_path_shaped_targets() {
+        let adapter = SearchEngineAdapter::fixture_elasticsearch();
+
+        let result = adapter
+            .search(
+                &SearchQueryRequest {
+                    index: "/logs-elastic-2026.05.24/_delete_by_query".into(),
+                    body: json!({ "query": { "match_all": {} } }),
+                    from: None,
+                    size: Some(10),
+                    track_total_hits: None,
+                },
+                None,
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(AppError::Validation(message)) if message.contains("destructive"))
+        );
+    }
+
+    #[tokio::test]
+    async fn fixture_search_rejects_unsupported_dsl_features_clearly() {
+        let adapter = SearchEngineAdapter::fixture_elasticsearch();
+
+        let result = adapter
+            .search(
+                &SearchQueryRequest {
+                    index: "logs-elastic-2026.05.24".into(),
+                    body: json!({
+                        "query": { "match_all": {} },
+                        "suggest": {
+                            "message-suggest": {
+                                "text": "fixture",
+                                "term": { "field": "message" }
+                            }
+                        }
+                    }),
+                    from: None,
+                    size: Some(10),
+                    track_total_hits: None,
+                },
+                None,
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(AppError::Unsupported(message)) if message.contains("suggest"))
+        );
     }
 }

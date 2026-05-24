@@ -2,6 +2,7 @@ import type { ColumnCategory } from "@/lib/columnCategory";
 import type { ResultEnvelopeKind } from "@/types/dataSource";
 import type { DocumentQueryResult } from "@/types/document";
 import type { BulkWriteResult, DocumentId } from "@/types/documentMutate";
+import type { SearchResultEnvelope } from "@/types/search";
 
 /**
  * Column metadata returned by a query execution.
@@ -93,6 +94,10 @@ export type DocumentResultEnvelopeKind = Extract<
 >;
 export type OpaqueResultEnvelopeKind = Exclude<
   ResultEnvelopeKind,
+  TabularResultEnvelopeKind | DocumentResultEnvelopeKind | "searchHits"
+>;
+export type UnsupportedQueryResultEnvelopeKind = Exclude<
+  ResultEnvelopeKind,
   TabularResultEnvelopeKind | DocumentResultEnvelopeKind
 >;
 
@@ -111,14 +116,20 @@ export interface OpaqueResultEnvelope {
   payload: unknown;
 }
 
+export interface SearchHitsResultEnvelope {
+  kind: "searchHits";
+  searchResult: SearchResultEnvelope;
+}
+
 export type ResultEnvelope =
   | TabularResultEnvelope
   | DocumentResultEnvelope
+  | SearchHitsResultEnvelope
   | OpaqueResultEnvelope;
 
 export interface UnsupportedResultEnvelopeConversionError {
   kind: "unsupported-envelope-kind";
-  envelopeKind: OpaqueResultEnvelopeKind;
+  envelopeKind: UnsupportedQueryResultEnvelopeKind;
   message: string;
 }
 
@@ -144,6 +155,15 @@ export function createDocumentResultEnvelope(
   };
 }
 
+export function createSearchHitsResultEnvelope(
+  searchResult: SearchResultEnvelope,
+): SearchHitsResultEnvelope {
+  return {
+    kind: "searchHits",
+    searchResult,
+  };
+}
+
 export function toCompatibleQueryResult(
   envelope: ResultEnvelope,
 ): ResultEnvelopeCompatibilityResult {
@@ -159,6 +179,16 @@ export function toCompatibleQueryResult(
           totalCount: envelope.documentResult.totalCount,
           executionTimeMs: envelope.documentResult.executionTimeMs,
           queryType: "select",
+        },
+      };
+    case "searchHits":
+      return {
+        ok: false,
+        error: {
+          kind: "unsupported-envelope-kind",
+          envelopeKind: envelope.kind,
+          message:
+            "Search hit envelopes require the search result renderer and cannot be projected into QueryResultGrid.",
         },
       };
     default:

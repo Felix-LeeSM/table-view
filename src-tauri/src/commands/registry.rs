@@ -98,6 +98,8 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         commands::kv::delete_kv_key,
         commands::kv::update_kv_ttl,
         commands::kv::read_kv_stream,
+        // Search query execution
+        commands::search::execute_search_query,
         // Mongo browse and query
         commands::document::browse::list_mongo_databases,
         commands::document::browse::list_mongo_collections,
