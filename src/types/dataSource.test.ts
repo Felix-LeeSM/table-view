@@ -129,11 +129,15 @@ describe("DataSourceProfile registry", () => {
     redis: createEmptyDataSourceCapabilities(),
     elasticsearch: expectedCapabilities({
       connection: { test: true },
+      query: { query: true, cancel: true },
       catalog: { browse: true, schema: true, indexes: true },
+      paradigmSpecific: { searchDocuments: true },
     }),
     opensearch: expectedCapabilities({
       connection: { test: true },
+      query: { query: true, cancel: true },
       catalog: { browse: true, schema: true, indexes: true },
+      paradigmSpecific: { searchDocuments: true },
     }),
   };
 

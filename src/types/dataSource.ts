@@ -364,7 +364,8 @@ export const SEARCH_CAPABILITIES = capabilities({
     test: true,
   },
   query: {
-    query: false,
+    query: true,
+    cancel: true,
     explain: false,
   },
   catalog: {
@@ -373,7 +374,7 @@ export const SEARCH_CAPABILITIES = capabilities({
     indexes: true,
   },
   paradigmSpecific: {
-    searchDocuments: false,
+    searchDocuments: true,
   },
 });
 
