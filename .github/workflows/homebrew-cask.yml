@@ -46,6 +46,7 @@ jobs:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+          HOMEBREW_TAP_BASE_BRANCH: ${{ vars.HOMEBREW_TAP_BASE_BRANCH || 'main' }}
         working-directory: homebrew-tap
         run: |
           set -euo pipefail
@@ -55,6 +56,7 @@ jobs:
             exit 0
           fi
 
+          base_branch="${HOMEBREW_TAP_BASE_BRANCH:-main}"
           version="${RELEASE_TAG#v}"
           branch="chore/table-view-${version}"
           tap_file="Casks/table-view.rb"
@@ -97,5 +99,5 @@ jobs:
             --repo "${HOMEBREW_TAP_REPO}" \
             --title "chore(homebrew): update table-view cask ${RELEASE_TAG}" \
             --body "## Summary\n\nAutomatically updated Homebrew cask for ${RELEASE_TAG}.\n\n## Changes\n\n- Updated version/url/checksums in Casks/table-view.rb\n\n## Smoke impact\n\nNo app tests run; this is packaging metadata only.\n\n## Documentation impact\n\nNo runtime docs changed." \
-            --base main \
+            --base "${base_branch}" \
             --head "${branch}"
