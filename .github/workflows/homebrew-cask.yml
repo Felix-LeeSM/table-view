@@ -60,8 +60,13 @@ jobs:
           tap_file="Casks/table-view.rb"
 
           if git ls-remote --exit-code --heads origin "${branch}" > /dev/null 2>&1; then
-            git fetch --quiet origin "${branch}":"${branch}"
-            git switch --quiet "${branch}"
+            git fetch --quiet origin "${branch}"
+            if git show-ref --verify --quiet "refs/heads/${branch}"; then
+              git switch --quiet "${branch}"
+              git reset --hard "origin/${branch}"
+            else
+              git switch --quiet -c "${branch}" --track "origin/${branch}"
+            fi
           else
             git switch --quiet -c "${branch}"
           fi
