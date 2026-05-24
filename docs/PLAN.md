@@ -19,6 +19,7 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | 현재 실행 순서 | `docs/PLAN.md` |
 | 장기 product / architecture roadmap | `docs/ROADMAP.md` |
 | data-source extension architecture | `docs/data-source-architecture.md`, ADR 0046 |
+| data-source contributor guide | `docs/adding-a-data-source.md` |
 | 완료된 plan / sprint sequence | `docs/archives/plans/completed-roadmap.md` |
 | 완료된 phase index | `docs/archives/phases/README.md` |
 | Active/deferred risks | `docs/RISKS.md` |
@@ -31,8 +32,8 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 1. 현재 코드를 `docs/data-source-architecture.md` 의 profile/capability 구조에
    먼저 끼운다.
 2. RDBMS support gap 먼저 닫는다.
-3. 새 DBMS 는 `docs/data-source-architecture.md` 의 profile/capability contract 를
-   먼저 정의한다.
+3. 새 DBMS 는 `docs/adding-a-data-source.md` 의 contributor checklist 로
+   profile/capability contract 를 먼저 정의한다.
 4. 이미 열린 runtime/parser/completion surface 의 semantic correctness 를 넓힌다.
 5. capability/version gating 은 vocabulary coverage 이후에 붙인다.
 6. 큰 state-management migration 은 DB support 흐름과 충돌하지 않을 때 재개한다.
@@ -78,7 +79,7 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | 10 | Redis | active Redis first slice | Redis adapter, KV sidebar, key scan, value read, guarded string write, TTL mutation, and bounded stream read paths are live. Valkey parity/support is unverified follow-up. Cluster/pubsub/modules/consumer-group management remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-468/handoff.md` |
 | 11 | Elasticsearch/OpenSearch | active fixture-backed slice | Search adapter contract, Elasticsearch/OpenSearch identities, fixture catalog, bounded fixture DSL execution, and `searchHits` result UI are live. Live HTTP catalog/query execution, cluster administration, and observability remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-472/handoff.md` |
 | 12 | MongoDB full support | deferred/current subagent audit only | Phase 28 Slice A 는 보존하되 RDBMS-first 후 재개. `queryMode` 는 execution SOT 로 되살리지 않음 | `docs/phases/phase-28.md` |
-| 13 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md` |
+| 13 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md`, `docs/adding-a-data-source.md` |
 | 14 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |
 | 15 | State-management migration | planned contracts | Sprint 353-376 contracts 는 보존. 실제 재개 전 current code와 재-audit 필요 | `docs/state-management-strategy-2026-05-15.md` |
 

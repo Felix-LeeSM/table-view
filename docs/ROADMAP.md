@@ -56,7 +56,7 @@ Strategic constraints:
 
 | Track | Long-Term Direction | Current Anchor |
 |---|---|---|
-| Data-source architecture | New DBMS/support surfaces enter through profile, capability, adapter, language, catalog, result envelope, and safety contracts. | `docs/data-source-architecture.md`, ADR 0046 |
+| Data-source architecture | New DBMS/support surfaces enter through profile, capability, adapter, language, catalog, result envelope, and safety contracts. | `docs/data-source-architecture.md`, `docs/adding-a-data-source.md`, ADR 0046 |
 | RDBMS runtime | Strong support for PostgreSQL, MySQL, MariaDB, SQLite, and DuckDB/file analytics before widening to uncertain paradigms. | `docs/PLAN.md`, `docs/phases/phase-18.md`, `docs/phases/phase-19.md` |
 | Non-RDBMS runtime | Redis/Valkey, Elasticsearch/OpenSearch, and MongoDB are first-class non-RDBMS targets; Cassandra/DynamoDB/graph/vector are gated candidates. | `docs/data-source-architecture.md`, `docs/phases/phase-28.md` |
 | Language core | Rust/WASM owns hot-path parse/completion vocabulary, context routing, and capability gates where practical. | ADR 0045, `docs/query-language-support.md`, `docs/archives/phases/completed/phase-31.md` |
@@ -75,18 +75,8 @@ Strategic constraints:
    only connect/browse/query.
 3. Parser/Safe Mode/completion support must be explicit. Unsupported syntax is
    acceptable only when documented in `docs/query-language-support.md`.
-4. Any new DBMS must define:
-   - data-source profile and paradigm
-   - connection config shape
-   - adapter/protocol ownership
-   - capability profile
-   - query language(s)
-   - catalog/sidebar namespace model
-   - result envelope kind(s)
-   - query execution semantics
-   - edit and DDL support level
-   - safety policy
-   - testcontainer or local fixture strategy
+4. Any new DBMS must satisfy `docs/adding-a-data-source.md` before implementation
+   starts.
 5. Any new long-lived state must define:
    - source of truth
    - durability

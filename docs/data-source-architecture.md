@@ -213,19 +213,10 @@ catalog graph, but they are not forced into RDB ERD semantics.
 
 ## Adding A New Data Source
 
-Before implementation starts, the phase contract must answer:
-
-1. Which paradigm does it belong to?
-2. Does an adapter contract already exist, or is a new adapter ADR needed?
-3. What connection kind and fields are required?
-4. Which capabilities are supported, unsupported, and deferred?
-5. Which query languages are accepted?
-6. What catalog model is exposed?
-7. What result envelopes can execution return?
-8. What safety policies are mandatory?
-9. What local fixture, testcontainer, emulator, or cloud-mock strategy verifies it?
-10. Which docs are updated: `docs/PLAN.md`, `docs/ROADMAP.md`,
-    `docs/query-language-support.md`, and phase docs.
+Use `docs/adding-a-data-source.md` before implementation starts. That guide is
+the contributor-facing checklist for profile, connection, adapter, language,
+catalog, result envelope, safety policy, fixtures, conformance level, docs, and
+ADR requirements.
 
 Adapter-level fixture strategy should be expressed through
 `table_view_lib::db::fixtures` where possible. Tests can request an opt-in
