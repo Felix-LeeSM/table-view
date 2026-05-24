@@ -37,9 +37,9 @@ worktree-spawn.sh — multi-agent worktree 생성
     - 현재 worktree 의 node_modules 와 pruned src-tauri/target 을 새 worktree 로 복사
     - 새 worktree lockfile 기준으로 pnpm install --frozen-lockfile 실행
     - Cargo.lock 기준으로 cargo fetch --manifest-path src-tauri/Cargo.toml 실행
-    - src-tauri/target 기본 복사는 llvm-cov-target, release, tmp,
-      incremental, coverage raw/profile, debug/*.a, debug/deps/*.a,
-      libduckdb-sys out/*.o 를 제외
+    - src-tauri/target 기본 복사는 release, tmp, incremental,
+      coverage raw/profile 만 제외하고 llvm-cov-target 과 DuckDB build
+      outputs 는 보존
   - 해당 worktree 에서 lefthook install
   - stdout 에 worktree 경로 출력
   - stderr 에 agent 첫 turn 검증 + worker prompt 계약 템플릿 출력
@@ -126,24 +126,16 @@ copy_bootstrap_dir() {
 prune_tauri_target() {
   local dst="$WORKTREE_PATH/src-tauri/target"
 
-  rm -rf -- "$dst/llvm-cov-target" "$dst/release" "$dst/tmp"
+  rm -rf -- "$dst/release" "$dst/tmp"
 
   if [ -d "$dst" ]; then
     find "$dst" -type d -name incremental -prune -exec rm -rf -- {} +
     find "$dst" \( -name '*.profraw' -o -name '*.profdata' \) -type f -exec rm -f -- {} +
   fi
 
-  if [ -d "$dst/debug" ]; then
-    find "$dst/debug" -maxdepth 1 -type f -name '*.a' -exec rm -f -- {} +
-  fi
-
-  if [ -d "$dst/debug/deps" ]; then
-    find "$dst/debug/deps" -maxdepth 1 -type f -name '*.a' -exec rm -f -- {} +
-  fi
-
-  if [ -d "$dst/debug/build" ]; then
-    find "$dst/debug/build" -path '*/libduckdb-sys-*/out/*.o' -type f -exec rm -f -- {} +
-  fi
+  # Keep compiled deps and native build outputs. Pre-push runs cargo-llvm-cov
+  # against llvm-cov-target, and removing DuckDB objects forces minute-scale
+  # C++ rebuilds in every spawned worktree.
 }
 
 copy_tauri_target() {
@@ -181,15 +173,11 @@ copy_tauri_target() {
   if command -v rsync >/dev/null 2>&1; then
     mkdir -p "$dst"
     rsync -a \
-      --exclude='/llvm-cov-target/' \
       --exclude='/release/' \
       --exclude='/tmp/' \
       --exclude='*/incremental/' \
       --exclude='*.profraw' \
       --exclude='*.profdata' \
-      --exclude='/debug/*.a' \
-      --exclude='/debug/deps/*.a' \
-      --exclude='/debug/build/libduckdb-sys-*/out/*.o' \
       -- "$src/" "$dst/"
     prune_tauri_target
   else

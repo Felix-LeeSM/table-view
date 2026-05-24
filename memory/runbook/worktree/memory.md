@@ -63,11 +63,11 @@ src-tauri/Cargo.toml` 를 실행한다. 복사는 빠른 시작용이고, instal
 branch 별 lockfile 차이를 보정한다. `--no-deps` 를 주면 의존성 복사/보정을
 생략한다.
 
-`src-tauri/target/` 기본 복사는 `llvm-cov-target/`, `release/`, `tmp/`,
-`*/incremental/`, coverage raw/profile, `debug/*.a`, `debug/deps/*.a`,
-`libduckdb-sys` 의 `out/*.o` 를 제외한다. 목적은 DuckDB/Rust 의존성 산출물은
-가져오되 coverage 전용 target, 큰 최종 산출물, 정적 라이브러리에 이미 묶인
-C++ object 복사는 피하는 것. 전체 target 이 필요하면 `--full-target` 을 쓴다.
+`src-tauri/target/` 기본 복사는 `llvm-cov-target/` 과 DuckDB native build
+outputs 를 보존하고 `release/`, `tmp/`, `*/incremental/`, coverage raw/profile
+만 제외한다. 목적은 pre-push 의 `cargo-llvm-cov` 와 DuckDB/Rust 의존성 산출물을
+재사용하되 volatile coverage output 과 최종 산출물은 피하는 것. 전체 target 이
+필요하면 `--full-target` 을 쓴다.
 
 ## 책임
 
