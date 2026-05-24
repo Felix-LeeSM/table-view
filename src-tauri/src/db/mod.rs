@@ -13,6 +13,7 @@
 
 pub mod active;
 pub mod duckdb;
+pub mod fixtures;
 pub mod kv_trait;
 pub mod kv_types;
 pub mod mongodb;
