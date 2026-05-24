@@ -3,16 +3,16 @@
 Active/deferred risk 단일 추적 문서. Resolved risk 는
 `docs/archives/risks/resolved-risks.md` 에서 관리한다.
 
-Last updated: 2026-05-24 (Sprint 468 Redis/Valkey integration gate)
+Last updated: 2026-05-24 (Sprint 468 Redis/Valkey integration gate; Sprint 464 ERD merge alignment)
 
 ## Summary
 
 | Status | Count |
 |---|---:|
-| Active | 27 |
+| Active | 29 |
 | Deferred | 1 |
 | Resolved | 17 |
-| Total | 45 |
+| Total | 47 |
 
 ## Active / Deferred Risks
 
@@ -45,7 +45,9 @@ Last updated: 2026-05-24 (Sprint 468 Redis/Valkey integration gate)
 | RISK-042 | MySQL/MariaDB version-aware capability gates are typed/tested metadata but not yet wired through runtime/UI capability lookup | active | frontend/capabilities | Sprint 458, Sprint 459 | route feature gates through server-version-aware profile context |
 | RISK-043 | MariaDB runtime support reuses the MySQL adapter path without a MariaDB-engine integration fixture in CI | active | backend/testing | Sprint 451, Sprint 459 | add MariaDB service fixture smoke or narrow public support claim |
 | RISK-044 | Result envelope migration remains a compatibility layer; IPC still returns legacy `QueryResult` for RDBMS runtimes | active | query/results | Sprint 444, Sprint 459 | move query IPC boundary to typed result envelopes |
+| RISK-045 | ERD navigation/layout has component coverage but no automated desktop+narrow viewport screenshot smoke | active | frontend/ui | Sprint 463, Sprint 464 | add Playwright/browser visual smoke for ERD dense-schema view |
 | RISK-046 | Redis/Valkey first slice excludes cluster, pub/sub, modules, and consumer-group management despite exposing base KV browsing/editing | active | kv/runtime | Sprint 468 | scope follow-up contracts before broad Redis capability claims |
+| RISK-047 | Production ERD snapshot feeds table/column caches only; constraint/index graph nodes remain fixture-covered but not wired from live schema-store caches | active | frontend/schema | Sprint 464 | wire constraints/indexes into `buildSchemaGraphCatalogSnapshot` inputs from schema-store caches |
 
 ## Notes
 
@@ -53,4 +55,6 @@ Last updated: 2026-05-24 (Sprint 468 Redis/Valkey integration gate)
 - `RISK-033` moved to resolved: Phase 28 + roadmap memory now define Mongo edit milestone.
 - `RISK-039`-`RISK-041` moved to resolved after Sprint 433-438 follow-ups.
 - `RISK-042`-`RISK-044` added by Sprint 459 RDBMS integration gate.
+- `RISK-045` added by Sprint 464 ERD integration gate.
 - `RISK-046` added by Sprint 468 Redis/Valkey integration gate.
+- `RISK-047` added by Sprint 464 to track production ERD graph-source coverage.

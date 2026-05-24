@@ -310,6 +310,7 @@ export function parseConnectionUrl(
       user: decodeURIComponent(parsed.username),
       password: decodeURIComponent(parsed.password),
       database: dbType === "redis" && database === "" ? "0" : database,
+      ...(parsed.protocol === "rediss:" ? { tlsEnabled: true } : {}),
       paradigm: paradigmOf(dbType),
     };
   } catch {

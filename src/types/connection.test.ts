@@ -127,6 +127,7 @@ describe("parseConnectionUrl paradigm tagging (Sprint 65)", () => {
       user: "user",
       password: "pw",
       database: "4",
+      tlsEnabled: true,
       paradigm: "kv",
     });
   });

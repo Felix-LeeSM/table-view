@@ -126,6 +126,7 @@ interface PasteCase {
     user?: string;
     database?: string;
     password?: string;
+    tlsEnabled?: boolean;
   };
 }
 
@@ -248,6 +249,7 @@ const PASTE_CASES: PasteCase[] = [
       user: "rediu",
       database: "5",
       password: "redip",
+      tlsEnabled: true,
     },
   },
 ];
@@ -312,6 +314,12 @@ describe("[AC-178-01] form-mode host paste detection", () => {
               .getAllByLabelText(/^Database( \(optional\))?$/)
               .find((el) => el.tagName === "INPUT") as HTMLInputElement);
       expect(dbInput.value).toBe(c.expected.database ?? "");
+      if (c.expected.dbType === "redis") {
+        const tlsInput = screen.getByLabelText(
+          "Enable TLS",
+        ) as HTMLInputElement;
+        expect(tlsInput.checked).toBe(!!c.expected.tlsEnabled);
+      }
       // Password is not directly readable — we save and inspect the
       // outgoing payload instead. Skip here unless the AC explicitly
       // covers it; AC-178-02 below covers the password verbatim case.
