@@ -73,12 +73,13 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
       readFileSync(resolve(tempDir, "connections.json"), "utf8"),
     ) as { connections: { id: string; db_type: string; password: string }[] };
     const passwordBackedConnections = conns.connections.filter(
-      (c) => c.db_type !== "sqlite",
+      (c) => !["sqlite", "duckdb", "redis"].includes(c.db_type),
     );
     expect(passwordBackedConnections.length).toBeGreaterThan(0);
     for (const c of passwordBackedConnections) {
-      expect(c.password).not.toBe("testpass");
-      expect(decrypt(c.password, key)).toBe("testpass");
+      const plain = decrypt(c.password, key);
+      expect(plain.length).toBeGreaterThan(0);
+      expect(c.password).not.toBe(plain);
     }
   });
 

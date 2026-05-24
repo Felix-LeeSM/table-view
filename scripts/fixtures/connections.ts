@@ -28,6 +28,10 @@ import {
   mysqlEnvConn,
   mysqlRootEnvConn,
 } from "./mysql.js";
+import { mariadbEnvConn } from "./mariadb.js";
+import { mssqlEnvConn } from "./mssql.js";
+import { oracleEnvConn } from "./oracle.js";
+import { redisEnvConn } from "./redis.js";
 
 const FIXTURE_GROUP_ID = "fixture-group";
 const FIXTURE_GROUP_NAME = "Fixtures";
@@ -35,7 +39,16 @@ const FIXTURE_GROUP_NAME = "Fixtures";
 interface StoredConnection {
   id: string;
   name: string;
-  db_type: "postgresql" | "mongodb" | "mysql" | "sqlite" | "redis";
+  db_type:
+    | "postgresql"
+    | "mongodb"
+    | "mysql"
+    | "sqlite"
+    | "redis"
+    | "duckdb"
+    | "mariadb"
+    | "mssql"
+    | "oracle";
   host: string;
   port: number;
   user: string;
@@ -342,6 +355,134 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
         tls_enabled: null,
       });
     }
+  }
+
+  // DuckDB — file-based, same pattern as SQLite.
+  const duckdbFile = profile.database.duckdb;
+  if (duckdbFile) {
+    for (const c of profile.connections?.duckdb ?? []) {
+      out.push({
+        id: c.id,
+        name: c.name,
+        db_type: "duckdb",
+        host: "",
+        port: 0,
+        user: "",
+        password: "",
+        database: resolve(appDataPath(), "fixtures", "duckdb", duckdbFile),
+        read_only: false,
+        group_id: FIXTURE_GROUP_ID,
+        color: c.color ?? null,
+        connection_timeout: null,
+        keep_alive_interval: null,
+        environment: c.environment ?? null,
+        auth_source: null,
+        replica_set: null,
+        tls_enabled: null,
+      });
+    }
+  }
+
+  // MariaDB — reuses MySQL protocol with separate port.
+  const mariadb = mariadbEnvConn();
+  const mariadbDb = profile.database.mariadb;
+  if (mariadbDb) {
+    for (const c of profile.connections?.mariadb ?? []) {
+      out.push({
+        id: c.id,
+        name: c.name,
+        db_type: "mariadb",
+        host: mariadb.host,
+        port: mariadb.port,
+        user: mariadb.user,
+        password: encryptForStorage(mariadb.password, key),
+        database: mariadbDb,
+        group_id: FIXTURE_GROUP_ID,
+        color: c.color ?? null,
+        connection_timeout: null,
+        keep_alive_interval: null,
+        environment: c.environment ?? null,
+        auth_source: null,
+        replica_set: null,
+        tls_enabled: null,
+      });
+    }
+  }
+
+  // MSSQL
+  const mssql = mssqlEnvConn();
+  const mssqlDb = profile.database.mssql;
+  if (mssqlDb) {
+    for (const c of profile.connections?.mssql ?? []) {
+      out.push({
+        id: c.id,
+        name: c.name,
+        db_type: "mssql",
+        host: mssql.host,
+        port: mssql.port,
+        user: mssql.user,
+        password: encryptForStorage(mssql.password, key),
+        database: mssqlDb,
+        group_id: FIXTURE_GROUP_ID,
+        color: c.color ?? null,
+        connection_timeout: null,
+        keep_alive_interval: null,
+        environment: c.environment ?? null,
+        auth_source: null,
+        replica_set: null,
+        tls_enabled: null,
+      });
+    }
+  }
+
+  // Oracle
+  const oracle = oracleEnvConn();
+  const oracleDb = profile.database.oracle;
+  if (oracleDb) {
+    for (const c of profile.connections?.oracle ?? []) {
+      out.push({
+        id: c.id,
+        name: c.name,
+        db_type: "oracle",
+        host: oracle.host,
+        port: oracle.port,
+        user: oracle.user,
+        password: encryptForStorage(oracle.password, key),
+        database: oracle.serviceName,
+        group_id: FIXTURE_GROUP_ID,
+        color: c.color ?? null,
+        connection_timeout: null,
+        keep_alive_interval: null,
+        environment: c.environment ?? null,
+        auth_source: null,
+        replica_set: null,
+        tls_enabled: null,
+      });
+    }
+  }
+
+  // Redis
+  const redisDbNum = profile.database.redis ?? 0;
+  const redis = redisEnvConn(redisDbNum);
+  for (const c of profile.connections?.redis ?? []) {
+    out.push({
+      id: c.id,
+      name: c.name,
+      db_type: "redis",
+      host: redis.host,
+      port: redis.port,
+      user: "",
+      password: encryptForStorage(redis.password, key),
+      database: String(redisDbNum),
+      group_id: FIXTURE_GROUP_ID,
+      color: c.color ?? null,
+      connection_timeout: null,
+      keep_alive_interval: null,
+      environment: c.environment ?? null,
+      auth_source: null,
+      replica_set: null,
+      tls_enabled: null,
+    });
   }
 
   return out;

@@ -68,7 +68,17 @@ const EmbedSchema = z.object({
   kind: z.enum(["one", "many"]),
 });
 
-const EntityTargetSchema = z.enum(["pg", "mongo", "mysql", "sqlite"]);
+const EntityTargetSchema = z.enum([
+  "pg",
+  "mongo",
+  "mysql",
+  "sqlite",
+  "duckdb",
+  "mariadb",
+  "mssql",
+  "oracle",
+  "redis",
+]);
 
 const EntitySchema = z
   .object({
@@ -83,6 +93,18 @@ const EntitySchema = z
     // Sprint 288 — MySQL entity placement. database = schema 라 schema 필드
     // 없이 table 만. yaml 에선 `mysql: { table: customers }` 처럼 사용.
     mysql: z.object({ table: z.string() }).optional(),
+    // SQLite uses local database files with table-only placement.
+    sqlite: z.object({ table: z.string() }).optional(),
+    // DuckDB shares PG's schema+table placement model.
+    duckdb: z.object({ schema: z.string(), table: z.string() }).optional(),
+    // MariaDB shares MySQL's table-only placement model.
+    mariadb: z.object({ table: z.string() }).optional(),
+    // MSSQL uses schema.table within the connected database.
+    mssql: z.object({ schema: z.string(), table: z.string() }).optional(),
+    // Oracle: connected user owns tables, so table-only.
+    oracle: z.object({ table: z.string() }).optional(),
+    // Redis: key prefix for the entity's hash keys.
+    redis: z.object({ key_prefix: z.string() }).optional(),
     columns: z.record(z.string(), ColumnSchema),
   })
   .strict();
@@ -110,12 +132,13 @@ const ProfileSpecSchema = z
     database: z.object({
       pg: z.string(),
       mongo: z.string(),
-      // Sprint 281 — MySQL Slice A wire-up. profile yaml 에서 mysql
-      // database 명을 따로 지정할 수 있게 (PG 와 동일한 이름을 쓸지,
-      // `*_mysql` 처럼 분리할지는 profile 측 결정).
       mysql: z.string().optional(),
-      // Sprint 452 — SQLite fixture DB is a local file under app-data.
       sqlite: z.string().optional(),
+      duckdb: z.string().optional(),
+      mariadb: z.string().optional(),
+      mssql: z.string().optional(),
+      oracle: z.string().optional(),
+      redis: z.number().int().min(0).max(15).optional(),
     }),
     locale_mix: z.record(z.string(), z.number().min(0).max(1)),
     rows: z.record(z.string(), z.number().int().nonnegative()),
@@ -123,10 +146,13 @@ const ProfileSpecSchema = z
       .object({
         pg: z.array(ConnectionSpec).optional(),
         mongo: z.array(ConnectionSpec).optional(),
-        // Sprint 281 — fixture 가 MySQL connection 도 storage 에 upsert
-        // 할 수 있게. yaml 미지정 시 buildConnections 는 mysql 항목 skip.
         mysql: z.array(ConnectionSpec).optional(),
         sqlite: z.array(ConnectionSpec).optional(),
+        duckdb: z.array(ConnectionSpec).optional(),
+        mariadb: z.array(ConnectionSpec).optional(),
+        mssql: z.array(ConnectionSpec).optional(),
+        oracle: z.array(ConnectionSpec).optional(),
+        redis: z.array(ConnectionSpec).optional(),
       })
       .optional(),
   })
