@@ -385,7 +385,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
   });
 
   // [AC-312-write-10] bulkWrite with INFO sub-ops → direct IPC call.
-  it("dispatches bulkWrite to bulkWriteDocuments (INFO sub-ops only)", async () => {
+  it("normalizes real mongosh bulkWrite insertOne before dispatch", async () => {
     const bulkResult: BulkWriteResult = {
       inserted_count: 1,
       matched_count: 1,
@@ -395,7 +395,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     };
     bulkWriteDocumentsMock.mockResolvedValueOnce(bulkResult);
     const tab = seedDocTab(
-      'db.users.bulkWrite([{op:"insertOne", document:{n:1}}])',
+      "db.users.bulkWrite([{insertOne:{document:{n:1}}}])",
     );
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
@@ -418,6 +418,28 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     expect(useQueryHistoryStore.getState().recentVisible[0]!.queryMode).toBe(
       "bulkWrite",
     );
+  });
+
+  it("rejects real mongosh bulkWrite updateOne without an _id-only filter before IPC", async () => {
+    const tab = seedDocTab(
+      'db.users.bulkWrite([{updateOne:{filter:{email:"x@y.com"}, update:{$set:{verified:true}}}}])',
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await actAsync(result.current.handleExecute);
+
+    expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      const state = getTestWorkspace("conn-mongo", "table_view_test");
+      const updated = state.tabs.find((t) => t.id === tab.id);
+      expect(updated?.type).toBe("query");
+      if (updated?.type === "query") {
+        expect(updated.queryState.status).toBe("error");
+        if (updated.queryState.status === "error") {
+          expect(updated.queryState.error).toMatch(/_id-only filter/i);
+        }
+      }
+    });
   });
 
   it("dispatches replaceOne through bulkWriteDocuments", async () => {
@@ -565,9 +587,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
 
   // [AC-312-write-11] bulkWrite with empty-filter `*-many` sub-op → STOP.
   it("bulkWrite with empty-filter *-many sub-op → STOP confirm", async () => {
-    const tab = seedDocTab(
-      'db.users.bulkWrite([{op:"deleteMany", filter:{}}])',
-    );
+    const tab = seedDocTab("db.users.bulkWrite([{deleteMany:{filter:{}}}])");
     useConnectionStore.setState({
       connections: [
         makeConn({

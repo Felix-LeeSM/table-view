@@ -289,6 +289,37 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     expect(result.current.pendingMongoConfirm).toBeNull();
   });
 
+  it("[SPRINT-475] non-prod + warn + write-capable runCommand passes backend safety ack", async () => {
+    useSafeModeStore.setState({ mode: "warn" });
+    runMongoCommandMock.mockResolvedValueOnce({ ok: 1 });
+    const tab = seedDocTab(
+      'db.runCommand({delete:"users", deletes:[{q:{active:false}, limit:0}]})',
+      {
+        database: "scratch",
+        collection: undefined,
+      },
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    await waitFor(() => {
+      expect(runMongoCommandMock).toHaveBeenCalledTimes(1);
+    });
+    expect(runMongoCommandMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      "scratch",
+      {
+        delete: "users",
+        deletes: [{ q: { active: false }, limit: 0 }],
+      },
+      true,
+    );
+    expect(result.current.pendingMongoConfirm).toBeNull();
+  });
+
   // Regression: `db.users.find({})` with empty chip → existing error
   // ("Select a target database…"). runMongoCommand MUST NOT fire.
   it("[AC-381-05 dispatcher] db.users.find({}) without chip → error path; runMongoCommand untouched", async () => {

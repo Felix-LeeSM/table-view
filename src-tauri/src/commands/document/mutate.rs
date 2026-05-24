@@ -53,11 +53,11 @@ fn require_safety_confirmation(confirmed: bool, operation: &str) -> Result<(), A
 }
 
 fn bulk_write_requires_safety(operations: &[BulkWriteOp]) -> bool {
-    operations.iter().any(|op| match op {
-        BulkWriteOp::UpdateMany { filter, .. } | BulkWriteOp::DeleteMany { filter } => {
-            filter.is_empty()
-        }
-        _ => false,
+    operations.iter().any(|op| {
+        matches!(
+            op,
+            BulkWriteOp::UpdateMany { .. } | BulkWriteOp::DeleteMany { .. }
+        )
     })
 }
 
@@ -223,9 +223,7 @@ async fn delete_many_inner(
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_document()?;
-    if filter.is_empty() {
-        require_safety_confirmation(safety_confirmed, "delete_many without filter")?;
-    }
+    require_safety_confirmation(safety_confirmed, "delete_many")?;
     adapter.delete_many(database, collection, filter).await
 }
 
@@ -270,9 +268,7 @@ async fn update_many_inner(
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_document()?;
-    if filter.is_empty() {
-        require_safety_confirmation(safety_confirmed, "update_many without filter")?;
-    }
+    require_safety_confirmation(safety_confirmed, "update_many")?;
     adapter
         .update_many(database, collection, filter, patch)
         .await
@@ -586,6 +582,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn delete_many_non_empty_filter_without_safety_ack_is_validation_error() {
+        let state = state_with("d", document_default()).await;
+        match delete_many_inner(
+            &state,
+            "d",
+            "db",
+            "c",
+            bson::doc! { "archived": true },
+            false,
+        )
+        .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("safety confirmation"),
+                    "unexpected message: {msg}"
+                );
+            }
+            other => panic!("expected Validation error, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
     async fn delete_many_rdb_paradigm_returns_unsupported() {
         let state = state_with("rdb", rdb_default()).await;
         assert!(matches!(
@@ -621,6 +640,30 @@ mod tests {
             .await,
             Err(AppError::NotFound(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn update_many_non_empty_filter_without_safety_ack_is_validation_error() {
+        let state = state_with("d", document_default()).await;
+        match update_many_inner(
+            &state,
+            "d",
+            "db",
+            "c",
+            bson::doc! { "active": false },
+            bson::doc! { "$set": { "reviewed": true } },
+            false,
+        )
+        .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("safety confirmation"),
+                    "unexpected message: {msg}"
+                );
+            }
+            other => panic!("expected Validation error, got: {:?}", other),
+        }
     }
 
     #[tokio::test]
@@ -828,5 +871,57 @@ mod tests {
         assert_eq!(r.inserted_count, 3);
         assert_eq!(r.deleted_count, 4);
         assert_eq!(r.upserted_ids.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn bulk_write_delete_many_non_empty_filter_without_safety_ack_is_validation_error() {
+        let state = state_with("d", document_default()).await;
+        match bulk_write_documents_inner(
+            &state,
+            "d",
+            "db",
+            "c",
+            vec![BulkWriteOp::DeleteMany {
+                filter: bson::doc! { "archived": true },
+            }],
+            false,
+        )
+        .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("safety confirmation"),
+                    "unexpected message: {msg}"
+                );
+            }
+            other => panic!("expected Validation error, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn bulk_write_update_many_non_empty_filter_without_safety_ack_is_validation_error() {
+        let state = state_with("d", document_default()).await;
+        match bulk_write_documents_inner(
+            &state,
+            "d",
+            "db",
+            "c",
+            vec![BulkWriteOp::UpdateMany {
+                filter: bson::doc! { "active": false },
+                update: bson::doc! { "$set": { "reviewed": true } },
+                upsert: false,
+            }],
+            false,
+        )
+        .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("safety confirmation"),
+                    "unexpected message: {msg}"
+                );
+            }
+            other => panic!("expected Validation error, got: {:?}", other),
+        }
     }
 }

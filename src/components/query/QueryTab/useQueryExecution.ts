@@ -78,6 +78,167 @@ import {
 // (schemaStore) reuse the same verify + sync logic. Behaviour unchanged.
 import { logger } from "@lib/logger";
 
+const BULK_WRITE_OP_NAMES = [
+  "insertOne",
+  "updateOne",
+  "updateMany",
+  "deleteOne",
+  "deleteMany",
+  "replaceOne",
+] as const satisfies readonly BulkWriteOp["op"][];
+
+type NormalizeBulkWriteOpsResult =
+  | { ok: true; ops: BulkWriteOp[] }
+  | { ok: false; error: string };
+
+type NormalizeBulkWriteOpResult =
+  | { ok: true; op: BulkWriteOp }
+  | { ok: false; error: string };
+
+function isBulkWriteOpName(value: string): value is BulkWriteOp["op"] {
+  return (BULK_WRITE_OP_NAMES as readonly string[]).includes(value);
+}
+
+function readBulkWriteRecordField(
+  record: Record<string, unknown>,
+  field: string,
+  label: string,
+): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  const value = record[field];
+  if (!isRecord(value)) {
+    return { ok: false, error: `bulkWrite ${label} must be an object.` };
+  }
+  return { ok: true, value };
+}
+
+function readOptionalBulkWriteBoolean(
+  record: Record<string, unknown>,
+  field: string,
+  label: string,
+): { ok: true; value?: boolean } | { ok: false; error: string } {
+  const value = record[field];
+  if (value === undefined) return { ok: true };
+  if (typeof value !== "boolean") {
+    return { ok: false, error: `bulkWrite ${label} must be a boolean.` };
+  }
+  return { ok: true, value };
+}
+
+function normalizeBulkWriteSpec(
+  op: BulkWriteOp["op"],
+  spec: Record<string, unknown>,
+): NormalizeBulkWriteOpResult {
+  if (op === "insertOne") {
+    const document = readBulkWriteRecordField(
+      spec,
+      "document",
+      "insertOne.document",
+    );
+    if (!document.ok) return document;
+    return { ok: true, op: { op, document: document.value } };
+  }
+
+  if (op === "deleteOne" || op === "deleteMany") {
+    const filter = readBulkWriteRecordField(spec, "filter", `${op}.filter`);
+    if (!filter.ok) return filter;
+    return { ok: true, op: { op, filter: filter.value } };
+  }
+
+  if (op === "replaceOne") {
+    const filter = readBulkWriteRecordField(
+      spec,
+      "filter",
+      "replaceOne.filter",
+    );
+    if (!filter.ok) return filter;
+    const replacement = readBulkWriteRecordField(
+      spec,
+      "replacement",
+      "replaceOne.replacement",
+    );
+    if (!replacement.ok) return replacement;
+    const upsert = readOptionalBulkWriteBoolean(
+      spec,
+      "upsert",
+      "replaceOne.upsert",
+    );
+    if (!upsert.ok) return upsert;
+    const normalized: Extract<BulkWriteOp, { op: "replaceOne" }> = {
+      op,
+      filter: filter.value,
+      replacement: replacement.value,
+    };
+    if (upsert.value !== undefined) normalized.upsert = upsert.value;
+    return { ok: true, op: normalized };
+  }
+
+  const filter = readBulkWriteRecordField(spec, "filter", `${op}.filter`);
+  if (!filter.ok) return filter;
+  const update = readBulkWriteRecordField(spec, "update", `${op}.update`);
+  if (!update.ok) return update;
+  const upsert = readOptionalBulkWriteBoolean(spec, "upsert", `${op}.upsert`);
+  if (!upsert.ok) return upsert;
+  const normalized: Extract<BulkWriteOp, { op: "updateOne" | "updateMany" }> = {
+    op,
+    filter: filter.value,
+    update: update.value,
+  };
+  if (upsert.value !== undefined) normalized.upsert = upsert.value;
+  return { ok: true, op: normalized };
+}
+
+function normalizeBulkWriteOperation(
+  raw: unknown,
+  index: number,
+): NormalizeBulkWriteOpResult {
+  if (!isRecord(raw)) {
+    return {
+      ok: false,
+      error: `bulkWrite operation ${index} must be an object.`,
+    };
+  }
+
+  const internalOp = raw["op"];
+  if (typeof internalOp === "string") {
+    if (!isBulkWriteOpName(internalOp)) {
+      return {
+        ok: false,
+        error: `unsupported bulkWrite operation: ${internalOp}`,
+      };
+    }
+    return normalizeBulkWriteSpec(internalOp, raw);
+  }
+
+  const keys = Object.keys(raw);
+  if (keys.length !== 1) {
+    return {
+      ok: false,
+      error: `bulkWrite operation ${index} must contain exactly one operation name.`,
+    };
+  }
+  const op = keys[0]!;
+  if (!isBulkWriteOpName(op)) {
+    return { ok: false, error: `unsupported bulkWrite operation: ${op}` };
+  }
+  const spec = raw[op];
+  if (!isRecord(spec)) {
+    return { ok: false, error: `bulkWrite ${op} must be an object.` };
+  }
+  return normalizeBulkWriteSpec(op, spec);
+}
+
+function normalizeBulkWriteOperations(
+  rawOps: readonly unknown[],
+): NormalizeBulkWriteOpsResult {
+  const ops: BulkWriteOp[] = [];
+  for (const [index, raw] of rawOps.entries()) {
+    const normalized = normalizeBulkWriteOperation(raw, index);
+    if (!normalized.ok) return normalized;
+    ops.push(normalized.op);
+  }
+  return { ok: true, ops };
+}
+
 function findNonDeterministicBulkWriteOp(
   ops: readonly BulkWriteOp[],
 ): string | null {
@@ -1340,7 +1501,15 @@ export function useQueryExecution({
           });
           return;
         }
-        const ops = opsRaw as readonly BulkWriteOp[];
+        const normalized = normalizeBulkWriteOperations(opsRaw);
+        if (!normalized.ok) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: normalized.error,
+          });
+          return;
+        }
+        const ops = normalized.ops;
         const identityError = findNonDeterministicBulkWriteOp(ops);
         if (identityError !== null) {
           updateQueryState(tab.id, {

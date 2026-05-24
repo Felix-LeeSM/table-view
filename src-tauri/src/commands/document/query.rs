@@ -484,26 +484,43 @@ async fn run_mongo_command_inner(
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
+    let adapter = active.as_document()?;
     require_run_command_safety(&command, safety_confirmed)?;
-    active.as_document()?.run_command(database, command).await
+    adapter.run_command(database, command).await
 }
 
 fn require_run_command_safety(command: &bson::Document, confirmed: bool) -> Result<(), AppError> {
-    const DESTRUCTIVE_COMMANDS: &[&str] = &[
-        "drop",
-        "dropDatabase",
-        "dropIndexes",
-        "killOp",
-        "renameCollection",
+    const READ_ONLY_COMMANDS: &[&str] = &[
+        "buildInfo",
+        "collStats",
+        "connectionStatus",
+        "count",
+        "currentOp",
+        "dbStats",
+        "distinct",
+        "explain",
+        "find",
+        "getCmdLineOpts",
+        "getLog",
+        "getParameter",
+        "hello",
+        "hostInfo",
+        "isMaster",
+        "listCollections",
+        "listDatabases",
+        "listIndexes",
+        "ping",
+        "serverStatus",
+        "whatsmyuri",
     ];
     let Some(first_key) = command.keys().next() else {
         return Ok(());
     };
-    if !DESTRUCTIVE_COMMANDS.contains(&first_key.as_str()) || confirmed {
+    if READ_ONLY_COMMANDS.contains(&first_key.as_str()) || confirmed {
         return Ok(());
     }
     Err(AppError::Validation(format!(
-        "runCommand {first_key} requires safety confirmation"
+        "runCommand {first_key} requires safety confirmation because it is not in the read-only allowlist"
     )))
 }
 
@@ -1043,6 +1060,41 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn run_mongo_command_write_commands_without_safety_ack_are_validation_errors() {
+        let state = state_with("d", document_default()).await;
+        for body in [
+            serde_json::json!({ "delete": "users", "deletes": [{ "q": { "active": false }, "limit": 0 }] }),
+            serde_json::json!({ "update": "users", "updates": [{ "q": { "active": false }, "u": { "$set": { "reviewed": true } }, "multi": true }] }),
+            serde_json::json!({ "findAndModify": "users", "query": { "_id": 1 }, "update": { "$set": { "reviewed": true } } }),
+        ] {
+            match run_mongo_command_inner(&state, "d", Some("myapp"), body, false).await {
+                Err(AppError::Validation(msg)) => {
+                    assert!(
+                        msg.contains("safety confirmation"),
+                        "unexpected validation message: {msg}"
+                    );
+                }
+                other => panic!("expected AppError::Validation, got: {:?}", other),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_unknown_command_without_safety_ack_is_validation_error() {
+        let state = state_with("d", document_default()).await;
+        let body = serde_json::json!({ "customWriteCapableCommand": 1 });
+        match run_mongo_command_inner(&state, "d", Some("myapp"), body, false).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("safety confirmation"),
+                    "unexpected validation message: {msg}"
+                );
+            }
+            other => panic!("expected AppError::Validation, got: {:?}", other),
+        }
+    }
+
     // ── Sprint 384 (2026-05-17) — extended-JSON → BSON conversion ───────
     //
     // 작성 이유: sprint-383 mongoshAst 가 `ObjectId(...)` / `ISODate(...)` /
@@ -1074,7 +1126,7 @@ mod tests {
             Ok(serde_json::json!({ "ok": 1 }))
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
-        let r = run_mongo_command_inner(&state, "d", None, body, false).await;
+        let r = run_mongo_command_inner(&state, "d", None, body, true).await;
         let captured = captured.lock().unwrap().clone();
         (r, captured)
     }
