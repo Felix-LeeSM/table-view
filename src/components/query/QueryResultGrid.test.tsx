@@ -121,6 +121,43 @@ describe("QueryResultGrid", () => {
     expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
   });
 
+  it("renders Mongo document results without SQL editability wording", () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-mongo",
+          name: "Mongo",
+          dbType: "mongodb",
+          host: "localhost",
+          port: 27017,
+          user: "",
+          database: "table_view_test",
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "document",
+        },
+      ],
+    });
+    const documentResult = {
+      ...SELECT_RESULT,
+      resultUnit: "document",
+    } satisfies QueryResult & { resultUnit: "document" };
+
+    render(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: documentResult }}
+        connectionId="conn-mongo"
+        database="table_view_test"
+        sql="db.users.find({ active: true })"
+      />,
+    );
+
+    expect(screen.getByText(/2 documents/)).toBeInTheDocument();
+    expect(screen.queryByText(/Read-only/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/row editing/i)).not.toBeInTheDocument();
+  });
+
   it("renders NULL values as italic text for SELECT", () => {
     render(
       <QueryResultGrid
