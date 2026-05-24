@@ -265,6 +265,19 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("opensearch")).toBe(true);
   });
 
+  it("exposes search profiles as executable search-document sources", () => {
+    for (const dbType of [
+      "elasticsearch",
+      "opensearch",
+    ] satisfies DatabaseType[]) {
+      const profile = getDataSourceProfile(dbType);
+
+      expect(profile.capabilities.query.query).toBe(true);
+      expect(profile.capabilities.query.cancel).toBe(true);
+      expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(true);
+    }
+  });
+
   it("keeps legacy URL supported DBMS list aligned with profile-supported DBMS", () => {
     expect(getConnectionSupportedDatabaseTypes()).toEqual(
       SUPPORTED_DATABASE_TYPES,
