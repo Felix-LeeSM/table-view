@@ -6,7 +6,7 @@ use super::values::{
     map_key_type, read_hash, read_json, read_list, read_set, read_stream_range, read_string,
     read_zset, ttl_from_seconds,
 };
-use super::RedisAdapter;
+use super::{build_set_string_command, RedisAdapter};
 use crate::db::{
     DbAdapter, KvAdapter, KvDeleteRequest, KvKeyScanRequest, KvKeyType, KvSetStringRequest,
     KvStreamReadRequest, KvTtlState, KvTtlUpdate, KvTtlUpdateRequest, KvValueReadRequest,
@@ -47,6 +47,34 @@ fn connection_url_percent_encodes_auth_and_database() {
     let (url, db) = connection_url(&config("2")).unwrap();
     assert_eq!(db, 2);
     assert_eq!(url, "redis://acl%20user:p%40ss@redis.local:6379/2");
+}
+
+#[test]
+fn connection_url_uses_rediss_when_tls_is_enabled() {
+    let mut config = config("5");
+    config.tls_enabled = Some(true);
+
+    let (url, db) = connection_url(&config).unwrap();
+
+    assert_eq!(db, 5);
+    assert_eq!(url, "rediss://acl%20user:p%40ss@redis.local:6379/5");
+}
+
+#[test]
+fn set_string_reject_overwrite_uses_atomic_set_nx_with_ttl() {
+    let cmd = build_set_string_command(&KvSetStringRequest {
+        key: "session:1".into(),
+        value: "v".into(),
+        database: Some(0),
+        ttl_seconds: Some(30),
+        safety: KvWriteSafety::RejectOverwrite,
+    })
+    .unwrap();
+
+    assert_eq!(
+        String::from_utf8(cmd.get_packed_command()).unwrap(),
+        "*6\r\n$3\r\nSET\r\n$9\r\nsession:1\r\n$1\r\nv\r\n$2\r\nNX\r\n$2\r\nEX\r\n$2\r\n30\r\n"
+    );
 }
 
 #[test]

@@ -104,17 +104,6 @@ impl RedisAdapter {
         })
         .await
     }
-
-    async fn key_exists(&self, key: &str) -> Result<bool, AppError> {
-        self.with_connection(async |connection| {
-            ::redis::cmd("EXISTS")
-                .arg(key)
-                .query_async(connection)
-                .await
-                .map_err(redis_database_error)
-        })
-        .await
-    }
 }
 
 impl DbAdapter for RedisAdapter {
@@ -276,32 +265,22 @@ impl KvAdapter for RedisAdapter {
     ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
         Box::pin(async move {
             validate_key(&request.key)?;
+            let cmd = build_set_string_command(&request)?;
             self.ensure_database(request.database).await?;
-            if request.safety == KvWriteSafety::RejectOverwrite
-                && self.key_exists(&request.key).await?
-            {
+            let changed = self
+                .with_connection(async |connection| {
+                    let result: Option<String> = cmd
+                        .query_async(connection)
+                        .await
+                        .map_err(redis_database_error)?;
+                    Ok(result.is_some())
+                })
+                .await?;
+            if !changed {
                 return Err(AppError::Validation(
                     "Key already exists; enable overwrite to replace it".into(),
                 ));
             }
-            self.with_connection(async |connection| {
-                let mut cmd = ::redis::cmd("SET");
-                cmd.arg(&request.key).arg(&request.value);
-                if let Some(seconds) = request.ttl_seconds {
-                    if seconds == 0 {
-                        return Err(AppError::Validation(
-                            "ttlSeconds must be greater than zero".into(),
-                        ));
-                    }
-                    cmd.arg("EX").arg(seconds);
-                }
-                let _: String = cmd
-                    .query_async(connection)
-                    .await
-                    .map_err(redis_database_error)?;
-                Ok(())
-            })
-            .await?;
             Ok(KvMutationResult {
                 key: request.key.clone(),
                 changed: true,
@@ -372,6 +351,23 @@ impl KvAdapter for RedisAdapter {
             read_stream_range(self, &request.key, start, end, limit).await
         })
     }
+}
+
+fn build_set_string_command(request: &KvSetStringRequest) -> Result<::redis::Cmd, AppError> {
+    let mut cmd = ::redis::cmd("SET");
+    cmd.arg(&request.key).arg(&request.value);
+    if request.safety == KvWriteSafety::RejectOverwrite {
+        cmd.arg("NX");
+    }
+    if let Some(seconds) = request.ttl_seconds {
+        if seconds == 0 {
+            return Err(AppError::Validation(
+                "ttlSeconds must be greater than zero".into(),
+            ));
+        }
+        cmd.arg("EX").arg(seconds);
+    }
+    Ok(cmd)
 }
 
 async fn expire_key(adapter: &RedisAdapter, key: &str, seconds: u64) -> Result<bool, AppError> {
