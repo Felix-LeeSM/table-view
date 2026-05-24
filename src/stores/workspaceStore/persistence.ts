@@ -113,10 +113,8 @@ export function debouncePersistWorkspaces(workspaces: WorkspacesShape): void {
 function migrateTab(t: Tab, workspaceDb: string): Tab {
   if (t.type === "query") {
     const paradigm: Paradigm = t.paradigm ?? "rdb";
-    const queryMode: WorkspaceQueryMode = sanitizeWorkspaceQueryMode(
-      paradigm,
-      t.queryMode,
-    );
+    const queryMode: WorkspaceQueryMode | undefined =
+      sanitizeWorkspaceQueryMode(paradigm, t.queryMode);
     const queryLanguage = toWorkspaceQueryLanguage({
       paradigm,
       queryLanguage: t.queryLanguage,

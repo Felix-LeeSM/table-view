@@ -232,7 +232,27 @@ describe("DataSourceProfile registry", () => {
 
     expect(mongo.paradigm).toBe("document");
     expect(mongo.languages).toEqual(["mongosh"]);
+    expect(mongo.catalogModel).toBe("document");
+    expect(mongo.resultKinds).toEqual(["document", "tabular"]);
+    expect(mongo.safetyPolicy).toBe("document-default");
+    expect(mongo.backendAdapter).toEqual({
+      id: "mongodb",
+      kind: "document",
+      capabilitySource: "mongodb",
+    });
     expect(mongo.capabilities.connection.switchDatabase).toBe(false);
+    expect(mongo.capabilities.query.query).toBe(true);
+    expect(mongo.capabilities.query.cancel).toBe(true);
+    expect(mongo.capabilities.query.explain).toBe(true);
+    expect(mongo.capabilities.catalog.browse).toBe(true);
+    expect(mongo.capabilities.catalog.schema).toBe(true);
+    expect(mongo.capabilities.catalog.indexes).toBe(true);
+    expect(mongo.capabilities.catalog.relationships).toBe(false);
+    expect(mongo.capabilities.edit.editDocuments).toBe(true);
+    expect(mongo.capabilities.edit.editRows).toBe(false);
+    expect(mongo.capabilities.edit.bulkWrite).toBe(true);
+    expect(mongo.capabilities.ddl.createIndex).toBe(true);
+    expect(mongo.capabilities.ddl.dropObject).toBe(true);
     expect(mongo.capabilities).toEqual(expectedCapabilitiesByType.mongodb);
   });
 
