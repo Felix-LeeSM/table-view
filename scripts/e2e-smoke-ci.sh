@@ -21,6 +21,7 @@ REPORT_DIR="$ROOT_DIR/e2e/wdio-report"
 mkdir -p "$REPORT_DIR"
 find "$REPORT_DIR" -type f ! -name .gitkeep -delete
 
+pnpm tsx scripts/e2e-pre-smoke-release-gate.ts
 pnpm tsx e2e/fixtures/seed-smoke.ts
 pnpm tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
 

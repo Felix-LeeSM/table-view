@@ -20,17 +20,16 @@ async fn redis_testcontainer_covers_live_kv_catalog_values_and_streams() {
     {
         Ok(container) => container,
         Err(error) => {
-            println!(
-                "SKIP: Redis testcontainer start failed ({}). Docker daemon required.",
-                error
-            );
+            skip_or_fail_on_ci(format!(
+                "Redis testcontainer start failed ({error}). Docker daemon required."
+            ));
             return;
         }
     };
     let port = match container.get_host_port_ipv4(REDIS_PORT).await {
         Ok(port) => port,
         Err(error) => {
-            println!("SKIP: Redis container port mapping failed ({})", error);
+            skip_or_fail_on_ci(format!("Redis container port mapping failed ({error})"));
             return;
         }
     };
@@ -139,6 +138,13 @@ async fn seed_redis(port: u16) {
         .query_async(&mut connection)
         .await
         .unwrap();
+}
+
+fn skip_or_fail_on_ci(reason: String) {
+    if std::env::var_os("CI").is_some() || std::env::var_os("GITHUB_ACTIONS").is_some() {
+        panic!("{reason}");
+    }
+    println!("SKIP: {reason}");
 }
 
 fn redis_config(port: u16, database: &str) -> ConnectionConfig {

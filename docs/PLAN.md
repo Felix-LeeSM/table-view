@@ -66,8 +66,17 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 
 Sprint 481 release-gate decision: do not promote Cassandra/DynamoDB/graph/vector/
 stream yet. The next promotion requires a profile/capability/fixture decision
-under `docs/adding-a-data-source.md`; near-term work should harden Redis/Valkey
-parity and Search live HTTP before adding another paradigm.
+under `docs/adding-a-data-source.md`. No additional DBMS/runtime promotion starts
+while one existing supported DBMS is being lifted through a TablePlus-style
+query/workbench parity lane. This is not full admin parity: role/user/permission
+UI, extension management UI, schema diff/migration preview, DB-level backup/
+restore/import/export, and deep activity/profiler dashboards stay out of scope.
+Each lane must close runtime, parser/safety, completion, edit, fixture, e2e,
+support-claim, and lightweight EXPLAIN/plan-inspection gaps before the next lane
+starts. Locked parity order: PostgreSQL first, then MySQL/MariaDB, then
+SQLite/DuckDB, then MongoDB whitelist/full-support. After those lanes clear
+enough capacity, promotion order is Elasticsearch/OpenSearch live HTTP first,
+then the MSSQL+Oracle enterprise RDBMS lane.
 
 Fixture evidence boundary: CI integration services cover PostgreSQL and MongoDB;
 Redis has a Rust testcontainer smoke in CI. MySQL/MariaDB/Redis are available in
@@ -88,17 +97,22 @@ active risk.
 | 8 | DuckDB + file analytics hardening | active follow-up | `.duckdb`, CSV, Parquet, JSON, NDJSON preview/query 는 local-first runtime path 존재. analytics import/history/favorites 확대는 별도 결정 | `docs/data-source-architecture.md`, `docs/ROADMAP.md`, `docs/sprints/sprint-457/contract.md` |
 | 9 | RDBMS ERD / SchemaGraph | planned | FK/constraint catalog 를 재사용 가능한 `SchemaGraph` 로 승격. ERD는 첫 renderer | `docs/data-source-architecture.md` |
 | 10 | Redis | active Redis first slice | Redis adapter, KV sidebar, key scan, value read, guarded string write, TTL mutation, and bounded stream read paths are live and covered by a Redis testcontainer smoke. Valkey parity/support is unverified follow-up. Cluster/pubsub/modules/consumer-group management remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-468/handoff.md` |
-| 11 | Elasticsearch/OpenSearch | fixture-backed only | Search adapter contract, Elasticsearch/OpenSearch identities, fixture catalog, bounded fixture DSL execution, and `searchHits` result UI are fixture-backed. Live connection UI waits for HTTP catalog/query execution, cluster administration, and observability | `docs/data-source-architecture.md`, `docs/sprints/sprint-472/handoff.md`, `docs/RISKS.md` |
-| 12 | MongoDB full support | deferred/current subagent audit only | Phase 28 Slice A 는 보존하되 RDBMS-first 후 재개. `queryMode` 는 execution SOT 로 되살리지 않음 | `docs/phases/phase-28.md` |
-| 13 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md`, `docs/adding-a-data-source.md` |
-| 14 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |
-| 15 | State-management migration | planned contracts | Sprint 353-376 contracts 는 보존. 실제 재개 전 current code와 재-audit 필요 | `docs/state-management-strategy-2026-05-15.md` |
+| 11 | One-DBMS query/workbench parity lane | active planning | 새 DBMS 승격 중단. PostgreSQL → MySQL/MariaDB → SQLite/DuckDB → MongoDB 순서로 하나씩 runtime/parser/safety/completion/edit/fixture/e2e/support-claim/Explain gap을 닫음. Full admin parity는 scope 밖. Sprint sequence는 아직 만들지 않음 | `docs/phases/phase-32.md`, `docs/RISKS.md`, `docs/query-language-support.md` |
+| 12 | Elasticsearch/OpenSearch live HTTP | deferred until active parity lane clears | Search adapter fixture slice는 유지. live connection UI, HTTP catalog/query execution, cluster administration, and observability는 one-DBMS parity lane 뒤 첫 promotion | `docs/data-source-architecture.md`, `docs/sprints/sprint-472/handoff.md`, `docs/RISKS.md` |
+| 13 | MSSQL + Oracle enterprise RDBMS lane | deferred after Search live HTTP | Known planned RDBMS identities 유지. runtime adapter, driver/license, dialect depth, CI fixture 전략은 Search live HTTP 뒤 별도 lane으로 lock | `docs/phases/phase-20.md`, `docs/query-language-support.md` |
+| 14 | MongoDB full support | deferred/current whitelist hardening only | Phase 28 Slice A 는 보존. 현재는 whitelist workflow 품질을 먼저 끌어올리고 arbitrary JS shell/full-support는 후속 결정 | `docs/phases/phase-28.md` |
+| 15 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md`, `docs/adding-a-data-source.md` |
+| 16 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |
+| 17 | State-management migration | planned contracts | Sprint 353-376 contracts 는 보존. 실제 재개 전 current code와 재-audit 필요 | `docs/state-management-strategy-2026-05-15.md` |
 
 ## Active Sprint Sequence
 
 본 순서는 병렬 실행을 위한 contract queue 다. 440-447 은 architecture alignment
 root 이고, 448-459 는 RDBMS-first 실행 구간이다. 460 이후는 worktree/subagent 로
 병렬 준비 가능하지만, 사용자 승인 전 RDBMS 순서를 앞지르지 않는다.
+
+Sprint 481 이후 active implementation sprint 는 아직 배정하지 않는다. 다음 작업
+선택은 `docs/ROADMAP.md` 와 `docs/phases/phase-32.md` 를 먼저 보고 결정한다.
 
 | Sprint | Track | Parallel lane | Depends on |
 |---:|---|---|---|
@@ -163,6 +177,14 @@ root 이고, 448-459 는 RDBMS-first 실행 구간이다. 460 이후는 worktree
 | 470 | Elasticsearch/OpenSearch connection/catalog fixtures; live HTTP unsupported |
 | 471 | Bounded Search DSL fixture execution and `searchHits` result envelopes |
 | 472 | Elasticsearch/OpenSearch integration gate docs/status alignment; live HTTP/admin/observability follow-up |
+| 473 | MongoDB profile/capability normalization |
+| 474 | MongoDB catalog/result envelope |
+| 475 | MongoDB edit/safety semantics |
+| 476 | MongoDB integration gate |
+| 477 | Cross-paradigm fixture harness |
+| 478 | Adapter conformance test matrix |
+| 479 | Language registry and completion ownership matrix |
+| 480 | Capability documentation/developer guide |
 
 ## Phase Index
 
@@ -172,6 +194,7 @@ root 이고, 448-459 는 RDBMS-first 실행 구간이다. 460 이후는 worktree
 | 19 | SQLite adapter | deferred | `docs/phases/phase-19.md` |
 | 20 | Oracle adapter | deferred | `docs/phases/phase-20.md` |
 | 28 | MongoDB Full Support | deferred/current subagent audit only | `docs/phases/phase-28.md` |
+| 32 | Query/Workbench parity ladder | active planning, no sprint sequence | `docs/phases/phase-32.md` |
 | 31 follow-up | semantic widening / capability gating | active follow-up | `docs/archives/phases/completed/phase-31.md` |
 
 Completed/closed phases live in `docs/archives/phases/README.md`.
