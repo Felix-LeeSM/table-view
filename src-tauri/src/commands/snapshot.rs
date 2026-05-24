@@ -318,18 +318,7 @@ struct ConnectionRow {
 impl ConnectionRow {
     fn into_public(self) -> ConnectionConfigPublic {
         use crate::models::DatabaseType;
-        let db_type = match self.db_type.as_str() {
-            "postgresql" => DatabaseType::Postgresql,
-            "mysql" => DatabaseType::Mysql,
-            "mariadb" => DatabaseType::Mariadb,
-            "sqlite" => DatabaseType::Sqlite,
-            "duckdb" => DatabaseType::Duckdb,
-            "mongodb" => DatabaseType::Mongodb,
-            "redis" => DatabaseType::Redis,
-            // unknown DBMS — default to postgresql to keep deserialization
-            // resilient; should not happen in practice (migration 강제).
-            _ => DatabaseType::Postgresql,
-        };
+        let db_type = self.db_type.parse::<DatabaseType>().unwrap_or_default();
         let paradigm = db_type.paradigm();
         ConnectionConfigPublic {
             id: self.id,
@@ -836,6 +825,56 @@ mod tests {
                     c.items[0].has_password,
                     "non-empty password_enc → has_password = true"
                 );
+            }
+            StoreSlot::Err { error } => panic!("connections must read OK, got error={}", error),
+        }
+        pool_cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn inner_preserves_search_connection_types_from_storage() {
+        use crate::models::{DatabaseType, Paradigm};
+
+        let (_dir, pool) = pool_setup().await;
+        for (idx, (id, db_type)) in [
+            ("c-elastic", "elasticsearch"),
+            ("c-opensearch", "opensearch"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            sqlx::query(
+                "INSERT INTO connections(id, name, db_type, host, port, user, password_enc, database, \
+                 sort_order, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(id)
+            .bind(id)
+            .bind(db_type)
+            .bind("search.local")
+            .bind(9200i64)
+            .bind("")
+            .bind("")
+            .bind("")
+            .bind(idx as i64)
+            .bind(1i64)
+            .bind(1i64)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        let snap = get_initial_app_state_inner(&pool, "launcher", &HashMap::new())
+            .await
+            .unwrap();
+        match &snap.stores.connections {
+            StoreSlot::Ok(c) => {
+                assert_eq!(c.items.len(), 2);
+                assert!(matches!(c.items[0].db_type, DatabaseType::Elasticsearch));
+                assert_eq!(c.items[0].paradigm, Paradigm::Search);
+                assert!(matches!(c.items[1].db_type, DatabaseType::Opensearch));
+                assert_eq!(c.items[1].paradigm, Paradigm::Search);
             }
             StoreSlot::Err { error } => panic!("connections must read OK, got error={}", error),
         }
