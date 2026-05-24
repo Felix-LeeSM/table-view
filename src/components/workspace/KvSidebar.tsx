@@ -179,7 +179,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
 
         {keys.length === 0 && !loading && !error && (
           <div role="status" className="px-3 py-3 text-muted-foreground">
-            No keys found.
+            {emptyKeysMessage(pattern)}
           </div>
         )}
 
@@ -202,6 +202,12 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
       </div>
     </div>
   );
+}
+
+function emptyKeysMessage(pattern: string) {
+  const normalized = pattern.trim();
+  if (!normalized || normalized === "*") return "No keys found.";
+  return `No keys match pattern ${normalized}.`;
 }
 
 function iconForKeyType(type: KvKeyMetadata["keyType"]) {
