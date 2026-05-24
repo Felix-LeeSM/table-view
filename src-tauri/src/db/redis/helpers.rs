@@ -9,6 +9,22 @@ pub(super) const MAX_SCAN_LIMIT: u32 = 500;
 
 pub(super) type RedisConnection = ::redis::aio::MultiplexedConnection;
 
+pub(super) fn validate_key(key: &str) -> Result<(), AppError> {
+    if key.is_empty() {
+        return Err(AppError::Validation("Redis key is required".into()));
+    }
+    Ok(())
+}
+
+pub(super) fn require_confirm_key(key: &str, confirm_key: &str) -> Result<(), AppError> {
+    if key != confirm_key {
+        return Err(AppError::Validation(
+            "Confirmation key must exactly match the Redis key".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn bounded_limit(limit: Option<u32>) -> u32 {
     limit.unwrap_or(DEFAULT_SCAN_LIMIT).clamp(1, MAX_SCAN_LIMIT)
 }

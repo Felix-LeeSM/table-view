@@ -156,6 +156,8 @@ pub enum BackendAdapterCapability {
     DocumentMutation,
     KeyValueMarker,
     KeyValueCatalog,
+    KeyValueRead,
+    KeyValueMutation,
     SearchMarker,
     SearchCatalog,
     SearchQuery,
@@ -260,7 +262,10 @@ const SEARCH_DSL: &[QueryLanguageId] = &[QueryLanguageId::SearchDsl];
 const TABULAR_RESULT: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::Tabular];
 const DOCUMENT_RESULTS: &[ResultEnvelopeKind] =
     &[ResultEnvelopeKind::Document, ResultEnvelopeKind::Tabular];
-const KV_RESULTS: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::KeyValue];
+const KV_RESULTS: &[ResultEnvelopeKind] = &[
+    ResultEnvelopeKind::KeyValue,
+    ResultEnvelopeKind::StreamRecords,
+];
 const SEARCH_RESULTS: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::SearchHits];
 
 const RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
@@ -293,6 +298,8 @@ const KV_MARKER_CAPABILITIES: &[BackendAdapterCapability] = &[
 const REDIS_KV_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::KeyValueCatalog,
+    BackendAdapterCapability::KeyValueRead,
+    BackendAdapterCapability::KeyValueMutation,
 ];
 const SEARCH_MARKER_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
@@ -611,5 +618,28 @@ fn search_profile(id: DatabaseType, dialect: DataSourceDialectMetadata) -> DataS
         dialect,
         adapter_contract: SEARCH_ENGINE_CONTRACT,
         file_connection: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redis_profile_declares_value_and_stream_result_support() {
+        let profile = DatabaseType::Redis.data_source_profile();
+
+        assert_eq!(profile.paradigm, Paradigm::Kv);
+        assert_eq!(
+            profile.result_kinds,
+            &[
+                ResultEnvelopeKind::KeyValue,
+                ResultEnvelopeKind::StreamRecords
+            ]
+        );
+        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
+        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueRead));
+        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueMutation));
+        assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     }
 }

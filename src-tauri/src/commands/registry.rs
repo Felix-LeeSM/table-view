@@ -93,6 +93,11 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         commands::kv::current_kv_database,
         commands::kv::switch_kv_database,
         commands::kv::scan_kv_keys,
+        commands::kv::get_kv_value,
+        commands::kv::set_kv_string_value,
+        commands::kv::delete_kv_key,
+        commands::kv::update_kv_ttl,
+        commands::kv::read_kv_stream,
         // Mongo browse and query
         commands::document::browse::list_mongo_databases,
         commands::document::browse::list_mongo_collections,

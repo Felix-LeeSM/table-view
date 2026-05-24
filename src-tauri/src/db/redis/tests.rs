@@ -1,18 +1,17 @@
 use super::helpers::{
     bounded_limit, connection_url, ensure_not_cancelled, redis_connection_error,
-    redis_database_error, DEFAULT_SCAN_LIMIT, MAX_SCAN_LIMIT,
+    redis_database_error, require_confirm_key, validate_key, DEFAULT_SCAN_LIMIT, MAX_SCAN_LIMIT,
 };
+use super::test_support::{runtime_config, spawn_redis_catalog_stub};
 use super::values::{map_key_type, ttl_from_seconds};
-use super::RedisAdapter;
+use super::{build_set_string_command, RedisAdapter};
 use crate::db::{
     DbAdapter, KvAdapter, KvDeleteRequest, KvKeyScanRequest, KvKeyType, KvSetStringRequest,
-    KvStreamReadRequest, KvTtlState, KvTtlUpdate, KvTtlUpdateRequest, KvValueReadRequest,
-    KvWriteSafety,
+    KvStreamReadRequest, KvStringEncoding, KvTtlState, KvTtlUpdate, KvTtlUpdateRequest, KvValue,
+    KvValueReadRequest, KvWriteSafety,
 };
 use crate::error::AppError;
 use crate::models::{ConnectionConfig, DatabaseType};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 
 fn config(database: &str) -> ConnectionConfig {
@@ -37,127 +36,30 @@ fn config(database: &str) -> ConnectionConfig {
     }
 }
 
-fn runtime_config(port: u16, database: &str) -> ConnectionConfig {
-    ConnectionConfig {
-        id: "r-live".into(),
-        name: "redis-runtime".into(),
-        db_type: DatabaseType::Redis,
-        host: "127.0.0.1".into(),
-        port,
-        user: String::new(),
-        password: String::new(),
-        database: database.into(),
-        read_only: false,
-        group_id: None,
-        color: None,
-        connection_timeout: None,
-        keep_alive_interval: None,
-        environment: None,
-        auth_source: None,
-        replica_set: None,
-        tls_enabled: None,
-    }
+#[test]
+fn set_string_reject_overwrite_uses_atomic_set_nx_with_ttl() {
+    let cmd = build_set_string_command(&KvSetStringRequest {
+        key: "session:1".into(),
+        value: "v".into(),
+        database: Some(0),
+        ttl_seconds: Some(30),
+        safety: KvWriteSafety::RejectOverwrite,
+    })
+    .unwrap();
+
+    assert_eq!(
+        String::from_utf8(cmd.get_packed_command()).unwrap(),
+        "*6\r\n$3\r\nSET\r\n$9\r\nsession:1\r\n$1\r\nv\r\n$2\r\nNX\r\n$2\r\nEX\r\n$2\r\n30\r\n"
+    );
 }
 
-async fn spawn_redis_catalog_stub() -> u16 {
-    let listener = TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("bind redis stub");
-    let port = listener.local_addr().expect("redis stub addr").port();
-    tokio::spawn(async move {
-        loop {
-            let Ok((stream, _)) = listener.accept().await else {
-                break;
-            };
-            tokio::spawn(handle_redis_stub_connection(stream));
-        }
-    });
-    port
-}
-
-async fn handle_redis_stub_connection(mut stream: tokio::net::TcpStream) {
-    let mut buffer = Vec::new();
-    let mut scratch = [0_u8; 1024];
-    loop {
-        let Ok(read) = stream.read(&mut scratch).await else {
-            break;
-        };
-        if read == 0 {
-            break;
-        }
-        buffer.extend_from_slice(&scratch[..read]);
-        while let Some(command) = parse_resp_command(&mut buffer) {
-            let response = redis_stub_response(&command);
-            if stream.write_all(response.as_bytes()).await.is_err() {
-                return;
-            }
-        }
-    }
-}
-
-fn parse_resp_command(buffer: &mut Vec<u8>) -> Option<Vec<String>> {
-    if buffer.first().copied()? != b'*' {
-        buffer.clear();
-        return None;
-    }
-    let mut offset = 1;
-    let count_end = find_crlf(buffer, offset)?;
-    let count = std::str::from_utf8(&buffer[offset..count_end])
-        .ok()?
-        .parse::<usize>()
-        .ok()?;
-    offset = count_end + 2;
-    let mut parts = Vec::with_capacity(count);
-    for _ in 0..count {
-        if buffer.get(offset).copied()? != b'$' {
-            buffer.clear();
-            return None;
-        }
-        offset += 1;
-        let len_end = find_crlf(buffer, offset)?;
-        let len = std::str::from_utf8(&buffer[offset..len_end])
-            .ok()?
-            .parse::<usize>()
-            .ok()?;
-        offset = len_end + 2;
-        if buffer.len() < offset + len + 2 {
-            return None;
-        }
-        let part = String::from_utf8_lossy(&buffer[offset..offset + len]).to_string();
-        parts.push(part);
-        offset += len + 2;
-    }
-    buffer.drain(..offset);
-    Some(parts)
-}
-
-fn find_crlf(buffer: &[u8], start: usize) -> Option<usize> {
-    buffer[start..]
-        .windows(2)
-        .position(|window| window == b"\r\n")
-        .map(|relative| start + relative)
-}
-
-fn redis_stub_response(command: &[String]) -> &'static str {
-    match command.first().map(|value| value.to_ascii_uppercase()).as_deref() {
-        Some("CLIENT") => "+OK\r\n",
-        Some("PING") => "+PONG\r\n",
-        Some("CONFIG") => "*2\r\n$9\r\ndatabases\r\n$1\r\n4\r\n",
-        Some("INFO") => {
-            "$77\r\n# Keyspace\r\ndb0:keys=2,expires=1,avg_ttl=42\r\ndb2:keys=1,expires=0,avg_ttl=0\r\n\r\n"
-        }
-        Some("SELECT") => "+OK\r\n",
-        Some("SCAN") => "*2\r\n$1\r\n0\r\n*2\r\n$5\r\nalpha\r\n$4\r\nbeta\r\n",
-        Some("TYPE") if command.get(1).is_some_and(|key| key == "alpha") => "+string\r\n",
-        Some("TYPE") if command.get(1).is_some_and(|key| key == "beta") => "+hash\r\n",
-        Some("TTL") if command.get(1).is_some_and(|key| key == "alpha") => ":30\r\n",
-        Some("TTL") if command.get(1).is_some_and(|key| key == "beta") => ":-1\r\n",
-        Some("STRLEN") => ":5\r\n",
-        Some("HLEN") => ":2\r\n",
-        Some("MEMORY") if command.get(2).is_some_and(|key| key == "alpha") => ":64\r\n",
-        Some("MEMORY") if command.get(2).is_some_and(|key| key == "beta") => ":96\r\n",
-        _ => "-ERR unsupported test command\r\n",
-    }
+#[test]
+fn destructive_delete_requires_exact_key_confirmation() {
+    assert!(require_confirm_key("prod:1", "prod:1").is_ok());
+    assert!(matches!(
+        require_confirm_key("prod:1", "prod"),
+        Err(AppError::Validation(_))
+    ));
 }
 
 #[test]
@@ -197,6 +99,8 @@ fn redis_type_mapping_covers_key_browser_metadata_types() {
 
 #[test]
 fn redis_helper_error_paths_are_typed() {
+    assert!(matches!(validate_key(""), Err(AppError::Validation(_))));
+
     let token = CancellationToken::new();
     assert!(ensure_not_cancelled(Some(&token)).is_ok());
     token.cancel();
@@ -223,7 +127,7 @@ fn redis_helper_error_paths_are_typed() {
 }
 
 #[tokio::test]
-async fn disconnected_adapter_covers_key_browser_and_future_contract_paths() {
+async fn disconnected_adapter_covers_non_network_error_paths() {
     let adapter = RedisAdapter::new();
     assert!(matches!(adapter.kind(), DatabaseType::Redis));
     assert_eq!(adapter.current_database().await.unwrap(), Some(0));
@@ -258,42 +162,64 @@ async fn disconnected_adapter_covers_key_browser_and_future_contract_paths() {
                     limit: Some(10),
                     cursor: None,
                 },
-                None,
+                Some(&cancelled),
             )
             .await,
-        Err(AppError::Unsupported(_))
+        Err(AppError::Database(_))
     ));
     assert!(matches!(
         adapter
             .set_string(KvSetStringRequest {
-                key: "session:1".into(),
+                key: "".into(),
                 value: "v".into(),
                 database: Some(0),
                 ttl_seconds: None,
                 safety: KvWriteSafety::RejectOverwrite,
             })
             .await,
-        Err(AppError::Unsupported(_))
+        Err(AppError::Validation(_))
     ));
     assert!(matches!(
         adapter
             .delete_key(KvDeleteRequest {
                 key: "session:1".into(),
                 database: Some(0),
-                confirm_key: "session:1".into(),
+                confirm_key: "different".into(),
             })
             .await,
-        Err(AppError::Unsupported(_))
+        Err(AppError::Validation(_))
+    ));
+    assert!(matches!(
+        adapter
+            .update_ttl(KvTtlUpdateRequest {
+                key: "".into(),
+                database: Some(0),
+                update: KvTtlUpdate::Expire { seconds: 30 },
+            })
+            .await,
+        Err(AppError::Validation(_))
     ));
     assert!(matches!(
         adapter
             .update_ttl(KvTtlUpdateRequest {
                 key: "session:1".into(),
                 database: Some(0),
-                update: KvTtlUpdate::Expire { seconds: 30 },
+                update: KvTtlUpdate::Expire { seconds: 0 },
             })
             .await,
-        Err(AppError::Unsupported(_))
+        Err(AppError::Validation(_))
+    ));
+    assert!(matches!(
+        adapter
+            .update_ttl(KvTtlUpdateRequest {
+                key: "session:1".into(),
+                database: Some(0),
+                update: KvTtlUpdate::Persist {
+                    confirm_key: "session:1".into(),
+                },
+            })
+            .await,
+        Err(AppError::Connection(_))
     ));
     assert!(matches!(
         adapter
@@ -305,10 +231,10 @@ async fn disconnected_adapter_covers_key_browser_and_future_contract_paths() {
                     end: None,
                     limit: Some(10),
                 },
-                None,
+                Some(&cancelled),
             )
             .await,
-        Err(AppError::Unsupported(_))
+        Err(AppError::Database(_))
     ));
 }
 
@@ -358,4 +284,156 @@ async fn redis_adapter_runtime_covers_catalog_scan_and_metadata() {
     assert_eq!(page.keys[1].length, Some(2));
     assert_eq!(page.keys[1].memory_bytes, Some(96));
     assert_eq!(page.keys[1].ttl.state, KvTtlState::Persistent);
+}
+
+#[tokio::test]
+async fn redis_adapter_runtime_covers_values_ttl_mutations_and_streams() {
+    let port = spawn_redis_catalog_stub().await;
+    let config = runtime_config(port, "0");
+    let adapter = RedisAdapter::new();
+    adapter.connect(&config).await.unwrap();
+
+    let string_value = read_value(&adapter, "alpha").await.value;
+    match string_value {
+        KvValue::String(value) => {
+            assert_eq!(value.encoding, KvStringEncoding::Utf8);
+            assert_eq!(value.text.as_deref(), Some("hello"));
+        }
+        other => panic!("expected string value, got {other:?}"),
+    }
+
+    let binary_value = read_value(&adapter, "binary").await.value;
+    match binary_value {
+        KvValue::String(value) => {
+            assert_eq!(value.encoding, KvStringEncoding::Binary);
+            assert_eq!(value.hex.as_deref(), Some("ff0041"));
+        }
+        other => panic!("expected binary string value, got {other:?}"),
+    }
+
+    for (key, expected) in [
+        ("list", "list"),
+        ("set", "set"),
+        ("zset", "zset"),
+        ("beta", "hash"),
+        ("json", "json"),
+        ("stream", "stream"),
+        ("missing", "missing"),
+    ] {
+        assert_eq!(
+            kv_value_kind(&read_value(&adapter, key).await.value),
+            expected
+        );
+    }
+
+    let stream = adapter
+        .read_stream(
+            KvStreamReadRequest {
+                key: "events".into(),
+                database: Some(0),
+                start: Some("0-0".into()),
+                end: Some("+".into()),
+                limit: Some(10),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(stream.entries[0].id, "1-0");
+    assert_eq!(stream.entries[0].fields[0].field, "type");
+    assert_eq!(stream.entries[0].fields[0].value, "login");
+
+    assert!(matches!(
+        adapter
+            .set_string(KvSetStringRequest {
+                key: "alpha".into(),
+                value: "new".into(),
+                database: Some(0),
+                ttl_seconds: None,
+                safety: KvWriteSafety::RejectOverwrite,
+            })
+            .await,
+        Err(AppError::Validation(_))
+    ));
+
+    let set_result = adapter
+        .set_string(set_string_request(
+            "mut:string",
+            KvWriteSafety::AllowOverwrite,
+        ))
+        .await
+        .unwrap();
+    assert!(set_result.changed);
+    assert_eq!(set_result.ttl.unwrap().state, KvTtlState::Expires);
+
+    let expire_result = adapter
+        .update_ttl(KvTtlUpdateRequest {
+            key: "mut:string".into(),
+            database: Some(0),
+            update: KvTtlUpdate::Expire { seconds: 60 },
+        })
+        .await
+        .unwrap();
+    assert!(expire_result.changed);
+
+    let persist_result = adapter
+        .update_ttl(KvTtlUpdateRequest {
+            key: "mut:string".into(),
+            database: Some(0),
+            update: KvTtlUpdate::Persist {
+                confirm_key: "mut:string".into(),
+            },
+        })
+        .await
+        .unwrap();
+    assert!(persist_result.changed);
+
+    let delete_result = adapter
+        .delete_key(KvDeleteRequest {
+            key: "mut:string".into(),
+            database: Some(0),
+            confirm_key: "mut:string".into(),
+        })
+        .await
+        .unwrap();
+    assert!(delete_result.changed);
+}
+
+fn set_string_request(key: &str, safety: KvWriteSafety) -> KvSetStringRequest {
+    KvSetStringRequest {
+        key: key.into(),
+        value: "new".into(),
+        database: Some(0),
+        ttl_seconds: Some(30),
+        safety,
+    }
+}
+
+fn kv_value_kind(value: &KvValue) -> &'static str {
+    match value {
+        KvValue::String(_) => "string",
+        KvValue::List(_) => "list",
+        KvValue::Set(_) => "set",
+        KvValue::ZSet(_) => "zset",
+        KvValue::Hash(_) => "hash",
+        KvValue::Stream(_) => "stream",
+        KvValue::Json(_) => "json",
+        KvValue::Unsupported { .. } => "unsupported",
+        KvValue::Missing => "missing",
+    }
+}
+
+async fn read_value(adapter: &RedisAdapter, key: &str) -> crate::db::KvValueEnvelope {
+    adapter
+        .read_value(
+            KvValueReadRequest {
+                key: key.into(),
+                database: Some(0),
+                limit: Some(10),
+                cursor: None,
+            },
+            None,
+        )
+        .await
+        .unwrap()
 }
