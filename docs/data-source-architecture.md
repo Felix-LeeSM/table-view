@@ -132,8 +132,11 @@ it has explicit adapter and test evidence. Bounded stream reads can return the
 `streamRecords` result envelope, but this does not enable the broader
 `streamConsumer` capability; consumer groups, pub/sub, cluster administration,
 and module-specific management remain follow-up.
-`SearchAdapter` has a live contract/profile slice for Elasticsearch/OpenSearch,
-with HTTP catalog/search execution still deferred.
+`SearchAdapter` has a live contract/profile slice for Elasticsearch/OpenSearch:
+fixture-backed identities, index/alias/mapping/template catalog reads, bounded
+Search DSL execution, delete-by-query safety planning, and typed `searchHits`
+rendering. Live HTTP catalog/search execution, cluster administration, and
+observability are deferred.
 
 Future adapter families:
 
@@ -245,8 +248,8 @@ Near-term:
 8. ERD / schema graph on top of RDB catalog data.
 9. Redis first slice is live through `KvAdapter`; Valkey parity/support and
    broader KV workflows remain follow-up until explicitly verified.
-10. Elasticsearch/OpenSearch HTTP catalog/search execution on the live
-    `SearchAdapter` contract slice.
+10. Elasticsearch/OpenSearch live HTTP catalog/search execution, admin, and
+    observability on top of the fixture-verified `SearchAdapter` slice.
 11. MongoDB full support remains document-paradigm backlog.
 12. Cassandra/DynamoDB/graph/vector/stream wait until profile + capability +
    result envelope contracts are implemented.

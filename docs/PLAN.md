@@ -60,7 +60,7 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | SQLite | file adapter complete | parser/write parity guardrails | Rust/WASM vocabulary | user DBMS adapter는 internal SQLite state와 분리됨. DDL UI는 unsupported |
 | DuckDB | file adapter + local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM vocabulary | local `.duckdb`/CSV/Parquet/JSON/NDJSON preview/query 지원. DDL/write는 unsupported |
 | Redis | Redis first slice live | key/type/TTL/stream guardrails | redis-command profile | Redis key browser, value reads, TTL mutation, guarded string writes, and bounded stream reads live. Valkey parity/support is unverified follow-up. Cluster/pubsub/modules/consumer-group management deferred |
-| Elasticsearch/OpenSearch | contract slice live | index/mapping/search envelope guardrails | search DSL deferred | Search adapter + identities live; HTTP catalog/query UI deferred |
+| Elasticsearch/OpenSearch | fixture-backed Search slice live | index/mapping/search envelope guardrails | bounded fixture DSL only | Search identities/catalog, bounded fixture DSL execution, and typed result rendering live; live HTTP/admin/observability deferred |
 
 ## Active Roadmap
 
@@ -76,7 +76,7 @@ Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequenc
 | 8 | DuckDB + file analytics hardening | active follow-up | `.duckdb`, CSV, Parquet, JSON, NDJSON preview/query 는 local-first runtime path 존재. analytics import/history/favorites 확대는 별도 결정 | `docs/data-source-architecture.md`, `docs/ROADMAP.md`, `docs/sprints/sprint-457/contract.md` |
 | 9 | RDBMS ERD / SchemaGraph | planned | FK/constraint catalog 를 재사용 가능한 `SchemaGraph` 로 승격. ERD는 첫 renderer | `docs/data-source-architecture.md` |
 | 10 | Redis | active Redis first slice | Redis adapter, KV sidebar, key scan, value read, guarded string write, TTL mutation, and bounded stream read paths are live. Valkey parity/support is unverified follow-up. Cluster/pubsub/modules/consumer-group management remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-468/handoff.md` |
-| 11 | Elasticsearch/OpenSearch | active contract slice | Search adapter contract and Elasticsearch/OpenSearch identities are live. HTTP catalog, DSL execution, and result UI remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-470/handoff.md` |
+| 11 | Elasticsearch/OpenSearch | active fixture-backed slice | Search adapter contract, Elasticsearch/OpenSearch identities, fixture catalog, bounded fixture DSL execution, and `searchHits` result UI are live. Live HTTP catalog/query execution, cluster administration, and observability remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-472/handoff.md` |
 | 12 | MongoDB full support | deferred/current subagent audit only | Phase 28 Slice A 는 보존하되 RDBMS-first 후 재개. `queryMode` 는 execution SOT 로 되살리지 않음 | `docs/phases/phase-28.md` |
 | 13 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md` |
 | 14 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |
@@ -147,6 +147,10 @@ root 이고, 448-459 는 RDBMS-first 실행 구간이다. 460 이후는 worktree
 | 466 | Redis connection, catalog, and key browser; Valkey support unverified |
 | 467 | Redis values, TTL, and bounded streams; Valkey support unverified |
 | 468 | Redis integration gate docs/status alignment; Valkey parity follow-up |
+| 469 | Search adapter contract |
+| 470 | Elasticsearch/OpenSearch connection/catalog fixtures; live HTTP unsupported |
+| 471 | Bounded Search DSL fixture execution and `searchHits` result envelopes |
+| 472 | Elasticsearch/OpenSearch integration gate docs/status alignment; live HTTP/admin/observability follow-up |
 
 ## Phase Index
 
