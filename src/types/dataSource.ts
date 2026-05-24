@@ -366,8 +366,12 @@ export const REDIS_CAPABILITIES = capabilities({
   catalog: {
     browse: true,
   },
+  edit: {
+    editKeys: true,
+  },
   paradigmSpecific: {
     keyBrowser: true,
+    streamConsumer: false,
   },
 });
 
@@ -473,7 +477,7 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "server",
     ["redis-command"],
     "kv",
-    ["keyValue"],
+    ["keyValue", "streamRecords"],
     "kv-default",
     REDIS_CAPABILITIES,
   ),

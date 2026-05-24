@@ -20,11 +20,16 @@ import {
 import { useConnectionStore } from "@stores/connectionStore";
 import {
   currentKvDatabase,
+  getKvValue,
   listKvDatabases,
   scanKvKeys,
   switchKvDatabase,
 } from "@lib/tauri/kv";
-import type { KvDatabaseInfo, KvKeyMetadata } from "@/types/kv";
+import type {
+  KvDatabaseInfo,
+  KvKeyMetadata,
+  KvValueEnvelope,
+} from "@/types/kv";
 import { formatKvTtl } from "@/types/kv";
 
 const KEY_SCAN_LIMIT = 100;
@@ -52,7 +57,10 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   const [nextCursor, setNextCursor] = useState("0");
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [loadingKeys, setLoadingKeys] = useState(false);
+  const [loadingValue, setLoadingValue] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [value, setValue] = useState<KvValueEnvelope | null>(null);
 
   const loadCatalog = useCallback(async () => {
     setLoadingCatalog(true);
@@ -97,6 +105,27 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     [connectionId, database, pattern],
   );
 
+  const loadValue = useCallback(
+    async (key: string) => {
+      setSelectedKey(key);
+      setLoadingValue(true);
+      setError(null);
+      try {
+        const envelope = await getKvValue(connectionId, {
+          database,
+          key,
+          limit: KEY_SCAN_LIMIT,
+        });
+        setValue(envelope);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setLoadingValue(false);
+      }
+    },
+    [connectionId, database],
+  );
+
   useEffect(() => {
     void loadCatalog();
   }, [loadCatalog]);
@@ -104,6 +133,8 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   useEffect(() => {
     setKeys([]);
     setNextCursor("0");
+    setSelectedKey(null);
+    setValue(null);
     void loadKeys("0");
   }, [database, loadKeys]);
 
@@ -206,10 +237,14 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div role="tree" aria-label="Redis keys" className="py-1">
           {keys.map((item) => (
-            <div
+            <button
               key={item.key}
+              type="button"
               role="treeitem"
-              className="grid min-h-8 grid-cols-[minmax(0,1fr)_auto] gap-x-2 px-3 py-1.5 hover:bg-accent hover:text-accent-foreground"
+              aria-selected={selectedKey === item.key}
+              data-selected={selectedKey === item.key || undefined}
+              className="grid min-h-8 w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2 px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground data-[selected]:bg-accent data-[selected]:text-accent-foreground"
+              onClick={() => void loadValue(item.key)}
             >
               <div className="flex min-w-0 items-center gap-2">
                 {iconForKeyType(item.keyType)}
@@ -230,7 +265,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
                   {formatKvTtl(item.ttl)}
                 </span>
               </div>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -266,6 +301,8 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
             </Button>
           </div>
         )}
+
+        <KvValuePreview value={value} loading={loadingValue} />
       </div>
     </div>
   );
@@ -325,4 +362,75 @@ function formatBytes(value: number): string {
   const kib = value / 1024;
   if (kib < 1024) return `${kib.toFixed(1)} KiB`;
   return `${(kib / 1024).toFixed(1)} MiB`;
+}
+
+function KvValuePreview({
+  value,
+  loading,
+}: {
+  value: KvValueEnvelope | null;
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div
+        role="status"
+        className="border-t border-border px-3 py-3 text-muted-foreground"
+      >
+        Loading value
+      </div>
+    );
+  }
+  if (!value) return null;
+  return (
+    <div className="border-t border-border px-3 py-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate font-medium text-secondary-foreground">
+          {value.key}
+        </span>
+        <span className="inline-flex items-center gap-1 text-3xs text-muted-foreground">
+          <Timer size={11} aria-hidden />
+          {formatKvTtl(value.metadata.ttl)}
+        </span>
+      </div>
+      <pre className="max-h-48 overflow-auto rounded border border-border bg-muted/40 p-2 text-3xs text-foreground">
+        {renderValueText(value)}
+      </pre>
+    </div>
+  );
+}
+
+function renderValueText(envelope: KvValueEnvelope): string {
+  const { value } = envelope;
+  switch (value.type) {
+    case "string":
+      return value.text ?? value.hex ?? "";
+    case "hash":
+      return value.fields
+        .map((field) => `${field.field}: ${field.value}`)
+        .join("\n");
+    case "list":
+      return value.entries
+        .map((entry) => `${entry.index}: ${entry.value}`)
+        .join("\n");
+    case "set":
+      return value.members.join("\n");
+    case "zSet":
+      return value.entries
+        .map((entry) => `${entry.member}: ${entry.score}`)
+        .join("\n");
+    case "stream":
+      return value.entries
+        .map(
+          (entry) =>
+            `${entry.id} ${entry.fields.map((f) => `${f.field}=${f.value}`).join(" ")}`,
+        )
+        .join("\n");
+    case "json":
+      return JSON.stringify(value.value, null, 2);
+    case "missing":
+      return "(missing)";
+    case "unsupported":
+      return value.message;
+  }
 }

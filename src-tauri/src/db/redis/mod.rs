@@ -1,22 +1,29 @@
 mod helpers;
+#[cfg(test)]
+mod test_support;
 mod values;
 
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 use crate::db::{
-    BoxFuture, DbAdapter, KvAdapter, KvDatabaseInfo, KvKeyMetadata, KvKeyScanPage, KvKeyScanRequest,
+    BoxFuture, DbAdapter, KvAdapter, KvDatabaseInfo, KvDeleteRequest, KvKeyMetadata, KvKeyScanPage,
+    KvKeyScanRequest, KvKeyType, KvMutationResult, KvSetStringRequest, KvStreamReadRequest,
+    KvStreamReadResult, KvTtlState, KvTtlUpdate, KvTtlUpdateRequest, KvValue, KvValueEnvelope,
+    KvValueReadRequest, KvWriteSafety,
 };
 use crate::error::AppError;
 use crate::models::{ConnectionConfig, DatabaseType};
 
 use helpers::{
     bounded_limit, connection_url, ensure_not_cancelled, redis_connection_error,
-    redis_database_error, RedisConnection, DEFAULT_REDIS_DATABASES,
+    redis_database_error, require_confirm_key, validate_key, RedisConnection,
+    DEFAULT_REDIS_DATABASES,
 };
 use values::{
-    read_database_count, read_key_length, read_key_type, read_keyspace_counts, read_memory_usage,
-    ttl_from_seconds,
+    read_database_count, read_hash, read_json, read_key_length, read_key_type,
+    read_keyspace_counts, read_list, read_memory_usage, read_set, read_stream_range, read_string,
+    read_zset, ttl_from_seconds,
 };
 
 #[derive(Debug, Default)]
@@ -49,7 +56,7 @@ impl RedisAdapter {
         Ok(())
     }
 
-    async fn with_connection<T, F>(&self, f: F) -> Result<T, AppError>
+    pub(super) async fn with_connection<T, F>(&self, f: F) -> Result<T, AppError>
     where
         F: AsyncFnOnce(&mut RedisConnection) -> Result<T, AppError>,
     {
@@ -216,6 +223,234 @@ impl KvAdapter for RedisAdapter {
             })
         })
     }
+
+    fn read_value<'a>(
+        &'a self,
+        request: KvValueReadRequest,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<KvValueEnvelope, AppError>> {
+        Box::pin(async move {
+            ensure_not_cancelled(cancel)?;
+            self.ensure_database(request.database).await?;
+            let limit = bounded_limit(request.limit);
+            let cursor = request.cursor.unwrap_or_else(|| "0".into());
+            let metadata = self.key_metadata(&request.key).await?;
+            let value = match metadata.key_type {
+                KvKeyType::String => KvValue::String(read_string(self, &request.key).await?),
+                KvKeyType::List => KvValue::List(read_list(self, &request.key, limit).await?),
+                KvKeyType::Set => KvValue::Set(read_set(self, &request.key, &cursor, limit).await?),
+                KvKeyType::ZSet => KvValue::ZSet(read_zset(self, &request.key, limit).await?),
+                KvKeyType::Hash => {
+                    KvValue::Hash(read_hash(self, &request.key, &cursor, limit).await?)
+                }
+                KvKeyType::Stream => {
+                    KvValue::Stream(read_stream_range(self, &request.key, "-", "+", limit).await?)
+                }
+                KvKeyType::Json => KvValue::Json(read_json(self, &request.key).await?),
+                KvKeyType::Unknown if metadata.ttl.state == KvTtlState::Missing => KvValue::Missing,
+                KvKeyType::Unknown => KvValue::Unsupported {
+                    message: "Unsupported Redis key type".into(),
+                },
+            };
+            Ok(KvValueEnvelope {
+                key: request.key,
+                metadata,
+                value,
+            })
+        })
+    }
+
+    fn set_string<'a>(
+        &'a self,
+        request: KvSetStringRequest,
+    ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
+        Box::pin(async move {
+            validate_key(&request.key)?;
+            let cmd = build_set_string_command(&request)?;
+            self.ensure_database(request.database).await?;
+            ensure_string_write_allowed(self, &request).await?;
+            let changed = self
+                .with_connection(async |connection| {
+                    let result: Option<String> = cmd
+                        .query_async(connection)
+                        .await
+                        .map_err(redis_database_error)?;
+                    Ok(result.is_some())
+                })
+                .await?;
+            if !changed {
+                return Err(AppError::Validation(
+                    "Key already exists; enable overwrite to replace it".into(),
+                ));
+            }
+            Ok(KvMutationResult {
+                key: request.key.clone(),
+                changed: true,
+                ttl: Some(self.key_metadata(&request.key).await?.ttl),
+            })
+        })
+    }
+
+    fn delete_key<'a>(
+        &'a self,
+        request: KvDeleteRequest,
+    ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
+        Box::pin(async move {
+            validate_key(&request.key)?;
+            require_confirm_key(&request.key, &request.confirm_key)?;
+            self.ensure_database(request.database).await?;
+            let changed = self
+                .with_connection(async |connection| {
+                    let deleted: u64 = ::redis::cmd("DEL")
+                        .arg(&request.key)
+                        .query_async(connection)
+                        .await
+                        .map_err(redis_database_error)?;
+                    Ok(deleted > 0)
+                })
+                .await?;
+            Ok(KvMutationResult {
+                key: request.key,
+                changed,
+                ttl: None,
+            })
+        })
+    }
+
+    fn update_ttl<'a>(
+        &'a self,
+        request: KvTtlUpdateRequest,
+    ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
+        Box::pin(async move {
+            validate_key(&request.key)?;
+            self.ensure_database(request.database).await?;
+            let changed = match &request.update {
+                KvTtlUpdate::Expire { seconds } => expire_key(self, &request.key, *seconds).await?,
+                KvTtlUpdate::Persist { confirm_key } => {
+                    require_confirm_key(&request.key, confirm_key)?;
+                    persist_key(self, &request.key).await?
+                }
+            };
+            Ok(KvMutationResult {
+                key: request.key.clone(),
+                changed,
+                ttl: Some(self.key_metadata(&request.key).await?.ttl),
+            })
+        })
+    }
+
+    fn read_stream<'a>(
+        &'a self,
+        request: KvStreamReadRequest,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<KvStreamReadResult, AppError>> {
+        Box::pin(async move {
+            ensure_not_cancelled(cancel)?;
+            self.ensure_database(request.database).await?;
+            let limit = bounded_limit(request.limit);
+            let start = request.start.as_deref().unwrap_or("-");
+            let end = request.end.as_deref().unwrap_or("+");
+            read_stream_range(self, &request.key, start, end, limit).await
+        })
+    }
+}
+
+fn build_set_string_command(request: &KvSetStringRequest) -> Result<::redis::Cmd, AppError> {
+    let mut cmd = ::redis::cmd("SET");
+    cmd.arg(&request.key).arg(&request.value);
+    if request.safety == KvWriteSafety::RejectOverwrite {
+        cmd.arg("NX");
+    }
+    if let Some(seconds) = request.ttl_seconds {
+        if seconds == 0 {
+            return Err(AppError::Validation(
+                "ttlSeconds must be greater than zero".into(),
+            ));
+        }
+        cmd.arg("EX").arg(seconds);
+    }
+    Ok(cmd)
+}
+
+async fn ensure_string_write_allowed(
+    adapter: &RedisAdapter,
+    request: &KvSetStringRequest,
+) -> Result<(), AppError> {
+    if request.safety != KvWriteSafety::AllowOverwrite {
+        return Ok(());
+    }
+
+    let (key_type, exists) = adapter
+        .with_connection(async |connection| {
+            let key_type = read_key_type(connection, &request.key).await?;
+            let exists = if key_type == KvKeyType::Unknown {
+                ::redis::cmd("EXISTS")
+                    .arg(&request.key)
+                    .query_async::<u64>(connection)
+                    .await
+                    .map_err(redis_database_error)?
+                    > 0
+            } else {
+                true
+            };
+            Ok((key_type, exists))
+        })
+        .await?;
+
+    match (key_type, exists) {
+        (KvKeyType::String, _) | (KvKeyType::Unknown, false) => Ok(()),
+        (KvKeyType::Unknown, true) => Err(AppError::Validation(
+            "Cannot overwrite existing Redis key of unsupported type with a string".into(),
+        )),
+        (existing_type, true) => Err(AppError::Validation(format!(
+            "Cannot overwrite existing Redis {} key with a string",
+            key_type_label(existing_type)
+        ))),
+        (_, false) => Ok(()),
+    }
+}
+
+fn key_type_label(key_type: KvKeyType) -> &'static str {
+    match key_type {
+        KvKeyType::String => "string",
+        KvKeyType::List => "list",
+        KvKeyType::Set => "set",
+        KvKeyType::ZSet => "zset",
+        KvKeyType::Hash => "hash",
+        KvKeyType::Stream => "stream",
+        KvKeyType::Json => "json",
+        KvKeyType::Unknown => "unknown",
+    }
+}
+
+async fn expire_key(adapter: &RedisAdapter, key: &str, seconds: u64) -> Result<bool, AppError> {
+    if seconds == 0 {
+        return Err(AppError::Validation(
+            "TTL seconds must be greater than zero".into(),
+        ));
+    }
+    adapter
+        .with_connection(async |connection| {
+            ::redis::cmd("EXPIRE")
+                .arg(key)
+                .arg(seconds)
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)
+        })
+        .await
+}
+
+async fn persist_key(adapter: &RedisAdapter, key: &str) -> Result<bool, AppError> {
+    adapter
+        .with_connection(async |connection| {
+            ::redis::cmd("PERSIST")
+                .arg(key)
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)
+        })
+        .await
 }
 
 #[cfg(test)]

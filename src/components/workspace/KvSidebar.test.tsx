@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import KvSidebar from "./KvSidebar";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig } from "@/types/connection";
@@ -47,6 +53,9 @@ describe("KvSidebar", () => {
       if (command === "scan_kv_keys") {
         return Promise.resolve(defaultKeyPage());
       }
+      if (command === "get_kv_value") {
+        return Promise.resolve(defaultValueEnvelope());
+      }
       return Promise.reject(new Error(`Unhandled command: ${command}`));
     });
   });
@@ -82,6 +91,27 @@ describe("KvSidebar", () => {
     expect(screen.getByText("hash")).toBeInTheDocument();
     expect(screen.getByText("128 B")).toBeInTheDocument();
     expect(screen.queryByText(/loading value/i)).not.toBeInTheDocument();
+  });
+
+  it("renders a typed value envelope when a Redis key is selected", async () => {
+    render(<KvSidebar connectionId="redis-1" />);
+    const tree = await screen.findByRole("tree", { name: /redis keys/i });
+
+    fireEvent.click(within(tree).getByRole("treeitem", { name: /user:1/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("get_kv_value", {
+        connectionId: "redis-1",
+        queryId: undefined,
+        request: {
+          database: 0,
+          key: "user:1",
+          limit: 100,
+        },
+      });
+    });
+    expect(screen.getByText(/name: Ada/)).toBeInTheDocument();
+    expect(screen.getAllByText(/persistent/)).toHaveLength(2);
   });
 
   it("switches database through KV IPC and reloads keys", async () => {
@@ -159,6 +189,26 @@ function defaultKeyPage() {
         memoryBytes: 128,
       },
     ],
+  };
+}
+
+function defaultValueEnvelope() {
+  return {
+    key: "user:1",
+    metadata: {
+      key: "user:1",
+      keyType: "hash",
+      ttl: { state: "persistent" },
+      length: 2,
+    },
+    value: {
+      type: "hash",
+      fields: [{ field: "name", value: "Ada" }],
+      cursor: "0",
+      nextCursor: "0",
+      done: true,
+      total: 1,
+    },
   };
 }
 

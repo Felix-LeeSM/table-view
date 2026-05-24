@@ -129,6 +129,7 @@ describe("DataSourceProfile registry", () => {
     redis: expectedCapabilities({
       connection: { test: true },
       catalog: { browse: true },
+      edit: { editKeys: true },
       paradigmSpecific: { keyBrowser: true },
     }),
     elasticsearch: expectedCapabilities({
@@ -246,8 +247,9 @@ describe("DataSourceProfile registry", () => {
       capabilitySource: "redis",
     });
     expect(redis.capabilities.paradigmSpecific.keyBrowser).toBe(true);
+    expect(redis.resultKinds).toEqual(["keyValue", "streamRecords"]);
     expect(redis.capabilities.connection.switchDatabase).toBe(false);
-    expect(redis.capabilities.edit.editKeys).toBe(false);
+    expect(redis.capabilities.edit.editKeys).toBe(true);
     expect(redis.capabilities.paradigmSpecific.streamConsumer).toBe(false);
   });
 
