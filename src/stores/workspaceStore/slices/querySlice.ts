@@ -25,6 +25,7 @@ type QuerySlice = Pick<
   | "setQueryTabDatabase"
   | "setQueryMode"
   | "completeQuery"
+  | "completeSearchQuery"
   | "failQuery"
   | "completeMultiStatementQuery"
   | "completeQueryDryRun"
@@ -199,6 +200,18 @@ export function createQuerySlice(
           return patchRunningQueryTab(ws, tabId, queryId, (tab) => ({
             ...tab,
             queryState: { status: "completed" as const, result },
+          }));
+        });
+        return next ? { workspaces: next } : state;
+      });
+    },
+
+    completeSearchQuery: (connId, db, tabId, queryId, result) => {
+      set((state) => {
+        const next = patchExistingWorkspace(state, connId, db, (ws) => {
+          return patchRunningQueryTab(ws, tabId, queryId, (tab) => ({
+            ...tab,
+            queryState: { status: "completedSearch" as const, result },
           }));
         });
         return next ? { workspaces: next } : state;

@@ -24,7 +24,7 @@ const result: SearchResultEnvelope = {
     {
       name: "by_status",
       kind: "terms",
-      value: { buckets: [{ key: "ok", doc_count: 1 }] },
+      buckets: [{ key: "ok", docCount: 1 }],
     },
   ],
 };
@@ -42,7 +42,7 @@ describe("SearchResultView", () => {
     const aggregations = screen.getByLabelText("Search aggregations");
     expect(within(aggregations).getByText("by_status")).toBeInTheDocument();
     expect(within(aggregations).getByText("terms")).toBeInTheDocument();
-    expect(within(aggregations).getByText(/doc_count/)).toBeInTheDocument();
+    expect(within(aggregations).getByText(/docCount/)).toBeInTheDocument();
     expect(screen.queryByRole("grid")).not.toBeInTheDocument();
   });
 

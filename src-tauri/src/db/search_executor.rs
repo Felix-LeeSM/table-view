@@ -1,10 +1,10 @@
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use crate::db::search::SearchCatalogFixture;
 use crate::error::AppError;
 use crate::models::{
     SearchAggregationEnvelope, SearchHitEnvelope, SearchQueryRequest, SearchResultEnvelope,
-    SearchTotalHits, SearchTotalHitsRelation,
+    SearchTermsBucket, SearchTotalHits, SearchTotalHitsRelation,
 };
 
 pub(crate) fn execute_fixture_search(
@@ -17,8 +17,9 @@ pub(crate) fn execute_fixture_search(
         .as_object()
         .ok_or_else(|| AppError::Validation("Search DSL body must be a JSON object".into()))?;
 
-    let mut hits = filter_fixture_hits(&fixture.search_result.hits, body.get("query"))?;
-    let total = hits.len() as u64;
+    let filtered_hits = filter_fixture_hits(&fixture.search_result.hits, body.get("query"))?;
+    let total = filtered_hits.len() as u64;
+    let aggregations = aggregation_envelopes(body, &filtered_hits)?;
 
     let from = request
         .from
@@ -27,8 +28,8 @@ pub(crate) fn execute_fixture_search(
     let size = request
         .size
         .or_else(|| body.get("size").and_then(Value::as_u64))
-        .unwrap_or(hits.len() as u64) as usize;
-    hits = hits.into_iter().skip(from).take(size).collect();
+        .unwrap_or(filtered_hits.len() as u64) as usize;
+    let hits = filtered_hits.into_iter().skip(from).take(size).collect();
 
     let mut result = fixture.search_result.clone();
     result.total = SearchTotalHits {
@@ -36,7 +37,7 @@ pub(crate) fn execute_fixture_search(
         relation: SearchTotalHitsRelation::Eq,
     };
     result.hits = hits;
-    result.aggregations = aggregation_envelopes(body, &result.hits)?;
+    result.aggregations = aggregations;
     Ok(result)
 }
 
@@ -77,16 +78,7 @@ fn validate_fixture_search_request(
     for key in body.keys() {
         if !matches!(
             key.as_str(),
-            "query"
-                | "aggs"
-                | "aggregations"
-                | "from"
-                | "size"
-                | "sort"
-                | "track_total_hits"
-                | "_source"
-                | "fields"
-                | "highlight"
+            "query" | "aggs" | "aggregations" | "from" | "size" | "track_total_hits"
         ) {
             return Err(AppError::Unsupported(format!(
                 "Search DSL feature '{}' is not supported by the bounded fixture executor",
@@ -249,12 +241,11 @@ fn terms_aggregation(
     }
     let buckets = counts
         .into_iter()
-        .map(|(key, doc_count)| json!({ "key": key, "doc_count": doc_count }))
+        .map(|(key, doc_count)| SearchTermsBucket { key, doc_count })
         .collect::<Vec<_>>();
-    Ok(SearchAggregationEnvelope {
+    Ok(SearchAggregationEnvelope::Terms {
         name: name.into(),
-        kind: "terms".into(),
-        value: json!({ "buckets": buckets }),
+        buckets,
     })
 }
 
@@ -268,10 +259,9 @@ fn value_count_aggregation(
         .iter()
         .filter(|hit| source_field_value(&hit.source, field).is_some())
         .count();
-    Ok(SearchAggregationEnvelope {
+    Ok(SearchAggregationEnvelope::ValueCount {
         name: name.into(),
-        kind: "value_count".into(),
-        value: json!({ "value": value }),
+        value: value as u64,
     })
 }
 
@@ -289,4 +279,181 @@ fn source_field_value<'a>(source: &'a Value, field: &str) -> Option<&'a Value> {
     normalized
         .split('.')
         .try_fold(source, |current, part| current.get(part))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::search::SearchCatalogFixture;
+    use crate::models::SearchProductKind;
+    use serde_json::json;
+
+    fn fixture() -> SearchCatalogFixture {
+        SearchCatalogFixture::sample(SearchProductKind::Elasticsearch)
+    }
+
+    fn request(body: Value) -> SearchQueryRequest {
+        SearchQueryRequest {
+            index: "logs-elastic-2026.05.24".into(),
+            body,
+            from: None,
+            size: Some(10),
+            track_total_hits: Some(true),
+        }
+    }
+
+    #[test]
+    fn fixture_search_returns_typed_aggregation_envelopes() {
+        let result = execute_fixture_search(
+            &fixture(),
+            &request(json!({
+                "query": { "match_all": {} },
+                "aggs": {
+                    "by_status": {
+                        "terms": { "field": "status.keyword" }
+                    }
+                }
+            })),
+        )
+        .unwrap();
+
+        assert_eq!(result.hits[0].id, "doc-1");
+        assert_eq!(result.aggregations.len(), 1);
+        match &result.aggregations[0] {
+            SearchAggregationEnvelope::Terms { name, buckets } => {
+                assert_eq!(name, "by_status");
+                assert_eq!(buckets.len(), 2);
+                assert!(buckets
+                    .iter()
+                    .any(|bucket| bucket.key == "ok" && bucket.doc_count == 1));
+                assert!(buckets
+                    .iter()
+                    .any(|bucket| bucket.key == "error" && bucket.doc_count == 1));
+            }
+            other => panic!("expected terms aggregation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fixture_search_returns_typed_value_count_aggregation() {
+        let result = execute_fixture_search(
+            &fixture(),
+            &request(json!({
+                "query": { "match_all": {} },
+                "aggs": {
+                    "messages": {
+                        "value_count": { "field": "message" }
+                    }
+                }
+            })),
+        )
+        .unwrap();
+
+        assert_eq!(
+            result.aggregations[0],
+            SearchAggregationEnvelope::ValueCount {
+                name: "messages".into(),
+                value: 2
+            }
+        );
+    }
+
+    #[test]
+    fn fixture_search_aggregates_before_paginating_hits() {
+        let mut req = request(json!({
+            "query": { "match_all": {} },
+            "aggs": {
+                "by_status": {
+                    "terms": { "field": "status.keyword" }
+                }
+            }
+        }));
+        req.size = Some(1);
+
+        let result = execute_fixture_search(&fixture(), &req).unwrap();
+
+        assert_eq!(result.hits.len(), 1);
+        match &result.aggregations[0] {
+            SearchAggregationEnvelope::Terms { buckets, .. } => {
+                let total_bucket_docs: u64 = buckets.iter().map(|bucket| bucket.doc_count).sum();
+                assert_eq!(total_bucket_docs, 2);
+            }
+            other => panic!("expected terms aggregation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fixture_search_blocks_broad_wildcard_targets_by_default() {
+        let mut req = request(json!({ "query": { "match_all": {} } }));
+        req.index = "*".into();
+
+        let result = execute_fixture_search(&fixture(), &req);
+
+        assert!(
+            matches!(result, Err(AppError::Validation(message)) if message.contains("wildcard"))
+        );
+    }
+
+    #[test]
+    fn fixture_search_blocks_destructive_path_shaped_targets() {
+        let mut req = request(json!({ "query": { "match_all": {} } }));
+        req.index = "/logs-elastic-2026.05.24/_delete_by_query".into();
+
+        let result = execute_fixture_search(&fixture(), &req);
+
+        assert!(
+            matches!(result, Err(AppError::Validation(message)) if message.contains("destructive"))
+        );
+    }
+
+    #[test]
+    fn fixture_search_rejects_unsupported_dsl_features_clearly() {
+        let result = execute_fixture_search(
+            &fixture(),
+            &request(json!({
+                "query": { "match_all": {} },
+                "suggest": {
+                    "message-suggest": {
+                        "text": "fixture",
+                        "term": { "field": "message" }
+                    }
+                }
+            })),
+        );
+
+        assert!(
+            matches!(result, Err(AppError::Unsupported(message)) if message.contains("suggest"))
+        );
+    }
+
+    #[test]
+    fn fixture_search_rejects_ignored_dsl_features_clearly() {
+        for feature in ["sort", "_source", "fields", "highlight"] {
+            let result = execute_fixture_search(
+                &fixture(),
+                &request(json!({
+                    "query": { "match_all": {} },
+                    feature: []
+                })),
+            );
+
+            assert!(
+                matches!(result, Err(AppError::Unsupported(ref message)) if message.contains(feature)),
+                "feature {feature} should fail clearly, got {result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn aggregation_envelope_rejects_unknown_raw_kind() {
+        let raw = json!({
+            "kind": "raw",
+            "name": "raw_payload",
+            "value": { "opaque": true }
+        });
+
+        let result = serde_json::from_value::<SearchAggregationEnvelope>(raw);
+
+        assert!(result.is_err());
+    }
 }

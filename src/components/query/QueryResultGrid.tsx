@@ -29,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { ExportButton } from "@components/shared/ExportButton";
 import type { ExportContext, ExportFormat } from "@/lib/tauri";
 import { getDataSourceProfile } from "@/types/dataSource";
+import { SearchResultView } from "@components/search/SearchResultView";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
 import ScalarOrListPanel from "./ScalarOrListPanel";
 import WriteSummaryPanel from "./WriteSummaryPanel";
@@ -729,6 +730,10 @@ export default function QueryResultGrid({
       );
     }
     return body;
+  }
+
+  if (queryState.status === "completedSearch") {
+    return <SearchResultView result={queryState.result} />;
   }
 
   // Idle state — prompt the user

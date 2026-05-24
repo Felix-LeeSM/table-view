@@ -26,6 +26,7 @@ import {
   createMongoIndex,
   dropMongoIndex,
   runMongoCommand,
+  executeSearchQuery,
   type CreateMongoIndexRequest,
 } from "@lib/tauri";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
@@ -47,6 +48,7 @@ import type { QueryTab } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";
 import type { BulkWriteOp, BulkWriteResult } from "@/types/documentMutate";
 import type { WriteSummaryData } from "@/types/query";
+import type { SearchQueryRequest } from "@/types/search";
 import {
   parseMongoshExpression,
   type ParsedMongoshCall,
@@ -179,6 +181,37 @@ export interface QueryExecution {
   cancelMongoWarn: () => void;
 }
 
+function parseSearchDslRequest(sql: string): SearchQueryRequest {
+  const parsed: unknown = JSON.parse(sql);
+  if (!isRecord(parsed)) {
+    throw new Error("Search DSL request must be a JSON object.");
+  }
+  const index = parsed.index;
+  const body = parsed.body;
+  if (typeof index !== "string" || index.trim().length === 0) {
+    throw new Error("Search DSL request requires a string index.");
+  }
+  if (!isRecord(body)) {
+    throw new Error("Search DSL request requires an object body.");
+  }
+  return {
+    index,
+    body,
+    from: numberField(parsed.from),
+    size: numberField(parsed.size),
+    trackTotalHits:
+      typeof parsed.trackTotalHits === "boolean"
+        ? parsed.trackTotalHits
+        : undefined,
+  };
+}
+
+function numberField(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
 export function useQueryExecution({
   tab,
 }: UseQueryExecutionArgs): QueryExecution {
@@ -199,6 +232,9 @@ export function useQueryExecution({
   const wsConnId = tab.connectionId;
   const updateQueryStateAction = useWorkspaceStore((s) => s.updateQueryState);
   const completeQueryAction = useWorkspaceStore((s) => s.completeQuery);
+  const completeSearchQueryAction = useWorkspaceStore(
+    (s) => s.completeSearchQuery,
+  );
   const failQueryAction = useWorkspaceStore((s) => s.failQuery);
   const completeMultiStatementQueryAction = useWorkspaceStore(
     (s) => s.completeMultiStatementQuery,
@@ -221,6 +257,16 @@ export function useQueryExecution({
       completeQueryAction(wsConnId, workspaceDb, tabId, queryId, result);
     },
     [completeQueryAction, wsConnId, workspaceDb],
+  );
+  const completeSearchQuery = useCallback(
+    (
+      tabId: string,
+      queryId: string,
+      result: Parameters<typeof completeSearchQueryAction>[4],
+    ) => {
+      completeSearchQueryAction(wsConnId, workspaceDb, tabId, queryId, result);
+    },
+    [completeSearchQueryAction, wsConnId, workspaceDb],
   );
   const failQuery = useCallback(
     (tabId: string, queryId: string, errorMessage: string) => {
@@ -2010,6 +2056,37 @@ export function useQueryExecution({
       return;
     }
 
+    if (tab.paradigm === "search") {
+      let request: SearchQueryRequest;
+      try {
+        request = parseSearchDslRequest(sql);
+      } catch (err) {
+        updateQueryState(tab.id, {
+          status: "error",
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+
+      const queryId = `${tab.id}-${Date.now()}`;
+      updateQueryState(tab.id, { status: "running", queryId });
+      try {
+        const result = await executeSearchQuery(
+          tab.connectionId,
+          request,
+          queryId,
+        );
+        completeSearchQuery(tab.id, queryId, result);
+      } catch (err) {
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+      return;
+    }
+
     // Sprint 311 (Phase 28 Slice A5, 2026-05-14) — document paradigm
     // Run dispatch is now driven by `parseMongoshExpression`. The legacy
     // `JSON.parse(sql)` + `tab.queryMode === "aggregate"` branch is
@@ -2322,6 +2399,9 @@ export function useQueryExecution({
     canCancelQuery,
     dbType,
     dispatchMongoshCall,
+    completeSearchQuery,
+    failQuery,
+    updateQueryState,
     runRdbSingleNow,
     runRdbBatchNow,
   ]);

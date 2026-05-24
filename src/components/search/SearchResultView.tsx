@@ -1,5 +1,7 @@
 import type {
   SearchAggregationEnvelope,
+  SearchTermsAggregationEnvelope,
+  SearchValueCountAggregationEnvelope,
   SearchResultEnvelope,
 } from "@/types/search";
 
@@ -83,7 +85,22 @@ export function SearchResultView({ result }: SearchResultViewProps) {
 }
 
 function formatAggregation(aggregation: SearchAggregationEnvelope): string {
-  return formatJson(aggregation.value);
+  switch (aggregation.kind) {
+    case "terms":
+      return formatTermsAggregation(aggregation);
+    case "value_count":
+      return formatValueCountAggregation(aggregation);
+  }
+}
+
+function formatTermsAggregation(aggregation: SearchTermsAggregationEnvelope) {
+  return formatJson({ buckets: aggregation.buckets });
+}
+
+function formatValueCountAggregation(
+  aggregation: SearchValueCountAggregationEnvelope,
+) {
+  return formatJson({ value: aggregation.value });
 }
 
 function formatJson(value: unknown): string {

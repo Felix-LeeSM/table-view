@@ -253,4 +253,8 @@ export type QueryState =
       statements?: QueryStatementResult[];
       isDryRun?: boolean;
     }
+  | {
+      status: "completedSearch";
+      result: SearchResultEnvelope;
+    }
   | { status: "error"; error: string };

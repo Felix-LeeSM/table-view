@@ -74,8 +74,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(result.hits.len(), 1);
-        assert_eq!(result.aggregations[0].name, "by_status");
+        assert_eq!(result.hits.len(), 2);
+        assert_eq!(result.aggregations[0].name(), "by_status");
         let tokens = state.query_tokens.lock().await;
         assert!(!tokens.contains_key("q"));
     }

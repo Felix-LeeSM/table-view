@@ -38,6 +38,7 @@ const TAURI_FUNCTIONS = [
   "executeQuery",
   "executeQueryBatch",
   "executeQueryDryRun",
+  "executeSearchQuery",
   "exportConnections",
   "exportConnectionsEncrypted",
   "exportGridRows",

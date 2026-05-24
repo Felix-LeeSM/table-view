@@ -10,7 +10,14 @@ import {
   type OpaqueResultEnvelope,
   type QueryResult,
 } from "./query";
-import type { SearchResultEnvelope } from "./search";
+import type { SearchAggregationEnvelope, SearchResultEnvelope } from "./search";
+
+const rawAggregationEnvelope: SearchAggregationEnvelope = {
+  // @ts-expect-error Raw aggregation payload bags must not type-check.
+  kind: "raw",
+  name: "opaque",
+};
+void rawAggregationEnvelope;
 
 const tabularResult: QueryResult = {
   columns: [{ name: "id", dataType: "integer", category: "int" }],
@@ -48,7 +55,7 @@ const searchResult: SearchResultEnvelope = {
     {
       name: "by_status",
       kind: "terms",
-      value: { buckets: [{ key: "ok", doc_count: 1 }] },
+      buckets: [{ key: "ok", docCount: 1 }],
     },
   ],
 };
