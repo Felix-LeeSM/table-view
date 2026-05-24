@@ -126,7 +126,11 @@ describe("DataSourceProfile registry", () => {
         serverInfo: true,
       },
     }),
-    redis: createEmptyDataSourceCapabilities(),
+    redis: expectedCapabilities({
+      connection: { test: true },
+      catalog: { browse: true },
+      paradigmSpecific: { keyBrowser: true },
+    }),
     elasticsearch: expectedCapabilities({
       connection: { test: true },
     }),
@@ -205,6 +209,7 @@ describe("DataSourceProfile registry", () => {
     expect(getDataSourceProfile("mysql").connectionKind).toBe("server");
     expect(getDataSourceProfile("mariadb").connectionKind).toBe("server");
     expect(getDataSourceProfile("mongodb").connectionKind).toBe("server");
+    expect(getDataSourceProfile("redis").connectionKind).toBe("server");
     expect(getDataSourceProfile("sqlite").connectionKind).toBe("file");
     expect(getDataSourceProfile("duckdb").connectionKind).toBe("file");
   });
@@ -230,12 +235,24 @@ describe("DataSourceProfile registry", () => {
     expect(mongo.capabilities).toEqual(expectedCapabilitiesByType.mongodb);
   });
 
+  it("exposes Redis as a supported KV key-browser profile", () => {
+    const redis = getDataSourceProfile("redis");
+
+    expect(redis.paradigm).toBe("kv");
+    expect(redis.languages).toEqual(["redis-command"]);
+    expect(redis.backendAdapter).toEqual({
+      id: "redis",
+      kind: "kv",
+      capabilitySource: "redis",
+    });
+    expect(redis.capabilities.paradigmSpecific.keyBrowser).toBe(true);
+    expect(redis.capabilities.connection.switchDatabase).toBe(false);
+    expect(redis.capabilities.edit.editKeys).toBe(false);
+    expect(redis.capabilities.paradigmSpecific.streamConsumer).toBe(false);
+  });
+
   it("keeps unsupported profiles structurally present but capability-empty", () => {
-    for (const dbType of [
-      "mssql",
-      "oracle",
-      "redis",
-    ] satisfies DatabaseType[]) {
+    for (const dbType of ["mssql", "oracle"] satisfies DatabaseType[]) {
       expect(getDataSourceProfile(dbType).capabilities).toEqual(
         createEmptyDataSourceCapabilities(),
       );
@@ -250,15 +267,16 @@ describe("DataSourceProfile registry", () => {
       "sqlite",
       "duckdb",
       "mongodb",
+      "redis",
       "elasticsearch",
       "opensearch",
     ]);
     expect(isConnectionSupportedDatabaseType("postgresql")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mongodb")).toBe(true);
     expect(isConnectionSupportedDatabaseType("duckdb")).toBe(true);
+    expect(isConnectionSupportedDatabaseType("redis")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
-    expect(isConnectionSupportedDatabaseType("redis")).toBe(false);
     expect(isConnectionSupportedDatabaseType("elasticsearch")).toBe(true);
     expect(isConnectionSupportedDatabaseType("opensearch")).toBe(true);
   });
@@ -348,12 +366,13 @@ describe("DataSourceProfile registry", () => {
     }
   });
 
-  it("keeps switch-database capability enabled for RDBMS profiles and disabled for Mongo", () => {
+  it("keeps switch-database capability enabled for RDBMS profiles and disabled for non-toolbar profiles", () => {
     expect(hasConnectionCapability("postgresql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mysql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mariadb", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);
+    expect(hasConnectionCapability("redis", "switchDatabase")).toBe(false);
   });
 
   it("keeps SQLite file picker and read-only capabilities explicit while missing profiles stay disabled", () => {

@@ -11,6 +11,7 @@ export * from "./schema";
 export * from "./query";
 export * from "./ddl";
 export * from "./document";
+export * from "./kv";
 export * from "./export";
 export * from "./fileAnalytics";
 // Sprint 361 (Phase 3, Q13) — per-conn workspace window launcher.

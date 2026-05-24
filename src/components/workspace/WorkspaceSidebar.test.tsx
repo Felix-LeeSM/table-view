@@ -23,6 +23,12 @@ vi.mock("@components/schema/DocumentDatabaseTree", () => ({
   ),
 }));
 
+vi.mock("./KvSidebar", () => ({
+  default: ({ connectionId }: { connectionId: string }) => (
+    <div data-testid="kv-sidebar">{connectionId}</div>
+  ),
+}));
+
 function makeConn(
   id: string,
   overrides?: Partial<ConnectionConfig>,
@@ -241,21 +247,13 @@ describe("WorkspaceSidebar", () => {
     expect(screen.queryByTestId("schema-tree")).toBeNull();
   });
 
-  it("renders the kv placeholder for paradigm 'kv'", () => {
+  it("renders KvSidebar for paradigm 'kv'", () => {
     setupStore({
       connections: [makeConn("k1", { dbType: "redis", paradigm: "kv" })],
       active: ["k1"],
     });
     render(<WorkspaceSidebar selectedId="k1" />);
-    const placeholder = screen.getByRole("status", {
-      name: /key-value workspace placeholder/i,
-    });
-    expect(placeholder).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /key-value database support is planned but not yet implemented/i,
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("kv-sidebar")).toHaveTextContent("k1");
     expect(screen.queryByTestId("schema-tree")).toBeNull();
     expect(screen.queryByTestId("document-database-tree")).toBeNull();
   });
