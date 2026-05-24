@@ -45,5 +45,5 @@ work starts from profile/capability/adapter/language/result/safety contracts.
 
 ### Required Checks
 
-1. `npx prettier --check docs/data-source-architecture.md docs/PLAN.md docs/ROADMAP.md docs/sprints/sprint-480/contract.md`
+1. `npx prettier --check docs/adding-a-data-source.md docs/data-source-architecture.md docs/PLAN.md docs/ROADMAP.md docs/sprints/sprint-480/contract.md`
 2. `git diff --check`
