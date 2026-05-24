@@ -16,6 +16,10 @@ import {
   isConnectionSupportedDatabaseType,
 } from "./dataSource";
 import {
+  getActiveQueryLanguages,
+  getQueryLanguageMetadata,
+} from "./queryLanguage";
+import {
   FILE_RDBMS_DATABASE_TYPES,
   RDBMS_DATABASE_TYPES,
   RUNTIME_RDBMS_DATABASE_TYPES,
@@ -385,6 +389,44 @@ describe("DataSourceProfile registry", () => {
           paradigm: profile.paradigm,
         }),
       ).toBe(profile.languages[0]);
+    }
+  });
+
+  it("requires owner metadata for every active query language", () => {
+    const activeLanguages = [
+      ...new Set(
+        Object.values(DATA_SOURCE_PROFILES).flatMap((profile) =>
+          profile.capabilities.connection.test ? profile.languages : [],
+        ),
+      ),
+    ].sort();
+
+    expect([...getActiveQueryLanguages()].sort()).toEqual(activeLanguages);
+
+    for (const languageId of activeLanguages) {
+      const metadata = getQueryLanguageMetadata(languageId);
+
+      expect(metadata.lifecycle).toBe("active");
+      expect(metadata.parserOwner).toBeTruthy();
+      expect(metadata.completionOwner).toBeTruthy();
+      expect(metadata.fallbackPolicy.kind).not.toBe("source-of-truth");
+      expect(metadata.safetyAnalyzer).toBeTruthy();
+      expect(metadata.supportedSyntaxDocs).toBe(
+        "docs/query-language-support.md",
+      );
+    }
+  });
+
+  it("keeps ADR 0045 hot-path languages owned by Rust/WASM with compatibility mirrors only", () => {
+    for (const languageId of ["sql", "mongosh"] as const) {
+      const metadata = getQueryLanguageMetadata(languageId);
+
+      expect(metadata.parserOwner).toBe("rust-wasm-language-core");
+      expect(metadata.completionOwner).toBe("rust-wasm-language-core");
+      expect(metadata.fallbackPolicy).toMatchObject({
+        kind: "compatibility-mirror",
+        sourceOfTruth: "rust-wasm-language-core",
+      });
     }
   });
 
