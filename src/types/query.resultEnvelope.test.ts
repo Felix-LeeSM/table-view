@@ -87,6 +87,7 @@ describe("result envelope compatibility layer", () => {
         totalCount: documentResult.totalCount,
         executionTimeMs: documentResult.executionTimeMs,
         queryType: "select",
+        resultUnit: "document",
       },
     });
     expect(converted.ok && "rawDocuments" in converted.queryResult).toBe(false);
