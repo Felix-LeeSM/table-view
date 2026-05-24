@@ -81,6 +81,14 @@ async function getShaFromReleaseAsset(asset) {
   return firstToken;
 }
 
+function escapeRubyString(value) {
+  return String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\r\n/g, "\\n")
+    .replace(/\n/g, "\\n");
+}
+
 async function sha256Url(url) {
   const response = await fetch(url, {
     headers: { ...headers, Accept: "application/octet-stream" },
@@ -102,34 +110,85 @@ async function sha256Url(url) {
   return hash.digest("hex");
 }
 
-function pickDmg(assets, patterns) {
-  return (
-    assets.find((asset) => {
-      if (!asset.name.toLowerCase().endsWith(".dmg")) {
-        return false;
-      }
+function detectArchFromName(name) {
+  const normalized = name.toLowerCase();
+  if (/\b(universal)\b/.test(normalized)) {
+    return "universal";
+  }
+  if (/(^|[_-])(aarch64|arm64|apple.?silicon)([_-]|$)/.test(normalized)) {
+    return "arm";
+  }
+  if (/(^|[_-])(x86_64|x64|amd64|intel)([_-]|$)/.test(normalized)) {
+    return "intel";
+  }
 
-      const normalized = asset.name.toLowerCase();
-      return patterns.some((pattern) => normalized.includes(pattern));
-    }) || null
+  return "unknown";
+}
+
+function pickDmgAssets(assets) {
+  const dmgs = assets.filter((asset) =>
+    asset.name.toLowerCase().endsWith(".dmg"),
   );
+  const candidates = dmgs
+    .map((asset) => ({ ...asset, arch: detectArchFromName(asset.name) }))
+    .filter((asset) => asset.arch !== "unknown");
+
+  const unknownDmgs = dmgs.filter(
+    (asset) => detectArchFromName(asset.name) === "unknown",
+  );
+
+  if (candidates.length === 0 && unknownDmgs.length === 1) {
+    return {
+      fallback: unknownDmgs[0],
+      arm: null,
+      intel: null,
+      universal: null,
+    };
+  }
+
+  const arm = candidates.find((asset) => asset.arch === "arm") || null;
+  const intel = candidates.find((asset) => asset.arch === "intel") || null;
+  const universal =
+    candidates.find((asset) => asset.arch === "universal") || null;
+
+  if (universal && arm && arm.name !== universal.name) {
+    console.warn(
+      `[warn] both universal(${universal.name}) and arm(${arm.name}) dmg found; selecting universal first.`,
+    );
+    return { fallback: null, arm: null, intel, universal };
+  }
+  if (universal && intel && intel.name !== universal.name) {
+    console.warn(
+      `[warn] both universal(${universal.name}) and intel(${intel.name}) dmg found; selecting universal first.`,
+    );
+    return { fallback: null, arm, intel: null, universal };
+  }
+
+  if (arm && intel && arm.name === intel.name) {
+    return { fallback: null, arm: null, intel: null, universal: arm };
+  }
+
+  return { fallback: null, arm, intel, universal };
 }
 
 function makeDmgUrl(tag, filename) {
   return `https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${encodeURIComponent(filename)}`;
 }
 
-function makeCask({ version, tag, arm, intel }) {
+function makeCask({ version, tag, arm, intel, universal }) {
   const header = `cask "${HOMEBREW_CASK_NAME}" do\n  version "${version}"\n`;
   const meta = [
-    `  name "${HOMEBREW_APP_TITLE}"`,
-    `  desc "${HOMEBREW_DESCRIPTION}"`,
-    `  homepage "${HOMEBREW_HOMEPAGE}"`,
+    `  name "${escapeRubyString(HOMEBREW_APP_TITLE)}"`,
+    `  desc "${escapeRubyString(HOMEBREW_DESCRIPTION)}"`,
+    `  homepage "${escapeRubyString(HOMEBREW_HOMEPAGE)}"`,
     "",
   ];
 
   const body = [];
-  if (arm && intel) {
+  if (universal) {
+    body.push(`  sha256 "${universal.sha}"`);
+    body.push(`  url "${makeDmgUrl(tag, universal.name)}"`);
+  } else if (arm && intel) {
     body.push("  if Hardware::CPU.arm?");
     body.push(`    sha256 "${arm.sha}"`);
     body.push(`    url "${makeDmgUrl(tag, arm.name)}"`);
@@ -150,7 +209,7 @@ function makeCask({ version, tag, arm, intel }) {
   }
 
   body.push("");
-  body.push(`  app "${HOMEBREW_APP_NAME}"`);
+  body.push(`  app "${escapeRubyString(HOMEBREW_APP_NAME)}"`);
   body.push("end");
 
   return [header, ...meta, ...body]
@@ -187,10 +246,22 @@ const release = await getJson(
 );
 const assets = Array.isArray(release.assets) ? release.assets : [];
 
-const armDmg = pickDmg(assets, ["aarch64", "arm64"]);
-const intelDmg = pickDmg(assets, ["x86_64", "x64", "amd64"]);
+const {
+  arm: armDmg,
+  intel: intelDmg,
+  universal: detectedUniversalDmg,
+  fallback,
+} = pickDmgAssets(assets);
 
-if (!armDmg && !intelDmg) {
+const universalDmg = detectedUniversalDmg || fallback;
+
+if (fallback) {
+  console.warn(
+    `[warn] Could not infer architecture from ${fallback.name}; falling back to single-package mode.`,
+  );
+}
+
+if (!armDmg && !intelDmg && !universalDmg) {
   throw new Error(`No macOS .dmg assets found for ${releaseTag}`);
 }
 
@@ -200,12 +271,16 @@ if (armDmg) {
 if (intelDmg) {
   intelDmg.sha = await resolveAssetSha(assets, intelDmg);
 }
+if (universalDmg) {
+  universalDmg.sha = await resolveAssetSha(assets, universalDmg);
+}
 
 const caskContent = makeCask({
   version,
   tag: releaseTag,
   arm: armDmg,
   intel: intelDmg,
+  universal: universalDmg,
 });
 
 await fs.mkdir(path.dirname(tapFilePath), { recursive: true });

@@ -48,6 +48,8 @@ jobs:
           HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
         working-directory: homebrew-tap
         run: |
+          set -euo pipefail
+
           if git diff --quiet; then
             echo "No changes for Homebrew cask for ${RELEASE_TAG}."
             exit 0
@@ -55,11 +57,29 @@ jobs:
 
           version="${RELEASE_TAG#v}"
           branch="chore/table-view-${version}"
+          tap_file="Casks/table-view.rb"
+
+          if git ls-remote --exit-code --heads origin "${branch}" > /dev/null 2>&1; then
+            git fetch --quiet origin "${branch}":"${branch}"
+            git switch --quiet "${branch}"
+          else
+            git switch --quiet -c "${branch}"
+          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "${branch}"
-          git add Casks/table-view.rb
+          git add "${tap_file}"
+
+          if git diff --cached --quiet; then
+            echo "No local tap changes for ${RELEASE_TAG}."
+            if gh pr view --repo "${HOMEBREW_TAP_REPO}" "${branch}" > /dev/null 2>&1; then
+              echo "PR already exists for ${branch}."
+            else
+              echo "No PR exists for ${branch}, but there are no tap changes."
+            fi
+            exit 0
+          fi
+
           git commit -m "feat(homebrew): bump table-view to ${RELEASE_TAG}"
           git push -u origin "${branch}"
 
