@@ -363,19 +363,6 @@ export const SEARCH_CAPABILITIES = capabilities({
   connection: {
     test: true,
   },
-  query: {
-    query: true,
-    cancel: true,
-    explain: false,
-  },
-  catalog: {
-    browse: true,
-    schema: true,
-    indexes: true,
-  },
-  paradigmSpecific: {
-    searchDocuments: true,
-  },
 });
 
 function profile(

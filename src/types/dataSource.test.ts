@@ -129,15 +129,9 @@ describe("DataSourceProfile registry", () => {
     redis: createEmptyDataSourceCapabilities(),
     elasticsearch: expectedCapabilities({
       connection: { test: true },
-      query: { query: true, cancel: true },
-      catalog: { browse: true, schema: true, indexes: true },
-      paradigmSpecific: { searchDocuments: true },
     }),
     opensearch: expectedCapabilities({
       connection: { test: true },
-      query: { query: true, cancel: true },
-      catalog: { browse: true, schema: true, indexes: true },
-      paradigmSpecific: { searchDocuments: true },
     }),
   };
 
@@ -269,16 +263,17 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("opensearch")).toBe(true);
   });
 
-  it("exposes search profiles as executable search-document sources", () => {
+  it("keeps search profiles connection-only until live HTTP catalog lands", () => {
     for (const dbType of [
       "elasticsearch",
       "opensearch",
     ] satisfies DatabaseType[]) {
       const profile = getDataSourceProfile(dbType);
 
-      expect(profile.capabilities.query.query).toBe(true);
-      expect(profile.capabilities.query.cancel).toBe(true);
-      expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(true);
+      expect(profile.capabilities.connection.test).toBe(true);
+      expect(profile.capabilities.catalog.browse).toBe(false);
+      expect(profile.capabilities.query.query).toBe(false);
+      expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);
     }
   });
 

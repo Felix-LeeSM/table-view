@@ -11,7 +11,8 @@ client slice lands.
 
 - Added `DatabaseType::Elasticsearch` and `DatabaseType::Opensearch`.
 - Added frontend database type labels, defaults, URL schemes, metadata, and
-  supported connection-dialog entries.
+  connection-dialog entries with connection-only capabilities until live HTTP
+  lands.
 - Wired `make_adapter` to `ActiveAdapter::Search(SearchEngineAdapter)`.
 - Added `SearchCatalogFixture` for Elasticsearch/OpenSearch identity, indexes,
   aliases, mappings, templates, and a typed search-hit envelope.
@@ -23,7 +24,7 @@ client slice lands.
 | AC | Evidence |
 |---|---|
 | AC-470-01 | Separate `elasticsearch` and `opensearch` DB types, labels, defaults, dialect metadata, and fixture identities. |
-| AC-470-02 | Fixture adapter returns index catalog, aliases, mappings, templates through `SearchAdapter`. |
+| AC-470-02 | Fixture adapter returns index catalog, aliases, mappings, templates through `SearchAdapter`; frontend profile does not advertise live catalog/query support yet. |
 | AC-470-03 | Cluster/admin surfaces beyond catalog/search safety planning are not exposed. |
 | AC-470-04 | Network paths fail with explicit `Unsupported` messages; dialog profiles can surface the failure. |
 
@@ -36,5 +37,6 @@ client slice lands.
 ## Deferred
 
 - Live HTTP auth/TLS/client behavior.
+- Live frontend catalog/search-document capabilities.
 - Search DSL execution and result UI.
 - Document editing and cluster administration.

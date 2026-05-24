@@ -15,6 +15,7 @@ use super::{make_adapter, AppState, SaveConnectionRequest, TestConnectionRequest
 use crate::db::mongodb::MongoAdapter;
 use crate::db::mysql::MysqlAdapter;
 use crate::db::postgres::PostgresAdapter;
+use crate::db::search::SearchEngineAdapter;
 use crate::db::sqlite::SqliteAdapter;
 use crate::db::DuckdbAdapter;
 use crate::error::AppError;
@@ -114,6 +115,9 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         }
         DatabaseType::Mongodb => {
             MongoAdapter::test(&full).await?;
+        }
+        DatabaseType::Elasticsearch | DatabaseType::Opensearch => {
+            SearchEngineAdapter::test(&full).await?;
         }
         other => {
             return Err(AppError::Unsupported(format!(
@@ -550,6 +554,40 @@ mod tests {
                 panic!("Mongodb routing regressed — got Unsupported: {msg}");
             }
             other => panic!("Expected AppError::Connection, got: {:?}", other),
+        }
+
+        cleanup_test_env();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_test_connection_routes_search_types_to_search_adapter() {
+        let _dir = setup_test_env();
+
+        for db_type in [DatabaseType::Elasticsearch, DatabaseType::Opensearch] {
+            let mut conn = sample_connection("s1", "Search1");
+            conn.port = match &db_type {
+                DatabaseType::Elasticsearch => 9200,
+                DatabaseType::Opensearch => 9200,
+                _ => unreachable!(),
+            };
+            conn.db_type = db_type;
+            conn.password = String::new();
+            conn.user = String::new();
+
+            let req = TestConnectionRequest {
+                config: ConnectionConfigPublic::from(&conn),
+                password: Some(String::new()),
+                existing_id: None,
+            };
+            let result = test_connection(req).await;
+
+            match result {
+                Err(AppError::Unsupported(msg)) => {
+                    assert!(msg.contains("network connection is not wired"));
+                }
+                other => panic!("Expected search Unsupported, got: {:?}", other),
+            }
         }
 
         cleanup_test_env();
