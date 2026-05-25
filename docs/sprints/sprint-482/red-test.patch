@@ -1,0 +1,38 @@
+diff --git a/src-tauri/sql-parser-core/src/parser.rs b/src-tauri/sql-parser-core/src/parser.rs
+--- a/src-tauri/sql-parser-core/src/parser.rs
++++ b/src-tauri/sql-parser-core/src/parser.rs
+@@ -6802,6 +6802,33 @@ mod tests {
+             other => panic!("expected UnsupportedExpression, got {:?}", other),
+         }
+     }
+ 
++    #[test]
++    fn ac_482_red_no_from_select_literal_should_parse() {
++        match parse("SELECT 1") {
++            ParseResult::Select(s) => assert!(s.from.is_empty()),
++            other => panic!("expected no-FROM SELECT to parse, got {:?}", other),
++        }
++    }
++
++    #[test]
++    fn ac_482_red_select_list_function_call_should_parse() {
++        match parse("SELECT count(*) FROM t") {
++            ParseResult::Select(_) => {}
++            other => panic!(
++                "expected SELECT-list function call to parse, got {:?}",
++                other
++            ),
++        }
++    }
++
++    #[test]
++    fn ac_482_red_no_from_function_call_should_parse() {
++        match parse("SELECT now()") {
++            ParseResult::Select(s) => assert!(s.from.is_empty()),
++            other => panic!("expected no-FROM function call to parse, got {:?}", other),
++        }
++    }
++
+     // ---- AC-393b-C CASE expression ----------------------------------
+ 
+     #[test]
