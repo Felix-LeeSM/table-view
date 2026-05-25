@@ -1,0 +1,9 @@
+$ cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml ac_482 --quiet
+
+error[E0599]: no variant named `FunctionCall` found for enum `ast::SelectExpr`
+
+Context:
+- RED parser tests were added for:
+  - `SELECT 1`
+  - `SELECT count(*) FROM t`
+- The pre-implementation AST had no `SelectExpr::FunctionCall` variant.
