@@ -1,3 +1,4 @@
+$ git checkout 23b0b3df
 $ git apply docs/sprints/sprint-482/red-test.patch
 $ cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml ac_482 --quiet
 

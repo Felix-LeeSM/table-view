@@ -71,4 +71,4 @@ client parser/Safe Mode gap for common PostgreSQL read-only SELECT forms.
 3. `pnpm vitest run src/lib/sql/sqlAst.test.ts src/lib/sql/sqlSafety.test.ts`
 4. `pnpm exec tsc -b --pretty false`
 5. `bash scripts/check-wasm-size.sh`
-6. `git diff --check`
+6. `git diff --check origin/main...HEAD`

@@ -59,6 +59,19 @@ failures=()
 
 is_allowed_command() {
 	case "$1" in
+		*';'* | *'|'* | *'`'* | *'$('* | *'>'* | *'<'* | *$'\n'*)
+			return 1
+			;;
+	esac
+	case "$1" in
+		*'&'*)
+			case "$1" in
+				cd\ src-tauri\ \&\&\ cargo\ *) ;;
+				*) return 1 ;;
+			esac
+			;;
+	esac
+	case "$1" in
 		npm\ run\ lint* | npm\ run\ test* | npm\ run\ build* | npm\ run\ contrast:check*)
 			return 0
 			;;
@@ -74,7 +87,10 @@ is_allowed_command() {
 		cd\ src-tauri\ \&\&\ cargo\ test* | cd\ src-tauri\ \&\&\ cargo\ check* | cd\ src-tauri\ \&\&\ cargo\ clippy* | cd\ src-tauri\ \&\&\ cargo\ fmt\ --check*)
 			return 0
 			;;
-		bash\ scripts/hooks/check-*.sh* | bash\ scripts/regenerate-indexes.sh* | bash\ scripts/check-wasm-size.sh*)
+		bash\ scripts/hooks/check-*.sh* | bash\ scripts/regenerate-indexes.sh*)
+			return 0
+			;;
+		bash\ scripts/check-wasm-size.sh)
 			return 0
 			;;
 		rg\ * | grep\ * | git\ diff* | git\ status* | git\ show*)

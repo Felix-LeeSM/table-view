@@ -13,7 +13,8 @@
 
 ## RED Evidence
 
-- `git apply docs/sprints/sprint-482/red-test.patch` followed by
+- At RED commit `23b0b3df`, `git apply docs/sprints/sprint-482/red-test.patch`
+  followed by
   `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml ac_482 --quiet`
   failed before implementation with 3 failing parser tests.
 - Captured in `docs/sprints/sprint-482/red-state.log` and

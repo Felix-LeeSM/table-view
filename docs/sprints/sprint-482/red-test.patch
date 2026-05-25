@@ -1,11 +1,10 @@
 diff --git a/src-tauri/sql-parser-core/src/parser.rs b/src-tauri/sql-parser-core/src/parser.rs
 --- a/src-tauri/sql-parser-core/src/parser.rs
 +++ b/src-tauri/sql-parser-core/src/parser.rs
-@@ -6802,6 +6802,33 @@ mod tests {
+@@ -6802,3 +6802,29 @@ mod tests {
              other => panic!("expected UnsupportedExpression, got {:?}", other),
          }
      }
- 
 +    #[test]
 +    fn ac_482_red_no_from_select_literal_should_parse() {
 +        match parse("SELECT 1") {
@@ -32,7 +31,3 @@ diff --git a/src-tauri/sql-parser-core/src/parser.rs b/src-tauri/sql-parser-core
 +            other => panic!("expected no-FROM function call to parse, got {:?}", other),
 +        }
 +    }
-+
-     // ---- AC-393b-C CASE expression ----------------------------------
- 
-     #[test]
