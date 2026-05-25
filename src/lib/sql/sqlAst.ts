@@ -139,6 +139,11 @@ export type SqlSelectExpr =
       over: SqlOverClause;
     }
   | {
+      kind: "function-call";
+      name: string;
+      arguments: SqlWindowArgument[];
+    }
+  | {
       kind: "case";
       operand: SqlSelectExpr | null;
       when_clauses: SqlCaseWhen[];

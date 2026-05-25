@@ -1,0 +1,33 @@
+$ git checkout 23b0b3df
+$ git apply docs/sprints/sprint-482/red-test.patch
+$ cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml ac_482 --quiet
+
+running 3 tests
+parser::tests::ac_482_red_no_from_function_call_should_parse --- FAILED
+parser::tests::ac_482_red_select_list_function_call_should_parse --- FAILED
+parser::tests::ac_482_red_no_from_select_literal_should_parse --- FAILED
+
+failures:
+
+---- parser::tests::ac_482_red_no_from_function_call_should_parse stdout ----
+expected no-FROM function call to parse, got Error(ParseError {
+  error_kind: UnsupportedExpression,
+  message: "bare function call (no OVER) unsupported",
+  at: Some(7)
+})
+
+---- parser::tests::ac_482_red_select_list_function_call_should_parse stdout ----
+expected SELECT-list function call to parse, got Error(ParseError {
+  error_kind: UnsupportedExpression,
+  message: "bare function call (no OVER) unsupported",
+  at: Some(7)
+})
+
+---- parser::tests::ac_482_red_no_from_select_literal_should_parse stdout ----
+expected no-FROM SELECT to parse, got Error(ParseError {
+  error_kind: SyntaxError,
+  message: "expected FROM",
+  at: None
+})
+
+test result: FAILED. 0 passed; 3 failed.
