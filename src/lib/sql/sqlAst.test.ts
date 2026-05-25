@@ -37,8 +37,8 @@ vi.mock("./wasm/sql_parser_core.js", () => {
     default: vi.fn().mockResolvedValue(undefined),
     parse_sql: vi.fn((sql: string) => {
       // The Rust unit tests exhaustively cover the grammar; here we
-      // implement a thin stub that only handles the two SQL strings
-      // the facade test actually issues. Anything else surfaces as a
+      // implement a thin stub that only handles SQL strings the facade
+      // tests issue. Anything else surfaces as a
       // sentinel that would fail the assertion clearly.
       if (sql === "SELECT id FROM users WHERE name = 'felix'") {
         return {
@@ -82,6 +82,91 @@ vi.mock("./wasm/sql_parser_core.js", () => {
               source: { kind: "table", schema: null, table: "users" },
             },
           ],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "SELECT 1") {
+        return {
+          kind: "select",
+          columns: {
+            kind: "expressions",
+            items: [
+              {
+                kind: "expression",
+                expression: {
+                  kind: "literal",
+                  value: {
+                    kind: "literal",
+                    value: { kind: "integer", value: 1 },
+                  },
+                },
+              },
+            ],
+          },
+          from: [],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "SELECT count(*) FROM users") {
+        return {
+          kind: "select",
+          columns: {
+            kind: "expressions",
+            items: [
+              {
+                kind: "expression",
+                expression: {
+                  kind: "function-call",
+                  name: "count",
+                  arguments: [{ kind: "star" }],
+                },
+              },
+            ],
+          },
+          from: [
+            {
+              schema: null,
+              table: "users",
+              alias: null,
+              join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "users" },
+            },
+          ],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "SELECT now()") {
+        return {
+          kind: "select",
+          columns: {
+            kind: "expressions",
+            items: [
+              {
+                kind: "expression",
+                expression: {
+                  kind: "function-call",
+                  name: "now",
+                  arguments: [],
+                },
+              },
+            ],
+          },
+          from: [],
           where: null,
           group_by: [],
           having: null,
@@ -942,6 +1027,58 @@ describe("parseSql (sprint-385 facade)", () => {
     if (result.kind !== "select") return;
     expect(result.columns).toEqual({ kind: "star" });
     expect(result.where).toBeNull();
+  });
+
+  it("[AC-482-F01] parses no-FROM SELECT literal", async () => {
+    const result = await parseSql("SELECT 1");
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.from).toHaveLength(0);
+    expect(result.columns.kind).toBe("expressions");
+    if (result.columns.kind !== "expressions") return;
+    expect(result.columns.items[0]).toEqual({
+      kind: "expression",
+      expression: {
+        kind: "literal",
+        value: {
+          kind: "literal",
+          value: { kind: "integer", value: 1 },
+        },
+      },
+    });
+  });
+
+  it("[AC-482-F02] parses SELECT-list function call without OVER", async () => {
+    const result = await parseSql("SELECT count(*) FROM users");
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.columns.kind).toBe("expressions");
+    if (result.columns.kind !== "expressions") return;
+    const item = result.columns.items[0];
+    expect(item).toBeDefined();
+    if (!item || item.kind !== "expression") return;
+    expect(item.expression).toEqual({
+      kind: "function-call",
+      name: "count",
+      arguments: [{ kind: "star" }],
+    });
+  });
+
+  it("[AC-482-F03] parses no-FROM SELECT-list function call", async () => {
+    const result = await parseSql("SELECT now()");
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.from).toHaveLength(0);
+    expect(result.columns.kind).toBe("expressions");
+    if (result.columns.kind !== "expressions") return;
+    const item = result.columns.items[0];
+    expect(item).toBeDefined();
+    if (!item || item.kind !== "expression") return;
+    expect(item.expression).toEqual({
+      kind: "function-call",
+      name: "now",
+      arguments: [],
+    });
   });
 
   it("returns a tagged error union (not a thrown exception) for unsupported statements", async () => {

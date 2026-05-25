@@ -135,9 +135,8 @@ pub struct CteDefinition {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SelectStatement {
     pub columns: Columns,
-    /// Ordered list of FROM items. Length ≥ 1 for any successfully-parsed
-    /// SELECT (a `FROM` clause is required by the sprint-393a grammar —
-    /// `SELECT 1` with no FROM is still out of scope).
+    /// Ordered list of FROM items. Empty for PostgreSQL-style no-FROM
+    /// projection SELECTs such as `SELECT 1`; otherwise left-to-right.
     pub from: Vec<FromItem>,
     #[serde(rename = "where")]
     pub where_clause: Option<SelectExpr>,
@@ -384,10 +383,14 @@ pub enum SelectExpr {
     ScalarSubquery {
         statement: Box<SelectStatement>,
     },
+    /// Sprint-482 — `func(args)` in SELECT-list position without `OVER`.
+    /// Predicate-position function calls remain out of scope.
+    FunctionCall {
+        name: String,
+        arguments: Vec<WindowArgument>,
+    },
     /// Sprint-393b — `func(args) OVER (...)`. The arg list, partition-by,
-    /// order-by, and frame are populated per the OVER clause body; bare
-    /// function calls without OVER continue to be
-    /// `Error(UnsupportedExpression)` (see AC-393b-O08).
+    /// order-by, and frame are populated per the OVER clause body.
     WindowFunction {
         name: String,
         arguments: Vec<WindowArgument>,
