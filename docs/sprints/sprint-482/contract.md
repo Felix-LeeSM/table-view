@@ -68,7 +68,7 @@ client parser/Safe Mode gap for common PostgreSQL read-only SELECT forms.
 
 1. `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml`
 2. `pnpm build:sql-wasm`
-3. `pnpm exec vitest run src/lib/sql/sqlAst.test.ts src/lib/sql/sqlSafety.test.ts`
+3. `pnpm vitest run src/lib/sql/sqlAst.test.ts src/lib/sql/sqlSafety.test.ts`
 4. `pnpm exec tsc -b --pretty false`
 5. `bash scripts/check-wasm-size.sh`
 6. `git diff --check`

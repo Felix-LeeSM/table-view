@@ -333,9 +333,12 @@ impl<'a> Parser<'a> {
     fn parse_select_body(&mut self) -> Result<SelectStatement, ParseError> {
         let columns = self.parse_columns()?;
 
-        // FROM
-        self.expect_keyword(Token::From, "expected FROM")?;
-        let from = self.parse_from_list()?;
+        let from = if matches!(self.peek().map(|t| &t.token), Some(Token::From)) {
+            self.advance();
+            self.parse_from_list()?
+        } else {
+            Vec::new()
+        };
 
         // Optional WHERE.
         let where_clause = if matches!(self.peek().map(|t| &t.token), Some(Token::Where)) {
@@ -945,6 +948,19 @@ impl<'a> Parser<'a> {
             let inner = self.parse_select_expr_or()?;
             self.expect_token(Token::RParen, "expected ')'")?;
             return Ok(inner);
+        }
+
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Ident(_)))
+            && matches!(
+                self.tokens.get(self.cursor + 1).map(|t| &t.token),
+                Some(Token::LParen)
+            )
+        {
+            let at = self.peek().map(|t| t.at);
+            return Err(unsupported_expression_err(
+                at,
+                "function call expression unsupported in predicate",
+            ));
         }
 
         let column = self.parse_column_ref()?;
@@ -2803,12 +2819,11 @@ impl<'a> Parser<'a> {
             // (not the start of a qualified ref `a.b`, a function call
             // `f(...)`, etc.).
             let after = self.tokens.get(self.cursor + 1).map(|t| &t.token);
-            match after {
-                Some(Token::Comma) | Some(Token::From) => {
-                    names.push(name);
-                    self.advance();
-                }
-                _ => return None,
+            if Self::is_select_list_boundary(after) {
+                names.push(name);
+                self.advance();
+            } else {
+                return None;
             }
             if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
                 self.advance();
@@ -2817,6 +2832,25 @@ impl<'a> Parser<'a> {
             break;
         }
         Some(names)
+    }
+
+    fn is_select_list_boundary(token: Option<&Token>) -> bool {
+        matches!(
+            token,
+            None | Some(
+                Token::Comma
+                    | Token::From
+                    | Token::Where
+                    | Token::Group
+                    | Token::Having
+                    | Token::Order
+                    | Token::Limit
+                    | Token::Union
+                    | Token::Intersect
+                    | Token::Except
+                    | Token::RParen
+            )
+        )
     }
 
     /// Sprint-393b — parse one item of an expression-form select list.
@@ -2879,10 +2913,7 @@ impl<'a> Parser<'a> {
                 return Ok(SelectListItem::Expression { expression: expr });
             }
             // Plain column ref (followed by `,` / `FROM` / clause kw).
-            if matches!(
-                self.peek().map(|t| &t.token),
-                Some(Token::Comma | Token::From)
-            ) {
+            if Self::is_select_list_boundary(self.peek().map(|t| &t.token)) {
                 return Ok(SelectListItem::Column { reference: column });
             }
             // Anything else after the column ref is unexpected at top-
@@ -2924,9 +2955,7 @@ impl<'a> Parser<'a> {
                 });
             }
         }
-        // Identifier followed by `(` → function call. Sprint-393b only
-        // accepts a function call when followed by `OVER (...)` (window
-        // function). Otherwise it's UnsupportedExpression.
+        // Identifier followed by `(` → SELECT-list function call.
         if matches!(self.peek().map(|t| &t.token), Some(Token::Ident(_))) {
             return self.parse_function_or_window();
         }
@@ -2934,9 +2963,8 @@ impl<'a> Parser<'a> {
         Err(syntax_err(at, "expected expression in SELECT list"))
     }
 
-    /// Sprint-393b — `<ident>(args) OVER (...)`. Bare function calls
-    /// without `OVER` continue to surface as `UnsupportedExpression`
-    /// (AC-393b-O08).
+    /// Sprint-482 — `<ident>(args)` in SELECT-list position; optional
+    /// `OVER (...)` keeps the sprint-393b window-function shape.
     fn parse_function_or_window(&mut self) -> Result<SelectExpr, ParseError> {
         let ident_tok = self
             .peek()
@@ -2961,13 +2989,8 @@ impl<'a> Parser<'a> {
         }
         self.expect_token(Token::RParen, "expected ')'")?;
 
-        // Sprint-393b — function call without `OVER` is UnsupportedExpression.
         if !matches!(self.peek().map(|t| &t.token), Some(Token::Over)) {
-            let at = ident_tok.at;
-            return Err(unsupported_expression_err(
-                Some(at),
-                "bare function call (no OVER) unsupported",
-            ));
+            return Ok(SelectExpr::FunctionCall { name, arguments });
         }
         self.advance(); // consume OVER
         let over = self.parse_over_clause()?;
@@ -4172,10 +4195,10 @@ mod tests {
     }
 
     #[test]
-    fn ac_p6_missing_from_is_syntax_error() {
+    fn ac_p6_unexpected_token_after_no_from_select_is_syntax_error() {
         let e = err("SELECT * users");
         assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
-        assert!(e.message.to_lowercase().contains("from"));
+        assert!(e.message.to_lowercase().contains("trailing"));
     }
 
     #[test]
@@ -5725,7 +5748,10 @@ mod tests {
                 "CALL refresh_user_stats((SELECT id FROM users))",
             ),
             ("bare identifier", "CALL refresh_user_stats(user_id)"),
-            ("system variable", "CALL refresh_user_stats(@@session_sql_mode)"),
+            (
+                "system variable",
+                "CALL refresh_user_stats(@@session_sql_mode)",
+            ),
         ];
 
         for (label, sql) in cases {
@@ -6402,12 +6428,10 @@ mod tests {
 
     #[test]
     fn ac_392_s_unsupported_expression_serializes_with_error_kind() {
-        // Sprint-393b — the sprint-392 deferral for IN-list / cross-table
-        // comparison is *lifted*. We pick a still-out-of-scope construct
-        // for this serialization test: a function call (arithmetic / bare
-        // function calls remain `UnsupportedExpression` per sprint-393b
-        // §Out of Scope).
-        let r = parse("SELECT sum(a) FROM x");
+        // Function calls in SELECT-list position are supported from
+        // sprint-482 onward; predicate-position function calls remain
+        // out of scope and serialize as UnsupportedExpression.
+        let r = parse("SELECT a FROM x WHERE lower(a) = 'x'");
         let json = serde_json::to_value(&r).expect("serialize");
         assert_eq!(json["kind"], "error");
         assert_eq!(json["error_kind"], "unsupported-expression");
@@ -6790,13 +6814,70 @@ mod tests {
     }
 
     #[test]
-    fn ac_393b_o08_bare_function_call_is_unsupported_expression() {
-        let r = parse("SELECT sum(x) FROM t");
+    fn ac_482_pg03_predicate_function_call_remains_unsupported_expression() {
+        let r = parse("SELECT x FROM t WHERE lower(x) = 'a'");
         match r {
             ParseResult::Error(e) => {
                 assert_eq!(e.error_kind, ParseErrorKind::UnsupportedExpression);
             }
             other => panic!("expected UnsupportedExpression, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_482_pg01_no_from_select_literal_parses() {
+        let s = ok_select("SELECT 1");
+        assert!(s.from.is_empty());
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression: SelectExpr::Literal { value },
+                } => {
+                    assert!(matches!(
+                        value,
+                        InsertValue::Literal {
+                            value: SqlLiteral::Integer { value: 1 }
+                        }
+                    ));
+                }
+                _ => panic!("expected literal expression"),
+            },
+            _ => panic!("expected expression list"),
+        }
+    }
+
+    #[test]
+    fn ac_482_pg02_bare_function_call_parses_without_over() {
+        let s = ok_select("SELECT count(*) FROM t");
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression: SelectExpr::FunctionCall { name, arguments },
+                } => {
+                    assert_eq!(name, "count");
+                    assert!(matches!(arguments.as_slice(), [WindowArgument::Star]));
+                }
+                _ => panic!("expected function-call expression"),
+            },
+            _ => panic!("expected expression list"),
+        }
+    }
+
+    #[test]
+    fn ac_482_pg04_no_from_function_call_parses() {
+        let s = ok_select("SELECT now()");
+        assert!(s.from.is_empty());
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression: SelectExpr::FunctionCall { name, arguments },
+                } => {
+                    assert_eq!(name, "now");
+                    assert!(arguments.is_empty());
+                }
+                _ => panic!("expected function-call expression"),
+            },
+            _ => panic!("expected expression list"),
         }
     }
 

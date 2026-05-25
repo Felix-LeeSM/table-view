@@ -306,10 +306,69 @@ vi.mock("./wasm/sql_parser_core.js", () => {
         };
       }
       // SELECT — sprint-393a routes SELECT through the AST. Return the
-      // widened SELECT shape (FROM list, optional clause slots all null /
-      // empty) so the runtime guard accepts the value and
+      // widened SELECT shape so the runtime guard accepts the value and
       // `statementAnalysisFromAst` returns `kind: "select"` / `info`.
       if (/^SELECT\b/.test(upper)) {
+        if (/^SELECT\s+1$/i.test(trimmed)) {
+          return {
+            kind: "select",
+            columns: {
+              kind: "expressions",
+              items: [
+                {
+                  kind: "expression",
+                  expression: {
+                    kind: "literal",
+                    value: {
+                      kind: "literal",
+                      value: { kind: "integer", value: 1 },
+                    },
+                  },
+                },
+              ],
+            },
+            from: [],
+            where: null,
+            group_by: [],
+            having: null,
+            order_by: [],
+            limit: null,
+            set_operation: [],
+          };
+        }
+        if (/^SELECT\s+COUNT\(\*\)\s+FROM\b/i.test(trimmed)) {
+          return {
+            kind: "select",
+            columns: {
+              kind: "expressions",
+              items: [
+                {
+                  kind: "expression",
+                  expression: {
+                    kind: "function-call",
+                    name: "count",
+                    arguments: [{ kind: "star" }],
+                  },
+                },
+              ],
+            },
+            from: [
+              {
+                schema: null,
+                table: "stub",
+                alias: null,
+                join: { kind: "comma" },
+                source: { kind: "table", schema: null, table: "stub" },
+              },
+            ],
+            where: null,
+            group_by: [],
+            having: null,
+            order_by: [],
+            limit: null,
+            set_operation: [],
+          };
+        }
         return {
           kind: "select",
           columns: { kind: "star" },
@@ -1487,6 +1546,31 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(Object.keys(a).sort()).toEqual(["kind", "reasons", "severity"]);
       expect(isInfoStatement(a)).toBe(true);
       expect(isDangerous(a)).toBe(false);
+    });
+  });
+
+  describe("Sprint 482 — PostgreSQL parser Safe Mode kickoff (AC-482-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-482-X01] no-FROM SELECT stays select / info / []", () => {
+      const a = analyzeStatement("SELECT 1");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-482-X02] SELECT-list function call stays select / info / []", () => {
+      const a = analyzeStatement("SELECT count(*) FROM users");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
     });
   });
 

@@ -74,7 +74,7 @@ is_allowed_command() {
 		cd\ src-tauri\ \&\&\ cargo\ test* | cd\ src-tauri\ \&\&\ cargo\ check* | cd\ src-tauri\ \&\&\ cargo\ clippy* | cd\ src-tauri\ \&\&\ cargo\ fmt\ --check*)
 			return 0
 			;;
-		bash\ scripts/hooks/check-*.sh* | bash\ scripts/regenerate-indexes.sh*)
+		bash\ scripts/hooks/check-*.sh* | bash\ scripts/regenerate-indexes.sh* | bash\ scripts/check-wasm-size.sh*)
 			return 0
 			;;
 		rg\ * | grep\ * | git\ diff* | git\ status* | git\ show*)
