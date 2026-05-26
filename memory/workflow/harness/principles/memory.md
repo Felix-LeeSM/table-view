@@ -50,7 +50,7 @@ review findings, 남은 risk, 사용자가 결정해야 할 항목을 짧게 보
 Destructive action 은 정성 판단으로만 막지 않는다. 원칙은 hook/blocking script 로
 기계 차단하고, prompt/skill 에도 같은 금지를 적어 우회 시도를 줄인다.
 
-Human-facing progress SOT 는 [roadmap](../../roadmap/memory.md) 이다. Agent 는 PR 로
+Human-facing progress SOT 는 [roadmap](../../../roadmap/memory.md) 이다. Agent 는 PR 로
 작업을 끝내되, sequencing/status 변경이 있으면 PLAN/ROADMAP 계열 SOT 갱신 여부를
 handoff 와 PR body 에 명시한다.
 

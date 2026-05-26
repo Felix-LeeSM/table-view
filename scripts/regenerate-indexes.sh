@@ -14,7 +14,7 @@ set -u
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 cd "$PROJECT_DIR" || exit 1
 
-INDEX_DIR="memory/index"
+INDEX_DIR="${MEMORY_INDEX_OUTPUT_DIR:-memory/index}"
 BY_TASK="$INDEX_DIR/by-task.md"
 BY_SURFACE="$INDEX_DIR/by-surface.md"
 
@@ -78,6 +78,8 @@ EOF
       for (i=1; i<=n; i++) {
         k = arr[i]
         gsub(/^[ ]+|[ ]+$/, "", k)
+        gsub(/^\047+|\047+$/, "", k)
+        gsub(/^"+|"+$/, "", k)
         if (k == "") continue
         entries[k] = entries[k] "- [" title "](../../" path ")\n"
       }
@@ -124,6 +126,8 @@ EOF
       for (i=1; i<=n; i++) {
         k = arr[i]
         gsub(/^[ ]+|[ ]+$/, "", k)
+        gsub(/^\047+|\047+$/, "", k)
+        gsub(/^"+|"+$/, "", k)
         if (k == "") continue
         entries[k] = entries[k] "- [" title "](../../" path ")\n"
       }

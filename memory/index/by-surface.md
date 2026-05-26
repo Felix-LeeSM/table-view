@@ -11,23 +11,23 @@ generator: scripts/regenerate-indexes.sh
 
 ## Surface → 룰 매핑
 
-### `'**/*.test.ts`
+### `**/*.rs`
+
+- [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
+
+### `**/*.test.ts`
 
 - [비-E2E 테스트 시나리오 설계 원칙](../../memory/conventions/testing-scenarios/memory.md)
 - [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/conventions/testing-scenarios/mock-scope/memory.md)
-
-### `'**/*.ts`
-
-- [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
-
-### `**/*.rs'`
-
-- [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
 
 ### `**/*.test.tsx`
 
 - [비-E2E 테스트 시나리오 설계 원칙](../../memory/conventions/testing-scenarios/memory.md)
 - [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/conventions/testing-scenarios/mock-scope/memory.md)
+
+### `**/*.ts`
+
+- [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
 
 ### `**/*.tsx`
 
@@ -90,7 +90,7 @@ generator: scripts/regenerate-indexes.sh
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
 
-### `src-tauri/tests/**/*.rs'`
+### `src-tauri/tests/**/*.rs`
 
 - [비-E2E 테스트 시나리오 설계 원칙](../../memory/conventions/testing-scenarios/memory.md)
 
@@ -120,6 +120,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [Terminology](../../memory/terminology/memory.md)
 
-### `vi.mock'`
+### `vi.mock`
 
 - [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/conventions/testing-scenarios/mock-scope/memory.md)

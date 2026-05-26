@@ -8,9 +8,16 @@ if [ ! -d "memory" ]; then
 	exit 0
 fi
 
-bash scripts/regenerate-indexes.sh >/dev/null
+tmp_dir="$(mktemp -d)"
+cleanup() {
+	rm -rf "$tmp_dir"
+}
+trap cleanup EXIT
 
-if ! git diff --quiet -- memory/index/by-task.md memory/index/by-surface.md; then
+MEMORY_INDEX_OUTPUT_DIR="$tmp_dir" bash scripts/regenerate-indexes.sh >/dev/null
+
+if ! cmp -s "$tmp_dir/by-task.md" "memory/index/by-task.md" ||
+	! cmp -s "$tmp_dir/by-surface.md" "memory/index/by-surface.md"; then
 	echo "ERROR: memory indexes are stale." >&2
 	echo "Run: bash scripts/regenerate-indexes.sh" >&2
 	echo "Then stage memory/index/by-task.md and memory/index/by-surface.md." >&2

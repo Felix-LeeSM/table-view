@@ -7,7 +7,8 @@ type Diagnostic = {
 };
 
 const repoRoot = process.cwd();
-const roots = [".agents/skills", ".claude/skills", ".codex/skills"];
+const sourceRoot = ".agents/skills";
+const forbiddenSkillRoots = [".claude/skills", ".codex/skills"];
 
 function repoPath(filePath: string): string {
   return path.relative(repoRoot, filePath).split(path.sep).join("/");
@@ -55,54 +56,32 @@ function frontmatter(markdown: string): Map<string, string> | null {
   return fields;
 }
 
-function skillName(filePath: string): string {
-  return path.basename(path.dirname(filePath));
-}
-
-function expectedWrapperTarget(filePath: string): string | null {
-  const rel = repoPath(filePath);
-  if (!rel.startsWith(".claude/skills/") && !rel.startsWith(".codex/skills/")) {
-    return null;
-  }
-  return `../../../.agents/skills/${skillName(filePath)}/SKILL.md`;
-}
-
 const errors: Diagnostic[] = [];
 
-for (const root of roots) {
+for (const root of forbiddenSkillRoots) {
   for (const filePath of walk(path.join(repoRoot, root))) {
-    const rel = repoPath(filePath);
-    const markdown = readFileSync(filePath, "utf8");
-    const fields = frontmatter(markdown);
+    errors.push({
+      file: repoPath(filePath),
+      message: "brain-specific skill copy is forbidden; use .agents/skills",
+    });
+  }
+}
 
-    if (!fields) {
-      errors.push({ file: rel, message: "missing YAML frontmatter" });
-      continue;
-    }
+for (const filePath of walk(path.join(repoRoot, sourceRoot))) {
+  const rel = repoPath(filePath);
+  const markdown = readFileSync(filePath, "utf8");
+  const fields = frontmatter(markdown);
 
-    for (const required of ["name", "description"]) {
-      if (!fields.has(required)) {
-        errors.push({ file: rel, message: `missing field '${required}'` });
-      } else if (fields.get(required) === "") {
-        errors.push({ file: rel, message: `empty field '${required}'` });
-      }
-    }
+  if (!fields) {
+    errors.push({ file: rel, message: "missing YAML frontmatter" });
+    continue;
+  }
 
-    const expected = expectedWrapperTarget(filePath);
-    if (expected) {
-      const target = path.resolve(path.dirname(filePath), expected);
-      if (!markdown.includes(`](${expected})`)) {
-        errors.push({
-          file: rel,
-          message: `runtime wrapper must link to ${expected}`,
-        });
-      }
-      if (!existsSync(target)) {
-        errors.push({
-          file: rel,
-          message: `runtime wrapper source is missing: ${expected}`,
-        });
-      }
+  for (const required of ["name", "description"]) {
+    if (!fields.has(required)) {
+      errors.push({ file: rel, message: `missing field '${required}'` });
+    } else if (fields.get(required) === "") {
+      errors.push({ file: rel, message: `empty field '${required}'` });
     }
   }
 }

@@ -108,7 +108,7 @@ pre-commit:
       glob: "memory/**/*.md"
       run: bash scripts/hooks/check-memory-index-fresh.sh
     memory-index-links:
-      glob: "memory/index/*.md"
+      glob: "memory/**/*.md"
       run: bash scripts/hooks/check-memory-index-links.sh
     memory-index-coverage:
       glob: "memory/**/*.md"

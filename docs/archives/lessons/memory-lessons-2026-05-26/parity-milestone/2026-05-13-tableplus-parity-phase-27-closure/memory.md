@@ -129,7 +129,7 @@ will fail` (Sprint 237 AC-237-04).
 - ADR 0019, 0020 — e2e 정책.
 - ADR 0022 — destructive confirm dialog (Phase 23 → Sprint 245–247).
 - ADR 0012 — launcher/workspace split (Phase 12).
-- [docs/PLAN.md](../../../../docs/PLAN.md) Phase 27 row.
-- [memory/roadmap/memory.md](../../../roadmap/memory.md) 패리티
+- [docs/PLAN.md](../../../../../PLAN.md) Phase 27 row.
+- [memory/roadmap/memory.md](../../../../../../memory/roadmap/memory.md) 패리티
   마일스톤 row.
 - 영역별 phase spec: `docs/phases/phase-{21..27}.md`.

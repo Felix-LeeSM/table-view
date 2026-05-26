@@ -161,7 +161,7 @@ run_case "main: Claude settings allowed" 0 main-path ".claude/settings.json"
 run_case "main: AGENTS allowed" 0 main-path "AGENTS.md"
 run_case "main: markdown allowed" 0 main-path "notes/review.md"
 run_case "main: agent skills source allowed" 0 main-path ".agents/skills/tdd/SKILL.md"
-run_case "main: Codex skills orchestration allowed" 0 main-path ".codex/skills/tdd/SKILL.md"
+run_case "main: Codex agent orchestration allowed" 0 main-path ".codex/agents/tdd-generator.md"
 run_case "main: non-source Tauri asset allowed" 0 main-path "src-tauri/icons/icon.png"
 
 run_case "main command: redirection to src blocked" 1 main-command "cat > src/App.tsx <<'EOF'"
@@ -188,9 +188,9 @@ run_codex_hook_case \
 	'{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"src/App.tsx"}}' \
 	allow
 run_codex_hook_case \
-	"Codex hook: .codex skills allowed" \
+	"Codex hook: .codex agent wrapper allowed" \
 	"Edit" \
-	'{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":".codex/skills/tdd/SKILL.md"}}' \
+	'{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":".codex/agents/tdd-generator.md"}}' \
 	allow
 run_codex_hook_case \
 	"Codex hook: .agents skills source allowed" \

@@ -9,6 +9,7 @@ type Diagnostic = {
 
 const repoRoot = process.cwd();
 const indexDir = path.join(repoRoot, "memory", "index");
+const memoryDir = path.join(repoRoot, "memory");
 
 function repoPath(filePath: string): string {
   return path.relative(repoRoot, filePath).split(path.sep).join("/");
@@ -80,27 +81,38 @@ function markdownLinks(
   return links;
 }
 
-function indexFiles(): string[] {
-  if (!existsSync(indexDir)) {
+function markdownFiles(dir: string): string[] {
+  if (!existsSync(dir)) {
     return [];
   }
-  return readdirSync(indexDir)
-    .filter((entry) => entry.endsWith(".md"))
-    .map((entry) => path.join(indexDir, entry))
-    .filter((filePath) => statSync(filePath).isFile())
-    .sort();
+
+  const files: string[] = [];
+  for (const entry of readdirSync(dir).sort()) {
+    const filePath = path.join(dir, entry);
+    const stat = statSync(filePath);
+    if (stat.isDirectory()) {
+      files.push(...markdownFiles(filePath));
+    } else if (entry.endsWith(".md")) {
+      files.push(filePath);
+    }
+  }
+
+  return files;
 }
 
 const errors: Diagnostic[] = [];
 const warnings: Diagnostic[] = [];
 
-for (const indexFile of indexFiles()) {
-  const markdown = readFileSync(indexFile, "utf8");
-  const relativeIndexFile = repoPath(indexFile);
+for (const memoryFile of markdownFiles(memoryDir)) {
+  const markdown = readFileSync(memoryFile, "utf8");
+  const relativeMemoryFile = repoPath(memoryFile);
 
-  if (!/^generator:\s+/m.test(markdown)) {
+  if (
+    memoryFile.startsWith(`${indexDir}${path.sep}`) &&
+    !/^generator:\s+/m.test(markdown)
+  ) {
     warnings.push({
-      file: relativeIndexFile,
+      file: relativeMemoryFile,
       line: 1,
       message: "generated index marker is missing",
     });
@@ -111,15 +123,18 @@ for (const indexFile of indexFiles()) {
       continue;
     }
 
-    const resolved = resolveTarget(indexFile, link.target);
+    const resolved = resolveTarget(memoryFile, link.target);
     if (resolved === "") {
       continue;
     }
 
     const relativeTarget = repoPath(resolved);
-    if (relativeTarget.startsWith("docs/archives/")) {
+    if (
+      memoryFile.startsWith(`${indexDir}${path.sep}`) &&
+      relativeTarget.startsWith("docs/archives/")
+    ) {
       warnings.push({
-        file: relativeIndexFile,
+        file: relativeMemoryFile,
         line: link.line,
         message: `default memory index points at archive: ${link.target}`,
       });
@@ -127,9 +142,9 @@ for (const indexFile of indexFiles()) {
 
     if (!existsSync(resolved)) {
       errors.push({
-        file: relativeIndexFile,
+        file: relativeMemoryFile,
         line: link.line,
-        message: `broken memory index link: ${link.target}`,
+        message: `broken memory link: ${link.target}`,
       });
     }
   }

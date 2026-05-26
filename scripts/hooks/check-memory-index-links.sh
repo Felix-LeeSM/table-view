@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # check-memory-index-links.sh
-# Fail when generated memory indexes contain broken internal markdown links.
+# Fail when active memory contains broken internal markdown links.
 
 set -euo pipefail
 

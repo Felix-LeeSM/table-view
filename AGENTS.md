@@ -6,7 +6,7 @@ Claude Code / Codex / Cursor 모두 본 파일 1번 read. 본문 lazy, 작업 �
 
 - `memory/` = active operational SOT. 미래 agent 가 다시 읽고 행동을 바꿔야 하는 지식만 둔다.
 - `memory/index/` = generated read router. Agent 는 작업 시작 시 index 로 필요한 SOT 를 찾고, worker 에는 task packet 수준의 최소 read set 만 넘긴다.
-- `.agents/skills/` = agent-agnostic skill body source. `.claude/skills/`, `.codex/skills/`, `.claude/commands/` 등 brain-specific 파일은 wrapper 다.
+- `.agents/skills/` = agent-agnostic skill body source. `.claude/skills/`, `.codex/skills/` 같은 brain-specific skill copy 는 두지 않는다. Slash command wrapper 는 필요할 때만 `.claude/commands/` 에 둔다.
 - `docs/archives/` = history / raw audit / old decisions / raw lessons. 기본 read 대상 아님. 충돌·회고·근거 추적이 필요할 때만 검색한다. Raw lesson 은 SOT 가 아니며, 배울 내용은 관련 `memory/**/memory.md` 로 해석·흡수한다.
 - Chat, 외부 memory, GitHub issue/comment 는 repo tracked file 로 반영되기 전까지 SOT 가 아니다.
 

@@ -6,8 +6,9 @@ updated: 2026-05-26
 
 # Agent Skills
 
-Agent-agnostic skill body source. Brain-specific runtime files stay thin and
-redirect here.
+Agent-agnostic skill body source. Brain-specific skill copies are not kept in
+this repo; runtime agents read this directory directly or receive explicit
+links from `AGENTS.md` / command wrappers.
 
 ## 방 지도
 
@@ -34,26 +35,16 @@ redirect here.
 
 ## 새 skill 추가 시
 
-1. `.agents/skills/<name>/SKILL.md` 작성 — frontmatter `type: skill`
-2. `.claude/skills/<name>/SKILL.md`, `.codex/skills/<name>/SKILL.md`,
-   `.claude/commands/<name>.md` 같은 brain wrapper 는 redirect 만
-3. `/remember` 의 type 매트릭스 와 정합 — `skill` type 사용
+1. `.agents/skills/<name>/SKILL.md` 작성 — frontmatter `name`, `description`
+   필수.
+2. `.claude/skills/<name>/SKILL.md`, `.codex/skills/<name>/SKILL.md` 같은
+   brain-specific skill copy 는 만들지 않는다.
+3. slash command 가 필요할 때만 `.claude/commands/<name>.md` wrapper 를 둔다.
+4. `/remember` 의 type 매트릭스 와 정합 — `skill` type 사용
 
-## Wrapper 정책
+## Slash command wrapper 정책
 
-각 skill wrapper 는 frontmatter + 1-3줄 redirect:
-
-```yaml
----
-description: <한 줄 — slash command 목록에 표시>
----
-
-# Runtime Wrapper
-
-Source: [`.agents/skills/<name>/SKILL.md`](../../../.agents/skills/<name>/SKILL.md).
-```
-
-Slash command wrapper 는 한 단계 덜 내려간다:
+Slash command wrapper 는 frontmatter + 1-3줄 redirect:
 
 ```yaml
 ---
@@ -73,13 +64,13 @@ Source: [`.agents/skills/<name>/SKILL.md`](../../.agents/skills/<name>/SKILL.md)
 - **`.claude/commands/` 디렉토리에 README.md 두지 마** — Claude Code 가 디렉토리
   내 모든 `.md` 를 slash command 로 등록한다 (sprint-387 발견). 정책은 본
   `.agents/skills/README.md` 에 둘 것.
-- skill body 자체는 `.agents/skills/<name>/SKILL.md` 가 source — wrapper 와 body 가 양쪽에
-  있으면 안 됨 (drift).
+- skill body 자체는 `.agents/skills/<name>/SKILL.md` 가 source — brain-specific
+  skill copy 를 만들면 안 됨 (drift / duplicate load).
 
 ## Multi-brain 호환
 
-Codex / Cursor 의 slash command 인터페이스도 같은 구조 — brain 별 wrapper,
-본문은 `.agents/skills/` source 재사용.
+Codex / Cursor 에서도 본문은 `.agents/skills/` source 를 재사용한다. Brain 별
+skill directory copy 는 금지한다.
 
 ## 관련
 

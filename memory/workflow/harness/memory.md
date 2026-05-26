@@ -37,7 +37,7 @@ trigger:
 
 - Sprint artifacts: `docs/sprints/sprint-N/`
 - Skill source: `.agents/skills/harness/`
-- Runtime wrappers: `.codex/skills/harness/`, `.claude/skills/harness/`
+- Brain-specific skill copies: 금지. `.agents/skills/harness/` 를 직접 참조한다.
 - Raw audit input: `docs/archives/audits/harness-issues-handoff-2026-05-25.md`
 
 ## 관련

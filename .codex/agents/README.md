@@ -13,14 +13,14 @@ runtime's tool policy.
 | wrapper | Codex role | source |
 |---|---|---|
 | `bug-fix` | `worker` | `memory/workflow/bug-fix/memory.md` |
-| `tdd-generator` | `worker` | `.codex/skills/tdd/SKILL.md` + testing memory |
+| `tdd-generator` | `worker` | `.agents/skills/tdd/SKILL.md` + testing memory |
 | `delivery` | `worker` | `memory/workflow/delivery/memory.md` |
 | `research` | `explorer` | `memory/workflow/implementation/memory.md` |
 | `pr-reviewer` | `explorer` | `memory/workflow/review/memory.md` |
 | `grill-planner` | `default` | `memory/workflow/grill/memory.md` |
 | `security-handoff` | `default` | `memory/workflow/grill/security-handoff/memory.md` |
 | `codex-reviewer` | `default` | `memory/workflow/review/memory.md` |
-| `caveman-default` | `default` | `.codex/skills/caveman/SKILL.md` |
+| `caveman-default` | `default` | `.agents/skills/caveman/SKILL.md` |
 
 Rules in Claude Code path-trigger wrappers are platform glue only. Their real
 content is in `memory/`, so no separate `.codex/rules/` copy is needed unless
