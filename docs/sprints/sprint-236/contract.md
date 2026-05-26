@@ -1179,7 +1179,7 @@ contract, flag it in `findings.md`.
    browser smoke (a user dropping a table sees one label; a user
    dropping a column sees another). Recommendation: future
    polish sprint (Sprint 238?) to unify both labels — flag in
-   `memory/lessons/` post-sprint.
+   `docs/archives/lessons/memory-lessons-2026-05-26/` post-sprint.
 
 4. **StructurePanel context-menu vs. trash icon for drop** — The
    user's locked decision (#7) says "per-row 'Drop Column…'

@@ -12,7 +12,7 @@ trigger:
 
 `.claude/commands/remember.md` wrapper 가 가리키는 source. 모든 brain 공통.
 
-인자 (`$ARGUMENTS`) + 최근 대화 맥락을 분석해, 8 type 매트릭스 중 가장 적합한
+인자 (`$ARGUMENTS`) + 최근 대화 맥락을 분석해, type 매트릭스 중 가장 적합한
 한 곳에 저장.
 
 ## Type 매트릭스
@@ -26,7 +26,7 @@ trigger:
 | Slash command / skill body (`/remember`, `/split-memory` 등) | `skill` | `memory/skills/<name>/memory.md` (wrapper: `.claude/commands/<name>.md`) |
 | 외부 도구 사용법 | `reference` | `memory/reference/<tool>/memory.md` 또는 **미이동** + 사용자 질의 옵션 |
 | 트레이드오프 있는 결정 | `ADR` | `memory/decisions/NNNN-<slug>/memory.md` |
-| 실패·성공·재발 방지 | `lesson` | `memory/lessons/<domain>/YYYY-MM-DD-<slug>/memory.md` |
+| 실패·성공·재발 방지 | 관련 `convention` / `workflow-rule` / `runbook` / `ux-rule` / `topic` 으로 해석 | raw 원문은 필요 시 `docs/archives/lessons/`, active SOT 는 관련 `memory/**/memory.md` |
 | 시스템 구조 변화 | `topic` | `memory/<area>/memory.md` 갱신 |
 
 ## 동작 — 6 단계
@@ -64,7 +64,7 @@ trigger:
 ---
 name: <한 줄 제목>
 description: <한 줄 설명 — 미래 재방문 시 trigger 신호>
-type: convention | workflow-rule | ux-rule | runbook | skill | reference | ADR | lesson | topic
+type: convention | workflow-rule | ux-rule | runbook | skill | reference | ADR | topic
 updated: YYYY-MM-DD
 trigger:  # 선택 — 인지 layer 자동화 input
   signal: <어떤 상황에서 룰 발동되는가>
@@ -96,14 +96,6 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
 **트레이드오프**: + 장점 / - 단점.
 ```
 
-### Lesson (3줄 inline)
-
-```
-**상황**: 한 문장.
-**원인**: 한 문장.
-**재발 방지**: 한 문장.
-```
-
 ### Convention / Workflow-rule / UX-rule / Runbook
 
 자유 형식. 필수: 룰 본문 + Why + How to apply + 관련 cross-link.
@@ -115,6 +107,8 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
 - ADR 본문 동결 — 수정 금지. 메타 필드 (`status`, `superseded_by`) 만 갱신.
 - `CLAUDE.md` 수정 금지 (자동 — 손 댈 일 거의 없음).
 - auto-memory 와 중복 저장 금지 — repo 가 source of truth.
+- Raw lesson/history 를 active memory type 으로 만들지 않는다. 배울 내용은
+  기존 SOT 문서에 흡수하고, 원문 보존이 필요할 때만 `docs/archives/lessons/` 로 이동한다.
 
 ## 관련
 

@@ -52,4 +52,4 @@ NULL 칩(아이템 에디터가 `editValue === null`일 때 렌더되는 "NULL" 
   - `src/components/datagrid/DataGridTable.editing-visual.test.tsx` — 테스트 확장 주 대상
   - `src/components/datagrid/useDataGridEdit.cellToEditValue.test.ts` — helper 테스트 추가 위치
   - ADR 0009 (`memory/decisions/0009-null-vs-empty-string-tri-state/memory.md`)
-  - Lesson 2026-04-24-react-autofocus-form-control-only (`memory/lessons/ui-patterns/2026-04-24-react-autofocus-form-control-only/memory.md`)
+  - Lesson 2026-04-24-react-autofocus-form-control-only (`docs/archives/lessons/memory-lessons-2026-05-26/ui-patterns/2026-04-24-react-autofocus-form-control-only/memory.md`)

@@ -1,7 +1,9 @@
 ---
 title: E2E 시나리오 설계 원칙
 type: memory
-updated: 2026-04-30
+updated: 2026-05-26
+task: e2e, smoke, regression, selector, runtime-journey
+surface: e2e/**/*.ts, e2e/smoke/**/*.ts
 ---
 
 # E2E 시나리오 설계 원칙
@@ -91,6 +93,18 @@ e2e 파일을 만지는 모든 작업은 이 원칙을 컨텍스트로 받는다
 - [ ] tauri-driver 한계에 걸리는가? → P7 우선순위로 처리.
 - [ ] 모든 step에 `step("...")` 라벨이 있는가?
 - [ ] `skip()`을 새로 추가했다면 만료 조건이 sprint handoff에 기록됐는가?
+
+## Regression addenda
+
+- 사용자 가시 component 의 role / aria-label / 클릭 모델을 바꾸면 같은 PR 에서
+  `e2e/` selector 와 동작 가정을 grep 해 갱신한다.
+- write smoke 는 modal close / preview close 에서 끝내지 않는다. DB/grid 에
+  committed value 가 다시 보이는 persisted outcome 까지 검증한다.
+- smoke failure 는 helper 수정 전에 `interaction flake` / `missing diagnostic` /
+  `real product/backend bug` 로 분류한다. helper 를 3회 이상 연속 수정하면
+  artifact/DOM/ARIA/log 로 layer 를 먼저 확정한다.
+- invariant 변경 refactor 는 현재 검증 surface 와 변경 후 검증 surface 를 PR 에
+  명시한다. 답이 e2e 인데 e2e 가 dead/drift 상태면 prerequisite 복구 작업부터 한다.
 
 ---
 

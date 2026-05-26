@@ -5,7 +5,7 @@
 - Close Column MODIFY — add USING cast expression to `ColumnChange::Modify`
   (backend + TS mirror + SQL emitter + `ColumnsEditor` UI), add a
   pre-execution NULL-rows conflict probe for SET NOT NULL toggles, and
-  record the Phase 27 closure markers (`memory/lessons/`, `docs/PLAN.md`,
+  record the Phase 27 closure markers (`docs/archives/lessons/memory-lessons-2026-05-26/`, `docs/PLAN.md`,
   `memory/roadmap/memory.md`).
 
 ## Task Why
@@ -58,7 +58,7 @@
    `count_null_rows` 호출. `count > 0` 이면 "`N` rows have NULL — adding NOT
    NULL will fail" 경고 inline 표시. `count === 0` 이면 표시 안 함. 차단
    없음. vitest 2 케이스 통과.
-6. `memory/lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`
+6. `docs/archives/lessons/memory-lessons-2026-05-26/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`
    회고 추가.
 7. `docs/PLAN.md` Phase 27 status `진행 중` → `종료`.
 8. `memory/roadmap/memory.md` 패리티 마일스톤 row 갱신.

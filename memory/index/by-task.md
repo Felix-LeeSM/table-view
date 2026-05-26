@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-05-24
+generated: 2026-05-26
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -21,6 +21,14 @@ generator: scripts/regenerate-indexes.sh
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
 
+### agent-topology
+
+- [Harness agents](../../memory/workflow/harness/agents/memory.md)
+
+### approval
+
+- [Delivery — commit → push → PR → review → user review → merge](../../memory/workflow/delivery/memory.md)
+
 ### backend
 
 - [Backend Guidance](../../memory/conventions/backend/memory.md)
@@ -32,10 +40,6 @@ generator: scripts/regenerate-indexes.sh
 ### bug-fix
 
 - [버그 fix — Red test 먼저](../../memory/workflow/bug-fix/memory.md)
-
-### cargo-deny
-
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 
 ### code-writing
 
@@ -51,12 +55,12 @@ generator: scripts/regenerate-indexes.sh
 
 ### commit
 
-- [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Delivery — commit → push → PR → review → user review → merge](../../memory/workflow/delivery/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 
-### coverage
+### contract-test
 
-- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
+- [비-E2E 테스트 시나리오 설계 원칙](../../memory/conventions/testing-scenarios/memory.md)
 
 ### decision-lock
 
@@ -68,9 +72,13 @@ generator: scripts/regenerate-indexes.sh
 
 ### delivery
 
-- [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Delivery — commit → push → PR → review → user review → merge](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
+
+### destructive-action
+
+- [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
 
 ### docs
 
@@ -80,15 +88,26 @@ generator: scripts/regenerate-indexes.sh
 
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 
+### domain-language
+
+- [Terminology](../../memory/terminology/memory.md)
+
+### e2e
+
+- [E2E 시나리오 설계 원칙](../../memory/conventions/e2e-scenarios/memory.md)
+
+### fixture
+
+- [비-E2E 테스트 시나리오 설계 원칙](../../memory/conventions/testing-scenarios/memory.md)
+
 ### frontend
 
 - [Frontend Guidance](../../memory/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
 
-### git
+### glossary
 
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
-- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
+- [Terminology](../../memory/terminology/memory.md)
 
 ### god-file
 
@@ -99,12 +118,18 @@ generator: scripts/regenerate-indexes.sh
 - [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
 - [보안 grill — threat-model 핸드오프 먼저](../../memory/workflow/grill/security-handoff/memory.md)
 
+### harness
+
+- [Terminology](../../memory/terminology/memory.md)
+- [Harness agents](../../memory/workflow/harness/agents/memory.md)
+- [Harness workflow SOT](../../memory/workflow/harness/memory.md)
+- [Harness principles](../../memory/workflow/harness/principles/memory.md)
+- [Harness run ledger](../../memory/workflow/harness/run-ledger/memory.md)
+
 ### hook
 
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
-- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
-- [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
+- [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
 
 ### hook-design
 
@@ -130,7 +155,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### merge
 
-- [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Delivery — commit → push → PR → review → user review → merge](../../memory/workflow/delivery/memory.md)
 
 ### merge-gate
 
@@ -143,6 +168,12 @@ generator: scripts/regenerate-indexes.sh
 ### multi-agent
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
+- [Harness agents](../../memory/workflow/harness/agents/memory.md)
+- [Harness workflow SOT](../../memory/workflow/harness/memory.md)
+
+### naming
+
+- [Terminology](../../memory/terminology/memory.md)
 
 ### option-design
 
@@ -151,10 +182,6 @@ generator: scripts/regenerate-indexes.sh
 ### parallel
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
-
-### path-routing
-
-- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
 
 ### performance
 
@@ -168,13 +195,9 @@ generator: scripts/regenerate-indexes.sh
 
 - [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
 
-### plugin
-
-- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
-
 ### pr
 
-- [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Delivery — commit → push → PR → review → user review → merge](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 
 ### pr-close
@@ -191,8 +214,6 @@ generator: scripts/regenerate-indexes.sh
 
 ### pre-push
 
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
-- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
 - [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
@@ -202,12 +223,11 @@ generator: scripts/regenerate-indexes.sh
 
 ### push
 
-- [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Delivery — commit → push → PR → review → user review → merge](../../memory/workflow/delivery/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 
 ### push-reject
 
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 
 ### race-trace
@@ -220,6 +240,12 @@ generator: scripts/regenerate-indexes.sh
 - [Frontend Guidance](../../memory/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
 
+### read-verified
+
+- [Harness workflow SOT](../../memory/workflow/harness/memory.md)
+- [Harness principles](../../memory/workflow/harness/principles/memory.md)
+- [Harness run ledger](../../memory/workflow/harness/run-ledger/memory.md)
+
 ### refactor
 
 - [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
@@ -227,12 +253,13 @@ generator: scripts/regenerate-indexes.sh
 - [Rust 컨벤션](../../memory/conventions/rust/memory.md)
 - [Implementation — agent 자율성 + noise 차단](../../memory/workflow/implementation/memory.md)
 
-### regex
+### regression
 
-- [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
+- [E2E 시나리오 설계 원칙](../../memory/conventions/e2e-scenarios/memory.md)
 
 ### regression-guard
 
+- [비-E2E 테스트 시나리오 설계 원칙](../../memory/conventions/testing-scenarios/memory.md)
 - [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/conventions/testing-scenarios/mock-scope/memory.md)
 
 ### regression-test
@@ -245,14 +272,17 @@ generator: scripts/regenerate-indexes.sh
 
 ### review
 
-- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
-- [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
+- [Delivery — commit → push → PR → review → user review → merge](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 - [PR Review](../../memory/workflow/review/memory.md)
 
-### root-cause
+### run-ledger
 
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
+- [Harness run ledger](../../memory/workflow/harness/run-ledger/memory.md)
+
+### runtime-journey
+
+- [E2E 시나리오 설계 원칙](../../memory/conventions/e2e-scenarios/memory.md)
 
 ### rust-impl
 
@@ -265,12 +295,19 @@ generator: scripts/regenerate-indexes.sh
 
 ### security
 
-- [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
 - [보안 grill — threat-model 핸드오프 먼저](../../memory/workflow/grill/security-handoff/memory.md)
 
-### skill
+### selector
 
-- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
+- [E2E 시나리오 설계 원칙](../../memory/conventions/e2e-scenarios/memory.md)
+
+### skip-accountability
+
+- [비-E2E 테스트 시나리오 설계 원칙](../../memory/conventions/testing-scenarios/memory.md)
+
+### smoke
+
+- [E2E 시나리오 설계 원칙](../../memory/conventions/e2e-scenarios/memory.md)
 
 ### spawn-verify
 
@@ -282,11 +319,9 @@ generator: scripts/regenerate-indexes.sh
 
 ### sprint
 
+- [Harness workflow SOT](../../memory/workflow/harness/memory.md)
+- [Harness run ledger](../../memory/workflow/harness/run-ledger/memory.md)
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
-
-### sprint-388
-
-- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
 
 ### tauri
 
@@ -296,9 +331,18 @@ generator: scripts/regenerate-indexes.sh
 
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
+### terminology
+
+- [Terminology](../../memory/terminology/memory.md)
+
 ### test-writing
 
+- [비-E2E 테스트 시나리오 설계 원칙](../../memory/conventions/testing-scenarios/memory.md)
 - [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/conventions/testing-scenarios/mock-scope/memory.md)
+
+### thin-read-pack
+
+- [Harness agents](../../memory/workflow/harness/agents/memory.md)
 
 ### threat-model
 
@@ -312,11 +356,21 @@ generator: scripts/regenerate-indexes.sh
 
 - [버그 fix — Red test 먼저](../../memory/workflow/bug-fix/memory.md)
 
+### user-review
+
+- [Terminology](../../memory/terminology/memory.md)
+- [Delivery — commit → push → PR → review → user review → merge](../../memory/workflow/delivery/memory.md)
+- [PR Review](../../memory/workflow/review/memory.md)
+
 ### ux-review
 
 - [UX 머지 기준](../../memory/ux/memory.md)
 
+### workflow-sot
+
+- [Harness workflow SOT](../../memory/workflow/harness/memory.md)
+- [Harness principles](../../memory/workflow/harness/principles/memory.md)
+
 ### worktree
 
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)

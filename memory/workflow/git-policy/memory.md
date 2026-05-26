@@ -71,15 +71,15 @@ hook 정의 → worktree drift 없음.
 
 - (a) 회피 사유 commit body 에 1줄 기록
 - (b) 후속 커밋에서 회피한 검사를 통과시키는 변경 push
-- (c) `memory/lessons/` 에 사유 기록
+- (c) 관련 `memory/workflow` 또는 `docs/archives/lessons/` 에 사유 기록
 
 GPG signing 우회는 위 예외에 포함하지 않음. signing 불가 시 멈춤.
 
 ## 책임 주체 — Assistant 직접 실행
 
-TDD / 구현 / 버그 fix 완료 시 agent 가 직접 commit + push + PR + review +
-merge 자율 실행. 사용자에게 "이제 커밋해 주세요" 안내 금지 (사용자 2026-05-16
-lock).
+TDD / 구현 / 버그 fix 완료 시 agent 가 branch 에서 commit + push + PR +
+review/fix 까지 자율 실행한다. main 직접 commit/push 금지. 최종 반영은
+사용자 명시 review + merge 승인 후에만 실행한다.
 
 - 자율 범위 / 예외 / spawn 패턴: [delivery](../delivery/memory.md)
 - 본 정책 (hook 회피 금지) 은 자율 실행의 조건 — hook 통과 안 되면 commit/

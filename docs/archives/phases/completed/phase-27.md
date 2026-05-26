@@ -61,4 +61,4 @@ TablePlus `gui-tools/working-with-table/{table,column}.md`.
 - Phase 21~26 의 패턴이 깨지지 않음 (회귀 0).
 - Phase 17~20 (MySQL / MariaDB / SQLite / Oracle) 재개 평가 — 본 Phase
   종료 시점에 신규 DBMS 추가의 비용/가치 재산정.
-- TablePlus 패리티 달성 자축 기록 — `memory/lessons/` 에 회고 1편.
+- TablePlus 패리티 달성 자축 기록 — `docs/archives/lessons/memory-lessons-2026-05-26/` 에 회고 1편.

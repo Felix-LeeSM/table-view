@@ -143,7 +143,7 @@ model — option 1 (entry removal) + option B (Sprint 188 nested preserved).
    pattern + module-level `vi.fn()` shared instances depend on vitest pool
    config; if `vitest.config.ts` changes pool to `threads` with shared
    workers, this could break. No action needed today (config unchanged),
-   but flag in `memory/lessons/` for future config migrations.
+   but flag in `docs/archives/lessons/memory-lessons-2026-05-26/` for future config migrations.
 
 4. **Sprint 218 commit message draft**: Mirror Sprint 216's commit message
    style — `refactor(QueryTab.test): 2308-line god file → 6 axis + 1 helper (Sprint 218)`

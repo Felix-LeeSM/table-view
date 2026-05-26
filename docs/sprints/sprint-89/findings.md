@@ -6,7 +6,7 @@
 | Completeness | 9/10 | All 5 ACs satisfied with cited evidence (see AC Verification). 5 TS unit tests + 1 round-trip; 4 RTL integration tests; 4 Rust unit tests. `// TODO regression(sprint-89)` count is 0 in `src/`. |
 | Reliability | 8/10 | docstring on `format_fk_reference` (postgres.rs:16-32) explicitly documents input assumptions (no `.`/`(`/`)` in identifiers) — escape policy is acknowledged as out-of-scope rather than silently broken. Negative tests cover `"users.id"` (no parens) and `""` (empty) → `null`. NULL-cell and non-FK column tests assert zero-button rendering. |
 | Verification Quality | 9/10 | All 8 required checks executed and pass: vitest 1632/1632, tsc clean, lint clean, cargo test 0 failures (227 incl. 4 new), clippy 0 warnings, grep for `TODO regression(sprint-89)` returns 0, parseFkReference export present at line 54, fixture round-trip both directions pass. Sprint-88 invariants (fixture JSON, helper, catch-audit, mysql/sqlite, DataGrid.tsx) all show 0-line diff. |
-| Sprint Hygiene | 9/10 | Scope respected: only the 4 in-scope files modified plus 1 new test file. No MySQL/SQLite/DataGrid.tsx writes. Sprint-88 fixture, expectNodeStable, catch-audit untouched. Pre-existing worktree mods (`memory/lessons/memory.md`, `.claude/rules/test-scenarios.md`, `ConnectionDialog.tsx`) are not Generator-attributable per F-1 / orchestrator note. |
+| Sprint Hygiene | 9/10 | Scope respected: only the 4 in-scope files modified plus 1 new test file. No MySQL/SQLite/DataGrid.tsx writes. Sprint-88 fixture, expectNodeStable, catch-audit untouched. Pre-existing worktree mods (`docs/archives/lessons/memory-lessons-2026-05-26/memory.md`, `.claude/rules/test-scenarios.md`, `ConnectionDialog.tsx`) are not Generator-attributable per F-1 / orchestrator note. |
 
 **Overall**: 9/10
 **Verdict**: PASS
@@ -45,7 +45,7 @@
 
 ## Findings
 
-- **F-89-1 (info)** Pre-existing worktree modifications outside sprint-89 scope are present (`memory/lessons/memory.md`, `.claude/rules/test-scenarios.md`, `src/components/connection/ConnectionDialog.tsx`). These predate the sprint and were already accounted for in sprint-88 finding F-1; `git diff` shows none of them were touched by the Generator's sprint-89 changes (they're modified-but-unstaged from earlier work). Not a regression for this sprint.
+- **F-89-1 (info)** Pre-existing worktree modifications outside sprint-89 scope are present (`docs/archives/lessons/memory-lessons-2026-05-26/memory.md`, `.claude/rules/test-scenarios.md`, `src/components/connection/ConnectionDialog.tsx`). These predate the sprint and were already accounted for in sprint-88 finding F-1; `git diff` shows none of them were touched by the Generator's sprint-89 changes (they're modified-but-unstaged from earlier work). Not a regression for this sprint.
 
 - **F-89-2 (info)** `format_fk_reference`'s docstring (postgres.rs:26-32) correctly notes that identifiers containing `.`, `(`, or `)` are not escaped. The TS regex `^(.+)\.(.+)\((.+)\)$` is greedy on each segment and would mis-split such identifiers, but the fixture deliberately exercises only safe charsets (hyphens, underscores, spaces). Escape policy is documented as out-of-scope per the contract's Edge Cases note — a follow-up sprint can quote/escape on both sides if real-world identifiers demand it.
 

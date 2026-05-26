@@ -1,35 +1,48 @@
 # Handoff: <sprint-id>
 
-## Outcome
+## Human Review Packet
 
-- Status:
-- Summary:
+- Review request:
+- Recommended user action: review | approve merge | request changes | decide blocker
+- PR / branch:
 
-## Verification Profile
+## Summary
 
-- Profile:
-- Overall score:
-- Final evaluator verdict:
+- Outcome:
+- What changed:
+- What did not change:
 
 ## Evidence Packet
 
 ### Checks Run
 
-- `check`: pass | fail
+- `check`: pass | fail | blocked
 
 ### Acceptance Criteria Coverage
 
-- `AC-01`:
-- `AC-02`:
-- `AC-03`:
+| AC | Evidence Candidate |
+|---|---|
+| AC-01 |  |
+| AC-02 |  |
+| AC-03 |  |
 
-### Screenshots / Links / Artifacts
+### Artifacts
 
 -
 
+## Reviewer Findings
+
+- Status:
+- Open findings:
+- Fixed findings:
+
 ## Changed Areas
 
-- `path`: why it changed
+- `path`: purpose
+
+## User Decisions Needed
+
+- none
 
 ## Assumptions
 

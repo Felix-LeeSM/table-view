@@ -79,6 +79,58 @@ run_case() {
   fi
 }
 
+run_case_on_branch() {
+  local branch="$1"
+  local name="$2"
+  local expected_exit="$3"
+  local input="$4"
+  local stderr_check="$5"
+
+  local actual_stderr actual_exit
+  actual_stderr="$(echo "$input" | env CHECK_DANGEROUS_BASH_CURRENT_BRANCH="$branch" "$HOOK" 2>&1 >/dev/null)"
+  actual_exit=$?
+
+  local ok=1
+  if [ "$actual_exit" != "$expected_exit" ]; then
+    ok=0
+    FAIL_DETAILS+=("[$name] exit expected=$expected_exit got=$actual_exit")
+  fi
+
+  case "$stderr_check" in
+    EMPTY)
+      if [ -n "$actual_stderr" ]; then
+        ok=0
+        FAIL_DETAILS+=("[$name] stderr expected empty, got: $actual_stderr")
+      fi
+      ;;
+    MATCH:*)
+      local patterns="${stderr_check#MATCH:}"
+      local IFS='|'
+      # shellcheck disable=SC2206
+      local arr=($patterns)
+      for p in "${arr[@]}"; do
+        if ! echo "$actual_stderr" | grep -qF -- "$p"; then
+          ok=0
+          FAIL_DETAILS+=("[$name] stderr missing pattern: $p")
+          FAIL_DETAILS+=("    got: $actual_stderr")
+        fi
+      done
+      ;;
+    *)
+      echo "FAIL: 알 수 없는 stderr_check 형식: $stderr_check" >&2
+      exit 1
+      ;;
+  esac
+
+  if [ "$ok" = "1" ]; then
+    PASS_COUNT=$((PASS_COUNT + 1))
+    echo "PASS  $name"
+  else
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    echo "FAIL  $name"
+  fi
+}
+
 # Case 1 — git reset --hard FETCH_HEAD: block + sprint-402 update-ref recovery.
 # sprint-402 부터 recovery 가 git pull --rebase 대신 reflog + update-ref + SHA
 # refspec push 로 변경됨 (2-step bypass 차단).
@@ -108,6 +160,27 @@ run_case \
   0 \
   '{"tool_input":{"command":"git log --oneline"}}' \
   EMPTY
+
+run_case_on_branch \
+  "main" \
+  "main-guard: git commit on main → block" \
+  1 \
+  '{"tool_input":{"command":"git commit -m foo"}}' \
+  'MATCH:direct main branch write|branch + PR|PR merge'
+
+run_case_on_branch \
+  "feature/test" \
+  "main-guard: git push origin main → block" \
+  1 \
+  '{"tool_input":{"command":"git push origin main"}}' \
+  'MATCH:direct main branch write|branch + PR|PR merge'
+
+run_case_on_branch \
+  "feature/test" \
+  "main-guard: git push HEAD:refs/heads/main → block" \
+  1 \
+  '{"tool_input":{"command":"git push origin HEAD:refs/heads/main"}}' \
+  'MATCH:direct main branch write|branch + PR|PR merge'
 
 # 회귀 가드 1 — --no-verify 차단 + memory pointer.
 run_case \

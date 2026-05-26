@@ -62,7 +62,7 @@
 사용자 첫 메시지 갭. CONTEXT.md 부재.
 
 **범위**:
-- `memory/glossary/memory.md` — 도메인 용어 (focusedConnId, DbAdapter, envelope, paradigm-aware, SchemaCache, single-instance, state-changed event, per-tab affinity, tri-state null, numeric wire string) 한 줄 정의 + 정의 ADR/lesson cross-link
+- `memory/glossary/memory.md` — 도메인 용어 (focusedConnId, DbAdapter, envelope, paradigm-aware, SchemaCache, single-instance, state-changed event, per-tab affinity, tri-state null, numeric wire string) 한 줄 정의 + 정의 ADR/SOT cross-link
 - 신규 어휘 (Q번호 시리즈, 사용자 결정 lock 시 만들어진 용어) 자동 등록
 
 ### D5 — Index polish

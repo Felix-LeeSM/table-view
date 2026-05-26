@@ -16,10 +16,11 @@
 
 -
 
-## Done Criteria
+## Acceptance Criteria
 
-1.
-2.
+- `AC-01`:
+- `AC-02`:
+- `AC-03`:
 
 ## Verification Plan
 
@@ -32,14 +33,7 @@
 
 ## Evidence To Return
 
-- Changed files and purpose
-- Checks run and outcomes
-- Done criteria coverage with evidence
-- Assumptions made during implementation
-- Residual risk or verification gaps
-
-## References
-
-- Contract:
-- Findings:
-- Relevant files:
+- changed files with purpose
+- checks run and outcomes
+- AC evidence candidates
+- assumptions, risks, unresolved gaps

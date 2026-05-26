@@ -161,7 +161,7 @@ Open `P3` findings: **3** — `"ddl-structure"` literal lives in hook (per contr
 3. **`no-stale-sprint-tooltip.test.ts` allowlist not pre-authorized in contract**
    - Current: +19 LOC adds `/src/components/schema/CreateTableDialog.tsx` and `.test.tsx` to a `SPRINT_PROSE_GUARD_PATH_ALLOWLIST`.
    - Expected: Contract `## In Scope` enumerates touched files; `src/__tests__/no-stale-sprint-tooltip.test.ts` is not listed.
-   - Suggestion: Defensible carve-out (without it the AC-141-2 prose guard would fail on the verbatim placeholder strings) — but next sprint should either (a) update the contract to pre-authorize this kind of allowlist edit, or (b) redesign the prose guard to recognize `"Available in Sprint NNN"` placeholders directly. Worth a follow-up note in `memory/lessons/` so future contracts enumerate auxiliary test-guard files.
+   - Suggestion: Defensible carve-out (without it the AC-141-2 prose guard would fail on the verbatim placeholder strings) — but next sprint should either (a) update the contract to pre-authorize this kind of allowlist edit, or (b) redesign the prose guard to recognize `"Available in Sprint NNN"` placeholders directly. Worth a follow-up note in `docs/archives/lessons/memory-lessons-2026-05-26/` so future contracts enumerate auxiliary test-guard files.
 
 ## Ready to commit
 
@@ -169,4 +169,4 @@ Open `P3` findings: **3** — `"ddl-structure"` literal lives in hook (per contr
 
 Recommendation for the user:
 1. Add the PLAN.md row 2 update before committing (1-line edit, ~3 LOC), then commit the full sprint-227 tree as a single feature commit.
-2. Capture the orchestrator-stream-timeout pattern in `memory/lessons/` so future harness runs know to verify the handoff numbers independently when the Generator stream terminates abnormally.
+2. Capture the orchestrator-stream-timeout pattern in `docs/archives/lessons/memory-lessons-2026-05-26/` so future harness runs know to verify the handoff numbers independently when the Generator stream terminates abnormally.

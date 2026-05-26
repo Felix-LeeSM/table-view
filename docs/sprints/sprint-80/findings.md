@@ -38,7 +38,7 @@
 ## Pre-existing Workspace State (NOT Sprint 80)
 
 - `src/components/connection/ConnectionDialog.tsx` — uncommitted diff from prior session (last committed in `f5a3faa` Sprint 79). Not caused by Sprint 80 Generator. AC-12 verdict unaffected.
-- `memory/lessons/2026-04-24-*` untracked lesson directories from parallel agent sessions. Outside Sprint 80 scope.
+- `docs/archives/lessons/memory-lessons-2026-05-26/2026-04-24-*` untracked lesson directories from parallel agent sessions. Outside Sprint 80 scope.
 
 ## Next Sprint
 

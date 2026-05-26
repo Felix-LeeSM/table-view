@@ -2,8 +2,9 @@
 name: Git hook — ref mutation 금지 (read-only verification)
 description: Hook script 는 검증 only. ref mutation (fetch/reset/push 등) 금지 — 부수효과 cascade + 자살 trigger.
 type: workflow-rule
-updated: 2026-05-20
-task: hook-design, lefthook, pre-push, pre-commit, race-trace
+updated: 2026-05-26
+task: hook, hook-design, lefthook, pre-push, pre-commit, race-trace, destructive-action
+surface: lefthook.yml, scripts/hooks/check-dangerous-bash.sh, scripts/hooks/pre-push-path-router.sh, scripts/hooks/test-pre-push-path-router.sh, scripts/worktree-spawn.sh, scripts/hooks/test-worktree-push-ref-safety.sh
 trigger:
   signal: hook script 작성 / lefthook step 추가 / pre-push 차단 동작 분석 시
   layer: agent-prompt
@@ -15,6 +16,10 @@ trigger:
 
 **Hook script (pre-commit / pre-push / commit-msg / post-*) 안에서 git ref
 mutation 명령 금지.**
+
+Destructive action 은 prompt 정책보다 hook/blocking script 로 먼저 막는다. Prompt 는
+2차 reminder 이고, 실질 enforcement 는 hook 이다. Hook 으로 잡기 어려운 intentional
+우회는 git log/PR review/user review 에서 다룬다.
 
 차단 대상:
 - `git fetch`, `git pull`, `git remote update`
@@ -54,6 +59,14 @@ Hook 안 mutation 의 부수효과 cascade:
   Git 이 outer worktree metadata 를 바라보며 `reset: moving to FETCH_HEAD` 를
   만들었다. hook 안에서 nested Git 을 실행할 수 있는 도구는
   `unset $(git rev-parse --local-env-vars)` 후 실행한다.
+- PreToolUse bash guard 는 부주의 방지 layer 다. 따옴표/괄호/절대경로 안의
+  위험 git token 도 잡도록 command anchor 는 `(^|[^a-zA-Z0-9_])` 류의
+  punctuation-safe 경계로 테스트한다. string concat / variable substitution /
+  PATH override 같은 의도적 우회는 hook 이 아니라 PR review / git log / user
+  review 에서 다룬다.
+- pre-push path router 는 비용 최적화 layer 이지만, signed commit / TDD-cycle
+  guard 는 항상 실행한다. docs-only 만 heavy stack 을 생략하고, hook/workflow/
+  unknown/new-branch/rename/delete 는 fail-open to full stack 으로 처리한다.
 
 ## How to apply
 
@@ -68,6 +81,8 @@ Hook 안 mutation 의 부수효과 cascade:
      → `unset $(git rev-parse --local-env-vars)` 로 outer repo env 차단
 3. Formatter 외 working-tree mutation 도 의심 — staged file 변형이 *의도된
    pre-commit 패턴* 인지 확인. 의도 외면 제거.
+4. path routing 을 추가하면 old path + new path 를 모두 classification input 으로
+   쓰고, unknown 은 full stack 으로 보낸다.
 
 ### 기존 hook audit (2026-05-19, lefthook.yml + scripts/ 전수)
 

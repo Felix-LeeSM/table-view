@@ -77,8 +77,9 @@ trigger:
 
 ### 저장 라우팅
 
-- 용어 / 도메인 언어 / 협업 룰: `/remember` 의 type 매트릭스
-  ([remember](../../skills/remember/memory.md)) 로 위치를 계산한다.
+- 용어 / 도메인 언어: [terminology](../../terminology/memory.md) 에 먼저 저장한다.
+- 협업 룰: `/remember` 의 type 매트릭스 ([remember](../../skills/remember/memory.md))
+  로 위치를 계산한다.
 - Hard decision: 아래 3조건을 모두 만족할 때만 ADR
   ([decisions](../../decisions/memory.md)) 을 제안/작성한다.
   1. 나중에 뒤집는 비용이 크다.

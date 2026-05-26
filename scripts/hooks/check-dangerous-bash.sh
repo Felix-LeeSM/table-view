@@ -471,6 +471,53 @@ check_warn_patterns() {
   done
 }
 
+emit_main_branch_write_message() {
+  cat >&2 <<EOF
+BLOCKED: direct main branch write is not allowed.
+
+Agent work must land through a branch + PR. Human approval is the PR merge.
+
+Blocked command:
+  $CMD
+
+Allowed:
+  git switch -c <branch>
+  git push origin <branch>
+  gh pr create
+
+자세히: $MEMORY_POINTER (책임 주체 / delivery)
+EOF
+  exit 1
+}
+
+current_branch() {
+  if [ -n "${CHECK_DANGEROUS_BASH_CURRENT_BRANCH:-}" ]; then
+    echo "$CHECK_DANGEROUS_BASH_CURRENT_BRANCH"
+    return
+  fi
+  git branch --show-current 2>/dev/null || true
+}
+
+check_main_branch_git_write() {
+  local branch
+  branch="$(current_branch)"
+
+  if echo "$CMD" | grep -qiE '(^|[^a-zA-Z0-9_])git[[:space:]]+commit([^a-zA-Z0-9_]|$)'; then
+    if [ "$branch" = "main" ]; then
+      emit_main_branch_write_message
+    fi
+  fi
+
+  if echo "$CMD" | grep -qiE '(^|[^a-zA-Z0-9_])git[[:space:]]+push([^a-zA-Z0-9_]|$)'; then
+    if [ "$branch" = "main" ]; then
+      emit_main_branch_write_message
+    fi
+    if echo "$CMD" | grep -qiE '(^|[[:space:]:/])((refs/heads/)?main)([^a-zA-Z0-9_]|$)'; then
+      emit_main_branch_write_message
+    fi
+  fi
+}
+
 check_lefthook_binary() {
   if ! command -v lefthook >/dev/null 2>&1; then
     block "lefthook is not installed. Run 'pnpm install' first."
@@ -515,6 +562,7 @@ check_git_hooks() {
 
 check_dangerous_patterns
 check_warn_patterns
+check_main_branch_git_write
 check_git_hooks
 
 exit 0

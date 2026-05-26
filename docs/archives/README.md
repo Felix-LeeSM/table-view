@@ -3,6 +3,10 @@
 Inactive docs live here. Active planning stays in `docs/PLAN.md`, active risk in
 `docs/RISKS.md`, active phase specs in `docs/phases/`.
 
+Pure history, retrospectives, raw audits, and raw lesson narratives belong here.
+Raw lessons are not active SOT; reusable knowledge must be interpreted into the
+relevant `memory/**/memory.md` room.
+
 ## Categories
 
 | Directory | Content |
@@ -18,6 +22,7 @@ Inactive docs live here. Active planning stays in `docs/PLAN.md`, active risk in
 | `risks/` | resolved risk register |
 | `test-plans/` | retired test improvement plans |
 | `workflows/` | inactive workflow handoffs |
+| `lessons/` | raw lesson archive; not default agent read path |
 
 ## Naming
 

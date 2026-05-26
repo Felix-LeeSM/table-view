@@ -1,7 +1,7 @@
 ---
 title: Backend guidance
 type: convention
-updated: 2026-05-20
+updated: 2026-05-26
 surface: src-tauri/**/*.rs
 task: backend, rust-impl, tauri
 trigger:
@@ -58,6 +58,13 @@ Backend 변경은 Tauri command / state / DB adapter contract 를 깨지 않는 
   보장한다. native cancel / cooperative cancel 의미를 섞지 않는다.
 - wire struct 를 확장할 때는 `#[serde(rename_all = "camelCase")]` 와
   compatible default (`#[serde(default)]`) 를 우선 검토한다.
+- 사용자에게 노출되는 SQL / query text 와 실행용 wrapper SQL 을 분리한다.
+  `row_to_json` 같은 내부 coercion wrapper 는 `executed_query` 류 user-facing
+  field 에 누출하지 않는다.
+- TS/Rust 가 공유하는 wire string format 은 순수 함수 + fixture 로 lock 한다.
+  SQL inline concat / 익명 closure 안 포맷 조립은 테스트 불가하면 추출한다.
+- 외부 fixture/CLI 가 backend storage 파일을 직접 write 하면 storage envelope
+  (특히 password encryption) 을 backend 와 byte-compatible 하게 재현한다.
 
 ## Workflow
 

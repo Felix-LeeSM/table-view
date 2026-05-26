@@ -58,8 +58,8 @@ P0 사용자 리포트 (#EDIT-6). 현재 `} catch { /* Error handling is done vi
 
 ## Untouched Working Tree
 
-- `memory/lessons/memory.md` (modified) — 건드리지 마라
-- `memory/lessons/workflow/2026-04-25-multi-sprint-protected-scope-diff/` (untracked) — 건드리지 마라
+- `docs/archives/lessons/memory-lessons-2026-05-26/memory.md` (modified) — 건드리지 마라
+- `docs/archives/lessons/memory-lessons-2026-05-26/workflow/2026-04-25-multi-sprint-protected-scope-diff/` (untracked) — 건드리지 마라
 
 ## References
 

@@ -58,6 +58,15 @@ done
 
 - `docs/sprints/sprint-175/baseline.md` — Pre-sprint-2 / post-sprint-2 baseline 4 시나리오 표.
 
+## Interpretation rules
+
+- Tauri 2 macOS 의 다중 WKWebView spawn 은 OS-level parallel 일 수 있다.
+  launcher/workspace `page-load:Started` marker 가 거의 동시에 찍히면 "윈도우 수
+  = 직렬 비용" 가정을 버린다.
+- `setup-done` 같은 단일 marker 만 보고 Rust/application 변경을 가정하지 않는다.
+  WebKit helper process spawn floor 일 수 있으므로 같은 protocol 의 trial delta 로만
+  판단한다.
+
 ## Marker 위치 (코드 grep 으로)
 
 - Rust: `src-tauri/src/lib.rs::run()` 의 `BOOT_T0` + `record_phase` + setup `rust:setup-done` + `on_page_load`
@@ -69,4 +78,3 @@ done
 ## 관련
 
 - [decisions](../../decisions/memory.md) — ADR 0017 (lazy workspace window)
-- [lessons](../../lessons/memory.md) — `boot-windows/2026-04-30-cold-boot-tracing-instrumentation`, `boot-windows/2026-04-30-wkwebview-spawn-os-parallel`

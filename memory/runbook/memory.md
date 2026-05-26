@@ -20,5 +20,6 @@ updated: 2026-05-17
 
 ## 관련
 
-- [lessons](../lessons/memory.md) — 실패/원인/방지 (runbook 과 다름 — lesson 은 사고, runbook 은 절차)
+- Raw incident/lesson 원문은 [docs/archives](../../docs/archives/README.md) 에만 둔다.
+  재사용 절차는 runbook 으로 해석해 흡수한다.
 - [conventions](../conventions/memory.md) — 빌드 / 테스트 / 린트 명령 (단발 실행)

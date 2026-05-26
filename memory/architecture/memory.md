@@ -1,7 +1,7 @@
 ---
 title: Architecture
 type: memory
-updated: 2026-05-20
+updated: 2026-05-26
 ---
 
 # 시스템 구조
@@ -73,6 +73,20 @@ table-view/
   active db 로부터 `(connId, db)` 를 만들고, `workspaceStore` 가 그 key 로 tab /
   sidebar state 를 소유한다. 상세 결정: [decisions/0027](../decisions/0027-per-workspace-state-store/memory.md),
   [decisions/0039](../decisions/0039-workspace-window-per-connection/memory.md)
+
+## Multi-window state model
+
+- 현재 모델은 webview-distributed state 다. Rust process 1개 + WebviewWindow
+  여러 개가 있고, 각 webview 의 Zustand store 가 IPC bridge 로 `SYNCED_KEYS` 를
+  broadcast 한다.
+- broadcast 는 모든 window 로 fan-out 되지만 persist 는 origin window 책임이다.
+  side-effect 추출 전 `broadcast / persist / API call` origin ownership 을 먼저
+  분류한다.
+- window label scheme 을 바꾸면 `src-tauri/capabilities/default.json` 의
+  windows allowlist 와 capability integration test 를 같은 PR 에 갱신한다.
+- Rust=server / storage-event / SharedWorker 같은 state model shift 는 현재
+  검증 surface 와 shift 후 검증 surface 를 비교한 뒤 진입한다. 대체 surface 가
+  e2e 인데 e2e 가 dead/drift 상태면 먼저 복구한다.
 
 ## 데이터 흐름
 

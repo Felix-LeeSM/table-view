@@ -45,7 +45,7 @@ PR body 에 다음 섹션을 포함:
 | 잔여 risk / 감사 follow-up | `docs/RISKS.md` |
 | sequencing / 다음 sprint 후보 | `docs/PLAN.md` |
 | 실제 sprint 범위 / AC / handoff | `docs/sprints/sprint-N/` |
-| 반복 적용 규칙 / workflow / lesson | `memory/**/memory.md` |
+| 반복 적용 규칙 / workflow / convention | `memory/**/memory.md` |
 | 임시 audit 원문 | 사용자 명시 승인 + retire 조건 필수 |
 
 임시 `docs/<new-area>/` 는 SOT 가 아니다. 만들기 전 PR body 에 owner SOT,

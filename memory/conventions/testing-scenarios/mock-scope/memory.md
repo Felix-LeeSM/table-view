@@ -1,7 +1,7 @@
 ---
 title: Mock 범위 — 광역 stub 금지, user-facing invariant 단언
 type: convention
-updated: 2026-05-17
+updated: 2026-05-26
 task: test-writing, mock-scope, regression-guard
 surface: '**/*.test.ts, **/*.test.tsx, vi.mock'
 trigger:
@@ -62,7 +62,7 @@ it("Back triggers the workspace_close IPC (path step)", () => {
 
 ## Why
 
-2026-05-16 wave 9.5 회귀 3 (모든 테마 slate 고정), 회귀 4 (Back 버튼이 창 안 닫음), Cmd+W/Cmd+N OS-level shortcut 부재 — 모두 unit test GREEN 통과한 상태로 사용자에게 도달. 공통 원인: 광역 mock 이 silent failure 가림.
+2026-05-16 wave 9.5 회귀 3 (모든 테마 slate 고정), 회귀 4 (Back 버튼이 창 안 닫음), Cmd+W/Cmd+N OS-level shortcut 부재 — 모두 unit test GREEN 통과한 상태로 사용자에게 도달. ThemePicker 도 `setTheme` mock 이 click → IPC → store → DOM path 를 가려 hover preview 만 살아 있는 silent failure 를 통과시켰다. 공통 원인: 광역 mock 이 silent failure 가림.
 
 사용자 명시 (2026-05-16): "테스트 시나리오 작성할 때, 유저의 플로우를 상상하면서 path 를 따라가도록 하는 원칙" — *그게 안 되었던 게 일련의 회귀의 root cause*.
 
@@ -70,4 +70,3 @@ it("Back triggers the workspace_close IPC (path step)", () => {
 
 - [testing-scenarios](../memory.md) — 8 원칙. P2 (사용자 가시 행동), P6 (mock = boundary)
 - [workflow/bug-fix](../../../workflow/bug-fix/memory.md) — Red test 의 단언 형식
-- [lessons/ui-patterns/2026-05-16-theme-selection-silent-fail](../../../lessons/ui-patterns/2026-05-16-theme-selection-silent-fail/memory.md) — 회귀 사례

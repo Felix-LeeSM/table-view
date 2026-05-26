@@ -67,4 +67,4 @@ Sprint 154 wires real `WebviewWindow.show()/hide()`; without the rest of the sha
 - Sprint 152 findings (advisories): `docs/sprints/sprint-152/findings.md`
 - Stores to opt in: `src/stores/{tabStore,mruStore,themeStore,favoritesStore,appShellStore}.ts`
 - Conventions: `memory/conventions/memory.md`
-- Skip-zero gate: `memory/lessons/workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md`
+- Skip-zero gate: `docs/archives/lessons/memory-lessons-2026-05-26/workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md`

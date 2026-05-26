@@ -64,3 +64,5 @@ updated: 2026-05-13
 - 본문 3줄 inline: 상황 / 원인 / 재발 방지.
 - 도메인 cross-cut lesson 은 한 도메인에만 두고 인덱스에서 cross-link.
 - 새 도메인 임계: 한 lesson 만 든 도메인 신설 금지 (조기 분기). 2-3건 쌓이면 분기 검토.
+- Lesson 은 배워야 하는 재사용 지식만 남긴다. 순수 history/회고/완료 기록은
+  `docs/archives/` 로 이동하고, lesson 에는 반복 적용할 원인/재발 방지만 남긴다.

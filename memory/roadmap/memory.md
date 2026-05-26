@@ -11,6 +11,10 @@ Active 실행 순서: [docs/PLAN.md](../../docs/PLAN.md). 장기 roadmap:
 [docs/data-source-architecture.md](../../docs/data-source-architecture.md). 비교 근거:
 [docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md](../../docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md).
 
+Human-facing 진행 SOT 는 `docs/PLAN.md` / `docs/ROADMAP.md` 다. Agent 는 작은 PR 로
+작업을 만들고, sequencing/status 가 바뀌면 PR body + handoff 에 어떤 roadmap SOT 를
+갱신했는지 또는 왜 갱신 불필요한지 남긴다.
+
 ## 방향 (2026-05-22)
 
 Active ordering 은 `docs/PLAN.md` 가 SOT. 현재 기준은:
@@ -40,8 +44,8 @@ Active ordering 은 `docs/PLAN.md` 가 SOT. 현재 기준은:
   closure)** — Sprint 226 CREATE TABLE → Sprint 237 Column MODIFY USING
   - NULL-rows 사전 표시까지 7단계 모두 마감. TablePlus
     `working-with-table/{table,column,row,constraint,index,trigger}` 6
-    surface 의 동등 워크플로우 도달. 회고:
-    [`memory/lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`](../lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md).
+    surface 의 동등 워크플로우 도달. Raw closure retro 는 `docs/archives/lessons/`
+    에 보존.
 - **Phase 17–20 재개 평가 트리거 발동 (2026-05-13)** — Phase 27 종료
   exit criterion 에 따라 신규 DBMS 추가 비용/가치 재산정 시점.
 - **Phase 13–16 retroactive closure (2026-05-14)** — audit 결과 모두

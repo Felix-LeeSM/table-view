@@ -59,7 +59,7 @@ ConnectionDialog가 모든 DBMS에 대해 같은 필드(host/port/user/password/
 
 - Contract: `docs/sprints/sprint-138/contract.md`
 - Master spec: `docs/sprints/sprint-134/spec.md` (Phase 10)
-- Lesson: `memory/lessons/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
+- Lesson: `docs/archives/lessons/memory-lessons-2026-05-26/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
 - Relevant files (read first):
   - `src/types/connection.ts` (DatabaseType, DATABASE_DEFAULTS, ConnectionConfig, ConnectionDraft)
   - `src/components/connection/ConnectionDialog.tsx` + test

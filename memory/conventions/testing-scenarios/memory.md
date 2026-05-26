@@ -1,7 +1,9 @@
 ---
 title: 비-E2E 테스트 시나리오 설계 원칙 (Rust unit/integration · React component · Zustand store · Hook · Async)
 type: memory
-updated: 2026-04-30
+updated: 2026-05-26
+task: test-writing, regression-guard, fixture, skip-accountability, contract-test
+surface: '**/*.test.ts, **/*.test.tsx, src-tauri/tests/**/*.rs'
 ---
 
 # 비-E2E 테스트 시나리오 설계 원칙
@@ -117,6 +119,19 @@ describe('ConnectionActivation', () => {
 - 실 DB가 필요한 시나리오는 docker compose `test` profile (sprint-169 결과물).
 - mock DB 는 *contract* 검증 전용 — 실 DB 대용으로 쓰지 않는다 (sprint-169 이전
   프로젝트가 빠진 함정).
+
+## Boundary contract addenda
+
+- TS/Rust 경계를 문자열/JSON shape 로 넘기는 포맷은 공유 fixture 또는 양쪽
+  pure-function test 로 lock 한다. FK reference, error code, timestamp/BigInt/
+  ObjectId, executed-query metadata 가 대표 사례다.
+- 외부 도구가 Tauri storage 파일을 직접 write 하면 backend storage envelope
+  (암호화 nonce/ciphertext/tag, casing, defaults) 을 1:1 재현하고 round-trip test
+  + 앱 sanity smoke 를 둔다.
+- `skip` / `todo` 는 `RISK-NNN` 또는 `[DEFERRED-ID]`, 동치 커버리지 경로,
+  재진입 trigger 중 최소 하나를 code/spec/handoff 에 남긴다. 무맥락 skip 은 debt.
+- architectural shift 로 mockability 가 줄면 대체 검증 surface 를 명시한다.
+  "vitest 에서 더 못 잡음"은 단순 편의 문제가 아니라 회귀 가드 손실이다.
 
 ---
 

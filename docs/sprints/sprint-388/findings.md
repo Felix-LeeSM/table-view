@@ -63,12 +63,12 @@ date: 2026-05-18
 
 - `.claude/agents/pr-reviewer.md` 갱신 — read 리스트 새 source 3개
 - `memory/workflow/delivery/memory.md` T4 review + T6 자율 머지 조건
-- `memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md`
+- `docs/archives/lessons/memory-lessons-2026-05-26/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md`
   신설 — 본 sprint 의 plugin 영역 침범 시도 lesson
 
 ### 5. 기존 lessons 9 카테고리 index 보강
 
-`memory/lessons/{parity-milestone,security,ui-patterns,boot-windows,data-and-query,workspace-shell,workflow,agent-and-git,e2e}/memory.md` 각각 신설.
+`docs/archives/lessons/memory-lessons-2026-05-26/{parity-milestone,security,ui-patterns,boot-windows,data-and-query,workspace-shell,workflow,agent-and-git,e2e}/memory.md` 각각 신설.
 sprint-387 의 skills index 누락 같은 결함 재발 방지의 일환.
 
 ## 회귀 영향

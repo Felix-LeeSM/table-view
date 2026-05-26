@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Table View — Agentic Harness 문제점 분석</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --dim: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --orange: #f0883e;
+    --cyan: #39d2c0;
+    --pink: #f778ba;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'SF Pro Text', 'Noto Sans KR', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 64px 24px; }
+
+  h1 { font-size: 32px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.5px; }
+  h1 .sub { color: var(--dim); font-weight: 400; font-size: 18px; }
+  h2 {
+    font-size: 22px; margin: 56px 0 20px; padding-bottom: 10px;
+    border-bottom: 2px solid var(--border); letter-spacing: -0.3px;
+  }
+  h3 { font-size: 17px; margin: 28px 0 10px; color: var(--accent); }
+  h4 { font-size: 15px; margin: 20px 0 8px; color: var(--text); }
+  p { margin: 8px 0; }
+  .dim { color: var(--dim); }
+  .small { font-size: 13px; }
+  .tight { margin: 4px 0; }
+
+  /* header */
+  .header { margin-bottom: 48px; }
+  .meta { color: var(--dim); font-size: 13px; margin-top: 8px; }
+  .meta span { margin-right: 20px; }
+
+  /* badge */
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
+    vertical-align: middle;
+  }
+  .b-foundation { background: rgba(188,140,255,0.12); color: var(--purple); }
+  .b-cognition { background: rgba(88,166,255,0.12); color: var(--accent); }
+  .b-process { background: rgba(240,136,62,0.12); color: var(--orange); }
+  .b-outcome { background: rgba(248,81,73,0.12); color: var(--red); }
+  .b-severity-high { background: rgba(248,81,73,0.12); color: var(--red); }
+  .b-severity-mid { background: rgba(210,153,34,0.12); color: var(--yellow); }
+
+  /* issue card */
+  .issue {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 24px; margin: 16px 0;
+  }
+  .issue-num {
+    font-family: 'SF Mono', monospace; font-size: 13px; font-weight: 700;
+    color: var(--dim); margin-bottom: 6px;
+  }
+  .issue-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .issue-body { color: var(--text); font-size: 14px; }
+  .issue-body ul { margin: 6px 0 6px 20px; }
+  .issue-body li { margin: 3px 0; }
+  .issue-tags { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .issue-conn {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+    font-size: 13px; color: var(--dim);
+  }
+  .issue-conn code {
+    background: rgba(88,166,255,0.06); padding: 1px 5px; border-radius: 3px;
+    font-size: 12px; color: var(--accent);
+  }
+
+  /* summary table */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  th {
+    text-align: left; color: var(--dim); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  th, td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: rgba(88,166,255,0.03); }
+
+  /* map */
+  .map {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 28px; margin: 20px 0;
+    font-family: 'SF Mono', monospace; font-size: 13px;
+    line-height: 1.5; overflow-x: auto; white-space: pre;
+  }
+
+  /* callout */
+  .callout {
+    border-radius: 8px; padding: 16px 20px; margin: 16px 0;
+    font-size: 14px;
+  }
+  .callout-insight {
+    background: rgba(188,140,255,0.06);
+    border-left: 3px solid var(--purple);
+  }
+
+  /* nav */
+  .toc { margin: 24px 0; }
+  .toc a {
+    display: block; padding: 6px 0; color: var(--dim); font-size: 14px;
+    text-decoration: none;
+  }
+  .toc a:hover { color: var(--accent); }
+  .toc a .num { color: var(--dim); font-family: 'SF Mono', monospace; font-size: 12px; margin-right: 8px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- HEADER ============================================================ -->
+<div class="header">
+  <h1>Agentic Harness 문제점 분석 <span class="sub">— 23 Issues</span></h1>
+  <p class="dim" style="font-size:16px; margin-top:8px;">Table View 프로젝트의 자율 개발 harness가 가진 구조적 한계와 개선 방향</p>
+  <div class="meta">
+    <span>작성: 2026-05-25</span>
+    <span>기준: harness v0.2.0 + dual runtime (Claude Code / Codex)</span>
+    <span>대화 기반 분석</span>
+  </div>
+</div>
+
+<!-- ROOT CAUSE ========================================================= -->
+<div class="callout callout-insight">
+  <strong>근본 원인:</strong> "쓰기는 하는데 읽히고, 유지되고, 일관성 있는지 확인하는 루프가 없다."<br>
+  규칙·memory·시나리오·handoff·문서가 전부 write-only. Agent가 매 세션 새로 시작하므로 암묵적 합의가 작동하지 않으며, 검증·관찰·갱신 메커니즘이 부재합니다.
+</div>
+
+<!-- MAP ================================================================ -->
+<h2>문제 지도</h2>
+<div class="map">┌─ <span style="color:#bc8cff">기반 Foundation</span> (4) — 나머지 모두의 근원 ──────────────────────┐
+│  ⑧ 용어 미정렬             ⑰ 코딩 원칙 미정의                          │
+│  ⑱ Skill/harness 통합 부재  22 자연어→agent 자동 라우팅 없음            │
+└─────────────────────────────┬──────────────────────────────────────────┘
+                              ↓
+┌─ <span style="color:#58a6ff">인지 Cognition</span> (4) — Agent가 세계를 이해하는 방식 ──────────┐
+│  ① 큰 그림 못 봄            ② 규칙 준수 보장 없음                      │
+│  ⑫ Unknown unknowns         ⑯ Caveman 모드 미유지                      │
+└─────────────────────────────┬──────────────────────────────────────────┘
+                              ↓
+┌─ <span style="color:#f0883e">프로세스 Process</span> (7) — 작업이 실행되는 방식 ────────────────┐
+│  ③ 시나리오-테스트 연결 없음     ④ 작업 후 문서화 누락                    │
+│  ⑦ Harness 실행 검증 불가        ⑬ Worktree 패턴 미보장                   │
+│  ⑮ 경직된 구조가 흐름 끊음       ⑳ 작업 추적 repo 내부 한정               │
+│  23 Worktree ref hook 미검증                                              │
+└─────────────────────────────┬──────────────────────────────────────────┘
+                              ↓
+┌─ <span style="color:#f85149">결과 Outcome</span> (8) — 최종적으로 나타나는 증상 ────────────────┐
+│  ⑤ Memory 관리 체계 없음         ⑥ Context 오염                          │
+│  ⑨ 코드 패턴 불일치              ⑩ Cross-sprint 회귀                     │
+│  ⑪ 피드백 루프 미폐쇄            ⑭ 사용자 관찰 불가                       │
+│  ⑲ Human-readable 문서 방치      21 Smoke test/fixture 관리 부재          │
+└───────────────────────────────────────────────────────────────────────────┘</div>
+
+<!-- TOC ================================================================ -->
+<h2>목차</h2>
+<div class="toc">
+  <a href="#foundation"><strong>기반 Foundation</strong></a>
+  <a href="#f8"><span class="num">#8</span>용어 미정렬</a>
+  <a href="#f17"><span class="num">#17</span>코딩 원칙 미정의</a>
+  <a href="#f18"><span class="num">#18</span>Skill/harness 통합 부재</a>
+  <a href="#f22"><span class="num">#22</span>자연어→agent 자동 라우팅 없음</a>
+  <a href="#cognition"><strong>인지 Cognition</strong></a>
+  <a href="#c1"><span class="num">#1</span>큰 그림 못 봄</a>
+  <a href="#c2"><span class="num">#2</span>규칙 준수 보장 없음</a>
+  <a href="#c12"><span class="num">#12</span>Unknown unknowns</a>
+  <a href="#c16"><span class="num">#16</span>Caveman 모드 미유지</a>
+  <a href="#process"><strong>프로세스 Process</strong></a>
+  <a href="#p3"><span class="num">#3</span>시나리오-테스트 연결 없음</a>
+  <a href="#p4"><span class="num">#4</span>작업 후 문서화 누락</a>
+  <a href="#p7"><span class="num">#7</span>Harness 실행 검증 불가</a>
+  <a href="#p13"><span class="num">#13</span>Worktree 패턴 미보장</a>
+  <a href="#p15"><span class="num">#15</span>경직된 구조가 흐름 끊음</a>
+  <a href="#p20"><span class="num">#20</span>작업 추적 repo 내부 한정</a>
+  <a href="#p23"><span class="num">#23</span>Worktree ref hook 미검증</a>
+  <a href="#outcome"><strong>결과 Outcome</strong></a>
+  <a href="#o5"><span class="num">#5</span>Memory 관리 체계 없음</a>
+  <a href="#o6"><span class="num">#6</span>Context 오염</a>
+  <a href="#o9"><span class="num">#9</span>코드 패턴 불일치</a>
+  <a href="#o10"><span class="num">#10</span>Cross-sprint 회귀</a>
+  <a href="#o11"><span class="num">#11</span>피드백 루프 미폐쇄</a>
+  <a href="#o14"><span class="num">#14</span>사용자 관찰 불가</a>
+  <a href="#o19"><span class="num">#19</span>Human-readable 문서 방치</a>
+  <a href="#o21"><span class="num">#21</span>Smoke test/fixture 관리 부재</a>
+</div>
+
+<!-- ================================================================== -->
+<!-- FOUNDATION ========================================================= -->
+<!-- ================================================================== -->
+<h2 id="foundation">기반 Foundation</h2>
+<p class="dim">나머지 모든 문제의 근원. 이 영역이 해결되면 아래 문제들의 강도가 크게 약화됩니다.</p>
+
+<div class="issue" id="f8">
+  <div class="issue-num">#8</div>
+  <div class="issue-title">용어가 정렬되어 있지 않다</div>
+  <div class="issue-body">
+    <p>작업 지시 시 "윈도우", "패널", "뷰", "사이드바" 같은 용어가 사용자, memory, 코드베이스 사이에서 일관되지 않습니다. 같은 것을 다른 이름으로 부르거나, 같은 이름으로 다른 것을 부르면 지시가 복잡해지고 의도가 분기합니다.</p>
+    <p>Agent는 매 세션 새로 시작하므로 암묵적 합의가 작동하지 않습니다. 명시적 용어 사전 없이는, sprint마다 다른 용어를 사용하고, 이게 코드와 문서에 반영되어 전체 일관성이 무너집니다.</p>
+    <ul>
+      <li>사용자가 "사이드바"라고 하면 agent는 무엇을 이해하는가?</li>
+      <li>코드에서는 <code>ConnectionPanel</code>, memory에서는 "connection navigator", UI에서는 "sidebar" — 어느 것이 정답인가?</li>
+    </ul>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-foundation">Foundation</span>
+    <span class="badge b-severity-high">High impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#9</code> 코드 패턴 불일치, <code>#12</code> Unknown unknowns, <code>#2</code> 규칙 준수</div>
+</div>
+
+<div class="issue" id="f17">
+  <div class="issue-num">#17</div>
+  <div class="issue-title">일반적인 코딩 원칙이 문서화되어 있지 않다</div>
+  <div class="issue-body">
+    <p>언제 hook을 쓰고 언제 utility를 쓸지, 에러 처리는 어떻게 할지, 함수는 어디까지 쪼갤지 같은 기본 원칙이 memory에 체계적으로 정리되어 있지 않습니다. Domain-specific 규칙(Rust 컨벤션, React 컨벤션)은 있는데, <strong>그 밑에 깔려야 할 일반 원칙</strong>이 빠져 있습니다.</p>
+    <p>Agent가 매번 상황에 따라 임의로 결정하니, sprint마다 다른 철학이 반영됩니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-foundation">Foundation</span>
+    <span class="badge b-severity-high">High impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#9</code> 코드 패턴 불일치의 뿌리, <code>#2</code> 규칙 준수의 전제</div>
+</div>
+
+<div class="issue" id="f18">
+  <div class="issue-num">#18</div>
+  <div class="issue-title">Import된 skill과 custom harness가 엉켜 있다</div>
+  <div class="issue-body">
+    <p>Grill, TDD, delivery 등은 다른 repository에서 가져온 것이고, harness는 직접 만든 것입니다. 설계 배경과 가정이 다르니 서로 잘 엮이지 않습니다.</p>
+    <ul>
+      <li>Grill은 단일 질문에 집중하는 인터뷰 모델</li>
+      <li>Harness는 multi-sprint pipeline</li>
+      <li>두 개가 만나야 할 지점(설계 결정 → sprint contract)이 명확하지 않음</li>
+    </ul>
+    <p>작업 방식이 하나로 정형화되어야 1-23번 문제를 아무리 고쳐도 다시 흩어지지 않습니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-foundation">Foundation</span>
+    <span class="badge b-severity-high">High impact</span>
+  </div>
+  <div class="issue-conn">연결: 모든 skill/agent 문제의 상위, <code>#22</code> 라우팅의 전제</div>
+</div>
+
+<div class="issue" id="f22">
+  <div class="issue-num">#22</div>
+  <div class="issue-title">자연어 지시가 적절한 subagent로 자동 라우팅되지 않는다</div>
+  <div class="issue-body">
+    <p>"리뷰해라"라고 하면, 알아서 적절한 컨텍스트를 가진 subagent가 spawn되어야 합니다. 지금은 사용자가 어떤 skill을 쓸지, 어떤 agent를 부를지 알아야 합니다. Intent → agent 매핑이 수동입니다.</p>
+    <p>사람이 orchestrator 역할을 직접 수행해야 하니, 자율 개발의 목표와 멀어집니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-foundation">Foundation</span>
+    <span class="badge b-severity-mid">Mid impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#18</code> 통합, <code>#14</code> 관찰 불가</div>
+</div>
+
+<!-- ================================================================== -->
+<!-- COGNITION ========================================================== -->
+<!-- ================================================================== -->
+<h2 id="cognition">인지 Cognition</h2>
+<p class="dim">Agent가 세계를 이해하고 판단하는 방식의 한계.</p>
+
+<div class="issue" id="c1">
+  <div class="issue-num">#1</div>
+  <div class="issue-title">Agent가 큰 그림을 못 본다</div>
+  <div class="issue-body">
+    <p>Sprint 단위로 쪼개진 contract만 받으니, 자기가 어디를 건드리고 있는지 시스템 전체 맥락에서 이해하지 못합니다. 국소적으로는 올바른 결정이 전체적으로는 잘못된 결정일 수 있습니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-cognition">Cognition</span>
+    <span class="badge b-severity-high">High impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#10</code> cross-sprint 회귀, <code>#12</code> unknown unknowns</div>
+</div>
+
+<div class="issue" id="c2">
+  <div class="issue-num">#2</div>
+  <div class="issue-title">규칙 준수가 보장되지 않는다</div>
+  <div class="issue-body">
+    <p>Memory, convention, skill 사용 지시가 전부 prompt의 soft requirement입니다. "이렇게 하세요"라고 적어놓았을 뿐, 실제로 따랐는지 검증하는 수단이 없습니다. Agent가 규칙을 무시하거나 누락해도 발견이 안 됩니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-cognition">Cognition</span>
+    <span class="badge b-severity-high">High impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#17</code> 원칙 부재가 원인, <code>#9</code> <code>#11</code> 로 파급</div>
+</div>
+
+<div class="issue" id="c12">
+  <div class="issue-num">#12</div>
+  <div class="issue-title">Agent가 모르는 것을 모른다</div>
+  <div class="issue-body">
+    <p>명시적으로 주어진 정보(contract, memory, 코드)는 처리할 수 있지만, <strong>주어지지 않은 정보의 부재</strong>를 인식하지 못합니다.</p>
+    <ul>
+      <li>Security consideration이 contract에 없으면 고려하지 않고, 누락이라는 사실도 모름</li>
+      <li>Performance, accessibility, backward compatibility도 마찬가지</li>
+    </ul>
+    <p>이건 LLM의 구조적 한계에 가깝습니다. 외부에서 질문을 던지는 역할이 필요합니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-cognition">Cognition</span>
+    <span class="badge b-severity-high">Structural limit</span>
+  </div>
+  <div class="issue-conn">연결: <code>#8</code> 용어가 정렬되면 일부 완화, <code>#1</code> 큰 그림 문제와 공유</div>
+</div>
+
+<div class="issue" id="c16">
+  <div class="issue-num">#16</div>
+  <div class="issue-title">Caveman 모드가 subagent와 compaction 후에 유지되지 않는다</div>
+  <div class="issue-body">
+    <p>Caveman 스킬은 모든 agent의 기본 모드여야 하는데, subagent spawn 시 상속되는지 보장이 없습니다. 특히 Codex는 context compaction 후 caveman 지시를 잃어버립니다.</p>
+    <p>결과적으로 subagent가 장황한 출력을 내면, 그게 상위 agent의 context를 다시 잠식합니다. Caveman은 token 절약이 목적인데, 미적용 시 token 낭비가 증폭되는 구조입니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-cognition">Cognition</span>
+    <span class="badge b-severity-mid">Mid impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#6</code> context 오염과 직결, 악순환 구조</div>
+</div>
+
+<!-- ================================================================== -->
+<!-- PROCESS ============================================================ -->
+<!-- ================================================================== -->
+<h2 id="process">프로세스 Process</h2>
+<p class="dim">작업이 실행되고 추적되는 방식의 한계.</p>
+
+<div class="issue" id="p3">
+  <div class="issue-num">#3</div>
+  <div class="issue-title">시나리오-테스트 연결고리가 없다</div>
+  <div class="issue-body">
+    <p><code>memory/conventions/testing-scenarios/</code>에 시나리오가 정의되어 있지만, 실제 테스트 코드와의 대응 관계를 알 수 없습니다. "시나리오 X를 커버하는 테스트가 존재하는가?"라는 질문에 답할 수 없습니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-process">Process</span>
+    <span class="badge b-severity-high">High impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#21</code> fixture 관리와 짝, <code>#11</code> 피드백 루프의 검증 축</div>
+</div>
+
+<div class="issue" id="p4">
+  <div class="issue-num">#4</div>
+  <div class="issue-title">작업 후 문서화가 안 된다</div>
+  <div class="issue-body">
+    <p>Sprint가 끝나면 handoff.md를 채워야 하고, 학습한 내용을 memory에 옮겨 적어야 합니다. 하지만 이게 제대로 이루어지지 않습니다. 템플릿이 있어도 내용이 대충 채워지거나 아예 건너뛰어집니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-process">Process</span>
+    <span class="badge b-severity-mid">Mid impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#5</code> memory 관리, <code>#11</code> 피드백 루프, <code>#19</code> 문서 방치</div>
+</div>
+
+<div class="issue" id="p7">
+  <div class="issue-num">#7</div>
+  <div class="issue-title">Harness가 실제로 동작했는지 모른다</div>
+  <div class="issue-body">
+    <p>Sprint가 PASS로 끝났다고 해서 harness의 전체 workflow가 제대로 순차적으로 실행되었는지 알 수 없습니다. Phase를 건너뛰었는지, Planner가 실제로 코드베이스를 읽었는지, Contract가 sprint scope를 정확히 반영했는지 — 어느 것도 외부에서 검증할 수 없습니다.</p>
+    <p>결과물(코드)만 보이고 과정은 불투명합니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-process">Process</span>
+    <span class="badge b-severity-high">High impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#2</code> 준수 보장, <code>#10</code> 회귀, <code>#13</code> worktree</div>
+</div>
+
+<div class="issue" id="p13">
+  <div class="issue-num">#13</div>
+  <div class="issue-title">Worktree 격리 패턴이 지켜지는지 모른다</div>
+  <div class="issue-body">
+    <p>Main agent를 orchestrator로, worktree에서 작업을 진행하는 구조를 설계했습니다. 하지만 이 패턴이 실제로 지켜지는지, 작업이 main 브랜치를 오염시키지 않았는지 확인할 수 없습니다.</p>
+    <p><code>check-main-worktree-source-edit.sh</code> hook이 있긴 하지만, 이건 편집 정책이지 workflow compliance가 아닙니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-process">Process</span>
+    <span class="badge b-severity-mid">Mid impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#14</code> 관찰 불가, <code>#23</code> ref hook</div>
+</div>
+
+<div class="issue" id="p15">
+  <div class="issue-num">#15</div>
+  <div class="issue-title">미리 만든 sprint 문서가 오히려 흐름을 끊는다</div>
+  <div class="issue-body">
+    <p>Sprint 문서를 사전 작성 후 작업을 진행해 봤지만, 상황이 변하면 문서와 실제 작업이 어긋나고, 문서에 맞추려다 자연스러운 개발 흐름이 깨집니다. 구조가 너무 강하면 적응력이 떨어집니다.</p>
+    <p><strong>구조화와 유연성의 딜레마:</strong> 구조가 없으면 agent가 방황하고(1-12), 구조가 너무 강하면 사람이 흐름을 잃습니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-process">Process</span>
+    <span class="badge b-severity-mid">Mid impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#18</code> 통합 부재와 짝, <code>#20</code> 추적 방식과 연관</div>
+</div>
+
+<div class="issue" id="p20">
+  <div class="issue-num">#20</div>
+  <div class="issue-title">작업 추적이 repo 내부 파일에만 있다</div>
+  <div class="issue-body">
+    <p>Sprint가 <code>docs/sprints/</code> 디렉토리에 파일로만 존재합니다. 진행 상황, 계획, 완료 여부를 repo 안에서만 알 수 있고, 외부에서는 보이지 않습니다. GitHub Issue, Milestone, Project board 같은 추적 수단과 연결이 없습니다.</p>
+    <p>잠재적 해결책이기도 합니다: GitHub 연결로 <code>#7</code> <code>#14</code> <code>#15</code> <code>#19</code>를 완화할 수 있습니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-process">Process</span>
+    <span class="badge b-severity-mid">Mid impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#14</code> 관찰 불가, <code>#19</code> 문서 방치</div>
+</div>
+
+<div class="issue" id="p23">
+  <div class="issue-num">#23</div>
+  <div class="issue-title">Worktree ref 관리 hook이 효율적으로 동작하는지 모른다</div>
+  <div class="issue-body">
+    <p>FETCH_HEAD, ORIG_HEAD 등 git 내부 ref와 worktree의 충돌을 방지하기 위해 hook을 작성했지만, 이 hook들이 실제로 효율적으로 동작하는지 검증이 필요합니다.</p>
+    <p>문제가 발생했을 때 대응식으로 작성된 패치들이라, 근본 설계가 올바른지 재검토가 필요합니다. Git 내부 FETCH_REF 관리와 충돌 문제가 근원입니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-process">Process</span>
+    <span class="badge b-severity-mid">Mid impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#13</code> worktree 패턴의 인프라 신뢰성</div>
+</div>
+
+<!-- ================================================================== -->
+<!-- OUTCOME ============================================================ -->
+<!-- ================================================================== -->
+<h2 id="outcome">결과 Outcome</h2>
+<p class="dim">최종적으로 나타나는 증상. 기반·인지·프로세스 문제가 겹쳐서 발생합니다.</p>
+
+<div class="issue" id="o5">
+  <div class="issue-num">#5</div>
+  <div class="issue-title">Memory가 방대해지는데 관리 체계가 없다</div>
+  <div class="issue-body">
+    <p>Memory는 계속 쌓이기만 합니다. 어떤 memory가 여전히 유효한지, 어떤 것이 구식인지, 무엇이 중요하고 무엇이 잡음인지 판단하는 메커니즘이 없습니다.</p>
+    <p>200줄 cap은 파일 하나의 크기 제한일 뿐, 전체 memory 생태계의 건강성을 보장하지 못합니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-outcome">Outcome</span>
+    <span class="badge b-severity-high">High impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#4</code> 문서화 누락, <code>#11</code> 피드백 루프</div>
+</div>
+
+<div class="issue" id="o6">
+  <div class="issue-num">#6</div>
+  <div class="issue-title">검증을 위한 enforcement가 context를 오염시킨다</div>
+  <div class="issue-body">
+    <p>문제들을 해결하려고 hook으로 검사하고 경고를 넣으면, agent의 한정된 context window를 검증 메시지가 잠식합니다. 핵심 작업 정보보다 경고 메시지가 더 많아지는 역설이 발생합니다.</p>
+    <p>해결 방향: push(agent에게 알림) 대신 pull(Evaluator에게만 전달). Generator는 코드에 집중, Evaluator가 side-channel compliance 데이터를 평가에 반영.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-outcome">Outcome</span>
+    <span class="badge b-severity-high">High impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#16</code> caveman 미유지와 악순환, <code>#2</code> 준수 검증의 부작용</div>
+</div>
+
+<div class="issue" id="o9">
+  <div class="issue-num">#9</div>
+  <div class="issue-title">코드 패턴 일관성이 강제되지 않는다</div>
+  <div class="issue-body">
+    <p>같은 유형의 컴포넌트를 만들 때마다 다른 패턴이 사용됩니다. 한 sprint에서는 custom hook, 다음 sprint에서는 인라인. Formatting(prettier, cargo fmt)은 잡지만, 구조적 패턴은 잡지 못합니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-outcome">Outcome</span>
+    <span class="badge b-severity-mid">Mid impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#8</code> 용어, <code>#17</code> 원칙 부재의 코드적 표현</div>
+</div>
+
+<div class="issue" id="o10">
+  <div class="issue-num">#10</div>
+  <div class="issue-title">Sprint 간 회귀가 감지되지 않는다</div>
+  <div class="issue-body">
+    <p>Sprint 3이 통과해도, Sprint 1의 결과를 망가뜨렸는지 아무도 검사하지 않습니다. Evaluator는 "이 sprint의 contract"만 평가합니다. <code>memory/lessons/</code>에 교훈이 있지만 이미 학습한 특정 사례에 대한 방어일 뿐, 일반적인 cross-sprint 회귀 감지 체계가 아닙니다.</p>
+    <p>Sprint가 쌓일수록 누적 위험은 단조증가합니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-outcome">Outcome</span>
+    <span class="badge b-severity-high">High impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#1</code> 큰 그림, <code>#7</code> 실행 검증</div>
+</div>
+
+<div class="issue" id="o11">
+  <div class="issue-num">#11</div>
+  <div class="issue-title">피드백 루프가 닫히지 않는다</div>
+  <div class="issue-body">
+    <p>Sprint에서 실수 → Evaluator 지적 → Generator 수정은 잘 됩니다. 하지만 <strong>그 실수의 원인이 다음 sprint나 다음 feature에서 반복 방지되는지</strong>는 보장되지 않습니다.</p>
+    <p><code>memory/lessons/</code>에 기록되더라도, 다음 agent 세션이 그걸 읽고 실제로 반영했는지 검증이 없습니다. 교훈이 write-only가 됩니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-outcome">Outcome</span>
+    <span class="badge b-severity-high">High impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#5</code> memory 관리, <code>#4</code> 문서화</div>
+</div>
+
+<div class="issue" id="o14">
+  <div class="issue-num">#14</div>
+  <div class="issue-title">사용자가 작업 현황을 관찰할 수 없다</div>
+  <div class="issue-body">
+    <p>Worktree에서 작업이 진행되면 사용자는 그 안에서 무슨 일이 일어나는지 볼 수 없습니다. 진행 상황, 중간 결과, 문제 발생 — 전부 블랙박스입니다. 작업이 끝나고 PR이 올라와야 처음으로 결과를 봅니다.</p>
+    <p>사람이 감시하려 해도 감시 창구가 없고, 알아서 잘 돌기를 바랄 수밖에 없는데 그게 안 됩니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-outcome">Outcome</span>
+    <span class="badge b-severity-high">High impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#13</code> worktree, <code>#20</code> 추적, <code>#7</code> 실행 검증</div>
+</div>
+
+<div class="issue" id="o19">
+  <div class="issue-num">#19</div>
+  <div class="issue-title">Human-readable 문서가 방치된다</div>
+  <div class="issue-body">
+    <p>README, plan, roadmap, features 등 사람이 읽는 문서는 memory/와는 다른 영역입니다. Agent는 memory/를 관리하도록 되어 있지만, repo 루트의 human-facing 문서는 sprint contract, hook, evaluator rubric 어디에도 포함되지 않습니다.</p>
+    <p>코드는 바뀌어도 README는 예전 그대로, roadmap은 구 시안, features는 실제 구현과 불일치합니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-outcome">Outcome</span>
+    <span class="badge b-severity-mid">Mid impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#4</code> 문서화 누락과 대상 다름, <code>#20</code> GitHub 연결로 완화 가능</div>
+</div>
+
+<div class="issue" id="o21">
+  <div class="issue-num">#21</div>
+  <div class="issue-title">Smoke test와 fixture가 관리되지 않는다</div>
+  <div class="issue-body">
+    <p>테스트 코드는 작성하지만, 그 테스트가 의존하는 fixture, mock 데이터, smoke test 인프라는 방치됩니다. DX(Developer Experience)가 고려되지 않아서, 테스트가 깨지면 고치는 비용이 초기 작성 비용보다 큽니다.</p>
+    <p>Agent는 "테스트를 작성하라"에는 반응하지만, "테스트가 지속적으로 유용하려면 무엇이 필요한가"에는 답하지 못합니다.</p>
+  </div>
+  <div class="issue-tags">
+    <span class="badge b-outcome">Outcome</span>
+    <span class="badge b-severity-mid">Mid impact</span>
+  </div>
+  <div class="issue-conn">연결: <code>#3</code> 시나리오-테스트와 짝, <code>#11</code> 피드백 루프</div>
+</div>
+
+<!-- SUMMARY TABLE ===================================================== -->
+<h2>전체 요약</h2>
+<table>
+  <thead>
+    <tr><th>#</th><th>문제</th><th>계층</th><th>영향</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>8</td><td>용어 미정렬</td><td><span class="badge b-foundation">Foundation</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>17</td><td>코딩 원칙 미정의</td><td><span class="badge b-foundation">Foundation</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>18</td><td>Skill/harness 통합 부재</td><td><span class="badge b-foundation">Foundation</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>22</td><td>자연어→agent 라우팅 없음</td><td><span class="badge b-foundation">Foundation</span></td><td><span class="badge b-severity-mid">Mid</span></td></tr>
+    <tr><td>1</td><td>큰 그림 못 봄</td><td><span class="badge b-cognition">Cognition</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>2</td><td>규칙 준수 보장 없음</td><td><span class="badge b-cognition">Cognition</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>12</td><td>Unknown unknowns</td><td><span class="badge b-cognition">Cognition</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>16</td><td>Caveman 모드 미유지</td><td><span class="badge b-cognition">Cognition</span></td><td><span class="badge b-severity-mid">Mid</span></td></tr>
+    <tr><td>3</td><td>시나리오-테스트 연결 없음</td><td><span class="badge b-process">Process</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>4</td><td>작업 후 문서화 누락</td><td><span class="badge b-process">Process</span></td><td><span class="badge b-severity-mid">Mid</span></td></tr>
+    <tr><td>7</td><td>Harness 실행 검증 불가</td><td><span class="badge b-process">Process</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>13</td><td>Worktree 패턴 미보장</td><td><span class="badge b-process">Process</span></td><td><span class="badge b-severity-mid">Mid</span></td></tr>
+    <tr><td>15</td><td>경직된 구조가 흐름 끊음</td><td><span class="badge b-process">Process</span></td><td><span class="badge b-severity-mid">Mid</span></td></tr>
+    <tr><td>20</td><td>작업 추적 repo 내부 한정</td><td><span class="badge b-process">Process</span></td><td><span class="badge b-severity-mid">Mid</span></td></tr>
+    <tr><td>23</td><td>Worktree ref hook 미검증</td><td><span class="badge b-process">Process</span></td><td><span class="badge b-severity-mid">Mid</span></td></tr>
+    <tr><td>5</td><td>Memory 관리 체계 없음</td><td><span class="badge b-outcome">Outcome</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>6</td><td>Context 오염</td><td><span class="badge b-outcome">Outcome</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>9</td><td>코드 패턴 불일치</td><td><span class="badge b-outcome">Outcome</span></td><td><span class="badge b-severity-mid">Mid</span></td></tr>
+    <tr><td>10</td><td>Cross-sprint 회귀</td><td><span class="badge b-outcome">Outcome</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>11</td><td>피드백 루프 미폐쇄</td><td><span class="badge b-outcome">Outcome</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>14</td><td>사용자 관찰 불가</td><td><span class="badge b-outcome">Outcome</span></td><td><span class="badge b-severity-high">High</span></td></tr>
+    <tr><td>19</td><td>Human-readable 문서 방치</td><td><span class="badge b-outcome">Outcome</span></td><td><span class="badge b-severity-mid">Mid</span></td></tr>
+    <tr><td>21</td><td>Smoke test/fixture 관리 부재</td><td><span class="badge b-outcome">Outcome</span></td><td><span class="badge b-severity-mid">Mid</span></td></tr>
+  </tbody>
+</table>
+
+<div class="callout callout-insight" style="margin-top:40px;">
+  <strong>최종 목표:</strong> 사람이 보지 않아도 알아서 잘 개발이 이루어지는 것.<br><br>
+  <strong>근본 원인:</strong> 쓰기는 하는데 읽히고, 유지되고, 일관성 있는지 확인하는 루프가 없다.<br><br>
+  <strong>우선순위:</strong> 기반(⑧⑰⑱) → 인지(①②⑫) → 프로세스/결과는 자연히 따라옴.
+</div>
+
+</div>
+</body>
+</html>

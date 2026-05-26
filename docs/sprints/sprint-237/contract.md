@@ -42,7 +42,7 @@ Phase 27) by:
    warning ("`N` rows have NULL — adding NOT NULL will fail"). Zero rows
    → no warning. The warning is informative only; it does NOT block
    preview / commit.
-5. Recording the Phase 27 closure markers — `memory/lessons/` 회고 1편,
+5. Recording the Phase 27 closure markers — `docs/archives/lessons/memory-lessons-2026-05-26/` 회고 1편,
    `docs/PLAN.md` Phase 27 status `진행 중` → `종료`, `memory/roadmap/`
    파리티 마일스톤 갱신.
 
@@ -171,8 +171,8 @@ Phase 27) by:
     2. Same flow, mocked `count_null_rows` resolves `0` → no warning
        element rendered.
 - **`AC-237-07`** — **Phase 27 closure markers**:
-  - New `memory/lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`
-    (or equivalent path under `memory/lessons/`) — 회고 1편 recording the
+  - New `docs/archives/lessons/memory-lessons-2026-05-26/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`
+    (or equivalent path under `docs/archives/lessons/memory-lessons-2026-05-26/`) — 회고 1편 recording the
     TablePlus 패리티 7단계 종료, key trade-offs, and the trigger for
     Phase 17–20 (MySQL / MariaDB / SQLite / Oracle) re-evaluation.
   - `docs/PLAN.md` Phase 27 status updated from `진행 중` to `종료`.
@@ -237,7 +237,7 @@ Phase 27) by:
     cases.
   - Quote of the diff line(s) in `docs/PLAN.md` flipping Phase 27 status,
     quote of the diff line in `memory/roadmap/memory.md`, and the
-    relative path of the new `memory/lessons/` retro file.
+    relative path of the new `docs/archives/lessons/memory-lessons-2026-05-26/` retro file.
 - Evaluator must cite:
   - File:line of `using_expression` added to `ColumnChange::Modify`.
   - File:line of the emitter branch in `mutations.rs`.
@@ -303,7 +303,7 @@ Phase 27) by:
    (or sibling).
 8. Run all 7 gates; fix; commit `feat(sprint-237): column MODIFY USING
    + null-conflict probe`.
-9. Add closure markers — `memory/lessons/parity-milestone/...
+9. Add closure markers — `docs/archives/lessons/memory-lessons-2026-05-26/parity-milestone/...
    /memory.md`, flip `docs/PLAN.md` Phase 27 status to `종료`, update
    `memory/roadmap/memory.md`. Commit `docs(sprint-237): phase 27
    closure markers`.
@@ -325,7 +325,7 @@ Phase 27) by:
   - `src/components/structure/ColumnsEditor.test.tsx` (or sibling)
   - `docs/PLAN.md` (Phase 27 status flip)
   - `memory/roadmap/memory.md` (parity milestone row)
-  - `memory/lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`
+  - `docs/archives/lessons/memory-lessons-2026-05-26/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`
     (new retro)
   - `docs/sprints/sprint-237/handoff.md` (new — appends or replaces
     legacy stub; recommended: replace, since legacy was a different

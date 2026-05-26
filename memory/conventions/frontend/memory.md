@@ -1,7 +1,7 @@
 ---
 title: Frontend guidance
 type: convention
-updated: 2026-05-20
+updated: 2026-05-26
 surface: src/**/*.ts, src/**/*.tsx, src/**/*.css
 task: frontend, ui, react-impl
 trigger:
@@ -69,6 +69,20 @@ backend contract 를 통해서만 다룬다.
   loading/error/session-only flag 를 durable/broadcast state 로 승격하지 않는다.
 - 새 persistent UI state 는 reset affordance 를 같은 PR 에 포함한다
   ([ux](../../ux/memory.md)).
+
+## Interaction edge rules
+
+- 비-form focus target (`div[role="textbox"]`, custom cell, chip 등) 은 `autoFocus`
+  에 기대지 않는다. ref + `useEffect` 로 active target 전이를 명시 focus 한다.
+- Tauri 2 + HTML5 drag/drop 은 window config/builder 의 OS drag-drop handler 를
+  명시 결정한다. 중첩 drop target 은 child 에서 `stopPropagation()` 하고 visual
+  drop extent 와 handler extent 를 맞춘다.
+- Toolbar / switcher 는 같은 의미의 active connection/db 에 대해 하나의 SoT 를
+  contract 에 적는다. active tab 이 없으면 workspace/sidebar 와 같은 fallback
+  순서 (`activeTab` -> focused connection/db) 를 쓴다.
+- Document/paradigm tree auto-load guard 는 `(connectionId, activeDb)` composite
+  key 로 둔다. DB switch 로 cache 를 비운 뒤 connectionId 만 보면 stale/empty
+  tree 를 다시 fetch 하지 못한다.
 
 ## Workflow
 

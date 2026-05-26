@@ -104,6 +104,15 @@ pre-commit:
       # 새 ADR (untracked → added) 은 OK. 결정 뒤집기는 새 ADR + supersedes.
       glob: "memory/decisions/**/*.md"
       run: bash scripts/hooks/check-adr-frozen.sh
+    memory-index-fresh:
+      glob: "memory/**/*.md"
+      run: bash scripts/hooks/check-memory-index-fresh.sh
+    memory-index-links:
+      glob: "memory/index/*.md"
+      run: bash scripts/hooks/check-memory-index-links.sh
+    memory-index-coverage:
+      glob: "memory/**/*.md"
+      run: bash scripts/hooks/check-memory-index-coverage.sh
 
 pre-push:
   # ADR 0044 (2026-05-20) — runtime E2E smoke 는 GitHub Actions remote
