@@ -113,6 +113,8 @@ pre-commit:
     memory-index-coverage:
       glob: "memory/**/*.md"
       run: bash scripts/hooks/check-memory-index-coverage.sh
+    skill-metadata:
+      run: bash scripts/hooks/check-skill-metadata.sh
 
 pre-push:
   # ADR 0044 (2026-05-20) — runtime E2E smoke 는 GitHub Actions remote

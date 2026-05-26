@@ -1,5 +1,7 @@
 ---
+name: remember
 title: /remember skill — 메모리 팔레스에 결정 / 룰 저장
+description: 대화에서 배운 결정 / 룰을 메모리 팔레스에 type 매트릭스 기준으로 저장.
 type: skill
 updated: 2026-05-26
 task: memory-write, remember

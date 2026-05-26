@@ -1,5 +1,7 @@
 ---
+name: split-memory
 title: /split-memory skill — 200줄 초과 분할
+description: 200줄을 넘는 memory.md 를 승인 기반으로 하위 memory room 으로 분할.
 type: skill
 updated: 2026-05-26
 task: memory-write, split
