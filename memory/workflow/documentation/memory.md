@@ -38,6 +38,12 @@ PR body 에 다음 섹션을 포함:
 - architecture/invariant 변경: 앞으로 지켜야 할 설계 제약.
 - deferred risk/follow-up 발생: 지금 안 고치는 이유와 추적 위치 필요.
 
+## 문서 언어
+
+Repo-owned 문서는 한국어 문장으로 작성한다. 예외는 파일명, 경로, 명령,
+frontmatter key, 코드 identifier, UI label 원문, 고유명사, 기존 외부 인용,
+archive 의 원문 보존이다.
+
 ## 기존 SOT 라우팅
 
 | 내용 | SOT |

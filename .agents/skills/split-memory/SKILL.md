@@ -12,8 +12,8 @@ trigger:
 
 # /split-memory skill
 
-`.claude/commands/split-memory.md` wrapper 가 가리키는 agent-agnostic source.
-모든 brain 공통.
+`.claude/commands/split-memory.md` wrapper 가 가리키는 브레인 공통 skill 원본.
+모든 agent 실행 환경에서 이 파일을 기준으로 한다.
 
 인자 (`$ARGUMENTS`): 분할할 `memory.md` 경로. 생략 시 200줄 초과 파일을 탐색해
 사용자에게 선택 요청.

@@ -10,7 +10,7 @@ trigger:
 
 # Harness workflow SOT
 
-`/harness` 의 source of truth. Skill/prompts/templates 는 실행 wrapper 이고,
+`/harness` 의 SOT. Skill/prompts/templates 는 실행 wrapper 이고,
 본 memory tree 가 설계/운영 규칙을 가진다.
 
 ## 방 지도
@@ -36,8 +36,8 @@ trigger:
 ## Artifact 위치
 
 - Sprint artifacts: `docs/sprints/sprint-N/`
-- Skill source: `.agents/skills/harness/`
-- Brain-specific skill copies: 금지. `.agents/skills/harness/` 를 직접 참조한다.
+- Skill 원본: `.agents/skills/harness/`
+- 브레인별 skill 복사본: 금지. `.agents/skills/harness/` 를 직접 참조한다.
 - Raw audit input: `docs/archives/audits/harness-issues-handoff-2026-05-25.md`
 
 ## 관련

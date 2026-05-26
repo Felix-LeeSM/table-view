@@ -1,16 +1,16 @@
-# `.codex/agents/` — Codex agent wrappers
+# `.codex/agents/` — Codex agent wrapper
 
-Codex currently exposes built-in sub-agent roles (`default`, `explorer`,
-`worker`) rather than arbitrary repo-defined agent names. These files are thin
-role wrappers and map each repo workflow to a Codex built-in role.
+Codex 는 임의의 repo-defined agent 이름 대신 내장 sub-agent role
+(`default`, `explorer`, `worker`) 을 제공한다. 이 파일들은 얇은 role
+wrapper 이며, repo workflow 를 Codex 내장 role 에 매핑한다.
 
-The source of truth remains `memory/`; these wrappers are pointers, not
-duplicated policy. Agent spawning follows the workflow memory and the active
-runtime's tool policy.
+SOT 는 `memory/` 에 있다. 이 wrapper 는 pointer 일 뿐, 정책 복사본이
+아니다. Agent spawn 은 workflow memory 와 현재 실행 환경의 tool policy 를
+따른다.
 
-## Mapping
+## 매핑
 
-| wrapper | Codex role | source |
+| wrapper | Codex role | 원본 |
 |---|---|---|
 | `bug-fix` | `worker` | `memory/workflow/bug-fix/memory.md` |
 | `tdd-generator` | `worker` | `.agents/skills/tdd/SKILL.md` + testing memory |
@@ -22,6 +22,6 @@ runtime's tool policy.
 | `codex-reviewer` | `default` | `memory/workflow/review/memory.md` |
 | `caveman-default` | `default` | `.agents/skills/caveman/SKILL.md` |
 
-Rules in Claude Code path-trigger wrappers are platform glue only. Their real
-content is in `memory/`, so no separate `.codex/rules/` copy is needed unless
-Codex adds a path-triggered rules mechanism.
+Claude Code path-trigger wrapper 의 rule 은 platform glue 일 뿐이다. 실제
+내용은 `memory/` 에 있으므로, Codex 가 path-triggered rules mechanism 을
+추가하기 전까지 별도 `.codex/rules/` 복사본은 만들지 않는다.

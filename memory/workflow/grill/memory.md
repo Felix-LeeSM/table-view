@@ -103,5 +103,5 @@ trigger:
 - [implementation](../implementation/memory.md) — grill lock 후 구현 phase
 - [remember](../../../.agents/skills/remember/SKILL.md) — resolved item 저장 라우팅
 - [decisions](../../decisions/memory.md) — ADR 작성/동결 규칙
-- `.agents/skills/grill-me/` — skill source (트리거 / 템플릿)
-- `.agents/skills/grill-with-memory/` — memory 동기화형 grill skill source
+- `.agents/skills/grill-me/` — skill 원본 (트리거 / 템플릿)
+- `.agents/skills/grill-with-memory/` — memory 동기화형 grill skill 원본
