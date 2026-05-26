@@ -32,7 +32,7 @@ caveman 모드. 작업 시 read:
 
 Codex / Cursor 도 같은 agent 개념 사용 시 본 wrapper 패턴을 base 로 — 각 brain
 별 디렉토리 (`.codex/agents/`, `.cursor/agents/`) 에 같은 구조. 본문 (룰) 은
-`memory/` 가 source.
+`memory/` 또는 `.agents/skills/` 가 source.
 
 ## 관련
 
@@ -41,5 +41,5 @@ Codex / Cursor 도 같은 agent 개념 사용 시 본 wrapper 패턴을 base 로
 - `memory/workflow/memory.md` — 협업 phase 룰
 - `memory/conventions/memory.md` — 코드 룰 (caveman 포함)
 - `.claude/rules/README.md` — auto-load rule wrapper 정책
-- `memory/skills/memory.md` — slash command wrapper 정책 (commands/ 디렉토리는
+- `.agents/skills/README.md` — slash command wrapper 정책 (commands/ 디렉토리는
   README.md 두면 slash command 로 잘못 등록되므로 정책을 source room 에 보관)

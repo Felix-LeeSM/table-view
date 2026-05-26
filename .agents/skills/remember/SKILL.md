@@ -1,7 +1,7 @@
 ---
 title: /remember skill — 메모리 팔레스에 결정 / 룰 저장
 type: skill
-updated: 2026-05-18
+updated: 2026-05-26
 task: memory-write, remember
 trigger:
   signal: 사용자가 /remember 호출 / "기억해" 발언
@@ -10,7 +10,8 @@ trigger:
 
 # /remember skill
 
-`.claude/commands/remember.md` wrapper 가 가리키는 source. 모든 brain 공통.
+`.claude/commands/remember.md` wrapper 가 가리키는 agent-agnostic source.
+모든 brain 공통.
 
 인자 (`$ARGUMENTS`) + 최근 대화 맥락을 분석해, type 매트릭스 중 가장 적합한
 한 곳에 저장.
@@ -23,7 +24,7 @@ trigger:
 | 사용자 협업 phase 행동 룰 (grill / bug-fix / commit / cleanup) | `workflow-rule` | `memory/workflow/<phase>/memory.md` 또는 sub-room |
 | 제품 UX 머지 기준 (영속 reset 등) | `ux-rule` | `memory/ux/memory.md` 또는 sub-room |
 | 실행 절차 (cold-boot 측정 등) | `runbook` | `memory/runbook/<topic>/memory.md` |
-| Slash command / skill body (`/remember`, `/split-memory` 등) | `skill` | `memory/skills/<name>/memory.md` (wrapper: `.claude/commands/<name>.md`) |
+| Slash command / skill body (`/remember`, `/split-memory` 등) | `skill` | `.agents/skills/<name>/SKILL.md` (wrapper: `.claude/commands/<name>.md`) |
 | 외부 도구 사용법 | `reference` | `memory/reference/<tool>/memory.md` 또는 **미이동** + 사용자 질의 옵션 |
 | 트레이드오프 있는 결정 | `ADR` | `memory/decisions/NNNN-<slug>/memory.md` |
 | 실패·성공·재발 방지 | 관련 `convention` / `workflow-rule` / `runbook` / `ux-rule` / `topic` 으로 해석 | raw 원문은 필요 시 `docs/archives/lessons/`, active SOT 는 관련 `memory/**/memory.md` |
@@ -104,6 +105,8 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
 
 - 200줄 초과 예상 시 즉시 분할 금지. 경고 출력 + `/split-memory` 안내.
 - `memory/` 트리는 `memory.md` 만 (예외: `memory/index/*.md`). 다른 이름 금지.
+- Skill body 는 `memory/` 에 두지 않는다. `.agents/skills/<name>/SKILL.md` 로
+  두고 brain-specific wrapper 는 redirect 만 한다.
 - ADR 본문 동결 — 수정 금지. 메타 필드 (`status`, `superseded_by`) 만 갱신.
 - `CLAUDE.md` 수정 금지 (자동 — 손 댈 일 거의 없음).
 - auto-memory 와 중복 저장 금지 — repo 가 source of truth.

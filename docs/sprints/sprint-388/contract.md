@@ -45,7 +45,7 @@ scope) 만 pr-reviewer agent 가 평가. agent spawn = PR 당 1회.
    - pr-reviewer spawn 1회 (default)
    - codex-reviewer 사용자 명시 시만
    - 자율 머지 조건: 정성 ≥ 7/10 + CI green + 사용자 거부 없음
-10. **harness skill 분리** — `.claude/skills/harness/prompts/evaluator.md` (skill
+10. **harness skill 분리** — `.agents/skills/harness/prompts/evaluator.md` (skill
     plugin 의 evaluator) 는 **건드리지 않음**. 본 sprint 의 pr-reviewer 룰
     (`memory/workflow/review/memory.md`) 은 repo 자체 source, harness skill 의
     evaluator prompt 와 직교 — 두 룰 독립 진화. agent 이름을 `pr-reviewer` 로
@@ -65,7 +65,7 @@ scope) 만 pr-reviewer agent 가 평가. agent spawn = PR 당 1회.
 - 기존 hook scripts 호출 경로 unchanged.
 - `memory/` 트리는 여전히 `memory.md` 만. 신설 디렉토리에 index 포함.
 - pr-reviewer agent frontmatter (`name`, `tools`, `model`) 보존.
-- `.claude/skills/harness/prompts/evaluator.md` (skill plugin) 는 **건드리지
+- `.agents/skills/harness/prompts/evaluator.md` (skill source) 는 **건드리지
   않음** — skill 영역 분리 원칙.
 
 ## Acceptance Criteria
@@ -95,7 +95,7 @@ scope) 만 pr-reviewer agent 가 평가. agent spawn = PR 당 1회.
   3개.
 - `AC-388-11` `memory/workflow/delivery/memory.md` T4 review step 갱신 +
   자율 머지 조건 명시.
-- `AC-388-12` `.claude/skills/harness/prompts/evaluator.md` unchanged (skill
+- `AC-388-12` `.agents/skills/harness/prompts/evaluator.md` unchanged (skill
   plugin 영역 분리, 본 sprint 가 손대지 않음). 본 repo 의 review agent 이름은
   `pr-reviewer` — skill 의 `evaluator` 와 명확히 구분.
 - `AC-388-13` `bash scripts/check-memory-structure.sh` exit 0 (본 sprint 후

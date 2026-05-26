@@ -36,7 +36,8 @@ trigger:
 ## Artifact 위치
 
 - Sprint artifacts: `docs/sprints/sprint-N/`
-- Skill runner: `.codex/skills/harness/`, `.claude/skills/harness/`
+- Skill source: `.agents/skills/harness/`
+- Runtime wrappers: `.codex/skills/harness/`, `.claude/skills/harness/`
 - Raw audit input: `docs/archives/audits/harness-issues-handoff-2026-05-25.md`
 
 ## 관련

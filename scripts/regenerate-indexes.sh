@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Index 자동 생성.
 #
-# `memory/**/memory.md` frontmatter (yq 또는 awk) 의
+# `memory/**/memory.md` 와 `.agents/skills/*/SKILL.md` frontmatter (yq 또는 awk) 의
 #   - `task:` (작업 의도 키워드, 콤마 분리)
 #   - `surface:` (코드 영역 / 모듈, 콤마 분리)
 # 필드를 읽어 `memory/index/by-task.md` + `memory/index/by-surface.md` 재생성.
@@ -23,9 +23,10 @@ mkdir -p "$INDEX_DIR"
 # Awk 가 frontmatter 의 task / surface 필드 + 첫 # 헤더 + path 추출.
 # 각 메모리 파일 한 줄: <task_csv>|<surface_csv>|<path>|<title>
 extract() {
-  find memory -name "memory.md" \
-    -not -path "memory/index/*" \
-    | sort \
+  {
+    find memory -name "memory.md" -not -path "memory/index/*"
+    find .agents/skills -name "SKILL.md" 2>/dev/null
+  } | sort \
     | while read -r f; do
         awk -v file="$f" '
           BEGIN { in_fm=0; fm_seen=0; task=""; surface=""; title="" }

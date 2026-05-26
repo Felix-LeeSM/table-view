@@ -137,7 +137,7 @@ scope 밖 touch 가 필요해 보이면 STOP — assumption 으로 surface.
 - **Residual risk or verification gaps** — A5/A6 가 노출되어야 끝나는 표면
   (예: `find_one` 의 grid/scalar 렌더링 분기는 A6 에서 확정).
 
-## TDD Workflow Reminder (per `.claude/skills/tdd`)
+## TDD Workflow Reminder (per `.agents/skills/tdd`)
 
 Vertical slice — 한 메서드씩 RED→GREEN:
 

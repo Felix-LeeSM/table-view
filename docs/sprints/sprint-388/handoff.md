@@ -36,7 +36,7 @@ layer (pr-reviewer agent 1 spawn). 다음 PR 부터 본 룰 적용.
 
 | 동작 | 차단 |
 |---|---|
-| `.claude/skills/<x>/` 수정 | PreToolUse Edit|Write hard block (사용자 지적 lock) |
+| `.claude/skills/<x>/` 수정 | PreToolUse Edit|Write wrapper cap / source 분리 확인 |
 | `.env*`, `.claude/settings.local.json` 수정 | PreToolUse hard block (기존) |
 | ADR 본문 수정 | pre-commit `adr-frozen` (frontmatter 메타만 허용) |
 | `git push --force` (사용자 미승인) | Bash PreToolUse `check-dangerous-bash` |
@@ -72,7 +72,7 @@ layer (pr-reviewer agent 1 spawn). 다음 PR 부터 본 룰 적용.
 
 - review 룰 source: `memory/workflow/review/memory.md` 단일. wrapper / agent
   prompt 가 본 방을 가리킴.
-- `.claude/skills/<x>/` **수정 금지** — plugin 영역 분리 원칙.
+- `.claude/skills/<x>/` 는 thin wrapper 만 — skill source 는 `.agents/skills/<x>/`.
 - hook script 의 anchor / 패턴 결함 발견 시 lesson 기록 + script fix (sprint-
   387 의 bash-c bypass 와 동일 패턴).
 - contract frontmatter 의 `review-profile` 누락 시 pr-reviewer 가 기본 매트릭스
@@ -83,7 +83,7 @@ layer (pr-reviewer agent 1 spawn). 다음 PR 부터 본 룰 적용.
 - code profile sprint 실제 사용 시 — `[RED]` commit 강제 동작 확인.
 - pr-reviewer agent 가 정성 3 차원 + profile 분기 정확히 적용하는지 PR comment
   품질 점검.
-- `.claude/skills/<x>/` 수정 시도 시 PreToolUse hard block 확인.
+- `.claude/skills/<x>/` wrapper 가 15줄 cap 을 넘지 않는지 확인.
 - `scripts/review/run-checks.sh` 의 contract 파서가 실제 sprint contract 들의
   Required Checks 섹션을 일관되게 처리하는지 확인 (현재 sprint-388 contract
   로 smoke 만).

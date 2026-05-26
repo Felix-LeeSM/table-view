@@ -86,7 +86,7 @@ If a touch outside this list seems necessary, STOP and surface it as an assumpti
 - **Assumptions made during implementation** — e.g. "chose handwritten parser over WASM because bundle-size cost of WASM mongosh-parser exceeds 200KB" (or whatever the actual decision is).
 - **Residual risk or verification gaps** — anything the parser cannot yet handle that future slices will need (e.g. `bulkWrite` op shapes that are sparsely tested).
 
-## TDD Workflow Reminder (per `.claude/skills/tdd`)
+## TDD Workflow Reminder (per `.agents/skills/tdd`)
 
 The TDD skill is loaded — follow it strictly:
 1. **Plan**: list the testable behaviours from the AC matrix (32 behaviours = 13 happy + 6 BSON + 13 refusal). Prioritize the "tracer bullet" — a single happy-path `find()` parse — first.

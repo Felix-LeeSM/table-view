@@ -148,10 +148,19 @@ generator: scripts/regenerate-indexes.sh
 
 - [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
 
+### memory-index
+
+- [팔레스 입구](../../memory/memory.md)
+
+### memory-sot
+
+- [팔레스 입구](../../memory/memory.md)
+
 ### memory-write
 
-- [/remember skill](../../memory/skills/remember/memory.md)
-- [/split-memory skill](../../memory/skills/split-memory/memory.md)
+- [/remember skill](../../.agents/skills/remember/SKILL.md)
+- [/split-memory skill](../../.agents/skills/split-memory/SKILL.md)
+- [팔레스 입구](../../memory/memory.md)
 
 ### merge
 
@@ -268,7 +277,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### remember
 
-- [/remember skill](../../memory/skills/remember/memory.md)
+- [/remember skill](../../.agents/skills/remember/SKILL.md)
 
 ### review
 
@@ -315,7 +324,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### split
 
-- [/split-memory skill](../../memory/skills/split-memory/memory.md)
+- [/split-memory skill](../../.agents/skills/split-memory/SKILL.md)
 
 ### sprint
 

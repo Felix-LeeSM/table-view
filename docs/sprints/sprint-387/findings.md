@@ -16,7 +16,7 @@ date: 2026-05-18
 | 387-04 (hook script multi-input) | PASS | env / argv / stdin JSON 3입력 smoke 통과 |
 | 387-05 (`.claude/rules/*.md` ≤ 20줄) | PASS | 6파일 모두 8~16줄, paths frontmatter 보존 |
 | 387-06 (`.claude/commands/*.md` ≤ 15줄) | PASS | 2파일 모두 7~11줄, description 보존 |
-| 387-07 (`memory/skills/{remember,split-memory}/memory.md`) | PASS | 122 / 33줄 신설 |
+| 387-07 (`.agents/skills/{remember,split-memory}/SKILL.md`) | PASS | 122 / 33줄 신설 |
 | 387-08 (worktree script + `--help`) | PASS | spawn / cleanup `--help` 모두 exit 0 |
 | 387-09 (`memory/runbook/worktree/memory.md`) | PASS | 50+줄, 사용 시점 + 명령 + 격리 동작 + 책임 + 주의 |
 | 387-10 (`check-memory-structure.sh`) | PASS | exit 0 |
@@ -75,8 +75,8 @@ path 점프.
   - `memory/workflow/git-policy/memory.md` (60줄)
   - `memory/conventions/rust/memory.md` (76줄)
   - `memory/conventions/react/memory.md` (102줄)
-  - `memory/skills/remember/memory.md` (122줄)
-  - `memory/skills/split-memory/memory.md` (33줄)
+  - `.agents/skills/remember/SKILL.md` (122줄)
+  - `.agents/skills/split-memory/SKILL.md` (33줄)
 
 ### 5. Worktree 인프라
 

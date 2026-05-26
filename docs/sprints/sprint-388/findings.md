@@ -54,7 +54,7 @@ date: 2026-05-18
 
 ### 3. Hook 등록
 
-- `.claude/settings.json` PreToolUse Edit|Write 에 `.claude/skills/**` hard block 추가
+- `.claude/settings.json` PreToolUse Edit|Write 에 `.claude/skills/**` wrapper guard 추가
 - `.claude/settings.json` PostToolUse Edit|Write 에 `check-wrapper-cap.sh` 등록
 - `lefthook.yml` pre-commit 에 `adr-frozen` stage
 - `lefthook.yml` pre-push 에 `8_check-tdd-cycle` stage
@@ -81,7 +81,7 @@ sprint-387 의 skills index 누락 같은 결함 재발 방지의 일환.
 ## 사용자 지적 사항
 
 **중간 발견 1 — skill 영역 침범 (anti-pattern)**: 사용자가 즉시 지적.
-`.claude/skills/harness/prompts/evaluator.md` 본문 deprecate 시도 → revert →
+`.agents/skills/harness/prompts/evaluator.md` 본문 deprecate 시도 → revert →
 정합성 차원에 카테고리 추가 + PreToolUse hard block + lesson 기록.
 
 **중간 발견 2 — 정합성 차원 보강 요청**: skill 영역 침범 같은 안티패턴을

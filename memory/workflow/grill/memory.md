@@ -55,7 +55,7 @@ trigger:
 - `open <path>` Bash 자동 — 사용자 path 복사 안 해도 됨.
 - mock 은 sprint planning input → contract 첨부.
 
-템플릿: `.claude/skills/grill-me/templates/option-comparison.html`.
+템플릿: `.agents/skills/grill-me/templates/option-comparison.html`.
 
 ## 4. 보안 영역 — threat-model 핸드오프 먼저
 
@@ -78,7 +78,7 @@ trigger:
 ### 저장 라우팅
 
 - 용어 / 도메인 언어: [terminology](../../terminology/memory.md) 에 먼저 저장한다.
-- 협업 룰: `/remember` 의 type 매트릭스 ([remember](../../skills/remember/memory.md))
+- 협업 룰: `/remember` 의 type 매트릭스 ([remember](../../../.agents/skills/remember/SKILL.md))
   로 위치를 계산한다.
 - Hard decision: 아래 3조건을 모두 만족할 때만 ADR
   ([decisions](../../decisions/memory.md)) 을 제안/작성한다.
@@ -101,7 +101,7 @@ trigger:
 - [security-handoff](./security-handoff/memory.md) — 보안 grill 의 사전 단계
 - [bug-fix](../bug-fix/memory.md) — 사용자 보고가 명확치 않을 때 grill 으로 증상 lock 먼저
 - [implementation](../implementation/memory.md) — grill lock 후 구현 phase
-- [remember](../../skills/remember/memory.md) — resolved item 저장 라우팅
+- [remember](../../../.agents/skills/remember/SKILL.md) — resolved item 저장 라우팅
 - [decisions](../../decisions/memory.md) — ADR 작성/동결 규칙
-- `.claude/skills/grill-me/` — skill 자체 (트리거 / 템플릿)
-- `.claude/skills/grill-with-memory/`, `.codex/skills/grill-with-memory/` — memory 동기화형 grill wrapper
+- `.agents/skills/grill-me/` — skill source (트리거 / 템플릿)
+- `.claude/skills/grill-with-memory/`, `.codex/skills/grill-with-memory/` — memory 동기화형 grill runtime wrapper

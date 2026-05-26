@@ -2,6 +2,7 @@
 title: Table View — 팔레스 입구
 type: index
 updated: 2026-05-17
+task: memory-write, memory-index, memory-sot
 ---
 
 # 팔레스 입구
@@ -40,14 +41,12 @@ updated: 2026-05-17
 - [ux](./ux/memory.md) — UX 머지 기준 (영속 상태 reset 등)
 - [runbook](./runbook/memory.md) — 절차 (cold-boot 측정, multi-agent worktree 등)
   - [runbook/worktree](./runbook/worktree/memory.md) — git worktree 다중 agent 격리 룰
-- [skills](./skills/memory.md) — slash command / skill body source
-  - [skills/remember](./skills/remember/memory.md) — `/remember` (8 type 매트릭스)
-  - [skills/split-memory](./skills/split-memory/memory.md) — `/split-memory` (200줄 분할)
 - [roadmap](./roadmap/memory.md) — 현재 Phase 상태, 진행 중 스프린트
 - [decisions](./decisions/memory.md) — ADR 이력 (과거 결정, 대체 관계)
 - [index/by-task](./index/by-task.md) — 작업 type → 관련 룰/방 묶음 (읽는 자용 cross-link)
 - [index/by-surface](./index/by-surface.md) — 코드 surface → 관련 SOT 묶음
 - [docs/archives](../docs/archives/README.md) — raw audit / history / old decisions / raw lessons. 기본 read 대상 아님.
+- [.agents/skills](../.agents/skills/README.md) — agent-agnostic skill body source. `memory/` 에 skill body 를 두지 않는다.
 
 ## 프로젝트 한줄 요약
 

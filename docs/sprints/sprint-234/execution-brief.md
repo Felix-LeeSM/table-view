@@ -42,7 +42,7 @@ first — this brief assumes the AC list is in your working set.
 9. `src-tauri/src/models/schema.rs` (lines 215-226 = `CreateTableRequest`).
    New optional field added at the bottom (preserves field declaration
    order).
-10. `.claude/skills/harness/templates/handoff.md` — Generator self-report
+10. `.agents/skills/harness/templates/handoff.md` — Generator self-report
     skeleton.
 
 ## Order of operations

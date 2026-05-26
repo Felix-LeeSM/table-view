@@ -160,6 +160,7 @@ run_case "main: docs orchestration allowed" 0 main-path "docs/PLAN.md"
 run_case "main: Claude settings allowed" 0 main-path ".claude/settings.json"
 run_case "main: AGENTS allowed" 0 main-path "AGENTS.md"
 run_case "main: markdown allowed" 0 main-path "notes/review.md"
+run_case "main: agent skills source allowed" 0 main-path ".agents/skills/tdd/SKILL.md"
 run_case "main: Codex skills orchestration allowed" 0 main-path ".codex/skills/tdd/SKILL.md"
 run_case "main: non-source Tauri asset allowed" 0 main-path "src-tauri/icons/icon.png"
 
@@ -190,6 +191,11 @@ run_codex_hook_case \
 	"Codex hook: .codex skills allowed" \
 	"Edit" \
 	'{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":".codex/skills/tdd/SKILL.md"}}' \
+	allow
+run_codex_hook_case \
+	"Codex hook: .agents skills source allowed" \
+	"Edit" \
+	'{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":".agents/skills/tdd/SKILL.md"}}' \
 	allow
 run_codex_hook_case \
 	"Codex hook: Bash source write denied" \

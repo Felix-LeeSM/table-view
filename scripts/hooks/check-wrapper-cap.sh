@@ -5,6 +5,8 @@
 #   .codex/agents     ≤ 15 줄
 #   .claude/rules     ≤ 20 줄
 #   .claude/commands  ≤ 15 줄
+#   .claude/skills/*/SKILL.md ≤ 15 줄
+#   .codex/skills/*/SKILL.md  ≤ 15 줄
 # README.md 는 skip (디렉토리 정책 문서).
 # 기본 동작: violation 있어도 경고만 (exit 0). --strict 시 violation 있으면 exit 1.
 # PostToolUse hook 으로 등록 시 stderr 경고만 → agent 가 즉시 보고 fix.
@@ -37,16 +39,36 @@ check_dir() {
 
 		if [ "$lines" -gt "$cap" ]; then
 			echo "⚠️  wrapper cap: $f — $lines 줄 (cap $cap)."
-			echo "    본문은 memory/ 의 source room 으로 옮기고 wrapper 는 redirect 만."
+			echo "    본문은 memory/ 또는 .agents/skills/ source 로 옮기고 wrapper 는 redirect 만."
 			violations=$((violations + 1))
 		fi
 	done
+}
+
+check_skill_dir() {
+	local dir="$1"
+	local cap="$2"
+
+	[ -d "$dir" ] || return 0
+
+	while IFS= read -r -d '' f; do
+		local lines
+		lines=$(wc -l < "$f" | tr -d ' ')
+
+		if [ "$lines" -gt "$cap" ]; then
+			echo "⚠️  skill wrapper cap: $f — $lines 줄 (cap $cap)."
+			echo "    본문은 .agents/skills/ source 로 옮기고 runtime wrapper 는 redirect 만."
+			violations=$((violations + 1))
+		fi
+	done < <(find "$dir" -mindepth 2 -maxdepth 2 -name SKILL.md -print0)
 }
 
 check_dir ".claude/agents" 15
 check_dir ".codex/agents" 15
 check_dir ".claude/rules" 20
 check_dir ".claude/commands" 15
+check_skill_dir ".claude/skills" 15
+check_skill_dir ".codex/skills" 15
 
 if [ "$violations" -gt 0 ] && [ "$STRICT" = "1" ]; then
 	exit 1

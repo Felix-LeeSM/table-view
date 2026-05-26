@@ -19,7 +19,7 @@ Sprint 386 의 agent harness 를 **multi-brain ready** 로 진화. 본문 (룰 s
   머리에 붙음. 본문은 "memory/X 를 read 해" 명령만. read 가 *조건부* 인 경우
   (예: 보안 키워드 / 변경 500줄 이상) 진짜 lazy.
 - slash command `/remember`, `/split-memory` 호출 시 wrapper 의 1줄 redirect
-  → assistant 가 `memory/skills/.../memory.md` 본문 read.
+  → assistant 가 `.agents/skills/.../SKILL.md` 본문 read.
 
 ### Codex (미적용 — handoff 대상)
 
@@ -52,7 +52,7 @@ Sprint 386 의 agent harness 를 **multi-brain ready** 로 진화. 본문 (룰 s
 
 - Source-of-truth: `memory/`. wrapper 수정 시 반드시 `memory/` 본문도 같이
   수정. 그 반대도 동일.
-- `memory/skills/*` 의 본문 변경 시 `.claude/commands/*.md` 의 redirect 만
+- `.agents/skills/*` 의 본문 변경 시 `.claude/commands/*.md` 의 redirect 만
   유지하면 자동 동기. 추가 작업 0.
 - `.claude/rules/*.md` 의 `paths` frontmatter 는 Claude Code 의 auto-load
   trigger — 본 trigger 가 깨지면 wrapper 가 매치되지 않아 redirect 가 의미

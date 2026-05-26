@@ -5,5 +5,5 @@ tools: [Read, Grep, Glob]
 model: opus
 ---
 
-`.claude/skills/caveman/SKILL.md` 발동. 출력 caveman 모드. 보안 경고 / 돌이킬 수
+`.agents/skills/caveman/SKILL.md` 발동. 출력 caveman 모드. 보안 경고 / 돌이킬 수
 없는 작업 / 다단계 / 사용자 반복 질문은 잠시 끄고 명확하게.

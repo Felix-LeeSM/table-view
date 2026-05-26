@@ -19,7 +19,7 @@
 | 4 | feedback_security_rigor | `memory/workflow/grill/security-handoff/memory.md` | 원본 보존 |
 | 5 | feedback_one_decision_at_a_time | `memory/workflow/grill/memory.md` 본문 | 원본 보존 |
 | 6 | feedback_option_decomposition | `memory/workflow/grill/memory.md` 본문 | reframe — "기술 + 유저 플로우 두 축" |
-| 7 | feedback_demo_html_for_grill | `memory/workflow/grill/memory.md` 본문 + `.claude/skills/grill-me/templates/option-comparison.html` | reframe — UI/복잡 워크플로우/예측 트리거, 동적 인터랙션 우선 |
+| 7 | feedback_demo_html_for_grill | `memory/workflow/grill/memory.md` 본문 + `.agents/skills/grill-me/templates/option-comparison.html` | reframe — UI/복잡 워크플로우/예측 트리거, 동적 인터랙션 우선 |
 | 8 | feedback_minimal_implementation_logs | `memory/workflow/implementation/memory.md` | reframe — agent 자율성 + tool noise 차단 |
 | 9 | feedback_reset_to_default_ui | `memory/ux/memory.md` (ux 방 신설) | 원본 보존 |
 | 10 | feedback_do_not_commit_diagnostic_logs | `memory/conventions/memory.md` 금지 사항 확장 | 일반화 (console.log → 임시 진단 일반) |
@@ -196,7 +196,7 @@
 ## Ownership
 
 - Generator: orchestrator 본인 (또는 `tdd-generator` agent spawn — 본 sprint 자체가 generator 정의 작성이라 self-bootstrap 단계라서 orchestrator 직접 추천).
-- Write scope: `memory/**`, `.claude/agents/**`, `.claude/commands/remember.md`, `.claude/skills/grill-me/templates/**`, `.claude/settings.json` (hook 등록), `scripts/check-god-file.sh`, `scripts/regenerate-indexes.sh`, `eslint.config.js` (max-lines), `src-tauri/clippy.toml` (선택), `docs/sprints/sprint-386/**`.
+- Write scope: `memory/**`, `.claude/agents/**`, `.claude/commands/remember.md`, `.agents/skills/grill-me/templates/**`, `.claude/settings.json` (hook 등록), `scripts/check-god-file.sh`, `scripts/regenerate-indexes.sh`, `eslint.config.js` (max-lines), `src-tauri/clippy.toml` (선택), `docs/sprints/sprint-386/**`.
 - Merge order: 메모리 이동 → 신규 방 본문 → agent definition → hook → skill 갱신 → index 생성 → 검증 → handoff → commit (delivery agent 패턴 self-적용).
 
 ## Exit Criteria

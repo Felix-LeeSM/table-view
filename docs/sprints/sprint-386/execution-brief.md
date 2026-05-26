@@ -62,7 +62,7 @@ Memory palace + agent harness 인프라 개선. auto-memory 협업 룰 12 항목
 - Relevant files:
   - 현 `memory/memory.md` 및 자식 방 8개 (architecture/, conventions/, decisions/, lessons/, roadmap/)
   - `/Users/felix/.claude/projects/-Users-felix-Desktop-study-view-table/memory/` (auto-memory 14 파일)
-  - `.claude/skills/` 13 skill, `.claude/commands/remember.md`, `.claude/commands/split-memory.md`
+  - `.agents/skills/` source, `.claude/commands/remember.md`, `.claude/commands/split-memory.md`
   - `.claude/hooks/pre-bash.sh`, `.claude/settings.json`, `lefthook.yml`
   - `.claude/rules/git-policy.md`, `.claude/rules/test-scenarios.md`
   - `eslint.config.js`, `src-tauri/clippy.toml` (있다면)

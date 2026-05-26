@@ -89,7 +89,7 @@
 
 - `.claude/commands/remember.md` (MODIFIED — type 매트릭스)
 - `.claude/rules/git-policy.md` (MODIFIED — delivery 책임)
-- `.claude/skills/grill-me/templates/option-comparison.html` (NEW)
+- `.agents/skills/grill-me/templates/option-comparison.html` (NEW)
 - `.claude/settings.json` (MODIFIED — PostToolUse 2 entry)
 
 ### Scripts (2 신규 / 1 수정)
