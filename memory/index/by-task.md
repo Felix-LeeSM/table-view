@@ -55,6 +55,7 @@ generator: scripts/regenerate-indexes.sh
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
+- [PR Review Behavior](../../memory/workflow/review/memory.md)
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
 ### docs
@@ -131,7 +132,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### pr-reviewer
 
-- [PR Review](../../memory/workflow/review/memory.md)
+- [PR Review Behavior](../../memory/workflow/review/memory.md)
 
 ### pre-commit
 
@@ -141,10 +142,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [Hook validation gate principle](../../memory/workflow/hooks/memory.md)
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
-
-### profile
-
-- [PR Review](../../memory/workflow/review/memory.md)
 
 ### push
 
@@ -185,16 +182,12 @@ generator: scripts/regenerate-indexes.sh
 - [Engineering](../../memory/engineering/memory.md)
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
-- [PR Review](../../memory/workflow/review/memory.md)
+- [PR Review Behavior](../../memory/workflow/review/memory.md)
 
 ### rust-impl
 
 - [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
 - [Rust 컨벤션](../../memory/engineering/conventions/rust/memory.md)
-
-### scorecard
-
-- [PR Review](../../memory/workflow/review/memory.md)
 
 ### spawn-verify
 

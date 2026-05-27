@@ -1,7 +1,7 @@
 ---
 title: Table View — 팔레스 입구
 type: index
-updated: 2026-05-17
+updated: 2026-05-27
 ---
 
 # 팔레스 입구
@@ -18,7 +18,7 @@ updated: 2026-05-17
 ## 5분 path
 
 - 작업이 *코드 변경* → [engineering/conventions](./engineering/conventions/memory.md) (Rust/TS/테스트/주석/refactoring/god-file).
-- 작업이 *사용자 협업* → [workflow](./workflow/memory.md) (bug-fix / implementation / delivery).
+- 작업이 *사용자 협업* → [workflow](./workflow/memory.md) (행동 계약).
 - 작업이 *제품/UX* → [product](./product/memory.md).
 - 작업이 *운영 절차* → [runbook](./runbook/memory.md).
 - 미래 목표 / 다음 후보 → [docs/ROADMAP.md](../docs/ROADMAP.md).
@@ -32,7 +32,7 @@ updated: 2026-05-17
   - [engineering/conventions/e2e-scenarios](./engineering/conventions/e2e-scenarios/memory.md) — E2E 시나리오 설계
   - [engineering/conventions/rust](./engineering/conventions/rust/memory.md) — Rust 컨벤션 전체 (`.claude/rules/rust-conventions.md` source)
   - [engineering/conventions/react](./engineering/conventions/react/memory.md) — React/TS 컨벤션 전체 (`.claude/rules/react-conventions.md` source)
-- [workflow](./workflow/memory.md) — User-Claude 협업 phase 룰 (bug-fix / implementation / delivery / git-policy)
+- [workflow](./workflow/memory.md) — User-Claude 협업 phase 행동 계약 (bug-fix / implementation / delivery / review / git-policy)
   - [workflow/git-policy](./workflow/git-policy/memory.md) — hook 회피 금지 (`.claude/rules/git-policy.md` source)
 - [product](./product/memory.md) — 제품/UX 머지 기준 (영속 상태 reset 등)
 - [runbook](./runbook/memory.md) — 절차 (multi-agent worktree 등)
@@ -40,6 +40,8 @@ updated: 2026-05-17
 - 결정 / grill 은 memory workflow 가 아니라 `.agents/skills/grill-me/SKILL.md`
   또는 `.agents/skills/grill-with-memory/SKILL.md` 를 따른다.
   보안 결정도 `grill-me` skill 의 보안 결정 섹션을 따른다.
+- 긴 절차, 평가 매트릭스, 대화 방식, 구현 방법론은 workflow memory 가 아니라
+  `.agents/skills/*` 를 따른다. workflow 는 행동 계약과 skill pointer 만 둔다.
 - [index/by-task](./index/by-task.md) — 작업 type → 관련 룰/방 묶음 (읽는 자용 cross-link)
 - [index/by-surface](./index/by-surface.md) — 코드 surface → 관련 active rule 묶음
 

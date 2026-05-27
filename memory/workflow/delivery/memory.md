@@ -28,8 +28,8 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 3. **T3 PR** — `gh pr create`. body 는 Summary / Changes / Invariants / Test plan / Smoke impact / Documentation impact / Links.
 4. **T4 Review** — `pr-reviewer` agent spawn (1회, default 자동):
    - 정량은 자동 layer (hook / lint / pre-push / scripts/review/run-checks.sh) 가 이미 함
-   - pr-reviewer 는 정성 차원 + documentation topology 를 평가
-   - 출력: scorecard PR comment (`memory/workflow/review/memory.md` 형식)
+   - pr-reviewer 는 `.agents/skills/pr-review/SKILL.md` 를 적용
+   - 출력: scorecard PR comment
    - **외부 옵션**: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가
 5. **T5 Reflect/Fix** — 결함 발견 시 delivery owner 가 fix commit + push → T4 재시작
 6. **T6 Merge or Blocked report** — 자율 머지 조건:
@@ -71,7 +71,7 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 
 ## Agent spawn 권장
 
-- 리뷰: orchestrator 자기 리뷰 = 편향. `pr-reviewer` agent (`.claude/agents/pr-reviewer.md`) spawn 으로 독립 평가. [review](../review/memory.md) 룰 적용.
+- 리뷰: orchestrator 자기 리뷰 = 편향. `pr-reviewer` agent (`.claude/agents/pr-reviewer.md`) spawn 으로 독립 평가. [review](../review/memory.md) 행동 계약과 `.agents/skills/pr-review/SKILL.md` 적용.
 - 외부 시각 필요 시 `codex-reviewer` (사용자 명시 시만, 자동 호출 X).
 - Multi-worktree 병렬 시 각 worktree 의 delivery 도 delivery owner 가 소유.
   reviewer 는 read-only, merge 는 delivery owner 책임.
@@ -85,7 +85,8 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 - `.claude/rules/git-policy.md` — `--no-verify` / `LEFTHOOK=0` 금지 + hook 강제
 - `.claude/agents/delivery.md` — 본 룰 enforce agent
 - `.claude/agents/pr-reviewer.md` — T4 review spawn 대상
-- [review](../review/memory.md) — T4 review 룰 (정성 차원 + profile)
+- [review](../review/memory.md) — T4 review 행동 계약
+- `.agents/skills/pr-review/SKILL.md` — T4 review 방법론
 - [documentation](../documentation/memory.md) — 문서화 impact + evidence portability
 - [implementation](../implementation/memory.md) — 직전 phase
 - [tdd](../tdd/memory.md) — code-profile sprint RED evidence

@@ -15,7 +15,7 @@ description: 대화 중 합의된 결정, 룰, 적용 원칙을 repo memory/docs
 | 신호 | type | 위치 패턴 |
 |---|---|---|
 | 코드 작성 룰 (Rust/TS/테스트/주석/금지) | `convention` | `memory/engineering/conventions/<area>/memory.md` 또는 sub-room |
-| 사용자 협업 phase 행동 룰 (bug-fix / commit / cleanup) | `workflow-rule` | `memory/workflow/<phase>/memory.md` 또는 sub-room |
+| 사용자 협업 phase 행동 계약 (언제/무엇을 해야 하는가) | `workflow-rule` | `memory/workflow/<phase>/memory.md` 또는 sub-room |
 | 제품 현재 상태 / UX 머지 기준 (영속 reset 등) | `product-rule` | `memory/product/memory.md` 또는 sub-room |
 | 실행 절차 / 운영 protocol | `runbook` | `memory/runbook/<topic>/memory.md` |
 | Agent skill body (`remember`, `split-memory` 등) | `agent-skill` | `.agents/skills/<name>/SKILL.md` |
@@ -110,6 +110,9 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
 - `memory/` 트리는 `memory.md` 만 (예외: `memory/index/*.md`). 다른 이름 금지.
 - Skill 본문은 `memory/` 에 저장하지 않는다. `.agents/skills/<name>/SKILL.md` 를
   수정하고 별도 Claude command wrapper 를 두지 않는다.
+- Workflow memory 는 행동 계약만 저장한다. 긴 절차, 평가 매트릭스, 대화 방식,
+  구현 방법론은 `.agents/skills/<name>/SKILL.md` 로 이관하고 workflow 에서는
+  해당 skill 을 링크만 한다.
 - 과거 사건/결정은 기본 memory 가 아니다. 먼저 적용 가능한 원칙을
   `memory/product`, `memory/engineering`, `memory/workflow`, `memory/runbook` 에
   반영하고, 이력 보존 가치가 있을 때만 archive 에 기록한다.
