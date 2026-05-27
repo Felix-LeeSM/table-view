@@ -35,13 +35,14 @@ trigger:
 ## 적용 예 (참고)
 
 2026-05-16 회귀 2건:
+
 - launcher 이중 창 → fix 전 e2e 또는 단위 test: `open_workspace_window` 호출 후 launcher window 의 `visible === false` assert.
 - 테마 빈 부팅 → fix 전 unit test: `loadAllFromSnapshot` 가 `theme: null` 응답 받았을 때 store 의 `themeId === "default"` + `mode === "system"` assert.
 
 ## 관련
 
-- [grill](../grill/memory.md) — 사용자 보고가 명확하지 않으면 먼저 grill 으로 증상 lock
+- `grill-with-memory` skill — 사용자 보고가 명확하지 않으면 먼저 증상 lock
 - [implementation](../implementation/memory.md) — Red 작성 후 Green 단계 narration / noise 룰
 - [delivery](../delivery/memory.md) — fix 끝나면 자율 commit/push
-- [conventions/testing-scenarios](../../conventions/testing-scenarios/memory.md) — 시나리오 8원칙
-- [conventions/testing-scenarios/mock-scope](../../conventions/testing-scenarios/mock-scope/memory.md) — mock 범위 룰 (assertion 이 user-facing invariant 잡도록)
+- [engineering/conventions/testing-scenarios](../../engineering/conventions/testing-scenarios/memory.md) — 시나리오 8원칙
+- [engineering/conventions/testing-scenarios/mock-scope](../../engineering/conventions/testing-scenarios/mock-scope/memory.md) — mock 범위 룰 (assertion 이 user-facing invariant 잡도록)

@@ -89,7 +89,7 @@ ADR 0022 의 핵심 약속 — "destructive 만 dialog, safe write 는 Cmd+Z 안
 
 - Contract: `docs/sprints/sprint-249/contract.md`
 - Phase 4 baseline: `docs/sprints/sprint-248/contract.md`, `findings.md`
-- ADR 0022: `memory/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
+- ADR 0022: `docs/archives/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
 - Relevant files:
   - `src/components/datagrid/useDataGridEdit.ts`
   - `src/components/datagrid/DataGridToolbar.tsx`

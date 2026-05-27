@@ -151,6 +151,6 @@ result contract 를 먼저 고정해야 한다.
 ## 관련
 
 - ADR 0045:
-  [`memory/decisions/0045-language-completion-profile-wasm-boundary/memory.md`](../../../../memory/decisions/0045-language-completion-profile-wasm-boundary/memory.md)
+  [`docs/archives/decisions/0045-language-completion-profile-wasm-boundary/memory.md`](../../../../docs/archives/decisions/0045-language-completion-profile-wasm-boundary/memory.md)
 - Support matrix: [`docs/query-language-support.md`](../../../query-language-support.md)
 - Sprint 420: [`docs/sprints/sprint-420/contract.md`](../../../sprints/sprint-420/contract.md)

@@ -110,7 +110,7 @@ Sprint 250/251/252 가 한 번의 사용자 가시 polish 사이클로 완성된
 - Sprint 251 baseline (store-lift): `docs/sprints/sprint-251/contract.md`
   + `findings.md`
 - Sprint 250 baseline (onBlur+Esc): `docs/sprints/sprint-250/contract.md`
-- ADR 0022: `memory/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
+- ADR 0022: `docs/archives/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
 - Relevant files:
   - `src/components/ui/dialog/PreviewDialog.tsx`
   - `src/components/structure/SqlPreviewDialog.tsx`

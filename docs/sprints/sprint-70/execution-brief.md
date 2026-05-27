@@ -31,7 +31,7 @@
 - 이번 스프린트가 수정하지 않는 모든 파일 diff 0 (`git status`로 확인).
 - 기존 테스트 파일(`src/components/shared/QuickLookPanel.test.tsx`, `src/components/datagrid/*`, `src-tauri/**`) diff 0.
 - `src/types/document.ts` shape 불변 (필요하면 이번 스프린트는 소비하지 않음).
-- Other agents의 in-flight 변경(`postgres.rs`, `Sidebar.tsx`, `query/**`, `ThemePicker.tsx`, `index.css`, `SqlSyntax.tsx`, `sqlTokenize**`, `memory/lessons/**`) 건드리지 않음.
+- Other agents의 in-flight 변경(`postgres.rs`, `Sidebar.tsx`, `query/**`, `ThemePicker.tsx`, `index.css`, `SqlSyntax.tsx`, `sqlTokenize**`, `docs/archives/incidents/**`) 건드리지 않음.
 
 ## Done Criteria
 

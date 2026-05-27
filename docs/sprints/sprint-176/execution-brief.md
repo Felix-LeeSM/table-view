@@ -67,5 +67,5 @@ Out: anything in sprints 177–180; no general loading-state refactor; no design
   - `src/components/document/DocumentDataGrid.tsx` (overlay at line 324–331)
   - `src/components/schema/StructurePanel.tsx` (loading at line 109; empty-state passes through to `ColumnsEditor` / `IndexesEditor` / `ConstraintsEditor`)
   - `docs/RISKS.md` (RISK-009 line 30, RISK-035 line 56)
-  - `memory/conventions/memory.md` (test rules, naming)
+  - `memory/engineering/conventions/memory.md` (test rules, naming)
   - `.claude/rules/test-scenarios.md` (scenario checklist)

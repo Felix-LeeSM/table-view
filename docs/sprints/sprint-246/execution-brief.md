@@ -86,7 +86,7 @@ Phase 1 (Sprint 245) 가 정책을 destructive-only 로 통일했으므로 dialo
 
 - Contract: `docs/sprints/sprint-246/contract.md`
 - Phase 1 (baseline): `docs/sprints/sprint-245/contract.md` + `findings.md`
-- ADR 0022: `memory/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
+- ADR 0022: `docs/archives/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
 - Relevant files:
   - `src/components/workspace/ConfirmDangerousDialog.tsx` (deleted in this
     sprint — see contract)

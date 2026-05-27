@@ -114,7 +114,7 @@ AC-254-05 / AC-254-06 / AC-254-07.
 
 - Master spec: `docs/sprints/sprint-253/spec.md` §Sprint 254
 - 13-question grill (Q2-(a) 3-tier severity 채택): `docs/sprints/sprint-253/grill-decisions.md`
-- ADR 0023: `memory/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
+- ADR 0023: `docs/archives/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
 - Sprint 253 baseline: `docs/sprints/sprint-253/contract.md` (commit 528063b)
 - Sprint 255 baseline: `docs/sprints/sprint-255/contract.md` (commit b8600bc)
 - Relevant files:

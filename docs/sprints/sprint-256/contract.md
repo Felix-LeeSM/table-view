@@ -123,7 +123,7 @@ AC-256-05 / AC-256-06 / AC-256-07.
 
 - Master spec: `docs/sprints/sprint-253/spec.md` §Sprint 256
 - 13-question grill (Q4-(c) chrome top stripe + prod border / Q5-(b) color+target / Q6-(a) two dialogs separate): `docs/sprints/sprint-253/grill-decisions.md`
-- ADR 0023: `memory/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
+- ADR 0023: `docs/archives/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
 - Sprint 253 baseline: `docs/sprints/sprint-253/contract.md` (commit 528063b)
 - Sprint 255 baseline: `docs/sprints/sprint-255/contract.md` (commit b8600bc)
 - Sprint 254 baseline: `docs/sprints/sprint-254/contract.md` (commit 2d518b2)

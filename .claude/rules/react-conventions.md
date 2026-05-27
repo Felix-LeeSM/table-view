@@ -5,4 +5,4 @@ paths:
 
 # React / TS 컨벤션 wrapper
 
-Source: [`memory/conventions/react/memory.md`](../../memory/conventions/react/memory.md).
+Source: [`memory/engineering/conventions/react/memory.md`](../../memory/engineering/conventions/react/memory.md).

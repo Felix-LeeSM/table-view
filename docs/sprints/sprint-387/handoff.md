@@ -7,7 +7,8 @@ date: 2026-05-18
 # Sprint 387 — Handoff
 
 Sprint 386 의 agent harness 를 **multi-brain ready** 로 진화. 본문 (룰 source)
-은 `memory/`, platform 디렉토리 (`.claude/`) 는 얇은 wrapper 만.
+은 `memory/` 와 `.agents/skills/`, platform 디렉토리 (`.claude/`) 는 필요한
+wrapper 만.
 
 ## 적용 후 동작
 
@@ -18,8 +19,8 @@ Sprint 386 의 agent harness 를 **multi-brain ready** 로 진화. 본문 (룰 s
 - agent spawn 시 `.claude/agents/<name>.md` 의 9-15줄 본문이 system prompt
   머리에 붙음. 본문은 "memory/X 를 read 해" 명령만. read 가 *조건부* 인 경우
   (예: 보안 키워드 / 변경 500줄 이상) 진짜 lazy.
-- slash command `/remember`, `/split-memory` 호출 시 wrapper 의 1줄 redirect
-  → assistant 가 `memory/skills/.../memory.md` 본문 read.
+- `remember`, `split-memory` 은 `.agents/skills/<name>/SKILL.md` 가 source.
+  `.claude/commands/{remember,split-memory}.md` wrapper 는 두지 않는다.
 
 ### Codex (미적용 — handoff 대상)
 
@@ -50,10 +51,10 @@ Sprint 386 의 agent harness 를 **multi-brain ready** 로 진화. 본문 (룰 s
 
 ## 운영 룰
 
-- Source-of-truth: `memory/`. wrapper 수정 시 반드시 `memory/` 본문도 같이
-  수정. 그 반대도 동일.
-- `memory/skills/*` 의 본문 변경 시 `.claude/commands/*.md` 의 redirect 만
-  유지하면 자동 동기. 추가 작업 0.
+- Source-of-truth: `memory/` 와 `.agents/skills/`. wrapper 수정 시 반드시
+  해당 source 본문도 같이 수정. 그 반대도 동일.
+- Skill 본문은 `.agents/skills/<name>/SKILL.md` 에만 둔다. Claude command
+  wrapper 로 중복하지 않는다.
 - `.claude/rules/*.md` 의 `paths` frontmatter 는 Claude Code 의 auto-load
   trigger — 본 trigger 가 깨지면 wrapper 가 매치되지 않아 redirect 가 의미
   없어짐. 변경 시 주의.

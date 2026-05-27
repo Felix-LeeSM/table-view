@@ -7,8 +7,8 @@
 //!   1. increments the `(domain, entity_id)` version counter held in
 //!      [`EventVersionRegistry`] so receivers can dedup / detect gaps,
 //!   2. constructs the wire payload (`camelCase`, matching the strategy
-//!      doc F.4 contract — see `docs/state-management-strategy-2026-05-15.md`
-//!      lines 1295–1313),
+//!      state-management event contract — see
+//!      `memory/engineering/architecture/state-management/memory.md`),
 //!   3. broadcasts via `AppHandle::emit("state-changed", payload)` so
 //!      every window listener — including the calling window for the
 //!      self-echo skip path — receives it.
@@ -42,7 +42,7 @@ use crate::error::AppError;
 pub const STATE_CHANGED_EVENT: &str = "state-changed";
 
 /// Nine domains in the state-management migration that participate in
-/// cross-window broadcast. Strategy doc F.4 (line 1300) fixes the wire
+/// cross-window broadcast. The state-management contract fixes the wire
 /// tag for each variant via `#[serde(rename_all = "camelCase")]`.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
@@ -58,8 +58,8 @@ pub enum EventDomain {
     DatagridColumnPrefs,
 }
 
-/// Op tags. Strategy doc F.4 (lines 1302–1306) lists the union — same
-/// set frontend-side. `Bulk` covers mru (single bulk replacement
+/// Op tags. The state-management contract lists the union — same set
+/// frontend-side. `Bulk` covers mru (single bulk replacement
 /// IPC); `Status` is the Q14 connection-status broadcast; `Invalidate`
 /// is the Q23 schemaCache drop; `Reset` is Q21 reset-to-default;
 /// `Clear` is F.5 history clear.

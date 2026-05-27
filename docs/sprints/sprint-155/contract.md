@@ -10,9 +10,9 @@
 ## In Scope
 
 - `src/__tests__/window-lifecycle.ac141.test.tsx` — `describe.skip` 제거, 5개 `it.todo` → 실제 `it()` 변환. Sprint 154 wiring + `@lib/window-controls` mock에 대한 회귀 단언 작성. Sprint 154에서 추가된 seam-call assertion 기반 케이스도 일관성 있게 정리.
-- `memory/decisions/0012-multi-window-launcher-workspace/memory.md` (new) — ADR. `supersedes: 0011`.
-- `memory/decisions/0011-single-window-stub-for-launcher-workspace/memory.md` — frontmatter 메타 필드 두 개만 갱신: `status: Superseded`, `superseded_by: 0012`. **본문 동결**.
-- `memory/decisions/memory.md` — 인덱스에서 0011을 활성 → 역사 섹션 이동, 0012 활성 추가.
+- `docs/archives/decisions/0012-multi-window-launcher-workspace/memory.md` (new) — ADR. `supersedes: 0011`.
+- `docs/archives/decisions/0011-single-window-stub-for-launcher-workspace/memory.md` — frontmatter 메타 필드 두 개만 갱신: `status: Superseded`, `superseded_by: 0012`. **본문 동결**.
+- `docs/archives/decisions/memory.md` — 인덱스에서 0011을 활성 → 역사 섹션 이동, 0012 활성 추가.
 - `docs/RISKS.md` — RISK-025 status `deferred` → `resolved`. 해소 로그 항목 추가 (Sprint 150-155 인용). 요약 카운터 재계산.
 - `src/stores/appShellStore.ts` — `screen` 필드 + `setScreen` action + `AppShellScreen` type 완전 제거. Sprint 154에서 vestigial test seam으로 남겼던 잔재 정리.
 - `src/__tests__/cross-window-store-sync.test.tsx` — Sprint 153 AC-153-05 케이스만 한 곳 적응 (`setScreen` 호출 → `screen` 필드 미존재 단언으로 변경 또는 삭제). Sprint 153 byte-freeze는 이 한 곳에 대해 명시적으로 완화.
@@ -39,9 +39,9 @@
 
 - `AC-155-01` — `src/__tests__/window-lifecycle.ac141.test.tsx`에서 `describe.skip`, `it.todo`, `it.skip`, `xit`, `this.skip()` 모두 제거. 5개 AC-141-* (real) 케이스가 live `it(...)`으로 존재. 각 케이스는 Sprint 154의 `@lib/window-controls` seam mock 또는 `WebviewWindow` mock에 대한 단언으로 검증.
 - `AC-155-02` — `grep -rE "it\.skip|this\.skip\(\)|it\.todo|xit\(|describe\.skip" src/__tests__/window-lifecycle.ac141.test.tsx` empty.
-- `AC-155-03` — `memory/decisions/0012-multi-window-launcher-workspace/memory.md` 생성. frontmatter `supersedes: 0011`, `status: Accepted`, `date: 2026-04-27`. 본문 3줄 ADR 템플릿 (결정/이유/트레이드오프).
-- `AC-155-04` — `memory/decisions/0011-single-window-stub-for-launcher-workspace/memory.md` frontmatter `status: Superseded`, `superseded_by: 0012`. **본문 동결** (`git diff`가 frontmatter 두 줄만 보여야 함).
-- `AC-155-05` — `memory/decisions/memory.md` 인덱스 갱신: 0011 활성 → 역사 섹션 이동, 0012 활성 행 추가.
+- `AC-155-03` — `docs/archives/decisions/0012-multi-window-launcher-workspace/memory.md` 생성. frontmatter `supersedes: 0011`, `status: Accepted`, `date: 2026-04-27`. 본문 3줄 ADR 템플릿 (결정/이유/트레이드오프).
+- `AC-155-04` — `docs/archives/decisions/0011-single-window-stub-for-launcher-workspace/memory.md` frontmatter `status: Superseded`, `superseded_by: 0012`. **본문 동결** (`git diff`가 frontmatter 두 줄만 보여야 함).
+- `AC-155-05` — `docs/archives/decisions/memory.md` 인덱스 갱신: 0011 활성 → 역사 섹션 이동, 0012 활성 행 추가.
 - `AC-155-06` — `docs/RISKS.md` RISK-025 status `resolved`. 해소 로그 entry 추가 (Sprint 150-155 인용). 요약 카운터(active/resolved/deferred) 재계산.
 - `AC-155-07` — `src/stores/appShellStore.ts`에서 `screen` 필드, `setScreen` action, `AppShellScreen` type 완전 제거. `useAppShellStore`는 다른 책임이 있다면 보존, 비어있으면 의미 있는 책임으로 축소.
 - `AC-155-08` — `grep -rE "useAppShellStore.*screen|appShellStore.*screen|setScreen|AppShellScreen" src/` 결과 0 hit (코멘트 포함 — Sprint 154에서 남긴 코멘트도 정리).

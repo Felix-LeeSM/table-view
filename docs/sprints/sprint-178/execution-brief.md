@@ -105,6 +105,6 @@ A second motive is the password-leak guard (AC-178-05). Once paste detection is 
   - `src/types/connection.test.ts` — parser test suite (extension target)
   - `src/components/connection/ConnectionDialog.test.tsx` — UI test suite (extension target)
   - `src/stores/connectionStore.ts` — IPC consumer (NOT modified; only its payload is normalized)
-  - `memory/decisions/` — ADR-0005 (passwords stay backend-side; AC-178-05 enforces this)
-  - `memory/conventions/memory.md` — test rules, naming, skip-zero gate
+  - `docs/archives/decisions/` — ADR-0005 (passwords stay backend-side; AC-178-05 enforces this)
+  - `memory/engineering/conventions/memory.md` — test rules, naming, skip-zero gate
   - `.claude/rules/test-scenarios.md` — scenario checklist

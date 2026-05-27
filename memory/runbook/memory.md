@@ -1,7 +1,7 @@
 ---
 title: Runbook
 type: index
-updated: 2026-05-17
+updated: 2026-05-27
 ---
 
 # Runbook
@@ -10,7 +10,6 @@ updated: 2026-05-17
 
 ## 방 지도
 
-- [cold-boot](./cold-boot/memory.md) — Tauri cold-boot 5-trial drop-slowest 측정 protocol
 - [worktree](./worktree/memory.md) — 다중 agent / brain 병렬 작업용 git worktree 사용 룰
 
 ## 진입 규칙
@@ -20,5 +19,5 @@ updated: 2026-05-17
 
 ## 관련
 
-- [lessons](../lessons/memory.md) — 실패/원인/방지 (runbook 과 다름 — lesson 은 사고, runbook 은 절차)
-- [conventions](../conventions/memory.md) — 빌드 / 테스트 / 린트 명령 (단발 실행)
+- [engineering/conventions](../engineering/conventions/memory.md) — 빌드 / 테스트 / 린트 명령 (단발 실행)
+- [docs/archives/incidents](../../docs/archives/incidents/memory.md) — historical incident archive

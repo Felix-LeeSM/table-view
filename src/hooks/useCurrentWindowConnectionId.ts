@@ -7,8 +7,8 @@
  * was answered by `connectionStore.focusedConnId`. Sprint 361 made
  * workspace labels per-connection (`workspace-{connection_id}`); from this
  * sprint on the workspace tree derives its connection identity from the
- * window label rather than from the cross-window store slot — that's the
- * Q15 lock in `docs/state-management-strategy-2026-05-15.md`. The
+ * window label rather than from the cross-window store slot; see
+ * `memory/engineering/architecture/state-management/memory.md`. The
  * `focusedConnId` slot is now launcher-only.
  *
  * Behaviour:

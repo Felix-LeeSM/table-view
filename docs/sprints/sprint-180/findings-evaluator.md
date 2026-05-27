@@ -40,7 +40,7 @@ Body sections present:
 - **트레이드오프**: 250–999ms grey zone, Mongo/SQLite cooperative-only, status union widening allowing silent fall-through.
 - **측정 결과**: 4-surface uniformity, sub-second toggle, fetchIdRef pattern, 8 cancel-token tests.
 
-ADR index `memory/decisions/memory.md:27` carries the new ADR-0018 row in 활성 결정.
+ADR index `docs/archives/decisions/memory.md:27` carries the new ADR-0018 row in 활성 결정.
 
 **Body-frozen ADR/code mismatch (P2)**: ADR claims `PostgreSQL: 실제 query 중단 가능. ... cancel 토큰이 fire 되면 PG 백엔드의 backend pid 에 cancel signal 을 보내 server-side query 를 즉시 중단하고 Operation cancelled AppError 를 반환한다.` However `grep -rn 'pg_cancel_backend' src-tauri/` returns zero hits. The actual `tokio::select!` arm at `postgres.rs:1990, 2025, 2099, 2119` returns the cancelled error but does NOT issue a server-side `pg_cancel_backend(pid)`. The pre-existing `execute_query` reference at `postgres.rs:537-546` is the same shape — neither the new methods nor the Sprint 88 reference call `pg_cancel_backend`. This means PG is ALSO cooperative-only, not "Full guarantee" as the ADR claims. Per memory-palace rules, the ADR body is frozen on first write — fixing this requires either (a) adding `pg_cancel_backend` plumbing in a follow-on sprint to make the policy code-true, or (b) writing a new ADR that supersedes 0018 with the corrected policy ("PG = cooperative drop only; `pg_cancel_backend` deferred"). **This is a P2, not a P1**, because the user-perceived UX matches the policy (overlay clears synchronously on cancel) and the AC text only requires "observably stop server-side work when the token is cancelled" — `tokio::select!` futures dropping does observably stop the future-side work, even if the SQL connection's underlying tcp byte stream from PG continues until the pool reaps the connection.
 
@@ -61,7 +61,7 @@ ADR index `memory/decisions/memory.md:27` carries the new ADR-0018 row in 활성
 | `grep -rn 'pg_cancel_backend' src-tauri/` | **empty** | ADR/findings.md/handoff claim PG runs `pg_cancel_backend(pid)` on cancel; the actual code does not. The `tokio::select!` arm only drops the future client-side (cooperative). See P2 finding #1. |
 | `grep -nE 'it\.(skip\|todo)\|xit\(' <touched-test-files>` | empty | Skip-zero gate holds across 9 touched test files. |
 | ADR file inspection | exists, frontmatter present, 5 body sections | 결정 / per-adapter contract / 이유 / 트레이드오프 / 측정 결과 — all present. Body-frozen rule consideration: the body was rewritten between attempt 1 and attempt 2; this is permitted because ADR-0018 was net-new and unmerged when attempt 1's body was written, so the freeze hadn't yet applied. From attempt 2 onward the body IS frozen. |
-| ADR index update | row 27 | 0018 row present at `memory/decisions/memory.md:27` linking to the new ADR. |
+| ADR index update | row 27 | 0018 row present at `docs/archives/decisions/memory.md:27` linking to the new ADR. |
 
 ## File-Level Diff Verification (Attempt 2 deltas)
 
@@ -78,7 +78,7 @@ ADR index `memory/decisions/memory.md:27` carries the new ADR-0018 row in 활성
 | `src-tauri/tests/mongo_integration.rs` | M | 7 call sites updated to pass `None` for the new cancel parameter. |
 | `src/components/datagrid/DataGridTable.refetch-overlay.test.tsx` | M | Added `[AC-180-05-DataGridTable]` per-vector retry test (lines 315-381). |
 | `src/components/document/DocumentDataGrid.refetch-overlay.test.tsx` | M | Added `[AC-180-05-DocumentDataGrid]` per-vector retry test (lines 243-330). |
-| `memory/decisions/0018-async-cancel-policy/memory.md` | M | Body rewritten from "deferral note" to "per-adapter policy". |
+| `docs/archives/decisions/0018-async-cancel-policy/memory.md` | M | Body rewritten from "deferral note" to "per-adapter policy". |
 | `docs/sprints/sprint-180/findings.md` | M | Attempt 2 changelog + operator runbook section (PG/Mongo/SQLite). |
 | `docs/sprints/sprint-180/handoff.md` | M | Attempt 2 summary added; AC coverage matrix updated. |
 | `src/components/schema/StructurePanel.test.tsx` | unchanged from attempt 1 | NO `[AC-180-05-StructurePanel]` retry test. |
@@ -101,7 +101,7 @@ ADR index `memory/decisions/memory.md:27` carries the new ADR-0018 row in 활성
 - Open `P1` findings: **0**.
 - Open `P2` findings: **2** (ADR/code `pg_cancel_backend` drift; 2 of 4 AC-180-05 retry tests missing).
 - Required checks passing: yes (Vitest targeted + full minus the pre-existing AC-141-1; tsc/lint/clippy all clean; cargo test pass).
-- ADR-0018 frontmatter + 5 body sections present; ADR index `memory/decisions/memory.md:27` updated.
+- ADR-0018 frontmatter + 5 body sections present; ADR index `docs/archives/decisions/memory.md:27` updated.
 - `findings.md` includes shared-component decision + threshold mechanism + AC→test mapping + operator runbook (PG/Mongo/SQLite).
 
 ## Final Verdict (Attempt 2): **PASS**
@@ -141,7 +141,7 @@ Per the rubric "each dimension must be ≥ 7/10 to PASS", the sprint fails on Co
 
 ## ADR-0018 Review
 
-ADR exists at `memory/decisions/0018-async-cancel-policy/memory.md`. Frontmatter: `id: "0018"`, `status: Accepted`, `date: 2026-04-30`, `supersedes: null`, `superseded_by: null` — present.
+ADR exists at `docs/archives/decisions/0018-async-cancel-policy/memory.md`. Frontmatter: `id: "0018"`, `status: Accepted`, `date: 2026-04-30`, `supersedes: null`, `superseded_by: null` — present.
 
 Body sections present:
 - 결정: shared `AsyncProgressOverlay` + `useDelayedFlag(loading, 1000)` + `fetchIdRef` stale-guard + best-effort `cancelQuery`. Status union widened.
@@ -149,7 +149,7 @@ Body sections present:
 - 트레이드오프: 250–999ms grey zone, cooperative DB-side cancel, AC-180-04 trait-level cancel-token plumbing **deferred** to a follow-on sprint, status union widening allows silent fall-through in non-exhaustive switches.
 - 측정 결과: 4 surfaces share the testid + accessible name; sub-second toggle stays false; cancel→retry stale-guard pattern.
 
-Index updated: `memory/decisions/memory.md:27` carries the new ADR-0018 row in the "활성 결정" table.
+Index updated: `docs/archives/decisions/memory.md:27` carries the new ADR-0018 row in the "활성 결정" table.
 
 **Critical gap in the ADR**: per the contract at line 41, the ADR was supposed to capture the per-adapter cancel policy (PG / Mongo / SQLite) for the trait-extended methods, with PG = cooperative + driver-level cancel, Mongo = cooperative + `killOperations` where supported, SQLite = best-effort statement-boundary. The ADR partially documents the trade-off but its 트레이드오프 paragraph 3 explicitly says the trait-level extension was **deferred** rather than documenting per-adapter behavior for the eight methods. So the ADR is honest about the deferral but does not actually fulfill the contract's "ADR documents the per-adapter cancel policy including SQLite best-effort" requirement at AC-180-04.
 
@@ -200,8 +200,8 @@ The ADR is also internally inconsistent: it says (in the body's 이유 ¶3) "4 �
 | `src/components/query/QueryLog.test.tsx` | M | `[AC-180-03c]` muted-foreground test. |
 | `src/components/query/GlobalQueryLogPanel.tsx` | M | Three-way icon (`CircleSlash` for cancelled). |
 | `src/components/query/GlobalQueryLogPanel.test.tsx` | M | `[AC-180-03c]` CircleSlash + muted bg test. |
-| `memory/decisions/0018-async-cancel-policy/memory.md` | NEW | ADR with frontmatter + body. |
-| `memory/decisions/memory.md` | M | Index updated. |
+| `docs/archives/decisions/0018-async-cancel-policy/memory.md` | NEW | ADR with frontmatter + body. |
+| `docs/archives/decisions/memory.md` | M | Index updated. |
 | `src-tauri/src/db/mod.rs` | **NOT MODIFIED** | **Contract violation.** |
 | `src-tauri/src/db/postgres.rs` | **NOT MODIFIED** | **Contract violation.** |
 | `src-tauri/src/db/mongodb.rs` | **NOT MODIFIED** | **Contract violation.** |
@@ -228,7 +228,7 @@ The ADR is also internally inconsistent: it says (in the body's 이유 ¶3) "4 �
 
 4. **ADR-0018 trade-off ¶3 should be re-cast as a per-adapter policy, not a deferral note**:
    - Current: ADR's 트레이드오프 ¶3 says "AC-180-04 trait-level cancel 토큰 plumbing은 본 sprint scope 에서는 ... 후속 스프린트로 이월" — a deferral, not a policy.
-   - Expected: Per the contract at line 41, the ADR should document PG = cooperative + driver-level cancel where supported; Mongo = cooperative + `killOperations` where supported by the bundled driver version; SQLite = best-effort, abort only at statement boundary. The ADR's body is frozen on first write per `memory/conventions`, so this can't be edited later — the ADR-0018 body needs to be replaced before the sprint passes.
+   - Expected: Per the contract at line 41, the ADR should document PG = cooperative + driver-level cancel where supported; Mongo = cooperative + `killOperations` where supported by the bundled driver version; SQLite = best-effort, abort only at statement boundary. The ADR's body is frozen on first write per `memory/engineering/conventions`, so this can't be edited later — the ADR-0018 body needs to be replaced before the sprint passes.
    - Suggestion: Re-write the ADR body to capture the per-adapter cancel policy explicitly, even if the trait extension is deferred. Per-adapter policy is the architectural decision; the trait-extension code is the implementation. Document the policy now so the follow-on sprint inherits the constraint.
 
 ## Exit Criteria Status
@@ -237,7 +237,7 @@ The ADR is also internally inconsistent: it says (in the body's 이유 ¶3) "4 �
 - Open `P2` findings: **2** (operator runbook absent; ADR body re-frame required).
 - Required checks passing: yes (Vitest targeted + full minus the pre-existing AC-141-1; tsc/lint/clippy all clean; cargo test pass).
 - ADR-0018 exists with frontmatter + body sections, but body needs re-casting from "deferral note" to "per-adapter policy" — see Feedback #4.
-- ADR index `memory/decisions/memory.md` updated with row 27 — pass.
+- ADR index `docs/archives/decisions/memory.md` updated with row 27 — pass.
 - `findings.md` exists and includes shared-component decision + threshold mechanism + AC→test mapping, but is missing the operator runbook section per Feedback #3.
 
 ## Final Verdict: **FAIL**

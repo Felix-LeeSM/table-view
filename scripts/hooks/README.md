@@ -5,8 +5,12 @@ Hook-facing scripts live here. They are called by runtime hook wrappers such as
 
 Rules:
 
-- Verification scripts must be read-only unless they are formatter-style staged-file fixes.
-- No `git fetch`, `git pull`, `git push`, ref mutation, branch switching, or stash.
+- Verification scripts are read-only gates: inspect current state, emit pass/fail
+  diagnostics, and do not repair state.
+- Do not mutate repository state from verification scripts.
+- Pass/fail policy details live in the hook scripts and tests, not memory.
+- Formatter/fix steps must be explicit formatter steps in `lefthook.yml`; do not hide
+  repair behavior inside verification scripts.
 - Shared business/tooling CLIs stay outside this directory until they are proven hook-only.
 - Agent-specific wrappers stay in the runtime directory and delegate here.
 

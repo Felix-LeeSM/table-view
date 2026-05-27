@@ -8,7 +8,7 @@ Build `src/lib/mongo/mongoshParser.ts`, a pure-TS (or WASM-backed) module that t
 
 Slice A1 is the first sub-sprint of Phase 28 (MongoDB Full Support). The full Slice A replaces the Find/Aggregate toggle with a single mongosh editor where the user types `db.coll.method(args)`. A1's parser is the contract every later sub-slice (A2 backend / A3 editor / A4 snippet menu / A5 read dispatch / A6 write dispatch) consumes — it is the **architectural pivot** of Phase 28.
 
-Phase 28 grill froze the design (`memory/roadmap/phase-28-mongo-full-support/memory.md`):
+Phase 28 grill froze the design (`docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md`):
 - Q14 chose option 2+ (mongosh LSP/parser, no JS eval) — this sprint executes that choice.
 - The 13-method whitelist + 6 BSON literal whitelist is locked.
 - TDD policy applies: parser/builder ≥90% line coverage (`.claude/rules/testing.md`).
@@ -20,8 +20,8 @@ Phase 28 grill froze the design (`memory/roadmap/phase-28-mongo-full-support/mem
 - `src/lib/mongo/mongoshParser.test.ts` (NEW)
 - `src/lib/mongo/bsonLiterals.ts` (NEW, optional split)
 - `src/lib/mongo/bsonLiterals.test.ts` (NEW, optional split)
-- `memory/decisions/00NN-mongosh-parser-strategy/memory.md` (NEW)
-- `memory/decisions/memory.md` (MODIFY index)
+- `docs/archives/decisions/00NN-mongosh-parser-strategy/memory.md` (NEW)
+- `docs/archives/decisions/memory.md` (MODIFY index)
 
 **DO NOT touch**:
 - Any `src/components/` file (editor surface = Sprint A3)
@@ -53,7 +53,7 @@ If a touch outside this list seems necessary, STOP and surface it as an assumpti
 4. `pnpm lint` exits 0.
 5. `pnpm vitest run` (full suite) exits 0 — no regression.
 6. `grep -E "\b(eval|new Function)\b" src/lib/mongo/mongoshParser.ts src/lib/mongo/bsonLiterals.ts` returns empty (zero matches).
-7. ADR exists at `memory/decisions/00NN-mongosh-parser-strategy/memory.md` (sequential ADR number after `0028`) with sections Decision / Rationale (cites R28.1) / Trade-offs / Consequences, AND is registered in the active list of `memory/decisions/memory.md`.
+7. ADR exists at `docs/archives/decisions/00NN-mongosh-parser-strategy/memory.md` (sequential ADR number after `0028`) with sections Decision / Rationale (cites R28.1) / Trade-offs / Consequences, AND is registered in the active list of `docs/archives/decisions/memory.md`.
 8. The 13-method whitelist is exported as a single `readonly` tuple/array from `mongoshParser.ts` and imported by the parser test (no duplicate constant elsewhere).
 9. Test suite covers the AC matrix from `contract.md`:
    - 13 happy-path methods (AC-02)
@@ -99,8 +99,8 @@ The TDD skill is loaded — follow it strictly:
 - **Contract**: `docs/sprints/sprint-307/contract.md`
 - **Spec**: `docs/sprints/sprint-307/spec.md`
 - **Phase definition**: `docs/phases/phase-28.md`
-- **Grill decisions**: `memory/roadmap/phase-28-mongo-full-support/memory.md`
+- **Grill decisions**: `docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md`
 - **Existing Mongo autocomplete (constants to reuse)**: `src/lib/mongo/mongoAutocomplete.ts` — `MONGO_QUERY_OPERATORS` (13 ops), `MONGO_AGGREGATE_STAGES`
 - **Existing backend wire format**: `src-tauri/src/db/mongodb/queries.rs::flatten_cell` (BSON canonical-extjson expectation)
 - **Conventions**: `.claude/rules/react-conventions.md`, `.claude/rules/testing.md`, `.claude/rules/test-scenarios.md`
-- **ADR index**: `memory/decisions/memory.md` — next available number is `0029` (sprint-296's `0028` is current latest)
+- **ADR index**: `docs/archives/decisions/memory.md` — next available number is `0029` (sprint-296's `0028` is current latest)

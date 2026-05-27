@@ -12,7 +12,7 @@
   - 상태 어휘 표 — `active` / `verified` / `deferred` 정의.
   - 추적 항목 표 — UI-FU-01 ~ UI-FU-09 (총 9 행) × 7 필드 (ID / 한 줄 요약 / 출처 / 검증 절차 / 담당 / 종결 조건 / 상태). 모두 초기 상태 `active`.
   - 신규 ⚠️ 추가 절차 — 7 단계.
-  - 참조 — `ui-evaluation-results.md` / `RISKS.md` / `memory/roadmap/memory.md`.
+  - 참조 — `ui-evaluation-results.md` / `RISKS.md` / `docs/archives/roadmaps/memory-roadmap/memory.md`.
 - `docs/RISKS.md`:
   - 머리말 `Last updated` 갱신 (2026-04-19 → 2026-04-25 + Sprint 116 사유).
   - "참고 문서" 섹션 신설 → `ui-evaluation-followup.md` 1 줄 링크.

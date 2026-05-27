@@ -98,7 +98,7 @@ check_path() {
 			echo "BLOCKED: Editing local settings is not allowed." >&2
 			exit 1
 			;;
-		memory/decisions/*/memory.md)
+		docs/archives/decisions/*/memory.md)
 			echo "WARNING: ADR 본문은 작성 순간 동결입니다. 결정을 뒤집으려면 새 ADR을 추가하세요." >&2
 			;;
 	esac

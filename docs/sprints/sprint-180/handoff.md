@@ -20,7 +20,7 @@ Frontend pieces from attempt 1 (AsyncProgressOverlay + useDelayedFlag + 4-surfac
 - `src-tauri/tests/mongo_integration.rs` — 7 call sites updated to pass `None` for the new cancel parameter.
 - `src/components/datagrid/DataGridTable.refetch-overlay.test.tsx` — added `[AC-180-05-DataGridTable]` per-vector retry test (trigger → cancel → re-trigger via `rerender`).
 - `src/components/document/DocumentDataGrid.refetch-overlay.test.tsx` — added `[AC-180-05-DocumentDataGrid]` per-vector retry test (3-call mock chain; total_count=1500 to keep Next-page enabled across retries).
-- `memory/decisions/0018-async-cancel-policy/memory.md` — body rewritten for per-adapter cancel POLICY (PG/Mongo client-side cooperative drop via `tokio::select!`; server-side abort hooks `pg_cancel_backend` / `killOp` documented as future enhancements; SQLite Phase 9 best-effort no-op).
+- `docs/archives/decisions/0018-async-cancel-policy/memory.md` — body rewritten for per-adapter cancel POLICY (PG/Mongo client-side cooperative drop via `tokio::select!`; server-side abort hooks `pg_cancel_backend` / `killOp` documented as future enhancements; SQLite Phase 9 best-effort no-op).
 - `docs/sprints/sprint-180/findings.md` — attempt 2 changelog + operator runbook (PG/Mongo/SQLite) added; `AC-180-04 deferred rationale` section replaced with `AC-180-04 attempt 2 completion`.
 - `docs/sprints/sprint-180/handoff.md` (this file) — attempt 2 summary added; AC coverage matrix updated.
 
@@ -45,8 +45,8 @@ Frontend pieces from attempt 1 (AsyncProgressOverlay + useDelayedFlag + 4-surfac
 - `src/components/schema/StructurePanel.first-render-gate.test.tsx` — removed incidental immediate-spinner assertion from `[AC-176-03]`; AC-176-03 negative-text invariants are independent of the (now threshold-gated) spinner's visibility, and they continue to hold.
 - `src/components/rdb/DataGrid.tsx` — added `cancelQuery` import, `queryIdRef`, `handleCancelRefetch`, and wired `onCancelRefetch={handleCancelRefetch}` to `<DataGridTable/>`.
 - `src/components/rdb/DataGrid.test.tsx` — `shows overlay spinner on top of table during refetch` adapted to `findByRole("status", { name: "Loading" }, { timeout: 2000 })`.
-- `memory/decisions/0018-async-cancel-policy/memory.md` (new in attempt 1; **body rewritten in attempt 2**) — ADR documenting the 1s threshold + Cancel UX policy + per-adapter cancel POLICY: 결정 (shared `AsyncProgressOverlay` + `useDelayedFlag` + `fetchIdRef` stale-guard + best-effort `cancelQuery` + 8 trait methods × `Option<&CancellationToken>` + per-adapter contract: PG/Mongo client-side cooperative drop via `tokio::select!`; SQLite Phase 9 best-effort no-op; server-side abort hooks `pg_cancel_backend` / `killOp` / `sqlite3_interrupt` are future enhancements), 이유 (Doherty + Goal-Gradient + Law of Similarity + Sprint 176 hardening preserved + per-adapter policy explicit), 트레이드오프 (250–999ms grey zone, all paradigms currently cooperative-only DB-side cancel, status union widening), 측정 결과 (overlay+useDelayedFlag+fetchIdRef + 8 db::tests::test_*_honors_cancel_token).
-- `memory/decisions/memory.md` — added ADR-0018 row to "활성 결정" table; `updated: 2026-04-30`.
+- `docs/archives/decisions/0018-async-cancel-policy/memory.md` (new in attempt 1; **body rewritten in attempt 2**) — ADR documenting the 1s threshold + Cancel UX policy + per-adapter cancel POLICY: 결정 (shared `AsyncProgressOverlay` + `useDelayedFlag` + `fetchIdRef` stale-guard + best-effort `cancelQuery` + 8 trait methods × `Option<&CancellationToken>` + per-adapter contract: PG/Mongo client-side cooperative drop via `tokio::select!`; SQLite Phase 9 best-effort no-op; server-side abort hooks `pg_cancel_backend` / `killOp` / `sqlite3_interrupt` are future enhancements), 이유 (Doherty + Goal-Gradient + Law of Similarity + Sprint 176 hardening preserved + per-adapter policy explicit), 트레이드오프 (250–999ms grey zone, all paradigms currently cooperative-only DB-side cancel, status union widening), 측정 결과 (overlay+useDelayedFlag+fetchIdRef + 8 db::tests::test_*_honors_cancel_token).
+- `docs/archives/decisions/memory.md` — added ADR-0018 row to "활성 결정" table; `updated: 2026-04-30`.
 - `docs/sprints/sprint-180/findings.md` (new in attempt 1; **body extended in attempt 2**) — Generator notes: attempt-2 changelog, operator runbook (PG/Mongo/SQLite), shared-component decision, threshold mechanism, AC→test mapping, fake-vs-real-timer trade-off rationale, AC-180-04 attempt-2 completion section, open items.
 - `docs/sprints/sprint-180/handoff.md` (this file) — sprint deliverable.
 
@@ -62,8 +62,8 @@ Frontend pieces from attempt 1 (AsyncProgressOverlay + useDelayedFlag + 4-surfac
 | `cargo clippy --all-targets --all-features -- -D warnings` (in `src-tauri/`) | pass (zero warnings) |
 | `cargo test` (in `src-tauri/`) | **303 lib tests pass** + integration tests pass + doc-tests pass. Includes the 8 new `db::tests::test_*_honors_cancel_token` tests + 1 None-token sanity test added in attempt 2. |
 | `grep -nE 'data-testid="async-cancel"\|preventDefault\|stopPropagation' src/components/feedback/AsyncProgressOverlay.tsx` | pass — testid present; ≥8 hardening calls (4 handlers × 2) |
-| `test -d memory/decisions/0018-async-cancel-policy && head -30 memory/decisions/0018-async-cancel-policy/memory.md` | pass — ADR with frontmatter (`status: Accepted`, `date: 2026-04-30`) and 결정/이유/트레이드오프/측정 결과 sections |
-| `grep -n '0018' memory/decisions/memory.md` | pass — index row added under "활성 결정" |
+| `test -d docs/archives/decisions/0018-async-cancel-policy && head -30 docs/archives/decisions/0018-async-cancel-policy/memory.md` | pass — ADR with frontmatter (`status: Accepted`, `date: 2026-04-30`) and 결정/이유/트레이드오프/측정 결과 sections |
+| `grep -n '0018' docs/archives/decisions/memory.md` | pass — index row added under "활성 결정" |
 | `grep -nE 'it\.(skip\|todo)\|xit\(' <touched-test-files>` | pass (empty — skip-zero gate) |
 | `git diff src/types/connection.ts` | pass (no diff — `Paradigm` type unchanged invariant) |
 | `git diff src-tauri/src/commands/rdb/query.rs` | pass (no diff — `cancel_query` wire signature unchanged invariant) |

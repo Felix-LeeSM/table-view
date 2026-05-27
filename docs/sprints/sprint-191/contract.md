@@ -164,7 +164,7 @@ hard cut-off 단언은 안 함 (라인 수보다 응집도가 우선) — findin
 
 - `docs/refactoring-smells.md` §2, §3.1, §5, §6 — SchemaTree 진단.
 - `docs/refactoring-plan.md` §51 — SchemaTree 분해 4단계.
-- `memory/conventions/refactoring/store-coupling/memory.md` B-1 — UI 직접
+- `memory/engineering/conventions/refactoring/store-coupling/memory.md` B-1 — UI 직접
   setState 금지.
-- `memory/conventions/refactoring/lib-hook-boundary/memory.md` D-2 —
+- `memory/engineering/conventions/refactoring/lib-hook-boundary/memory.md` D-2 —
   components → hooks → lib import 방향.

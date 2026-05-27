@@ -28,7 +28,7 @@ review/run-checks.sh — sprint contract Required Checks batch
   - allowlist prefix 와 일치하는 명령만 실행
   - PASS/FAIL list 출력
 
-관련: memory/workflow/review/memory.md
+관련: .agents/skills/pr-review/SKILL.md
 EOF
 	exit 0
 fi

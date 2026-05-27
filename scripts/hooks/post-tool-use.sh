@@ -85,7 +85,7 @@ while IFS= read -r raw; do
 	esac
 	case "$rel" in
 		memory/*) has_memory=1 ;;
-		memory/decisions/*) has_adr=1 ;;
+		docs/archives/decisions/*) has_adr=1 ;;
 		.claude/agents/*.md | .claude/rules/*.md | .claude/commands/*.md | .codex/agents/*.md)
 			has_wrapper=1
 			;;

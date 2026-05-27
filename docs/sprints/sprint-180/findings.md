@@ -18,7 +18,7 @@ Attempt 1 scored 5.75/10 (FAIL). Evaluator findings addressed in attempt 2:
 - `src/components/document/DocumentDataGrid.refetch-overlay.test.tsx` `[AC-180-05-DocumentDataGrid]`: 3-call mock chain (resolve → hang → resolve with Carol). Initial total_count=1500 (5 pages with DEFAULT_PAGE_SIZE=300) so the Next-page button is enabled across both refetches. 6/6 tests pass.
 
 **P2-1 — Operator runbook in `findings.md`:** done. See § "Operator runbook" below.
-**P2-2 — ADR-0018 body rewrite for per-adapter cancel POLICY:** done. `memory/decisions/0018-async-cancel-policy/memory.md` body now documents the per-adapter cancel contract: PG/Mongo currently use **client-side cooperative drop** via `tokio::select!`; server-side abort hooks (PG `pg_cancel_backend`, Mongo `killOp`, SQLite `sqlite3_interrupt`) are documented as future enhancements. SQLite (Phase 9) is best-effort no-op.
+**P2-2 — ADR-0018 body rewrite for per-adapter cancel POLICY:** done. `docs/archives/decisions/0018-async-cancel-policy/memory.md` body now documents the per-adapter cancel contract: PG/Mongo currently use **client-side cooperative drop** via `tokio::select!`; server-side abort hooks (PG `pg_cancel_backend`, Mongo `killOp`, SQLite `sqlite3_interrupt`) are documented as future enhancements. SQLite (Phase 9) is best-effort no-op.
 
 Frontend pieces from attempt 1 (AsyncProgressOverlay + useDelayedFlag + 4-surface wiring + queryHistoryStore widening + pointer-event hardening) preserved unchanged.
 
@@ -72,14 +72,14 @@ For the current sprint, no SQLite smoke is possible. The runbook entry is forwar
 - `src-tauri/tests/mongo_integration.rs` — 7 call sites updated to pass `None` for the new cancel parameter.
 - `src/components/datagrid/DataGridTable.refetch-overlay.test.tsx` — added `[AC-180-05-DataGridTable]` per-vector retry test (trigger → cancel → re-trigger via `rerender` with new dataset).
 - `src/components/document/DocumentDataGrid.refetch-overlay.test.tsx` — added `[AC-180-05-DocumentDataGrid]` per-vector retry test (3-call mock chain; total_count=1500 to keep Next-page enabled across retries).
-- `memory/decisions/0018-async-cancel-policy/memory.md` — body rewritten for per-adapter cancel POLICY (PG/Mongo client-side cooperative drop via `tokio::select!`; server-side abort hooks `pg_cancel_backend` / `killOp` documented as future enhancements; SQLite Phase 9 best-effort no-op).
+- `docs/archives/decisions/0018-async-cancel-policy/memory.md` — body rewritten for per-adapter cancel POLICY (PG/Mongo client-side cooperative drop via `tokio::select!`; server-side abort hooks `pg_cancel_backend` / `killOp` documented as future enhancements; SQLite Phase 9 best-effort no-op).
 
 ### New files (attempt 1, preserved)
 - `src/hooks/useDelayedFlag.ts` + `.test.ts` — threshold gate hook (1s default).
   - 6 tests pass: AC-180-01c (false before), AC-180-01d (true after), AC-180-01e (sync reset), rapid on/off, re-arm cycle.
 - `src/components/feedback/AsyncProgressOverlay.tsx` + `.test.tsx` — shared overlay with internalised Sprint 176 pointer hardening.
   - 11 tests pass: AC-180-01a/b (visibility), AC-180-02a (cancel cb), AC-180-06a/b (testid + accessible name), AC-180-06c × 4 (mouseDown/click/dblClick/contextMenu × `defaultPrevented`), Cancel-button-click-still-fires invariant, custom-label.
-- `memory/decisions/0018-async-cancel-policy/memory.md` — ADR documenting the threshold + cancel policy.
+- `docs/archives/decisions/0018-async-cancel-policy/memory.md` — ADR documenting the threshold + cancel policy.
 
 ### Modified files
 - `src/stores/queryHistoryStore.ts` — `QueryHistoryStatus = "success" | "error" | "cancelled"`. Strict superset; existing callers unchanged.
@@ -97,7 +97,7 @@ For the current sprint, no SQLite smoke is possible. The runbook entry is forwar
 - `src/components/schema/StructurePanel.first-render-gate.test.tsx` — removed the (incidental) immediate-spinner assertion; AC-176-03 negative-text invariants are independent of the spinner's visibility.
 - `src/components/rdb/DataGrid.tsx` — added `cancelQuery` import, `queryIdRef`, `handleCancelRefetch`, and wired `onCancelRefetch={handleCancelRefetch}` to `<DataGridTable/>`.
 - `src/components/rdb/DataGrid.test.tsx` — `shows overlay spinner on top of table during refetch` adapted to `findByRole("status", {name: "Loading"}, {timeout: 2000})`.
-- `memory/decisions/memory.md` — added ADR-0018 row.
+- `docs/archives/decisions/memory.md` — added ADR-0018 row.
 
 ## Test results (attempt 2)
 

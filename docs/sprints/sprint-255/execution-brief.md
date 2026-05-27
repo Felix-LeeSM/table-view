@@ -99,7 +99,7 @@ foundation token (Sprint 253) 위에 immediate user protection 도입.
 - Spec (master): `docs/sprints/sprint-253/spec.md` §Sprint 255
 - Contract: `docs/sprints/sprint-255/contract.md`
 - 13-question grill (Q3-(b) 모든 환경 + 모든 write 표면): `docs/sprints/sprint-253/grill-decisions.md`
-- ADR 0023: `memory/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
+- ADR 0023: `docs/archives/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
 - Sprint 253 baseline: `docs/sprints/sprint-253/contract.md` (commit 528063b)
 - Relevant files:
   - `src/components/query/QueryTab.tsx`

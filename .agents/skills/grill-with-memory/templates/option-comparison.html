@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>옵션 비교 — &lt;TOPIC&gt;</title>
+    <style>
+      /*
+     * Grill-with-memory 옵션 비교 mock 템플릿.
+     * 룰: .agents/skills/grill-with-memory/SKILL.md
+     *
+     * 작성 시:
+     * 1. 같은 데이터 / 같은 상황을 모든 옵션에 동일 적용
+     * 2. 옵션 간 *차이만* 두드러지게
+     * 3. UI 사소한 모양 결정 → 슬라이더 / 토글로 동적 인터랙션
+     * 4. 워크플로우 결정 → state machine 시각화 (클릭으로 step 진행)
+     * 5. 각 옵션 panel 아래에 task 영향 / 비용 annotation
+     */
+      :root {
+        --bg: #0b0b0c;
+        --panel: #16171a;
+        --border: #2a2c30;
+        --text: #e8e8ea;
+        --muted: #8a8a8e;
+        --accent: #6aa3ff;
+        --warn: #ffaa66;
+        --good: #7adda0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 0 0 8px;
+      }
+      .lede {
+        color: var(--muted);
+        margin-bottom: 32px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 24px;
+      }
+      .option {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 20px;
+      }
+      .option h2 {
+        font-size: 16px;
+        margin: 0 0 12px;
+      }
+      .option .preview {
+        background: #1f2024;
+        border-radius: 6px;
+        padding: 16px;
+        margin-bottom: 16px;
+        min-height: 120px;
+      }
+      .annot {
+        font-size: 12px;
+        color: var(--muted);
+        border-top: 1px dashed var(--border);
+        padding-top: 12px;
+        margin-top: 12px;
+      }
+      .annot div {
+        margin-bottom: 4px;
+      }
+      .annot .label {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .axis-tech {
+        color: var(--warn);
+      }
+      .axis-user {
+        color: var(--good);
+      }
+      /* 동적 인터랙션 — 사소한 모양 결정 시 */
+      .controls {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 24px;
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .controls label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .controls input[type="range"] {
+        width: 160px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>&lt;질문 / 결정 한 줄&gt;</h1>
+    <p class="lede">
+      같은 데이터 / 같은 상황의 옵션 비교. <strong>유저 task</strong> 와
+      <strong>기술 비용</strong>
+      두 축으로 평가. 옵션 패널 클릭 → 인터랙션 가능.
+    </p>
+
+    <!-- 사소한 모양 결정 시 슬라이더 / 토글 — 생략 가능 -->
+    <!--
+  <div class="controls">
+    <label>
+      <span>border-radius</span>
+      <input type="range" min="0" max="20" value="6" oninput="document.documentElement.style.setProperty('--demo-radius', this.value + 'px')">
+    </label>
+    <label>
+      <span>padding</span>
+      <input type="range" min="4" max="32" value="16" oninput="document.documentElement.style.setProperty('--demo-padding', this.value + 'px')">
+    </label>
+  </div>
+  -->
+
+    <div class="grid">
+      <div class="option">
+        <h2>옵션 A — &lt;이름&gt;</h2>
+        <div class="preview">
+          <!-- 옵션 A 의 UI / 워크플로우 시각화. 같은 데이터 사용. -->
+        </div>
+        <div class="annot">
+          <div>
+            <span class="label axis-user">유저 플로우:</span> &lt;어느 task 가
+            어떻게 영향&gt; — &lt;빈도 자주/가끔/드묾&gt;
+          </div>
+          <div>
+            <span class="label axis-tech">기술:</span> &lt;implementation 비용 /
+            위험 / 의존&gt;
+          </div>
+        </div>
+      </div>
+
+      <div class="option">
+        <h2>옵션 B — &lt;이름&gt;</h2>
+        <div class="preview">
+          <!-- 옵션 B -->
+        </div>
+        <div class="annot">
+          <div><span class="label axis-user">유저 플로우:</span> ...</div>
+          <div><span class="label axis-tech">기술:</span> ...</div>
+        </div>
+      </div>
+
+      <div class="option">
+        <h2>옵션 C — &lt;이름&gt;</h2>
+        <div class="preview">
+          <!-- 옵션 C -->
+        </div>
+        <div class="annot">
+          <div><span class="label axis-user">유저 플로우:</span> ...</div>
+          <div><span class="label axis-tech">기술:</span> ...</div>
+        </div>
+      </div>
+    </div>
+
+    <!--
+    워크플로우 / state machine 결정 시 — 클릭으로 step 진행:
+    <button onclick="advance()">다음 step</button>
+    <pre id="state">step 0</pre>
+    <script>
+      let step = 0;
+      function advance() {
+        step = (step + 1) % 5;
+        document.getElementById('state').textContent = 'step ' + step;
+      }
+    </script>
+  --></body>
+</html>

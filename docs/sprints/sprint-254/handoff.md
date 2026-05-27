@@ -314,7 +314,7 @@ export async function escalateWarnIfLargeImpact(
 
 - Master spec: `docs/sprints/sprint-253/spec.md` §Sprint 254
 - Contract: `docs/sprints/sprint-254/contract.md`
-- ADR 0023: `memory/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
+- ADR 0023: `docs/archives/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
 - 13-question grill (Q2-(a) 채택): `docs/sprints/sprint-253/grill-decisions.md`
 - Sprint 253 baseline: commit 528063b
 - Sprint 255 baseline: commit b8600bc

@@ -81,7 +81,7 @@ commit 전 결정 흐름의 마무리.
 - Spec (master): `docs/sprints/sprint-250/spec.md`
 - Contract: `docs/sprints/sprint-250/contract.md`
 - Sprint 249 baseline (Cmd+Z 패턴): `docs/sprints/sprint-249/contract.md`
-- ADR 0022: `memory/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
+- ADR 0022: `docs/archives/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
 - Relevant files:
   - `src/components/datagrid/useDataGridEdit.ts`
   - `src/components/datagrid/DataGridTable.tsx` (또는 분리된 row-component)

@@ -7,7 +7,7 @@ source: memory/workflow/grill/security-handoff/memory.md
 
 Read:
 1. `memory/workflow/grill/security-handoff/memory.md`
-2. Related ADRs, commonly `memory/decisions/0005-*`, `0021-*`, `0036-*`,
+2. Related ADRs, commonly `docs/archives/decisions/0005-*`, `0021-*`, `0036-*`,
    `0040-*`
 
 Write scope, if any: `docs/threat-models/**`, `memory/security/**`. Do not

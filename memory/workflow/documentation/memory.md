@@ -42,10 +42,14 @@ PR body 에 다음 섹션을 포함:
 
 | 내용 | SOT |
 |---|---|
-| 잔여 risk / 감사 follow-up | `docs/RISKS.md` |
-| sequencing / 다음 sprint 후보 | `docs/PLAN.md` |
+| sequencing / 다음 sprint 후보 | `docs/ROADMAP.md` |
 | 실제 sprint 범위 / AC / handoff | `docs/sprints/sprint-N/` |
-| 반복 적용 규칙 / workflow / lesson | `memory/**/memory.md` |
+| 반복 적용 규칙 / workflow / product / engineering | `memory/**/memory.md` |
+| 현재 사용자-visible 제한 | `docs/product/known-limitations.md` 또는 `docs/product/README.md` |
+| 미래 follow-up / 승격 후보 | `docs/ROADMAP.md` |
+| 구조적 제약 | `memory/engineering/architecture/**` |
+| 개발/운영 검증 제약 | `memory/engineering/**` 또는 `docs/contributor-guide/**` |
+| 과거 risk register / 사건 | `docs/archives/**` |
 | 임시 audit 원문 | 사용자 명시 승인 + retire 조건 필수 |
 
 임시 `docs/<new-area>/` 는 SOT 가 아니다. 만들기 전 PR body 에 owner SOT,

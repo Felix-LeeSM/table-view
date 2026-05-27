@@ -128,7 +128,7 @@ effect 와 강결합.
     트랙 유지.
   - **Sprint 203** — `db/postgres.rs` (3803) 4분할 (Sprint 197 답습).
   - **Sprint 205** — `tabStore.ts` (1002) 분해.
-- 영속 표준은 `memory/conventions/refactoring/` 4 카테고리 (B / D / C / A).
+- 영속 표준은 `memory/engineering/conventions/refactoring/` 4 카테고리 (B / D / C / A).
 - `docs/PLAN.md` 의 sequencing 표 갱신 시점 — cycle 종료 후 (Sprint
   208) 일괄 갱신 권장.
 

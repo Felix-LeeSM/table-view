@@ -10,8 +10,8 @@
 
 ## 변경 파일
 
-- `memory/decisions/0030-mongo-db-scope-tab-local/memory.md` (NEW)
-- `memory/decisions/memory.md` — 인덱스 +1 row, `updated: 2026-05-15`.
+- `docs/archives/decisions/0030-mongo-db-scope-tab-local/memory.md` (NEW)
+- `docs/archives/decisions/memory.md` — 인덱스 +1 row, `updated: 2026-05-15`.
 
 ## 라인업 update (Sprint 327 D-72 +3 shift)
 

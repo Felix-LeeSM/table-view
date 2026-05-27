@@ -38,7 +38,7 @@ Files allowed to modify (per spec "Components to Create/Modify"):
 - E2E selector overhauls. AC-GLOBAL-06 requires updating any e2e selector that breaks because of the rename in the same sprint that breaks it; the Generator audits — if no e2e currently relies on the affected RDB strings, no e2e update is needed. Audit result is recorded in `findings.md`.
 - Migrating other paradigm-aware copy modules (e.g. `COLLECTION_READONLY_BANNER_TEXT` at `src/lib/strings/document.ts:17`) into the dictionary. Banner copy is one-off, not part of the unit/record/container axis; left as a `paradigm-fixed` entry in the audit.
 - Adding new Mongo / search / kv structure surfaces. The `search` and `kv` vocabulary entries are populated as best-effort dictionary entries (so AC-179-01 has full coverage) but no rendering surface is added for them in this sprint.
-- ADR or `memory/decisions/` updates. No architecture decision is made; the dictionary is an implementation detail consistent with the existing `src/lib/strings/document.ts` pattern.
+- ADR or `docs/archives/decisions/` updates. No architecture decision is made; the dictionary is an implementation detail consistent with the existing `src/lib/strings/document.ts` pattern.
 
 ## Invariants
 

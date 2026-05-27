@@ -10,7 +10,7 @@
 SQLite는 file-based RDBMS. host/port 모델 없음 → connection form 자체가
 다름(파일 경로 picker). 또한 단일 namespace(`main` + attached DB) 모델이라
 `NamespaceLabel::Single` 추상화 활용. 이 phase 는 **사용자 DBMS adapter** 만
-다룬다. `docs/state-management-strategy-2026-05-15.md` 의 internal app
+다룬다. `memory/engineering/architecture/state-management/memory.md` 의 internal app
 SQLite state store 이주는 별도 track 이며 cargo/sqlx feature 충돌 여부만
 공유 dependency 로 본다.
 

@@ -10,7 +10,7 @@ import { Button } from "@components/ui/button";
 
 // ---------------------------------------------------------------------------
 // `ConfirmDialog` preset (Layer 2 of the dialog 2-layer system; see
-// `docs/dialog-conventions.md`).
+// `memory/engineering/conventions/frontend/dialogs/memory.md`).
 //
 // Uses Layer-1 primitives only — `<AlertDialog*>` from
 // `src/components/ui/alert-dialog.tsx`. It does not reach into Radix

@@ -55,6 +55,6 @@ Sprint 74 는 NULL 칩에서 typed editor 로 복귀하는 UX 만 고쳤다. 저
   - `src/components/datagrid/sqlGenerator.test.ts` — 분기별 테스트 추가 대상
   - `src/components/datagrid/useDataGridEdit.ts` — commit 경로 + 에러 맵 도입
   - `src/components/datagrid/DataGridTable.tsx` — 활성 에디터 아래 hint 렌더
-  - ADR 0009 (`memory/decisions/0009-null-vs-empty-string-tri-state/memory.md`)
-  - Lesson 2026-04-24 (`memory/lessons/ui-patterns/2026-04-24-react-autofocus-form-control-only/memory.md`)
+  - ADR 0009 (`docs/archives/decisions/0009-null-vs-empty-string-tri-state/memory.md`)
+  - Lesson 2026-04-24 (`docs/archives/incidents/ui-patterns/2026-04-24-react-autofocus-form-control-only/memory.md`)
   - Sprint 74 handoff — typed editor 분류 기준 재사용 가능 (`docs/sprints/sprint-74/handoff.md`)

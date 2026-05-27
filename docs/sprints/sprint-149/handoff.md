@@ -40,7 +40,7 @@
 
 ### Forcing Mechanism (4-fold lock — verified live)
 
-1. **ADR 0011** — `memory/decisions/0011-single-window-stub-for-launcher-workspace/memory.md` exists with frozen body (결정/이유/트레이드오프). ADR index `memory/decisions/memory.md` row added at `0011`, index `updated: 2026-04-27`. ✓
+1. **ADR 0011** — `docs/archives/decisions/0011-single-window-stub-for-launcher-workspace/memory.md` exists with frozen body (결정/이유/트레이드오프). ADR index `docs/archives/decisions/memory.md` row added at `0011`, index `updated: 2026-04-27`. ✓
 2. **RISK-025 deferred** — `docs/RISKS.md:50` row present with `status=deferred`, area `frontend/architecture`, origin sprint `149`, resolution note pointing back to ADR 0011 + it.todo + findings. Summary counts re-tallied by evaluator: Active=15, Resolved=8, Deferred=2, Total=25 — matches table reality (`awk` count). ✓
 3. **`it.todo()` block** — `describe.skip("AC-141-* real-window invariants (DEFERRED to phase 12 — see ADR 0011)")` contains exactly 5 `it.todo(...)` entries (one per AC sub-clause). vitest run summary shows `5 todo` line — permanent reminder. ✓
 4. **findings.md Deferred Work** — section "Deferred Work (phase 12 진입 트리거 + 영향 면적)" enumerates entry triggers, 5-store impact list (connection/tab/appShell/mru/theme + favorites mention), and new-file manifest (`tauri.conf.json` windows, `launcher.rs`, `zustand-ipc-bridge.ts`, `LauncherPage.tsx`, `e2e/window-lifecycle.spec.ts`, superseding ADR). ✓
@@ -58,16 +58,16 @@
 ### Screenshots / Links / Artifacts
 
 - `src/__tests__/window-lifecycle.ac141.test.tsx` (new test file)
-- `memory/decisions/0011-single-window-stub-for-launcher-workspace/memory.md` (frozen ADR)
-- `memory/decisions/memory.md` (ADR index — row 0011 added)
+- `docs/archives/decisions/0011-single-window-stub-for-launcher-workspace/memory.md` (frozen ADR)
+- `docs/archives/decisions/memory.md` (ADR index — row 0011 added)
 - `docs/RISKS.md:50` (RISK-025 deferred row)
 - `docs/sprints/sprint-149/contract.md` / `execution-brief.md` / `findings.md`
 
 ## Changed Areas
 
 - `src/__tests__/window-lifecycle.ac141.test.tsx`: lifecycle invariants regression lock for AC-141-1~5.
-- `memory/decisions/0011-single-window-stub-for-launcher-workspace/memory.md`: ADR freezing the deferral decision.
-- `memory/decisions/memory.md`: ADR index updated (row + `updated` date).
+- `docs/archives/decisions/0011-single-window-stub-for-launcher-workspace/memory.md`: ADR freezing the deferral decision.
+- `docs/archives/decisions/memory.md`: ADR index updated (row + `updated` date).
 - `docs/RISKS.md`: RISK-025 deferred + summary recount.
 - `docs/sprints/sprint-149/{contract,execution-brief,findings}.md`: Sprint artifacts.
 

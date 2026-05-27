@@ -92,7 +92,7 @@ persistent 탭으로 promote 등 일상 워크플로 어디서든 pending 작업
 - Contract: `docs/sprints/sprint-251/contract.md`
 - Sprint 250 baseline: `docs/sprints/sprint-250/contract.md` + `findings.md`
 - Sprint 249 baseline (undoStack pattern): `docs/sprints/sprint-249/contract.md`
-- ADR 0022: `memory/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
+- ADR 0022: `docs/archives/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
 - Relevant files:
   - `src/components/datagrid/useDataGridEdit.ts`
   - `src/stores/dataGridEditStore.ts` (신규)

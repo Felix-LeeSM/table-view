@@ -115,16 +115,16 @@ This spec converts the five remaining items of `docs/archives/action-plans/ux-la
 - `src-tauri/src/db/postgres.rs` and `src-tauri/src/db/mongodb.rs`: implement cancel-token reception on the methods extended above, observing the same cancellation behavior the existing `execute_sql` already shows.
 - `src-tauri/src/commands/`: cancel-token registration and the existing `cancel_query` command surface extend to the new operations OR a generalized cancel command is introduced; the frontend invocation surface is uniform across vectors.
 - `src/components/datagrid/DataGridTable.tsx`, `src/components/document/DocumentDataGrid.tsx`, `src/components/schema/StructurePanel.tsx`, and the refetch path in `src/components/rdb/DataGrid.tsx`: render the unified progress-with-cancel overlay on the existing loading surface.
-- A new ADR under `memory/decisions/` covering the per-adapter cancel policy (in-flight vs best-effort; SQLite limitation explicit).
+- A new ADR under `docs/archives/decisions/` covering the per-adapter cancel policy (in-flight vs best-effort; SQLite limitation explicit).
 
 ---
 
 ## Global Acceptance Criteria
 
 1. `AC-GLOBAL-01`: All four verification commands pass after each sprint: `pnpm vitest run`, `pnpm tsc --noEmit`, `pnpm lint`, and (for sprints touching Rust — Sprint 180 only) `cargo build --manifest-path src-tauri/Cargo.toml` plus `cargo clippy --all-targets --all-features -- -D warnings`.
-2. `AC-GLOBAL-02`: Every sprint that adds new user-visible behavior ships at least one Vitest test exercising that behavior — no production code without a test (`memory/conventions/memory.md`).
+2. `AC-GLOBAL-02`: Every sprint that adds new user-visible behavior ships at least one Vitest test exercising that behavior — no production code without a test (`memory/engineering/conventions/memory.md`).
 3. `AC-GLOBAL-03`: No regression in existing paradigm-aware areas: tests for `QuerySyntax`, `MongoSyntax`, `SqlSyntax`, `DOCUMENT_LABELS`, `parseConnectionUrl`, and `cancel_query` continue to pass without modification beyond extension.
-4. `AC-GLOBAL-04`: Touched files achieve ≥ 70% line coverage for new code (project convention from `memory/conventions/memory.md`); each sprint's handoff cites the resulting numbers.
+4. `AC-GLOBAL-04`: Touched files achieve ≥ 70% line coverage for new code (project convention from `memory/engineering/conventions/memory.md`); each sprint's handoff cites the resulting numbers.
 5. `AC-GLOBAL-05`: No `it.skip` / `it.todo` / `xit` introduced in touched files — the project's "skip-zero gate" (Phase 13+) holds across all five sprints.
 6. `AC-GLOBAL-06`: No regression in the e2e suite shards already passing on `main`: any e2e test that selects content via text matchers affected by Sprint 179 paradigm-relabeling is updated in the same sprint.
 
@@ -191,4 +191,4 @@ The action plan was written 2026-04-30 and prescribes implementation steps; some
 
 - **Sprint 177 risk**: The `paradigm` field on `QueryHistoryEntry` is typed `paradigm: Paradigm` (required at the type level) but `addHistoryEntry` accepts a payload where it's optional and defaults to `"rdb"` (`queryHistoryStore.ts:46-48,87-90`). If a Mongo call site forgets to pass `paradigm`, the Mongo entry silently saves with `paradigm: "rdb"` and Sprint 177's coloring goes wrong. AC-177-03 captures this regression-guard requirement; consider adding a lint/grep step in Sprint 177's audit to catch silent omissions at the call sites.
 - **Sprint 180 risk**: The frontend's `fetchIdRef` race-protection pattern (`src/components/rdb/DataGrid.tsx:146-180`) currently bails out after a stale fetch resolves. With cancel added, a cancelled fetch's promise rejects rather than resolves; the existing `try/catch + setError` path now catches a "cancelled" error that should not surface as a user-visible error. AC-180-02 names this — the post-cancel UI must revert without an error message.
-- **Cross-sprint risk**: `it.skip` / `it.todo` skip-zero gate is Phase 13+ policy. Any sprint that adds tests in skipped form (e.g. for SQLite cancel deferred to a future sprint) must register a `[DEFERRED-<ID>]` annotation per `memory/lessons/workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md`.
+- **Cross-sprint risk**: `it.skip` / `it.todo` skip-zero gate is Phase 13+ policy. Any sprint that adds tests in skipped form (e.g. for SQLite cancel deferred to a future sprint) must register a `[DEFERRED-<ID>]` annotation per `docs/archives/incidents/workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md`.

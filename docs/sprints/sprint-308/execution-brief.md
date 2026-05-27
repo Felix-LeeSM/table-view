@@ -22,7 +22,7 @@ A2 는 A1 의 파서가 호출할 backend dispatch 표면이다. 13-method white
 (`BulkWriteOp` enum + `BulkWriteResult` 카운터)을 명확히 잡아두지 않으면 후속
 sprint 에서 frontend dispatch 가 잘못된 가정으로 설계될 위험이 있다.
 
-Phase 28 grill (`memory/roadmap/phase-28-mongo-full-support/memory.md`):
+Phase 28 grill (`docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md`):
 - 13-method whitelist 가 frozen — A2 는 그 중 새로 IPC 가 필요한 6 개를
   커버.
 - BSON canonical-extjson shape 도 frozen — 신규 method 의 결과는 기존
@@ -162,9 +162,9 @@ Vertical slice — 한 메서드씩 RED→GREEN:
 - **Contract**: `docs/sprints/sprint-308/contract.md`
 - **Slice A 마스터 spec**: `docs/sprints/sprint-307/spec.md` (A2 섹션)
 - **Sprint A1 산출물** (consumed): `src/lib/mongo/mongoshParser.ts`,
-  `memory/decisions/0029-mongosh-parser-strategy/memory.md`
+  `docs/archives/decisions/0029-mongosh-parser-strategy/memory.md`
 - **Phase 정의서**: `docs/phases/phase-28.md`
-- **Grill 결정**: `memory/roadmap/phase-28-mongo-full-support/memory.md`
+- **Grill 결정**: `docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md`
 - **기존 mongo command 패턴**: `src-tauri/src/commands/document/query.rs`
   (`find_documents`), `src-tauri/src/commands/document/mutate.rs`
   (`update_document`)

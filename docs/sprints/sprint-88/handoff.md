@@ -25,4 +25,4 @@
 - `.claude/rules/test-scenarios.md` 에 catch 블록 검증 규칙 추가됨. 이후 sprint 의 신규 코드는 빈 catch 허용 안 됨.
 
 ## Residual Notes
-- Generator 가 직접 만든 게 아닌 pre-existing 워크트리 modifications (`memory/lessons/memory.md`, `src/components/connection/ConnectionDialog.tsx`) 은 sprint-88 범위 밖. sprint-89 시작 전 baseline 캡처 권고 (findings F-1).
+- Generator 가 직접 만든 게 아닌 pre-existing 워크트리 modifications (`docs/archives/incidents/memory.md`, `src/components/connection/ConnectionDialog.tsx`) 은 sprint-88 범위 밖. sprint-89 시작 전 baseline 캡처 권고 (findings F-1).

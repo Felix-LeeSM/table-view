@@ -84,7 +84,7 @@
 | `src/lib/sql/cteColumnCompletion.ts` | 1 | 중 |
 | `src-tauri/src/db/postgres/**`, `db/mongodb/**` | (별 sprint 누적) | 중 |
 
-각 god file 의 시퀀스: 주석 단순화 → memory 이관 → 그래도 크면 5+ commit 리팩토링 (`memory/conventions/refactoring/god-file/memory.md`).
+각 god file 의 시퀀스: 주석 단순화 → memory 이관 → 그래도 크면 5+ commit 리팩토링 (`memory/engineering/conventions/refactoring/god-file/memory.md`).
 
 ### D7 — Frontmatter retrofit
 

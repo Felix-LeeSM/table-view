@@ -7,7 +7,7 @@
  * module surface and exercise the facade's contract (lazy load, type
  * narrowing, error handling) against a controllable stub.
  *
- * Mock scope (memory/conventions/testing-scenarios/mock-scope/memory.md):
+ * Mock scope (memory/engineering/conventions/testing-scenarios/mock-scope/memory.md):
  *   - We mock the WASM module — the unit under test is the TS facade
  *     wrapper, not the WASM binary itself. The Rust crate has its own
  *     `cargo test` suite (31 tests) that covers AC-385-L1..L7 +

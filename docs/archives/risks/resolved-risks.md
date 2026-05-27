@@ -1,6 +1,8 @@
 # Resolved Risk Register — Table View
 
-Resolved risk archive. Active/deferred risks live in `docs/RISKS.md`.
+Resolved risk archive. The former active/deferred register is archived at
+`docs/archives/risks/active-risk-register-2026-05-27.md`; current limitations
+and follow-ups live in product, roadmap, and contributor docs.
 
 Last updated: 2026-05-22
 
@@ -25,7 +27,7 @@ Last updated: 2026-05-22
 | RISK-018 | MySQL adapter missing | backend | 16 | Sprint 296 — Phase 17 closure; MySQL adapter slices A-G + coverage gate complete |
 | RISK-024 | `fireEvent` act() warnings possible | frontend/testing | 24-40 | 2026-04-12 — fireEvent calls wrapped in `act()` |
 | RISK-025 | Multi-window split deferred behind stub lifecycle | frontend/architecture | 149 | Sprint 150-155 — launcher/workspace split + IPC sync; ADR 0012 supersedes 0011 |
-| RISK-033 | Mongo edit path P0 milestone undecided | frontend/ux | UI eval | Phase 28 roadmap + `memory/roadmap/phase-28-mongo-full-support/memory.md` define full-support edit path |
+| RISK-033 | Mongo edit path P0 milestone undecided | frontend/ux | UI eval | Phase 28 roadmap + `docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md` define full-support edit path |
 | RISK-035 | `StructurePanel` first-render empty-state flicker | frontend/ui | P2 P1 review | Sprint 176 — `hasFetched*` gates empty-state rendering |
 | RISK-036 | pre-push e2e gate blocked pushes due image staleness / Vite OOM | ci/e2e | ADR-0044 | Superseded by remote PR/main smoke gate |
 | RISK-039 | DataGrid edit key missed database identity | frontend/logic | code-smell-audit L1 | Sprint 433 — key expanded to `(connId, db, schema, table)` |
@@ -40,7 +42,7 @@ Phase 17 closed retrospectively in Sprint 296. Evidence: `docs/sprints/sprint-29
 
 ### RISK-033 — Mongo edit milestone undecided
 
-The risk was about absence of roadmap, not completion of Mongo full support. It is resolved because `docs/phases/phase-28.md` and `memory/roadmap/phase-28-mongo-full-support/memory.md` now lock the edit path: `$set` DataGrid edits, QuickLook advanced operators, `_id` disabled, nested one-depth promote, BSON editors, bulkWrite and transaction toggle.
+The risk was about absence of roadmap, not completion of Mongo full support. It is resolved because `docs/phases/phase-28.md` and `docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md` now lock the edit path: `$set` DataGrid edits, QuickLook advanced operators, `_id` disabled, nested one-depth promote, BSON editors, bulkWrite and transaction toggle.
 
 ### RISK-039 — DataGrid edit key database identity
 

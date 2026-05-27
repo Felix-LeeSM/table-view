@@ -153,7 +153,7 @@ Detail (트레이서 / AC / dependency / risk) 는 `sprint-plan.md` 참조.
 
 - `memory/workflow/git-policy/memory.md` — 194/200 (–6). 다음 +7 lines 추가 시 split.
 - `memory/workflow/review/memory.md` — 149/200 (–51).
-- `memory/conventions/testing-scenarios/memory.md` — 141/200 (–59).
+- `memory/engineering/conventions/testing-scenarios/memory.md` — 141/200 (–59).
 
 split 시 sub-directory + 하위 `memory.md` index (200줄 cap 룰 유지).
 

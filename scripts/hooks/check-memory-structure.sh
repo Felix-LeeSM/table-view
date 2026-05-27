@@ -2,7 +2,6 @@
 # check-memory-structure.sh
 # 규칙: memory/ 트리 아래에는 **오직 memory.md만** 허용.
 #       모든 "방"은 디렉토리이고 내용은 memory.md에, 더 세분화하면 하위 디렉토리에 또 memory.md를 둔다.
-#       ADR/lesson도 서브디렉토리 + memory.md 형태여야 함.
 # 기본: 경고만 (exit 0). --strict 시 violation 있으면 exit 1.
 
 set -euo pipefail
@@ -40,8 +39,7 @@ if [ "$violations" -gt 0 ] && [ "$STRICT" = "1" ]; then
 fi
 
 # Sprint 388 — 자식 디렉토리 있는데 본 dir 에 memory.md 없으면 위반 (index 누락).
-# sprint-387 에서 memory/skills/ 가 sub-room (remember, split-memory) 가졌는데
-# memory.md 없이 silent fail 한 결함 재발 방지.
+# 과거 sub-room 이 parent memory.md 없이 생겨 silent fail 한 결함 재발 방지.
 while IFS= read -r dir; do
 	case "$dir" in
 		memory|memory/index) continue ;;

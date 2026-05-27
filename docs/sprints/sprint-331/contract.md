@@ -9,9 +9,9 @@ Sprint 328~330 의 Mongo DB-scope 변경 (toolbar chip 제거 / tab-local chip
 
 ## Done Criteria
 
-1. `memory/decisions/0030-mongo-db-scope-tab-local/memory.md` — ADR 0030
+1. `docs/archives/decisions/0030-mongo-db-scope-tab-local/memory.md` — ADR 0030
    생성 (Accepted, 2026-05-15).
-2. `memory/decisions/memory.md` — 인덱스 +1 row (ADR 0030), `updated`
+2. `docs/archives/decisions/memory.md` — 인덱스 +1 row (ADR 0030), `updated`
    필드 갱신.
 3. backend dead code 제거는 본 sprint 의 scope **외** — `resolved_db_name`
    이 여전히 `active_db` 필드를 fallback 처리에 사용하므로 진짜 dead 아님.
@@ -31,7 +31,7 @@ Sprint 328~330 의 Mongo DB-scope 변경 (toolbar chip 제거 / tab-local chip
 
 - Profile: `static`
 - Required checks:
-  1. `memory/decisions/0030-mongo-db-scope-tab-local/memory.md` 존재.
-  2. `memory/decisions/memory.md` 인덱스 row 추가.
+  1. `docs/archives/decisions/0030-mongo-db-scope-tab-local/memory.md` 존재.
+  2. `docs/archives/decisions/memory.md` 인덱스 row 추가.
 - Required evidence:
   - 파일 경로.

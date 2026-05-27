@@ -63,7 +63,7 @@ Phase 9에서 toolbar에 SchemaSwitcher를 도입했으나 사용자 점검(2026
 - Contract: `docs/sprints/sprint-135/contract.md`
 - Master spec: `docs/sprints/sprint-134/spec.md` (Phase 10 합본)
 - S134 baseline: `docs/sprints/sprint-134/handoff.md`
-- Lesson trigger: `memory/lessons/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
+- Lesson trigger: `docs/archives/incidents/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
 - Relevant files (read first):
   - `src/components/workspace/SchemaSwitcher.tsx` + test
   - `src/components/workspace/WorkspaceToolbar.tsx` + test

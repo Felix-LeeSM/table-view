@@ -4,9 +4,9 @@
 > grill 결정은 유지하되, Sprint 420–430 의 language completion architecture
 > 와 ADR 0045 이후 기준으로 Slice A 를 재정렬했다. 본 Phase 의 grill 결정
 > dict 는
-> [`memory/roadmap/phase-28-mongo-full-support/memory.md`](../../memory/roadmap/phase-28-mongo-full-support/memory.md)
+> [`docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md`](../../docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md)
 > 에 동결. RDB+Mongo paradigm 통합 후속 묶음 (U1–U5) 은 별도 phase 후보 —
-> [`memory/roadmap/unified-followups/memory.md`](../../memory/roadmap/unified-followups/memory.md).
+> [`docs/archives/roadmaps/memory-roadmap/unified-followups/memory.md`](../../docs/archives/roadmaps/memory-roadmap/unified-followups/memory.md).
 
 ## 2026-05-22 Re-baseline
 
@@ -14,7 +14,8 @@
   `src-tauri/mongosh-parser-core/src/completion.rs`.
 - TypeScript Mongo completion vocabulary 는 WASM load 전 fallback mirror 로만
   유지한다.
-- 자동완성 architecture SOT 는 ADR 0045 + `docs/query-language-support.md`.
+- 자동완성 architecture SOT 는 ADR 0045 +
+  `docs/product/query-language-support.md`.
 - Slice A 는 greenfield external parser 도입이 아니다. 기존 Rust/WASM
   parser/completion core 를 Query Editor routing 에 연결하는 작업이다.
 - 임의 JavaScript execution 은 계속 금지한다. 지원 method whitelist 와 typed
@@ -25,7 +26,7 @@
 기존 Mongo 지원은 Phase 6 / Sprint 189–198 의 부분 구현 (filter bar 5
 operators, find/aggregate toggle 의 raw JSON 만, $set 단독 update,
 schema-less DataGrid 의 기본 표시). TablePlus 패리티 종료 후 사용자가
-"MongoDB 기능 full 로 지원" 을 요청. 2026-05-14 grill-me 세션으로 카테고리
+"MongoDB 기능 full 로 지원" 을 요청. 2026-05-14 grill 세션으로 카테고리
 20+ 결정을 lock.
 
 판단 기준: "PostgreSQL 워크플로우 (탐색 / 조회 / 편집 / 쿼리 / 운영) 를

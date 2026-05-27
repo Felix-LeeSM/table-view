@@ -13,7 +13,7 @@ expansion / scroll / selected 가 함께 swap 된다. ADR 0027 구현.
 ## Contract
 
 - `docs/sprints/sprint-262/spec.md` (locked at session start, 2026-05-12).
-- `memory/decisions/0027-per-workspace-state-store/memory.md` (ADR 0027).
+- `docs/archives/decisions/0027-per-workspace-state-store/memory.md` (ADR 0027).
 
 ## Implementation under review
 
@@ -29,8 +29,8 @@ slice 19 케이스 (lifecycle / persistence / selectors / sidebar 4 axis
 파일).
 
 #### Files
-- `memory/decisions/0027-per-workspace-state-store/memory.md` (신규).
-- `memory/decisions/memory.md` (index entry).
+- `docs/archives/decisions/0027-per-workspace-state-store/memory.md` (신규).
+- `docs/archives/decisions/memory.md` (index entry).
 - `docs/sprints/sprint-262/spec.md` (신규).
 - `src/stores/workspaceStore.ts` (신규, 902 줄).
 - `src/stores/workspaceStore/types.ts` (신규, 214 줄).

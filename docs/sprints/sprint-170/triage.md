@@ -1,7 +1,7 @@
 # Sprint 170 — E2E `skip()` Inventory Triage (decision frozen)
 
 - **Date**: 2026-04-30
-- **Source-of-truth principles**: [`memory/conventions/e2e-scenarios/memory.md`](../../../memory/conventions/e2e-scenarios/memory.md)
+- **Source-of-truth principles**: [`memory/engineering/conventions/e2e-scenarios/memory.md`](../../../memory/engineering/conventions/e2e-scenarios/memory.md)
 - **Trigger**: `e2e/` 의 28개 unconditional `skip()` 부채 정리. P6 (`skip()`은
   부채) 적용.
 

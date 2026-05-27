@@ -2,7 +2,7 @@
 
 Harness sprint outputs live here.
 
-Prompts/templates stay in `.claude/skills/harness/`; run artifacts go in `docs/sprints/sprint-N/`.
+Prompts/templates stay in `.agents/skills/harness/`; run artifacts go in `docs/sprints/sprint-N/`.
 
 ## Policy
 

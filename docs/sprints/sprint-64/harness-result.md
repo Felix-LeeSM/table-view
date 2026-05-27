@@ -38,7 +38,7 @@
 1. **Frontend `paradigm`을 optional(`?`)로 둔 점** — Sprint 65 이후 UI 분기 도입 시 required로 타이트닝.
 2. **`ConnectionConfigPublic.paradigm: String` + `#[serde(default)]`가 `""` fallback 허용** — 타입 안전성 약화, `&'static str`나 enum으로 교체 고려. `docs/RISKS.md`에 등록 권장.
 3. **`execute_query`가 쿼리 수행 전 구간 동안 connections Mutex 보유** — 동시 장기 쿼리 처리 시 경합. `Arc<ActiveAdapter>` wrap으로 Sprint 65에서 완화.
-4. **평가 중 `memory/conventions/memory.md`가 수정된 상태** — Sprint 63 커밋에서 누락된 네이밍 규칙 문서 업데이트. Sprint 64 커밋에 합쳐 수습.
+4. **평가 중 `memory/engineering/conventions/memory.md`가 수정된 상태** — Sprint 63 커밋에서 누락된 네이밍 규칙 문서 업데이트. Sprint 64 커밋에 합쳐 수습.
 
 ## 다음 단계
 Sprint 65 (Phase 6 plan B — MongoAdapter 연결 + 테스트 인프라)로 진행.

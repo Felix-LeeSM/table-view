@@ -14,7 +14,7 @@
 - 13-method whitelist exported as a single `readonly` tuple from the parser module (single source of truth used by A4's snippet menu and A5's dispatcher).
 - Cursor chain parser: `.sort({...})`, `.limit(N)`, `.skip(N)`, `.toArray()` — only valid after `find` / `aggregate`.
 - Refusal cases (returns `ParsedMongoshError`, never throws): variables, control flow (for/while/if), callbacks (`.forEach(cb)`, `.map(cb)`), shell helpers (`use`, `show`), cross-DB (`getSiblingDB`), unknown method, malformed BSON literal, multiple statements, missing `db.` prefix, invalid cursor chain on non-cursor method, `NumberLong` 64-bit overflow.
-- ADR in `memory/decisions/00NN-mongosh-parser-strategy/memory.md` (next sequential ADR number — check the index) recording the strategy decision.
+- ADR in `docs/archives/decisions/00NN-mongosh-parser-strategy/memory.md` (next sequential ADR number — check the index) recording the strategy decision.
 - Unit suite `src/lib/mongo/mongoshParser.test.ts` covering the 13×method × happy + 8×refusal + 6×BSON-literal matrix.
 
 ## Out of Scope
@@ -77,7 +77,7 @@
   - `users.find({})` → `missing-db-prefix`
   - `db.users.insertOne({}).limit(5)` → `invalid-cursor-chain`
 - `AC-05` `pnpm vitest run --coverage src/lib/mongo/mongoshParser` reports ≥90% line coverage on the parser module (≥85% if branch is reported separately).
-- `AC-06` ADR exists at `memory/decisions/00NN-mongosh-parser-strategy/memory.md` (next sequential number per `memory/decisions/memory.md` index) with sections: Decision, Rationale (cites R28.1), Trade-offs, Consequences (bundle size, build complexity). ADR is added to the activelist of the decisions index.
+- `AC-06` ADR exists at `docs/archives/decisions/00NN-mongosh-parser-strategy/memory.md` (next sequential number per `docs/archives/decisions/memory.md` index) with sections: Decision, Rationale (cites R28.1), Trade-offs, Consequences (bundle size, build complexity). ADR is added to the activelist of the decisions index.
 - `AC-07` `grep -E "\b(eval|new Function)\b" src/lib/mongo/mongoshParser.ts src/lib/mongo/bsonLiterals.ts` returns empty (no JS eval primitives invoked).
 - `AC-08` `pnpm tsc --noEmit` exits 0. `pnpm lint` exits 0. `pnpm vitest run` (full suite) exits 0 — no regression in any existing test.
 
@@ -98,7 +98,7 @@
 4. `pnpm lint` exit 0.
 5. `pnpm vitest run` (full suite) exit 0 — no regression.
 6. `grep -E "\b(eval|new Function)\b" src/lib/mongo/mongoshParser.ts src/lib/mongo/bsonLiterals.ts` returns empty.
-7. ADR file exists at `memory/decisions/00NN-mongosh-parser-strategy/memory.md` and is referenced in `memory/decisions/memory.md` index.
+7. ADR file exists at `docs/archives/decisions/00NN-mongosh-parser-strategy/memory.md` and is referenced in `docs/archives/decisions/memory.md` index.
 8. The 13-method whitelist constant is exported from `mongoshParser.ts` and consumed (via TS import) only from the test file in this sprint (consumer sub-slices arrive later).
 
 ### Required Evidence
@@ -154,8 +154,8 @@ pnpm vitest run
 grep -E "\b(eval|new Function)\b" src/lib/mongo/mongoshParser.ts src/lib/mongo/bsonLiterals.ts 2>/dev/null && echo "FAIL: eval primitives present" || echo "OK: no eval"
 
 # 6. ADR present
-ls memory/decisions/*mongosh-parser-strategy*/memory.md
-grep -l "mongosh-parser-strategy" memory/decisions/memory.md
+ls docs/archives/decisions/*mongosh-parser-strategy*/memory.md
+grep -l "mongosh-parser-strategy" docs/archives/decisions/memory.md
 ```
 
 All 6 commands must exit cleanly (grep `2`-cleanly = no matches found).
@@ -168,8 +168,8 @@ All 6 commands must exit cleanly (grep `2`-cleanly = no matches found).
   - `src/lib/mongo/mongoshParser.test.ts` (NEW)
   - `src/lib/mongo/bsonLiterals.ts` (NEW, optional split from parser module)
   - `src/lib/mongo/bsonLiterals.test.ts` (NEW, optional if split)
-  - `memory/decisions/00NN-mongosh-parser-strategy/memory.md` (NEW)
-  - `memory/decisions/memory.md` (MODIFY: add entry to active list)
+  - `docs/archives/decisions/00NN-mongosh-parser-strategy/memory.md` (NEW)
+  - `docs/archives/decisions/memory.md` (MODIFY: add entry to active list)
   - **DO NOT TOUCH**: any `src/components/`, `src-tauri/`, `src/stores/`, `src/hooks/`, RDB code, existing test files.
 - **Merge order**: A1 is the first of 6 sub-sprints. Subsequent sub-sprints (A2–A6) consume the parser surface and must NOT modify A1's exports.
 
@@ -179,4 +179,4 @@ All 6 commands must exit cleanly (grep `2`-cleanly = no matches found).
 - Required checks passing: `yes` (all 6)
 - Acceptance criteria evidence linked in `handoff.md`
 - No file outside the declared write scope is touched (verified by `git diff --name-only` against the pre-sprint baseline).
-- ADR is the **next sequential number** in `memory/decisions/memory.md` index (no number collision).
+- ADR is the **next sequential number** in `docs/archives/decisions/memory.md` index (no number collision).

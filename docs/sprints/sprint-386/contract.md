@@ -13,28 +13,28 @@
 
 | # | 출처 (auto-memory) | 목적지 (repo) | 변형 |
 |---|---|---|---|
-| 1 | feedback_test_scenarios_user_journey | `memory/conventions/testing-scenarios/mock-scope/memory.md` (sub-room 신설) | 원본 보존 |
+| 1 | feedback_test_scenarios_user_journey | `memory/engineering/conventions/testing-scenarios/mock-scope/memory.md` (sub-room 신설) | 원본 보존 |
 | 2 | feedback_bug_fix_starts_with_regression_test | `memory/workflow/bug-fix/memory.md` (workflow 방 신설) | 원본 보존 |
-| 3 | feedback_test_documentation | `memory/conventions/testing-scenarios/memory.md` P7 확장 | 흡수 |
+| 3 | feedback_test_documentation | `memory/engineering/conventions/testing-scenarios/memory.md` P7 확장 | 흡수 |
 | 4 | feedback_security_rigor | `memory/workflow/grill/security-handoff/memory.md` | 원본 보존 |
 | 5 | feedback_one_decision_at_a_time | `memory/workflow/grill/memory.md` 본문 | 원본 보존 |
 | 6 | feedback_option_decomposition | `memory/workflow/grill/memory.md` 본문 | reframe — "기술 + 유저 플로우 두 축" |
 | 7 | feedback_demo_html_for_grill | `memory/workflow/grill/memory.md` 본문 + `.claude/skills/grill-me/templates/option-comparison.html` | reframe — UI/복잡 워크플로우/예측 트리거, 동적 인터랙션 우선 |
 | 8 | feedback_minimal_implementation_logs | `memory/workflow/implementation/memory.md` | reframe — agent 자율성 + tool noise 차단 |
-| 9 | feedback_reset_to_default_ui | `memory/ux/memory.md` (ux 방 신설) | 원본 보존 |
-| 10 | feedback_do_not_commit_diagnostic_logs | `memory/conventions/memory.md` 금지 사항 확장 | 일반화 (console.log → 임시 진단 일반) |
+| 9 | feedback_reset_to_default_ui | `memory/product/memory.md` (ux 방 신설) | 원본 보존 |
+| 10 | feedback_do_not_commit_diagnostic_logs | `memory/engineering/conventions/memory.md` 금지 사항 확장 | 일반화 (console.log → 임시 진단 일반) |
 | 11 | feedback_git_commit_direct | `memory/workflow/delivery/memory.md` + `.claude/rules/git-policy.md` cross-ref | reframe — commit → push → PR → review → merge 전체 자율, agent spawn 가능 |
-| 12 | feedback_sprint_comment_cleanup | `memory/conventions/refactoring/god-file/memory.md` (sub-room 신설) | reframe — god file 시퀀스 (탐지 ≥500줄 → 주석 단순화/이관 → 정합성 검증 → 그래도 크면 리팩토링) |
+| 12 | feedback_sprint_comment_cleanup | `memory/engineering/conventions/refactoring/god-file/memory.md` (sub-room 신설) | reframe — god file 시퀀스 (탐지 ≥500줄 → 주석 단순화/이관 → 정합성 검증 → 그래도 크면 리팩토링) |
 | 13 | reference_codex_review | **미이동** | auto-memory 유지. delivery review step 에서 사용자 질의로 호출 |
 | 14 | reference_cold_boot_instrumentation | `memory/runbook/cold-boot/memory.md` (runbook 방 신설) | 부분만 — protocol + aggregation 만 (marker 위치는 코드 grep 으로 drift 회피) |
 
 ### 신규 방 / sub-room
 
 - `memory/workflow/memory.md` (입구) — `bug-fix/`, `grill/` (`security-handoff/` 포함), `implementation/`, `delivery/`
-- `memory/ux/memory.md`
+- `memory/product/memory.md`
 - `memory/runbook/memory.md` (입구) — `cold-boot/`
-- `memory/conventions/testing-scenarios/mock-scope/memory.md`
-- `memory/conventions/refactoring/god-file/memory.md`
+- `memory/engineering/conventions/testing-scenarios/mock-scope/memory.md`
+- `memory/engineering/conventions/refactoring/god-file/memory.md`
 - `memory/index/by-task.md` (R3)
 - `memory/index/by-surface.md` (R3)
 
@@ -135,7 +135,7 @@
 
 ### Required Checks
 
-1. `find memory/workflow memory/ux memory/runbook memory/conventions/testing-scenarios/mock-scope memory/conventions/refactoring/god-file -name "memory.md" | wc -l` ≥ 8
+1. `find memory/workflow memory/product memory/runbook memory/engineering/conventions/testing-scenarios/mock-scope memory/engineering/conventions/refactoring/god-file -name "memory.md" | wc -l` ≥ 8
 2. `bash scripts/check-memory-size.sh` — 모든 memory.md 200줄 이하
 3. `bash scripts/check-memory-structure.sh` — `memory/` 트리 `memory.md` 만 (예외 `index/*.md`)
 4. `ls .claude/agents/*.md | wc -l` ≥ 9

@@ -4,7 +4,7 @@
 
 Phase 28 Slice A removes the per-tab `Find / Aggregate` toggle and replaces the MongoDB query input surface with a single mongosh-style editor where the user types `db.<collection>.<method>(<args>).<cursorChain>` expressions. A frontend mini-parser (no JS eval) extracts collection, method, arguments, and cursor-chain options, then routes the call to the matching MongoDB driver path via existing or newly-added Tauri commands. The slice also introduces a `+ Insert ▾` toolbar dropdown with four sections (Query methods / Mutation methods / Filter operators / Aggregate stages) that inserts snippet templates with `<placeholder>` markers at the cursor. This is the architectural foundation for the remaining 12 slices in Phase 28: every later slice (B–M) that interacts with the editor depends on the parser surface defined here.
 
-Lock decisions (encoded only — already grilled and frozen in `memory/roadmap/phase-28-mongo-full-support/memory.md`): toggle removed; mongosh expression input; mini parser (WASM/sidecar preferred per Q14 option 2+, falling back to handwritten whitelist parser if WASM is too expensive — R28.1); supported method set fixed at 13; BSON literal whitelist fixed at 6; `tab.queryMode` field deprecated (not unset on existing tabs; new tabs do not set it; Run dispatch ignores it).
+Lock decisions (encoded only — already grilled and frozen in `docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md`): toggle removed; mongosh expression input; mini parser (WASM/sidecar preferred per Q14 option 2+, falling back to handwritten whitelist parser if WASM is too expensive — R28.1); supported method set fixed at 13; BSON literal whitelist fixed at 6; `tab.queryMode` field deprecated (not unset on existing tabs; new tabs do not set it; Run dispatch ignores it).
 
 ## Sprint Breakdown
 
@@ -48,14 +48,14 @@ Slice A is sub-divided into **A1 → A6** so each sub-slice is independently ver
    - Malformed BSON literal: `ObjectId("not-hex")` → kind `bson-literal`.
    - JS eval is **never** invoked — verifiable by grepping the parser module: `grep -E "\b(eval|Function|new Function)\b" src/lib/mongo/mongoshParser.ts` returns empty.
 5. The 13 supported methods are exported as a single `readonly` tuple/array constant from the parser module, used both by the parser itself and by the snippet dictionary in Sprint A4 (single source of truth, verifiable by import inspection).
-6. The parser decision (WASM-sidecar vs handwritten whitelist) is recorded in a new ADR file under `memory/decisions/` (filename per ADR convention). Decision body includes: (a) chosen strategy, (b) rationale referencing R28.1, (c) consequences (bundle size, build dependencies). Verifiable by file inspection.
+6. The parser decision (WASM-sidecar vs handwritten whitelist) is recorded in a new ADR file under `docs/archives/decisions/` (filename per ADR convention). Decision body includes: (a) chosen strategy, (b) rationale referencing R28.1, (c) consequences (bundle size, build dependencies). Verifiable by file inspection.
 7. `pnpm test src/lib/mongo/mongoshParser` exit 0 with ≥90% line coverage on the parser module (per `.claude/rules/testing.md` "쿼리 파서/빌더: 90%").
 
 **Components to Create/Modify**:
 - `src/lib/mongo/mongoshParser.ts` (NEW) — pure parser module.
 - `src/lib/mongo/mongoshParser.test.ts` (NEW) — unit suite covering 13 methods × happy / refusal / BSON literal matrix.
 - `src/lib/mongo/bsonLiterals.ts` (NEW or fold into parser module) — the 6-literal whitelist + tagged reification types.
-- `memory/decisions/00NN-mongosh-parser-strategy/memory.md` (NEW) — strategy ADR.
+- `docs/archives/decisions/00NN-mongosh-parser-strategy/memory.md` (NEW) — strategy ADR.
 - (Optional, if WASM chosen) — Rust crate `src-tauri/crates/mongosh-parser/` or `src/lib/mongo/wasm/` glue. Decision in AC#6 determines.
 
 ---

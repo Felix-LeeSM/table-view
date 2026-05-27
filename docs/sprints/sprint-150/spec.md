@@ -116,15 +116,15 @@ Phase 12 supersedes ADR 0011's single-window stub by splitting the app into two 
 **Acceptance Criteria**:
 1. `src/__tests__/window-lifecycle.ac141.test.tsx` no longer contains any `describe.skip` / `it.todo` / `it.skip` / `xit` / `this.skip()`. The 5 deferred AC-141-* (real) cases are now live `it(...)` and pass against the Sprint 150–154 implementation.
 2. `grep -rE "it\.skip|this\.skip\(\)|it\.todo|xit\(" src/__tests__/window-lifecycle.ac141.test.tsx` returns empty.
-3. A new ADR file (`memory/decisions/0012-multi-window-launcher-workspace/memory.md`) is created with `supersedes: 0011`. ADR 0011 front-matter `superseded_by` is updated to `0012`. ADR 0011 body is NOT edited (frozen).
+3. A new ADR file (`docs/archives/decisions/0012-multi-window-launcher-workspace/memory.md`) is created with `supersedes: 0011`. ADR 0011 front-matter `superseded_by` is updated to `0012`. ADR 0011 body is NOT edited (frozen).
 4. `docs/RISKS.md` shows RISK-025 status as `resolved` with a resolution log entry citing Sprint 150–155, and the summary counters are recomputed.
 5. `pnpm vitest run`, `pnpm tsc --noEmit`, `pnpm lint` exit 0. Test counts ≥ Sprint 149's 2244 with the 5 todos now active.
 
 **Components to Create/Modify**:
 - `src/__tests__/window-lifecycle.ac141.test.tsx`: convert 5 todos into live tests, remove `describe.skip`, prune dead stub cases or repoint them at the real harness.
-- `memory/decisions/0012-multi-window-launcher-workspace/memory.md` (new).
-- `memory/decisions/0011-single-window-stub-for-launcher-workspace/memory.md`: front-matter `superseded_by` only.
-- `memory/decisions/memory.md`: index updated.
+- `docs/archives/decisions/0012-multi-window-launcher-workspace/memory.md` (new).
+- `docs/archives/decisions/0011-single-window-stub-for-launcher-workspace/memory.md`: front-matter `superseded_by` only.
+- `docs/archives/decisions/memory.md`: index updated.
 - `docs/RISKS.md`: RISK-025 status flip + resolution log entry.
 
 ---

@@ -5,7 +5,7 @@ Date: 2026-05-05.
 Type: refactor (행동 변경 0; e2e 실행 면적 동일 — skip 표시만 사라짐).
 
 [`docs/PLAN.md`](../../PLAN.md) Sprint 206 row + `/CODE_SMELLS.md` §6.
-[`memory/conventions/e2e-scenarios/memory.md`](../../../memory/conventions/e2e-scenarios/memory.md) "skip 은 부채" 원칙.
+[`memory/engineering/conventions/e2e-scenarios/memory.md`](../../../memory/engineering/conventions/e2e-scenarios/memory.md) "skip 은 부채" 원칙.
 
 ## 배경
 

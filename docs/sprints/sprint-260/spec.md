@@ -13,9 +13,9 @@ Sprint 258 (`<table>` → CSS Grid 전환) + Sprint 259 (ObjectId / serial / per
 ## Acceptance Criteria
 
 ### AC-260-01 — ADR 0025 lock (TanStack Table 도입 안 함)
-- `memory/decisions/0025-datagrid-self-managed-no-tanstack/memory.md` 작성.
+- `docs/archives/decisions/0025-datagrid-self-managed-no-tanstack/memory.md` 작성.
 - 결정 / 이유 / 트레이드오프 / 관련 sprint 명시.
-- `memory/decisions/memory.md` 인덱스에 entry 추가 (활성 결정 마지막 행).
+- `docs/archives/decisions/memory.md` 인덱스에 entry 추가 (활성 결정 마지막 행).
 
 ### AC-260-02 — Drag-resize 4 grid 확대
 - 현재 RDB `DataGridTable` 만 `useColumnResize` 사용. Document `DocumentDataGrid`, read-only `QueryResultGrid`, editable `EditableQueryResultGrid` 에도 동일 hook 도입.

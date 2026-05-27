@@ -405,9 +405,6 @@ describe("DataSourceProfile registry", () => {
       expect(metadata.completionOwner).toBeTruthy();
       expect(metadata.fallbackPolicy.kind).not.toBe("source-of-truth");
       expect(metadata.safetyAnalyzer).toBeTruthy();
-      expect(metadata.supportedSyntaxDocs).toBe(
-        "docs/query-language-support.md",
-      );
     }
   });
 

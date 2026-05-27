@@ -15,7 +15,7 @@ paths:
 
 # Rust 컨벤션 wrapper
 
-Source: [`memory/conventions/rust/memory.md`](../../memory/conventions/rust/memory.md).
+Source: [`memory/engineering/conventions/rust/memory.md`](../../memory/engineering/conventions/rust/memory.md).
 ```
 
 ## 룰
@@ -30,11 +30,11 @@ Source: [`memory/conventions/rust/memory.md`](../../memory/conventions/rust/memo
 | wrapper | source |
 |---|---|
 | `git-policy.md` | `memory/workflow/git-policy/memory.md` |
-| `rust-conventions.md` | `memory/conventions/rust/memory.md` |
-| `react-conventions.md` | `memory/conventions/react/memory.md` |
-| `testing.md` | `memory/conventions/testing-scenarios/memory.md` + `e2e-scenarios/memory.md` |
+| `rust-conventions.md` | `memory/engineering/conventions/rust/memory.md` |
+| `react-conventions.md` | `memory/engineering/conventions/react/memory.md` |
+| `testing.md` | `memory/engineering/conventions/testing-scenarios/memory.md` + `e2e-scenarios/memory.md` |
 | `test-scenarios.md` | 위와 동일 (체크리스트 관점) |
-| `e2e-scenarios.md` | `memory/conventions/e2e-scenarios/memory.md` |
+| `e2e-scenarios.md` | `memory/engineering/conventions/e2e-scenarios/memory.md` |
 
 ## Multi-brain 호환
 
@@ -44,7 +44,7 @@ brain 별 wrapper, 본문은 `memory/` source.
 ## 관련
 
 - `AGENTS.md` — universal entry
-- `memory/conventions/memory.md` — 코드 룰
+- `memory/engineering/conventions/memory.md` — 코드 룰
 - `memory/workflow/git-policy/memory.md` — git hook 회피 금지 source
 - `.claude/agents/README.md` — agent wrapper 정책
-- `memory/skills/memory.md` — slash command wrapper 정책 (commands/ README 금지 룰)
+- `.agents/skills/remember/SKILL.md`, `.agents/skills/split-memory/SKILL.md` — agent skill source

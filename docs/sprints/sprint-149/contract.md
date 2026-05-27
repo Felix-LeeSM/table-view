@@ -41,7 +41,7 @@ fixed / workspace 1280×800 resizable)로 lifecycle을 분리하기를 요구한
 
 ## Forcing Mechanisms (이월 강제 4중 잠금)
 
-1. **ADR 0011** — `memory/decisions/0011-single-window-stub-for-launcher-workspace/memory.md`.
+1. **ADR 0011** — `docs/archives/decisions/0011-single-window-stub-for-launcher-workspace/memory.md`.
    본문 동결 — single-window stub 채택 결정 + 재개 트리거.
 2. **RISK-025 deferred** — `docs/RISKS.md`에 등록. status=deferred,
    재개 트리거 + 재개 시 영향 면적 명시.

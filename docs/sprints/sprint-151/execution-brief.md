@@ -58,5 +58,5 @@ Sprints 152–153 will sync 5–6 production stores across launcher and workspac
 - Master spec: `docs/sprints/sprint-150/spec.md` (Sprint 151 section)
 - Phase 11 closing findings (still authoritative for store list): `docs/sprints/sprint-149/findings.md`
 - Sprint 150 outputs (must not regress): `docs/sprints/sprint-150/handoff.md`
-- Conventions: `memory/conventions/memory.md`
-- Skip-zero gate: `memory/lessons/workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md`
+- Conventions: `memory/engineering/conventions/memory.md`
+- Skip-zero gate: `docs/archives/incidents/workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md`
