@@ -40,7 +40,7 @@ trigger:
 
 ## 관련
 
-- [grill](../grill/memory.md) — 사용자 보고가 명확하지 않으면 먼저 grill 으로 증상 lock
+- `grill-me` skill — 사용자 보고가 명확하지 않으면 먼저 증상 lock
 - [implementation](../implementation/memory.md) — Red 작성 후 Green 단계 narration / noise 룰
 - [delivery](../delivery/memory.md) — fix 끝나면 자율 commit/push
 - [engineering/conventions/testing-scenarios](../../engineering/conventions/testing-scenarios/memory.md) — 시나리오 8원칙

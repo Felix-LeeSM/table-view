@@ -167,4 +167,4 @@ pr-reviewer 가 spawn 시:
 - `scripts/review/run-checks.sh` — contract Required Checks batch
 - `memory/workflow/delivery/memory.md` — T4 review 통합
 - `memory/workflow/documentation/memory.md` — Docs 차원 source
-- `memory/workflow/grill/memory.md` — review 와 직교 (grill = 결정 인터뷰)
+- `.agents/skills/grill-me/SKILL.md` — review 와 직교 (grill = 결정 인터뷰)

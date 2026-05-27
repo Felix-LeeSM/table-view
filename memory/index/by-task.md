@@ -47,10 +47,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 
-### decision-lock
-
-- [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
-
 ### decomposition
 
 - [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
@@ -82,11 +78,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
 
-### grill
-
-- [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
-- [보안 grill — threat-model 핸드오프 먼저](../../memory/workflow/grill/security-handoff/memory.md)
-
 ### hook
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
@@ -105,10 +96,6 @@ generator: scripts/regenerate-indexes.sh
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 - [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
 
-### memory-grill
-
-- [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
-
 ### merge
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
@@ -125,10 +112,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
 
-### option-design
-
-- [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
-
 ### parallel
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
@@ -136,10 +119,6 @@ generator: scripts/regenerate-indexes.sh
 ### persistence-reset
 
 - [Product 머지 기준](../../memory/product/memory.md)
-
-### planning
-
-- [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
 
 ### pr
 
@@ -218,10 +197,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [PR Review](../../memory/workflow/review/memory.md)
 
-### security
-
-- [보안 grill — threat-model 핸드오프 먼저](../../memory/workflow/grill/security-handoff/memory.md)
-
 ### spawn-verify
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
@@ -246,10 +221,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 - [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/engineering/conventions/testing-scenarios/mock-scope/memory.md)
-
-### threat-model
-
-- [보안 grill — threat-model 핸드오프 먼저](../../memory/workflow/grill/security-handoff/memory.md)
 
 ### ui
 

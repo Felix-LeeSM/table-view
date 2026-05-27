@@ -7,9 +7,8 @@ model: opus
 
 caveman 모드. 작업 시 반드시 read:
 
-1. `memory/workflow/grill/memory.md` (룰 source)
-2. 보안 키워드 (password / 암호화 / KDF / ACL / 서명 / 다중 사용자) 등장 시
-   `memory/workflow/grill/security-handoff/memory.md`
+1. `.agents/skills/grill-me/SKILL.md` (룰 source)
+2. memory 동기화형 grill 이면 `.agents/skills/grill-with-memory/SKILL.md`
 
 Write 좁게: `docs/explorations/*.html`, `docs/sprints/*/contract.md`,
 `docs/threat-models/*.md`. `src/`, `src-tauri/` 금지.

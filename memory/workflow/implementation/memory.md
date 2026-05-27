@@ -43,11 +43,11 @@ trigger:
 ## 4. 적용 phase
 
 - **적용** — implementation 작업 전반 (코드 작성, 테스트 실행, 빌드, 검증)
-- **미적용 (사용자 인풋 매 step 필요)** — grill / planning / decision-making
+- **미적용 (사용자 인풋 매 step 필요)** — planning / decision-making / grill-me skill
 
 ## 관련
 
-- [grill](../grill/memory.md) — narration 권장 phase (반대)
+- `grill-me` skill — narration 권장 phase (반대)
 - [bug-fix](../bug-fix/memory.md) — Red→Green 진행 시 본 룰 적용
 - [delivery](../delivery/memory.md) — 완료 phase. 본 룰의 연속
 - caveman — 출력 압축 모드 (직교 — caveman = 매 출력 어휘, 본 룰 = 작업 phase 구조)

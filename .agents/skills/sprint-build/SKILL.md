@@ -48,7 +48,7 @@ description: >
 DOD를 사용자에게 제시하고 승인을 받습니다.
 사용자가 수정하면 DOD를 업데이트합니다.
 
-DOD 승인 후에는 `memory/workflow/grill/memory.md` 기준으로 필요한 결정만
+DOD 승인 후에는 `.agents/skills/grill-me/SKILL.md` 기준으로 필요한 결정만
 잠그고, 명확한 작업은 자율적으로 Phase 2로 진행합니다.
 
 ---

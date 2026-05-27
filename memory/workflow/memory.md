@@ -6,12 +6,11 @@ updated: 2026-05-27
 
 # Workflow
 
-User-Claude 협업 phase 별 행동 룰. 코드 룰은 [engineering/conventions](../engineering/conventions/memory.md) 참조, 본 방은 _사용자와의 협업 패턴_.
+User-Claude 협업 phase 별 행동 룰. 코드 룰은 [engineering/conventions](../engineering/conventions/memory.md) 참조, 본 방은 _구현/검증/전달 협업 패턴_.
 
 ## 방 지도
 
 - [bug-fix](./bug-fix/memory.md) — 사용자 버그/회귀/UX 이슈 보고 시 처리 순서 (Red 먼저)
-- [grill](./grill/memory.md) — 결정 인터뷰 룰 (1q/메시지, 두 축 옵션 분해, html 시각화). sub-room: [security-handoff](./grill/security-handoff/memory.md)
 - [implementation](./implementation/memory.md) — 구현 phase 의 agent 자율성 + tool output noise 차단
 - [tdd](./tdd/memory.md) — code-profile sprint 의 RED evidence / pre-push TDD gate 해석
 - [delivery](./delivery/memory.md) — code → commit → push → PR → review → merge 전체 자율 pipeline
@@ -24,7 +23,6 @@ User-Claude 협업 phase 별 행동 룰. 코드 룰은 [engineering/conventions]
 | 신호                                      | phase          | 진입 룰                                                                               |
 | ----------------------------------------- | -------------- | ------------------------------------------------------------------------------------- |
 | 사용자가 버그/회귀/UX 이슈 보고           | bug-fix        | 즉시 [bug-fix](./bug-fix/memory.md) 본문 읽고 Red test 부터                           |
-| 사용자가 결정/선택지 묻거나 grill 요청    | grill          | [grill](./grill/memory.md) — 1q/메시지, 옵션은 두 축                                  |
 | 사용자가 코드 작성/구현 지시              | implementation | [implementation](./implementation/memory.md) — narration 최소, tool output noise 차단 |
 | code-profile sprint 에서 테스트/기능 변경 | tdd            | [tdd](./tdd/memory.md) — 작업 방식 강제가 아니라 delivery evidence 사전 확인          |
 | 문서 추가 / PR 작성 / workflow 변경       | documentation  | [documentation](./documentation/memory.md) — impact 판단 후 기존 SOT 반영             |
@@ -34,3 +32,5 @@ User-Claude 협업 phase 별 행동 룰. 코드 룰은 [engineering/conventions]
 
 - [engineering/conventions](../engineering/conventions/memory.md) — 코드 룰 (Rust/TS/테스트/주석)
 - [product](../product/memory.md) — 제품 UX 머지 기준
+- 결정 / grill 은 workflow memory 가 아니라 `.agents/skills/grill-me/SKILL.md` 와
+  `.agents/skills/grill-with-memory/SKILL.md` 가 source.

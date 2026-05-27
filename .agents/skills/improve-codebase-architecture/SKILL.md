@@ -67,7 +67,7 @@ deepening 기회의 번호 매긴 리스트를 제시. 각 후보에 대해:
 
 부수 효과는 결정이 구체화될 때 인라인으로 발생:
 
-- **deepened 모듈이 memory 에 없는 개념의 이름을 따랐어?** `/grill-with-memory` 규율에 따라 적절한 `memory/**/memory.md` 에 추가한다.
+- **deepened 모듈이 memory 에 없는 개념의 이름을 따랐어?** `grill-with-memory` skill 규율에 따라 적절한 `memory/**/memory.md` 에 추가한다.
 - **대화 중에 모호한 용어를 다듬어?** 그 자리에서 해당 memory source 를 업데이트한다.
-- **사용자가 무게 있는 이유로 후보를 거부?** ADR 제안, 다음과 같이 표현: _"이걸 ADR로 기록해서 미래 아키텍처 리뷰가 같은 걸 다시 제안하지 않게 할까?"_ 미래 탐험가가 같은 것을 다시 제안하지 않게 하기 위해 그 이유가 실제로 필요할 때만 제안 — 일시적 이유 ("지금은 가치 없음")와 자명한 이유는 건너뛰어. ADR 기준은 `memory/workflow/grill/memory.md` 의 `Grill with memory` 섹션을 따른다.
+- **사용자가 무게 있는 이유로 후보를 거부?** ADR 제안, 다음과 같이 표현: _"이걸 ADR로 기록해서 미래 아키텍처 리뷰가 같은 걸 다시 제안하지 않게 할까?"_ 미래 탐험가가 같은 것을 다시 제안하지 않게 하기 위해 그 이유가 실제로 필요할 때만 제안 — 일시적 이유 ("지금은 가치 없음")와 자명한 이유는 건너뛰어. ADR 기준은 `.agents/skills/grill-with-memory/SKILL.md` 의 ADR 조건을 따른다.
 - **deepened 모듈을 위한 대안 인터페이스를 탐색하고 싶어?** [INTERFACE-DESIGN.md](INTERFACE-DESIGN.md) 참고.
