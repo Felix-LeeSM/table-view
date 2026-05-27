@@ -35,8 +35,8 @@ use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, CreateTriggerRequest, DatabaseType,
     DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
-    DropTriggerRequest, FilterCondition, IndexInfo, PostgresTypeInfo, RenameTableRequest,
-    SchemaChangeResult, TableData, TableInfo, TriggerInfo,
+    DropTriggerRequest, FilterCondition, IndexInfo, PostgresExtensionInfo, PostgresTypeInfo,
+    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo,
 };
 
 /// Closure type alias — `Send + Sync` so the trait `BoxFuture` constraint
@@ -76,6 +76,7 @@ pub(crate) struct StubRdbAdapter {
     pub get_view_columns_fn: Option<FnTwo<str, str, Vec<ColumnInfo>>>,
     pub get_function_source_fn: Option<FnTwo<str, str, String>>,
     pub list_types_fn: Option<FnZero<Vec<PostgresTypeInfo>>>,
+    pub list_extensions_fn: Option<FnZero<Vec<PostgresExtensionInfo>>>,
     /// Sprint 272 — override for `list_triggers(namespace, table)`. `None`
     /// falls back to the trait default (`Ok(Vec::new())`) so wiring tests
     /// that don't care about triggers still type-check.
@@ -168,6 +169,7 @@ impl Default for StubRdbAdapter {
             get_view_columns_fn: None,
             get_function_source_fn: None,
             list_types_fn: None,
+            list_extensions_fn: None,
             list_triggers_fn: None,
             get_trigger_source_fn: None,
             current_database_fn: None,
@@ -540,6 +542,15 @@ impl RdbAdapter for StubRdbAdapter {
     }
     fn list_types<'a>(&'a self) -> BoxFuture<'a, Result<Vec<PostgresTypeInfo>, AppError>> {
         let r = self.list_types_fn.as_ref().map_or(Ok(Vec::new()), |f| f());
+        Box::pin(async move { r })
+    }
+    fn list_extensions<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<PostgresExtensionInfo>, AppError>> {
+        let r = self
+            .list_extensions_fn
+            .as_ref()
+            .map_or(Ok(Vec::new()), |f| f());
         Box::pin(async move { r })
     }
     fn list_triggers<'a>(

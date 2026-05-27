@@ -10,8 +10,8 @@ use sqlx::PgPool;
 
 use crate::error::AppError;
 use crate::models::{
-    ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, PostgresTypeInfo, SchemaInfo, TableInfo,
-    TriggerInfo, ViewInfo,
+    ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, PostgresExtensionInfo, PostgresTypeInfo,
+    SchemaInfo, TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::category::{map_pg_data_type, normalize_pg_type, restore_serial};
@@ -60,6 +60,14 @@ pub(crate) const LIST_TYPES_SQL: &str = "SELECT n.nspname AS schema, t.typname A
         WHERE c.reltype = t.oid
    )
  ORDER BY n.nspname, t.typname";
+
+pub(crate) const LIST_EXTENSIONS_SQL: &str = "SELECT e.extname AS name,
+       n.nspname AS schema,
+       e.extversion AS version,
+       obj_description(e.oid, 'pg_extension') AS comment
+  FROM pg_catalog.pg_extension e
+  JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
+ ORDER BY e.extname";
 
 /// Serialize a foreign-key reference into the canonical
 /// `<schema>.<table>(<column>)` string consumed by the frontend
@@ -736,6 +744,26 @@ impl PostgresAdapter {
                 // returns Some(_); fall back to "base" if PG ever
                 // surprises us.
                 type_kind: type_kind.unwrap_or_else(|| "base".to_string()),
+            })
+            .collect())
+    }
+
+    pub async fn list_extensions(&self) -> Result<Vec<PostgresExtensionInfo>, AppError> {
+        let pool = self.active_pool().await?;
+
+        let rows: Vec<(String, String, String, Option<String>)> =
+            sqlx::query_as(LIST_EXTENSIONS_SQL)
+                .fetch_all(&pool)
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(name, schema, version, comment)| PostgresExtensionInfo {
+                name,
+                schema,
+                version,
+                comment,
             })
             .collect())
     }
@@ -1743,10 +1771,38 @@ mod tests {
         assert!(LIST_TYPES_SQL.contains("ORDER BY n.nspname, t.typname"));
     }
 
+    #[test]
+    fn list_extensions_sql_matches_canonical_fixture() {
+        const EXPECTED: &str = "SELECT e.extname AS name,
+       n.nspname AS schema,
+       e.extversion AS version,
+       obj_description(e.oid, 'pg_extension') AS comment
+  FROM pg_catalog.pg_extension e
+  JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
+ ORDER BY e.extname";
+        assert_eq!(LIST_EXTENSIONS_SQL, EXPECTED);
+        assert!(LIST_EXTENSIONS_SQL.contains("pg_catalog.pg_extension e"));
+        assert!(LIST_EXTENSIONS_SQL.contains("pg_catalog.pg_namespace n"));
+        assert!(LIST_EXTENSIONS_SQL.contains("obj_description(e.oid, 'pg_extension')"));
+        assert!(LIST_EXTENSIONS_SQL.contains("ORDER BY e.extname"));
+    }
+
     #[tokio::test]
     async fn list_types_without_connection_fails() {
         let adapter = PostgresAdapter::new();
         let result = adapter.list_types().await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_extensions_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.list_extensions().await;
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(

@@ -1,0 +1,28 @@
+RED test summary:
+
+- Added `list_postgres_extensions_routes_to_list_extensions_trait_method`.
+  It expects the command helper to dispatch through `RdbAdapter::list_extensions`
+  and return a `pg_trgm` extension row from `StubRdbAdapter`.
+- Added `list_extensions_sql_matches_canonical_fixture`. It expects the
+  PostgreSQL adapter SQL to query `pg_catalog.pg_extension`, join
+  `pg_catalog.pg_namespace`, include `obj_description`, and order by extension
+  name.
+- The two RED assertions are marked `#[ignore]` after capturing RED output in
+  `red-state.log`, because local pre-commit coverage runs all lib tests.
+
+Intentional RED stub:
+
+```rust
+pub(crate) const LIST_EXTENSIONS_SQL: &str = "SELECT 1";
+
+pub async fn list_extensions(&self) -> Result<Vec<PostgresExtensionInfo>, AppError> {
+    let _ = LIST_EXTENSIONS_SQL;
+    Ok(Vec::new())
+}
+
+async fn list_postgres_extensions_inner(...) -> Result<Vec<PostgresExtensionInfo>, AppError> {
+    ...
+    let _ = adapter;
+    Ok(Vec::new())
+}
+```
