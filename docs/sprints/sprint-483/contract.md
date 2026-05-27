@@ -69,7 +69,7 @@ SELECT list.
 5. Frontend typecheck.
 6. Documentation drift check.
 
-## Required Checks
+### Required Checks
 
 1. `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml`
 2. `pnpm build:sql-wasm`
