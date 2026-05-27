@@ -60,6 +60,9 @@ pub enum ParseResult {
     Update(UpdateStatement),
     /// `DELETE FROM <table> …` (sprint-392).
     Delete(DeleteStatement),
+    /// Sprint-484 — narrow PostgreSQL `MERGE INTO ... USING ... ON ...`
+    /// with UPDATE / INSERT / DO NOTHING actions.
+    Merge(MergeStatement),
     /// Sprint-393b — `WITH [RECURSIVE] cte AS (...) <inner-statement>`. The
     /// `inner_statement` slot is one of SELECT / INSERT / UPDATE / DELETE —
     /// nested `WITH` is rejected at parse time (out of scope this sprint).
@@ -383,8 +386,8 @@ pub enum SelectExpr {
     ScalarSubquery {
         statement: Box<SelectStatement>,
     },
-    /// Sprint-482 — `func(args)` in SELECT-list position without `OVER`.
-    /// Predicate-position function calls remain out of scope.
+    /// Sprint-482/483 — `func(args)` in SELECT-list and simple predicate
+    /// expression positions without `OVER`.
     FunctionCall {
         name: String,
         arguments: Vec<WindowArgument>,
@@ -1044,6 +1047,28 @@ pub struct DeleteStatement {
     pub returning: Vec<String>,
 }
 
+/// Sprint-484 — table-source PostgreSQL MERGE first slice. The target and
+/// source are table references with optional aliases; source subqueries,
+/// `WHEN ... AND`, `DELETE`, `BY SOURCE`, and RETURNING stay out of scope.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MergeStatement {
+    pub target: TableRef,
+    pub target_alias: Option<String>,
+    pub source: TableRef,
+    pub source_alias: Option<String>,
+    pub on: SelectExpr,
+    pub clauses: Vec<MergeWhenClause>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MergeWhenClause {
+    pub not_matched: bool,
+    pub action: String,
+    pub assignments: Vec<(String, SelectExpr)>,
+    pub columns: Vec<String>,
+    pub values: Vec<SelectExpr>,
+}
+
 /// Sprint-392 narrow WHERE expression. The grammar accepts:
 ///   - `column <op> <literal-or-placeholder>` — `Comparison`
 ///   - `<expr> AND <expr>` / `<expr> OR <expr>` — boolean
@@ -1194,6 +1219,7 @@ pub enum ExplainInner {
     Insert(InsertStatement),
     Update(UpdateStatement),
     Delete(DeleteStatement),
+    Merge(MergeStatement),
     With(WithStatement),
 }
 

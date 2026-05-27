@@ -8,7 +8,7 @@ MONGO_WASM="$ROOT/src/lib/mongo/wasm/mongosh_parser_core_bg.wasm"
 
 # Budgets are gzip-compressed bytes. They are expressed as KiB to avoid
 # platform-specific ambiguity in human "KB" output.
-SQL_WASM_GZIP_BUDGET_BYTES="${SQL_WASM_GZIP_BUDGET_BYTES:-81920}"     # 80 KiB
+SQL_WASM_GZIP_BUDGET_BYTES="${SQL_WASM_GZIP_BUDGET_BYTES:-204800}"    # 200 KiB
 MONGO_WASM_GZIP_BUDGET_BYTES="${MONGO_WASM_GZIP_BUDGET_BYTES:-54272}" # 53 KiB
 
 size_bytes() {

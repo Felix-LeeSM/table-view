@@ -171,23 +171,33 @@ SQL dialect와 shell/meta command는 별도 layer다.
 - `WHERE` / `HAVING`: comparison, column comparison, `BETWEEN`, `LIKE`, `ILIKE`, `IN (...)`, `IN (SELECT ...)`, `EXISTS`, scalar subquery, `IS NULL`, boolean `AND`/`OR`/`NOT`.
 - `GROUP BY`, `ORDER BY`, `LIMIT ... OFFSET ...`.
 - set operations: `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`.
-- expressions: literals, column refs, simple unqualified SELECT-list function calls, `CASE`, window functions with `OVER`, scalar subqueries.
+- expressions: literals, column refs, simple unqualified function calls in
+  SELECT-list position and as predicate comparison left-hand expressions,
+  `CASE`, window functions with `OVER`, scalar subqueries.
 - CTE: `WITH [RECURSIVE] cte AS (...)` wrapping `SELECT` / `INSERT` / `UPDATE` / `DELETE`; CTE body는 `SELECT`.
-- DML: `INSERT INTO ... VALUES`, `DEFAULT VALUES`, `INSERT ... SELECT`, PostgreSQL `ON CONFLICT`, `RETURNING`, `UPDATE ... SET ... FROM ... WHERE ... RETURNING`, `DELETE ... USING ... WHERE ... RETURNING`.
+- DML: `INSERT INTO ... VALUES`, `DEFAULT VALUES`, `INSERT ... SELECT`, PostgreSQL `ON CONFLICT`, `RETURNING`, `UPDATE ... SET ... FROM ... WHERE ... RETURNING`, `DELETE ... USING ... WHERE ... RETURNING`, narrow table-source `MERGE INTO ... USING ... ON ...` with `UPDATE SET`, `INSERT (...) VALUES (...)`, and `DO NOTHING` actions.
 - DDL subset: `CREATE TABLE`, `CREATE INDEX`, `CREATE VIEW`, `DROP TABLE/DATABASE/INDEX/VIEW/SCHEMA/SEQUENCE/TYPE`, `TRUNCATE`, `ALTER TABLE ADD/DROP/RENAME COLUMN`, `ADD/DROP CONSTRAINT`, `DROP INDEX`, `RENAME TABLE`.
 - misc: `GRANT`, `REVOKE`, `EXPLAIN`, `SHOW`, `SET`, `COPY`, `COMMENT`.
 
 ⚠️ 부분 지원:
 
-- function calls in predicate positions (`WHERE lower(name) = ...` 등)는 아직 `unsupported-expression`으로 거부될 수 있다.
-- function call aliases, schema-qualified functions, nested function arguments,
-  `DISTINCT`, and expression arguments are still out of scope.
+- schema-qualified functions, nested function arguments, function-call `LIKE`
+  predicates, `DISTINCT`, and arbitrary arithmetic/string expression arguments
+  are still out of scope.
+- `MERGE` support is a first slice: source subqueries, `WHEN ... AND`
+  filters, `WHEN NOT MATCHED BY SOURCE`, `DELETE` actions, `RETURNING`,
+  `OVERRIDING`, `ONLY`, and arbitrary action expressions are still out of
+  scope. Unsupported MERGE forms stay warn-tier write surfaces in Safe Mode
+  instead of falling through to INFO.
+- PostgreSQL `DO $$ ... $$` anonymous procedural blocks remain parser-
+  unsupported, but top-level `DO` is known to Safe Mode and classifies as
+  `routine-call` / `warn`, not INFO.
 - parser가 거부해도 서버 실행 자체가 항상 불가능하다는 뜻은 아니다. Safe Mode는 거부 시 기존 heuristic으로 fallback할 수 있다.
 
 ❌ 미지원:
 
-- stored procedure/function body 문법, PL/pgSQL block, `DO $$ ... $$`.
-- `MERGE`.
+- stored procedure/function body 문법과 PL/pgSQL / `DO $$ ... $$` body
+  parsing. Safe Mode only recognizes the top-level `DO` boundary.
 - 임의 vendor extension 전체. 지원 목록 밖은 `unsupported-statement`, `syntax-error`, 또는 `unsupported-expression`으로 떨어진다.
 
 ## MySQL SQL

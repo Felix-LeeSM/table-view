@@ -305,6 +305,38 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           returning: [],
         };
       }
+      if (/^MERGE\b/i.test(trimmed) && !/\bTHEN\s+DELETE\b/i.test(trimmed)) {
+        return {
+          kind: "merge",
+          target: { schema: null, table: "users" },
+          target_alias: null,
+          source: { schema: null, table: "incoming" },
+          source_alias: null,
+          on: {
+            kind: "column-comparison",
+            left: { table: "users", column: "id" },
+            op: "eq",
+            right: { table: "incoming", column: "id" },
+          },
+          clauses: [
+            {
+              not_matched: false,
+              action: "update",
+              assignments: [
+                [
+                  "name",
+                  {
+                    kind: "column-ref-expr",
+                    column: { table: "incoming", column: "name" },
+                  },
+                ],
+              ],
+              columns: [],
+              values: [],
+            },
+          ],
+        };
+      }
       // SELECT — sprint-393a routes SELECT through the AST. Return the
       // widened SELECT shape so the runtime guard accepts the value and
       // `statementAnalysisFromAst` returns `kind: "select"` / `info`.
@@ -623,6 +655,29 @@ vi.mock("./wasm/sql_parser_core.js", () => {
                   }
                 : null,
               returning: [],
+            };
+          } else if (innerUpper.startsWith("MERGE")) {
+            inner = {
+              kind: "merge",
+              target: { schema: null, table: "users" },
+              target_alias: null,
+              source: { schema: null, table: "incoming" },
+              source_alias: null,
+              on: {
+                kind: "column-comparison",
+                left: { table: "users", column: "id" },
+                op: "eq",
+                right: { table: "incoming", column: "id" },
+              },
+              clauses: [
+                {
+                  not_matched: false,
+                  action: "do-nothing",
+                  assignments: [],
+                  columns: [],
+                  values: [],
+                },
+              ],
             };
           } else {
             // Default: SELECT.
@@ -1571,6 +1626,105 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(a.kind).toBe("select");
       expect(a.severity).toBe("info");
       expect(a.reasons).toEqual([]);
+    });
+  });
+
+  describe("Sprint 483 — PostgreSQL function-call expression Safe Mode (AC-483-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-483-X01] predicate function call stays select / info / []", () => {
+      const a = analyzeStatement(
+        "SELECT name FROM users WHERE lower(name) = 'felix'",
+      );
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-483-X02] HAVING function call stays select / info / []", () => {
+      const a = analyzeStatement(
+        "SELECT region FROM sales GROUP BY region HAVING count(*) > 1",
+      );
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+  });
+
+  describe("Sprint 484 — PostgreSQL MERGE Safe Mode (AC-484-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-484-X01] parsed MERGE classifies as dml-merge / warn / []", () => {
+      // Reason: MERGE is a conditional write surface and must not flow
+      // through the read-only SELECT/other INFO paths. (2026-05-27)
+      const a = analyzeStatement(
+        "MERGE INTO users USING incoming ON users.id = incoming.id WHEN MATCHED THEN UPDATE SET name = incoming.name",
+      );
+      expect(a.kind).toBe("dml-merge");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-484-X02] unsupported MERGE fallback is warn, not info", () => {
+      // Reason: unsupported MERGE shapes are still writes; fallback must
+      // keep them out of INFO-tier execution. (2026-05-27)
+      const a = analyzeStatement(
+        "MERGE INTO users USING incoming ON users.id = incoming.id WHEN MATCHED THEN DELETE",
+      );
+      expect(a.kind).toBe("dml-merge");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["MERGE — conditional write"]);
+    });
+
+    it("[AC-484-X03] EXPLAIN ANALYZE MERGE inherits MERGE warn tier", () => {
+      // Reason: EXPLAIN ANALYZE can execute the inner statement, so
+      // MERGE must inherit the DML classification. (2026-05-27)
+      const a = analyzeStatement(
+        "EXPLAIN ANALYZE MERGE INTO users USING incoming ON users.id = incoming.id WHEN MATCHED THEN DO NOTHING",
+      );
+      expect(a.kind).toBe("dml-merge");
+      expect(a.severity).toBe("warn");
+    });
+  });
+
+  describe("Sprint 485 — PostgreSQL DO block Safe Mode boundary (AC-485-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-485-X01] DO block classifies as routine-call / warn, not info", () => {
+      const a = analyzeStatement("DO $$ BEGIN RAISE NOTICE 'hi'; END $$");
+      expect(a.kind).toBe("routine-call");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["DO — procedural block execution"]);
+    });
+
+    it("[AC-485-X02] comment-prefixed DO keeps routine-call / warn", () => {
+      const a = analyzeStatement(
+        "-- maintenance\nDO $$ BEGIN RAISE NOTICE 'hi'; END $$",
+      );
+      expect(a.kind).toBe("routine-call");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["DO — procedural block execution"]);
     });
   });
 

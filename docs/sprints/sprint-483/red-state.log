@@ -1,0 +1,19 @@
+
+running 1 test
+parser::tests::ac_483_red_predicate_function_call_should_parse --- FAILED
+
+failures:
+
+---- parser::tests::ac_483_red_predicate_function_call_should_parse stdout ----
+
+thread 'parser::tests::ac_483_red_predicate_function_call_should_parse' (43103212) panicked at src/parser.rs:4080:22:
+expected Select, got: Error(ParseError { error_kind: UnsupportedExpression, message: "function call expression unsupported in predicate", at: Some(22) })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    parser::tests::ac_483_red_predicate_function_call_should_parse
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 529 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
