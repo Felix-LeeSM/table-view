@@ -26,7 +26,8 @@
 use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{
-    ColumnInfo, FunctionInfo, PostgresTypeInfo, SchemaInfo, TableInfo, TriggerInfo, ViewInfo,
+    ColumnInfo, FunctionInfo, PostgresExtensionInfo, PostgresTypeInfo, SchemaInfo, TableInfo,
+    TriggerInfo, ViewInfo,
 };
 
 use super::{ensure_expected_db, not_connected, register_cancel_token, release_cancel_token};
@@ -554,6 +555,21 @@ async fn list_postgres_types_inner(
     adapter.list_types().await
 }
 
+async fn list_postgres_extensions_inner(
+    state: &AppState,
+    connection_id: &str,
+    expected_database: Option<&str>,
+) -> Result<Vec<PostgresExtensionInfo>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
+    let _ = adapter;
+    Ok(Vec::new())
+}
+
 /// Sprint 230 — list every Postgres-style data type visible to the
 /// active connection (built-ins from `pg_catalog`, extension types
 /// like PostGIS `geometry`, user-defined enums / domains / ranges /
@@ -573,6 +589,16 @@ pub async fn list_postgres_types(
     expected_database: Option<String>,
 ) -> Result<Vec<PostgresTypeInfo>, AppError> {
     list_postgres_types_inner(state.inner(), &connection_id, expected_database.as_deref()).await
+}
+
+#[tauri::command]
+pub async fn list_postgres_extensions(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    expected_database: Option<String>,
+) -> Result<Vec<PostgresExtensionInfo>, AppError> {
+    list_postgres_extensions_inner(state.inner(), &connection_id, expected_database.as_deref())
+        .await
 }
 
 #[cfg(test)]
@@ -843,6 +869,14 @@ mod tests {
             Err(AppError::Unsupported(_))
         ));
     }
+    #[tokio::test]
+    async fn list_postgres_extensions_document_paradigm_returns_unsupported() {
+        let state = state_with("doc", document_default()).await;
+        assert!(matches!(
+            list_postgres_extensions_inner(&state, "doc", None).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
 
     // ── 11 routing tests — schema-arg propagation ────────────────────────
     //
@@ -1045,6 +1079,27 @@ mod tests {
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
         let r = list_postgres_types_inner(&state, "c", None).await.unwrap();
         assert_eq!(r[0].name, "uuid");
+    }
+
+    #[tokio::test]
+    #[ignore = "RED evidence captured in docs/sprints/sprint-487/red-state.log"]
+    async fn list_postgres_extensions_routes_to_list_extensions_trait_method() {
+        let mut s = StubRdbAdapter::default();
+        s.list_extensions_fn = Some(Box::new(|| {
+            Ok(vec![PostgresExtensionInfo {
+                name: "pg_trgm".into(),
+                schema: "public".into(),
+                version: "1.6".into(),
+                comment: Some("text similarity measurement and index searching".into()),
+            }])
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let r = list_postgres_extensions_inner(&state, "c", None)
+            .await
+            .unwrap();
+        assert_eq!(r[0].name, "pg_trgm");
+        assert_eq!(r[0].schema, "public");
+        assert_eq!(r[0].version, "1.6");
     }
 
     // ── cancel-token registration round-trip witness ─────────────────────

@@ -574,3 +574,10 @@ export interface PostgresTypeInfo {
   name: string;
   type_kind: "base" | "domain" | "enum" | "range" | "composite";
 }
+
+export interface PostgresExtensionInfo {
+  name: string;
+  schema: string;
+  version: string;
+  comment: string | null;
+}

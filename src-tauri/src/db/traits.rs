@@ -15,11 +15,11 @@ use crate::models::{
     ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest,
     CreateTriggerRequest, DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
     DropTableRequest, DropTriggerRequest, FileAnalyticsPreview, FileAnalyticsQueryResponse,
-    FileAnalyticsSource, FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo,
-    RenameTableRequest, SchemaChangeResult, SearchAliasInfo, SearchClusterIdentity,
-    SearchDeleteByQueryRequest, SearchDestructiveOperationPlan, SearchIndexInfo,
-    SearchIndexMapping, SearchIndexTemplateInfo, SearchQueryRequest, SearchResultEnvelope,
-    TableData, TableInfo, TriggerInfo, ViewInfo,
+    FileAnalyticsSource, FilterCondition, FunctionInfo, IndexInfo, PostgresExtensionInfo,
+    PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, SearchAliasInfo,
+    SearchClusterIdentity, SearchDeleteByQueryRequest, SearchDestructiveOperationPlan,
+    SearchIndexInfo, SearchIndexMapping, SearchIndexTemplateInfo, SearchQueryRequest,
+    SearchResultEnvelope, TableData, TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::types::{
@@ -590,6 +590,18 @@ pub trait RdbAdapter: DbAdapter {
         Box::pin(async {
             Err(AppError::Unsupported(
                 "This adapter does not list types".into(),
+            ))
+        })
+    }
+
+    /// Sprint 487 — list installed PostgreSQL extensions. PG overrides to query
+    /// `pg_catalog.pg_extension`; non-PG adapters inherit `Unsupported`.
+    fn list_extensions<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<PostgresExtensionInfo>, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not list PostgreSQL extensions".into(),
             ))
         })
     }

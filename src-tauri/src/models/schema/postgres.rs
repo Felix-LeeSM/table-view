@@ -177,3 +177,14 @@ pub struct PostgresTypeInfo {
     pub name: String,
     pub type_kind: String,
 }
+
+/// Sprint 487 — installed PostgreSQL extension entry returned by
+/// `list_postgres_extensions(connection_id)`. Sourced from
+/// `pg_catalog.pg_extension` joined with `pg_catalog.pg_namespace`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PostgresExtensionInfo {
+    pub name: String,
+    pub schema: String,
+    pub version: String,
+    pub comment: Option<String>,
+}

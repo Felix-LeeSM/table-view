@@ -69,6 +69,7 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         commands::rdb::schema::list_triggers,
         commands::rdb::schema::get_trigger_source,
         commands::rdb::schema::list_postgres_types,
+        commands::rdb::schema::list_postgres_extensions,
         commands::rdb::query::execute_query,
         commands::rdb::query::execute_query_batch,
         commands::rdb::query::execute_query_dry_run,

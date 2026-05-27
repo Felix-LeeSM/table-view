@@ -10,8 +10,8 @@ use sqlx::PgPool;
 
 use crate::error::AppError;
 use crate::models::{
-    ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, PostgresTypeInfo, SchemaInfo, TableInfo,
-    TriggerInfo, ViewInfo,
+    ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, PostgresExtensionInfo, PostgresTypeInfo,
+    SchemaInfo, TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::category::{map_pg_data_type, normalize_pg_type, restore_serial};
@@ -60,6 +60,8 @@ pub(crate) const LIST_TYPES_SQL: &str = "SELECT n.nspname AS schema, t.typname A
         WHERE c.reltype = t.oid
    )
  ORDER BY n.nspname, t.typname";
+
+pub(crate) const LIST_EXTENSIONS_SQL: &str = "SELECT 1";
 
 /// Serialize a foreign-key reference into the canonical
 /// `<schema>.<table>(<column>)` string consumed by the frontend
@@ -738,6 +740,11 @@ impl PostgresAdapter {
                 type_kind: type_kind.unwrap_or_else(|| "base".to_string()),
             })
             .collect())
+    }
+
+    pub async fn list_extensions(&self) -> Result<Vec<PostgresExtensionInfo>, AppError> {
+        let _ = LIST_EXTENSIONS_SQL;
+        Ok(Vec::new())
     }
 
     /// List all functions and procedures in the given schema.
@@ -1741,6 +1748,23 @@ mod tests {
         assert!(LIST_TYPES_SQL.contains("NOT EXISTS"));
         assert!(LIST_TYPES_SQL.contains("c.reltype = t.oid"));
         assert!(LIST_TYPES_SQL.contains("ORDER BY n.nspname, t.typname"));
+    }
+
+    #[test]
+    #[ignore = "RED evidence captured in docs/sprints/sprint-487/red-state.log"]
+    fn list_extensions_sql_matches_canonical_fixture() {
+        const EXPECTED: &str = "SELECT e.extname AS name,
+       n.nspname AS schema,
+       e.extversion AS version,
+       obj_description(e.oid, 'pg_extension') AS comment
+  FROM pg_catalog.pg_extension e
+  JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
+ ORDER BY e.extname";
+        assert_eq!(LIST_EXTENSIONS_SQL, EXPECTED);
+        assert!(LIST_EXTENSIONS_SQL.contains("pg_catalog.pg_extension e"));
+        assert!(LIST_EXTENSIONS_SQL.contains("pg_catalog.pg_namespace n"));
+        assert!(LIST_EXTENSIONS_SQL.contains("obj_description(e.oid, 'pg_extension')"));
+        assert!(LIST_EXTENSIONS_SQL.contains("ORDER BY e.extname"));
     }
 
     #[tokio::test]

@@ -57,8 +57,9 @@ use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, CreateTriggerRequest, DatabaseType,
     DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
-    DropTriggerRequest, FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo,
-    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo, ViewInfo,
+    DropTriggerRequest, FilterCondition, FunctionInfo, IndexInfo, PostgresExtensionInfo,
+    PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo,
+    ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -448,6 +449,13 @@ impl RdbAdapter for PostgresAdapter {
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<PostgresTypeInfo>, AppError>> + Send + 'a>> {
         Box::pin(async move { self.list_types().await })
+    }
+
+    fn list_extensions<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<PostgresExtensionInfo>, AppError>> + Send + 'a>>
+    {
+        Box::pin(async move { self.list_extensions().await })
     }
 
     fn create_database<'a>(
