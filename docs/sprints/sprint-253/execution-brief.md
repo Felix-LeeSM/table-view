@@ -94,7 +94,7 @@ foundational.
 - Spec (master): `docs/sprints/sprint-253/spec.md`
 - Contract: `docs/sprints/sprint-253/contract.md`
 - 13-question grill: `docs/sprints/sprint-253/grill-decisions.md`
-- ADR 0023: `memory/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
+- ADR 0023: `docs/archives/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
 - Sprint 252 baseline: `docs/sprints/sprint-252/contract.md` + `findings.md`
 - Relevant files:
   - `src/themes.css`

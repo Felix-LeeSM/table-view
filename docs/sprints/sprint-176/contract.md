@@ -53,7 +53,7 @@ Files allowed to modify (per spec "Components to Create/Modify"):
 
 - Implementation prefers minimal blast radius: prefer a single Tailwind/CSS class addition (e.g. ensuring the overlay's `<div>` intercepts pointer events while children remain interactive if/when needed) over restructuring the overlay tree. The spec is silent on mechanism; the Generator chooses but must justify in `findings.md`.
 - For `StructurePanel`: a `hasFetched` boolean (or equivalent guard) is the canonical fix shape — empty-state branches are gated behind "first fetch settled" so the empty list (length 0) does not paint until at least one fetch has completed.
-- Tests use user-visible queries (`getByRole`, `getByText`) per `.claude/rules/react-conventions.md` and `memory/conventions/memory.md`. `getByTestId` only when no role/text query is workable.
+- Tests use user-visible queries (`getByRole`, `getByText`) per `.claude/rules/react-conventions.md` and `memory/engineering/conventions/memory.md`. `getByTestId` only when no role/text query is workable.
 - Each new test gets a top-of-file or top-of-`describe` comment with the reason ("guards AC-176-0X — overlay click-through") and date — per the user's auto-memory `feedback_test_documentation.md` (2026-04-28).
 - New code targets ≥ 70% line coverage on touched files (project convention; AC-GLOBAL-04).
 

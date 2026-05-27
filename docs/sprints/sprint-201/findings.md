@@ -154,7 +154,7 @@ contract §"Out of scope" 항목 모두 본 sprint 에서 손대지 않음:
 
 ## §6 — 영속 표준 / 후속 입력
 
-- 본 분해는 `memory/conventions/refactoring/memory.md` 의 4 카테고리
+- 본 분해는 `memory/engineering/conventions/refactoring/memory.md` 의 4 카테고리
   중 **B (책임 분할 분해)**.
 - entry-pattern 의 **4 번째 적용 사례** (Sprint 197/199/200 → 201).
   표준 패턴이 다음 god file 분해 (`tabStore.ts` 1002 — Sprint 205

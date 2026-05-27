@@ -43,5 +43,5 @@ trigger:
 - [grill](../grill/memory.md) — 사용자 보고가 명확하지 않으면 먼저 grill 으로 증상 lock
 - [implementation](../implementation/memory.md) — Red 작성 후 Green 단계 narration / noise 룰
 - [delivery](../delivery/memory.md) — fix 끝나면 자율 commit/push
-- [conventions/testing-scenarios](../../conventions/testing-scenarios/memory.md) — 시나리오 8원칙
-- [conventions/testing-scenarios/mock-scope](../../conventions/testing-scenarios/mock-scope/memory.md) — mock 범위 룰 (assertion 이 user-facing invariant 잡도록)
+- [engineering/conventions/testing-scenarios](../../engineering/conventions/testing-scenarios/memory.md) — 시나리오 8원칙
+- [engineering/conventions/testing-scenarios/mock-scope](../../engineering/conventions/testing-scenarios/mock-scope/memory.md) — mock 범위 룰 (assertion 이 user-facing invariant 잡도록)

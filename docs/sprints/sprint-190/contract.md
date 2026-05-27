@@ -146,4 +146,4 @@ verbatim 을 검증하면 동반 갱신.
 - `docs/PLAN.md:41` — FB-1b row.
 - `docs/refactoring-plan.md:63,80` — sequencing + 묶음 근거.
 - `docs/sprints/sprint-189/findings.md` §1 (Phase 23 closure refactor 종료).
-- `memory/conventions/refactoring/lib-hook-boundary/memory.md` D-4.
+- `memory/engineering/conventions/refactoring/lib-hook-boundary/memory.md` D-4.

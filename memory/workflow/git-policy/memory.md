@@ -71,7 +71,7 @@ hook 정의 → worktree drift 없음.
 
 - (a) 회피 사유 commit body 에 1줄 기록
 - (b) 후속 커밋에서 회피한 검사를 통과시키는 변경 push
-- (c) `memory/lessons/` 에 사유 기록
+- (c) `docs/archives/incidents/` 에 사유 기록
 
 GPG signing 우회는 위 예외에 포함하지 않음. signing 불가 시 멈춤.
 

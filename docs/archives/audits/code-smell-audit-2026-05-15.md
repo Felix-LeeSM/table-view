@@ -14,7 +14,7 @@
 - 프로덕션 TS/TSX/Rust 파일 LOC 분포 — 상위 50개 식별.
 - React hook 밀집도 (`useState` / `useEffect` / `useCallback` / `useMemo`
   /`useRef`) — 컴포넌트별 호출 합계.
-- `memory/conventions/refactoring/` 룰셋 4 카테고리 (B/D/C/A) 위반 grep.
+- `memory/engineering/conventions/refactoring/` 룰셋 4 카테고리 (B/D/C/A) 위반 grep.
 - Rust 백엔드: 파일별 책임 도메인 분류 + 큰 함수 (≥80 LOC) 식별.
 - 책임 응집도 — 한 파일이 다루는 distinct concern 갯수를 코드 읽고 분류.
 
@@ -692,7 +692,7 @@ deepening — 작은 인터페이스 뒤에 같은 동작을 묶음.
 
 ## Related
 
-- [`memory/conventions/refactoring/memory.md`](../../../memory/conventions/refactoring/memory.md)
+- [`memory/engineering/conventions/refactoring/memory.md`](../../../memory/engineering/conventions/refactoring/memory.md)
   — B/D/C/A 4 카테고리 정의.
 - [`docs/archives/backlogs/refactoring-candidates-2026-05-06.md`](../backlogs/refactoring-candidates-2026-05-06.md)
   (retired 2026-05-06) — 이전 wide-net scan, 본 문서가 후속.

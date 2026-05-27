@@ -309,5 +309,5 @@ clean / 0 errors / 0 violations / all tests passing.
 - Contract: `docs/sprints/sprint-135/contract.md`
 - Execution brief: `docs/sprints/sprint-135/execution-brief.md`
 - Master spec: `docs/sprints/sprint-134/spec.md` (Phase 10 합본)
-- Origin lesson: `memory/lessons/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
+- Origin lesson: `docs/archives/incidents/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
 - Phase 9/10 baseline: `docs/sprints/sprint-134/handoff.md`

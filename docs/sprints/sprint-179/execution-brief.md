@@ -84,4 +84,4 @@
   - `src/components/structure/ColumnsEditor.tsx` — `"Add Column"` button at line 504, `"No columns found"` at line 643; needs paradigm prop + dictionary lookups.
   - `src/components/document/DocumentDataGrid.tsx:273-276` — existing `DOCUMENT_LABELS` consumer; verify byte-equal output post-derivation.
 - Reference style: `docs/sprints/sprint-178/contract.md`.
-- Project conventions: `memory/conventions/memory.md`; testing rule: `.claude/rules/testing.md`; React rule: `.claude/rules/react-conventions.md`; test-scenarios rule: `.claude/rules/test-scenarios.md`.
+- Project conventions: `memory/engineering/conventions/memory.md`; testing rule: `.claude/rules/testing.md`; React rule: `.claude/rules/react-conventions.md`; test-scenarios rule: `.claude/rules/test-scenarios.md`.

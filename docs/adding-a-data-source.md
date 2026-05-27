@@ -7,7 +7,7 @@ every required contract below.
 Architecture source of truth:
 
 - `docs/data-source-architecture.md`
-- ADR 0046: `memory/decisions/0046-data-source-profile-capability-architecture/memory.md`
+- ADR 0046: `docs/archives/decisions/0046-data-source-profile-capability-architecture/memory.md`
 - Active sequencing: `docs/PLAN.md`
 - Long-term ordering: `docs/ROADMAP.md`
 

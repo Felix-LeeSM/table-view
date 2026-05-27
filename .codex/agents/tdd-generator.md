@@ -7,9 +7,9 @@ source: .agents/skills/tdd/SKILL.md
 
 Read:
 1. `.agents/skills/tdd/SKILL.md`
-2. `memory/conventions/testing-scenarios/memory.md`
-3. `memory/conventions/testing-scenarios/mock-scope/memory.md`
+2. `memory/engineering/conventions/testing-scenarios/memory.md`
+3. `memory/engineering/conventions/testing-scenarios/mock-scope/memory.md`
 4. `memory/workflow/implementation/memory.md`
-5. 변경 >= 500줄 시 `memory/conventions/refactoring/god-file/memory.md`
+5. 변경 >= 500줄 시 `memory/engineering/conventions/refactoring/god-file/memory.md`
 
 Ownership disjoint. Do not revert others' edits. No `--no-verify`, `LEFTHOOK=0`, destructive git.

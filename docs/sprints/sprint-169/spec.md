@@ -79,13 +79,13 @@ This is an **infrastructure / build feature**: nearly every acceptance criterion
 2. The seed SQL (the `users`/`orders`/`products` definitions + sample rows) lives in exactly one place — either a checked-in `.sql` file consumed by both the local script and the workflow, or the script alone consumed by the workflow. `grep -rn "CREATE TABLE IF NOT EXISTS users"` returns one definition, not two.
 3. On failure, the CI run still uploads the contents of `e2e/wdio-report/` as a build artifact (parity with the existing `e2e-logs` upload behaviour). A red CI run produces an artifact a maintainer can download and inspect.
 4. `scripts/setup-e2e.sh` and any README/ADR text that mentions running E2E tests is updated to point to the docker entrypoint as the canonical path for Linux/CI, and to clearly state the macOS limitation (no native run; requires Linux VM or buildx). References to the deleted `docker-compose.test.yml` are removed or redirected.
-5. An ADR (or a dedicated section in `memory/decisions/0014-e2e-switchwindow-multi-window/memory.md` or a new ADR) records the decision to standardise E2E execution on the docker pipeline, including the macOS-host limitation and the rationale for keeping/relocating the Tauri build (per Sprint 4's decision).
+5. An ADR (or a dedicated section in `docs/archives/decisions/0014-e2e-switchwindow-multi-window/memory.md` or a new ADR) records the decision to standardise E2E execution on the docker pipeline, including the macOS-host limitation and the rationale for keeping/relocating the Tauri build (per Sprint 4's decision).
 
 **Components to Create/Modify**:
 - `.github/workflows/ci.yml`: e2e job slimmed to docker invocation; artifact upload preserved.
 - `scripts/setup-e2e.sh`: rewritten to point to the docker flow; obsolete instructions removed.
 - A canonical seed source (one file, referenced by both local and CI paths).
-- `memory/decisions/...`: new or updated ADR capturing the standardisation.
+- `docs/archives/decisions/...`: new or updated ADR capturing the standardisation.
 - `README.md` or `docs/archives/design-snapshots/architecture-legacy.md` (whichever already documents test commands): one-line update pointing at `pnpm test:e2e:docker`.
 
 ---

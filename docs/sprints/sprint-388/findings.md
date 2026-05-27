@@ -16,7 +16,7 @@ date: 2026-05-18
 | 388-04 (tdd-cycle code profile만 강제) | PASS | infra profile sprint-388 자동 skip ✓ |
 | 388-05 (adr-frozen 3 시나리오) | PASS | 본문 변경 BLOCK / frontmatter 만 ALLOW / 새 ADR ALLOW |
 | 388-06 (run-checks contract Required Checks 실행) | PASS | sprint-388 contract 의 9 항목 parse OK |
-| 388-07 (lefthook pre-commit adr-frozen 추가) | PASS | `glob: memory/decisions/**/*.md` stage |
+| 388-07 (lefthook pre-commit adr-frozen 추가) | PASS | `glob: docs/archives/decisions/**/*.md` stage |
 | 388-08 (lefthook pre-push 8_check-tdd-cycle 추가) | PASS | `tags: review` stage |
 | 388-09 (settings.json PostToolUse wrapper-cap 등록) | PASS | `.claude/{agents,rules,commands}/*.md` 매치 |
 | 388-10 (pr-reviewer wrapper ≤ 15줄 + 새 source 3개) | PASS | 14줄 |
@@ -49,7 +49,7 @@ date: 2026-05-18
 | `check-memory-structure.sh` 보강 | PostToolUse + pre-commit | 자식 디렉토리 있는데 본인 index 없으면 fail |
 | `check-wrapper-cap.sh` 신설 | PostToolUse (`.claude/{agents,rules,commands}/*.md`) | 줄수 cap (15/20/15), README skip |
 | `check-tdd-cycle.sh` 신설 | pre-push 8 stage | code profile 만 강제, `SKIP_TDD_CYCLE=1` 사용자 명시 우회 |
-| `check-adr-frozen.sh` 신설 | pre-commit (`memory/decisions/**/*.md`) | frontmatter 외 hunk 차단, 새 ADR OK |
+| `check-adr-frozen.sh` 신설 | pre-commit (`docs/archives/decisions/**/*.md`) | frontmatter 외 hunk 차단, 새 ADR OK |
 | `review/run-checks.sh` 신설 | 사용자 / pr-reviewer 호출 | contract Required Checks batch + PASS/FAIL |
 
 ### 3. Hook 등록
@@ -63,12 +63,12 @@ date: 2026-05-18
 
 - `.claude/agents/pr-reviewer.md` 갱신 — read 리스트 새 source 3개
 - `memory/workflow/delivery/memory.md` T4 review + T6 자율 머지 조건
-- `memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md`
+- `docs/archives/incidents/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md`
   신설 — 본 sprint 의 plugin 영역 침범 시도 lesson
 
 ### 5. 기존 lessons 9 카테고리 index 보강
 
-`memory/lessons/{parity-milestone,security,ui-patterns,boot-windows,data-and-query,workspace-shell,workflow,agent-and-git,e2e}/memory.md` 각각 신설.
+`docs/archives/incidents/{parity-milestone,security,ui-patterns,boot-windows,data-and-query,workspace-shell,workflow,agent-and-git,e2e}/memory.md` 각각 신설.
 sprint-387 의 skills index 누락 같은 결함 재발 방지의 일환.
 
 ## 회귀 영향

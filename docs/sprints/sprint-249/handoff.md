@@ -175,7 +175,7 @@ const clearAllPending = useCallback(() => {
 
 - Contract: `docs/sprints/sprint-249/contract.md`.
 - Execution brief: `docs/sprints/sprint-249/execution-brief.md`.
-- ADR 0022: `memory/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`.
+- ADR 0022: `docs/archives/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`.
 
 ## Changed Areas
 

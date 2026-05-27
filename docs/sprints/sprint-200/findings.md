@@ -125,7 +125,7 @@ contract §"Out of scope" 항목 모두 본 sprint 에서 손대지 않음:
 
 ## §6 — 영속 표준 / 후속 입력
 
-- 본 분해는 `memory/conventions/refactoring/memory.md` 의 4 카테고리
+- 본 분해는 `memory/engineering/conventions/refactoring/memory.md` 의 4 카테고리
   (B/D/C/A) 중 **B (책임 분할 분해)** 에 해당.
 - entry-pattern (entry + same-name subdir, 외부 caller 시그니처 무변화)
   은 Sprint 197 (`mongodb.rs` 4분할) → Sprint 199 (`SchemaTree.tsx` 5

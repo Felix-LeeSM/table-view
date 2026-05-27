@@ -1,7 +1,7 @@
 # Phase 8: Redis 지원
 
 > **Archive status (2026-05-22)**: retired/future sketch. Current paradigm
-> summary lives in `../../../../memory/architecture/paradigms/memory.md`; this phase
+> summary lives in `../../../../memory/engineering/architecture/paradigms/memory.md`; this phase
 > is not active roadmap.
 >
 > KV 어댑터 + 키 스페이스 뷰 — **계획 v2 (2026-04-24 재설계)**

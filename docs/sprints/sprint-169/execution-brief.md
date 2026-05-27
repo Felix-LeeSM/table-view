@@ -63,4 +63,4 @@
   - `Dockerfile.e2e`
   - `.dockerignore`
 - CI workflow for version pinning: `.github/workflows/ci.yml`
-- ADR providing context for multi-window toolchain: `memory/decisions/0014-e2e-switchwindow-multi-window/memory.md`
+- ADR providing context for multi-window toolchain: `docs/archives/decisions/0014-e2e-switchwindow-multi-window/memory.md`

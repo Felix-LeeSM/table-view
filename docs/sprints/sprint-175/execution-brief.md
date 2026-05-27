@@ -77,5 +77,5 @@
 - Rust entry: `src-tauri/src/lib.rs`
 - Rust IPC handler for `rust:first-ipc`: `src-tauri/src/commands/connection.rs` (function `get_session_id`)
 - Docker E2E harness (for the cold-boot inside-container scenario): `e2e/run-e2e-docker.sh`, `Dockerfile.e2e`
-- Testing convention: `.claude/rules/testing.md`, `memory/conventions/testing-scenarios/memory.md`
+- Testing convention: `.claude/rules/testing.md`, `memory/engineering/conventions/testing-scenarios/memory.md`
 - Findings: (none — this is the opening sprint)

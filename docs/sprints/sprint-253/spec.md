@@ -183,5 +183,5 @@ ADR 0022 의 Safe Mode (destructive-only confirm + Cmd+Z + dry-run + onBlur+Esc 
 - Reference spec (외부, 논의용): `Table View Design System/PRODUCTION-WARNING.md`
 - 13-question grill 결과: `docs/sprints/sprint-253/grill-decisions.md`
 - Banner 4-variants mockup (사용 안 됨, archived): `docs/sprints/sprint-253/banner-mockups.html`
-- ADR 0022 (Safe Mode): `memory/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
+- ADR 0022 (Safe Mode): `docs/archives/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
 - Sprint 250-252 baseline: `docs/sprints/sprint-{250,251,252}/contract.md`

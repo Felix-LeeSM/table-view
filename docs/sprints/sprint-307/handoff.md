@@ -19,10 +19,10 @@ scope).
   13 happy-path methods (AC-02), 6 BSON literal reifications (AC-03), 13
   refusal kinds (AC-04), invariants, lexer/value coverage, BSON edge cases,
   cursor chain semantics.
-- `memory/decisions/0029-mongosh-parser-strategy/memory.md` — NEW ADR.
+- `docs/archives/decisions/0029-mongosh-parser-strategy/memory.md` — NEW ADR.
   Decision: handwritten whitelist parser. Rationale cites R28.1, bundle
   size, JS-eval invariant. 31 lines (<200 cap).
-- `memory/decisions/memory.md` — MODIFY. Added ADR 0029 row to the active
+- `docs/archives/decisions/memory.md` — MODIFY. Added ADR 0029 row to the active
   decisions table.
 
 No files outside the declared write scope were touched
@@ -38,7 +38,7 @@ No files outside the declared write scope were touched
 | `pnpm lint` | pass — exit 0 |
 | `pnpm vitest run` (full regression) | pass — 3491 tests passed, 10 skipped, exit 0 |
 | `grep -E "\b(eval\|new Function)\b" src/lib/mongo/mongoshParser.ts src/lib/mongo/bsonLiterals.ts` | pass — empty (exit 2 = no match) |
-| ADR present + registered in index | pass — `ls memory/decisions/0029-.../memory.md` exit 0; index grep returns the row |
+| ADR present + registered in index | pass — `ls docs/archives/decisions/0029-.../memory.md` exit 0; index grep returns the row |
 
 ## Done Criteria Coverage
 
@@ -49,7 +49,7 @@ No files outside the declared write scope were touched
 | AC-03 (6 BSON literal reifications) | `parseMongoshExpression — BSON literal reification (AC-03)` describe block — `ObjectId → $oid`, `ISODate → $date`, `UUID → $binary subType "04"` (deterministic base64), `NumberLong → $numberLong`, `NumberDecimal → $numberDecimal`, `BinData → $binary subType "00"`. |
 | AC-04 (13 refusal kinds) | `parseMongoshExpression — refusal kinds (AC-04)` describe block — every kind asserted: `unsupported-syntax` (var / for / if / forEach / map / use / show / getSiblingDB), `unsupported-method` (deleteAll), `bson-literal` (ObjectId not-hex, NumberLong overflow), `multiple-statements` (`;`), `missing-db-prefix` (bare collection), `invalid-cursor-chain` (`.limit` after `insertOne`). |
 | AC-05 (≥90% parser line coverage) | Coverage scoped to the parser module: Lines 96.44%, Branches 92.38%, Functions 100% — well above the 90% threshold. |
-| AC-06 (ADR with R28.1 citation) | `memory/decisions/0029-mongosh-parser-strategy/memory.md` — sections Decision / 이유 (cites R28.1 in item 1) / 트레이드오프 / 관련. Registered in `memory/decisions/memory.md` active decisions table. |
+| AC-06 (ADR with R28.1 citation) | `docs/archives/decisions/0029-mongosh-parser-strategy/memory.md` — sections Decision / 이유 (cites R28.1 in item 1) / 트레이드오프 / 관련. Registered in `docs/archives/decisions/memory.md` active decisions table. |
 | AC-07 (grep eval/new Function returns empty) | `grep -E "\b(eval\|new Function)\b" ...` exit 2 / empty stdout. The parser uses only a hand-written tokenizer + recursive-descent walker. |
 | AC-08 (tsc, lint, full vitest all exit 0) | `pnpm tsc --noEmit` exit 0; `pnpm lint` exit 0; full `pnpm vitest run` 3491 passed / 10 skipped exit 0. |
 | Whitelist single source of truth | `MONGOSH_METHOD_WHITELIST` is a `readonly` tuple exported from `mongoshParser.ts` and imported only by the parser's own test file. No duplicate constant exists elsewhere — `mongoAutocomplete.ts` holds the *operator* / *stage* constants which are a different concept. |

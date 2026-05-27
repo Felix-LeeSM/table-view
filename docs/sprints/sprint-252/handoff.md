@@ -188,7 +188,7 @@ copyAriaLabel="Copy SQL to clipboard"
 
 - Sprint 252 contract: `docs/sprints/sprint-252/contract.md`
 - Sprint 252 execution brief: `docs/sprints/sprint-252/execution-brief.md`
-- ADR 0022 reference: `memory/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
+- ADR 0022 reference: `docs/archives/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
 
 ## Changed Areas
 

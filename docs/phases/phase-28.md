@@ -4,9 +4,9 @@
 > grill 결정은 유지하되, Sprint 420–430 의 language completion architecture
 > 와 ADR 0045 이후 기준으로 Slice A 를 재정렬했다. 본 Phase 의 grill 결정
 > dict 는
-> [`memory/roadmap/phase-28-mongo-full-support/memory.md`](../../memory/roadmap/phase-28-mongo-full-support/memory.md)
+> [`docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md`](../../docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md)
 > 에 동결. RDB+Mongo paradigm 통합 후속 묶음 (U1–U5) 은 별도 phase 후보 —
-> [`memory/roadmap/unified-followups/memory.md`](../../memory/roadmap/unified-followups/memory.md).
+> [`docs/archives/roadmaps/memory-roadmap/unified-followups/memory.md`](../../docs/archives/roadmaps/memory-roadmap/unified-followups/memory.md).
 
 ## 2026-05-22 Re-baseline
 

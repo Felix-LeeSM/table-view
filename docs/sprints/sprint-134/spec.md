@@ -354,10 +354,10 @@ DbSwitcher (mongo) → invoke('use_db', { connection_id, db_name })
 
 ## References
 
-- Architecture: `memory/architecture/memory.md`
-- Conventions: `memory/conventions/memory.md`
-- Roadmap: `memory/roadmap/memory.md`
-- Decisions (focused id, paradigm enum): `memory/decisions/memory.md`
-- Phase 10 trigger lesson: `memory/lessons/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
+- Architecture: `memory/engineering/architecture/memory.md`
+- Conventions: `memory/engineering/conventions/memory.md`
+- Roadmap: `docs/archives/roadmaps/memory-roadmap/memory.md`
+- Decisions (focused id, paradigm enum): `docs/archives/decisions/memory.md`
+- Phase 10 trigger lesson: `docs/archives/incidents/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
 - Phase 9 master spec (shape reference): `docs/sprints/sprint-125/spec.md`
 - Sprint 133 evidence (toolbar/Cmd+K state of the world we are unwinding): `docs/sprints/sprint-133/handoff.md`

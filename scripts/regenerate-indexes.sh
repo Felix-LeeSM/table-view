@@ -109,7 +109,7 @@ generator: scripts/regenerate-indexes.sh
 
 # By-surface 인덱스
 
-코드 surface (모듈 / 디렉토리) → 관련 ADR/lesson/convention. 자동 생성 — 직접 편집 금지. 메모리 frontmatter 의 \`surface:\` 필드를 input 으로 한다.
+코드 surface (모듈 / 디렉토리) → 관련 active rule/convention. 자동 생성 — 직접 편집 금지. 메모리 frontmatter 의 \`surface:\` 필드를 input 으로 한다.
 
 ## Surface → 룰 매핑
 

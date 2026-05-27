@@ -60,9 +60,9 @@ Phase 11 ended with ADR 0011's single-window stub and 5 deferred `it.todo()` inv
 - Contract: `docs/sprints/sprint-150/contract.md`
 - Master spec: `docs/sprints/sprint-150/spec.md`
 - Phase 11 closing findings: `docs/sprints/sprint-149/findings.md`
-- ADR (frozen): `memory/decisions/0011-single-window-stub-for-launcher-workspace/memory.md`
+- ADR (frozen): `docs/archives/decisions/0011-single-window-stub-for-launcher-workspace/memory.md`
 - RISK-025 (deferred → resolved in Sprint 155): `docs/RISKS.md`
 - Existing baseline test: `src/__tests__/window-lifecycle.ac141.test.tsx`
-- Conventions: `memory/conventions/memory.md`
-- Architecture: `memory/architecture/memory.md`
-- Skip-zero gate (lesson): `memory/lessons/workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md`
+- Conventions: `memory/engineering/conventions/memory.md`
+- Architecture: `memory/engineering/architecture/memory.md`
+- Skip-zero gate (lesson): `docs/archives/incidents/workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md`

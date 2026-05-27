@@ -73,5 +73,5 @@ Out: anything in sprints 176 / 178 / 179 / 180; refactoring `QuerySyntax` / `Mon
   - `src/components/query/GlobalQueryLogPanel.tsx:211-220` (reference consumption pattern)
   - `src/components/query/QueryTab.tsx:1025-1030` (reference consumption pattern)
   - `src/stores/queryHistoryStore.ts` (paradigm field at line 26; legacy fallback at line 75)
-  - `memory/conventions/memory.md` (test rules, naming)
+  - `memory/engineering/conventions/memory.md` (test rules, naming)
   - `.claude/rules/test-scenarios.md` (scenario checklist)

@@ -75,4 +75,4 @@ The vertical slice is functional, the core invariants are guarded, and the locke
 
 9. **[Contract drift]**: Either rename `scripts/db/wait.sh` to match handoff `./scripts/wait-for-test-db.sh`, or amend the handoff with a one-line note explaining the new path replaces the legacy script.
    - Current: `db:up` invokes `./scripts/db/wait.sh`; handoff line 124 says `./scripts/wait-for-test-db.sh`.
-   - Suggestion: Add a note to `docs/archives/workflows/fixture-data-workflow-2026-05-09.md` (the only acceptable amendment per memory palace ADR rule, since it's a path detail not a decision) or accept the deviation as-is and document it in `memory/lessons/` so future readers don't trip on the discrepancy.
+   - Suggestion: Add a note to `docs/archives/workflows/fixture-data-workflow-2026-05-09.md` (the only acceptable amendment per memory palace ADR rule, since it's a path detail not a decision) or accept the deviation as-is and document it in `docs/archives/incidents/` so future readers don't trip on the discrepancy.

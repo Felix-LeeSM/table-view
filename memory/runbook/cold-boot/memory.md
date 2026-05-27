@@ -68,5 +68,5 @@ done
 
 ## 관련
 
-- [decisions](../../decisions/memory.md) — ADR 0017 (lazy workspace window)
-- [lessons](../../lessons/memory.md) — `boot-windows/2026-04-30-cold-boot-tracing-instrumentation`, `boot-windows/2026-04-30-wkwebview-spawn-os-parallel`
+- [docs/archives/decisions/0017-lazy-workspace-window](../../../docs/archives/decisions/0017-launcher-lazy-workspace-window/memory.md) — historical lazy workspace decision
+- [docs/archives/incidents/boot-windows](../../../docs/archives/incidents/boot-windows/memory.md) — historical cold-boot incidents

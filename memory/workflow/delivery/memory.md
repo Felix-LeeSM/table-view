@@ -89,4 +89,4 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 - [documentation](../documentation/memory.md) — 문서화 impact + evidence portability
 - [implementation](../implementation/memory.md) — 직전 phase
 - [tdd](../tdd/memory.md) — code-profile sprint RED evidence
-- [conventions](../../conventions/memory.md) — Conventional Commits 형식 (`feat(scope): description`)
+- [engineering/conventions](../../engineering/conventions/memory.md) — Conventional Commits 형식 (`feat(scope): description`)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # check-adr-frozen.sh
-# ADR 본문 동결 정책. memory/decisions/*/memory.md 의 frontmatter (--- 사이) 외
+# ADR 본문 동결 정책. docs/archives/decisions/*/memory.md 의 frontmatter (--- 사이) 외
 # hunk 가 staged 된 경우 차단. 새 ADR (untracked → 새로 add) 은 OK.
 #
 # 결정 뒤집기는: 새 ADR + frontmatter `supersedes: NNNN` + 원본 ADR 의 frontmatter
@@ -9,7 +9,7 @@
 set -euo pipefail
 
 # staged ADR memory.md 파일
-staged_adrs="$(git diff --cached --name-only --diff-filter=AM 2>/dev/null | grep -E "^memory/decisions/[^/]+/memory\.md$" || true)"
+staged_adrs="$(git diff --cached --name-only --diff-filter=AM 2>/dev/null | grep -E "^docs/archives/decisions/[^/]+/memory\.md$" || true)"
 
 if [ -z "$staged_adrs" ]; then
 	exit 0

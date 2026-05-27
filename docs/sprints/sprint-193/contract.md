@@ -202,7 +202,7 @@ export function useDataGridPreviewCommit(
 
 - `docs/refactoring-smells.md` §2 — useDataGridEdit god surface.
 - `docs/refactoring-plan.md` §63 — 3-4 일 추정.
-- `memory/conventions/refactoring/lib-hook-boundary/memory.md` D-2 —
+- `memory/engineering/conventions/refactoring/lib-hook-boundary/memory.md` D-2 —
   components → hooks → lib import 방향.
-- `memory/conventions/refactoring/decomposition/memory.md` A-3 —
+- `memory/engineering/conventions/refactoring/decomposition/memory.md` A-3 —
   책임별 분해, A-5 — commit decomposition.

@@ -27,7 +27,7 @@ scope) 만 pr-reviewer agent 가 평가. agent spawn = PR 당 1회.
    `.claude/rules` ≤ 20 / `.claude/commands` ≤ 15 줄 cap. README.md 는 skip.
 4. **`scripts/check-tdd-cycle.sh` 신설** — code profile sprint 만 검사.
    `origin/main..HEAD` 에 `[RED]` / `RED:` / `test.*fail` commit 없으면 fail.
-5. **`scripts/check-adr-frozen.sh` 신설** — `memory/decisions/*/memory.md` 의
+5. **`scripts/check-adr-frozen.sh` 신설** — `docs/archives/decisions/*/memory.md` 의
    frontmatter (`---` 사이) 외 hunk 차단. 새 ADR 은 OK.
 6. **`scripts/review/run-checks.sh` 신설** — `docs/sprints/sprint-<N>/contract.md`
    의 "Required Checks" 섹션 numbered list 파싱 → 백틱 안의 명령 batch 실행 →

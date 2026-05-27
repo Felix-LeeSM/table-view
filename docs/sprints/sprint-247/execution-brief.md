@@ -90,7 +90,7 @@ Phase 1 (정책) + Phase 2 (dialog UI 단순화) 가 destructive 만 dialog 로 
 - Contract: `docs/sprints/sprint-247/contract.md`
 - Phase 1 baseline: `docs/sprints/sprint-245/contract.md`, `findings.md`
 - Phase 2 baseline: `docs/sprints/sprint-246/contract.md`, `findings.md`
-- ADR 0022: `memory/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
+- ADR 0022: `docs/archives/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
 - Relevant files:
   - `src-tauri/src/db/traits.rs`
   - `src-tauri/src/db/postgres/queries.rs` (또는 `mutations.rs`)

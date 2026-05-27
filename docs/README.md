@@ -13,8 +13,8 @@ updated: 2026-05-27
 
 | 찾는 것 | 현재 위치 | 정리 방향 |
 |---|---|---|
-| 제품 범위 / 지원 현황 | `query-language-support.md`, `table_plus/` | `product/` 로 모으기 |
-| 계획 / 순서 | `PLAN.md`, `ROADMAP.md` | `roadmap/` 로 모으되 `PLAN.md` 호환 경로 유지 |
+| 제품 범위 / 지원 현황 | `product/README.md`, `query-language-support.md`, `table_plus/` | 현재 상태는 `product/` |
+| 미래 목표 / 순서 후보 | `ROADMAP.md`, `PLAN.md` | `ROADMAP.md` 가 SOT, `PLAN.md` 는 호환 인덱스 |
 | 구조 / 설계 | `data-source-architecture.md`, `state-management-strategy-2026-05-15.md` | `architecture/` 로 모으기 |
 | 기여자 가이드 | `adding-a-data-source.md`, `dialog-conventions.md`, `homebrew-cask.md` | `contributor-guide/` 로 모으기 |
 | 리스크 / 감사 follow-up | `RISKS.md` | 별도 유지 권장 |
@@ -23,8 +23,9 @@ updated: 2026-05-27
 
 ## 유지할 최상위 묶음
 
-- `product/` - 사용자 관점 기능, 지원 범위, 제품 동작.
-- `roadmap/` - 계획, 단계, sequencing. 현재 `docs/PLAN.md` 는 호환 entry 로 유지.
+- `product/` - 현재 제품 상태, 사용자 관점 기능, 지원 범위.
+- `ROADMAP.md` - 미래 목표, 승격 후보, sequencing 기준.
+- `PLAN.md` - 기존 링크 호환용 roadmap/product 인덱스.
 - `architecture/` - 시스템 구조, 상태 관리, 데이터 소스 설계.
 - `contributor-guide/` - 개발자가 변경을 넣을 때 읽는 절차.
 - `sprints/` - sprint contract, evidence, handoff.
@@ -33,7 +34,8 @@ updated: 2026-05-27
 
 ## Memory 와 Docs 경계
 
-- `memory/` - agent 가 작업 중 자동으로 읽는 압축 규칙, ADR, lesson, runbook.
+- `memory/` - agent 가 작업 중 자동으로 읽는 active product/engineering/workflow/runbook 규칙.
+- `docs/archives/decisions/`, `docs/archives/incidents/` - 과거 결정과 사건 기록. 기본 agent memory 탐색 대상이 아니다.
 - `.agents/skills/` - agent skill 본문과 slash command source.
 - `docs/` - 사람이 탐색하는 제품/프로젝트 문서와 sprint evidence.
 

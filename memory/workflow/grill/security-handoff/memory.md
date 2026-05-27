@@ -45,4 +45,4 @@ trigger:
 
 - [grill](../memory.md) — 일반 grill 룰
 - `security-handoff` agent (`.claude/agents/security-handoff.md`) — 본 룰 enforce
-- [decisions](../../../decisions/memory.md) — 보안 ADR (0005, 0021, 0036, 0040 등)
+- [docs/archives/decisions](../../../../docs/archives/decisions/memory.md) — 보안 ADR archive (0005, 0021, 0036, 0040 등)

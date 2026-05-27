@@ -13,7 +13,7 @@
   TYPE … USING …`), wiring a sub-clause input into `ColumnsEditor`, adding a
   pre-execution conflict check for `SET NOT NULL` (count of NULL rows
   visible to the user before commit), and recording the parity-milestone
-  closure markers (lesson + `docs/PLAN.md` + `memory/roadmap/`).
+  closure markers (lesson + `docs/PLAN.md` + `docs/archives/roadmaps/memory-roadmap/`).
 - **Audience**: Generator (implementation), Evaluator (gate + closure
   marker verification).
 - **Owner**: harness Generator.
@@ -42,8 +42,8 @@ Phase 27) by:
    warning ("`N` rows have NULL — adding NOT NULL will fail"). Zero rows
    → no warning. The warning is informative only; it does NOT block
    preview / commit.
-5. Recording the Phase 27 closure markers — `memory/lessons/` 회고 1편,
-   `docs/PLAN.md` Phase 27 status `진행 중` → `종료`, `memory/roadmap/`
+5. Recording the Phase 27 closure markers — `docs/archives/incidents/` 회고 1편,
+   `docs/PLAN.md` Phase 27 status `진행 중` → `종료`, `docs/archives/roadmaps/memory-roadmap/`
    파리티 마일스톤 갱신.
 
 ## Out of Scope
@@ -171,12 +171,12 @@ Phase 27) by:
     2. Same flow, mocked `count_null_rows` resolves `0` → no warning
        element rendered.
 - **`AC-237-07`** — **Phase 27 closure markers**:
-  - New `memory/lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`
-    (or equivalent path under `memory/lessons/`) — 회고 1편 recording the
+  - New `docs/archives/incidents/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`
+    (or equivalent path under `docs/archives/incidents/`) — 회고 1편 recording the
     TablePlus 패리티 7단계 종료, key trade-offs, and the trigger for
     Phase 17–20 (MySQL / MariaDB / SQLite / Oracle) re-evaluation.
   - `docs/PLAN.md` Phase 27 status updated from `진행 중` to `종료`.
-  - `memory/roadmap/memory.md` 패리티 마일스톤 row updated to reflect
+  - `docs/archives/roadmaps/memory-roadmap/memory.md` 패리티 마일스톤 row updated to reflect
     Sprint 237 closure.
 - **`AC-237-08`** — **Regression gate**: `cargo test` (full suite),
   `cargo clippy --all-targets --all-features -- -D warnings`,
@@ -236,8 +236,8 @@ Phase 27) by:
   - vitest test names for the USING-input case + the two conflict-probe
     cases.
   - Quote of the diff line(s) in `docs/PLAN.md` flipping Phase 27 status,
-    quote of the diff line in `memory/roadmap/memory.md`, and the
-    relative path of the new `memory/lessons/` retro file.
+    quote of the diff line in `docs/archives/roadmaps/memory-roadmap/memory.md`, and the
+    relative path of the new `docs/archives/incidents/` retro file.
 - Evaluator must cite:
   - File:line of `using_expression` added to `ColumnChange::Modify`.
   - File:line of the emitter branch in `mutations.rs`.
@@ -303,9 +303,9 @@ Phase 27) by:
    (or sibling).
 8. Run all 7 gates; fix; commit `feat(sprint-237): column MODIFY USING
    + null-conflict probe`.
-9. Add closure markers — `memory/lessons/parity-milestone/...
+9. Add closure markers — `docs/archives/incidents/parity-milestone/...
    /memory.md`, flip `docs/PLAN.md` Phase 27 status to `종료`, update
-   `memory/roadmap/memory.md`. Commit `docs(sprint-237): phase 27
+   `docs/archives/roadmaps/memory-roadmap/memory.md`. Commit `docs(sprint-237): phase 27
    closure markers`.
 10. Write `handoff.md` with all gate tails + AC coverage table + closure
     marker citations.
@@ -324,8 +324,8 @@ Phase 27) by:
   - `src/components/structure/ColumnsEditor.tsx`
   - `src/components/structure/ColumnsEditor.test.tsx` (or sibling)
   - `docs/PLAN.md` (Phase 27 status flip)
-  - `memory/roadmap/memory.md` (parity milestone row)
-  - `memory/lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`
+  - `docs/archives/roadmaps/memory-roadmap/memory.md` (parity milestone row)
+  - `docs/archives/incidents/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`
     (new retro)
   - `docs/sprints/sprint-237/handoff.md` (new — appends or replaces
     legacy stub; recommended: replace, since legacy was a different
@@ -340,7 +340,7 @@ Phase 27) by:
 - Required checks passing: `yes`.
 - AC-237-01 through AC-237-08 evidence linked in `handoff.md`.
 - Phase 27 closure markers present in all 3 locations (lesson file +
-  `docs/PLAN.md` + `memory/roadmap/memory.md`).
+  `docs/PLAN.md` + `docs/archives/roadmaps/memory-roadmap/memory.md`).
 
 ## Carryover policy (Sprint 237 — strict)
 

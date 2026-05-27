@@ -104,7 +104,7 @@ inline gate 부분만 교체.
   갱신 안 함. Sprint 189 findings 에 정정 기록만.
 - **smell §6 의 hook deps 정리** (DataGridTable:552, SchemaTree:519,
   DataGrid:116, DocumentDatabaseTree:230) — Sprint 191 / 193 으로 분배
-  (`memory/conventions/refactoring/hook-api/memory.md` C-2).
+  (`memory/engineering/conventions/refactoring/hook-api/memory.md` C-2).
 - **`runRdbBatch` / `runBatch` / `runAlter` / `runPendingExecute` helper
   의 공용화** — 5 사이트가 paradigm 별로 미세하게 다름. 본 sprint 의
   스코프는 gate 통일만, helper 통일은 하지 않음.
@@ -132,7 +132,7 @@ inline gate 부분만 교체.
 
 ## Commit 분할 (예상)
 
-`memory/conventions/refactoring/decomposition/memory.md` A-5 의 5+ commit
+`memory/engineering/conventions/refactoring/decomposition/memory.md` A-5 의 5+ commit
 시퀀스 적용:
 
 1. **D-4 lib pure 추출** — `decideSafeModeAction` + lib 테스트 + hook 단순화.
@@ -150,8 +150,8 @@ inline gate 부분만 교체.
 - `docs/sprints/sprint-188/{contract,findings,handoff}.md` — Phase 23
   closure 상태 + Sprint 188 findings §10 followup.
 - `docs/refactoring-plan.md` — Sprint 189 항목 (시한부, Sprint 198 retire).
-- `memory/conventions/refactoring/memory.md` — 코드 표준 4 카테고리 (영속).
-- `memory/conventions/refactoring/store-coupling/memory.md` — B-6 (cross-
+- `memory/engineering/conventions/refactoring/memory.md` — 코드 표준 4 카테고리 (영속).
+- `memory/engineering/conventions/refactoring/store-coupling/memory.md` — B-6 (cross-
   store 결합은 hook 레벨에서만 — `useSafeModeGate` 가 본 룰 적용 사례).
-- `memory/conventions/refactoring/lib-hook-boundary/memory.md` — D-4 / D-6.
-- `memory/conventions/refactoring/hook-api/memory.md` — C-1 / C-2.
+- `memory/engineering/conventions/refactoring/lib-hook-boundary/memory.md` — D-4 / D-6.
+- `memory/engineering/conventions/refactoring/hook-api/memory.md` — C-1 / C-2.

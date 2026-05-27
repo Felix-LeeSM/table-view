@@ -136,14 +136,14 @@ model — option 1 (entry removal) + option B (Sprint 188 nested preserved).
    approach (5 mock + `mockEditorProps` snapshot + 3 fixture builders + 2
    constants + 1 reset; module-level inline `vi.mock` factories per axis;
    worker-isolation for shared `vi.fn()` instances) is a clean template.
-   Consider documenting this in `memory/conventions/refactoring/memory.md`
+   Consider documenting this in `memory/engineering/conventions/refactoring/memory.md`
    alongside Sprint 216's pattern for future test-axis splits.
 
 3. **Residual risk acknowledgment**: The vitest worker-per-file isolation
    pattern + module-level `vi.fn()` shared instances depend on vitest pool
    config; if `vitest.config.ts` changes pool to `threads` with shared
    workers, this could break. No action needed today (config unchanged),
-   but flag in `memory/lessons/` for future config migrations.
+   but flag in `docs/archives/incidents/` for future config migrations.
 
 4. **Sprint 218 commit message draft**: Mirror Sprint 216's commit message
    style — `refactor(QueryTab.test): 2308-line god file → 6 axis + 1 helper (Sprint 218)`

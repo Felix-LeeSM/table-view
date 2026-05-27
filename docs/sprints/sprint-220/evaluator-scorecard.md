@@ -154,7 +154,7 @@ evidence, and no behavioural drift observed against `StructurePanel.tsx` /
 - **R-002** (P3): Sprint 218 / 220 helpers diverge on extension (`.ts` vs
   `.tsx`); future P11 step 4-5 (tabStore.test.ts 2,234 / DataGrid.test.tsx
   1,906) should pre-decide based on whether helper exposes JSX `renderXxx`.
-  Recommend baking this into `memory/conventions/refactoring/memory.md`'s
+  Recommend baking this into `memory/engineering/conventions/refactoring/memory.md`'s
   axis-split playbook.
 
 - **R-003** (P3): Constraints axis has only 14 cases — among the smallest

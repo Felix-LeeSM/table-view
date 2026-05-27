@@ -1,7 +1,7 @@
 ---
 title: Grill — 결정 인터뷰 룰
 type: workflow-rule
-updated: 2026-05-20
+updated: 2026-05-27
 task: grill, decision-lock, planning, option-design, memory-grill
 trigger:
   signal: 사용자가 결정 / 선택지 / "grill" 요청
@@ -69,8 +69,10 @@ trigger:
 ### 탐색 순서
 
 - 질문하기 전 답이 repo 안에 있는지 먼저 본다: `memory/index/by-surface.md`,
-  `memory/index/by-task.md`, 관련 `memory/**/memory.md`, `memory/decisions/memory.md`,
-  필요 시 코드.
+  `memory/index/by-task.md`, 관련 `memory/**/memory.md`, `docs/product/README.md`,
+  `docs/ROADMAP.md`, 필요 시 코드.
+- Archived ADR 은 기본 입력이 아니다. 과거 결정 출처가 필요하거나 hard decision
+  충돌을 점검할 때만 `docs/archives/decisions/memory.md` 를 본다.
 - 코드/문서로 답할 수 있으면 사용자에게 묻지 않는다. 모순만 surface 한다.
 - 기존 memory/ADR 과 용어가 충돌하면 즉시 callout: "기존 결정은 X 인데 지금은 Y 로
   들립니다. 뒤집는 건가요, 범위가 다른 건가요?"
@@ -79,11 +81,12 @@ trigger:
 
 - 용어 / 도메인 언어 / 협업 룰: `/remember` 의 type 매트릭스로 위치를 계산한다.
 - Hard decision: 아래 3조건을 모두 만족할 때만 ADR
-  ([decisions](../../decisions/memory.md)) 을 제안/작성한다.
+  (`docs/archives/decisions/`) 을 제안/작성한다.
   1. 나중에 뒤집는 비용이 크다.
   2. 맥락 없이 보면 왜 그랬는지 의아하다.
   3. 실제 trade-off 가 있었다.
-- Product plan / sequencing 은 `docs/PLAN.md` 또는 `docs/sprints/sprint-N/`.
+- Product 상태는 `docs/product/`, 미래 목표와 sequencing 후보는 `docs/ROADMAP.md`,
+  sprint evidence 는 `docs/sprints/sprint-N/`.
 - 잔여 risk / 감사 follow-up 은 `docs/RISKS.md`.
 - UI/flow 비교 mock 은 `docs/explorations/<topic>-<date>.html`.
 
@@ -100,6 +103,6 @@ trigger:
 - [bug-fix](../bug-fix/memory.md) — 사용자 보고가 명확치 않을 때 grill 으로 증상 lock 먼저
 - [implementation](../implementation/memory.md) — grill lock 후 구현 phase
 - `/remember` — resolved item 저장 라우팅
-- [decisions](../../decisions/memory.md) — ADR 작성/동결 규칙
+- [docs/archives/decisions](../../../docs/archives/decisions/memory.md) — ADR 작성/동결 규칙
 - grill-me — decision interview workflow
 - grill-with-memory — memory 동기화형 grill wrapper

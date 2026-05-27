@@ -23,7 +23,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### backend
 
-- [Backend Guidance](../../memory/conventions/backend/memory.md)
+- [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
 
 ### baseline
 
@@ -31,11 +31,8 @@ generator: scripts/regenerate-indexes.sh
 
 ### bug-fix
 
+- [Engineering](../../memory/engineering/memory.md)
 - [버그 fix — Red test 먼저](../../memory/workflow/bug-fix/memory.md)
-
-### cargo-deny
-
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 
 ### code-writing
 
@@ -47,16 +44,12 @@ generator: scripts/regenerate-indexes.sh
 
 ### comment-cleanup
 
-- [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
+- [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
 
 ### commit
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
-
-### coverage
-
-- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
 
 ### decision-lock
 
@@ -64,7 +57,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### decomposition
 
-- [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
+- [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
 
 ### delivery
 
@@ -82,17 +75,12 @@ generator: scripts/regenerate-indexes.sh
 
 ### frontend
 
-- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
-- [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
-
-### git
-
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
-- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
+- [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
+- [React / TypeScript 컨벤션](../../memory/engineering/conventions/react/memory.md)
 
 ### god-file
 
-- [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
+- [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
 
 ### grill
 
@@ -101,9 +89,6 @@ generator: scripts/regenerate-indexes.sh
 
 ### hook
 
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
-- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
-- [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 
 ### hook-design
@@ -112,6 +97,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### implementation
 
+- [Engineering](../../memory/engineering/memory.md)
 - [Implementation — agent 자율성 + noise 차단](../../memory/workflow/implementation/memory.md)
 
 ### lefthook
@@ -129,11 +115,11 @@ generator: scripts/regenerate-indexes.sh
 
 ### merge-gate
 
-- [UX 머지 기준](../../memory/ux/memory.md)
+- [Product 머지 기준](../../memory/product/memory.md)
 
 ### mock-scope
 
-- [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/conventions/testing-scenarios/mock-scope/memory.md)
+- [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/engineering/conventions/testing-scenarios/mock-scope/memory.md)
 
 ### multi-agent
 
@@ -147,17 +133,13 @@ generator: scripts/regenerate-indexes.sh
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
 
-### path-routing
-
-- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
-
 ### performance
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
 
 ### persistence-reset
 
-- [UX 머지 기준](../../memory/ux/memory.md)
+- [Product 머지 기준](../../memory/product/memory.md)
 
 ### planning
 
@@ -182,8 +164,6 @@ generator: scripts/regenerate-indexes.sh
 
 ### pre-push
 
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
-- [pre-push path routing must fail open and include old paths](../../memory/lessons/agent-and-git/2026-05-22-pre-push-path-routing/memory.md)
 - [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
@@ -198,7 +178,6 @@ generator: scripts/regenerate-indexes.sh
 
 ### push-reject
 
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 
 ### race-trace
@@ -208,23 +187,20 @@ generator: scripts/regenerate-indexes.sh
 
 ### react-impl
 
-- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
-- [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
+- [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
+- [React / TypeScript 컨벤션](../../memory/engineering/conventions/react/memory.md)
 
 ### refactor
 
-- [React / TypeScript 컨벤션](../../memory/conventions/react/memory.md)
-- [God file 시퀀스](../../memory/conventions/refactoring/god-file/memory.md)
-- [Rust 컨벤션](../../memory/conventions/rust/memory.md)
+- [React / TypeScript 컨벤션](../../memory/engineering/conventions/react/memory.md)
+- [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
+- [Rust 컨벤션](../../memory/engineering/conventions/rust/memory.md)
+- [Engineering](../../memory/engineering/memory.md)
 - [Implementation — agent 자율성 + noise 차단](../../memory/workflow/implementation/memory.md)
-
-### regex
-
-- [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
 
 ### regression-guard
 
-- [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/conventions/testing-scenarios/mock-scope/memory.md)
+- [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/engineering/conventions/testing-scenarios/mock-scope/memory.md)
 
 ### regression-test
 
@@ -232,18 +208,15 @@ generator: scripts/regenerate-indexes.sh
 
 ### review
 
+- [Engineering](../../memory/engineering/memory.md)
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 - [PR Review](../../memory/workflow/review/memory.md)
 
-### root-cause
-
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
-
 ### rust-impl
 
-- [Backend Guidance](../../memory/conventions/backend/memory.md)
-- [Rust 컨벤션](../../memory/conventions/rust/memory.md)
+- [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
+- [Rust 컨벤션](../../memory/engineering/conventions/rust/memory.md)
 
 ### scorecard
 
@@ -251,7 +224,6 @@ generator: scripts/regenerate-indexes.sh
 
 ### security
 
-- [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
 - [보안 grill — threat-model 핸드오프 먼저](../../memory/workflow/grill/security-handoff/memory.md)
 
 ### spawn-verify
@@ -264,7 +236,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### tauri
 
-- [Backend Guidance](../../memory/conventions/backend/memory.md)
+- [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
 
 ### tdd
 
@@ -272,7 +244,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### test-writing
 
-- [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/conventions/testing-scenarios/mock-scope/memory.md)
+- [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/engineering/conventions/testing-scenarios/mock-scope/memory.md)
 
 ### threat-model
 
@@ -280,7 +252,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### ui
 
-- [Frontend Guidance](../../memory/conventions/frontend/memory.md)
+- [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
 
 ### user-report
 
@@ -288,9 +260,8 @@ generator: scripts/regenerate-indexes.sh
 
 ### ux-review
 
-- [UX 머지 기준](../../memory/ux/memory.md)
+- [Product 머지 기준](../../memory/product/memory.md)
 
 ### worktree
 
-- [cargo-deny nested git inherited hook env and snapped worktree refs](../../memory/lessons/agent-and-git/2026-05-21-cargo-deny-git-env-ref-snapback/memory.md)
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)

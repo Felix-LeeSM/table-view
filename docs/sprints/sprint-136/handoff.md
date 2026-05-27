@@ -294,6 +294,6 @@ See the table at the top of this handoff. Gates 1–7 all pass.
 - Contract: `docs/sprints/sprint-136/contract.md`
 - Execution brief: `docs/sprints/sprint-136/execution-brief.md`
 - Master spec: `docs/sprints/sprint-134/spec.md` (Phase 10 합본 — Sprint 136 section)
-- Origin lesson: `memory/lessons/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
+- Origin lesson: `docs/archives/incidents/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
 - S134 baseline: `docs/sprints/sprint-134/handoff.md`
 - S135 baseline: `docs/sprints/sprint-135/handoff.md`

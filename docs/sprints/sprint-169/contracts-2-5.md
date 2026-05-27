@@ -80,7 +80,7 @@
   - 새 step: docker compose build + `--profile test up --abort-on-container-exit --exit-code-from e2e`.
   - 실패 시 `e2e/wdio-report/` artifact upload 유지 (`path: e2e/wdio-report/`).
 - `scripts/setup-e2e.sh`: `docker-compose.test.yml` 참조 제거, `pnpm test:e2e:docker` 를 canonical Linux/CI 경로로 안내, macOS 한계 문서화.
-- 새 ADR `memory/decisions/0015-e2e-docker-pipeline-canonical/memory.md`: docker pipeline을 E2E 표준으로 채택한 결정, macOS 미지원, Tauri build를 runtime + named volume cache로 둔 이유, 이전 inline-CI 접근 대비 trade-offs.
+- 새 ADR `docs/archives/decisions/0015-e2e-docker-pipeline-canonical/memory.md`: docker pipeline을 E2E 표준으로 채택한 결정, macOS 미지원, Tauri build를 runtime + named volume cache로 둔 이유, 이전 inline-CI 접근 대비 trade-offs.
 - 시드 SQL grep 통일성: `grep -rn "CREATE TABLE IF NOT EXISTS users"` 가 정확히 1건(`e2e/fixtures/seed.sql`).
 - README/docs는 변경 최소(필요 시 한 줄). `CLAUDE.md`/팔레스는 건드리지 않음(원칙).
 

@@ -26,7 +26,7 @@ caveman 모드. 작업 시 read:
 - 본문 **9-15줄 cap**. 50줄 넘으면 lazy 위반 — source 로 옮기고 redirect.
 - main read (해당 agent 본인 룰) 는 강제, 조건부 read 만 진짜 lazy.
 - frontmatter `name` / `description` / `tools` / `model` 필수.
-- caveman skill 첫 줄에 명시 (`memory/conventions/memory.md` 의 caveman 룰 상속).
+- caveman skill 첫 줄에 명시 (`memory/engineering/conventions/memory.md` 의 caveman 룰 상속).
 
 ## Multi-brain 호환
 
@@ -39,6 +39,6 @@ Codex / Cursor 도 같은 agent 개념 사용 시 본 wrapper 패턴을 base 로
 - `AGENTS.md` — universal entry (work-type → memory 매트릭스)
 - `memory/memory.md` — 팔레스 입구
 - `memory/workflow/memory.md` — 협업 phase 룰
-- `memory/conventions/memory.md` — 코드 룰 (caveman 포함)
+- `memory/engineering/conventions/memory.md` — 코드 룰 (caveman 포함)
 - `.claude/rules/README.md` — auto-load rule wrapper 정책
 - `.agents/skills/remember/SKILL.md`, `.agents/skills/split-memory/SKILL.md` — slash command source

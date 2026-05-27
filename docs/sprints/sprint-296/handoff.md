@@ -26,7 +26,7 @@ closure 다.
 | `pnpm lint` | PASS | ESLint errors 0 |
 | Rust unit / 통합 | PASS | `cargo test` (testcontainers gate 합류, sprint-296) |
 | Coverage 임계 (line/func/region) | PASS | 84.23 / 79.74 / 85.66 (임계 80 / 74 / 81) |
-| ADR 0028 (driver 선택 동결) | PASS | sqlx::mysql 채택, `memory/decisions/0028-mysql-driver-sqlx/memory.md` |
+| ADR 0028 (driver 선택 동결) | PASS | sqlx::mysql 채택, `docs/archives/decisions/0028-mysql-driver-sqlx/memory.md` |
 | F-Refactor Part 1/2 (ConnectionConfig variant + DDL DTO) | PASS | Sprint 278~280 |
 | MysqlAdapter Slice A (read path) | PASS | Sprint 281 |
 | MysqlAdapter Slice B (execute_sql + query_table_data) | PASS | Sprint 282 |

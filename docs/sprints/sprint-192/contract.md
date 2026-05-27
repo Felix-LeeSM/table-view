@@ -201,4 +201,4 @@ AS IDENTITY 미지원).
 ## Refs
 
 - `docs/refactoring-plan.md` FB-3 — DB 단위 export.
-- `memory/conventions/refactoring/lib-hook-boundary/memory.md` D-2.
+- `memory/engineering/conventions/refactoring/lib-hook-boundary/memory.md` D-2.

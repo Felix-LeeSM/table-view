@@ -108,7 +108,7 @@ Generator 와 Evaluator 양측이 본 sprint 를 DONE 으로 합의하는 조건
 
 - Master spec: `docs/sprints/sprint-253/spec.md` §Sprint 255
 - 13-question grill (Q3-(b)): `docs/sprints/sprint-253/grill-decisions.md`
-- ADR 0023: `memory/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
+- ADR 0023: `docs/archives/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
 - Sprint 253 baseline: `docs/sprints/sprint-253/contract.md` (commit 528063b)
 - Relevant files:
   - `src/components/query/QueryTab.tsx`

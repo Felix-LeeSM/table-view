@@ -33,7 +33,7 @@ Files allowed to modify (per spec "Components to Create/Modify"):
 - Modifying the existing URL-mode toggle path (the explicit "URL" button + `urlValue` / `urlError` state + `Parse & Continue` button at `ConnectionDialog.tsx:341-426`). That path stays as-is; this sprint only adds detection on the form-mode host field.
 - Changing `parseSqliteFilePath` semantics — the existing path-only fallback is preserved; the new "sqlite-file-URL" support means `parseConnectionUrl` continues to handle `sqlite:/path` URLs (already supported) AND the form-mode host field now treats a `sqlite:` URL paste the same as the URL-mode `Parse & Continue` flow does today.
 - E2E test changes — no e2e selector currently asserts on the host field's behavior in this scope. If a future e2e selector breaks because of the trim-on-save change, that update is in scope; verified during contract drafting that no existing e2e relies on whitespace-padded saved values.
-- ADR or `memory/decisions/` updates. Sprint 178 is a frontend behavior fix, not a paradigm/architecture decision.
+- ADR or `docs/archives/decisions/` updates. Sprint 178 is a frontend behavior fix, not a paradigm/architecture decision.
 - Any change to `password` handling: the password input flow (`passwordInput`, `clearPassword`, `resolvePassword`) and the existing semantics (`null` = unchanged, `""` = clear, non-empty = set) are preserved verbatim.
 
 ## Invariants

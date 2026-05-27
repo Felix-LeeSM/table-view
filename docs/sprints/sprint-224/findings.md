@@ -375,7 +375,7 @@ no subscriptions. Pure read-only orchestration.
   cross-window regression. **Mitigation**: keep both modules' top-level code
   free of cross-module side-effect calls (current state). If a future refactor
   adds a top-level `useConnectionStore.getState()` call to the hook module,
-  TDZ may surface — note this in `memory/lessons/` if it ever bites.
+  TDZ may surface — note this in `docs/archives/incidents/` if it ever bites.
 - **Test file mock pattern shift** — the new `vi.mock` + `vi.importActual`
   pattern wraps the real `hydrateConnectionSession` in a spy. If a future
   change adds module-load side effects to the hook module, those would also

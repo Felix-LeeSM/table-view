@@ -128,7 +128,7 @@
 **제안**:
 1. (현 sprint) findings 에 P3 으로 기록만, sprint-211 PASS 유지.
 2. (planner 후속) sprint-N 에서 spec 의 "live in helpers.ts" 표현을 검증할 때, `@vitejs/plugin-react` JSX 거부 같은 기술 제약을 미리 검토하고 5번째 sub-file 허용을 명시하거나 spec text 를 "lives in helpers.ts OR a colocated `.tsx` companion" 로 완화.
-3. (architecture lessons) `memory/lessons/` 에 "JSX 가 들어가는 모듈을 `.ts` 로 명시하면 안 된다" lesson 등록 후보.
+3. (architecture lessons) `docs/archives/incidents/` 에 "JSX 가 들어가는 모듈을 `.ts` 로 명시하면 안 된다" lesson 등록 후보.
 
 ### F-002 [P3] — `RdbQuickLookBody` 가 entry 의 `firstSelectedId == null` 단축 분기 우회
 
@@ -161,7 +161,7 @@
 1. **handoff.md 작성** (sprint-211/handoff.md) — 5 변경 파일 + 6번째 추가 파일 사실 + 12 check exit code + AC-01..05 evidence + F-001/F-002/F-003 link + post-211 baseline (189 files / 2725 tests) 적시.
 2. **(선택) Sprint 211 commit** — 사용자가 명시 요청 시. assistant 자동 커밋 금지 (feedback_git_ops 정책).
 3. **sprint-212 candidate 1** — `docs/archives/backlogs/refactoring-candidates-2026-05-06.md` §P2 의 다음 god-file 후보 advance. Sprint 211 의 entry-pattern 패턴을 그대로 답습.
-4. **sprint-212 candidate 2 (planner protocol 보강)** — F-001 lesson 을 `memory/lessons/` 에 등록 (`spec 에 "live in helpers.ts" 표현이 있을 때 plugin/loader JSX-parse 제약 사전 검토`). spec 작성 시 `JSX-bearing module 은 반드시 .tsx`, `pure-helper module 은 .ts` 분리 의도 명시. 후속 spec author 가 같은 함정 피하도록.
+4. **sprint-212 candidate 2 (planner protocol 보강)** — F-001 lesson 을 `docs/archives/incidents/` 에 등록 (`spec 에 "live in helpers.ts" 표현이 있을 때 plugin/loader JSX-parse 제약 사전 검토`). spec 작성 시 `JSX-bearing module 은 반드시 .tsx`, `pure-helper module 은 .ts` 분리 의도 명시. 후속 spec author 가 같은 함정 피하도록.
 5. **sprint-212 candidate 3 (minor cleanup, optional)** — F-002 의 entry early-return + F-003 의 mode-reset effect. 두 개 모두 행동 변경 0 의 cosmetic refactor, sprint 1 task 로 합칠 수 있음.
 
 ---

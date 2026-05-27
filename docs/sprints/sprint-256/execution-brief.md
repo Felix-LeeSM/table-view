@@ -102,7 +102,7 @@ mount + Execute 버튼 composition 으로 사용자가 *항상* 활성 탭의
 - Spec (master): `docs/sprints/sprint-253/spec.md` §Sprint 256
 - Contract: `docs/sprints/sprint-256/contract.md`
 - 13-question grill (Q4-(c) + Q5-(b) + Q6-(a)): `docs/sprints/sprint-253/grill-decisions.md`
-- ADR 0023: `memory/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
+- ADR 0023: `docs/archives/decisions/0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md`
 - Sprint 253 baseline: `docs/sprints/sprint-253/contract.md` (commit 528063b)
 - Sprint 255 baseline: `docs/sprints/sprint-255/contract.md` (commit b8600bc)
 - Sprint 254 baseline: `docs/sprints/sprint-254/contract.md` (commit 2d518b2)

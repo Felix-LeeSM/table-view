@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # God file 인지 hook. PostToolUse(Edit|Write) 에서 자동 호출.
 #
-# 룰: memory/conventions/refactoring/god-file/memory.md
+# 룰: memory/engineering/conventions/refactoring/god-file/memory.md
 # 임계: 500 lines (≥). 초과 시 stderr 경고 + 룰 path 출력.
 #
 # 입력: stdin JSON (`tool_input.file_path`).
@@ -41,7 +41,7 @@ if [ "$LINE_COUNT" -ge "$THRESHOLD" ]; then
   REL_FILE="${FILE#"$CLAUDE_PROJECT_DIR/"}"
   cat >&2 <<EOF
 ⚠️  god file ($LINE_COUNT lines ≥ $THRESHOLD): $REL_FILE
-   룰: memory/conventions/refactoring/god-file/memory.md
+   룰: memory/engineering/conventions/refactoring/god-file/memory.md
    시퀀스: 주석 단순화 → memory 이관 → 그래도 크면 리팩토링 (5+ commit)
 EOF
 fi

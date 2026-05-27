@@ -201,5 +201,5 @@ test struct 가 broken — Rust 의 trait coverage 강제. 본 sprint 가
 - `docs/refactoring-smells.md` retire (시한부 catalogue).
 
 retire 처리는 본 sprint 의 마지막 step 으로 docs 에 reference 만 남기고
-다음 sprint 가 영속 conventions (`memory/conventions/refactoring/`) 만
+다음 sprint 가 영속 conventions (`memory/engineering/conventions/refactoring/`) 만
 참조하도록 정리.

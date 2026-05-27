@@ -478,9 +478,9 @@
         <li>memory/workflow/bug-fix/memory.md</li>
         <li>memory/workflow/implementation/memory.md</li>
         <li>memory/workflow/delivery/memory.md</li>
-        <li>memory/ux/memory.md</li>
+        <li>memory/product/memory.md</li>
         <li>memory/runbook/*/memory.md</li>
-        <li>memory/conventions/**/memory.md</li>
+        <li>memory/engineering/conventions/**/memory.md</li>
         <li>scripts/hooks/check-god-file.sh</li>
         <li>scripts/regenerate-indexes.sh</li>
         <li>lefthook.yml</li>
@@ -634,9 +634,9 @@ model: opus
 ---
 작업 시작 시 반드시 read:
 1. memory/workflow/implementation/memory.md (noise / 자율성)
-2. memory/conventions/testing-scenarios/memory.md (8 원칙)
-3. memory/conventions/testing-scenarios/mock-scope/memory.md (mock 범위)
-4. memory/conventions/refactoring/god-file/memory.md (≥500줄 시퀀스)
+2. memory/engineering/conventions/testing-scenarios/memory.md (8 원칙)
+3. memory/engineering/conventions/testing-scenarios/mock-scope/memory.md (mock 범위)
+4. memory/engineering/conventions/refactoring/god-file/memory.md (≥500줄 시퀀스)
 read 없이 작업 = 룰 위반. RED commit 없이 GREEN = 평가 fail.`,
     codex: `# Codex agent: tdd-generator
 Role: TDD generator — RED→GREEN→REFACTOR
@@ -644,16 +644,16 @@ Tools: read, edit, write, shell, grep, glob
 
 Trigger 시 read:
 - memory/workflow/implementation/memory.md
-- memory/conventions/testing-scenarios/memory.md
-- memory/conventions/testing-scenarios/mock-scope/memory.md
-- memory/conventions/refactoring/god-file/memory.md
+- memory/engineering/conventions/testing-scenarios/memory.md
+- memory/engineering/conventions/testing-scenarios/mock-scope/memory.md
+- memory/engineering/conventions/refactoring/god-file/memory.md
 RED commit 없으면 fail.`,
     cursor: `# Cursor rule: tdd-generator
 Read on trigger:
 - memory/workflow/implementation/memory.md
-- memory/conventions/testing-scenarios/memory.md
-- memory/conventions/testing-scenarios/mock-scope/memory.md
-- memory/conventions/refactoring/god-file/memory.md`
+- memory/engineering/conventions/testing-scenarios/memory.md
+- memory/engineering/conventions/testing-scenarios/mock-scope/memory.md
+- memory/engineering/conventions/refactoring/god-file/memory.md`
   },
   'bug-fix': {
     claude: `---
@@ -664,17 +664,17 @@ model: opus
 ---
 작업 시작 시 반드시 read:
 1. memory/workflow/bug-fix/memory.md (Red 우선)
-2. memory/conventions/testing-scenarios/mock-scope/memory.md (assertion 범위)
+2. memory/engineering/conventions/testing-scenarios/mock-scope/memory.md (assertion 범위)
 read 없이 작업 = 룰 위반.`,
     codex: `# Codex agent: bug-fix
 Trigger 시 read:
 - memory/workflow/bug-fix/memory.md
-- memory/conventions/testing-scenarios/mock-scope/memory.md
+- memory/engineering/conventions/testing-scenarios/mock-scope/memory.md
 Red 먼저, fix 그 다음.`,
     cursor: `# Cursor rule: bug-fix
 Red regression test 먼저. read:
 - memory/workflow/bug-fix/memory.md
-- memory/conventions/testing-scenarios/mock-scope/memory.md`
+- memory/engineering/conventions/testing-scenarios/mock-scope/memory.md`
   },
   'delivery': {
     claude: `---

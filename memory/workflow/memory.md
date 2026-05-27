@@ -1,12 +1,12 @@
 ---
 title: Workflow
 type: index
-updated: 2026-05-17
+updated: 2026-05-27
 ---
 
 # Workflow
 
-User-Claude 협업 phase 별 행동 룰. 코드 룰은 [conventions](../conventions/memory.md) 참조, 본 방은 _사용자와의 협업 패턴_.
+User-Claude 협업 phase 별 행동 룰. 코드 룰은 [engineering/conventions](../engineering/conventions/memory.md) 참조, 본 방은 _사용자와의 협업 패턴_.
 
 ## 방 지도
 
@@ -32,6 +32,5 @@ User-Claude 협업 phase 별 행동 룰. 코드 룰은 [conventions](../conventi
 
 ## 관련 방
 
-- [conventions](../conventions/memory.md) — 코드 룰 (Rust/TS/테스트/주석)
-- [ux](../ux/memory.md) — 제품 UX 머지 기준
-- [decisions](../decisions/memory.md) — workflow 룰을 만든 결정 이력
+- [engineering/conventions](../engineering/conventions/memory.md) — 코드 룰 (Rust/TS/테스트/주석)
+- [product](../product/memory.md) — 제품 UX 머지 기준

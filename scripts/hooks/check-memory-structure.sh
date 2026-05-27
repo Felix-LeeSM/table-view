@@ -2,7 +2,6 @@
 # check-memory-structure.sh
 # 규칙: memory/ 트리 아래에는 **오직 memory.md만** 허용.
 #       모든 "방"은 디렉토리이고 내용은 memory.md에, 더 세분화하면 하위 디렉토리에 또 memory.md를 둔다.
-#       ADR/lesson도 서브디렉토리 + memory.md 형태여야 함.
 # 기본: 경고만 (exit 0). --strict 시 violation 있으면 exit 1.
 
 set -euo pipefail

@@ -72,7 +72,7 @@ ADR 0022 Phase 1 — Sprint 244 의 production+strict = read-only 정책을 lib 
 ## References
 
 - Contract: `docs/sprints/sprint-245/contract.md`
-- ADR: `memory/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
+- ADR: `docs/archives/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
 - 직전 sprint 의 코드 변경: commit `13b297f` (Sprint 243), `f0276ee` (Sprint 244 lib), `2126063` (Sprint 244 정렬)
 - Relevant files:
   - `src/lib/safeMode.ts`

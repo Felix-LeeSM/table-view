@@ -137,6 +137,6 @@ git diff --stat src-tauri/
 - `docs/sprints/sprint-196/contract.md` — sprint contract.
 - `docs/sprints/sprint-196/findings.md` — 결정 / 결과 / 트레이드오프.
 - `docs/refactoring-plan.md` Sprint 196 row.
-- `memory/conventions/refactoring/store-coupling/memory.md` — B-2 / B-6
+- `memory/engineering/conventions/refactoring/store-coupling/memory.md` — B-2 / B-6
   룰 (selector 구독 패턴 / cross-store hook level 룰 — 본 sprint 검토
   발견).

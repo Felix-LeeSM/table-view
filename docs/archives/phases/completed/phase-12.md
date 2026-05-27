@@ -27,7 +27,7 @@ Phase 12는 launcher 720×560 fixed window + workspace 1280×800 resizable windo
 - `src/lib/window-controls.ts` — 얇은 testable seam (`showWindow`/`hideWindow`/`focusWindow`/`exitApp`/`onCloseRequested`).
 - `src/lib/window-lifecycle-boot.ts` — launcher close → app exit 핸들러.
 - `src/AppRouter.tsx` — `getCurrentWindowLabel()` 기반 분기 (launcher → `LauncherPage` / workspace → `App`).
-- ADR 0012 (`memory/decisions/0012-multi-window-launcher-workspace/memory.md`).
+- ADR 0012 (`docs/archives/decisions/0012-multi-window-launcher-workspace/memory.md`).
 
 ## 잔여 위험 / 후속 작업
 

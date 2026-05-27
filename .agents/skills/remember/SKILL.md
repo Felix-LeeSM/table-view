@@ -1,6 +1,6 @@
 ---
 name: remember
-description: 대화 중 합의된 결정, 룰, 교훈을 repo memory/docs의 올바른 SOT에 저장. 사용자가 /remember 또는 "기억해"라고 말할 때 사용.
+description: 대화 중 합의된 결정, 룰, 적용 원칙을 repo memory/docs의 올바른 SOT에 저장. 사용자가 /remember 또는 "기억해"라고 말할 때 사용.
 ---
 
 # /remember skill
@@ -15,21 +15,21 @@ wrapper 는 이 파일을 가리킨다.
 
 | 신호 | type | 위치 패턴 |
 |---|---|---|
-| 코드 작성 룰 (Rust/TS/테스트/주석/금지) | `convention` | `memory/conventions/<area>/memory.md` 또는 sub-room |
+| 코드 작성 룰 (Rust/TS/테스트/주석/금지) | `convention` | `memory/engineering/conventions/<area>/memory.md` 또는 sub-room |
 | 사용자 협업 phase 행동 룰 (grill / bug-fix / commit / cleanup) | `workflow-rule` | `memory/workflow/<phase>/memory.md` 또는 sub-room |
-| 제품 UX 머지 기준 (영속 reset 등) | `ux-rule` | `memory/ux/memory.md` 또는 sub-room |
+| 제품 현재 상태 / UX 머지 기준 (영속 reset 등) | `product-rule` | `memory/product/memory.md` 또는 sub-room |
 | 실행 절차 (cold-boot 측정 등) | `runbook` | `memory/runbook/<topic>/memory.md` |
 | Agent skill / slash command body (`/remember`, `/split-memory` 등) | `agent-skill` | `.agents/skills/<name>/SKILL.md` (wrapper: `.claude/commands/<name>.md`) |
 | 외부 도구 사용법 | `reference` | `memory/reference/<tool>/memory.md` 또는 **미이동** + 사용자 질의 옵션 |
-| 트레이드오프 있는 결정 | `ADR` | `memory/decisions/NNNN-<slug>/memory.md` |
-| 실패·성공·재발 방지 | `lesson` | `memory/lessons/<domain>/YYYY-MM-DD-<slug>/memory.md` |
+| 트레이드오프 있는 결정 이력 | `ADR` | `docs/archives/decisions/NNNN-<slug>/memory.md` |
+| 사건 이력 / 재발 방지 기록 | `incident` | `docs/archives/incidents/<domain>/YYYY-MM-DD-<slug>/memory.md` |
 | 시스템 구조 변화 | `topic` | `memory/<area>/memory.md` 갱신 |
 
 ## 동작 — 6 단계
 
 1. **Type 판정** — 위 매트릭스. 두 type 사이 애매 시 사용자에게 1q.
 2. **위치 계산**:
-   - ADR `NNNN`: `memory/decisions/` 의 최대 번호 + 1 (4자리 zero-pad).
+   - ADR `NNNN`: `docs/archives/decisions/` 의 최대 번호 + 1 (4자리 zero-pad).
    - 슬러그: 주제 접두사 + 결정 꼬리 kebab-case (예: `global-state-zustand`).
    - sub-room 임계: 같은 영역 룰 누적되어 본문 200줄 위협 시 sub-room 분기.
 3. **정합성 검증** (필수):
@@ -48,7 +48,7 @@ wrapper 는 이 파일을 가리킨다.
    - 그 외 route 는 디렉토리 + `memory.md` 생성.
    - Memory frontmatter — type / updated / 필요 시 `trigger:` (signal + layer + hook_script).
    - 본문 — 룰 명세 + Why + How to apply + 관련 cross-link.
-   - ADR 이면 `memory/decisions/memory.md` 인덱스 "활성 결정" 표에 한 행 추가.
+   - ADR 이면 `docs/archives/decisions/memory.md` 인덱스에 한 행 추가.
    - 기존 ADR 뒤집기 시:
      - 새 ADR frontmatter `supersedes: NNNN`
      - 원본 ADR frontmatter `status: Superseded`, `superseded_by: NNNN` (메타만)
@@ -62,7 +62,7 @@ wrapper 는 이 파일을 가리킨다.
 ---
 name: <한 줄 제목>
 description: <한 줄 설명 — 미래 재방문 시 trigger 신호>
-type: convention | workflow-rule | ux-rule | runbook | reference | ADR | lesson | topic
+type: convention | workflow-rule | product-rule | runbook | reference | ADR | incident | topic
 updated: YYYY-MM-DD
 trigger:  # 선택 — 인지 layer 자동화 input
   signal: <어떤 상황에서 룰 발동되는가>
@@ -94,7 +94,7 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
 **트레이드오프**: + 장점 / - 단점.
 ```
 
-### Lesson (3줄 inline)
+### Incident (3줄 inline)
 
 ```
 **상황**: 한 문장.
@@ -102,7 +102,7 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
 **재발 방지**: 한 문장.
 ```
 
-### Convention / Workflow-rule / UX-rule / Runbook
+### Convention / Workflow-rule / Product-rule / Runbook
 
 자유 형식. 필수: 룰 본문 + Why + How to apply + 관련 cross-link.
 
@@ -112,6 +112,9 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
 - `memory/` 트리는 `memory.md` 만 (예외: `memory/index/*.md`). 다른 이름 금지.
 - Skill 본문은 `memory/` 에 저장하지 않는다. `.agents/skills/<name>/SKILL.md` 를
   수정하고 wrapper 만 얇게 둔다.
+- 과거 사건/결정은 기본 memory 가 아니다. 먼저 적용 가능한 원칙을
+  `memory/product`, `memory/engineering`, `memory/workflow`, `memory/runbook` 에
+  반영하고, 이력 보존 가치가 있을 때만 archive 에 기록한다.
 - ADR 본문 동결 — 수정 금지. 메타 필드 (`status`, `superseded_by`) 만 갱신.
 - auto-memory 와 중복 저장 금지 — repo 가 source of truth.
 

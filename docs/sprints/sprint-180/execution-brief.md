@@ -50,7 +50,7 @@
 5. `queryHistoryStore.ts` `QueryHistoryEntry.status` widens to `"success" | "error" | "cancelled"`. Existing callers compile unchanged. The `normaliseEntry` function preserves the wider union. Cancelled RDB queries record an entry with `status === "cancelled"`. (AC-180-03)
 6. `QueryLog.tsx` and `GlobalQueryLogPanel.tsx` render the `"cancelled"` branch with a calm muted treatment (Generator's choice, distinct from `bg-destructive`). Tests assert the visual class is non-destructive. (AC-180-03)
 7. Cancel→retry succeeds on each of the four surfaces: second attempt resolves cleanly with its own data; no orphaned token in `query_tokens`; no late cancelled response surfacing post-retry. The cancel path removes the token from the registry BEFORE invoking `.cancel()` so a concurrent retry can register without contention. (AC-180-05)
-8. NEW ADR `memory/decisions/0018-async-cancel-policy/memory.md` exists with frontmatter (`status: Accepted`, `date: 2026-04-30`) and body sections: motivation (Doherty + Goal-Gradient), decision (cooperative `CancellationToken` registry on the four extended methods per paradigm), per-adapter behavior (PG / Mongo / SQLite), trade-offs (no IPC AbortController; registry pattern is the canonical workaround), reversibility (`Superseded` if a future Tauri version supports IPC AbortController). The ADR index `memory/decisions/memory.md` carries a new row for ADR-0018. (AC-180-04)
+8. NEW ADR `docs/archives/decisions/0018-async-cancel-policy/memory.md` exists with frontmatter (`status: Accepted`, `date: 2026-04-30`) and body sections: motivation (Doherty + Goal-Gradient), decision (cooperative `CancellationToken` registry on the four extended methods per paradigm), per-adapter behavior (PG / Mongo / SQLite), trade-offs (no IPC AbortController; registry pattern is the canonical workaround), reversibility (`Superseded` if a future Tauri version supports IPC AbortController). The ADR index `docs/archives/decisions/memory.md` carries a new row for ADR-0018. (AC-180-04)
 9. Required checks pass:
    - `pnpm vitest run` (full suite) green.
    - `pnpm tsc --noEmit` zero.
@@ -73,7 +73,7 @@
   5. `cargo build --manifest-path src-tauri/Cargo.toml` — clean build.
   6. `cargo clippy --all-targets --all-features --manifest-path src-tauri/Cargo.toml -- -D warnings` — zero warnings.
   7. `cargo test --manifest-path src-tauri/Cargo.toml` — green, with new fake-adapter cancel-token tests (`test_query_table_data_honors_cancel_token`, `test_find_honors_cancel_token`, etc.).
-  8. Static — `grep -nE 'data-testid="async-cancel"|preventDefault|stopPropagation' src/components/feedback/AsyncProgressOverlay.tsx` shows the testid + ≥8 hardening calls; `test -d memory/decisions/0018-async-cancel-policy && head -30 memory/decisions/0018-async-cancel-policy/memory.md` shows ADR; `grep -n '0018' memory/decisions/memory.md` shows index updated; `grep -nE 'fn (query_table_data|get_columns|get_table_indexes|get_table_constraints|find|aggregate|infer_collection_fields|list_collections)' src-tauri/src/db/mod.rs` shows trait methods carrying `cancel: Option<&'a CancellationToken>`.
+  8. Static — `grep -nE 'data-testid="async-cancel"|preventDefault|stopPropagation' src/components/feedback/AsyncProgressOverlay.tsx` shows the testid + ≥8 hardening calls; `test -d docs/archives/decisions/0018-async-cancel-policy && head -30 docs/archives/decisions/0018-async-cancel-policy/memory.md` shows ADR; `grep -n '0018' docs/archives/decisions/memory.md` shows index updated; `grep -nE 'fn (query_table_data|get_columns|get_table_indexes|get_table_constraints|find|aggregate|infer_collection_fields|list_collections)' src-tauri/src/db/mod.rs` shows trait methods carrying `cancel: Option<&'a CancellationToken>`.
   9. Operator browser smoke — `pnpm tauri dev`, run each of the four surfaces under a long-fetch condition, observe the overlay+Cancel at ~1s, click Cancel, confirm idle restoration, retry, confirm second attempt's data renders. PG smoke: `SELECT pg_sleep(5)` cancelled at 1.5s — verify in `pg_stat_activity` that the query is gone. Mongo smoke: long aggregate cancelled — verify in `db.currentOp()` (driver-version-dependent — record observation either way). At min window size 1024×600, confirm overlay does not visually clip.
 - **Required evidence**:
   - Changed files list with one-line purpose each (AsyncProgressOverlay.tsx + .test.tsx, useDelayedFlag.ts + .test.ts if hook, four surface .tsx + .test.tsx, queryHistoryStore.ts + .test.ts, QueryLog.tsx + GlobalQueryLogPanel.tsx + their tests, src-tauri/src/db/mod.rs, postgres.rs, mongodb.rs, the relevant src-tauri/src/commands/rdb/*.rs and src-tauri/src/commands/document/*.rs files, ADR file, ADR index, findings.md, handoff.md).
@@ -104,7 +104,7 @@
 - Master spec: `docs/sprints/sprint-176/spec.md` (Sprint 180 section, Global ACs, Discrepancies §E.10–§E.11, Verification Hints, Additional Risks)
 - Findings (Generator output): `docs/sprints/sprint-180/findings.md`
 - Handoff (Generator output): `docs/sprints/sprint-180/handoff.md`
-- New ADR (Generator output): `memory/decisions/0018-async-cancel-policy/memory.md`
+- New ADR (Generator output): `docs/archives/decisions/0018-async-cancel-policy/memory.md`
 - Relevant Rust source files:
   - `src-tauri/src/db/mod.rs` — trait surface; extend the cancel-token contract on the four enumerated methods per paradigm.
   - `src-tauri/src/db/postgres.rs:443-595` — reference shape for cooperative cancel-token observation in the adapter implementation.
@@ -121,5 +121,5 @@
   - `src/stores/queryHistoryStore.ts:23` — `status` union; widen to include `"cancelled"`.
   - `src/components/query/QueryLog.tsx:110`, `src/components/query/GlobalQueryLogPanel.tsx:187,204` — existing `status === "success" | "error"` rendering branches; add `"cancelled"` branch.
 - Reference style: `docs/sprints/sprint-179/contract.md`, `docs/sprints/sprint-179/execution-brief.md`.
-- Project conventions: `memory/conventions/memory.md`; testing rule: `.claude/rules/testing.md`; React rule: `.claude/rules/react-conventions.md`; Rust rule: `.claude/rules/rust-conventions.md`; test-scenarios rule: `.claude/rules/test-scenarios.md`.
-- ADR convention: `memory/decisions/memory.md` (numbering, slug, frontmatter, body-frozen rule).
+- Project conventions: `memory/engineering/conventions/memory.md`; testing rule: `.claude/rules/testing.md`; React rule: `.claude/rules/react-conventions.md`; Rust rule: `.claude/rules/rust-conventions.md`; test-scenarios rule: `.claude/rules/test-scenarios.md`.
+- ADR convention: `docs/archives/decisions/memory.md` (numbering, slug, frontmatter, body-frozen rule).

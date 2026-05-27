@@ -5,8 +5,8 @@
 - Close Column MODIFY — add USING cast expression to `ColumnChange::Modify`
   (backend + TS mirror + SQL emitter + `ColumnsEditor` UI), add a
   pre-execution NULL-rows conflict probe for SET NOT NULL toggles, and
-  record the Phase 27 closure markers (`memory/lessons/`, `docs/PLAN.md`,
-  `memory/roadmap/memory.md`).
+  record the Phase 27 closure markers (`docs/archives/incidents/`, `docs/PLAN.md`,
+  `docs/archives/roadmaps/memory-roadmap/memory.md`).
 
 ## Task Why
 
@@ -58,10 +58,10 @@
    `count_null_rows` 호출. `count > 0` 이면 "`N` rows have NULL — adding NOT
    NULL will fail" 경고 inline 표시. `count === 0` 이면 표시 안 함. 차단
    없음. vitest 2 케이스 통과.
-6. `memory/lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`
+6. `docs/archives/incidents/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`
    회고 추가.
 7. `docs/PLAN.md` Phase 27 status `진행 중` → `종료`.
-8. `memory/roadmap/memory.md` 패리티 마일스톤 row 갱신.
+8. `docs/archives/roadmaps/memory-roadmap/memory.md` 패리티 마일스톤 row 갱신.
 9. 모든 gate (`cargo test` / `cargo clippy` / `cargo fmt --check` /
    `pnpm tsc --noEmit` / `pnpm vitest run` / `pnpm lint`) 통과. 테스트 카운트
    monotonically non-decreasing.
@@ -96,7 +96,7 @@
 - 6 개 SQL emission fixture (3 새 fixture + 3 기존 회귀 spot-check).
 - 충돌 사전 표시 vitest 결과 (`count > 0` / `count === 0` 각각).
 - Phase 27 closure marker 3 종 (lesson 파일 경로, `docs/PLAN.md` diff
-  인용, `memory/roadmap/memory.md` diff 인용).
+  인용, `docs/archives/roadmaps/memory-roadmap/memory.md` diff 인용).
 - Assumptions made during implementation (예: USING expression 의 escape
   처리 정책 — 본 sprint 는 free-text passthrough 로 결정).
 - Residual risk or verification gaps (예: live PG 통합 테스트 없음 — fixture

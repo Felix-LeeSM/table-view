@@ -1692,5 +1692,5 @@ type ClearHistoryResponse = {
 - ADR 0002 — Zustand 채택.
 - ADR 0025 — DataGrid self-managed (TanStack 미도입) — D1 의 TanStack 옵션 배제 근거.
 - ADR 0027 — Per-workspace state store (Q4 / Q5 와 paired).
-- `memory/decisions/0021-export-envelope-auto-mnemonic-no-ttl/memory.md` — Q1 의 envelope 모델.
-- `memory/roadmap/memory.md` — TablePlus 패리티 방향성 (Q5 affinity 근거).
+- `docs/archives/decisions/0021-export-envelope-auto-mnemonic-no-ttl/memory.md` — Q1 의 envelope 모델.
+- `docs/archives/roadmaps/memory-roadmap/memory.md` — TablePlus 패리티 방향성 (Q5 affinity 근거).

@@ -1,6 +1,6 @@
 ---
 name: improve-codebase-architecture
-description: memory/의 도메인 언어와 memory/decisions의 결정에 비추어 코드베이스에서 깊이를 더할 기회(deepening opportunity)를 발견. 사용자가 아키텍처를 개선하거나, 리팩토링 기회를 찾거나, 강하게 결합된 모듈을 통합하거나, 코드베이스를 더 테스트 가능하고 AI 친화적으로 만들고 싶을 때 사용.
+description: active memory의 도메인 언어와 현재 docs에 비추어 코드베이스에서 깊이를 더할 기회(deepening opportunity)를 발견. 사용자가 아키텍처를 개선하거나, 리팩토링 기회를 찾거나, 강하게 결합된 모듈을 통합하거나, 코드베이스를 더 테스트 가능하고 AI 친화적으로 만들고 싶을 때 사용.
 ---
 
 # Improve Codebase Architecture
@@ -26,14 +26,15 @@ description: memory/의 도메인 언어와 memory/decisions의 결정에 비추
 - **인터페이스가 곧 테스트 표면.**
 - **어댑터 1개 = 가설적 seam. 어댑터 2개 = 진짜 seam.**
 
-이 스킬은 프로젝트의 도메인 모델에 _기반함_. 도메인 언어가 좋은 seam에 이름을 줌; ADR은 스킬이 다시 논의(re-litigate)하지 말아야 할 결정을 기록.
+이 스킬은 프로젝트의 도메인 모델에 _기반함_. 도메인 언어가 좋은 seam에 이름을 줌. Archived ADR은 과거 결정을 다시 논의(re-litigate)하지 않아야 할 때만 본다.
 
 ## Process
 
 ### 1. 탐색
 
 먼저 `memory/memory.md`, `memory/index/by-surface.md`, 건드리는 영역의 관련
-`memory/**/memory.md` 와 `memory/decisions/memory.md` 를 읽어.
+`memory/**/memory.md`, `docs/product/README.md`, `docs/ROADMAP.md` 를 읽어.
+과거 결정 출처가 필요한 경우에만 `docs/archives/decisions/memory.md` 를 추가로 본다.
 
 그 다음 Agent 도구를 `subagent_type=Explore`와 함께 사용해서 코드베이스를 걸어. 경직된 휴리스틱을 따르지 말고 — 유기적으로 탐색하면서 마찰을 느끼는 곳을 메모:
 

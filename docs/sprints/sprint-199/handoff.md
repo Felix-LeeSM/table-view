@@ -106,7 +106,7 @@ subdir) 을 frontend 측으로 답습한 첫 사례. 다음 god file 분해 (Dat
   - **Sprint 200 / 201** — `DataGridTable.tsx` (1071) 분해.
   - **Sprint 203** — `QueryTab.tsx` (1040) 분해.
   - **Sprint 205** — `tabStore.ts` (1002) 분해.
-- 영속 표준은 `memory/conventions/refactoring/` 4 카테고리 (B / D / C / A).
+- 영속 표준은 `memory/engineering/conventions/refactoring/` 4 카테고리 (B / D / C / A).
 
 ## Refs
 

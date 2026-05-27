@@ -10,13 +10,13 @@
 > 본 문서는 Phase 28 Slice A1-M + Phase 29 U1-U5 진행 중 assistant 가
 > 자율적으로 내린 결정을 **(1) 어떤 문제 (2) 결정 (3) 근거 (4) 대안과
 > trade-off** 형식으로 누적한다. grill 에서 이미 lock 된 결정은
-> `memory/roadmap/phase-28-mongo-full-support/memory.md` 가 source —
+> `docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md` 가 source —
 > 본 문서는 그 결정 안에서 발생한 implementation-level micro-decision 만
 > 기록한다.
 >
 > 메모리 팔레스 ADR 과 차이: 본 문서는 sprint scope 안 implementation
 > trade-off 의 동결 로그 (sprint context 가 없으면 의미가 사라짐). 시스템
-> 전반에 영향을 주는 결정은 `memory/decisions/` 에 ADR 로 별도 기록.
+> 전반에 영향을 주는 결정은 `docs/archives/decisions/` 에 ADR 로 별도 기록.
 
 ## 형식
 

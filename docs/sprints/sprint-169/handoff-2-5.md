@@ -19,7 +19,7 @@
 | `.gitignore` | Modified | 4 | Anchors `/wdio-report/` to repo root, ignores `e2e/wdio-report/*` while keeping `e2e/wdio-report/.gitkeep`. |
 | `.github/workflows/ci.yml` | Modified | 5 | `e2e` job replaced with one `docker compose --profile test up --build --abort-on-container-exit --exit-code-from e2e` step + failure artifact upload from `e2e/wdio-report/`. Inline `psql`/`apt-get install webkit2gtk-driver`/`cargo install tauri-driver`/Rust+Node setup all removed. Timeout bumped 30 → 45 minutes for first-build headroom. |
 | `scripts/setup-e2e.sh` | Rewritten | 5 | Removes `docker-compose.test.yml` reference; documents `pnpm test:e2e:docker` as the canonical Linux/CI entrypoint; states the macOS limitation (Linux VM or CI required). |
-| `memory/decisions/0015-e2e-docker-pipeline-canonical/memory.md` | New | 5 | ADR — frontmatter `id: "0015"`, `status: Accepted`, `date: 2026-04-29`. Body 결정 / 이유 / 트레이드오프, 27 lines total. |
+| `docs/archives/decisions/0015-e2e-docker-pipeline-canonical/memory.md` | New | 5 | ADR — frontmatter `id: "0015"`, `status: Accepted`, `date: 2026-04-29`. Body 결정 / 이유 / 트레이드오프, 27 lines total. |
 | `Dockerfile.e2e` | Modified | Sprint 1 amendment (allowed) | Symlink `/root/.cargo/bin/tauri-driver → /usr/local/cargo/bin/tauri-driver` so wdio.conf.ts's `~/.cargo/bin/tauri-driver` fallback resolves inside the container without touching wdio.conf.ts. |
 
 No memory palace files outside the new ADR directory were touched.
@@ -59,14 +59,14 @@ This is the minimal Sprint 1 amendment (Option (a) from the task brief). It keep
 | `grep -nE "service_healthy\|profiles:\|command:\|working_dir:\|tauri-target\|wdio-report\|MONGO_USER\|MONGO_PASSWORD\|E2E_MONGO_HOST\|E2E_PG_HOST" /tmp/sprint-169-compose-render.yml` | **PASS** | Every wiring keyword present. |
 | `bash -n e2e/run-e2e-docker.sh` | **PASS** | Script syntax valid. |
 | `shellcheck e2e/run-e2e-docker.sh` | N/A | shellcheck not installed on the host; non-blocking per task instructions. |
-| `head -10 memory/decisions/0015-…/memory.md` | **PASS** | Frontmatter correct: `id: "0015"`, `status: Accepted`, `date: 2026-04-29`, `supersedes: null`, `superseded_by: null`. |
-| `wc -l memory/decisions/0015-…/memory.md` | **PASS** | 27 lines, well under the 200-line palace limit. |
+| `head -10 docs/archives/decisions/0015-…/memory.md` | **PASS** | Frontmatter correct: `id: "0015"`, `status: Accepted`, `date: 2026-04-29`, `supersedes: null`, `superseded_by: null`. |
+| `wc -l docs/archives/decisions/0015-…/memory.md` | **PASS** | 27 lines, well under the 200-line palace limit. |
 | `grep -rn "CREATE TABLE IF NOT EXISTS users" .github/ e2e/ scripts/ src-tauri/` (contract grep) | **PASS** | Exactly one match: `e2e/fixtures/seed.sql:17`. |
 | `grep -rn "CREATE TABLE IF NOT EXISTS users" .github/ e2e/ scripts/ src-tauri/ docs/sprints/sprint-169/` (broader grep including docs) | INFORMATIONAL | Returns 1 SQL definition + 3 documentation references in spec/contract/handoff (expected — those are doc strings, not seed sources). |
 | `git check-ignore -v e2e/wdio-report/.gitkeep` | **PASS** (exit 0) | Resolves to the negation rule `!e2e/wdio-report/.gitkeep`, so the file is tracked. |
 | `git check-ignore -v e2e/wdio-report/foo.json` | **PASS** (exit 0) | Resolves to `e2e/wdio-report/*`, so non-`.gitkeep` files stay ignored. |
 | `node -e "..."` static check of CI workflow | **PASS** | `e2e` job present; `docker compose --profile test up` present; inline psql/apt webkit2gtk/cargo install tauri-driver/xvfb all absent; artifact path is `e2e/wdio-report/`. |
-| `git status` | **PASS** | Untracked: only the expected new files (`e2e/fixtures/`, `e2e/run-e2e-docker.sh`, `e2e/wdio-report/.gitkeep`, `memory/decisions/0015-…/`). |
+| `git status` | **PASS** | Untracked: only the expected new files (`e2e/fixtures/`, `e2e/run-e2e-docker.sh`, `e2e/wdio-report/.gitkeep`, `docs/archives/decisions/0015-…/`). |
 
 End-to-end runtime verification (`pnpm test:e2e:docker`) is deferred to the CI runner because under linux/amd64 emulation on darwin/arm64 the cold Tauri build alone is estimated at 30-60 min — out of scope for the static-verification phase.
 
@@ -180,7 +180,7 @@ End-to-end runtime verification (`pnpm test:e2e:docker`) is deferred to the CI r
 - `.gitignore`: Sprint 4 anchoring + .gitkeep negation.
 - `.github/workflows/ci.yml`: Sprint 5 e2e job slim.
 - `scripts/setup-e2e.sh`: Sprint 5 rewrite, docker-compose.test.yml ref removed.
-- `memory/decisions/0015-e2e-docker-pipeline-canonical/memory.md`: Sprint 5 ADR (new).
+- `docs/archives/decisions/0015-e2e-docker-pipeline-canonical/memory.md`: Sprint 5 ADR (new).
 - `Dockerfile.e2e`: Sprint 1 amendment — symlink so wdio.conf.ts resolver works.
 
 ### Checks Run

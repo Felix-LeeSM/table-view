@@ -73,8 +73,8 @@ path 점프.
 - `.claude/commands/*.md` 2 파일은 frontmatter (description) + redirect
 - 신설 memory rooms:
   - `memory/workflow/git-policy/memory.md` (60줄)
-  - `memory/conventions/rust/memory.md` (76줄)
-  - `memory/conventions/react/memory.md` (102줄)
+  - `memory/engineering/conventions/rust/memory.md` (76줄)
+  - `memory/engineering/conventions/react/memory.md` (102줄)
   - `memory/skills/remember/memory.md` (122줄)
   - `memory/skills/split-memory/memory.md` (33줄)
 

@@ -90,7 +90,7 @@ power-user 워크플로 (TablePlus 의 "Run", DBeaver 의 "Explain Plan" 옆에 
 
 - Contract: `docs/sprints/sprint-248/contract.md`
 - Phase 3 baseline: `docs/sprints/sprint-247/contract.md`, `findings.md`
-- ADR 0022: `memory/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
+- ADR 0022: `docs/archives/decisions/0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md`
 - Relevant files:
   - `src/types/query.ts`
   - `src/stores/tabStore.ts`

@@ -132,7 +132,7 @@ import).
 - 본 sprint 가 **Sprint 189–198 sequencing 종료**. 이후 docs retire:
   - `docs/refactoring-plan.md` — 시한부 (Sprint 198 종료 후 retire).
   - `docs/refactoring-smells.md` — 시한부 (frozen 2026-05-02 snapshot).
-- 영속 표준은 `memory/conventions/refactoring/` 4 카테고리 (B / D / C / A).
+- 영속 표준은 `memory/engineering/conventions/refactoring/` 4 카테고리 (B / D / C / A).
 
 ## Refs
 
