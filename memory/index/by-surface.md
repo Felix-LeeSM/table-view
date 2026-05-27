@@ -31,6 +31,14 @@ generator: scripts/regenerate-indexes.sh
 
 - [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
 
+### `docs/adding-a-data-source.md`
+
+- [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
+
+### `e2e/fixtures`
+
+- [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
+
 ### `src-tauri/**/*.rs`
 
 - [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
@@ -40,9 +48,17 @@ generator: scripts/regenerate-indexes.sh
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
 
+### `src-tauri/src/db/fixtures.rs`
+
+- [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
+
 ### `src-tauri/src/lib.rs`
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
+
+### `src-tauri/tests`
+
+- [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 
 ### `src/**/*.css`
 
@@ -61,6 +77,10 @@ generator: scripts/regenerate-indexes.sh
 ### `src/lib/perf/bootInstrumentation.ts`
 
 - [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
+
+### `tests/fixtures`
+
+- [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 
 ### `vi.mock'`
 

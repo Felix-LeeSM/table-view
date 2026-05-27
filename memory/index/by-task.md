@@ -51,6 +51,10 @@ generator: scripts/regenerate-indexes.sh
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 
+### data-source-promotion
+
+- [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
+
 ### decision-lock
 
 - [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
@@ -72,6 +76,10 @@ generator: scripts/regenerate-indexes.sh
 ### documentation
 
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
+
+### fixture
+
+- [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 
 ### frontend
 
@@ -234,6 +242,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
+### support-claim
+
+- [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
+
 ### tauri
 
 - [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
@@ -244,6 +256,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### test-writing
 
+- [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 - [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/engineering/conventions/testing-scenarios/mock-scope/memory.md)
 
 ### threat-model

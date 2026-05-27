@@ -1,7 +1,7 @@
 ---
 title: 비-E2E 테스트 시나리오 설계 원칙 (Rust unit/integration · React component · Zustand store · Hook · Async)
 type: memory
-updated: 2026-04-30
+updated: 2026-05-27
 ---
 
 # 비-E2E 테스트 시나리오 설계 원칙
@@ -117,6 +117,8 @@ describe('ConnectionActivation', () => {
 - 실 DB가 필요한 시나리오는 docker compose `test` profile (sprint-169 결과물).
 - mock DB 는 *contract* 검증 전용 — 실 DB 대용으로 쓰지 않는다 (sprint-169 이전
   프로젝트가 빠진 함정).
+- DBMS / adapter / result envelope 지원 범위 주장은
+  [fixtures](fixtures/memory.md) 의 local fixture / conformance 증거와 함께 둔다.
 
 ---
 
@@ -137,5 +139,6 @@ describe('ConnectionActivation', () => {
 
 - [conventions](../memory.md) — Rust/TS/테스트 메커니즘 룰
 - [e2e-scenarios](../e2e-scenarios/memory.md) — 같은 P-시리즈, e2e 레이어
+- [fixtures](fixtures/memory.md) — fixture strategy / support claim evidence
 - [docs/archives/decisions](../../../../docs/archives/decisions/memory.md) — historical ADR archive
 - 자동 로드: `.claude/rules/testing.md` (전역 paths)

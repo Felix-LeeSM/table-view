@@ -80,6 +80,7 @@ Sprint 189–198 의 모든 refactor / feature 커밋은 본 표준의 규칙을
 - [backend](./backend/memory.md) — Tauri / Rust backend 작업 guidance
 - [e2e-scenarios](e2e-scenarios/memory.md) — E2E 시나리오 설계 8원칙 + CUJ 5종
 - [testing-scenarios](testing-scenarios/memory.md) — 비-E2E 시나리오 설계 8원칙 (unit/component/store/integration/async)
+- [fixture strategy](testing-scenarios/fixtures/memory.md) — fixture-backed support claim / conformance evidence
 - [rust](./rust/memory.md) — Rust 컨벤션 전체 (`.claude/rules/rust-conventions.md` source)
 - [react](./react/memory.md) — React/TS 컨벤션 전체 (`.claude/rules/react-conventions.md` source)
 - [docs/archives/decisions](../../../docs/archives/decisions/memory.md) — historical ADR archive
