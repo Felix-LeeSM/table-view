@@ -1,7 +1,10 @@
-# Active Risk Register — Table View
+# Retired Active Risk Register — Table View
 
-Active/deferred risk 단일 추적 문서. Resolved risk 는
-`docs/archives/risks/resolved-risks.md` 에서 관리한다.
+This is a historical snapshot of the former active/deferred risk register.
+`docs/RISKS.md` is no longer an active source of truth. Current limitations now
+live in `docs/product/known-limitations.md`, future work in `docs/ROADMAP.md`,
+developer-facing verification gaps in `docs/contributor-guide/testing-and-quality.md`,
+and resolved history in `docs/archives/risks/resolved-risks.md`.
 
 Last updated: 2026-05-25 (Sprint 481 cross-paradigm release gate)
 

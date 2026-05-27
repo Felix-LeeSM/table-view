@@ -10,9 +10,10 @@ Read:
 
 `grill-me` 의 결정 인터뷰 규칙에 아래 memory 동기화 규칙을 추가한다.
 
-용어/룰은 `memory/**/memory.md`, 현재 제품 상태는 `docs/product/`, 미래 목표는
-`docs/ROADMAP.md`, hard decision 이력은 `docs/archives/decisions/*/memory.md`,
-risk/sprint 산출물은 기존 `docs/` SOT 로 라우팅한다.
+용어/룰은 `memory/**/memory.md`, 현재 제품 상태와 제한은 `docs/product/`,
+미래 목표는 `docs/ROADMAP.md`, hard decision 이력은
+`docs/archives/decisions/*/memory.md`, sprint 산출물은 기존 `docs/` SOT 로
+라우팅한다.
 
 질문은 한 번에 결정 1개만 한다. 각 질문은 옵션 + 추천 답을 포함한다. 코드나
 기존 memory 로 답할 수 있으면 먼저 탐색한다. 용어/룰/결정이 lock 되면 즉시 해당
@@ -35,7 +36,8 @@ source 를 갱신하고, `memory/` 변경 시 `bash scripts/regenerate-indexes.s
   1. 나중에 뒤집는 비용이 크다.
   2. 맥락 없이 보면 왜 그랬는지 의아하다.
   3. 실제 trade-off 가 있었다.
-- Product 상태는 `docs/product/`, 미래 목표와 sequencing 후보는 `docs/ROADMAP.md`,
-  sprint evidence 는 `docs/sprints/sprint-N/`.
-- 잔여 risk / 감사 follow-up 은 `docs/RISKS.md`.
+- Product 상태와 사용자-visible 제한은 `docs/product/`, 미래 목표와 sequencing
+  후보는 `docs/ROADMAP.md`, sprint evidence 는 `docs/sprints/sprint-N/`.
+- 구조적 제약은 architecture SOT, 개발/운영 검증 제약은
+  `docs/contributor-guide/`, 과거 risk register 는 `docs/archives/risks/`.
 - UI/flow 비교 mock 은 `docs/explorations/<topic>-<date>.html`.

@@ -1,6 +1,8 @@
 # Resolved Risk Register — Table View
 
-Resolved risk archive. Active/deferred risks live in `docs/RISKS.md`.
+Resolved risk archive. The former active/deferred register is archived at
+`docs/archives/risks/active-risk-register-2026-05-27.md`; current limitations
+and follow-ups live in product, roadmap, and contributor docs.
 
 Last updated: 2026-05-22
 

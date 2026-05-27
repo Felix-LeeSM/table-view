@@ -32,7 +32,7 @@ Last updated: 2026-05-22
 
 | Phase | Scope | Status | Current home |
 |---:|---|---|---|
-| 5 | Extended features | retired/partial | `retired/phase-5.md`; active gaps live in `../../PLAN.md` / `../../RISKS.md` |
+| 5 | Extended features | retired/partial | `retired/phase-5.md`; active gaps live in `../../ROADMAP.md` / `../../product/known-limitations.md` |
 | 6 | Legacy MongoDB support sketch | superseded | `retired/phase-6.md`; current MongoDB plan is `../../phases/phase-28.md` |
 | 7 | Elasticsearch sketch | retired/future | `retired/phase-7.md`; paradigm summary is `../../../memory/engineering/architecture/paradigms/memory.md` |
 | 8 | Redis sketch | retired/future | `retired/phase-8.md`; paradigm summary is `../../../memory/engineering/architecture/paradigms/memory.md` |

@@ -45,7 +45,7 @@ table-view/
 │   ├── lib/             # 유틸리티
 │   └── types/           # TypeScript 타입
 ├── e2e/                 # Playwright E2E
-└── docs/                # 프로젝트 문서 (PLAN, RISKS, phases)
+└── docs/                # 사람용 프로젝트 문서 (product, roadmap, sprints, archives)
 ```
 
 ## 계층

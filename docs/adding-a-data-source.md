@@ -30,7 +30,7 @@ Required answers:
 | Safety policy | Destructive actions, expensive reads, partition/access-pattern guards, preview/confirmation path, and unsupported dangerous operations. |
 | Fixtures | Local fixture, embedded sample, testcontainer, emulator, or mock strategy. Paid cloud services cannot be the only verification path. |
 | Conformance | Declared conformance level for connection, catalog, query, result, edit, and safety behavior. Unsupported/deferred surfaces must be explicit. |
-| Docs | Updates or no-op rationale for `docs/PLAN.md`, `docs/ROADMAP.md`, `docs/data-source-architecture.md`, `docs/query-language-support.md`, risk docs, and sprint docs. |
+| Docs | Updates or no-op rationale for `docs/PLAN.md`, `docs/ROADMAP.md`, `docs/product/README.md`, `docs/product/known-limitations.md`, `docs/data-source-architecture.md`, `docs/query-language-support.md`, contributor follow-up docs, and sprint docs. |
 
 ## Capability Rules
 

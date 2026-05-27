@@ -1,8 +1,8 @@
 # Docs Archive Index
 
 Inactive docs live here. Future goals stay in `docs/ROADMAP.md`, current product
-state in `docs/product/`, active risk in `docs/RISKS.md`, active phase specs in
-`docs/phases/`.
+state and limitations in `docs/product/`, developer-facing follow-ups in
+`docs/contributor-guide/`, active phase specs in `docs/phases/`.
 
 ## Categories
 
@@ -18,7 +18,7 @@ state in `docs/product/`, active risk in `docs/RISKS.md`, active phase specs in
 | `phases/retired/` | obsolete phase sketches kept for history |
 | `plans/` | completed roadmap and sequence indexes |
 | `product-snapshots/` | dated product capability/comparison snapshots |
-| `risks/` | resolved risk register |
+| `risks/` | retired risk registers and resolved risk archive |
 | `roadmaps/` | retired memory roadmap snapshots |
 | `test-plans/` | retired test improvement plans |
 | `workflows/` | inactive workflow handoffs |
