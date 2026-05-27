@@ -401,9 +401,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
       }
       if (sql === "INSERT INTO x VALUES (1)") {
         // Pre-sprint-392 this was an unsupported-statement; sprint-392
-        // promotes INSERT to a first-class variant. The facade test that
-        // exercises "tagged error union" now uses MERGE (still
-        // unsupported in sprint-392) — see updated test below.
+        // promotes INSERT to a first-class variant.
         return {
           kind: "insert",
           table: "x",
@@ -422,9 +420,44 @@ vi.mock("./wasm/sql_parser_core.js", () => {
         "MERGE INTO x USING y ON x.id = y.id WHEN MATCHED THEN UPDATE SET a = 1"
       ) {
         return {
+          kind: "merge",
+          target: { schema: null, table: "x" },
+          target_alias: null,
+          source: { schema: null, table: "y" },
+          source_alias: null,
+          on: {
+            kind: "column-comparison",
+            left: { table: "x", column: "id" },
+            op: "eq",
+            right: { table: "y", column: "id" },
+          },
+          clauses: [
+            {
+              not_matched: false,
+              action: "update",
+              assignments: [
+                [
+                  "a",
+                  {
+                    kind: "literal",
+                    value: {
+                      kind: "literal",
+                      value: { kind: "integer", value: 1 },
+                    },
+                  },
+                ],
+              ],
+              columns: [],
+              values: [],
+            },
+          ],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "REPLACE INTO x VALUES (1)") {
+        return {
           kind: "error",
           error_kind: "unsupported-statement",
-          message: "sprint-392 does not support MERGE",
+          message: "REPLACE remains unsupported",
           at: 0,
         } satisfies SqlParseResult;
       }
@@ -1282,11 +1315,27 @@ describe("parseSql (sprint-385 facade)", () => {
     });
   });
 
-  it("returns a tagged error union (not a thrown exception) for unsupported statements", async () => {
-    // Sprint-392 — INSERT is now supported. MERGE remains unsupported.
+  it("[AC-484-F01] parses MERGE into a kind:'merge' facade variant", async () => {
+    // Reason: Sprint 484 adds PostgreSQL MERGE to the WASM/TS parse
+    // result contract. (2026-05-27)
     const result = await parseSql(
       "MERGE INTO x USING y ON x.id = y.id WHEN MATCHED THEN UPDATE SET a = 1",
     );
+    expect(result.kind).toBe("merge");
+    if (result.kind !== "merge") return;
+    expect(result.target.table).toBe("x");
+    expect(result.source.table).toBe("y");
+    const [clause] = result.clauses;
+    expect(clause).toBeDefined();
+    if (clause === undefined) return;
+    expect(clause.not_matched).toBe(false);
+    expect(clause.action).toBe("update");
+  });
+
+  it("returns a tagged error union (not a thrown exception) for unsupported statements", async () => {
+    // Sprint-484 — MERGE is now supported, so REPLACE keeps this unsupported
+    // tagged-union facade path covered.
+    const result = await parseSql("REPLACE INTO x VALUES (1)");
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.error_kind).toBe("unsupported-statement");

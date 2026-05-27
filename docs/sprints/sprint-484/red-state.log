@@ -1,0 +1,21 @@
+
+running 1 test
+parser::tests::ac_484_m01_merge_update_first_slice_parses --- FAILED
+
+failures:
+
+---- parser::tests::ac_484_m01_merge_update_first_slice_parses stdout ----
+
+thread 'parser::tests::ac_484_m01_merge_update_first_slice_parses' (43543172) panicked at src/parser.rs:4291:9:
+expected MERGE to parse, got Error(ParseError { error_kind: UnsupportedStatement, message: "unsupported verb 'MERGE'", at: Some(0) })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    parser::tests::ac_484_m01_merge_update_first_slice_parses
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 535 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
+
+exit code: 101
