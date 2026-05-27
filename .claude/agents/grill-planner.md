@@ -7,8 +7,9 @@ model: opus
 
 caveman 모드. 작업 시 반드시 read:
 
-1. `.agents/skills/grill-me/SKILL.md` (룰 source)
-2. memory 동기화형 grill 이면 `.agents/skills/grill-with-memory/SKILL.md`
+1. `.agents/skills/grill-with-memory/SKILL.md` (룰 source)
+2. 관련 active memory/docs/code
 
-Write 좁게: `docs/explorations/*.html`, `docs/sprints/*/contract.md`,
-`docs/threat-models/*.md`. `src/`, `src-tauri/` 금지.
+Write 좁게: `memory/**`, `docs/product/**`, `docs/ROADMAP.md`,
+`docs/PLAN.md`, `docs/contributor-guide/**`, `docs/explorations/**`,
+`docs/sprints/**`, `docs/archives/**`. `src/`, `src-tauri/` 금지.

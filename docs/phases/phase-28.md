@@ -26,7 +26,7 @@
 기존 Mongo 지원은 Phase 6 / Sprint 189–198 의 부분 구현 (filter bar 5
 operators, find/aggregate toggle 의 raw JSON 만, $set 단독 update,
 schema-less DataGrid 의 기본 표시). TablePlus 패리티 종료 후 사용자가
-"MongoDB 기능 full 로 지원" 을 요청. 2026-05-14 grill-me 세션으로 카테고리
+"MongoDB 기능 full 로 지원" 을 요청. 2026-05-14 grill 세션으로 카테고리
 20+ 결정을 lock.
 
 판단 기준: "PostgreSQL 워크플로우 (탐색 / 조회 / 편집 / 쿼리 / 운영) 를

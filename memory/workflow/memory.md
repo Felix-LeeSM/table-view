@@ -40,7 +40,7 @@ User-Claude 협업 phase 별 행동 계약. 코드 룰은 [engineering/conventio
 
 - [engineering/conventions](../engineering/conventions/memory.md) — 코드 룰 (Rust/TS/테스트/주석)
 - [product](../product/memory.md) — 제품 UX 머지 기준
-- 결정 / grill 은 workflow memory 가 아니라 `.agents/skills/grill-me/SKILL.md` 와
+- 결정 / grill 은 workflow memory 가 아니라
   `.agents/skills/grill-with-memory/SKILL.md` 가 source.
 - PR review 방법론은 workflow memory 가 아니라 `.agents/skills/pr-review/SKILL.md`
   가 source.
