@@ -61,7 +61,7 @@ generator: scripts/regenerate-indexes.sh
 
 작업 의도 키워드 → 관련 룰/방. 자동 생성 — 직접 편집 금지. 메모리 frontmatter 의 \`task:\` 필드를 input 으로 한다.
 
-수동 추가 또는 task 필드 누락된 룰은 본 인덱스에 빠질 수 있음 — \`/remember\` skill 로 frontmatter 갱신 시 자동 등록됨.
+수동 추가 또는 task 필드 누락된 룰은 본 인덱스에 빠질 수 있음 — \`.agents/skills/remember/SKILL.md\` 절차로 frontmatter 갱신 시 자동 등록됨.
 
 ## 작업 → 룰 / 방 매핑
 

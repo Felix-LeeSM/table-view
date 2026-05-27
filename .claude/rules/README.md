@@ -47,4 +47,4 @@ brain 별 wrapper, 본문은 `memory/` source.
 - `memory/conventions/memory.md` — 코드 룰
 - `memory/workflow/git-policy/memory.md` — git hook 회피 금지 source
 - `.claude/agents/README.md` — agent wrapper 정책
-- `memory/skills/memory.md` — slash command wrapper 정책 (commands/ README 금지 룰)
+- `.agents/skills/remember/SKILL.md`, `.agents/skills/split-memory/SKILL.md` — slash command source

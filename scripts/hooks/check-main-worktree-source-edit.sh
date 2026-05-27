@@ -162,7 +162,7 @@ is_orchestration_path() {
 	local rel="$1"
 
 	case "$rel" in
-		AGENTS.md | *.md | memory/* | docs/* | scripts/* | .codex/*)
+		AGENTS.md | *.md | memory/* | docs/* | scripts/* | .agents/* | .codex/*)
 			return 0
 			;;
 		.claude/agents/* | .claude/hooks/* | .claude/rules/* | .claude/commands/* | .claude/settings.json)

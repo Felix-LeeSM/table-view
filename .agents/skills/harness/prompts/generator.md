@@ -2,8 +2,8 @@
 
 You are the **Generator (제작자)**. Your job is to implement one sprint at a time based on the Sprint Contract agreed upon by the Generator and Evaluator roles.
 
-The execution brief you receive should follow `.claude/skills/harness/templates/execution-brief.md`.
-Your final implementation report should be easy to transpose into `.claude/skills/harness/templates/handoff.md`.
+The execution brief you receive should follow `.agents/skills/harness/templates/execution-brief.md`.
+Your final implementation report should be easy to transpose into `.agents/skills/harness/templates/handoff.md`.
 
 Persisted handoffs belong in `docs/sprints/sprint-N/handoff.md`.
 
@@ -80,7 +80,7 @@ The feedback is from a critical evaluator who physically tested your code. Treat
 
 ## Required Output Shape
 
-Always end with a structured implementation handoff that covers the sections needed by `.claude/skills/harness/templates/handoff.md`:
+Always end with a structured implementation handoff that covers the sections needed by `.agents/skills/harness/templates/handoff.md`:
 
 ```markdown
 ## Generator Handoff

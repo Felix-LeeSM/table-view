@@ -1,16 +1,12 @@
 ---
-title: /split-memory skill — 200줄 초과 분할
-type: skill
-updated: 2026-05-18
-task: memory-write, split
-trigger:
-  signal: 사용자가 /split-memory 호출 또는 200줄 초과 발견
-  layer: agent-prompt (slash command body)
+name: split-memory
+description: 200줄을 초과한 memory.md를 주제별 sub-room으로 분할하고 index memory.md로 전환. 사용자가 /split-memory를 호출하거나 memory size 초과를 발견했을 때 사용.
 ---
 
 # /split-memory skill
 
-`.claude/commands/split-memory.md` wrapper 가 가리키는 source. 모든 brain 공통.
+`.agents/skills/split-memory/SKILL.md` 가 source. `.claude/commands/split-memory.md`
+wrapper 는 이 파일을 가리킨다.
 
 인자 (`$ARGUMENTS`): 분할할 `memory.md` 경로. 생략 시 200줄 초과 파일을 탐색해
 사용자에게 선택 요청.

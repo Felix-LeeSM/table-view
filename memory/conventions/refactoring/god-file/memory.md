@@ -74,7 +74,7 @@ pnpm tsc --noEmit && pnpm lint && pnpm vitest run <touched-tree>
 
 주석 본문이 cross-component invariant 이거나 lessons/decisions 가치 있으면:
 - 별도로 `memory/lessons/YYYY-MM-DD-<slug>/memory.md` 추가
-- 또는 ADR 가치 있으면 `/remember` skill 으로 `memory/decisions/NNNN-<slug>/`
+- 또는 ADR 가치 있으면 `/remember` 로 `memory/decisions/NNNN-<slug>/`
 - 코드 주석은 그 메모리에 cross-link (단 link rot 위험 — 메모리 path 변경 가능성 고려)
 
 ## Why

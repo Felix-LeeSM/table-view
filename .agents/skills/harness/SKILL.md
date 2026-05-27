@@ -20,7 +20,7 @@ You are an **orchestrator** managing three specialized agents to build the featu
 
 ## Artifact Storage
 
-- Prompts/templates: `.claude/skills/harness/`
+- Prompts/templates: `.agents/skills/harness/`
 - Sprint artifacts: `docs/sprints/sprint-{{N}}/`
 - Files: `spec.md`, `contract.md`, `execution-brief.md`, `findings.md`, `handoff.md`
 - If `N` is unspecified, use the next unused project-wide sprint number.
@@ -29,10 +29,10 @@ You are an **orchestrator** managing three specialized agents to build the featu
 
 ### Phase 1: Planning (Planner 에이전트)
 
-Read the planner prompt from `.claude/skills/harness/prompts/planner.md`.
+Read the planner prompt from `.agents/skills/harness/prompts/planner.md`.
 
 Spawn a **Plan-type Agent** with:
-- **Task**: "You are the Planner (기획자). Read the planner prompt at `.claude/skills/harness/prompts/planner.md` and follow its instructions exactly. Produce a spec for this feature: {{user_argument}}"
+- **Task**: "You are the Planner (기획자). Read the planner prompt at `.agents/skills/harness/prompts/planner.md` and follow its instructions exactly. Produce a spec for this feature: {{user_argument}}"
 - **Context**: The user's feature request, plus read the project roadmap/config and the files directly related to the requested feature area before writing the spec.
 
 Wait for the spec output. Validate it contains:
@@ -50,13 +50,13 @@ If incomplete, re-run Planning once. Save the spec to `docs/sprints/sprint-{{N}}
 Before each sprint, establish the **sprint contract** and the **verification plan** between Generator and Evaluator:
 
 Use these canonical templates from the skill directory:
-- `.claude/skills/harness/templates/contract.md`
-- `.claude/skills/harness/templates/execution-brief.md`
+- `.agents/skills/harness/templates/contract.md`
+- `.agents/skills/harness/templates/execution-brief.md`
 
 Write outputs to `docs/sprints/sprint-{{N}}/`; templates are shapes only.
 
 Spawn a **general-purpose Agent** with the contract task:
-- **Task**: "Given the master spec and sprint {{N}} scope, produce a **Sprint Contract** and **Verification Plan** — a concrete, testable agreement between the Generator and Evaluator for this sprint. Use `.claude/skills/harness/templates/contract.md` as the output shape."
+- **Task**: "Given the master spec and sprint {{N}} scope, produce a **Sprint Contract** and **Verification Plan** — a concrete, testable agreement between the Generator and Evaluator for this sprint. Use `.agents/skills/harness/templates/contract.md` as the output shape."
 - **Input**: The sprint scope from the spec (which acceptance criteria belong to this sprint)
 
 The Sprint Contract must contain:
@@ -95,7 +95,7 @@ Select the Verification Plan using this decision order:
 4. Use `static` when the sprint is documentation, configuration, schema, or other non-executable change.
 5. Use `mixed` when no single profile is sufficient. In that case, list browser and non-browser checks separately.
 
-After the contract is written, the orchestrator must normalize it into a **Sprint Execution Brief** for downstream agents using `.claude/skills/harness/templates/execution-brief.md`:
+After the contract is written, the orchestrator must normalize it into a **Sprint Execution Brief** for downstream agents using `.agents/skills/harness/templates/execution-brief.md`:
 
 ```markdown
 ## Sprint Execution Brief
@@ -132,10 +132,10 @@ Persist the contract as `docs/sprints/sprint-{{N}}/contract.md` and the brief as
 
 ### Phase 3: Sprint N — Generation (Generator 에이전트)
 
-Read the generator prompt from `.claude/skills/harness/prompts/generator.md`.
+Read the generator prompt from `.agents/skills/harness/prompts/generator.md`.
 
 Spawn a **general-purpose Agent** with:
-- **Task**: "You are the Generator (제작자). Read the generator prompt at `.claude/skills/harness/prompts/generator.md` and follow its instructions exactly."
+- **Task**: "You are the Generator (제작자). Read the generator prompt at `.agents/skills/harness/prompts/generator.md` and follow its instructions exactly."
 - **Input**:
   - Sprint Execution Brief
   - Sprint Contract
@@ -155,10 +155,10 @@ If a required pre-evaluation check fails, count it as an attempt but skip evalua
 
 ### Phase 4: Sprint N — Evaluation (Evaluator 에이전트)
 
-Read the evaluator prompt from `.claude/skills/harness/prompts/evaluator.md`.
+Read the evaluator prompt from `.agents/skills/harness/prompts/evaluator.md`.
 
 Spawn a **general-purpose Agent** with:
-- **Task**: "You are the Evaluator (평가자). Read the evaluator prompt at `.claude/skills/harness/prompts/evaluator.md` and follow its instructions exactly."
+- **Task**: "You are the Evaluator (평가자). Read the evaluator prompt at `.agents/skills/harness/prompts/evaluator.md` and follow its instructions exactly."
 - **Input**:
   - Sprint Execution Brief
   - Sprint Contract

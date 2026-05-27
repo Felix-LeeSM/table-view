@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-05-24
+generated: 2026-05-27
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -9,7 +9,7 @@ generator: scripts/regenerate-indexes.sh
 
 작업 의도 키워드 → 관련 룰/방. 자동 생성 — 직접 편집 금지. 메모리 frontmatter 의 `task:` 필드를 input 으로 한다.
 
-수동 추가 또는 task 필드 누락된 룰은 본 인덱스에 빠질 수 있음 — `/remember` skill 로 frontmatter 갱신 시 자동 등록됨.
+수동 추가 또는 task 필드 누락된 룰은 본 인덱스에 빠질 수 있음 — `.agents/skills/remember/SKILL.md` 절차로 frontmatter 갱신 시 자동 등록됨.
 
 ## 작업 → 룰 / 방 매핑
 
@@ -123,11 +123,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
 
-### memory-write
-
-- [/remember skill](../../memory/skills/remember/memory.md)
-- [/split-memory skill](../../memory/skills/split-memory/memory.md)
-
 ### merge
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
@@ -167,10 +162,6 @@ generator: scripts/regenerate-indexes.sh
 ### planning
 
 - [Grill — 결정 인터뷰 룰](../../memory/workflow/grill/memory.md)
-
-### plugin
-
-- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
 
 ### pr
 
@@ -239,13 +230,8 @@ generator: scripts/regenerate-indexes.sh
 
 - [버그 fix — Red test 먼저](../../memory/workflow/bug-fix/memory.md)
 
-### remember
-
-- [/remember skill](../../memory/skills/remember/memory.md)
-
 ### review
 
-- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 - [PR Review](../../memory/workflow/review/memory.md)
@@ -268,25 +254,13 @@ generator: scripts/regenerate-indexes.sh
 - [pre-bash hook anchor bypass (bash -c quoted)](../../memory/lessons/security/2026-05-18-bash-c-bypass-anchor-fix/memory.md)
 - [보안 grill — threat-model 핸드오프 먼저](../../memory/workflow/grill/security-handoff/memory.md)
 
-### skill
-
-- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
-
 ### spawn-verify
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
 
-### split
-
-- [/split-memory skill](../../memory/skills/split-memory/memory.md)
-
 ### sprint
 
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
-
-### sprint-388
-
-- [Skill plugin 영역 침범](../../memory/lessons/agent-and-git/2026-05-18-skill-plugin-area-touch/memory.md)
 
 ### tauri
 

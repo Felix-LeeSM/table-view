@@ -40,8 +40,7 @@ if [ "$violations" -gt 0 ] && [ "$STRICT" = "1" ]; then
 fi
 
 # Sprint 388 — 자식 디렉토리 있는데 본 dir 에 memory.md 없으면 위반 (index 누락).
-# sprint-387 에서 memory/skills/ 가 sub-room (remember, split-memory) 가졌는데
-# memory.md 없이 silent fail 한 결함 재발 방지.
+# 과거 sub-room 이 parent memory.md 없이 생겨 silent fail 한 결함 재발 방지.
 while IFS= read -r dir; do
 	case "$dir" in
 		memory|memory/index) continue ;;

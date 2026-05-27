@@ -50,4 +50,4 @@ trigger:
 - [grill](../grill/memory.md) — narration 권장 phase (반대)
 - [bug-fix](../bug-fix/memory.md) — Red→Green 진행 시 본 룰 적용
 - [delivery](../delivery/memory.md) — 완료 phase. 본 룰의 연속
-- `.claude/skills/caveman/` — 출력 압축 모드 (직교 — caveman = 매 출력 어휘, 본 룰 = 작업 phase 구조)
+- caveman — 출력 압축 모드 (직교 — caveman = 매 출력 어휘, 본 룰 = 작업 phase 구조)
