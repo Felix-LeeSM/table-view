@@ -44,17 +44,9 @@ generator: scripts/regenerate-indexes.sh
 - [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
 - [Rust 컨벤션](../../memory/engineering/conventions/rust/memory.md)
 
-### `src-tauri/src/commands/connection.rs`
-
-- [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
-
 ### `src-tauri/src/db/fixtures.rs`
 
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
-
-### `src-tauri/src/lib.rs`
-
-- [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
 
 ### `src-tauri/tests`
 
@@ -73,10 +65,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/engineering/conventions/react/memory.md)
-
-### `src/lib/perf/bootInstrumentation.ts`
-
-- [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
 
 ### `tests/fixtures`
 

@@ -17,7 +17,7 @@ description: 대화 중 합의된 결정, 룰, 적용 원칙을 repo memory/docs
 | 코드 작성 룰 (Rust/TS/테스트/주석/금지) | `convention` | `memory/engineering/conventions/<area>/memory.md` 또는 sub-room |
 | 사용자 협업 phase 행동 룰 (grill / bug-fix / commit / cleanup) | `workflow-rule` | `memory/workflow/<phase>/memory.md` 또는 sub-room |
 | 제품 현재 상태 / UX 머지 기준 (영속 reset 등) | `product-rule` | `memory/product/memory.md` 또는 sub-room |
-| 실행 절차 (cold-boot 측정 등) | `runbook` | `memory/runbook/<topic>/memory.md` |
+| 실행 절차 / 운영 protocol | `runbook` | `memory/runbook/<topic>/memory.md` |
 | Agent skill body (`remember`, `split-memory` 등) | `agent-skill` | `.agents/skills/<name>/SKILL.md` |
 | 외부 도구 사용법 | `reference` | `memory/reference/<tool>/memory.md` 또는 **미이동** + 사용자 질의 옵션 |
 | 트레이드오프 있는 결정 이력 | `ADR` | `docs/archives/decisions/NNNN-<slug>/memory.md` |

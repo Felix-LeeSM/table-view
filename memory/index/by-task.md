@@ -25,10 +25,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
 
-### baseline
-
-- [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
-
 ### bug-fix
 
 - [Engineering](../../memory/engineering/memory.md)
@@ -37,10 +33,6 @@ generator: scripts/regenerate-indexes.sh
 ### code-writing
 
 - [Implementation — agent 자율성 + noise 차단](../../memory/workflow/implementation/memory.md)
-
-### cold-boot-measurement
-
-- [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
 
 ### comment-cleanup
 
@@ -140,10 +132,6 @@ generator: scripts/regenerate-indexes.sh
 ### parallel
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
-
-### performance
-
-- [Cold-boot 5-trial drop-slowest protocol](../../memory/runbook/cold-boot/memory.md)
 
 ### persistence-reset
 

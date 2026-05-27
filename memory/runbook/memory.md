@@ -10,7 +10,6 @@ updated: 2026-05-27
 
 ## 방 지도
 
-- [cold-boot](./cold-boot/memory.md) — Tauri cold-boot 5-trial drop-slowest 측정 protocol
 - [worktree](./worktree/memory.md) — 다중 agent / brain 병렬 작업용 git worktree 사용 룰
 
 ## 진입 규칙
