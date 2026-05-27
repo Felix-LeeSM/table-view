@@ -42,6 +42,10 @@
  *
  * Sprint 484 (2026-05-27) — narrow PostgreSQL MERGE parses as a bounded
  * write surface: `kind: "dml-merge"` / `severity: "warn"`.
+ *
+ * Sprint 485 (2026-05-27) — PostgreSQL `DO $$ ... $$` stays parser-
+ * unsupported, but Safe Mode classifies top-level DO blocks as opaque
+ * procedural execution: `kind: "routine-call"` / `severity: "warn"`.
  */
 export type Severity = "info" | "warn" | "danger";
 
@@ -421,11 +425,12 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   // `error` variant lets the regex SELECT branch below handle them.
   // Sprint 395 — extended to GRANT / REVOKE / EXPLAIN / SHOW / SET / COPY /
   // COMMENT. EXPLAIN inherits the inner statement's classification (D1);
-  // CALL is warn-tier because routine side effects are opaque to the client
-  // parser. COPY / GRANT / REVOKE classify per the misc-grammar table;
-  // SHOW / SET / COMMENT classify as info-tier metadata-like reads/writes.
+  // CALL/DO are warn-tier because routine/procedural side effects are opaque
+  // to the client parser. COPY / GRANT / REVOKE classify per the misc-grammar
+  // table; SHOW / SET / COMMENT classify as info-tier metadata-like
+  // reads/writes.
   if (
-    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|CALL|UPDATE|DELETE|MERGE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT)\b/.test(
+    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|CALL|DO|UPDATE|DELETE|MERGE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT)\b/.test(
       upper,
     )
   ) {
@@ -470,6 +475,14 @@ export function analyzeStatement(sql: string): StatementAnalysis {
       kind: "routine-call",
       severity: "warn",
       reasons: ["CALL — stored routine execution"],
+    };
+  }
+
+  if (/^DO\b/.test(upper)) {
+    return {
+      kind: "routine-call",
+      severity: "warn",
+      reasons: ["DO — procedural block execution"],
     };
   }
 

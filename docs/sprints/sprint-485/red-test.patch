@@ -5,7 +5,7 @@ index 400b08e8..deb73da4 100644
 @@ -286,6 +286,16 @@ fn ac_484_m04_merge_delete_action_stays_unsupported() {
      assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
  }
- 
+
 +#[test]
 +fn ac_485_d01_do_block_is_known_unsupported_statement() {
 +    // Reason: PostgreSQL anonymous DO blocks are procedural execution
@@ -26,7 +26,7 @@ index 58e2b878..8bfa0556 100644
 @@ -1701,6 +1701,33 @@ describe("sqlSafety.analyzeStatement", () => {
      });
    });
- 
+
 +  describe("Sprint 485 — PostgreSQL DO block Safe Mode boundary (AC-485-X)", () => {
 +    beforeAll(async () => {
 +      __resetSqlWasmModuleForTests();
