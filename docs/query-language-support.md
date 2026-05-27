@@ -135,6 +135,9 @@ SQL dialect와 shell/meta command는 별도 layer다.
   알려진 pack 의 function/type/operator/snippet 후보를 추가하고, 알 수 없는
   capability 는 "detected, no completion pack" 상태로만 노출한다. 설치되지 않은
   extension 후보는 제안하지 않는다.
+- Sprint 487 기준 PostgreSQL installed extension inventory IPC 는 존재하지만,
+  이 inventory 를 소비하는 extension completion pack activation 은 아직
+  비활성이다.
 - Rust/WASM vocabulary 와 TypeScript fallback mirror 는 Sprint 429
   official-reference drift tests 로 고정한다.
 - `serverVersion` 과 `capabilities` 는 contract surface에 있지만 Sprint 430

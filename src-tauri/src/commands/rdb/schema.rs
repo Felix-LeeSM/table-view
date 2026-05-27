@@ -566,8 +566,7 @@ async fn list_postgres_extensions_inner(
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_rdb()?;
     ensure_expected_db(adapter, expected_database).await?;
-    let _ = adapter;
-    Ok(Vec::new())
+    adapter.list_extensions().await
 }
 
 /// Sprint 230 — list every Postgres-style data type visible to the
@@ -1082,7 +1081,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "RED evidence captured in docs/sprints/sprint-487/red-state.log"]
     async fn list_postgres_extensions_routes_to_list_extensions_trait_method() {
         let mut s = StubRdbAdapter::default();
         s.list_extensions_fn = Some(Box::new(|| {
@@ -1326,6 +1324,20 @@ mod tests {
         s.list_types_fn = Some(Box::new(|| panic!("must not run on mismatch")));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
         match list_postgres_types_inner(&state, "c", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn list_postgres_extensions_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.list_extensions_fn = Some(Box::new(|| panic!("must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match list_postgres_extensions_inner(&state, "c", Some("dbB")).await {
             Err(AppError::DbMismatch { expected, actual }) => {
                 assert_eq!(expected, "dbB");
                 assert_eq!(actual, "dbA");

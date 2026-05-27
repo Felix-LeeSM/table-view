@@ -750,6 +750,13 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn trait_list_extensions_without_connection_fails() {
+        let a = PostgresAdapter::new();
+        let r = <PostgresAdapter as RdbAdapter>::list_extensions(&a).await;
+        assert!(r.is_err());
+    }
+
+    #[tokio::test]
     async fn trait_create_database_without_connection_fails() {
         let a = PostgresAdapter::new();
         let r = <PostgresAdapter as RdbAdapter>::create_database(&a, "newdb").await;

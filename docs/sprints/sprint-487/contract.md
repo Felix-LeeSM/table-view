@@ -54,8 +54,8 @@ does not yet enable completion candidates.
 
 ## Required Checks
 
-1. `cargo test --manifest-path src-tauri/Cargo.toml list_postgres_extensions --quiet`
-2. `cargo test --manifest-path src-tauri/Cargo.toml list_extensions_sql_matches_canonical_fixture --quiet`
-3. `cargo test --manifest-path src-tauri/Cargo.toml --quiet`
+1. `cargo test --manifest-path src-tauri/Cargo.toml --lib list_postgres_extensions --quiet`
+2. `cargo test --manifest-path src-tauri/Cargo.toml --lib list_extensions_sql_matches_canonical_fixture --quiet`
+3. `cargo test --manifest-path src-tauri/Cargo.toml --lib --quiet`
 4. `pnpm exec tsc -b --pretty false`
 5. `git diff --check origin/main...HEAD`

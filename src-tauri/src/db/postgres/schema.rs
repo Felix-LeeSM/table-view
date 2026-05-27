@@ -61,7 +61,13 @@ pub(crate) const LIST_TYPES_SQL: &str = "SELECT n.nspname AS schema, t.typname A
    )
  ORDER BY n.nspname, t.typname";
 
-pub(crate) const LIST_EXTENSIONS_SQL: &str = "SELECT 1";
+pub(crate) const LIST_EXTENSIONS_SQL: &str = "SELECT e.extname AS name,
+       n.nspname AS schema,
+       e.extversion AS version,
+       obj_description(e.oid, 'pg_extension') AS comment
+  FROM pg_catalog.pg_extension e
+  JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
+ ORDER BY e.extname";
 
 /// Serialize a foreign-key reference into the canonical
 /// `<schema>.<table>(<column>)` string consumed by the frontend
@@ -743,8 +749,23 @@ impl PostgresAdapter {
     }
 
     pub async fn list_extensions(&self) -> Result<Vec<PostgresExtensionInfo>, AppError> {
-        let _ = LIST_EXTENSIONS_SQL;
-        Ok(Vec::new())
+        let pool = self.active_pool().await?;
+
+        let rows: Vec<(String, String, String, Option<String>)> =
+            sqlx::query_as(LIST_EXTENSIONS_SQL)
+                .fetch_all(&pool)
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(name, schema, version, comment)| PostgresExtensionInfo {
+                name,
+                schema,
+                version,
+                comment,
+            })
+            .collect())
     }
 
     /// List all functions and procedures in the given schema.
@@ -1751,7 +1772,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "RED evidence captured in docs/sprints/sprint-487/red-state.log"]
     fn list_extensions_sql_matches_canonical_fixture() {
         const EXPECTED: &str = "SELECT e.extname AS name,
        n.nspname AS schema,
@@ -1771,6 +1791,18 @@ mod tests {
     async fn list_types_without_connection_fails() {
         let adapter = PostgresAdapter::new();
         let result = adapter.list_types().await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_extensions_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.list_extensions().await;
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
