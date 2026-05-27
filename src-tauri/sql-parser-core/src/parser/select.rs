@@ -873,6 +873,16 @@ impl Parser<'_> {
             return Err(syntax_err(at, "expected BETWEEN/LIKE/ILIKE/IN after NOT"));
         }
 
+        if let Some(operator) = self.peek_extension_operator() {
+            self.advance();
+            let right = self.parse_extension_operator_operand()?;
+            return Ok(SelectExpr::ExtensionOperatorComparison {
+                left: column,
+                operator,
+                right,
+            });
+        }
+
         // Comparison — `col op (literal | placeholder | column |
         // (SELECT ...) scalar-subquery)`.
         let op_tok = self
@@ -1010,6 +1020,22 @@ impl Parser<'_> {
             Some(Token::GtEq) => Some(CompareOp::Ge),
             _ => None,
         }
+    }
+
+    fn peek_extension_operator(&self) -> Option<String> {
+        match self.peek().map(|t| &t.token) {
+            Some(Token::ExtensionOperator(op)) => Some(op.clone()),
+            _ => None,
+        }
+    }
+
+    fn parse_extension_operator_operand(&mut self) -> Result<ExtensionOperatorOperand, ParseError> {
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Ident(_))) {
+            let column = self.parse_column_ref()?;
+            return Ok(ExtensionOperatorOperand::Column { column });
+        }
+        let value = self.parse_insert_value()?;
+        Ok(ExtensionOperatorOperand::Value { value })
     }
 
     fn parse_case_value_expression(&mut self) -> Result<SelectExpr, ParseError> {

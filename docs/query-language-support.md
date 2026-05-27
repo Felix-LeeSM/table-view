@@ -169,6 +169,9 @@ SQL dialect와 shell/meta command는 별도 layer다.
 - `SELECT ... FROM ...`: projection, table/schema qualifiers, alias, comma join, `INNER/LEFT/RIGHT/FULL/CROSS JOIN`, `ON`, `USING`.
 - no-FROM read-only projection SELECT: `SELECT 1`, `SELECT now()`.
 - `WHERE` / `HAVING`: comparison, column comparison, `BETWEEN`, `LIKE`, `ILIKE`, `IN (...)`, `IN (SELECT ...)`, `EXISTS`, scalar subquery, `IS NULL`, boolean `AND`/`OR`/`NOT`.
+- bounded extension/operator-class predicates: representative symbolic
+  PostgreSQL operators such as `pg_trgm` `%` parse as opaque extension
+  operator predicates.
 - `GROUP BY`, `ORDER BY`, `LIMIT ... OFFSET ...`.
 - set operations: `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`.
 - expressions: literals, column refs, simple unqualified function calls in
@@ -177,6 +180,9 @@ SQL dialect와 shell/meta command는 별도 layer다.
 - CTE: `WITH [RECURSIVE] cte AS (...)` wrapping `SELECT` / `INSERT` / `UPDATE` / `DELETE`; CTE body는 `SELECT`.
 - DML: `INSERT INTO ... VALUES`, `DEFAULT VALUES`, `INSERT ... SELECT`, PostgreSQL `ON CONFLICT`, `RETURNING`, `UPDATE ... SET ... FROM ... WHERE ... RETURNING`, `DELETE ... USING ... WHERE ... RETURNING`, narrow table-source `MERGE INTO ... USING ... ON ...` with `UPDATE SET`, `INSERT (...) VALUES (...)`, and `DO NOTHING` actions.
 - DDL subset: `CREATE TABLE`, `CREATE INDEX`, `CREATE VIEW`, `DROP TABLE/DATABASE/INDEX/VIEW/SCHEMA/SEQUENCE/TYPE`, `TRUNCATE`, `ALTER TABLE ADD/DROP/RENAME COLUMN`, `ADD/DROP CONSTRAINT`, `DROP INDEX`, `RENAME TABLE`.
+- DDL extension type tolerance: known PostgreSQL extension-backed column
+  types such as `citext`, `hstore`, `vector(...)`, `geometry(...)`, and
+  `geography(...)`.
 - misc: `GRANT`, `REVOKE`, `EXPLAIN`, `SHOW`, `SET`, `COPY`, `COMMENT`.
 
 ⚠️ 부분 지원:
@@ -192,6 +198,9 @@ SQL dialect와 shell/meta command는 별도 layer다.
 - PostgreSQL `DO $$ ... $$` anonymous procedural blocks remain parser-
   unsupported, but top-level `DO` is known to Safe Mode and classifies as
   `routine-call` / `warn`, not INFO.
+- Extension operator/type handling is tolerance only. The client parser keeps
+  the statement classifiable, but it does not validate whether `pg_trgm`,
+  `postgis`, `pgvector`, `citext`, or `hstore` are installed.
 - parser가 거부해도 서버 실행 자체가 항상 불가능하다는 뜻은 아니다. Safe Mode는 거부 시 기존 heuristic으로 fallback할 수 있다.
 
 ❌ 미지원:

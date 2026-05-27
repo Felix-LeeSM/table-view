@@ -77,6 +77,8 @@ export type SqlLikeCase = "sensitive" | "insensitive";
  *   DML WHERE, except the left side is widened from `string` to
  *   `SqlColumnRef`.
  * - `column-comparison` — column-op-column (cross-table or same-table).
+ * - `extension-operator-comparison` — column symbolic-operator value/column
+ *   for bounded PostgreSQL extension/operator-class tolerance.
  * - `between` — `col BETWEEN low AND high`. The negated `NOT BETWEEN`
  *   form is encoded as `not` wrapping `between` (no discrete variant).
  * - `like` — `col LIKE 'pattern'` (`case_sensitivity: "sensitive"`) or
@@ -95,6 +97,12 @@ export type SqlSelectExpr =
       left: SqlColumnRef;
       op: SqlCompareOp;
       right: SqlColumnRef;
+    }
+  | {
+      kind: "extension-operator-comparison";
+      left: SqlColumnRef;
+      operator: string;
+      right: SqlExtensionOperatorOperand;
     }
   | {
       kind: "scalar-subquery-comparison";
@@ -157,6 +165,10 @@ export type SqlSelectExpr =
       op: SqlCompareOp;
       value: SqlInsertValue;
     };
+
+export type SqlExtensionOperatorOperand =
+  | { kind: "value"; value: SqlInsertValue }
+  | { kind: "column"; column: SqlColumnRef };
 
 // Sprint-393b — window-function support types --------------------------
 
@@ -377,8 +389,7 @@ export interface SqlTableRef {
  * Sprint-394 — column-type discriminated union. The `kind` tag is the
  * kebab-case lowercase form of the SQL type-name. Vendor-specific
  * synonyms (INT4 / STRING / DATETIME / LONGTEXT) parse to
- * `SqlParseError` — the type-name allowlist is explicit in both lexer
- * and parser.
+ * `SqlParseError` unless they are known PostgreSQL extension-backed types.
  */
 export type SqlColumnType =
   | { kind: "integer" }
@@ -394,7 +405,18 @@ export type SqlColumnType =
       kind: "numeric";
       precision: number | null;
       scale: number | null;
+    }
+  | {
+      kind: "extension";
+      name: string;
+      modifiers: SqlExtensionTypeModifier[];
     };
+
+export type SqlExtensionTypeModifier =
+  | { kind: "identifier"; value: string }
+  | { kind: "integer"; value: number }
+  | { kind: "float"; value: number }
+  | { kind: "string"; value: string };
 
 /**
  * Sprint-394 — column-level constraint. The optional `name` slot is
