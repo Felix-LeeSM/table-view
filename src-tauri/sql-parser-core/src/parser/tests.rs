@@ -297,6 +297,22 @@ fn ac_485_d01_do_block_is_known_unsupported_statement() {
 }
 
 #[test]
+fn ac_486_e01_pg_trgm_percent_operator_predicate_parses() {
+    // Reason: extension-backed boolean predicates should not fall out of
+    // SELECT parser coverage just because the operator is symbolic.
+    ok_select("SELECT id FROM docs WHERE title % 'table'");
+}
+
+#[test]
+fn ac_486_e02_extension_column_types_parse() {
+    // Reason: extension-backed column types are common PostgreSQL schema
+    // surface; parser tolerance should preserve DDL classification.
+    ok_create_table(
+        "CREATE TABLE docs (title citext, attrs hstore, embedding vector(3), geom geometry(Point, 4326))",
+    );
+}
+
+#[test]
 fn ac_p9_empty_input_is_empty_input_kind() {
     assert_eq!(err("").error_kind, ParseErrorKind::EmptyInput);
     assert_eq!(err("   ").error_kind, ParseErrorKind::EmptyInput);

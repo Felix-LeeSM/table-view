@@ -1,0 +1,20 @@
+Command: cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml ac_486 --quiet
+Exit: 101
+
+running 2 tests
+parser::tests::ac_486_e02_extension_column_types_parse --- FAILED
+parser::tests::ac_486_e01_pg_trgm_percent_operator_predicate_parses --- FAILED
+
+failures:
+
+- ac_486_e01_pg_trgm_percent_operator_predicate_parses
+  expected Select, got Error(ParseError { error_kind: LexError, message:
+  "unexpected character '%'", at: Some(32) })
+
+- ac_486_e02_extension_column_types_parse
+  expected CreateTable, got Error(ParseError { error_kind: SyntaxError,
+  message: "unsupported column type — sprint-394 allowlist is
+  INTEGER/BIGINT/VARCHAR/TEXT/TIMESTAMP/DATE/BOOLEAN/NUMERIC/SERIAL/UUID",
+  at: Some(25) })
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 540 filtered out
