@@ -84,7 +84,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### hook-design
 
-- [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
+- [Hook validation gate principle](../../memory/workflow/hooks/memory.md)
 
 ### implementation
 
@@ -94,7 +94,7 @@ generator: scripts/regenerate-indexes.sh
 ### lefthook
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
-- [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
+- [Hook validation gate principle](../../memory/workflow/hooks/memory.md)
 
 ### merge
 
@@ -135,11 +135,11 @@ generator: scripts/regenerate-indexes.sh
 
 ### pre-commit
 
-- [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
+- [Hook validation gate principle](../../memory/workflow/hooks/memory.md)
 
 ### pre-push
 
-- [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
+- [Hook validation gate principle](../../memory/workflow/hooks/memory.md)
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
 ### profile
@@ -158,7 +158,6 @@ generator: scripts/regenerate-indexes.sh
 ### race-trace
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
-- [Git hook 작성 룰 — Read-only verification](../../memory/workflow/hooks/memory.md)
 
 ### react-impl
 
@@ -233,6 +232,10 @@ generator: scripts/regenerate-indexes.sh
 ### ux-review
 
 - [Product 머지 기준](../../memory/product/memory.md)
+
+### verification-gate
+
+- [Hook validation gate principle](../../memory/workflow/hooks/memory.md)
 
 ### worktree
 
