@@ -14,7 +14,8 @@
   `src-tauri/mongosh-parser-core/src/completion.rs`.
 - TypeScript Mongo completion vocabulary 는 WASM load 전 fallback mirror 로만
   유지한다.
-- 자동완성 architecture SOT 는 ADR 0045 + `docs/reference/query-language-support.md`.
+- 자동완성 architecture SOT 는 ADR 0045 +
+  `docs/product/query-language-support.md`.
 - Slice A 는 greenfield external parser 도입이 아니다. 기존 Rust/WASM
   parser/completion core 를 Query Editor routing 에 연결하는 작업이다.
 - 임의 JavaScript execution 은 계속 금지한다. 지원 method whitelist 와 typed

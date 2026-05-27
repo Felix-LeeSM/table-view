@@ -8,7 +8,7 @@ import {
 describe("query language support documentation", () => {
   it("documents every active query language ownership record", () => {
     const supportDocs = readFileSync(
-      "docs/reference/query-language-support.md",
+      "docs/product/query-language-support.md",
       "utf8",
     );
 

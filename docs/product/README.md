@@ -40,7 +40,7 @@
 
 ## Related Documents
 
-- [`docs/reference/query-language-support.md`](../reference/query-language-support.md) — language and parser support matrix
+- [`docs/product/query-language-support.md`](query-language-support.md) — current query-language support boundaries
 - [`memory/engineering/architecture/data-source/memory.md`](../../memory/engineering/architecture/data-source/memory.md) — data-source profile/capability architecture
 - [`memory/engineering/architecture/data-source/adding/memory.md`](../../memory/engineering/architecture/data-source/adding/memory.md) — contributor checklist for new sources
 - [`docs/product/known-limitations.md`](known-limitations.md) — current product-visible limitations

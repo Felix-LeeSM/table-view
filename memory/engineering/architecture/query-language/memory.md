@@ -55,8 +55,8 @@ Tauri IPC -> catalog introspection -> client catalog store
 
 ## Reference
 
-Detailed support and unsupported syntax matrix lives in
-[docs/reference/query-language-support.md](../../../../docs/reference/query-language-support.md).
+Current product-facing support boundaries live in
+[docs/product/query-language-support.md](../../../../docs/product/query-language-support.md).
 
 ## Related
 
