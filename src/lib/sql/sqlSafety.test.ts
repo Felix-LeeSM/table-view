@@ -1574,6 +1574,35 @@ describe("sqlSafety.analyzeStatement", () => {
     });
   });
 
+  describe("Sprint 483 — PostgreSQL function-call expression Safe Mode (AC-483-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-483-X01] predicate function call stays select / info / []", () => {
+      const a = analyzeStatement(
+        "SELECT name FROM users WHERE lower(name) = 'felix'",
+      );
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-483-X02] HAVING function call stays select / info / []", () => {
+      const a = analyzeStatement(
+        "SELECT region FROM sales GROUP BY region HAVING count(*) > 1",
+      );
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+  });
+
   // -------------------------------------------------------------------------
   // Sprint 394 (2026-05-18) — AST-based DDL additive classifier callsite.
   // Pre-condition: WASM module preloaded (the mock above produces

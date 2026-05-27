@@ -2,10 +2,7 @@ diff --git a/src-tauri/sql-parser-core/src/parser.rs b/src-tauri/sql-parser-core
 index a035a519..db28b05e 100644
 --- a/src-tauri/sql-parser-core/src/parser.rs
 +++ b/src-tauri/sql-parser-core/src/parser.rs
-@@ -6814,13 +6814,37 @@ mod tests {
-     }
- 
-     #[test]
+@@ -6817,5 +6817,29 @@ mod tests {
 -    fn ac_482_pg03_predicate_function_call_remains_unsupported_expression() {
 -        let r = parse("SELECT x FROM t WHERE lower(x) = 'a'");
 -        match r {
@@ -40,9 +37,6 @@ index a035a519..db28b05e 100644
 +                    }
 +                    other => panic!("expected function-call left side, got {:?}", other),
 +                }
-             }
+@@ -6823 +6847 @@ mod tests {
 -            other => panic!("expected UnsupportedExpression, got {:?}", other),
 +            other => panic!("expected function-call comparison, got {:?}", other),
-         }
-     }
- 

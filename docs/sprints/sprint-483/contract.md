@@ -46,8 +46,9 @@ SELECT list.
   `function-call` SELECT-list item and consumes the bare alias.
 - AC-483-05: Safe Mode classifies parsed SELECT statements from AC-483-01 and
   AC-483-02 as `kind="select"`, `severity="info"`, `reasons=[]`.
-- AC-483-06: `row_number() OVER (...)` keeps the existing `window-function`
-  shape; nested function calls and schema-qualified functions stay unsupported.
+- AC-483-06: `row_number() OVER (...)` keeps the existing SELECT-list
+  `window-function` shape; predicate-position window functions, nested function
+  calls, and schema-qualified functions stay unsupported.
 
 ## Out of Scope
 
