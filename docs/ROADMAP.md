@@ -88,7 +88,7 @@ Near-term follow-up groups:
 | Group | Follow-up |
 |---|---|
 | RDBMS parity | Route MySQL/MariaDB version-aware feature gates through server-version-aware profile context. Add MariaDB engine fixture evidence or keep support claims narrowed. |
-| Query language widening | Widen SQL/Mongo client semantic support by tested slices: broader MySQL/MariaDB routine expressions, SQLite/DuckDB extension semantics, server-version/capability gates, Mongo version/deployment gates, and extension-aware completion packs. |
+| Query language widening | Widen SQL/Mongo client semantic support by tested slices: broader MySQL/MariaDB routine expressions, SQLite/DuckDB extension semantics, server-version/capability gates, Mongo version/deployment gates, and extension-aware completion packs. PostgreSQL completion packs must consume installed extension inventory before enabling curated extension-specific candidates. |
 | Query/result boundary | Move RDBMS query IPC from legacy `QueryResult` compatibility toward typed result envelopes. |
 | ERD/schema graph | Wire constraints and indexes into production schema graph inputs from schema-store caches; add dense-view screenshot smoke. |
 | Redis/Valkey | Define follow-up contracts for Valkey parity, cluster, pub/sub, modules, and consumer-group management before broader support claims. |

@@ -1,0 +1,47 @@
+RED verification for Sprint 487.
+
+Command:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml --lib list_postgres_extensions --quiet
+```
+
+Result:
+
+```text
+running 2 tests
+. 1/2
+commands::rdb::schema::tests::list_postgres_extensions_routes_to_list_extensions_trait_method --- FAILED
+
+thread 'commands::rdb::schema::tests::list_postgres_extensions_routes_to_list_extensions_trait_method' panicked at src/commands/rdb/schema.rs:1099:21:
+index out of bounds: the len is 0 but the index is 0
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 1344 filtered out
+```
+
+Command:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml --lib list_extensions_sql_matches_canonical_fixture --quiet
+```
+
+Result:
+
+```text
+running 1 test
+db::postgres::schema::tests::list_extensions_sql_matches_canonical_fixture --- FAILED
+
+assertion `left == right` failed
+  left: "SELECT 1"
+ right: "SELECT e.extname AS name,\n       n.nspname AS schema,\n       e.extversion AS version,\n       obj_description(e.oid, 'pg_extension') AS comment\n  FROM pg_catalog.pg_extension e\n  JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace\n ORDER BY e.extname"
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1345 filtered out
+```
+
+Note:
+
+- A first non-`--lib` focused run could not reach RED because the local
+  worktree target directory filled the disk during integration-test linking
+  (`ld: write() failed, errno=28`). `cargo clean --manifest-path
+  src-tauri/Cargo.toml` removed 17.0GiB of build artifacts; RED was then
+  captured with the scoped `--lib` commands above.

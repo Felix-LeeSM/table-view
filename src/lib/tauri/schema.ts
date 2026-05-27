@@ -4,6 +4,7 @@ import type {
   ConstraintInfo,
   FunctionInfo,
   IndexInfo,
+  PostgresExtensionInfo,
   PostgresTypeInfo,
   SchemaInfo,
   TableInfo,
@@ -227,6 +228,16 @@ export async function listPostgresTypes(
   expectedDatabase?: string,
 ): Promise<PostgresTypeInfo[]> {
   return invoke<PostgresTypeInfo[]>("list_postgres_types", {
+    connectionId,
+    expectedDatabase: expectedDatabase ?? null,
+  });
+}
+
+export async function listPostgresExtensions(
+  connectionId: string,
+  expectedDatabase?: string,
+): Promise<PostgresExtensionInfo[]> {
+  return invoke<PostgresExtensionInfo[]>("list_postgres_extensions", {
     connectionId,
     expectedDatabase: expectedDatabase ?? null,
   });
