@@ -383,8 +383,8 @@ pub enum SelectExpr {
     ScalarSubquery {
         statement: Box<SelectStatement>,
     },
-    /// Sprint-482 — `func(args)` in SELECT-list position without `OVER`.
-    /// Predicate-position function calls remain out of scope.
+    /// Sprint-482/483 — `func(args)` in SELECT-list and simple predicate
+    /// expression positions without `OVER`.
     FunctionCall {
         name: String,
         arguments: Vec<WindowArgument>,

@@ -956,11 +956,21 @@ impl<'a> Parser<'a> {
                 Some(Token::LParen)
             )
         {
-            let at = self.peek().map(|t| t.at);
-            return Err(unsupported_expression_err(
-                at,
-                "function call expression unsupported in predicate",
-            ));
+            let expression = self.parse_function_or_window()?;
+            if matches!(expression, SelectExpr::WindowFunction { .. }) {
+                let at = self.peek().map(|t| t.at);
+                return Err(syntax_err(at, "window function unsupported in predicate"));
+            }
+            if let Some(op) = self.peek_compare_op() {
+                self.advance();
+                let value = self.parse_insert_value()?;
+                return Ok(SelectExpr::ExpressionComparison {
+                    left: Box::new(expression),
+                    op,
+                    value,
+                });
+            }
+            return Ok(expression);
         }
 
         let column = self.parse_column_ref()?;
@@ -2910,6 +2920,7 @@ impl<'a> Parser<'a> {
             if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
                 self.cursor = save;
                 let expr = self.parse_select_list_expression()?;
+                self.parse_optional_select_item_alias()?;
                 return Ok(SelectListItem::Expression { expression: expr });
             }
             // Plain column ref (followed by `,` / `FROM` / clause kw).
@@ -2924,6 +2935,29 @@ impl<'a> Parser<'a> {
         }
         let at = self.peek().map(|t| t.at);
         Err(syntax_err(at, "expected SELECT list item"))
+    }
+
+    fn parse_optional_select_item_alias(&mut self) -> Result<(), ParseError> {
+        if matches!(self.peek().map(|t| &t.token), Some(Token::As)) {
+            self.advance();
+            let tok = self
+                .peek()
+                .ok_or_else(|| syntax_err(None, "expected alias after AS"))?
+                .clone();
+            match tok.token {
+                Token::Ident(_) => {
+                    self.advance();
+                    return Ok(());
+                }
+                _ => return Err(syntax_err(Some(tok.at), "expected alias ident after AS")),
+            }
+        }
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Ident(_)))
+            && Self::is_select_list_boundary(self.tokens.get(self.cursor + 1).map(|t| &t.token))
+        {
+            self.advance();
+        }
+        Ok(())
     }
 
     /// Sprint-393b — parse one expression that lives in select-list
@@ -2955,7 +2989,7 @@ impl<'a> Parser<'a> {
                 });
             }
         }
-        // Identifier followed by `(` → SELECT-list function call.
+        // Identifier followed by `(` → function call / window function.
         if matches!(self.peek().map(|t| &t.token), Some(Token::Ident(_))) {
             return self.parse_function_or_window();
         }
@@ -3988,20 +4022,6 @@ fn first_word(input: &str) -> Option<(String, usize)> {
 fn syntax_err(at: Option<usize>, msg: &str) -> ParseError {
     ParseError {
         error_kind: ParseErrorKind::SyntaxError,
-        message: msg.to_string(),
-        at,
-    }
-}
-
-/// Sprint-392 — the WHERE expression includes a construct outside the
-/// narrow column-op-literal slice (function call, subquery, IN-list,
-/// arithmetic, cross-table comparison, …). The parser surfaces this as
-/// its own `ParseErrorKind` so the caller (sqlSafety) can fall back to
-/// the regex heuristic without conflating it with a generic
-/// `SyntaxError` (which is genuinely broken SQL).
-fn unsupported_expression_err(at: Option<usize>, msg: &str) -> ParseError {
-    ParseError {
-        error_kind: ParseErrorKind::UnsupportedExpression,
         message: msg.to_string(),
         at,
     }
@@ -6427,14 +6447,12 @@ mod tests {
     }
 
     #[test]
-    fn ac_392_s_unsupported_expression_serializes_with_error_kind() {
-        // Function calls in SELECT-list position are supported from
-        // sprint-482 onward; predicate-position function calls remain
-        // out of scope and serialize as UnsupportedExpression.
+    fn ac_483_pg07_predicate_function_call_serializes_as_select() {
         let r = parse("SELECT a FROM x WHERE lower(a) = 'x'");
         let json = serde_json::to_value(&r).expect("serialize");
-        assert_eq!(json["kind"], "error");
-        assert_eq!(json["error_kind"], "unsupported-expression");
+        assert_eq!(json["kind"], "select");
+        assert_eq!(json["where"]["kind"], "expression-comparison");
+        assert_eq!(json["where"]["left"]["kind"], "function-call");
     }
 
     // =================================================================
@@ -6814,14 +6832,115 @@ mod tests {
     }
 
     #[test]
-    fn ac_482_pg03_predicate_function_call_remains_unsupported_expression() {
-        let r = parse("SELECT x FROM t WHERE lower(x) = 'a'");
-        match r {
-            ParseResult::Error(e) => {
-                assert_eq!(e.error_kind, ParseErrorKind::UnsupportedExpression);
+    fn ac_483_pg01_predicate_function_call_parses() {
+        // Reason: Sprint 483 lifts the common PostgreSQL read path
+        // `WHERE lower(col) = ...` out of Safe Mode fallback (2026-05-27).
+        let s = ok_select("SELECT x FROM t WHERE lower(x) = 'a'");
+        match s.where_clause {
+            Some(SelectExpr::ExpressionComparison { left, op, value }) => {
+                assert_eq!(op, CompareOp::Eq);
+                assert!(matches!(
+                    value,
+                    InsertValue::Literal {
+                        value: SqlLiteral::String { ref value }
+                    } if value == "a"
+                ));
+                match *left {
+                    SelectExpr::FunctionCall { name, arguments } => {
+                        assert_eq!(name, "lower");
+                        assert_eq!(arguments.len(), 1);
+                        assert!(matches!(
+                            arguments[0],
+                            WindowArgument::ColumnRef {
+                                reference: ColumnRef {
+                                    table: None,
+                                    ref column
+                                }
+                            } if column == "x"
+                        ));
+                    }
+                    other => panic!("expected function-call left side, got {:?}", other),
+                }
             }
-            other => panic!("expected UnsupportedExpression, got {:?}", other),
+            other => panic!("expected function-call comparison, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn ac_483_pg02_having_function_call_parses() {
+        let s = ok_select("SELECT region FROM sales GROUP BY region HAVING count(*) > 1");
+        match s.having {
+            Some(SelectExpr::ExpressionComparison { left, op, value }) => {
+                assert_eq!(op, CompareOp::Gt);
+                assert!(matches!(
+                    value,
+                    InsertValue::Literal {
+                        value: SqlLiteral::Integer { value: 1 }
+                    }
+                ));
+                match *left {
+                    SelectExpr::FunctionCall { name, arguments } => {
+                        assert_eq!(name, "count");
+                        assert!(matches!(arguments.as_slice(), [WindowArgument::Star]));
+                    }
+                    other => panic!("expected function-call left side, got {:?}", other),
+                }
+            }
+            other => panic!("expected function-call HAVING comparison, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_483_pg03_select_list_function_call_as_alias_consumed() {
+        let s = ok_select("SELECT now() AS ts");
+        assert!(s.from.is_empty());
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression: SelectExpr::FunctionCall { name, arguments },
+                } => {
+                    assert_eq!(name, "now");
+                    assert!(arguments.is_empty());
+                }
+                _ => panic!("expected function-call expression"),
+            },
+            _ => panic!("expected expression list"),
+        }
+    }
+
+    #[test]
+    fn ac_483_pg04_select_list_function_call_bare_alias_consumed() {
+        let s = ok_select("SELECT count(*) total FROM users");
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression: SelectExpr::FunctionCall { name, arguments },
+                } => {
+                    assert_eq!(name, "count");
+                    assert!(matches!(arguments.as_slice(), [WindowArgument::Star]));
+                }
+                _ => panic!("expected function-call expression"),
+            },
+            _ => panic!("expected expression list"),
+        }
+    }
+
+    #[test]
+    fn ac_483_pg05_nested_function_call_remains_unsupported() {
+        let e = err("SELECT lower(trim(name)) FROM users");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_483_pg06_schema_qualified_function_remains_unsupported() {
+        let e = err("SELECT public.lower(name) FROM users");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_483_pg08_predicate_window_function_remains_unsupported() {
+        let e = err("SELECT x FROM t WHERE row_number() OVER () = 1");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
     }
 
     #[test]

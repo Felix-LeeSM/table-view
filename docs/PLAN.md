@@ -97,7 +97,7 @@ active risk.
 | 8 | DuckDB + file analytics hardening | active follow-up | `.duckdb`, CSV, Parquet, JSON, NDJSON preview/query 는 local-first runtime path 존재. analytics import/history/favorites 확대는 별도 결정 | `docs/data-source-architecture.md`, `docs/ROADMAP.md`, `docs/sprints/sprint-457/contract.md` |
 | 9 | RDBMS ERD / SchemaGraph | planned | FK/constraint catalog 를 재사용 가능한 `SchemaGraph` 로 승격. ERD는 첫 renderer | `docs/data-source-architecture.md` |
 | 10 | Redis | active Redis first slice | Redis adapter, KV sidebar, key scan, value read, guarded string write, TTL mutation, and bounded stream read paths are live and covered by a Redis testcontainer smoke. Valkey parity/support is unverified follow-up. Cluster/pubsub/modules/consumer-group management remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-468/handoff.md` |
-| 11 | One-DBMS query/workbench parity lane | active PostgreSQL lane | 새 DBMS 승격 중단. PostgreSQL → MySQL/MariaDB → SQLite/DuckDB → MongoDB 순서로 하나씩 runtime/parser/safety/completion/edit/fixture/e2e/support-claim/Explain gap을 닫음. Sprint 482가 PostgreSQL parser/Safe Mode first slice를 시작 | `docs/phases/phase-32.md`, `docs/RISKS.md`, `docs/query-language-support.md` |
+| 11 | One-DBMS query/workbench parity lane | active PostgreSQL lane | 새 DBMS 승격 중단. PostgreSQL → MySQL/MariaDB → SQLite/DuckDB → MongoDB 순서로 하나씩 runtime/parser/safety/completion/edit/fixture/e2e/support-claim/Explain gap을 닫음. Sprint 482-483이 PostgreSQL parser/Safe Mode function-call surface를 넓힘 | `docs/phases/phase-32.md`, `docs/RISKS.md`, `docs/query-language-support.md` |
 | 12 | Elasticsearch/OpenSearch live HTTP | deferred until active parity lane clears | Search adapter fixture slice는 유지. live connection UI, HTTP catalog/query execution, cluster administration, and observability는 one-DBMS parity lane 뒤 첫 promotion | `docs/data-source-architecture.md`, `docs/sprints/sprint-472/handoff.md`, `docs/RISKS.md` |
 | 13 | MSSQL + Oracle enterprise RDBMS lane | deferred after Search live HTTP | Known planned RDBMS identities 유지. runtime adapter, driver/license, dialect depth, CI fixture 전략은 Search live HTTP 뒤 별도 lane으로 lock | `docs/phases/phase-20.md`, `docs/query-language-support.md` |
 | 14 | MongoDB full support | deferred/current whitelist hardening only | Phase 28 Slice A 는 보존. 현재는 whitelist workflow 품질을 먼저 끌어올리고 arbitrary JS shell/full-support는 후속 결정 | `docs/phases/phase-28.md` |
@@ -159,6 +159,7 @@ Sprint 482부터 Phase 32 PostgreSQL lane implementation 을 시작한다. 이�
 | 480 | Capability documentation/developer guide | docs/shared | 442, 477 |
 | 481 | Cross-paradigm release gate | release/join | 459, 464, 468, 472, 476, 478-480 |
 | 482 | PostgreSQL parser/Safe Mode kickoff | rdbms/postgresql | 481 |
+| 483 | PostgreSQL function-call expression widening | rdbms/postgresql | 482 |
 
 ## Recently Closed
 
@@ -187,6 +188,7 @@ Sprint 482부터 Phase 32 PostgreSQL lane implementation 을 시작한다. 이�
 | 479 | Language registry and completion ownership matrix |
 | 480 | Capability documentation/developer guide |
 | 482 | PostgreSQL parser/Safe Mode kickoff: no-FROM SELECT and SELECT-list function calls |
+| 483 | PostgreSQL parser/Safe Mode widening: predicate/HAVING function calls and SELECT-list function aliases |
 
 ## Phase Index
 

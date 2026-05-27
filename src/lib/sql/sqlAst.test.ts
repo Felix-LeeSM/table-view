@@ -175,6 +175,134 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           set_operation: [],
         } satisfies SqlParseResult;
       }
+      if (sql === "SELECT name FROM users WHERE lower(name) = 'felix'") {
+        return {
+          kind: "select",
+          columns: { kind: "named", names: ["name"] },
+          from: [
+            {
+              schema: null,
+              table: "users",
+              alias: null,
+              join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "users" },
+            },
+          ],
+          where: {
+            kind: "expression-comparison",
+            left: {
+              kind: "function-call",
+              name: "lower",
+              arguments: [
+                {
+                  kind: "column-ref",
+                  reference: { table: null, column: "name" },
+                },
+              ],
+            },
+            op: "eq",
+            value: {
+              kind: "literal",
+              value: { kind: "string", value: "felix" },
+            },
+          },
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [],
+        } satisfies SqlParseResult;
+      }
+      if (
+        sql === "SELECT region FROM sales GROUP BY region HAVING count(*) > 1"
+      ) {
+        return {
+          kind: "select",
+          columns: { kind: "named", names: ["region"] },
+          from: [
+            {
+              schema: null,
+              table: "sales",
+              alias: null,
+              join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "sales" },
+            },
+          ],
+          where: null,
+          group_by: [{ table: null, column: "region" }],
+          having: {
+            kind: "expression-comparison",
+            left: {
+              kind: "function-call",
+              name: "count",
+              arguments: [{ kind: "star" }],
+            },
+            op: "gt",
+            value: { kind: "literal", value: { kind: "integer", value: 1 } },
+          },
+          order_by: [],
+          limit: null,
+          set_operation: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "SELECT now() AS ts") {
+        return {
+          kind: "select",
+          columns: {
+            kind: "expressions",
+            items: [
+              {
+                kind: "expression",
+                expression: {
+                  kind: "function-call",
+                  name: "now",
+                  arguments: [],
+                },
+              },
+            ],
+          },
+          from: [],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [],
+        } satisfies SqlParseResult;
+      }
+      if (sql === "SELECT count(*) total FROM users") {
+        return {
+          kind: "select",
+          columns: {
+            kind: "expressions",
+            items: [
+              {
+                kind: "expression",
+                expression: {
+                  kind: "function-call",
+                  name: "count",
+                  arguments: [{ kind: "star" }],
+                },
+              },
+            ],
+          },
+          from: [
+            {
+              schema: null,
+              table: "users",
+              alias: null,
+              join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "users" },
+            },
+          ],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [],
+        } satisfies SqlParseResult;
+      }
       // ── sprint-393a SELECT widening ────────────────────────────────
       if (sql === "SELECT a FROM x JOIN y ON x.id = y.x_id") {
         return {
@@ -1078,6 +1206,79 @@ describe("parseSql (sprint-385 facade)", () => {
       kind: "function-call",
       name: "now",
       arguments: [],
+    });
+  });
+
+  it("[AC-483-F01] parses predicate-position function call comparison", async () => {
+    const result = await parseSql(
+      "SELECT name FROM users WHERE lower(name) = 'felix'",
+    );
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.where).toEqual({
+      kind: "expression-comparison",
+      left: {
+        kind: "function-call",
+        name: "lower",
+        arguments: [
+          {
+            kind: "column-ref",
+            reference: { table: null, column: "name" },
+          },
+        ],
+      },
+      op: "eq",
+      value: { kind: "literal", value: { kind: "string", value: "felix" } },
+    });
+  });
+
+  it("[AC-483-F02] parses HAVING function call comparison", async () => {
+    const result = await parseSql(
+      "SELECT region FROM sales GROUP BY region HAVING count(*) > 1",
+    );
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.having).toEqual({
+      kind: "expression-comparison",
+      left: {
+        kind: "function-call",
+        name: "count",
+        arguments: [{ kind: "star" }],
+      },
+      op: "gt",
+      value: { kind: "literal", value: { kind: "integer", value: 1 } },
+    });
+  });
+
+  it("[AC-483-F03] consumes SELECT-list function call AS alias", async () => {
+    const result = await parseSql("SELECT now() AS ts");
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.columns.kind).toBe("expressions");
+    if (result.columns.kind !== "expressions") return;
+    expect(result.columns.items[0]).toEqual({
+      kind: "expression",
+      expression: {
+        kind: "function-call",
+        name: "now",
+        arguments: [],
+      },
+    });
+  });
+
+  it("[AC-483-F04] consumes SELECT-list function call bare alias", async () => {
+    const result = await parseSql("SELECT count(*) total FROM users");
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.columns.kind).toBe("expressions");
+    if (result.columns.kind !== "expressions") return;
+    expect(result.columns.items[0]).toEqual({
+      kind: "expression",
+      expression: {
+        kind: "function-call",
+        name: "count",
+        arguments: [{ kind: "star" }],
+      },
     });
   });
 
