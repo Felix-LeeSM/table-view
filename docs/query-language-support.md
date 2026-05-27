@@ -189,11 +189,15 @@ SQL dialect와 shell/meta command는 별도 layer다.
   `OVERRIDING`, `ONLY`, and arbitrary action expressions are still out of
   scope. Unsupported MERGE forms stay warn-tier write surfaces in Safe Mode
   instead of falling through to INFO.
+- PostgreSQL `DO $$ ... $$` anonymous procedural blocks remain parser-
+  unsupported, but top-level `DO` is known to Safe Mode and classifies as
+  `routine-call` / `warn`, not INFO.
 - parser가 거부해도 서버 실행 자체가 항상 불가능하다는 뜻은 아니다. Safe Mode는 거부 시 기존 heuristic으로 fallback할 수 있다.
 
 ❌ 미지원:
 
-- stored procedure/function body 문법, PL/pgSQL block, `DO $$ ... $$`.
+- stored procedure/function body 문법과 PL/pgSQL / `DO $$ ... $$` body
+  parsing. Safe Mode only recognizes the top-level `DO` boundary.
 - 임의 vendor extension 전체. 지원 목록 밖은 `unsupported-statement`, `syntax-error`, 또는 `unsupported-expression`으로 떨어진다.
 
 ## MySQL SQL

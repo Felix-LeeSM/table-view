@@ -287,6 +287,16 @@ fn ac_484_m04_merge_delete_action_stays_unsupported() {
 }
 
 #[test]
+fn ac_485_d01_do_block_is_known_unsupported_statement() {
+    // Reason: PostgreSQL anonymous DO blocks are procedural execution
+    // boundaries. The parser must stop at the verb-level unsupported
+    // statement path before the lexer reaches the dollar-quoted body.
+    let e = err("DO $$ BEGIN RAISE NOTICE 'hi'; END $$");
+    assert_eq!(e.error_kind, ParseErrorKind::UnsupportedStatement);
+    assert!(e.message.to_ascii_uppercase().contains("DO"));
+}
+
+#[test]
 fn ac_p9_empty_input_is_empty_input_kind() {
     assert_eq!(err("").error_kind, ParseErrorKind::EmptyInput);
     assert_eq!(err("   ").error_kind, ParseErrorKind::EmptyInput);

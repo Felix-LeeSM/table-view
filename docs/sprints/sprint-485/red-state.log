@@ -1,0 +1,19 @@
+Command: cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml ac_485 --quiet
+Exit: 101
+
+running 1 test
+parser::tests::ac_485_d01_do_block_is_known_unsupported_statement --- FAILED
+
+failure:
+assertion `left == right` failed
+left: LexError
+right: UnsupportedStatement
+
+Command: pnpm vitest run src/lib/sql/sqlSafety.test.ts -t "Sprint 485"
+Exit: 1
+
+src/lib/sql/sqlSafety.test.ts:
+- [AC-485-X01] DO block classifies as routine-call / warn, not info
+  expected kind "routine-call"; received "other"
+- [AC-485-X02] comment-prefixed DO keeps routine-call / warn
+  expected kind "routine-call"; received "other"

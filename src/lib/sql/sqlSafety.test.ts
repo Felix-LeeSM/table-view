@@ -1701,6 +1701,33 @@ describe("sqlSafety.analyzeStatement", () => {
     });
   });
 
+  describe("Sprint 485 — PostgreSQL DO block Safe Mode boundary (AC-485-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-485-X01] DO block classifies as routine-call / warn, not info", () => {
+      const a = analyzeStatement("DO $$ BEGIN RAISE NOTICE 'hi'; END $$");
+      expect(a.kind).toBe("routine-call");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["DO — procedural block execution"]);
+    });
+
+    it("[AC-485-X02] comment-prefixed DO keeps routine-call / warn", () => {
+      const a = analyzeStatement(
+        "-- maintenance\nDO $$ BEGIN RAISE NOTICE 'hi'; END $$",
+      );
+      expect(a.kind).toBe("routine-call");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual(["DO — procedural block execution"]);
+    });
+  });
+
   // -------------------------------------------------------------------------
   // Sprint 394 (2026-05-18) — AST-based DDL additive classifier callsite.
   // Pre-condition: WASM module preloaded (the mock above produces

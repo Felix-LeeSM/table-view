@@ -54,6 +54,7 @@ pub(super) fn is_known_sql_verb(name: &str) -> bool {
         "SELECT"
             | "INSERT"
             | "CALL"
+            | "DO"
             | "UPDATE"
             | "DELETE"
             | "CREATE"
@@ -80,6 +81,7 @@ pub(super) fn is_known_sql_verb(name: &str) -> bool {
 /// `CREATE TRIGGER` etc. surface as `SyntaxError` from the dispatcher.
 /// Sprint-395 adds GRANT / REVOKE / EXPLAIN / SHOW / SET / COPY / COMMENT.
 /// Sprint-484 adds the narrow PostgreSQL MERGE first slice.
+/// Sprint-485 keeps PostgreSQL DO blocks known-but-unsupported.
 pub(super) fn is_supported_sql_verb(name: &str) -> bool {
     matches!(
         name.to_ascii_uppercase().as_str(),
