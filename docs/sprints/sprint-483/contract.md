@@ -19,8 +19,8 @@ SELECT list.
 
 ## Scope
 
-- Support simple unqualified function calls in predicate/value expression
-  positions, starting with common PostgreSQL reads like
+- Support simple unqualified function calls as predicate comparison left-hand
+  expressions, starting with common PostgreSQL reads like
   `WHERE lower(name) = 'a'`.
 - Support simple function-call aliases in SELECT-list position:
   `SELECT now() AS ts`, `SELECT count(*) total FROM users`.

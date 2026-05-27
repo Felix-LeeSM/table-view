@@ -2,8 +2,8 @@
 
 ## Landed
 
-- Simple unqualified function calls now parse in PostgreSQL-style predicate and
-  HAVING expression positions, e.g. `WHERE lower(name) = 'felix'` and
+- Simple unqualified function calls now parse as PostgreSQL-style predicate and
+  HAVING comparison left-hand expressions, e.g. `WHERE lower(name) = 'felix'` and
   `HAVING count(*) > 1`.
 - Function-call SELECT-list aliases are consumed for `AS alias` and bare alias
   forms without changing the existing `function-call` AST shape.
