@@ -1,0 +1,48 @@
+diff --git a/src-tauri/sql-parser-core/src/parser.rs b/src-tauri/sql-parser-core/src/parser.rs
+index a035a519..db28b05e 100644
+--- a/src-tauri/sql-parser-core/src/parser.rs
++++ b/src-tauri/sql-parser-core/src/parser.rs
+@@ -6814,13 +6814,37 @@ mod tests {
+     }
+ 
+     #[test]
+-    fn ac_482_pg03_predicate_function_call_remains_unsupported_expression() {
+-        let r = parse("SELECT x FROM t WHERE lower(x) = 'a'");
+-        match r {
+-            ParseResult::Error(e) => {
+-                assert_eq!(e.error_kind, ParseErrorKind::UnsupportedExpression);
++    fn ac_483_red_predicate_function_call_should_parse() {
++        // Reason: Sprint 483 lifts the common PostgreSQL read path
++        // `WHERE lower(col) = ...` out of Safe Mode fallback (2026-05-27).
++        let s = ok_select("SELECT x FROM t WHERE lower(x) = 'a'");
++        match s.where_clause {
++            Some(SelectExpr::ExpressionComparison { left, op, value }) => {
++                assert_eq!(op, CompareOp::Eq);
++                assert!(matches!(
++                    value,
++                    InsertValue::Literal {
++                        value: SqlLiteral::String { ref value }
++                    } if value == "a"
++                ));
++                match *left {
++                    SelectExpr::FunctionCall { name, arguments } => {
++                        assert_eq!(name, "lower");
++                        assert_eq!(arguments.len(), 1);
++                        assert!(matches!(
++                            arguments[0],
++                            WindowArgument::ColumnRef {
++                                reference: ColumnRef {
++                                    table: None,
++                                    ref column
++                                }
++                            } if column == "x"
++                        ));
++                    }
++                    other => panic!("expected function-call left side, got {:?}", other),
++                }
+             }
+-            other => panic!("expected UnsupportedExpression, got {:?}", other),
++            other => panic!("expected function-call comparison, got {:?}", other),
+         }
+     }
+ 
