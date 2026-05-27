@@ -50,6 +50,6 @@ Tauri 2 + React 19 + Rust 기반 TablePlus-like 로컬 DB 관리 도구. 다중 
 
 ## 팔레스 규칙
 
-- 각 memory.md는 200줄 이하. 초과 시 `/split-memory`로 하위 주제 분할.
+- 각 memory.md는 200줄 이하. 초과 시 `split-memory` skill 로 하위 주제 분할.
 - `memory/` 트리 안에는 `memory.md`와 하위 디렉토리만 허용 (다른 파일명 금지).
 - `docs/` 파일과 내용 중복 금지. 링크로 포인터만.

@@ -1,12 +1,11 @@
 ---
 name: remember
-description: 대화 중 합의된 결정, 룰, 적용 원칙을 repo memory/docs의 올바른 SOT에 저장. 사용자가 /remember 또는 "기억해"라고 말할 때 사용.
+description: 대화 중 합의된 결정, 룰, 적용 원칙을 repo memory/docs의 올바른 SOT에 저장. 사용자가 remember skill 실행을 요청하거나 "기억해"라고 말할 때 사용.
 ---
 
-# /remember skill
+# remember skill
 
-`.agents/skills/remember/SKILL.md` 가 source. `.claude/commands/remember.md`
-wrapper 는 이 파일을 가리킨다.
+`.agents/skills/remember/SKILL.md` 가 source.
 
 인자 (`$ARGUMENTS`) + 최근 대화 맥락을 분석해, 아래 type 매트릭스 중 가장 적합한
 한 곳에 저장.
@@ -19,7 +18,7 @@ wrapper 는 이 파일을 가리킨다.
 | 사용자 협업 phase 행동 룰 (grill / bug-fix / commit / cleanup) | `workflow-rule` | `memory/workflow/<phase>/memory.md` 또는 sub-room |
 | 제품 현재 상태 / UX 머지 기준 (영속 reset 등) | `product-rule` | `memory/product/memory.md` 또는 sub-room |
 | 실행 절차 (cold-boot 측정 등) | `runbook` | `memory/runbook/<topic>/memory.md` |
-| Agent skill / slash command body (`/remember`, `/split-memory` 등) | `agent-skill` | `.agents/skills/<name>/SKILL.md` (wrapper: `.claude/commands/<name>.md`) |
+| Agent skill body (`remember`, `split-memory` 등) | `agent-skill` | `.agents/skills/<name>/SKILL.md` |
 | 외부 도구 사용법 | `reference` | `memory/reference/<tool>/memory.md` 또는 **미이동** + 사용자 질의 옵션 |
 | 트레이드오프 있는 결정 이력 | `ADR` | `docs/archives/decisions/NNNN-<slug>/memory.md` |
 | 사건 이력 / 재발 방지 기록 | `incident` | `docs/archives/incidents/<domain>/YYYY-MM-DD-<slug>/memory.md` |
@@ -43,8 +42,7 @@ wrapper 는 이 파일을 가리킨다.
    - 시점 의존성 (예: codex 같은 도구) 은 미이동 + 사용자 질의 옵션 적합 가능.
    - 옵션을 사용자에게 짧게 제시 후 결정 받기.
 5. **저장**:
-   - `agent-skill` 이면 `.agents/skills/<name>/SKILL.md` 를 생성/수정하고,
-     `.claude/commands/<name>.md` 는 source 링크만 둔다.
+   - `agent-skill` 이면 `.agents/skills/<name>/SKILL.md` 를 생성/수정한다.
    - 그 외 route 는 디렉토리 + `memory.md` 생성.
    - Memory frontmatter — type / updated / 필요 시 `trigger:` (signal + layer + hook_script).
    - 본문 — 룰 명세 + Why + How to apply + 관련 cross-link.
@@ -108,10 +106,10 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
 
 ## 제약
 
-- 200줄 초과 예상 시 즉시 분할 금지. 경고 출력 + `/split-memory` 안내.
+- 200줄 초과 예상 시 즉시 분할 금지. 경고 출력 + `split-memory` skill 안내.
 - `memory/` 트리는 `memory.md` 만 (예외: `memory/index/*.md`). 다른 이름 금지.
 - Skill 본문은 `memory/` 에 저장하지 않는다. `.agents/skills/<name>/SKILL.md` 를
-  수정하고 wrapper 만 얇게 둔다.
+  수정하고 별도 Claude command wrapper 를 두지 않는다.
 - 과거 사건/결정은 기본 memory 가 아니다. 먼저 적용 가능한 원칙을
   `memory/product`, `memory/engineering`, `memory/workflow`, `memory/runbook` 에
   반영하고, 이력 보존 가치가 있을 때만 archive 에 기록한다.
@@ -120,6 +118,6 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
 
 ## 관련
 
-- `/split-memory` — 200줄 초과 시 분할
+- `split-memory` skill — 200줄 초과 시 분할
 - `memory/memory.md` — 팔레스 입구
 - `scripts/regenerate-indexes.sh` — index 자동 갱신

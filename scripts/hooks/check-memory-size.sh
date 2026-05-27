@@ -23,7 +23,7 @@ found_over=0
 while IFS= read -r -d '' file; do
 	lines=$(wc -l < "$file" | tr -d ' ')
 	if [ "$lines" -gt "$THRESHOLD" ]; then
-		echo "⚠️  memory size: $file (${lines} lines > ${THRESHOLD}). 하위 주제로 분할을 고려하세요 (/split-memory)."
+		echo "⚠️  memory size: $file (${lines} lines > ${THRESHOLD}). 하위 주제로 분할을 고려하세요 (split-memory skill)."
 		found_over=1
 	fi
 done < <(find memory -name "memory.md" -type f -print0)

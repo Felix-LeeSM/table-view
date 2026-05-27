@@ -41,4 +41,4 @@ Codex / Cursor 도 같은 agent 개념 사용 시 본 wrapper 패턴을 base 로
 - `memory/workflow/memory.md` — 협업 phase 룰
 - `memory/engineering/conventions/memory.md` — 코드 룰 (caveman 포함)
 - `.claude/rules/README.md` — auto-load rule wrapper 정책
-- `.agents/skills/remember/SKILL.md`, `.agents/skills/split-memory/SKILL.md` — slash command source
+- `.agents/skills/remember/SKILL.md`, `.agents/skills/split-memory/SKILL.md` — agent skill source

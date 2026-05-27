@@ -15,8 +15,8 @@ date: 2026-05-18
 | 387-03 (`CLAUDE.md` ≤ 25줄 redirect) | PASS | 20줄, AGENTS.md redirect |
 | 387-04 (hook script multi-input) | PASS | env / argv / stdin JSON 3입력 smoke 통과 |
 | 387-05 (`.claude/rules/*.md` ≤ 20줄) | PASS | 6파일 모두 8~16줄, paths frontmatter 보존 |
-| 387-06 (`.claude/commands/*.md` ≤ 15줄) | PASS | 2파일 모두 7~11줄, description 보존 |
-| 387-07 (`memory/skills/{remember,split-memory}/memory.md`) | PASS | 122 / 33줄 신설 |
+| 387-06 (`.claude/commands/{remember,split-memory}.md` 없음) | PASS | Claude command wrapper 2파일 삭제 |
+| 387-07 (`.agents/skills/{remember,split-memory}/SKILL.md`) | PASS | repo-owned skill source 보존 |
 | 387-08 (worktree script + `--help`) | PASS | spawn / cleanup `--help` 모두 exit 0 |
 | 387-09 (`memory/runbook/worktree/memory.md`) | PASS | 50+줄, 사용 시점 + 명령 + 격리 동작 + 책임 + 주의 |
 | 387-10 (`check-memory-structure.sh`) | PASS | exit 0 |
@@ -66,17 +66,16 @@ path 점프.
 
 이제 같은 패턴 차단 룰을 모든 brain 에 동일 적용.
 
-### 4. Rules / Commands 평면화
+### 4. Rules / Agent skills 평면화
 
-- 본문 모두 `memory/` 로 이동 (source of truth 1부)
+- Rule 본문은 `memory/` 로 이동 (source of truth 1부)
 - `.claude/rules/*.md` 6 파일은 frontmatter (paths trigger) + 1-3 줄 redirect
-- `.claude/commands/*.md` 2 파일은 frontmatter (description) + redirect
+- `remember`, `split-memory` 은 `.agents/skills/<name>/SKILL.md` 가 source
+- `.claude/commands/{remember,split-memory}.md` wrapper 는 삭제
 - 신설 memory rooms:
   - `memory/workflow/git-policy/memory.md` (60줄)
   - `memory/engineering/conventions/rust/memory.md` (76줄)
   - `memory/engineering/conventions/react/memory.md` (102줄)
-  - `memory/skills/remember/memory.md` (122줄)
-  - `memory/skills/split-memory/memory.md` (33줄)
 
 ### 5. Worktree 인프라
 

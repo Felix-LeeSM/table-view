@@ -1,12 +1,11 @@
 ---
 name: split-memory
-description: 200줄을 초과한 memory.md를 주제별 sub-room으로 분할하고 index memory.md로 전환. 사용자가 /split-memory를 호출하거나 memory size 초과를 발견했을 때 사용.
+description: 200줄을 초과한 memory.md를 주제별 sub-room으로 분할하고 index memory.md로 전환. 사용자가 split-memory 실행을 요청하거나 memory size 초과를 발견했을 때 사용.
 ---
 
-# /split-memory skill
+# split-memory skill
 
-`.agents/skills/split-memory/SKILL.md` 가 source. `.claude/commands/split-memory.md`
-wrapper 는 이 파일을 가리킨다.
+`.agents/skills/split-memory/SKILL.md` 가 source.
 
 인자 (`$ARGUMENTS`): 분할할 `memory.md` 경로. 생략 시 200줄 초과 파일을 탐색해
 사용자에게 선택 요청.
@@ -29,6 +28,6 @@ wrapper 는 이 파일을 가리킨다.
 
 ## 관련
 
-- `/remember` — 새 룰 저장 (200줄 cap 점검 포함)
+- `remember` skill — 새 룰 저장 (200줄 cap 점검 포함)
 - `memory/memory.md` — 팔레스 입구
 - `scripts/hooks/check-memory-structure.sh` — `memory.md` 외 파일 차단
