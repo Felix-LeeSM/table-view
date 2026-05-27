@@ -28,6 +28,8 @@
   - 539 passed.
 - `cargo test --manifest-path src-tauri/Cargo.toml invalid_sql_returns_error_variant_not_err --lib`
   - passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`
+  - 6 passed.
 - `pnpm vitest run src/lib/sql/sqlAst.test.ts src/lib/sql/sqlSafety.test.ts`
   - 2 files passed, 195 tests passed.
 - `pnpm exec tsc -b --pretty false`
