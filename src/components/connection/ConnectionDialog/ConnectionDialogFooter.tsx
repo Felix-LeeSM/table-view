@@ -25,7 +25,7 @@ export interface ConnectionDialogFooterProps {
  *   - `error` save-error region (`role="alert"`, sprint-178 sanitised).
  *   - Footer with Test Connection (left) + Cancel/Save (right) — the
  *     dialog-level escape-hatch split documented at the top of
- *     `ConnectionDialog.tsx` (`docs/dialog-conventions.md`).
+ *     `ConnectionDialog.tsx` (`memory/engineering/conventions/frontend/dialogs/memory.md`).
  *
  * Stateless. All decisions (state -> message, error string, loading
  * flags) come from props.

@@ -3,7 +3,7 @@ title: Fixture strategy — support claims need local evidence
 type: convention
 updated: 2026-05-27
 task: test-writing, fixture, data-source-promotion, support-claim
-surface: src-tauri/src/db/fixtures.rs, src-tauri/tests, tests/fixtures, e2e/fixtures, docs/adding-a-data-source.md
+surface: src-tauri/src/db/fixtures.rs, src-tauri/tests, tests/fixtures, e2e/fixtures, memory/engineering/architecture/data-source/adding/memory.md
 trigger:
   signal: fixture 추가 / DBMS support claim / adapter conformance test
   layer: index
@@ -71,5 +71,5 @@ contract/handoff 에 다음을 남긴다.
 
 - [testing-scenarios](../memory.md) — 비-E2E 테스트 시나리오 원칙
 - [mock-scope](../mock-scope/memory.md) — mock 은 boundary 에만
-- [adding-a-data-source](../../../../../docs/adding-a-data-source.md) — 새 source checklist
-- [data-source-architecture](../../../../../docs/data-source-architecture.md) — fixture harness / support claim architecture
+- [adding-a-data-source](../../../architecture/data-source/adding/memory.md) — 새 source checklist
+- [data-source-architecture](../../../architecture/data-source/memory.md) — fixture harness / support claim architecture

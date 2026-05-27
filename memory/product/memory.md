@@ -30,12 +30,14 @@ task: ux-review, persistence-reset, merge-gate
 
 새 영속 상태 추가 PR 마다 reset affordance 위치 명시. 미커버 항목 발견 시 그 PR 에서 같이 추가. 별도 PR 미루지 마 — "추가하겠다" 약속만 남으면 잊힘.
 
-Phase 6 audit (`docs/state-management-strategy-2026-05-15.md` F.6) 에 사이트별 체크리스트 박힘.
+State-management reset gate 는
+[engineering/state-management](../engineering/architecture/state-management/memory.md)
+와 함께 적용한다.
 
 ## 관련
 
 - [engineering/conventions](../engineering/conventions/memory.md) — TS/React 코드 룰
 - [workflow/delivery](../workflow/delivery/memory.md) — 머지 직전 checkpoint
 - [docs/product](../../docs/product/README.md) — 현재 제품 상태
-- `docs/ux-laws-mapping.md` — UX 법칙 매핑 source. Action plan 은
-  sprint-176~180 분해 완료 후 retire 됨.
+- `docs/product/README.md` — 현재 제품 상태
+- `docs/archives/audits/ux-laws-mapping-2026-04-30.md` — historical UX audit snapshot

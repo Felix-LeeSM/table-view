@@ -1,6 +1,6 @@
 /**
  * `dehydrate(workspace)` — Sprint 353 (Phase 0 dehydration pipeline,
- * state-management-strategy-2026-05-15 Q16~Q19 + M-1).
+ * memory/engineering/architecture/state-management/memory.md).
  *
  * 작성 2026-05-16 (Phase 0 sprint-353).
  *

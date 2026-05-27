@@ -25,8 +25,9 @@ backend contract 를 통해서만 다룬다.
 
 1. 기존 컴포넌트 / token / interaction pattern
 2. [react](../react/memory.md)
-3. [testing-scenarios](../testing-scenarios/memory.md)
-4. 본 문서
+3. [dialogs](dialogs/memory.md) when editing modal/dialog surfaces
+4. [testing-scenarios](../testing-scenarios/memory.md)
+5. 본 문서
 
 ## UI 원칙
 
@@ -78,6 +79,7 @@ backend contract 를 통해서만 다룬다.
 
 ## 관련
 
+- [dialogs](dialogs/memory.md)
 - [react](../react/memory.md)
 - [testing-scenarios](../testing-scenarios/memory.md)
 - [refactoring](../refactoring/memory.md)

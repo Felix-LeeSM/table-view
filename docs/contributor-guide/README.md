@@ -8,10 +8,9 @@ decision logs.
 
 - [`testing-and-quality.md`](testing-and-quality.md) — developer-facing
   verification gaps and quality follow-ups.
-- [`../adding-a-data-source.md`](../adding-a-data-source.md) — checklist for
-  adding or promoting a data source.
-- [`../dialog-conventions.md`](../dialog-conventions.md) — dialog UI conventions.
-- [`../homebrew-cask.md`](../homebrew-cask.md) — Homebrew cask and release notes.
+- [`release/homebrew-cask.md`](release/homebrew-cask.md) — Homebrew cask and release notes.
+- [`memory/engineering/architecture/data-source/adding/memory.md`](../../memory/engineering/architecture/data-source/adding/memory.md) — checklist for adding or promoting a data source.
+- [`memory/engineering/conventions/frontend/dialogs/memory.md`](../../memory/engineering/conventions/frontend/dialogs/memory.md) — dialog UI conventions.
 
 ## Boundary
 
@@ -19,3 +18,4 @@ decision logs.
   [`docs/product/known-limitations.md`](../product/known-limitations.md).
 - Future sequencing lives in [`docs/ROADMAP.md`](../ROADMAP.md).
 - Historical records live under [`docs/archives/`](../archives/).
+- Active engineering rules live under [`memory/engineering/`](../../memory/engineering/memory.md).

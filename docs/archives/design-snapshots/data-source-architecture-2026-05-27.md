@@ -1,5 +1,8 @@
 # Data Source Extension Architecture
 
+> Archived snapshot. Active engineering SOT:
+> [`memory/engineering/architecture/data-source/memory.md`](../../../memory/engineering/architecture/data-source/memory.md).
+
 ## Purpose
 
 Table View 는 RDBMS client 에서 출발했지만 장기적으로는 local-first data

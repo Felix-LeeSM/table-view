@@ -1,6 +1,6 @@
 {
   "$schema": "Each entry waives a known WCAG AA contrast violation. New violations not listed here will fail the contrast check.",
-  "policy": "Add an entry only when the brand identity dictates the color and a darker/lighter foreground would compromise it. Track follow-up tightening in docs/RISKS.md.",
+  "policy": "Add an entry only when the brand identity dictates the color and a darker/lighter foreground would compromise it. Track follow-up tightening in docs/product/known-limitations.md.",
   "entries": [
     {
       "theme": "apple",

@@ -29,10 +29,7 @@ export interface QueryLanguageMetadata {
   readonly completionOwner: QueryLanguageOwner;
   readonly fallbackPolicy: QueryLanguageFallbackPolicy;
   readonly safetyAnalyzer: QueryLanguageOwner;
-  readonly supportedSyntaxDocs: string;
 }
-
-const QUERY_LANGUAGE_SUPPORT_DOCS = "docs/query-language-support.md";
 
 export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
   sql: {
@@ -47,7 +44,6 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
       mirrorOwner: "typescript-runtime-adapter",
     },
     safetyAnalyzer: "rust-wasm-language-core",
-    supportedSyntaxDocs: QUERY_LANGUAGE_SUPPORT_DOCS,
   },
   mongosh: {
     id: "mongosh",
@@ -61,7 +57,6 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
       mirrorOwner: "typescript-runtime-adapter",
     },
     safetyAnalyzer: "rust-wasm-language-core",
-    supportedSyntaxDocs: QUERY_LANGUAGE_SUPPORT_DOCS,
   },
   "redis-command": {
     id: "redis-command",
@@ -74,7 +69,6 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
       reason: "Redis command query execution is not active yet.",
     },
     safetyAnalyzer: "profile-safety-policy",
-    supportedSyntaxDocs: QUERY_LANGUAGE_SUPPORT_DOCS,
   },
   "search-dsl": {
     id: "search-dsl",
@@ -88,7 +82,6 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
         "Search DSL is fixture-backed only until live HTTP execution lands.",
     },
     safetyAnalyzer: "profile-safety-policy",
-    supportedSyntaxDocs: QUERY_LANGUAGE_SUPPORT_DOCS,
   },
   cql: {
     id: "cql",
@@ -101,7 +94,6 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
       reason: "Cassandra/Scylla profiles are not active.",
     },
     safetyAnalyzer: "profile-safety-policy",
-    supportedSyntaxDocs: QUERY_LANGUAGE_SUPPORT_DOCS,
   },
   partiql: {
     id: "partiql",
@@ -114,7 +106,6 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
       reason: "DynamoDB profiles are not active.",
     },
     safetyAnalyzer: "profile-safety-policy",
-    supportedSyntaxDocs: QUERY_LANGUAGE_SUPPORT_DOCS,
   },
   cypher: {
     id: "cypher",
@@ -127,7 +118,6 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
       reason: "Graph profiles are not active.",
     },
     safetyAnalyzer: "profile-safety-policy",
-    supportedSyntaxDocs: QUERY_LANGUAGE_SUPPORT_DOCS,
   },
   gql: {
     id: "gql",
@@ -140,7 +130,6 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
       reason: "GraphQL profiles are not active.",
     },
     safetyAnalyzer: "profile-safety-policy",
-    supportedSyntaxDocs: QUERY_LANGUAGE_SUPPORT_DOCS,
   },
   gremlin: {
     id: "gremlin",
@@ -153,7 +142,6 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
       reason: "Graph profiles are not active.",
     },
     safetyAnalyzer: "profile-safety-policy",
-    supportedSyntaxDocs: QUERY_LANGUAGE_SUPPORT_DOCS,
   },
   "vector-query": {
     id: "vector-query",
@@ -166,7 +154,6 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
       reason: "Vector profiles are not active.",
     },
     safetyAnalyzer: "profile-safety-policy",
-    supportedSyntaxDocs: QUERY_LANGUAGE_SUPPORT_DOCS,
   },
   "stream-command": {
     id: "stream-command",
@@ -179,7 +166,6 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
       reason: "Stream profiles are not active.",
     },
     safetyAnalyzer: "profile-safety-policy",
-    supportedSyntaxDocs: QUERY_LANGUAGE_SUPPORT_DOCS,
   },
 }) satisfies Readonly<Record<QueryLanguageId, QueryLanguageMetadata>>;
 

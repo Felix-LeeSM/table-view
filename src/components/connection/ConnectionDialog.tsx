@@ -16,7 +16,7 @@
 //   3. URL-mode toggle + scrollable inner column with `max-h-[60vh]`.
 //   4. Save error rendered alongside (not inside) the test-feedback slot.
 //
-// Per `docs/dialog-conventions.md`, this file is the sole sanctioned escape
+// Per `memory/engineering/conventions/frontend/dialogs/memory.md`, this file is the sole sanctioned escape
 // hatch — new dialogs should pick a preset.
 //
 // Sprint 138 (#4 — DBMS-aware connection form): the inner network/auth/db

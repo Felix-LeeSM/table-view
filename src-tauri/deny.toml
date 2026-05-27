@@ -49,9 +49,9 @@ ignore = [
   # mongodb 가 hickory-proto 를 ~0.25.2 로 핀해 cargo update 로 해소 불가.
   # 실 영향: 우리 desktop app 은 hickory 를 *DNS 클라이언트* 로 사용 — 두
   # CVE 모두 악의적 DNS 응답 처리 시 트리거. 사용자가 임의 MongoDB host 를
-  # 입력해 악의적 resolver 를 통과해야 발현. RISKS.md 의 active 항목으로
-  # 추적 (2026-05-07 등록). mongodb 4.x 또는 hickory-proto 0.25.3+ 채택
-  # 시 즉시 해소.
+  # 입력해 악의적 resolver 를 통과해야 발현. Dependency security follow-up 은
+  # docs/contributor-guide/testing-and-quality.md 에서 추적한다. mongodb 4.x
+  # 또는 hickory-proto 0.25.3+ 채택 시 즉시 해소.
   "RUSTSEC-2026-0118", # hickory-proto NSEC3 unbounded loop
   "RUSTSEC-2026-0119", # hickory-proto O(n²) name compression
   # ── sqlx-mysql: rsa 0.9 timing sidechannel (Marvin Attack) ───────────
@@ -65,9 +65,10 @@ ignore = [
   # Table View 는 desktop app — 사용자가 자신의 MySQL server 에 직접 접속
   # 하며, attacker 가 user 의 connection timing 을 측정할 채널이 없다.
   # mysql_native_password (RSA 미사용) 로 인증 plugin 을 우회 가능하지만,
-  # 그건 사용자 environment 가 결정. RISKS.md 신규 항목 등록 (2026-05-13).
-  # sqlx 0.9+ 또는 rsa 0.10+ 채택 시 즉시 해소. Sprint 278 (sqlx mysql
-  # feature 활성화) 이후 본 advisory 가 surfacing 되어 추가.
+  # 그건 사용자 environment 가 결정. Dependency security follow-up 은
+  # docs/contributor-guide/testing-and-quality.md 에서 추적한다. sqlx 0.9+
+  # 또는 rsa 0.10+ 채택 시 즉시 해소. Sprint 278 (sqlx mysql feature 활성화)
+  # 이후 본 advisory 가 surfacing 되어 추가.
   "RUSTSEC-2023-0071",
 ]
 

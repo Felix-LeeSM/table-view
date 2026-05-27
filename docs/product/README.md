@@ -16,7 +16,7 @@
 |---|---|---|---|---|
 | PostgreSQL | strong | strong | WASM-first | 기준선. query/workbench parity lane 이 현재 우선 후보 |
 | MySQL | adapter complete | widening in progress | Rust/WASM vocabulary | adapter 완료. semantic gap 계속 축소 |
-| MariaDB | MySQL-adapter reuse | MySQL-family profile + MariaDB delta | Rust/WASM vocabulary | runtime path 존재. MariaDB-engine fixture gap 은 active risk |
+| MariaDB | MySQL-adapter reuse | MySQL-family profile + MariaDB delta | Rust/WASM vocabulary | runtime path 존재. MariaDB-engine fixture gap 은 known limitation / quality follow-up |
 | SQLite | file adapter complete | parser/write parity guardrails | Rust/WASM vocabulary | user DBMS adapter 는 internal SQLite state 와 분리됨. DDL UI 는 unsupported |
 | DuckDB | file adapter + local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM vocabulary | local `.duckdb`/CSV/Parquet/JSON/NDJSON preview/query 지원. DDL/write 는 unsupported |
 | MongoDB | partial/full-support backlog | whitelisted mongosh | Rust/WASM vocabulary | whitelist workflow hardening 이후 full-support 재검토 |
@@ -40,8 +40,8 @@
 
 ## Related Documents
 
-- [`docs/query-language-support.md`](../query-language-support.md) — language and parser support
-- [`docs/data-source-architecture.md`](../data-source-architecture.md) — data-source profile/capability architecture
-- [`docs/adding-a-data-source.md`](../adding-a-data-source.md) — contributor checklist for new sources
+- [`docs/reference/query-language-support.md`](../reference/query-language-support.md) — language and parser support matrix
+- [`memory/engineering/architecture/data-source/memory.md`](../../memory/engineering/architecture/data-source/memory.md) — data-source profile/capability architecture
+- [`memory/engineering/architecture/data-source/adding/memory.md`](../../memory/engineering/architecture/data-source/adding/memory.md) — contributor checklist for new sources
 - [`docs/product/known-limitations.md`](known-limitations.md) — current product-visible limitations
 - [`docs/ROADMAP.md`](../ROADMAP.md) — future follow-ups and promotion order

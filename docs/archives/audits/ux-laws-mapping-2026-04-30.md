@@ -1,5 +1,8 @@
 # UX 30 Laws — Table View 적용 매핑
 
+> Archived UX audit snapshot. Active product UX gate:
+> [`memory/product/memory.md`](../../../memory/product/memory.md).
+
 > 출처: [Laws of UX](https://lawsofux.com/) · 작성일 2026-04-30
 >
 > 형식: **법칙명** — *한 줄 의미* — ✅ 이미 적용/진행 중 / 💡 신규 검토 권장

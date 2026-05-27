@@ -7,7 +7,10 @@ import {
 
 describe("query language support documentation", () => {
   it("documents every active query language ownership record", () => {
-    const supportDocs = readFileSync("docs/query-language-support.md", "utf8");
+    const supportDocs = readFileSync(
+      "docs/reference/query-language-support.md",
+      "utf8",
+    );
 
     for (const languageId of getActiveQueryLanguages()) {
       const metadata = getQueryLanguageMetadata(languageId);

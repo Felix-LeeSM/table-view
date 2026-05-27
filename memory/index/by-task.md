@@ -13,6 +13,11 @@ generator: scripts/regenerate-indexes.sh
 
 ## 작업 → 룰 / 방 매핑
 
+### adapter
+
+- [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
+- [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
+
 ### agent-autonomy
 
 - [Implementation — agent 자율성 + noise 차단](../../memory/workflow/implementation/memory.md)
@@ -20,6 +25,10 @@ generator: scripts/regenerate-indexes.sh
 ### agent-hard-rule
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
+
+### architecture
+
+- [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
 
 ### backend
 
@@ -29,6 +38,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [Engineering](../../memory/engineering/memory.md)
 - [버그 fix — Red test 먼저](../../memory/workflow/bug-fix/memory.md)
+
+### capability
+
+- [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
 
 ### code-writing
 
@@ -42,6 +55,19 @@ generator: scripts/regenerate-indexes.sh
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
+
+### completion
+
+- [Query Language Architecture](../../memory/engineering/architecture/query-language/memory.md)
+
+### cross-window
+
+- [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
+
+### data-source
+
+- [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
+- [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
 
 ### data-source-promotion
 
@@ -58,6 +84,10 @@ generator: scripts/regenerate-indexes.sh
 - [PR Review Behavior](../../memory/workflow/review/memory.md)
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
+### dialog
+
+- [Dialog Conventions](../../memory/engineering/conventions/frontend/dialogs/memory.md)
+
 ### docs
 
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
@@ -68,10 +98,12 @@ generator: scripts/regenerate-indexes.sh
 
 ### fixture
 
+- [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 
 ### frontend
 
+- [Dialog Conventions](../../memory/engineering/conventions/frontend/dialogs/memory.md)
 - [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/engineering/conventions/react/memory.md)
 
@@ -97,6 +129,10 @@ generator: scripts/regenerate-indexes.sh
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
 - [Hook validation gate principle](../../memory/workflow/hooks/memory.md)
 
+### local-storage
+
+- [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
+
 ### merge
 
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
@@ -116,6 +152,14 @@ generator: scripts/regenerate-indexes.sh
 ### parallel
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
+
+### parser
+
+- [Query Language Architecture](../../memory/engineering/architecture/query-language/memory.md)
+
+### persistence
+
+- [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
 
 ### persistence-reset
 
@@ -151,6 +195,10 @@ generator: scripts/regenerate-indexes.sh
 ### push-reject
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
+
+### query-language
+
+- [Query Language Architecture](../../memory/engineering/architecture/query-language/memory.md)
 
 ### race-trace
 
@@ -189,6 +237,10 @@ generator: scripts/regenerate-indexes.sh
 - [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
 - [Rust 컨벤션](../../memory/engineering/conventions/rust/memory.md)
 
+### safe-mode
+
+- [Query Language Architecture](../../memory/engineering/architecture/query-language/memory.md)
+
 ### spawn-verify
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
@@ -197,8 +249,17 @@ generator: scripts/regenerate-indexes.sh
 
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
+### sqlite
+
+- [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
+
+### state-management
+
+- [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
+
 ### support-claim
 
+- [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 
 ### tauri
@@ -216,6 +277,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### ui
 
+- [Dialog Conventions](../../memory/engineering/conventions/frontend/dialogs/memory.md)
 - [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
 
 ### user-report

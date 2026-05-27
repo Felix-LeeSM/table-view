@@ -82,6 +82,9 @@ table-view/
 
 ## 관련 방
 
+- [data-source](data-source/memory.md) — source profile, capability, adapter, result envelope architecture
+- [query-language](query-language/memory.md) — parser/completion/Safe Mode ownership
+- [state-management](state-management/memory.md) — persistence, workspace identity, cross-window sync
 - [paradigms](paradigms/memory.md) — Phase 7(ES) · Phase 8(Redis) UI slot 비교 + 일급 개념 대조 + 결정 이력
 - [docs/ROADMAP.md](../../../docs/ROADMAP.md) — 미래 목표와 승격 후보
 - [conventions](../conventions/memory.md) — Rust/TS 코딩 규칙, 테스트, 커밋

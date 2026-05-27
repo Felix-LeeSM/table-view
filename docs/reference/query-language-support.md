@@ -29,10 +29,10 @@ Sprint 479 기준 active query language는
 
 | QueryLanguageId | Parser owner | Completion owner | Fallback policy | Safety analyzer | Syntax docs |
 |---|---|---|---|---|---|
-| `sql` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` from `rust-wasm-language-core` through `typescript-runtime-adapter`; TypeScript fallback mirrors are compatibility only, not source of truth | `rust-wasm-language-core` | `docs/query-language-support.md` |
-| `mongosh` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` from `rust-wasm-language-core` through `typescript-runtime-adapter`; TypeScript fallback mirrors are compatibility only, not source of truth | `rust-wasm-language-core` | `docs/query-language-support.md` |
-| `redis-command` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented`; no TypeScript source-of-truth fallback | `profile-safety-policy` | `docs/query-language-support.md` |
-| `search-dsl` | `future-language-core-contract` | `future-language-core-contract` | `deferred`; fixture-backed only until live HTTP execution lands | `profile-safety-policy` | `docs/query-language-support.md` |
+| `sql` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` from `rust-wasm-language-core` through `typescript-runtime-adapter`; TypeScript fallback mirrors are compatibility only, not source of truth | `rust-wasm-language-core` | `docs/reference/query-language-support.md` |
+| `mongosh` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` from `rust-wasm-language-core` through `typescript-runtime-adapter`; TypeScript fallback mirrors are compatibility only, not source of truth | `rust-wasm-language-core` | `docs/reference/query-language-support.md` |
+| `redis-command` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented`; no TypeScript source-of-truth fallback | `profile-safety-policy` | `docs/reference/query-language-support.md` |
+| `search-dsl` | `future-language-core-contract` | `future-language-core-contract` | `deferred`; fixture-backed only until live HTTP execution lands | `profile-safety-policy` | `docs/reference/query-language-support.md` |
 
 Deferred language ids (`cql`, `partiql`, `cypher`, `gql`, `gremlin`,
 `vector-query`, `stream-command`) stay in the registry with
@@ -308,7 +308,8 @@ SQL dialect와 shell/meta command는 별도 layer다.
 
 - MySQL과 MariaDB의 문법 divergence는 서버 실행 결과가 최종 판단한다.
 - 현재 자동화 fixture는 MySQL adapter path 중심이다. MariaDB-engine integration
-  fixture gap은 `RISK-043`에서 추적한다.
+  fixture gap은 product known limitation 과 contributor quality follow-up 으로
+  추적한다.
 - trigger create/drop은 MySQL과 동일하게 unsupported다.
 - `DELIMITER` / `LOAD DATA` runtime boundary도 MySQL과 동일하게 `Unsupported`
   거부다.

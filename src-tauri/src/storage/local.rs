@@ -1,6 +1,6 @@
 //! Sprint 355 (Phase 1) — SQLite SOT 스켈레톤.
 //!
-//! 본 모듈은 state-management-strategy-2026-05-15 의 SQLite 단일 path 도입을
+//! 본 모듈은 `memory/engineering/architecture/state-management/memory.md` 의 SQLite 단일 path 도입을
 //! 위한 토대다. 향후 Phase 1+ 에서 dual-write, snapshot IPC, dual-read 가 이
 //! 위에 쌓인다.
 //!

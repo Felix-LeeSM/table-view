@@ -31,11 +31,11 @@ generator: scripts/regenerate-indexes.sh
 
 - [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
 
-### `docs/adding-a-data-source.md`
+### `e2e/fixtures`
 
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 
-### `e2e/fixtures`
+### `memory/engineering/architecture/data-source/adding/memory.md`
 
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 
@@ -44,9 +44,26 @@ generator: scripts/regenerate-indexes.sh
 - [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
 - [Rust 컨벤션](../../memory/engineering/conventions/rust/memory.md)
 
+### `src-tauri/*-parser-core/**`
+
+- [Query Language Architecture](../../memory/engineering/architecture/query-language/memory.md)
+
+### `src-tauri/src/db/**`
+
+- [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
+- [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
+
 ### `src-tauri/src/db/fixtures.rs`
 
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
+
+### `src-tauri/src/events.rs`
+
+- [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
+
+### `src-tauri/src/storage/**`
+
+- [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
 
 ### `src-tauri/tests`
 
@@ -66,9 +83,55 @@ generator: scripts/regenerate-indexes.sh
 - [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/engineering/conventions/react/memory.md)
 
+### `src/components/**/*.tsx`
+
+- [Dialog Conventions](../../memory/engineering/conventions/frontend/dialogs/memory.md)
+
+### `src/components/ui/dialog/**/*.tsx`
+
+- [Dialog Conventions](../../memory/engineering/conventions/frontend/dialogs/memory.md)
+
+### `src/hooks/useCurrentWindowConnectionId.ts`
+
+- [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
+
+### `src/lib/**`
+
+- [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
+
+### `src/lib/mongo/**`
+
+- [Query Language Architecture](../../memory/engineering/architecture/query-language/memory.md)
+
+### `src/lib/sql/**`
+
+- [Query Language Architecture](../../memory/engineering/architecture/query-language/memory.md)
+
+### `src/stores/**`
+
+- [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
+
+### `src/types/dataSource*`
+
+- [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
+- [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
+
+### `src/types/queryLanguage*`
+
+- [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
+- [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
+
+### `src/types/queryLanguage.ts`
+
+- [Query Language Architecture](../../memory/engineering/architecture/query-language/memory.md)
+
 ### `tests/fixtures`
 
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
+
+### `tests/fixtures/**`
+
+- [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
 
 ### `vi.mock'`
 
