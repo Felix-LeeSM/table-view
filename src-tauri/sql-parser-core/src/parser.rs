@@ -4281,13 +4281,17 @@ mod tests {
     }
 
     #[test]
-    fn ac_p8_merge_remains_unsupported_statement() {
-        // Sprint-395 — MERGE remains in `is_known_sql_verb` but not in
-        // `is_supported_sql_verb` (out of scope). Keep an
-        // UnsupportedStatement smoke-test alive for known-but-unsupported
-        // verbs now that EXPLAIN/GRANT have moved to supported.
-        let e = err("MERGE INTO target USING source ON foo = bar");
-        assert_eq!(e.error_kind, ParseErrorKind::UnsupportedStatement);
+    fn ac_484_m01_merge_update_first_slice_parses() {
+        // Reason: Sprint 484 promotes the narrow PostgreSQL MERGE write
+        // surface out of unsupported-statement fallback. (2026-05-27)
+        let r = parse(
+            "MERGE INTO users USING incoming ON users.id = incoming.id \
+             WHEN MATCHED THEN UPDATE SET name = incoming.name",
+        );
+        assert!(
+            !matches!(r, ParseResult::Error(_)),
+            "expected MERGE to parse, got {r:?}"
+        );
     }
 
     #[test]
