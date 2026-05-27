@@ -39,6 +39,9 @@
  * 여전히 `kind: "select"` / `severity: "info"` / `reasons: []`. 효과는
  * 단지 regex fallback 경로가 더 적게 실행된다는 점이다. CTE / window /
  * subquery / set ops 는 sprint-393b 까지 regex 경로로 남는다.
+ *
+ * Sprint 484 (2026-05-27) — narrow PostgreSQL MERGE parses as a bounded
+ * write surface: `kind: "dml-merge"` / `severity: "warn"`.
  */
 export type Severity = "info" | "warn" | "danger";
 
@@ -51,6 +54,7 @@ export type StatementKind =
   | "dml-insert"
   | "dml-update"
   | "dml-delete"
+  | "dml-merge"
   | "ddl-drop"
   | "ddl-truncate"
   | "ddl-alter-drop"
@@ -306,6 +310,8 @@ function statementAnalysisFromAst(
         };
       }
       return { kind: "dml-delete", severity: "warn", reasons: [] };
+    case "merge":
+      return { kind: "dml-merge", severity: "warn", reasons: [] };
     // Sprint-393a — successful widened SELECT parse always classifies as
     // read-only `info`. No JOIN / GROUP / ORDER / LIMIT shape escalates
     // severity — the AST simply confirms the statement is a valid SELECT
@@ -419,7 +425,7 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   // parser. COPY / GRANT / REVOKE classify per the misc-grammar table;
   // SHOW / SET / COMMENT classify as info-tier metadata-like reads/writes.
   if (
-    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|CALL|UPDATE|DELETE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT)\b/.test(
+    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|CALL|UPDATE|DELETE|MERGE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT)\b/.test(
       upper,
     )
   ) {
@@ -579,6 +585,14 @@ export function analyzeStatement(sql: string): StatementAnalysis {
 
   if (/^INSERT\s+INTO\b/.test(upper)) {
     return { kind: "dml-insert", severity: "info", reasons: [] };
+  }
+
+  if (/^MERGE\b/.test(upper)) {
+    return {
+      kind: "dml-merge",
+      severity: "warn",
+      reasons: ["MERGE — conditional write"],
+    };
   }
 
   if (/^SELECT\b/.test(upper)) {

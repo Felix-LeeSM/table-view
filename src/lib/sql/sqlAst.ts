@@ -595,6 +595,28 @@ export interface SqlDeleteStatement {
   returning: string[];
 }
 
+// ---- sprint-484 PostgreSQL MERGE first-slice types -------------------
+
+export interface SqlMergeStatement {
+  kind: "merge";
+  target: SqlTableRef;
+  target_alias: string | null;
+  source: SqlTableRef;
+  source_alias: string | null;
+  on: SqlSelectExpr;
+  clauses: SqlMergeWhenClause[];
+}
+
+export interface SqlMergeWhenClause {
+  not_matched: boolean;
+  action: "update" | "insert" | "do-nothing";
+  assignments: Array<[string, SqlMergeValue]>;
+  columns: string[];
+  values: SqlMergeValue[];
+}
+
+export type SqlMergeValue = SqlSelectExpr;
+
 /**
  * Sprint-393b — `WITH [RECURSIVE] cte AS (...) <inner-statement>`. The
  * inner statement is one of SELECT / INSERT / UPDATE / DELETE (nested
@@ -704,6 +726,7 @@ export type SqlExplainInner =
   | SqlInsertStatement
   | SqlUpdateStatement
   | SqlDeleteStatement
+  | SqlMergeStatement
   | SqlWithStatement;
 
 export interface SqlExplainStatement {
@@ -809,6 +832,7 @@ export type SqlParseResult =
   | SqlCallStatement
   | SqlUpdateStatement
   | SqlDeleteStatement
+  | SqlMergeStatement
   | SqlWithStatement
   // Sprint-395 — misc grammar top-levels.
   | SqlGrantStatement
@@ -943,6 +967,7 @@ const SQL_PARSE_RESULT_KINDS = new Set<string>([
   "call",
   "update",
   "delete",
+  "merge",
   // Sprint-393b — CTE-wrap top-level.
   "with",
   // Sprint-394 — DDL additive top-levels.

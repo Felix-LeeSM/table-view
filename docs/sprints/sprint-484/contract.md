@@ -64,6 +64,12 @@ auditable `MERGE` subset from unsupported statement to parsed write surface.
 5. Frontend typecheck.
 6. Documentation drift check.
 
+## Budget Note
+
+- SQL parser WASM is a local-app artifact and will keep growing as the
+  PostgreSQL grammar lane widens. Sprint 484 raises the gzip budget to 200 KiB
+  so grammar coverage is not distorted to fit the prior 80 KiB cap.
+
 ### Required Checks
 
 1. `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml`

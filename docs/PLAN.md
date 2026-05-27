@@ -160,6 +160,7 @@ Sprint 482부터 Phase 32 PostgreSQL lane implementation 을 시작한다. 이�
 | 481 | Cross-paradigm release gate | release/join | 459, 464, 468, 472, 476, 478-480 |
 | 482 | PostgreSQL parser/Safe Mode kickoff | rdbms/postgresql | 481 |
 | 483 | PostgreSQL function-call expression widening | rdbms/postgresql | 482 |
+| 484 | PostgreSQL MERGE parser/Safe Mode first slice | rdbms/postgresql | 483 |
 
 ## Recently Closed
 
@@ -189,6 +190,7 @@ Sprint 482부터 Phase 32 PostgreSQL lane implementation 을 시작한다. 이�
 | 480 | Capability documentation/developer guide |
 | 482 | PostgreSQL parser/Safe Mode kickoff: no-FROM SELECT and SELECT-list function calls |
 | 483 | PostgreSQL parser/Safe Mode widening: predicate/HAVING function calls and SELECT-list function aliases |
+| 484 | PostgreSQL MERGE parser/Safe Mode first slice: table-source MERGE with UPDATE, INSERT, and DO NOTHING actions |
 
 ## Phase Index
 

@@ -31,13 +31,13 @@ pub use ast::{
     CopySource, CopyStatement, CopyTarget, CteDefinition, DeleteStatement, DropObjectType,
     DropStatement, ExplainInner, ExplainOption, ExplainStatement, FrameBound, FrameUnit, FromItem,
     FromSource, GrantObject, GrantStatement, InsertSource, InsertStatement, InsertValue,
-    JoinDescriptor, JoinPredicate, LikeCase, LimitClause, NullsPlacement, OnConflict,
-    OnDuplicateKeyUpdate, OnDuplicateKeyUpdateAssignment, OnDuplicateKeyUpdateValue,
-    OrderDirection, OrderingItem, OverClause, ParseError, ParseErrorKind, ParseResult,
-    PrivilegeTag, ProcedureRef, RevokeStatement, RoleRef, SelectExpr, SelectListItem,
-    SelectStatement, SetOperationEntry, SetOperator, SetScope, SetStatement, SetValue,
-    ShowStatement, ShowTarget, SqlLiteral, TruncateStatement, UpdateAssignment, UpdateStatement,
-    WhereExpr, WindowArgument, WindowFrame, WithInner, WithStatement,
+    JoinDescriptor, JoinPredicate, LikeCase, LimitClause, MergeStatement, MergeWhenClause,
+    NullsPlacement, OnConflict, OnDuplicateKeyUpdate, OnDuplicateKeyUpdateAssignment,
+    OnDuplicateKeyUpdateValue, OrderDirection, OrderingItem, OverClause, ParseError,
+    ParseErrorKind, ParseResult, PrivilegeTag, ProcedureRef, RevokeStatement, RoleRef, SelectExpr,
+    SelectListItem, SelectStatement, SetOperationEntry, SetOperator, SetScope, SetStatement,
+    SetValue, ShowStatement, ShowTarget, SqlLiteral, TruncateStatement, UpdateAssignment,
+    UpdateStatement, WhereExpr, WindowArgument, WindowFrame, WithInner, WithStatement,
 };
 pub use completion::{
     complete_sql, complete_sql_compact, CompletionCursorOffsets, CompletionItem,
@@ -144,9 +144,9 @@ mod tests {
     fn smoke_error_serialization_shape() {
         // Sprint-394 — CREATE/INSERT/UPDATE/DELETE/ALTER/WITH are now
         // supported. Sprint-395 — GRANT/REVOKE/EXPLAIN/SHOW/SET/COPY/COMMENT
-        // are now supported. Pick a verb still in `is_known_sql_verb` but
-        // not in `is_supported_sql_verb` (MERGE).
-        let result = parse_sql("MERGE INTO users USING source ON foo = bar");
+        // are now supported. Sprint-484 — MERGE is supported, so REPLACE
+        // keeps the known-but-unsupported smoke path covered.
+        let result = parse_sql("REPLACE INTO users VALUES (1)");
         let json = serde_json::to_value(&result).expect("serialize");
         assert_eq!(json["kind"], "error");
         assert_eq!(json["error_kind"], "unsupported-statement");

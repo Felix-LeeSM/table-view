@@ -40,13 +40,14 @@ use crate::ast::{
     CreateViewStatement, CteDefinition, DeleteStatement, DropObjectType, DropStatement,
     ExplainInner, ExplainOption, ExplainStatement, FrameBound, FrameUnit, FromItem, FromSource,
     GrantObject, GrantStatement, InsertSource, InsertStatement, InsertValue, JoinDescriptor,
-    JoinPredicate, LikeCase, LimitClause, NullsPlacement, OnConflict, OnDuplicateKeyUpdate,
-    OnDuplicateKeyUpdateAssignment, OnDuplicateKeyUpdateValue, OrderDirection, OrderingItem,
-    OverClause, ParseError, ParseErrorKind, ParseResult, PrivilegeTag, ProcedureRef,
-    RevokeStatement, RoleRef, SelectExpr, SelectListItem, SelectStatement, SetOperationEntry,
-    SetOperator, SetScope, SetStatement, SetValue, ShowStatement, ShowTarget, SqlLiteral,
-    TableConstraint, TableConstraintBody, TableRef, TruncateStatement, UpdateAssignment,
-    UpdateStatement, WindowArgument, WindowFrame, WithInner, WithStatement,
+    JoinPredicate, LikeCase, LimitClause, MergeStatement, MergeWhenClause, NullsPlacement,
+    OnConflict, OnDuplicateKeyUpdate, OnDuplicateKeyUpdateAssignment, OnDuplicateKeyUpdateValue,
+    OrderDirection, OrderingItem, OverClause, ParseError, ParseErrorKind, ParseResult,
+    PrivilegeTag, ProcedureRef, RevokeStatement, RoleRef, SelectExpr, SelectListItem,
+    SelectStatement, SetOperationEntry, SetOperator, SetScope, SetStatement, SetValue,
+    ShowStatement, ShowTarget, SqlLiteral, TableConstraint, TableConstraintBody, TableRef,
+    TruncateStatement, UpdateAssignment, UpdateStatement, WindowArgument, WindowFrame, WithInner,
+    WithStatement,
 };
 use crate::lexer::{lex, Spanned, Token};
 
@@ -178,6 +179,10 @@ impl<'a> Parser<'a> {
             Token::Delete => {
                 self.advance();
                 Ok(ParseResult::Delete(self.parse_delete()?))
+            }
+            Token::Ident(name) if name.eq_ignore_ascii_case("merge") => {
+                self.advance();
+                Ok(ParseResult::Merge(self.parse_merge()?))
             }
             Token::With => {
                 self.advance();
@@ -2391,6 +2396,169 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// PostgreSQL `MERGE INTO <target> [AS alias] USING <source> [AS alias]
+    /// ON <predicate> WHEN ... THEN ...`. This first slice accepts only table
+    /// sources and UPDATE / INSERT / DO NOTHING actions.
+    fn parse_merge(&mut self) -> Result<MergeStatement, ParseError> {
+        self.expect_keyword(Token::Into, "expected INTO")?;
+        let (target, target_alias) = self.parse_merge_relation()?;
+        self.expect_keyword(Token::Using, "expected USING")?;
+        let (source, source_alias) = self.parse_merge_relation()?;
+        self.expect_keyword(Token::On, "expected ON")?;
+        let on = self.parse_select_expr_or()?;
+
+        let mut clauses: Vec<MergeWhenClause> = Vec::new();
+        loop {
+            if !matches!(self.peek().map(|t| &t.token), Some(Token::When)) {
+                break;
+            }
+            clauses.push(self.parse_merge_when_clause()?);
+        }
+        if clauses.is_empty() {
+            let at = self.peek().map(|t| t.at);
+            return Err(syntax_err(at, "MERGE requires at least one WHEN clause"));
+        }
+
+        Ok(MergeStatement {
+            target,
+            target_alias,
+            source,
+            source_alias,
+            on,
+            clauses,
+        })
+    }
+
+    fn parse_merge_relation(&mut self) -> Result<(TableRef, Option<String>), ParseError> {
+        let table = self.parse_table_ref()?;
+        let alias = if matches!(self.peek().map(|t| &t.token), Some(Token::As)) {
+            self.advance();
+            Some(self.expect_ident("expected alias after AS")?)
+        } else if matches!(self.peek().map(|t| &t.token), Some(Token::Ident(_))) {
+            Some(self.expect_ident("expected alias")?)
+        } else {
+            None
+        };
+        Ok((table, alias))
+    }
+
+    fn parse_merge_when_clause(&mut self) -> Result<MergeWhenClause, ParseError> {
+        self.expect_keyword(Token::When, "expected WHEN")?;
+        let not_matched = if matches!(self.peek().map(|t| &t.token), Some(Token::Not)) {
+            self.advance();
+            true
+        } else {
+            false
+        };
+        self.expect_ident_kw("matched", "expected MATCHED")?;
+        if not_matched && self.peek_ident_kw("by") {
+            return Err(syntax_err(
+                self.peek().map(|t| t.at),
+                "WHEN NOT MATCHED BY SOURCE unsupported",
+            ));
+        }
+        self.expect_keyword(Token::Then, "expected THEN")?;
+        self.parse_merge_action(not_matched)
+    }
+
+    fn parse_merge_action(&mut self, not_matched: bool) -> Result<MergeWhenClause, ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected MERGE action"))?
+            .clone();
+        match tok.token {
+            Token::Update => {
+                if not_matched {
+                    return Err(syntax_err(Some(tok.at), "NOT MATCHED cannot UPDATE"));
+                }
+                self.advance();
+                self.expect_keyword(Token::Set, "expected SET")?;
+                Ok(MergeWhenClause {
+                    not_matched,
+                    action: "update".to_string(),
+                    assignments: self.parse_merge_assignment_list()?,
+                    columns: Vec::new(),
+                    values: Vec::new(),
+                })
+            }
+            Token::Insert => {
+                if !not_matched {
+                    return Err(syntax_err(Some(tok.at), "MATCHED cannot INSERT"));
+                }
+                self.advance();
+                self.expect_token(Token::LParen, "expected '(' after INSERT")?;
+                let columns = self.parse_ident_list("expected column name")?;
+                self.expect_token(Token::RParen, "expected ')'")?;
+                self.expect_keyword(Token::Values, "expected VALUES")?;
+                self.expect_token(Token::LParen, "expected '(' after VALUES")?;
+                let values = self.parse_merge_value_list()?;
+                self.expect_token(Token::RParen, "expected ')'")?;
+                Ok(MergeWhenClause {
+                    not_matched,
+                    action: "insert".to_string(),
+                    assignments: Vec::new(),
+                    columns,
+                    values,
+                })
+            }
+            Token::Do => {
+                self.advance();
+                self.expect_keyword(Token::Nothing, "expected NOTHING")?;
+                Ok(MergeWhenClause {
+                    not_matched,
+                    action: "do-nothing".to_string(),
+                    assignments: Vec::new(),
+                    columns: Vec::new(),
+                    values: Vec::new(),
+                })
+            }
+            Token::Delete => Err(syntax_err(Some(tok.at), "MERGE DELETE action unsupported")),
+            _ => Err(syntax_err(
+                Some(tok.at),
+                "expected UPDATE/INSERT/DO NOTHING",
+            )),
+        }
+    }
+
+    fn parse_merge_assignment_list(&mut self) -> Result<Vec<(String, SelectExpr)>, ParseError> {
+        let mut out: Vec<(String, SelectExpr)> = Vec::new();
+        loop {
+            let column = self.expect_ident("expected column name")?;
+            self.expect_token(Token::Eq, "expected '='")?;
+            let value = self.parse_merge_value()?;
+            out.push((column, value));
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        Ok(out)
+    }
+
+    fn parse_merge_value_list(&mut self) -> Result<Vec<SelectExpr>, ParseError> {
+        let mut out: Vec<SelectExpr> = Vec::new();
+        loop {
+            out.push(self.parse_merge_value()?);
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        Ok(out)
+    }
+
+    fn parse_merge_value(&mut self) -> Result<SelectExpr, ParseError> {
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Ident(_))) {
+            return Ok(SelectExpr::ColumnRefExpr {
+                column: self.parse_column_ref()?,
+            });
+        }
+        self.parse_insert_value()
+            .map(|value| SelectExpr::Literal { value })
+    }
+
     /// `VALUES (row1), (row2), …`. The `VALUES` keyword has been
     /// consumed; this reads the parenthesised row tuples.
     fn parse_values_rows(&mut self) -> Result<Vec<Vec<InsertValue>>, ParseError> {
@@ -3561,12 +3729,13 @@ impl<'a> Parser<'a> {
             ParseResult::Insert(i) => ExplainInner::Insert(i),
             ParseResult::Update(u) => ExplainInner::Update(u),
             ParseResult::Delete(d) => ExplainInner::Delete(d),
+            ParseResult::Merge(m) => ExplainInner::Merge(m),
             ParseResult::With(w) => ExplainInner::With(w),
             ParseResult::Error(e) => return Err(e),
             _ => {
                 return Err(syntax_err(
                     at,
-                    "EXPLAIN inner statement must be SELECT / INSERT / UPDATE / DELETE / WITH",
+                    "EXPLAIN inner statement must be SELECT / INSERT / UPDATE / DELETE / MERGE / WITH",
                 ));
             }
         };
@@ -4058,6 +4227,7 @@ fn is_known_sql_verb(name: &str) -> bool {
 /// adds `CREATE` (TABLE / INDEX / VIEW) — `CREATE FUNCTION` /
 /// `CREATE TRIGGER` etc. surface as `SyntaxError` from the dispatcher.
 /// Sprint-395 adds GRANT / REVOKE / EXPLAIN / SHOW / SET / COPY / COMMENT.
+/// Sprint-484 adds the narrow PostgreSQL MERGE first slice.
 fn is_supported_sql_verb(name: &str) -> bool {
     matches!(
         name.to_ascii_uppercase().as_str(),
@@ -4067,6 +4237,7 @@ fn is_supported_sql_verb(name: &str) -> bool {
             | "TRUNCATE"
             | "ALTER"
             | "INSERT"
+            | "MERGE"
             | "UPDATE"
             | "DELETE"
             | "WITH"
@@ -4098,6 +4269,13 @@ mod tests {
         match parse(input) {
             ParseResult::Select(s) => s,
             other => panic!("expected Select, got: {:?}", other),
+        }
+    }
+
+    fn ok_merge(input: &str) -> MergeStatement {
+        match parse(input) {
+            ParseResult::Merge(s) => s,
+            other => panic!("expected Merge, got: {:?}", other),
         }
     }
 
@@ -4231,8 +4409,7 @@ mod tests {
     // sprint-385 tests that asserted they were `UnsupportedStatement`
     // are inverted to assert successful parse + correct ParseResult
     // variant. The `UnsupportedStatement` path is still exercised by
-    // verbs sprint-392 does not implement (CREATE / GRANT / REVOKE /
-    // MERGE / REPLACE / WITH-prefixed statements).
+    // verbs the parser still does not implement (REPLACE, etc.).
     #[test]
     fn ac_p8_insert_is_now_supported_statement() {
         let r = parse("INSERT INTO users VALUES (1)");
@@ -4284,14 +4461,94 @@ mod tests {
     fn ac_484_m01_merge_update_first_slice_parses() {
         // Reason: Sprint 484 promotes the narrow PostgreSQL MERGE write
         // surface out of unsupported-statement fallback. (2026-05-27)
-        let r = parse(
+        let m = ok_merge(
             "MERGE INTO users USING incoming ON users.id = incoming.id \
              WHEN MATCHED THEN UPDATE SET name = incoming.name",
         );
-        assert!(
-            !matches!(r, ParseResult::Error(_)),
-            "expected MERGE to parse, got {r:?}"
+        assert_eq!(m.target.table, "users");
+        assert_eq!(m.source.table, "incoming");
+        match m.on {
+            SelectExpr::ColumnComparison { left, op, right } => {
+                assert_eq!(left.table.as_deref(), Some("users"));
+                assert_eq!(left.column, "id");
+                assert_eq!(op, CompareOp::Eq);
+                assert_eq!(right.table.as_deref(), Some("incoming"));
+                assert_eq!(right.column, "id");
+            }
+            other => panic!("expected ON column comparison, got {:?}", other),
+        }
+        assert_eq!(m.clauses.len(), 1);
+        assert!(!m.clauses[0].not_matched);
+        let clause = &m.clauses[0];
+        assert_eq!(clause.action, "update");
+        assert_eq!(clause.assignments.len(), 1);
+        assert_eq!(clause.assignments[0].0, "name");
+        assert!(matches!(
+            &clause.assignments[0].1,
+            SelectExpr::ColumnRefExpr {
+                column: ColumnRef {
+                    table: Some(table),
+                    column,
+                }
+            } if table == "incoming" && column == "name"
+        ));
+    }
+
+    #[test]
+    fn ac_484_m02_merge_insert_aliases_and_column_values_parse() {
+        // Reason: PostgreSQL MERGE users commonly alias target/source and
+        // insert source columns into missing target rows. (2026-05-27)
+        let m = ok_merge(
+            "MERGE INTO users AS u USING incoming AS i ON u.id = i.id \
+             WHEN NOT MATCHED THEN INSERT (id, name) VALUES (i.id, 'new')",
         );
+        assert_eq!(m.target_alias.as_deref(), Some("u"));
+        assert_eq!(m.source_alias.as_deref(), Some("i"));
+        assert_eq!(m.clauses.len(), 1);
+        assert!(m.clauses[0].not_matched);
+        let clause = &m.clauses[0];
+        assert_eq!(clause.action, "insert");
+        assert_eq!(clause.columns.len(), 2);
+        assert_eq!(clause.columns[0], "id");
+        assert_eq!(clause.columns[1], "name");
+        assert_eq!(clause.values.len(), 2);
+        assert!(matches!(
+            &clause.values[0],
+            SelectExpr::ColumnRefExpr {
+                column: ColumnRef {
+                    table: Some(table),
+                    column,
+                }
+            } if table == "i" && column == "id"
+        ));
+        assert!(matches!(
+            &clause.values[1],
+            SelectExpr::Literal {
+                value: InsertValue::Literal {
+                    value: SqlLiteral::String { value }
+                }
+            } if value == "new"
+        ));
+    }
+
+    #[test]
+    fn ac_484_m03_merge_do_nothing_parses() {
+        // Reason: PostgreSQL MERGE supports DO NOTHING as a non-mutating
+        // action inside the overall write statement. (2026-05-27)
+        let m = ok_merge(
+            "MERGE INTO users USING incoming ON users.id = incoming.id \
+             WHEN MATCHED THEN DO NOTHING",
+        );
+        assert_eq!(m.clauses[0].action, "do-nothing");
+    }
+
+    #[test]
+    fn ac_484_m04_merge_delete_action_stays_unsupported() {
+        // Reason: DELETE inside MERGE has a larger destructive surface
+        // than this first slice commits to parse. (2026-05-27)
+        let e = err("MERGE INTO users USING incoming ON users.id = incoming.id \
+             WHEN MATCHED THEN DELETE");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
     }
 
     #[test]
