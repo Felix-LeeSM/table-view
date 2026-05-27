@@ -326,6 +326,15 @@ pub enum SelectExpr {
         op: CompareOp,
         right: ColumnRef,
     },
+    /// Sprint-486 — bounded PostgreSQL symbolic operators from extension
+    /// surfaces (`pg_trgm` `%`, PostGIS `&&`, pgvector operators, JSON
+    /// operators). The parser preserves the operator text but does not
+    /// semantically validate installed extensions or precedence.
+    ExtensionOperatorComparison {
+        left: ColumnRef,
+        operator: String,
+        right: ExtensionOperatorOperand,
+    },
     /// Sprint-393b — `col op (SELECT ...)` — column-vs-scalar-subquery
     /// comparison. The right-hand side is a parenthesized SELECT used as
     /// a scalar.
@@ -433,6 +442,13 @@ pub enum SelectExpr {
         op: CompareOp,
         value: InsertValue,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ExtensionOperatorOperand {
+    Value { value: InsertValue },
+    Column { column: ColumnRef },
 }
 
 /// Sprint-393b — one argument to a window function. The `Star` variant is
@@ -744,6 +760,22 @@ pub enum ColumnType {
         precision: Option<i64>,
         scale: Option<i64>,
     },
+    /// Sprint-486 — known PostgreSQL extension-backed type names. The
+    /// parser stores the written name and simple modifiers but does not
+    /// validate that the backing extension is installed.
+    Extension {
+        name: String,
+        modifiers: Vec<ExtensionTypeModifier>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ExtensionTypeModifier {
+    Identifier { value: String },
+    Integer { value: i64 },
+    Float { value: f64 },
+    String { value: String },
 }
 
 /// Sprint-394 — column-level constraint. The optional `name` slot is set

@@ -1728,6 +1728,33 @@ describe("sqlSafety.analyzeStatement", () => {
     });
   });
 
+  describe("Sprint 486 — PostgreSQL extension tolerance Safe Mode (AC-486-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-486-X01] extension operator SELECT stays select / info", () => {
+      const a = analyzeStatement("SELECT id FROM docs WHERE title % 'table'");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-486-X02] extension type CREATE TABLE stays ddl-create / info", () => {
+      const a = analyzeStatement(
+        "CREATE TABLE docs (title citext, attrs hstore, embedding vector(3), geom geometry(Point, 4326))",
+      );
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+  });
+
   // -------------------------------------------------------------------------
   // Sprint 394 (2026-05-18) — AST-based DDL additive classifier callsite.
   // Pre-condition: WASM module preloaded (the mock above produces

@@ -191,6 +191,11 @@ pub enum Token {
     Gt,
     LtEq,
     GtEq,
+    /// Bounded PostgreSQL symbolic operators used by common extension and
+    /// JSON/vector/operator-class predicates. This is deliberately not a
+    /// generic operator lexer; unsupported symbols still surface as
+    /// `LexError`.
+    ExtensionOperator(String),
     LParen,
     RParen,
     Dot,
@@ -254,6 +259,15 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 at: start,
             });
             i += 1;
+            continue;
+        }
+
+        if let Some((op, consumed)) = extension_operator_at(bytes, i) {
+            tokens.push(Spanned {
+                token: Token::ExtensionOperator(op.to_string()),
+                at: start,
+            });
+            i += consumed;
             continue;
         }
 
@@ -708,6 +722,22 @@ fn lex_err(at: usize, msg: &str) -> ParseError {
     }
 }
 
+fn extension_operator_at(bytes: &[u8], start: usize) -> Option<(&'static str, usize)> {
+    const OPERATORS: [&str; 13] = [
+        "#>>", "<->", "<#>", "<=>", "->>", "@>", "<@", "?|", "?&", "#>", "->", "&&", "%",
+    ];
+    for op in OPERATORS {
+        let op_bytes = op.as_bytes();
+        if bytes
+            .get(start..start + op_bytes.len())
+            .is_some_and(|slice| slice == op_bytes)
+        {
+            return Some((op, op_bytes.len()));
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -785,6 +815,24 @@ mod tests {
         assert_eq!(lex_ok(">="), vec![Token::GtEq]);
         assert_eq!(lex_ok("<>"), vec![Token::NotEq]);
         assert_eq!(lex_ok("!="), vec![Token::BangEq]);
+    }
+
+    #[test]
+    fn ac_486_lex_bounded_postgres_extension_operators() {
+        for op in [
+            "%", "&&", "<->", "<#>", "<=>", "@>", "<@", "?|", "?&", "#>", "#>>", "->", "->>",
+        ] {
+            assert_eq!(
+                lex_ok(op),
+                vec![Token::ExtensionOperator(op.into())],
+                "op={op}"
+            );
+        }
+        assert_eq!(lex_ok("?"), vec![Token::PlaceholderAnonymous]);
+        assert_eq!(
+            lex_ok("@user_id"),
+            vec![Token::UserVariable("user_id".into())]
+        );
     }
 
     #[test]

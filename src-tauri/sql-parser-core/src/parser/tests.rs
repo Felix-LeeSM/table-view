@@ -297,6 +297,71 @@ fn ac_485_d01_do_block_is_known_unsupported_statement() {
 }
 
 #[test]
+fn ac_486_e01_pg_trgm_percent_operator_predicate_parses() {
+    // Reason: extension-backed boolean predicates should not fall out of
+    // SELECT parser coverage just because the operator is symbolic.
+    let s = ok_select("SELECT id FROM docs WHERE title % 'table'");
+    let where_clause = s.where_clause.expect("WHERE");
+    match where_clause {
+        SelectExpr::ExtensionOperatorComparison {
+            left,
+            operator,
+            right,
+        } => {
+            assert_eq!(left.table, None);
+            assert_eq!(left.column, "title");
+            assert_eq!(operator, "%");
+            assert!(matches!(
+                right,
+                ExtensionOperatorOperand::Value {
+                    value: InsertValue::Literal {
+                        value: SqlLiteral::String { value }
+                    }
+                } if value == "table"
+            ));
+        }
+        other => panic!("expected extension operator predicate, got {:?}", other),
+    }
+}
+
+#[test]
+fn ac_486_e02_extension_column_types_parse() {
+    // Reason: extension-backed column types are common PostgreSQL schema
+    // surface; parser tolerance should preserve DDL classification.
+    let s = ok_create_table(
+        "CREATE TABLE docs (title citext, attrs hstore, embedding vector(3), geom geometry(Point, 4326))",
+    );
+    assert!(matches!(
+        &s.columns[0].data_type,
+        ColumnType::Extension { name, modifiers }
+            if name.eq_ignore_ascii_case("citext") && modifiers.is_empty()
+    ));
+    assert!(matches!(
+        &s.columns[1].data_type,
+        ColumnType::Extension { name, modifiers }
+            if name.eq_ignore_ascii_case("hstore") && modifiers.is_empty()
+    ));
+    assert!(matches!(
+        &s.columns[2].data_type,
+        ColumnType::Extension { name, modifiers }
+            if name.eq_ignore_ascii_case("vector")
+                && matches!(modifiers.as_slice(), [ExtensionTypeModifier::Integer { value: 3 }])
+    ));
+    assert!(matches!(
+        &s.columns[3].data_type,
+        ColumnType::Extension { name, modifiers }
+            if name.eq_ignore_ascii_case("geometry")
+                && matches!(
+                    modifiers.as_slice(),
+                    [
+                        ExtensionTypeModifier::Identifier { value },
+                        ExtensionTypeModifier::Integer { value: 4326 }
+                    ] if value == "Point"
+                )
+    ));
+}
+
+#[test]
 fn ac_p9_empty_input_is_empty_input_kind() {
     assert_eq!(err("").error_kind, ParseErrorKind::EmptyInput);
     assert_eq!(err("   ").error_kind, ParseErrorKind::EmptyInput);

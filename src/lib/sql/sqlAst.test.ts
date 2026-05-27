@@ -69,6 +69,38 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           set_operation: [],
         } satisfies SqlParseResult;
       }
+      if (sql === "SELECT id FROM docs WHERE title % 'table'") {
+        return {
+          kind: "select",
+          columns: { kind: "named", names: ["id"] },
+          from: [
+            {
+              schema: null,
+              table: "docs",
+              alias: null,
+              join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "docs" },
+            },
+          ],
+          where: {
+            kind: "extension-operator-comparison",
+            left: { table: null, column: "title" },
+            operator: "%",
+            right: {
+              kind: "value",
+              value: {
+                kind: "literal",
+                value: { kind: "string", value: "table" },
+              },
+            },
+          },
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: null,
+          set_operation: [],
+        } satisfies SqlParseResult;
+      }
       if (sql === "SELECT * FROM users") {
         return {
           kind: "select",
@@ -775,6 +807,54 @@ vi.mock("./wasm/sql_parser_core.js", () => {
               data_type: { kind: "text" },
               constraints: [],
               source_index: 1,
+            },
+          ],
+          table_constraints: [],
+        } satisfies SqlParseResult;
+      }
+      if (
+        sql ===
+        "CREATE TABLE docs (title citext, attrs hstore, embedding vector(3), geom geometry(Point, 4326))"
+      ) {
+        return {
+          kind: "create-table",
+          table: { schema: null, table: "docs" },
+          if_not_exists: false,
+          columns: [
+            {
+              name: "title",
+              data_type: { kind: "extension", name: "citext", modifiers: [] },
+              constraints: [],
+              source_index: 0,
+            },
+            {
+              name: "attrs",
+              data_type: { kind: "extension", name: "hstore", modifiers: [] },
+              constraints: [],
+              source_index: 1,
+            },
+            {
+              name: "embedding",
+              data_type: {
+                kind: "extension",
+                name: "vector",
+                modifiers: [{ kind: "integer", value: 3 }],
+              },
+              constraints: [],
+              source_index: 2,
+            },
+            {
+              name: "geom",
+              data_type: {
+                kind: "extension",
+                name: "geometry",
+                modifiers: [
+                  { kind: "identifier", value: "Point" },
+                  { kind: "integer", value: 4326 },
+                ],
+              },
+              constraints: [],
+              source_index: 3,
             },
           ],
           table_constraints: [],
@@ -2011,5 +2091,41 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(c.kind).toBe("copy");
     const m = await parseSql("COMMENT ON TABLE users IS 'all'");
     expect(m.kind).toBe("comment");
+  });
+
+  it("[AC-486-F01] parses a PostgreSQL extension operator predicate shape", async () => {
+    const result = await parseSql("SELECT id FROM docs WHERE title % 'table'");
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.where?.kind).toBe("extension-operator-comparison");
+    if (result.where?.kind !== "extension-operator-comparison") return;
+    expect(result.where.operator).toBe("%");
+    expect(result.where.right.kind).toBe("value");
+  });
+
+  it("[AC-486-F02] parses PostgreSQL extension column type shapes", async () => {
+    const result = await parseSql(
+      "CREATE TABLE docs (title citext, attrs hstore, embedding vector(3), geom geometry(Point, 4326))",
+    );
+    expect(result.kind).toBe("create-table");
+    if (result.kind !== "create-table") return;
+    expect(result.columns[0]?.data_type).toEqual({
+      kind: "extension",
+      name: "citext",
+      modifiers: [],
+    });
+    expect(result.columns[2]?.data_type).toEqual({
+      kind: "extension",
+      name: "vector",
+      modifiers: [{ kind: "integer", value: 3 }],
+    });
+    expect(result.columns[3]?.data_type).toEqual({
+      kind: "extension",
+      name: "geometry",
+      modifiers: [
+        { kind: "identifier", value: "Point" },
+        { kind: "integer", value: 4326 },
+      ],
+    });
   });
 });

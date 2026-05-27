@@ -1,0 +1,27 @@
+diff --git a/src-tauri/sql-parser-core/src/parser/tests.rs b/src-tauri/sql-parser-core/src/parser/tests.rs
+index deb73da4..d26968e3 100644
+--- a/src-tauri/sql-parser-core/src/parser/tests.rs
++++ b/src-tauri/sql-parser-core/src/parser/tests.rs
+@@ -296,6 +296,22 @@ fn ac_485_d01_do_block_is_known_unsupported_statement() {
+     assert!(e.message.to_ascii_uppercase().contains("DO"));
+ }
+
++#[test]
++fn ac_486_e01_pg_trgm_percent_operator_predicate_parses() {
++    // Reason: extension-backed boolean predicates should not fall out of
++    // SELECT parser coverage just because the operator is symbolic.
++    ok_select("SELECT id FROM docs WHERE title % 'table'");
++}
++
++#[test]
++fn ac_486_e02_extension_column_types_parse() {
++    // Reason: extension-backed column types are common PostgreSQL schema
++    // surface; parser tolerance should preserve DDL classification.
++    ok_create_table(
++        "CREATE TABLE docs (title citext, attrs hstore, embedding vector(3), geom geometry(Point, 4326))",
++    );
++}
++
+ #[test]
+ fn ac_p9_empty_input_is_empty_input_kind() {
+     assert_eq!(err("").error_kind, ParseErrorKind::EmptyInput);

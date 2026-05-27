@@ -587,15 +587,63 @@ impl Parser<'_> {
                     scale,
                 })
             }
+            Token::Ident(name) if is_known_postgres_extension_type(&name) => {
+                self.advance();
+                let modifiers = self.parse_extension_type_modifiers()?;
+                Ok(ColumnType::Extension { name, modifiers })
+            }
             // Bare identifier in type position — vendor synonym like
             // INT4 / STRING / DATETIME — out of scope (AC-394-T21).
             Token::Ident(_) => Err(syntax_err(
                 Some(tok.at),
-                "unsupported column type — sprint-394 allowlist is \
-                 INTEGER/BIGINT/VARCHAR/TEXT/TIMESTAMP/DATE/BOOLEAN/NUMERIC/SERIAL/UUID",
+                "unsupported column type — allowlist is INTEGER/BIGINT/VARCHAR/TEXT/TIMESTAMP/DATE/BOOLEAN/NUMERIC/SERIAL/UUID plus known PostgreSQL extension types",
             )),
             _ => Err(syntax_err(Some(tok.at), "expected column type")),
         }
+    }
+
+    fn parse_extension_type_modifiers(&mut self) -> Result<Vec<ExtensionTypeModifier>, ParseError> {
+        if !matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+            return Ok(Vec::new());
+        }
+        self.advance();
+        if matches!(self.peek().map(|t| &t.token), Some(Token::RParen)) {
+            let at = self.peek().map(|t| t.at);
+            return Err(syntax_err(
+                at,
+                "extension type modifier list cannot be empty",
+            ));
+        }
+        let mut modifiers = Vec::new();
+        loop {
+            let tok = self
+                .peek()
+                .ok_or_else(|| syntax_err(None, "expected extension type modifier"))?
+                .clone();
+            let modifier = match tok.token {
+                Token::Ident(value) => ExtensionTypeModifier::Identifier { value },
+                Token::Integer(value) => ExtensionTypeModifier::Integer { value },
+                Token::Float(value) => ExtensionTypeModifier::Float { value },
+                Token::String(value) => ExtensionTypeModifier::String { value },
+                _ => return Err(syntax_err(Some(tok.at), "expected extension type modifier")),
+            };
+            self.advance();
+            modifiers.push(modifier);
+            match self.peek().map(|t| &t.token) {
+                Some(Token::Comma) => {
+                    self.advance();
+                }
+                Some(Token::RParen) => {
+                    self.advance();
+                    break;
+                }
+                _ => {
+                    let at = self.peek().map(|t| t.at);
+                    return Err(syntax_err(at, "expected ',' or ')'"));
+                }
+            }
+        }
+        Ok(modifiers)
     }
 
     /// Parse the column-level constraint suffix of a column definition.
@@ -849,4 +897,11 @@ impl Parser<'_> {
             body,
         })
     }
+}
+
+fn is_known_postgres_extension_type(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "citext" | "hstore" | "vector" | "halfvec" | "sparsevec" | "geometry" | "geography"
+    )
 }
