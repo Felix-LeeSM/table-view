@@ -13,6 +13,7 @@ export function complete_sql(
   objects: string,
   columns: string,
   catalog_functions: string,
+  extensions: string,
 ): any;
 
 /**
@@ -53,6 +54,8 @@ export interface InitOutput {
     r: number,
     s: number,
     t: number,
+    u: number,
+    v: number,
   ) => number;
   readonly parse_sql: (a: number, b: number) => number;
   readonly __wbindgen_export: (a: number, b: number) => number;

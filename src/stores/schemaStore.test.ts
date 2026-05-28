@@ -43,6 +43,16 @@ beforeEach(() => {
         },
       ]),
     ),
+    listPostgresExtensions: vi.fn(() =>
+      Promise.resolve([
+        {
+          name: "pgcrypto",
+          schema: "public",
+          version: "1.3",
+          comment: "cryptographic functions",
+        },
+      ]),
+    ),
     getTableColumns: vi.fn(() =>
       Promise.resolve([
         {
@@ -187,6 +197,7 @@ describe("schemaStore", () => {
       tables: {},
       views: {},
       functions: {},
+      postgresExtensions: {},
       tableColumnsCache: {},
       // Sprint 272 — reset the triggers slice between tests so cache
       // residue from a prior `getTableTriggers` doesn't leak into the
@@ -266,6 +277,23 @@ describe("schemaStore", () => {
     expect(state.tableColumnsCache.conn1?.db1?.public?.users).toHaveLength(1);
     expect(state.tableColumnsCache.conn1?.db1?.public?.users![0]!.name).toBe(
       "id",
+    );
+  });
+
+  it("loadPostgresExtensions caches installed extensions by connection and database", async () => {
+    const { listPostgresExtensions } = await import("@lib/tauri");
+    const first = await useSchemaStore
+      .getState()
+      .loadPostgresExtensions("conn1", "db1");
+    const second = await useSchemaStore
+      .getState()
+      .loadPostgresExtensions("conn1", "db1");
+
+    expect(listPostgresExtensions).toHaveBeenCalledWith("conn1", "db1");
+    expect(listPostgresExtensions).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(first);
+    expect(useSchemaStore.getState().postgresExtensions.conn1?.db1).toEqual(
+      first,
     );
   });
 
@@ -691,6 +719,21 @@ describe("schemaStore", () => {
           },
         },
       },
+      postgresExtensions: {
+        conn1: {
+          db1: [
+            {
+              name: "pgcrypto",
+              schema: "public",
+              version: "1.3",
+              comment: null,
+            },
+          ],
+        },
+        conn2: {
+          db1: [],
+        },
+      },
       tableColumnsCache: {
         conn1: { db1: { public: { users: [] } } },
         conn2: { db1: { public: { users: [] } } },
@@ -707,6 +750,8 @@ describe("schemaStore", () => {
     expect(state.tables.conn2?.db1?.public).toHaveLength(1);
     expect(state.views.conn1?.db1?.public).toBeUndefined();
     expect(state.functions.conn1?.db1?.public).toBeUndefined();
+    expect(state.postgresExtensions.conn1?.db1).toBeUndefined();
+    expect(state.postgresExtensions.conn2?.db1).toEqual([]);
     expect(state.tableColumnsCache.conn1?.db1?.public?.users).toBeUndefined();
     expect(state.tableColumnsCache.conn2?.db1?.public?.users).toEqual([]);
   });

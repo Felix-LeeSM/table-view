@@ -11,6 +11,7 @@ use aliases::{resolve_alias, scan_aliases};
 use token::completion_token_at;
 use vocabulary::{
     builtin_functions, builtin_keyword_deltas, builtin_keywords, builtin_shell_commands,
+    postgresql_extension_pack,
 };
 
 pub use compact::complete_sql_compact;
@@ -43,6 +44,7 @@ pub struct SqlCompletionCatalogSnapshot {
     pub objects: Vec<SqlCompletionCatalogObject>,
     pub columns: Vec<SqlCompletionCatalogColumn>,
     pub functions: Vec<SqlCompletionCatalogFunction>,
+    pub extensions: Vec<SqlCompletionCatalogExtension>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -68,6 +70,13 @@ pub struct SqlCompletionCatalogFunction {
     pub qualified_name: String,
     pub arguments: Option<String>,
     pub return_type: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SqlCompletionCatalogExtension {
+    pub schema: String,
+    pub name: String,
+    pub version: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -121,6 +130,7 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
             add_catalog_objects(&mut items, &request, &token.prefix);
             add_unqualified_columns(&mut items, &request, &token.prefix);
             add_functions(&mut items, &request, &token.prefix);
+            add_extension_pack_items(&mut items, &request, &token.prefix);
         }
     }
 
@@ -322,6 +332,37 @@ fn add_functions(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest
                 apply: Some(function.name.clone()),
                 detail: Some(detail),
                 boost: Some(30),
+            });
+        }
+    }
+}
+
+fn add_extension_pack_items(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    prefix: &str,
+) {
+    if request.dialect != "postgresql" {
+        return;
+    }
+
+    for extension in &request.catalog.extensions {
+        let Some(pack) = postgresql_extension_pack(&extension.name) else {
+            continue;
+        };
+        for candidate in pack {
+            if !matches_prefix(candidate.label, prefix) {
+                continue;
+            }
+            items.push(CompletionItem {
+                label: candidate.label.to_string(),
+                kind: candidate.kind.to_string(),
+                apply: Some(candidate.label.to_string()),
+                detail: Some(format!(
+                    "PostgreSQL extension {} {}",
+                    extension.name, candidate.detail
+                )),
+                boost: Some(candidate.boost),
             });
         }
     }

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { QueryTab } from "@stores/workspaceStore";
 import {
   useCurrentWorkspaceKey,
@@ -109,7 +109,29 @@ export default function QueryTab({ tab }: QueryTabProps) {
   const tables = useSchemaStore((s) => s.tables);
   const views = useSchemaStore((s) => s.views);
   const functions = useSchemaStore((s) => s.functions);
+  const postgresExtensions = useSchemaStore((s) => s.postgresExtensions);
+  const loadPostgresExtensions = useSchemaStore(
+    (s) => s.loadPostgresExtensions,
+  );
   const tableColumnsCache = useSchemaStore((s) => s.tableColumnsCache);
+  useEffect(() => {
+    if (
+      tab.paradigm !== "rdb" ||
+      connection?.dbType !== "postgresql" ||
+      !tab.database
+    ) {
+      return;
+    }
+    void loadPostgresExtensions(tab.connectionId, tab.database).catch(() => {
+      // Background completion inventory; schemaStore records the error.
+    });
+  }, [
+    tab.paradigm,
+    tab.connectionId,
+    tab.database,
+    connection?.dbType,
+    loadPostgresExtensions,
+  ]);
   const completionContext = useMemo(() => {
     if (tab.paradigm !== "rdb") return undefined;
     return buildSqlCompletionContext({
@@ -117,6 +139,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
       tables,
       views,
       functions,
+      postgresExtensions,
       tableColumnsCache,
       connectionId: tab.connectionId,
       database: tab.database ?? "",
@@ -127,6 +150,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     tables,
     views,
     functions,
+    postgresExtensions,
     tableColumnsCache,
     tab.paradigm,
     tab.connectionId,

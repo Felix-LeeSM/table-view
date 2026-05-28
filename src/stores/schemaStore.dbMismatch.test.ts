@@ -37,6 +37,9 @@ beforeEach(() => {
     listTables: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
     listViews: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
     listFunctions: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
+    listPostgresExtensions: vi.fn(() =>
+      Promise.reject(new Error(DB_MISMATCH_ERROR)),
+    ),
     getTableColumns: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
     listSchemaColumns: vi.fn(() =>
       Promise.reject(new Error(DB_MISMATCH_ERROR)),
@@ -73,6 +76,7 @@ describe("schemaStore — DbMismatch silent sync (Sprint 271a)", () => {
       tables: {},
       views: {},
       functions: {},
+      postgresExtensions: {},
       tableColumnsCache: {},
       loading: false,
       error: null,
@@ -113,6 +117,16 @@ describe("schemaStore — DbMismatch silent sync (Sprint 271a)", () => {
   it("getTableColumns mismatch rethrows AND triggers silent sync", async () => {
     await expect(
       useSchemaStore.getState().getTableColumns("conn1", "dbA", "t", "s"),
+    ).rejects.toThrow(/Database mismatch/);
+
+    await flushMicrotasks();
+    expect(setActiveDbMock).toHaveBeenCalledWith("conn1", "dbB");
+    expect(toastWarningMock).not.toHaveBeenCalled();
+  });
+
+  it("loadPostgresExtensions mismatch rethrows AND triggers silent sync", async () => {
+    await expect(
+      useSchemaStore.getState().loadPostgresExtensions("conn1", "dbA"),
     ).rejects.toThrow(/Database mismatch/);
 
     await flushMicrotasks();

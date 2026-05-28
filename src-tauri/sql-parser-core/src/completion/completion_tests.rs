@@ -46,6 +46,7 @@ fn request(text: &str, cursor_utf16: usize, cursor_utf8: usize) -> SqlCompletion
                 arguments: Some("text".to_string()),
                 return_type: Some("text".to_string()),
             }],
+            extensions: vec![],
         },
     }
 }
@@ -87,6 +88,14 @@ fn column(schema: &str, table: &str, name: &str) -> SqlCompletionCatalogColumn {
         table: table.to_string(),
         name: name.to_string(),
         qualified_table_name: format!("{schema}.{table}"),
+    }
+}
+
+fn extension(name: &str) -> SqlCompletionCatalogExtension {
+    SqlCompletionCatalogExtension {
+        schema: "public".to_string(),
+        name: name.to_string(),
+        version: "1.0".to_string(),
     }
 }
 
@@ -201,6 +210,46 @@ fn postgresql_psql_reference_vocabulary_smoke() {
     assert_builtin_completion_contains("postgresql", "psql", "\\bi", "\\bind");
     assert_builtin_completion_contains("postgresql", "psql", "\\par", "\\parse");
     assert_builtin_completion_contains("postgresql", "psql", "\\wa", "\\watch");
+}
+
+#[test]
+fn ac_488_pgcrypto_pack_is_not_suggested_without_installed_extension_inventory() {
+    let result = complete_sql(empty_vocabulary_request("postgresql", "psql", "GEN_RANDOM"));
+
+    assert!(!labels(&result).contains(&"GEN_RANDOM_UUID".to_string()));
+}
+
+#[test]
+fn ac_488_detected_pgcrypto_extension_enables_curated_function_pack() {
+    let mut req = empty_vocabulary_request("postgresql", "psql", "GEN_RANDOM");
+    req.catalog.extensions = vec![extension("pgcrypto")];
+
+    let result = complete_sql(req);
+
+    assert!(labels(&result).contains(&"GEN_RANDOM_UUID".to_string()));
+    let item = result
+        .items
+        .iter()
+        .find(|item| item.label == "GEN_RANDOM_UUID")
+        .expect("pgcrypto function candidate");
+    assert_eq!(item.kind, "function");
+    assert_eq!(
+        item.detail.as_deref(),
+        Some("PostgreSQL extension pgcrypto function")
+    );
+}
+
+#[test]
+fn ac_488_extension_packs_are_keyed_by_detected_extension_name() {
+    let mut uuid_req = empty_vocabulary_request("postgresql", "psql", "UUID_GENERATE");
+    uuid_req.catalog.extensions = vec![extension("uuid-ossp")];
+    let uuid_result = complete_sql(uuid_req);
+    assert!(labels(&uuid_result).contains(&"UUID_GENERATE_V4".to_string()));
+
+    let mut unknown_req = empty_vocabulary_request("postgresql", "psql", "GEN_RANDOM");
+    unknown_req.catalog.extensions = vec![extension("unknown_extension")];
+    let unknown_result = complete_sql(unknown_req);
+    assert!(!labels(&unknown_result).contains(&"GEN_RANDOM_UUID".to_string()));
 }
 
 #[test]

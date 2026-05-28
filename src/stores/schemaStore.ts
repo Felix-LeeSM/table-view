@@ -4,6 +4,7 @@ import type {
   ConstraintInfo,
   FunctionInfo,
   IndexInfo,
+  PostgresExtensionInfo,
   SchemaInfo,
   TableInfo,
   TriggerInfo,
@@ -23,6 +24,7 @@ import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
  *   tables:            Record<connId, Record<db, Record<schema, TableInfo[]>>>
  *   views:             Record<connId, Record<db, Record<schema, ViewInfo[]>>>
  *   functions:         Record<connId, Record<db, Record<schema, FunctionInfo[]>>>
+ *   postgresExtensions: Record<connId, Record<db, PostgresExtensionInfo[]>>
  *   tableColumnsCache: Record<connId, Record<db, Record<schema, Record<table, ColumnInfo[]>>>>
  *
  * Sprint 262 의 workspaceStore `Record<conn, Record<db, ...>>` 패턴과
@@ -49,6 +51,7 @@ interface SchemaState {
   tables: ByConn<BySchema<TableInfo[]>>;
   views: ByConn<BySchema<ViewInfo[]>>;
   functions: ByConn<BySchema<FunctionInfo[]>>;
+  postgresExtensions: ByConn<PostgresExtensionInfo[]>;
   tableColumnsCache: ByConn<BySchema<ByTable<ColumnInfo[]>>>;
   /**
    * Sprint 272 — per-`(connId, db, schema, table)` trigger cache.
@@ -64,6 +67,10 @@ interface SchemaState {
   loadTables: (connId: string, db: string, schema: string) => Promise<void>;
   loadViews: (connId: string, db: string, schema: string) => Promise<void>;
   loadFunctions: (connId: string, db: string, schema: string) => Promise<void>;
+  loadPostgresExtensions: (
+    connId: string,
+    db: string,
+  ) => Promise<PostgresExtensionInfo[]>;
   getTableColumns: (
     connId: string,
     db: string,
@@ -265,6 +272,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   tables: {},
   views: {},
   functions: {},
+  postgresExtensions: {},
   tableColumnsCache: {},
   triggers: {},
   loading: false,
@@ -325,6 +333,27 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     } catch (e) {
       handleDbMismatch(connId, e);
       set({ error: String(e) });
+    }
+  },
+
+  loadPostgresExtensions: async (connId, db) => {
+    const cached = get().postgresExtensions[connId]?.[db];
+    if (cached) return cached;
+    try {
+      const extensions = await tauri.listPostgresExtensions(connId, db);
+      set((state) => ({
+        postgresExtensions: setConnDb(
+          state.postgresExtensions,
+          connId,
+          db,
+          extensions,
+        ),
+      }));
+      return extensions;
+    } catch (e) {
+      handleDbMismatch(connId, e);
+      set({ error: String(e) });
+      throw e;
     }
   },
 
@@ -443,6 +472,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       tables: deleteConn(state.tables, connId),
       views: deleteConn(state.views, connId),
       functions: deleteConn(state.functions, connId),
+      postgresExtensions: deleteConn(state.postgresExtensions, connId),
       tableColumnsCache: deleteConn(state.tableColumnsCache, connId),
       triggers: deleteConn(state.triggers, connId),
     }));
@@ -454,6 +484,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       tables: deleteConnDb(state.tables, connId, db),
       views: deleteConnDb(state.views, connId, db),
       functions: deleteConnDb(state.functions, connId, db),
+      postgresExtensions: deleteConnDb(state.postgresExtensions, connId, db),
       tableColumnsCache: deleteConnDb(state.tableColumnsCache, connId, db),
       triggers: deleteConnDb(state.triggers, connId, db),
     }));

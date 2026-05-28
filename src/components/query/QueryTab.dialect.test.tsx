@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, act } from "@testing-library/react";
+import { render, act, waitFor } from "@testing-library/react";
 import {
   MySQL,
   PostgreSQL,
@@ -40,6 +40,7 @@ beforeEach(() => {
     cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
     findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
     aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
+    listPostgresExtensions: vi.fn(() => Promise.resolve([])),
   });
 });
 
@@ -65,7 +66,8 @@ vi.mock("./SqlQueryEditor", async () => {
       sql: string;
       sqlDialect?: SQLDialect;
     }
-  >(function MockSqlQueryEditor(props) {
+  >(function MockSqlQueryEditor(props, _ref) {
+    void _ref;
     mockEditorProps.lastDialect = props.sqlDialect;
     mockEditorProps.dialectHistory.push(props.sqlDialect);
     mockEditorProps.lastMongoExtensions = undefined;
@@ -94,7 +96,8 @@ vi.mock("./MongoQueryEditor", async () => {
       mongoExtensions?: readonly Extension[];
       queryMode?: string;
     }
-  >(function MockMongoQueryEditor(props) {
+  >(function MockMongoQueryEditor(props, _ref) {
+    void _ref;
     mockEditorProps.lastDialect = undefined;
     mockEditorProps.dialectHistory.push(undefined);
     mockEditorProps.lastMongoExtensions = props.mongoExtensions;
@@ -121,6 +124,10 @@ vi.mock("./QueryResultGrid", () => ({
   default: ({ queryState }: { queryState: unknown }) => (
     <div data-testid="mock-result" data-status={JSON.stringify(queryState)} />
   ),
+}));
+
+vi.mock("./QueryHistoryPanel", () => ({
+  default: () => <div data-testid="mock-query-history-panel" />,
 }));
 
 vi.mock("@hooks/useSqlAutocomplete", () => ({
@@ -155,6 +162,30 @@ describe("QueryTab — dialect", () => {
     const tab = makeQueryTab();
     render(<QueryTab tab={tab} />);
     expect(mockEditorProps.lastDialect).toBe(PostgreSQL);
+  });
+
+  it("loads PostgreSQL extension inventory for PostgreSQL query tabs only", async () => {
+    const { listPostgresExtensions } = await import("@lib/tauri");
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "conn1", dbType: "postgresql" })],
+    });
+
+    const { unmount } = render(
+      <QueryTab tab={makeQueryTab({ database: "db" })} />,
+    );
+
+    await waitFor(() =>
+      expect(listPostgresExtensions).toHaveBeenCalledWith("conn1", "db"),
+    );
+
+    unmount();
+    vi.clearAllMocks();
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "conn1", dbType: "mysql" })],
+    });
+    render(<QueryTab tab={makeQueryTab({ database: "db" })} />);
+
+    expect(listPostgresExtensions).not.toHaveBeenCalled();
   });
 
   // AC-02: MySQL connection → MySQL dialect.

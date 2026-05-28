@@ -21,6 +21,13 @@ const table = (schema: string, name: string): TableInfo => ({
   row_count: null,
 });
 
+const pgExtension = (name: string) => ({
+  name,
+  schema: "public",
+  version: "1.0",
+  comment: null,
+});
+
 function requestFor(dbType: DatabaseType) {
   const snapshot = emptySnapshot();
   snapshot.tables.conn1 = {
@@ -113,6 +120,26 @@ describe("buildSqlCompletionRequest", () => {
       viewsLoaded: false,
       columnsLoaded: false,
       functionsLoaded: false,
+      extensionsLoaded: false,
     });
+  });
+
+  it("preserves installed extension inventory on the request boundary", () => {
+    const snapshot = emptySnapshot();
+    snapshot.postgresExtensions = {
+      conn1: { app: [pgExtension("pgcrypto")] },
+    };
+    const ctx = buildSqlCompletionContext({
+      ...snapshot,
+      connectionId: "conn1",
+      database: "app",
+      dbType: "postgresql",
+      catalogRevision: "pg-ext-rev",
+    });
+
+    const req = buildSqlCompletionRequest("GEN_RANDOM", 10, ctx);
+
+    expect(req.catalog.extensions).toEqual([pgExtension("pgcrypto")]);
+    expect(req.cacheState.extensionsLoaded).toBe(true);
   });
 });
