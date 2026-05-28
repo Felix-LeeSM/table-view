@@ -8,7 +8,7 @@ updated: 2026-05-14
 
 2026-05-14 `/grill-me` 세션에서 lock 된 Q1–Q36 결정 dict. Phase 28 의
 sprint planning input. 정의서:
-[`docs/phases/phase-28.md`](../../../docs/phases/phase-28.md).
+[`docs/phases/phase-28.md`](../../../../phases/phase-28.md).
 
 ## 결정 표 (lock)
 
@@ -66,7 +66,7 @@ A (unified editor) → E (schema) → F (nested ⋯) → B (filter ops) → C
 `$indexStats`) → K (validator + views + RDB 통합) → L (collection DDL) →
 M (DB CRUD).
 
-상세: [phase-28.md](../../../docs/phases/phase-28.md).
+상세: [phase-28.md](../../../../phases/phase-28.md).
 
 ## 관련 방
 

@@ -12,7 +12,7 @@ in [`docs/archives/risks/active-risk-register-2026-05-27.md`](../archives/risks/
 | MariaDB | MariaDB currently reuses the MySQL adapter path. MariaDB-engine fixture evidence is still pending before broader support claims. |
 | Query results | RDBMS IPC still carries a legacy `QueryResult` compatibility layer while typed result envelopes are being migrated. |
 | ERD | Table/column graph data is wired first. Constraint and index graph nodes are still fixture-covered rather than fully live-cache backed. |
-| Redis / Valkey | Redis first-slice workflows are live. Valkey parity, cluster, pub/sub, modules, and consumer-group management remain out of scope. |
+| Redis / Valkey | Redis connection/profile, backend KV primitives, key browser, and value preview exist. Value editing, TTL/write, stream UI, Valkey parity, cluster, pub/sub, modules, and consumer-group management remain out of scope. |
 | MongoDB | MongoDB support is limited to tested whitelisted document workflows. Arbitrary JavaScript shell execution, version/deployment gates, and native document-first panels remain out of scope. |
 | Elasticsearch / OpenSearch | Search support is fixture-backed only. Live connection UI, HTTP auth/TLS, response parsing, admin APIs, and observability are not implemented. |
 | MSSQL / Oracle | These are planned identities only. Runtime support is not implemented. |

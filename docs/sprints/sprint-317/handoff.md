@@ -26,7 +26,7 @@ Mongo `DocumentDataGrid` 에 column hide / show / persist 기능을 도입.
 | `src/components/datagrid/DataGridTable/HeaderRow.contextmenu.test.tsx` | edit | Hide column 2 case 추가 |
 | `src/components/document/DocumentDataGrid.tsx` | edit | `useHiddenColumns` 호출, `visibleEntries` memo, header `order` + row cell map filter, badge JSX |
 | `src/components/document/DocumentDataGrid.hide.test.tsx` | NEW | 5 RTL case |
-| `docs/phases/phase-28-decision-log.md` | edit | D-35..D-38 append |
+| `docs/archives/phases/retired/phase-28-decision-log.md` | edit | D-35..D-38 append |
 | `docs/sprints/sprint-317/handoff.md` | NEW | 본 문서 |
 
 ## Per-Done-Criterion evidence
@@ -61,7 +61,7 @@ Mongo `DocumentDataGrid` 에 column hide / show / persist 기능을 도입.
 - `pnpm lint` → exit 0.
 - `pnpm build` → exit 0 (Vite 빌드 성공, 신규 경고 없음).
 
-## Autonomous decisions (recorded in `docs/phases/phase-28-decision-log.md`)
+## Autonomous decisions (recorded in `docs/archives/phases/retired/phase-28-decision-log.md`)
 
 - **D-35**: persist 단위 = `document:<db>:<coll>` (column-widths 와
   namespace 공유). localStorage prefix `hidden-columns:`.

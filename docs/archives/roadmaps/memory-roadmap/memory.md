@@ -11,7 +11,7 @@ current product state lives in [docs/product](../../../product/README.md).
 
 Active 실행 순서: [docs/PLAN.md](../../../PLAN.md). 장기 roadmap:
 [docs/ROADMAP.md](../../../ROADMAP.md). Data-source extension architecture:
-[docs/data-source-architecture.md](../../../data-source-architecture.md). 비교 근거:
+[docs/archives/design-snapshots/data-source-architecture-2026-05-27.md](../../design-snapshots/data-source-architecture-2026-05-27.md). 비교 근거:
 [docs/archives/product-snapshots/tableplus-comparison-2026-05-01.md](../../product-snapshots/tableplus-comparison-2026-05-01.md).
 
 ## 방향 (2026-05-22)
@@ -87,7 +87,7 @@ Sprint 198 종료로 sequencing 완료.
 
 ## State-management 이주 sequencing (Sprint 353–376, 24 sprint, 2026-05-16)
 
-기준 문서: [`docs/state-management-strategy-2026-05-15.md`](../../../state-management-strategy-2026-05-15.md)
+기준 문서: [`docs/archives/design-snapshots/state-management-strategy-2026-05-15.md`](../../design-snapshots/state-management-strategy-2026-05-15.md)
 (11회 codex 외부 검토 0 findings 수렴) + [`docs/archives/audits/code-smell-audit-2026-05-15.md`](../../audits/code-smell-audit-2026-05-15.md).
 contract.md 24개 작성 + 4회 codex 5.5 medium consistency review.
 
@@ -123,8 +123,8 @@ contract.md 24개 작성 + 4회 codex 5.5 medium consistency review.
     (retrospective 2026-05-14). MysqlAdapter Slice A–G + ADR 0028 +
     testcontainers gate 합류 (coverage 84.23/79.74/85.66).
 - 보류 -> 재평가 대기 (2026-05-22 re-baseline):
-  [18](../../../phases/phase-18.md), [19](../../../phases/phase-19.md),
-  [20](../../../phases/phase-20.md). Phase 18/19 는 과거 sprint 번호를
+  [18](../../phases/retired/phase-18.md), [19](../../phases/retired/phase-19.md),
+  [20](../../phases/retired/phase-20.md). Phase 18/19 는 과거 sprint 번호를
   버리고 slice 단위로 재진입한다. Phase 20 은 현 priority 아님.
 - **Phase 28 (MongoDB Full Support) 계획 / current candidate
   (2026-05-22 re-baseline)** — grill-me 세션으로 카테고리 20+ 결정 lock.

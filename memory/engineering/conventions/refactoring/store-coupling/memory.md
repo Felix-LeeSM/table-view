@@ -1,7 +1,7 @@
 ---
 title: B. Store 결합도
 type: memory
-updated: 2026-05-02
+updated: 2026-05-28
 ---
 
 # B. Store 결합도
@@ -11,12 +11,18 @@ updated: 2026-05-02
 
 ## B-1. `useXStore.setState(...)` 직접 호출 금지
 
-- 컴포넌트 / hook / lib 어디서도 `useXStore.setState(...)` 호출 0.
-- **예외**: store 자체 코드 (`stores/*.ts`) + IPC bridge
-  (`lib/zustand-ipc-bridge.ts`).
-- 현재 violations 8 사이트 (SchemaTree:603 + QueryTab × 7) 는 sprint 별
-  정리 (SchemaTree → Sprint 191, QueryTab × 7 → Sprint 195 + 일부
-  Sprint 189).
+- production component / hook / runtime lib 에서 `useXStore.setState(...)`
+  직접 write 금지. 상태 변화는 store public action 으로 표현한다.
+- **예외**: store 자체 코드 (`src/stores/**`), test/reset/helper 코드,
+  infrastructure bridge (`src/lib/zustand-ipc-bridge.ts`) 처럼 Zustand plumbing 을
+  직접 다루는 얇은 경계.
+- `src/lib/runtime/**` 는 store 를 다룰 수 있지만 직접 `setState` 하지 않는다.
+  필요한 write 는 `hydrate*`, `apply*`, `recover*`, `record*` 같은 action 을
+  store 에 추가한 뒤 호출한다.
+- 현재 legacy debt: `src/hooks/useSchemaTableMutations.ts`,
+  `src/hooks/useConnectionSessionHydration.ts`, `src/lib/snapshot/loadAll.ts` 는 아직
+  direct `setState` 를 쓴다. 새 코드가 따라 해서는 안 되며, touched scope 에서
+  store action 또는 `src/lib/runtime/**` use-case 로 낮춘다.
 
 ## B-2. `useXStore.getState()` read 정책
 
@@ -50,17 +56,18 @@ updated: 2026-05-02
 - **비권장**: `setX` / `updateX` / `changeX` (CRUD 일반어, 의도 불명).
 - **예외**: 단순 setter (`setActiveTab`) — 의도가 단어에 이미 있음.
 
-## B-6. Cross-store 결합 — hook 레벨에서만
+## B-6. Cross-store 결합 — runtime use-case 로 중앙화
 
 - **금지**: store 내부에서 다른 store 직접 `import` / `getState()`.
-- **요구**: cross-store 조합은 hook 에서 — 예 `useSafeModeGate` 가
-  `useSafeModeStore` + `useConnectionStore` 두 개 read.
+- **요구**: store 2개 이상을 묶는 orchestration 은 `src/lib/runtime/**` use-case
+  로 중앙화한다. hook/component 는 해당 use-case 를 호출하고 UI state 만 소유한다.
+- **허용**: 단순 render selector 조합은 hook/component 에 둔다. side effect,
+  stale guard, recovery, cross-window sync 가 섞이면 runtime 으로 올린다.
 
 ## B-7. 강제 메커니즘 — 단계적
 
-- **Phase 1 (즉시)**: convention + sprint findings.md audit. 각 refactor
-  sprint 가 자신의 surface 에서 violation 0 확인.
-- **Phase 2 (도입 예정)**: ESLint custom rule `no-direct-zustand-setstate`
-  — `useXStore.setState` 호출 detect. 도입 시점은 violations 0 달성 직후
-  (Sprint 198 종료 후 일괄 lint 0 보장).
-- **Phase 3 (보류)**: TS 레벨 차단.
+- **현재**: convention + sprint findings audit. 위 legacy debt 외 production
+  surface 에 새 direct `setState` 를 만들지 않는다.
+- **계획**: ESLint custom rule `no-direct-zustand-setstate` 로 production source 를
+  차단하고, test/reset/helper 예외를 allowlist 한다.
+- **보류**: TS 레벨 차단.

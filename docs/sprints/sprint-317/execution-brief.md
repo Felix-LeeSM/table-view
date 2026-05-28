@@ -14,7 +14,7 @@ Mongo DocumentDataGrid 에 hide column 기능 추가. context menu trigger
 - `src/components/datagrid/DataGridTable/HeaderRow.contextmenu.test.tsx`
 - `src/components/document/DocumentDataGrid.tsx`
 - `src/components/document/DocumentDataGrid.hide.test.tsx` (NEW)
-- `docs/phases/phase-28-decision-log.md`
+- `docs/archives/phases/retired/phase-28-decision-log.md`
 - `docs/sprints/sprint-317/handoff.md`
 
 미변경:

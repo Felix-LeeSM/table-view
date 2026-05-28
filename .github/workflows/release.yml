@@ -3,7 +3,8 @@ name: Release
 # Trigger policy:
 # - tag push (`v*.*.*`): the actual release pipeline. Tag SHA's tauri.conf.json
 #   version must match the tag (e.g. tag `v0.2.0` ↔ "version": "0.2.0"). Builds
-#   bundles for macOS arm64, Windows x64, Linux x64 and attaches them to
+#   required bundles for macOS arm64 and Windows x86_64, plus the Linux x64
+#   automation bundle, and attaches them to
 #   a *draft* GitHub Release named after the tag — the maintainer reviews and
 #   publishes manually so an accidental tag push doesn't ship to users.
 # - `workflow_dispatch`: manual trigger from the Actions UI for dry-runs. Still
@@ -34,7 +35,7 @@ jobs:
             platform: macos-14
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
-          - label: Windows x64
+          - label: Windows x86_64
             platform: windows-latest
             target: x86_64-pc-windows-msvc
             args: ""

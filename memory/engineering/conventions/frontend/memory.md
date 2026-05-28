@@ -1,7 +1,7 @@
 ---
 title: Frontend guidance
 type: convention
-updated: 2026-05-20
+updated: 2026-05-28
 surface: src/**/*.ts, src/**/*.tsx, src/**/*.css
 task: frontend, ui, react-impl
 trigger:
@@ -25,9 +25,8 @@ backend contract 를 통해서만 다룬다.
 
 1. 기존 컴포넌트 / token / interaction pattern
 2. [react](../react/memory.md)
-3. [dialogs](dialogs/memory.md) when editing modal/dialog surfaces
-4. [testing-scenarios](../testing-scenarios/memory.md)
-5. 본 문서
+3. [testing-scenarios](../testing-scenarios/memory.md)
+4. 본 문서
 
 ## UI 원칙
 
@@ -38,6 +37,9 @@ backend contract 를 통해서만 다룬다.
 - viewport 기반 font scaling 금지. compact surface 안의 heading 은 작고 조밀하게.
 - palette 는 단일 hue 로 밀지 않음. 기존 token 우선, 새 색은 contrast 검증.
 - 텍스트가 버튼/칩/카드 안에서 넘치거나 겹치면 layout bug 로 본다.
+- Dialog 수정은 기존 component contract/test 를 먼저 보며 close button,
+  feedback slot, alert role, toast hookup 같은 테스트된 invariant 를 깨지 않는다.
+  preset/layout source-order 강제 규칙은 retired 상태다.
 
 ## Contract 경계
 
@@ -64,8 +66,10 @@ backend contract 를 통해서만 다룬다.
 
 - `workspaceStore` 는 `(connId, db)` keyed workspace state 의 SOT 다. workspace
   path 에서 `connectionStore.focusedConnId` 를 작업 identity 로 재도입하지 않는다.
-- store 끼리 runtime import / action 호출을 늘리지 않는다. 두 store 를 묶는
-  orchestration 은 `src/hooks/*` 또는 caller component 로 둔다.
+- store 내부에서 다른 store 를 직접 import/read 하지 않는다. 두 store 이상과 side
+  effect 를 묶는 새 orchestration 은 `src/lib/runtime/**` use-case 로 둔다.
+  남아 있는 hook/lib direct `setState` debt 는
+  [store-coupling](../refactoring/store-coupling/memory.md) 기준으로 줄인다.
 - cross-window sync 는 각 store 의 `SYNCED_KEYS` allowlist 를 audit point 로 본다.
   loading/error/session-only flag 를 durable/broadcast state 로 승격하지 않는다.
 - 새 persistent UI state 는 reset affordance 를 같은 PR 에 포함한다
@@ -79,7 +83,6 @@ backend contract 를 통해서만 다룬다.
 
 ## 관련
 
-- [dialogs](dialogs/memory.md)
 - [react](../react/memory.md)
 - [testing-scenarios](../testing-scenarios/memory.md)
 - [refactoring](../refactoring/memory.md)

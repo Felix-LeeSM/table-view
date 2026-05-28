@@ -17,9 +17,9 @@ runtime's tool policy.
 | `tdd-generator` | `worker` | `.agents/skills/tdd/SKILL.md` + testing memory |
 | `delivery` | `worker` | `memory/workflow/delivery/memory.md` |
 | `research` | `explorer` | `memory/workflow/implementation/memory.md` |
-| `pr-reviewer` | `explorer` | `memory/workflow/review/memory.md` |
-| `grill-planner` | `default` | `memory/workflow/grill/memory.md` |
-| `security-handoff` | `default` | `memory/workflow/grill/security-handoff/memory.md` |
+| `pr-reviewer` | `explorer` | `.agents/skills/pr-review/SKILL.md` + review memory |
+| `grill-planner` | `default` | `.agents/skills/grill-with-memory/SKILL.md` |
+| `security-handoff` | `default` | `.agents/skills/grill-with-memory/SKILL.md` |
 | `codex-reviewer` | `default` | `memory/workflow/review/memory.md` |
 | `caveman-default` | `default` | `.agents/skills/caveman/SKILL.md` |
 

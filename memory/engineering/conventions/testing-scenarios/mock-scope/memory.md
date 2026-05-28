@@ -1,7 +1,7 @@
 ---
-title: Mock 범위 — 광역 stub 금지, user-facing invariant 단언
+title: Mock 범위 — boundary stub, user-facing invariant 단언
 type: convention
-updated: 2026-05-17
+updated: 2026-05-28
 task: test-writing, mock-scope, regression-guard
 surface: '**/*.test.ts, **/*.test.tsx, vi.mock'
 trigger:
@@ -9,7 +9,7 @@ trigger:
   layer: agent-prompt (tdd-generator / bug-fix) + 향후 ESLint custom rule 후보
 ---
 
-# Mock 범위 — 광역 stub 금지, user-facing invariant 단언
+# Mock 범위 — boundary stub, user-facing invariant 단언
 
 테스트 시나리오 작성 시 user 의 행위 시퀀스를 *글로 적고* 그 path 의 마지막 outcome (user-facing invariant) 을 한 번이라도 단언. 단언이 "어떤 함수가 호출됐는지" (implementation detail) 만 lock 하면 mock 의 default success 가 silent failure 를 가려 회귀가 main 에 들어감.
 
@@ -26,16 +26,24 @@ trigger:
 
 ## Mock 범위
 
-- **우리 own 코드 (`@lib/window-controls`, `@/stores/...`, hooks) 는 real import.**
-- **Lib boundary (`@tauri-apps/api/core::invoke`, `@tauri-apps/api/event::listen`, fetch) 만 stub.**
-- 광역 `vi.mock("@lib/...")` = **anti-pattern**. 우리 own 코드의 silent failure 를 가린다.
+- **Pure/domain lib**: real import. parser, formatter, analyzer, serializer 를 mock
+  으로 대체하지 않는다.
+- **Stores**: 가능하면 real store + reset helper 를 쓴다. action 자체를 mock 해서
+  사용자-visible state 전이를 가리지 않는다.
+- **Runtime/boundary**: Tauri `invoke/listen/emit`, native window/dialog/file API,
+  `fetch`, timer, network, filesystem 같은 외부 boundary 는 stub 가능하다.
+- **Hooks/components**: target behavior 를 소유한 own hook/lib 는 real import 한다.
+  단, page/container test 에서 무거운 child component 또는 runtime graph 를 줄이는
+  narrow mock 은 허용한다. 이때 user-facing outcome 단언을 반드시 남긴다.
+- 기존 own-code broad mock 은 touched scope 에서 바로 실패 처리하지 않는다. 새 테스트
+  또는 수정 테스트는 broad mock 을 늘리지 말고, 가능한 범위에서 real import 로 낮춘다.
 
 ## jsdom 한계 대응
 
 검증 불가능한 layer (Tauri runtime, NSMenu, native window lifecycle) 가 path 의 일부면:
 - unit test 에 "이 시나리오는 unit 으로 cover 못 한다 — e2e 후보" 명시 코멘트.
 - Backend Rust `MockRuntime` test 로 같은 invariant 를 *Rust 측에서* lock.
-- 또는 e2e 시나리오 추가 (playwright/wdio + tauri-driver).
+- 또는 E2E 시나리오 추가 (WebdriverIO + tauri-driver).
 
 ## Anti-pattern 예시 (회귀 4 실제 코드)
 

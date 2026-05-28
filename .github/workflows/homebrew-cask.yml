@@ -51,15 +51,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          if git diff --quiet; then
-            echo "No changes for Homebrew cask for ${RELEASE_TAG}."
-            exit 0
-          fi
-
           base_branch="${HOMEBREW_TAP_BASE_BRANCH:-main}"
           version="${RELEASE_TAG#v}"
           branch="chore/table-view-${version}"
           tap_file="Casks/table-view.rb"
+          generated_tap_file="$(mktemp)"
+          trap 'rm -f "${generated_tap_file:-}"' EXIT
+          cp "${tap_file}" "${generated_tap_file}"
 
           if git ls-remote --exit-code --heads origin "${branch}" > /dev/null 2>&1; then
             git fetch --quiet origin "${branch}"
@@ -73,8 +71,21 @@ jobs:
             git switch --quiet -c "${branch}"
           fi
 
+          cp "${generated_tap_file}" "${tap_file}"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- "${tap_file}"; then
+            echo "No changes for Homebrew cask for ${RELEASE_TAG}."
+            if gh pr view --repo "${HOMEBREW_TAP_REPO}" "${branch}" > /dev/null 2>&1; then
+              echo "PR already exists for ${branch}."
+            else
+              echo "No PR exists for ${branch}, but the branch already has the generated cask."
+            fi
+            exit 0
+          fi
+
           git add "${tap_file}"
 
           if git diff --cached --quiet; then
@@ -95,9 +106,44 @@ jobs:
             exit 0
           fi
 
+          pr_body="$(cat <<EOF
+          ## Summary
+
+          Automatically updated Homebrew cask for ${RELEASE_TAG}.
+
+          ## Changes
+
+          - Updated version/url/checksums in Casks/table-view.rb
+
+          ## Invariants
+
+          - App runtime behavior is unchanged.
+          - Homebrew tap metadata continues to point at published release assets.
+
+          ## Test plan
+
+          - Generated cask metadata from the published GitHub release assets.
+
+          ## Smoke impact
+
+          Smoke-Test-Plan: Not required: packaging metadata only.
+
+          ## Documentation impact
+
+          - Required: no
+          - Trigger: none
+          - Updated SOT: n/a
+          - Reason: Packaging metadata update only; no app runtime, workflow, or user-facing documentation changed.
+
+          ## Links
+
+          - Release: ${RELEASE_TAG}
+          EOF
+          )"
+
           gh pr create \
             --repo "${HOMEBREW_TAP_REPO}" \
             --title "chore(homebrew): update table-view cask ${RELEASE_TAG}" \
-            --body "## Summary\n\nAutomatically updated Homebrew cask for ${RELEASE_TAG}.\n\n## Changes\n\n- Updated version/url/checksums in Casks/table-view.rb\n\n## Smoke impact\n\nNo app tests run; this is packaging metadata only.\n\n## Documentation impact\n\nNo runtime docs changed." \
+            --body "${pr_body}" \
             --base "${base_branch}" \
             --head "${branch}"

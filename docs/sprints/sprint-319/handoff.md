@@ -19,7 +19,7 @@ Mongo document grid 의 schemaless column 흔들림을 흡수하는 client-side
 |------|------|------|
 | `src/hooks/useDocumentSchemaAccumulator.ts` | NEW | hook 본체 |
 | `src/hooks/useDocumentSchemaAccumulator.test.ts` | NEW | 7 case |
-| `docs/phases/phase-28-decision-log.md` | edit | D-43..D-46 append |
+| `docs/archives/phases/retired/phase-28-decision-log.md` | edit | D-43..D-46 append |
 | `docs/sprints/sprint-319/contract.md` | NEW | sprint contract |
 | `docs/sprints/sprint-319/execution-brief.md` | NEW | execution brief |
 | `docs/sprints/sprint-319/handoff.md` | NEW | 본 문서 |
@@ -43,7 +43,7 @@ Mongo document grid 의 schemaless column 흔들림을 흡수하는 client-side
 - `pnpm tsc --noEmit` → exit 0.
 - `pnpm lint` → exit 0.
 
-## Autonomous decisions (recorded in `docs/phases/phase-28-decision-log.md`)
+## Autonomous decisions (recorded in `docs/archives/phases/retired/phase-28-decision-log.md`)
 
 - **D-43**: 누적 단위 = `(connId, db, collection)` triple.
 - **D-44**: 정렬 = `_id` first + case-insensitive 알파벳.

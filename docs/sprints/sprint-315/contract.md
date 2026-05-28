@@ -91,7 +91,7 @@
   (없으면 신설) — sort 변환 unit
 - `src/components/document/DocumentDataGrid.sort.test.tsx` (신규) —
   header click → onApply
-- `docs/phases/phase-28-decision-log.md` — D-29..D-31
+- `docs/archives/phases/retired/phase-28-decision-log.md` — D-29..D-31
 - `docs/sprints/sprint-315/handoff.md`
 
 ## Residual Risk

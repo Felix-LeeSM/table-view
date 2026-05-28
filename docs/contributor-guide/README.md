@@ -10,7 +10,6 @@ decision logs.
   verification gaps and quality follow-ups.
 - [`release/homebrew-cask.md`](release/homebrew-cask.md) — Homebrew cask and release notes.
 - [`memory/engineering/architecture/data-source/adding/memory.md`](../../memory/engineering/architecture/data-source/adding/memory.md) — checklist for adding or promoting a data source.
-- [`memory/engineering/conventions/frontend/dialogs/memory.md`](../../memory/engineering/conventions/frontend/dialogs/memory.md) — dialog UI conventions.
 
 ## Boundary
 

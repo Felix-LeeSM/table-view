@@ -53,9 +53,10 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 
 사용자 2026-05-16 강하게 lock — "커밋 왜 자꾸 나한테 하라고 지랄이야". 이전 패턴 (assistant = 변경 요약만 보고) retire. 사용자는 작업 완전 종료까지 책임지길 원함.
 
-## 예외 — 사용자 확인 필수
+## 중단 조건 — 사용자 확인 / 별도 절차 필요
 
-- `git push --force` / `--force-with-lease` ([git-policy.md](../../../.claude/rules/git-policy.md))
+- `git push --force` / `--force-with-lease`: agent path 에서는 수행 금지
+  ([git-policy.md](../../../.claude/rules/git-policy.md))
 - main 직접 push (PR 우회)
 - `gh pr merge` 의 squash/merge/rebase 정책이 명시 안 됐을 때
 - 사용자 명시 거부 ("commit 하지 마", "push 멈춰") — 즉시 중단

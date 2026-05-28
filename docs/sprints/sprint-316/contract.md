@@ -86,7 +86,7 @@
 - `src/components/document/DocumentDataGrid.tsx` — helper + prop wire
 - `src/components/document/DocumentDataGrid.sort.test.tsx` 확장 또는
   신규 `DocumentDataGrid.contextmenu.test.tsx`
-- `docs/phases/phase-28-decision-log.md` — D-32..D-34
+- `docs/archives/phases/retired/phase-28-decision-log.md` — D-32..D-34
 - `docs/sprints/sprint-316/handoff.md`
 
 ## Residual Risk

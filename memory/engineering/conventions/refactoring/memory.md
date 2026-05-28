@@ -1,7 +1,7 @@
 ---
 title: 리팩토링 코드 작성 기준
 type: memory
-updated: 2026-05-02
+updated: 2026-05-28
 ---
 
 # 리팩토링 코드 작성 기준
@@ -21,10 +21,11 @@ contract / findings / handoff 는 `docs/sprints/sprint-189` ~ `sprint-198`
 ## 카테고리별 방
 
 - [store-coupling](./store-coupling/memory.md) — **B**. `useXStore.setState`
-  직접 호출 금지, action 분할 단위, stale guard 위치, cross-store 결합
-  제한, 명명 규칙, 강제 메커니즘 단계.
-- [lib-hook-boundary](./lib-hook-boundary/memory.md) — **D**. `lib/hooks/
-  components` 3 layer 분리, import 방향, pure 추출 강도, lib sub-grouping.
+  direct write 축소, action 분할 단위, stale guard 위치, runtime use-case
+  중앙화, 명명 규칙, 강제 메커니즘 단계.
+- [lib-hook-boundary](./lib-hook-boundary/memory.md) — **D**. pure lib /
+  runtime lib / hooks / components 분리, import 방향, pure 추출 강도, lib
+  sub-grouping.
 - [hook-api](./hook-api/memory.md) — **C**. return shape (객체), deps
   stability (`useCallback` 강제), 최신 참조 패턴, hook 시그니처, sub-grouping
   임계.
@@ -36,13 +37,13 @@ contract / findings / handoff 는 `docs/sprints/sprint-189` ~ `sprint-198`
 
 | 룰 | Phase 1 (지금) | Phase 2 (도입 예정) | Phase 3 (보류) |
 |----|----------------|---------------------|----------------|
-| B-1 (setState 금지) | sprint findings audit | ESLint `no-direct-zustand-setstate` | TS 레벨 차단 |
+| B-1 (setState direct write 축소) | legacy debt 명시 + sprint findings audit | ESLint `no-direct-zustand-setstate` | TS 레벨 차단 |
 | C-2 (exhaustive-deps ignore 0) | sprint findings audit | 기존 ESLint 룰 (이미 활성) | — |
 | D-1/D-2 (lib React 의존 0) | sprint findings audit | ESLint `no-restricted-imports` (lib 에서 react import 차단) | — |
 | 그 외 | convention + review | (필요 시 검토) | — |
 
-Phase 2 ESLint 룰 도입 시점: **Sprint 198 종료 직후** (모든 refactor sprint
-의 violations 0 달성 후 일괄 도입).
+Phase 2 ESLint 룰 도입 시점: 현재 legacy debt 를 store action 또는
+`src/lib/runtime/**` use-case 로 낮춘 뒤.
 
 ## 관련 방
 

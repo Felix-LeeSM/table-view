@@ -23,7 +23,7 @@
   - `HeaderRow` 에 prop wire.
 - `src/components/datagrid/DataGridTable/HeaderRow.contextmenu.test.tsx`
   (NEW) — 10 case.
-- `docs/phases/phase-28-decision-log.md` — D-32..D-34 append.
+- `docs/archives/phases/retired/phase-28-decision-log.md` — D-32..D-34 append.
 
 ## Per-AC evidence
 

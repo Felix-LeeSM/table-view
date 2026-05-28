@@ -106,7 +106,7 @@ normalize_path() {
 	done
 
 	joined=""
-	for part in "${normalized[@]}"; do
+	for part in "${normalized[@]-}"; do
 		if [ -z "$joined" ]; then
 			joined="$part"
 		else
@@ -274,6 +274,20 @@ paths_from_patch_markers() {
 	printf '%s\n' "$COMMAND" | sed -nE \
 		-e 's/^\*\*\* (Add|Update|Delete) File: (.*)$/\2/p' \
 		-e 's/^\*\*\* Move to: (.*)$/\1/p'
+}
+
+is_patch_payload() {
+	awk '
+		/^[[:space:]]*$/ { next }
+		{
+			if (first == "") first = $0
+			last = $0
+			if ($0 ~ /^\*\*\* (Add|Update|Delete) File: /) file_marker = 1
+		}
+		END {
+			exit !(first == "*** Begin Patch" && last == "*** End Patch" && file_marker)
+		}
+	' <<< "$COMMAND"
 }
 
 paths_from_command_tokens() {
@@ -444,6 +458,14 @@ if ! is_primary_worktree; then
 fi
 
 if [ -n "$COMMAND" ]; then
+	if is_patch_payload; then
+		while IFS= read -r path; do
+			[ -n "$path" ] || continue
+			check_path "$path"
+		done < <(paths_from_patch_markers | sort -u)
+		exit 0
+	fi
+
 	while IFS= read -r path; do
 		[ -n "$path" ] || continue
 		check_path "$path"

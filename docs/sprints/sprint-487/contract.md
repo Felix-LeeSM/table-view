@@ -52,7 +52,7 @@ does not yet enable completion candidates.
 - Catalog-backed operators/functions/types from installed extensions.
 - Runtime execution behavior changes.
 
-## Required Checks
+### Required Checks
 
 1. `cargo test --manifest-path src-tauri/Cargo.toml --lib list_postgres_extensions --quiet`
 2. `cargo test --manifest-path src-tauri/Cargo.toml --lib list_extensions_sql_matches_canonical_fixture --quiet`

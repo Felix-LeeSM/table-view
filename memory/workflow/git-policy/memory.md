@@ -1,7 +1,7 @@
 ---
 title: Git 정책 — hook 회피 절대 금지 + 능동 enforcement
 type: workflow-rule
-updated: 2026-05-20
+updated: 2026-05-28
 task: commit, push, hook, lefthook, push-reject, pr-close, race-trace
 trigger:
   signal: git commit / git push / hook 실패 / push reject / PR close 시
@@ -59,21 +59,20 @@ hook 정의 → worktree drift 없음.
 - GPG pinentry timeout → 즉시 중단. 사용자에게 signing cache warm-up 필요를
   보고하고 unsigned commit 으로 진행하지 않음.
 
-## 예외 — 사용자 명시 승인 시만
+## Hard block — 승인으로도 우회 불가
 
-다음 2 경우 한정, 사용자가 채팅에서 명시적 `--no-verify 써` / `hook 건너뛰어`
-지시했을 때:
+`scripts/hooks/check-dangerous-bash.sh` 가 hard-block 하는 명령은 사용자 승인
+요청 대상이 아니라 수행 금지다. 특히 다음은 어떤 상황에서도 쓰지 않는다.
 
-1. CI 에서 이미 검증된 머지 커밋 백포팅 (revert, cherry-pick 충돌 해결).
-2. 시스템 장애 복구 (hook 자체 손상 + `lefthook install` 메타 커밋).
+- `git commit --no-verify` / `git push --no-verify`
+- `--no-gpg-sign` / `commit.gpgsign=false`
+- `LEFTHOOK=0`, `LEFTHOOK_SKIP=...`, `HUSKY=0`
+- hook 이 destructive bash 로 차단하는 source/app destructive command
+- hook 이 force-push 또는 fetch/reset/pull recovery hazard 로 차단하는 명령
 
-이 경우에도:
-
-- (a) 회피 사유 commit body 에 1줄 기록
-- (b) 후속 커밋에서 회피한 검사를 통과시키는 변경 push
-- (c) `docs/archives/incidents/` 에 사유 기록
-
-GPG signing 우회는 위 예외에 포함하지 않음. signing 불가 시 멈춤.
+긴급 복구도 hard-block 명령 승인 우회가 아니라 별도 hook/script 정책 변경으로
+기록한다. 실제 차단 목록과 판정은 `scripts/hooks/check-dangerous-bash.sh` 와 테스트가
+source of truth다. GPG signing 불가 시 unsigned commit 으로 진행하지 않는다.
 
 ## 책임 주체 — Assistant 직접 실행
 
@@ -139,7 +138,8 @@ agent 는 위 명령 _어느 것으로도_ 본 hook 우회 불가능 — single-
 
 closed-PR stale ref 가 의심되면 (PR close 시 `--delete-branch` 누락):
 `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>` 후 재시도.
-여전히 안 풀리면 **사용자 승인 요청**.
+여전히 안 풀리면 force/reset/hook-bypass 를 시도하지 말고 상황 보고 후 별도
+복구 절차를 합의한다.
 
 ## PR close cleanup (sprint-389)
 

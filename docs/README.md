@@ -1,7 +1,7 @@
 ---
 title: Docs Index
 type: index
-updated: 2026-05-27
+updated: 2026-05-28
 ---
 
 # Docs Index
@@ -19,7 +19,7 @@ updated: 2026-05-27
 | 구조 / 설계 규칙 | `memory/engineering/architecture/**` | agent 가 적용해야 하는 active engineering SOT |
 | 개발 / 검증 / 기여 | `contributor-guide/`, `memory/engineering/**` | 사람용 절차는 docs, 코딩 규칙은 memory |
 | 스프린트 산출물 | `sprints/` | 그대로 유지 |
-| 과거 기록 | `archives/`, `phases/`, `explorations/`, retired risk registers | `archives/` 아래로 수렴 |
+| 과거 기록 | `archives/`, retired risk registers, historical `explorations/` | `archives/` 아래로 수렴 |
 
 ## 유지할 최상위 묶음
 
@@ -30,6 +30,8 @@ updated: 2026-05-27
 - `contributor-guide/` - 개발자가 변경을 넣을 때 읽는 사람용 절차.
 - `sprints/` - sprint contract, evidence, handoff.
 - `archives/` - 더 이상 active SOT 가 아닌 기록.
+- `phases/` - active phase planning 만 둔다. 보류/완료/비활성 phase 는
+  `archives/phases/` 로 이동한다.
 
 `RISKS.md` 는 독립 active 문서로 유지하지 않는다. 위험/제약은 소유 문서로
 라우팅한다:

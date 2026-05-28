@@ -91,7 +91,7 @@ Slice A 종료 후 B–M 의 모든 후속 slice 가 "Slice A 가 끝났다" 가
 
 - `docs/sprints/sprint-312/contract.md`
 - `docs/sprints/sprint-307/spec.md` (A6 + Global AC 섹션)
-- `docs/phases/phase-28-decision-log.md` — D-16+ 부터
+- `docs/archives/phases/retired/phase-28-decision-log.md` — D-16+ 부터
 - `src/lib/mongo/mongoSafety.ts` — `analyzeMongoOperation` (기존)
 - `src/lib/tauri/document.ts` — A2 wrappers (insertManyDocuments,
   bulkWriteDocuments 등)

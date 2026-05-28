@@ -18,9 +18,9 @@
 | MySQL | adapter complete | widening in progress | Rust/WASM vocabulary | adapter 완료. semantic gap 계속 축소 |
 | MariaDB | MySQL-adapter reuse | MySQL-family profile + MariaDB delta | Rust/WASM vocabulary | runtime path 존재. MariaDB-engine fixture gap 은 known limitation / quality follow-up |
 | SQLite | file adapter complete | parser/write parity guardrails | Rust/WASM vocabulary | user DBMS adapter 는 internal SQLite state 와 분리됨. DDL UI 는 unsupported |
-| DuckDB | file adapter + local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM vocabulary | local `.duckdb`/CSV/Parquet/JSON/NDJSON preview/query 지원. DDL/write 는 unsupported |
+| DuckDB | file adapter + local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM vocabulary | local `.duckdb` raw SQL 실행과 CSV/Parquet/JSON/NDJSON preview 경로 지원. 구조화된 DDL/write UI 와 file analytics query UI parity 는 unsupported |
 | MongoDB | partial/full-support backlog | whitelisted mongosh | Rust/WASM vocabulary | whitelist workflow hardening 이후 full-support 재검토 |
-| Redis | Redis first slice live | key/type/TTL/stream guardrails | redis-command profile | key browser, value reads, TTL mutation, guarded string writes, bounded stream reads covered. Valkey parity/support unverified |
+| Redis | connection/profile + backend KV primitives + key browser/value preview | backend guardrails only | redis-command profile | key browser/value preview 는 live. value edit/TTL/write/stream UI 와 Valkey parity/support 는 follow-up |
 | Elasticsearch/OpenSearch | fixture-backed Search slice only | index/mapping/search envelope guardrails | bounded fixture DSL only | live connection UI, HTTP catalog/query execution, admin, observability 는 deferred |
 | MSSQL/Oracle | unsupported/deferred | declared SQL identity only | deferred | planned RDBMS identities. runtime support 는 없음 |
 

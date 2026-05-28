@@ -158,7 +158,7 @@ run_case \
 # 본 5 case 는 destructive vs recovery 의 4 분기 + 회귀 분기를 검증.
 #   - case-400-1: origin/* ref           → destructive, 4-step recovery 안내
 #   - case-400-2: HEAD~N relative ref    → destructive, soft 옵션 안내
-#   - case-400-3: 40-hex SHA in reflog   → 복구 case 추정, 사용자 승인 안내
+#   - case-400-3: 40-hex SHA in reflog   → 복구 case 추정, hard reset 재시도 금지
 #   - case-400-4: 40-hex SHA not in reflog → 알 수 없는 SHA, destructive 안내
 #   - case-400-5: branch name (기존 회귀) → destructive (회귀 유지)
 
@@ -183,12 +183,12 @@ run_case \
   '{"tool_input":{"command":"git reset --hard HEAD~1"}}' \
   'MATCH:HEAD~|--soft|memory/workflow/git-policy/memory.md'
 
-# Case 400-3 — git reset --hard <SHA-in-reflog>: 복구 case 추정 + 승인 안내.
+# Case 400-3 — git reset --hard <SHA-in-reflog>: 복구 case 추정 + 재시도 금지.
 run_case \
   "case-400-3: git reset --hard <SHA in reflog> → block + 복구 case 안내" \
   1 \
   "{\"tool_input\":{\"command\":\"git reset --hard $HEAD_SHA\"}}" \
-  'MATCH:복구|사용자 명시 승인|reflog|memory/workflow/git-policy/memory.md'
+  'MATCH:복구|hard reset|reflog|memory/workflow/git-policy/memory.md'
 
 # Case 400-4 — git reset --hard <SHA-not-in-reflog>: 알 수 없는 SHA.
 run_case \

@@ -10,7 +10,7 @@ DocumentDataGrid 에 `useDocumentSchemaAccumulator` wire — 누적 schema
 수정/추가:
 - `src/components/document/DocumentDataGrid.tsx`
 - `src/components/document/DocumentDataGrid.schema.test.tsx` (NEW)
-- `docs/phases/phase-28-decision-log.md` (D-47..D-??)
+- `docs/archives/phases/retired/phase-28-decision-log.md` (D-47..D-??)
 - `docs/sprints/sprint-320/handoff.md`
 
 미변경:

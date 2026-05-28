@@ -21,7 +21,7 @@ widening work lives in `docs/ROADMAP.md`.
 | `sql` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
 | `mongosh` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
 | `redis-command` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` |
-| `search-dsl` | `future-language-core-contract` | `future-language-core-contract` | `deferred` | `profile-safety-policy` |
+| `search-dsl` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` |
 
 Deferred language ids stay in the registry so future active profiles cannot add
 parser or completion vocabulary without an owner decision.
@@ -34,9 +34,9 @@ parser or completion vocabulary without an owner decision.
 | MySQL SQL | Runtime adapter is broad. Completion has MySQL-family keywords/functions and backtick identifiers. Parser/Safe Mode understands the common SQL subset plus `LIMIT offset, count`, `ON DUPLICATE KEY UPDATE`, and narrow `CALL proc(...)`. | Stored routine/event bodies, transaction/control-flow scripting, broad `CALL` argument expressions, `DELIMITER`, and `LOAD DATA` are unsupported or explicitly rejected. |
 | MariaDB SQL | Reuses the MySQL adapter path with MariaDB identity/profile deltas. Completion exposes the MySQL-family surface plus MariaDB `RETURNING`. | MariaDB-engine fixture evidence is still pending; MariaDB-only syntax/version gates are narrow. |
 | SQLite SQL | File connection, query, preview, and primary-key-scoped row edits are supported. Completion covers current SQLite vocabulary and cached schema objects. | DDL UI/runtime write parity, function source introspection, virtual table syntax, sqlite-cli dot command execution, and extension-specific semantics are unsupported. |
-| DuckDB SQL | DuckDB file connection and local CSV/Parquet/JSON/NDJSON preview/query paths are supported. Completion covers current DuckDB vocabulary and cached schema objects. | DDL/write parity, shell commands, cloud/object-store access, and arbitrary external-file SQL functions are out of scope. |
+| DuckDB SQL | DuckDB file connection, local CSV/Parquet/JSON/NDJSON preview, and raw SQL execution are supported. Completion covers current DuckDB vocabulary and cached schema objects. | Structured DDL/write UI parity, file analytics query UI parity, shell commands, cloud/object-store access, and arbitrary external-file SQL functions are out of scope. |
 | MongoDB Mongosh/MQL | Whitelisted `db...` collection/admin commands, JSON-like bodies, BSON literals, cursor chains, operator/stage/expression completion, and destructive admin Safe Mode gates are supported. | Arbitrary JavaScript, shell helpers such as `use`/`show`, multiple statements, unsupported cursor helpers, cross-db shell navigation, server-version gates, and native document-first result panels remain out of scope. |
-| Redis command | Redis first-slice workflows exist for key browser/value/TTL/stream paths. | Query-language parser/completion ownership is future-contract only. Broader Redis/Valkey command coverage is not claimed. |
+| Redis command | Connection/profile, backend KV primitives, key browser, and value preview exist. | Query-language parser/completion ownership is future-contract only. Value edit, TTL/write, stream UI, and broader Redis/Valkey command coverage are not claimed. |
 | Search DSL | Fixture-backed Search identities and bounded fixture DSL exist. | Live HTTP execution and full query-language support are deferred. |
 
 ## Current Unsupported Boundaries

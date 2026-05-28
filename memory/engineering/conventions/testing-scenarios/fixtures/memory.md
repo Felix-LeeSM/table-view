@@ -3,7 +3,7 @@ title: Fixture strategy — support claims need local evidence
 type: convention
 updated: 2026-05-27
 task: test-writing, fixture, data-source-promotion, support-claim
-surface: src-tauri/src/db/fixtures.rs, src-tauri/tests, tests/fixtures, e2e/fixtures, memory/engineering/architecture/data-source/adding/memory.md
+surface: src-tauri/src/db/fixtures.rs, src-tauri/tests, tests/fixtures, e2e/fixtures
 trigger:
   signal: fixture 추가 / DBMS support claim / adapter conformance test
   layer: index

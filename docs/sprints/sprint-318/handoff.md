@@ -25,7 +25,7 @@ Sprint 317 D.1 의 Mongo hide column 기능을 RDB `DataGrid` /
 | `src/components/datagrid/DataGridTable.hide.test.tsx` | NEW | 6 case |
 | `src/components/rdb/DataGrid.tsx` | edit | `useHiddenColumns` 호출, 배지 strip, DataGridTable wire |
 | `src/components/rdb/DataGrid.hide.test.tsx` | NEW | 5 case |
-| `docs/phases/phase-28-decision-log.md` | edit | D-39..D-42 append |
+| `docs/archives/phases/retired/phase-28-decision-log.md` | edit | D-39..D-42 append |
 | `docs/sprints/sprint-318/contract.md` | NEW | sprint contract |
 | `docs/sprints/sprint-318/execution-brief.md` | NEW | execution brief |
 | `docs/sprints/sprint-318/handoff.md` | NEW | 본 문서 |
@@ -63,7 +63,7 @@ Sprint 317 D.1 의 Mongo hide column 기능을 RDB `DataGrid` /
 - `pnpm lint` → exit 0.
 - `pnpm build` → exit 0 (Vite 빌드 성공, 신규 경고 없음).
 
-## Autonomous decisions (recorded in `docs/phases/phase-28-decision-log.md`)
+## Autonomous decisions (recorded in `docs/archives/phases/retired/phase-28-decision-log.md`)
 
 - **D-39**: RDB hide column persist 단위 = `hidden-columns:rdb:<schema>:<table>`
   (column-widths 와 namespace 공유).
