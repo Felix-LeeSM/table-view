@@ -7,7 +7,7 @@ import {
   type CSSProperties,
 } from "react";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
-import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { isDocumentSentinel } from "@/types/document";
 import { safeStringifyCell } from "@lib/jsonCell";
 import { useColumnWidths } from "@/hooks/useColumnWidths";

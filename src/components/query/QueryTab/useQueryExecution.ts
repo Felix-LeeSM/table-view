@@ -5,7 +5,7 @@ import { useSchemaStore } from "@stores/schemaStore";
 import {
   recordHistoryEntry,
   type DocumentRecordHistoryQueryMode,
-} from "@lib/history/recordHistoryEntry";
+} from "@lib/runtime/history/recordHistoryEntry";
 import {
   executeQuery,
   executeQueryDryRun,

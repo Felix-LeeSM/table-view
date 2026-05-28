@@ -5,7 +5,7 @@ import { dropCollection } from "@lib/tauri";
 import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
-import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 
 interface DropDialogState {
   database: string;

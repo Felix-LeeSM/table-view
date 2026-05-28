@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
-import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
 import { toast } from "@lib/toast";

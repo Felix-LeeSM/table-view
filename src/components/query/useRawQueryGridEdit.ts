@@ -6,7 +6,7 @@ import {
 import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { executeQueryBatch } from "@lib/tauri";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
-import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { toast } from "@lib/toast";
 import type { QueryResult } from "@/types/query";
