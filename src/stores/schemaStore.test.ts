@@ -874,10 +874,9 @@ describe("schemaStore", () => {
         .getState()
         .getTableTriggers("conn1", "db1", "users", "public"),
     ).rejects.toThrow(/Database mismatch/);
-    // The store's mismatch handler is silent for background paths — we
-    // assert by the absence of a re-thrown error other than the
-    // original. The verifyActiveDb / setActiveDb side-effects are tested
-    // upstream in `syncMismatchedActiveDb.test`.
+    // The store's mismatch handler is silent for background paths. The
+    // registered verifyActiveDb / setActiveDb side-effects are covered by
+    // schemaStore.dbMismatch.test.
     const state = useSchemaStore.getState();
     expect(state.triggers.conn1?.db1?.public?.users).toBeUndefined();
   });

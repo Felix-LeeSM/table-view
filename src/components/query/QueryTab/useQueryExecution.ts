@@ -30,7 +30,7 @@ import {
   type CreateMongoIndexRequest,
 } from "@lib/tauri";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
-import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
+import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { stripSqlComments } from "@lib/sql/stripSqlComments";
 import { findMysqlScriptingBoundaryViolation } from "@lib/sql/mysqlScriptingBoundary";
@@ -73,9 +73,6 @@ import {
   parseReplaceOneOptions,
 } from "./queryHelpers";
 
-// Sprint 271a — `syncMismatchedActiveDb` extracted to
-// `src/lib/api/syncMismatchedActiveDb.ts` so background introspection paths
-// (schemaStore) reuse the same verify + sync logic. Behaviour unchanged.
 import { logger } from "@lib/logger";
 
 const BULK_WRITE_OP_NAMES = [
