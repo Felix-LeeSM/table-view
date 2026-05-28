@@ -100,12 +100,13 @@ async function boot() {
   // workspace has correct focusedConnId + activeStatuses on first render.
   // The dynamic import preserves the boot-graph node ordering so the
   // module-load `attachZustandIpcBridge` attach inside `connectionStore.ts`
-  // still runs before any caller observes the store. `hydrateConnectionSession`
-  // is a plain function — safe to call here outside the React tree.
+  // still runs before any caller observes the store. The runtime
+  // `hydrateConnectionSession` entrypoint is a plain function — safe to call
+  // here outside the React tree.
   await import("@stores/connectionStore");
   markBootMilestone("connectionStore:imported");
   const { hydrateConnectionSession } =
-    await import("@hooks/useConnectionSessionHydration");
+    await import("@lib/runtime/connection/hydrateConnectionSession");
   hydrateConnectionSession();
   markBootMilestone("connectionStore:hydrated");
 

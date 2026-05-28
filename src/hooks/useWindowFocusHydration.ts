@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
-import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
+import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnectionSession";
 
 /**
  * Re-hydrate connection state from session-scoped localStorage on mount

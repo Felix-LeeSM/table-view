@@ -12,8 +12,9 @@ import { getCurrentWindowLabel } from "@lib/window-label";
 import {
   persistFocusedConnId,
   persistActiveStatuses,
+  readConnectionSession,
 } from "@lib/scopedLocalStorage";
-import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
+import { normalizeActiveStatuses } from "@lib/wireCamelCase";
 import { cleanupConnectionFrontendState } from "@hooks/connectionCleanup";
 
 export interface ConnectionState {
@@ -279,7 +280,22 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     persistFocusedConnId(id);
   },
 
-  hydrateFromSession: () => hydrateConnectionSession(),
+  hydrateFromSession: () => {
+    const session = readConnectionSession();
+    const patch: Partial<
+      Pick<ConnectionState, "focusedConnId" | "activeStatuses">
+    > = {};
+    const hasFocusedConnId =
+      session.hasFocusedConnId ?? Boolean(session.focusedConnId);
+    const hasActiveStatuses =
+      session.hasActiveStatuses ?? session.activeStatuses !== null;
+    if (hasFocusedConnId) patch.focusedConnId = session.focusedConnId;
+    if (hasActiveStatuses)
+      patch.activeStatuses = normalizeActiveStatuses(
+        session.activeStatuses ?? {},
+      ) as Record<string, ConnectionStatus>;
+    if (Object.keys(patch).length > 0) set(patch);
+  },
 
   hydrateConnectionsFromSnapshot: (connections, groups) => {
     set({

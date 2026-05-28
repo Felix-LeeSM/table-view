@@ -1125,11 +1125,93 @@ describe("connectionStore", () => {
       expect((lastStatuses["c2"] as { type: string }).type).toBe("connected");
     });
 
-    // Sprint 224 (P10 step 3a): the two hydrateFromSession session-
-    // restore / no-op cases migrated to
-    // `src/hooks/useConnectionSessionHydration.test.ts`. The store action
-    // remains as a thin proxy — see the module test for the byte-
-    // equivalent assertions under direct module-function call.
+    it("hydrateFromSession restores focusedConnId and activeStatuses", () => {
+      mockReadConnectionSession.mockReturnValue({
+        focusedConnId: "c2",
+        activeStatuses: {
+          c1: { type: "connected", activeDb: "prod" },
+          c2: { type: "connected", activeDb: "dev" },
+        },
+        hasFocusedConnId: true,
+        hasActiveStatuses: true,
+      });
+
+      useConnectionStore.getState().hydrateFromSession();
+
+      expect(useConnectionStore.getState().focusedConnId).toBe("c2");
+      expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+        type: "connected",
+        activeDb: "prod",
+      });
+      expect(useConnectionStore.getState().activeStatuses["c2"]).toEqual({
+        type: "connected",
+        activeDb: "dev",
+      });
+    });
+
+    it("hydrateFromSession is a no-op when session is empty", () => {
+      useConnectionStore.setState({
+        focusedConnId: "existing",
+        activeStatuses: { existing: { type: "connected" } },
+      });
+      mockReadConnectionSession.mockReturnValue({
+        focusedConnId: null,
+        activeStatuses: null,
+        hasFocusedConnId: false,
+        hasActiveStatuses: false,
+      });
+      const listener = vi.fn();
+      const unsubscribe = useConnectionStore.subscribe(listener);
+
+      useConnectionStore.getState().hydrateFromSession();
+
+      unsubscribe();
+      expect(useConnectionStore.getState().focusedConnId).toBe("existing");
+      expect(useConnectionStore.getState().activeStatuses).toEqual({
+        existing: { type: "connected" },
+      });
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it("hydrateFromSession applies focusedConnId only when activeStatuses is missing", () => {
+      useConnectionStore.setState({
+        focusedConnId: null,
+        activeStatuses: { existing: { type: "connected" } },
+      });
+      mockReadConnectionSession.mockReturnValue({
+        focusedConnId: "c1",
+        activeStatuses: null,
+        hasFocusedConnId: true,
+        hasActiveStatuses: false,
+      });
+
+      useConnectionStore.getState().hydrateFromSession();
+
+      expect(useConnectionStore.getState().focusedConnId).toBe("c1");
+      expect(useConnectionStore.getState().activeStatuses).toEqual({
+        existing: { type: "connected" },
+      });
+    });
+
+    it("hydrateFromSession applies activeStatuses only when focusedConnId is missing", () => {
+      useConnectionStore.setState({
+        focusedConnId: "previous",
+        activeStatuses: {},
+      });
+      mockReadConnectionSession.mockReturnValue({
+        focusedConnId: null,
+        activeStatuses: { c1: { type: "connected" } },
+        hasFocusedConnId: false,
+        hasActiveStatuses: true,
+      });
+
+      useConnectionStore.getState().hydrateFromSession();
+
+      expect(useConnectionStore.getState().focusedConnId).toBe("previous");
+      expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+        type: "connected",
+      });
+    });
 
     it("connect failure does not persist activeStatuses to session", async () => {
       seedTwoConnections();
