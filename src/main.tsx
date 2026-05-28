@@ -21,6 +21,7 @@ import {
   registerSnapshotListener,
 } from "@lib/snapshot/loadAll";
 import { registerSettingReceiver } from "@lib/runtime/settings/settingsReceiver";
+import { registerSchemaStoreDbMismatchRecovery } from "@lib/runtime/recovery/syncMismatchedActiveDb";
 import "./index.css";
 
 // Boot sequence: theme → session → hydrate stores → render.
@@ -90,6 +91,10 @@ async function boot() {
   // `registerSnapshotListener` because the receiver only adds handlers
   // — it does not touch the Tauri listener registration.
   registerSettingReceiver();
+
+  // Runtime recovery for background schema introspection. Query/DDL user
+  // flows call the same use-case directly so they can attach Retry toasts.
+  registerSchemaStoreDbMismatchRecovery();
 
   // Hydrate connection state from session-scoped localStorage so the
   // workspace has correct focusedConnId + activeStatuses on first render.

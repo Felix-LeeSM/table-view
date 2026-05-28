@@ -11,8 +11,6 @@ import type {
   ViewInfo,
 } from "@/types/schema";
 import * as tauri from "@lib/tauri";
-import { parseDbMismatch } from "@lib/api/dbMismatch";
-import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
 
 /**
  * Sprint 263 (ADR 0027 extension) — schemaStore 의 캐시 차원을
@@ -45,6 +43,19 @@ type ByDb<V> = Record<string, V>;
 type ByConn<V> = Record<string, ByDb<V>>;
 type BySchema<V> = Record<string, V>;
 type ByTable<V> = Record<string, V>;
+
+export type SchemaDbMismatchRecoveryHandler = (
+  connId: string,
+  err: unknown,
+) => void;
+
+let dbMismatchRecoveryHandler: SchemaDbMismatchRecoveryHandler | null = null;
+
+export function registerSchemaDbMismatchRecoveryHandler(
+  handler: SchemaDbMismatchRecoveryHandler | null,
+): void {
+  dbMismatchRecoveryHandler = handler;
+}
 
 interface SchemaState {
   schemas: ByConn<SchemaInfo[]>;
@@ -90,12 +101,10 @@ interface SchemaState {
     schema: string,
   ) => Promise<ConstraintInfo[]>;
   /**
-   * Sprint 272 — list triggers for `(connId, db, schema, table)`.
+   * List triggers for `(connId, db, schema, table)`.
    * Cache-first: second call with identical key returns the cached
    * array without invoking the `listTriggers` IPC. On `DbMismatch` the
-   * helper threads through `syncMismatchedActiveDb` silently (passive
-   * prefetch — no toast; matches Sprint 271a `getTableIndexes`
-   * behaviour).
+   * registered runtime recovery handles passive prefetch silently.
    */
   getTableTriggers: (
     connId: string,
@@ -247,20 +256,12 @@ function deleteConnDbSchema<V>(
 }
 
 /**
- * Sprint 271a — schemaStore introspection paths are background / silent.
- * When the backend rejects with `AppError::DbMismatch` (Sprint 266 guard),
- * the helper fires verify + setActiveDb so the next dispatch uses the
- * correct expectedDatabase. The original rejection is then rethrown so the
- * caller's loading/error state book-keeping stays consistent with
- * pre-Sprint-271 behaviour — NO toast (contract §Out-of-Scope: "silent
- * introspection (schemaStore prefetch, autocomplete refresh) uses
- * syncMismatchedActiveDb sync-only, no toast").
+ * Schema introspection paths are background and silent. Runtime recovery owns
+ * DbMismatch parsing and cross-store sync so this store does not import a
+ * use-case that imports the store back.
  */
 function handleDbMismatch(connId: string, err: unknown): void {
-  const message = err instanceof Error ? err.message : String(err);
-  if (parseDbMismatch(message)) {
-    void syncMismatchedActiveDb(connId);
-  }
+  dbMismatchRecoveryHandler?.(connId, err);
 }
 
 // ---------------------------------------------------------------------------

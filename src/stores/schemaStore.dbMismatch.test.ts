@@ -10,6 +10,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
+import {
+  registerSchemaStoreDbMismatchRecovery,
+  resetSchemaStoreDbMismatchRecoveryForTests,
+} from "@lib/runtime/recovery/syncMismatchedActiveDb";
 
 const setActiveDbMock = vi.hoisted(() => vi.fn());
 const toastWarningMock = vi.hoisted(() => vi.fn());
@@ -84,9 +88,12 @@ describe("schemaStore — DbMismatch silent sync (Sprint 271a)", () => {
     setActiveDbMock.mockReset();
     toastWarningMock.mockReset();
     verifyActiveDbMock.mockReset().mockResolvedValue("dbB");
+    resetSchemaStoreDbMismatchRecoveryForTests();
+    registerSchemaStoreDbMismatchRecovery();
   });
 
   afterEach(() => {
+    resetSchemaStoreDbMismatchRecoveryForTests();
     vi.clearAllMocks();
   });
 
