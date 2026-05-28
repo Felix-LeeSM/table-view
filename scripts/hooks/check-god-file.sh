@@ -2,7 +2,7 @@
 # God file 인지 hook. PostToolUse(Edit|Write) 에서 자동 호출.
 #
 # 룰: memory/engineering/conventions/refactoring/god-file/memory.md
-# 임계: 500 lines (≥). 초과 시 stderr 경고 + 룰 path 출력.
+# 임계: 700 lines (≥). 초과 시 stderr 경고 + 룰 path 출력.
 #
 # 입력: stdin JSON (`tool_input.file_path`).
 # 출력: 위반 시 stderr 만, 통과 시 nothing.
@@ -35,7 +35,7 @@ case "$FILE" in
 esac
 
 LINE_COUNT=$(wc -l < "$FILE" | tr -d ' ')
-THRESHOLD=500
+THRESHOLD=700
 
 if [ "$LINE_COUNT" -ge "$THRESHOLD" ]; then
   REL_FILE="${FILE#"$CLAUDE_PROJECT_DIR/"}"

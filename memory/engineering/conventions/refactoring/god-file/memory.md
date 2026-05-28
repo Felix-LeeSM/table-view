@@ -1,28 +1,28 @@
 ---
-title: God file 시퀀스 (500줄 임계)
+title: God file 시퀀스 (700줄 임계)
 type: convention
-updated: 2026-05-17
+updated: 2026-05-29
 task: refactor, god-file, comment-cleanup, decomposition
 surface: '**/*.ts, **/*.tsx, **/*.rs'
 trigger:
-  signal: file >= 500 lines
+  signal: file >= 700 lines
   layer: hook (scripts/hooks/check-god-file.sh) + ESLint max-lines + agent-prompt
   hook_script: scripts/hooks/check-god-file.sh
 ---
 
 # God file 시퀀스
 
-## 임계 — 500줄
+## 임계 — 700줄
 
-파일 line count ≥ 500 → "god file" 지정. 자동 감지:
+파일 line count ≥ 700 → "god file" 지정. 자동 감지:
 - PostToolUse hook (`scripts/hooks/check-god-file.sh`) — Edit/Write 시 stderr 경고 + 본 문서 path 출력.
-- ESLint `max-lines: 500` (warn).
+- ESLint `max-lines: 700` (warn).
 - Clippy `too_many_lines` (활성 검토).
 
 ## 시퀀스
 
 ```
-[탐지] file ≥ 500 줄
+[탐지] file ≥ 700 줄
    ↓
 [1단계] 주석 단순화
    - sprint history 메타 (Sprint NNN / AC-NNN / category B/D/C/A / N call sites) 제거
@@ -33,7 +33,7 @@ trigger:
    - 1차: 코드베이스 현 상태 보고 판단
    - 2차: 모순 여전 → 사용자 질의
    ↓
-[2단계] 그래도 ≥ 500줄 → 리팩토링 (decomposition sub-room 의 5+ commit 시퀀스)
+[2단계] 그래도 ≥ 700줄 → 리팩토링 (decomposition sub-room 의 5+ commit 시퀀스)
 ```
 
 ## 주석 분류
@@ -83,6 +83,8 @@ pnpm tsc --noEmit && pnpm lint && pnpm vitest run <touched-tree>
 - CLAUDE.md comment policy ("only WHY when non-obvious; no WHAT/sprint-history") 정합.
 - 사용자 지시 (2026-05-05): "memory 로 필요한 건 옮기고, 간단하게 병합할만하거나 요약할만한 건 요약."
 - 500줄 임계 (2026-05-17): 사용자 reframe — 단순 주석 정리 룰이 god file 시퀀스 트리거로 격상.
+- 700줄 임계 (2026-05-29): 500줄은 일반 production/test 파일에 너무 공격적이라
+  soft cap 을 완화. 700줄 이상만 god file 시퀀스를 트리거한다.
 
 ## 관련
 
