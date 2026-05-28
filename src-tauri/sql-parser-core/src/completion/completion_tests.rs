@@ -253,6 +253,47 @@ fn ac_488_extension_packs_are_keyed_by_detected_extension_name() {
 }
 
 #[test]
+fn ac_488_operator_pack_candidates_replace_typed_operator_prefixes() {
+    let mut vector_req = empty_vocabulary_request("postgresql", "psql", "SELECT embedding <");
+    vector_req.catalog.extensions = vec![extension("pgvector")];
+    let vector_result = complete_sql(vector_req);
+    assert!(labels(&vector_result).contains(&"<->".to_string()));
+    assert_eq!(
+        vector_result.replace_range.from,
+        CompletionCursorOffsets {
+            utf16: 17,
+            utf8: 17
+        }
+    );
+    assert_eq!(
+        vector_result.replace_range.to,
+        CompletionCursorOffsets {
+            utf16: 18,
+            utf8: 18
+        }
+    );
+
+    let mut trigram_req = empty_vocabulary_request("postgresql", "psql", "SELECT title %");
+    trigram_req.catalog.extensions = vec![extension("pg_trgm")];
+    let trigram_result = complete_sql(trigram_req);
+    assert!(labels(&trigram_result).contains(&"%".to_string()));
+    assert_eq!(
+        trigram_result.replace_range.from,
+        CompletionCursorOffsets {
+            utf16: 13,
+            utf8: 13
+        }
+    );
+    assert_eq!(
+        trigram_result.replace_range.to,
+        CompletionCursorOffsets {
+            utf16: 14,
+            utf8: 14
+        }
+    );
+}
+
+#[test]
 fn mysql_family_reference_vocabulary_smoke() {
     assert_builtin_completion_contains("mysql", "mysql-client", "ON", "ON DUPLICATE KEY UPDATE");
     assert_builtin_completion_contains("mysql", "mysql-client", "JSON_TA", "JSON_TABLE");

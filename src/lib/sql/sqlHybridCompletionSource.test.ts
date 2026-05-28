@@ -93,6 +93,38 @@ describe("createSqlHybridCompletionSource", () => {
     expect(legacySource).not.toHaveBeenCalled();
   });
 
+  it("keeps operator completions valid while typing operator prefixes", async () => {
+    const wasmResult: CoreCompletionResult = {
+      items: [{ label: "<->", kind: "operator", apply: "<->" }],
+      replaceRange: {
+        from: { utf16: 17, utf8: 17 },
+        to: { utf16: 18, utf8: 18 },
+      },
+      incomplete: false,
+      metadata: {
+        engine: "wasm",
+        dialect: "postgresql",
+        shell: "psql",
+        catalogRevision: "rev-1",
+      },
+    };
+    const source = createSqlHybridCompletionSource({
+      dialect: StandardSQL,
+      getNamespace: () => TEST_SCHEMA,
+      getCompletionContext: () => completionContext(),
+      completeWithPreloadedWasm: vi.fn().mockReturnValue(wasmResult),
+      completeWithWasm: vi.fn(),
+    });
+
+    const result = await source(codeMirrorContext("SELECT embedding <"));
+
+    expect(result?.validFor).toBeInstanceOf(RegExp);
+    const validFor = result?.validFor as RegExp;
+    expect(validFor.test("<")).toBe(true);
+    expect(validFor.test("<-")).toBe(true);
+    expect(validFor.test("%")).toBe(true);
+  });
+
   it("falls back to legacy TypeScript sources when WASM has no candidates", async () => {
     const emptyWasmResult: CoreCompletionResult = {
       items: [],
