@@ -12,9 +12,10 @@
  * @param {string} objects
  * @param {string} columns
  * @param {string} catalog_functions
+ * @param {string} extensions
  * @returns {any}
  */
-export function complete_sql(text, cursor_utf16, cursor_utf8, dialect, shell, catalog_revision, keywords, vocabulary_functions, objects, columns, catalog_functions) {
+export function complete_sql(text, cursor_utf16, cursor_utf8, dialect, shell, catalog_revision, keywords, vocabulary_functions, objects, columns, catalog_functions, extensions) {
     const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(dialect, wasm.__wbindgen_export, wasm.__wbindgen_export2);
@@ -33,7 +34,9 @@ export function complete_sql(text, cursor_utf16, cursor_utf8, dialect, shell, ca
     const len7 = WASM_VECTOR_LEN;
     const ptr8 = passStringToWasm0(catalog_functions, wasm.__wbindgen_export, wasm.__wbindgen_export2);
     const len8 = WASM_VECTOR_LEN;
-    const ret = wasm.complete_sql(ptr0, len0, cursor_utf16, cursor_utf8, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6, ptr7, len7, ptr8, len8);
+    const ptr9 = passStringToWasm0(extensions, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len9 = WASM_VECTOR_LEN;
+    const ret = wasm.complete_sql(ptr0, len0, cursor_utf16, cursor_utf8, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6, ptr7, len7, ptr8, len8, ptr9, len9);
     return takeObject(ret);
 }
 

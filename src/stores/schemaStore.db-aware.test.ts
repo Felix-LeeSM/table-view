@@ -39,6 +39,7 @@ describe("schemaStore — db-aware caching (Sprint 263)", () => {
       tables: {},
       views: {},
       functions: {},
+      postgresExtensions: {},
       tableColumnsCache: {},
       loading: false,
       error: null,
@@ -86,6 +87,21 @@ describe("schemaStore — db-aware caching (Sprint 263)", () => {
     await useSchemaStore.getState().loadSchemas("conn1", "db2");
     await useSchemaStore.getState().loadTables("conn1", "db1", "public");
     await useSchemaStore.getState().loadTables("conn1", "db2", "public");
+    useSchemaStore.setState({
+      postgresExtensions: {
+        conn1: {
+          db1: [
+            {
+              name: "pgcrypto",
+              schema: "public",
+              version: "1.3",
+              comment: null,
+            },
+          ],
+          db2: [],
+        },
+      },
+    });
 
     useSchemaStore.getState().clearForWorkspace("conn1", "db1");
 
@@ -94,18 +110,28 @@ describe("schemaStore — db-aware caching (Sprint 263)", () => {
     expect(state.schemas.conn1?.db2).toEqual([{ name: "public" }]);
     expect(state.tables.conn1?.db1).toBeUndefined();
     expect(state.tables.conn1?.db2?.public).toBeDefined();
+    expect(state.postgresExtensions.conn1?.db1).toBeUndefined();
+    expect(state.postgresExtensions.conn1?.db2).toEqual([]);
   });
 
   it("clearForConnection drops every db slot for the connection", async () => {
     await useSchemaStore.getState().loadSchemas("conn1", "db1");
     await useSchemaStore.getState().loadSchemas("conn1", "db2");
     await useSchemaStore.getState().loadSchemas("conn2", "db1");
+    useSchemaStore.setState({
+      postgresExtensions: {
+        conn1: { db1: [], db2: [] },
+        conn2: { db1: [] },
+      },
+    });
 
     useSchemaStore.getState().clearForConnection("conn1");
 
     const state = useSchemaStore.getState();
     expect(state.schemas.conn1).toBeUndefined();
     expect(state.schemas.conn2?.db1).toEqual([{ name: "public" }]);
+    expect(state.postgresExtensions.conn1).toBeUndefined();
+    expect(state.postgresExtensions.conn2?.db1).toEqual([]);
   });
 
   it("evictSchemaForName drops only the (connId, db, schemaName) triple", async () => {

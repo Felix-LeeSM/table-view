@@ -1,0 +1,16 @@
+diff --git a/src-tauri/sql-parser-core/src/completion/completion_tests.rs b/src-tauri/sql-parser-core/src/completion/completion_tests.rs
+index e0fbb28e..2b76d191 100644
+--- a/src-tauri/sql-parser-core/src/completion/completion_tests.rs
++++ b/src-tauri/sql-parser-core/src/completion/completion_tests.rs
+@@ -205,0 +206,11 @@ fn postgresql_psql_reference_vocabulary_smoke() {
++#[test]
++fn ac_488_pgcrypto_pack_is_not_suggested_without_installed_extension_inventory() {
++    let result = complete_sql(empty_vocabulary_request(
++        "postgresql",
++        "psql",
++        "GEN_RANDOM",
++    ));
++
++    assert!(!labels(&result).contains(&"GEN_RANDOM_UUID".to_string()));
++}
++

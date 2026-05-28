@@ -15,6 +15,7 @@ interface SqlCompletionWasmModule {
     objects: string,
     columns: string,
     catalogFunctions: string,
+    extensions: string,
   ) => unknown;
 }
 
@@ -93,6 +94,11 @@ function callCompleteSql(
           fn.arguments ?? "",
           fn.returnType ?? "",
         ].join("\t"),
+      )
+      .join("\n"),
+    request.catalog.extensions
+      .map((extension) =>
+        [extension.schema, extension.name, extension.version].join("\t"),
       )
       .join("\n"),
   );

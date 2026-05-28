@@ -42,8 +42,9 @@ pub use ast::{
 pub use completion::{
     complete_sql, complete_sql_compact, CompletionCursorOffsets, CompletionItem,
     CompletionReplaceRange, CompletionResultMetadata, SqlCompletionCatalogColumn,
-    SqlCompletionCatalogFunction, SqlCompletionCatalogObject, SqlCompletionCatalogSnapshot,
-    SqlCompletionCoreResult, SqlCompletionRequest, SqlCompletionVocabulary,
+    SqlCompletionCatalogExtension, SqlCompletionCatalogFunction, SqlCompletionCatalogObject,
+    SqlCompletionCatalogSnapshot, SqlCompletionCoreResult, SqlCompletionRequest,
+    SqlCompletionVocabulary,
 };
 pub use parser::parse;
 
@@ -95,6 +96,7 @@ mod wasm_bridge {
         objects: &str,
         columns: &str,
         catalog_functions: &str,
+        extensions: &str,
     ) -> JsValue {
         let result = super::complete_sql_compact(
             text,
@@ -108,6 +110,7 @@ mod wasm_bridge {
             objects,
             columns,
             catalog_functions,
+            extensions,
         );
         serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL)
     }

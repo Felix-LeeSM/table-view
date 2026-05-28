@@ -2,6 +2,7 @@ import type { DatabaseType } from "@/types/connection";
 import type {
   ColumnInfo,
   FunctionInfo,
+  PostgresExtensionInfo,
   SchemaInfo,
   TableInfo,
   ViewInfo,
@@ -26,6 +27,7 @@ export interface SqlCompletionCatalogStoreSnapshot {
   views: ByConn<BySchema<ViewInfo[]>>;
   functions: ByConn<BySchema<FunctionInfo[]>>;
   tableColumnsCache: ByConn<BySchema<ByTable<ColumnInfo[]>>>;
+  postgresExtensions?: ByConn<PostgresExtensionInfo[]>;
 }
 
 export interface BuildSqlCompletionContextInput extends SqlCompletionCatalogStoreSnapshot {
@@ -73,12 +75,20 @@ export interface SqlCompletionCatalogFunction {
   kind: string;
 }
 
+export interface SqlCompletionCatalogExtension {
+  schema: string;
+  name: string;
+  version: string;
+  comment: string | null;
+}
+
 export interface SqlCompletionCatalogSnapshot {
   revision: string;
   schemas: readonly SqlCompletionCatalogSchema[];
   objects: readonly SqlCompletionCatalogObject[];
   columns: readonly SqlCompletionCatalogColumn[];
   functions: readonly SqlCompletionCatalogFunction[];
+  extensions: readonly SqlCompletionCatalogExtension[];
 }
 
 export interface SqlCompletionCacheState {
@@ -88,6 +98,7 @@ export interface SqlCompletionCacheState {
   viewsLoaded: boolean;
   columnsLoaded: boolean;
   functionsLoaded: boolean;
+  extensionsLoaded: boolean;
 }
 
 export interface SqlCompletionContext {
@@ -140,6 +151,9 @@ export function buildSqlCompletionContext(
   const functions = flattenFunctions(byConnDb.functions).sort(
     compareCatalogFunction,
   );
+  const extensions = flattenExtensions(byConnDb.postgresExtensions).sort(
+    compareCatalogExtension,
+  );
   const schemas = mergeSchemas(
     explicitSchemas,
     Object.keys(byConnDb.tables),
@@ -158,6 +172,7 @@ export function buildSqlCompletionContext(
       objects,
       columns,
       functions,
+      extensions,
     );
 
   return {
@@ -176,6 +191,7 @@ export function buildSqlCompletionContext(
       objects,
       columns,
       functions,
+      extensions,
     },
     cacheState: {
       schemasLoaded: byConnDb.schemasLoaded,
@@ -184,6 +200,7 @@ export function buildSqlCompletionContext(
       viewsLoaded: byConnDb.viewsLoaded,
       columnsLoaded: byConnDb.columnsLoaded,
       functionsLoaded: byConnDb.functionsLoaded,
+      extensionsLoaded: byConnDb.extensionsLoaded,
     },
   };
 }
@@ -198,11 +215,13 @@ function selectDb(
   views: BySchema<ViewInfo[]>;
   functions: BySchema<FunctionInfo[]>;
   tableColumnsCache: BySchema<ByTable<ColumnInfo[]>>;
+  postgresExtensions: PostgresExtensionInfo[];
   schemasLoaded: boolean;
   tablesLoaded: boolean;
   viewsLoaded: boolean;
   functionsLoaded: boolean;
   columnsLoaded: boolean;
+  extensionsLoaded: boolean;
 } {
   const schemas = snapshot.schemas[connectionId]?.[database];
   const tables = snapshot.tables[connectionId]?.[database];
@@ -210,6 +229,8 @@ function selectDb(
   const functions = snapshot.functions[connectionId]?.[database];
   const tableColumnsCache =
     snapshot.tableColumnsCache[connectionId]?.[database];
+  const postgresExtensions =
+    snapshot.postgresExtensions?.[connectionId]?.[database];
 
   return {
     schemas: schemas ?? [],
@@ -217,11 +238,13 @@ function selectDb(
     views: views ?? {},
     functions: functions ?? {},
     tableColumnsCache: tableColumnsCache ?? {},
+    postgresExtensions: postgresExtensions ?? [],
     schemasLoaded: schemas !== undefined,
     tablesLoaded: tables !== undefined,
     viewsLoaded: views !== undefined,
     functionsLoaded: functions !== undefined,
     columnsLoaded: tableColumnsCache !== undefined,
+    extensionsLoaded: postgresExtensions !== undefined,
   };
 }
 
@@ -303,6 +326,17 @@ function flattenFunctions(
   );
 }
 
+function flattenExtensions(
+  extensions: readonly PostgresExtensionInfo[],
+): SqlCompletionCatalogExtension[] {
+  return extensions.map((extension) => ({
+    schema: extension.schema,
+    name: extension.name,
+    version: extension.version,
+    comment: extension.comment,
+  }));
+}
+
 function mergeSchemas(...groups: readonly (readonly string[])[]): string[] {
   const names = new Set<string>();
   for (const group of groups) {
@@ -342,6 +376,7 @@ function deriveCatalogRevision(
   objects: readonly SqlCompletionCatalogObject[],
   columns: readonly SqlCompletionCatalogColumn[],
   functions: readonly SqlCompletionCatalogFunction[],
+  extensions: readonly SqlCompletionCatalogExtension[],
 ): string {
   const parts = [
     ...schemas.map((schema) => `s:${schema}`),
@@ -357,6 +392,11 @@ function deriveCatalogRevision(
       (fn) =>
         `f:${fn.kind}:${fn.qualifiedName}:${fn.arguments ?? ""}:` +
         `${fn.returnType ?? ""}:${fn.language ?? ""}`,
+    ),
+    ...extensions.map(
+      (extension) =>
+        `x:${extension.schema}:${extension.name}:${extension.version}:` +
+        `${extension.comment ?? ""}`,
     ),
   ];
   return [
@@ -415,5 +455,16 @@ function compareCatalogFunction(
     left.schema.localeCompare(right.schema) ||
     left.name.localeCompare(right.name) ||
     left.kind.localeCompare(right.kind)
+  );
+}
+
+function compareCatalogExtension(
+  left: SqlCompletionCatalogExtension,
+  right: SqlCompletionCatalogExtension,
+): number {
+  return (
+    left.name.localeCompare(right.name) ||
+    left.schema.localeCompare(right.schema) ||
+    left.version.localeCompare(right.version)
   );
 }

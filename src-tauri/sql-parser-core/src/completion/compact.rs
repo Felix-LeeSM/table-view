@@ -1,7 +1,8 @@
 use super::{
     complete_sql, CompletionCursorOffsets, SqlCompletionCatalogColumn,
-    SqlCompletionCatalogFunction, SqlCompletionCatalogObject, SqlCompletionCatalogSnapshot,
-    SqlCompletionCoreResult, SqlCompletionRequest, SqlCompletionVocabulary,
+    SqlCompletionCatalogExtension, SqlCompletionCatalogFunction, SqlCompletionCatalogObject,
+    SqlCompletionCatalogSnapshot, SqlCompletionCoreResult, SqlCompletionRequest,
+    SqlCompletionVocabulary,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -17,6 +18,7 @@ pub fn complete_sql_compact(
     objects: &str,
     columns: &str,
     catalog_functions: &str,
+    extensions: &str,
 ) -> SqlCompletionCoreResult {
     complete_sql(SqlCompletionRequest {
         text: text.to_string(),
@@ -35,6 +37,7 @@ pub fn complete_sql_compact(
             objects: parse_objects(objects),
             columns: parse_columns(columns),
             functions: parse_functions(catalog_functions),
+            extensions: parse_extensions(extensions),
         },
     })
 }
@@ -88,6 +91,20 @@ fn parse_functions(input: &str) -> Vec<SqlCompletionCatalogFunction> {
                 qualified_name: fields.next()?.to_string(),
                 arguments: empty_to_none(fields.next()?),
                 return_type: empty_to_none(fields.next()?),
+            })
+        })
+        .collect()
+}
+
+fn parse_extensions(input: &str) -> Vec<SqlCompletionCatalogExtension> {
+    input
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            Some(SqlCompletionCatalogExtension {
+                schema: fields.next()?.to_string(),
+                name: fields.next()?.to_string(),
+                version: fields.next()?.to_string(),
             })
         })
         .collect()

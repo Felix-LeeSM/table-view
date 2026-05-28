@@ -40,6 +40,30 @@ function request() {
   return buildSqlCompletionRequest("SEL", 3, ctx);
 }
 
+function requestWithExtension() {
+  const snapshot = emptySnapshot();
+  snapshot.postgresExtensions = {
+    conn1: {
+      app: [
+        {
+          schema: "public",
+          name: "pgcrypto",
+          version: "1.3",
+          comment: null,
+        },
+      ],
+    },
+  };
+  const ctx = buildSqlCompletionContext({
+    ...snapshot,
+    connectionId: "conn1",
+    database: "app",
+    dbType: "postgresql",
+    catalogRevision: "rev-ext",
+  });
+  return buildSqlCompletionRequest("GEN_RANDOM", 10, ctx);
+}
+
 describe("sqlCompletionWasm", () => {
   beforeEach(() => {
     __resetSqlCompletionWasmModuleForTests();
@@ -76,6 +100,28 @@ describe("sqlCompletionWasm", () => {
       expect.any(String),
       expect.any(String),
       expect.any(String),
+      expect.any(String),
+    );
+  });
+
+  it("serializes installed extension inventory across the WASM bridge", async () => {
+    completeSqlMock.mockReturnValue(null);
+
+    await completeSqlWithWasm(requestWithExtension());
+
+    expect(completeSqlMock).toHaveBeenCalledWith(
+      "GEN_RANDOM",
+      10,
+      10,
+      "postgresql",
+      "psql",
+      "rev-ext",
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      "public\tpgcrypto\t1.3",
     );
   });
 

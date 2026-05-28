@@ -105,6 +105,7 @@ describe("schemaStore — scope (L2 fix)", () => {
     expect(typeof state.loadTables).toBe("function");
     expect(typeof state.loadViews).toBe("function");
     expect(typeof state.loadFunctions).toBe("function");
+    expect(typeof state.loadPostgresExtensions).toBe("function");
     expect(typeof state.getTableColumns).toBe("function");
     expect(typeof state.getTableIndexes).toBe("function");
     expect(typeof state.getTableConstraints).toBe("function");

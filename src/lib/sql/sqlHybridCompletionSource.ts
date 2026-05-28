@@ -156,7 +156,9 @@ function coreValidFor(result: CoreCompletionResult): RegExp {
   const hasMetaCommand = result.items.some(
     (item) => item.kind === "meta-command",
   );
-  return hasMetaCommand ? /^[\w$.\\]*$/ : /^[\w$]*$/;
+  const hasOperator = result.items.some((item) => item.kind === "operator");
+  if (hasMetaCommand) return /^[\w$.\\]*$/;
+  return hasOperator ? /^[\w$+\-*/<>=~!@#%^&|`?]*$/ : /^[\w$]*$/;
 }
 
 function dedupeCompletions(options: readonly Completion[]): Completion[] {

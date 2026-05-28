@@ -69,6 +69,13 @@ const fnInfo = (
   kind,
 });
 
+const pgExtension = (name: string, schemaName = "public") => ({
+  name,
+  schema: schemaName,
+  version: "1.0",
+  comment: null,
+});
+
 describe("buildSqlCompletionContext", () => {
   it("normalizes a PostgreSQL schemaStore snapshot into a flat WASM-ready context", () => {
     const snapshot = emptySnapshot();
@@ -228,6 +235,38 @@ describe("buildSqlCompletionContext", () => {
 
     expect(usersCtx.catalog.revision).not.toBe(ordersCtx.catalog.revision);
     expect(usersCtx.catalog.revision).toMatch(/^conn1:db1:1:1:0:0:/);
+  });
+
+  it("threads installed PostgreSQL extensions into the WASM-ready catalog", () => {
+    const snapshot = emptySnapshot();
+    snapshot.postgresExtensions = {
+      conn1: {
+        app: [pgExtension("pgcrypto"), pgExtension("uuid-ossp", "extensions")],
+      },
+    };
+
+    const ctx = buildSqlCompletionContext({
+      ...snapshot,
+      connectionId: "conn1",
+      database: "app",
+      dbType: "postgresql",
+    });
+
+    expect(ctx.catalog.extensions).toEqual([
+      {
+        schema: "public",
+        name: "pgcrypto",
+        version: "1.0",
+        comment: null,
+      },
+      {
+        schema: "extensions",
+        name: "uuid-ossp",
+        version: "1.0",
+        comment: null,
+      },
+    ]);
+    expect(ctx.cacheState.extensionsLoaded).toBe(true);
   });
 
   it("keeps MariaDB distinct while reusing the MySQL completion family", () => {

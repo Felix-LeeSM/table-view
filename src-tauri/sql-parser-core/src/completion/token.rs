@@ -20,6 +20,15 @@ pub(super) fn completion_token_at(text: &str, cursor: CompletionCursorOffsets) -
         from_utf8 = idx;
     }
 
+    if from_utf8 == cursor_utf8 {
+        for (idx, ch) in before.char_indices().rev() {
+            if !is_operator_char(ch) {
+                break;
+            }
+            from_utf8 = idx;
+        }
+    }
+
     let mut prefix = text[from_utf8..cursor_utf8].to_string();
     let mut qualifier = None;
     if from_utf8 > 0 && text[..from_utf8].ends_with('.') {
@@ -50,6 +59,28 @@ pub(super) fn completion_token_at(text: &str, cursor: CompletionCursorOffsets) -
 
 pub(super) fn is_ident_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_' || ch == '$'
+}
+
+fn is_operator_char(ch: char) -> bool {
+    matches!(
+        ch,
+        '+' | '-'
+            | '*'
+            | '/'
+            | '<'
+            | '>'
+            | '='
+            | '~'
+            | '!'
+            | '@'
+            | '#'
+            | '%'
+            | '^'
+            | '&'
+            | '|'
+            | '`'
+            | '?'
+    )
 }
 
 fn valid_cursor_utf8(text: &str, requested: usize) -> usize {

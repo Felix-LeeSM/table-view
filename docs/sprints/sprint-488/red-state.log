@@ -1,0 +1,19 @@
+RED verification for Sprint 488.
+
+Command:
+
+```bash
+cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml ac_488 --quiet
+```
+
+Result:
+
+```text
+running 1 test
+completion::completion_tests::ac_488_pgcrypto_pack_is_not_suggested_without_installed_extension_inventory --- FAILED
+
+thread 'completion::completion_tests::ac_488_pgcrypto_pack_is_not_suggested_without_installed_extension_inventory' panicked at src/completion/completion_tests.rs:214:5:
+assertion failed: !labels(&result).contains(&"GEN_RANDOM_UUID".to_string())
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 543 filtered out
+```
