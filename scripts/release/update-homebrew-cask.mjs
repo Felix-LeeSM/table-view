@@ -111,7 +111,7 @@ async function sha256Url(url) {
 }
 
 function isMacArm64DmgName(name) {
-  const normalized = name.toLowerCase();
+  const normalized = name.toLowerCase().replace(/\.dmg$/, "");
   return /(^|[_-])(aarch64|arm64|apple.?silicon)([_-]|$)/.test(normalized);
 }
 
