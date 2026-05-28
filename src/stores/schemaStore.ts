@@ -76,6 +76,25 @@ interface SchemaState {
 
   loadSchemas: (connId: string, db: string) => Promise<void>;
   loadTables: (connId: string, db: string, schema: string) => Promise<void>;
+  recordTablesReloaded: (
+    connId: string,
+    db: string,
+    schema: string,
+    tables: TableInfo[],
+  ) => void;
+  recordTableDropped: (
+    connId: string,
+    db: string,
+    schema: string,
+    table: string,
+  ) => void;
+  recordTableRenamed: (
+    connId: string,
+    db: string,
+    schema: string,
+    table: string,
+    newName: string,
+  ) => void;
   loadViews: (connId: string, db: string, schema: string) => Promise<void>;
   loadFunctions: (connId: string, db: string, schema: string) => Promise<void>;
   loadPostgresExtensions: (
@@ -305,6 +324,42 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       handleDbMismatch(connId, e);
       set({ error: String(e), loading: false });
     }
+  },
+
+  recordTablesReloaded: (connId, db, schema, tables) => {
+    set((state) => ({
+      tables: setConnDbSchema(state.tables, connId, db, schema, tables),
+    }));
+  },
+
+  recordTableDropped: (connId, db, schema, table) => {
+    set((state) => {
+      const current = state.tables[connId]?.[db]?.[schema] ?? [];
+      return {
+        tables: setConnDbSchema(
+          state.tables,
+          connId,
+          db,
+          schema,
+          current.filter((t) => t.name !== table),
+        ),
+      };
+    });
+  },
+
+  recordTableRenamed: (connId, db, schema, table, newName) => {
+    set((state) => {
+      const current = state.tables[connId]?.[db]?.[schema] ?? [];
+      return {
+        tables: setConnDbSchema(
+          state.tables,
+          connId,
+          db,
+          schema,
+          current.map((t) => (t.name === table ? { ...t, name: newName } : t)),
+        ),
+      };
+    });
   },
 
   loadViews: async (connId, db, schema) => {

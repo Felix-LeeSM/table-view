@@ -103,6 +103,9 @@ describe("schemaStore — scope (L2 fix)", () => {
     const publicState = state as unknown as Record<string, unknown>;
     expect(typeof state.loadSchemas).toBe("function");
     expect(typeof state.loadTables).toBe("function");
+    expect(typeof state.recordTablesReloaded).toBe("function");
+    expect(typeof state.recordTableDropped).toBe("function");
+    expect(typeof state.recordTableRenamed).toBe("function");
     expect(typeof state.loadViews).toBe("function");
     expect(typeof state.loadFunctions).toBe("function");
     expect(typeof state.loadPostgresExtensions).toBe("function");
