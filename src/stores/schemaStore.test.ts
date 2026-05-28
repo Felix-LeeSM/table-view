@@ -456,10 +456,80 @@ describe("schemaStore", () => {
   // direct tauri.executeQuery calls already lived in
   // `useQueryExecution.ts`, so this delegate test no longer fits.
 
-  // Sprint 223 (P10 step 2) — 6 drop/rename reload-then-fallback cases
-  // moved to `src/hooks/useSchemaTableMutations.test.ts`. The store now
-  // owns only a thin `await tauri.X(...)` body; the reload + optimistic
-  // fallback policy lives with the use-case hook.
+  it("recordTablesReloaded replaces one schema table cache and preserves siblings", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 1 }],
+            audit: [{ name: "events", schema: "audit", row_count: 2 }],
+          },
+        },
+      },
+    });
+
+    useSchemaStore
+      .getState()
+      .recordTablesReloaded("conn1", "db1", "public", [
+        { name: "orders", schema: "public", row_count: 3 },
+      ]);
+
+    const state = useSchemaStore.getState();
+    expect(state.tables.conn1?.db1?.public).toEqual([
+      { name: "orders", schema: "public", row_count: 3 },
+    ]);
+    expect(state.tables.conn1?.db1?.audit).toEqual([
+      { name: "events", schema: "audit", row_count: 2 },
+    ]);
+  });
+
+  it("recordTableDropped removes the table from cache fallback", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [
+              { name: "users", schema: "public", row_count: 1 },
+              { name: "orders", schema: "public", row_count: 2 },
+            ],
+          },
+        },
+      },
+    });
+
+    useSchemaStore
+      .getState()
+      .recordTableDropped("conn1", "db1", "public", "users");
+
+    expect(useSchemaStore.getState().tables.conn1?.db1?.public).toEqual([
+      { name: "orders", schema: "public", row_count: 2 },
+    ]);
+  });
+
+  it("recordTableRenamed updates cache fallback and handles cache miss", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 1 }],
+          },
+        },
+      },
+    });
+
+    useSchemaStore
+      .getState()
+      .recordTableRenamed("conn1", "db1", "public", "users", "people");
+    useSchemaStore
+      .getState()
+      .recordTableRenamed("conn1", "db1", "missing", "ghost", "shadow");
+
+    const state = useSchemaStore.getState();
+    expect(state.tables.conn1?.db1?.public).toEqual([
+      { name: "people", schema: "public", row_count: 1 },
+    ]);
+    expect(state.tables.conn1?.db1?.missing).toEqual([]);
+  });
 
   it("handles loadTables error", async () => {
     const { listTables } = await import("@lib/tauri");
