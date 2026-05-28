@@ -7,19 +7,15 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import WorkspacePage from "./WorkspacePage";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useThemeStore } from "@stores/themeStore";
-import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
+import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnectionSession";
 import * as windowControls from "@lib/window-controls";
 
-// Sprint 224 (P10 step 3a): the read-only `hydrateFromSession` body moved
-// from `connectionStore.ts` into `@hooks/useConnectionSessionHydration`,
-// and `useWindowFocusHydration` (the hook the workspace mounts) now calls
-// `hydrateConnectionSession()` directly. Wrap the real implementation in
-// a spy so the workspace's mount + focus call counts can still be
-// asserted byte-equivalent to the pre-extraction contract.
-vi.mock("@hooks/useConnectionSessionHydration", async () => {
+// Wrap the runtime implementation in a spy so the workspace's mount + focus
+// call counts can still be asserted while preserving store behavior.
+vi.mock("@lib/runtime/connection/hydrateConnectionSession", async () => {
   const actual = await vi.importActual<
-    typeof import("@hooks/useConnectionSessionHydration")
-  >("@hooks/useConnectionSessionHydration");
+    typeof import("@lib/runtime/connection/hydrateConnectionSession")
+  >("@lib/runtime/connection/hydrateConnectionSession");
   return {
     ...actual,
     hydrateConnectionSession: vi.fn(actual.hydrateConnectionSession),

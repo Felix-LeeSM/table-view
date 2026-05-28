@@ -7,7 +7,7 @@ import { renderHook, act } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { entryKey, useDataGridEditStore } from "@stores/dataGridEditStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
-import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
+import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnectionSession";
 import { useWindowFocusHydration } from "./useWindowFocusHydration";
 
 // Mock scopedLocalStorage so hydrateConnectionSession's readConnectionSession
@@ -30,14 +30,13 @@ vi.mock("@lib/scopedLocalStorage", () => ({
   readConnectionSession: () => mockReadConnectionSession(),
 }));
 
-// Sprint 224 (P10 step 3a): the hook now calls `hydrateConnectionSession`
-// directly instead of `useConnectionStore.getState().hydrateFromSession()`.
-// We wrap the real implementation in a spy so call-count assertions still
-// work while the byte-equivalent store-mutation behaviour is preserved.
-vi.mock("@hooks/useConnectionSessionHydration", async () => {
+// The hook calls the runtime `hydrateConnectionSession` entrypoint directly.
+// Wrap the real implementation in a spy so call-count assertions still work
+// while the store-mutation behaviour is preserved.
+vi.mock("@lib/runtime/connection/hydrateConnectionSession", async () => {
   const actual = await vi.importActual<
-    typeof import("./useConnectionSessionHydration")
-  >("./useConnectionSessionHydration");
+    typeof import("@lib/runtime/connection/hydrateConnectionSession")
+  >("@lib/runtime/connection/hydrateConnectionSession");
   return {
     ...actual,
     hydrateConnectionSession: vi.fn(actual.hydrateConnectionSession),
