@@ -18,6 +18,7 @@ export interface SafeModeState {
   // and the receiver path keeps live windows in sync.
   setMode: (next: SafeMode) => Promise<void>;
   toggle: () => Promise<void>;
+  hydrateSafeModeFromSnapshot: (mode: SafeMode) => void;
 }
 
 /**
@@ -67,6 +68,10 @@ export const useSafeModeStore = create<SafeModeState>()((set, get) => ({
     const next = NEXT_MODE[get().mode];
     await persistSafeModeSetting(next);
     set({ mode: next });
+  },
+
+  hydrateSafeModeFromSnapshot: (mode) => {
+    set({ mode });
   },
 }));
 

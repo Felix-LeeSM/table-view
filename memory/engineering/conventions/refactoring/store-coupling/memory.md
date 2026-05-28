@@ -20,9 +20,9 @@ updated: 2026-05-28
   필요한 write 는 `hydrate*`, `apply*`, `recover*`, `record*` 같은 action 을
   store 에 추가한 뒤 호출한다.
 - 현재 legacy debt: `src/hooks/useSchemaTableMutations.ts`,
-  `src/hooks/useConnectionSessionHydration.ts`, `src/lib/snapshot/loadAll.ts` 는 아직
-  direct `setState` 를 쓴다. 새 코드가 따라 해서는 안 되며, touched scope 에서
-  store action 또는 `src/lib/runtime/**` use-case 로 낮춘다.
+  `src/hooks/useConnectionSessionHydration.ts` 는 아직 direct `setState` 를 쓴다.
+  새 코드가 따라 해서는 안 되며, touched scope 에서 store action 또는
+  `src/lib/runtime/**` use-case 로 낮춘다.
 
 ## B-2. `useXStore.getState()` read 정책
 

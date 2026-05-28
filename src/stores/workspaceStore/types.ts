@@ -253,6 +253,9 @@ export interface WorkspaceStoreState {
   loadQueryIntoTab: (payload: LoadQueryPayload) => void;
 
   clearForConnection: (connId: string) => void;
+  hydrateWorkspacesFromSnapshot: (
+    workspaces: Record<string, Record<string, WorkspaceState>>,
+  ) => void;
 
   toggleExpand: (connId: string, db: string, nodeId: string) => void;
   setExpanded: (connId: string, db: string, nodes: string[]) => void;

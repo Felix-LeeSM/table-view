@@ -53,6 +53,13 @@ export interface ConnectionState {
   setFocusedConn: (id: string | null) => void;
   /** Hydrate focusedConnId + activeStatuses from session-scoped localStorage. */
   hydrateFromSession: () => void;
+  hydrateConnectionsFromSnapshot: (
+    connections: ConnectionConfig[],
+    groups: ConnectionGroup[],
+  ) => void;
+  hydrateActiveStatusesFromSnapshot: (
+    activeStatuses: Record<string, ConnectionStatus>,
+  ) => void;
   /**
    * Record the active database for the connection. No-op when the
    * connection isn't in the `connected` variant — `activeDb` only makes
@@ -273,6 +280,20 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   },
 
   hydrateFromSession: () => hydrateConnectionSession(),
+
+  hydrateConnectionsFromSnapshot: (connections, groups) => {
+    set({
+      connections,
+      groups,
+      // Snapshot is the source of truth at boot, so the launcher skeleton can
+      // switch to the hydrated empty/error surface immediately.
+      hasLoadedOnce: true,
+    });
+  },
+
+  hydrateActiveStatusesFromSnapshot: (activeStatuses) => {
+    set({ activeStatuses });
+  },
 
   setActiveDb: (id, dbName) =>
     set((state) => {
