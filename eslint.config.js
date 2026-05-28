@@ -31,10 +31,7 @@ let DEFINED_TOKENS_CACHE = null;
 function loadDefinedTokens(cwd) {
   if (DEFINED_TOKENS_CACHE) return DEFINED_TOKENS_CACHE;
   const set = new Set();
-  const files = [
-    resolve(cwd, "src/themes.css"),
-    resolve(cwd, "src/index.css"),
-  ];
+  const files = [resolve(cwd, "src/themes.css"), resolve(cwd, "src/index.css")];
   for (const file of files) {
     if (!existsSync(file)) continue;
     const content = readFileSync(file, "utf8");
@@ -48,6 +45,43 @@ function loadDefinedTokens(cwd) {
 
 const tvLocal = {
   rules: {
+    "no-direct-zustand-setstate": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Disallow production code from writing Zustand stores through direct useXStore.setState calls.",
+        },
+        schema: [],
+        messages: {
+          direct:
+            "Do not call {{store}}.setState in production component/hook/runtime code. Express the state transition as a store action instead.",
+        },
+      },
+      create(context) {
+        function getPropertyName(node) {
+          if (node.type === "Identifier") return node.name;
+          if (node.type === "Literal" && typeof node.value === "string") {
+            return node.value;
+          }
+          return null;
+        }
+
+        return {
+          MemberExpression(node) {
+            if (getPropertyName(node.property) !== "setState") return;
+            const object = node.object;
+            if (object.type !== "Identifier") return;
+            if (!/^use[A-Z].*Store$/.test(object.name)) return;
+            context.report({
+              node,
+              messageId: "direct",
+              data: { store: object.name },
+            });
+          },
+        };
+      },
+    },
     "no-tailwind-arbitrary-px": {
       meta: {
         type: "problem",
@@ -57,8 +91,7 @@ const tvLocal = {
         },
         schema: [],
         messages: {
-          noPx:
-            "Arbitrary pixel value '{{match}}' is not allowed on size/spacing utilities. Add a design token (e.g. --text-3xs, --spacing-dialog-md) to @theme inline and use the named class.",
+          noPx: "Arbitrary pixel value '{{match}}' is not allowed on size/spacing utilities. Add a design token (e.g. --text-3xs, --spacing-dialog-md) to @theme inline and use the named class.",
         },
       },
       create(context) {
@@ -193,6 +226,21 @@ export default tseslint.config(
         "warn",
         { max: 500, skipBlankLines: true, skipComments: true },
       ],
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: [
+      "**/*.test.{ts,tsx}",
+      "**/__tests__/**",
+      "src/stores/**",
+      "src/test-setup.ts",
+      "src/test-utils.{ts,tsx}",
+      "src/test-utils/**",
+      "src/lib/zustand-ipc-bridge.ts",
+    ],
+    rules: {
+      "tv-local/no-direct-zustand-setstate": "error",
     },
   },
   {
