@@ -11,6 +11,17 @@ import type {
   ViewInfo,
 } from "@/types/schema";
 import * as tauri from "@lib/tauri";
+import {
+  deleteConn,
+  deleteConnDb,
+  deleteConnDbSchema,
+  setConnDb,
+  setConnDbSchema,
+  setConnDbSchemaTable,
+  type ByConn,
+  type BySchema,
+  type ByTable,
+} from "./schemaStoreMaps";
 
 /**
  * Sprint 263 (ADR 0027 extension) — schemaStore 의 캐시 차원을
@@ -38,11 +49,6 @@ import * as tauri from "@lib/tauri";
  * `db` 를 `expectedDatabase` 로 forwarding. mismatch 가 surface 되면
  * 백그라운드 introspection 이므로 silent sync (no toast) 로 처리.
  */
-
-type ByDb<V> = Record<string, V>;
-type ByConn<V> = Record<string, ByDb<V>>;
-type BySchema<V> = Record<string, V>;
-type ByTable<V> = Record<string, V>;
 
 export type SchemaDbMismatchRecoveryHandler = (
   connId: string,
@@ -176,102 +182,6 @@ interface SchemaState {
     db: string,
     schema: string,
   ) => Promise<void>;
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers — immutable nested-map patching. Each helper returns the
-// updated outer map (new reference) so React subscribers re-render only on
-// real change.
-// ---------------------------------------------------------------------------
-
-function setConnDb<V>(
-  outer: ByConn<V>,
-  connId: string,
-  db: string,
-  value: V,
-): ByConn<V> {
-  return {
-    ...outer,
-    [connId]: { ...(outer[connId] ?? {}), [db]: value },
-  };
-}
-
-function setConnDbSchema<V>(
-  outer: ByConn<BySchema<V>>,
-  connId: string,
-  db: string,
-  schema: string,
-  value: V,
-): ByConn<BySchema<V>> {
-  const connSlot = outer[connId] ?? {};
-  const dbSlot = connSlot[db] ?? {};
-  return {
-    ...outer,
-    [connId]: {
-      ...connSlot,
-      [db]: { ...dbSlot, [schema]: value },
-    },
-  };
-}
-
-function setConnDbSchemaTable<V>(
-  outer: ByConn<BySchema<ByTable<V>>>,
-  connId: string,
-  db: string,
-  schema: string,
-  table: string,
-  value: V,
-): ByConn<BySchema<ByTable<V>>> {
-  const connSlot = outer[connId] ?? {};
-  const dbSlot = connSlot[db] ?? {};
-  const schemaSlot = dbSlot[schema] ?? {};
-  return {
-    ...outer,
-    [connId]: {
-      ...connSlot,
-      [db]: {
-        ...dbSlot,
-        [schema]: { ...schemaSlot, [table]: value },
-      },
-    },
-  };
-}
-
-function deleteConn<V>(outer: ByConn<V>, connId: string): ByConn<V> {
-  if (!(connId in outer)) return outer;
-  const next = { ...outer };
-  delete next[connId];
-  return next;
-}
-
-function deleteConnDb<V>(
-  outer: ByConn<V>,
-  connId: string,
-  db: string,
-): ByConn<V> {
-  const connSlot = outer[connId];
-  if (!connSlot || !(db in connSlot)) return outer;
-  const nextConn = { ...connSlot };
-  delete nextConn[db];
-  return { ...outer, [connId]: nextConn };
-}
-
-function deleteConnDbSchema<V>(
-  outer: ByConn<BySchema<V>>,
-  connId: string,
-  db: string,
-  schema: string,
-): ByConn<BySchema<V>> {
-  const connSlot = outer[connId];
-  if (!connSlot) return outer;
-  const dbSlot = connSlot[db];
-  if (!dbSlot || !(schema in dbSlot)) return outer;
-  const nextDb = { ...dbSlot };
-  delete nextDb[schema];
-  return {
-    ...outer,
-    [connId]: { ...connSlot, [db]: nextDb },
-  };
 }
 
 /**
