@@ -8,7 +8,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
-import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 // Sprint 354 (L2 fix, 2026-05-16) — `executeQueryBatch` lives in
 // `@lib/tauri`; use namespace import so a test that stubs `@lib/tauri`
 // with a partial surface doesn't fail at module-load time. The lookup

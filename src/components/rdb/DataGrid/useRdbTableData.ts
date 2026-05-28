@@ -3,7 +3,7 @@ import type { FilterCondition, SortInfo, TableData } from "@/types/schema";
 import { cancelQuery, queryTableData } from "@lib/tauri";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
-import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { toast } from "@lib/toast";
 
 interface UseRdbTableDataParams {

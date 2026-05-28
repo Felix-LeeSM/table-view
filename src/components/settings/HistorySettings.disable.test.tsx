@@ -37,7 +37,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 import HistorySettings from "./HistorySettings";
 import { useHistorySettingsStore } from "@stores/historySettingsStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 
 /**
  * 5 source caller 의 동일 입력 시뮬레이터. 본 helper 는 `recordHistoryEntry`

@@ -65,7 +65,7 @@ runtime orchestration, `hooks` (React state), `components` (JSX) 분리 룰.
 - runtime-only 흐름은 `src/lib/runtime/**` 로 묶는다. 이 예외 구역을 만들었다고
   pure helper 에 store import 를 허용하지 않는다.
 - 현재 legacy runtime 성격 파일(`src/lib/api/syncMismatchedActiveDb.ts`,
-  `src/lib/events/settingsReceiver.ts`, `src/lib/history/recordHistoryEntry.ts`,
-  `src/lib/snapshot/loadAll.ts`, `src/lib/toast.ts` 등)은 touched scope 에서
+  `src/lib/events/settingsReceiver.ts`, `src/lib/snapshot/loadAll.ts`,
+  `src/lib/toast.ts` 등)은 touched scope 에서
   `src/lib/runtime/**` 로 이동하거나 store action 호출로 낮춘다. 행동 변경이
   섞이면 별도 refactor contract 로 분리한다.
