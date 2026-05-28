@@ -92,6 +92,10 @@ interface MruState {
    * mru.bulk` (frontend dispatcher applies the empty array on receive).
    */
   clearRecentConnections: () => void;
+  hydrateMruFromSnapshot: (
+    entries: MruEntry[],
+    lastUsedConnectionId: string | null,
+  ) => void;
   /**
    * Sprint 370 — no-op. Snapshot IPC (`loadAllFromSnapshot`) is the sole
    * hydration path; this function survives only so existing call sites
@@ -162,6 +166,13 @@ export const useMruStore = create<MruState>((set) => ({
         recentConnections: [],
         lastUsedConnectionId: null,
       };
+    });
+  },
+
+  hydrateMruFromSnapshot: (entries, lastUsedConnectionId) => {
+    set({
+      recentConnections: entries,
+      lastUsedConnectionId,
     });
   },
 

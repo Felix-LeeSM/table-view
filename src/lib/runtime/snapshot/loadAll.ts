@@ -45,7 +45,7 @@ import { toast } from "@lib/toast";
 import { logger } from "@lib/logger";
 
 import { useConnectionStore } from "@stores/connectionStore";
-import { useWorkspaceStore } from "@stores/workspaceStore";
+import { useWorkspaceStore, type WorkspaceState } from "@stores/workspaceStore";
 import { toWorkspaceQueryLanguage } from "@stores/workspaceStore/queryMode";
 import { useMruStore, type MruEntry } from "@stores/mruStore";
 import { useThemeStore } from "@stores/themeStore";
@@ -223,9 +223,8 @@ async function applyToStores(snap: InitialAppState): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Per-store hydrate receivers — direct `setState` since the contract
-// forbids store internals changes ("receiver 추가만"). Each receiver
-// tolerates the `{ error }` partial slot by leaving the store at default.
+// Per-store hydrate receivers. Each receiver tolerates the `{ error }` partial
+// slot by leaving that store at default.
 // ---------------------------------------------------------------------------
 
 async function hydrateConnections(snap: InitialAppState): Promise<void> {
@@ -235,15 +234,12 @@ async function hydrateConnections(snap: InitialAppState): Promise<void> {
     // partial flag at a higher layer.
     return;
   }
-  useConnectionStore.setState({
-    connections: slot.items.map(normalizeConnectionConfig),
-    groups: slot.groups,
-    // Snapshot is the source of truth at boot — flip `hasLoadedOnce` so
-    // the launcher skeleton swaps out immediately. Matches the post-boot
-    // behavior of `loadConnections` (which is now skipped for the same
-    // session window because snapshot already supplied the data).
-    hasLoadedOnce: true,
-  });
+  useConnectionStore
+    .getState()
+    .hydrateConnectionsFromSnapshot(
+      slot.items.map(normalizeConnectionConfig),
+      slot.groups,
+    );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -305,10 +301,14 @@ async function hydrateWorkspaces(snap: InitialAppState): Promise<void> {
   //
   // The cast is bounded to the call boundary; the store's internal type
   // is `Record<string, Record<string, WorkspaceState>>`.
-  useWorkspaceStore.setState({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    workspaces: normalizeWorkspaceSnapshot(slot.byConnectionId) as any,
-  });
+  useWorkspaceStore
+    .getState()
+    .hydrateWorkspacesFromSnapshot(
+      normalizeWorkspaceSnapshot(slot.byConnectionId) as Record<
+        string,
+        Record<string, WorkspaceState>
+      >,
+    );
 }
 
 async function hydrateMru(snap: InitialAppState): Promise<void> {
@@ -322,10 +322,9 @@ async function hydrateMru(snap: InitialAppState): Promise<void> {
     connectionId,
     lastUsed: snap.generatedAt,
   }));
-  useMruStore.setState({
-    recentConnections: entries,
-    lastUsedConnectionId: slot.lastUsedConnectionId,
-  });
+  useMruStore
+    .getState()
+    .hydrateMruFromSnapshot(entries, slot.lastUsedConnectionId);
 }
 
 async function hydrateTheme(snap: InitialAppState): Promise<void> {
@@ -340,7 +339,7 @@ async function hydrateTheme(snap: InitialAppState): Promise<void> {
   // cast 가 themes.css 의 매칭 selector 가 없는 `data-theme` 을 박아 시각적
   // 깨짐을 일으켰던 회귀를 막는다 (Wave 9.5, 2026-05-16).
   const themeId = isThemeId(slot.themeId) ? slot.themeId : DEFAULT_THEME_ID;
-  useThemeStore.setState({ themeId, mode });
+  useThemeStore.getState().hydrateThemeFromSnapshot({ themeId, mode });
 }
 
 async function hydrateSafeMode(snap: InitialAppState): Promise<void> {
@@ -350,18 +349,17 @@ async function hydrateSafeMode(snap: InitialAppState): Promise<void> {
     slot.mode === "strict" || slot.mode === "warn" || slot.mode === "off"
       ? slot.mode
       : "strict"; // unknown → strict (safest default).
-  useSafeModeStore.setState({ mode });
+  useSafeModeStore.getState().hydrateSafeModeFromSnapshot(mode);
 }
 
 async function hydrateRuntimeActiveStatuses(
   snap: InitialAppState,
 ): Promise<void> {
-  // Q14 — backend M2 truth process state mirror into connectionStore.
-  // No store internals changed; the receiver writes the same field that
-  // `connectToDatabase` mutates at runtime.
-  useConnectionStore.setState({
-    activeStatuses: normalizeActiveStatuses(snap.runtime.activeStatuses),
-  });
+  useConnectionStore
+    .getState()
+    .hydrateActiveStatusesFromSnapshot(
+      normalizeActiveStatuses(snap.runtime.activeStatuses),
+    );
 }
 
 // ---------------------------------------------------------------------------

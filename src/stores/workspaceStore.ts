@@ -78,6 +78,9 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
       ...createTabSlice(workspaceSet, workspaceGet),
       ...createQuerySlice(workspaceSet, workspaceGet),
       ...createSidebarSlice(workspaceSet),
+      hydrateWorkspacesFromSnapshot: (workspaces) => {
+        workspaceSet({ workspaces });
+      },
 
       loadPersistedWorkspaces: () => {
         if (typeof window === "undefined") return;

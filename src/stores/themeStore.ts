@@ -31,6 +31,7 @@ interface ThemeStoreState {
   setMode: (mode: ThemeMode) => Promise<void>;
   setState: (state: ThemeState) => Promise<void>;
   hydrate: () => void;
+  hydrateThemeFromSnapshot: (state: ThemeState) => void;
   handleSystemChange: () => void;
 }
 
@@ -119,6 +120,10 @@ export const useThemeStore = create<ThemeStoreState>((set, get) => ({
       mode: stored.mode,
       resolvedMode: resolved,
     });
+  },
+
+  hydrateThemeFromSnapshot: ({ themeId, mode }) => {
+    set({ themeId, mode });
   },
 
   handleSystemChange: () => {

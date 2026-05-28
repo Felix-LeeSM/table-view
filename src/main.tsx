@@ -14,12 +14,12 @@ import {
 import { logger } from "@lib/logger";
 // CRITICAL (sprint-367 AC-367-03): the listener-register call below MUST
 // precede `loadAllFromSnapshot()` in the boot flow. That ordering is also
-// regression-locked by `src/lib/snapshot/loadAll.listener-order.test.ts`,
+// regression-locked by `src/lib/runtime/snapshot/loadAll.listener-order.test.ts`,
 // which scans `loadAll.ts` for the same pattern.
 import {
   loadAllFromSnapshot,
   registerSnapshotListener,
-} from "@lib/snapshot/loadAll";
+} from "@lib/runtime/snapshot/loadAll";
 import { registerSettingReceiver } from "@lib/runtime/settings/settingsReceiver";
 import { registerSchemaStoreDbMismatchRecovery } from "@lib/runtime/recovery/syncMismatchedActiveDb";
 import "./index.css";
