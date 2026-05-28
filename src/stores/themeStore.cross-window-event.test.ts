@@ -37,7 +37,7 @@ import {
 import {
   registerSettingReceiver,
   resetSettingReceiverForTests,
-} from "@lib/events/settingsReceiver";
+} from "@lib/runtime/settings/settingsReceiver";
 import { THEME_STORAGE_KEY, DEFAULT_THEME_ID } from "@lib/themeBoot";
 import { useThemeStore } from "./themeStore";
 import { useSafeModeStore } from "./safeModeStore";

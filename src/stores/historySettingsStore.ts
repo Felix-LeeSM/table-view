@@ -16,7 +16,7 @@
  *   - 사용자 액션 → store mutate (optimistic) → `persist_setting` IPC.
  *     IPC reject 는 logger.warn 만; 다음 boot snapshot 이 truth 회복.
  *   - cross-window: backend `state-changed` (`setting:query_history_*:update`)
- *     → `settingsReceiver.ts` 가 본 store 의 `applyFromBackend` 를 호출 →
+ *     → runtime settings receiver 가 본 store 의 `applyFromBackend` 를 호출 →
  *     `get_setting` refetch 로 store sync.
  *
  * 본 store 는 launcher / workspace 양 window 에 mount — 모든 caller 가
@@ -93,7 +93,7 @@ export const useHistorySettingsStore = create<HistorySettingsState>()(
 );
 
 /**
- * Cross-window setting receiver. `settingsReceiver.ts` 가 entityId 별
+ * Cross-window setting receiver. runtime settings receiver 가 entityId 별
  * dispatch 할 때 본 함수가 두 키의 refetch + store sync 를 책임.
  *
  * `applyFromBackend` 는 backend `get_setting(key)` IPC 를 호출해서 JSON

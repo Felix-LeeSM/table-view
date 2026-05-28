@@ -88,7 +88,7 @@ void attachZustandIpcBridge<SafeModeState>(useSafeModeStore, {
 
 /**
  * Per-entity `setting.update` refetch for the `safe_mode` key. Exported
- * so the unified setting receiver (`src/lib/events/settingsReceiver.ts`)
+ * so the unified setting receiver (`src/lib/runtime/settings/settingsReceiver.ts`)
  * can delegate without having to know the parse / store internals.
  */
 export async function applySafeModeSettingFromBackend(): Promise<void> {

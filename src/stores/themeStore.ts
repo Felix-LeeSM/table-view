@@ -211,7 +211,7 @@ void attachZustandIpcBridge<ThemeStoreState>(useThemeStore, {
  */
 /**
  * Per-entity `setting.update` refetch for the `theme` key. Exported so
- * the unified setting receiver (`src/lib/events/settingsReceiver.ts`)
+ * the unified setting receiver (`src/lib/runtime/settings/settingsReceiver.ts`)
  * can delegate without having to know the parse / store internals.
  */
 export async function applyThemeSettingFromBackend(): Promise<void> {
