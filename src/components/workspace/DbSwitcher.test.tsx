@@ -35,7 +35,7 @@ import type {
   ConnectionStatus,
   Paradigm,
 } from "@/types/connection";
-import { useToastStore } from "@/lib/toast";
+import { useToastStore } from "@/stores/toastStore";
 
 function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
   return {

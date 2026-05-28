@@ -41,7 +41,7 @@
 import { getInitialAppState, type InitialAppState } from "@lib/tauri/snapshot";
 import { dispatchStateChangedPayload } from "@lib/events/stateChanged";
 import { getCurrentWindowLabel } from "@lib/window-label";
-import { toast } from "@lib/toast";
+import { toast } from "@lib/runtime/toast";
 import { logger } from "@lib/logger";
 
 import { useConnectionStore } from "@stores/connectionStore";

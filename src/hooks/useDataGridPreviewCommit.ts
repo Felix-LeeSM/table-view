@@ -15,7 +15,7 @@ import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 // is only reached on the RDB commit path; document commits never read
 // `tauri.executeQueryBatch`.
 import * as tauri from "@lib/tauri";
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
 import {
   buildRdbSession,
   documentEditAdapter,

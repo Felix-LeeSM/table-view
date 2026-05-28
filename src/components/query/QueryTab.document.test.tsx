@@ -23,7 +23,7 @@ import {
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useSafeModeStore, SAFE_MODE_STORAGE_KEY } from "@stores/safeModeStore";
-import { useToastStore } from "@lib/toast";
+import { useToastStore } from "@stores/toastStore";
 import { userEvent } from "@testing-library/user-event";
 import {
   MOCK_RESULT,

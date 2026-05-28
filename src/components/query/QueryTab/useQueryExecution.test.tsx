@@ -10,7 +10,7 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useHistorySettingsStore } from "@stores/historySettingsStore";
-import { useToastStore } from "@lib/toast";
+import { useToastStore } from "@stores/toastStore";
 import { useQueryExecution } from "./useQueryExecution";
 import {
   makeQueryTab,

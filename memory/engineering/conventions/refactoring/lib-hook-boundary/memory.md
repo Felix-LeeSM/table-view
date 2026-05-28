@@ -11,8 +11,8 @@ runtime orchestration, `hooks` (React state), `components` (JSX) 분리 룰.
 
 ## D-1. 3 layer 분리 기준
 
-- **pure lib target** (`src/lib/**`, `src/lib/runtime/**` 와 아래 legacy
-  debt 제외): 새 pure/domain 파일은 React 의존 0 (no `useState` /
+- **pure lib target** (`src/lib/**` 중 `src/lib/runtime/**` 와 아래 명시 예외
+  제외): 새 pure/domain 파일은 React 의존 0 (no `useState` /
   `useEffect` / JSX / hooks), store 의존 0. 순수 `(input) → output` 함수 +
   작은 자료형. 모범: `analyzeStatement`, `analyzeMongoPipeline`, `format`,
   `sqlTokenize`.
@@ -64,6 +64,9 @@ runtime orchestration, `hooks` (React state), `components` (JSX) 분리 룰.
   folder 처럼 capability 기준으로 묶는다.
 - runtime-only 흐름은 `src/lib/runtime/**` 로 묶는다. 이 예외 구역을 만들었다고
   pure helper 에 store import 를 허용하지 않는다.
-- 현재 legacy runtime 성격 파일(`src/lib/toast.ts` 등)은 touched scope 에서
+- 현재 명시된 legacy runtime 성격 파일은 없다. 새로 발견되면 touched scope 에서
   `src/lib/runtime/**` 로 이동하거나 store action 호출로 낮춘다. 행동 변경이
   섞이면 별도 refactor contract 로 분리한다.
+- 남은 명시 예외: `src/lib/datagrid/paradigmEditAdapter.ts` 는 row edit
+  adapter split 전까지 runtime toast + Safe Mode gate type import 를 허용한다.
+  확장하지 말고 별도 리팩터링에서 hook/runtime 경계로 내린다.

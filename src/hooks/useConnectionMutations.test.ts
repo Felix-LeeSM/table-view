@@ -10,7 +10,7 @@ import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 // error inline; we don't want a duplicate "success" toast on top).
 //
 // Mock pattern follows `useConnectionLifecycle.test.ts` — `vi.hoisted` +
-// factory `vi.mock("@stores/connectionStore", ...)` + `vi.mock("@lib/toast",
+// factory `vi.mock("@stores/connectionStore", ...)` + `vi.mock("@lib/runtime/toast",
 // ...)` so the mocks are wired BEFORE the hook module imports run.
 
 const { mockAdd, mockUpdate, mockRemove, mockToastSuccess, mockGetState } =
@@ -34,7 +34,7 @@ vi.mock("@stores/connectionStore", () => ({
   ),
 }));
 
-vi.mock("@lib/toast", () => ({
+vi.mock("@lib/runtime/toast", () => ({
   toast: {
     success: mockToastSuccess,
     error: vi.fn(),

@@ -69,7 +69,7 @@ table-view/
 
 - Zustand store 파일: `src/stores/`
 - 주요 store: `connectionStore`, `workspaceStore`, `schemaStore`, `favoritesStore`,
-  `mruStore`, `themeStore`, `safeModeStore`.
+  `mruStore`, `themeStore`, `safeModeStore`, `toastStore`.
 - `connectionStore.focusedConnId` 는 launcher/connection-list focus 용도다.
   workspace 작업 identity 는 window label 의 `workspace-{connection_id}` +
   active db 로부터 `(connId, db)` 를 만들고, `workspaceStore` 가 그 key 로 tab /

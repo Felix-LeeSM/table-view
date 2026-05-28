@@ -21,7 +21,7 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 import { clearHistory } from "@lib/tauri/history";
-import { toast } from "@lib/toast";
+import { toast } from "@lib/runtime/toast";
 import { logger } from "@lib/logger";
 
 export interface ClearHistoryButtonProps {

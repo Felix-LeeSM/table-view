@@ -29,7 +29,7 @@ import {
   exportSchemaDump,
   type SchemaDumpTable,
 } from "@/lib/tauri";
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
 
 export type ExportInclude = "ddl" | "dml" | "both";
 

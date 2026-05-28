@@ -19,7 +19,7 @@ import QueryTab from "./QueryTab";
 import { Toaster } from "@/components/ui/toaster";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useToastStore } from "@lib/toast";
+import { useToastStore } from "@stores/toastStore";
 import {
   mockExecuteQuery,
   mockCancelQuery,

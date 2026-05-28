@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { logger } from "@/lib/logger";
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
 import { dropCollection } from "@lib/tauri";
 import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";

@@ -13,11 +13,11 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { useSchemaCache } from "./useSchemaCache";
 import { useSchemaStore } from "@stores/schemaStore";
 
-// `@lib/toast` is the canonical sink for hook failures (Sprint 191
+// `@lib/runtime/toast` is the canonical sink for hook failures (Sprint 191
 // AC-191-03). The store mocks below already use vi.fn() for tauri
 // adapters; here we mock the toast module so we can assert that the
 // hook routes failures to toast.error rather than swallowing them.
-vi.mock("@/lib/toast", () => ({
+vi.mock("@/lib/runtime/toast", () => ({
   toast: {
     error: vi.fn(),
     success: vi.fn(),

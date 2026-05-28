@@ -19,7 +19,7 @@ import {
   isSnapshotBufferActive,
 } from "./loadAll";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useToastStore } from "@lib/toast";
+import { useToastStore } from "@stores/toastStore";
 
 describe("AC-367-05 snapshot failure path", () => {
   beforeEach(() => {

@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import DisconnectButton from "./DisconnectButton";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useToastStore } from "@lib/toast";
+import { useToastStore } from "@stores/toastStore";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
 function makeConnection(

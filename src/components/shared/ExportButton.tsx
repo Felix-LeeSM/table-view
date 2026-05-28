@@ -6,7 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { runExport } from "@/lib/export";
+import { runExport } from "@/lib/runtime/export";
 import type { ExportContext, ExportFormat } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 

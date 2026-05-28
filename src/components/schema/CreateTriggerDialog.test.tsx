@@ -37,7 +37,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-vi.mock("@lib/toast", () => ({
+vi.mock("@lib/runtime/toast", () => ({
   toast: { warning: toastWarningMock, info: vi.fn(), error: vi.fn() },
 }));
 

@@ -5,7 +5,7 @@ import {
   type SqlMutationDialect,
 } from "@lib/sql/sqlDialectMutations";
 import { verifyActiveDb } from "@lib/api/verifyActiveDb";
-import { toast } from "@lib/toast";
+import { toast } from "@lib/runtime/toast";
 import type { Paradigm } from "@/types/connection";
 import type { QueryTab } from "@stores/workspaceStore";
 import { documentIdFromRow, type DocumentId } from "@/types/documentMutate";

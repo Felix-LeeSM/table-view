@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { createMongoIndex } from "@/lib/tauri";
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
 import type {
   CreateMongoIndexRequest,
   MongoIndexDirection,

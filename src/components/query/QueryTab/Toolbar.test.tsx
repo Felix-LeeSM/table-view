@@ -17,7 +17,7 @@ import type { QueryFavoritesState } from "./useQueryFavorites";
 vi.mock("@/lib/api/listDatabases", () => ({
   listDatabases: vi.fn().mockResolvedValue([]),
 }));
-vi.mock("@/lib/toast", () => ({
+vi.mock("@/lib/runtime/toast", () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 vi.mock("@stores/workspaceStore", async () => {

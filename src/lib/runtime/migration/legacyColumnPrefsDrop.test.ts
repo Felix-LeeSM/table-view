@@ -23,7 +23,7 @@ vi.mock("@/lib/tauri/meta_sentinel", () => ({
   setMetaSentinel: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/lib/toast", () => ({
+vi.mock("@/lib/runtime/toast", () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock("@/lib/toast", () => ({
 
 import { dropLegacyColumnPrefs } from "./legacyColumnPrefsDrop";
 import { getMetaSentinel, setMetaSentinel } from "@/lib/tauri/meta_sentinel";
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
 
 beforeEach(() => {
   window.localStorage.clear();

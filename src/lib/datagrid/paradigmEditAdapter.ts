@@ -12,7 +12,7 @@ import {
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
 import { bulkWriteDocuments } from "@/lib/tauri";
 import { mqlCommandsToBulkOps } from "@/lib/mongo/mqlToBulk";
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
 import type { SafeModeGate } from "@/hooks/useSafeModeGate";
 import type { TableData } from "@/types/schema";
 

@@ -11,7 +11,7 @@ import {
   roleForVariant,
   type Toast,
   type ToastVariant,
-} from "@/lib/toast";
+} from "@/stores/toastStore";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
  *
  * Each toast renders with:
  *   - `role="status"` (success/info, polite) or `role="alert"` (error/warning,
- *     assertive). See `roleForVariant` in `src/lib/toast.ts`.
+ *     assertive). See `roleForVariant` in `src/stores/toastStore.ts`.
  *   - A dismiss button with an explicit `aria-label="Dismiss notification"`.
  *   - Esc key handler that dismisses the most-recently-pushed toast (LIFO).
  *

@@ -30,7 +30,7 @@ import {
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 const toastInfo = vi.fn();
-vi.mock("@/lib/toast", () => ({
+vi.mock("@/lib/runtime/toast", () => ({
   toast: {
     success: (msg: string) => toastSuccess(msg),
     error: (msg: string) => toastError(msg),

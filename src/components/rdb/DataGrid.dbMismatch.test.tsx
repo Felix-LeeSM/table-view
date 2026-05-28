@@ -55,7 +55,7 @@ vi.mock("@stores/connectionStore", () => ({
   ),
 }));
 
-vi.mock("@lib/toast", () => ({
+vi.mock("@lib/runtime/toast", () => ({
   toast: {
     warning: toastWarningMock,
     info: vi.fn(),

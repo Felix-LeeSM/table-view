@@ -22,7 +22,7 @@
  * 한 번 호출되어야 한다.
  */
 
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
 import { getMetaSentinel, setMetaSentinel } from "@/lib/tauri/meta_sentinel";
 
 const SENTINEL_KEY = "legacy_column_prefs_drop_dismissed";
