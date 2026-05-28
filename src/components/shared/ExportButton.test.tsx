@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { ExportButton } from "./ExportButton";
 import type { ExportContext } from "@/lib/tauri";
-import { useToastStore } from "@/lib/toast";
+import { useToastStore } from "@/stores/toastStore";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 
 // Sprint 181 — ExportButton dispatches into `@tauri-apps/plugin-dialog`

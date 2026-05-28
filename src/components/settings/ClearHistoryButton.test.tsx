@@ -16,7 +16,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import ClearHistoryButton from "./ClearHistoryButton";
-import { useToastStore } from "@lib/toast";
+import { useToastStore } from "@stores/toastStore";
 
 describe("ClearHistoryButton (sprint-372)", () => {
   beforeEach(() => {

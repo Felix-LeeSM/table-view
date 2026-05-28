@@ -17,7 +17,7 @@ import {
 } from "@components/ui/popover";
 import { listDatabases } from "@/lib/api/listDatabases";
 import { switchActiveDb } from "@/lib/api/switchActiveDb";
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
 import type { DatabaseInfo } from "@/types/document";
 import type { DatabaseType, Paradigm } from "@/types/connection";
 import { hasConnectionCapability } from "@/types/dataSource";

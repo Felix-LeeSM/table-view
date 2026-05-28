@@ -4,7 +4,7 @@ import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
-import { toast } from "@lib/toast";
+import { toast } from "@lib/runtime/toast";
 
 /**
  * Shared DDL preview/execute lifecycle for the Structure-surface editors

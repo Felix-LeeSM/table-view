@@ -17,7 +17,7 @@
 //
 // Mock surface mirrors `useQueryExecution.ts` imports: tauri IPC
 // (executeQueryDryRun + cancelQuery + executeQuery + find/aggregate),
-// `@lib/sql/sqlUtils.splitSqlStatements`, `@lib/toast.toast.info`, and
+// `@lib/sql/sqlUtils.splitSqlStatements`, `@lib/runtime/toast.toast.info`, and
 // `useSafeModeGate` (no-op since dry-run never invokes the gate).
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
@@ -28,7 +28,7 @@ import {
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { useToastStore } from "@lib/toast";
+import { useToastStore } from "@stores/toastStore";
 import { useQueryExecution } from "./useQueryExecution";
 import { makeQueryTab, makeDocTab } from "../__tests__/queryTabTestHelpers";
 import type { QueryResult } from "@/types/query";

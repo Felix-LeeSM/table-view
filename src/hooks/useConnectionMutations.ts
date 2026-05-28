@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 import { useConnectionStore } from "@stores/connectionStore";
-import { toast } from "@lib/toast";
+import { toast } from "@lib/runtime/toast";
 
 /**
  * Sprint 219 (P10 step 1) — moves the user-facing toast notifications for

@@ -17,7 +17,7 @@ import {
   PopoverTrigger,
 } from "@components/ui/popover";
 import { listDatabases } from "@/lib/api/listDatabases";
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
 import {
   useCurrentWorkspaceKey,
   useWorkspaceStore,

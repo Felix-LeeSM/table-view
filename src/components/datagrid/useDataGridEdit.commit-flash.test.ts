@@ -45,7 +45,7 @@ const toastInfoMock = vi.fn();
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
 const toastWarningMock = vi.fn();
-vi.mock("@/lib/toast", () => ({
+vi.mock("@/lib/runtime/toast", () => ({
   toast: {
     info: (...args: unknown[]) => toastInfoMock(...args),
     success: (...args: unknown[]) => toastSuccessMock(...args),

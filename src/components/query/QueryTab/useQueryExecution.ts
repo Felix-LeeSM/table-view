@@ -42,7 +42,7 @@ import {
 import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
-import { toast } from "@lib/toast";
+import { toast } from "@lib/runtime/toast";
 import { getDataSourceProfile } from "@/types/dataSource";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";

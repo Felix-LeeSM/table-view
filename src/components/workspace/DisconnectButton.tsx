@@ -3,7 +3,7 @@ import { Loader2, Unplug } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
-import { toast } from "@lib/toast";
+import { toast } from "@lib/runtime/toast";
 
 /**
  * Workspace-toolbar control that drops the focused connection's adapter

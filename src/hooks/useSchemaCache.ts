@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
 import { logger } from "@/lib/logger";
 import type { SchemaInfo } from "@/types/schema";
 

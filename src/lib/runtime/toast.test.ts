@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { toast } from "./toast";
 import {
-  toast,
   useToastStore,
   roleForVariant,
   TOAST_DEFAULT_DURATIONS,
-} from "./toast";
+} from "@stores/toastStore";
 
 // Sprint 94 — toast API unit tests.
 //

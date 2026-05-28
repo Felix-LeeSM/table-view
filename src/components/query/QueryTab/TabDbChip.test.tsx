@@ -31,7 +31,7 @@ vi.mock("@/lib/api/listDatabases", () => ({
   listDatabases: vi.fn(async () => [{ name: "admin" }, { name: "analytics" }]),
 }));
 
-vi.mock("@/lib/toast", () => ({
+vi.mock("@/lib/runtime/toast", () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),

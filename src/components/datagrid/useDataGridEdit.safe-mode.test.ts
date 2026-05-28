@@ -61,7 +61,7 @@ vi.mock("@stores/connectionStore", () => ({
     }),
 }));
 
-vi.mock("@/lib/toast", () => ({
+vi.mock("@/lib/runtime/toast", () => ({
   toast: {
     error: (msg: string) => mockToastError(msg),
     success: vi.fn(),

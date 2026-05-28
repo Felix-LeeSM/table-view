@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, act, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "./toaster";
-import { toast, useToastStore } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
+import { useToastStore } from "@/stores/toastStore";
 
 // Sprint 94 — Toaster container tests.
 //

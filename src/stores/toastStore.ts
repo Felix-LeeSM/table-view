@@ -1,7 +1,6 @@
 /**
- * Global toast API. Self-implemented Zustand-backed queue — kept in `src/lib`
- * (not `src/stores`) because callers reach for `toast.success(...)` the way
- * they reach for `cn(...)`.
+ * Global toast queue. Callers use the runtime `toast` facade; the React
+ * toaster consumes this store directly.
  *
  * The toaster container (`src/components/ui/toaster.tsx`) is mounted once at
  * the App root — outside any modal portal — so a toast surfaced from inside
@@ -135,33 +134,6 @@ export const useToastStore = create<ToastStoreState>((set) => ({
   },
   clear: () => set({ toasts: [] }),
 }));
-
-/**
- * Public toast façade. The four variant helpers wrap `push` so callers don't
- * have to import the store directly. `dismiss` removes a toast by id (matches
- * the id `push` returned). `clear` wipes the queue — used by tests; not part
- * of the public surface but exposed for completeness.
- */
-export const toast = {
-  success(message: string, options?: ToastOptions): string {
-    return useToastStore.getState().push("success", message, options);
-  },
-  error(message: string, options?: ToastOptions): string {
-    return useToastStore.getState().push("error", message, options);
-  },
-  info(message: string, options?: ToastOptions): string {
-    return useToastStore.getState().push("info", message, options);
-  },
-  warning(message: string, options?: ToastOptions): string {
-    return useToastStore.getState().push("warning", message, options);
-  },
-  dismiss(id: string): void {
-    useToastStore.getState().dismiss(id);
-  },
-  clear(): void {
-    useToastStore.getState().clear();
-  },
-};
 
 /**
  * Variant → ARIA role mapping. `success` / `info` are non-disruptive

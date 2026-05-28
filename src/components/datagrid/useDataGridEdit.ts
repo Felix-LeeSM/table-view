@@ -7,7 +7,7 @@ import {
 import { useCommitFlash } from "@/hooks/useCommitFlash";
 import { useDataGridSelection } from "@/hooks/useDataGridSelection";
 import { useDataGridPreviewCommit } from "@/hooks/useDataGridPreviewCommit";
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
 import { useDataGridEditPendingState } from "./useDataGridEditPendingState";
 import type {
   DataGridEditState,

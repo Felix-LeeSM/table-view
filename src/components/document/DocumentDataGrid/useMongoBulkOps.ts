@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { toast } from "@/lib/toast";
+import { toast } from "@/lib/runtime/toast";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import {
   deleteMany as invokeDeleteMany,

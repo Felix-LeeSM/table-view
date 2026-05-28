@@ -8,7 +8,7 @@ import { executeQueryBatch } from "@lib/tauri";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
-import { toast } from "@lib/toast";
+import { toast } from "@lib/runtime/toast";
 import type { QueryResult } from "@/types/query";
 
 /**
