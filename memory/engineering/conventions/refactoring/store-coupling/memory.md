@@ -62,10 +62,9 @@ updated: 2026-05-28
 - **허용**: 단순 render selector 조합은 hook/component 에 둔다. side effect,
   stale guard, recovery, cross-window sync 가 섞이면 runtime 으로 올린다.
 
-## B-7. 강제 메커니즘 — 단계적
+## B-7. 강제 메커니즘
 
-- **현재**: convention + sprint findings audit. production surface 에 새 direct
-  `setState` 를 만들지 않는다.
-- **계획**: ESLint custom rule `no-direct-zustand-setstate` 로 production source 를
-  차단하고, test/reset/helper 예외를 allowlist 한다.
+- **현재**: convention + ESLint custom rule `tv-local/no-direct-zustand-setstate`.
+- production source 의 `useXStore.setState(...)` 는 lint error 다.
+- test/reset/helper, store 자체 코드, `src/lib/zustand-ipc-bridge.ts` 는 allowlist.
 - **보류**: TS 레벨 차단.
