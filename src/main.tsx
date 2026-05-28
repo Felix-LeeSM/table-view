@@ -20,7 +20,7 @@ import {
   loadAllFromSnapshot,
   registerSnapshotListener,
 } from "@lib/snapshot/loadAll";
-import { registerSettingReceiver } from "@lib/events/settingsReceiver";
+import { registerSettingReceiver } from "@lib/runtime/settings/settingsReceiver";
 import "./index.css";
 
 // Boot sequence: theme → session → hydrate stores → render.
