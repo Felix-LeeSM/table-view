@@ -1,7 +1,7 @@
 ---
 title: Query language architecture
 type: memory
-updated: 2026-05-27
+updated: 2026-05-28
 surface: src/types/queryLanguage.ts, src/lib/sql/**, src/lib/mongo/**, src-tauri/*-parser-core/**
 task: query-language, parser, completion, safe-mode
 trigger:
@@ -21,7 +21,8 @@ Query language ownership 은 `src/types/queryLanguage.ts` 의
   SOT 다.
 - TypeScript fallback mirror 는 compatibility/loading fallback 이며 SOT 가 아니다.
 - `redis-command` 와 `search-dsl` 은 profile safety policy 와 future language-core
-  contract 아래 둔다. Runtime/support claim 은 fixture/live evidence 로 좁힌다.
+  contract 아래 둔다. Fallback policy 는 `not-implemented` 로 명시하고,
+  runtime/support claim 은 fixture/live evidence 로 좁힌다.
 - Deferred ids (`cql`, `partiql`, `cypher`, `gql`, `gremlin`, `vector-query`,
   `stream-command`) 는 future owner placeholder 를 가진다. Active profile 이
   silently parser/completion vocabulary 를 도입하면 안 된다.

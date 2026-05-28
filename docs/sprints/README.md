@@ -19,5 +19,8 @@ Any sprint that changes `src-tauri/sql-parser-core/`,
 `src-tauri/mongosh-parser-core/`, or the generated `src/lib/**/wasm/`
 artifacts must include a `WASM budget` section in `contract.md`. The section
 records the gzip byte budget, the measured gzip size after regeneration, and
-the validation command (`pnpm wasm:size`). Current enforced budgets are SQL
-parser WASM ≤ 80 KiB gzip and Mongo parser WASM ≤ 53 KiB gzip.
+the validation command (`bash scripts/check-wasm-size.sh`). Current enforced
+budgets are SQL parser WASM ≤ 200 KiB gzip (204800 bytes) and Mongo parser WASM
+≤ 53 KiB gzip (54272 bytes). `pnpm wasm:size` may remain a local convenience,
+but sprint Required Checks should use the script command accepted by the review
+runner.

@@ -1,9 +1,9 @@
 # UX Laws — Action Plan
 
-> 출처: [`docs/ux-laws-mapping.md`](../../ux-laws-mapping.md) Top 6
+> 출처: [`docs/archives/audits/ux-laws-mapping-2026-04-30.md`](../audits/ux-laws-mapping-2026-04-30.md) Top 6
 > 작성일: 2026-04-30 · 작성자: 계획만, 실행 X
 > 사용법: 이 문서는 transient. 각 항목이 sprint contract로 분해되면 해당 항목 줄을 지운다. 마지막 항목까지 분해되면 본 문서 폐기.
-> 2026-05-22 갱신: §A-§E 모두 sprint-176~180으로 분해/구현 완료. retired reference로만 보존한다. Current SOT는 `docs/ux-laws-mapping.md`.
+> 2026-05-22 갱신: §A-§E 모두 sprint-176~180으로 분해/구현 완료. retired reference로만 보존한다. Historical source snapshot은 `docs/archives/audits/ux-laws-mapping-2026-04-30.md`.
 
 ## 진행 상황
 

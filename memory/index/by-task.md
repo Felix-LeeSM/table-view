@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-05-27
+generated: 2026-05-28
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -84,10 +84,6 @@ generator: scripts/regenerate-indexes.sh
 - [PR Review Behavior](../../memory/workflow/review/memory.md)
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
-### dialog
-
-- [Dialog Conventions](../../memory/engineering/conventions/frontend/dialogs/memory.md)
-
 ### docs
 
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
@@ -103,7 +99,6 @@ generator: scripts/regenerate-indexes.sh
 
 ### frontend
 
-- [Dialog Conventions](../../memory/engineering/conventions/frontend/dialogs/memory.md)
 - [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/engineering/conventions/react/memory.md)
 
@@ -117,7 +112,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### hook-design
 
-- [Hook validation gate principle](../../memory/workflow/hooks/memory.md)
+- [Hook taxonomy — git hooks vs agent hooks](../../memory/workflow/hooks/memory.md)
 
 ### implementation
 
@@ -127,7 +122,7 @@ generator: scripts/regenerate-indexes.sh
 ### lefthook
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
-- [Hook validation gate principle](../../memory/workflow/hooks/memory.md)
+- [Hook taxonomy — git hooks vs agent hooks](../../memory/workflow/hooks/memory.md)
 
 ### local-storage
 
@@ -143,7 +138,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### mock-scope
 
-- [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/engineering/conventions/testing-scenarios/mock-scope/memory.md)
+- [Mock 범위 — boundary stub, user-facing invariant 단언](../../memory/engineering/conventions/testing-scenarios/mock-scope/memory.md)
 
 ### multi-agent
 
@@ -180,11 +175,11 @@ generator: scripts/regenerate-indexes.sh
 
 ### pre-commit
 
-- [Hook validation gate principle](../../memory/workflow/hooks/memory.md)
+- [Hook taxonomy — git hooks vs agent hooks](../../memory/workflow/hooks/memory.md)
 
 ### pre-push
 
-- [Hook validation gate principle](../../memory/workflow/hooks/memory.md)
+- [Hook taxonomy — git hooks vs agent hooks](../../memory/workflow/hooks/memory.md)
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
 ### push
@@ -219,7 +214,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### regression-guard
 
-- [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/engineering/conventions/testing-scenarios/mock-scope/memory.md)
+- [Mock 범위 — boundary stub, user-facing invariant 단언](../../memory/engineering/conventions/testing-scenarios/mock-scope/memory.md)
 
 ### regression-test
 
@@ -273,11 +268,10 @@ generator: scripts/regenerate-indexes.sh
 ### test-writing
 
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
-- [Mock 범위 — 광역 stub 금지, user-facing invariant 단언](../../memory/engineering/conventions/testing-scenarios/mock-scope/memory.md)
+- [Mock 범위 — boundary stub, user-facing invariant 단언](../../memory/engineering/conventions/testing-scenarios/mock-scope/memory.md)
 
 ### ui
 
-- [Dialog Conventions](../../memory/engineering/conventions/frontend/dialogs/memory.md)
 - [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
 
 ### user-report
@@ -290,7 +284,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### verification-gate
 
-- [Hook validation gate principle](../../memory/workflow/hooks/memory.md)
+- [Hook taxonomy — git hooks vs agent hooks](../../memory/workflow/hooks/memory.md)
 
 ### worktree
 

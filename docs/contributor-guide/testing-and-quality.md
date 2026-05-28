@@ -24,6 +24,7 @@ is archived at
 | macOS smoke | Keep macOS E2E deferred until tauri-driver WKWebView support or an alternate mac smoke path exists. |
 | Right-click E2E | Add an alternate context-menu trigger or wait for tauri-driver W3C Actions support. |
 | E2E isolation | Reset fixtures before each smoke instead of relying on one reused app instance. |
+| Link checker | Add an internal-doc link checker after archive routing settles. |
 | Dependency security | Track `hickory-proto` advisory exposure through `mongodb 3.6.0`; remove deny ignore when MongoDB dependency updates make it possible. |
 
 ## Frontend Test Quality

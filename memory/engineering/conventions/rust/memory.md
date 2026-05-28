@@ -1,7 +1,7 @@
 ---
 title: Rust 컨벤션 (전체)
 type: convention
-updated: 2026-05-18
+updated: 2026-05-28
 surface: src-tauri/**/*.rs
 task: rust-impl, refactor
 trigger:
@@ -61,7 +61,9 @@ fn get_user(id: u64) -> Result<User, AppError> {
 - 통합: `src-tauri/tests/`
 - 명명: `test_<동작>_<조건>_<기대결과>`
 - 모든 공개 함수에 테스트 필수
-- 커버리지: DbAdapter 구현체 80%+, 쿼리 파서/빌더 90%+, Tauri command 핸들러 70%+
+- 커버리지: Rust local target 은 sprint/contract 에 명시한다. Parser/adapter/command
+  처럼 위험한 surface 는 기존 high-coverage 선례를 참고하되, 전역 frontend gate
+  70/70/70 과 혼동하지 않는다.
 
 ## 보안
 

@@ -1,7 +1,7 @@
 ---
 title: 코딩 컨벤션
 type: memory
-updated: 2026-05-27
+updated: 2026-05-28
 ---
 
 # 코딩 컨벤션
@@ -14,8 +14,12 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 - 에러: `thiserror`로 `AppError` 정의, `Result<T, AppError>` 반환. `unwrap()` 금지 (테스트 제외) — `?` 또는 `map_err` 사용.
 - 공개 API는 `///` 문서 주석.
 - 모듈: `mod.rs`에서 공개 인터페이스 노출, 파일 1개 = 주요 struct/trait 1개, 순환 참조 금지.
-- DB 드라이버는 `DbAdapter` trait 구현 (async), Connection Factory 패턴으로 인스턴스 생성.
-- `DbAdapter` 핵심 메서드: `connect`, `disconnect`, `execute`, `query`, `get_tables`, `get_schema`.
+- DB 드라이버는 common lifecycle `DbAdapter` 를 구현하고, query/schema 기능은
+  paradigm trait 로 분리한다: `RdbAdapter`, `DocumentAdapter`, `KvAdapter`,
+  `SearchAdapter`.
+- `DbAdapter` 는 `kind`, `connect`, `disconnect`, `ping`, `cancel_query` 같은
+  lifecycle/capability 공통부만 소유한다. `execute/query/get_tables/get_schema`
+  류 동작은 해당 paradigm trait 에 둔다.
 
 ## TypeScript / React
 
@@ -27,11 +31,12 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 ## 테스트
 
 - 신규 기능/버그 수정은 테스트 동반 필수 (테스트 없는 커밋 금지).
-- Rust: 같은 파일 하단 `#[cfg(test)] mod tests {}` 또는 `src-tauri/tests/` 통합 테스트. 핵심 로직(DbAdapter 구현체, 쿼리 파서) 커버리지 80% 이상.
+- Rust: 같은 파일 하단 `#[cfg(test)] mod tests {}` 또는 `src-tauri/tests/` 통합 테스트. 핵심 로직은 adapter/parser/command 별 local coverage target 을 contract 에 적는다.
 - React: Vitest + React Testing Library. 파일은 컴포넌트 옆 `*.test.tsx` 또는 `__tests__/`. Zustand 스토어는 순수 함수처럼.
 - E2E: WebdriverIO + tauri-driver 로 핵심 플로우(연결 생성, 쿼리 실행, 결과 확인). 시나리오 설계 원칙은 [e2e-scenarios](e2e-scenarios/memory.md) 필독.
 - 시나리오 원칙: 비-E2E 는 [testing-scenarios](testing-scenarios/memory.md), E2E 는 [e2e-scenarios](e2e-scenarios/memory.md). 같은 P-시리즈로 일관.
-- 커버리지 기준 (CI 검증): 전체 라인 40% / 함수 40% / 브랜치 35%. 신규·수정 파일 라인 70% 권장.
+- Frontend coverage gate: `vite.config.ts` 기준 전체 라인 70% / 함수 70% /
+  브랜치 70%. 신규·수정 파일도 이 gate 를 낮추는 방향으로 들어가지 않는다.
 - 시나리오 체크: happy path, 빈/누락 입력, 에러 복구, 동시성(빠른 더블 클릭 등), 상태 전이. 상세: `.claude/rules/test-scenarios.md`.
 - 변경 후 필수 검증: `pnpm vitest run`, `pnpm tsc --noEmit`, `pnpm lint`.
 

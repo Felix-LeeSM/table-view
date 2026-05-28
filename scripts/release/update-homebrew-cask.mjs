@@ -110,83 +110,46 @@ async function sha256Url(url) {
   return hash.digest("hex");
 }
 
-function detectArchFromName(name) {
+function isMacArm64DmgName(name) {
   const normalized = name.toLowerCase();
-  if (/\b(universal)\b/.test(normalized)) {
-    return "universal";
-  }
-  if (/(^|[_-])(aarch64|arm64|apple.?silicon)([_-]|$)/.test(normalized)) {
-    return "arm";
-  }
-  if (/(^|[_-])(x86_64|x64|amd64|intel)([_-]|$)/.test(normalized)) {
-    return "intel";
-  }
-
-  return "unknown";
+  return /(^|[_-])(aarch64|arm64|apple.?silicon)([_-]|$)/.test(normalized);
 }
 
-function pickDmgAssets(assets) {
+function pickArmDmgAsset(assets) {
   const dmgs = assets.filter((asset) =>
     asset.name.toLowerCase().endsWith(".dmg"),
   );
   const sortedDmgs = dmgs.toSorted((a, b) =>
     a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
   );
-  const candidates = sortedDmgs
-    .map((asset) => ({ ...asset, arch: detectArchFromName(asset.name) }))
-    .filter((asset) => asset.arch !== "unknown");
-
-  const unknownDmgs = sortedDmgs.filter(
-    (asset) => detectArchFromName(asset.name) === "unknown",
+  const armCandidates = sortedDmgs.filter((asset) =>
+    isMacArm64DmgName(asset.name),
   );
 
-  if (candidates.length === 0 && unknownDmgs.length === 1) {
-    return {
-      fallback: unknownDmgs[0],
-      arm: null,
-      intel: null,
-      universal: null,
-    };
+  if (armCandidates.length === 1) {
+    return armCandidates[0];
   }
 
-  if (candidates.length === 0 && unknownDmgs.length > 1) {
+  if (armCandidates.length > 1) {
     throw new Error(
-      `Multiple macOS dmg assets found for ${GITHUB_REPOSITORY}, but no arm64/x86_64 pattern match in names: ${unknownDmgs
+      `Multiple macOS arm64 dmg assets found for ${GITHUB_REPOSITORY}: ${armCandidates
         .map((asset) => asset.name)
         .join(", ")}`,
     );
   }
 
-  const arm = candidates.find((asset) => asset.arch === "arm") || null;
-  const intel = candidates.find((asset) => asset.arch === "intel") || null;
-  const universal =
-    candidates.find((asset) => asset.arch === "universal") || null;
-
-  if (universal && arm && arm.name !== universal.name) {
-    console.warn(
-      `[warn] both universal(${universal.name}) and arm(${arm.name}) dmg found; selecting universal first.`,
-    );
-    return { fallback: null, arm: null, intel, universal };
-  }
-  if (universal && intel && intel.name !== universal.name) {
-    console.warn(
-      `[warn] both universal(${universal.name}) and intel(${intel.name}) dmg found; selecting universal first.`,
-    );
-    return { fallback: null, arm, intel: null, universal };
-  }
-
-  if (arm && intel && arm.name === intel.name) {
-    return { fallback: null, arm: null, intel: null, universal: arm };
-  }
-
-  return { fallback: null, arm, intel, universal };
+  throw new Error(
+    `No macOS arm64 .dmg asset found for ${GITHUB_REPOSITORY}. Expected a .dmg filename containing arm64, aarch64, or apple-silicon. Found: ${
+      sortedDmgs.map((asset) => asset.name).join(", ") || "(none)"
+    }`,
+  );
 }
 
 function makeDmgUrl(tag, filename) {
   return `https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${encodeURIComponent(filename)}`;
 }
 
-function makeCask({ version, tag, arm, intel, universal }) {
+function makeCask({ version, tag, arm }) {
   const header = `cask "${HOMEBREW_CASK_NAME}" do\n  version "${version}"\n`;
   const meta = [
     `  name "${escapeRubyString(HOMEBREW_APP_TITLE)}"`,
@@ -196,28 +159,9 @@ function makeCask({ version, tag, arm, intel, universal }) {
   ];
 
   const body = [];
-  if (universal) {
-    body.push(`  sha256 "${universal.sha}"`);
-    body.push(`  url "${makeDmgUrl(tag, universal.name)}"`);
-  } else if (arm && intel) {
-    body.push("  if Hardware::CPU.arm?");
-    body.push(`    sha256 "${arm.sha}"`);
-    body.push(`    url "${makeDmgUrl(tag, arm.name)}"`);
-    body.push("  else");
-    body.push(`    sha256 "${intel.sha}"`);
-    body.push(`    url "${makeDmgUrl(tag, intel.name)}"`);
-    body.push("  end");
-  } else if (arm) {
-    body.push(`  sha256 "${arm.sha}"`);
-    body.push(`  url "${makeDmgUrl(tag, arm.name)}"`);
-    body.push("  depends_on arch: :arm64");
-  } else if (intel) {
-    body.push(`  sha256 "${intel.sha}"`);
-    body.push(`  url "${makeDmgUrl(tag, intel.name)}"`);
-    body.push("  depends_on arch: :x86_64");
-  } else {
-    throw new Error("No macOS dmg asset found for Homebrew update");
-  }
+  body.push(`  sha256 "${arm.sha}"`);
+  body.push(`  url "${makeDmgUrl(tag, arm.name)}"`);
+  body.push("  depends_on arch: :arm64");
 
   body.push("");
   body.push(`  app "${escapeRubyString(HOMEBREW_APP_NAME)}"`);
@@ -257,41 +201,13 @@ const release = await getJson(
 );
 const assets = Array.isArray(release.assets) ? release.assets : [];
 
-const {
-  arm: armDmg,
-  intel: intelDmg,
-  universal: detectedUniversalDmg,
-  fallback,
-} = pickDmgAssets(assets);
-
-const universalDmg = detectedUniversalDmg || fallback;
-
-if (fallback) {
-  console.warn(
-    `[warn] Could not infer architecture from ${fallback.name}; falling back to single-package mode.`,
-  );
-}
-
-if (!armDmg && !intelDmg && !universalDmg) {
-  throw new Error(`No macOS .dmg assets found for ${releaseTag}`);
-}
-
-if (armDmg) {
-  armDmg.sha = await resolveAssetSha(assets, armDmg);
-}
-if (intelDmg) {
-  intelDmg.sha = await resolveAssetSha(assets, intelDmg);
-}
-if (universalDmg) {
-  universalDmg.sha = await resolveAssetSha(assets, universalDmg);
-}
+const armDmg = pickArmDmgAsset(assets);
+armDmg.sha = await resolveAssetSha(assets, armDmg);
 
 const caskContent = makeCask({
   version,
   tag: releaseTag,
   arm: armDmg,
-  intel: intelDmg,
-  universal: universalDmg,
 });
 
 await fs.mkdir(path.dirname(tapFilePath), { recursive: true });

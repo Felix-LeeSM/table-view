@@ -1,7 +1,7 @@
 ---
 title: Data source architecture
 type: memory
-updated: 2026-05-27
+updated: 2026-05-28
 surface: src-tauri/src/db/**, src/lib/**, src/types/dataSource*, src/types/queryLanguage*
 task: data-source, architecture, adapter, capability
 trigger:
@@ -64,7 +64,9 @@ failure 를 기본 동작으로 만들지 않는다.
 
 - `RdbAdapter`: SQL, table browse, DDL, row edit, ERD.
 - `DocumentAdapter`: collection browse, document query/edit, index/validator.
-- `KvAdapter`: Redis first slice live. Broader KV/Valkey support requires evidence.
+- `KvAdapter`: Redis backend primitives, key browser, and value preview exist.
+  Value edit, TTL/write, stream UI, and broader KV/Valkey support require
+  follow-up evidence.
 - `SearchAdapter`: fixture-backed Search slice. Live HTTP requires explicit connection/auth/catalog/search contracts.
 - `WideColumnAdapter`, `CloudDocumentAdapter`, `GraphAdapter`, `VectorAdapter`,
   `StreamAdapter`: future contracts only.

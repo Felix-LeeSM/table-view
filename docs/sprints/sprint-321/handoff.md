@@ -18,7 +18,7 @@ Edit flow 은 Sprint 322 (F.2).
 | `src/components/document/NestedExpandPopover.test.tsx` | NEW | 5 case |
 | `src/components/document/DocumentDataGrid.tsx` | edit | sentinel cell 옆 trigger 마운트 |
 | `src/components/document/DocumentDataGrid.nested.test.tsx` | NEW | 5 RTL integration |
-| `docs/phases/phase-28-decision-log.md` | edit | D-51..D-54 append |
+| `docs/archives/phases/retired/phase-28-decision-log.md` | edit | D-51..D-54 append |
 | `docs/sprints/sprint-321/contract.md` | NEW | sprint contract |
 | `docs/sprints/sprint-321/execution-brief.md` | NEW | execution brief |
 | `docs/sprints/sprint-321/handoff.md` | NEW | 본 문서 |
@@ -49,7 +49,7 @@ Edit flow 은 Sprint 322 (F.2).
 - `pnpm lint` → exit 0.
 - `pnpm build` → exit 0.
 
-## Autonomous decisions (recorded in `docs/phases/phase-28-decision-log.md`)
+## Autonomous decisions (recorded in `docs/archives/phases/retired/phase-28-decision-log.md`)
 
 - **D-51**: 1-depth only. nested-of-nested 는 sentinel 유지.
 - **D-52**: BSON canonical singleton (`$oid` 등) 은 scalar 취급.

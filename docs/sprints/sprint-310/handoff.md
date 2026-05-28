@@ -42,7 +42,7 @@
 - `src/components/query/QueryTab.tsx` **(MODIFY)** — Threads the
   existing `editorRef` from `useQueryEvents` into the toolbar (1-line
   prop addition).
-- `docs/phases/phase-28-decision-log.md` **(APPEND)** — D-06..D-09 logs
+- `docs/archives/phases/retired/phase-28-decision-log.md` **(APPEND)** — D-06..D-09 logs
   for placeholder syntax / snippet engine choice / operator wrapped
   fragments / editor ref flow.
 
@@ -116,7 +116,7 @@
   `QueryTab` → `QueryTabToolbar` → `InsertSnippetMenu`). No new
   context / store.
 
-All four appended to `docs/phases/phase-28-decision-log.md`.
+All four appended to `docs/archives/phases/retired/phase-28-decision-log.md`.
 
 ## Tests added
 

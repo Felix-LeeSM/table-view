@@ -144,13 +144,13 @@ result contract 를 먼저 고정해야 한다.
   drift test 가 유지된다.
 - Official-reference sentinel tests 가 SQL shell/function/keyword 와 Mongo
   operator/stage/expression vocabulary drift 를 잡는다.
-- `docs/query-language-support.md` support matrix 최신화.
-- "100%" 정의와 semantic gap이 `docs/query-language-support.md`에 명확히
+- `docs/product/query-language-support.md` support matrix 최신화.
+- "100%" 정의와 semantic gap이 `docs/product/query-language-support.md`에 명확히
   분리돼 있다.
 
 ## 관련
 
 - ADR 0045:
   [`docs/archives/decisions/0045-language-completion-profile-wasm-boundary/memory.md`](../../../../docs/archives/decisions/0045-language-completion-profile-wasm-boundary/memory.md)
-- Support matrix: [`docs/query-language-support.md`](../../../query-language-support.md)
+- Support matrix: [`docs/product/query-language-support.md`](../../../product/query-language-support.md)
 - Sprint 420: [`docs/sprints/sprint-420/contract.md`](../../../sprints/sprint-420/contract.md)

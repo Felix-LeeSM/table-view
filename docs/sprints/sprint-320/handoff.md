@@ -15,7 +15,7 @@ NULL chip 으로 표시.
 |------|------|------|
 | `src/components/document/DocumentDataGrid.tsx` | edit | accumulator hook 호출, queryResult.columns merge useEffect, accumulator-driven `data` memo (backend → accumulator index map + null-fill) |
 | `src/components/document/DocumentDataGrid.schema.test.tsx` | NEW | 5 RTL case |
-| `docs/phases/phase-28-decision-log.md` | edit | D-47..D-50 append |
+| `docs/archives/phases/retired/phase-28-decision-log.md` | edit | D-47..D-50 append |
 | `docs/sprints/sprint-320/contract.md` | NEW | sprint contract |
 | `docs/sprints/sprint-320/execution-brief.md` | NEW | execution brief |
 | `docs/sprints/sprint-320/handoff.md` | NEW | 본 문서 |
@@ -51,7 +51,7 @@ NULL chip 으로 표시.
 - `pnpm lint` → exit 0.
 - `pnpm build` → exit 0.
 
-## Autonomous decisions (recorded in `docs/phases/phase-28-decision-log.md`)
+## Autonomous decisions (recorded in `docs/archives/phases/retired/phase-28-decision-log.md`)
 
 - **D-47**: accumulator merge 트리거 = `queryResult?.columns` useEffect.
 - **D-48**: accumulator 빈 상태일 때 backend columns fallback —

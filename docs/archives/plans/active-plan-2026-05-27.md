@@ -104,7 +104,7 @@ active risk.
 | 10 | Redis | active Redis first slice | Redis adapter, KV sidebar, key scan, value read, guarded string write, TTL mutation, and bounded stream read paths are live and covered by a Redis testcontainer smoke. Valkey parity/support is unverified follow-up. Cluster/pubsub/modules/consumer-group management remain follow-up | `docs/data-source-architecture.md`, `docs/sprints/sprint-468/handoff.md` |
 | 11 | One-DBMS query/workbench parity lane | active PostgreSQL lane | 새 DBMS 승격 중단. PostgreSQL → MySQL/MariaDB → SQLite/DuckDB → MongoDB 순서로 하나씩 runtime/parser/safety/completion/edit/fixture/e2e/support-claim/Explain gap을 닫음. Sprint 482가 PostgreSQL parser/Safe Mode first slice를 시작 | `docs/phases/phase-32.md`, `docs/RISKS.md`, `docs/query-language-support.md` |
 | 12 | Elasticsearch/OpenSearch live HTTP | deferred until active parity lane clears | Search adapter fixture slice는 유지. live connection UI, HTTP catalog/query execution, cluster administration, and observability는 one-DBMS parity lane 뒤 첫 promotion | `docs/data-source-architecture.md`, `docs/sprints/sprint-472/handoff.md`, `docs/RISKS.md` |
-| 13 | MSSQL + Oracle enterprise RDBMS lane | deferred after Search live HTTP | Known planned RDBMS identities 유지. runtime adapter, driver/license, dialect depth, CI fixture 전략은 Search live HTTP 뒤 별도 lane으로 lock | `docs/phases/phase-20.md`, `docs/query-language-support.md` |
+| 13 | MSSQL + Oracle enterprise RDBMS lane | deferred after Search live HTTP | Known planned RDBMS identities 유지. runtime adapter, driver/license, dialect depth, CI fixture 전략은 Search live HTTP 뒤 별도 lane으로 lock | `docs/archives/phases/retired/phase-20.md`, `docs/query-language-support.md` |
 | 14 | MongoDB full support | deferred/current whitelist hardening only | Phase 28 Slice A 는 보존. 현재는 whitelist workflow 품질을 먼저 끌어올리고 arbitrary JS shell/full-support는 후속 결정 | `docs/phases/phase-28.md` |
 | 15 | Broader paradigms | gated backlog | Cassandra/DynamoDB/graph/vector/stream 은 workflow value + profile contract lock 전 active 승격 금지 | `docs/data-source-architecture.md`, `docs/adding-a-data-source.md` |
 | 16 | RISK-038 refactor backlog | active | 12 후보를 current feature path 와 충돌 없는 slice 로 등록 | `docs/RISKS.md` |
@@ -197,9 +197,9 @@ Sprint 482부터 Phase 32 PostgreSQL lane implementation 을 시작한다. 이�
 
 | Phase | 내용 | 상태 | 상세 |
 |---:|---|---|---|
-| 18 | MariaDB adapter | deferred | `docs/phases/phase-18.md` |
-| 19 | SQLite adapter | deferred | `docs/phases/phase-19.md` |
-| 20 | Oracle adapter | deferred | `docs/phases/phase-20.md` |
+| 18 | MariaDB adapter | deferred | `docs/archives/phases/retired/phase-18.md` |
+| 19 | SQLite adapter | deferred | `docs/archives/phases/retired/phase-19.md` |
+| 20 | Oracle adapter | deferred | `docs/archives/phases/retired/phase-20.md` |
 | 28 | MongoDB Full Support | deferred/current subagent audit only | `docs/phases/phase-28.md` |
 | 32 | Query/Workbench parity ladder | active PostgreSQL lane | `docs/phases/phase-32.md` |
 | 31 follow-up | semantic widening / capability gating | active follow-up | `docs/archives/phases/completed/phase-31.md` |

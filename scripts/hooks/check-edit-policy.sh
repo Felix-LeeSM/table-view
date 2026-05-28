@@ -35,7 +35,7 @@ tool_name="$(json_field '.tool_name // .tool // .name')"
 
 is_write_path_tool() {
 	case "$tool_name" in
-		Edit | Write | MultiEdit)
+		Edit | Write | MultiEdit | apply_patch)
 			return 0
 			;;
 	esac

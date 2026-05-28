@@ -69,7 +69,7 @@
   - 변경 파일 목록 + 목적.
   - 신규 unit/RTL test 이름 + assertion 요약.
   - vitest 카운트 (baseline 3602 → +N).
-  - 자율 의사결정 1 건 이상 (`docs/phases/phase-28-decision-log.md`
+  - 자율 의사결정 1 건 이상 (`docs/archives/phases/retired/phase-28-decision-log.md`
     D-21 형식).
 
 ## 자율 의사결정 (Sprint 313 시점에 미해결인 항목 — Generator 가 결정)
@@ -97,7 +97,7 @@
 - `src/components/document/DocumentFilterBar.tsx` — placeholder hint
 - `src/components/document/DocumentFilterBar.test.tsx` (있다면) 또는
   신규 — RTL coverage
-- `docs/phases/phase-28-decision-log.md` — D-21..D-24 append
+- `docs/archives/phases/retired/phase-28-decision-log.md` — D-21..D-24 append
 
 ## Residual Risk
 

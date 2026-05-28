@@ -22,8 +22,8 @@ review/run-checks.sh — sprint contract Required Checks batch
   bash scripts/review/run-checks.sh <sprint-number>
 
 동작:
-  - docs/sprints/sprint-<N>/contract.md 의 '### Required Checks' 섹션 numbered
-    list 파싱
+  - docs/sprints/sprint-<N>/contract.md 의 '### Required Checks' 또는
+    '## Required Checks' 섹션 numbered list 파싱 (heading suffix 허용)
   - 각 항목의 백틱 안 명령 (\` ... \`) 추출
   - allowlist prefix 와 일치하는 명령만 실행
   - PASS/FAIL list 출력
@@ -41,15 +41,15 @@ if [ ! -f "$contract" ]; then
 	exit 1
 fi
 
-# "### Required Checks" 섹션 추출 (다음 "###" / "##" 시작 전까지)
+# "### Required Checks" 또는 "## Required Checks" 섹션 추출 (다음 "##" 이상 heading 전까지)
 section="$(awk '
-	/^### Required Checks/ { f = 1; next }
+	/^#{2,3}[[:space:]]+Required Checks([[:space:]].*)?$/ { f = 1; next }
 	f && /^##/ { exit }
 	f { print }
 ' "$contract")"
 
 if [ -z "$section" ]; then
-	echo "ERROR: contract 에 '### Required Checks' 섹션 없음" >&2
+	echo "ERROR: contract 에 '### Required Checks' 또는 '## Required Checks' 섹션 없음" >&2
 	exit 1
 fi
 

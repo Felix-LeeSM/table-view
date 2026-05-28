@@ -1,7 +1,7 @@
 ---
 title: Architecture
 type: memory
-updated: 2026-05-27
+updated: 2026-05-28
 ---
 
 # 시스템 구조
@@ -19,10 +19,10 @@ updated: 2026-05-27
 | State Management  | Zustand                                                   |
 | Styling           | Tailwind CSS 4 (다크 모드 지원 필수)                      |
 | Backend           | Rust (Tauri commands)                                     |
-| DB Drivers        | sqlx (PostgreSQL / MySQL), mongodb                        |
+| DB Drivers        | sqlx (PostgreSQL / MySQL / MariaDB / SQLite), DuckDB, mongodb, redis; fixture-backed Search adapter has no live HTTP driver |
 | App Storage       | SQLite via sqlx                                           |
 | Build Tool        | Vite 6 (frontend), Cargo (backend)                        |
-| Testing           | Vitest (frontend), cargo test (backend), Playwright (e2e) |
+| Testing           | Vitest (frontend), cargo test (backend), WebdriverIO + tauri-driver (e2e) |
 
 ## 디렉토리 구조
 
@@ -31,7 +31,7 @@ table-view/
 ├── src-tauri/           # Rust 백엔드
 │   ├── src/
 │   │   ├── main.rs      # Tauri 진입점
-│   │   ├── db/          # DB driver 추상화 (trait DbAdapter)
+│   │   ├── db/          # DB lifecycle + paradigm adapter traits
 │   │   ├── commands/    # Tauri IPC 명령 핸들러
 │   │   ├── storage/     # 연결 설정 I/O + 암호화
 │   │   ├── models/      # 데이터 모델 (struct)
@@ -42,23 +42,25 @@ table-view/
 │   ├── hooks/           # 커스텀 훅
 │   ├── stores/          # Zustand 스토어 (camelCase)
 │   ├── pages/           # 페이지 단위 컴포넌트
-│   ├── lib/             # 유틸리티
+│   ├── lib/             # pure/domain helpers + boundary wrappers; runtime exception below
 │   └── types/           # TypeScript 타입
-├── e2e/                 # Playwright E2E
+├── e2e/                 # WebdriverIO + tauri-driver E2E
 └── docs/                # 사람용 프로젝트 문서 (product, roadmap, sprints, archives)
 ```
 
 ## 계층
 
-- **Rust 백엔드** (`src-tauri/src/`) — Tauri IPC commands, DbAdapter trait, storage
+- **Rust 백엔드** (`src-tauri/src/`) — Tauri IPC commands, adapter traits, storage
 - **React 프론트엔드** (`src/`) — Zustand stores, components, hooks
 - **IPC 경계** — `#[tauri::command]` 함수가 프론트 `invoke()` 호출 진입점
 
 ## Rust 주요 모듈
 
 - `commands/` — IPC 핸들러 (connection, query, schema)
-- `db/` — ActiveAdapter + paradigm trait + 사용자 DB 구현체 (PostgreSQL, MySQL,
-  MongoDB)
+- `db/` — `ActiveAdapter` + common `DbAdapter` lifecycle + paradigm traits
+  (`RdbAdapter`, `DocumentAdapter`, `KvAdapter`, `SearchAdapter`) + 사용자 DB
+  구현체 (PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, Redis) +
+  fixture-backed Search adapter (Elasticsearch/OpenSearch identities only; no live HTTP)
 - `storage/` — 연결 설정 파일 I/O + 암호화 (AES-256-GCM, OsRng)
 - `models/` — 공용 구조체 (ConnectionConfig, ConnectionGroup, DatabaseType 등)
 - `error.rs` — `AppError` (thiserror) + `Result<T, AppError>`
@@ -75,10 +77,14 @@ table-view/
 
 ## 데이터 흐름
 
-1. 사용자 UI 조작 → component/hook/store → `src/lib/tauri/**` domain wrapper
+1. 사용자 UI 조작 → component/hook → store action 또는 `src/lib/runtime/**`
+   use-case → `src/lib/tauri/**` domain wrapper
 2. Wrapper → `invoke("command_name", args)` typed request/response
 3. Rust command → `ActiveAdapter` paradigm gate → adapter/storage/state method
-4. `Result<T, AppError>` 반환 → wrapper post-processing → store/UI 반영
+4. `Result<T, AppError>` 반환 → wrapper/runtime post-processing → store/UI 반영
+
+`src/lib/runtime/**` 는 pure `lib` 예외 구역이다. boot/event/history/recovery 처럼
+React 밖에서 여러 store action 과 Tauri boundary 를 묶는 orchestration 만 둔다.
 
 ## 관련 방
 

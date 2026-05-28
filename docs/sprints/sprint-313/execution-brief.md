@@ -23,7 +23,7 @@ parity 가 깨진다.
 - `src/lib/mongo/mqlFilterBuilder.test.ts`
 - `src/components/document/DocumentFilterBar.tsx`
 - `src/components/document/DocumentFilterBar.test.tsx` (없으면 신설)
-- `docs/phases/phase-28-decision-log.md` (D-21..D-24 append)
+- `docs/archives/phases/retired/phase-28-decision-log.md` (D-21..D-24 append)
 - `docs/sprints/sprint-313/handoff.md` (신규)
 
 건드리지 않을 곳:
@@ -68,7 +68,7 @@ parity 가 깨진다.
   - 변경 파일 + 1 줄 목적
   - 신규 테스트 이름 + assertion 요약
   - baseline (3602/10) → 신규 카운트
-  - 자율 결정 (D-21..D-24) 기록 — `docs/phases/phase-28-decision-log.md`
+  - 자율 결정 (D-21..D-24) 기록 — `docs/archives/phases/retired/phase-28-decision-log.md`
 
 ## Evidence To Return
 

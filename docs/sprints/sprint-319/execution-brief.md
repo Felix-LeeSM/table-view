@@ -10,7 +10,7 @@
 수정/추가:
 - `src/hooks/useDocumentSchemaAccumulator.ts` (NEW)
 - `src/hooks/useDocumentSchemaAccumulator.test.ts` (NEW)
-- `docs/phases/phase-28-decision-log.md` (D-43..D-??)
+- `docs/archives/phases/retired/phase-28-decision-log.md` (D-43..D-??)
 - `docs/sprints/sprint-319/handoff.md`
 
 미변경:

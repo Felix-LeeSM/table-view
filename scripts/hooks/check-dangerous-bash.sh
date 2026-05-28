@@ -130,8 +130,8 @@ MEMORY_POINTER="memory/workflow/git-policy/memory.md"
 #      신호 절 참고).
 #   2) HEAD~N / HEAD^N / @~N / @^N — destructive relative-ref reset,
 #      `--soft` 옵션 안내 (commit 보존)
-#   3) 40-hex SHA — reflog 검색 → 발견되면 *복구 case 추정* + 사용자 명시 승인
-#      안내 / 미발견이면 *알 수 없는 SHA* + destructive 안내
+#   3) 40-hex SHA — reflog 검색 → 발견되면 *복구 case 추정* 안내 /
+#      미발견이면 *알 수 없는 SHA* + destructive 안내
 #   4) 그 외 (branch name, tag 등) — destructive default 안내 (회귀 유지)
 #
 # 모든 case 에서 exit 1 (block) 은 호출자가 처리. 본 함수는 stderr 메시지만 출력.
@@ -162,7 +162,7 @@ push reject 후 즉시 reset 으로 가는 것은 거의 항상 잘못된 응급
      git push origin "\$SHA":refs/heads/<branch>
 
 자세히: $MEMORY_POINTER (외부 race 가짜 신호 + Push reject 절)
-이 가이드를 따라도 안 풀리면 사용자 승인 요청.
+이 가이드를 따라도 안 풀리면 중단하고 별도 복구 절차를 설계.
 EOF
       ;;
     HEAD~* | HEAD^* | @~* | @^*)
@@ -177,8 +177,8 @@ git reset --hard $target — destructive **relative-ref reset**.
   3) git stash                    # working tree 변경분만 stash 로 대피
   4) git reflog                   # commit 이 정말 필요하면 reflog 로 복구 가능
 
-destructive hard reset 이 진짜 필요하다고 판단되면 **사용자 명시 승인** 후
-재시도. 자세히: $MEMORY_POINTER
+hard reset 으로 재시도하지 말고 soft/reset/stash/reflog 복구 절차를 선택.
+자세히: $MEMORY_POINTER
 EOF
       ;;
     [0-9a-fA-F]*)
@@ -204,8 +204,7 @@ target SHA 가 reflog 에 발견됨 — 본인이 과거에 만든 commit 으로
 되돌리려는 것 같습니다. 이 경우 destructive 가 아닐 수 있으나 hook 은
 *모든* hard reset 을 block 으로 유지 (false-positive 가능성 인정).
 
-진행하려면 **사용자 명시 승인** 후 재시도. 메시지에 다음을 포함해서 사용자
-가 case 를 확정할 수 있게 합니다:
+hard reset 으로 재시도하지 말고 다음을 기록한 별도 복구 절차로 분리:
   - 왜 reset 이 필요한가 (예: 직전 broken merge 복구, 우발 commit 되돌리기)
   - target SHA 가 reflog 의 어떤 entry 인가
   - 더 부드러운 옵션 (\`git reset --soft $target\` / \`git checkout $target -- .\`)
@@ -237,7 +236,8 @@ destructive 위험: --hard 는 working tree + commit 을 wipe 합니다. 회복 
 stale PR ref 가 의심되면 (closed PR 의 --delete-branch 누락):
   gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>
 
-진행하려면 사용자 명시 승인 후 재시도. 자세히: $MEMORY_POINTER
+hard reset 으로 재시도하지 말고 ref 진단과 update-ref 복구 절차로 분리.
+자세히: $MEMORY_POINTER
 EOF
         fi
       else
@@ -347,7 +347,7 @@ pre-commit / pre-push 는 품질 + 회귀 게이트입니다.
   - e2e timeout → e2e/_helpers.ts + wdio.conf.ts timeout, docker daemon 확인
 
 자세히: $MEMORY_POINTER (Hook 실패 시 절)
-예외 (사용자 명시 승인 시만): revert 백포팅, hook 자체 손상 복구.
+예외 없음: hook 자체 손상 복구도 차단 명령 우회가 아니라 정책/script 변경으로 기록.
 EOF
       ;;
     no_gpg_sign | gpgsign_false | gpgsign_env_key)
@@ -372,10 +372,10 @@ git push --force 는 destructive — remote 의 commit 을 덮어씁니다.
 회복:
   - 일반적으로는 force 가 필요 없는 케이스. push reject 라면
     'git reset --hard' 가이드 (Push reject 절) 참고.
-  - 정말 force 가 필요한 경우 (rebase 후 자기 PR branch update 등):
-    --force-with-lease 사용 + 사용자 승인 후 진행.
+  - 정말 force 가 필요한 경우도 agent hook path 에서는 수행하지 않음.
+    별도 정책/script 변경 또는 사람이 수행하는 복구 절차로 분리.
 
-자세히: $MEMORY_POINTER (Hook 강제 메커니즘 / 예외 절)
+자세히: $MEMORY_POINTER (Hard block 절)
 EOF
       ;;
     git_pull)

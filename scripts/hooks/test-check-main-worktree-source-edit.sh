@@ -176,6 +176,11 @@ run_case "main command: dd of source blocked" 1 main-command "dd if=/tmp/a of=sr
 run_case "main command: read-only source mention allowed" 0 main-command "rg App src/App.tsx"
 run_case "main command: external temp source-like path allowed" 0 main-command "printf hi > /tmp/App.tsx"
 
+doc_patch_input="$(printf '*** Begin Patch\n*** Update File: memory/foo/memory.md\n@@\n-- git mv old path\n+- test/reset/helper wording in docs\n*** End Patch\n')"
+run_case "main command: apply_patch checks patch markers only" 0 main-command "$doc_patch_input"
+mixed_patch_shell_input="$(printf 'printf patch_marker <<EOF\n*** Update File: memory/foo/memory.md\nEOF\nprintf hi > src/App.tsx\n')"
+run_case "main command: patch marker plus source write blocked" 1 main-command "$mixed_patch_shell_input"
+
 run_codex_hook_case \
 	"Codex hook: Edit src denied" \
 	"Edit" \
@@ -195,6 +200,19 @@ run_codex_hook_case \
 	"Codex hook: Bash source write denied" \
 	"Bash" \
 	'{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"printf hi > src/App.tsx"}}' \
+	deny
+
+apply_patch_target="src/"'App.tsx'
+apply_patch_input="$(printf '*** Begin Patch\n*** Update File: %s\n@@\n-old\n+new\n*** End Patch\n' "$apply_patch_target")"
+apply_patch_payload="$(jq -n --arg input "$apply_patch_input" '{
+  hook_event_name: "PreToolUse",
+  tool_name: "apply_patch",
+  tool_input: { input: $input }
+}')"
+run_codex_hook_case \
+	"Codex hook: apply_patch source write denied" \
+	"apply_patch" \
+	"$apply_patch_payload" \
 	deny
 
 run_jq_case "Claude settings: edit policy also runs for Bash" '

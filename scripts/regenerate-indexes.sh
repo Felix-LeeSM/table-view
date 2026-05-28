@@ -69,14 +69,20 @@ EOF
 
   # Task 키워드 별로 묶음
   extract | awk -F'|' '
+    function normalize_key(value) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^["\047`]+/, "", value)
+      gsub(/["\047`]+$/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      return value
+    }
     {
       task=$1; surface=$2; path=$3; title=$4
       if (task == "") next
       # task 가 콤마 분리면 각각 키 등록
       n = split(task, arr, /,[ ]*/)
       for (i=1; i<=n; i++) {
-        k = arr[i]
-        gsub(/^[ ]+|[ ]+$/, "", k)
+        k = normalize_key(arr[i])
         if (k == "") continue
         entries[k] = entries[k] "- [" title "](../../" path ")\n"
       }
@@ -116,14 +122,35 @@ generator: scripts/regenerate-indexes.sh
 EOF
 
   extract | awk -F'|' '
+    function normalize_key(value) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^["\047`]+/, "", value)
+      gsub(/["\047`]+$/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      return value
+    }
+    function valid_surface(value) {
+      if (value == "vi.mock") return 1
+      if (value ~ /^\*\*\//) return 1
+      if (value ~ /^(src|src-tauri|e2e|tests|test)(\/|$)/) return 1
+      if (value ~ /^scripts\//) return 1
+      if (value ~ /^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$/) return 1
+      if (value ~ /^(vite|vitest|eslint)\.config\./) return 1
+      if (value ~ /^tsconfig.*\.json$/) return 1
+      if (value ~ /^Cargo\.(toml|lock)$/) return 1
+      return 0
+    }
     {
       task=$1; surface=$2; path=$3; title=$4
       if (surface == "") next
       n = split(surface, arr, /,[ ]*/)
       for (i=1; i<=n; i++) {
-        k = arr[i]
-        gsub(/^[ ]+|[ ]+$/, "", k)
+        k = normalize_key(arr[i])
         if (k == "") continue
+        if (!valid_surface(k)) {
+          print "[regenerate-indexes] warning: skip invalid surface `" k "` in " path > "/dev/stderr"
+          continue
+        }
         entries[k] = entries[k] "- [" title "](../../" path ")\n"
       }
     }

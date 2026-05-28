@@ -21,7 +21,7 @@ discoverability + 명시적 sort 의 두 가지 가치.
 - `src/components/document/DocumentDataGrid.tsx`
 - `src/components/document/DocumentDataGrid.sort.test.tsx` 확장 또는
   신규 contextmenu test
-- `docs/phases/phase-28-decision-log.md` (D-32..D-34)
+- `docs/archives/phases/retired/phase-28-decision-log.md` (D-32..D-34)
 - `docs/sprints/sprint-316/handoff.md`
 
 미변경:

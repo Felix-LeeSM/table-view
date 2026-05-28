@@ -1,7 +1,7 @@
 ---
 title: ADR 인덱스
 type: index
-updated: 2026-05-27
+updated: 2026-05-28
 ---
 
 # ADR 인덱스
@@ -25,6 +25,7 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0010](./0010-paradigm-ui-staged-evolution/memory.md)                                | paradigm-aware UI는 폴더 재조직 먼저, capability adapter는 ES/redis 도입 시 진화              | Accepted | 2026-04-25 | —          |
 | [0012](./0012-multi-window-launcher-workspace/memory.md)                             | Phase 12 — launcher/workspace 별도 WebviewWindow + cross-window IPC sync 완성                 | Accepted | 2026-04-27 | 0011       |
 | [0013](./0013-cross-window-focus-hydration-hook/memory.md)                           | 크로스 윈도우 상태 동기화: IPC bridge + session localStorage + useWindowFocusHydration 훅     | Accepted | 2026-04-29 | —          |
+| [0014](./0014-e2e-switchwindow-multi-window/memory.md)                                | E2E multi-window 대응을 위한 browser.switchWindow 도입                                        | Accepted | 2026-04-29 | —          |
 | [0016](./0016-e2e-window-visibility-override/memory.md)                              | e2e 빌드는 workspace.visible flag만 overlay로 override                                        | Accepted | 2026-04-30 | —          |
 | [0017](./0017-launcher-lazy-workspace-window/memory.md)                              | Sprint 175 — workspace WebviewWindow를 lazy 생성으로 전환                                     | Accepted | 2026-04-30 | —          |
 | [0018](./0018-async-cancel-policy/memory.md)                                         | Sprint 180 — 비동기 작업 1초 임계 + Cancel UX 단일화                                          | Accepted | 2026-04-30 | —          |
