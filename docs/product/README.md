@@ -18,7 +18,7 @@
 | MySQL | runtime/query/edit/DDL adapter active | bounded parser/Safe Mode slice; version gates not fully routed | Rust/WASM MySQL-family vocabulary | connection, browsing, raw query, DML-oriented multi-statement batch, row edit, cancellation, and bounded structured table/index/constraint DDL are active. Trigger create/drop, DB-level import/export/dump parity, and broader routine scripting remain unsupported/follow-up |
 | MariaDB | MySQL-family adapter reuse with distinct MariaDB identity | MySQL-family parser/Safe Mode path + MariaDB dialect/profile identity | Rust/WASM MySQL-family vocabulary + completion-only MariaDB `RETURNING` delta | runtime adapter path exists through MySQL reuse. `RETURNING` is not a version-gated runtime support claim; MariaDB-engine routine/default fixture, CI, and live evidence remain known limitations / quality follow-up |
 | SQLite | file adapter + SELECT/DML | bounded parser/Safe Mode guardrails; DDL rejected by adapter | Rust/WASM built-in vocabulary + cached schema objects | user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의 DML/PK-projected row edit 로 제한되며 DDL UI/runtime DDL parity, unsupported `ALTER TABLE` rebuild, extension gates 는 unsupported |
-| DuckDB | RDBMS file adapter + local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM DuckDB vocabulary | `rdb` profile + `file` connection kind 로 표현한다. local `.duckdb` file 은 catalog/table read 와 statement-level raw SQL 실행 경로를 지원한다. CSV/Parquet/JSON/NDJSON analytics 는 local file registration/preview 와 source-scoped SELECT runtime path 가 있다. 구조화된 DDL/write UI, file analytics query UI parity, raw external-file SQL functions 는 unsupported |
+| DuckDB | RDBMS file adapter + registered local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM DuckDB vocabulary | `rdb` profile + `file` connection kind 로 표현한다. local `.duckdb` file 은 catalog/table read 와 statement-level raw SQL 실행 경로를 지원한다. registered local CSV/Parquet/JSON/NDJSON analytics 는 preview basics 와 source-scoped SELECT backend path evidence 가 있다. Preview public payload 는 source alias, file name, kind, size 만 노출하고 absolute local path 는 노출하지 않는다. extension install/load, `COPY`, arbitrary external-file SQL functions/replacement scans 는 adapter-blocked. 구조화된 DDL/write UI, file analytics query UI parity/history/import 는 unsupported/follow-up |
 | MongoDB | partial/full-support backlog | whitelisted mongosh | Rust/WASM vocabulary | whitelist workflow hardening 이후 full-support 재검토 |
 | Redis | connection/profile + backend KV primitives + key browser/value preview | backend guardrails only | redis-command profile | key browser/value preview 는 live. value edit/TTL/write/stream UI 와 Valkey parity/support 는 follow-up |
 | Elasticsearch/OpenSearch | fixture-backed Search slice only | index/mapping/search envelope guardrails | bounded fixture DSL only | live connection UI, HTTP catalog/query execution, admin, observability 는 deferred |
@@ -42,6 +42,12 @@ catalog/query execution, admin/observability 는 아직 deferred 다.
 - Full admin parity 는 scope 밖이다: role/user/permission UI, extension management
   UI, schema diff/migration preview, DB-level backup/restore/import/export, deep
   activity/profiler dashboards.
+- DuckDB file analytics paths stay in active-session adapter state and clear on
+  connect/disconnect. Preview/query/error payloads expose only public source
+  metadata and redact local paths. Grid export is the generic explicit
+  save-dialog export of current grid rows, not automatic export of a registered
+  local file source; connection export is a separate encrypted-envelope flow and
+  does not embed connection passwords.
 - Runtime/parser/completion/edit/fixture/e2e/support-claim/lightweight
   EXPLAIN gaps 를 lane 하나씩 닫는다.
 - Cassandra/DynamoDB/graph/vector/stream 은 profile/capability/fixture decision 전
