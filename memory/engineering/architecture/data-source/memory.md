@@ -28,11 +28,19 @@ interface DataSourceProfile {
   resultKinds: ResultEnvelopeKind[];
   capabilities: DataSourceCapabilities;
   safetyPolicy: SafetyPolicyId;
+  backendAdapter: BackendAdapterProfile;
+  dialect: DataSourceDialectMetadata;
+  fileConnection?: FileConnectionContract;
 }
 ```
 
+`DATA_SOURCE_PROFILES` 는 모든 `DatabaseType` identity 를 포함한다. Profile 존재는
+runtime support claim 이 아니다. Connection dialog/runtime 노출은
+`capabilities.connection.test` 로 gate 한다.
+
 `DatabaseType` 은 identity 다. Workbench 선택과 UI affordance 는
-`DataParadigm` + capability 를 본다.
+`DataParadigm` + capability 를 본다. Backend adapter, dialect, file connection
+contract 도 profile registry 에서 읽고 ad-hoc `dbType` switch 로 분산하지 않는다.
 
 ## Layer Rules
 
@@ -44,19 +52,23 @@ interface DataSourceProfile {
 Capability 가 없으면 UI 는 hide/disable + fallback 을 보여준다. Runtime optimistic
 failure 를 기본 동작으로 만들지 않는다.
 
+Declared-only identities (`mssql`, `oracle`) 는 RDB profile 을 갖지만 capability-empty
+상태다. Search identities (`elasticsearch`, `opensearch`) 는 fixture-backed/deferred
+profile 이며 live HTTP connection/query claim 은 capability 가 켜질 때까지 하지 않는다.
+
 ## Paradigm Map
 
-| Paradigm | Examples | Primary language | Catalog model | Primary result |
-|---|---|---|---|---|
-| `rdb` | PostgreSQL, MySQL, MariaDB, SQLite, DuckDB | SQL | schema/table/view/column/index/constraint/FK | tabular |
-| `document` | MongoDB | mongosh/MQL | database/collection/index/validator/view | document, tabular |
-| `kv` | Redis, Valkey | redis-command | database/key/type/TTL/stream | key-value, stream |
-| `search` | Elasticsearch/OpenSearch | search-dsl | index/mapping/alias/template | searchHits, aggregations |
-| `wide-column` | Cassandra/ScyllaDB | CQL | keyspace/table/partition/clustering | tabular |
-| `cloud-document` | DynamoDB | PartiQL/native API | table/keySchema/GSI/LSI | document, tabular |
-| `graph` | Neo4j/Memgraph | Cypher/GQL/Gremlin | label/relationship/property/index | graph, path, tabular |
-| `vector` | Qdrant/Milvus/Pinecone | vector-query/filter DSL | collection/vectorSchema/payloadIndex | vectorNeighbors |
-| `stream` | Kafka/Redpanda | stream command/API | topic/partition/consumerGroup/schema | records, metrics |
+| Paradigm         | Examples                                   | Primary language        | Catalog model                                | Primary result           |
+| ---------------- | ------------------------------------------ | ----------------------- | -------------------------------------------- | ------------------------ |
+| `rdb`            | PostgreSQL, MySQL, MariaDB, SQLite, DuckDB | SQL                     | schema/table/view/column/index/constraint/FK | tabular                  |
+| `document`       | MongoDB                                    | mongosh/MQL             | database/collection/index/validator/view     | document, tabular        |
+| `kv`             | Redis, Valkey                              | redis-command           | database/key/type/TTL/stream                 | key-value, stream        |
+| `search`         | Elasticsearch/OpenSearch                   | search-dsl              | index/mapping/alias/template                 | searchHits, aggregations |
+| `wide-column`    | Cassandra/ScyllaDB                         | CQL                     | keyspace/table/partition/clustering          | tabular                  |
+| `cloud-document` | DynamoDB                                   | PartiQL/native API      | table/keySchema/GSI/LSI                      | document, tabular        |
+| `graph`          | Neo4j/Memgraph                             | Cypher/GQL/Gremlin      | label/relationship/property/index            | graph, path, tabular     |
+| `vector`         | Qdrant/Milvus/Pinecone                     | vector-query/filter DSL | collection/vectorSchema/payloadIndex         | vectorNeighbors          |
+| `stream`         | Kafka/Redpanda                             | stream command/API      | topic/partition/consumerGroup/schema         | records, metrics         |
 
 새 paradigm 은 ADR 이 필요하다.
 
@@ -88,6 +100,7 @@ RDB schemas.
 - Showing every paradigm through RDB table/grid/ERD metaphors.
 - Arbitrary script execution without typed parser/dispatch.
 - Enabling features by `dbType` checks instead of capabilities.
+- Treating profile presence as runtime support.
 - Persisting file paths, cloud endpoints, or query text without privacy/export policy.
 
 ## Related

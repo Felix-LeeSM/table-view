@@ -12,17 +12,25 @@ trigger:
 # Query Language Architecture
 
 Query language ownership 은 `src/types/queryLanguage.ts` 의
-`QUERY_LANGUAGE_REGISTRY` 가 고정한다. Active `DataSourceProfile.languages` 가
-참조하는 언어는 registry 에 active owner record 를 가져야 한다.
+`QUERY_LANGUAGE_REGISTRY` 가 고정한다. `capabilities.connection.test` 가 true 인
+runtime-active `DataSourceProfile.languages` 는 registry 에 active owner record 를
+가져야 한다.
+
+Declared-only 또는 fixture-backed profile 이 참조하는 언어는 deferred owner
+placeholder 로 남길 수 있다. Profile 존재만으로 query language runtime support 를
+claim 하지 않는다.
 
 ## Ownership Rules
 
 - `sql` 과 `mongosh` hot path parser/completion/safety 는 Rust/WASM language core 가
   SOT 다.
 - TypeScript fallback mirror 는 compatibility/loading fallback 이며 SOT 가 아니다.
-- `redis-command` 와 `search-dsl` 은 profile safety policy 와 future language-core
-  contract 아래 둔다. Fallback policy 는 `not-implemented` 로 명시하고,
-  runtime/support claim 은 fixture/live evidence 로 좁힌다.
+- `redis-command` 는 Redis connection/profile/key-browser slice 가 live 라서
+  registry lifecycle 은 active 이지만, command query parser/completion 은 future
+  language-core contract 이고 fallback policy 는 `not-implemented` 다.
+- `search-dsl` 은 Search profiles 가 fixture-backed/deferred 상태라 registry
+  lifecycle 도 deferred 다. Live HTTP 와 query execution 이 landing 되기 전까지
+  runtime/support claim 을 하지 않는다.
 - Deferred ids (`cql`, `partiql`, `cypher`, `gql`, `gremlin`, `vector-query`,
   `stream-command`) 는 future owner placeholder 를 가진다. Active profile 이
   silently parser/completion vocabulary 를 도입하면 안 된다.
