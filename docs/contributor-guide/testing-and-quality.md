@@ -27,6 +27,25 @@ is archived at
 | Link checker | Add an internal-doc link checker after archive routing settles. |
 | Dependency security | Track `hickory-proto` advisory exposure through `mongodb 3.6.0`; remove deny ignore when MongoDB dependency updates make it possible. |
 
+## H1 Data Source Smoke Matrix
+
+This matrix records the current data-source architecture smoke boundary. It is
+not a product support expansion; product-visible limits remain in
+[`docs/product/known-limitations.md`](../product/known-limitations.md).
+
+| Claim / journey | Current evidence | Gap routing |
+|---|---|---|
+| PostgreSQL connect -> browse/edit -> query result | `e2e/smoke/postgres.spec.ts`, `src-tauri/tests/schema_integration.rs`, `src-tauri/tests/query_integration.rs` | H2 one-DBMS parity hardening. |
+| MongoDB connect -> collection edit/query -> document result | `e2e/smoke/mongodb.spec.ts`, `e2e/smoke/phase-28-slice-A.spec.ts`, `src-tauri/tests/mongo_integration.rs` | MongoDB whitelist/full-support lane after RDBMS parity. |
+| Query history source labels across RDB/document journeys | `e2e/smoke/history-source-5.spec.ts` | Keep as regression guard for source attribution. |
+| Profile/capability/adapter contract registry | `src/types/dataSource.test.ts`, `src/types/adapterConformance.test.ts`, `src-tauri/tests/backend_adapter_contract_profile.rs` | Extend same matrix when a DBMS capability is promoted. |
+| Query language owner registry | `src/types/dataSource.test.ts`, `docs/product/query-language-support.md` | Add active owner metadata before any new runtime-active language. |
+| Result envelope compatibility | `src/types/query.resultEnvelope.test.ts`, `src/lib/tauri/query.test.ts` | Backend-native RDBMS envelope wire format is future hardening; wrapper boundary is current SOT. |
+| Redis key browser/value preview | `src-tauri/tests/redis_integration.rs`, `src/lib/tauri/kv.test.ts`, `src/components/workspace/KvSidebar.test.tsx` | Runtime E2E smoke remains future H5 Redis/Valkey work. |
+| Elasticsearch/OpenSearch fixture-backed search | `src/lib/tauri/search.test.ts`, `src/components/search/SearchResultView.test.tsx` | Live HTTP smoke waits for Search promotion. |
+| DuckDB file analytics | `src/lib/tauri/fileAnalytics.test.ts`, DuckDB unit/integration coverage near `src-tauri/src/db/duckdb*` | Runtime E2E smoke and broader file analytics query UI remain tracked by product limitations and H3. |
+| MySQL/MariaDB/SQLite support claims | Unit/integration tests under `src-tauri/tests/*integration.rs`, `src/types/dataSource.test.ts`, dialect/parser tests | Add DBMS-specific runtime smoke when each parity lane becomes active. |
+
 ## Frontend Test Quality
 
 | Area | Follow-up |

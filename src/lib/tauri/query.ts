@@ -1,5 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { QueryResult } from "@/types/query";
+import {
+  createTabularResultEnvelope,
+  requireCompatibleQueryResult,
+  type QueryResult,
+  type TabularResultEnvelope,
+} from "@/types/query";
 import type { FilterCondition, TableData } from "@/types/schema";
 import { normalizeQueryResult } from "@lib/wireCamelCase";
 
@@ -51,13 +56,24 @@ export async function executeQuery(
   queryId: string,
   expectedDatabase?: string,
 ): Promise<QueryResult> {
+  return requireCompatibleQueryResult(
+    await executeQueryEnvelope(connectionId, sql, queryId, expectedDatabase),
+  );
+}
+
+export async function executeQueryEnvelope(
+  connectionId: string,
+  sql: string,
+  queryId: string,
+  expectedDatabase?: string,
+): Promise<TabularResultEnvelope> {
   const result = await invoke<unknown>("execute_query", {
     connectionId,
     sql,
     queryId,
     expectedDatabase: expectedDatabase ?? null,
   });
-  return wrapNumericCells(normalizeQueryResult(result));
+  return createTabularResultEnvelope(normalizeTabularQueryResult(result));
 }
 
 export async function cancelQuery(queryId: string): Promise<string> {
@@ -74,6 +90,21 @@ export async function executeQueryBatch(
   queryId: string,
   expectedDatabase?: string,
 ): Promise<QueryResult[]> {
+  const envelopes = await executeQueryBatchEnvelopes(
+    connectionId,
+    statements,
+    queryId,
+    expectedDatabase,
+  );
+  return envelopes.map(requireCompatibleQueryResult);
+}
+
+export async function executeQueryBatchEnvelopes(
+  connectionId: string,
+  statements: string[],
+  queryId: string,
+  expectedDatabase?: string,
+): Promise<TabularResultEnvelope[]> {
   const results = await invoke<unknown[]>("execute_query_batch", {
     connectionId,
     statements,
@@ -81,7 +112,7 @@ export async function executeQueryBatch(
     expectedDatabase: expectedDatabase ?? null,
   });
   return results.map((result) =>
-    wrapNumericCells(normalizeQueryResult(result)),
+    createTabularResultEnvelope(normalizeTabularQueryResult(result)),
   );
 }
 
@@ -109,6 +140,21 @@ export async function executeQueryDryRun(
   queryId: string,
   expectedDatabase?: string,
 ): Promise<QueryResult[]> {
+  const envelopes = await executeQueryDryRunEnvelopes(
+    connectionId,
+    statements,
+    queryId,
+    expectedDatabase,
+  );
+  return envelopes.map(requireCompatibleQueryResult);
+}
+
+export async function executeQueryDryRunEnvelopes(
+  connectionId: string,
+  statements: string[],
+  queryId: string,
+  expectedDatabase?: string,
+): Promise<TabularResultEnvelope[]> {
   const results = await invoke<unknown[]>("execute_query_dry_run", {
     connectionId,
     statements,
@@ -116,6 +162,10 @@ export async function executeQueryDryRun(
     expectedDatabase: expectedDatabase ?? null,
   });
   return results.map((result) =>
-    wrapNumericCells(normalizeQueryResult(result)),
+    createTabularResultEnvelope(normalizeTabularQueryResult(result)),
   );
+}
+
+function normalizeTabularQueryResult(result: unknown): QueryResult {
+  return wrapNumericCells(normalizeQueryResult(result));
 }
