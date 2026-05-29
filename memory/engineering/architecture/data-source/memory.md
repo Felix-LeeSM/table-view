@@ -1,7 +1,7 @@
 ---
 title: Data source architecture
 type: memory
-updated: 2026-05-28
+updated: 2026-05-29
 surface: src-tauri/src/db/**, src/lib/**, src/types/dataSource*, src/types/queryLanguage*
 task: data-source, architecture, adapter, capability
 trigger:
@@ -93,6 +93,14 @@ for non-tabular data.
 ERD work should build reusable `SchemaGraph`, not a one-off canvas. RDBMS gets FK
 ERD semantics; other paradigms may expose catalog graphs without pretending to be
 RDB schemas.
+
+RDB catalog model 의 `index/constraint/FK` 는 target contract 다. schemaStore 의
+현재 cache owner 범위는 schemas/tables/views/functions/postgresExtensions/
+tableColumnsCache/triggers 이며 indexes/constraints 는 cache 가 아니라 live IPC
+delegate 다. 현재 wired production `SchemaGraph` input 은 schema/table/column
+cache 와 `ColumnInfo` 에서 derive 한 synthetic PK/FK/CHECK constraint 다.
+explicit `indexesByTable` / `constraintsByTable` graph input 은 owner 를 정해 wire
+하기 전까지 fixture/test input 으로만 본다.
 
 ## Anti-Patterns
 
