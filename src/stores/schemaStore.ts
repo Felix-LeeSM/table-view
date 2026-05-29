@@ -15,6 +15,9 @@ import {
   deleteConn,
   deleteConnDb,
   deleteConnDbSchema,
+  deleteConnDbSchemaTable,
+  renameConnDbSchemaTable,
+  retainConnDbSchemaTables,
   setConnDb,
   setConnDbSchema,
   setConnDbSchemaTable,
@@ -35,6 +38,8 @@ import {
  *   functions:         Record<connId, Record<db, Record<schema, FunctionInfo[]>>>
  *   postgresExtensions: Record<connId, Record<db, PostgresExtensionInfo[]>>
  *   tableColumnsCache: Record<connId, Record<db, Record<schema, Record<table, ColumnInfo[]>>>>
+ *   tableIndexesCache: Record<connId, Record<db, Record<schema, Record<table, IndexInfo[]>>>>
+ *   tableConstraintsCache: Record<connId, Record<db, Record<schema, Record<table, ConstraintInfo[]>>>>
  *
  * Sprint 262 의 workspaceStore `Record<conn, Record<db, ...>>` 패턴과
  * 동일. flat `"conn:db:schema"` 문자열 키 회피 — separator 충돌 없음.
@@ -70,6 +75,8 @@ interface SchemaState {
   functions: ByConn<BySchema<FunctionInfo[]>>;
   postgresExtensions: ByConn<PostgresExtensionInfo[]>;
   tableColumnsCache: ByConn<BySchema<ByTable<ColumnInfo[]>>>;
+  tableIndexesCache: ByConn<BySchema<ByTable<IndexInfo[]>>>;
+  tableConstraintsCache: ByConn<BySchema<ByTable<ConstraintInfo[]>>>;
   /**
    * Sprint 272 — per-`(connId, db, schema, table)` trigger cache.
    * Populated lazily by `getTableTriggers`. Mirrors the
@@ -204,6 +211,8 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   functions: {},
   postgresExtensions: {},
   tableColumnsCache: {},
+  tableIndexesCache: {},
+  tableConstraintsCache: {},
   triggers: {},
   loading: false,
   error: null,
@@ -237,8 +246,23 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   },
 
   recordTablesReloaded: (connId, db, schema, tables) => {
+    const tableNames = new Set(tables.map((table) => table.name));
     set((state) => ({
       tables: setConnDbSchema(state.tables, connId, db, schema, tables),
+      tableIndexesCache: retainConnDbSchemaTables(
+        state.tableIndexesCache,
+        connId,
+        db,
+        schema,
+        tableNames,
+      ),
+      tableConstraintsCache: retainConnDbSchemaTables(
+        state.tableConstraintsCache,
+        connId,
+        db,
+        schema,
+        tableNames,
+      ),
     }));
   },
 
@@ -252,6 +276,20 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
           db,
           schema,
           current.filter((t) => t.name !== table),
+        ),
+        tableIndexesCache: deleteConnDbSchemaTable(
+          state.tableIndexesCache,
+          connId,
+          db,
+          schema,
+          table,
+        ),
+        tableConstraintsCache: deleteConnDbSchemaTable(
+          state.tableConstraintsCache,
+          connId,
+          db,
+          schema,
+          table,
         ),
       };
     });
@@ -267,6 +305,22 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
           db,
           schema,
           current.map((t) => (t.name === table ? { ...t, name: newName } : t)),
+        ),
+        tableIndexesCache: renameConnDbSchemaTable(
+          state.tableIndexesCache,
+          connId,
+          db,
+          schema,
+          table,
+          newName,
+        ),
+        tableConstraintsCache: renameConnDbSchemaTable(
+          state.tableConstraintsCache,
+          connId,
+          db,
+          schema,
+          table,
+          newName,
         ),
       };
     });
@@ -348,7 +402,18 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   // rejects a swapped pool BEFORE the trait dispatches.
   getTableIndexes: async (connId, db, table, schema) => {
     try {
-      return await tauri.getTableIndexes(connId, table, schema, db);
+      const indexes = await tauri.getTableIndexes(connId, table, schema, db);
+      set((state) => ({
+        tableIndexesCache: setConnDbSchemaTable(
+          state.tableIndexesCache,
+          connId,
+          db,
+          schema,
+          table,
+          indexes,
+        ),
+      }));
+      return indexes;
     } catch (e) {
       handleDbMismatch(connId, e);
       throw e;
@@ -357,7 +422,23 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
 
   getTableConstraints: async (connId, db, table, schema) => {
     try {
-      return await tauri.getTableConstraints(connId, table, schema, db);
+      const constraints = await tauri.getTableConstraints(
+        connId,
+        table,
+        schema,
+        db,
+      );
+      set((state) => ({
+        tableConstraintsCache: setConnDbSchemaTable(
+          state.tableConstraintsCache,
+          connId,
+          db,
+          schema,
+          table,
+          constraints,
+        ),
+      }));
+      return constraints;
     } catch (e) {
       handleDbMismatch(connId, e);
       throw e;
@@ -440,6 +521,8 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       functions: deleteConn(state.functions, connId),
       postgresExtensions: deleteConn(state.postgresExtensions, connId),
       tableColumnsCache: deleteConn(state.tableColumnsCache, connId),
+      tableIndexesCache: deleteConn(state.tableIndexesCache, connId),
+      tableConstraintsCache: deleteConn(state.tableConstraintsCache, connId),
       triggers: deleteConn(state.triggers, connId),
     }));
   },
@@ -452,6 +535,12 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       functions: deleteConnDb(state.functions, connId, db),
       postgresExtensions: deleteConnDb(state.postgresExtensions, connId, db),
       tableColumnsCache: deleteConnDb(state.tableColumnsCache, connId, db),
+      tableIndexesCache: deleteConnDb(state.tableIndexesCache, connId, db),
+      tableConstraintsCache: deleteConnDb(
+        state.tableConstraintsCache,
+        connId,
+        db,
+      ),
       triggers: deleteConnDb(state.triggers, connId, db),
     }));
   },
@@ -461,6 +550,18 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       tables: deleteConnDbSchema(state.tables, connId, db, schemaName),
       views: deleteConnDbSchema(state.views, connId, db, schemaName),
       functions: deleteConnDbSchema(state.functions, connId, db, schemaName),
+      tableIndexesCache: deleteConnDbSchema(
+        state.tableIndexesCache,
+        connId,
+        db,
+        schemaName,
+      ),
+      tableConstraintsCache: deleteConnDbSchema(
+        state.tableConstraintsCache,
+        connId,
+        db,
+        schemaName,
+      ),
       triggers: deleteConnDbSchema(state.triggers, connId, db, schemaName),
     }));
   },
