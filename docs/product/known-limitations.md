@@ -10,7 +10,8 @@ in [`docs/archives/risks/active-risk-register-2026-05-27.md`](../archives/risks/
 |---|---|
 | MySQL / MariaDB capabilities | Version-aware capability gates are typed and tested as metadata, but not fully routed through runtime/UI capability lookup. |
 | MariaDB | MariaDB currently reuses the MySQL adapter path. MariaDB-engine fixture evidence is still pending before broader support claims. |
-| Query results | RDBMS IPC still carries a legacy `QueryResult` compatibility layer while typed result envelopes are being migrated. |
+| Adapter / workspace boundary | Backend commands regain typed adapters through `ActiveAdapter::as_rdb` / `as_document` / `as_search`; frontend query dispatch still lives in `useQueryExecution`, and query tab/result lifecycle lives in `workspaceStore`. Moving broad dispatch switches behind adapter/runtime contracts is roadmap follow-up work (#183, #184), not current behavior. |
+| Query results | RDBMS IPC still returns the legacy `QueryResult` shape. Typed result envelopes coexist with that compatibility layer: `tabular` and `document` can project to `QueryResultGrid`, Search uses a separate typed renderer state, and KV/stream/metrics-style envelopes do not have a grid projection yet. |
 | ERD | Table/column graph data is wired first. Constraint and index graph nodes are still fixture-covered rather than fully live-cache backed. |
 | Redis / Valkey | Redis connection/profile, backend KV primitives, key browser, and value preview exist. Value editing, TTL/write, stream UI, Valkey parity, cluster, pub/sub, modules, and consumer-group management remain out of scope. |
 | MongoDB | MongoDB support is limited to tested whitelisted document workflows. Arbitrary JavaScript shell execution, version/deployment gates, and native document-first panels remain out of scope. |

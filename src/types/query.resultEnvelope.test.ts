@@ -164,4 +164,42 @@ describe("result envelope compatibility layer", () => {
       queryResult: tabularResult,
     });
   });
+
+  it("keeps typed-only source profile result kinds out of QueryResultGrid compatibility projection", () => {
+    const redis = getDataSourceProfile("redis");
+    expect(redis.resultKinds).toEqual(["keyValue", "streamRecords"]);
+
+    for (const kind of ["keyValue", "streamRecords"] as const) {
+      const envelope: OpaqueResultEnvelope = {
+        kind,
+        payload: { sample: true },
+      };
+
+      expect(toCompatibleQueryResult(envelope)).toEqual({
+        ok: false,
+        error: {
+          kind: "unsupported-envelope-kind",
+          envelopeKind: kind,
+          message: `Result envelope kind '${kind}' does not have a QueryResult compatibility projection.`,
+        },
+      });
+    }
+
+    for (const dbType of ["elasticsearch", "opensearch"] as const) {
+      const profile = getDataSourceProfile(dbType);
+
+      expect(profile.resultKinds).toEqual(["searchHits"]);
+      expect(
+        toCompatibleQueryResult(createSearchHitsResultEnvelope(searchResult)),
+      ).toEqual({
+        ok: false,
+        error: {
+          kind: "unsupported-envelope-kind",
+          envelopeKind: "searchHits",
+          message:
+            "Search hit envelopes require the search result renderer and cannot be projected into QueryResultGrid.",
+        },
+      });
+    }
+  });
 });
