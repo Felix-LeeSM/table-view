@@ -14,7 +14,7 @@
 
 | DBMS | Runtime | Parser / safety | Completion | 현재 판단 |
 |---|---|---|---|---|
-| PostgreSQL | strong | strong | WASM-first | 기준선. query/workbench parity lane 이 현재 우선 후보 |
+| PostgreSQL | strong | strong bounded subset | WASM-first | 현재 가장 강한 lane 이지만 full dialect/admin/arbitrary extension semantics 보장은 아님. query/workbench parity lane 이 현재 우선 후보 |
 | MySQL | adapter complete | widening in progress | Rust/WASM vocabulary | adapter 완료. semantic gap 계속 축소 |
 | MariaDB | MySQL-adapter reuse | MySQL-family profile + MariaDB delta | Rust/WASM vocabulary | runtime path 존재. MariaDB-engine fixture gap 은 known limitation / quality follow-up |
 | SQLite | file adapter complete | parser/write parity guardrails | Rust/WASM vocabulary | user DBMS adapter 는 internal SQLite state 와 분리됨. DDL UI 는 unsupported |
