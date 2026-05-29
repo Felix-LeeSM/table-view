@@ -17,7 +17,7 @@
 | PostgreSQL | strong | strong bounded subset | WASM-first | 현재 가장 강한 lane 이지만 full dialect/admin/arbitrary extension semantics 보장은 아님. query/workbench parity lane 이 현재 우선 후보 |
 | MySQL | adapter complete | widening in progress | Rust/WASM vocabulary | adapter 완료. semantic gap 계속 축소 |
 | MariaDB | MySQL-adapter reuse | MySQL-family profile + MariaDB delta | Rust/WASM vocabulary | runtime path 존재. MariaDB-engine fixture gap 은 known limitation / quality follow-up |
-| SQLite | file adapter complete | parser/write parity guardrails | Rust/WASM vocabulary | user DBMS adapter 는 internal SQLite state 와 분리됨. DDL UI 는 unsupported |
+| SQLite | file adapter + SELECT/DML | bounded parser/Safe Mode guardrails; DDL rejected by adapter | Rust/WASM built-in vocabulary + cached schema objects | user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의 DML/PK-projected row edit 로 제한되며 DDL UI/runtime DDL parity, unsupported `ALTER TABLE` rebuild, extension gates 는 unsupported |
 | DuckDB | file adapter + local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM vocabulary | local `.duckdb` raw SQL 실행과 CSV/Parquet/JSON/NDJSON preview 경로 지원. 구조화된 DDL/write UI 와 file analytics query UI parity 는 unsupported |
 | MongoDB | partial/full-support backlog | whitelisted mongosh | Rust/WASM vocabulary | whitelist workflow hardening 이후 full-support 재검토 |
 | Redis | connection/profile + backend KV primitives + key browser/value preview | backend guardrails only | redis-command profile | key browser/value preview 는 live. value edit/TTL/write/stream UI 와 Valkey parity/support 는 follow-up |
