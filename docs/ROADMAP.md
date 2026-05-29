@@ -55,6 +55,24 @@ sequencing 을 명시 요청하면 별도 sprint contract queue 에 번호와 �
 | H6 | 더 넓은 paradigm | Cassandra, DynamoDB, graph DB, vector DB, stream source 는 active work 전 명확한 workflow proof 가 필요하다. | 각 candidate 가 profile, connection kind, language, catalog model, result envelope, safety policy, fixture strategy 를 가진다. |
 | H7 | 운영, 보안, 신뢰성 | 넓은 source support 는 관찰 가능하고 안전하며 반복 검증 가능해야 한다. | 핵심 ops/security/a11y/perf smoke path 가 routine gate 가 된다. |
 
+## H1 완료 기준
+
+H1 data-source architecture 정렬은 현재 기준선으로 닫는다. 종료 신호는 다음
+SOT와 regression guard가 함께 소유한다.
+
+| Gate | Current owner |
+|---|---|
+| Profile/capability foundation | `src/types/dataSource.ts`, `src/types/dataSource.test.ts`, `src-tauri/tests/backend_adapter_contract_profile.rs` |
+| Adapter contract normalization | `src/types/adapterConformance.ts`, `src-tauri/src/models/data_source.rs`, `src-tauri/src/db/active.rs` |
+| Query language ownership | `src/types/queryLanguage.ts`, `docs/product/query-language-support.md`, `memory/engineering/architecture/query-language/memory.md` |
+| Result envelope boundary | `src/types/query.ts`, `src/types/query.resultEnvelope.test.ts`, `src/lib/tauri/query.ts` |
+| Product/support claim boundary | `docs/product/README.md`, `docs/product/known-limitations.md`, `memory/engineering/architecture/data-source/memory.md` |
+| Smoke/verification matrix | `docs/contributor-guide/testing-and-quality.md` |
+
+남은 작업은 H1 gate 미완료가 아니라 다음 lane 의 깊이 작업이다. Server-native
+result envelope wire format, `useQueryExecution` decomposition, DBMS별 live smoke
+확대는 H2/H3/H5 quality follow-up 으로 라우팅한다.
+
 ## 트랙 맵
 
 | 트랙 | 장기 방향 | 현재 기준 |
@@ -89,7 +107,7 @@ Near-term follow-up groups:
 |---|---|
 | RDBMS parity | Route MySQL/MariaDB version-aware feature gates through server-version-aware profile context. Add MariaDB engine fixture evidence or keep support claims narrowed. |
 | Query language widening | Widen SQL/Mongo client semantic support by tested slices: broader MySQL/MariaDB routine expressions, SQLite/DuckDB extension semantics, server-version/capability gates, Mongo version/deployment gates, and extension-aware completion packs. PostgreSQL completion packs must consume installed extension inventory before enabling curated extension-specific candidates. |
-| Query/result boundary | Move RDBMS query IPC from legacy `QueryResult` compatibility toward typed result envelopes. |
+| Query/result boundary | Keep typed envelopes as the UI-facing boundary. Future hardening can make backend RDBMS IPC emit native `tabular` envelopes instead of normalizing legacy `QueryResult` at the Tauri wrapper. |
 | ERD/schema graph | 현재 schemaStore cache owner 범위는 schemas/tables/views/functions/postgresExtensions/tableColumnsCache/tableIndexesCache/tableConstraintsCache/triggers 이다. Production ERD/`SchemaGraph` input 은 schema/table/column cache 와 cached/fetched explicit index/constraint metadata 를 함께 쓰며, column-level FK info 는 synthetic fallback 으로 남아 있다. FK navigation 은 현재 DataGrid cell/icon path 이며 ERD interaction claim 이 아니다. Follow-up 은 shared `SchemaGraph`/catalog input path 를 확장해 parent tracking(#200), dependency view, migration impact analysis, dense-view screenshot smoke(#247) 를 연결하는 것이다. Duplicate catalog parsing 금지. |
 | Redis/Valkey | Define follow-up contracts for value edit, TTL/write, stream UI, Valkey parity, cluster, pub/sub, modules, and consumer-group management before broader support claims. |
 | MongoDB | Keep support to whitelisted document workflows until version/deployment gates, safe native panels, and arbitrary shell policy are resolved. |
@@ -160,21 +178,17 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 
 다음 승격 후보 순서:
 
-1. 현재 코드 -> data-source architecture 정렬.
-2. Data-source profile/capability foundation.
-3. Query language / result envelope migration.
-4. Adapter contract normalization.
-5. One-DBMS query/workbench parity ladder. 지원 DBMS lane 하나만 골라
+1. One-DBMS query/workbench parity ladder. 지원 DBMS lane 하나만 골라
    runtime/parser/completion/edit/fixture/e2e/Explain gap 을 닫고 다음 lane 을
    고른다. 고정 lane 순서: PostgreSQL -> MySQL/MariaDB -> SQLite/DuckDB -> MongoDB.
-6. PostgreSQL query/workbench parity hardening.
-7. MySQL-family semantic widening + MariaDB engine evidence/delta hardening.
-8. SQLite DBMS write/parity + DuckDB file analytics hardening.
-9. MongoDB whitelist/full-support parity hardening.
-10. RDBMS ERD / `SchemaGraph`.
-11. Redis/Valkey parity hardening.
-12. Elasticsearch/OpenSearch live HTTP promotion.
-13. MSSQL + Oracle enterprise RDBMS lane.
+2. PostgreSQL query/workbench parity hardening.
+3. MySQL-family semantic widening + MariaDB engine evidence/delta hardening.
+4. SQLite DBMS write/parity + DuckDB file analytics hardening.
+5. MongoDB whitelist/full-support parity hardening.
+6. RDBMS ERD / `SchemaGraph`.
+7. Redis/Valkey parity hardening.
+8. Elasticsearch/OpenSearch live HTTP promotion.
+9. MSSQL + Oracle enterprise RDBMS lane.
 
 이 순서를 바꾸면 이 파일을 업데이트한다. 현재 제품 상태가 달라지는 변경이면
 `docs/product/README.md` 도 함께 업데이트한다.

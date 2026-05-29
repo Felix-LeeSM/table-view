@@ -52,6 +52,14 @@ cannot add parser or completion vocabulary without an owner decision.
 | Redis command | Connection/profile, backend KV primitives, key browser, and value preview exist. | Query-language parser/completion ownership is future-contract only. Value edit, TTL/write, stream UI, and broader Redis/Valkey command coverage are not claimed. |
 | Search DSL | Fixture-backed Search identities and bounded fixture DSL exist. | Live HTTP execution and full query-language support are deferred. |
 
+## Result Boundary
+
+RDBMS query IPC is normalized into a `tabular` result envelope at
+`src/lib/tauri/query.ts`. Existing grid consumers still receive the legacy
+`QueryResult` projection, but new source work must choose an explicit
+`ResultEnvelopeKind` instead of assuming every result can render through
+`QueryResultGrid`.
+
 ## Current Unsupported Boundaries
 
 For server-backed SQL adapters, unsupported syntax can still execute on the
