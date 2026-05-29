@@ -69,8 +69,8 @@ describe("getSidebarObjectLabel", () => {
   });
 
   it("redis → key/keys", () => {
-    // Redis 는 SUPPORTED_DATABASE_TYPES 에 없지만 DatabaseType variant 이므로
-    // 매핑은 정의되어 있어야 한다 (URL parse 실패 메시지 등에서 사용).
+    // Redis 는 supported connection profile 이면서 non-RDBMS sidebar label 을
+    // 별도로 유지해야 한다.
     expect(getSidebarObjectLabel("redis")).toEqual({
       single: "key",
       plural: "keys",

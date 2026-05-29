@@ -16,15 +16,28 @@ widening work lives in `docs/ROADMAP.md`.
 
 ## Ownership Snapshot
 
-| QueryLanguageId | Parser owner | Completion owner | Fallback policy | Safety analyzer |
-|---|---|---|---|---|
-| `sql` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
-| `mongosh` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
-| `redis-command` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` |
-| `search-dsl` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` |
+Runtime-active languages are the languages used by connection-supported
+`DataSourceProfile` entries.
 
-Deferred language ids stay in the registry so future active profiles cannot add
-parser or completion vocabulary without an owner decision.
+| QueryLanguageId | Lifecycle | Parser owner | Completion owner | Fallback policy | Safety analyzer |
+|---|---|---|---|---|---|
+| `sql` | `active` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
+| `mongosh` | `active` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
+| `redis-command` | `active` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` |
+
+Declared or deferred language ids stay in the registry so future active profiles
+cannot add parser or completion vocabulary without an owner decision.
+
+| QueryLanguageId | Lifecycle | Parser owner | Completion owner | Fallback policy | Safety analyzer | Current boundary |
+|---|---|---|---|---|---|---|
+| `search-dsl` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Search profiles are fixture-backed until live HTTP lands. |
+| `cql` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Cassandra/Scylla profiles are not active. |
+| `partiql` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | DynamoDB profiles are not active. |
+| `cypher` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Graph profiles are not active. |
+| `gql` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | GraphQL profiles are not active. |
+| `gremlin` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Graph profiles are not active. |
+| `vector-query` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Vector profiles are not active. |
+| `stream-command` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Stream profiles are not active. |
 
 ## Current Product Surface
 

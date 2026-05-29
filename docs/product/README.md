@@ -24,6 +24,17 @@
 | Elasticsearch/OpenSearch | fixture-backed Search slice only | index/mapping/search envelope guardrails | bounded fixture DSL only | live connection UI, HTTP catalog/query execution, admin, observability 는 deferred |
 | MSSQL/Oracle | unsupported/deferred | declared SQL identity only | deferred | planned RDBMS identities. runtime support 는 없음 |
 
+## Profile Registry Boundary
+
+`src/types/dataSource.ts` 의 `DATA_SOURCE_PROFILES` 는 모든 `DatabaseType` identity 를
+포함한다. Profile 존재는 곧 runtime support claim 이 아니다. 현재 connection dialog
+와 runtime connection support 는 `capabilities.connection.test` 가 true 인
+PostgreSQL, MySQL, MariaDB, SQLite, DuckDB, MongoDB, Redis 로 제한된다.
+
+MSSQL/Oracle 은 capability-empty declared RDB identities 다. Elasticsearch/OpenSearch
+는 Search identity 와 fixture-backed contract 만 갖고 있으며 live HTTP connection,
+catalog/query execution, admin/observability 는 아직 deferred 다.
+
 ## Current Boundaries
 
 - 새 DBMS/runtime promotion 은 기존 지원 DBMS 하나가 데스크톱 DB 클라이언트 수준의
