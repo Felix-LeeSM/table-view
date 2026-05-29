@@ -43,7 +43,7 @@ cannot add parser or completion vocabulary without an owner decision.
 
 | Surface | Current support | Current boundary |
 |---|---|---|
-| PostgreSQL SQL | Strongest SQL parser/Safe Mode surface. Completion covers common keywords, functions, tables, columns, shell/meta command vocabulary, selected extension-tolerant operators/types, and detected curated extension packs for `pgcrypto`, `uuid-ossp`, `postgis`, `pgvector`, `citext`, `hstore`, and `pg_trgm`. | Full PL/pgSQL bodies, arbitrary vendor extension semantics, broad MERGE variants, nested/arbitrary function expressions, and catalog-backed enumeration of every extension symbol are not modeled. |
+| PostgreSQL SQL | Strongest SQL parser/Safe Mode lane, but still a bounded client subset. Parser/Safe Mode covers tested SQL slices plus selected extension-tolerant syntax for symbolic operators and known extension-backed column types. Completion separately covers common keywords, functions, tables, columns, shell/meta command vocabulary, and installed extension inventory-gated curated packs for `pgcrypto`, `uuid-ossp`, `postgis`, `pgvector`, `citext`, `hstore`, and `pg_trgm`. | Full PL/pgSQL bodies, arbitrary vendor extension semantics, broad MERGE variants, nested/arbitrary function expressions, installed-extension semantic validation for parser/Safe Mode, and catalog-backed enumeration of every extension symbol are not modeled. |
 | MySQL SQL | Runtime adapter is broad. Completion has MySQL-family keywords/functions and backtick identifiers. Parser/Safe Mode understands the common SQL subset plus `LIMIT offset, count`, `ON DUPLICATE KEY UPDATE`, and narrow `CALL proc(...)`. | Stored routine/event bodies, transaction/control-flow scripting, broad `CALL` argument expressions, `DELIMITER`, and `LOAD DATA` are unsupported or explicitly rejected. |
 | MariaDB SQL | Reuses the MySQL adapter path with MariaDB identity/profile deltas. Completion exposes the MySQL-family surface plus MariaDB `RETURNING`. | MariaDB-engine fixture evidence is still pending; MariaDB-only syntax/version gates are narrow. |
 | SQLite SQL | File connection, query, preview, and primary-key-scoped row edits are supported. Completion covers current SQLite vocabulary and cached schema objects. | DDL UI/runtime write parity, function source introspection, virtual table syntax, sqlite-cli dot command execution, and extension-specific semantics are unsupported. |
@@ -58,10 +58,13 @@ Unsupported syntax can still execute on the database server when sent through a
 raw SQL path. The client may only lose completion, typed dispatch, or Safe Mode
 precision. Current product-facing boundaries are:
 
-- SQL parser/Safe Mode is PostgreSQL/ANSI-centered and widens by tested slices.
+- SQL parser/Safe Mode is PostgreSQL/ANSI-centered and widens by tested slices;
+  selected extension-tolerant syntax is accepted only as structure, not as full
+  extension semantics.
 - PostgreSQL installed extension inventory activates only curated completion
-  packs for known extensions. It does not semantically validate extension
-  usage or enumerate every extension-provided symbol.
+  packs for known extensions. It does not semantically validate extension usage,
+  make parser/Safe Mode dependent on installed extensions, or enumerate every
+  extension-provided symbol.
 - MySQL/MariaDB scripting and file import directives are not normalized into
   server SQL.
 - SQLite and DuckDB extension-specific semantics are not validated client-side.
