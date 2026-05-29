@@ -47,16 +47,18 @@ cannot add parser or completion vocabulary without an owner decision.
 | MySQL SQL | Runtime adapter supports connection, database/table browsing, raw query execution, DML-oriented multi-statement batches, table data reads, row edits, cancellation, and bounded structured DDL for tables/indexes/constraints. Completion has MySQL-family keywords/functions and backtick identifiers. Parser/Safe Mode understands the common SQL subset plus tested MySQL-family slices: `LIMIT offset, count`, `ON DUPLICATE KEY UPDATE`, and narrow `CALL proc(...)`. | Stored routine/event bodies, transaction/control-flow scripting, broad `CALL` argument expressions, `DELIMITER`, and `LOAD DATA` are unsupported or explicitly rejected. Trigger create/drop is raw-SQL-only; structured trigger dialogs are not mapped to MySQL's inline trigger body model. MySQL version-aware capability metadata exists, but server-version gates are not fully routed through runtime/UI lookup. Grid CSV/TSV export is generic; DB-level backup/restore/import/export and MySQL-restorable schema dumps are not claimed. |
 | MariaDB SQL | Uses a distinct MariaDB `DatabaseType`, profile, and dialect identity while reusing the MySQL-family runtime adapter, CodeMirror dialect, parser/Safe Mode path, and capability family. Completion/profile vocabulary exposes the MySQL-family surface plus a current MariaDB `RETURNING` delta. | `RETURNING` is a completion/profile delta, not a version-gated runtime support guarantee; the server remains the final judge. MariaDB-engine routine/default fixture, CI, and live-engine evidence is still too thin for broader MariaDB-only syntax or runtime claims. |
 | SQLite SQL | File connection, table browsing, raw SELECT execution, and multi-statement batches are supported. Raw DML execution and primary-key-scoped row edits are supported only for writable SQLite files. Completion covers built-in SQLite keywords/functions, cached schema objects, and sqlite-cli dot-command vocabulary as suggestions. | Raw SQL DDL is rejected by the SQLite adapter, and structured DDL UI parity is not implemented. Unsupported `ALTER TABLE` actions are not auto-rebuilt, row edits require a single-table result with all primary-key columns projected, read-only file connections reject writes, sqlite-cli dot commands are not executed, and extension/capability-specific semantics are not validated client-side. |
-| DuckDB SQL | DuckDB file connection, local CSV/Parquet/JSON/NDJSON preview, and raw SQL execution are supported. Completion covers current DuckDB vocabulary and cached schema objects. | Structured DDL/write UI parity, file analytics query UI parity, shell commands, cloud/object-store access, and arbitrary external-file SQL functions are out of scope. |
+| DuckDB SQL | DuckDB is a file-backed RDBMS profile (`rdb` + `file` connection kind). Local `.duckdb` files can be opened for catalog browsing, table reads, and statement-level raw SQL execution through the RDBMS tabular result path. Local CSV/Parquet/JSON/NDJSON analytics sources can be registered and previewed; a source-scoped SELECT runtime/wrapper exists, while the product UI is still preview-first. Completion covers current DuckDB vocabulary and cached schema objects. | Structured DDL/write UI parity, file analytics query UI parity/history/import, extension install/load, `COPY` file import/export, shell commands, cloud/object-store access, and arbitrary external-file SQL functions or replacement scans are out of scope. Read-only `.duckdb` files reject writes. Follow-up hardening remains tracked by #188, #210, and #246. |
 | MongoDB Mongosh/MQL | Whitelisted `db...` collection/admin commands, JSON-like bodies, BSON literals, cursor chains, operator/stage/expression completion, and destructive admin Safe Mode gates are supported. | Arbitrary JavaScript, shell helpers such as `use`/`show`, multiple statements, unsupported cursor helpers, cross-db shell navigation, server-version gates, and native document-first result panels remain out of scope. |
 | Redis command | Connection/profile, backend KV primitives, key browser, and value preview exist. | Query-language parser/completion ownership is future-contract only. Value edit, TTL/write, stream UI, and broader Redis/Valkey command coverage are not claimed. |
 | Search DSL | Fixture-backed Search identities and bounded fixture DSL exist. | Live HTTP execution and full query-language support are deferred. |
 
 ## Current Unsupported Boundaries
 
-Unsupported syntax can still execute on the database server when sent through a
-raw SQL path. The client may only lose completion, typed dispatch, or Safe Mode
-precision. Current product-facing boundaries are:
+For server-backed SQL adapters, unsupported syntax can still execute on the
+database server when sent through a raw SQL path. The client may only lose
+completion, typed dispatch, or Safe Mode precision. File-backed adapters may also
+block specific runtime slices before dispatch. Current product-facing boundaries
+are:
 
 - SQL parser/Safe Mode is PostgreSQL/ANSI-centered and widens by tested slices;
   selected extension-tolerant syntax is accepted only as structure, not as full
@@ -82,7 +84,16 @@ precision. Current product-facing boundaries are:
   objects, and sqlite-cli dot-command vocabulary, but dot commands and
   extension-specific candidates are not dispatched or gated by installed
   capabilities.
-- DuckDB extension-specific semantics are not validated client-side.
+- DuckDB remains an RDBMS + `file` connection kind unless future evidence
+  requires a separate file-SQL paradigm.
+- DuckDB `.duckdb` raw SQL uses the RDBMS adapter path for statement-level
+  execution. The adapter rejects extension install/load, `COPY` import/export,
+  raw external-file functions, and string replacement scans. Read-only files
+  reject writes.
+- DuckDB file analytics has local source registration/preview and
+  source-scoped SELECT runtime evidence. Broader query UI parity, history/import
+  behavior, privacy documentation, and smoke coverage remain follow-ups (#188,
+  #210, #246).
 - MongoDB support is limited to the tested whitelist; arbitrary shell behavior is
   intentionally not supported.
 - Redis and Search query language support is not yet a full active product
