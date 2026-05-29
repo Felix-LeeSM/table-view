@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import { Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { safeStringifyCell } from "@lib/jsonCell";
+import { isArrayColumn, isJsonbColumn } from "@lib/sql/structuralSqlEdit";
 import { getTextAlign, type ColumnCategory } from "@/lib/columnCategory";
 import type { TableData } from "@/types/schema";
 import {
@@ -11,7 +12,6 @@ import {
   deriveEditorSeed,
   getInputTypeForColumn,
 } from "../dataGridEditFsm";
-import { isJsonbColumn, isArrayColumn } from "../sqlGenerator";
 import { cn } from "@lib/utils";
 import { isBlobColumn, parseFkReference } from "./columnUtils";
 import type { CellNavigationDirection } from "./useCellNavigation";
