@@ -93,6 +93,10 @@ export function isForeignKeyConstraint(constraintType: string): boolean {
   return normalizeConstraintType(constraintType) === "foreign key";
 }
 
+export function isCheckConstraint(constraintType: string): boolean {
+  return normalizeConstraintType(constraintType) === "check";
+}
+
 export interface ParsedFkReference {
   readonly schema?: string;
   readonly table: string;

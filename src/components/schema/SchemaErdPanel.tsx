@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Network } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
@@ -23,6 +23,7 @@ export default function SchemaErdPanel({
   database,
 }: SchemaErdPanelProps) {
   const [selectedTableId, setSelectedTableId] = useState<string | undefined>();
+  const metadataInFlightRef = useRef<Set<string>>(new Set());
   const dbType = useConnectionStore(
     (state) =>
       state.connections.find((connection) => connection.id === connectionId)
@@ -38,10 +39,22 @@ export default function SchemaErdPanel({
     (state) =>
       state.tableColumnsCache[connectionId]?.[database] ?? EMPTY_BY_SCHEMA,
   );
+  const indexesByTable = useSchemaStore(
+    (state) =>
+      state.tableIndexesCache[connectionId]?.[database] ?? EMPTY_BY_SCHEMA,
+  );
+  const constraintsByTable = useSchemaStore(
+    (state) =>
+      state.tableConstraintsCache[connectionId]?.[database] ?? EMPTY_BY_SCHEMA,
+  );
   const loadSchemas = useSchemaStore((state) => state.loadSchemas);
   const loadTables = useSchemaStore((state) => state.loadTables);
   const prefetchSchemaColumns = useSchemaStore(
     (state) => state.prefetchSchemaColumns,
+  );
+  const getTableIndexes = useSchemaStore((state) => state.getTableIndexes);
+  const getTableConstraints = useSchemaStore(
+    (state) => state.getTableConstraints,
   );
   const runtimeDbType = isRuntimeRdbmsDatabaseType(dbType) ? dbType : null;
 
@@ -80,6 +93,57 @@ export default function SchemaErdPanel({
     tablesBySchema,
   ]);
 
+  useEffect(() => {
+    if (!runtimeDbType) return;
+
+    for (const [schemaName, tables] of Object.entries(tablesBySchema)) {
+      for (const table of tables) {
+        const tableSchema = table.schema || schemaName;
+        const tableName = table.name;
+
+        if (!hasCachedTableEntry(indexesByTable, tableSchema, tableName)) {
+          queueTableMetadataFetch(
+            metadataInFlightRef.current,
+            connectionId,
+            database,
+            tableSchema,
+            tableName,
+            "indexes",
+            () =>
+              getTableIndexes(connectionId, database, tableName, tableSchema),
+          );
+        }
+
+        if (!hasCachedTableEntry(constraintsByTable, tableSchema, tableName)) {
+          queueTableMetadataFetch(
+            metadataInFlightRef.current,
+            connectionId,
+            database,
+            tableSchema,
+            tableName,
+            "constraints",
+            () =>
+              getTableConstraints(
+                connectionId,
+                database,
+                tableName,
+                tableSchema,
+              ),
+          );
+        }
+      }
+    }
+  }, [
+    connectionId,
+    constraintsByTable,
+    database,
+    getTableConstraints,
+    getTableIndexes,
+    indexesByTable,
+    runtimeDbType,
+    tablesBySchema,
+  ]);
+
   const graph = useMemo(() => {
     if (!runtimeDbType) return null;
     return extractSchemaGraph(
@@ -89,9 +153,19 @@ export default function SchemaErdPanel({
         schemas,
         tablesBySchema,
         columnsByTable,
+        indexesByTable,
+        constraintsByTable,
       }),
     );
-  }, [columnsByTable, database, runtimeDbType, schemas, tablesBySchema]);
+  }, [
+    columnsByTable,
+    constraintsByTable,
+    database,
+    indexesByTable,
+    runtimeDbType,
+    schemas,
+    tablesBySchema,
+  ]);
 
   if (!runtimeDbType || !graph) {
     return (
@@ -122,4 +196,32 @@ function isRuntimeRdbmsDatabaseType(
   return RUNTIME_RDBMS_DATABASE_TYPES.includes(
     dbType as RuntimeRdbmsDatabaseType,
   );
+}
+
+function hasCachedTableEntry(
+  cache: Readonly<Record<string, Readonly<Record<string, readonly unknown[]>>>>,
+  schema: string,
+  table: string,
+): boolean {
+  return Object.prototype.hasOwnProperty.call(cache[schema] ?? {}, table);
+}
+
+function queueTableMetadataFetch(
+  inFlight: Set<string>,
+  connectionId: string,
+  database: string,
+  schema: string,
+  table: string,
+  kind: "indexes" | "constraints",
+  fetchMetadata: () => Promise<unknown>,
+): void {
+  const key = [connectionId, database, schema, table, kind].join("\u0000");
+  if (inFlight.has(key)) return;
+
+  inFlight.add(key);
+  void fetchMetadata()
+    .catch(() => undefined)
+    .finally(() => {
+      inFlight.delete(key);
+    });
 }

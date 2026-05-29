@@ -92,3 +92,83 @@ export function deleteConnDbSchema<V>(
     [connId]: { ...connSlot, [db]: nextDb },
   };
 }
+
+export function deleteConnDbSchemaTable<V>(
+  outer: ByConn<BySchema<ByTable<V>>>,
+  connId: string,
+  db: string,
+  schema: string,
+  table: string,
+): ByConn<BySchema<ByTable<V>>> {
+  const connSlot = outer[connId];
+  if (!connSlot) return outer;
+  const dbSlot = connSlot[db];
+  if (!dbSlot) return outer;
+  const schemaSlot = dbSlot[schema];
+  if (!schemaSlot || !(table in schemaSlot)) return outer;
+
+  const nextSchema = { ...schemaSlot };
+  delete nextSchema[table];
+  return {
+    ...outer,
+    [connId]: {
+      ...connSlot,
+      [db]: { ...dbSlot, [schema]: nextSchema },
+    },
+  };
+}
+
+export function renameConnDbSchemaTable<V>(
+  outer: ByConn<BySchema<ByTable<V>>>,
+  connId: string,
+  db: string,
+  schema: string,
+  table: string,
+  newName: string,
+): ByConn<BySchema<ByTable<V>>> {
+  if (table === newName) return outer;
+  const connSlot = outer[connId];
+  if (!connSlot) return outer;
+  const dbSlot = connSlot[db];
+  if (!dbSlot) return outer;
+  const schemaSlot = dbSlot[schema];
+  if (!schemaSlot || !(table in schemaSlot)) return outer;
+
+  const nextSchema = { ...schemaSlot, [newName]: schemaSlot[table]! };
+  delete nextSchema[table];
+  return {
+    ...outer,
+    [connId]: {
+      ...connSlot,
+      [db]: { ...dbSlot, [schema]: nextSchema },
+    },
+  };
+}
+
+export function retainConnDbSchemaTables<V>(
+  outer: ByConn<BySchema<ByTable<V>>>,
+  connId: string,
+  db: string,
+  schema: string,
+  tableNames: ReadonlySet<string>,
+): ByConn<BySchema<ByTable<V>>> {
+  const connSlot = outer[connId];
+  if (!connSlot) return outer;
+  const dbSlot = connSlot[db];
+  if (!dbSlot) return outer;
+  const schemaSlot = dbSlot[schema];
+  if (!schemaSlot) return outer;
+
+  const nextEntries = Object.entries(schemaSlot).filter(([table]) =>
+    tableNames.has(table),
+  );
+  if (nextEntries.length === Object.keys(schemaSlot).length) return outer;
+
+  return {
+    ...outer,
+    [connId]: {
+      ...connSlot,
+      [db]: { ...dbSlot, [schema]: Object.fromEntries(nextEntries) },
+    },
+  };
+}

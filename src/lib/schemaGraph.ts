@@ -27,6 +27,7 @@ import {
   addSchemaGraphDiagnostic as addDiagnostic,
   addSchemaGraphEdge as addEdge,
   formatReferenceTable,
+  isCheckConstraint as isCheck,
   isForeignKeyConstraint as isForeignKey,
   isPrimaryKeyConstraint as isPrimaryKey,
   parseFkReference,
@@ -190,6 +191,9 @@ function addSyntheticConstraints(
   const hasPrimaryKey = constraints.some((constraint) =>
     isPrimaryKey(constraint.constraint_type),
   );
+  const hasCheckConstraint = constraints.some((constraint) =>
+    isCheck(constraint.constraint_type),
+  );
   const explicitFkColumns = new Set(
     constraints
       .filter((constraint) => isForeignKey(constraint.constraint_type))
@@ -233,23 +237,25 @@ function addSyntheticConstraints(
     );
   }
 
-  [...collectCheckClauses(columns).entries()].forEach(
-    ([checkExpression, checkColumns], index) => {
-      addConstraint(
-        table,
-        {
-          name: `__synthetic_check_${index + 1}`,
-          constraintType: "CHECK",
-          columns: checkColumns,
-          referenceTable: null,
-          referenceColumns: null,
-          checkExpression,
-          synthetic: true,
-        },
-        context,
-      );
-    },
-  );
+  if (!hasCheckConstraint) {
+    [...collectCheckClauses(columns).entries()].forEach(
+      ([checkExpression, checkColumns], index) => {
+        addConstraint(
+          table,
+          {
+            name: `__synthetic_check_${index + 1}`,
+            constraintType: "CHECK",
+            columns: checkColumns,
+            referenceTable: null,
+            referenceColumns: null,
+            checkExpression,
+            synthetic: true,
+          },
+          context,
+        );
+      },
+    );
+  }
 }
 
 function collectCheckClauses(

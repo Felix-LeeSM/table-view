@@ -96,11 +96,10 @@ catalog graphs without pretending to be RDB schemas.
 
 RDB catalog model 의 `index/constraint/FK` 는 target contract 다. schemaStore 의
 현재 cache owner 범위는 schemas/tables/views/functions/postgresExtensions/
-tableColumnsCache/triggers 이며 indexes/constraints 는 cache 가 아니라 live IPC
-delegate 다. 현재 wired production `SchemaGraph` input 은 schema/table/column
-cache 와 `ColumnInfo` 에서 derive 한 synthetic PK/FK/CHECK constraint 다.
-explicit `indexesByTable` / `constraintsByTable` graph input 은 owner 를 정해 wire
-하기 전까지 fixture/test input 으로만 본다.
+tableColumnsCache/tableIndexesCache/tableConstraintsCache/triggers 다. Production
+ERD/`SchemaGraph` input 은 schema/table/column cache 와 cached/fetched explicit
+index/constraint cache 를 함께 사용한다. `ColumnInfo` PK/FK/CHECK metadata 는
+explicit metadata 가 비어 있을 때 synthetic constraint 보강에 사용한다.
 
 Future dependency view, migration impact, and dense-view work should extend the
 shared `SchemaGraph`/catalog input path. Duplicate catalog parsing 금지. 현재 FK
