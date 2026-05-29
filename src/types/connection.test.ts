@@ -358,9 +358,9 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Sprint 276 / 281 — `SUPPORTED_DATABASE_TYPES` 가 connection 생성 UI 의
-// DBMS 노출 단일 source. 백엔드 `make_adapter` 가 실제 어댑터를 반환하는
-// DBMS 만 포함되어야 한다.
+// Sprint 276 / 281 — legacy connection 생성 allow-list. Current profile
+// support source 는 `DATA_SOURCE_PROFILES` 이고, connection 생성 UI 노출은
+// `capabilities.connection.test` 와 이 list 가 정렬되어야 한다.
 // Date 2026-05-13.
 // ---------------------------------------------------------------------------
 describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {

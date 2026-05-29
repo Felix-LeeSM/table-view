@@ -20,7 +20,7 @@ Runtime-active languages are the languages used by connection-supported
 `DataSourceProfile` entries.
 
 | QueryLanguageId | Lifecycle | Parser owner | Completion owner | Fallback policy | Safety analyzer |
-|---|---|---|---|---|
+|---|---|---|---|---|---|
 | `sql` | `active` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
 | `mongosh` | `active` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
 | `redis-command` | `active` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` |

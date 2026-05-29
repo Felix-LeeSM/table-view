@@ -12,18 +12,19 @@ export type DatabaseType =
   | "opensearch";
 
 /**
- * Sprint 276 — 사용자에게 노출되는 어댑터의 단일 source of truth.
- * 백엔드 `make_adapter` 가 실제 어댑터를 반환하는 DatabaseType 만 포함한다.
- * 새 어댑터를 wire-up 하면 여기에 추가만 하면 ConnectionDialog Select /
- * URL parse / paste detect 가 동시에 풀린다.
+ * Legacy connection creation allow-list.
+ *
+ * Current source/profile support lives in `DATA_SOURCE_PROFILES`; connection UI
+ * exposure is derived from `capabilities.connection.test` and tested to stay
+ * aligned with this compatibility list.
  *
  * Sprint 281 (Phase 17 Slice A) — MySQL 추가. read path (namespaces /
  * tables / columns) 만 동작 — DDL / queries / streaming 은 Slice B~G
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
- * 미포함 어댑터 (MSSQL/Oracle/Search live HTTP) 는 connection 생성 dialog 의
- * Select option 에 노출되지 않고, URL paste / Parse & Continue 로 들어와도
- * 거부된다.
+ * 미포함 어댑터 (MSSQL/Oracle/Search live HTTP) 는 profile identity 는 있지만
+ * connection 생성 dialog 의 Select option 에 노출되지 않고, URL paste /
+ * Parse & Continue 로 들어와도 거부된다.
  */
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",
