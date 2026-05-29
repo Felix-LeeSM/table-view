@@ -143,6 +143,37 @@ describe("SchemaGraph extraction", () => {
     );
   });
 
+  it("does not duplicate CHECK constraints when explicit metadata is present", () => {
+    const graph = extractSchemaGraph({
+      source: { dbType: "postgresql", database: "app" },
+      schemas: [{ name: "public" }],
+      tablesBySchema: { public: [table("public", "accounts")] },
+      columnsByTable: {
+        public: {
+          accounts: [
+            column("id", { is_primary_key: true }),
+            column("age", { check_clauses: ["CHECK ((age >= 0))"] }),
+          ],
+        },
+      },
+      constraintsByTable: {
+        public: {
+          accounts: [constraint("accounts_age_check", "CHECK", ["age"])],
+        },
+      },
+    });
+    const checkNodes = graph.nodes.filter(
+      (node) =>
+        node.kind === "constraint" && node.data.constraintType === "CHECK",
+    );
+
+    expect(checkNodes).toHaveLength(1);
+    expect(checkNodes[0]).toMatchObject({
+      id: schemaGraphConstraintId("public", "accounts", "accounts_age_check"),
+      data: { synthetic: false, columns: ["age"] },
+    });
+  });
+
   it("keeps dotted SQL identifiers from colliding in stable graph IDs", () => {
     const graph = extractSchemaGraph({
       source: { dbType: "postgresql", database: "app" },

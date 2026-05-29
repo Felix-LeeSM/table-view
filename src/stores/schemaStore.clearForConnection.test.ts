@@ -3,7 +3,7 @@
 // 사유: Q23 self-window schemaCache invalidate — DDL 후 사이드바가 100ms 안에
 // `foo` 를 표시하려면 `clearForConnection(connId)` 가 그 conn 의 **모든** 캐시
 // 슬롯(schemas / tables / views / functions / postgresExtensions /
-// tableColumnsCache / triggers)을
+// tableColumnsCache / tableIndexesCache / tableConstraintsCache / triggers)을
 // 한 번에 비워 wide drop 을 보장해야 한다. Sprint 130/263 의 기존 행동을
 // sprint-360 의 contract 어휘 (AC-360-01 / AC-360-05) 로 다시 고정한다.
 
@@ -80,6 +80,14 @@ const SEEDED_CACHE = {
     conn1: { db1: { public: { users: [] } } },
     conn2: { db1: { public: { users: [] } } },
   },
+  tableIndexesCache: {
+    conn1: { db1: { public: { users: [] } } },
+    conn2: { db1: { public: { users: [] } } },
+  },
+  tableConstraintsCache: {
+    conn1: { db1: { public: { users: [] } } },
+    conn2: { db1: { public: { users: [] } } },
+  },
   triggers: {
     conn1: {
       db1: {
@@ -116,6 +124,8 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
       functions: {},
       postgresExtensions: {},
       tableColumnsCache: {},
+      tableIndexesCache: {},
+      tableConstraintsCache: {},
       triggers: {},
       loading: false,
       error: null,
@@ -136,6 +146,8 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
     expect(state.functions.conn1).toBeUndefined();
     expect(state.postgresExtensions.conn1).toBeUndefined();
     expect(state.tableColumnsCache.conn1).toBeUndefined();
+    expect(state.tableIndexesCache.conn1).toBeUndefined();
+    expect(state.tableConstraintsCache.conn1).toBeUndefined();
     expect(state.triggers.conn1).toBeUndefined();
   });
 
@@ -152,5 +164,7 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
     expect(state.tables.conn2?.db1?.public).toHaveLength(1);
     expect(state.postgresExtensions.conn2?.db1).toEqual([]);
     expect(state.tableColumnsCache.conn2?.db1?.public?.users).toEqual([]);
+    expect(state.tableIndexesCache.conn2?.db1?.public?.users).toEqual([]);
+    expect(state.tableConstraintsCache.conn2?.db1?.public?.users).toEqual([]);
   });
 });
