@@ -282,7 +282,21 @@ export async function typeQuery(sql: string) {
   const content = await $(".cm-content");
   await content.waitForDisplayed({ timeout: 5000 });
   await content.click();
-  await browser.keys(sql);
+  for (const char of sql) {
+    await browser.keys(char === "\n" ? "Enter" : char);
+  }
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (expected) =>
+          document.querySelector(".cm-content")?.textContent === expected,
+        sql,
+      ),
+    {
+      timeout: 5000,
+      timeoutMsg: "SQL Query Editor did not receive the exact query text",
+    },
+  );
 }
 
 export async function runQuery() {
