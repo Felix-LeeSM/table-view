@@ -651,9 +651,9 @@ pub trait RdbAdapter: DbAdapter {
     }
 
     /// Sprint 337 — return the query execution plan for `sql`. PG override
-    /// runs `EXPLAIN (ANALYZE, FORMAT JSON) <sql>` and parses the first
-    /// cell (a JSON array with a single `Plan` node). Non-PG RDB adapters
-    /// inherit `Unsupported`.
+    /// runs `EXPLAIN (FORMAT JSON) <sql>` and parses the first cell (a JSON
+    /// array with a single `Plan` node). Non-PG RDB adapters inherit
+    /// `Unsupported`.
     fn explain_query<'a>(
         &'a self,
         _sql: &'a str,

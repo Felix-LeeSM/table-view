@@ -3,21 +3,21 @@
  *
  * 사용자 journey:
  *   1. (default) HistorySettings 토글 ON — `query_history_enabled = true`
- *      (AC-373-08). 5 source caller (`recordHistoryEntry`) 가 `add_history_entry`
+ *      (AC-373-08). 6 source caller (`recordHistoryEntry`) 가 `add_history_entry`
  *      IPC 를 호출.
  *   2. 사용자 토글 OFF — `setQueryHistoryEnabled(false)` 호출 →
  *      `persist_setting("query_history_enabled", false)` IPC + store mutate.
- *      이후 5 source caller 가 `recordHistoryEntry` 호출 시 IPC 0회 (early
+ *      이후 6 source caller 가 `recordHistoryEntry` 호출 시 IPC 0회 (early
  *      return).
  *   3. 사용자 다시 토글 ON — IPC 호출 재개.
  *
  * 사유 (test scenarios 8 원칙):
- *   - user journey path: 토글 → 5 source caller 모두 시뮬 → IPC spy 0/N
- *     검증. mock 광역화 silent failure 가 안 일어나도록 5 caller 각자
+ *   - user journey path: 토글 → 6 source caller 모두 시뮬 → IPC spy 0/N
+ *     검증. mock 광역화 silent failure 가 안 일어나도록 6 caller 각자
  *     호출이 ON 시 +1 / OFF 시 +0 임을 정확히 단언.
  *   - state transition: ON → OFF → ON 의 3 단계 모두 자명한 단언.
  *   - regression-lock: `recordHistoryEntry` 의 early-return 분기가 빠지면
- *     OFF 상태에서도 IPC count 가 5 — 본 테스트가 회귀를 즉시 잡음.
+ *     OFF 상태에서도 IPC count 가 6 — 본 테스트가 회귀를 즉시 잡음.
  *
  * Tauri `invoke` 만 mock — `recordHistoryEntry` / `useHistorySettingsStore`
  * 의 실제 logic 을 실행해서 lego (settings → record → store → invoke)
@@ -27,7 +27,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
-// hoisted mock — module-level invoke. 5 source caller 마다 어떤 IPC 가
+// hoisted mock — module-level invoke. 6 source caller 마다 어떤 IPC 가
 // 호출되는지 단언하기 위해 spy 화.
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
@@ -40,11 +40,11 @@ import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 
 /**
- * 5 source caller 의 동일 입력 시뮬레이터. 본 helper 는 `recordHistoryEntry`
- * 의 5종 source 라벨을 1회씩 발사 — IPC mock 의 count 가 ON 일 때 5,
+ * 6 source caller 의 동일 입력 시뮬레이터. 본 helper 는 `recordHistoryEntry`
+ * 의 6종 source 라벨을 1회씩 발사 — IPC mock 의 count 가 ON 일 때 6,
  * OFF 일 때 0 인지 검증할 수 있다.
  */
-function simulateAll5Sources() {
+function simulateAll6Sources() {
   // raw
   recordHistoryEntry({
     sql: "SELECT 1",
@@ -91,10 +91,23 @@ function simulateAll5Sources() {
     collection: "t",
     source: "mongo-op",
   });
+  // explain (RDB plan inspection)
+  recordHistoryEntry({
+    sql: "SELECT * FROM t WHERE id = 1",
+    executedAt: 1_700_000_000_004,
+    duration: 4,
+    status: "success",
+    connectionId: "c-1",
+    paradigm: "rdb",
+    queryMode: "sql",
+    database: "db1",
+    tabId: "query-1",
+    source: "explain",
+  });
   // sidebar-prefetch (RDB preview rows)
   recordHistoryEntry({
     sql: "SELECT * FROM t",
-    executedAt: 1_700_000_000_004,
+    executedAt: 1_700_000_000_005,
     duration: 3,
     status: "success",
     connectionId: "c-1",
@@ -140,16 +153,16 @@ describe("HistorySettings (sprint-373) — disable toggle gates IPC", () => {
     expect(useHistorySettingsStore.getState().queryHistoryEnabled).toBe(true);
   });
 
-  // AC-373-03 — 토글 OFF 후 5 source caller 모두 IPC 호출 안 함.
+  // AC-373-03 — 토글 OFF 후 6 source caller 모두 IPC 호출 안 함.
   // 작성 2026-05-17. 사유: 사용자가 disable 하면 IPC count = 0 invariant.
-  it("disables IPC across all 5 source callers when toggled off (AC-373-03)", async () => {
+  it("disables IPC across all 6 source callers when toggled off (AC-373-03)", async () => {
     render(<HistorySettings />);
 
-    // 1. ON 상태 — 5 source 발사 → 5 IPC.
+    // 1. ON 상태 — 6 source 발사 → 6 IPC.
     act(() => {
-      simulateAll5Sources();
+      simulateAll6Sources();
     });
-    expect(countAddHistoryCalls()).toBe(5);
+    expect(countAddHistoryCalls()).toBe(6);
 
     // 2. 사용자 토글 OFF — IPC 1회 (persist_setting). count reset 후
     //    add_history_entry count 만 다시 잰다.
@@ -160,10 +173,10 @@ describe("HistorySettings (sprint-373) — disable toggle gates IPC", () => {
     });
     expect(useHistorySettingsStore.getState().queryHistoryEnabled).toBe(false);
 
-    // 3. OFF 상태에서 5 source 다시 발사 → IPC 0.
+    // 3. OFF 상태에서 6 source 다시 발사 → IPC 0.
     invokeMock.mockClear();
     act(() => {
-      simulateAll5Sources();
+      simulateAll6Sources();
     });
     expect(countAddHistoryCalls()).toBe(0);
   });
@@ -188,12 +201,12 @@ describe("HistorySettings (sprint-373) — disable toggle gates IPC", () => {
     });
     expect(useHistorySettingsStore.getState().queryHistoryEnabled).toBe(true);
 
-    // 3. 5 source 발사 → IPC 5회 (resume).
+    // 3. 6 source 발사 → IPC 6회 (resume).
     invokeMock.mockClear();
     act(() => {
-      simulateAll5Sources();
+      simulateAll6Sources();
     });
-    expect(countAddHistoryCalls()).toBe(5);
+    expect(countAddHistoryCalls()).toBe(6);
   });
 
   // 토글 상태가 aria-pressed 에 동기화 — accessibility 회귀 가드.

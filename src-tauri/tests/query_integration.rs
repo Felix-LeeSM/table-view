@@ -110,6 +110,51 @@ async fn test_dml_query_returns_rows_affected() {
     adapter.disconnect_pool().await.ok();
 }
 
+/// PostgreSQL Explain is plan inspection, not profiler execution.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_explain_query_does_not_execute_mutation() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let table_name = format!(
+        "test_explain_plan_only_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    );
+
+    adapter
+        .execute_query(&format!("CREATE TABLE {table_name} (id INT)"), None)
+        .await
+        .expect("CREATE TABLE should succeed");
+    adapter
+        .execute_query(&format!("INSERT INTO {table_name} VALUES (1)"), None)
+        .await
+        .expect("INSERT should succeed");
+
+    let plan = adapter
+        .explain_query(&format!("UPDATE {table_name} SET id = 2"))
+        .await
+        .expect("EXPLAIN should return a JSON plan");
+    assert!(plan.is_array(), "PostgreSQL FORMAT JSON returns an array");
+
+    let rows = adapter
+        .execute_query(&format!("SELECT id FROM {table_name}"), None)
+        .await
+        .expect("SELECT should succeed");
+    assert_eq!(rows.rows[0][0].as_i64(), Some(1));
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table_name}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
 /// Integration test for DDL query execution
 #[tokio::test]
 #[serial_test::serial]

@@ -9,6 +9,7 @@ import { render, screen, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useHistorySettingsStore } from "@stores/historySettingsStore";
 import {
   MOCK_RESULT,
   mockExecuteQuery,
@@ -28,6 +29,10 @@ import type { Extension } from "@codemirror/state";
 // path. `vi.fn()` lives at module scope so individual tests can read
 // `.mock.calls` after clicking the button.
 const mockExecuteQueryDryRun = vi.fn();
+const { mockExplainRdbQuery, mockExplainMongoFind } = vi.hoisted(() => ({
+  mockExplainRdbQuery: vi.fn(),
+  mockExplainMongoFind: vi.fn(),
+}));
 beforeEach(() => {
   setupTauriMock({
     executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
@@ -37,6 +42,11 @@ beforeEach(() => {
     executeQueryDryRun: (...args: unknown[]) => mockExecuteQueryDryRun(...args),
   });
 });
+
+vi.mock("@/lib/api/explain", () => ({
+  explainRdbQuery: (...args: unknown[]) => mockExplainRdbQuery(...args),
+  explainMongoFind: (...args: unknown[]) => mockExplainMongoFind(...args),
+}));
 
 // Sprint 132 — the QueryTab raw-query hook calls `verifyActiveDb` after
 // optimistic `setActiveDb`. The wrapper itself is unit-tested in
@@ -138,7 +148,13 @@ vi.mock("@lib/sql/sqlUtils", () => ({
 describe("QueryTab — toolbar", () => {
   beforeEach(() => {
     resetQueryTabStores();
+    useHistorySettingsStore.setState({
+      queryHistoryEnabled: true,
+      queryHistoryRetentionDays: 30,
+    });
     mockExecuteQueryDryRun.mockReset();
+    mockExplainRdbQuery.mockReset();
+    mockExplainMongoFind.mockReset();
   });
 
   // ── Sprint 25: Query Editor Toolbar ──
@@ -317,5 +333,32 @@ describe("QueryTab — toolbar", () => {
     );
     // Real-execute path NEVER fires for dry-run clicks.
     expect(mockExecuteQuery).not.toHaveBeenCalled();
+  });
+
+  it("renders PostgreSQL Explain and swaps the result area to the plan viewer", async () => {
+    mockExplainRdbQuery.mockResolvedValueOnce([
+      { Plan: { "Node Type": "Seq Scan", "Relation Name": "users" } },
+    ]);
+    useHistorySettingsStore.setState({ queryHistoryEnabled: false });
+    const tab = makeQueryTab({ database: "db1" });
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "conn1", dbType: "postgresql" })],
+    });
+    render(<QueryTab tab={tab} />);
+
+    const explainBtn = screen.getByRole("button", {
+      name: /explain query/i,
+    });
+    expect(explainBtn).not.toBeDisabled();
+
+    await act(async () => {
+      explainBtn.click();
+    });
+
+    expect(await screen.findByTestId("explain-plan-summary")).toHaveTextContent(
+      "Plan Summary",
+    );
+    expect(mockExplainRdbQuery).toHaveBeenCalledWith("conn1", "SELECT 1");
+    expect(screen.queryByTestId("mock-result")).not.toBeInTheDocument();
   });
 });

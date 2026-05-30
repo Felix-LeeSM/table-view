@@ -30,13 +30,13 @@ describe("BackendPendingPlaceholder (Sprint 327)", () => {
       <BackendPendingPlaceholder
         title="Explain"
         pendingSprint="Sprint 333"
-        description="RDB EXPLAIN ANALYZE will reuse execute_query."
+        description="RDB EXPLAIN uses plan-only FORMAT JSON."
         testId="placeholder-explain"
       />,
     );
 
     expect(
-      screen.getByText("RDB EXPLAIN ANALYZE will reuse execute_query."),
+      screen.getByText("RDB EXPLAIN uses plan-only FORMAT JSON."),
     ).toBeInTheDocument();
   });
 });

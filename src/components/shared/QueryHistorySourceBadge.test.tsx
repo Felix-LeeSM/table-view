@@ -42,4 +42,12 @@ describe("QueryHistorySourceBadge", () => {
     expect(badge).toHaveTextContent("MQL");
     expect(badge.getAttribute("data-source")).toBe("mongo-op");
   });
+
+  it("surfaces a PLAN badge for explain", () => {
+    render(<QueryHistorySourceBadge source="explain" />);
+    const badge = screen.getByTestId("query-history-source-badge");
+    expect(badge).toHaveTextContent("PLAN");
+    expect(badge.getAttribute("data-source")).toBe("explain");
+    expect(badge.getAttribute("title")).toMatch(/explain plan/i);
+  });
 });

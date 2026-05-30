@@ -282,7 +282,7 @@ pub fn run() {
         });
 
         // Sprint 375 (Phase 6 cleanup) — boot-time `query_history.tab_id`
-        // invariant audit. 5 source 중 sidebar-prefetch 만 NULL tab_id 를
+        // invariant audit. sidebar-prefetch 만 NULL tab_id 를
         // 허용하므로, `tab_id IS NULL AND source != 'sidebar-prefetch'`
         // 인 row 가 1개 이상이면 frontend caller 가 tab_id 를 elide 한
         // 회귀가 있다. Q10 zero-telemetry — `tracing::error!` 한 줄만,

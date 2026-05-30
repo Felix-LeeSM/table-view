@@ -1,5 +1,5 @@
-// Sprint 337 (2026-05-15) — U2 live wire. RDB EXPLAIN (ANALYZE, FORMAT
-// JSON) and Mongo runCommand({explain: …}) wrapped behind a single
+// Sprint 337 (2026-05-15) — U2 live wire. RDB EXPLAIN (FORMAT JSON) and
+// Mongo runCommand({explain: …}) wrapped behind a single
 // component. PostgreSQL plans render a compact summary/tree, with raw JSON
 // retained for fallback and troubleshooting.
 
@@ -28,6 +28,12 @@ export interface ExplainViewerProps {
   rdbSql?: string;
   /** Mongo only — `{database, collection, filter?, verbosity?}` */
   mongoSpec?: ExplainMongoFindArgs;
+  onPlanSettled?: (result: {
+    status: "success" | "error";
+    durationMs: number;
+    executedAt: number;
+    errorMessage?: string;
+  }) => void;
 }
 
 export function ExplainViewer({
@@ -35,12 +41,14 @@ export function ExplainViewer({
   paradigm,
   rdbSql,
   mongoSpec,
+  onPlanSettled,
 }: ExplainViewerProps) {
   const [plan, setPlan] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    const startedAt = Date.now();
     setLoading(true);
     setError(null);
     try {
@@ -55,12 +63,24 @@ export function ExplainViewer({
             )
           : await explainRdbQuery(connectionId, rdbSql ?? "");
       setPlan(next);
+      onPlanSettled?.({
+        status: "success",
+        durationMs: Date.now() - startedAt,
+        executedAt: startedAt,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
+      onPlanSettled?.({
+        status: "error",
+        durationMs: Date.now() - startedAt,
+        executedAt: startedAt,
+        errorMessage: message,
+      });
     } finally {
       setLoading(false);
     }
-  }, [connectionId, paradigm, rdbSql, mongoSpec]);
+  }, [connectionId, paradigm, rdbSql, mongoSpec, onPlanSettled]);
 
   useEffect(() => {
     void refresh();

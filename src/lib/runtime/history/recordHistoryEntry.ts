@@ -1,8 +1,8 @@
 /**
  * Sprint 373 (Phase 5 F.5) — `add_history_entry` IPC 의 thin caller.
  *
- * 작성 2026-05-17. 5 source caller (raw / grid-edit / ddl-structure /
- * mongo-op / sidebar-prefetch) 가 공유. 책임:
+ * 작성 2026-05-17. 6 source caller (raw / grid-edit / ddl-structure /
+ * mongo-op / explain / sidebar-prefetch) 가 공유. 책임:
  *
  *   1. `useHistorySettingsStore.queryHistoryEnabled` 가 false 면 early
  *      return — IPC 호출 자체를 skip 한다 (AC-373-03 invariant).
@@ -46,7 +46,7 @@ interface RecordHistoryEntryCommonArgs {
   /** Optional db/collection (document paradigm 의 경우 거의 항상 set). */
   database?: string;
   collection?: string;
-  /** 5 source label — 호출자가 명시. */
+  /** Source label — 호출자가 명시. */
   source: QueryHistorySource;
   /** 원본 SQL 또는 mongosh 표현. backend 가 `sql_redacted` 생성. */
   sql: string;
@@ -114,7 +114,7 @@ function toDocumentQueryMode(
 }
 
 /**
- * 메인 진입점. 5 caller 모두 본 함수를 호출.
+ * 메인 진입점. 모든 history caller 가 본 함수를 호출.
  *
  * "Disable history" 토글 (`query_history_enabled = false`) 검사가 본
  * 함수의 첫 줄 — 토글 OFF 일 때는 IPC 호출 path 가 0 (AC-373-03 spy

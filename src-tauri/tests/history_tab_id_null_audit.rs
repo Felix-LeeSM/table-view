@@ -5,7 +5,7 @@
 //! 사유 (test scenarios 8 원칙 적용):
 //!   - **user journey end-to-end**: 사용자 app 을 boot — `lib.rs::setup` 의
 //!     detached task 가 `boot_audit_history_tab_id_null_inner(pool)` 를
-//!     호출 → row 5종 (정상 3 / 위반 2) 시드 → count = 2 단언.
+//!     호출 → 정상/위반 source row 를 시드 → count 단언.
 //!   - **lego 맞물림**: history.rs (sprint-371) 의 schema (`tab_id`
 //!     nullable + `source TEXT NOT NULL`) + sprint-375 의 audit query 두
 //!     piece 가 함께 동작해야 통과.
@@ -79,10 +79,10 @@ async fn boot_audit_zero_when_clean() {
 #[tokio::test]
 #[serial]
 async fn boot_audit_counts_only_non_prefetch_null_tabs() {
-    // sprint-375 — 5 source 의 invariant rule 을 정확히 enforce 하는지
+    // sprint-375 — source별 invariant rule 을 정확히 enforce 하는지
     // user journey 끝-까지 검증:
     //   - sidebar-prefetch + tab_id NULL  → 허용 (count 미포함)
-    //   - raw / grid-edit / ddl-structure / mongo-op + tab_id NULL → 위반
+    //   - raw / grid-edit / ddl-structure / mongo-op / explain + tab_id NULL → 위반
     //   - 모두 tab_id 채워짐 → 허용
     let (_dir, pool) = setup().await;
 
@@ -108,8 +108,8 @@ async fn boot_audit_counts_only_non_prefetch_null_tabs() {
 
 #[tokio::test]
 #[serial]
-async fn boot_audit_all_four_non_prefetch_sources_flagged() {
-    // sprint-375 — 회귀 가드: 4 non-prefetch source 각각 NULL tab_id 시
+async fn boot_audit_all_non_prefetch_sources_flagged() {
+    // sprint-375 — 회귀 가드: non-prefetch source 각각 NULL tab_id 시
     // count 에 포함되는지 individual 확인. user journey: 회귀가 한 source
     // 만 break 했을 때 (예: ddl-structure caller 가 tab_id elide) 도 잡힘.
     let (_dir, pool) = setup().await;
@@ -118,11 +118,12 @@ async fn boot_audit_all_four_non_prefetch_sources_flagged() {
     insert_row(&pool, None, "grid-edit").await;
     insert_row(&pool, None, "ddl-structure").await;
     insert_row(&pool, None, "mongo-op").await;
+    insert_row(&pool, None, "explain").await;
     // 그리고 정상 path 도 같이 — 둘이 섞여도 정확.
     insert_row(&pool, None, "sidebar-prefetch").await;
     insert_row(&pool, Some("tab-9"), "raw").await;
 
     let count = count_history_tab_id_null_non_prefetch(&pool).await;
-    assert_eq!(count, 4);
+    assert_eq!(count, 5);
     cleanup();
 }

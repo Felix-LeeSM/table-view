@@ -120,16 +120,50 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
 
   it("renders error alert when explain rejects", async () => {
     explainRdbMock.mockRejectedValueOnce(new Error("syntax error"));
+    const onPlanSettled = vi.fn();
     render(
       <ExplainViewer
         connectionId="conn-pg"
         paradigm="table"
         rdbSql="SELECT FROM"
+        onPlanSettled={onPlanSettled}
       />,
     );
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/syntax error/);
     expect(screen.queryByTestId("explain-plan")).toBeNull();
+    expect(onPlanSettled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "error",
+        errorMessage: "syntax error",
+        durationMs: expect.any(Number),
+        executedAt: expect.any(Number),
+      }),
+    );
+  });
+
+  it("notifies the caller when a plan renders successfully", async () => {
+    const onPlanSettled = vi.fn();
+    explainRdbMock.mockResolvedValueOnce([
+      { Plan: { "Node Type": "Index Scan" } },
+    ]);
+    render(
+      <ExplainViewer
+        connectionId="conn-pg"
+        paradigm="table"
+        rdbSql="SELECT 1"
+        onPlanSettled={onPlanSettled}
+      />,
+    );
+
+    await screen.findByTestId("explain-plan");
+    expect(onPlanSettled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "success",
+        durationMs: expect.any(Number),
+        executedAt: expect.any(Number),
+      }),
+    );
   });
 
   it("re-fetches when Refresh is clicked", async () => {

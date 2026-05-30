@@ -3,10 +3,10 @@
 //!
 //! state-management-strategy doc F.5 (sprint-371 의 schema 0001) 는
 //! `tab_id` 가 nullable column 으로 정의되어 있다. 그러나 source 차원에서
-//! invariant 가 좁다: 5 source 중 **`sidebar-prefetch` 만 `tab_id=NULL` 을
+//! invariant 가 좁다: 6 source 중 **`sidebar-prefetch` 만 `tab_id=NULL` 을
 //! 허용**한다 (sidebar 가 collection/table preview 를 열 때는 tab 이 아직
-//! 만들어지지 않음). 나머지 4 source (`raw`, `grid-edit`, `ddl-structure`,
-//! `mongo-op`) 는 모두 tab 안에서 발생하는 사용자 action 이므로 `tab_id`
+//! 만들어지지 않음). 나머지 source (`raw`, `grid-edit`, `ddl-structure`,
+//! `mongo-op`, `explain`) 는 모두 tab 안에서 발생하는 사용자 action 이므로 `tab_id`
 //! 가 항상 set 되어야 한다.
 //!
 //! 본 audit 는 boot 직후 `SELECT COUNT(*) FROM query_history WHERE tab_id
@@ -54,8 +54,8 @@ pub async fn count_history_tab_id_null_non_prefetch(pool: &SqlitePool) -> i64 {
 pub async fn boot_audit_history_tab_id_null_inner(pool: &SqlitePool) {
     let count = count_history_tab_id_null_non_prefetch(pool).await;
     if count > 0 {
-        // **invariant 위반**: 4 source (raw / grid-edit / ddl-structure /
-        // mongo-op) 중 어딘가가 tab_id 를 채우지 않은 채 IPC 를 호출했다.
+        // **invariant 위반**: sidebar-prefetch 외 source 중 어딘가가
+        // tab_id 를 채우지 않은 채 IPC 를 호출했다.
         // Q10 zero-telemetry — 외부 전송 0, dev console 에 error 한 줄.
         // `target` 은 grep / log filter 용 identifier.
         error!(
@@ -178,6 +178,7 @@ mod tests {
         // 정상 path — raw + tab_id 채워짐.
         insert_row(&pool, Some("tab-1"), "raw").await;
         insert_row(&pool, Some("tab-2"), "grid-edit").await;
+        insert_row(&pool, Some("tab-3"), "explain").await;
         let count = count_history_tab_id_null_non_prefetch(&pool).await;
         assert_eq!(count, 0);
         cleanup();
@@ -187,15 +188,17 @@ mod tests {
     #[serial]
     async fn mixed_rows_count_only_violations() {
         let (_dir, pool) = setup().await;
-        // 정상 (3)
+        // 정상 (4)
         insert_row(&pool, Some("tab-1"), "raw").await;
         insert_row(&pool, Some("tab-2"), "grid-edit").await;
+        insert_row(&pool, Some("tab-3"), "explain").await;
         insert_row(&pool, None, "sidebar-prefetch").await;
-        // 위반 (2)
+        // 위반 (3)
         insert_row(&pool, None, "raw").await;
         insert_row(&pool, None, "mongo-op").await;
+        insert_row(&pool, None, "explain").await;
         let count = count_history_tab_id_null_non_prefetch(&pool).await;
-        assert_eq!(count, 2);
+        assert_eq!(count, 3);
         cleanup();
     }
 }
