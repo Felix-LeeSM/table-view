@@ -5,6 +5,7 @@ import {
   openNewQueryTab,
   runQuery,
   step,
+  switchToWorkspaceWindow,
   typeQuery,
   waitForGridTextAll,
   waitForLauncher,
@@ -13,16 +14,26 @@ import {
 const CONNECTION_NAME = "E2E Postgres Cancellation";
 
 async function waitForHistoryStatuses(statuses: string[]) {
+  await switchToWorkspaceWindow();
   await browser.waitUntil(
-    async () =>
-      await browser.execute((expected) => {
+    async () => {
+      await switchToWorkspaceWindow();
+      await browser.execute(() => {
+        document
+          .querySelector<HTMLElement>(
+            '[data-testid="query-history-panel-new-entry"]',
+          )
+          ?.click();
+      });
+      return await browser.execute((expected) => {
         const actual = Array.from(
           document.querySelectorAll(
             '[data-testid="query-history-panel-rows"] [title]',
           ),
         ).map((el) => el.getAttribute("title"));
         return expected.every((status) => actual.includes(status));
-      }, statuses),
+      }, statuses);
+    },
     {
       timeout: 10000,
       timeoutMsg: `tab history did not include statuses: ${statuses.join(", ")}`,
