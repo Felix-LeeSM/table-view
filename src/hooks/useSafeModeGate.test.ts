@@ -76,14 +76,32 @@ describe("useSafeModeGate (store wiring)", () => {
     expect(result.current.decide(DANGER).action).toBe("allow");
   });
 
-  it("[AC-245-H2] missing connection (id not found) → null environment / allow", () => {
-    // Mongo aggregate path can fire before the connection store has hydrated
-    // a particular id; the hook normalises missing → null and the lib
-    // matrix maps null → non-production. Combined with mode=warn, the
-    // result is allow.
+  it("[AC-245-H2] missing connection id uses null environment by default", () => {
+    useConnectionStore.setState({ connections: [] });
+    useSafeModeStore.setState({ mode: "off" });
+    const { result } = renderHook(() => useSafeModeGate("missing"));
+    expect(result.current.decide(DANGER).action).toBe("allow");
+  });
+
+  it("[AC-436-H1] missing connection metadata can fail closed as production", () => {
+    useConnectionStore.setState({ connections: [] });
+    useSafeModeStore.setState({ mode: "off" });
+    const { result } = renderHook(() =>
+      useSafeModeGate("missing", {
+        missingConnectionEnvironment: "production",
+      }),
+    );
+    expect(result.current.decide(DANGER)).toEqual({
+      action: "confirm",
+      reason:
+        "DROP TABLE (production environment forces Safe Mode — change connection environment tag to override)",
+    });
+  });
+
+  it("[AC-436-H2] null connectionId still maps to null environment", () => {
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "warn" });
-    const { result } = renderHook(() => useSafeModeGate("missing"));
+    const { result } = renderHook(() => useSafeModeGate(null));
     expect(result.current.decide(DANGER).action).toBe("allow");
   });
 });

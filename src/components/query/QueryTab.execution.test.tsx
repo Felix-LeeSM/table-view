@@ -137,6 +137,12 @@ vi.mock("@lib/sql/sqlUtils", () => ({
   uglifySql: (sql: string) => sql.replace(/\s+/g, " ").trim(),
 }));
 
+function seedDevelopmentConnection() {
+  useConnectionStore.setState({
+    connections: [makeConn({ environment: "development" })],
+  });
+}
+
 describe("QueryTab — execution", () => {
   beforeEach(() => {
     resetQueryTabStores();
@@ -201,15 +207,14 @@ describe("QueryTab — execution", () => {
     // tab per statement (success rows / failed marker). The store's
     // `statements` array carries per-stmt status + error message + result.
     //
-    // Sprint 245 (ADR 0022 Phase 1) — pin Safe Mode to `warn` so the
-    // destructive `DROP TABLE nope` flows through (non-prod + strict
-    // would now open the M.1 confirm dialog and short-circuit the
-    // execution-path test).
+    // Pin non-production + warn so destructive SQL still exercises
+    // multi-statement execution instead of the Safe Mode confirm path.
     mockExecuteQuery
       .mockResolvedValueOnce(MOCK_RESULT)
       .mockRejectedValueOnce(new Error("Table not found"));
 
     useSafeModeStore.setState({ mode: "warn" });
+    seedDevelopmentConnection();
     const tab = makeQueryTab({ sql: "SELECT 1; DROP TABLE nope" });
     useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
@@ -452,13 +457,13 @@ describe("QueryTab — execution", () => {
   // ── Multi-statement history recording ──
 
   it("records error history when some multi-statements fail", async () => {
-    // Sprint 245 — pin warn so destructive DROP TABLE doesn't open the
-    // M.1 strict-mode confirm dialog before executeQuery dispatches.
+    // Pin non-production + warn so destructive SQL still dispatches.
     mockExecuteQuery
       .mockResolvedValueOnce(MOCK_RESULT)
       .mockRejectedValueOnce(new Error("Table not found"));
 
     useSafeModeStore.setState({ mode: "warn" });
+    seedDevelopmentConnection();
     const tab = makeQueryTab({ sql: "SELECT 1; DROP TABLE nope" });
     useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
@@ -536,13 +541,13 @@ describe("QueryTab — execution", () => {
     // String(err) and recorded on the failing statement entry, not on the
     // collapsed top-level error message.
     //
-    // Sprint 245 — pin warn so destructive DROP TABLE doesn't open the
-    // M.1 strict-mode confirm dialog before executeQuery dispatches.
+    // Pin non-production + warn so destructive SQL still dispatches.
     mockExecuteQuery
       .mockResolvedValueOnce(MOCK_RESULT)
       .mockRejectedValueOnce("raw error");
 
     useSafeModeStore.setState({ mode: "warn" });
+    seedDevelopmentConnection();
     const tab = makeQueryTab({ sql: "SELECT 1; DROP TABLE nope" });
     useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);

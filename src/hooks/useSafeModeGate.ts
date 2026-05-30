@@ -3,6 +3,7 @@ import { useSafeModeStore } from "@stores/safeModeStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 import { decideSafeModeAction, type SafeModeDecision } from "@/lib/safeMode";
+import type { ConnectionConfig } from "@/types/connection";
 
 /**
  * Paradigm-agnostic Safe Mode gate. Pure store wiring around
@@ -35,11 +36,36 @@ export interface SafeModeGate {
   decide(analysis: StatementAnalysis): SafeModeDecision;
 }
 
-export function useSafeModeGate(connectionId: string | null): SafeModeGate {
+export interface SafeModeGateOptions {
+  missingConnectionEnvironment?: string | null;
+}
+
+type SafeModeConnection = Pick<ConnectionConfig, "id" | "environment">;
+
+export function resolveSafeModeEnvironment(
+  connections: readonly SafeModeConnection[],
+  connectionId: string | null,
+  missingConnectionEnvironment: string | null = null,
+): string | null {
+  if (!connectionId) return null;
+  const connection = connections.find((c) => c.id === connectionId);
+  if (!connection) return missingConnectionEnvironment;
+  return connection.environment ?? null;
+}
+
+export function useSafeModeGate(
+  connectionId: string | null,
+  options: SafeModeGateOptions = {},
+): SafeModeGate {
   const mode = useSafeModeStore((s) => s.mode);
-  const environment = useConnectionStore(
-    (s) =>
-      s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  const missingConnectionEnvironment =
+    options.missingConnectionEnvironment ?? null;
+  const environment = useConnectionStore((s) =>
+    resolveSafeModeEnvironment(
+      s.connections,
+      connectionId,
+      missingConnectionEnvironment,
+    ),
   );
 
   const decide = useCallback(
