@@ -78,21 +78,21 @@ describe("queryHistoryStore retire (sprint-373)", () => {
     expect(state.addHistoryEntry).toBeUndefined();
   });
 
-  // sprint-373 — `sidebar-prefetch` source 가 union 에 추가됨 (5종).
-  // 작성 2026-05-17. 사유: e2e history-source-5 가 5종 source 모두를
-  // 시뮬해야 하므로 type-level 5종 보장 (4 → 5 회귀 가드).
-  it("QueryHistorySource union covers all 5 source labels", () => {
+  // sprint-373 — `sidebar-prefetch` source 가 union 에 추가됨.
+  // sprint-435 — Explain plan-inspection history source 추가.
+  it("QueryHistorySource union covers all 6 source labels", () => {
     const sources: QueryHistorySource[] = [
       "raw",
       "grid-edit",
       "ddl-structure",
       "mongo-op",
+      "explain",
       "sidebar-prefetch",
     ];
     // 본 단언은 런타임보다 TS 컴파일 단계의 정합성 (모든 라벨이 union 의
     // 정확한 variant) 을 잡는다 — 추가 변종이 union 에 들어오면 위 배열
     // 의 type 이 좁아져 compile error.
-    expect(sources).toHaveLength(5);
-    expect(new Set(sources).size).toBe(5);
+    expect(sources).toHaveLength(6);
+    expect(new Set(sources).size).toBe(6);
   });
 });

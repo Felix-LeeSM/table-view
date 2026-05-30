@@ -1,4 +1,5 @@
-// Sprint 373 (2026-05-17) — Phase 5 F.5 의 history source 5종 e2e.
+// Sprint 373 (2026-05-17) — Phase 5 F.5 의 original history source 5종 e2e.
+// Sprint 435 adds `explain`; it is covered by postgres-explain.spec.ts.
 //
 // 작성 이유: AC-373-06 — 5 source caller (`raw` / `grid-edit` /
 // `ddl-structure` / `mongo-op` / `sidebar-prefetch`) 가 각각 사용자
@@ -12,7 +13,7 @@
 //   3. CUJ 회귀: 연결→첫쿼리 + paradigm 전환 + 셀편집 + DDL menu + Mongo
 //      bulk op + sidebar prefetch 의 cross-cut.
 //   4. 매트릭스 단순화: PG (raw / grid-edit / ddl-structure / sidebar-prefetch)
-//      + Mongo (mongo-op) — 5종 union 이 분기되어 양 DBMS 모두 활용.
+//      + Mongo (mongo-op) — original 5 source 가 분기되어 양 DBMS 모두 활용.
 //   5. 회귀 고정: ADR sprint-373 의 핵심 lego invariant.
 //   6. skip 없음.
 //   7. tauri-driver 한계: 본 spec 은 5종 trigger 가 user-visible UI 에서

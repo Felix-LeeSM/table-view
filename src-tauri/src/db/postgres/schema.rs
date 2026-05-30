@@ -1226,21 +1226,20 @@ impl PostgresAdapter {
         Ok(())
     }
 
-    /// Sprint 337 (U2 live wire) — `EXPLAIN (ANALYZE, FORMAT JSON) <sql>`.
+    /// Sprint 337 (U2 live wire) — `EXPLAIN (FORMAT JSON) <sql>`.
     ///
     /// `FORMAT JSON` 은 PG 가 plan tree 를 single-row, single-column
     /// `JSON` 결과로 직렬화하게 한다. result row 가 정확히 1개 / column 도
     /// 정확히 1개여야 하며, 그 안에 `Vec<Plan>` 형태의 JSON array 가
-    /// 들어있다. `ANALYZE` 는 실제 query 를 실행하기 때문에 mutation 도
-    /// 실행될 수 있다 — 본 sprint v1 은 caller 가 read-only SELECT 만
-    /// 넘기는 것을 전제로 한다.
+    /// 들어있다. `ANALYZE` 는 의도적으로 쓰지 않는다 — Explain UI 는
+    /// plan inspection 이지 profiler / activity path 가 아니다.
     pub async fn explain_query(&self, sql: &str) -> Result<serde_json::Value, AppError> {
         let trimmed = sql.trim();
         if trimmed.is_empty() {
             return Err(AppError::Validation("SQL must not be empty".into()));
         }
         let pool = self.active_pool().await?;
-        let wrapped = format!("EXPLAIN (ANALYZE, FORMAT JSON) {trimmed}");
+        let wrapped = format!("EXPLAIN (FORMAT JSON) {trimmed}");
         let row: (serde_json::Value,) = sqlx::query_as(&wrapped)
             .fetch_one(&pool)
             .await

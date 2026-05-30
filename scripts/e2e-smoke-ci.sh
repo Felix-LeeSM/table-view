@@ -41,4 +41,5 @@ run_wdio() {
 }
 
 run_wdio "$BASE_DATA_DIR/postgres" "e2e/smoke/postgres.spec.ts"
+run_wdio "$BASE_DATA_DIR/postgres-explain" "e2e/smoke/postgres-explain.spec.ts"
 run_wdio "$BASE_DATA_DIR/mongodb" "e2e/smoke/mongodb.spec.ts"

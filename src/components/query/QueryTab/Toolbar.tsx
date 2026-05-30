@@ -9,6 +9,7 @@ import {
   X,
   FlaskConical,
   FileSearch,
+  SearchCode,
 } from "lucide-react";
 import FavoritesPanel from "../FavoritesPanel";
 import TabDbChip from "./TabDbChip";
@@ -52,6 +53,8 @@ export interface QueryTabToolbarProps {
    * has no Mongo equivalent.
    */
   onDryRun: () => void;
+  onExplain?: () => void;
+  canExplain?: boolean;
   onFormat: () => void;
   showFileAnalytics?: boolean;
   onOpenFileAnalytics?: () => void;
@@ -64,6 +67,8 @@ export default function QueryTabToolbar({
   canCancelQuery = true,
   onExecute,
   onDryRun,
+  onExplain,
+  canExplain = false,
   onFormat,
   showFileAnalytics = false,
   onOpenFileAnalytics,
@@ -165,6 +170,19 @@ export default function QueryTabToolbar({
           <FlaskConical />
           <span>Dry Run</span>
           <span className="text-3xs text-muted-foreground">{"⌘⇧⏎"}</span>
+        </Button>
+      )}
+      {!isDocument && canExplain && (
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={onExplain}
+          disabled={tab.queryState.status === "running" || !tab.sql.trim()}
+          aria-label="Explain query"
+          title="Explain query plan"
+        >
+          <SearchCode />
+          <span>Explain</span>
         </Button>
       )}
       {!isDocument && (

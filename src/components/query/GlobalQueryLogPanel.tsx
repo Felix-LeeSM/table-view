@@ -63,7 +63,7 @@ export default function GlobalQueryLogPanel({
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState<number | null>(null);
   const { rows, loading, hasMore, newEntryAvailable, loadMore, refresh } =
-    useQueryHistory({});
+    useQueryHistory({ enabled: visible });
 
   // Reset client-side filter when panel closes.
   useEffect(() => {

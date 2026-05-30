@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { QueryTab } from "@stores/workspaceStore";
 import {
   useCurrentWorkspaceKey,
@@ -17,6 +17,7 @@ import { assertNever } from "@/lib/paradigm";
 import SqlQueryEditor from "./SqlQueryEditor";
 import MongoQueryEditor from "./MongoQueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
+import { ExplainViewer } from "./ExplainViewer";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
@@ -29,6 +30,7 @@ import QueryHistoryPanel from "./QueryHistoryPanel";
 import { useQueryExecution } from "./QueryTab/useQueryExecution";
 import { useQueryEvents } from "./QueryTab/useQueryEvents";
 import { useQueryFavorites } from "./QueryTab/useQueryFavorites";
+import { recordHistoryEntryAsync } from "@lib/runtime/history/recordHistoryEntry";
 
 /**
  * `QueryTab` — RDB / Document paradigm 의 단일 query tab shell. 책임은
@@ -94,6 +96,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     );
   }, [connection]);
   const [showFileAnalytics, setShowFileAnalytics] = useState(false);
+  const [explainSql, setExplainSql] = useState<string | null>(null);
   // `dbType` flows in so the autocomplete namespace surfaces
   // dialect-specific keywords (PG: RETURNING/ILIKE; MySQL: AUTO_INCREMENT;
   // SQLite: PRAGMA / WITHOUT ROWID).
@@ -213,6 +216,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
     collectionNames: mongoCollectionNames,
   });
   const isDocument = tab.paradigm === "document";
+  const canExplainQuery =
+    tab.paradigm === "rdb" && connection?.dbType === "postgresql";
 
   const favorites = useQueryFavorites({ tab });
   const {
@@ -237,6 +242,49 @@ export default function QueryTab({ tab }: QueryTabProps) {
     canCancelQuery,
   });
 
+  const handleExecuteAndShowResults = useCallback(() => {
+    setExplainSql(null);
+    handleExecute();
+  }, [handleExecute]);
+
+  const handleDryRunAndShowResults = useCallback(() => {
+    setExplainSql(null);
+    handleDryRun();
+  }, [handleDryRun]);
+
+  const handleExplain = useCallback(() => {
+    const sql = tab.sql.trim();
+    if (!sql || tab.queryState.status === "running" || !canExplainQuery) {
+      return;
+    }
+    setExplainSql(sql);
+  }, [canExplainQuery, tab.queryState.status, tab.sql]);
+
+  const handleExplainSettled = useCallback(
+    (result: {
+      status: "success" | "error";
+      durationMs: number;
+      executedAt: number;
+      errorMessage?: string;
+    }) => {
+      if (!explainSql) return;
+      return recordHistoryEntryAsync({
+        connectionId: tab.connectionId,
+        database: tab.database,
+        tabId: tab.id,
+        paradigm: "rdb",
+        queryMode: "sql",
+        source: "explain",
+        sql: explainSql,
+        status: result.status,
+        errorMessage: result.errorMessage,
+        executedAt: result.executedAt,
+        duration: result.durationMs,
+      });
+    },
+    [explainSql, tab.connectionId, tab.database, tab.id],
+  );
+
   // Resizable split state
   const containerRef = useRef<HTMLDivElement>(null);
   const { size: editorPct, handleMouseDown: handleResizeMouseDown } =
@@ -255,8 +303,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
         tab={tab}
         isDocument={isDocument}
         canCancelQuery={canCancelQuery}
-        onExecute={handleExecute}
-        onDryRun={handleDryRun}
+        onExecute={handleExecuteAndShowResults}
+        onDryRun={handleDryRunAndShowResults}
+        onExplain={handleExplain}
+        canExplain={canExplainQuery}
         onFormat={handleFormat}
         showFileAnalytics={canPreviewLocalFile}
         onOpenFileAnalytics={() => setShowFileAnalytics(true)}
@@ -279,8 +329,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
                   ref={editorRef}
                   sql={tab.sql}
                   onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
-                  onExecute={handleExecute}
-                  onDryRun={handleDryRun}
+                  onExecute={handleExecuteAndShowResults}
+                  onDryRun={handleDryRunAndShowResults}
                   schemaNamespace={schemaNamespace}
                   sqlDialect={sqlDialect}
                   completionContext={completionContext}
@@ -296,8 +346,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
                   ref={editorRef}
                   sql={tab.sql}
                   onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
-                  onExecute={handleExecute}
-                  onDryRun={handleDryRun}
+                  onExecute={handleExecuteAndShowResults}
+                  onDryRun={handleDryRunAndShowResults}
                   mongoExtensions={mongoExtensions}
                 />
               );
@@ -343,20 +393,29 @@ export default function QueryTab({ tab }: QueryTabProps) {
       {/* Result area — flex column so QueryResultGrid's flex-1 children fill
           the remaining height and the inner table can actually scroll. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <QueryResultGrid
-          queryState={tab.queryState}
-          connectionId={tab.connectionId}
-          database={tab.database}
-          sql={tab.sql}
-          onAfterCommit={handleExecute}
-          // Sprint 248 (ADR 0022 Phase 4) — surface the dry-run flag so
-          // the result grid renders the rolled-back banner. Derived
-          // here so the grid stays paradigm-agnostic.
-          isDryRun={
-            tab.queryState.status === "completed" &&
-            tab.queryState.isDryRun === true
-          }
-        />
+        {explainSql && canExplainQuery ? (
+          <ExplainViewer
+            connectionId={tab.connectionId}
+            paradigm="table"
+            rdbSql={explainSql}
+            onPlanSettled={handleExplainSettled}
+          />
+        ) : (
+          <QueryResultGrid
+            queryState={tab.queryState}
+            connectionId={tab.connectionId}
+            database={tab.database}
+            sql={tab.sql}
+            onAfterCommit={handleExecuteAndShowResults}
+            // Sprint 248 (ADR 0022 Phase 4) — surface the dry-run flag so
+            // the result grid renders the rolled-back banner. Derived
+            // here so the grid stays paradigm-agnostic.
+            isDryRun={
+              tab.queryState.status === "completed" &&
+              tab.queryState.isDryRun === true
+            }
+          />
+        )}
       </div>
 
       <QueryHistoryPanel connectionId={tab.connectionId} tabId={tab.id} />

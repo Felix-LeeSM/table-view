@@ -761,9 +761,8 @@ async fn explain_rdb_query_inner(
     adapter.explain_query(sql).await
 }
 
-/// Sprint 337 (U2 live wire) — RDB `EXPLAIN (ANALYZE, FORMAT JSON)` for
-/// the given SQL. Frontend `ExplainViewer` renders the raw JSON plan
-/// tree.
+/// Sprint 337 (U2 live wire) — RDB `EXPLAIN (FORMAT JSON)` for the given
+/// SQL. Frontend `ExplainViewer` renders the raw JSON plan tree.
 #[tauri::command]
 pub async fn explain_rdb_query(
     state: tauri::State<'_, AppState>,

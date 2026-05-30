@@ -51,7 +51,7 @@ export default function QueryLog() {
   // connections. The hook still keys off a single `list_history` IPC
   // and uses cursor pagination via Load more.
   const { rows, loading, hasMore, newEntryAvailable, loadMore, refresh } =
-    useQueryHistory({});
+    useQueryHistory({ enabled: isVisible });
 
   useEffect(() => {
     const handler = () => {

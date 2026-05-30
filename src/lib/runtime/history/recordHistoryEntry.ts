@@ -1,8 +1,8 @@
 /**
  * Sprint 373 (Phase 5 F.5) — `add_history_entry` IPC 의 thin caller.
  *
- * 작성 2026-05-17. 5 source caller (raw / grid-edit / ddl-structure /
- * mongo-op / sidebar-prefetch) 가 공유. 책임:
+ * 작성 2026-05-17. 6 source caller (raw / grid-edit / ddl-structure /
+ * mongo-op / explain / sidebar-prefetch) 가 공유. 책임:
  *
  *   1. `useHistorySettingsStore.queryHistoryEnabled` 가 false 면 early
  *      return — IPC 호출 자체를 skip 한다 (AC-373-03 invariant).
@@ -10,7 +10,7 @@
  *      `duration` + 기타) 을 backend wire shape (discriminated union +
  *      `durationMs`) 으로 normalise.
  *   3. `useQueryHistoryStore.addOptimisticEntry` 에 위임 — optimistic
- *      `recentVisible` prepend + backend IPC fire.
+ *      `recentVisible` prepend + backend IPC.
  *
  * RDB paradigm 의 `queryMode` 는 항상 `"sql"` 로 normalise (backend
  * `RdbQueryMode` 의 유일한 variant). Document paradigm 의 legacy mode
@@ -46,7 +46,7 @@ interface RecordHistoryEntryCommonArgs {
   /** Optional db/collection (document paradigm 의 경우 거의 항상 set). */
   database?: string;
   collection?: string;
-  /** 5 source label — 호출자가 명시. */
+  /** Source label — 호출자가 명시. */
   source: QueryHistorySource;
   /** 원본 SQL 또는 mongosh 표현. backend 가 `sql_redacted` 생성. */
   sql: string;
@@ -114,17 +114,12 @@ function toDocumentQueryMode(
 }
 
 /**
- * 메인 진입점. 5 caller 모두 본 함수를 호출.
- *
- * "Disable history" 토글 (`query_history_enabled = false`) 검사가 본
- * 함수의 첫 줄 — 토글 OFF 일 때는 IPC 호출 path 가 0 (AC-373-03 spy
- * test 가 본 invariant 를 lock).
+ * Frontend history input → backend `AddHistoryEntryRequest`.
+ * Invalid runtime pair 는 기존 동작대로 silent skip (`null`) 한다.
  */
-export function recordHistoryEntry(args: RecordHistoryEntryArgs): void {
-  if (!useHistorySettingsStore.getState().queryHistoryEnabled) {
-    return;
-  }
-
+function toAddHistoryEntryRequest(
+  args: RecordHistoryEntryArgs,
+): AddHistoryEntryRequest | null {
   const common = {
     connectionId: args.connectionId,
     tabId: args.tabId,
@@ -140,33 +135,61 @@ export function recordHistoryEntry(args: RecordHistoryEntryArgs): void {
     serverPid: args.serverPid,
   } as const;
 
-  let req: AddHistoryEntryRequest;
   if (args.paradigm === "rdb") {
     if (args.queryMode !== undefined && args.queryMode !== "sql") {
-      return;
+      return null;
     }
-    req = {
+    return {
       ...common,
       paradigm: "rdb",
       queryMode: "sql",
     };
-  } else if (args.paradigm === "document") {
+  }
+
+  if (args.paradigm === "document") {
     const queryMode = toDocumentQueryMode(args.queryMode);
     if (!queryMode) {
-      return;
+      return null;
     }
-    req = {
+    return {
       ...common,
       paradigm: "document",
       queryMode,
     };
-  } else {
-    // kv / search — no backend wire support today. silent skip to avoid
-    // backend serde reject (`paradigm: "kv"` 자체가 union 에 부재).
+  }
+
+  // kv / search — no backend wire support today. silent skip to avoid
+  // backend serde reject (`paradigm: "kv"` 자체가 union 에 부재).
+  return null;
+}
+
+/**
+ * 메인 진입점. 모든 history caller 가 본 함수를 호출.
+ *
+ * "Disable history" 토글 (`query_history_enabled = false`) 검사가 본
+ * 함수의 첫 줄 — 토글 OFF 일 때는 IPC 호출 path 가 0 (AC-373-03 spy
+ * test 가 본 invariant 를 lock).
+ */
+export function recordHistoryEntry(args: RecordHistoryEntryArgs): void {
+  void recordHistoryEntryAsync(args);
+}
+
+/**
+ * Awaitable variant for UI paths whose next visible state depends on the
+ * backend list-history row being committed before they expose a history view.
+ */
+export async function recordHistoryEntryAsync(
+  args: RecordHistoryEntryArgs,
+): Promise<void> {
+  if (!useHistorySettingsStore.getState().queryHistoryEnabled) {
     return;
   }
 
-  // Promise 반환 안 받음 — fire-and-forget. error 는 store 내부에서
-  // logger.warn 으로만 노출 (best-effort).
-  void useQueryHistoryStore.getState().addOptimisticEntry(req);
+  const req = toAddHistoryEntryRequest(args);
+  if (!req) {
+    return;
+  }
+
+  // Error 는 store 내부에서 logger.warn 으로만 노출 (best-effort).
+  await useQueryHistoryStore.getState().addOptimisticEntry(req);
 }

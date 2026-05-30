@@ -76,8 +76,8 @@ result envelope wire format, `useQueryExecution` decomposition, DBMS별 live smo
 ## H2 진행 기준
 
 H2 RDBMS parity 는 **PostgreSQL lane 을 먼저 선택**한다. 이 lane 이
-runtime/parser/Safe Mode/completion/edit/fixture/E2E/support-claim/lightweight
-Explain gate 를 통과하기 전까지 MySQL/MariaDB/SQLite/DuckDB 를 full parity lane 으로
+runtime/parser/Safe Mode/completion/edit/fixture/E2E/support-claim gate 를
+통과하기 전까지 MySQL/MariaDB/SQLite/DuckDB 를 full parity lane 으로
 승격하지 않는다. MySQL/MariaDB/SQLite 작업은 현재 claim 정합성, typed capability
 gate, fixture/smoke evidence routing 으로 제한한다.
 
@@ -103,13 +103,13 @@ semantics, or a broad desktop E2E suite.
 
 | Gate | Current owner | PostgreSQL boundary |
 |---|---|---|
-| Runtime execution | `src-tauri/src/db/postgres/queries.rs`, `src-tauri/tests/query_integration.rs`, `src-tauri/tests/cancel_pg.rs` | Connection, table data, raw SELECT/EXPLAIN row results, DML batches, query cancellation, and raw-query grid edit paths are active. psql meta-command execution, DB-level backup/restore/import/export, and PL/pgSQL body authoring are not parity claims. |
+| Runtime execution | `src-tauri/src/db/postgres/queries.rs`, `src-tauri/src/db/postgres/schema.rs`, `src-tauri/tests/query_integration.rs`, `src-tauri/tests/cancel_pg.rs` | Connection, table data, raw SELECT/EXPLAIN row results, plan-only `EXPLAIN (FORMAT JSON)`, DML batches, query cancellation, and raw-query grid edit paths are active. psql meta-command execution, DB-level backup/restore/import/export, and PL/pgSQL body authoring are not parity claims. |
 | Catalog/workbench | `src-tauri/src/db/postgres/schema.rs`, `src-tauri/tests/schema_integration.rs`, `src/components/schema/**`, `src/components/rdb/**` | Schemas, tables, views, functions, types, installed extensions, triggers, table stats, indexes, constraints, FKs, cached metadata, DataGrid, Structure, and ERD inputs have current evidence. Server activity, profiler, full stats dashboards, role/user/permission UI, extension management UI, schema diff, migration impact, and data compare stay future work. |
 | Parser and Safe Mode | `src-tauri/sql-parser-core/**`, `src/lib/sql/sqlSafety.test.ts`, `src/components/query/QueryTab.safe-mode.test.tsx`, `src/components/datagrid/useDataGridEdit.safe-mode.test.ts` | The current subset classifies tested SQL slices, destructive/warn/info statements, bounded writes, raw query confirmations, grid edit confirmations, DDL preview, and EXPLAIN inner statements. Full PL/pgSQL bodies, broad MERGE variants, arbitrary function-expression semantics, and arbitrary extension semantics are not modeled. |
 | Completion and extensions | `src-tauri/src/db/postgres/schema.rs`, `src/lib/sql/sqlCompletionContext.ts`, `src/lib/sql/sqlCompletionWasm.test.ts`, `src-tauri/sql-parser-core/src/completion/**` | Installed extension inventory is fetched and passed to completion before curated known extension packs are enabled. Unknown extensions remain detected-but-unpacked; completion must not invent extension symbols or imply parser/Safe Mode semantic validation. |
 | Edit semantics | `src/components/datagrid/**`, `src/components/query/EditableQueryResultGrid*`, `src/components/datagrid/sqlGenerator.test.ts`, `src-tauri/src/db/postgres/queries.rs` | Row edits require key/projected identity and keep preview/commit/discard plus Safe Mode confirmation paths. Arbitrary query result mutation, bulk admin workflows, and full desktop-client edit parity stay future work. |
-| Lightweight Explain | `src-tauri/src/db/postgres/schema.rs`, `src/lib/api/explain.ts`, `src/components/query/ExplainViewer.test.tsx`, `src/lib/sql/sqlAst.test.ts` | Lightweight plan inspection exists through backend, API, parser, safety, and component evidence. It is not a full profiler/activity dashboard and is not part of the routine desktop E2E gate today. |
-| Fixture and E2E smoke | `e2e/fixtures/seed.sql`, `e2e/smoke/postgres.spec.ts`, `scripts/e2e-smoke-ci.sh` | Runtime Happy Path currently proves PostgreSQL connect -> browse seeded `users` -> edit -> query result on Ubuntu. It does not cover extension completion, Safe Mode confirmations, DDL structure flows, Explain UI, history-source labeling, cancellation, ERD, admin, or profiler scenarios. |
+| Lightweight Explain | `src-tauri/src/db/postgres/schema.rs`, `src/lib/api/explain.ts`, `src/components/query/ExplainViewer.test.tsx`, `src/components/query/QueryTab.toolbar.test.tsx`, `src/lib/sql/sqlAst.test.ts`, `e2e/smoke/postgres-explain.spec.ts` | Lightweight plan inspection exists through backend, API, parser, safety, component, and routine desktop smoke evidence. It is not a full profiler/activity dashboard. |
+| Fixture and E2E smoke | `e2e/fixtures/seed.sql`, `e2e/smoke/postgres.spec.ts`, `e2e/smoke/postgres-explain.spec.ts`, `scripts/e2e-smoke-ci.sh` | Runtime Happy Path currently proves PostgreSQL connect -> browse seeded `users` -> edit -> query result plus Explain plan-inspection/source-label on Ubuntu. It does not cover extension completion, Safe Mode confirmations, DDL structure flows, broader history-source labeling, cancellation, ERD, admin, or profiler/activity scenarios. |
 | Support claim SOT | `docs/product/README.md`, `docs/product/query-language-support.md`, `docs/product/known-limitations.md` | Product-visible PostgreSQL claims must stay narrower than the evidence above until new implementation slices add matching tests and smoke routing. |
 
 ### SQLite file DBMS parity lane
@@ -353,7 +353,7 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 다음 승격 후보 순서:
 
 1. One-DBMS query/workbench parity ladder. 지원 DBMS lane 하나만 골라
-   runtime/parser/completion/edit/fixture/e2e/Explain gap 을 닫고 다음 lane 을
+   runtime/parser/completion/edit/fixture/e2e/support-claim gap 을 닫고 다음 lane 을
    고른다. 고정 lane 순서: PostgreSQL -> MySQL/MariaDB -> SQLite/DuckDB -> MongoDB.
 2. PostgreSQL query/workbench parity hardening.
 3. MySQL-family semantic widening + MariaDB engine evidence/delta hardening.

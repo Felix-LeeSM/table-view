@@ -2,7 +2,7 @@
  * Sprint 373 (Phase 5 F.5) — "Disable history" 토글.
  *
  * 작성 2026-05-17. `query_history_enabled` setting 의 사용자 control. ON
- * (default) → 5 source caller 가 `add_history_entry` IPC 를 호출. OFF →
+ * (default) → 6 source caller 가 `add_history_entry` IPC 를 호출. OFF →
  * IPC 호출 path 가 0 (AC-373-03 의 spy invariant).
  *
  * UX:

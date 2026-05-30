@@ -3,7 +3,7 @@
  *
  * 작성 2026-05-17. 두 사용자 preference 를 보관:
  *   1. `queryHistoryEnabled` (boolean) — "Disable history" 토글의 ON/OFF.
- *      `false` 로 가면 5 source caller 가 `add_history_entry` IPC 자체를
+ *      `false` 로 가면 6 source caller 가 `add_history_entry` IPC 자체를
  *      호출 안 함 (AC-373-03). default `true`.
  *   2. `queryHistoryRetentionDays` (number) — 7 | 30 | 90 | 0 (forever).
  *      0 은 보존 무제한 — `boot_vacuum_old_history` 가 no-op. default 30.

@@ -49,6 +49,11 @@ export interface UseQueryHistoryFilter {
   tabId?: string;
   filter?: HistoryQueryModeFilter;
   limit?: number;
+  /**
+   * Optional read gate for hidden dock panels. Defaults to enabled so
+   * always-visible callers keep the original mount-time fetch behavior.
+   */
+  enabled?: boolean;
 }
 
 export interface UseQueryHistoryResult {
@@ -76,6 +81,7 @@ const DEFAULT_LIMIT = 100;
 export function useQueryHistory(
   filterArg: UseQueryHistoryFilter,
 ): UseQueryHistoryResult {
+  const enabled = filterArg.enabled ?? true;
   const [rows, setRows] = useState<HistoryListRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +106,7 @@ export function useQueryHistory(
   }, []);
 
   const refresh = useCallback(async (): Promise<void> => {
+    if (!(lastFilterRef.current.enabled ?? true)) return;
     setLoading(true);
     setError(null);
     try {
@@ -118,6 +125,7 @@ export function useQueryHistory(
   }, [buildRequest]);
 
   const loadMore = useCallback(async (): Promise<void> => {
+    if (!(lastFilterRef.current.enabled ?? true)) return;
     if (nextCursor === undefined) return;
     setLoading(true);
     setError(null);
@@ -135,14 +143,14 @@ export function useQueryHistory(
     }
   }, [buildRequest, nextCursor]);
 
-  // Initial mount — 1 IPC. `refresh` deps 가 `buildRequest` 뿐이고,
-  // `buildRequest` 는 `useCallback([])` 이라 mount 마다 한 번 실행된다.
-  // filter 변경 시 mount 단위로 새 호출이 필요한 경우 caller 는 `key`
-  // prop 으로 컴포넌트를 재마운트하거나 직접 `refresh()` 호출.
+  // Initial/enabled mount — 1 IPC. Hidden dock panels pass enabled=false so
+  // opening the panel fetches fresh backend truth instead of showing stale
+  // rows captured while the panel was not visible.
   useEffect(() => {
+    if (!enabled) return;
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [enabled]);
 
   // Event wiring — sprint-365 dispatcher 의 history domain handlers 를
   // 본 hook 이 등록한다. Mount 마다 등록, unmount 시에는 그냥 둔다 —
