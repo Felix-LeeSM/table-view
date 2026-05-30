@@ -107,7 +107,11 @@ describe("PostgreSQL Safe Mode smoke", () => {
 
       const commit = await $('[aria-label="Commit changes"]');
       await commit.click();
-      await waitForReviewSql(["Review SQL Changes", "UPDATE", aliceName]);
+      await waitForDialogTextAll(
+        ["SQL Preview", "UPDATE", aliceName],
+        15000,
+        "grid edit SQL preview did not appear before commit",
+      );
       await executeSqlPreview();
 
       await runSqlInNewTab(
