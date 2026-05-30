@@ -880,13 +880,12 @@ export function useQueryExecution({
 
       for (let i = 0; i < statements.length; i++) {
         const stmt = statements[i]!;
-        const stmtQueryId = `${queryId}-${i}`;
         const stmtStart = Date.now();
         try {
           const result = await executeQuery(
             tab.connectionId,
             stmt,
-            stmtQueryId,
+            queryId,
             workspaceDb ?? undefined,
           );
           lastResult = result;
@@ -898,6 +897,17 @@ export function useQueryExecution({
           });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
+          const wasCancelled = isQueryCancellationMessage(message);
+          if (wasCancelled) {
+            cancelRunningQuery(tab.id, queryId, "Query cancelled");
+            recordHistory({
+              sql: joinedSql,
+              executedAt: Date.now(),
+              duration: Date.now() - startTime,
+              status: "cancelled",
+            });
+            return;
+          }
           statementResults.push({
             sql: stmt,
             status: "error",
@@ -993,6 +1003,7 @@ export function useQueryExecution({
       workspaceDb,
       updateQueryState,
       completeMultiStatementQuery,
+      cancelRunningQuery,
       recordHistory,
       findLiveIdleTab,
       clearSchemaForConnection,

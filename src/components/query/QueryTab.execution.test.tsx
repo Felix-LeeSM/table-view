@@ -538,6 +538,42 @@ describe("QueryTab — execution", () => {
     });
   });
 
+  it("records cancelled history and stops multi-statement execution on cancellation", async () => {
+    mockExecuteQuery
+      .mockResolvedValueOnce(MOCK_RESULT)
+      .mockRejectedValueOnce(new Error("Operation cancelled"));
+    const tab = makeQueryTab({
+      sql: "SELECT 1; SELECT pg_sleep(30); SELECT 3",
+    });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    await waitFor(() => {
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(2);
+      const firstQueryId = mockExecuteQuery.mock.calls[0]?.[2];
+      const secondQueryId = mockExecuteQuery.mock.calls[1]?.[2];
+      expect(secondQueryId).toBe(firstQueryId);
+
+      const state = getTestWorkspace();
+      const updatedTab = state.tabs.find((t) => t.id === "query-1");
+      expect(updatedTab && updatedTab.type === "query").toBe(true);
+      if (updatedTab && updatedTab.type === "query") {
+        expect(updatedTab.queryState.status).toBe("cancelled");
+      }
+      const history = useQueryHistoryStore.getState().recentVisible;
+      expect(history).toHaveLength(1);
+      expect(history[0]!.status).toBe("cancelled");
+      expect(history[0]!.sqlRedacted).toBe(
+        "SELECT 1; SELECT pg_sleep(30); SELECT 3",
+      );
+    });
+  });
+
   // ── Error with non-Error object ──
 
   it("handles non-Error rejection in single statement", async () => {

@@ -378,18 +378,20 @@ describe("useQueryExecution scaffold", () => {
     await waitFor(() => {
       expect(getSeededRdbTab().queryState.status).toBe("completed");
     });
+    const runningQueryId = executeQueryMock.mock.calls[0]?.[2];
+    expect(runningQueryId).toEqual(expect.stringMatching(/^query-1-.*$/));
     expect(executeQueryMock).toHaveBeenNthCalledWith(
       1,
       "conn1",
       "SELECT 1",
-      expect.stringMatching(/^query-1-.*-0$/),
+      runningQueryId,
       "db1",
     );
     expect(executeQueryMock).toHaveBeenNthCalledWith(
       2,
       "conn1",
       "SELECT 2",
-      expect.stringMatching(/^query-1-.*-1$/),
+      runningQueryId,
       "db1",
     );
     const updated = getSeededRdbTab();
