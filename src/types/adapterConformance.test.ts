@@ -6,10 +6,8 @@ import {
   type ConformanceArea,
   getAdapterConformanceMatrix,
 } from "./adapterConformance";
-import {
-  getDataSourceProfile,
-  type DataSourceCapabilities,
-} from "./dataSource";
+import { type DataSourceCapabilities } from "./dataSource";
+import { getVersionAwareDataSourceCapabilities } from "./dataSourceVersionCapabilities";
 
 describe("adapter conformance matrix", () => {
   const allDatabaseTypes = Object.keys(DATABASE_TYPE_LABELS) as DatabaseType[];
@@ -49,7 +47,7 @@ describe("adapter conformance matrix", () => {
     }
   });
 
-  it("maps every profile capability flag to a conformance decision", () => {
+  it("maps every version-aware capability flag to a conformance decision", () => {
     const capabilityAreas = {
       connection: "connection",
       catalog: "catalog",
@@ -63,7 +61,7 @@ describe("adapter conformance matrix", () => {
     >;
 
     for (const dbType of allDatabaseTypes) {
-      const profile = getDataSourceProfile(dbType);
+      const capabilities = getVersionAwareDataSourceCapabilities(dbType);
       const conformance = ADAPTER_CONFORMANCE_MATRIX[dbType];
 
       for (const [area, group] of Object.entries(capabilityAreas) as [
@@ -72,9 +70,7 @@ describe("adapter conformance matrix", () => {
       ][]) {
         const claim = conformance.areas[area];
 
-        for (const [name, supported] of Object.entries(
-          profile.capabilities[group],
-        )) {
+        for (const [name, supported] of Object.entries(capabilities[group])) {
           const checkId = `${group}.${name}`;
 
           if (supported) {
@@ -88,6 +84,33 @@ describe("adapter conformance matrix", () => {
         }
       }
     }
+  });
+
+  it("keeps MySQL-family constraint catalog claims behind server-version context", () => {
+    expect(ADAPTER_CONFORMANCE_MATRIX.mysql.areas.catalog.checks).not.toContain(
+      "catalog.constraints",
+    );
+    expect(ADAPTER_CONFORMANCE_MATRIX.mysql.areas.catalog.deferred).toContain(
+      "catalog.constraints",
+    );
+    expect(
+      ADAPTER_CONFORMANCE_MATRIX.mariadb.areas.catalog.checks,
+    ).not.toContain("catalog.constraints");
+    expect(ADAPTER_CONFORMANCE_MATRIX.mariadb.areas.catalog.deferred).toContain(
+      "catalog.constraints",
+    );
+
+    const [mysql, mariadb] = getAdapterConformanceMatrix({
+      dbTypes: ["mysql", "mariadb"],
+      areas: ["catalog"],
+      versionContext: {
+        mysql: "8.0.16",
+        mariadb: "10.2.1-MariaDB",
+      },
+    });
+
+    expect(mysql?.areas.catalog?.checks).toContain("catalog.constraints");
+    expect(mariadb?.areas.catalog?.checks).toContain("catalog.constraints");
   });
 
   it("runs a focused pilot against one RDBMS and one non-RDBMS adapter family", () => {

@@ -73,6 +73,27 @@ SOT와 regression guard가 함께 소유한다.
 result envelope wire format, `useQueryExecution` decomposition, DBMS별 live smoke
 확대는 H2/H3/H5 quality follow-up 으로 라우팅한다.
 
+## H2 진행 기준
+
+H2 RDBMS parity 는 **PostgreSQL lane 을 먼저 선택**한다. 이 lane 이
+runtime/parser/Safe Mode/completion/edit/fixture/E2E/support-claim/lightweight
+Explain gate 를 통과하기 전까지 MySQL/MariaDB/SQLite/DuckDB 를 full parity lane 으로
+승격하지 않는다. MySQL/MariaDB/SQLite 작업은 현재 claim 정합성, typed capability
+gate, fixture/smoke evidence routing 으로 제한한다.
+
+| Gate | Current owner | H2 boundary |
+|---|---|---|
+| Active lane selection | `docs/ROADMAP.md`, #185 | PostgreSQL first. Full admin parity is out of scope. |
+| RDBMS common smoke matrix | `docs/contributor-guide/testing-and-quality.md`, #240 | Current remote E2E smoke proves PostgreSQL only; other RDBMS lanes use unit/integration/fixture evidence until promoted. |
+| MySQL version-aware capability gate | `src/types/dataSourceVersionCapabilities.ts`, `src/types/adapterConformance.ts`, #221 | CHECK/constraint catalog claim is enabled only with server version context (`>= 8.0.16`). |
+| MariaDB delta/evidence gate | `src/types/dataSourceRuntime.ts`, `src/lib/sql/sqlDialectProfile.ts`, `src/types/adapterConformance.ts`, #222 | MariaDB keeps identity/profile and completion-only `RETURNING` delta; runtime support remains server-resolved until engine evidence is promoted. |
+| MySQL/MariaDB support claim SOT | `docs/product/README.md`, `docs/product/known-limitations.md`, `docs/product/query-language-support.md`, #207 | Shared MySQL-family behavior and MariaDB-specific deltas are separated. |
+| RDBMS docs-code consistency | `docs/product/**`, #198 | Product-visible claims stay narrower than implemented/evidenced behavior. |
+
+H2 umbrella closure does not mean every RDBMS has full desktop-client parity. It
+means the current support claims, capability gates, and smoke routing are aligned
+so the next implementation lane can proceed without widening unsupported claims.
+
 ## 트랙 맵
 
 | 트랙 | 장기 방향 | 현재 기준 |
@@ -105,7 +126,7 @@ Near-term follow-up groups:
 
 | Group | Follow-up |
 |---|---|
-| RDBMS parity | Route MySQL/MariaDB version-aware feature gates through server-version-aware profile context. Add MariaDB engine fixture evidence or keep support claims narrowed. |
+| RDBMS parity | Keep MySQL/MariaDB version-aware feature gates on the server-version-aware conformance path, and add operation-level UI/runtime consumers only with matching evidence. Add MariaDB engine fixture evidence or keep support claims narrowed. |
 | Query language widening | Widen SQL/Mongo client semantic support by tested slices: broader MySQL/MariaDB routine expressions, SQLite/DuckDB extension semantics, server-version/capability gates, Mongo version/deployment gates, and extension-aware completion packs. PostgreSQL completion packs must consume installed extension inventory before enabling curated extension-specific candidates. |
 | Query/result boundary | Keep typed envelopes as the UI-facing boundary. Future hardening can make backend RDBMS IPC emit native `tabular` envelopes instead of normalizing legacy `QueryResult` at the Tauri wrapper. |
 | ERD/schema graph | 현재 schemaStore cache owner 범위는 schemas/tables/views/functions/postgresExtensions/tableColumnsCache/tableIndexesCache/tableConstraintsCache/triggers 이다. Production ERD/`SchemaGraph` input 은 schema/table/column cache 와 cached/fetched explicit index/constraint metadata 를 함께 쓰며, column-level FK info 는 synthetic fallback 으로 남아 있다. FK navigation 은 현재 DataGrid cell/icon path 이며 ERD interaction claim 이 아니다. Follow-up 은 shared `SchemaGraph`/catalog input path 를 확장해 parent tracking(#200), dependency view, migration impact analysis, dense-view screenshot smoke(#247) 를 연결하는 것이다. Duplicate catalog parsing 금지. |

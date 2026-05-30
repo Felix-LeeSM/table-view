@@ -4,6 +4,10 @@ import {
   type DataSourceCapabilities,
   type DataSourceProfile,
 } from "./dataSource";
+import {
+  getVersionAwareDataSourceCapabilities,
+  type DataSourceVersionInput,
+} from "./dataSourceVersionCapabilities";
 
 export type ConformanceArea =
   | "profile"
@@ -52,6 +56,9 @@ export interface AdapterConformanceFocus {
   readonly dbTypes?: readonly DatabaseType[];
   readonly areas?: readonly ConformanceArea[];
   readonly minLevel?: Exclude<ConformanceLevel, "unsupported">;
+  readonly versionContext?: Partial<
+    Record<DatabaseType, DataSourceVersionInput>
+  >;
 }
 
 const CONFORMANCE_AREAS = Object.freeze([
@@ -134,8 +141,18 @@ const AREA_CAPABILITY_GROUP = Object.freeze({
 
 const DEFERRED_FEATURES = Object.freeze({
   postgresql: noneDeferred(),
-  mysql: noneDeferred(),
-  mariadb: noneDeferred(),
+  mysql: {
+    connection: [],
+    catalog: ["catalog.constraints"],
+    query: [],
+    edit: [],
+  },
+  mariadb: {
+    connection: [],
+    catalog: ["catalog.constraints"],
+    query: [],
+    edit: [],
+  },
   sqlite: {
     connection: [],
     catalog: [
@@ -186,24 +203,10 @@ const DEFERRED_FEATURES = Object.freeze({
 
 export const ADAPTER_CONFORMANCE_MATRIX = Object.freeze(
   mapValues(DATA_SOURCE_PROFILES, (profile) =>
-    freezeEntry({
-      dbType: profile.id,
-      level: entryLevel(profile),
-      areas: {
-        profile: declaredClaim("profile", [
-          "profile.registry",
-          "profile.identity",
-          "profile.backendAdapter",
-          "profile.dialect",
-        ]),
-        connection: runtimeClaim(profile, "connection"),
-        catalog: runtimeClaim(profile, "catalog"),
-        query: runtimeClaim(profile, "query"),
-        result: declaredClaim("result", ["result.envelope"]),
-        edit: runtimeClaim(profile, "edit"),
-        safety: declaredClaim("safety", ["safety.policy"]),
-      },
-    }),
+    buildConformanceEntry(
+      profile,
+      getVersionAwareDataSourceCapabilities(profile.id),
+    ),
   ),
 ) satisfies Readonly<Record<DatabaseType, AdapterConformanceEntry>>;
 
@@ -214,7 +217,16 @@ export function getAdapterConformanceMatrix(
   const areas = focus.areas ?? CONFORMANCE_AREAS;
 
   return dbTypes
-    .map((dbType) => ADAPTER_CONFORMANCE_MATRIX[dbType])
+    .map((dbType) =>
+      focus.versionContext
+        ? buildConformanceEntry(
+            DATA_SOURCE_PROFILES[dbType],
+            getVersionAwareDataSourceCapabilities(dbType, {
+              version: focus.versionContext[dbType],
+            }),
+          )
+        : ADAPTER_CONFORMANCE_MATRIX[dbType],
+    )
     .filter((entry) => includesLevel(entry.level, focus.minLevel))
     .map((entry) =>
       freezeView({
@@ -225,6 +237,30 @@ export function getAdapterConformanceMatrix(
         ),
       }),
     );
+}
+
+function buildConformanceEntry(
+  profile: DataSourceProfile,
+  capabilities: DataSourceCapabilities,
+): AdapterConformanceEntry {
+  return freezeEntry({
+    dbType: profile.id,
+    level: entryLevel(capabilities),
+    areas: {
+      profile: declaredClaim("profile", [
+        "profile.registry",
+        "profile.identity",
+        "profile.backendAdapter",
+        "profile.dialect",
+      ]),
+      connection: runtimeClaim(profile, capabilities, "connection"),
+      catalog: runtimeClaim(profile, capabilities, "catalog"),
+      query: runtimeClaim(profile, capabilities, "query"),
+      result: declaredClaim("result", ["result.envelope"]),
+      edit: runtimeClaim(profile, capabilities, "edit"),
+      safety: declaredClaim("safety", ["safety.policy"]),
+    },
+  });
 }
 
 function check(
@@ -250,10 +286,11 @@ function declaredClaim(
 
 function runtimeClaim(
   profile: DataSourceProfile,
+  capabilities: DataSourceCapabilities,
   area: AreaCapabilityGroup,
 ): AdapterConformanceClaim {
   const group = AREA_CAPABILITY_GROUP[area];
-  const capabilityChecks = Object.entries(profile.capabilities[group]).map(
+  const capabilityChecks = Object.entries(capabilities[group]).map(
     ([name, supported]) => [`${group}.${name}`, supported] as const,
   );
   const checks = capabilityChecks
@@ -273,8 +310,8 @@ function runtimeClaim(
   });
 }
 
-function entryLevel(profile: DataSourceProfile): ConformanceLevel {
-  if (profile.capabilities.connection.test) return "runtime";
+function entryLevel(capabilities: DataSourceCapabilities): ConformanceLevel {
+  if (capabilities.connection.test) return "runtime";
   return "declared";
 }
 
