@@ -69,21 +69,49 @@ pub(super) fn first_sql_word(sql: &str) -> Option<&'static str> {
 pub(super) fn validate_supported_sql(sql: &str) -> Result<(), AppError> {
     let stripped = strip_leading_comments(sql);
     let words = leading_sql_words(stripped, 2);
-    match words.first().map(String::as_str) {
-        Some("INSTALL" | "LOAD") => {
+    match words.as_slice() {
+        [command, ..] if command == "INSTALL" || command == "LOAD" => {
             return Err(AppError::Unsupported(
                 "DuckDB extension install/load is not supported in this runtime slice".into(),
             ));
         }
-        Some("COPY") => {
+        [first, second] if first == "FORCE" && second == "INSTALL" => {
+            return Err(AppError::Unsupported(
+                "DuckDB extension install/load is not supported in this runtime slice".into(),
+            ));
+        }
+        [command, ..] if command == "COPY" => {
             return Err(AppError::Unsupported(
                 "DuckDB COPY file import/export is not supported in this runtime slice".into(),
+            ));
+        }
+        [command, ..] if command == "ATTACH" || command == "DETACH" => {
+            return Err(AppError::Unsupported(
+                "DuckDB ATTACH/DETACH external database routing is not supported in this runtime slice".into(),
+            ));
+        }
+        [command, setting]
+            if (command == "SET" || command == "PRAGMA")
+                && is_sensitive_capability_setting(setting) =>
+        {
+            return Err(AppError::Unsupported(
+                "DuckDB extension and external-file capability settings are not supported in this runtime slice".into(),
             ));
         }
         _ => {}
     }
 
     let upper = stripped.to_ascii_uppercase();
+    for function in ["INSTALL_EXTENSION", "LOAD_EXTENSION"] {
+        if contains_function_call(&upper, function)
+            || contains_quoted_function_call(&upper, function)
+        {
+            return Err(AppError::Unsupported(
+                "DuckDB extension install/load is not supported in this runtime slice".into(),
+            ));
+        }
+    }
+
     if contains_string_table_reference(stripped) {
         return Err(AppError::Unsupported(
             "DuckDB CSV/Parquet/JSON local file replacement scans are not supported in this runtime slice".into(),
@@ -115,6 +143,17 @@ pub(super) fn validate_supported_sql(sql: &str) -> Result<(), AppError> {
         }
     }
     Ok(())
+}
+
+fn is_sensitive_capability_setting(setting: &str) -> bool {
+    matches!(
+        setting,
+        "ENABLE_EXTERNAL_ACCESS"
+            | "AUTOLOAD_KNOWN_EXTENSIONS"
+            | "AUTOINSTALL_KNOWN_EXTENSIONS"
+            | "EXTENSION_DIRECTORY"
+            | "CUSTOM_EXTENSION_REPOSITORY"
+    )
 }
 
 fn contains_string_table_reference(sql: &str) -> bool {

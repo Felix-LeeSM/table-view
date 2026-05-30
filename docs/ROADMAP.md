@@ -94,6 +94,27 @@ H2 umbrella closure does not mean every RDBMS has full desktop-client parity. It
 means the current support claims, capability gates, and smoke routing are aligned
 so the next implementation lane can proceed without widening unsupported claims.
 
+## H3 진행 기준
+
+H3 DuckDB/file analytics 는 **local-first file analytics 를 RDBMS + `file`
+connection kind 안에서 닫는 정합성 gate**다. DuckDB 를 별도 file-SQL paradigm 으로
+승격하지 않고, `.duckdb` raw SQL, registered local file preview, source-scoped
+SELECT evidence, extension/external-file blocklist, privacy/export boundary 를 현재
+지원 claim 에 맞춘다.
+
+| Gate | Current owner | H3 boundary |
+|---|---|---|
+| DuckDB profile/modeling | `src/types/dataSource.ts`, `src/types/dataSource.test.ts` | DuckDB is `rdb` + `file`; profile presence does not imply full write/DDL/admin parity. |
+| `.duckdb` raw SQL path | `src-tauri/src/db/duckdb.rs`, `src-tauri/tests/duckdb_browse_query_adapter.rs` | Statement-level raw SQL and table reads are active; structured DDL/write UI parity is not claimed. |
+| File analytics preview basics | `src/lib/tauri/fileAnalytics.test.ts`, `src-tauri/tests/duckdb_file_analytics.rs` | CSV/Parquet/JSON/NDJSON registration and preview are active-session local-file flows. |
+| Source-scoped SELECT wrapper | `src-tauri/tests/duckdb_file_analytics.rs` | Backend read-only SELECT evidence exists; full query editor parity, history, and import workflows are not claimed. |
+| Extension/external-file gate | `src-tauri/src/db/duckdb.rs`, `docs/product/query-language-support.md` | Extension install/load, extension helper functions, `COPY`, `ATTACH`/`DETACH`, sensitive capability settings, replacement scans, and raw external-file functions are adapter-blocked. |
+| Smoke/verification matrix | `docs/contributor-guide/testing-and-quality.md` | No DuckDB desktop E2E smoke is claimed today; future E2E promotion must cover the matrix before support claims widen. |
+
+H3 umbrella closure means DuckDB/file analytics support claims, runtime gates, and
+verification routing are aligned. It does not mean DuckDB has full desktop-client
+parity or extension semantics.
+
 ## 트랙 맵
 
 | 트랙 | 장기 방향 | 현재 기준 |
@@ -127,7 +148,7 @@ Near-term follow-up groups:
 | Group | Follow-up |
 |---|---|
 | RDBMS parity | Keep MySQL/MariaDB version-aware feature gates on the server-version-aware conformance path, and add operation-level UI/runtime consumers only with matching evidence. Add MariaDB engine fixture evidence or keep support claims narrowed. |
-| Query language widening | Widen SQL/Mongo client semantic support by tested slices: broader MySQL/MariaDB routine expressions, SQLite/DuckDB extension semantics, server-version/capability gates, Mongo version/deployment gates, and extension-aware completion packs. PostgreSQL completion packs must consume installed extension inventory before enabling curated extension-specific candidates. |
+| Query language widening | Widen SQL/Mongo client semantic support by tested slices: broader MySQL/MariaDB routine expressions, SQLite extension semantics, server-version/capability gates, Mongo version/deployment gates, and extension-aware completion packs. DuckDB extension install/load and external-file capability settings are currently blocked by adapter gates; future DuckDB extension support needs detected capability evidence before completion/runtime claims widen. PostgreSQL completion packs must consume installed extension inventory before enabling curated extension-specific candidates. |
 | Query/result boundary | Keep typed envelopes as the UI-facing boundary. Future hardening can make backend RDBMS IPC emit native `tabular` envelopes instead of normalizing legacy `QueryResult` at the Tauri wrapper. |
 | ERD/schema graph | 현재 schemaStore cache owner 범위는 schemas/tables/views/functions/postgresExtensions/tableColumnsCache/tableIndexesCache/tableConstraintsCache/triggers 이다. Production ERD/`SchemaGraph` input 은 schema/table/column cache 와 cached/fetched explicit index/constraint metadata 를 함께 쓰며, column-level FK info 는 synthetic fallback 으로 남아 있다. FK navigation 은 현재 DataGrid cell/icon path 이며 ERD interaction claim 이 아니다. Follow-up 은 shared `SchemaGraph`/catalog input path 를 확장해 parent tracking(#200), dependency view, migration impact analysis, dense-view screenshot smoke(#247) 를 연결하는 것이다. Duplicate catalog parsing 금지. |
 | Redis/Valkey | Define follow-up contracts for value edit, TTL/write, stream UI, Valkey parity, cluster, pub/sub, modules, and consumer-group management before broader support claims. |
