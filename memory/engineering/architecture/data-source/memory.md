@@ -53,10 +53,20 @@ Capability 가 없으면 UI 는 hide/disable + fallback 을 보여준다. Runtim
 failure 를 기본 동작으로 만들지 않는다.
 
 Declared-only identities (`mssql`, `oracle`) 는 RDB profile 을 갖지만 capability-empty
-상태다. Search identities (`elasticsearch`, `opensearch`) 는 fixture-backed/deferred
-profile 이며 live HTTP connection/query claim 은 capability 가 켜질 때까지 하지 않는다.
+상태다. MSSQL future contract 는 SQL Server connection/auth/encryption/instance,
+T-SQL owner, RDB catalog, tabular result, RDB safety, fixture/live evidence 를
+분리해야 한다. Oracle future contract 는 service/SID/wallet/TNS, Oracle SQL/PLSQL
+owner, RDB catalog, tabular result, RDB safety, fixture/live evidence 를 분리해야
+한다. 둘 다 그 전까지 runtime support claim 이 아니다.
+
+Search identities (`elasticsearch`, `opensearch`) 는 fixture-backed/deferred profile
+이며 live HTTP connection/query claim 은 capability 가 켜질 때까지 하지 않는다.
 Valkey 는 planned KV family candidate 이지만 아직 active `DatabaseType`/profile 이
 아니며 Redis compatibility evidence 없이 support claim 을 하지 않는다.
+Cassandra/Scylla, DynamoDB, graph, vector, stream 은 workflow value, profile target,
+connection kind, language owner, catalog model, result envelope, safety policy,
+fixture strategy 가 잠기기 전 active `DatabaseType`/profile/runtime 으로 추가하지
+않는다.
 
 ## Paradigm Map
 

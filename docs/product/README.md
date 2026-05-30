@@ -23,7 +23,9 @@
 | Redis | connection/profile + backend KV primitives + key browser/value preview UI | backend KV guardrails only | redis-command profile; parser/completion future-contract | key browser/value preview are live. Backend guarded string set, delete confirmation, TTL expire/persist, and bounded stream read exist as typed IPC primitives. full value editor, TTL/write/stream UI, Redis command query editor, cluster/pubsub/modules/consumer-group management, and Valkey support are follow-up |
 | Valkey | unsupported/planned | no active profile/runtime evidence | deferred | Redis compatibility is not assumed. Valkey needs its own profile/capability decision plus fixture or live evidence before support can be claimed |
 | Elasticsearch/OpenSearch | fixture-backed Search slice only | index/mapping/search envelope guardrails | bounded fixture DSL only | fixture identity/catalog/mapping/template/search result and destructive plan contracts exist. live connection UI, HTTP auth/TLS, catalog/query execution, admin APIs, observability, and product-specific live deltas are deferred |
-| MSSQL/Oracle | unsupported/deferred | declared SQL identity only | deferred | planned RDBMS identities. runtime support 는 없음 |
+| MSSQL | planned declared RDBMS identity only | no active T-SQL parser/runtime safety claim | deferred | `mssql` profile/dialect identity exists as capability-empty `declared-rdb`. Connection UI, runtime query/catalog/edit, SQL Server auth/TLS/encryption/instance behavior, and live evidence are not implemented |
+| Oracle | planned declared RDBMS identity only | no active Oracle SQL/PL/SQL parser/runtime safety claim | deferred | `oracle` profile/dialect identity exists as capability-empty `declared-rdb`. Connection UI, runtime query/catalog/edit, service/SID/wallet/TNS behavior, and live evidence are not implemented |
+| Cassandra/Scylla, DynamoDB, graph, vector, stream | candidate only | deferred language ids only | deferred | no active `DatabaseType`/profile/runtime identity. Workflow value, profile target, connection kind, language owner, catalog model, result envelope, safety policy, fixture strategy, and smoke evidence must be locked before promotion |
 
 ## Profile Registry Boundary
 
@@ -34,9 +36,15 @@ PostgreSQL, MySQL, MariaDB, SQLite, DuckDB, MongoDB, Redis 로 제한된다.
 Valkey 는 아직 active `DatabaseType`/profile/runtime identity 가 없으며 Redis
 compatibility evidence 가 쌓이기 전까지 support claim 이 아니다.
 
-MSSQL/Oracle 은 capability-empty declared RDB identities 다. Elasticsearch/OpenSearch
-는 Search identity 와 fixture-backed contract 만 갖고 있으며 live HTTP connection,
-catalog/query execution, admin/observability 는 아직 deferred 다.
+MSSQL 과 Oracle 은 별도의 capability-empty declared RDB identities 다.
+Elasticsearch/OpenSearch 는 Search identity 와 fixture-backed contract 만 갖고
+있으며 live HTTP connection, catalog/query execution, admin/observability 는 아직
+deferred 다.
+
+Cassandra/Scylla, DynamoDB, graph, vector, stream 은 active `DatabaseType`,
+profile, runtime, parser/completion, fixture/live evidence 가 없다. 이 후보들은
+`docs/ROADMAP.md` H6 계약과 adding-data-source checklist 를 통과하기 전까지
+candidate-only 상태다.
 
 ## Current Boundaries
 
@@ -53,8 +61,9 @@ catalog/query execution, admin/observability 는 아직 deferred 다.
   does not embed connection passwords.
 - Runtime/parser/completion/edit/fixture/e2e/support-claim/lightweight
   EXPLAIN gaps 를 lane 하나씩 닫는다.
-- Cassandra/DynamoDB/graph/vector/stream 은 profile/capability/fixture decision 전
-  active support 로 승격하지 않는다.
+- Cassandra/Scylla, DynamoDB, graph, vector, stream 은 workflow value,
+  profile target, capability, fixture/live evidence decision 전 active support 로
+  승격하지 않는다.
 - Current user-visible support boundaries and unmeasured UI/a11y/perf areas are
   tracked in [`known-limitations.md`](known-limitations.md).
 
