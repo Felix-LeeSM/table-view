@@ -7,10 +7,13 @@
 -- not mask seed errors behind duplicate-key failures.
 --
 -- Strategy:
+--   * `CREATE EXTENSION IF NOT EXISTS ...` for installed-extension completion.
 --   * `CREATE TABLE IF NOT EXISTS ...` for schema.
 --   * `INSERT ... ON CONFLICT (email) DO NOTHING` for `users` (unique column).
 --   * `INSERT ... SELECT ... WHERE NOT EXISTS (...)` guarded inserts for
 --     `orders` and `products` (no unique column besides the SERIAL id).
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
