@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { MongoClient } from "mongodb";
+import { MongoClient, type Document } from "mongodb";
 import { Client as PgClient } from "pg";
 
 const pgConfig = {
@@ -18,6 +18,22 @@ const mongoConfig = {
   password: process.env.MONGO_PASSWORD ?? "testpass",
   authDb: process.env.E2E_MONGO_AUTH_DB ?? "admin",
   database: process.env.E2E_MONGO_DB ?? "table_view_test",
+};
+
+type MongoSeedIndex = {
+  name?: string;
+  keys: Document;
+  options?: Document;
+};
+
+type MongoSeedCollection = {
+  name: string;
+  indexes?: MongoSeedIndex[];
+  documents: Document[];
+};
+
+type MongoSeedFixture = {
+  collections: MongoSeedCollection[];
 };
 
 async function retry(label: string, fn: () => Promise<void>) {
@@ -50,6 +66,9 @@ async function seedPostgres() {
 }
 
 async function seedMongo() {
+  const fixture = JSON.parse(
+    await readFile(resolve("e2e/fixtures/seed.mongodb.json"), "utf-8"),
+  ) as MongoSeedFixture;
   const uri = `mongodb://${encodeURIComponent(mongoConfig.user)}:${encodeURIComponent(
     mongoConfig.password,
   )}@${mongoConfig.host}:${mongoConfig.port}/${mongoConfig.authDb}`;
@@ -59,23 +78,30 @@ async function seedMongo() {
     await client.connect();
     try {
       const db = client.db(mongoConfig.database);
-      const collection = db.collection("smoke_users");
-      await collection.createIndex({ email: 1 }, { unique: true });
-      await collection.updateOne(
-        { email: "mona@example.com" },
-        {
-          $set: {
-            name: "Mona",
-            email: "mona@example.com",
-            role: "smoke",
-          },
-        },
-        { upsert: true },
-      );
+      for (const collectionSpec of fixture.collections) {
+        const collection = db.collection(collectionSpec.name);
+        for (const index of collectionSpec.indexes ?? []) {
+          await collection.createIndex(index.keys, {
+            ...index.options,
+            ...(index.name ? { name: index.name } : {}),
+          });
+        }
+        for (const document of collectionSpec.documents) {
+          await collection.replaceOne(seedDocumentFilter(document), document, {
+            upsert: true,
+          });
+        }
+      }
     } finally {
       await client.close();
     }
   });
+}
+
+function seedDocumentFilter(document: Document): Document {
+  if (document._id !== undefined) return { _id: document._id };
+  if (document.email !== undefined) return { email: document.email };
+  throw new Error("MongoDB seed documents require _id or email");
 }
 
 await seedPostgres();

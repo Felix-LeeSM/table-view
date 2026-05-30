@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "database": "table_view_test",
+  "idempotencyContract": "Idempotency contract: create indexes idempotently and replace documents by stable _id or unique key.",
+  "collections": [
+    {
+      "name": "smoke_users",
+      "indexes": [
+        {
+          "name": "smoke_users_email_unique",
+          "keys": { "email": 1 },
+          "options": { "unique": true }
+        }
+      ],
+      "documents": [
+        {
+          "_id": "smoke-user-mona",
+          "name": "Mona",
+          "email": "mona@example.com",
+          "role": "smoke"
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "indexes": [
+        {
+          "name": "users_email_unique",
+          "keys": { "email": 1 },
+          "options": { "unique": true }
+        },
+        {
+          "name": "users_role_lookup",
+          "keys": { "role": 1 }
+        }
+      ],
+      "documents": [
+        {
+          "_id": "user-ada",
+          "name": "Ada Lovelace",
+          "email": "ada@example.com",
+          "role": "admin",
+          "tags": ["math", "analytics"],
+          "profile": {
+            "timezone": "Europe/London",
+            "active": true
+          }
+        },
+        {
+          "_id": "user-grace",
+          "name": "Grace Hopper",
+          "email": "grace@example.com",
+          "role": "editor",
+          "tags": ["compiler", "navy"],
+          "profile": {
+            "timezone": "America/New_York",
+            "active": true
+          }
+        },
+        {
+          "_id": "user-alan",
+          "name": "Alan Turing",
+          "email": "alan@example.com",
+          "role": "viewer",
+          "tags": ["logic", "security"],
+          "profile": {
+            "timezone": "Europe/London",
+            "active": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "products",
+      "indexes": [
+        {
+          "name": "products_sku_unique",
+          "keys": { "sku": 1 },
+          "options": { "unique": true }
+        }
+      ],
+      "documents": [
+        {
+          "_id": "product-analytics-seat",
+          "sku": "ANALYTICS-SEAT",
+          "name": "Analytics Seat",
+          "price": 49.99,
+          "active": true
+        },
+        {
+          "_id": "product-audit-pack",
+          "sku": "AUDIT-PACK",
+          "name": "Audit Pack",
+          "price": 129,
+          "active": true
+        }
+      ]
+    },
+    {
+      "name": "orders",
+      "indexes": [
+        {
+          "name": "orders_user_status_lookup",
+          "keys": { "userId": 1, "status": 1 }
+        }
+      ],
+      "documents": [
+        {
+          "_id": "order-ada-001",
+          "userId": "user-ada",
+          "status": "paid",
+          "total": 178.99,
+          "items": [
+            {
+              "sku": "ANALYTICS-SEAT",
+              "quantity": 1,
+              "unitPrice": 49.99
+            },
+            {
+              "sku": "AUDIT-PACK",
+              "quantity": 1,
+              "unitPrice": 129
+            }
+          ]
+        },
+        {
+          "_id": "order-grace-001",
+          "userId": "user-grace",
+          "status": "draft",
+          "total": 49.99,
+          "items": [
+            {
+              "sku": "ANALYTICS-SEAT",
+              "quantity": 1,
+              "unitPrice": 49.99
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

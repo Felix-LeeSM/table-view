@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "product": "elasticsearch",
+  "idempotencyContract": "Idempotency contract: embedded fixture state is deterministic and never opens a network connection.",
+  "identity": {
+    "clusterName": "Elasticsearch fixture",
+    "clusterUuid": "fixture-elasticsearch",
+    "version": {
+      "number": "8.12.2",
+      "distribution": "elasticsearch",
+      "lucene": "9.9.2",
+      "buildFlavor": "default"
+    },
+    "capabilities": {
+      "search": true,
+      "aggregations": true,
+      "aliases": true,
+      "mappings": true,
+      "legacyIndexTemplates": true,
+      "composableIndexTemplates": true,
+      "deleteByQuery": true
+    }
+  },
+  "indexes": [
+    {
+      "name": "logs-elastic-2026.05.24",
+      "uuid": "idx-fixture-001",
+      "health": "green",
+      "open": true,
+      "docsCount": 2,
+      "storeSizeBytes": 4096,
+      "aliases": ["logs-elastic"],
+      "primaryShards": 1,
+      "replicaShards": 1
+    }
+  ],
+  "aliases": [
+    {
+      "name": "logs-elastic",
+      "index": "logs-elastic-2026.05.24",
+      "writeIndex": true
+    }
+  ],
+  "mappings": [
+    {
+      "index": "logs-elastic-2026.05.24",
+      "fields": [
+        {
+          "path": "@timestamp",
+          "fieldType": "date",
+          "searchable": true,
+          "aggregatable": true
+        },
+        {
+          "path": "message",
+          "fieldType": "text",
+          "searchable": true,
+          "aggregatable": false,
+          "analyzer": "standard"
+        },
+        {
+          "path": "status",
+          "fieldType": "keyword",
+          "searchable": true,
+          "aggregatable": true
+        }
+      ],
+      "raw": {
+        "properties": {
+          "@timestamp": { "type": "date" },
+          "message": { "type": "text", "analyzer": "standard" },
+          "status": {
+            "type": "keyword",
+            "fields": { "keyword": { "type": "keyword" } }
+          }
+        }
+      }
+    }
+  ],
+  "templates": [
+    {
+      "name": "logs-elastic-template",
+      "endpoint": "composableIndexTemplate",
+      "indexPatterns": ["logs-elastic-*"],
+      "priority": 100,
+      "raw": {
+        "index_patterns": ["logs-elastic-*"],
+        "template": { "settings": { "number_of_shards": 1 } }
+      }
+    }
+  ],
+  "searchResult": {
+    "tookMs": 3,
+    "timedOut": false,
+    "total": { "value": 1, "relation": "eq" },
+    "hits": [
+      {
+        "index": "logs-elastic-2026.05.24",
+        "id": "doc-1",
+        "score": 1,
+        "source": {
+          "@timestamp": "2026-05-24T00:00:00Z",
+          "message": "fixture log",
+          "status": "ok"
+        },
+        "sort": []
+      },
+      {
+        "index": "logs-elastic-2026.05.24",
+        "id": "doc-2",
+        "score": 0.8,
+        "source": {
+          "@timestamp": "2026-05-24T00:01:00Z",
+          "message": "fixture error",
+          "status": "error"
+        },
+        "sort": []
+      }
+    ],
+    "aggregations": []
+  },
+  "destructivePlan": {
+    "operation": "deleteByQuery",
+    "requiresConfirmation": true,
+    "previewOnlyDefault": true
+  }
+}

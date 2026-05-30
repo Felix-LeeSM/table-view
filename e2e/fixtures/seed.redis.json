@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "database": 2,
+  "idempotencyContract": "Idempotency contract: select isolated fixture DB 2, clear it, then recreate stable keys.",
+  "commands": [
+    {
+      "command": "SELECT",
+      "database": 2
+    },
+    {
+      "command": "FLUSHDB"
+    },
+    {
+      "command": "SET",
+      "key": "tv:string",
+      "value": "hello",
+      "ttlSeconds": 60
+    },
+    {
+      "command": "HSET",
+      "key": "tv:hash",
+      "fields": {
+        "name": "Ada",
+        "role": "engineer"
+      }
+    },
+    {
+      "command": "XADD",
+      "key": "tv:events",
+      "id": "*",
+      "fields": {
+        "type": "login",
+        "user": "ada"
+      }
+    },
+    {
+      "command": "SADD",
+      "key": "idx:customer",
+      "members": ["customer-1", "customer-2"]
+    },
+    {
+      "command": "HSET",
+      "key": "customer:customer-1",
+      "fields": {
+        "id": "customer-1",
+        "name": "Ada Lovelace",
+        "email": "ada@example.com",
+        "tier": "enterprise"
+      }
+    },
+    {
+      "command": "ZADD",
+      "key": "orders:by_total",
+      "members": [
+        {
+          "score": 178.99,
+          "member": "order-ada-001"
+        },
+        {
+          "score": 49.99,
+          "member": "order-grace-001"
+        }
+      ]
+    }
+  ]
+}
