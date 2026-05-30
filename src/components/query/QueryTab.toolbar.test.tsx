@@ -358,7 +358,37 @@ describe("QueryTab — toolbar", () => {
     expect(await screen.findByTestId("explain-plan-summary")).toHaveTextContent(
       "Plan Summary",
     );
-    expect(mockExplainRdbQuery).toHaveBeenCalledWith("conn1", "SELECT 1");
+    expect(mockExplainRdbQuery).toHaveBeenCalledWith(
+      "conn1",
+      "SELECT 1",
+      "db1",
+    );
     expect(screen.queryByTestId("mock-result")).not.toBeInTheDocument();
+  });
+
+  it("passes resolved active DB to PostgreSQL Explain when the tab lacks a database", async () => {
+    mockExplainRdbQuery.mockResolvedValueOnce([
+      { Plan: { "Node Type": "Seq Scan", "Relation Name": "users" } },
+    ]);
+    useHistorySettingsStore.setState({ queryHistoryEnabled: false });
+    const tab = makeQueryTab();
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "conn1", dbType: "postgresql" })],
+      activeStatuses: {
+        conn1: { type: "connected", activeDb: "db1" },
+      },
+    });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByRole("button", { name: /explain query/i }).click();
+    });
+
+    await screen.findByTestId("explain-plan-summary");
+    expect(mockExplainRdbQuery).toHaveBeenCalledWith(
+      "conn1",
+      "SELECT 1",
+      "db1",
+    );
   });
 });

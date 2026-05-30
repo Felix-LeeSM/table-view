@@ -749,6 +749,7 @@ async fn explain_rdb_query_inner(
     state: &AppState,
     connection_id: &str,
     sql: &str,
+    expected_database: Option<&str>,
 ) -> Result<serde_json::Value, AppError> {
     if sql.trim().is_empty() {
         return Err(AppError::Validation("SQL must not be empty".into()));
@@ -758,6 +759,7 @@ async fn explain_rdb_query_inner(
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
     adapter.explain_query(sql).await
 }
 
@@ -768,8 +770,15 @@ pub async fn explain_rdb_query(
     state: tauri::State<'_, AppState>,
     connection_id: String,
     sql: String,
+    expected_database: Option<String>,
 ) -> Result<serde_json::Value, AppError> {
-    explain_rdb_query_inner(state.inner(), &connection_id, &sql).await
+    explain_rdb_query_inner(
+        state.inner(),
+        &connection_id,
+        &sql,
+        expected_database.as_deref(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1780,7 +1789,7 @@ mod tests {
     #[tokio::test]
     async fn explain_rdb_query_rejects_empty_sql() {
         let state = AppState::new();
-        match explain_rdb_query_inner(&state, "c", "  ").await {
+        match explain_rdb_query_inner(&state, "c", "  ", None).await {
             Err(AppError::Validation(msg)) => assert!(msg.contains("must not be empty")),
             other => panic!("Expected Validation, got: {:?}", other),
         }
@@ -1789,7 +1798,7 @@ mod tests {
     #[tokio::test]
     async fn explain_rdb_query_unknown_connection_returns_notfound() {
         let state = AppState::new();
-        match explain_rdb_query_inner(&state, "absent", "SELECT 1").await {
+        match explain_rdb_query_inner(&state, "absent", "SELECT 1", None).await {
             Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
             other => panic!("Expected NotFound, got: {:?}", other),
         }
@@ -1799,7 +1808,7 @@ mod tests {
     async fn explain_rdb_query_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            explain_rdb_query_inner(&state, "doc", "SELECT 1").await,
+            explain_rdb_query_inner(&state, "doc", "SELECT 1", None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -1811,7 +1820,41 @@ mod tests {
             Ok(serde_json::json!([{ "Plan": { "Node Type": "Seq Scan", "echo": sql } }]))
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = explain_rdb_query_inner(&state, "c", "SELECT 42")
+        let r = explain_rdb_query_inner(&state, "c", "SELECT 42", None)
+            .await
+            .unwrap();
+        assert_eq!(
+            r[0]["Plan"]["echo"],
+            serde_json::Value::String("SELECT 42".into())
+        );
+    }
+
+    #[tokio::test]
+    async fn explain_rdb_query_expected_db_mismatch_returns_dbmismatch_before_dispatch() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("db1".into()))));
+        s.explain_query_fn = Some(Box::new(|_| {
+            panic!("explain_query must not run on db mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match explain_rdb_query_inner(&state, "c", "SELECT 1", Some("db2")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "db2");
+                assert_eq!(actual, "db1");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn explain_rdb_query_expected_db_match_dispatches_normally() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("db1".into()))));
+        s.explain_query_fn = Some(Box::new(|sql| {
+            Ok(serde_json::json!([{ "Plan": { "Node Type": "Seq Scan", "echo": sql } }]))
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let r = explain_rdb_query_inner(&state, "c", "SELECT 42", Some("db1"))
             .await
             .unwrap();
         assert_eq!(

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { QueryTab } from "@stores/workspaceStore";
 import {
+  resolveActiveDb,
   useCurrentWorkspaceKey,
   useWorkspaceStore,
 } from "@stores/workspaceStore";
@@ -284,6 +285,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
     },
     [explainSql, tab.connectionId, tab.database, tab.id],
   );
+  const explainExpectedDatabase = useMemo(
+    () => tab.database ?? resolveActiveDb(tab.connectionId),
+    [tab.database, tab.connectionId],
+  );
 
   // Resizable split state
   const containerRef = useRef<HTMLDivElement>(null);
@@ -398,6 +403,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
             connectionId={tab.connectionId}
             paradigm="table"
             rdbSql={explainSql}
+            expectedDatabase={explainExpectedDatabase ?? undefined}
             onPlanSettled={handleExplainSettled}
           />
         ) : (
