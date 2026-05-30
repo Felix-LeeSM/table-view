@@ -1,7 +1,7 @@
 ---
 title: Delivery — commit → merge 전체 자율
 type: workflow-rule
-updated: 2026-05-20
+updated: 2026-05-30
 task: delivery, commit, push, pr, review, merge
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
@@ -26,9 +26,10 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 1. **T1 Commit** — `git add <specific files>` + `git commit -m "..."`. pre-commit hook 통과 책임.
 2. **T2 Push** — `git push`. pre-push stage 통과. `sprint-N/*` branch 의 contract 가 `review-profile: code` 면 [tdd](../tdd/memory.md) 의 RED evidence 를 push 전 확인한다.
 3. **T3 PR** — `gh pr create`. body 는 Summary / Changes / Invariants / Test plan / Smoke impact / Documentation impact / Links.
-4. **T4 Review** — `pr-reviewer` agent spawn (1회, default 자동):
+4. **T4 Review** — `pr-reviewer` coordinator spawn (1회, default 자동):
    - 정량은 자동 layer (hook / lint / pre-push / scripts/review/run-checks.sh) 가 이미 함
-   - pr-reviewer 는 `.agents/skills/pr-review/SKILL.md` 를 적용
+   - pr-reviewer 는 `.agents/skills/pr-review/SKILL.md` 를 적용하고 필요 시
+     관점별 read-only `pr-subreviewer` 를 fan-out
    - 출력: scorecard PR comment
    - **외부 옵션**: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가
 5. **T5 Reflect/Fix** — 결함 발견 시 delivery owner 가 fix commit + push → T4 재시작
@@ -72,7 +73,7 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 
 ## Agent spawn 권장
 
-- 리뷰: orchestrator 자기 리뷰 = 편향. `pr-reviewer` agent (`.claude/agents/pr-reviewer.md`) spawn 으로 독립 평가. [review](../review/memory.md) 행동 계약과 `.agents/skills/pr-review/SKILL.md` 적용.
+- 리뷰: orchestrator 자기 리뷰 = 편향. `pr-reviewer` coordinator (`.claude/agents/pr-reviewer.md`) spawn 으로 독립 평가. [review](../review/memory.md) 행동 계약과 `.agents/skills/pr-review/SKILL.md` 적용.
 - 외부 시각 필요 시 `codex-reviewer` (사용자 명시 시만, 자동 호출 X).
 - Multi-worktree 병렬 시 각 worktree 의 delivery 도 delivery owner 가 소유.
   reviewer 는 read-only, merge 는 delivery owner 책임.

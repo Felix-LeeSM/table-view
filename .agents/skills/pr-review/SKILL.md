@@ -28,6 +28,38 @@ summary에는 repo-relative path 또는 GitHub URL만 남긴다.
 - 구현 agent의 self-review를 피한다. 가능하면 별도 reviewer agent가 본다.
 - External reviewer는 사용자가 명시적으로 요청했을 때만 추가한다.
 
+## Review Pack
+
+`pr-reviewer`는 coordinator다. 작은 PR은 단독 평가한다. 변경이 넓거나 위험하면
+전용 read-only `pr-subreviewer`를 관점별로 2-4개 fan-out한 뒤 하나의
+scorecard로 합친다.
+Subreviewer도 이 skill의 Boundaries를 상속한다.
+각 subreviewer는 같은 immutable input을 받고, 서로의 결과를 보기 전에 독립
+산출물을 반환한다.
+Coordinator는 `pr-subreviewer` 외 agent를 subreview 용도로 spawn하지 않는다.
+`delivery`, `tdd-generator`, `bug-fix`, `codex-reviewer` 같은 write-capable 또는
+external reviewer agent는 subreviewer가 아니다.
+
+기본 관점:
+
+- `code-semantics`: runtime/source diff, behavioral regression, edge case.
+- `test-quality`: mock 범위, user-facing assertion, RED/contract evidence.
+- `sot-scope-docs`: active memory/docs/ADR 정합성, scope, PR body, evidence.
+- `security-infra`: credential/destructive/signing/CI/hook/build risk.
+
+선택 규칙:
+
+- `code`: `code-semantics`, `test-quality`, `sot-scope-docs`.
+- `docs`: `sot-scope-docs`.
+- `infra`: `security-infra`, `sot-scope-docs`.
+- `security`: `security-infra`, `sot-scope-docs`, 필요한 `code-semantics`.
+- 관련 diff가 없으면 해당 관점은 생략한다. 같은 관점 중복 spawn은 금지한다.
+
+Subreviewer 출력은 `관점`, `blocking findings`, `non-blocking notes`, `evidence
+coverage`만 포함한다. Coordinator는 중복을 합치고, 가장 높은 severity를 유지한다.
+한 관점이라도 blocking이면 최종 verdict는 blocking이다. 점수 평균으로 blocking을
+희석하지 않는다.
+
 ## Profile 선택
 
 우선순위:
@@ -88,6 +120,9 @@ summary에는 repo-relative path 또는 GitHub URL만 남긴다.
 ```markdown
 ## 자동 layer
 - <status> <check or source>
+
+## 관점 입력
+- <perspective>: pass|blocking — <short basis>
 
 ## 정성 차원 (profile: <name>)
 | 차원 | 점수 | 결함 |

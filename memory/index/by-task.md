@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-05-29
+generated: 2026-05-30
 generator: scripts/regenerate-indexes.sh
 ---
 
