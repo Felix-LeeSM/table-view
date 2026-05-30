@@ -81,6 +81,24 @@ future smoke evidence.
 | Lightweight Explain path | `src-tauri/src/db/postgres/schema.rs`, `src/lib/api/explain.ts`, `src/components/query/ExplainViewer.test.tsx`, `src/lib/sql/sqlAst.test.ts`, `src/lib/sql/sqlSafety.test.ts` | Backend/API/component/parser/safety evidence exists for lightweight plan inspection. There is no routine desktop E2E claim, profiler surface, or server activity dashboard claim. |
 | Non-routine scenario assets | `e2e/smoke/history-source-5.spec.ts`, `wdio.smoke.conf.ts` | These can inform local/manual regression and future CI wiring. They do not expand the GitHub Runtime Happy Path unless `scripts/e2e-smoke-ci.sh` invokes them. |
 
+## SQLite File DBMS Smoke Matrix
+
+This matrix is the SQLite file-DBMS lane inventory for #196/#242. It separates
+current unit/integration/fixture evidence from the absent routine desktop E2E
+claim.
+
+| Claim / journey | Current evidence | Current gap / routing |
+|---|---|---|
+| Routine desktop E2E claim | `scripts/e2e-smoke-ci.sh`, `e2e/smoke/**` | No SQLite desktop smoke spec is wired into GitHub Runtime Happy Path today. Future promotion must add a spec for file create/open, browse, read query, writable DML/row edit, read-only rejection, DDL rejection, extension-boundary non-claim, and app-state DB rejection. |
+| File connection lifecycle | `src-tauri/src/db/sqlite/connection.rs`, `src-tauri/tests/sqlite_connection_command.rs`, `src/components/connection/forms/SqliteFormFields.test.tsx`, `src/types/dataSource.test.ts` | Absolute file paths, create-new-file, read-only mode, no host requirement, file-picker capability, and internal app-state DB rejection have evidence. Server auth, switch-database, and multi-namespace flows are not SQLite claims. |
+| Query and writable-file DML | `src-tauri/src/db/sqlite/queries.rs`, `src-tauri/src/db/sqlite/batch.rs`, `src-tauri/src/db/sqlite/queries_tests.rs`, `src-tauri/src/db/sqlite/batch_tests.rs`, `src-tauri/tests/sqlite_browse_query_adapter.rs` | Read queries, writable-file DML, transactional DML batches, dry-run rollback, cancellation, and read-only write rejection have adapter evidence. Raw SQL DDL is rejected by the adapter. |
+| Catalog/workbench browse | `src-tauri/src/db/sqlite/connection.rs`, `src-tauri/tests/sqlite_browse_query_adapter.rs`, `src/components/schema/SchemaTree.dbms-shape.test.tsx`, `src/components/schema/SchemaTree.rowcount.test.tsx` | Current evidence covers `main`, flat table browsing, exact row counts, columns, FKs, indexes, views, and view columns. Schemas, functions, triggers, full constraints, table stats parity, and richer admin/workbench surfaces remain future work. |
+| Row edit semantics | `src/types/dataSource.ts`, `src/components/datagrid/sqlGenerator.test.ts`, `src/components/datagrid/useDataGridEdit.safe-mode.test.ts`, `src-tauri/src/db/sqlite/queries.rs` | SQLite row writes are scoped to writable files and key/projected row identity. Identifier quoting and scalar row write SQL have coverage. Nested JSON edits, arbitrary query-result mutation, bulk/admin edit workflows, and read-only writes are not supported. |
+| DDL and unsupported ALTER behavior | `src-tauri/src/db/sqlite.rs`, `src-tauri/src/db/sqlite/queries_tests.rs`, `src-tauri/src/db/sqlite/batch_tests.rs`, `docs/product/known-limitations.md` | SQLite DDL UI/runtime parity is disabled. Unsupported ALTER behavior is explicit rejection; automatic table rebuild is a future ADR-backed implementation decision. |
+| Completion and extension boundary | `src-tauri/sql-parser-core/src/completion/completion_tests.rs`, `src/lib/sql/sqlCompletionRequest.test.ts`, `docs/product/query-language-support.md` | SQLite keyword/function vocabulary and sqlite-cli dot-command suggestions have evidence. Dot commands are not executed, and JSON1/FTS/RTREE/loadable-extension semantics are not detected, gated, dispatched, or semantically validated client-side. |
+| Fixture inventory | `e2e/fixtures/seed.sqlite.sql`, `scripts/fixtures/spec.test.ts`, `scripts/fixtures/sqlite.test.ts`, `scripts/e2e-pre-smoke-release-gate.ts` | SQLite fixtures are deterministic local files and pre-smoke validates fixture presence/path. Fixture existence does not equal desktop smoke coverage until `scripts/e2e-smoke-ci.sh` runs a SQLite spec. |
+| DuckDB separation | `docs/ROADMAP.md`, `docs/product/query-language-support.md`, `docs/product/known-limitations.md` | DuckDB/file analytics remains in the H3 matrix; SQLite fixture/smoke inventory must not widen DuckDB claims. |
+
 ## H3 DuckDB And File Analytics Smoke Matrix
 
 This matrix is the H3 DuckDB/file analytics gate. It records the current
