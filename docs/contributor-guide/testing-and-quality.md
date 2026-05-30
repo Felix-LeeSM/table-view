@@ -96,6 +96,23 @@ dependency view, migration impact, or dense-view E2E coverage.
 | Future dependency/migration/schema diff/data compare surfaces | `docs/ROADMAP.md`, `memory/engineering/architecture/data-source/memory.md` | Future surfaces must reuse `SchemaGraph`/catalog input and avoid duplicate catalog parsing before support claims widen. |
 | Runtime E2E smoke inventory | This matrix and current ERD component evidence | Required before future E2E promotion: open a seeded RDBMS schema, open ERD, verify table nodes, FK edges, search, selection, zoom, fit, and narrow viewport behavior, confirm metadata fetch stability, and confirm no FK row-navigation claim through ERD. |
 
+## H5 Non-RDBMS Smoke Matrix
+
+This matrix is the H5 non-RDBMS claim gate. It separates current evidence from
+future promotion scenarios so Document/KV/Search support claims do not imply
+full first-class parity.
+
+| Claim / journey | Current evidence | Current gap / routing |
+|---|---|---|
+| MongoDB connection/catalog/query/edit workflow | `e2e/smoke/mongodb.spec.ts`, `e2e/smoke/phase-28-slice-A.spec.ts`, `src-tauri/tests/mongo_integration.rs`, `src/lib/tauri/document.ts` | MongoDB is the only H5 source with current desktop E2E smoke. Full-support parity, native document-first panels, and version/deployment gates remain future lane work. |
+| MongoDB whitelist and safety boundary | `src/lib/mongo/mongoshAst.test.ts`, `src/lib/mongo/mongoSafety.test.ts`, `src/components/query/QueryTab.warn-dialog.test.tsx`, `src-tauri/tests/cancel_mongo.rs` | Arbitrary JavaScript, shell helpers, multiple statements, and cross-db shell navigation are unsupported. Transaction-style paths on unsupported standalone deployments must fail clearly rather than silently commit partial work. |
+| Redis backend KV first slice | `src-tauri/src/db/redis/mod.rs`, `src-tauri/src/db/redis/tests.rs`, `src-tauri/tests/redis_integration.rs`, `src/lib/tauri/kv.test.ts` | Backend evidence covers database/key scan, typed value reads, guarded string set, delete confirmation, TTL expire/persist, and bounded stream read. No Redis desktop E2E smoke is claimed today. |
+| Redis visible UI journey | `src/components/workspace/KvSidebar.test.tsx`, `src/lib/tauri/kv.test.ts` | Product UI claim is key browser/value preview only. Full value editor, TTL/write controls, stream consumer UI, and Redis command query editor require new UI smoke before promotion. |
+| Valkey support claim | `docs/product/README.md`, `docs/product/known-limitations.md`, `docs/ROADMAP.md` | No active profile/runtime/fixture/live evidence exists. Future promotion must add Valkey identity/capability contracts plus Redis-compatibility or delta evidence before support is claimed. |
+| Search fixture-backed contract | `src-tauri/src/db/search.rs`, `src-tauri/tests/fixture_harness.rs`, `src/lib/tauri/search.test.ts`, `src/components/search/SearchResultView.test.tsx`, `src/components/query/QueryTab.search-route.test.tsx` | Elasticsearch/OpenSearch are fixture-backed only. Live HTTP connection, catalog/search execution, response parsing, admin APIs, and observability are not claimed. |
+| Elasticsearch/OpenSearch product delta | `src-tauri/src/models/search.rs`, `src-tauri/src/db/search.rs`, `src-tauri/tests/backend_adapter_contract_profile.rs` | Shared Search contract and product deltas must stay separated. Live promotion requires product/version detection, auth/TLS, API endpoint differences, and failure/observability smoke. |
+| Non-RDBMS E2E inventory | This matrix and current E2E smoke set | Required future Redis smoke: connect, scan keys, select typed value, switch DB, and prove guarded write/delete/TTL paths remain behind explicit controls. Required future Search smoke: connect with auth/TLS, list indexes/mappings/templates, run bounded search, render search hits, preview destructive delete-by-query plan, and verify error/observability surfaces. |
+
 ## Frontend Test Quality
 
 | Area | Follow-up |

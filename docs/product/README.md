@@ -19,9 +19,10 @@
 | MariaDB | MySQL-family adapter reuse with distinct MariaDB identity | MySQL-family parser/Safe Mode path + MariaDB dialect/profile identity | Rust/WASM MySQL-family vocabulary + completion-only MariaDB `RETURNING` delta | runtime adapter path exists through MySQL reuse. CHECK/constraint catalog conformance needs MariaDB `>= 10.2.1` context. `RETURNING` is not a version-gated runtime support claim; MariaDB-engine routine/default fixture, CI, and live evidence remain known limitations / quality follow-up |
 | SQLite | file adapter + SELECT/DML | bounded parser/Safe Mode guardrails; DDL rejected by adapter | Rust/WASM built-in vocabulary + cached schema objects | user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의 DML/PK-projected row edit 로 제한되며 DDL UI/runtime DDL parity, unsupported `ALTER TABLE` rebuild, extension gates 는 unsupported |
 | DuckDB | RDBMS file adapter + registered local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM DuckDB vocabulary | `rdb` profile + `file` connection kind 로 표현한다. local `.duckdb` file 은 catalog/table read 와 statement-level raw SQL 실행 경로를 지원한다. registered local CSV/Parquet/JSON/NDJSON analytics 는 preview basics 와 source-scoped SELECT backend path evidence 가 있다. Preview public payload 는 source alias, file name, kind, size 만 노출하고 absolute local path 는 노출하지 않는다. extension install/load/helper functions, `COPY`, `ATTACH`/`DETACH`, sensitive external-file capability settings, and arbitrary external-file SQL functions/replacement scans are adapter-blocked. 구조화된 DDL/write UI, file analytics query UI parity/history/import 는 unsupported/follow-up |
-| MongoDB | partial/full-support backlog | whitelisted mongosh | Rust/WASM vocabulary | whitelist workflow hardening 이후 full-support 재검토 |
-| Redis | connection/profile + backend KV primitives + key browser/value preview | backend guardrails only | redis-command profile | key browser/value preview 는 live. value edit/TTL/write/stream UI 와 Valkey parity/support 는 follow-up |
-| Elasticsearch/OpenSearch | fixture-backed Search slice only | index/mapping/search envelope guardrails | bounded fixture DSL only | live connection UI, HTTP catalog/query execution, admin, observability 는 deferred |
+| MongoDB | runtime-backed whitelisted document workflow | whitelisted mongosh/MQL | Rust/WASM vocabulary | connection, catalog, document query/edit, bulk/index/validator slices, cancellation, and destructive Safe Mode gates are active for tested whitelist paths. arbitrary JavaScript/shell behavior, version/deployment gates, native document-first panels, and full-support parity remain follow-up |
+| Redis | connection/profile + backend KV primitives + key browser/value preview UI | backend KV guardrails only | redis-command profile; parser/completion future-contract | key browser/value preview are live. Backend guarded string set, delete confirmation, TTL expire/persist, and bounded stream read exist as typed IPC primitives. full value editor, TTL/write/stream UI, Redis command query editor, cluster/pubsub/modules/consumer-group management, and Valkey support are follow-up |
+| Valkey | unsupported/planned | no active profile/runtime evidence | deferred | Redis compatibility is not assumed. Valkey needs its own profile/capability decision plus fixture or live evidence before support can be claimed |
+| Elasticsearch/OpenSearch | fixture-backed Search slice only | index/mapping/search envelope guardrails | bounded fixture DSL only | fixture identity/catalog/mapping/template/search result and destructive plan contracts exist. live connection UI, HTTP auth/TLS, catalog/query execution, admin APIs, observability, and product-specific live deltas are deferred |
 | MSSQL/Oracle | unsupported/deferred | declared SQL identity only | deferred | planned RDBMS identities. runtime support 는 없음 |
 
 ## Profile Registry Boundary
@@ -30,6 +31,8 @@
 포함한다. Profile 존재는 곧 runtime support claim 이 아니다. 현재 connection dialog
 와 runtime connection support 는 `capabilities.connection.test` 가 true 인
 PostgreSQL, MySQL, MariaDB, SQLite, DuckDB, MongoDB, Redis 로 제한된다.
+Valkey 는 아직 active `DatabaseType`/profile/runtime identity 가 없으며 Redis
+compatibility evidence 가 쌓이기 전까지 support claim 이 아니다.
 
 MSSQL/Oracle 은 capability-empty declared RDB identities 다. Elasticsearch/OpenSearch
 는 Search identity 와 fixture-backed contract 만 갖고 있으며 live HTTP connection,

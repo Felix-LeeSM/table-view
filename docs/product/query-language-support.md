@@ -49,8 +49,8 @@ cannot add parser or completion vocabulary without an owner decision.
 | SQLite SQL | File connection, table browsing, raw SELECT execution, and multi-statement batches are supported. Raw DML execution and primary-key-scoped row edits are supported only for writable SQLite files. Completion covers built-in SQLite keywords/functions, cached schema objects, and sqlite-cli dot-command vocabulary as suggestions. | Raw SQL DDL is rejected by the SQLite adapter, and structured DDL UI parity is not implemented. Unsupported `ALTER TABLE` actions are not auto-rebuilt, row edits require a single-table result with all primary-key columns projected, read-only file connections reject writes, sqlite-cli dot commands are not executed, and extension/capability-specific semantics are not validated client-side. |
 | DuckDB SQL | DuckDB is a file-backed RDBMS profile (`rdb` + `file` connection kind). Local `.duckdb` files can be opened for catalog browsing, table reads, and statement-level raw SQL execution through the RDBMS tabular result path. Registered local CSV/Parquet/JSON/NDJSON analytics sources can be previewed from the DuckDB query toolbar; the dialog chooses a local file, registers an active-session source alias, and previews up to 100 rows. A source-scoped SELECT backend wrapper exists, while the product UI is still preview-first. Public source payloads expose id, alias, file name, kind, and size, not absolute local paths. Completion covers current DuckDB vocabulary and cached schema objects. | Structured DDL/write UI parity and file analytics query UI parity/history/import are not implemented. Extension install/load statements and helper functions, `COPY` file import/export, `ATTACH`/`DETACH`, sensitive external-file capability settings, shell commands, cloud/object-store access, and arbitrary external-file SQL functions or replacement scans are adapter-rejected; extension autoload is disabled. Read-only `.duckdb` files reject writes. |
 | MongoDB Mongosh/MQL | Whitelisted `db...` collection/admin commands, JSON-like bodies, BSON literals, cursor chains, operator/stage/expression completion, and destructive admin Safe Mode gates are supported. | Arbitrary JavaScript, shell helpers such as `use`/`show`, multiple statements, unsupported cursor helpers, cross-db shell navigation, server-version gates, and native document-first result panels remain out of scope. |
-| Redis command | Connection/profile, backend KV primitives, key browser, and value preview exist. | Query-language parser/completion ownership is future-contract only. Value edit, TTL/write, stream UI, and broader Redis/Valkey command coverage are not claimed. |
-| Search DSL | Fixture-backed Search identities and bounded fixture DSL exist. | Live HTTP execution and full query-language support are deferred. |
+| Redis command | Redis connection/profile, backend KV primitives, key browser, and value preview exist. Backend primitives are typed IPC calls for database/key scan, typed value reads, guarded string set, delete confirmation, TTL expire/persist, and bounded stream reads. | Redis command query editor/parser/completion is not active. Full value editing, TTL/write controls, stream consumer UI, broader command coverage, cluster/pubsub/modules/consumer-group management, and Valkey support are not claimed. |
+| Search DSL | Fixture-backed Search identities and bounded fixture DSL exist for Elasticsearch/OpenSearch fixture catalog/search result paths. | Live HTTP execution, connection/auth/TLS handling, response parsing, admin APIs, observability, and full query-language support are deferred. |
 
 ## Result Boundary
 
@@ -109,10 +109,18 @@ are:
 - Export remains the generic explicit save-dialog grid export for current grid
   rows. It is not an automatic export path for registered DuckDB local file
   sources.
-- MongoDB support is limited to the tested whitelist; arbitrary shell behavior is
-  intentionally not supported.
-- Redis and Search query language support is not yet a full active product
-  claim.
+- MongoDB support is limited to the tested whitelist. Arbitrary JavaScript,
+  shell helpers, multiple statements, and cross-db shell navigation are
+  intentionally unsupported. Standalone deployments must produce friendly
+  unsupported/fallback behavior for transaction-style workflows rather than
+  silent partial commits.
+- Redis has backend KV primitives and key browser/value preview UI, but Redis
+  command query parsing/completion/execution is not a full active product claim.
+  Valkey has no active profile/runtime evidence.
+- Search DSL is fixture-backed for Elasticsearch/OpenSearch result rendering and
+  adapter contracts only. Live HTTP Search support waits for explicit
+  connection/auth/TLS, catalog/search execution, admin, observability, and
+  product-delta gates.
 
 ## Related
 

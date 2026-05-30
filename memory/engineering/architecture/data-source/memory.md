@@ -1,7 +1,7 @@
 ---
 title: Data source architecture
 type: memory
-updated: 2026-05-29
+updated: 2026-05-30
 surface: src-tauri/src/db/**, src/lib/**, src/types/dataSource*, src/types/queryLanguage*
 task: data-source, architecture, adapter, capability
 trigger:
@@ -55,6 +55,8 @@ failure 를 기본 동작으로 만들지 않는다.
 Declared-only identities (`mssql`, `oracle`) 는 RDB profile 을 갖지만 capability-empty
 상태다. Search identities (`elasticsearch`, `opensearch`) 는 fixture-backed/deferred
 profile 이며 live HTTP connection/query claim 은 capability 가 켜질 때까지 하지 않는다.
+Valkey 는 planned KV family candidate 이지만 아직 active `DatabaseType`/profile 이
+아니며 Redis compatibility evidence 없이 support claim 을 하지 않는다.
 
 ## Paradigm Map
 
@@ -76,10 +78,16 @@ profile 이며 live HTTP connection/query claim 은 capability 가 켜질 때까
 
 - `RdbAdapter`: SQL, table browse, DDL, row edit, ERD.
 - `DocumentAdapter`: collection browse, document query/edit, index/validator.
-- `KvAdapter`: Redis backend primitives, key browser, and value preview exist.
-  Value edit, TTL/write, stream UI, and broader KV/Valkey support require
-  follow-up evidence.
-- `SearchAdapter`: fixture-backed Search slice. Live HTTP requires explicit connection/auth/catalog/search contracts.
+- `KvAdapter`: Redis backend primitives support connection/list DB, bounded key
+  scan, typed value read, guarded string set, delete confirmation, TTL
+  expire/persist, and bounded stream read. Product UI claim is key browser/value
+  preview only; full value editor, TTL/write/stream UI, command query editor,
+  cluster/pubsub/modules/consumer-group flows, and Valkey need follow-up
+  evidence.
+- `SearchAdapter`: Elasticsearch/OpenSearch fixture-backed identity, catalog,
+  mapping/template, search result, and destructive plan contracts exist. Network
+  adapters return unsupported until live HTTP has explicit connection/auth/TLS,
+  catalog/search execution, admin, observability, and product-delta contracts.
 - `WideColumnAdapter`, `CloudDocumentAdapter`, `GraphAdapter`, `VectorAdapter`,
   `StreamAdapter`: future contracts only.
 
