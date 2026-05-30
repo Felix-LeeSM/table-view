@@ -14,7 +14,7 @@
 
 | DBMS | Runtime | Parser / safety | Completion | 현재 판단 |
 |---|---|---|---|---|
-| PostgreSQL | strong | strong bounded subset | WASM-first | 현재 가장 강한 lane 이지만 full dialect/admin/arbitrary extension semantics 보장은 아님. query/workbench parity lane 이 현재 우선 후보 |
+| PostgreSQL | strong | strong bounded subset | WASM-first + installed-extension-gated packs | 현재 가장 강한 lane 이지만 routine desktop smoke 는 connect/browse/edit/query path 만 증명한다. full dialect/admin/arbitrary extension semantics, Explain UI E2E, extension completion E2E, Safe Mode dialog E2E 는 보장하지 않음 |
 | MySQL | runtime/query/edit/DDL adapter active | bounded parser/Safe Mode slice; constraint conformance version-gated | Rust/WASM MySQL-family vocabulary | connection, browsing, raw query, DML-oriented multi-statement batch, row edit, cancellation, and bounded structured table/index/constraint DDL are active. CHECK/constraint catalog conformance needs MySQL `>= 8.0.16` context. Trigger create/drop, DB-level import/export/dump parity, and broader routine scripting remain unsupported/follow-up |
 | MariaDB | MySQL-family adapter reuse with distinct MariaDB identity | MySQL-family parser/Safe Mode path + MariaDB dialect/profile identity | Rust/WASM MySQL-family vocabulary + completion-only MariaDB `RETURNING` delta | runtime adapter path exists through MySQL reuse. CHECK/constraint catalog conformance needs MariaDB `>= 10.2.1` context. `RETURNING` is not a version-gated runtime support claim; MariaDB-engine routine/default fixture, CI, and live evidence remain known limitations / quality follow-up |
 | SQLite | file adapter + SELECT/DML | bounded parser/Safe Mode guardrails; DDL rejected by adapter | Rust/WASM built-in vocabulary + cached schema objects | user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의 DML/PK-projected row edit 로 제한되며 DDL UI/runtime DDL parity, unsupported `ALTER TABLE` rebuild, extension gates 는 unsupported |
@@ -61,6 +61,11 @@ candidate-only 상태다.
   does not embed connection passwords.
 - Runtime/parser/completion/edit/fixture/e2e/support-claim/lightweight
   EXPLAIN gaps 를 lane 하나씩 닫는다.
+- PostgreSQL is the active query/workbench parity lane. Its current routine
+  desktop smoke proves the PostgreSQL connect -> browse/edit -> query journey
+  only; Explain, installed-extension completion, Safe Mode confirmations, DDL
+  structure flows, history-source labeling, cancellation, ERD, admin, and
+  profiler scenarios need separate promotion before product claims widen.
 - Routine runtime smoke currently proves the GitHub Runtime Happy Path for
   PostgreSQL and MongoDB only. Other smoke specs or source inventories do not
   widen product support until the CI script and support docs promote them.

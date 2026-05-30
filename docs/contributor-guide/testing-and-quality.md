@@ -64,6 +64,23 @@ full desktop-client parity for every RDBMS.
 | SQLite file DBMS read/write boundary | `src-tauri/tests/sqlite_connection_command.rs`, `src-tauri/tests/sqlite_browse_query_adapter.rs`, `src-tauri/tests/workspace_sqlite_only.rs`, `e2e/fixtures/seed.sqlite.sql` | No SQLite runtime E2E smoke yet. DDL UI parity, raw DDL, ALTER rebuild, and extension semantics remain unsupported. |
 | RDBMS conformance/capability gate | `src/types/adapterConformance.test.ts`, `src/types/dataSourceVersionCapabilities.test.ts`, `src-tauri/tests/backend_adapter_contract_profile.rs` | Version-aware capability checks must be supplied with server version context before product claims use gated behavior. |
 
+## PostgreSQL Query/Workbench Smoke Matrix
+
+This matrix is the PostgreSQL lane inventory for #186/#241. It distinguishes the
+current GitHub Runtime Happy Path claim from component, unit, integration, and
+future smoke evidence.
+
+| Claim / journey | Current evidence | Current gap / routing |
+|---|---|---|
+| Routine desktop E2E claim | `scripts/e2e-smoke-ci.sh`, `e2e/smoke/postgres.spec.ts`, `e2e/fixtures/seed.sql` | GitHub Runtime Happy Path proves connect, browse seeded `users`, edit Alice's `name`, run a SQL preview, and verify the updated query result on Ubuntu. It does not prove Explain UI, extension completion, Safe Mode dialogs, DDL structure flows, history-source labeling, cancellation, ERD, admin, or profiler scenarios. |
+| Runtime query execution | `src-tauri/src/db/postgres/queries.rs`, `src-tauri/tests/query_integration.rs`, `src-tauri/tests/cancel_pg.rs` | SELECT/EXPLAIN result routing, DML batches, table data, cancellation, and raw-query grid edit are covered below desktop smoke. psql meta commands, DB-level backup/restore/import/export, and PL/pgSQL body authoring remain outside current parity claims. |
+| Catalog/workbench metadata | `src-tauri/src/db/postgres/schema.rs`, `src-tauri/tests/schema_integration.rs`, `src/components/schema/SchemaTree*`, `src/components/rdb/DataGrid*` | Schemas, tables, views, functions, types, installed extensions, triggers, stats, indexes, constraints, FKs, cached metadata, DataGrid, Structure, and ERD inputs have evidence. Server activity, profiler, role/user/permission UI, extension management UI, schema diff, migration impact, and data compare are future H7/H4-style work. |
+| Parser and Safe Mode | `src-tauri/sql-parser-core/**`, `src/lib/sql/sqlSafety.test.ts`, `src/components/query/QueryTab.safe-mode.test.tsx`, `src/components/query/QueryTab.warn-dialog.test.tsx`, `src/components/datagrid/useDataGridEdit.safe-mode.test.ts` | Tests cover bounded SQL classification, destructive/warn/info paths, EXPLAIN inner classification, raw query confirmation, grid edit confirmation, and DDL preview. Full PL/pgSQL bodies, broad MERGE variants, arbitrary nested expressions, and arbitrary extension semantics are not modeled. |
+| Completion and installed extensions | `src-tauri/src/db/postgres/schema.rs`, `src/lib/sql/sqlCompletionContext.test.ts`, `src/lib/sql/sqlCompletionRequest.test.ts`, `src/lib/sql/sqlCompletionWasm.test.ts`, `src-tauri/sql-parser-core/src/completion/completion_tests.rs` | Installed extension inventory is consumed before curated extension packs are enabled. Unknown installed extensions are detected-but-unpacked; completion does not enumerate every extension symbol or make parser/Safe Mode semantically extension-aware. |
+| Edit semantics | `src/components/datagrid/sqlGenerator.test.ts`, `src/components/query/EditableQueryResultGrid.safe-mode.test.tsx`, `src/components/query/useRawQueryGridEdit.ts`, `src-tauri/src/db/postgres/queries.rs` | Key-projected row edits, JSON/array SQL generation, preview/commit/discard, and Safe Mode confirmation have targeted evidence. Arbitrary query-result mutation and bulk/admin edit workflows are future work. |
+| Lightweight Explain path | `src-tauri/src/db/postgres/schema.rs`, `src/lib/api/explain.ts`, `src/components/query/ExplainViewer.test.tsx`, `src/lib/sql/sqlAst.test.ts`, `src/lib/sql/sqlSafety.test.ts` | Backend/API/component/parser/safety evidence exists for lightweight plan inspection. There is no routine desktop E2E claim, profiler surface, or server activity dashboard claim. |
+| Non-routine scenario assets | `e2e/smoke/history-source-5.spec.ts`, `wdio.smoke.conf.ts` | These can inform local/manual regression and future CI wiring. They do not expand the GitHub Runtime Happy Path unless `scripts/e2e-smoke-ci.sh` invokes them. |
+
 ## H3 DuckDB And File Analytics Smoke Matrix
 
 This matrix is the H3 DuckDB/file analytics gate. It records the current
