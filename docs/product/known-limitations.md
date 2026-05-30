@@ -18,7 +18,7 @@ in [`docs/archives/risks/active-risk-register-2026-05-27.md`](../archives/risks/
 | Connection import/export privacy | The Import / Export Connections dialog uses an encrypted JSON envelope for selected connections. Connection passwords are not embedded in the export payload; imported connections require password re-entry. |
 | Adapter / workspace boundary | Backend commands regain typed adapters through `ActiveAdapter::as_rdb` / `as_document` / `as_search`, and profile/conformance metadata declares adapter families. Frontend query dispatch still lives in `useQueryExecution`, and query tab/result lifecycle lives in `workspaceStore`; further decomposition is refactor/quality work, not a support claim. |
 | Query results | RDBMS IPC is normalized to a `tabular` result envelope at the Tauri wrapper while legacy `QueryResult` remains the renderer compatibility projection. `tabular` and `document` can project to `QueryResultGrid`, Search uses a separate typed renderer state, and KV/stream/metrics-style envelopes do not have a grid projection yet. |
-| ERD / SchemaGraph | schemaStore owns cached schemas/tables/views/functions/postgresExtensions/tableColumnsCache/tableIndexesCache/tableConstraintsCache/triggers. Production ERD/SchemaGraph input comes from schema/table/column cache plus cached/fetched explicit indexes/constraints for visible tables; `ColumnInfo` still supplies synthetic PK/FK/CHECK fallback metadata. Dependency view, migration-impact analysis, and dense-view smoke remain roadmap follow-ups (#189, #200, #247). #211 is documentation-only and does not change runtime behavior. |
+| ERD / SchemaGraph | schemaStore owns cached schemas/tables/views/functions/postgresExtensions/tableColumnsCache/tableIndexesCache/tableConstraintsCache/triggers. Production ERD/SchemaGraph input comes from schema/table/column cache plus cached/fetched explicit indexes/constraints for visible tables; `ColumnInfo` still supplies synthetic PK/FK/CHECK fallback metadata. Dependency view, migration-impact analysis, schema diff, data compare, and dense-view smoke remain future promotion gates in the H4 smoke matrix. |
 | FK navigation | Current FK navigation is the DataGrid foreign-key cell/icon path that opens the referenced row with filters. ERD selection, search, zoom, fit, focus, and relationship highlighting are local diagram interactions, not FK row navigation claims. |
 | Redis / Valkey | Redis connection/profile, backend KV primitives, key browser, and value preview exist. Value editing, TTL/write, stream UI, Valkey parity, cluster, pub/sub, modules, and consumer-group management remain out of scope. |
 | MongoDB | MongoDB support is limited to tested whitelisted document workflows. Arbitrary JavaScript shell execution, version/deployment gates, and native document-first panels remain out of scope. |
@@ -39,8 +39,8 @@ smoke or measurement gates:
 - Tauri production shortcut audit for `Cmd+Shift+I`.
 - `MainArea` empty-state MRU policy.
 - Narrow-column display for `pendingEditErrors`.
-- ERD desktop+narrow screenshot smoke. Dense-view smoke evidence is future work
-  tracked by #247; there is no current dense-view smoke claim.
+- ERD desktop+narrow screenshot smoke. Dense-view smoke evidence is a future H4
+  matrix gate; there is no current dense-view smoke claim.
 
 ## Related
 
