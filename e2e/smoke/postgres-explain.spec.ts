@@ -4,7 +4,6 @@ import {
   openConnection,
   openNewQueryTab,
   step,
-  switchToWorkspaceWindow,
   typeQuery,
   waitForLauncher,
 } from "./_helpers";
@@ -69,11 +68,12 @@ describe("PostgreSQL Explain smoke", () => {
     );
 
     await step("open query log and verify explain source label", async () => {
-      await switchToWorkspaceWindow();
       await browser.execute(() => {
-        window.dispatchEvent(new CustomEvent("toggle-query-log"));
+        window.dispatchEvent(new CustomEvent("toggle-global-query-log"));
       });
 
+      const panel = await $('[data-testid="global-query-log-panel"]');
+      await panel.waitForDisplayed({ timeout: 10000 });
       await waitForExplainSourceBadge();
 
       const badge = await $('[data-source="explain"]');

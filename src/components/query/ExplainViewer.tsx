@@ -33,7 +33,7 @@ export interface ExplainViewerProps {
     durationMs: number;
     executedAt: number;
     errorMessage?: string;
-  }) => void;
+  }) => void | Promise<void>;
 }
 
 export function ExplainViewer({
@@ -63,7 +63,7 @@ export function ExplainViewer({
             )
           : await explainRdbQuery(connectionId, rdbSql ?? "");
       setPlan(next);
-      onPlanSettled?.({
+      await onPlanSettled?.({
         status: "success",
         durationMs: Date.now() - startedAt,
         executedAt: startedAt,
@@ -71,7 +71,7 @@ export function ExplainViewer({
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       setError(message);
-      onPlanSettled?.({
+      await onPlanSettled?.({
         status: "error",
         durationMs: Date.now() - startedAt,
         executedAt: startedAt,

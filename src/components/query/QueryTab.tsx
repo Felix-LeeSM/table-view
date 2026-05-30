@@ -30,7 +30,7 @@ import QueryHistoryPanel from "./QueryHistoryPanel";
 import { useQueryExecution } from "./QueryTab/useQueryExecution";
 import { useQueryEvents } from "./QueryTab/useQueryEvents";
 import { useQueryFavorites } from "./QueryTab/useQueryFavorites";
-import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
+import { recordHistoryEntryAsync } from "@lib/runtime/history/recordHistoryEntry";
 
 /**
  * `QueryTab` — RDB / Document paradigm 의 단일 query tab shell. 책임은
@@ -268,7 +268,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
       errorMessage?: string;
     }) => {
       if (!explainSql) return;
-      recordHistoryEntry({
+      return recordHistoryEntryAsync({
         connectionId: tab.connectionId,
         database: tab.database,
         tabId: tab.id,
