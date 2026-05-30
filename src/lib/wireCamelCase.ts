@@ -210,6 +210,11 @@ export function normalizeQueryState(value: unknown): QueryState {
   if (r.status === "error" && typeof r.error === "string") {
     return { status: "error", error: r.error };
   }
+  if (r.status === "cancelled") {
+    return typeof r.message === "string"
+      ? { status: "cancelled", message: r.message }
+      : { status: "cancelled" };
+  }
   return { status: "idle" };
 }
 

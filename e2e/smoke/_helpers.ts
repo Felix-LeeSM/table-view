@@ -283,6 +283,21 @@ export async function typeQuery(sql: string) {
   const content = await $(".cm-content");
   await content.waitForDisplayed({ timeout: 5000 });
   await content.click();
+  const selectAllModifier = await browser.execute(() =>
+    navigator.platform.toLowerCase().includes("mac") ? "Meta" : "Control",
+  );
+  await browser.keys([selectAllModifier, "a"]);
+  await browser.keys("Backspace");
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        () => document.querySelector(".cm-content")?.textContent === "",
+      ),
+    {
+      timeout: 5000,
+      timeoutMsg: "SQL Query Editor did not clear before typing",
+    },
+  );
   for (const char of sql) {
     await browser.keys(char === "\n" ? "Enter" : char);
   }

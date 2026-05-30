@@ -27,6 +27,7 @@ type QuerySlice = Pick<
   | "completeQuery"
   | "completeSearchQuery"
   | "failQuery"
+  | "cancelRunningQuery"
   | "completeMultiStatementQuery"
   | "completeQueryDryRun"
   | "loadQueryIntoTab"
@@ -226,6 +227,21 @@ export function createQuerySlice(
               status: "error" as const,
               error: errorMessage,
             },
+          }));
+        });
+        return next ? { workspaces: next } : state;
+      });
+    },
+
+    cancelRunningQuery: (connId, db, tabId, queryId, message) => {
+      set((state) => {
+        const next = patchExistingWorkspace(state, connId, db, (ws) => {
+          return patchRunningQueryTab(ws, tabId, queryId, (tab) => ({
+            ...tab,
+            queryState:
+              message === undefined
+                ? { status: "cancelled" as const }
+                : { status: "cancelled" as const, message },
           }));
         });
         return next ? { workspaces: next } : state;

@@ -390,6 +390,18 @@ function numberField(value: unknown): number | undefined {
     : undefined;
 }
 
+function isQueryCancellationMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("query cancelled") ||
+    normalized.includes("query canceled") ||
+    normalized.includes("operation cancelled") ||
+    normalized.includes("operation canceled") ||
+    normalized.includes("canceling statement due to user request") ||
+    normalized.includes("cancelling statement due to user request")
+  );
+}
+
 export function useQueryExecution({
   tab,
 }: UseQueryExecutionArgs): QueryExecution {
@@ -414,6 +426,9 @@ export function useQueryExecution({
     (s) => s.completeSearchQuery,
   );
   const failQueryAction = useWorkspaceStore((s) => s.failQuery);
+  const cancelRunningQueryAction = useWorkspaceStore(
+    (s) => s.cancelRunningQuery,
+  );
   const completeMultiStatementQueryAction = useWorkspaceStore(
     (s) => s.completeMultiStatementQuery,
   );
@@ -451,6 +466,12 @@ export function useQueryExecution({
       failQueryAction(wsConnId, workspaceDb, tabId, queryId, errorMessage);
     },
     [failQueryAction, wsConnId, workspaceDb],
+  );
+  const cancelRunningQuery = useCallback(
+    (tabId: string, queryId: string, message: string) => {
+      cancelRunningQueryAction(wsConnId, workspaceDb, tabId, queryId, message);
+    },
+    [cancelRunningQueryAction, wsConnId, workspaceDb],
   );
   const completeMultiStatementQuery = useCallback(
     (
@@ -767,12 +788,17 @@ export function useQueryExecution({
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        failQuery(tab.id, queryId, message);
+        const wasCancelled = isQueryCancellationMessage(message);
+        if (wasCancelled) {
+          cancelRunningQuery(tab.id, queryId, "Query cancelled");
+        } else {
+          failQuery(tab.id, queryId, message);
+        }
         recordHistory({
           sql: stmt,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
-          status: "error",
+          status: wasCancelled ? "cancelled" : "error",
         });
         // Sprint 267 — Sprint 266 의 가드가 backend 의 active db 변동을
         // 알려준 것. 즉시 verify + sync 하여 다음 user click 이 올바른
@@ -783,7 +809,7 @@ export function useQueryExecution({
         // captures `stmt` lexically. The Retry closure re-invokes the live
         // `runRdbSingleNow` via `runRdbSingleRef.current` only when the tab
         // still exists and is NOT currently running.
-        if (parseDbMismatch(message)) {
+        if (!wasCancelled && parseDbMismatch(message)) {
           const capturedTabId = tab.id;
           const capturedConnectionId = tab.connectionId;
           const capturedStmt = stmt;
@@ -822,6 +848,7 @@ export function useQueryExecution({
       updateQueryState,
       completeQuery,
       failQuery,
+      cancelRunningQuery,
       recordHistory,
       findLiveIdleTab,
       clearSchemaForConnection,
