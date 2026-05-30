@@ -8,8 +8,13 @@ import { invoke } from "@tauri-apps/api/core";
 export async function explainRdbQuery(
   connectionId: string,
   sql: string,
+  expectedDatabase?: string,
 ): Promise<unknown> {
-  return invoke<unknown>("explain_rdb_query", { connectionId, sql });
+  return invoke<unknown>("explain_rdb_query", {
+    connectionId,
+    sql,
+    expectedDatabase: expectedDatabase ?? null,
+  });
 }
 
 export interface ExplainMongoFindArgs {

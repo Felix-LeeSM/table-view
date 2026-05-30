@@ -398,6 +398,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
             connectionId={tab.connectionId}
             paradigm="table"
             rdbSql={explainSql}
+            expectedDatabase={tab.database || undefined}
             onPlanSettled={handleExplainSettled}
           />
         ) : (

@@ -358,7 +358,11 @@ describe("QueryTab — toolbar", () => {
     expect(await screen.findByTestId("explain-plan-summary")).toHaveTextContent(
       "Plan Summary",
     );
-    expect(mockExplainRdbQuery).toHaveBeenCalledWith("conn1", "SELECT 1");
+    expect(mockExplainRdbQuery).toHaveBeenCalledWith(
+      "conn1",
+      "SELECT 1",
+      "db1",
+    );
     expect(screen.queryByTestId("mock-result")).not.toBeInTheDocument();
   });
 });

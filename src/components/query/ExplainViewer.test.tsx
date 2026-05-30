@@ -55,13 +55,14 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
         connectionId="conn-pg"
         paradigm="table"
         rdbSql="SELECT 1"
+        expectedDatabase="app"
       />,
     );
     expect(screen.getByTestId("explain-viewer")).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByTestId("explain-plan")).toBeInTheDocument(),
     );
-    expect(explainRdbMock).toHaveBeenCalledWith("conn-pg", "SELECT 1");
+    expect(explainRdbMock).toHaveBeenCalledWith("conn-pg", "SELECT 1", "app");
     expect(screen.getByTestId("explain-plan-summary")).toHaveTextContent(
       "Plan Summary",
     );

@@ -26,6 +26,8 @@ export interface ExplainViewerProps {
   paradigm: "table" | "document";
   /** RDB only — the SQL to explain. */
   rdbSql?: string;
+  /** RDB only — workspace database expected by the caller. */
+  expectedDatabase?: string;
   /** Mongo only — `{database, collection, filter?, verbosity?}` */
   mongoSpec?: ExplainMongoFindArgs;
   onPlanSettled?: (result: {
@@ -40,6 +42,7 @@ export function ExplainViewer({
   connectionId,
   paradigm,
   rdbSql,
+  expectedDatabase,
   mongoSpec,
   onPlanSettled,
 }: ExplainViewerProps) {
@@ -61,7 +64,7 @@ export function ExplainViewer({
                 collection: "",
               },
             )
-          : await explainRdbQuery(connectionId, rdbSql ?? "");
+          : await explainRdbQuery(connectionId, rdbSql ?? "", expectedDatabase);
       setPlan(next);
       await onPlanSettled?.({
         status: "success",
@@ -80,7 +83,14 @@ export function ExplainViewer({
     } finally {
       setLoading(false);
     }
-  }, [connectionId, paradigm, rdbSql, mongoSpec, onPlanSettled]);
+  }, [
+    connectionId,
+    paradigm,
+    rdbSql,
+    expectedDatabase,
+    mongoSpec,
+    onPlanSettled,
+  ]);
 
   useEffect(() => {
     void refresh();
