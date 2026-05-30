@@ -395,6 +395,27 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("[AC-436-R1] missing connection metadata + off + DROP TABLE → production confirm, executeQuery NOT called", async () => {
+    // Regression: per-connection workspace could execute before boot snapshot
+    // hydrated `connections[]`. Backend default safe mode is off, so missing
+    // environment must fail closed or a production destructive query can run.
+    useConnectionStore.setState({ connections: [] });
+    useSafeModeStore.setState({ mode: "off" });
+    const tab = seedTab("DROP TABLE users");
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockExecuteQuery).not.toHaveBeenCalled();
+    await screen.findByText("PRODUCTION DATABASE");
+    await screen.findByTestId("confirm-destructive-confirm");
+    expect(
+      screen.getAllByText(/production environment forces Safe Mode/).length,
+    ).toBeGreaterThan(0);
+  });
+
   // ── AC-231-01d: Allow on non-production (env-gated) — warn / off ──
   // Sprint 245 (ADR 0022 Phase 1) — under the new M.1 flow, dev +
   // strict + destructive opens the confirm dialog (covered by

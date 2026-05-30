@@ -32,6 +32,7 @@ import { useQueryExecution } from "./QueryTab/useQueryExecution";
 import { useQueryEvents } from "./QueryTab/useQueryEvents";
 import { useQueryFavorites } from "./QueryTab/useQueryFavorites";
 import { recordHistoryEntryAsync } from "@lib/runtime/history/recordHistoryEntry";
+import { resolveSafeModeEnvironment } from "@hooks/useSafeModeGate";
 
 /**
  * `QueryTab` — RDB / Document paradigm 의 단일 query tab shell. 책임은
@@ -75,6 +76,13 @@ export default function QueryTab({ tab }: QueryTabProps) {
     () => connections.find((c) => c.id === tab.connectionId),
     [connections, tab.connectionId],
   );
+  const safeModeEnvironment = useMemo(
+    () =>
+      resolveSafeModeEnvironment(connections, tab.connectionId, "production"),
+    [connections, tab.connectionId],
+  );
+  const destructiveDialogEnvironment =
+    safeModeEnvironment === "production" ? "production" : "non-production";
   const sqlDialect = useMemo(
     () => databaseTypeToSqlDialect(connection?.dbType),
     [connection?.dbType],
@@ -445,11 +453,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
               ? pendingMongoConfirm.previewLines.join("\n")
               : JSON.stringify(pendingMongoConfirm.pipeline, null, 2)
           }
-          environment={
-            connection?.environment === "production"
-              ? "production"
-              : "non-production"
-          }
+          environment={destructiveDialogEnvironment}
           connectionId={tab.connectionId}
           // Mongo dry-run is unsupported (paradigm="document" routes to
           // disclaimer); statements are still serialized for symmetry.
@@ -475,11 +479,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
           open
           reason={pendingRdbConfirm.reason}
           sqlPreview={pendingRdbConfirm.statements.join(";\n")}
-          environment={
-            connection?.environment === "production"
-              ? "production"
-              : "non-production"
-          }
+          environment={destructiveDialogEnvironment}
           connectionId={tab.connectionId}
           statements={pendingRdbConfirm.statements}
           paradigm="rdb"
