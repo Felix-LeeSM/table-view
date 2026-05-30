@@ -20,7 +20,7 @@ const CONNECTION_NAME = "E2E Postgres Safe Mode";
 
 describe("PostgreSQL Safe Mode smoke", () => {
   it("covers info, warn, destructive, DDL, and grid-edit confirmation paths", async () => {
-    const suffix = Date.now();
+    const suffix = randomAlphaSuffix();
     const ddlColumn = `safe_mode_note_${suffix}`;
     const bobName = `Bob Safe Mode ${suffix}`;
     const aliceName = `Alice Safe Mode ${suffix}`;
@@ -162,4 +162,11 @@ async function waitForDialogToClose(text: string) {
       timeoutMsg: `${text} dialog did not close`,
     },
   );
+}
+
+function randomAlphaSuffix() {
+  const alpha = Math.random()
+    .toString(36)
+    .replace(/[^a-z]/g, "");
+  return (alpha + "safe").slice(0, 6);
 }
