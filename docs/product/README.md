@@ -10,6 +10,31 @@
 
 핵심 워크플로우: 연결 -> 탐색 -> 조회/쿼리 -> 편집 -> 안전한 검토/커밋.
 
+## Supported Workflow Summary
+
+현재 사용자-visible 지원은 active connection profile, runtime adapter, parser/safety
+경계, fixture/live evidence 가 같이 있는 범위만 의미한다.
+
+- Active connection UI/runtime 대상: PostgreSQL, MySQL, MariaDB, SQLite,
+  DuckDB, MongoDB, Redis.
+- RDBMS workbench: catalog/tree browse, tabular result rendering, raw query path,
+  bounded DML/row-edit path, source-specific safety confirmation. PostgreSQL 이
+  routine desktop smoke-backed 주 lane 이고 MySQL/MariaDB/SQLite/DuckDB 는
+  adapter/unit/integration/fixture evidence 범위로 좁힌다.
+- SQLite/DuckDB file workflow: local file open/create/browse/query 중심. SQLite
+  는 writable-file DML 과 key-projected row edit, DuckDB 는 `.duckdb` catalog/read
+  query 와 registered local CSV/Parquet/JSON/NDJSON preview slice 를 지원한다.
+- MongoDB workflow: whitelisted mongosh/MQL document query/edit/admin slices 와
+  destructive Safe Mode path 를 지원한다. arbitrary JavaScript shell 은 지원하지
+  않는다.
+- Redis workflow: connection/profile, database/key scan, typed value preview, and
+  backend guarded KV primitives 가 있다. 현재 product UI claim 은 key browser/value
+  preview 로 제한된다.
+- Elasticsearch/OpenSearch: embedded fixture-backed Search catalog/mapping/template
+  and result rendering contract 만 있다. live HTTP connection/query/admin 은 없다.
+- MSSQL/Oracle: declared planned RDBMS identities and static seed contracts only.
+  connection UI/runtime/parser/completion support 는 아직 없다.
+
 ## Current Support Snapshot
 
 | DBMS | Runtime | Parser / safety | Completion | 현재 판단 |
@@ -23,9 +48,30 @@
 | Redis | connection/profile + backend KV primitives + key browser/value preview UI | backend KV guardrails only | redis-command profile; parser/completion future-contract | key browser/value preview are live. Backend guarded string set, delete confirmation, TTL expire/persist, and bounded stream read exist as typed IPC primitives. full value editor, TTL/write/stream UI, Redis command query editor, cluster/pubsub/modules/consumer-group management, and Valkey support are follow-up |
 | Valkey | unsupported/planned | no active profile/runtime evidence | deferred | Redis compatibility is not assumed. Valkey needs its own profile/capability decision plus fixture or live evidence before support can be claimed |
 | Elasticsearch/OpenSearch | fixture-backed Search slice only | index/mapping/search envelope guardrails | bounded fixture DSL only | fixture identity/catalog/mapping/template/search result and destructive plan contracts exist. live connection UI, HTTP auth/TLS, catalog/query execution, admin APIs, observability, and product-specific live deltas are deferred |
-| MSSQL | planned declared RDBMS identity only | no active T-SQL parser/runtime safety claim | deferred | `mssql` profile/dialect identity exists as capability-empty `declared-rdb`. Connection UI, runtime query/catalog/edit, SQL Server auth/TLS/encryption/instance behavior, and live evidence are not implemented |
-| Oracle | planned declared RDBMS identity only | no active Oracle SQL/PL/SQL parser/runtime safety claim | deferred | `oracle` profile/dialect identity exists as capability-empty `declared-rdb`. Connection UI, runtime query/catalog/edit, service/SID/wallet/TNS behavior, and live evidence are not implemented |
+| MSSQL | planned declared RDBMS identity only | no active T-SQL parser/runtime safety claim | deferred | `mssql` profile/dialect identity exists as capability-empty `declared-rdb`. Static SQL seed contract exists for future promotion, but connection UI, runtime query/catalog/edit, SQL Server auth/TLS/encryption/instance behavior, runtime fixture, and live evidence are not implemented |
+| Oracle | planned declared RDBMS identity only | no active Oracle SQL/PL/SQL parser/runtime safety claim | deferred | `oracle` profile/dialect identity exists as capability-empty `declared-rdb`. Static SQL seed contract exists for future promotion, but connection UI, runtime query/catalog/edit, service/SID/wallet/TNS behavior, runtime fixture, and live evidence are not implemented |
 | Cassandra/Scylla, DynamoDB, graph, vector, stream | candidate only | deferred language ids only | deferred | no active `DatabaseType`/profile/runtime identity. Workflow value, profile target, connection kind, language owner, catalog model, result envelope, safety policy, fixture strategy, and smoke evidence must be locked before promotion |
+
+## Fixture Coverage Snapshot
+
+Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture inventory 는
+`scripts/fixtures/dbms-seeds.test.ts` 가 검증하고, runtime smoke 는 별도 CI wiring 이
+있을 때만 product evidence 로 승격된다.
+
+| Source | Fixture asset | Current meaning |
+|---|---|---|
+| PostgreSQL | `e2e/fixtures/seed.sql` | GitHub Runtime Happy Path 의 active RDBMS smoke seed |
+| MySQL | `e2e/fixtures/seed.mysql.sql` | targetable SQL seed; no desktop E2E smoke claim |
+| MariaDB | `e2e/fixtures/seed.mariadb.sql` | explicit MariaDB-family seed contract; no routine/default live-engine claim |
+| SQLite | `e2e/fixtures/seed.sqlite.sql` | deterministic local-file seed; no desktop E2E smoke claim |
+| DuckDB | `e2e/fixtures/seed.duckdb.sql` | `.duckdb` fixture seed; no desktop E2E smoke claim |
+| MongoDB | `e2e/fixtures/seed.mongodb.json` | document fixture used by current MongoDB smoke seed path |
+| Redis | `e2e/fixtures/seed.redis.json` | KV/stream fixture inventory for backend/fixture parity; no desktop E2E smoke claim |
+| Elasticsearch | `e2e/fixtures/seed.search.elasticsearch.json`, `src-tauri/src/db/search.rs` | embedded Search fixture contract; no live HTTP support |
+| OpenSearch | `e2e/fixtures/seed.search.opensearch.json`, `src-tauri/src/db/search.rs` | embedded Search fixture contract; no live HTTP support |
+| MSSQL | `e2e/fixtures/seed.mssql.sql` | planned static SQL seed contract only |
+| Oracle | `e2e/fixtures/seed.oracle.sql` | planned static SQL seed contract only |
+| Valkey and wider candidates | none | no active fixture/live evidence |
 
 ## Profile Registry Boundary
 

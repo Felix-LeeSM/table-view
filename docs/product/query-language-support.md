@@ -54,10 +54,10 @@ cannot add parser or completion vocabulary without an owner decision.
 | SQLite SQL | File connection, table browsing, raw read queries, writable-file DML, transactional DML batches, dry-run rollback, and primary-key-scoped row edits are supported. Completion covers built-in SQLite keywords/functions, cached schema objects, and sqlite-cli dot-command vocabulary as suggestions. | Raw SQL DDL is rejected by the SQLite adapter, and structured DDL UI parity is not implemented. Unsupported `ALTER TABLE` actions are not auto-rebuilt, row edits require key/projected row identity, read-only file connections reject writes, nested JSON edits are deferred, sqlite-cli dot commands are not executed, and JSON1/FTS/RTREE/loadable-extension semantics are not detected, gated, dispatched, or validated client-side. |
 | DuckDB SQL | DuckDB is a file-backed RDBMS profile (`rdb` + `file` connection kind). Local `.duckdb` files can be opened for catalog browsing, table reads, and statement-level raw SQL execution through the RDBMS tabular result path. Registered local CSV/Parquet/JSON/NDJSON analytics sources can be previewed from the DuckDB query toolbar; the dialog chooses a local file, registers an active-session source alias, and previews up to 100 rows. A source-scoped SELECT backend wrapper exists, while the product UI is still preview-first. Public source payloads expose id, alias, file name, kind, and size, not absolute local paths. Completion covers current DuckDB vocabulary and cached schema objects. | Structured DDL/write UI parity and file analytics query UI parity/history/import are not implemented. Extension install/load statements and helper functions, `COPY` file import/export, `ATTACH`/`DETACH`, sensitive external-file capability settings, shell commands, cloud/object-store access, and arbitrary external-file SQL functions or replacement scans are adapter-rejected; extension autoload is disabled. Read-only `.duckdb` files reject writes. |
 | MongoDB Mongosh/MQL | Whitelisted `db...` collection/admin commands, JSON-like bodies, BSON literals, cursor chains, operator/stage/expression completion, and destructive admin Safe Mode gates are supported. | Arbitrary JavaScript, shell helpers such as `use`/`show`, multiple statements, unsupported cursor helpers, cross-db shell navigation, server-version gates, and native document-first result panels remain out of scope. |
-| Redis command | Redis connection/profile, backend KV primitives, key browser, and value preview exist. Backend primitives are typed IPC calls for database/key scan, typed value reads, guarded string set, delete confirmation, TTL expire/persist, and bounded stream reads. | Redis command query editor/parser/completion is not active. Full value editing, TTL/write controls, stream consumer UI, broader command coverage, cluster/pubsub/modules/consumer-group management, and Valkey support are not claimed. |
-| Search DSL | Fixture-backed Search identities and bounded fixture DSL exist for Elasticsearch/OpenSearch fixture catalog/search result paths. | Live HTTP execution, connection/auth/TLS handling, response parsing, admin APIs, observability, and full query-language support are deferred. |
-| MSSQL SQL | Planned profile metadata declares SQL Server as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no SQL Server connection UI, runtime query/catalog/edit path, T-SQL parser/completion claim, auth/TLS/encryption/instance contract, fixture/live evidence, or desktop E2E smoke. |
-| Oracle SQL | Planned profile metadata declares Oracle as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no Oracle connection UI, runtime query/catalog/edit path, Oracle SQL/PL/SQL parser/completion claim, service/SID/wallet/TNS contract, fixture/live evidence, or desktop E2E smoke. |
+| Redis command | Redis connection/profile, backend KV primitives, key browser, value preview, and static KV/stream fixture inventory exist. Backend primitives are typed IPC calls for database/key scan, typed value reads, guarded string set, delete confirmation, TTL expire/persist, and bounded stream reads. | Redis command query editor/parser/completion is not active. The static Redis fixture does not make arbitrary Redis command execution a product claim. Full value editing, TTL/write controls, stream consumer UI, broader command coverage, cluster/pubsub/modules/consumer-group management, and Valkey support are not claimed. |
+| Search DSL | Fixture-backed Search identities and bounded fixture DSL exist for Elasticsearch/OpenSearch fixture catalog/search result paths. | Live HTTP execution, connection/auth/TLS handling, response parsing, admin APIs, observability, and full query-language support are deferred. Search fixture files mirror embedded adapter contracts only. |
+| MSSQL SQL | Planned profile metadata and a static SQL seed contract declare SQL Server as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no SQL Server connection UI, runtime query/catalog/edit path, T-SQL parser/completion claim, auth/TLS/encryption/instance contract, runtime fixture/live evidence, or desktop E2E smoke. |
+| Oracle SQL | Planned profile metadata and a static SQL seed contract declare Oracle as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no Oracle connection UI, runtime query/catalog/edit path, Oracle SQL/PL/SQL parser/completion claim, service/SID/wallet/TNS contract, runtime fixture/live evidence, or desktop E2E smoke. |
 
 ## Result Boundary
 
@@ -128,16 +128,17 @@ are:
   intentionally unsupported. Standalone deployments must produce friendly
   unsupported/fallback behavior for transaction-style workflows rather than
   silent partial commits.
-- Redis has backend KV primitives and key browser/value preview UI, but Redis
-  command query parsing/completion/execution is not a full active product claim.
-  Valkey has no active profile/runtime evidence.
+- Redis has backend KV primitives, key browser/value preview UI, and a static
+  fixture inventory, but Redis command query parsing/completion/execution is not
+  a full active product claim. Valkey has no active profile/runtime evidence.
 - Search DSL is fixture-backed for Elasticsearch/OpenSearch result rendering and
   adapter contracts only. Live HTTP Search support waits for explicit
   connection/auth/TLS, catalog/search execution, admin, observability, and
   product-delta gates.
 - MSSQL and Oracle are planned SQL/RDBMS identities only. Declared profile
-  metadata does not imply active T-SQL, Oracle SQL/PL/SQL, connection, query,
-  catalog, edit, parser/completion, fixture/live, or E2E smoke support.
+  metadata and static seed contracts do not imply active T-SQL, Oracle
+  SQL/PL/SQL, connection, query, catalog, edit, parser/completion, runtime
+  fixture/live, or E2E smoke support.
 - Deferred language ids for CQL, PartiQL, Cypher, GQL, Gremlin, vector query,
   and stream commands do not create active profiles or support claims.
   Cassandra/Scylla, DynamoDB, graph, vector, and stream sources stay
