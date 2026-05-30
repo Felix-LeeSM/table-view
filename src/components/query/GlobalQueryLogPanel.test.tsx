@@ -1,0 +1,57 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { resetStateChangedRegistryForTests } from "@lib/events/stateChanged";
+import type { HistoryListRow } from "@lib/tauri/history";
+
+const invokeMock = vi.hoisted(() => vi.fn());
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => invokeMock(...args),
+}));
+
+import GlobalQueryLogPanel from "./GlobalQueryLogPanel";
+
+const row = (overrides: Partial<HistoryListRow> = {}): HistoryListRow => ({
+  id: 1,
+  connectionId: "conn-1",
+  paradigm: "rdb",
+  queryMode: "sql",
+  source: "explain",
+  sqlRedacted: "SELECT name FROM users WHERE email = ?",
+  status: "success",
+  durationMs: 12,
+  executedAt: Date.now(),
+  ...overrides,
+});
+
+describe("GlobalQueryLogPanel", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    resetStateChangedRegistryForTests();
+  });
+
+  it("fetches fresh history when opened and renders the explain source badge", async () => {
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <GlobalQueryLogPanel visible={false} onClose={onClose} />,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(invokeMock).not.toHaveBeenCalled();
+
+    invokeMock.mockResolvedValueOnce({ rows: [row()] });
+    rerender(<GlobalQueryLogPanel visible onClose={onClose} />);
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("list_history", {
+        req: { limit: 100 },
+      });
+    });
+    expect(await screen.findByTestId("global-log-entry-1")).toBeInTheDocument();
+    expect(screen.getByTestId("query-history-source-badge")).toHaveAttribute(
+      "data-source",
+      "explain",
+    );
+  });
+});
