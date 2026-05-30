@@ -19,10 +19,10 @@ pre-commit:
   commands:
     rust-format:
       glob: "*.rs"
-      run: cd src-tauri && cargo fmt --check
+      run: bash scripts/hooks/check-worktree-bootstrap.sh && cd src-tauri && cargo fmt --check
     rust-clippy:
       glob: "*.rs"
-      run: cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings
+      run: bash scripts/hooks/check-worktree-bootstrap.sh && cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings
     rust-coverage:
       # pre-commit 의 coverage gate 는 Tier 1 (unit + storage_integration 미포함)
       # 만 측정. Tier 2 (testcontainers 기반 PG/Mongo 통합) 는 매 commit 마다
@@ -56,6 +56,7 @@ pre-commit:
       # functions, sprint-288 mysql 자연 하락과 정확히 같은 정당화.
       glob: "*.rs"
       run: |
+        bash scripts/hooks/check-worktree-bootstrap.sh
         if ! rustup component list --installed 2>/dev/null | grep -q '^llvm-tools'; then
           echo "ERROR: rustup llvm-tools-preview 컴포넌트가 없습니다." >&2
           echo "       cargo llvm-cov 가 interactive 프롬프트로 install 의향을" >&2
@@ -74,11 +75,11 @@ pre-commit:
       # 없으면 cargo pg-test 가 실패하므로, PG 영역 작업자는 daemon 가동을
       # 사전 조건으로 본다.
       glob: "src-tauri/src/db/postgres/**/*.rs"
-      run: cd src-tauri && cargo pg-test
+      run: bash scripts/hooks/check-worktree-bootstrap.sh && cd src-tauri && cargo pg-test
     rust-mongo-test:
       # Sprint 237 P5+ (2026-05-08) — Mongo adapter 본체 staged 시 트리거.
       glob: "src-tauri/src/db/mongodb/**/*.rs"
-      run: cd src-tauri && cargo mongo-test
+      run: bash scripts/hooks/check-worktree-bootstrap.sh && cd src-tauri && cargo mongo-test
     ts-format:
       glob: "*.{ts,tsx}"
       run: npx prettier --write {staged_files}

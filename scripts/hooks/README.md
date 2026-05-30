@@ -22,6 +22,8 @@ Current dispatchers:
 - `check-edit-policy.sh` — Edit/Write hard blocks and advisory warnings.
 - `check-dangerous-bash.sh` — Bash command policy.
 - `check-main-worktree-source-edit.sh` — primary-worktree source/app edit guard.
+- `check-worktree-bootstrap.sh` — linked-worktree Rust cache guard before Cargo
+  pre-commit gates.
 - `check-signed-commits.sh` — pre-push outgoing signed-commit gate.
 - `pre-push-path-router.sh` — path-sensitive pre-push TS/Rust gate router.
 - `post-tool-use.sh` — post-edit formatter/check dispatcher.
