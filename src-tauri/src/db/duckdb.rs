@@ -447,6 +447,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn duckdb_unit_extension_and_file_capability_gate_is_explicit() {
+        let (dir, adapter) = connected_fixture(false).await;
+        let parquet_path = dir.path().join("users.parquet");
+        let other_db_path = dir.path().join("other.duckdb");
+        let csv_path = dir.path().join("users.csv");
+
+        for sql in [
+            "INSTALL httpfs".to_string(),
+            "FORCE INSTALL httpfs".to_string(),
+            "LOAD httpfs".to_string(),
+            "SELECT install_extension('httpfs')".to_string(),
+            "SELECT load_extension('httpfs')".to_string(),
+            format!("COPY app.users TO '{}'", parquet_path.display()),
+            format!("ATTACH '{}' AS other", other_db_path.display()),
+            "SET enable_external_access = true".to_string(),
+            "PRAGMA enable_external_access=true".to_string(),
+            "SET autoload_known_extensions = true".to_string(),
+            format!("SELECT * FROM read_csv_auto('{}')", csv_path.display()),
+            format!("SELECT * FROM '{}'", csv_path.display()),
+        ] {
+            let result = adapter.execute_sql(&sql, None).await;
+            assert!(
+                matches!(result, Err(AppError::Unsupported(_))),
+                "{sql} should be capability-gated, got {result:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn duckdb_unit_native_cancel_is_unsupported_until_interrupt_is_wired() {
         let (_dir, adapter) = connected_fixture(false).await;
         let result = adapter.cancel_query(1).await;
