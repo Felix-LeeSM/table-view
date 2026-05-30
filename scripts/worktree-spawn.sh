@@ -8,8 +8,7 @@
 #   - origin/<branch-name> 이 있으면 그 remote branch 를 source 로 새 local branch 생성
 #   - 없으면 origin/<base-branch> (default main) 기준으로 새 local branch 생성
 #   - worktrees/<sanitized-branch>/ 에 worktree 추가
-#   - 기본으로 node_modules / pruned src-tauri/target 을 복사한 뒤
-#     pnpm install --frozen-lockfile + cargo fetch 로 새 worktree 기준 보정
+#   - 기본으로 worktree-bootstrap-deps.sh 를 호출해 dependency cache 를 보정
 #   - 해당 worktree 에서 lefthook install 실행 (hook 활성화)
 #   - 생성된 worktree 경로 출력 (agent 가 cd 할 path)
 #   - stderr 에 worker prompt 계약 템플릿 출력
@@ -34,7 +33,7 @@ worktree-spawn.sh — multi-agent worktree 생성
   - 없으면 origin/<base-branch> 기반 local branch 신설
   - worktrees/<sanitized>/ 에 worktree 추가 (sanitized = branch 의 / → __)
   - 기본 deps warm-start:
-    - 현재 worktree 의 node_modules 와 pruned src-tauri/target 을 새 worktree 로 복사
+    - worktree-bootstrap-deps.sh 로 node_modules 와 src-tauri/target 보정
     - 새 worktree lockfile 기준으로 pnpm install --frozen-lockfile 실행
     - Cargo.lock 기준으로 cargo fetch --manifest-path src-tauri/Cargo.toml 실행
     - src-tauri/target 기본 복사는 release, tmp, incremental,
@@ -99,116 +98,6 @@ SANITIZED="${BRANCH//\//__}"
 # 본 경로 사용. (.claude/worktrees/ 는 별개 — Claude Code sub-agent 전용.)
 WORKTREE_PATH="$REPO_ROOT/worktrees/${SANITIZED}"
 
-copy_bootstrap_dir() {
-  local rel_path="$1"
-  local src="$REPO_ROOT/$rel_path"
-  local dst="$WORKTREE_PATH/$rel_path"
-
-  if [ ! -d "$src" ]; then
-    echo "deps: skip missing $rel_path" >&2
-    return 0
-  fi
-
-  if [ -e "$dst" ]; then
-    echo "deps: skip existing $rel_path" >&2
-    return 0
-  fi
-
-  mkdir -p "$(dirname "$dst")"
-  echo "deps: copy $rel_path" >&2
-  if command -v rsync >/dev/null 2>&1; then
-    rsync -a -- "$src/" "$dst/"
-  else
-    cp -R -p "$src" "$dst"
-  fi
-}
-
-prune_tauri_target() {
-  local dst="$WORKTREE_PATH/src-tauri/target"
-
-  rm -rf -- "$dst/release" "$dst/tmp"
-
-  if [ -d "$dst" ]; then
-    find "$dst" -type d -name incremental -prune -exec rm -rf -- {} +
-    find "$dst" \( -name '*.profraw' -o -name '*.profdata' \) -type f -exec rm -f -- {} +
-  fi
-
-  # Keep compiled deps and native build outputs. Pre-push runs cargo-llvm-cov
-  # against llvm-cov-target, and removing DuckDB objects forces minute-scale
-  # C++ rebuilds in every spawned worktree.
-}
-
-copy_tauri_target() {
-  local src="$REPO_ROOT/src-tauri/target"
-  local dst="$WORKTREE_PATH/src-tauri/target"
-
-  if [ ! -d "$src" ]; then
-    echo "deps: skip missing src-tauri/target" >&2
-    return 0
-  fi
-
-  if [ -e "$dst" ]; then
-    echo "deps: skip existing src-tauri/target" >&2
-    return 0
-  fi
-
-  mkdir -p "$(dirname "$dst")"
-
-  if [ "$PRUNE_TAURI_TARGET" -eq 0 ]; then
-    echo "deps: copy src-tauri/target (full)" >&2
-    copy_bootstrap_dir "src-tauri/target"
-    return 0
-  fi
-
-  echo "deps: copy src-tauri/target (pruned)" >&2
-
-  if [ "$(uname -s 2>/dev/null || echo '')" = "Darwin" ]; then
-    if cp -cR "$src" "$dst"; then
-      prune_tauri_target
-      return 0
-    fi
-    rm -rf -- "$dst"
-  fi
-
-  if command -v rsync >/dev/null 2>&1; then
-    mkdir -p "$dst"
-    rsync -a \
-      --exclude='/release/' \
-      --exclude='/tmp/' \
-      --exclude='*/incremental/' \
-      --exclude='*.profraw' \
-      --exclude='*.profdata' \
-      -- "$src/" "$dst/"
-    prune_tauri_target
-  else
-    cp -R -p "$src" "$dst"
-    prune_tauri_target
-  fi
-}
-
-bootstrap_deps() {
-  copy_bootstrap_dir "node_modules"
-  copy_tauri_target
-
-  if [ -f "$WORKTREE_PATH/package.json" ]; then
-    if command -v pnpm >/dev/null 2>&1; then
-      echo "deps: pnpm install --frozen-lockfile" >&2
-      (cd "$WORKTREE_PATH" && pnpm install --frozen-lockfile)
-    else
-      echo "WARN: pnpm not found; skipped pnpm install" >&2
-    fi
-  fi
-
-  if [ -f "$WORKTREE_PATH/src-tauri/Cargo.toml" ]; then
-    if command -v cargo >/dev/null 2>&1; then
-      echo "deps: cargo fetch --manifest-path src-tauri/Cargo.toml" >&2
-      (cd "$WORKTREE_PATH" && cargo fetch --manifest-path src-tauri/Cargo.toml)
-    else
-      echo "WARN: cargo not found; skipped cargo fetch" >&2
-    fi
-  fi
-}
-
 mkdir -p "$REPO_ROOT/worktrees"
 
 if [ -d "$WORKTREE_PATH" ]; then
@@ -258,7 +147,11 @@ if [ "$ACTUAL_TOPLEVEL" != "$WORKTREE_PATH" ]; then
 fi
 
 if [ "$WITH_DEPS" -eq 1 ]; then
-  bootstrap_deps
+  BOOTSTRAP_ARGS=()
+  if [ "$PRUNE_TAURI_TARGET" -eq 0 ]; then
+    BOOTSTRAP_ARGS+=(--full-target)
+  fi
+  bash "$REPO_ROOT/scripts/worktree-bootstrap-deps.sh" "${BOOTSTRAP_ARGS[@]}" "$WORKTREE_PATH" "$REPO_ROOT"
 fi
 
 # hook 활성화 (lefthook install 은 .git/hooks 가 worktree 별로 분리됨)
