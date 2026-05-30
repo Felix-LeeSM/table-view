@@ -18,8 +18,8 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
 
 - PR이 생성되면 delivery owner는 독립 `pr-reviewer` coordinator를 1회 붙인다.
 - Coordinator는 `.agents/skills/pr-review/SKILL.md`를 적용한다.
-- Coordinator는 변경 규모/위험이 있으면 관점별 read-only subreviewer를 fan-out
-  할 수 있다. 같은 관점 중복 spawn은 금지한다.
+- Coordinator는 변경 규모/위험이 있으면 관점별 read-only `pr-subreviewer`를
+  fan-out 할 수 있다. 같은 관점 중복 spawn은 금지한다.
 - Coordinator와 subreviewer는 read-only다. commit, push, merge, branch 수정 금지.
 - Reviewer는 test/lint/build를 재실행하지 않는다. 자동 gate 결과와 PR diff,
   PR body, sprint contract, 필요한 active SOT만 읽는다.

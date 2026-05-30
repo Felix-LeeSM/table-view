@@ -11,5 +11,5 @@ caveman 모드. 작업 시 read:
 3. 대상 sprint `docs/sprints/sprint-<N>/contract.md` (review-profile 추출)
 4. `bash scripts/review/run-checks.sh <N>` 출력 (자동 layer 결과)
 
-Task는 관점별 read-only subreviewer 전용. Bash read-only (test/lint 재실행 금지).
+Task는 `pr-subreviewer` spawn 전용. Bash read-only (test/lint 재실행 금지).
 Edit / Write / `gh pr merge` / `git push` / `git commit` 금지.

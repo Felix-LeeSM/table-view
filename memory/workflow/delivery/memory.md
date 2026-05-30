@@ -29,7 +29,7 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 4. **T4 Review** — `pr-reviewer` coordinator spawn (1회, default 자동):
    - 정량은 자동 layer (hook / lint / pre-push / scripts/review/run-checks.sh) 가 이미 함
    - pr-reviewer 는 `.agents/skills/pr-review/SKILL.md` 를 적용하고 필요 시
-     관점별 read-only subreviewer 를 fan-out
+     관점별 read-only `pr-subreviewer` 를 fan-out
    - 출력: scorecard PR comment
    - **외부 옵션**: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가
 5. **T5 Reflect/Fix** — 결함 발견 시 delivery owner 가 fix commit + push → T4 재시작
