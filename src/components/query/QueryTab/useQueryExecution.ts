@@ -565,7 +565,10 @@ export function useQueryExecution({
   // While a warn-tier dialog is open, `pendingMongoConfirm` /
   // `pendingRdbConfirm` retains the exact pipeline / statements + reason
   // so the re-dispatch on confirm runs the same input the user typed.
-  const safeModeGate = useSafeModeGate(tab.connectionId);
+  const safeModeGate = useSafeModeGate(tab.connectionId, {
+    // Fail closed until workspace snapshot hydrates connection metadata.
+    missingConnectionEnvironment: "production",
+  });
   const [pendingMongoConfirm, setPendingMongoConfirm] = useState<{
     pipeline: Record<string, unknown>[];
     reason: string;

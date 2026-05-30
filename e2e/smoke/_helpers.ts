@@ -3,8 +3,23 @@ import { $, $$, browser, expect } from "@wdio/globals";
 export { editGridCellInRow } from "./grid-edit";
 
 const WORKSPACE_TITLE = "Table View — Workspace";
+const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"]';
 
 export type DbType = "postgresql" | "mongodb";
+export type ConnectionEnvironment =
+  | "local"
+  | "testing"
+  | "development"
+  | "staging"
+  | "production";
+
+const ENVIRONMENT_LABELS: Record<ConnectionEnvironment, string> = {
+  local: "Local",
+  testing: "Testing",
+  development: "Development",
+  staging: "Staging",
+  production: "Production",
+};
 
 export async function step<T>(label: string, action: () => Promise<T>) {
   console.log(`[e2e smoke] step: ${label}`);
@@ -61,7 +76,7 @@ export async function switchToWorkspaceWindow(timeoutMs = 30000) {
 export async function openNewConnectionDialog() {
   await waitForLauncher();
   await clickDomSelector('[aria-label="New Connection"]');
-  const dialog = await $('[role="dialog"]');
+  const dialog = await $(DIALOG_SELECTOR);
   await dialog.waitForDisplayed({ timeout: 10000 });
   return dialog;
 }
@@ -147,11 +162,37 @@ async function clickVisibleOption(label: string) {
   }, label);
 }
 
-export async function createPostgresConnection(name = "E2E Postgres") {
+export async function selectConnectionEnvironment(
+  environment: ConnectionEnvironment,
+) {
+  const trigger = await $("#conn-environment");
+  await trigger.waitForDisplayed({ timeout: 5000 });
+  const expected = ENVIRONMENT_LABELS[environment];
+  const current = await getDomText("#conn-environment");
+  if (current.includes(expected)) return;
+
+  await trigger.click();
+  await clickVisibleOption(expected);
+  await browser.waitUntil(
+    async () => (await getDomText("#conn-environment")).includes(expected),
+    {
+      timeout: 5000,
+      timeoutMsg: `Environment did not switch to ${expected}`,
+    },
+  );
+}
+
+export async function createPostgresConnection(
+  name = "E2E Postgres",
+  environment?: ConnectionEnvironment,
+) {
   const dialog = await openNewConnectionDialog();
   await selectDatabaseType("postgresql");
 
   await setInput("#conn-name", name);
+  if (environment) {
+    await selectConnectionEnvironment(environment);
+  }
   await setInput("#conn-host", process.env.E2E_PG_HOST ?? "localhost");
   await setInput(
     "#conn-port",
@@ -242,7 +283,21 @@ export async function typeQuery(sql: string) {
   const content = await $(".cm-content");
   await content.waitForDisplayed({ timeout: 5000 });
   await content.click();
-  await browser.keys(sql);
+  for (const char of sql) {
+    await browser.keys(char === "\n" ? "Enter" : char);
+  }
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (expected) =>
+          document.querySelector(".cm-content")?.textContent === expected,
+        sql,
+      ),
+    {
+      timeout: 5000,
+      timeoutMsg: "SQL Query Editor did not receive the exact query text",
+    },
+  );
 }
 
 export async function runQuery() {
@@ -300,6 +355,134 @@ export async function waitForGridTextAll(
 
 export async function executeSqlPreview() {
   await executePreviewAction("Execute SQL");
+}
+
+export async function waitForDialogTextAll(
+  snippets: string[],
+  timeout = 10000,
+  timeoutMsg = "dialog text did not appear",
+) {
+  await switchToWorkspaceWindow();
+  const dialog = await $(DIALOG_SELECTOR);
+  await dialog.waitForDisplayed({ timeout });
+  await browser.waitUntil(
+    async () => {
+      const text = (
+        ((await dialog.getProperty("textContent")) as string) ?? ""
+      ).toLowerCase();
+      return snippets.every((snippet) => text.includes(snippet.toLowerCase()));
+    },
+    {
+      timeout,
+      timeoutMsg,
+    },
+  );
+  return dialog;
+}
+
+export async function expectNoVisibleDialogText(text: string, timeout = 750) {
+  await switchToWorkspaceWindow();
+  await browser.pause(timeout);
+  const visible = await browser.execute(
+    (needle, dialogSelector) => {
+      return Array.from(document.querySelectorAll<HTMLElement>(dialogSelector))
+        .filter((dialog) => {
+          const style = window.getComputedStyle(dialog);
+          return (
+            dialog.getClientRects().length > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden"
+          );
+        })
+        .some((dialog) =>
+          (dialog.textContent ?? "")
+            .toLowerCase()
+            .includes(needle.toLowerCase()),
+        );
+    },
+    text,
+    DIALOG_SELECTOR,
+  );
+  expect(visible).toBe(false);
+}
+
+export async function clickDialogAction(ariaLabel: string, timeout = 10000) {
+  await switchToWorkspaceWindow();
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (label, dialogSelector) => {
+          return findVisibleDialogButton(label) !== null;
+
+          function findVisibleDialogButton(label: string): HTMLElement | null {
+            const dialogs = Array.from(
+              document.querySelectorAll<HTMLElement>(dialogSelector),
+            );
+            for (const dialog of dialogs) {
+              if (!isVisible(dialog)) continue;
+              const button = Array.from(
+                dialog.querySelectorAll<HTMLElement>("[aria-label]"),
+              ).find(
+                (candidate) =>
+                  candidate.getAttribute("aria-label") === label &&
+                  isVisible(candidate) &&
+                  candidate.getAttribute("aria-disabled") !== "true",
+              );
+              if (button) return button;
+            }
+            return null;
+          }
+
+          function isVisible(element: HTMLElement) {
+            const style = window.getComputedStyle(element);
+            return (
+              element.getClientRects().length > 0 &&
+              style.display !== "none" &&
+              style.visibility !== "hidden"
+            );
+          }
+        },
+        ariaLabel,
+        DIALOG_SELECTOR,
+      ),
+    {
+      timeout,
+      timeoutMsg: `${ariaLabel} dialog action did not appear`,
+    },
+  );
+  await browser.execute(
+    (label, dialogSelector) => {
+      const dialogs = Array.from(
+        document.querySelectorAll<HTMLElement>(dialogSelector),
+      );
+      for (const dialog of dialogs) {
+        if (!isVisible(dialog)) continue;
+        const button = Array.from(
+          dialog.querySelectorAll<HTMLElement>("[aria-label]"),
+        ).find(
+          (candidate) =>
+            candidate.getAttribute("aria-label") === label &&
+            isVisible(candidate),
+        );
+        if (button) {
+          button.click();
+          return;
+        }
+      }
+      throw new Error(`${label} dialog action did not appear`);
+
+      function isVisible(element: HTMLElement) {
+        const style = window.getComputedStyle(element);
+        return (
+          element.getClientRects().length > 0 &&
+          style.display !== "none" &&
+          style.visibility !== "hidden"
+        );
+      }
+    },
+    ariaLabel,
+    DIALOG_SELECTOR,
+  );
 }
 
 export async function executeMqlPreview() {

@@ -96,8 +96,11 @@ describe("KvSidebar", () => {
   it("renders a typed value envelope when a Redis key is selected", async () => {
     render(<KvSidebar connectionId="redis-1" />);
     const tree = await screen.findByRole("tree", { name: /redis keys/i });
+    const userKey = await within(tree).findByRole("treeitem", {
+      name: /user:1/i,
+    });
 
-    fireEvent.click(within(tree).getByRole("treeitem", { name: /user:1/i }));
+    fireEvent.click(userKey);
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith("get_kv_value", {
