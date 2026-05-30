@@ -80,6 +80,22 @@ connection model until runtime evidence requires a separate paradigm.
 | Extension, external-file, and COPY gate | `src-tauri/src/db/duckdb.rs`, `src-tauri/tests/duckdb_file_analytics.rs`, `docs/product/query-language-support.md` | `INSTALL`/`LOAD`, extension helper functions, `COPY`, `ATTACH`/`DETACH`, sensitive capability settings, replacement scans, and raw external-file functions are adapter-blocked. No DuckDB extension semantic support is claimed. |
 | Runtime E2E smoke inventory | This matrix and `e2e/fixtures/seed.duckdb.sql` | Required before future E2E promotion: create/open a seeded `.duckdb` file, browse schema/table, run raw SELECT, register local CSV/Parquet/JSON/NDJSON, preview rows without path exposure, reject blocked extension/file statements, and verify no automatic history/import/export claim. |
 
+## H4 RDBMS Intelligence Smoke Matrix
+
+This matrix is the H4 ERD/SchemaGraph gate. It separates current unit/component
+evidence from future desktop smoke so reusable graph claims do not imply
+dependency view, migration impact, or dense-view E2E coverage.
+
+| Claim / journey | Current evidence | Current gap / routing |
+|---|---|---|
+| Schema metadata cache owner | `src/stores/schemaStore.ts`, `src/stores/schemaStore.tableMetadataCache.test.ts`, `src/stores/schemaStore.clearForConnection.test.ts` | Current cache owner range is schemas/tables/views/functions/postgresExtensions/tableColumnsCache/tableIndexesCache/tableConstraintsCache/triggers. New catalog metadata must define cache ownership before UI claim promotion. |
+| Production ERD graph input | `src/components/schema/SchemaErdPanel.tsx`, `src/components/schema/SchemaErdPanel.test.tsx`, `src/lib/schemaGraphSnapshot.ts`, `src/lib/schemaGraphSnapshot.test.ts` | ERD uses schema/table/column cache plus cached/fetched explicit index/constraint metadata for visible tables. `ColumnInfo` PK/FK/CHECK metadata remains a synthetic fallback when explicit metadata is absent. |
+| Reusable SchemaGraph extraction and FK semantics | `src/lib/schemaGraph.ts`, `src/lib/schemaGraph.test.ts`, `src/lib/schemaGraphRelationships.ts`, `src/lib/schemaGraphRelationships.test.ts` | RDB catalog/FK semantics are current scope. Other paradigms may expose catalog graphs later, but must not pretend to be RDB schemas. |
+| ERD renderer local interactions | `src/components/schema/SchemaErdRenderer.test.tsx`, `src/components/schema/SchemaErdLayout.ts` | Table cards, FK edges, search, select, zoom, fit, focus, and highlight are local diagram interactions. There is no desktop/narrow screenshot smoke claim today. |
+| FK row navigation boundary | `src/components/datagrid/DataGridTable.fk-navigation.test.tsx`, `src/components/datagrid/DataGridTable.parseFkReference.test.ts` | FK row navigation remains the DataGrid foreign-key cell/icon path. ERD interactions are not FK row navigation claims. |
+| Future dependency/migration/schema diff/data compare surfaces | `docs/ROADMAP.md`, `memory/engineering/architecture/data-source/memory.md` | Future surfaces must reuse `SchemaGraph`/catalog input and avoid duplicate catalog parsing before support claims widen. |
+| Runtime E2E smoke inventory | This matrix and current ERD component evidence | Required before future E2E promotion: open a seeded RDBMS schema, open ERD, verify table nodes, FK edges, search, selection, zoom, fit, and narrow viewport behavior, confirm metadata fetch stability, and confirm no FK row-navigation claim through ERD. |
+
 ## Frontend Test Quality
 
 | Area | Follow-up |
