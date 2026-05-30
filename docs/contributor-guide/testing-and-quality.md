@@ -131,6 +131,28 @@ do not look runtime-active before implementation.
 | Vector candidate smoke inventory | `docs/ROADMAP.md` H6 진행 기준 | Vector sources need future smoke for connection, collection/vectorSchema/payloadIndex catalog, bounded vector query/filter execution, vectorNeighbors rendering, write/delete guardrails, and embedded/mock or container fixture evidence. |
 | Stream candidate smoke inventory | `docs/ROADMAP.md` H6 진행 기준 | Stream sources need future smoke for connection, topic/partition/consumerGroup/schema catalog, bounded consume/produce or read-only decision, offset/consumer/destructive guardrails, records/metrics rendering, and Kafka/Redpanda fixture evidence. |
 
+## H7 Ops, Security, And Reliability Smoke Matrix
+
+This matrix is the H7 gate-alignment record. It separates the current automated
+gate surface from future ops/security/a11y/perf work so docs do not imply
+routine coverage that is not wired into CI or hooks.
+
+| Claim / journey | Current evidence | Current gap / routing |
+|---|---|---|
+| PR/main CI gate surface | `.github/workflows/ci.yml`, `.github/workflows/e2e-smoke.yml` | Blocking remote checks are Frontend Checks, Rust Unit And Storage Tests, Integration Tests (Docker), and Runtime Happy Path. Theme contrast is advisory. Link checking, full a11y, perf, dependency-security CI, and platform runtime smoke are not routine blocking checks. |
+| Local pre-push routing | `.githooks/pre-push`, `lefthook.yml`, `scripts/hooks/pre-push-path-router.sh`, `scripts/hooks/test-pre-push-path-router.sh` | Pre-push always runs signed-commit and TDD-cycle checks, then routes by outgoing path. Docs-only skips TS/Rust; frontend or Rust paths run the matching stack; workflow/unknown paths run full checks. Hook bypass remains forbidden by git policy and dangerous-bash guards. |
+| Runtime Happy Path E2E | `.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`, `e2e/smoke/postgres.spec.ts`, `e2e/smoke/mongodb.spec.ts` | The remote runtime gate builds the app on Ubuntu and executes PostgreSQL and MongoDB smoke specs only. `wdio.smoke.conf.ts` can discover more smoke specs, but `scripts/e2e-smoke-ci.sh` must wire a spec before it becomes part of the routine remote gate. |
+| Non-routine E2E smoke specs | `e2e/smoke/history-source-5.spec.ts`, `e2e/smoke/phase-28-slice-A.spec.ts`, `e2e/reset-to-default-audit.e2e.ts` | These are scenario inventory or local/manual regression assets unless a workflow/script invokes them. They do not currently expand the Runtime Happy Path claim. |
+| Destructive/admin operation safety | `src-tauri/src/commands/rdb/ddl.rs`, `src/components/datagrid/useDataGridEdit.safe-mode.test.ts`, `src-tauri/src/commands/document/**`, `src-tauri/src/db/kv_trait.rs`, `src-tauri/src/db/search.rs`, `docs/product/query-language-support.md` | Current safety is source-specific: RDB DDL preview/confirm, RDB Safe Mode confirmation paths, Mongo safety confirmation, Redis typed confirmation keys, and fixture-backed Search destructive plans. There is no universal dry-run, admin audit log, role/user/permission UI, or security dashboard claim. |
+| Credential and local-first privacy | `memory/engineering/architecture/state-management/memory.md`, `docs/product/README.md`, `docs/product/known-limitations.md`, `src-tauri/tests/keyring_new_user.rs` | Sensitive state stays local-first and connection export omits passwords; DuckDB file analytics public payloads redact absolute paths. Credential rotation, keyring diagnostics, broad key lifecycle smoke, and multi-user security flows are future work. |
+| Security decision process | `.agents/skills/grill-with-memory/SKILL.md` | Password, credential, encryption, KDF, file-sharing, ACL, code-signing, supply-chain, or multi-user decisions need a threat-model handoff before option grilling. H7 does not lock new security architecture by documentation-only claim. |
+| Dependency security | `src-tauri/deny.toml`, `scripts/hooks/pre-push-path-router.sh`, `docs/archives/risks/active-risk-register-2026-05-27.md` | `cargo deny check` runs on local Rust/full pre-push routes. It is not currently a PR/main GitHub Actions gate. Tracked advisory ignores remain bounded follow-ups, including `hickory-proto` through `mongodb 3.6.0` and `rsa 0.9` through `sqlx-mysql`. |
+| A11y | Component tests using roles/labels and `.github/workflows/ci.yml` advisory contrast step | Routine VoiceOver/NVDA, focus-order, and 72-theme strict WCAG gates are not wired. Promote from the follow-up table only when a feature lane gives the check a concrete owner and budget. |
+| Performance | `src-tauri/tests/snapshot_perf.rs`, targeted component perf smoke tests, `docs/product/known-limitations.md` | Snapshot and component-level perf checks do not equal routine SchemaTree/DataGrid FPS or latency gates. Promote FPS/latency budgets only with reproducible fixture size, runtime cost, and failure triage. |
+| Link checking | This page, `docs/ROADMAP.md` | No internal-doc link checker is wired today. Add one only after archive routing settles and ownership is clear. |
+| Platform smoke | `.github/workflows/e2e-smoke.yml`, `.github/workflows/ci.yml` | Runtime Happy Path is Ubuntu/Linux only. Rust unit/storage CI runs on macOS, but macOS desktop runtime smoke and Windows runtime smoke are deferred. |
+| E2E isolation | `scripts/e2e-smoke-ci.sh`, `e2e/fixtures/seed-smoke.ts` | The current script seeds once and runs each wired spec with its own app data directory. Per-spec database fixture reset remains future work before broadening the smoke suite. |
+
 ## Frontend Test Quality
 
 | Area | Follow-up |

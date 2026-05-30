@@ -61,6 +61,15 @@ candidate-only 상태다.
   does not embed connection passwords.
 - Runtime/parser/completion/edit/fixture/e2e/support-claim/lightweight
   EXPLAIN gaps 를 lane 하나씩 닫는다.
+- Routine runtime smoke currently proves the GitHub Runtime Happy Path for
+  PostgreSQL and MongoDB only. Other smoke specs or source inventories do not
+  widen product support until the CI script and support docs promote them.
+- Destructive/security behavior is source-specific. RDB DDL preview/confirm,
+  RDB Safe Mode confirmations, MongoDB safety confirmations, Redis typed
+  confirmation keys, and fixture-backed Search destructive plans exist, but
+  Table View does not claim a universal admin/security dashboard, global
+  audit log, role/user/permission UI, credential rotation UI, or broad
+  dry-run system.
 - Cassandra/Scylla, DynamoDB, graph, vector, stream 은 workflow value,
   profile target, capability, fixture/live evidence decision 전 active support 로
   승격하지 않는다.

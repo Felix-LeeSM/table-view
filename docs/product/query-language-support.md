@@ -82,6 +82,10 @@ are:
   packs for known extensions. It does not semantically validate extension usage,
   make parser/Safe Mode dependent on installed extensions, or enumerate every
   extension-provided symbol.
+- Destructive-operation protection is source-specific. Current claim is limited
+  to implemented preview, confirmation, Safe Mode, typed confirmation, and
+  fixture-backed destructive-plan paths. This page does not claim a universal
+  dry-run engine, admin audit log, or role/user/permission workflow.
 - MySQL/MariaDB scripting and file import directives are not normalized into
   server SQL. `DELIMITER` and `LOAD DATA` are explicit unsupported boundaries.
 - MariaDB shares the MySQL-family parser/Safe Mode path today. MariaDB
