@@ -141,7 +141,9 @@ async function waitForDialogToClose(text: string) {
     async () =>
       !(await browser.execute((needle) => {
         return Array.from(
-          document.querySelectorAll<HTMLElement>('[role="dialog"]'),
+          document.querySelectorAll<HTMLElement>(
+            '[role="dialog"], [role="alertdialog"]',
+          ),
         )
           .filter((dialog) => {
             const style = window.getComputedStyle(dialog);

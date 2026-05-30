@@ -3,6 +3,7 @@ import { $, $$, browser, expect } from "@wdio/globals";
 export { editGridCellInRow } from "./grid-edit";
 
 const WORKSPACE_TITLE = "Table View — Workspace";
+const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"]';
 
 export type DbType = "postgresql" | "mongodb";
 export type ConnectionEnvironment =
@@ -75,7 +76,7 @@ export async function switchToWorkspaceWindow(timeoutMs = 30000) {
 export async function openNewConnectionDialog() {
   await waitForLauncher();
   await clickDomSelector('[aria-label="New Connection"]');
-  const dialog = await $('[role="dialog"]');
+  const dialog = await $(DIALOG_SELECTOR);
   await dialog.waitForDisplayed({ timeout: 10000 });
   return dialog;
 }
@@ -362,7 +363,7 @@ export async function waitForDialogTextAll(
   timeoutMsg = "dialog text did not appear",
 ) {
   await switchToWorkspaceWindow();
-  const dialog = await $('[role="dialog"]');
+  const dialog = await $(DIALOG_SELECTOR);
   await dialog.waitForDisplayed({ timeout });
   await browser.waitUntil(
     async () => {
@@ -382,20 +383,26 @@ export async function waitForDialogTextAll(
 export async function expectNoVisibleDialogText(text: string, timeout = 750) {
   await switchToWorkspaceWindow();
   await browser.pause(timeout);
-  const visible = await browser.execute((needle) => {
-    return Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]'))
-      .filter((dialog) => {
-        const style = window.getComputedStyle(dialog);
-        return (
-          dialog.getClientRects().length > 0 &&
-          style.display !== "none" &&
-          style.visibility !== "hidden"
+  const visible = await browser.execute(
+    (needle, dialogSelector) => {
+      return Array.from(document.querySelectorAll<HTMLElement>(dialogSelector))
+        .filter((dialog) => {
+          const style = window.getComputedStyle(dialog);
+          return (
+            dialog.getClientRects().length > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden"
+          );
+        })
+        .some((dialog) =>
+          (dialog.textContent ?? "")
+            .toLowerCase()
+            .includes(needle.toLowerCase()),
         );
-      })
-      .some((dialog) =>
-        (dialog.textContent ?? "").toLowerCase().includes(needle.toLowerCase()),
-      );
-  }, text);
+    },
+    text,
+    DIALOG_SELECTOR,
+  );
   expect(visible).toBe(false);
 }
 
@@ -403,71 +410,79 @@ export async function clickDialogAction(ariaLabel: string, timeout = 10000) {
   await switchToWorkspaceWindow();
   await browser.waitUntil(
     async () =>
-      await browser.execute((label) => {
-        return findVisibleDialogButton(label) !== null;
+      await browser.execute(
+        (label, dialogSelector) => {
+          return findVisibleDialogButton(label) !== null;
 
-        function findVisibleDialogButton(label: string): HTMLElement | null {
-          const dialogs = Array.from(
-            document.querySelectorAll<HTMLElement>('[role="dialog"]'),
-          );
-          for (const dialog of dialogs) {
-            if (!isVisible(dialog)) continue;
-            const button = Array.from(
-              dialog.querySelectorAll<HTMLElement>("[aria-label]"),
-            ).find(
-              (candidate) =>
-                candidate.getAttribute("aria-label") === label &&
-                isVisible(candidate) &&
-                candidate.getAttribute("aria-disabled") !== "true",
+          function findVisibleDialogButton(label: string): HTMLElement | null {
+            const dialogs = Array.from(
+              document.querySelectorAll<HTMLElement>(dialogSelector),
             );
-            if (button) return button;
+            for (const dialog of dialogs) {
+              if (!isVisible(dialog)) continue;
+              const button = Array.from(
+                dialog.querySelectorAll<HTMLElement>("[aria-label]"),
+              ).find(
+                (candidate) =>
+                  candidate.getAttribute("aria-label") === label &&
+                  isVisible(candidate) &&
+                  candidate.getAttribute("aria-disabled") !== "true",
+              );
+              if (button) return button;
+            }
+            return null;
           }
-          return null;
-        }
 
-        function isVisible(element: HTMLElement) {
-          const style = window.getComputedStyle(element);
-          return (
-            element.getClientRects().length > 0 &&
-            style.display !== "none" &&
-            style.visibility !== "hidden"
-          );
-        }
-      }, ariaLabel),
+          function isVisible(element: HTMLElement) {
+            const style = window.getComputedStyle(element);
+            return (
+              element.getClientRects().length > 0 &&
+              style.display !== "none" &&
+              style.visibility !== "hidden"
+            );
+          }
+        },
+        ariaLabel,
+        DIALOG_SELECTOR,
+      ),
     {
       timeout,
       timeoutMsg: `${ariaLabel} dialog action did not appear`,
     },
   );
-  await browser.execute((label) => {
-    const dialogs = Array.from(
-      document.querySelectorAll<HTMLElement>('[role="dialog"]'),
-    );
-    for (const dialog of dialogs) {
-      if (!isVisible(dialog)) continue;
-      const button = Array.from(
-        dialog.querySelectorAll<HTMLElement>("[aria-label]"),
-      ).find(
-        (candidate) =>
-          candidate.getAttribute("aria-label") === label &&
-          isVisible(candidate),
+  await browser.execute(
+    (label, dialogSelector) => {
+      const dialogs = Array.from(
+        document.querySelectorAll<HTMLElement>(dialogSelector),
       );
-      if (button) {
-        button.click();
-        return;
+      for (const dialog of dialogs) {
+        if (!isVisible(dialog)) continue;
+        const button = Array.from(
+          dialog.querySelectorAll<HTMLElement>("[aria-label]"),
+        ).find(
+          (candidate) =>
+            candidate.getAttribute("aria-label") === label &&
+            isVisible(candidate),
+        );
+        if (button) {
+          button.click();
+          return;
+        }
       }
-    }
-    throw new Error(`${label} dialog action did not appear`);
+      throw new Error(`${label} dialog action did not appear`);
 
-    function isVisible(element: HTMLElement) {
-      const style = window.getComputedStyle(element);
-      return (
-        element.getClientRects().length > 0 &&
-        style.display !== "none" &&
-        style.visibility !== "hidden"
-      );
-    }
-  }, ariaLabel);
+      function isVisible(element: HTMLElement) {
+        const style = window.getComputedStyle(element);
+        return (
+          element.getClientRects().length > 0 &&
+          style.display !== "none" &&
+          style.visibility !== "hidden"
+        );
+      }
+    },
+    ariaLabel,
+    DIALOG_SELECTOR,
+  );
 }
 
 export async function executeMqlPreview() {
