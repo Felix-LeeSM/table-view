@@ -94,6 +94,24 @@ H2 umbrella closure does not mean every RDBMS has full desktop-client parity. It
 means the current support claims, capability gates, and smoke routing are aligned
 so the next implementation lane can proceed without widening unsupported claims.
 
+### PostgreSQL query/workbench parity lane
+
+PostgreSQL lane closure for #186/#241 means the current claim, smoke, and gap
+inventory is explicit enough to choose the next implementation slice. It does
+not mean Table View has full PostgreSQL admin parity, arbitrary dialect
+semantics, or a broad desktop E2E suite.
+
+| Gate | Current owner | PostgreSQL boundary |
+|---|---|---|
+| Runtime execution | `src-tauri/src/db/postgres/queries.rs`, `src-tauri/tests/query_integration.rs`, `src-tauri/tests/cancel_pg.rs` | Connection, table data, raw SELECT/EXPLAIN row results, DML batches, query cancellation, and raw-query grid edit paths are active. psql meta-command execution, DB-level backup/restore/import/export, and PL/pgSQL body authoring are not parity claims. |
+| Catalog/workbench | `src-tauri/src/db/postgres/schema.rs`, `src-tauri/tests/schema_integration.rs`, `src/components/schema/**`, `src/components/rdb/**` | Schemas, tables, views, functions, types, installed extensions, triggers, table stats, indexes, constraints, FKs, cached metadata, DataGrid, Structure, and ERD inputs have current evidence. Server activity, profiler, full stats dashboards, role/user/permission UI, extension management UI, schema diff, migration impact, and data compare stay future work. |
+| Parser and Safe Mode | `src-tauri/sql-parser-core/**`, `src/lib/sql/sqlSafety.test.ts`, `src/components/query/QueryTab.safe-mode.test.tsx`, `src/components/datagrid/useDataGridEdit.safe-mode.test.ts` | The current subset classifies tested SQL slices, destructive/warn/info statements, bounded writes, raw query confirmations, grid edit confirmations, DDL preview, and EXPLAIN inner statements. Full PL/pgSQL bodies, broad MERGE variants, arbitrary function-expression semantics, and arbitrary extension semantics are not modeled. |
+| Completion and extensions | `src-tauri/src/db/postgres/schema.rs`, `src/lib/sql/sqlCompletionContext.ts`, `src/lib/sql/sqlCompletionWasm.test.ts`, `src-tauri/sql-parser-core/src/completion/**` | Installed extension inventory is fetched and passed to completion before curated known extension packs are enabled. Unknown extensions remain detected-but-unpacked; completion must not invent extension symbols or imply parser/Safe Mode semantic validation. |
+| Edit semantics | `src/components/datagrid/**`, `src/components/query/EditableQueryResultGrid*`, `src/components/datagrid/sqlGenerator.test.ts`, `src-tauri/src/db/postgres/queries.rs` | Row edits require key/projected identity and keep preview/commit/discard plus Safe Mode confirmation paths. Arbitrary query result mutation, bulk admin workflows, and full desktop-client edit parity stay future work. |
+| Lightweight Explain | `src-tauri/src/db/postgres/schema.rs`, `src/lib/api/explain.ts`, `src/components/query/ExplainViewer.test.tsx`, `src/lib/sql/sqlAst.test.ts` | Lightweight plan inspection exists through backend, API, parser, safety, and component evidence. It is not a full profiler/activity dashboard and is not part of the routine desktop E2E gate today. |
+| Fixture and E2E smoke | `e2e/fixtures/seed.sql`, `e2e/smoke/postgres.spec.ts`, `scripts/e2e-smoke-ci.sh` | Runtime Happy Path currently proves PostgreSQL connect -> browse seeded `users` -> edit -> query result on Ubuntu. It does not cover extension completion, Safe Mode confirmations, DDL structure flows, Explain UI, history-source labeling, cancellation, ERD, admin, or profiler scenarios. |
+| Support claim SOT | `docs/product/README.md`, `docs/product/query-language-support.md`, `docs/product/known-limitations.md` | Product-visible PostgreSQL claims must stay narrower than the evidence above until new implementation slices add matching tests and smoke routing. |
+
 ## H3 진행 기준
 
 H3 DuckDB/file analytics 는 **local-first file analytics 를 RDBMS + `file`
@@ -242,7 +260,7 @@ Near-term follow-up groups:
 
 | Group | Follow-up |
 |---|---|
-| RDBMS parity | Keep MySQL/MariaDB version-aware feature gates on the server-version-aware conformance path, and add operation-level UI/runtime consumers only with matching evidence. Add MariaDB engine fixture evidence or keep support claims narrowed. |
+| RDBMS parity | Keep PostgreSQL as the active query/workbench parity lane until a focused implementation slice promotes the next PostgreSQL gap with matching tests and smoke routing. Keep MySQL/MariaDB version-aware feature gates on the server-version-aware conformance path, and add operation-level UI/runtime consumers only with matching evidence. Add MariaDB engine fixture evidence or keep support claims narrowed. |
 | Query language widening | Widen SQL/Mongo client semantic support by tested slices: broader MySQL/MariaDB routine expressions, SQLite extension semantics, server-version/capability gates, Mongo version/deployment gates, and extension-aware completion packs. DuckDB extension install/load and external-file capability settings are currently blocked by adapter gates; future DuckDB extension support needs detected capability evidence before completion/runtime claims widen. PostgreSQL completion packs must consume installed extension inventory before enabling curated extension-specific candidates. |
 | Query/result boundary | Keep typed envelopes as the UI-facing boundary. Future hardening can make backend RDBMS IPC emit native `tabular` envelopes instead of normalizing legacy `QueryResult` at the Tauri wrapper. |
 | ERD/schema graph | 현재 schemaStore cache owner 범위는 schemas/tables/views/functions/postgresExtensions/tableColumnsCache/tableIndexesCache/tableConstraintsCache/triggers 이다. Production ERD/`SchemaGraph` input 은 schema/table/column cache 와 cached/fetched explicit index/constraint metadata 를 함께 쓰며, column-level FK info 는 synthetic fallback 으로 남아 있다. FK navigation 은 현재 DataGrid cell/icon path 이며 ERD interaction claim 이 아니다. Follow-up 은 shared `SchemaGraph`/catalog input path 를 확장해 dependency view, migration impact analysis, schema diff, data compare, dense-view screenshot smoke 를 연결하는 것이다. Duplicate catalog parsing 금지. |
