@@ -113,6 +113,24 @@ full first-class parity.
 | Elasticsearch/OpenSearch product delta | `src-tauri/src/models/search.rs`, `src-tauri/src/db/search.rs`, `src-tauri/tests/backend_adapter_contract_profile.rs` | Shared Search contract and product deltas must stay separated. Live promotion requires product/version detection, auth/TLS, API endpoint differences, and failure/observability smoke. |
 | Non-RDBMS E2E inventory | This matrix and current E2E smoke set | Required future Redis smoke: connect, scan keys, select typed value, switch DB, and prove guarded write/delete/TTL paths remain behind explicit controls. Required future Search smoke: connect with auth/TLS, list indexes/mappings/templates, run bounded search, render search hits, preview destructive delete-by-query plan, and verify error/observability surfaces. |
 
+## H6 Wider Source Candidate Smoke Matrix
+
+This matrix is the H6 planned/candidate claim gate. It separates current E2E
+evidence from future source-specific smoke so MSSQL/Oracle and wider candidates
+do not look runtime-active before implementation.
+
+| Claim / journey | Current evidence | Current gap / routing |
+|---|---|---|
+| Current desktop E2E claim | `e2e/smoke/postgres.spec.ts`, `e2e/smoke/mongodb.spec.ts`, `e2e/smoke/phase-28-slice-A.spec.ts` | Current E2E smoke proves PostgreSQL and MongoDB journeys only. H6 adds no MSSQL, Oracle, Cassandra/Scylla, DynamoDB, graph, vector, or stream runtime E2E claim. |
+| MSSQL planned identity contract | `src/types/connection.ts`, `src/types/dataSource.ts`, `src/types/dataSourceRuntime.ts`, `src-tauri/tests/backend_adapter_contract_profile.rs`, `docs/ROADMAP.md` | No SQL Server connection UI, runtime adapter, T-SQL parser/completion claim, catalog/query/edit smoke, or live evidence. Required future smoke before promotion: connect with chosen auth/encryption/instance contract, browse databases/schemas/tables/views/procedures, run bounded SELECT/DML batch, cancel query, row-edit with key projection, verify Safe Mode/destructive previews, and capture SQL Server fixture/live evidence. |
+| Oracle planned identity contract | `src/types/connection.ts`, `src/types/dataSource.ts`, `src/types/dataSourceRuntime.ts`, `src-tauri/tests/backend_adapter_contract_profile.rs`, `docs/ROADMAP.md` | No Oracle connection UI, runtime adapter, Oracle SQL/PL/SQL parser/completion claim, catalog/query/edit smoke, or live evidence. Required future smoke before promotion: connect through the chosen service/SID/wallet/TNS contract, browse schemas/tables/views/sequences/packages/synonyms, run bounded SELECT/DML batch, cancel query, row-edit with key projection, verify Safe Mode/destructive previews, and capture Oracle fixture/live evidence. |
+| Wider source candidate common gate | `docs/ROADMAP.md`, `docs/product/README.md`, `docs/product/query-language-support.md`, `memory/engineering/architecture/data-source/memory.md` | Candidates have no active `DatabaseType`/profile/runtime. Promotion PRs must add workflow value, profile target, connection kind, language owner, catalog model, result envelope, safety policy, fixture strategy, conformance scope, docs, and source-specific smoke before support claims widen. |
+| Wide-column candidate smoke inventory | `docs/ROADMAP.md` H6 진행 기준 | Cassandra/Scylla need future smoke for cluster connection, keyspace/table/partition/clustering catalog, bounded CQL reads/writes, partition/expensive-read guardrails, result rendering, and fixture/live evidence. |
+| Cloud-document candidate smoke inventory | `docs/ROADMAP.md` H6 진행 기준 | DynamoDB needs future smoke for cloud/local connection contract, table/keySchema/GSI/LSI catalog, PartiQL or native API query path, item preview/edit boundaries, access-pattern/cost guardrails, and local emulator or bounded mock evidence. |
+| Graph candidate smoke inventory | `docs/ROADMAP.md` H6 진행 기준 | Graph sources need future smoke for connection, label/relationship/property catalog, chosen Cypher/GQL/Gremlin language route, graph/path/tabular result rendering, destructive traversal/write guardrails, and fixture graph evidence. |
+| Vector candidate smoke inventory | `docs/ROADMAP.md` H6 진행 기준 | Vector sources need future smoke for connection, collection/vectorSchema/payloadIndex catalog, bounded vector query/filter execution, vectorNeighbors rendering, write/delete guardrails, and embedded/mock or container fixture evidence. |
+| Stream candidate smoke inventory | `docs/ROADMAP.md` H6 진행 기준 | Stream sources need future smoke for connection, topic/partition/consumerGroup/schema catalog, bounded consume/produce or read-only decision, offset/consumer/destructive guardrails, records/metrics rendering, and Kafka/Redpanda fixture evidence. |
+
 ## Frontend Test Quality
 
 | Area | Follow-up |

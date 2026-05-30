@@ -52,7 +52,7 @@ sequencing 을 명시 요청하면 별도 sprint contract queue 에 번호와 �
 | H3 | DuckDB + file analytics | Local-first file analytics 는 새 paradigm 없이 RDBMS 작업을 확장한다. | `.duckdb` raw SQL, registered local CSV/Parquet/JSON/NDJSON preview basics, source-scoped SELECT evidence, and documented file privacy/export boundary 가 green 이다. |
 | H4 | RDBMS intelligence | ERD 와 향후 schema diff/data compare/migration preview 는 shared `SchemaGraph`/catalog input path 를 확장해 재사용한다. Duplicate catalog parsing 은 만들지 않는다. | Production ERD 는 schema/table/column cache 와 cached/fetched explicit index/constraint metadata 를 함께 쓰는 reusable `SchemaGraph` 를 사용한다. Dependency view, migration impact analysis, dense-view screenshot smoke 는 H4 matrix 의 future promotion gate 로 라우팅돼 있다. |
 | H5 | First-class non-RDBMS | Redis/Valkey, Elasticsearch/OpenSearch, MongoDB 가 가장 명확한 non-RDBMS 사용자 workflow 를 덮는다. | MongoDB 는 whitelisted document workflow 로, Redis 는 backend KV first slice + key browser/value preview 로, Valkey 는 planned/unverified 로, Elasticsearch/OpenSearch 는 fixture-backed Search slice 로 support claim 이 정렬돼 있다. Search live HTTP 는 active parity lane 을 약화시키지 않고 promotion gate 를 통과할 때까지 deferred 다. |
-| H6 | 더 넓은 paradigm | Cassandra, DynamoDB, graph DB, vector DB, stream source 는 active work 전 명확한 workflow proof 가 필요하다. | 각 candidate 가 profile, connection kind, language, catalog model, result envelope, safety policy, fixture strategy 를 가진다. |
+| H6 | 더 넓은 paradigm | Cassandra, DynamoDB, graph DB, vector DB, stream source 는 active work 전 명확한 workflow proof 가 필요하다. | MSSQL/Oracle 은 planned RDBMS identity 계약으로, wider source 는 candidate-only 계약으로 정렬된다. Profile target, connection kind, language, catalog model, result envelope, safety policy, fixture strategy 가 문서화되고 runtime support claim 은 생기지 않는다. |
 | H7 | 운영, 보안, 신뢰성 | 넓은 source support 는 관찰 가능하고 안전하며 반복 검증 가능해야 한다. | 핵심 ops/security/a11y/perf smoke path 가 routine gate 가 된다. |
 
 ## H1 완료 기준
@@ -155,13 +155,48 @@ H5 umbrella closure means support claims, runtime contracts, and smoke routing a
 aligned for non-RDBMS sources. It does not mean Valkey runtime support, Redis full
 UI/editor parity, Search live HTTP, or MongoDB full-support parity has shipped.
 
+## H6 진행 기준
+
+H6 wider source 는 **planned/candidate contract 정합성 gate**다. MSSQL/Oracle 은
+이미 `DatabaseType`/profile identity 가 있는 planned RDBMS 이고, Cassandra/Scylla,
+DynamoDB, graph, vector, stream 은 아직 active `DatabaseType`/profile/runtime 이
+없는 candidate 다. H6 closure 는 어떤 새 runtime support 도 출시하지 않는다.
+
+| Gate | Current owner | H6 boundary |
+|---|---|---|
+| MSSQL planned RDBMS identity | `src/types/connection.ts`, `src/types/dataSource.ts`, `src/types/dataSourceRuntime.ts`, `src-tauri/tests/backend_adapter_contract_profile.rs` | `mssql` has `server` connection kind, `sql` language, `rdb` catalog, `tabular` result, `rdb-default` safety, and `declared-rdb` backend identity. Capabilities are empty; connection UI, runtime query/catalog/edit, T-SQL parser/completion, SQL Server auth/TLS/encryption/instance behavior, and live evidence are not claimed. |
+| Oracle planned RDBMS identity | `src/types/connection.ts`, `src/types/dataSource.ts`, `src/types/dataSourceRuntime.ts`, `src-tauri/tests/backend_adapter_contract_profile.rs` | `oracle` has `server` connection kind, `sql` language, `rdb` catalog, `tabular` result, `rdb-default` safety, and `declared-rdb` backend identity. Capabilities are empty; connection UI, runtime query/catalog/edit, Oracle SQL/PL/SQL parser/completion, service/SID/wallet/TNS behavior, and live evidence are not claimed. |
+| Wider candidate workflow proof | `memory/engineering/architecture/data-source/memory.md`, `memory/engineering/architecture/data-source/adding/memory.md`, this roadmap | Promotion requires workflow value, profile target, connection kind, language, catalog model, result envelope, safety policy, fixture strategy, conformance scope, and docs/memory routing before implementation. |
+| Candidate source contract inventory | this roadmap, `docs/product/README.md`, `docs/product/query-language-support.md` | Candidate targets are inventoried below. They are profile targets, not active profile entries. |
+| Parser/completion/runtime non-claim | `docs/product/query-language-support.md`, `docs/product/known-limitations.md` | Deferred language ids do not create active parser, completion, connection, query, catalog, edit, or E2E claims. Runtime changes must land in later source-specific PRs with matching smoke evidence. |
+| H6 smoke matrix | `docs/contributor-guide/testing-and-quality.md` | Current E2E smoke proves PostgreSQL and MongoDB journeys only. MSSQL/Oracle and wider candidates have future smoke inventories, not current desktop E2E claims. |
+
+Candidate target inventory:
+
+| Candidate | Profile target | Connection kind | Language | Catalog model | Result envelope | Safety / fixture plan |
+|---|---|---|---|---|---|---|
+| Cassandra/Scylla | `wide-column` | `cluster` | `cql` | keyspace/table/partition/clustering | `tabular` | partition and expensive-read guardrails; Cassandra/Scylla fixture or testcontainer |
+| DynamoDB | `cloud-document` | `cloud-api` | `partiql` or native API decision | table/keySchema/GSI/LSI | `document`, `tabular` | access-pattern and cost guardrails; DynamoDB Local/emulator or bounded mock |
+| Graph | `graph` | `server` | Cypher/GQL/Gremlin decision | label/relationship/property/index | `graph`, `path`, `tabular` | destructive traversal/write guardrails; fixture graph |
+| Vector | `vector` | `server`; cloud providers need separate `cloud-api` profile decision | `vector-query` or provider filter DSL | collection/vectorSchema/payloadIndex | `vectorNeighbors` | bounded search/write/delete guardrails; embedded/mock or container fixture |
+| Stream | `stream` | `cluster` | `stream-command` or API decision | topic/partition/consumerGroup/schema | `streamRecords`, `metrics` | offset/consumer/destructive guardrails; Kafka/Redpanda fixture |
+
+Promotion order for wider candidates is decided by workflow value and contract
+readiness: clear user workflow first, then adapter-family fit, language/core
+ownership, fixture/live evidence, and safety risk. Candidate rows do not imply
+implementation order.
+
+H6 umbrella closure means planned/candidate support claims, contracts, and smoke
+routing are aligned. It does not mean MSSQL, Oracle, Cassandra/Scylla, DynamoDB,
+graph, vector, or stream runtime support has shipped.
+
 ## 트랙 맵
 
 | 트랙 | 장기 방향 | 현재 기준 |
 |---|---|---|
 | Data-source architecture | 새 DBMS/support surface 는 profile, capability, adapter, language, catalog, result envelope, safety contract 를 통해 들어온다. | `memory/engineering/architecture/data-source/memory.md`, `memory/engineering/architecture/data-source/adding/memory.md`, ADR 0046 |
 | RDBMS runtime | 불확실한 paradigm 을 넓히기 전에 PostgreSQL, MySQL, MariaDB, SQLite, DuckDB/file analytics support 를 강하게 만든다. | `docs/product/README.md`, historical phase notes in `docs/archives/phases/retired/phase-18.md` and `docs/archives/phases/retired/phase-19.md` |
-| Non-RDBMS runtime | Redis/Valkey 와 MongoDB 는 runtime slice 가 있다. Elasticsearch/OpenSearch 는 live HTTP 전까지 fixture-backed 다. Cassandra/DynamoDB/graph/vector 는 gated candidate 다. 새 runtime promotion 은 active one-DBMS parity lane 뒤로 둔다. | `memory/engineering/architecture/data-source/memory.md`, `docs/phases/phase-28.md` |
+| Non-RDBMS runtime | Redis/Valkey 와 MongoDB 는 runtime slice 가 있다. Elasticsearch/OpenSearch 는 live HTTP 전까지 fixture-backed 다. Cassandra/Scylla, DynamoDB, graph, vector, stream 은 gated candidate 다. 새 runtime promotion 은 active one-DBMS parity lane 뒤로 둔다. | `memory/engineering/architecture/data-source/memory.md`, `docs/phases/phase-28.md` |
 | Language core | 가능한 범위에서 Rust/WASM 이 hot-path parse/completion vocabulary, context routing, capability gate 를 소유한다. | `memory/engineering/architecture/query-language/memory.md`, ADR 0045, `docs/product/query-language-support.md`, `docs/archives/phases/completed/phase-31.md` |
 | Query editor | Query surface 는 legacy `queryMode` 가 아니라 `queryLanguage` 와 workbench paradigm 으로 고른다. | `memory/engineering/architecture/data-source/memory.md`, `docs/phases/phase-28.md` Slice A |
 | Data editing | Preview/commit/discard, bulk operation, paradigm 별 edit semantics. | completed Phases 22-23, Phase 28 |
@@ -194,6 +229,8 @@ Near-term follow-up groups:
 | Redis/Valkey | Redis first slice is backend KV primitives plus key browser/value preview UI. Define contracts and evidence for full value editor, TTL/write/stream UI, Redis command query editor, cluster, pub/sub, modules, consumer-group management, and Valkey-specific profile/runtime/fixture/live evidence before broader support claims. |
 | MongoDB | Keep support to tested whitelisted document workflows. Future widening needs version/deployment gates and safe native document-first panels; arbitrary JavaScript/shell behavior remains unsupported unless a new decision changes the policy. |
 | Search | Keep Elasticsearch/OpenSearch fixture-backed. Promote live HTTP only after connection UI, auth/TLS, product/version detection, catalog/search execution, response parsing, admin/destructive policy, observability/error surface, and product-specific delta contracts are explicit. |
+| MSSQL/Oracle | Keep both as capability-empty declared RDBMS identities. Future promotion must split SQL Server and Oracle connection/auth/dialect/catalog/safety contracts and add fixture/live evidence before any support claim widens. |
+| Wider source candidates | Keep Cassandra/Scylla, DynamoDB, graph, vector, and stream as candidate-only. Do not add active profile/runtime/parser/completion claims until workflow value and the full adding-data-source contract are locked. |
 | Quality gates | Promote a11y, perf, E2E isolation, link checking, and platform smoke gaps from `testing-and-quality.md` when they block an active feature lane. |
 | Refactor backlog | Promote code-smell audit candidates only when they intersect active feature work or remove current maintenance cost. Near-term candidates: move runtime-like lib/hook store orchestration into `src/lib/runtime/**`, replace legacy direct `setState` with store actions, and clean up dialog layout/preset drift without reintroducing the retired preset mandate. |
 
@@ -247,7 +284,7 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 | SQLite DBMS | Unsupported `ALTER TABLE` 을 disable 할지 auto-rebuild 할지? | ADR 이 rebuild 를 선택하기 전까지 disable + tooltip. |
 | DuckDB | File analytics 를 RDBMS 로 볼지 separate file-sql paradigm 으로 볼지? | Evidence 가 split 을 요구하기 전까지 RDBMS + `file` connection kind. |
 | Redis/Search | Redis full UI/editor parity 와 Search live HTTP 를 언제 승격할 수 있나? | Active one-DBMS parity lane 이후만. 그 뒤 Search live HTTP 가 MSSQL/Oracle 보다 먼저 온다. |
-| 더 넓은 paradigm | Cassandra/DynamoDB/graph/vector/stream 중 무엇을 먼저 승격하나? | Workflow value 와 profile contract 가 명확해질 때까지 승격 금지. |
+| 더 넓은 paradigm | Cassandra/DynamoDB/graph/vector/stream 중 무엇을 먼저 승격하나? | H6 기본값은 candidate-only. Workflow value, contract readiness, fixture/live evidence, safety risk 가 분명해질 때까지 승격 금지. |
 | App state | State-management migration 은 언제 재개하나? | DB support 작업이 storage/schema surface 와 충돌하지 않을 때. |
 | Security | Users/roles/auth mechanism UI 는 언제 추가하나? | RDBMS/DuckDB/non-RDBMS source order 가 명확해진 뒤. |
 

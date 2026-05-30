@@ -19,6 +19,11 @@ widening work lives in `docs/ROADMAP.md`.
 Runtime-active languages are the languages used by connection-supported
 `DataSourceProfile` entries.
 
+`sql` is active for connection-supported SQL/RDBMS profiles only. MSSQL and
+Oracle carry planned `sql` profile metadata, but their capabilities are empty;
+that metadata does not create T-SQL, Oracle SQL/PL/SQL, runtime query, catalog,
+edit, parser, completion, or E2E smoke claims.
+
 | QueryLanguageId | Lifecycle | Parser owner | Completion owner | Fallback policy | Safety analyzer |
 |---|---|---|---|---|---|
 | `sql` | `active` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
@@ -51,6 +56,8 @@ cannot add parser or completion vocabulary without an owner decision.
 | MongoDB Mongosh/MQL | Whitelisted `db...` collection/admin commands, JSON-like bodies, BSON literals, cursor chains, operator/stage/expression completion, and destructive admin Safe Mode gates are supported. | Arbitrary JavaScript, shell helpers such as `use`/`show`, multiple statements, unsupported cursor helpers, cross-db shell navigation, server-version gates, and native document-first result panels remain out of scope. |
 | Redis command | Redis connection/profile, backend KV primitives, key browser, and value preview exist. Backend primitives are typed IPC calls for database/key scan, typed value reads, guarded string set, delete confirmation, TTL expire/persist, and bounded stream reads. | Redis command query editor/parser/completion is not active. Full value editing, TTL/write controls, stream consumer UI, broader command coverage, cluster/pubsub/modules/consumer-group management, and Valkey support are not claimed. |
 | Search DSL | Fixture-backed Search identities and bounded fixture DSL exist for Elasticsearch/OpenSearch fixture catalog/search result paths. | Live HTTP execution, connection/auth/TLS handling, response parsing, admin APIs, observability, and full query-language support are deferred. |
+| MSSQL SQL | Planned profile metadata declares SQL Server as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no SQL Server connection UI, runtime query/catalog/edit path, T-SQL parser/completion claim, auth/TLS/encryption/instance contract, fixture/live evidence, or desktop E2E smoke. |
+| Oracle SQL | Planned profile metadata declares Oracle as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no Oracle connection UI, runtime query/catalog/edit path, Oracle SQL/PL/SQL parser/completion claim, service/SID/wallet/TNS contract, fixture/live evidence, or desktop E2E smoke. |
 
 ## Result Boundary
 
@@ -121,6 +128,15 @@ are:
   adapter contracts only. Live HTTP Search support waits for explicit
   connection/auth/TLS, catalog/search execution, admin, observability, and
   product-delta gates.
+- MSSQL and Oracle are planned SQL/RDBMS identities only. Declared profile
+  metadata does not imply active T-SQL, Oracle SQL/PL/SQL, connection, query,
+  catalog, edit, parser/completion, fixture/live, or E2E smoke support.
+- Deferred language ids for CQL, PartiQL, Cypher, GQL, Gremlin, vector query,
+  and stream commands do not create active profiles or support claims.
+  Cassandra/Scylla, DynamoDB, graph, vector, and stream sources stay
+  candidate-only until a source-specific promotion PR locks workflow value,
+  profile target, language owner, catalog model, result envelope, safety policy,
+  fixture strategy, and smoke evidence.
 
 ## Related
 
