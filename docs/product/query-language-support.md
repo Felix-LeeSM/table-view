@@ -59,6 +59,23 @@ cannot add parser or completion vocabulary without an owner decision.
 | MSSQL SQL | Planned profile metadata and a static SQL seed contract declare SQL Server as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no SQL Server connection UI, runtime query/catalog/edit path, T-SQL parser/completion claim, auth/TLS/encryption/instance contract, runtime fixture/live evidence, or desktop E2E smoke. |
 | Oracle SQL | Planned profile metadata and a static SQL seed contract declare Oracle as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no Oracle connection UI, runtime query/catalog/edit path, Oracle SQL/PL/SQL parser/completion claim, service/SID/wallet/TNS contract, runtime fixture/live evidence, or desktop E2E smoke. |
 
+### PostgreSQL SQL Support Breakdown
+
+- Runtime: connection, catalog/table data, raw SELECT/EXPLAIN row results,
+  plan-only `EXPLAIN (FORMAT JSON)`, DML batches, query cancellation, and
+  raw-query grid edit paths are active through the PostgreSQL adapter.
+- Parser / safety: bounded SQL slices, destructive/warn/info classification,
+  raw DDL preview, grid-edit preview, and EXPLAIN inner statement analysis are
+  tested. Extension-tolerant syntax is structural, not full extension semantic
+  validation.
+- Completion / autocomplete: common SQL vocabulary, schema objects, shell/meta
+  command suggestions, and curated installed-extension packs are available.
+  Installed extension inventory gates known packs such as `pgcrypto`; the app
+  does not enumerate every extension-provided symbol.
+- Routine smoke: GitHub Runtime Happy Path covers connect/browse/edit/query,
+  Explain, installed-extension-gated completion, Safe Mode, and cancellation
+  for PostgreSQL on Ubuntu.
+
 ## Result Boundary
 
 RDBMS query IPC is normalized into a `tabular` result envelope at
