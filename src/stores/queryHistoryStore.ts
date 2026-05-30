@@ -28,6 +28,22 @@ import {
 } from "@lib/tauri/history";
 import { logger } from "@lib/logger";
 
+export const QUERY_HISTORY_LOCAL_CREATED_EVENT = "query-history:local-created";
+
+export interface QueryHistoryLocalCreatedDetail {
+  row: HistoryListRow;
+}
+
+function emitLocalHistoryCreated(row: HistoryListRow): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<QueryHistoryLocalCreatedDetail>(
+      QUERY_HISTORY_LOCAL_CREATED_EVENT,
+      { detail: { row } },
+    ),
+  );
+}
+
 /**
  * Origin of the recorded query/operation. Lets the UI distinguish a raw
  * query the user typed from generated SQL emitted by another surface.
@@ -113,13 +129,17 @@ export const useQueryHistoryStore = create<QueryHistoryState>((set) => ({
     //    skip via sprint-365 dispatcher.
     try {
       const resp = await addHistoryEntryIpc(req);
+      const committedRow: HistoryListRow = {
+        ...tempRow,
+        id: resp.id,
+        sqlRedacted: resp.sqlRedacted,
+      };
       set((state) => ({
         recentVisible: state.recentVisible.map((r) =>
-          r.id === tempId
-            ? { ...r, id: resp.id, sqlRedacted: resp.sqlRedacted }
-            : r,
+          r.id === tempId ? committedRow : r,
         ),
       }));
+      emitLocalHistoryCreated(committedRow);
     } catch (e) {
       // best-effort — backend 가 reject 하면 다음 refetch 가 truth 를
       // 다시 잡는다. optimistic row 는 그대로 두고 사용자에게는 보이는

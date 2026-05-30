@@ -264,6 +264,7 @@ export interface QueryStatementResult {
 export type QueryState =
   | { status: "idle" }
   | { status: "running"; queryId: string }
+  | { status: "cancelled"; message?: string }
   | {
       status: "completed";
       result: QueryResult;

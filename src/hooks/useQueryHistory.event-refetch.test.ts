@@ -22,6 +22,7 @@ import {
   dispatchStateChangedPayload,
   resetStateChangedRegistryForTests,
 } from "@lib/events/stateChanged";
+import { QUERY_HISTORY_LOCAL_CREATED_EVENT } from "@stores/queryHistoryStore";
 
 const row = (id: number, sqlRedacted = `SELECT ${id}`) => ({
   id,
@@ -93,6 +94,39 @@ describe("useQueryHistory event + IPC flow (sprint-372)", () => {
     expect(invokeMock).toHaveBeenCalledTimes(2);
     expect(result.current.rows[0]?.id).toBe(2);
     expect(result.current.newEntryAvailable).toBe(false);
+  });
+
+  it("same-window committed history event refreshes the visible first page", async () => {
+    invokeMock.mockResolvedValueOnce({ rows: [{ ...row(1), tabId: "tab-1" }] });
+    const { result } = renderHook(() =>
+      useQueryHistory({ connectionId: "conn-1", tabId: "tab-1" }),
+    );
+    await waitFor(() => expect(result.current.rows).toHaveLength(1));
+
+    const cancelled = {
+      ...row(2),
+      tabId: "tab-1",
+      status: "cancelled",
+    };
+    invokeMock.mockResolvedValueOnce({
+      rows: [cancelled, { ...row(1), tabId: "tab-1" }],
+    });
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(QUERY_HISTORY_LOCAL_CREATED_EVENT, {
+          detail: { row: cancelled },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(result.current.rows.map((entry) => entry.status)).toEqual([
+        "cancelled",
+        "success",
+      ]);
+    });
+    expect(invokeMock).toHaveBeenCalledTimes(2);
   });
 
   // AC-372-06 — cursor pagination 중 history.create → refetch 0 + 배지.

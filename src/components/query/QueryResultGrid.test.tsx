@@ -101,6 +101,13 @@ describe("QueryResultGrid", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Connection lost");
   });
 
+  it("shows muted cancellation state when status is cancelled", () => {
+    render(<QueryResultGrid queryState={{ status: "cancelled" }} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Query cancelled");
+    expect(screen.queryByRole("grid")).not.toBeInTheDocument();
+  });
+
   it("renders SELECT result with column headers and rows", () => {
     render(
       <QueryResultGrid

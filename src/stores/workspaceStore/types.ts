@@ -235,6 +235,13 @@ export interface WorkspaceStoreState {
     queryId: string,
     errorMessage: string,
   ) => void;
+  cancelRunningQuery: (
+    connId: string,
+    db: string,
+    tabId: string,
+    queryId: string,
+    message?: string,
+  ) => void;
   completeMultiStatementQuery: (
     connId: string,
     db: string,

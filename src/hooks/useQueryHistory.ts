@@ -39,6 +39,10 @@ import {
 } from "@lib/tauri/history";
 import { setStateChangedHandlers } from "@lib/events/stateChanged";
 import { logger } from "@lib/logger";
+import {
+  QUERY_HISTORY_LOCAL_CREATED_EVENT,
+  type QueryHistoryLocalCreatedDetail,
+} from "@stores/queryHistoryStore";
 
 /**
  * 호출자가 hook 에 넘기는 filter — `list_history` IPC 의 인자 shape.
@@ -77,6 +81,31 @@ export interface UseQueryHistoryResult {
 
 /** 단일 page 의 default page size. */
 const DEFAULT_LIMIT = 100;
+
+function rowMatchesFilter(
+  row: HistoryListRow,
+  filter: UseQueryHistoryFilter,
+): boolean {
+  if (
+    filter.connectionId !== undefined &&
+    row.connectionId !== filter.connectionId
+  ) {
+    return false;
+  }
+  if (filter.tabId !== undefined && (row.tabId ?? undefined) !== filter.tabId) {
+    return false;
+  }
+  if (filter.filter !== undefined) {
+    if (row.paradigm !== filter.filter.paradigm) return false;
+    if (
+      filter.filter.queryMode !== undefined &&
+      row.queryMode !== filter.filter.queryMode
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export function useQueryHistory(
   filterArg: UseQueryHistoryFilter,
@@ -181,6 +210,31 @@ export function useQueryHistory(
         },
       },
     });
+  }, [refresh]);
+
+  useEffect(() => {
+    const onLocalCreated = (event: Event) => {
+      const detail = (event as CustomEvent<QueryHistoryLocalCreatedDetail>)
+        .detail;
+      if (
+        !detail?.row ||
+        !rowMatchesFilter(detail.row, lastFilterRef.current)
+      ) {
+        return;
+      }
+      if (inCursorModeRef.current) {
+        setNewEntryAvailable(true);
+        return;
+      }
+      void refresh();
+    };
+    window.addEventListener(QUERY_HISTORY_LOCAL_CREATED_EVENT, onLocalCreated);
+    return () => {
+      window.removeEventListener(
+        QUERY_HISTORY_LOCAL_CREATED_EVENT,
+        onLocalCreated,
+      );
+    };
   }, [refresh]);
 
   return {

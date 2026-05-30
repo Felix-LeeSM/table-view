@@ -39,7 +39,7 @@
 
 | DBMS | Runtime | Parser / safety | Completion | 현재 판단 |
 |---|---|---|---|---|
-| PostgreSQL | strong | strong bounded subset | WASM-first + installed-extension-gated packs | 현재 가장 강한 lane 이다. routine desktop smoke 는 connect/browse/edit/query, Explain plan-inspection UI/source-label path, seeded `pgcrypto` installed-extension completion gating, Safe Mode info/warn/destructive confirmation, raw DDL preview, and grid-edit preview 를 증명한다. full dialect/admin/arbitrary extension semantics 와 catalog-backed enumeration of every extension symbol 은 보장하지 않음 |
+| PostgreSQL | strong | strong bounded subset | WASM-first + installed-extension-gated packs | 현재 가장 강한 lane 이다. routine desktop smoke 는 connect/browse/edit/query, Explain plan-inspection UI/source-label path, seeded `pgcrypto` installed-extension completion gating, Safe Mode info/warn/destructive confirmation, raw DDL preview, grid-edit preview, and cancellation UI/history/retry behavior 를 증명한다. full dialect/admin/arbitrary extension semantics 와 catalog-backed enumeration of every extension symbol 은 보장하지 않음 |
 | MySQL | runtime/query/edit/DDL adapter active | bounded parser/Safe Mode slice; constraint conformance version-gated | Rust/WASM MySQL-family vocabulary | connection, browsing, raw query, DML-oriented multi-statement batch, row edit, cancellation, and bounded structured table/index/constraint DDL are active. CHECK/constraint catalog conformance needs MySQL `>= 8.0.16` context. Trigger create/drop, DB-level import/export/dump parity, and broader routine scripting remain unsupported/follow-up |
 | MariaDB | MySQL-family adapter reuse with distinct MariaDB identity | MySQL-family parser/Safe Mode path + MariaDB dialect/profile identity | Rust/WASM MySQL-family vocabulary + completion-only MariaDB `RETURNING` delta | runtime adapter path exists through MySQL reuse. CHECK/constraint catalog conformance needs MariaDB `>= 10.2.1` context. `RETURNING` is not a version-gated runtime support claim; MariaDB-engine routine/default fixture, CI, and live evidence remain known limitations / quality follow-up |
 | SQLite | file adapter + read/writable-file DML | bounded parser/Safe Mode guardrails; DDL rejected by adapter | Rust/WASM built-in vocabulary + cached schema objects + sqlite-cli suggestions | user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의 DML/PK-projected row edit 로 제한된다. routine desktop E2E, structured DDL UI/runtime parity, unsupported `ALTER TABLE` rebuild, nested JSON edit, sqlite-cli execution, extension/capability semantics 는 unsupported |
@@ -111,10 +111,10 @@ candidate-only 상태다.
   desktop smoke proves the PostgreSQL connect -> browse/edit -> query journey,
   the Explain plan-inspection UI/source label, seeded `pgcrypto`
   installed-extension completion gating, Safe Mode info/warn/destructive
-  confirmation, raw DDL preview, and grid-edit preview paths. Structured DDL
-  flows, broader history-source coverage, cancellation, ERD, admin, arbitrary
-  extension semantics, and profiler/activity scenarios need separate promotion
-  before product claims widen.
+  confirmation, raw DDL preview, grid-edit preview paths, and cancellation
+  UI/history/retry behavior. Structured DDL flows, broader history-source
+  coverage, ERD, admin, arbitrary extension semantics, and profiler/activity
+  scenarios need separate promotion before product claims widen.
 - SQLite is a file-backed DBMS lane. Current support is scoped to file
   create/open/test, read-only mode, catalog/table browse, read queries,
   writable-file DML, transactional DML batch/dry-run, and key-projected row

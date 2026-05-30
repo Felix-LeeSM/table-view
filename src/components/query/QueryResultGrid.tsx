@@ -692,6 +692,18 @@ export default function QueryResultGrid({
     );
   }
 
+  if (queryState.status === "cancelled") {
+    return (
+      <div
+        role="status"
+        data-testid="query-cancelled-state"
+        className="flex flex-1 flex-col items-center justify-center text-sm text-muted-foreground"
+      >
+        <p>{queryState.message ?? "Query cancelled"}</p>
+      </div>
+    );
+  }
+
   // Completed state
   if (queryState.status === "completed") {
     // Sprint 248 — explicit `isDryRun` prop wins over the queryState
