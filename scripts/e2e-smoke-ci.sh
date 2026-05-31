@@ -17,6 +17,12 @@ export MONGO_PASSWORD="${MONGO_PASSWORD:-testpass}"
 export E2E_MONGO_DB="${E2E_MONGO_DB:-table_view_test}"
 export E2E_MONGO_AUTH_DB="${E2E_MONGO_AUTH_DB:-admin}"
 
+export E2E_MYSQL_HOST="${E2E_MYSQL_HOST:-${MYSQL_HOST:-localhost}}"
+export E2E_MYSQL_PORT="${E2E_MYSQL_PORT:-${MYSQL_PORT:-13306}}"
+export MYSQL_USER="${MYSQL_USER:-testuser}"
+export MYSQL_PASSWORD="${MYSQL_PASSWORD:-testpass}"
+export MYSQL_DATABASE="${MYSQL_DATABASE:-table_view_test}"
+
 REPORT_DIR="$ROOT_DIR/e2e/wdio-report"
 mkdir -p "$REPORT_DIR"
 find "$REPORT_DIR" -type f ! -name .gitkeep -delete
@@ -45,4 +51,5 @@ run_wdio "$BASE_DATA_DIR/postgres-safe-mode" "e2e/smoke/postgres-safe-mode.spec.
 run_wdio "$BASE_DATA_DIR/postgres-explain" "e2e/smoke/postgres-explain.spec.ts"
 run_wdio "$BASE_DATA_DIR/postgres-extension-completion" "e2e/smoke/postgres-extension-completion.spec.ts"
 run_wdio "$BASE_DATA_DIR/postgres-cancellation" "e2e/smoke/postgres-cancellation.spec.ts"
+run_wdio "$BASE_DATA_DIR/mysql" "e2e/smoke/mysql.spec.ts"
 run_wdio "$BASE_DATA_DIR/mongodb" "e2e/smoke/mongodb.spec.ts"

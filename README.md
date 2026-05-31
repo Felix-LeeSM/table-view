@@ -2,7 +2,7 @@
 
 **Table View**는 Tauri 2, React 19, TypeScript, Rust로 만드는 로컬 데스크톱 데이터베이스 클라이언트입니다.
 
-TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 데이터를 바로 확인·편집하는 흐름을 지향합니다. PostgreSQL과 MongoDB를 가장 깊은 1차 표면으로 다루며, MySQL/MariaDB, SQLite, DuckDB도 검증된 범위 안에서 연결, 탐색, 쿼리 경로가 열려 있습니다. Redis는 연결/profile, key browser, value preview가 있고 write/TTL/stream UI는 후속입니다.
+TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 데이터를 바로 확인·편집하는 흐름을 지향합니다. PostgreSQL과 MongoDB를 가장 깊은 1차 표면으로 다루며, MySQL은 runtime smoke baseline까지 검증되어 있습니다. MariaDB, SQLite, DuckDB도 검증된 범위 안에서 연결, 탐색, 쿼리 경로가 열려 있습니다. Redis는 연결/profile, key browser, value preview가 있고 write/TTL/stream UI는 후속입니다.
 
 다중 창 워크스페이스, 변경 사항의 Preview/Commit 게이트, 운영 환경의 destructive 작업을 막는 Safe Mode를 통해 로컬 클라이언트의 속도와 데이터 작업의 안전장치를 함께 제공합니다.
 
@@ -13,7 +13,7 @@ TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 
 ### 1. 다중 DBMS와 RDB/Document 패러다임 지원
 
 - **PostgreSQL**: 스키마, 테이블, 뷰, 인덱스, 제약 조건(PK/FK/CHECK/UNIQUE), 함수/트리거 소스 조회, 테이블/컬럼/인덱스/제약 DDL UI를 지원합니다.
-- **MySQL/MariaDB**: 데이터베이스 전환, 테이블/컬럼/인덱스/제약/뷰/함수/트리거 조회, SQL 실행, 테이블 페이징/필터/정렬, 주요 DDL UI 백엔드가 연결되어 있습니다. MySQL 고유 문법의 클라이언트 분석은 아직 부분 지원입니다.
+- **MySQL/MariaDB**: 데이터베이스 전환, 테이블/컬럼/인덱스/제약/뷰/함수/트리거 조회, SQL 실행, 테이블 페이징/필터/정렬, 주요 DDL UI 백엔드가 연결되어 있습니다. MySQL은 connect/browse/query/edit/cancel runtime smoke baseline이 있고, MySQL 고유 문법의 클라이언트 분석은 아직 부분 지원입니다.
 - **SQLite**: 파일 기반 연결과 DB 파일 생성, 테이블/컬럼 탐색, 테이블 미리보기, 단일 쿼리 실행, 배치 실행과 dry-run을 지원합니다. DDL UI와 export parity는 아직 명시적으로 제한됩니다.
 - **DuckDB**: 파일 기반 `.duckdb` 연결과 raw SQL 실행, 로컬 CSV/Parquet/JSON/NDJSON preview 경로를 지원합니다. 구조화된 DDL/write UI와 file analytics query UI parity는 아직 명시적으로 제한됩니다.
 - **MongoDB**: 데이터베이스/컬렉션 탐색, 도큐먼트 그리드, find/aggregate/insert/update/delete/bulkWrite, 인덱스와 validator 관리, collection/server 진단 명령을 지원합니다. 임의 JavaScript를 실행하지 않고 허용된 `db....` 워크플로우만 파싱해 dispatch 합니다.
@@ -180,13 +180,13 @@ cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test
 
 ### 4. E2E Smoke 테스트 (Linux host / CI)
 
-WebdriverIO + tauri-driver로 실제 Tauri 앱을 부팅해 DBMS 연결부터 데이터 수정 commit까지의 runtime happy path를 검증합니다. GitHub Actions에서는 PR과 `main` push의 blocking check로 실행됩니다.
+WebdriverIO + tauri-driver로 실제 Tauri 앱을 부팅해 PostgreSQL, MySQL, MongoDB runtime happy path를 검증합니다. GitHub Actions에서는 PR과 `main` push의 blocking check로 실행됩니다.
 
 로컬 Linux 환경에서 동일 경로를 실행하려면:
 
 ```bash
 pnpm db:up
-E2E_PG_PORT=15432 E2E_MONGO_PORT=37017 bash scripts/e2e-smoke-ci.sh
+E2E_PG_PORT=15432 E2E_MYSQL_PORT=13306 E2E_MONGO_PORT=37017 bash scripts/e2e-smoke-ci.sh
 ```
 
 macOS/Windows 로컬에서는 tauri-driver의 Linux/GTK 의존성 차이 때문에 CI 검증을 기준으로 봅니다.
