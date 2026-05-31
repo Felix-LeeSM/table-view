@@ -46,11 +46,23 @@ async function waitForTabHistoryStatuses(statuses: string[]) {
   );
 }
 
-async function waitForGlobalSourceBadges(sources: string[]) {
+async function waitForGlobalHistoryEvidence({
+  sourceBadges,
+  rawFragments,
+}: {
+  sourceBadges: string[];
+  rawFragments: string[];
+}) {
   await switchToWorkspaceWindow();
-  await browser.execute(() => {
-    window.dispatchEvent(new CustomEvent("toggle-global-query-log"));
-  });
+
+  const isOpen = await browser.execute(() =>
+    Boolean(document.querySelector('[data-testid="global-query-log-panel"]')),
+  );
+  if (!isOpen) {
+    await browser.execute(() => {
+      window.dispatchEvent(new CustomEvent("toggle-global-query-log"));
+    });
+  }
 
   const panel = await $('[data-testid="global-query-log-panel"]');
   await panel.waitForDisplayed({ timeout: 10000 });
@@ -62,15 +74,25 @@ async function waitForGlobalSourceBadges(sources: string[]) {
           .querySelector<HTMLElement>('[data-testid="global-log-new-entry"]')
           ?.click();
       });
-      return await browser.execute((expected) => {
-        return expected.every((source) =>
-          Boolean(document.querySelector(`[data-source="${source}"]`)),
-        );
-      }, sources);
+      return await browser.execute(
+        ({ expectedBadges, expectedFragments }) => {
+          const bodyText = document.body.textContent ?? "";
+          const badgesReady = expectedBadges.every((source) =>
+            Boolean(document.querySelector(`[data-source="${source}"]`)),
+          );
+          const rawEntriesReady = expectedFragments.every((fragment) =>
+            bodyText.includes(fragment),
+          );
+          return badgesReady && rawEntriesReady;
+        },
+        { expectedBadges: sourceBadges, expectedFragments: rawFragments },
+      );
     },
     {
       timeout: 15000,
-      timeoutMsg: `global query log did not include source badges: ${sources.join(", ")}`,
+      timeoutMsg: `global query log missing source badges (${sourceBadges.join(
+        ", ",
+      )}) or raw entries (${rawFragments.join(", ")})`,
     },
   );
 }
@@ -204,7 +226,10 @@ describe("MySQL smoke", () => {
     });
 
     await step("verify query history source labels", async () => {
-      await waitForGlobalSourceBadges(["sidebar-prefetch", "grid-edit", "raw"]);
+      await waitForGlobalHistoryEvidence({
+        sourceBadges: ["sidebar-prefetch", "grid-edit"],
+        rawFragments: ["SELECT 7 AS retry_after_mysql_cancel"],
+      });
     });
   });
 });
