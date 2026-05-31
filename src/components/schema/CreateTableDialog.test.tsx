@@ -1256,73 +1256,77 @@ describe("Sprint 228 — Indexes tab functional", () => {
 
   // ── AC-228-07 second index fails — first stays applied ──────────
 
-  it("mid-chain rejection leaves earlier index applied (no dropIndex rollback) (AC-228-07)", async () => {
-    setDevConnection();
-    useSafeModeStore.setState({ mode: "off" });
-    mockCreateTable.mockResolvedValue({
-      sql: 'CREATE TABLE "public"."users" ("id" integer, "email" text)',
-    });
-    let commitIndexCount = 0;
-    mockCreateIndex.mockImplementation(
-      async (req: { preview_only: boolean; index_name: string }) => {
-        if (req.preview_only) {
+  it(
+    "mid-chain rejection leaves earlier index applied (no dropIndex rollback) (AC-228-07)",
+    async () => {
+      setDevConnection();
+      useSafeModeStore.setState({ mode: "off" });
+      mockCreateTable.mockResolvedValue({
+        sql: 'CREATE TABLE "public"."users" ("id" integer, "email" text)',
+      });
+      let commitIndexCount = 0;
+      mockCreateIndex.mockImplementation(
+        async (req: { preview_only: boolean; index_name: string }) => {
+          if (req.preview_only) {
+            return {
+              sql: `CREATE INDEX "${req.index_name}" ON "public"."users" USING btree ("email")`,
+            };
+          }
+          commitIndexCount += 1;
+          if (commitIndexCount === 2) {
+            throw new Error("disk full");
+          }
           return {
             sql: `CREATE INDEX "${req.index_name}" ON "public"."users" USING btree ("email")`,
           };
-        }
-        commitIndexCount += 1;
-        if (commitIndexCount === 2) {
-          throw new Error("disk full");
-        }
-        return {
-          sql: `CREATE INDEX "${req.index_name}" ON "public"."users" USING btree ("email")`,
-        };
-      },
-    );
+        },
+      );
 
-    renderDialog();
-    await fillTwoColumnFormAndOpenIndexesTab();
+      renderDialog();
+      await fillTwoColumnFormAndOpenIndexesTab();
 
-    // Three rows.
-    for (let i = 0; i < 3; i += 1) addIndexRow();
-    let panel = getIndexesPanel();
-    const nameInputs = within(panel).getAllByLabelText("Index name");
-    ["idx_a", "idx_b", "idx_c"].forEach((n, i) => {
-      fireEvent.change(nameInputs[i]!, { target: { value: n } });
-    });
-    // Each row picks the email column. The checkbox group is row-scoped
-    // (one group per row) — pick the first email checkbox of every row
-    // by walking the sequential aria-labelled nodes.
-    const emailBoxes = within(panel).getAllByLabelText("Index column: email");
-    expect(emailBoxes.length).toBeGreaterThanOrEqual(3);
-    for (let i = 0; i < 3; i += 1) fireEvent.click(emailBoxes[i]!);
+      // Three rows.
+      for (let i = 0; i < 3; i += 1) addIndexRow();
+      let panel = getIndexesPanel();
+      const nameInputs = within(panel).getAllByLabelText("Index name");
+      ["idx_a", "idx_b", "idx_c"].forEach((n, i) => {
+        fireEvent.change(nameInputs[i]!, { target: { value: n } });
+      });
+      // Each row picks the email column. The checkbox group is row-scoped
+      // (one group per row) — pick the first email checkbox of every row
+      // by walking the sequential aria-labelled nodes.
+      const emailBoxes = within(panel).getAllByLabelText("Index column: email");
+      expect(emailBoxes.length).toBeGreaterThanOrEqual(3);
+      for (let i = 0; i < 3; i += 1) fireEvent.click(emailBoxes[i]!);
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
-    await waitFor(() => expect(mockCreateIndex).toHaveBeenCalledTimes(3));
+      // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+      await waitFor(() => expect(mockCreateIndex).toHaveBeenCalledTimes(3));
 
-    fireEvent.click(screen.getByRole("button", { name: "Execute" }));
+      fireEvent.click(screen.getByRole("button", { name: "Execute" }));
 
-    await waitFor(() => {
-      const previewPane = document.querySelector(
-        "#create-table-ddl-preview",
-      ) as HTMLElement;
-      expect(previewPane.textContent).toContain("idx_b");
-    });
+      await waitFor(() => {
+        const previewPane = document.querySelector(
+          "#create-table-ddl-preview",
+        ) as HTMLElement;
+        expect(previewPane.textContent).toContain("idx_b");
+      });
 
-    const commitCalls = mockCreateIndex.mock.calls.filter(
-      (c) => (c[0] as { preview_only: boolean }).preview_only === false,
-    );
-    expect(commitCalls).toHaveLength(2);
-    expect((commitCalls[0]![0] as { index_name: string }).index_name).toBe(
-      "idx_a",
-    );
-    expect((commitCalls[1]![0] as { index_name: string }).index_name).toBe(
-      "idx_b",
-    );
-    // 3rd never fired.
-    panel = getIndexesPanel();
-    expect(mockDropIndex).not.toHaveBeenCalled();
-  });
+      const commitCalls = mockCreateIndex.mock.calls.filter(
+        (c) => (c[0] as { preview_only: boolean }).preview_only === false,
+      );
+      expect(commitCalls).toHaveLength(2);
+      expect((commitCalls[0]![0] as { index_name: string }).index_name).toBe(
+        "idx_a",
+      );
+      expect((commitCalls[1]![0] as { index_name: string }).index_name).toBe(
+        "idx_b",
+      );
+      // 3rd never fired.
+      panel = getIndexesPanel();
+      expect(mockDropIndex).not.toHaveBeenCalled();
+    },
+    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+  );
 
   // ── AC-228-08 PK auto-emission deduplication ─────────────────────
 
@@ -2505,48 +2509,52 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
 
   // ── canonical Safe Mode warn-cancel verbatim survives bundle ────
 
-  it("Safe Mode warn-cancel surfaces the canonical message even with constraints declared (AC-229-12 / Sprint 228 invariant carry-over)", async () => {
-    setProductionConnection();
-    useSafeModeStore.setState({ mode: "warn" });
-    mockCreateTable.mockResolvedValue({
-      sql: 'DROP TABLE "public"."orders"',
-    });
-    mockAddConstraint.mockResolvedValue({
-      sql: 'ALTER TABLE "public"."orders" ADD CONSTRAINT "chk_x" CHECK (id > 0)',
-    });
+  it(
+    "Safe Mode warn-cancel surfaces the canonical message even with constraints declared (AC-229-12 / Sprint 228 invariant carry-over)",
+    async () => {
+      setProductionConnection();
+      useSafeModeStore.setState({ mode: "warn" });
+      mockCreateTable.mockResolvedValue({
+        sql: 'DROP TABLE "public"."orders"',
+      });
+      mockAddConstraint.mockResolvedValue({
+        sql: 'ALTER TABLE "public"."orders" ADD CONSTRAINT "chk_x" CHECK (id > 0)',
+      });
 
-    renderDialog();
-    await fillTwoColumnFormAndOpenForeignKeysTab();
-    await addCheckRow();
-    const panel = getForeignKeysPanel();
-    fireEvent.change(within(panel).getByLabelText("Check name"), {
-      target: { value: "chk_x" },
-    });
-    fireEvent.change(within(panel).getByLabelText("Check expression"), {
-      target: { value: "id > 0" },
-    });
+      renderDialog();
+      await fillTwoColumnFormAndOpenForeignKeysTab();
+      await addCheckRow();
+      const panel = getForeignKeysPanel();
+      fireEvent.change(within(panel).getByLabelText("Check name"), {
+        target: { value: "chk_x" },
+      });
+      fireEvent.change(within(panel).getByLabelText("Check expression"), {
+        target: { value: "id > 0" },
+      });
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
-    await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
+      // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+      await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
-    act(() => {
-      fireEvent.click(screen.getByRole("button", { name: "Execute" }));
-    });
-    await screen.findByText("PRODUCTION DATABASE");
-    const alertDialog = document.querySelector(
-      '[data-slot="alert-dialog-content"]',
-    ) as HTMLElement;
-    const cancelBtn = Array.from(alertDialog.querySelectorAll("button")).find(
-      (b) => b.textContent === "Cancel",
-    );
-    act(() => {
-      cancelBtn?.click();
-    });
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: "Execute" }));
+      });
+      await screen.findByText("PRODUCTION DATABASE");
+      const alertDialog = document.querySelector(
+        '[data-slot="alert-dialog-content"]',
+      ) as HTMLElement;
+      const cancelBtn = Array.from(alertDialog.querySelectorAll("button")).find(
+        (b) => b.textContent === "Cancel",
+      );
+      act(() => {
+        cancelBtn?.click();
+      });
 
-    await screen.findByText(
-      "Safe Mode (warn): confirmation cancelled — no changes committed",
-    );
-  });
+      await screen.findByText(
+        "Safe Mode (warn): confirmation cancelled — no changes committed",
+      );
+    },
+    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+  );
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -2843,99 +2851,107 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
   // Sprint 234 AC-234-03 — Move column up/down buttons. Clicking them
   // swaps the column rows in place; ↑ disabled at row 0, ↓ disabled
   // at the last row.
-  it("Move column up/down buttons reorder rows in place and disable at boundaries (AC-234-03)", () => {
-    renderDialog();
-    fireEvent.click(screen.getByRole("button", { name: /Add column/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Add column/i }));
+  it(
+    "Move column up/down buttons reorder rows in place and disable at boundaries (AC-234-03)",
+    () => {
+      renderDialog();
+      fireEvent.click(screen.getByRole("button", { name: /Add column/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Add column/i }));
 
-    const columnsPanel = document.querySelector(
-      '[data-testid="create-table-columns-panel"]',
-    ) as HTMLElement;
-    const nameInputs = within(columnsPanel).getAllByLabelText("Column name");
-    fireEvent.change(nameInputs[0]!, { target: { value: "a" } });
-    fireEvent.change(nameInputs[1]!, { target: { value: "b" } });
-    fireEvent.change(nameInputs[2]!, { target: { value: "c" } });
+      const columnsPanel = document.querySelector(
+        '[data-testid="create-table-columns-panel"]',
+      ) as HTMLElement;
+      const nameInputs = within(columnsPanel).getAllByLabelText("Column name");
+      fireEvent.change(nameInputs[0]!, { target: { value: "a" } });
+      fireEvent.change(nameInputs[1]!, { target: { value: "b" } });
+      fireEvent.change(nameInputs[2]!, { target: { value: "c" } });
 
-    // Initial order: [a, b, c]. ↑ on row 0 disabled, ↓ on row 2 disabled.
-    let upButtons = within(columnsPanel).getAllByRole("button", {
-      name: /Move column up/i,
-    });
-    let downButtons = within(columnsPanel).getAllByRole("button", {
-      name: /Move column down/i,
-    });
-    expect(upButtons).toHaveLength(3);
-    expect(downButtons).toHaveLength(3);
-    expect(upButtons[0]).toBeDisabled();
-    expect(downButtons[2]).toBeDisabled();
-    expect(upButtons[1]).not.toBeDisabled();
-    expect(downButtons[1]).not.toBeDisabled();
+      // Initial order: [a, b, c]. ↑ on row 0 disabled, ↓ on row 2 disabled.
+      let upButtons = within(columnsPanel).getAllByRole("button", {
+        name: /Move column up/i,
+      });
+      let downButtons = within(columnsPanel).getAllByRole("button", {
+        name: /Move column down/i,
+      });
+      expect(upButtons).toHaveLength(3);
+      expect(downButtons).toHaveLength(3);
+      expect(upButtons[0]).toBeDisabled();
+      expect(downButtons[2]).toBeDisabled();
+      expect(upButtons[1]).not.toBeDisabled();
+      expect(downButtons[1]).not.toBeDisabled();
 
-    // Click ↓ on row 0 → swaps a and b. Order becomes [b, a, c].
-    fireEvent.click(downButtons[0]!);
-    const refreshedNames = within(columnsPanel)
-      .getAllByLabelText("Column name")
-      .map((el) => (el as HTMLInputElement).value);
-    expect(refreshedNames).toEqual(["b", "a", "c"]);
+      // Click ↓ on row 0 → swaps a and b. Order becomes [b, a, c].
+      fireEvent.click(downButtons[0]!);
+      const refreshedNames = within(columnsPanel)
+        .getAllByLabelText("Column name")
+        .map((el) => (el as HTMLInputElement).value);
+      expect(refreshedNames).toEqual(["b", "a", "c"]);
 
-    // Click ↑ on row 2 (now `c`) → swaps c and a. Order becomes [b, c, a].
-    upButtons = within(columnsPanel).getAllByRole("button", {
-      name: /Move column up/i,
-    });
-    fireEvent.click(upButtons[2]!);
-    const refreshedNames2 = within(columnsPanel)
-      .getAllByLabelText("Column name")
-      .map((el) => (el as HTMLInputElement).value);
-    expect(refreshedNames2).toEqual(["b", "c", "a"]);
+      // Click ↑ on row 2 (now `c`) → swaps c and a. Order becomes [b, c, a].
+      upButtons = within(columnsPanel).getAllByRole("button", {
+        name: /Move column up/i,
+      });
+      fireEvent.click(upButtons[2]!);
+      const refreshedNames2 = within(columnsPanel)
+        .getAllByLabelText("Column name")
+        .map((el) => (el as HTMLInputElement).value);
+      expect(refreshedNames2).toEqual(["b", "c", "a"]);
 
-    // ↑ on row 0 is still disabled (boundary defense).
-    upButtons = within(columnsPanel).getAllByRole("button", {
-      name: /Move column up/i,
-    });
-    downButtons = within(columnsPanel).getAllByRole("button", {
-      name: /Move column down/i,
-    });
-    expect(upButtons[0]).toBeDisabled();
-    expect(downButtons[2]).toBeDisabled();
-  });
+      // ↑ on row 0 is still disabled (boundary defense).
+      upButtons = within(columnsPanel).getAllByRole("button", {
+        name: /Move column up/i,
+      });
+      downButtons = within(columnsPanel).getAllByRole("button", {
+        name: /Move column down/i,
+      });
+      expect(upButtons[0]).toBeDisabled();
+      expect(downButtons[2]).toBeDisabled();
+    },
+    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+  );
 
   // Sprint 234 AC-234-04 / Sprint 238 — reorder auto-refetches the
   // preview with the swapped column order. 더 이상 "Show DDL" 재클릭이
   // 필요하지 않다.
-  it("reorder auto-refetches the preview with new column order (AC-234-04)", async () => {
-    setDevConnection();
-    useSafeModeStore.setState({ mode: "off" });
-    mockCreateTable.mockResolvedValue({
-      sql: 'CREATE TABLE "public"."events" ("id" integer, "name" text)',
-    });
-    renderDialog();
-    fireEvent.change(screen.getByLabelText("Table name"), {
-      target: { value: "events" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /Add column/i }));
-    const columnsPanel = document.querySelector(
-      '[data-testid="create-table-columns-panel"]',
-    ) as HTMLElement;
-    const nameInputs = within(columnsPanel).getAllByLabelText("Column name");
-    fireEvent.change(nameInputs[0]!, { target: { value: "id" } });
-    fireEvent.change(nameInputs[1]!, { target: { value: "name" } });
-    const typeInputs =
-      within(columnsPanel).getAllByLabelText("Column data type");
-    fireEvent.change(typeInputs[0]!, { target: { value: "integer" } });
-    fireEvent.change(typeInputs[1]!, { target: { value: "text" } });
+  it(
+    "reorder auto-refetches the preview with new column order (AC-234-04)",
+    async () => {
+      setDevConnection();
+      useSafeModeStore.setState({ mode: "off" });
+      mockCreateTable.mockResolvedValue({
+        sql: 'CREATE TABLE "public"."events" ("id" integer, "name" text)',
+      });
+      renderDialog();
+      fireEvent.change(screen.getByLabelText("Table name"), {
+        target: { value: "events" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /Add column/i }));
+      const columnsPanel = document.querySelector(
+        '[data-testid="create-table-columns-panel"]',
+      ) as HTMLElement;
+      const nameInputs = within(columnsPanel).getAllByLabelText("Column name");
+      fireEvent.change(nameInputs[0]!, { target: { value: "id" } });
+      fireEvent.change(nameInputs[1]!, { target: { value: "name" } });
+      const typeInputs =
+        within(columnsPanel).getAllByLabelText("Column data type");
+      fireEvent.change(typeInputs[0]!, { target: { value: "integer" } });
+      fireEvent.change(typeInputs[1]!, { target: { value: "text" } });
 
-    await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
-    const downButtons = within(columnsPanel).getAllByRole("button", {
-      name: /Move column down/i,
-    });
-    fireEvent.click(downButtons[0]!);
+      const downButtons = within(columnsPanel).getAllByRole("button", {
+        name: /Move column down/i,
+      });
+      fireEvent.click(downButtons[0]!);
 
-    await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(2));
-    const second = mockCreateTable.mock.calls[1]![0] as {
-      columns: Array<{ name: string }>;
-    };
-    expect(second.columns.map((c) => c.name)).toEqual(["name", "id"]);
-  });
+      await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(2));
+      const second = mockCreateTable.mock.calls[1]![0] as {
+        columns: Array<{ name: string }>;
+      };
+      expect(second.columns.map((c) => c.name)).toEqual(["name", "id"]);
+    },
+    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+  );
 });
 
 // ── Sprint 241 — inline FK + CHECK on column row ──────────────────────
