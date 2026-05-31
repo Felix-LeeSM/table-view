@@ -87,7 +87,7 @@ describe("KvSidebar", () => {
     expect(
       screen.getByRole("tree", { name: /redis keys/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText("user:1")).toBeInTheDocument();
+    expect(await screen.findByText("user:1")).toBeInTheDocument();
     expect(screen.getByText("hash")).toBeInTheDocument();
     expect(screen.getByText("128 B")).toBeInTheDocument();
     expect(screen.queryByText(/loading value/i)).not.toBeInTheDocument();
