@@ -12,9 +12,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockInvoke = vi.fn();
+const mockIsTauri = vi.fn(() => true);
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
+  isTauri: () => mockIsTauri(),
 }));
 
 // Mock connectionStore to avoid importing the real Zustand store
@@ -31,6 +33,9 @@ describe("scopedLocalStorage", () => {
   let store: Map<string, string>;
 
   beforeEach(() => {
+    mockInvoke.mockReset();
+    mockIsTauri.mockReset();
+    mockIsTauri.mockReturnValue(true);
     store = new Map();
     Object.defineProperty(window, "localStorage", {
       configurable: true,
@@ -59,6 +64,20 @@ describe("scopedLocalStorage", () => {
       await import("@lib/scopedLocalStorage");
     await initSession();
     expect(getSessionId()).toBe("test-uuid-123");
+  });
+
+  it("falls back to a browser session ID when Tauri IPC is unavailable", async () => {
+    mockIsTauri.mockReturnValue(false);
+    const { initSession, getSessionId, sessionSet, sessionGet } =
+      await import("@lib/scopedLocalStorage");
+
+    await expect(initSession()).resolves.toBeUndefined();
+
+    const sessionId = getSessionId();
+    expect(sessionId).toMatch(/^browser-/);
+    expect(mockInvoke).not.toHaveBeenCalled();
+    sessionSet("key1", { connId: "c1" });
+    expect(sessionGet("key1")).toEqual({ connId: "c1" });
   });
 
   // Reason: data written under one session ID must be readable under the

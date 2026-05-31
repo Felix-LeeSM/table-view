@@ -37,6 +37,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // resolve 가능하게 만든다.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+  isTauri: vi.fn(() => true),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({

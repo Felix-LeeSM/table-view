@@ -657,6 +657,19 @@ describe("connectionStore", () => {
     });
   });
 
+  it("initEventListeners is a no-op when the Tauri event runtime is unavailable", async () => {
+    const { listen } = await import("@tauri-apps/api/event");
+    (listen as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new TypeError(
+        "Cannot read properties of undefined (reading 'transformCallback')",
+      ),
+    );
+
+    await expect(
+      useConnectionStore.getState().initEventListeners(),
+    ).resolves.toBeUndefined();
+  });
+
   it("[RISK-040] connection-status disconnected event runs connection cleanup", async () => {
     const { listen } = await import("@tauri-apps/api/event");
     mockSessionActiveStatuses = { c1: { type: "connected" } };
