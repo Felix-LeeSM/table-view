@@ -92,6 +92,7 @@ async function openSeededUsersTable() {
 describe("MySQL smoke", () => {
   it("covers connect, browse, SELECT, DML batch, row edit, cancellation, and history evidence", async () => {
     const editedName = `Alice MySQL Smoke ${Date.now()}`;
+    const smokeProductName = `MySQL Smoke Product ${Date.now()}`;
 
     await step("create MySQL connection and open workspace", async () => {
       await waitForLauncher();
@@ -137,12 +138,11 @@ describe("MySQL smoke", () => {
       async () => {
         await typeQuery(
           [
-            "UPDATE products SET price = 29.99 WHERE name = 'Widget'",
-            "UPDATE products SET price = 24.99 WHERE name = 'Widget'",
+            `INSERT INTO products (name, price) VALUES ('${smokeProductName} A', 29.99)`,
+            `INSERT INTO products (name, price) VALUES ('${smokeProductName} B', 24.99)`,
           ].join("; "),
         );
         await runQuery();
-        await executeSqlPreview();
 
         await waitForWorkspaceTextAll(
           ["Statement 1 DML", "Statement 2 DML", "row affected"],
@@ -151,11 +151,18 @@ describe("MySQL smoke", () => {
         );
 
         await typeQuery(
-          "SELECT name, price FROM products WHERE name = 'Widget'",
+          `SELECT name, price FROM products WHERE name IN ('${smokeProductName} A', '${smokeProductName} B') ORDER BY name`,
         );
         await runQuery();
         await waitForGridTextAll(
-          ["name", "price", "Widget", "24.99"],
+          [
+            "name",
+            "price",
+            `${smokeProductName} A`,
+            `${smokeProductName} B`,
+            "29.99",
+            "24.99",
+          ],
           15000,
           "MySQL DML batch result was not visible through a follow-up SELECT",
         );
