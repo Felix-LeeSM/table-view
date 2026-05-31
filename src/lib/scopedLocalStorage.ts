@@ -19,9 +19,21 @@
  * names (`sessionSet` / `sessionGet` / `sessionRemove` / `initSession`)
  * are unchanged so call sites still read with the intended semantics.
  */
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 
 let _sessionId: string | null = null;
+
+function createBrowserSessionId(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return `browser-${crypto.randomUUID()}`;
+  }
+  return `browser-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+}
 
 /**
  * Fetch the session UUID from Rust and cache it. Must be called once before
@@ -29,6 +41,10 @@ let _sessionId: string | null = null;
  * the React tree mounts.
  */
 export async function initSession(): Promise<void> {
+  if (!isTauri()) {
+    _sessionId = createBrowserSessionId();
+    return;
+  }
   _sessionId = await invoke<string>("get_session_id");
 }
 

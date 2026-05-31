@@ -364,16 +364,20 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   },
 
   initEventListeners: async () => {
-    await listen<{ id: string; status: ConnectionStatus }>(
-      "connection-status-changed",
-      (event) => {
-        const { id, status } = event.payload;
-        set((state) => ({
-          activeStatuses: { ...state.activeStatuses, [id]: status },
-        }));
-        persistActiveStatuses(get().activeStatuses);
-      },
-    );
+    try {
+      await listen<{ id: string; status: ConnectionStatus }>(
+        "connection-status-changed",
+        (event) => {
+          const { id, status } = event.payload;
+          set((state) => ({
+            activeStatuses: { ...state.activeStatuses, [id]: status },
+          }));
+          persistActiveStatuses(get().activeStatuses);
+        },
+      );
+    } catch {
+      // Tauri event runtime is absent in plain-browser dev/test surfaces.
+    }
   },
 }));
 

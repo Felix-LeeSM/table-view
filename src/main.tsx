@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { isTauri } from "@tauri-apps/api/core";
 import AppRouter from "./AppRouter";
 import { bootTheme, reconcileThemeFromBackend } from "@lib/themeBoot";
 import { bootWindowLifecycle } from "@lib/window-lifecycle-boot";
@@ -52,6 +53,7 @@ async function boot() {
   //    flash 가 발생. 본 reconcile 이 보통 10–50ms 안에 완료되어 첫 React render
   //    전에 정답값이 들어간다 (Wave 9.5 회귀 7 user 가설 적용).
   bootTheme();
+  const tauriRuntimeAvailable = isTauri();
 
   // Wave 9.5 회귀 7 (2026-05-17) — `meta.legacy_imported` 가 영원히 Pending
   // 상태였다. sprint-355 의 frontend wrapper 는 만들어졌으나 boot path 어디서도
@@ -60,16 +62,20 @@ async function boot() {
   // 가 영속 안 됨. 빈 payload 도 Pending → Done 전이 인정 (sprint-355 design
   // idempotent). reconcile 보다 먼저 호출해 첫 클릭 race 회피. dev 단계 + 사용자
   // 명시로 legacy LS scan (favorites/mru/connections) 은 별도 작업.
-  try {
-    await importLegacyLocalStorage({});
-  } catch (e) {
-    logger.warn(
-      "[main] importLegacyLocalStorage failed:",
-      e instanceof Error ? e.message : e,
-    );
+  if (tauriRuntimeAvailable) {
+    try {
+      await importLegacyLocalStorage({});
+    } catch (e) {
+      logger.warn(
+        "[main] importLegacyLocalStorage failed:",
+        e instanceof Error ? e.message : e,
+      );
+    }
   }
 
-  await reconcileThemeFromBackend();
+  if (tauriRuntimeAvailable) {
+    await reconcileThemeFromBackend();
+  }
   markBootMilestone("theme:applied");
 
   // Session-scoped localStorage: fetch the process UUID from Rust so both
@@ -81,7 +87,9 @@ async function boot() {
   // snapshot IPC so race-window `state-changed` events get buffered.
   // Best-effort: in vitest jsdom or a tauri-less env this becomes a no-op
   // (`registerSnapshotListener` swallows the import failure).
-  await registerSnapshotListener();
+  if (tauriRuntimeAvailable) {
+    await registerSnapshotListener();
+  }
   markBootMilestone("snapshot:listener-registered");
 
   // Sprint 368 (Phase 4 Q12) — wire the singleton `setting.onUpdated`
@@ -116,26 +124,30 @@ async function boot() {
   // error toast with Retry inside `loadAllFromSnapshot` itself, so we keep
   // the existing session-LS path as the fallback for this sprint. Sprint 368
   // / 369 retire the LS dependencies; Sprint 370 owns workspaces.
-  void loadAllFromSnapshot()
-    .then(() => markBootMilestone("snapshot:applied"))
-    .catch((e) => {
-      logger.warn(
-        "[main] snapshot hydration failed (LS fallback in effect):",
-        e instanceof Error ? e.message : e,
-      );
-    });
+  if (tauriRuntimeAvailable) {
+    void loadAllFromSnapshot()
+      .then(() => markBootMilestone("snapshot:applied"))
+      .catch((e) => {
+        logger.warn(
+          "[main] snapshot hydration failed (LS fallback in effect):",
+          e instanceof Error ? e.message : e,
+        );
+      });
+  }
 
   // Sprint 369 (Phase 4) — drop legacy `column-widths:*` / `hidden-columns:*`
   // localStorage 키 + 사용자 1회 toast. sentinel 이 `meta` 테이블에 set 되어
   // 이미 보여줬으면 noop. Fire-and-forget — 본 작업이 실패해도 boot 은 계속.
-  void import("@lib/runtime/migration/legacyColumnPrefsDrop")
-    .then((m) => m.dropLegacyColumnPrefs())
-    .catch((e) => {
-      logger.warn(
-        "[main] legacy column prefs drop failed:",
-        e instanceof Error ? e.message : e,
-      );
-    });
+  if (tauriRuntimeAvailable) {
+    void import("@lib/runtime/migration/legacyColumnPrefsDrop")
+      .then((m) => m.dropLegacyColumnPrefs())
+      .catch((e) => {
+        logger.warn(
+          "[main] legacy column prefs drop failed:",
+          e instanceof Error ? e.message : e,
+        );
+      });
+  }
 
   // Sprint 401 (2026-05-17) — eager pre-load of the mongosh WASM parser.
   // `parseMongoshStatement` 의 호출부 (`Toolbar.tsx` 의 render-path Run

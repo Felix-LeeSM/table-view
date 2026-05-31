@@ -31,12 +31,12 @@ function useMenuNewConnectionBridge() {
   useEffect(() => {
     const unlistenPromise = listen("menu:new-connection", () => {
       window.dispatchEvent(new CustomEvent("new-connection"));
-    });
+    }).catch(() => undefined);
     return () => {
       // Cleanup is best-effort: unlisten can reject if the listener was
       // already removed or the Tauri runtime is unavailable (test env).
       // The effect is unmounting either way, so swallowing is safe.
-      unlistenPromise.then((fn) => fn()).catch(() => {});
+      unlistenPromise.then((fn) => fn?.()).catch(() => {});
     };
   }, []);
 }
