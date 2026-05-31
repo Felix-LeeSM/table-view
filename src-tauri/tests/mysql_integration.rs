@@ -1243,8 +1243,8 @@ async fn test_mysql_execute_query_batch_strips_trailing_semicolons() {
 // - PG BIGINT → JSON string. MySQL BIGINT → JSON number (i64).
 // - PG NUMERIC → JSON string. MySQL DECIMAL → JSON string (queries.rs line 145).
 // - INT 는 둘 다 JSON number.
-// - CHECK clauses: MySQL adapter 는 column-level check_clauses 를 채우지 않음
-//   (schema.rs line 218: `check_clauses: Vec::new()`). 빈 vec 보장으로 회귀 가드.
+// - CHECK clauses: MySQL adapter 는 information_schema CHECK expression 을
+//   column-level check_clauses 로 투영.
 
 #[tokio::test]
 #[serial_test::serial]
@@ -1610,15 +1610,9 @@ async fn test_mysql_get_table_columns_with_comments() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// Mirror of PG `test_get_table_columns_populates_check_clauses` — dialect
-/// adjusted: MySQL 8.0.16+ supports CHECK 이지만 mysql/schema.rs 의
-/// `get_table_columns` 는 column-level check_clauses 를 아직 populate 하지
-/// 않는다 (line 218 hardcoded Vec::new()). 회귀 가드: clause 가 항상 빈
-/// vec 임을 pin — 후속 sprint 에서 populate 구현 시 본 테스트가 실패하면서
-/// 정정 trigger.
 #[tokio::test]
 #[serial_test::serial]
-async fn test_mysql_get_table_columns_check_clauses_remain_empty() {
+async fn test_mysql_get_table_columns_populates_check_clauses() {
     let adapter = match common::setup_mysql_adapter().await {
         Some(a) => a,
         None => return,
@@ -1634,7 +1628,10 @@ async fn test_mysql_get_table_columns_check_clauses_remain_empty() {
             &format!(
                 "CREATE TABLE {table} (\
                  id INT AUTO_INCREMENT PRIMARY KEY, \
-                 age INT CHECK (age >= 0))"
+                 age INT CHECK (age >= 0), \
+                 min_v INT, \
+                 max_v INT, \
+                 CHECK (min_v <= max_v))"
             ),
             None,
         )
@@ -1645,12 +1642,29 @@ async fn test_mysql_get_table_columns_check_clauses_remain_empty() {
         .get_table_columns(&table, MYSQL_SCHEMA)
         .await
         .expect("get_table_columns");
-    for col in &columns {
-        assert!(
-            col.check_clauses.is_empty(),
-            "MySQL adapter must report check_clauses=[] (line 218), got {col:?}"
-        );
-    }
+
+    let age_col = columns.iter().find(|c| c.name == "age").expect("age");
+    assert_eq!(age_col.check_clauses.len(), 1, "age has 1 check");
+    assert!(
+        age_col.check_clauses[0].contains("age >= 0")
+            || age_col.check_clauses[0].contains("`age` >= 0"),
+        "age check should include expression: {:?}",
+        age_col.check_clauses
+    );
+
+    let min_col = columns.iter().find(|c| c.name == "min_v").expect("min_v");
+    let max_col = columns.iter().find(|c| c.name == "max_v").expect("max_v");
+    assert_eq!(min_col.check_clauses.len(), 1, "min_v has 1 check");
+    assert_eq!(max_col.check_clauses.len(), 1, "max_v has 1 check");
+    assert!(
+        min_col.check_clauses[0].contains("min_v <= max_v")
+            || min_col.check_clauses[0].contains("`min_v` <= `max_v`"),
+        "multi-column check should include expression: {:?}",
+        min_col.check_clauses
+    );
+
+    let id_col = columns.iter().find(|c| c.name == "id").expect("id");
+    assert!(id_col.check_clauses.is_empty(), "id has no check");
 
     adapter
         .execute_query(&format!("DROP TABLE {table}"), None)
@@ -2232,7 +2246,12 @@ async fn test_mysql_list_schema_columns_aggregates_multiple_tables() {
 
     adapter
         .execute_query(
-            &format!("CREATE TABLE {t1} (id INT PRIMARY KEY, label TEXT)"),
+            &format!(
+                "CREATE TABLE {t1} (\
+                 id INT PRIMARY KEY, \
+                 label TEXT, \
+                 score INT CHECK (score >= 0))"
+            ),
             None,
         )
         .await
@@ -2248,10 +2267,16 @@ async fn test_mysql_list_schema_columns_aggregates_multiple_tables() {
         .expect("list_schema_columns");
     let cols_t1 = map.get(&t1).unwrap_or_else(|| panic!("{t1} missing"));
     let cols_t2 = map.get(&t2).unwrap_or_else(|| panic!("{t2} missing"));
-    assert_eq!(cols_t1.len(), 2);
+    assert_eq!(cols_t1.len(), 3);
     assert_eq!(cols_t2.len(), 2);
     assert!(cols_t1.iter().any(|c| c.name == "id"));
     assert!(cols_t2.iter().any(|c| c.name == "v"));
+    let score = cols_t1.iter().find(|c| c.name == "score").expect("score");
+    assert_eq!(score.check_clauses.len(), 1);
+    assert!(
+        score.check_clauses[0].contains("score >= 0")
+            || score.check_clauses[0].contains("`score` >= 0")
+    );
 
     adapter
         .execute_query(&format!("DROP TABLE {t1}"), None)
@@ -2399,7 +2424,7 @@ async fn test_mysql_get_table_indexes_for_unknown_table_returns_empty() {
 
 #[tokio::test]
 #[serial_test::serial]
-async fn test_mysql_get_table_constraints_pk_unique() {
+async fn test_mysql_get_table_constraints_pk_unique_check() {
     let adapter = match common::setup_mysql_adapter().await {
         Some(a) => a,
         None => return,
@@ -2416,7 +2441,8 @@ async fn test_mysql_get_table_constraints_pk_unique() {
             &format!(
                 "CREATE TABLE {t} (\
                   id INT PRIMARY KEY, \
-                  email VARCHAR(190) UNIQUE)"
+                  email VARCHAR(190) UNIQUE, \
+                  age INT CHECK (age >= 0))"
             ),
             None,
         )
@@ -2440,6 +2466,13 @@ async fn test_mysql_get_table_constraints_pk_unique() {
         .find(|c| c.constraint_type == "UNIQUE")
         .expect("UNIQUE missing");
     assert_eq!(uniq.columns, vec!["email".to_string()]);
+
+    let chk = constraints
+        .iter()
+        .find(|c| c.constraint_type == "CHECK")
+        .expect("CHECK missing");
+    assert!(chk.columns.is_empty());
+    assert!(chk.reference_table.is_none());
 
     adapter
         .execute_query(&format!("DROP TABLE {t}"), None)
