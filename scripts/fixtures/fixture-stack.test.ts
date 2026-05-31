@@ -15,6 +15,14 @@ describe("fixture stack wiring", () => {
     );
   });
 
+  it("removes compose fixture volumes from db:down", () => {
+    const pkg = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+
+    expect(pkg.scripts["db:down"]).toBe("docker compose down -v");
+  });
+
   it("waits for every compose fixture container", () => {
     const compose = parse(readFileSync(resolve("docker-compose.yml"), "utf8"));
     const waitScript = readFileSync(resolve("scripts/db/wait.sh"), "utf8");

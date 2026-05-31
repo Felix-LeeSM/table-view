@@ -28,7 +28,7 @@
     "tauri": "tauri",
     "icons:build": "./scripts/build-icons.sh",
     "db:up": "docker compose up -d && ./scripts/db/wait.sh",
-    "db:down": "docker compose down",
+    "db:down": "docker compose down -v",
     "db:seed": "tsx scripts/fixtures/index.ts seed",
     "db:reset": "tsx scripts/fixtures/index.ts reset",
     "db:connections": "tsx scripts/fixtures/index.ts connections",
