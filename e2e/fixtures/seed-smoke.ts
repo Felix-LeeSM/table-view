@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { MongoClient, type Document } from "mongodb";
+import { createConnection } from "mysql2/promise";
 import { Client as PgClient } from "pg";
 
 const pgConfig = {
@@ -18,6 +19,14 @@ const mongoConfig = {
   password: process.env.MONGO_PASSWORD ?? "testpass",
   authDb: process.env.E2E_MONGO_AUTH_DB ?? "admin",
   database: process.env.E2E_MONGO_DB ?? "table_view_test",
+};
+
+const mysqlConfig = {
+  host: process.env.E2E_MYSQL_HOST ?? process.env.MYSQL_HOST ?? "localhost",
+  port: Number(process.env.E2E_MYSQL_PORT ?? process.env.MYSQL_PORT ?? 13306),
+  user: process.env.MYSQL_USER ?? "testuser",
+  password: process.env.MYSQL_PASSWORD ?? "testpass",
+  database: process.env.MYSQL_DATABASE ?? "table_view_test",
 };
 
 type MongoSeedIndex = {
@@ -98,6 +107,21 @@ async function seedMongo() {
   });
 }
 
+async function seedMysql() {
+  const sql = await readFile(resolve("e2e/fixtures/seed.mysql.sql"), "utf-8");
+  await retry("MySQL", async () => {
+    const connection = await createConnection({
+      ...mysqlConfig,
+      multipleStatements: true,
+    });
+    try {
+      await connection.query(sql);
+    } finally {
+      await connection.end();
+    }
+  });
+}
+
 function seedDocumentFilter(document: Document): Document {
   if (document._id !== undefined) return { _id: document._id };
   if (document.email !== undefined) return { email: document.email };
@@ -106,4 +130,7 @@ function seedDocumentFilter(document: Document): Document {
 
 await seedPostgres();
 await seedMongo();
-console.log("[e2e:seed] Postgres and MongoDB smoke fixtures are ready.");
+await seedMysql();
+console.log(
+  "[e2e:seed] Postgres, MongoDB, and MySQL smoke fixtures are ready.",
+);

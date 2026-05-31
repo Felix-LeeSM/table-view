@@ -6,11 +6,12 @@
 -- The seed must remain re-runnable so e2e containers (Phase 17) can boot
 -- against a warm volume without recreating the DB on every run.
 --
--- Strategy (mirrors seed.sql):
+-- Strategy (mirrors seed.sql, but resets smoke-mutated rows):
 --   * `CREATE TABLE IF NOT EXISTS ...` for schema (InnoDB + utf8mb4).
---   * `INSERT IGNORE INTO users` — UNIQUE(email) guards duplicates.
---   * `INSERT ... SELECT ... FROM DUAL WHERE NOT EXISTS (...)` guarded
---     inserts for orders/products (no UNIQUE besides AUTO_INCREMENT id).
+--   * `INSERT ... ON DUPLICATE KEY UPDATE` for users so reruns restore names
+--     after row-edit smoke.
+--   * delete/reinsert the single smoke product/order rows so reruns restore
+--     DML-smoke mutations without relying on a warm volume being empty.
 --
 -- Engine: InnoDB explicit (FK enforcement; MyISAM silently drops them).
 -- Charset: utf8mb4 explicit (default still latin1 on legacy installs).
@@ -35,17 +36,15 @@ CREATE TABLE IF NOT EXISTS products (
   price DECIMAL(10, 2)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT IGNORE INTO users (name, email) VALUES ('Alice', 'alice@example.com');
-INSERT IGNORE INTO users (name, email) VALUES ('Bob', 'bob@example.com');
+INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com')
+  ON DUPLICATE KEY UPDATE name = VALUES(name);
+INSERT INTO users (name, email) VALUES ('Bob', 'bob@example.com')
+  ON DUPLICATE KEY UPDATE name = VALUES(name);
 
-INSERT INTO orders (user_id, total)
-  SELECT 1, 99.99 FROM DUAL
-  WHERE NOT EXISTS (
-    SELECT 1 FROM orders WHERE user_id = 1 AND total = 99.99
-  );
+SET @alice_user_id := (SELECT id FROM users WHERE email = 'alice@example.com');
 
-INSERT INTO products (name, price)
-  SELECT 'Widget', 19.99 FROM DUAL
-  WHERE NOT EXISTS (
-    SELECT 1 FROM products WHERE name = 'Widget' AND price = 19.99
-  );
+DELETE FROM orders WHERE user_id = @alice_user_id AND total = 99.99;
+INSERT INTO orders (user_id, total) VALUES (@alice_user_id, 99.99);
+
+DELETE FROM products WHERE name = 'Widget';
+INSERT INTO products (name, price) VALUES ('Widget', 19.99);

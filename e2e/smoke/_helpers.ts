@@ -5,7 +5,7 @@ export { editGridCellInRow } from "./grid-edit";
 const WORKSPACE_TITLE = "Table View — Workspace";
 const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"]';
 
-export type DbType = "postgresql" | "mongodb";
+export type DbType = "postgresql" | "mongodb" | "mysql";
 export type ConnectionEnvironment =
   | "local"
   | "testing"
@@ -123,7 +123,9 @@ export async function selectDatabaseType(dbType: DbType) {
 }
 
 function dbTypeLabel(dbType: DbType): string {
-  return dbType === "postgresql" ? "PostgreSQL" : "MongoDB";
+  if (dbType === "postgresql") return "PostgreSQL";
+  if (dbType === "mysql") return "MySQL";
+  return "MongoDB";
 }
 
 async function getDomText(selector: string): Promise<string> {
@@ -201,6 +203,33 @@ export async function createPostgresConnection(
   await setInput("#conn-user", process.env.PGUSER ?? "testuser");
   await setInput("#conn-password", process.env.PGPASSWORD ?? "testpass");
   await setInput("#conn-database", process.env.PGDATABASE ?? "table_view_test");
+
+  await saveConnectionDialog(dialog);
+  await expectConnectionVisible(name);
+}
+
+export async function createMysqlConnection(
+  name = "E2E MySQL",
+  environment?: ConnectionEnvironment,
+) {
+  const dialog = await openNewConnectionDialog();
+  await selectDatabaseType("mysql");
+
+  await setInput("#conn-name", name);
+  if (environment) {
+    await selectConnectionEnvironment(environment);
+  }
+  await setInput("#conn-host", process.env.E2E_MYSQL_HOST ?? "localhost");
+  await setInput(
+    "#conn-port",
+    process.env.E2E_MYSQL_PORT ?? process.env.MYSQL_PORT ?? "13306",
+  );
+  await setInput("#conn-user", process.env.MYSQL_USER ?? "testuser");
+  await setInput("#conn-password", process.env.MYSQL_PASSWORD ?? "testpass");
+  await setInput(
+    "#conn-database",
+    process.env.MYSQL_DATABASE ?? "table_view_test",
+  );
 
   await saveConnectionDialog(dialog);
   await expectConnectionVisible(name);
@@ -366,6 +395,26 @@ export async function waitForGridTextAll(
     },
   );
   return grid;
+}
+
+export async function waitForWorkspaceTextAll(
+  snippets: string[],
+  timeout: number,
+  timeoutMsg: string,
+) {
+  await switchToWorkspaceWindow();
+  await browser.waitUntil(
+    async () => {
+      const text = await browser.execute(
+        () => document.body.textContent?.toLowerCase() ?? "",
+      );
+      return snippets.every((snippet) => text.includes(snippet.toLowerCase()));
+    },
+    {
+      timeout,
+      timeoutMsg,
+    },
+  );
 }
 
 export async function executeSqlPreview() {

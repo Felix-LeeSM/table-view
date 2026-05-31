@@ -75,16 +75,17 @@ result envelope wire format, `useQueryExecution` decomposition, DBMS별 live smo
 
 ## H2 진행 기준
 
-H2 RDBMS parity 는 **PostgreSQL lane 을 먼저 선택**한다. 이 lane 이
-runtime/parser/Safe Mode/completion/edit/fixture/E2E/support-claim gate 를
-통과하기 전까지 MySQL/MariaDB/SQLite/DuckDB 를 full parity lane 으로
-승격하지 않는다. MySQL/MariaDB/SQLite 작업은 현재 claim 정합성, typed capability
-gate, fixture/smoke evidence routing 으로 제한한다.
+H2 RDBMS parity 는 **PostgreSQL lane 을 먼저 선택**했다. PostgreSQL 은 아직 가장
+강한 full-parity 후보 lane 이고, MySQL 은 runtime smoke baseline 까지만 승격돼
+있다. MySQL/MariaDB/SQLite/DuckDB 를 full parity lane 으로 넓히려면 별도
+runtime/parser/Safe Mode/completion/edit/fixture/E2E/support-claim gate 가 필요하다.
+MariaDB/SQLite/DuckDB 작업은 현재 claim 정합성, typed capability gate,
+fixture/smoke evidence routing 으로 제한한다.
 
 | Gate | Current owner | H2 boundary |
 |---|---|---|
 | Active lane selection | `docs/ROADMAP.md`, #185 | PostgreSQL first. Full admin parity is out of scope. |
-| RDBMS common smoke matrix | `docs/contributor-guide/testing-and-quality.md`, #240 | Current remote E2E smoke proves PostgreSQL only; other RDBMS lanes use unit/integration/fixture evidence until promoted. |
+| RDBMS common smoke matrix | `docs/contributor-guide/testing-and-quality.md`, #240 | Current remote E2E smoke proves PostgreSQL as the strongest RDBMS lane and MySQL as a narrower runtime baseline. Other RDBMS lanes use unit/integration/fixture evidence until promoted. |
 | MySQL version-aware capability gate | `src/types/dataSourceVersionCapabilities.ts`, `src/types/adapterConformance.ts`, #221 | CHECK/constraint catalog claim is enabled only with server version context (`>= 8.0.16`). |
 | MariaDB delta/evidence gate | `src/types/dataSourceRuntime.ts`, `src/lib/sql/sqlDialectProfile.ts`, `src/types/adapterConformance.ts`, #222 | MariaDB keeps identity/profile and completion-only `RETURNING` delta; runtime support remains server-resolved until engine evidence is promoted. |
 | MySQL/MariaDB support claim SOT | `docs/product/README.md`, `docs/product/known-limitations.md`, `docs/product/query-language-support.md`, #207 | Shared MySQL-family behavior and MariaDB-specific deltas are separated. |
@@ -207,7 +208,7 @@ DynamoDB, graph, vector, stream 은 아직 active `DatabaseType`/profile/runtime
 | Wider candidate workflow proof | `memory/engineering/architecture/data-source/memory.md`, `memory/engineering/architecture/data-source/adding/memory.md`, this roadmap | Promotion requires workflow value, profile target, connection kind, language, catalog model, result envelope, safety policy, fixture strategy, conformance scope, and docs/memory routing before implementation. |
 | Candidate source contract inventory | this roadmap, `docs/product/README.md`, `docs/product/query-language-support.md` | Candidate targets are inventoried below. They are profile targets, not active profile entries. |
 | Parser/completion/runtime non-claim | `docs/product/query-language-support.md`, `docs/product/known-limitations.md` | Deferred language ids do not create active parser, completion, connection, query, catalog, edit, or E2E claims. Runtime changes must land in later source-specific PRs with matching smoke evidence. |
-| H6 smoke matrix | `docs/contributor-guide/testing-and-quality.md` | Current E2E smoke proves PostgreSQL and MongoDB journeys only. MSSQL/Oracle and wider candidates have future smoke inventories, not current desktop E2E claims. |
+| H6 smoke matrix | `docs/contributor-guide/testing-and-quality.md` | Current E2E smoke proves PostgreSQL, MySQL, and MongoDB journeys only. MSSQL/Oracle and wider candidates have future smoke inventories, not current desktop E2E claims. |
 
 Candidate target inventory:
 
@@ -239,7 +240,7 @@ owner 와 runtime cost 가 명확하며, failure triage 경로가 있을 때만 
 |---|---|---|
 | PR/main CI gates | `.github/workflows/ci.yml`, `.github/workflows/e2e-smoke.yml` | Remote blocking checks are Frontend Checks, Rust Unit And Storage Tests, Integration Tests (Docker), and Runtime Happy Path. Theme contrast is advisory. Link-check, full a11y, perf, and cross-platform runtime smoke are not routine blocking gates. |
 | Local hook gates | `.githooks/*`, `lefthook.yml`, `scripts/hooks/pre-push-path-router.sh`, `memory/workflow/git-policy/memory.md` | Pre-push always checks signed commits and TDD-cycle, then routes outgoing paths: docs-only skips TS/Rust; frontend/Rust paths run their stacks; workflow or unknown paths run full checks. Hook bypass, unsigned commits, pull/reset recovery hazards, and force-push remain forbidden by policy/hook. |
-| Runtime E2E smoke | `scripts/e2e-smoke-ci.sh`, `wdio.smoke.conf.ts`, `e2e/smoke/postgres.spec.ts`, `e2e/smoke/postgres-safe-mode.spec.ts`, `e2e/smoke/postgres-explain.spec.ts`, `e2e/smoke/postgres-extension-completion.spec.ts`, `e2e/smoke/postgres-cancellation.spec.ts`, `e2e/smoke/mongodb.spec.ts` | GitHub Runtime Happy Path builds the app on Ubuntu and executes the wired PostgreSQL and MongoDB smoke specs only. Other specs under `e2e/smoke/**` are not automatically part of the remote runtime gate unless the smoke script wires them. |
+| Runtime E2E smoke | `scripts/e2e-smoke-ci.sh`, `wdio.smoke.conf.ts`, `e2e/smoke/postgres.spec.ts`, `e2e/smoke/postgres-safe-mode.spec.ts`, `e2e/smoke/postgres-explain.spec.ts`, `e2e/smoke/postgres-extension-completion.spec.ts`, `e2e/smoke/postgres-cancellation.spec.ts`, `e2e/smoke/mysql.spec.ts`, `e2e/smoke/mongodb.spec.ts` | GitHub Runtime Happy Path builds the app on Ubuntu and executes the wired PostgreSQL, MySQL, and MongoDB smoke specs only. Other specs under `e2e/smoke/**` are not automatically part of the remote runtime gate unless the smoke script wires them. |
 | Security/destructive policy | `docs/product/query-language-support.md`, `docs/product/known-limitations.md`, `.agents/skills/grill-with-memory/SKILL.md` | Current destructive protections are source-specific preview/confirm/Safe Mode/typed confirmation paths. There is no universal admin/security dashboard, role/user/permission UI, credential rotation UI, or global audit-log claim. Security-impacting decisions follow the grill-with-memory threat-model handoff before option selection. |
 | Credential/privacy boundary | `memory/engineering/architecture/state-management/memory.md`, `docs/product/README.md`, `docs/product/known-limitations.md` | Table View remains local-first. Connection export omits passwords, imported connections require password re-entry, and local file analytics public payloads redact absolute paths. Broader credential/key lifecycle smoke is future work. |
 | A11y/perf/link-check/platform smoke | `docs/contributor-guide/testing-and-quality.md`, `.github/workflows/ci.yml` | Existing component/unit checks and advisory theme contrast do not equal routine screen-reader, FPS/latency, link-check, macOS runtime, or Windows runtime gates. Promote only when a lane needs a concrete owner and budget. |
@@ -280,7 +281,7 @@ Near-term follow-up groups:
 
 | Group | Follow-up |
 |---|---|
-| RDBMS parity | Keep PostgreSQL as the first query/workbench parity lane until a focused implementation slice promotes the next PostgreSQL gap with matching tests and smoke routing. Keep SQLite file-DBMS work scoped to writable-file DML, PK row edits, explicit DDL rejection, and future smoke promotion until structured DDL/ALTER rebuild and extension semantics have their own implementation evidence. Keep MySQL/MariaDB version-aware feature gates on the server-version-aware conformance path, and add operation-level UI/runtime consumers only with matching evidence. Add MariaDB engine fixture evidence or keep support claims narrowed. |
+| RDBMS parity | Keep PostgreSQL as the strongest query/workbench parity lane until a focused implementation slice promotes the next PostgreSQL gap with matching tests and smoke routing. Keep MySQL's runtime smoke baseline narrow to connect/browse/query/edit/cancel/history/result-envelope behavior; add broader MySQL/MariaDB operation-level UI/runtime consumers only with matching evidence. Keep SQLite file-DBMS work scoped to writable-file DML, PK row edits, explicit DDL rejection, and future smoke promotion until structured DDL/ALTER rebuild and extension semantics have their own implementation evidence. Add MariaDB engine fixture evidence or keep support claims narrowed. |
 | Query language widening | Widen SQL/Mongo client semantic support by tested slices: broader MySQL/MariaDB routine expressions, SQLite extension/capability semantics, server-version/capability gates, Mongo version/deployment gates, and extension-aware completion packs. DuckDB extension install/load and external-file capability settings are currently blocked by adapter gates; future DuckDB extension support needs detected capability evidence before completion/runtime claims widen. PostgreSQL completion packs must consume installed extension inventory before enabling curated extension-specific candidates. |
 | Query/result boundary | Keep typed envelopes as the UI-facing boundary. Future hardening can make backend RDBMS IPC emit native `tabular` envelopes instead of normalizing legacy `QueryResult` at the Tauri wrapper. |
 | ERD/schema graph | 현재 schemaStore cache owner 범위는 schemas/tables/views/functions/postgresExtensions/tableColumnsCache/tableIndexesCache/tableConstraintsCache/triggers 이다. Production ERD/`SchemaGraph` input 은 schema/table/column cache 와 cached/fetched explicit index/constraint metadata 를 함께 쓰며, column-level FK info 는 synthetic fallback 으로 남아 있다. FK navigation 은 현재 DataGrid cell/icon path 이며 ERD interaction claim 이 아니다. Follow-up 은 shared `SchemaGraph`/catalog input path 를 확장해 dependency view, migration impact analysis, schema diff, data compare, dense-view screenshot smoke 를 연결하는 것이다. Duplicate catalog parsing 금지. |
