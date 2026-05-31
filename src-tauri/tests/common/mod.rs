@@ -30,10 +30,10 @@ use testcontainers_modules::mysql::Mysql as MysqlImage;
 use testcontainers_modules::postgres::Postgres as PostgresImage;
 use tokio::sync::OnceCell;
 
-/// 우리 통합 테스트가 띄운 컨테이너를 식별하는 라벨 키. owner-pid 와 함께
-/// 박아 두면 self-sweep 이 "내 컨테이너 / 남의 컨테이너" 를 구분할 수 있다.
-const OWNED_LABEL: &str = "table-view.tests";
-const OWNER_PID_LABEL: &str = "table-view.tests.owner-pid";
+#[path = "../support/testcontainer_lifecycle.rs"]
+mod testcontainer_lifecycle;
+
+use testcontainer_lifecycle::{current_pid_label, ensure_sweep_once, OWNED_LABEL, OWNER_PID_LABEL};
 
 #[derive(Clone, Debug)]
 struct PgEndpoint {
@@ -82,63 +82,6 @@ struct MysqlEndpoint {
 static PG_CONTAINER: OnceCell<Option<Arc<ContainerAsync<PostgresImage>>>> = OnceCell::const_new();
 static MONGO_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MongoImage>>>> = OnceCell::const_new();
 static MYSQL_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MysqlImage>>>> = OnceCell::const_new();
-static SWEEP_DONE: OnceCell<()> = OnceCell::const_new();
-
-/// owner PID 가 죽은 우리 컨테이너만 `docker rm -f` 로 정리.
-/// 살아있는 PID 의 컨테이너에는 손대지 않으므로 동시 실행 중인 다른
-/// 테스트 binary 와 race-safe.
-async fn sweep_dead_owners() {
-    let listing = match tokio::process::Command::new("docker")
-        .args([
-            "ps",
-            "-a",
-            "--filter",
-            &format!("label={}", OWNED_LABEL),
-            "--format",
-            &format!("{{{{.ID}}}}\t{{{{.Label \"{}\"}}}}", OWNER_PID_LABEL),
-        ])
-        .output()
-        .await
-    {
-        Ok(o) if o.status.success() => o,
-        _ => return,
-    };
-    let stdout = String::from_utf8_lossy(&listing.stdout);
-    for line in stdout.lines() {
-        let mut parts = line.splitn(2, '\t');
-        let (Some(id), Some(pid_str)) = (parts.next(), parts.next()) else {
-            continue;
-        };
-        let pid_str = pid_str.trim();
-        if pid_str.is_empty() {
-            continue;
-        }
-        let alive = tokio::process::Command::new("kill")
-            .args(["-0", pid_str])
-            .status()
-            .await
-            .map(|s| s.success())
-            .unwrap_or(false);
-        if !alive {
-            let _ = tokio::process::Command::new("docker")
-                .args(["rm", "-f", id])
-                .status()
-                .await;
-        }
-    }
-}
-
-async fn ensure_sweep_once() {
-    SWEEP_DONE
-        .get_or_init(|| async {
-            sweep_dead_owners().await;
-        })
-        .await;
-}
-
-fn current_pid_label() -> String {
-    std::process::id().to_string()
-}
 
 async fn pg_endpoint() -> Option<PgEndpoint> {
     // 1) 외부 PG 재사용 — `PGHOST`/`PGPORT`/... 가 모두 있으면 그 값을 그대로.

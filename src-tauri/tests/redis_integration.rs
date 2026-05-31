@@ -9,12 +9,16 @@ use testcontainers::core::ImageExt;
 use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::redis::{Redis as RedisImage, REDIS_PORT};
 
-const OWNED_LABEL: &str = "table-view.tests";
+#[path = "support/testcontainer_lifecycle.rs"]
+mod testcontainer_lifecycle;
 
 #[tokio::test]
 async fn redis_testcontainer_covers_live_kv_catalog_values_and_streams() {
+    testcontainer_lifecycle::ensure_sweep_once().await;
+    let pid = testcontainer_lifecycle::current_pid_label();
     let container = match RedisImage::default()
-        .with_label(OWNED_LABEL, "1")
+        .with_label(testcontainer_lifecycle::OWNED_LABEL, "1")
+        .with_label(testcontainer_lifecycle::OWNER_PID_LABEL, &pid)
         .start()
         .await
     {
