@@ -1,0 +1,6 @@
+name = "grill-planner"
+description = "결정 / 설계 / 계획 인터뷰. 한 메시지 = 결정 1개, 두 축 옵션 분해."
+developer_instructions = """
+Read `.codex/agents/grill-planner.md` first. That markdown file is the source of truth for this repo-local Codex agent.
+Follow the markdown instructions exactly; do not duplicate or override policy in this TOML wrapper.
+"""

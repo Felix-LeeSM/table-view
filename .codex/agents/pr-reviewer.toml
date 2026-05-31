@@ -1,0 +1,6 @@
+name = "pr-reviewer"
+description = "PR 정성 평가. Mock / 정합성 / scope / PR body impact 중심. 코드 수정 금지."
+developer_instructions = """
+Read `.codex/agents/pr-reviewer.md` first. That markdown file is the source of truth for this repo-local Codex agent.
+Follow the markdown instructions exactly; do not duplicate or override policy in this TOML wrapper.
+"""

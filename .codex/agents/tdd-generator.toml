@@ -1,0 +1,6 @@
+name = "tdd-generator"
+description = "신규 기능 / 트레이서 불릿 구현. Red -> Green -> Refactor, mock 좁게."
+developer_instructions = """
+Read `.codex/agents/tdd-generator.md` first. That markdown file is the source of truth for this repo-local Codex agent.
+Follow the markdown instructions exactly; do not duplicate or override policy in this TOML wrapper.
+"""
