@@ -1,0 +1,6 @@
+name = "bug-fix"
+description = "사용자 보고 버그 / 회귀 / UX 이슈. Red regression test 먼저, Green fix, Verify 회귀 없음."
+developer_instructions = """
+Read `.codex/agents/bug-fix.md` first. That markdown file is the source of truth for this repo-local Codex agent.
+Follow the markdown instructions exactly; do not duplicate or override policy in this TOML wrapper.
+"""

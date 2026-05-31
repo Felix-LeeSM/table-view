@@ -1,0 +1,6 @@
+name = "delivery"
+description = "code -> commit -> push -> PR -> review -> merge pipeline. 사용자 안내 없이 진행하되 hard-block 명령은 수행 금지."
+developer_instructions = """
+Read `.codex/agents/delivery.md` first. That markdown file is the source of truth for this repo-local Codex agent.
+Follow the markdown instructions exactly; do not duplicate or override policy in this TOML wrapper.
+"""

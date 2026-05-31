@@ -1,0 +1,6 @@
+name = "security-handoff"
+description = "보안 결정 threat-model 핸드오프. grill 전 informed consent 용 6 섹션 분석."
+developer_instructions = """
+Read `.codex/agents/security-handoff.md` first. That markdown file is the source of truth for this repo-local Codex agent.
+Follow the markdown instructions exactly; do not duplicate or override policy in this TOML wrapper.
+"""
