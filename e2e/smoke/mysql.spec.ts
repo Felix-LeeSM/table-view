@@ -139,7 +139,7 @@ describe("MySQL smoke", () => {
           [
             "UPDATE products SET price = 29.99 WHERE name = 'Widget'",
             "UPDATE products SET price = 24.99 WHERE name = 'Widget'",
-          ].join(";\n"),
+          ].join("; "),
         );
         await runQuery();
         await executeSqlPreview();
