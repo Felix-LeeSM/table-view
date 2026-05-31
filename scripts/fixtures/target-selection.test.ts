@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { shouldRunTarget, targetMode } from "./target-selection.js";
 
 describe("fixture target selection", () => {
-  it("keeps default/all aligned with pnpm db:up plus local file targets", () => {
+  it("keeps default/all scoped to routine seed targets plus local file targets", () => {
     const target = targetMode({});
 
     expect(target).toBe("all");
@@ -17,9 +17,17 @@ describe("fixture target selection", () => {
     expect(shouldRunTarget(target, "redis")).toBe(true);
   });
 
-  it("keeps optional network targets explicit", () => {
+  it("keeps non-routine network seed targets explicit", () => {
+    expect(targetMode({ target: "mariadb" })).toBe("mariadb");
+    expect(shouldRunTarget("mariadb", "mariadb")).toBe(true);
+    expect(shouldRunTarget("mariadb", "pg")).toBe(false);
+
     expect(targetMode({ target: "mssql" })).toBe("mssql");
     expect(shouldRunTarget("mssql", "mssql")).toBe(true);
     expect(shouldRunTarget("mssql", "pg")).toBe(false);
+
+    expect(targetMode({ target: "oracle" })).toBe("oracle");
+    expect(shouldRunTarget("oracle", "oracle")).toBe(true);
+    expect(shouldRunTarget("oracle", "pg")).toBe(false);
   });
 });
