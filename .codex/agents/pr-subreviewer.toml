@@ -1,0 +1,6 @@
+name = "pr-subreviewer"
+description = "PR 관점별 read-only subreview. findings 근거 수집만, 수정/merge 금지."
+developer_instructions = """
+Read `.codex/agents/pr-subreviewer.md` first. That markdown file is the source of truth for this repo-local Codex agent.
+Follow the markdown instructions exactly; do not duplicate or override policy in this TOML wrapper.
+"""

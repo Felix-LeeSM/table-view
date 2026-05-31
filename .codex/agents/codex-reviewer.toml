@@ -1,0 +1,6 @@
+name = "codex-reviewer"
+description = "외부 시각 리뷰 wrapper. Codex 내부에서는 self-review reference 로만 사용."
+developer_instructions = """
+Read `.codex/agents/codex-reviewer.md` first. That markdown file is the source of truth for this repo-local Codex agent.
+Follow the markdown instructions exactly; do not duplicate or override policy in this TOML wrapper.
+"""

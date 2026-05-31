@@ -9,6 +9,10 @@ The source of truth remains `memory/` for workflow/code rules and
 duplicated policy. Agent spawning follows the workflow memory and the active
 runtime's tool policy.
 
+For Codex runtime registration, each wrapper has a matching `.toml` file. The
+`.toml` file only points back to the `.md` file; the `.md` file is the policy
+source of truth.
+
 ## Mapping
 
 | wrapper | Codex role | source |
@@ -18,6 +22,7 @@ runtime's tool policy.
 | `delivery` | `worker` | `memory/workflow/delivery/memory.md` |
 | `research` | `explorer` | `memory/workflow/implementation/memory.md` |
 | `pr-reviewer` | `explorer` | `.agents/skills/pr-review/SKILL.md` + review memory |
+| `pr-subreviewer` | `explorer` | `.agents/skills/pr-review/SKILL.md` + review memory |
 | `grill-planner` | `default` | `.agents/skills/grill-with-memory/SKILL.md` |
 | `security-handoff` | `default` | `.agents/skills/grill-with-memory/SKILL.md` |
 | `codex-reviewer` | `default` | `memory/workflow/review/memory.md` |
