@@ -92,20 +92,27 @@ pnpm install
 
 ### 3. 개발용 데이터베이스 실행
 
-PostgreSQL, MongoDB, MySQL, Redis 컨테이너를 띄우고 health check를 기다립니다.
+PostgreSQL, MongoDB, MySQL, MariaDB, MSSQL, Oracle, Redis compose 컨테이너를
+띄우고 health check를 기다립니다.
 
 ```bash
 pnpm db:up
 ```
 
+MSSQL/Oracle은 planned DBMS identity와 seed contract 검증용 컨테이너입니다.
+현재 앱 runtime adapter와 기본 fixture connection은 제공하지 않습니다.
+
 기본 접속 정보:
 
-| DBMS       | Host        | Port    | User       | Password   | Database          |
-| ---------- | ----------- | ------- | ---------- | ---------- | ----------------- |
-| PostgreSQL | `localhost` | `15432` | `testuser` | `testpass` | `table_view_test` |
-| MySQL      | `localhost` | `13306` | `testuser` | `testpass` | `table_view_test` |
-| MongoDB    | `localhost` | `37017` | `testuser` | `testpass` | `table_view_test` |
-| Redis      | `localhost` | `6379`  |            |            | `0`               |
+| DBMS       | Host        | Port    | User       | Password       | Database / service |
+| ---------- | ----------- | ------- | ---------- | -------------- | ------------------ |
+| PostgreSQL | `localhost` | `15432` | `testuser` | `testpass`     | `table_view_test`  |
+| MySQL      | `localhost` | `13306` | `testuser` | `testpass`     | `table_view_test`  |
+| MongoDB    | `localhost` | `37017` | `testuser` | `testpass`     | `table_view_test`  |
+| MariaDB    | `localhost` | `23306` | `testuser` | `testpass`     | `table_view_test`  |
+| MSSQL      | `localhost` | `14333` | `sa`       | `Testpass123!` | `master`           |
+| Oracle     | `localhost` | `1521`  | `testuser` | `testpass`     | `XEPDB1`           |
+| Redis      | `localhost` | `6379`  |            |                | `0`                |
 
 PostgreSQL connection URL:
 
@@ -114,6 +121,12 @@ postgresql://testuser:testpass@localhost:15432/table_view_test
 ```
 
 MongoDB는 auth source로 `admin`을 사용합니다.
+
+컨테이너와 compose volume을 함께 정리하려면:
+
+```bash
+pnpm db:down
+```
 
 ### 4. 개발 서버 실행
 
