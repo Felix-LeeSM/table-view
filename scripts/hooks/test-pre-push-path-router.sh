@@ -9,6 +9,10 @@ TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pre-push-router-check.XXXXXX")"
 ZERO_OID="0000000000000000000000000000000000000000"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
+while read -r git_env_var; do
+	[ -n "$git_env_var" ] && unset "$git_env_var"
+done < <(git -C "$ROOT" rev-parse --local-env-vars)
+
 assert_contains() {
 	local text="$1"
 	local needle="$2"
