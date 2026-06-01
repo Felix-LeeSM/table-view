@@ -147,11 +147,13 @@ if [ "$ACTUAL_TOPLEVEL" != "$WORKTREE_PATH" ]; then
 fi
 
 if [ "$WITH_DEPS" -eq 1 ]; then
-  BOOTSTRAP_ARGS=()
+  # macOS ships Bash 3.2. With set -u, expanding an empty "${array[@]}"
+  # can fail before the child script is invoked, so keep this branch explicit.
   if [ "$PRUNE_TAURI_TARGET" -eq 0 ]; then
-    BOOTSTRAP_ARGS+=(--full-target)
+    bash "$REPO_ROOT/scripts/worktree-bootstrap-deps.sh" --full-target "$WORKTREE_PATH" "$REPO_ROOT"
+  else
+    bash "$REPO_ROOT/scripts/worktree-bootstrap-deps.sh" "$WORKTREE_PATH" "$REPO_ROOT"
   fi
-  bash "$REPO_ROOT/scripts/worktree-bootstrap-deps.sh" "${BOOTSTRAP_ARGS[@]}" "$WORKTREE_PATH" "$REPO_ROOT"
 fi
 
 # hook 활성화 (lefthook install 은 .git/hooks 가 worktree 별로 분리됨)
