@@ -24,6 +24,7 @@ import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { Button } from "@components/ui/button";
 import CreateTriggerDialog from "./CreateTriggerDialog";
 import DropTriggerDialog from "./DropTriggerDialog";
+import { useConnectionStore } from "@stores/connectionStore";
 
 interface StructurePanelProps {
   connectionId: string;
@@ -97,6 +98,11 @@ export default function StructurePanel({
   const getTableConstraints = useSchemaStore((s) => s.getTableConstraints);
   const getTableTriggers = useSchemaStore((s) => s.getTableTriggers);
   const refreshTableTriggers = useSchemaStore((s) => s.refreshTableTriggers);
+  const dbType = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === connectionId)?.dbType,
+  );
+  const supportsStructuredTriggerCrud =
+    dbType !== "mysql" && dbType !== "mariadb";
   // fetchId guards against stale resolves overwriting state after a
   // Cancel-then-retry. The in-flight `query_id` is plumbed through the
   // Tauri command so the Cancel button can drive `cancel_query`.
@@ -328,6 +334,7 @@ export default function StructurePanel({
             triggers={triggers}
             onCreate={() => setCreateTriggerDialog(true)}
             onDrop={(triggerName) => setDropTriggerDialog({ triggerName })}
+            supportsStructuredCrud={supportsStructuredTriggerCrud}
           />
         )}
 
@@ -380,6 +387,7 @@ interface TriggersListProps {
   triggers: TriggerInfo[];
   onCreate: () => void;
   onDrop: (triggerName: string) => void;
+  supportsStructuredCrud: boolean;
 }
 
 /**
@@ -391,24 +399,31 @@ interface TriggersListProps {
  *   - One card per trigger with structured metadata + the canonical
  *     `pg_get_triggerdef` source in a monospace `<pre>` block. Per-row
  *     trash icon opens `DropTriggerDialog` via `onDrop(triggerName)`.
- *   - Empty state is an italic placeholder + Create button so the user
- *     can author their first trigger without leaving this tab.
+ *   - Empty state is an italic placeholder; DBMSs with structured
+ *     trigger CRUD support also get the Create button on this tab.
  */
-function TriggersList({ triggers, onCreate, onDrop }: TriggersListProps) {
+function TriggersList({
+  triggers,
+  onCreate,
+  onDrop,
+  supportsStructuredCrud,
+}: TriggersListProps) {
   return (
     <StructureShell>
       <StructureActionBar
         count={`${triggers.length} ${triggers.length === 1 ? "trigger" : "triggers"}`}
         actions={
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={onCreate}
-            aria-label="Create trigger"
-          >
-            <Plus />
-            Trigger
-          </Button>
+          supportsStructuredCrud ? (
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={onCreate}
+              aria-label="Create trigger"
+            >
+              <Plus />
+              Trigger
+            </Button>
+          ) : null
         }
       />
       {triggers.length === 0 ? (
@@ -430,16 +445,18 @@ function TriggersList({ triggers, onCreate, onDrop }: TriggersListProps) {
                     {t.timing} {t.events.join(" OR ")} · FOR EACH{" "}
                     {t.orientation}
                   </span>
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    onClick={() => onDrop(t.name)}
-                    aria-label={`Drop trigger ${t.name}`}
-                    title={`Drop trigger ${t.name}`}
-                    className="ml-auto text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="size-3" />
-                  </Button>
+                  {supportsStructuredCrud && (
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      onClick={() => onDrop(t.name)}
+                      aria-label={`Drop trigger ${t.name}`}
+                      title={`Drop trigger ${t.name}`}
+                      className="ml-auto text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="size-3" />
+                    </Button>
+                  )}
                 </header>
                 <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-2xs">
                   <dt className="text-muted-foreground">Function</dt>

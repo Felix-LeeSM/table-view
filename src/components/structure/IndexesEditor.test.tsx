@@ -240,4 +240,46 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
       ).toBe(true);
     });
   });
+
+  it("[AC-445-01] MySQL DROP INDEX preview and commit carry the parent table", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-1",
+          name: "mysql-dev",
+          dbType: "mysql",
+          host: "localhost",
+          port: 3306,
+          database: "app",
+          username: "u",
+          password: null,
+          environment: "development",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ],
+    });
+    useSafeModeStore.setState({ mode: "warn" });
+    await renderEditorAndOpenPreview();
+
+    expect(vi.mocked(tauri.dropIndex).mock.calls[0]?.[0]).toMatchObject({
+      schema: "public",
+      table: "users",
+      index_name: "idx_users_email",
+      preview_only: true,
+      expected_database: "db-1",
+    });
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
+    });
+
+    await waitFor(() => {
+      expect(
+        vi.mocked(tauri.dropIndex).mock.calls.some((c) => {
+          const req = c[0] as { preview_only?: boolean; table?: string };
+          return req.preview_only === false && req.table === "users";
+        }),
+      ).toBe(true);
+    });
+  });
 });

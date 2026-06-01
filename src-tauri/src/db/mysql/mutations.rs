@@ -539,11 +539,9 @@ impl MysqlAdapter {
     pub async fn drop_index(&self, req: &DropIndexRequest) -> Result<SchemaChangeResult, AppError> {
         validate_identifier(&req.schema, "Schema name")?;
         validate_identifier(&req.index_name, "Index name")?;
-        // MySQL DROP INDEX 는 `ON <table>` 이 필요한데, 본 request 는 table
-        // 이 없다 (PG drop_index 는 `schema.index` 만으로 충분). request 의
-        // table 필드가 빠진 채 호출되면 frontend 가 미리 채워주는 흐름. 본
-        // 어댑터에선 우선 PG-compatible request 만 지원하므로 schema-only
-        // form 일 땐 server-side 가 거부 — 명시적 validation 메시지를 surface.
+        // MySQL DROP INDEX 는 `ON <table>` 이 필요하다. PG 호출자는 table 을
+        // 생략해도 되지만, MySQL adapter 는 schema-only request 를 명시적
+        // validation 오류로 거부해 frontend payload 누락을 조용히 삼키지 않는다.
         if req.table.trim().is_empty() {
             return Err(AppError::Validation(
                 "MySQL DROP INDEX requires a table — request.table must not be empty".into(),

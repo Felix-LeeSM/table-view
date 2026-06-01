@@ -321,6 +321,7 @@ export default function IndexesEditor({
         tauri.dropIndex({
           connection_id: connectionId,
           schema,
+          table,
           index_name: indexName,
           preview_only: true,
           // Sprint 271c — opt-in DbMismatch guard.
@@ -330,6 +331,7 @@ export default function IndexesEditor({
         await tauri.dropIndex({
           connection_id: connectionId,
           schema,
+          table,
           index_name: indexName,
           preview_only: false,
           // Sprint 271c — opt-in DbMismatch guard.
