@@ -22,7 +22,12 @@ async fn redis_testcontainer_covers_live_kv_catalog_values_and_streams() {
         .start()
         .await
     {
-        Ok(container) => container,
+        Ok(container) => {
+            testcontainer_lifecycle::register_container_for_process_cleanup(
+                container.id().to_string(),
+            );
+            container
+        }
         Err(error) => {
             skip_or_fail_on_ci(format!(
                 "Redis testcontainer start failed ({error}). Docker daemon required."
