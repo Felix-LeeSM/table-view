@@ -9,6 +9,17 @@
 - CI remains the merge gate. Local `pre-push` exists to catch failures before a
   PR waits on CI.
 
+## Local And CI Split
+
+Local `pre-push` is the first expensive gate. It should catch common coverage,
+test, and hook regressions while the context is still on the developer machine.
+CI still owns remote-only confidence: clean checkout, platform differences,
+GitHub runner service wiring, and required branch protection.
+
+Do not move a gate out of CI only because it is present locally. Local hooks can
+be misconfigured, interrupted, or absent on another machine; CI is the shared
+record.
+
 ## Rust Build Cache
 
 Rust hooks use `sccache` when it is installed. The hook sets:
@@ -78,5 +89,5 @@ PRE_PUSH_PATH_ROUTER_LOG_TAIL_LINES=120
 
 ## Coverage Ratchet
 
-The first ratchet stage is threshold drift protection. See
+Coverage thresholds are protected by the ratchet in
 `docs/quality/coverage-ratchet.md`.
