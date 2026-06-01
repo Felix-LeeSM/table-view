@@ -17,5 +17,10 @@ if ! command -v lefthook >/dev/null 2>&1; then
   exit 1
 fi
 
+# `execution_out` — pre-push 는 오래 걸릴 수 있으므로 router heartbeat 를
+# 실시간으로 보여준다. Router 가 하위 명령 stdout 을 캡처하므로 성공 출력
+# 폭주는 유지하지 않는다.
+export LEFTHOOK_OUTPUT="${LEFTHOOK_OUTPUT:-summary,failure,execution_info,execution_out}"
+
 # `--no-auto-install` — pre-commit wrapper 의 주석 참조.
 exec lefthook run pre-push --no-auto-install "$@"

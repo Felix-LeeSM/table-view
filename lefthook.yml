@@ -9,6 +9,7 @@ output:
   - summary
   - failure
   - execution_info
+  - execution_out
 
 pre-commit:
   # pre-commit is already path-sensitive through Lefthook's staged-file `glob`
@@ -123,7 +124,8 @@ pre-push:
       # `scripts/hooks/pre-push-path-router.sh` preserves signed-commit and
       # TDD-cycle gates, then routes TS/Rust checks from outgoing changed paths:
       # docs-only => signed/TDD only; frontend => TS checks/tests; Rust => cargo
-      # checks/coverage; hook/workflow/unknown => conservative full checks.
+      # checks/coverage; hook changes => hook self-checks; workflow/unknown =>
+      # conservative full checks.
       # Cargo-deny still unsets Git-local env before nested Git can run.
       tags: security git lint test frontend rust
       run: bash scripts/hooks/pre-push-path-router.sh

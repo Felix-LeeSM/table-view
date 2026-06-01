@@ -9,6 +9,8 @@ set -euo pipefail
 
 ZERO_OID="0000000000000000000000000000000000000000"
 DRY_RUN="${PRE_PUSH_PATH_ROUTER_DRY_RUN:-0}"
+HEARTBEAT_SECONDS="${PRE_PUSH_PATH_ROUTER_HEARTBEAT_SECONDS:-15}"
+LOG_TAIL_LINES="${PRE_PUSH_PATH_ROUTER_LOG_TAIL_LINES:-80}"
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
@@ -17,6 +19,64 @@ REFS_FILE="$(mktemp "${TMPDIR:-/tmp}/pre-push-refs.XXXXXX")"
 COMMITS_FILE="$(mktemp "${TMPDIR:-/tmp}/pre-push-commits.XXXXXX")"
 PATHS_FILE="$(mktemp "${TMPDIR:-/tmp}/pre-push-paths.XXXXXX")"
 trap 'rm -f "$REFS_FILE" "$COMMITS_FILE" "$PATHS_FILE"' EXIT
+
+enable_sccache() {
+	if [ "$DRY_RUN" = "1" ]; then
+		return 0
+	fi
+	if command -v sccache >/dev/null 2>&1; then
+		export RUSTC_WRAPPER="${RUSTC_WRAPPER:-sccache}"
+		export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}"
+	else
+		echo "[pre-push-route] sccache missing; using cargo without shared compiler cache" >&2
+	fi
+}
+
+duration_since() {
+	local start="$1"
+	local now
+	now="$(date +%s)"
+	printf '%s\n' "$((now - start))"
+}
+
+run_with_heartbeat() {
+	local label="$1"
+	shift
+	local log_file pid status start elapsed next_heartbeat
+
+	log_file="$(mktemp "${TMPDIR:-/tmp}/pre-push-${label}.XXXXXX")"
+	start="$(date +%s)"
+	next_heartbeat="$HEARTBEAT_SECONDS"
+	echo "[pre-push-route] $label start"
+
+	("$@") >"$log_file" 2>&1 &
+	pid=$!
+	while kill -0 "$pid" 2>/dev/null; do
+		sleep 0.2
+		elapsed="$(duration_since "$start")"
+		if [ "$elapsed" -ge "$next_heartbeat" ]; then
+			echo "[pre-push-route] $label running elapsed=${elapsed}s"
+			next_heartbeat="$((next_heartbeat + HEARTBEAT_SECONDS))"
+		fi
+	done
+
+	set +e
+	wait "$pid"
+	status=$?
+	set -e
+	elapsed="$(duration_since "$start")"
+
+	if [ "$status" -eq 0 ]; then
+		echo "[pre-push-route] $label pass duration=${elapsed}s"
+		rm -f "$log_file"
+		return 0
+	fi
+
+	echo "[pre-push-route] $label fail duration=${elapsed}s log=$log_file" >&2
+	tail -n "$LOG_TAIL_LINES" "$log_file" >&2 || true
+	rm -f "$log_file"
+	return "$status"
+}
 
 if [ -t 0 ]; then
 	: >"$REFS_FILE"
@@ -105,9 +165,20 @@ is_docs_path() {
 	esac
 }
 
+is_hook_path() {
+	case "$1" in
+	lefthook.yml | .githooks/* | scripts/hooks/* | scripts/setup.sh | src-tauri/.config/nextest.toml)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
 is_workflow_path() {
 	case "$1" in
-	lefthook.yml | .githooks/* | scripts/hooks/* | .github/* | .claude/* | .codex/* | memory/*)
+	.github/* | .claude/* | .codex/* | memory/*)
 		return 0
 		;;
 	*)
@@ -158,8 +229,7 @@ run_step() {
 		return 0
 	fi
 
-	echo "[pre-push-route] $label"
-	"$@"
+	run_with_heartbeat "$label" "$@"
 }
 
 run_step_in() {
@@ -174,8 +244,7 @@ run_step_in() {
 		return 0
 	fi
 
-	echo "[pre-push-route] $label"
-	(cd "$dir" && "$@")
+	(cd "$dir" && run_with_heartbeat "$label" "$@")
 }
 
 run_cargo_deny() {
@@ -184,32 +253,35 @@ run_cargo_deny() {
 		return 0
 	fi
 
-	echo "[pre-push-route] cargo-deny"
 	local git_env_vars
 	git_env_vars="$(git rev-parse --local-env-vars)"
 	(
 		# Intentionally split Git's newline-separated env var names for unset.
 		# shellcheck disable=SC2086
 		unset $git_env_vars
-		cd src-tauri && cargo deny check
+		cd src-tauri && run_with_heartbeat "cargo-deny" cargo deny check
 	)
 }
 
 run_rust_coverage() {
 	if [ "$DRY_RUN" = "1" ]; then
-		echo "RUN rust-test-and-coverage: rustup component check && (cd src-tauri && cargo llvm-cov --lib --test storage_integration --test query_integration --test schema_integration --test fixture_loading --test mongo_integration --test mysql_integration --test duckdb_file_analytics --summary-only --fail-under-lines 79 --fail-under-functions 74 --fail-under-regions 80)"
+		echo "RUN rust-test-and-coverage: rustup component check && (cd src-tauri && cargo llvm-cov nextest --profile push --lib --test storage_integration --test query_integration --test schema_integration --test fixture_loading --test mongo_integration --test mysql_integration --test duckdb_file_analytics --summary-only --fail-under-lines 79 --fail-under-functions 74 --fail-under-regions 80)"
 		return 0
 	fi
 
-	echo "[pre-push-route] rust-test-and-coverage"
 	if ! rustup component list --installed 2>/dev/null | grep -q '^llvm-tools'; then
 		echo "ERROR: rustup llvm-tools-preview component is missing." >&2
 		echo "       Run 'bash scripts/setup.sh' and retry." >&2
 		exit 1
 	fi
+	if ! command -v cargo-nextest >/dev/null 2>&1; then
+		echo "ERROR: cargo-nextest is missing." >&2
+		echo "       Run 'bash scripts/setup.sh' and retry." >&2
+		exit 1
+	fi
 	(
 		cd src-tauri
-		cargo llvm-cov --lib \
+		run_with_heartbeat "rust-test-and-coverage" cargo llvm-cov nextest --profile push --lib \
 			--test storage_integration \
 			--test query_integration \
 			--test schema_integration \
@@ -231,10 +303,18 @@ run_ts_gates() {
 }
 
 run_rust_gates() {
+	enable_sccache
 	run_step_in "tauri-check" src-tauri cargo check
 	run_cargo_deny
 	run_step_in "cargo-machete" src-tauri cargo machete
 	run_rust_coverage
+}
+
+run_hook_gates() {
+	run_step "hook-shell-syntax" bash -n .githooks/pre-push scripts/hooks/*.sh scripts/setup.sh
+	run_step "lefthook-validate" lefthook validate
+	run_step_in "nextest-push-profile-list" src-tauri cargo nextest list --profile push --lib
+	run_step "pre-push-router-tests" bash scripts/hooks/test-pre-push-path-router.sh
 }
 
 run_frontend_and_rust_gates() {
@@ -246,15 +326,11 @@ run_frontend_and_rust_gates() {
 			return 0
 		fi
 
-		local ts_log rust_log ts_pid rust_pid ts_status rust_status
-		ts_log="$(mktemp "${TMPDIR:-/tmp}/pre-push-ts.XXXXXX")"
-		rust_log="$(mktemp "${TMPDIR:-/tmp}/pre-push-rust.XXXXXX")"
-		trap 'rm -f "$REFS_FILE" "$COMMITS_FILE" "$PATHS_FILE" "${ts_log:-}" "${rust_log:-}"' EXIT
-
+		local ts_pid rust_pid ts_status rust_status
 		echo "[pre-push-route] parallel: frontend+rust"
-		(run_ts_gates) >"$ts_log" 2>&1 &
+		(run_ts_gates) &
 		ts_pid=$!
-		(run_rust_gates) >"$rust_log" 2>&1 &
+		(run_rust_gates) &
 		rust_pid=$!
 
 		set +e
@@ -266,13 +342,11 @@ run_frontend_and_rust_gates() {
 
 		if [ "$ts_status" -ne 0 ]; then
 			echo "[pre-push-route] frontend gates failed" >&2
-			cat "$ts_log" >&2
 		else
 			echo "[pre-push-route] frontend gates passed"
 		fi
 		if [ "$rust_status" -ne 0 ]; then
 			echo "[pre-push-route] rust gates failed" >&2
-			cat "$rust_log" >&2
 		else
 			echo "[pre-push-route] rust gates passed"
 		fi
@@ -297,6 +371,7 @@ has_paths=0
 docs_only=1
 needs_frontend=0
 needs_rust=0
+needs_hook=0
 needs_full=0
 
 while read -r path; do
@@ -305,6 +380,11 @@ while read -r path; do
 
 	if ! is_docs_path "$path"; then
 		docs_only=0
+	fi
+	if is_hook_path "$path"; then
+		docs_only=0
+		needs_hook=1
+		continue
 	fi
 	if is_workflow_path "$path"; then
 		docs_only=0
@@ -316,7 +396,7 @@ while read -r path; do
 	if is_rust_path "$path"; then
 		needs_rust=1
 	fi
-	if ! is_docs_path "$path" && ! is_workflow_path "$path" && ! is_frontend_path "$path" && ! is_rust_path "$path"; then
+	if ! is_docs_path "$path" && ! is_hook_path "$path" && ! is_workflow_path "$path" && ! is_frontend_path "$path" && ! is_rust_path "$path"; then
 		needs_full=1
 	fi
 done <"$PATHS_FILE"
@@ -337,9 +417,12 @@ else
 		needs_rust=1
 		echo "[pre-push-route] route: full (workflow or unknown path)"
 	else
-		echo "[pre-push-route] route: frontend=$needs_frontend rust=$needs_rust"
+		echo "[pre-push-route] route: frontend=$needs_frontend rust=$needs_rust hook=$needs_hook"
 	fi
 
+	if [ "$needs_hook" = "1" ]; then
+		run_hook_gates
+	fi
 	run_frontend_and_rust_gates
 fi
 
