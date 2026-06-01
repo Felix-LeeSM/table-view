@@ -2405,6 +2405,20 @@ fn ac_392_d07_delete_returning() {
 }
 
 #[test]
+fn ac_451_mariadb_returning_parser_decision_is_structural_only() {
+    let insert = ok_insert("INSERT INTO users (id) VALUES (1) RETURNING id");
+    assert_eq!(insert.returning, vec!["id".to_string()]);
+
+    let bounded_delete = ok_delete("DELETE FROM users WHERE id = 1 RETURNING id");
+    assert!(bounded_delete.where_clause.is_some());
+    assert_eq!(bounded_delete.returning, vec!["id".to_string()]);
+
+    let update = ok_update("UPDATE users SET active = false WHERE id = 1 RETURNING id");
+    assert!(update.where_clause.is_some());
+    assert_eq!(update.returning, vec!["id".to_string()]);
+}
+
+#[test]
 fn ac_392_d08_delete_missing_from_is_syntax_error() {
     let e = err("DELETE users WHERE id = 1");
     assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
