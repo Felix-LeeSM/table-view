@@ -29,6 +29,16 @@ const mysqlConfig = {
   database: process.env.MYSQL_DATABASE ?? "table_view_test",
 };
 
+const mariadbConfig = {
+  host: process.env.E2E_MARIADB_HOST ?? process.env.MARIADB_HOST ?? "localhost",
+  port: Number(
+    process.env.E2E_MARIADB_PORT ?? process.env.MARIADB_PORT ?? 23306,
+  ),
+  user: process.env.MARIADB_USER ?? "testuser",
+  password: process.env.MARIADB_PASSWORD ?? "testpass",
+  database: process.env.MARIADB_DATABASE ?? "table_view_test",
+};
+
 type MongoSeedIndex = {
   name?: string;
   keys: Document;
@@ -122,6 +132,21 @@ async function seedMysql() {
   });
 }
 
+async function seedMariadb() {
+  const sql = await readFile(resolve("e2e/fixtures/seed.mariadb.sql"), "utf-8");
+  await retry("MariaDB", async () => {
+    const connection = await createConnection({
+      ...mariadbConfig,
+      multipleStatements: true,
+    });
+    try {
+      await connection.query(sql);
+    } finally {
+      await connection.end();
+    }
+  });
+}
+
 function seedDocumentFilter(document: Document): Document {
   if (document._id !== undefined) return { _id: document._id };
   if (document.email !== undefined) return { email: document.email };
@@ -131,6 +156,7 @@ function seedDocumentFilter(document: Document): Document {
 await seedPostgres();
 await seedMongo();
 await seedMysql();
+await seedMariadb();
 console.log(
-  "[e2e:seed] Postgres, MongoDB, and MySQL smoke fixtures are ready.",
+  "[e2e:seed] Postgres, MongoDB, MySQL, and MariaDB smoke fixtures are ready.",
 );

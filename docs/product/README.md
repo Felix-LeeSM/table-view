@@ -19,9 +19,9 @@
   DuckDB, MongoDB, Redis.
 - RDBMS workbench: catalog/tree browse, tabular result rendering, raw query path,
   bounded DML/row-edit path, source-specific safety confirmation. PostgreSQL 이
-  routine desktop smoke-backed 주 lane 이고 MySQL 은 runtime smoke baseline 이
-  있다. MariaDB/SQLite/DuckDB 는 adapter/unit/integration/fixture evidence 범위로
-  좁힌다.
+  routine desktop smoke-backed 주 lane 이고 MySQL/MariaDB 는 runtime smoke
+  baseline 이 있다. SQLite/DuckDB 는 adapter/unit/integration/fixture evidence
+  범위로 좁힌다.
 - SQLite/DuckDB file workflow: local file open/create/browse/query 중심. SQLite
   는 writable-file DML 과 key-projected row edit, DuckDB 는 `.duckdb` catalog/read
   query 와 registered local CSV/Parquet/JSON/NDJSON preview slice 를 지원한다.
@@ -42,7 +42,7 @@
 |---|---|---|---|---|
 | PostgreSQL | strong | strong bounded subset | WASM-first + installed-extension-gated packs | 현재 가장 강한 lane 이다. routine desktop smoke 는 connect/browse/edit/query, Explain plan-inspection UI/source-label path, seeded `pgcrypto` installed-extension completion gating, Safe Mode info/warn/destructive confirmation, raw DDL preview, grid-edit preview, and cancellation UI/history/retry behavior 를 증명한다. Cancellation claim 은 query toolbar/API boundary, cancelled history, stale-grid clearing, retry 로 제한된다. full dialect/admin/arbitrary extension semantics, catalog-backed enumeration of every extension symbol, server activity/session management UI 는 보장하지 않음 |
 | MySQL | runtime/query/edit/DDL adapter active | bounded parser/Safe Mode slice; constraint conformance version-gated | Rust/WASM MySQL-family vocabulary + current-catalog schema/table/column/routine suggestions | connection, browsing, databases/schemas, tables, views, columns, indexes, constraints/FKs, raw query, DML-oriented multi-statement batch, row edit with MySQL-quoted generated SQL/key projection, cancellation, and bounded structured table/index/constraint DDL are active. Routine desktop smoke covers connect, browse seeded table, SELECT result grid, DML batch per-statement result, row edit, cancellation/retry, history/source labels, and result-envelope rendering. Completion suggestions use the current connection/database catalog and MySQL backtick identifier context, but they do not widen runtime support for stored routine bodies or scripting. CHECK/constraint catalog metadata uses live MySQL `>= 8.0.16` context; older/unknown versions return empty CHECK hints. Stored routine/event bodies, control-flow scripting, `DELIMITER`, and `LOAD DATA` are explicit unsupported editor/backend boundaries. Trigger metadata is read-only in Structure; structured trigger create/drop and DB-level import/export/dump parity remain unsupported/follow-up |
-| MariaDB | MySQL-family adapter reuse with distinct MariaDB identity | MySQL-family parser/Safe Mode path + MariaDB dialect/profile identity | Rust/WASM MySQL-family vocabulary + completion-only MariaDB `RETURNING` delta | runtime adapter path exists through MySQL reuse. CHECK/constraint catalog metadata uses live MariaDB `>= 10.2.1` context. `RETURNING` is not a version-gated runtime support claim; MariaDB-engine routine/default fixture, CI, and live evidence remain known limitations / quality follow-up |
+| MariaDB | runtime/query/edit adapter active through distinct MariaDB engine smoke | MySQL-family parser/Safe Mode path + MariaDB dialect/profile identity | Rust/WASM MySQL-family vocabulary + completion-only MariaDB `RETURNING` delta | connection, seeded table browse, SELECT result grid, DML batch per-statement result, row edit, cancellation/retry, history/source labels, and result-envelope rendering have a wired MariaDB Runtime Happy Path baseline. The adapter path still reuses the MySQL-family implementation with distinct MariaDB identity and live MariaDB engine evidence. CHECK/constraint catalog metadata uses live MariaDB `>= 10.2.1` context. `RETURNING` remains completion/profile evidence only, not a version-gated runtime support claim |
 | SQLite | file adapter + read/writable-file DML | bounded parser/Safe Mode guardrails; DDL rejected by adapter | Rust/WASM built-in vocabulary + cached schema objects + sqlite-cli suggestions | user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의 DML/PK-projected row edit 로 제한된다. routine desktop E2E, structured DDL UI/runtime parity, unsupported `ALTER TABLE` rebuild, nested JSON edit, sqlite-cli execution, extension/capability semantics 는 unsupported |
 | DuckDB | RDBMS file adapter + registered local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM DuckDB vocabulary | `rdb` profile + `file` connection kind 로 표현한다. local `.duckdb` file 은 catalog/table read 와 statement-level raw SQL 실행 경로를 지원한다. registered local CSV/Parquet/JSON/NDJSON analytics 는 preview basics 와 source-scoped SELECT backend path evidence 가 있다. Preview public payload 는 source alias, file name, kind, size 만 노출하고 absolute local path 는 노출하지 않는다. extension install/load/helper functions, `COPY`, `ATTACH`/`DETACH`, sensitive external-file capability settings, and arbitrary external-file SQL functions/replacement scans are adapter-blocked. 구조화된 DDL/write UI, file analytics query UI parity/history/import 는 unsupported/follow-up |
 | MongoDB | runtime-backed whitelisted document workflow | whitelisted mongosh/MQL | Rust/WASM vocabulary | connection, catalog, document query/edit, bulk/index/validator slices, cancellation, and destructive Safe Mode gates are active for tested whitelist paths. arbitrary JavaScript/shell behavior, version/deployment gates, native document-first panels, and full-support parity remain follow-up |
@@ -63,7 +63,7 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 |---|---|---|
 | PostgreSQL | `e2e/fixtures/seed.sql` | GitHub Runtime Happy Path 의 active RDBMS smoke seed |
 | MySQL | `e2e/fixtures/seed.mysql.sql` | wired Runtime Happy Path seed for the connect/browse/query/edit/cancel baseline |
-| MariaDB | `e2e/fixtures/seed.mariadb.sql` | explicit MariaDB-family seed contract; no routine/default live-engine claim |
+| MariaDB | `e2e/fixtures/seed.mariadb.sql` | wired Runtime Happy Path seed for the MariaDB connect/browse/query/edit/cancel baseline |
 | SQLite | `e2e/fixtures/seed.sqlite.sql` | deterministic local-file seed; no desktop E2E smoke claim |
 | DuckDB | `e2e/fixtures/seed.duckdb.sql` | `.duckdb` fixture seed; no desktop E2E smoke claim |
 | MongoDB | `e2e/fixtures/seed.mongodb.json` | document fixture used by current MongoDB smoke seed path |
@@ -133,6 +133,11 @@ candidate-only 상태다.
   unsupported boundaries. Completion uses the current catalog as editor
   assistance only; completion runtime smoke, broader workbench breadth, and full
   admin/import/export parity remain separate promotion gates.
+- MariaDB now has its own routine runtime-smoke baseline for connect, seeded
+  table browse, SELECT, DML batch, row edit, cancellation/retry, history/source
+  labels, and tabular result rendering against the MariaDB engine fixture. This
+  does not widen MariaDB-only dialect/runtime claims such as `RETURNING`,
+  procedure-management, admin/import/export, or completion-runtime support.
 - SQLite is a file-backed DBMS lane. Current support is scoped to file
   create/open/test, read-only mode, catalog/table browse, read queries,
   writable-file DML, transactional DML batch/dry-run, and key-projected row
@@ -140,8 +145,9 @@ candidate-only 상태다.
   semantics, sqlite-cli command execution, nested JSON edits, and routine
   desktop E2E smoke remain future promotion gates.
 - Routine runtime smoke currently proves the GitHub Runtime Happy Path for
-  PostgreSQL, MySQL, and MongoDB. Other smoke specs or source inventories do not
-  widen product support until the CI script and support docs promote them.
+  PostgreSQL, MySQL, MariaDB, and MongoDB. Other smoke specs or source
+  inventories do not widen product support until the CI script and support docs
+  promote them.
 - Destructive/security behavior is source-specific. RDB DDL preview/confirm,
   RDB Safe Mode confirmations, MongoDB safety confirmations, Redis typed
   confirmation keys, and fixture-backed Search destructive plans exist, but
