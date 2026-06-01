@@ -283,6 +283,30 @@ describe("useQueryExecution scaffold", () => {
     expect(state.error).toContain("LOAD DATA");
   });
 
+  it("rejects MySQL stored routine bodies without DELIMITER before IPC", async () => {
+    executeQueryMock.mockResolvedValue(SELECT_RESULT);
+    const tab = seedRdbTab(
+      "CREATE PROCEDURE refresh_users() BEGIN UPDATE users SET touched = 1",
+      {},
+      { dbType: "mysql" },
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(executeQueryMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(getSeededRdbTab().queryState.status).toBe("error");
+    });
+    const state = getSeededRdbTab().queryState;
+    if (state.status !== "error") {
+      throw new Error(`Expected error state, got ${state.status}`);
+    }
+    expect(state.error).toContain("stored routine");
+  });
+
   it("rejects standalone MySQL executable comment dry-runs before IPC", async () => {
     executeQueryDryRunMock.mockResolvedValue([SELECT_RESULT]);
     const tab = seedRdbTab(

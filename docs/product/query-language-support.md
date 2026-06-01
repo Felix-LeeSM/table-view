@@ -82,8 +82,8 @@ cannot add parser or completion vocabulary without an owner decision.
   batches, cancellation, and key-projected row edits are active through the
   MySQL adapter.
 - Parser / safety: common SQL plus targeted MySQL-family slices are tested;
-  `DELIMITER`, `LOAD DATA`, broad routine bodies, and broader scripting remain
-  unsupported boundaries.
+  stored routine/event bodies, routine control-flow fragments, `DELIMITER`, and
+  `LOAD DATA` are explicit unsupported editor/backend boundaries.
 - Routine smoke: GitHub Runtime Happy Path covers connect, seeded table browse,
   SELECT, DML batch, row edit, cancellation/retry, history/source labels, and
   tabular result rendering for MySQL on Ubuntu.
@@ -125,7 +125,8 @@ are:
   paths. This page does not claim a universal dry-run engine, admin audit log,
   or role/user/permission workflow.
 - MySQL/MariaDB scripting and file import directives are not normalized into
-  server SQL. `DELIMITER` and `LOAD DATA` are explicit unsupported boundaries.
+  server SQL. Stored routine/event bodies, routine control-flow fragments,
+  `DELIMITER`, and `LOAD DATA` are explicit unsupported boundaries.
 - MariaDB shares the MySQL-family parser/Safe Mode path today. MariaDB
   `RETURNING` is tracked as a dialect profile and completion vocabulary delta;
   it is not yet a separate runtime/version-gated support claim. Constraint

@@ -1487,6 +1487,13 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(a.reasons).toEqual([]);
     });
 
+    it("[AC-443-X01] SELECT with MySQL LIMIT offset,count → select / info / []", () => {
+      const a = analyzeStatement("SELECT a FROM x LIMIT 10, 20");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
     it("[AC-393a-X03] every widened SELECT clause populated → still select / info / []", () => {
       // AC-393a-F01's full-clause-chain input — exercises FROM + WHERE +
       // GROUP BY + HAVING + ORDER BY + LIMIT + OFFSET in one statement.

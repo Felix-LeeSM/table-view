@@ -57,6 +57,35 @@ describe("mysql scripting boundary", () => {
     });
   });
 
+  it("rejects stored routine bodies without relying on DELIMITER", () => {
+    const violation = findMysqlScriptingBoundaryViolation(
+      [
+        "CREATE PROCEDURE refresh_users() BEGIN UPDATE users SET touched = 1",
+        "END",
+      ],
+      "mysql",
+    );
+
+    expect(violation).toMatchObject({
+      feature: "STORED ROUTINE",
+      statementIndex: 0,
+      message: expect.stringContaining("stored routine"),
+    });
+  });
+
+  it("rejects MySQL routine control-flow fragments before dispatch", () => {
+    const violation = findMysqlScriptingBoundaryViolation(
+      ["SELECT 1", "BEGIN UPDATE users SET touched = 1"],
+      "mariadb",
+    );
+
+    expect(violation).toMatchObject({
+      feature: "CONTROL FLOW",
+      statementIndex: 1,
+      message: expect.stringContaining("control-flow"),
+    });
+  });
+
   it("skips leading hash comments before unsupported statements", () => {
     const violation = findMysqlScriptingBoundaryViolation(
       ["# import\nLOAD DATA INFILE '/tmp/users.csv' INTO TABLE users"],
