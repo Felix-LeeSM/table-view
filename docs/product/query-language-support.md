@@ -130,8 +130,12 @@ claims separate for the MySQL docs recheck gate.
   profile/dialect id remains `mariadb`, CHECK/constraint catalog promotion
   requires MariaDB version evidence at `>= 10.2.1`, and `RETURNING` remains
   profile/completion plus structural parser/Safe Mode evidence only. The app
-  only uses MariaDB `>= 10.0.5` as a keyword completion-suggestion gate and does not
-  add a MariaDB `RETURNING` runtime/version support claim.
+  only uses MariaDB `>= 10.0.5` as a keyword completion-suggestion gate and
+  does not add a MariaDB `RETURNING` runtime/version support claim.
+- Support-claim closure: MariaDB docs and the testing matrix now separate live
+  engine smoke, focused shared-path tests, parser/Safe Mode structure, and
+  autocomplete evidence from future MariaDB-only runtime/admin/import/export
+  promotion slices.
 - Routine smoke: GitHub Runtime Happy Path covers connect, seeded table browse,
   catalog metadata browse, SELECT, DML batch, row edit, cancellation/retry,
   history/source labels, and tabular result rendering for MariaDB on Ubuntu. It
