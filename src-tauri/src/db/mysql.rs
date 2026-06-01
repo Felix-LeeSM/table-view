@@ -13,6 +13,7 @@
 //! `create_trigger` / `drop_trigger` 는 PG-shaped request 와 MySQL trigger
 //! body shape 이 달라 `Unsupported` reject 한다.
 
+mod checks;
 mod connection;
 mod mutations;
 mod queries;

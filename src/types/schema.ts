@@ -20,9 +20,10 @@ export interface ColumnInfo {
   fk_reference: string | null;
   comment: string | null;
   /**
-   * CHECK constraint expressions referencing this column. Each entry is
-   * the canonical `pg_get_constraintdef()` form (e.g. `"CHECK ((age >= 0))"`).
-   * A constraint over multiple columns appears in each column's vector.
+   * CHECK constraint expressions referencing this column. PostgreSQL uses
+   * `pg_get_constraintdef()` form; MySQL wraps `information_schema` expressions
+   * as `CHECK (<expr>)`. A constraint over multiple columns appears in each
+   * column's vector.
    * Backend-optional (#[serde(default)] keeps payloads from older callers
    * / non-PG adapters compatible) — read with `?? []` on the consumer side.
    */

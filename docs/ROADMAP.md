@@ -77,8 +77,10 @@ result envelope wire format, `useQueryExecution` decomposition, DBMS별 live smo
 
 H2 RDBMS parity 는 **PostgreSQL lane 을 먼저 선택**했다. PostgreSQL 은 아직 가장
 강한 full-parity 후보 lane 이고, MySQL 은 runtime smoke baseline 까지만 승격돼
-있다. MySQL/MariaDB/SQLite/DuckDB 를 full parity lane 으로 넓히려면 별도
-runtime/parser/Safe Mode/completion/edit/fixture/E2E/support-claim gate 가 필요하다.
+있다. MySQL catalog/workbench metadata 는 databases/schemas, tables, views,
+columns, indexes, constraints/FKs, column CHECK hints 까지 live adapter
+evidence 가 있다. MySQL/MariaDB/SQLite/DuckDB 를 full parity lane 으로 넓히려면
+별도 runtime/parser/Safe Mode/completion/edit/fixture/E2E/support-claim gate 가 필요하다.
 MariaDB/SQLite/DuckDB 작업은 현재 claim 정합성, typed capability gate,
 fixture/smoke evidence routing 으로 제한한다.
 

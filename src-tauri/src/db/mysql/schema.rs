@@ -1,5 +1,5 @@
-//! MySQL schema introspection — databases (= schemas), tables, columns.
-//! Sprint 281 (Phase 17 Slice A) — read path for sidebar + column meta.
+//! MySQL schema introspection — databases (= schemas), tables, columns,
+//! indexes, constraints, and views.
 //!
 //! PG (`db/postgres/schema.rs`) 의 분류를 답습하되 dialect 차이:
 //! - MySQL 은 database 가 곧 namespace ('schema' 와 동의어). `SHOW
@@ -8,8 +8,8 @@
 //!   `sys`) 는 사용자 surface 에서 필터.
 //! - `information_schema.columns.column_type` 은 PG `format_type` 와 동등
 //!   (`varchar(200)`, `int(11)`, `decimal(10,2)` 형식). 별도 정규화 불필요.
-//! - CHECK constraint 은 column 별이 아니라 constraint 별 — Slice E
-//!   (Sprint 285) 에서 처리. Slice A 는 `check_clauses` 빈 vec.
+//! - CHECK constraint 는 `information_schema.check_constraints` 에서 읽고
+//!   참조 컬럼별 `check_clauses` 로 투영.
 
 use sqlx::MySqlPool;
 
@@ -19,7 +19,16 @@ use crate::models::{
     TriggerInfo, ViewInfo,
 };
 
+use super::checks::{build_check_map, is_check_metadata_unavailable};
 use super::MysqlAdapter;
+
+fn mysql_check_rows_or_empty<T>(result: Result<Vec<T>, sqlx::Error>) -> Result<Vec<T>, AppError> {
+    match result {
+        Ok(rows) => Ok(rows),
+        Err(err) if is_check_metadata_unavailable(&err) => Ok(Vec::new()),
+        Err(err) => Err(AppError::Connection(err.to_string())),
+    }
+}
 
 /// MySQL data type → DataGrid category 매핑. PG 의 `map_pg_data_type` 와
 /// 동일 정책 (Sprint 238 AC-238-02): raw `data_type` (소문자 keyword,
@@ -116,10 +125,9 @@ impl MysqlAdapter {
     }
 
     /// PG 의 `get_table_columns_inner` 와 동일 책무. 4 round-trip:
-    /// (1) columns, (2) PK, (3) FK, (4) comments — MySQL 은 column comment 가
+    /// (1) columns, (2) PK, (3) FK, (4) CHECK — MySQL 은 column comment 가
     /// `information_schema.columns.column_comment` 에 inline 으로 들어
-    /// 있어 PG 처럼 별도 `col_description` round-trip 불필요. CHECK 은
-    /// Slice E (Sprint 285).
+    /// 있어 PG 처럼 별도 `col_description` round-trip 불필요.
     pub(super) async fn get_table_columns_inner(
         &self,
         pool: &MySqlPool,
@@ -191,6 +199,28 @@ impl MysqlAdapter {
             })
             .collect();
 
+        let check_rows: Vec<(String,)> = mysql_check_rows_or_empty(
+            sqlx::query_as(
+                "SELECT CONVERT(cc.check_clause USING utf8mb4) \
+             FROM information_schema.table_constraints tc \
+             JOIN information_schema.check_constraints cc \
+               ON cc.constraint_schema = tc.constraint_schema \
+              AND cc.constraint_name = tc.constraint_name \
+             WHERE tc.table_schema = ? AND tc.table_name = ? \
+               AND tc.constraint_type = 'CHECK' \
+             ORDER BY tc.constraint_name",
+            )
+            .bind(schema)
+            .bind(table)
+            .fetch_all(pool)
+            .await,
+        )?;
+        let column_names: Vec<String> = rows.iter().map(|(name, ..)| name.clone()).collect();
+        let mut check_map = build_check_map(
+            &column_names,
+            check_rows.into_iter().map(|(clause,)| clause),
+        );
+
         Ok(rows
             .into_iter()
             .map(
@@ -205,6 +235,7 @@ impl MysqlAdapter {
                     } else {
                         Some(column_comment)
                     };
+                    let check_clauses = check_map.remove(&name).unwrap_or_default();
                     let category = map_mysql_data_type(&data_type);
                     ColumnInfo {
                         name,
@@ -215,7 +246,7 @@ impl MysqlAdapter {
                         is_foreign_key: is_fk,
                         fk_reference,
                         comment,
-                        check_clauses: Vec::new(),
+                        check_clauses,
                         category,
                     }
                 },
@@ -303,6 +334,47 @@ impl MysqlAdapter {
             })
             .collect();
 
+        let check_rows: Vec<(String, String)> = mysql_check_rows_or_empty(
+            sqlx::query_as(
+                "SELECT CONVERT(tc.table_name USING utf8mb4), \
+                    CONVERT(cc.check_clause USING utf8mb4) \
+             FROM information_schema.table_constraints tc \
+             JOIN information_schema.check_constraints cc \
+               ON cc.constraint_schema = tc.constraint_schema \
+              AND cc.constraint_name = tc.constraint_name \
+             WHERE tc.table_schema = ? AND tc.constraint_type = 'CHECK' \
+             ORDER BY tc.table_name, tc.constraint_name",
+            )
+            .bind(schema)
+            .fetch_all(&pool)
+            .await,
+        )?;
+        let mut columns_by_table: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for row in &rows {
+            use sqlx::Row;
+            let table_name: String = row.try_get("table_name").unwrap_or_default();
+            let col_name: String = row.try_get("column_name").unwrap_or_default();
+            columns_by_table
+                .entry(table_name)
+                .or_default()
+                .push(col_name);
+        }
+        let mut check_map: std::collections::HashMap<(String, String), Vec<String>> =
+            std::collections::HashMap::new();
+        for (table_name, raw_clause) in check_rows {
+            let Some(column_names) = columns_by_table.get(&table_name) else {
+                continue;
+            };
+            let table_check_map = build_check_map(column_names, [raw_clause]);
+            for (column_name, clauses) in table_check_map {
+                check_map
+                    .entry((table_name.clone(), column_name))
+                    .or_default()
+                    .extend(clauses);
+            }
+        }
+
         let mut result: std::collections::HashMap<String, Vec<ColumnInfo>> =
             std::collections::HashMap::new();
 
@@ -326,6 +398,9 @@ impl MysqlAdapter {
             } else {
                 Some(column_comment)
             };
+            let check_clauses = check_map
+                .remove(&(table_name.clone(), col_name.clone()))
+                .unwrap_or_default();
             let category = map_mysql_data_type(&data_type);
             result.entry(table_name).or_default().push(ColumnInfo {
                 name: col_name,
@@ -336,7 +411,7 @@ impl MysqlAdapter {
                 is_foreign_key: is_fk,
                 fk_reference,
                 comment,
-                check_clauses: Vec::new(),
+                check_clauses,
                 category,
             });
         }
