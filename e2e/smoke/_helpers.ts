@@ -5,7 +5,7 @@ export { editGridCellInRow } from "./grid-edit";
 const WORKSPACE_TITLE = "Table View — Workspace";
 const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"]';
 
-export type DbType = "postgresql" | "mongodb" | "mysql" | "mariadb";
+export type DbType = "postgresql" | "mongodb" | "mysql" | "mariadb" | "sqlite";
 export type ConnectionEnvironment =
   | "local"
   | "testing"
@@ -126,6 +126,7 @@ function dbTypeLabel(dbType: DbType): string {
   if (dbType === "postgresql") return "PostgreSQL";
   if (dbType === "mysql") return "MySQL";
   if (dbType === "mariadb") return "MariaDB";
+  if (dbType === "sqlite") return "SQLite";
   return "MongoDB";
 }
 
@@ -258,6 +259,28 @@ export async function createMariaDbConnection(
     "#conn-database",
     process.env.MARIADB_DATABASE ?? "table_view_test",
   );
+
+  await saveConnectionDialog(dialog);
+  await expectConnectionVisible(name);
+}
+
+export async function createSqliteConnection(
+  name: string,
+  databasePath: string,
+  opts: { readOnly?: boolean } = {},
+) {
+  const dialog = await openNewConnectionDialog();
+  await selectDatabaseType("sqlite");
+
+  await setInput("#conn-name", name);
+  await setInput("#conn-sqlite-path", databasePath);
+  if (opts.readOnly === true) {
+    const readOnly = await $('input[type="checkbox"]');
+    await readOnly.waitForDisplayed({ timeout: 5000 });
+    if (!(await readOnly.isSelected())) {
+      await readOnly.click();
+    }
+  }
 
   await saveConnectionDialog(dialog);
   await expectConnectionVisible(name);
