@@ -85,7 +85,10 @@ fn check_clause_references_column(check_clause: &str, column: &str) -> bool {
                     i += 1;
                 }
                 let token = &check_clause[start..i];
-                if token.eq_ignore_ascii_case(column) && !token.eq_ignore_ascii_case("CHECK") {
+                if token.eq_ignore_ascii_case(column)
+                    && !token.eq_ignore_ascii_case("CHECK")
+                    && next_non_ws(bytes, i) != Some(b'(')
+                {
                     return true;
                 }
             }
@@ -104,6 +107,16 @@ fn is_identifier_start(byte: u8) -> bool {
 
 fn is_identifier_part(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$'
+}
+
+fn next_non_ws(bytes: &[u8], mut i: usize) -> Option<u8> {
+    while i < bytes.len() {
+        if !bytes[i].is_ascii_whitespace() {
+            return Some(bytes[i]);
+        }
+        i += 1;
+    }
+    None
 }
 
 fn skip_sql_string(bytes: &[u8], mut i: usize, quote: u8) -> usize {
@@ -263,6 +276,15 @@ mod tests {
         let checks = build_check_map(&columns, ["`상태` IS NOT NULL".to_string()]);
 
         assert_eq!(checks["상태"], vec!["CHECK (`상태` IS NOT NULL)"]);
+    }
+
+    #[test]
+    fn build_check_map_ignores_function_names_that_match_columns() {
+        let columns = vec!["lower".to_string(), "name".to_string()];
+        let checks = build_check_map(&columns, ["LOWER(name) <> ''".to_string()]);
+
+        assert!(!checks.contains_key("lower"));
+        assert_eq!(checks["name"], vec!["CHECK (LOWER(name) <> '')"]);
     }
 
     #[test]
