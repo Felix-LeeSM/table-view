@@ -11,6 +11,7 @@ ZERO_OID="0000000000000000000000000000000000000000"
 DRY_RUN="${PRE_PUSH_PATH_ROUTER_DRY_RUN:-0}"
 HEARTBEAT_SECONDS="${PRE_PUSH_PATH_ROUTER_HEARTBEAT_SECONDS:-15}"
 LOG_TAIL_LINES="${PRE_PUSH_PATH_ROUTER_LOG_TAIL_LINES:-80}"
+PARALLEL_GATES="${PRE_PUSH_PATH_ROUTER_PARALLEL_GATES:-0}"
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
@@ -320,6 +321,17 @@ run_hook_gates() {
 
 run_frontend_and_rust_gates() {
 	if [ "$needs_frontend" = "1" ] && [ "$needs_rust" = "1" ]; then
+		if [ "$PARALLEL_GATES" != "1" ]; then
+			if [ "$DRY_RUN" = "1" ]; then
+				echo "RUN sequential: frontend then rust"
+			else
+				echo "[pre-push-route] sequential: frontend then rust"
+			fi
+			run_ts_gates
+			run_rust_gates
+			return 0
+		fi
+
 		if [ "$DRY_RUN" = "1" ]; then
 			echo "RUN parallel: frontend+rust"
 			run_ts_gates

@@ -87,6 +87,19 @@ PRE_PUSH_PATH_ROUTER_HEARTBEAT_SECONDS=10
 PRE_PUSH_PATH_ROUTER_LOG_TAIL_LINES=120
 ```
 
+## Full-Route Concurrency
+
+When a change touches workflow or unknown paths, `pre-push` runs both frontend
+and Rust gates. The default is sequential execution: frontend first, then Rust.
+This avoids local CPU and memory contention where Rust coverage and Vitest run
+at the same time and cause otherwise unrelated test timeouts.
+
+Opt into the old parallel behavior only for an intentionally quiet machine:
+
+```bash
+PRE_PUSH_PATH_ROUTER_PARALLEL_GATES=1 git push
+```
+
 ## Coverage Ratchet
 
 Coverage thresholds are protected by the ratchet in

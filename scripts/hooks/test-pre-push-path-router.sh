@@ -171,9 +171,17 @@ assert_not_contains "$rust_output" "RUN ts-test:" "rust-only"
 
 mixed_output="$(run_case mixed normal src/App.tsx src-tauri/src/lib.rs)"
 assert_contains "$mixed_output" "route: frontend=1 rust=1" "mixed"
-assert_contains "$mixed_output" "RUN parallel: frontend+rust" "mixed"
+assert_contains "$mixed_output" "RUN sequential: frontend then rust" "mixed"
 assert_contains "$mixed_output" "RUN ts-test:" "mixed"
 assert_contains "$mixed_output" "RUN rust-test-and-coverage:" "mixed"
+
+mixed_parallel_output="$(
+	PRE_PUSH_PATH_ROUTER_PARALLEL_GATES=1 run_case mixed-parallel normal src/App.tsx src-tauri/src/lib.rs
+)"
+assert_contains "$mixed_parallel_output" "route: frontend=1 rust=1" "mixed parallel"
+assert_contains "$mixed_parallel_output" "RUN parallel: frontend+rust" "mixed parallel"
+assert_contains "$mixed_parallel_output" "RUN ts-test:" "mixed parallel"
+assert_contains "$mixed_parallel_output" "RUN rust-test-and-coverage:" "mixed parallel"
 
 hook_output="$(run_case hook normal lefthook.yml)"
 assert_contains "$hook_output" "route: frontend=0 rust=0 hook=1" "hook"
