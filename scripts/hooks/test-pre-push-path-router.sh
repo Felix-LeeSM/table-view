@@ -9,6 +9,10 @@ TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pre-push-router-check.XXXXXX")"
 ZERO_OID="0000000000000000000000000000000000000000"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
+while read -r git_env_var; do
+	[ -n "$git_env_var" ] && unset "$git_env_var"
+done < <(git -C "$ROOT" rev-parse --local-env-vars)
+
 assert_contains() {
 	local text="$1"
 	local needle="$2"
@@ -42,6 +46,8 @@ init_repo() {
 	git -C "$repo" config user.name "Test User"
 	git -C "$repo" config user.email "test@example.invalid"
 	git -C "$repo" config commit.gpgsign false
+	mkdir -p "$repo/.no-hooks"
+	git -C "$repo" config core.hooksPath .no-hooks
 
 	mkdir -p "$repo/docs"
 	printf 'base\n' >"$repo/docs/base.md"
@@ -159,6 +165,7 @@ assert_contains "$rust_output" "route: frontend=0 rust=1" "rust-only"
 assert_contains "$rust_output" "RUN tauri-check:" "rust-only"
 assert_contains "$rust_output" "RUN cargo-deny:" "rust-only"
 assert_contains "$rust_output" "RUN rust-test-and-coverage:" "rust-only"
+assert_contains "$rust_output" "cargo llvm-cov nextest --profile push" "rust-only"
 assert_not_contains "$rust_output" "RUN ts-test:" "rust-only"
 
 mixed_output="$(run_case mixed normal src/App.tsx src-tauri/src/lib.rs)"
@@ -167,15 +174,32 @@ assert_contains "$mixed_output" "RUN parallel: frontend+rust" "mixed"
 assert_contains "$mixed_output" "RUN ts-test:" "mixed"
 assert_contains "$mixed_output" "RUN rust-test-and-coverage:" "mixed"
 
-workflow_output="$(run_case workflow normal lefthook.yml)"
-assert_contains "$workflow_output" "route: full" "workflow"
-assert_contains "$workflow_output" "RUN ts-typecheck:" "workflow"
-assert_contains "$workflow_output" "RUN rust-test-and-coverage:" "workflow"
+hook_output="$(run_case hook normal lefthook.yml)"
+assert_contains "$hook_output" "route: frontend=0 rust=0 hook=1" "hook"
+assert_contains "$hook_output" "RUN hook-shell-syntax:" "hook"
+assert_contains "$hook_output" "RUN lefthook-validate:" "hook"
+assert_contains "$hook_output" "RUN nextest-push-profile-config:" "hook"
+assert_contains "$hook_output" "RUN pre-push-router-tests:" "hook"
+assert_not_contains "$hook_output" "RUN ts-typecheck:" "hook"
+assert_not_contains "$hook_output" "RUN rust-test-and-coverage:" "hook"
 
-workflow_doc_output="$(run_case workflow-doc normal scripts/hooks/README.md)"
-assert_contains "$workflow_doc_output" "route: full" "workflow doc"
-assert_contains "$workflow_doc_output" "RUN ts-test:" "workflow doc"
-assert_contains "$workflow_doc_output" "RUN rust-test-and-coverage:" "workflow doc"
+hook_doc_output="$(run_case hook-doc normal scripts/hooks/README.md)"
+assert_contains "$hook_doc_output" "route: frontend=0 rust=0 hook=1" "hook doc"
+assert_contains "$hook_doc_output" "RUN pre-push-router-tests:" "hook doc"
+assert_not_contains "$hook_doc_output" "RUN ts-test:" "hook doc"
+assert_not_contains "$hook_doc_output" "RUN rust-test-and-coverage:" "hook doc"
+
+setup_output="$(run_case setup normal scripts/setup.sh)"
+assert_contains "$setup_output" "route: frontend=0 rust=0 hook=1" "setup"
+assert_contains "$setup_output" "RUN hook-shell-syntax:" "setup"
+assert_not_contains "$setup_output" "RUN ts-test:" "setup"
+assert_not_contains "$setup_output" "RUN rust-test-and-coverage:" "setup"
+
+nextest_config_output="$(run_case nextest-config normal src-tauri/.config/nextest.toml)"
+assert_contains "$nextest_config_output" "route: frontend=0 rust=0 hook=1" "nextest config"
+assert_contains "$nextest_config_output" "RUN nextest-push-profile-config:" "nextest config"
+assert_not_contains "$nextest_config_output" "RUN ts-test:" "nextest config"
+assert_not_contains "$nextest_config_output" "RUN rust-test-and-coverage:" "nextest config"
 
 codex_workflow_output="$(run_case codex-workflow normal .codex/hooks.json)"
 assert_contains "$codex_workflow_output" "route: full" "codex workflow"
