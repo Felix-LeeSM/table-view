@@ -1,7 +1,7 @@
 ---
 title: Delivery — commit → merge 전체 자율
 type: workflow-rule
-updated: 2026-05-30
+updated: 2026-06-01
 task: delivery, commit, push, pr, review, merge
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
@@ -30,11 +30,11 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
    - 정량은 자동 layer (hook / lint / pre-push / scripts/review/run-checks.sh) 가 이미 함
    - pr-reviewer 는 `.agents/skills/pr-review/SKILL.md` 를 적용하고 필요 시
      관점별 read-only `pr-subreviewer` 를 fan-out
-   - 출력: scorecard PR comment
+   - 출력: PR에 직접 남긴 통합 scorecard comment
    - **외부 옵션**: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가
 5. **T5 Reflect/Fix** — 결함 발견 시 delivery owner 가 fix commit + push → T4 재시작
 6. **T6 Merge or Blocked report** — 자율 머지 조건:
-   - 정성 모든 차원 ≥ 7/10
+   - 정성 모든 차원 ≥ 8/10
    - `gh pr checks` SUCCESS (CI green)
    - `gh pr view` 가 mergeable 이고 branch policy block 없음
    - 사용자 명시 거부 없음
