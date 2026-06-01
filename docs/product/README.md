@@ -62,7 +62,7 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 | Source | Fixture asset | Current meaning |
 |---|---|---|
 | PostgreSQL | `e2e/fixtures/seed.sql` | GitHub Runtime Happy Path 의 active RDBMS smoke seed |
-| MySQL | `e2e/fixtures/seed.mysql.sql` | active MySQL smoke seed for connect/browse/query/edit/cancel baseline |
+| MySQL | `e2e/fixtures/seed.mysql.sql` | wired Runtime Happy Path seed for the connect/browse/query/edit/cancel baseline |
 | MariaDB | `e2e/fixtures/seed.mariadb.sql` | explicit MariaDB-family seed contract; no routine/default live-engine claim |
 | SQLite | `e2e/fixtures/seed.sqlite.sql` | deterministic local-file seed; no desktop E2E smoke claim |
 | DuckDB | `e2e/fixtures/seed.duckdb.sql` | `.duckdb` fixture seed; no desktop E2E smoke claim |
