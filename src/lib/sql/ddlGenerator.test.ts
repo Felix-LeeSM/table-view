@@ -280,6 +280,86 @@ describe("generateMigrationDDL", () => {
     expect(sql).toContain("`customer name` VARCHAR(255) NOT NULL");
   });
 
+  it("[#453] MariaDB emits MySQL-family table/index/FK DDL with MariaDB header", () => {
+    const sql = generateMigrationDDL({
+      dialect: "mariadb",
+      schema: "shop",
+      tables: [
+        table("users", [
+          col({
+            name: "id",
+            data_type: "BIGINT",
+            nullable: false,
+            is_primary_key: true,
+          }),
+        ]),
+        table(
+          "orders",
+          [
+            col({
+              name: "id",
+              data_type: "BIGINT",
+              nullable: false,
+              is_primary_key: true,
+            }),
+            col({
+              name: "user_id",
+              data_type: "BIGINT",
+              nullable: false,
+              is_foreign_key: true,
+              fk_reference: "users.id",
+            }),
+            col({
+              name: "code",
+              data_type: "VARCHAR(64)",
+              nullable: false,
+            }),
+          ],
+          {
+            indexes: [
+              {
+                name: "orders_pkey",
+                columns: ["id"],
+                index_type: "btree",
+                is_unique: true,
+                is_primary: true,
+              },
+              {
+                name: "uq_orders_code",
+                columns: ["code"],
+                index_type: "btree",
+                is_unique: true,
+                is_primary: false,
+              },
+            ],
+            constraints: [
+              {
+                name: "fk_orders_user",
+                constraint_type: "fk",
+                columns: ["user_id"],
+                reference_table: "users",
+                reference_columns: ["id"],
+              },
+            ],
+          },
+        ),
+      ],
+      generatedAt: FIXED_DATE,
+    });
+
+    expect(sql).toContain("-- dialect: mariadb");
+    expect(sql).toContain("CREATE TABLE `shop`.`orders`");
+    expect(sql).toContain(
+      "CREATE UNIQUE INDEX `uq_orders_code` ON `shop`.`orders` (`code`);",
+    );
+    expect(sql).not.toContain("orders_pkey");
+    expect(sql).toContain("ALTER TABLE `shop`.`orders`");
+    expect(sql).toContain("ADD CONSTRAINT `fk_orders_user`");
+    expect(sql).toContain(
+      "FOREIGN KEY (`user_id`) REFERENCES `shop`.`users` (`id`);",
+    );
+  });
+
   // [AC-192-01-7] SQLite 은 schema 개념 없이 unqualified table 이름.
   // identifier 는 PG 와 동일 ANSI double-quote.
   // date 2026-05-02
@@ -442,7 +522,7 @@ describe("generateMigrationDDL", () => {
     expect(lines[0]).toContain('SELECT MAX("id")');
   });
 
-  // [AC-192-09-6] 다른 dialect (mysql/sqlite) 는 setval 발생 안 함.
+  // [AC-192-09-6] 다른 dialect (mysql/mariadb/sqlite) 는 setval 발생 안 함.
   // 미래에 dialect 별 reset semantics 가 추가되면 본 케이스 갱신.
   it("[AC-192-09-6] buildSequenceResets returns empty for non-PG dialects", () => {
     const cols = [
@@ -457,6 +537,9 @@ describe("generateMigrationDDL", () => {
     expect(buildSequenceResets("mysql", "db", [table("t", cols)])).toHaveLength(
       0,
     );
+    expect(
+      buildSequenceResets("mariadb", "db", [table("t", cols)]),
+    ).toHaveLength(0);
     expect(
       buildSequenceResets("sqlite", "main", [table("t", cols)]),
     ).toHaveLength(0);

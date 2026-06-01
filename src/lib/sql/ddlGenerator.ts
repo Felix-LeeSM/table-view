@@ -11,7 +11,7 @@
 // backend — no normalisation.
 import type { ColumnInfo, IndexInfo, ConstraintInfo } from "@/types/schema";
 
-export type DdlDialect = "postgresql" | "mysql" | "sqlite";
+export type DdlDialect = "postgresql" | "mysql" | "mariadb" | "sqlite";
 
 export interface DdlExportTable {
   name: string;
@@ -274,8 +274,8 @@ function buildAddForeignKey(
 // ── Identifier / qualified name helpers ───────────────────────────────
 
 function quoteIdent(dialect: DdlDialect, raw: string): string {
-  if (dialect === "mysql") {
-    // MySQL: backtick quoting, embedded backtick은 두 개로 escape.
+  if (dialect === "mysql" || dialect === "mariadb") {
+    // MySQL-family: backtick quoting, embedded backtick은 두 개로 escape.
     return "`" + raw.replace(/`/g, "``") + "`";
   }
   // PG / SQLite: ANSI double quotes, embedded double-quote 두 개로.
