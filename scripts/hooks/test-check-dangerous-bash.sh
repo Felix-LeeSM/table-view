@@ -109,6 +109,20 @@ run_case \
   '{"tool_input":{"command":"git log --oneline"}}' \
   EMPTY
 
+# Case 5 — gh pr merge warns because worktree cleanup is a separate T7 step.
+run_case \
+  "case5: gh pr merge 123 → warn cleanup reminder" \
+  0 \
+  '{"tool_input":{"command":"gh pr merge 123 --squash --delete-branch"}}' \
+  'MATCH:WARNING|worktree-cleanup.sh|memory/runbook/worktree/memory.md|memory/workflow/delivery/memory.md'
+
+# Case 6 — gh pr merge command that already chains cleanup stays quiet.
+run_case \
+  "case6: gh pr merge 123 && worktree cleanup → allow, no warning" \
+  0 \
+  '{"tool_input":{"command":"gh pr merge 123 --squash --delete-branch && bash scripts/worktree-cleanup.sh feature/foo"}}' \
+  EMPTY
+
 # 회귀 가드 1 — --no-verify 차단 + memory pointer.
 run_case \
   "regression: git commit --no-verify → block + memory pointer" \

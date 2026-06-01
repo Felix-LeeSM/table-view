@@ -115,6 +115,7 @@ DANGEROUS_PATTERNS=(
 # id::pattern 형식.
 WARN_PATTERNS=(
   'gh_pr_close_no_delete::(^|[^a-zA-Z0-9_])gh[[:space:]]+pr[[:space:]]+close[[:space:]]'
+  'gh_pr_merge_cleanup::(^|[^a-zA-Z0-9_])gh[[:space:]]+pr[[:space:]]+merge[[:space:]]'
 )
 
 MEMORY_POINTER="memory/workflow/git-policy/memory.md"
@@ -431,6 +432,23 @@ Override (의도적으로 ref 를 남기고 싶을 때):
 자세히: $MEMORY_POINTER (PR close cleanup 절)
 EOF
       ;;
+    gh_pr_merge_cleanup)
+      cat >&2 <<EOF
+WARNING: gh pr merge 는 linked worktree 디스크를 자동 정리하지 않음.
+\`--delete-branch\` 는 remote branch/ref 만 지운다. merge 성공 후 T7 cleanup 을
+반드시 실행:
+
+  bash scripts/worktree-cleanup.sh <branch>
+  # 또는 merged clean worktree 일괄 정리
+  bash scripts/worktree-cleanup.sh --merged
+
+Dirty worktree 는 cleanup script 가 제거하지 않고 SKIP 으로 보고한다.
+
+자세히:
+  - memory/runbook/worktree/memory.md (cleanup 책임)
+  - memory/workflow/delivery/memory.md (T7 Cleanup)
+EOF
+      ;;
     *)
       echo "WARNING: 알 수 없는 warn id ($id)" >&2
       ;;
@@ -463,6 +481,12 @@ check_warn_patterns() {
       # gh_pr_close_no_delete: --delete-branch 가 명령에 있으면 silent allow.
       if [ "$id" = "gh_pr_close_no_delete" ]; then
         if echo "$CMD" | grep -qE -- '--delete-branch([^a-zA-Z0-9_]|$)'; then
+          continue
+        fi
+      fi
+      # gh_pr_merge_cleanup: same shell command already includes cleanup.
+      if [ "$id" = "gh_pr_merge_cleanup" ]; then
+        if echo "$CMD" | grep -q -- 'worktree-cleanup.sh'; then
           continue
         fi
       fi
