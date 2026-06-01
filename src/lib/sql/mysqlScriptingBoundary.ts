@@ -1,6 +1,10 @@
 import type { DatabaseType } from "@/types/connection";
 
-export type MysqlScriptingFeature = "DELIMITER" | "LOAD DATA";
+export type MysqlScriptingFeature =
+  | "DELIMITER"
+  | "LOAD DATA"
+  | "STORED ROUTINE"
+  | "CONTROL FLOW";
 
 export interface MysqlScriptingBoundaryViolation {
   feature: MysqlScriptingFeature;
@@ -13,6 +17,10 @@ const MESSAGES: Record<MysqlScriptingFeature, string> = {
     "DELIMITER is a mysql-client directive and is not supported in the query editor. Submit a single server SQL statement without DELIMITER; stored routine body parsing is not implemented.",
   "LOAD DATA":
     "LOAD DATA is not supported in the query editor. Use an external MySQL client or import workflow; this app does not provide an explicit file-import confirmation path yet.",
+  "STORED ROUTINE":
+    "MySQL stored routine and event bodies are not supported in the query editor. Use a dedicated MySQL client for CREATE PROCEDURE, CREATE FUNCTION, or CREATE EVENT scripts.",
+  "CONTROL FLOW":
+    "MySQL routine control-flow scripting is not supported in the query editor. Submit a single server SQL statement without IF/LOOP routine-body fragments.",
 };
 
 export function isMysqlFamilyDbType(
@@ -47,6 +55,10 @@ function mysqlScriptingFeature(sql: string): MysqlScriptingFeature | null {
   const words = leadingSqlWords(sql, 2);
   if (words[0] === "DELIMITER") return "DELIMITER";
   if (words[0] === "LOAD" && words[1] === "DATA") return "LOAD DATA";
+  if (words[0] === "CREATE" && isStoredRoutineCreateTarget(words[1])) {
+    return "STORED ROUTINE";
+  }
+  if (isRoutineControlFlowWord(words[0])) return "CONTROL FLOW";
   return null;
 }
 
@@ -173,5 +185,28 @@ function isWordContinue(charCode: number): boolean {
     isWordStart(charCode) ||
     (charCode >= 48 && charCode <= 57) ||
     charCode === 95
+  );
+}
+
+function isStoredRoutineCreateTarget(word: string | undefined): boolean {
+  return word === "PROCEDURE" || word === "FUNCTION" || word === "EVENT";
+}
+
+function isRoutineControlFlowWord(word: string | undefined): boolean {
+  return (
+    word === "DECLARE" ||
+    word === "IF" ||
+    word === "ELSEIF" ||
+    word === "ELSE" ||
+    word === "WHILE" ||
+    word === "LOOP" ||
+    word === "REPEAT" ||
+    word === "CASE" ||
+    word === "LEAVE" ||
+    word === "ITERATE" ||
+    word === "RETURN" ||
+    word === "SIGNAL" ||
+    word === "RESIGNAL" ||
+    word === "END"
   );
 }

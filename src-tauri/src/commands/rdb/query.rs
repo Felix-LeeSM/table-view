@@ -45,6 +45,8 @@ pub fn validate_cancel_inputs(query_id: &str) -> Result<(), AppError> {
 enum MysqlScriptingFeature {
     Delimiter,
     LoadData,
+    StoredRoutine,
+    ControlFlow,
 }
 
 fn validate_mysql_scripting_boundary(sql: &str, db_type: &DatabaseType) -> Result<(), AppError> {
@@ -60,6 +62,12 @@ fn validate_mysql_scripting_boundary(sql: &str, db_type: &DatabaseType) -> Resul
         }
         Some(MysqlScriptingFeature::LoadData) => Err(AppError::Unsupported(
             "LOAD DATA is not supported in the query editor. Use an external MySQL client or import workflow; this app does not provide an explicit file-import confirmation path yet.".into(),
+        )),
+        Some(MysqlScriptingFeature::StoredRoutine) => Err(AppError::Unsupported(
+            "MySQL stored routine and event bodies are not supported in the query editor. Use a dedicated MySQL client for CREATE PROCEDURE, CREATE FUNCTION, or CREATE EVENT scripts.".into(),
+        )),
+        Some(MysqlScriptingFeature::ControlFlow) => Err(AppError::Unsupported(
+            "MySQL routine control-flow scripting is not supported in the query editor. Submit a single server SQL statement without IF/LOOP routine-body fragments.".into(),
         )),
         None => Ok(()),
     }
@@ -88,6 +96,19 @@ fn mysql_scripting_feature(sql: &str) -> Option<MysqlScriptingFeature> {
         && words.get(1).is_some_and(|word| word == "DATA")
     {
         return Some(MysqlScriptingFeature::LoadData);
+    }
+    if words.first().is_some_and(|word| word == "CREATE")
+        && words
+            .get(1)
+            .is_some_and(|word| is_stored_routine_create_target(word))
+    {
+        return Some(MysqlScriptingFeature::StoredRoutine);
+    }
+    if words
+        .first()
+        .is_some_and(|word| is_routine_control_flow_word(word))
+    {
+        return Some(MysqlScriptingFeature::ControlFlow);
     }
 
     None
@@ -234,6 +255,30 @@ fn is_word_start(byte: u8) -> bool {
 
 fn is_word_continue(byte: u8) -> bool {
     is_word_start(byte) || byte.is_ascii_digit() || byte == b'_'
+}
+
+fn is_stored_routine_create_target(word: &str) -> bool {
+    matches!(word, "PROCEDURE" | "FUNCTION" | "EVENT")
+}
+
+fn is_routine_control_flow_word(word: &str) -> bool {
+    matches!(
+        word,
+        "DECLARE"
+            | "IF"
+            | "ELSEIF"
+            | "ELSE"
+            | "WHILE"
+            | "LOOP"
+            | "REPEAT"
+            | "CASE"
+            | "LEAVE"
+            | "ITERATE"
+            | "RETURN"
+            | "SIGNAL"
+            | "RESIGNAL"
+            | "END"
+    )
 }
 
 async fn execute_query_inner(
@@ -1078,6 +1123,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn execute_query_mysql_stored_routine_body_returns_unsupported_before_dispatch() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Mysql,
+            ..StubRdbAdapter::default()
+        };
+        s.execute_sql_fn = Some(Box::new(|_| {
+            panic!("execute_sql must not run for unsupported MySQL stored routine bodies")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+
+        match execute_query_inner(
+            &state,
+            "c",
+            "CREATE PROCEDURE refresh_users() BEGIN UPDATE users SET touched = 1",
+            "q-routine-body",
+            None,
+        )
+        .await
+        {
+            Err(AppError::Unsupported(msg)) => assert!(msg.contains("stored routine")),
+            other => panic!("Expected Unsupported(stored routine), got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
     async fn execute_query_expected_db_mismatch_releases_cancel_token() {
         // 가드가 일찍 short-circuit 해도 register 된 token 은 release 되어야
         // 다음 시도가 깨끗하게 가능.
@@ -1244,6 +1314,52 @@ mod tests {
             Err(AppError::Unsupported(msg)) => assert!(msg.contains("LOAD DATA")),
             other => panic!("Expected Unsupported(LOAD DATA), got: {:?}", other),
         }
+    }
+
+    #[tokio::test]
+    async fn execute_query_batch_mariadb_control_flow_returns_unsupported_before_dispatch() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Mariadb,
+            ..StubRdbAdapter::default()
+        };
+        s.execute_sql_batch_fn = Some(Box::new(|_| {
+            panic!("execute_sql_batch must not run for unsupported MariaDB control-flow scripts")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts = vec![
+            "SELECT 1".to_string(),
+            "IF user_id IS NULL THEN SELECT 1".to_string(),
+        ];
+
+        match execute_query_batch_inner(&state, "c", &stmts, "qb-control-flow", None).await {
+            Err(AppError::Unsupported(msg)) => assert!(msg.contains("control-flow")),
+            other => panic!("Expected Unsupported(control-flow), got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn execute_query_mysql_transaction_begin_is_not_control_flow_boundary() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Mysql,
+            ..StubRdbAdapter::default()
+        };
+        s.execute_sql_fn = Some(Box::new(|_| {
+            Ok(RdbQueryResult {
+                columns: vec![],
+                rows: vec![],
+                total_count: 0,
+                execution_time_ms: 0,
+                query_type: QueryType::Dml { rows_affected: 0 },
+            })
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+
+        let result = execute_query_inner(&state, "c", "BEGIN", "q-transaction-begin", None).await;
+
+        assert!(
+            result.is_ok(),
+            "transaction BEGIN must not be treated as routine control-flow"
+        );
     }
 
     #[tokio::test]

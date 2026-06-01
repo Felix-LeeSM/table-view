@@ -79,7 +79,9 @@ H2 RDBMS parity 는 **PostgreSQL lane 을 먼저 선택**했다. PostgreSQL 은 
 강한 full-parity 후보 lane 이고, MySQL 은 runtime smoke baseline 까지만 승격돼
 있다. MySQL catalog/workbench metadata 는 databases/schemas, tables, views,
 columns, indexes, constraints/FKs, column CHECK hints 까지 live adapter
-evidence 가 있다. MySQL/MariaDB/SQLite/DuckDB 를 full parity lane 으로 넓히려면
+evidence 가 있다. MySQL parser/Safe Mode 는 `LIMIT offset,count`,
+`ON DUPLICATE KEY UPDATE`, narrow `CALL proc(...)` 와 명시 unsupported scripting
+guard 까지 닫았다. MySQL/MariaDB/SQLite/DuckDB 를 full parity lane 으로 넓히려면
 별도 runtime/parser/Safe Mode/completion/edit/fixture/E2E/support-claim gate 가 필요하다.
 MariaDB/SQLite/DuckDB 작업은 현재 claim 정합성, typed capability gate,
 fixture/smoke evidence routing 으로 제한한다.
@@ -90,7 +92,7 @@ fixture/smoke evidence routing 으로 제한한다.
 | RDBMS common smoke matrix | `docs/contributor-guide/testing-and-quality.md`, #240 | Current remote E2E smoke proves PostgreSQL as the strongest RDBMS lane and MySQL as a narrower runtime baseline. Other RDBMS lanes use unit/integration/fixture evidence until promoted. |
 | MySQL version-aware capability gate | `src-tauri/src/db/mysql/version.rs`, `src-tauri/tests/mysql_integration.rs`, `src/types/dataSourceVersionCapabilities.ts`, `src/types/adapterConformance.ts`, #221 | CHECK/constraint catalog metadata uses live server version context and is enabled only at MySQL `>= 8.0.16` / MariaDB `>= 10.2.1`. |
 | MariaDB delta/evidence gate | `src/types/dataSourceRuntime.ts`, `src/lib/sql/sqlDialectProfile.ts`, `src/types/adapterConformance.ts`, #222 | MariaDB keeps identity/profile and completion-only `RETURNING` delta; runtime support remains server-resolved until engine evidence is promoted. |
-| MySQL/MariaDB support claim SOT | `docs/product/README.md`, `docs/product/known-limitations.md`, `docs/product/query-language-support.md`, #207 | Shared MySQL-family behavior and MariaDB-specific deltas are separated. |
+| MySQL/MariaDB support claim SOT | `docs/product/README.md`, `docs/product/known-limitations.md`, `docs/product/query-language-support.md`, #207/#443 | Shared MySQL-family behavior, explicit unsupported scripting boundaries, and MariaDB-specific deltas are separated. |
 | RDBMS docs-code consistency | `docs/product/**`, #198 | Product-visible claims stay narrower than implemented/evidenced behavior. |
 
 H2 umbrella closure does not mean every RDBMS has full desktop-client parity. It
@@ -284,7 +286,7 @@ Near-term follow-up groups:
 | Group | Follow-up |
 |---|---|
 | RDBMS parity | Keep PostgreSQL as the strongest query/workbench parity lane until a focused implementation slice promotes the next PostgreSQL gap with matching tests and smoke routing. Keep MySQL's runtime smoke baseline narrow to connect/browse/query/edit/cancel/history/result-envelope behavior; add broader MySQL/MariaDB operation-level UI/runtime consumers only with matching evidence. Keep SQLite file-DBMS work scoped to writable-file DML, PK row edits, explicit DDL rejection, and future smoke promotion until structured DDL/ALTER rebuild and extension semantics have their own implementation evidence. Add MariaDB engine fixture evidence or keep support claims narrowed. |
-| Query language widening | Widen SQL/Mongo client semantic support by tested slices: broader MySQL/MariaDB routine expressions, SQLite extension/capability semantics, server-version/capability gates, Mongo version/deployment gates, and extension-aware completion packs. DuckDB extension install/load and external-file capability settings are currently blocked by adapter gates; future DuckDB extension support needs detected capability evidence before completion/runtime claims widen. PostgreSQL completion packs must consume installed extension inventory before enabling curated extension-specific candidates. |
+| Query language widening | Widen SQL/Mongo client semantic support by tested slices: future MySQL/MariaDB routine-expression support only after the explicit unsupported scripting boundary is re-scoped, SQLite extension/capability semantics, server-version/capability gates, Mongo version/deployment gates, and extension-aware completion packs. DuckDB extension install/load and external-file capability settings are currently blocked by adapter gates; future DuckDB extension support needs detected capability evidence before completion/runtime claims widen. PostgreSQL completion packs must consume installed extension inventory before enabling curated extension-specific candidates. |
 | Query/result boundary | Keep typed envelopes as the UI-facing boundary. Future hardening can make backend RDBMS IPC emit native `tabular` envelopes instead of normalizing legacy `QueryResult` at the Tauri wrapper. |
 | ERD/schema graph | 현재 schemaStore cache owner 범위는 schemas/tables/views/functions/postgresExtensions/tableColumnsCache/tableIndexesCache/tableConstraintsCache/triggers 이다. Production ERD/`SchemaGraph` input 은 schema/table/column cache 와 cached/fetched explicit index/constraint metadata 를 함께 쓰며, column-level FK info 는 synthetic fallback 으로 남아 있다. FK navigation 은 현재 DataGrid cell/icon path 이며 ERD interaction claim 이 아니다. Follow-up 은 shared `SchemaGraph`/catalog input path 를 확장해 dependency view, migration impact analysis, schema diff, data compare, dense-view screenshot smoke 를 연결하는 것이다. Duplicate catalog parsing 금지. |
 | Redis/Valkey | Redis first slice is backend KV primitives plus key browser/value preview UI. Define contracts and evidence for full value editor, TTL/write/stream UI, Redis command query editor, cluster, pub/sub, modules, consumer-group management, and Valkey-specific profile/runtime/fixture/live evidence before broader support claims. |

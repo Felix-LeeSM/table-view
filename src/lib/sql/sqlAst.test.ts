@@ -431,6 +431,30 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           set_operation: [],
         } satisfies SqlParseResult;
       }
+      if (sql === "SELECT a FROM x LIMIT 10, 20") {
+        return {
+          kind: "select",
+          columns: { kind: "named", names: ["a"] },
+          from: [
+            {
+              schema: null,
+              table: "x",
+              alias: null,
+              join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "x" },
+            },
+          ],
+          where: null,
+          group_by: [],
+          having: null,
+          order_by: [],
+          limit: {
+            count: { kind: "literal", value: { kind: "integer", value: 20 } },
+            offset: { kind: "literal", value: { kind: "integer", value: 10 } },
+          },
+          set_operation: [],
+        } satisfies SqlParseResult;
+      }
       if (sql === "INSERT INTO x VALUES (1)") {
         // Pre-sprint-392 this was an unsupported-statement; sprint-392
         // promotes INSERT to a first-class variant.
@@ -1773,6 +1797,22 @@ describe("parseSql (sprint-385 facade)", () => {
       value: { kind: "integer", value: 5 },
     });
     expect(result.limit.offset).toBeNull();
+  });
+
+  it("[AC-443-F01] parses MySQL LIMIT offset,count into offset + count slots", async () => {
+    const result = await parseSql("SELECT a FROM x LIMIT 10, 20");
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.limit).not.toBeNull();
+    if (result.limit === null) return;
+    expect(result.limit.offset).toEqual({
+      kind: "literal",
+      value: { kind: "integer", value: 10 },
+    });
+    expect(result.limit.count).toEqual({
+      kind: "literal",
+      value: { kind: "integer", value: 20 },
+    });
   });
 
   it("[AC-393a-Fc04] parseSqlPreloaded returns the widened SELECT shape synchronously after preload", async () => {
