@@ -76,10 +76,13 @@ result envelope wire format, `useQueryExecution` decomposition, DBMS별 live smo
 ## H2 진행 기준
 
 H2 RDBMS parity 는 **PostgreSQL lane 을 먼저 선택**했다. PostgreSQL 은 아직 가장
-강한 full-parity 후보 lane 이고, MySQL/MariaDB 는 runtime smoke baseline 까지만
+강한 full-parity 후보 lane 이고, MySQL/MariaDB 는 runtime smoke baseline 으로
 승격돼 있다. MySQL catalog/workbench metadata 는 databases/schemas, tables, views,
 columns, indexes, constraints/FKs, column CHECK hints 까지 live adapter
-evidence 가 있다. MySQL parser/Safe Mode 는 `LIMIT offset,count`,
+evidence 가 있다. MariaDB catalog/workbench metadata 는 tables/views/columns/indexes/
+constraints/FKs/routine metadata browse 까지 MariaDB-specific Runtime Happy Path
+probe 와 no-schema workbench coverage 로 닫혔고, CHECK hints 는 MariaDB
+`>= 10.2.1` version context gate 를 유지한다. MySQL parser/Safe Mode 는 `LIMIT offset,count`,
 `ON DUPLICATE KEY UPDATE`, narrow `CALL proc(...)` 와 명시 unsupported scripting
 guard 까지 닫았다. MySQL row-edit generated SQL 은 backtick quoting, primary-key
 row projection, JSON/scalar/null coercion, preview/commit/discard consistency
@@ -91,7 +94,7 @@ suggestion evidence 로 닫혔지만, completion runtime smoke 와 broader workb
 admin/import/export parity 는 별도 promotion gate 로 남긴다.
 MySQL/MariaDB/SQLite/DuckDB 를 full parity lane 으로 넓히려면
 별도 runtime/parser/Safe Mode/completion/edit/fixture/E2E/support-claim gate 가 필요하다.
-MariaDB 작업은 MariaDB engine baseline 과 delta hardening 으로 제한한다.
+MariaDB 작업은 MariaDB engine baseline, catalog/workbench parity, delta hardening 으로 제한한다.
 SQLite/DuckDB 작업은 현재 claim 정합성, typed capability gate,
 fixture/smoke evidence routing 으로 제한한다.
 
@@ -105,6 +108,7 @@ fixture/smoke evidence routing 으로 제한한다.
 | MySQL autocomplete context gate | `src-tauri/sql-parser-core/src/completion/completion_tests.rs`, `src/lib/sql/sqlCompletionContext.test.ts`, `src/lib/sql/sqlCompletionWasm.test.ts`, `src/lib/sql/sqlHybridCompletionSource.test.ts`, #446 | MySQL completion uses the current connection/database catalog for schema, table/view, column, and routine suggestions, including schema-qualified prefixes and backtick identifier contexts. This is editor completion evidence, not runtime support for stored routine bodies or scripting. |
 | MySQL test coverage recheck | `docs/contributor-guide/testing-and-quality.md`, `src-tauri/tests/mysql_integration.rs`, `src-tauri/tests/cancel_mysql.rs`, `src-tauri/src/db/mysql/queries.rs`, `src-tauri/src/db/mysql/mutations.rs`, `src-tauri/sql-parser-core/src/parser/tests.rs`, `src/lib/sql/mysqlScriptingBoundary.test.ts`, `src/components/query/QueryTab/useQueryExecution.test.tsx`, `src/components/datagrid/sqlGenerator.test.ts`, `src/components/datagrid/useDataGridEdit.mixed-batch.test.ts`, `src/lib/sql/sqlCompletionContext.test.ts`, `src/lib/sql/sqlCompletionWasm.test.ts`, `src/lib/sql/sqlHybridCompletionSource.test.ts`, `src-tauri/sql-parser-core/src/completion/completion_tests.rs`, `scripts/e2e-smoke-ci.sh`, `e2e/smoke/mysql.spec.ts`, `e2e/fixtures/seed.mysql.sql`, `scripts/fixtures/dbms-seeds.test.ts`, #530 | #530 maps backend runtime/query/catalog/cancel tests, source-equivalent edit/DDL tests, parser/safety unsupported-boundary tests, autocomplete vocabulary/context tests, and fixture/live smoke routing before parity closure. Fixture-only and completion-only evidence remain non-runtime support claims. |
 | MariaDB engine baseline gate | `e2e/smoke/mariadb.spec.ts`, `e2e/fixtures/seed.mariadb.sql`, `scripts/e2e-smoke-ci.sh`, `.github/workflows/e2e-smoke.yml`, #448 | MariaDB has distinct engine evidence for the routine connect/browse/query/edit/cancel/history/result-envelope baseline instead of inheriting the MySQL runtime-smoke claim. |
+| MariaDB catalog/workbench metadata gate | `e2e/fixtures/seed.mariadb.sql`, `e2e/smoke/mariadb.spec.ts`, `e2e/smoke/mysql-family-baseline.ts`, `src/components/schema/SchemaTree.dbms-shape.test.tsx`, `src/types/adapterConformance.test.ts`, `src-tauri/src/db/mysql/schema.rs`, #452 | MariaDB-specific smoke seed/category evidence covers tables, views, columns, indexes, constraints/FKs, and routine metadata browse. CHECK hints remain version-gated at MariaDB `>= 10.2.1`; procedure body authoring/management, admin/import/export, and completion-runtime support remain future gates. |
 | MariaDB delta/evidence gate | `src/types/dataSourceRuntime.ts`, `src/lib/sql/sqlDialectProfile.ts`, `src/types/adapterConformance.ts`, `src-tauri/sql-parser-core/src/parser/tests.rs`, `src/lib/sql/sqlSafety.test.ts`, #222/#450/#451 | MariaDB keeps identity/profile and profile/completion `RETURNING` delta. #451 decides not to add a client-side MariaDB `RETURNING` runtime/version support gate; parser/Safe Mode recognition is structural and keeps the normal DML safety tiers while raw execution remains server-resolved. The MySQL-family reuse audit lists intentional shared adapter/parser/completion/capability paths and keeps MySQL-only evidence from promoting MariaDB claims without MariaDB-specific tests/docs. |
 | MySQL/MariaDB support claim SOT | `docs/product/README.md`, `docs/product/known-limitations.md`, `docs/product/query-language-support.md`, #207/#443/#447/#448/#529/#530 | Shared MySQL-family behavior, explicit unsupported scripting boundaries, MariaDB-specific engine baseline/deltas, MySQL closure-claim boundaries, and final MySQL docs/test recheck boundaries are separated. Fixture-only inventory, completion suggestions, and below-smoke tests do not widen runtime/admin/import/export claims. |
 | RDBMS docs-code consistency | `docs/product/**`, #198 | Product-visible claims stay narrower than implemented/evidenced behavior. |

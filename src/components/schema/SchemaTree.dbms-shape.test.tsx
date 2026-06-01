@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  act,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import SchemaTree from "./SchemaTree";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -129,6 +135,9 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     vi.clearAllMocks();
     mockLoadSchemas.mockResolvedValue(undefined);
     mockLoadTables.mockResolvedValue(undefined);
+    mockLoadViews.mockResolvedValue(undefined);
+    mockLoadFunctions.mockResolvedValue(undefined);
+    mockPrefetchSchemaColumns.mockResolvedValue(undefined);
     resetStores();
   });
 
@@ -289,6 +298,117 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     // MySQL into the SQLite "flat" shape, which would drop views and
     // functions.
     expect(screen.getByLabelText("Tables in appdb")).toBeInTheDocument();
+  });
+
+  it("MariaDB no-schema workbench loads views and routines without a visible schema expand row (#452)", async () => {
+    useConnectionStore.setState({
+      connections: [makeConnection("ma1", "mariadb")],
+    });
+    setSchemaStoreState({
+      schemas: { ma1: [{ name: "appdb" }] },
+      tables: {
+        "ma1:appdb": [
+          {
+            name: "catalog_metadata_probe",
+            schema: "appdb",
+            row_count: 1,
+          },
+        ],
+      },
+    });
+
+    mockLoadViews.mockImplementation(async (connId, db, schema) => {
+      useSchemaStore.setState((state) => ({
+        views: {
+          ...state.views,
+          [connId]: {
+            ...(state.views[connId] ?? {}),
+            [db]: {
+              ...(state.views[connId]?.[db] ?? {}),
+              [schema]: [
+                {
+                  name: "active_mariadb_users",
+                  schema,
+                  definition: "select id, name, email from users",
+                },
+              ],
+            },
+          },
+        },
+      }));
+    });
+    mockLoadFunctions.mockImplementation(async (connId, db, schema) => {
+      useSchemaStore.setState((state) => ({
+        functions: {
+          ...state.functions,
+          [connId]: {
+            ...(state.functions[connId] ?? {}),
+            [db]: {
+              ...(state.functions[connId]?.[db] ?? {}),
+              [schema]: [
+                {
+                  name: "mariadb_tax_rate",
+                  schema,
+                  arguments: "price decimal(10,2)",
+                  returnType: "decimal(10,2)",
+                  language: "SQL",
+                  source: "RETURN price * 0.10",
+                  kind: "function",
+                },
+                {
+                  name: "mariadb_catalog_ping",
+                  schema,
+                  arguments: "input_id bigint",
+                  returnType: null,
+                  language: "SQL",
+                  source: "SELECT input_id AS echoed_id",
+                  kind: "procedure",
+                },
+              ],
+            },
+          },
+        },
+      }));
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="ma1" />);
+    });
+
+    expect(screen.queryByLabelText("appdb schema")).toBeNull();
+    expect(
+      screen.getByLabelText("catalog_metadata_probe table"),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(mockLoadViews).toHaveBeenCalledWith("ma1", DEFAULT_DB, "appdb");
+      expect(mockLoadFunctions).toHaveBeenCalledWith(
+        "ma1",
+        DEFAULT_DB,
+        "appdb",
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Views in appdb"));
+    });
+    expect(
+      screen.getByLabelText("active_mariadb_users view"),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Functions in appdb"));
+    });
+    expect(
+      screen.getByLabelText("mariadb_tax_rate function"),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Procedures in appdb"));
+    });
+    expect(
+      screen.getByLabelText("mariadb_catalog_ping function"),
+    ).toBeInTheDocument();
   });
 
   // ─────────────────────────────────────────────────────────────────────

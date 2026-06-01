@@ -53,7 +53,24 @@ interface SchemaTreeProps {
 const EMPTY_BY_SCHEMA = Object.freeze({}) as Record<string, never>;
 
 export default function SchemaTree({ connectionId }: SchemaTreeProps) {
-  const actions = useSchemaTreeActions({ connectionId });
+  const connectionName = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === connectionId)?.name,
+  );
+  // DBMS-shape-aware tree depth. Driven off `dbType` because the shape
+  // difference (with-schema / no-schema / flat) is *within* the rdb
+  // paradigm. Defaults to `with-schema` (PG) on first render so the
+  // initial paint matches the most explicit shape.
+  const dbType = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === connectionId)?.dbType,
+  );
+  const treeShape: RdbTreeShape = dbType
+    ? resolveRdbTreeShape(dbType)
+    : "with-schema";
+
+  const actions = useSchemaTreeActions({
+    connectionId,
+    autoLoadAuxiliaryCatalog: treeShape === "no-schema",
+  });
   // Destructure the fields effects depend on. Using the whole `actions`
   // object as a dep would re-run effects every render.
   const { setExpandedSchemas, refreshConnection, workspaceKey } = actions;
@@ -71,20 +88,6 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const functions = useSchemaStore(
     (s) => s.functions[connectionId]?.[db] ?? EMPTY_BY_SCHEMA,
   );
-
-  const connectionName = useConnectionStore(
-    (s) => s.connections.find((c) => c.id === connectionId)?.name,
-  );
-  // DBMS-shape-aware tree depth. Driven off `dbType` because the shape
-  // difference (with-schema / no-schema / flat) is *within* the rdb
-  // paradigm. Defaults to `with-schema` (PG) on first render so the
-  // initial paint matches the most explicit shape.
-  const dbType = useConnectionStore(
-    (s) => s.connections.find((c) => c.id === connectionId)?.dbType,
-  );
-  const treeShape: RdbTreeShape = dbType
-    ? resolveRdbTreeShape(dbType)
-    : "with-schema";
 
   // RDB schema-level migration export. Hidden on Mongo/Redis and when
   // dbType hasn't loaded yet.

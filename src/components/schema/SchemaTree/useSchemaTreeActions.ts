@@ -34,6 +34,7 @@ const EMPTY_EXPANDED: readonly string[] = Object.freeze([]);
 
 interface UseSchemaTreeActionsArgs {
   connectionId: string;
+  autoLoadAuxiliaryCatalog?: boolean;
 }
 
 export interface SchemaTreeActions {
@@ -117,6 +118,7 @@ export interface SchemaTreeActions {
 
 export function useSchemaTreeActions({
   connectionId,
+  autoLoadAuxiliaryCatalog = false,
 }: UseSchemaTreeActionsArgs): SchemaTreeActions {
   // Sprint 262 Slice B — per-workspace sidebar state. Sprint 263 — schema
   // cache 도 같은 `(connId, db)` 키로 분리됐으므로, workspaceKey 해석은
@@ -145,7 +147,9 @@ export function useSchemaTreeActions({
     refreshConnection,
     refreshSchema,
     expandSchema: loadExpandedSchema,
-  } = useSchemaCache(connectionId, workspaceKey?.db ?? "");
+  } = useSchemaCache(connectionId, workspaceKey?.db ?? "", {
+    autoLoadAuxiliaryCatalog,
+  });
 
   const functions = useSchemaStore((s) => s.functions);
   const addTab = useWorkspaceStore((s) => s.addTab);

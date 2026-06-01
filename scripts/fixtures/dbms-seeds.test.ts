@@ -53,6 +53,22 @@ describe("DBMS-specific E2E seed fixtures", () => {
     },
   );
 
+  it("mariadb seed carries live catalog/workbench metadata probes", () => {
+    const sql = readFileSync(
+      resolve("e2e/fixtures", "seed.mariadb.sql"),
+      "utf-8",
+    );
+
+    expect(sql).toContain("catalog_metadata_probe");
+    expect(sql).toContain("active_mariadb_users");
+    expect(sql).toContain("mariadb_tax_rate");
+    expect(sql).toContain("mariadb_catalog_ping");
+    expect(sql).toContain("uq_mariadb_catalog_probe_code");
+    expect(sql).toContain("ix_mariadb_catalog_probe_user");
+    expect(sql).toContain("fk_mariadb_catalog_probe_user");
+    expect(sql).toMatch(/CHECK\s*\(amount >= 0\)/i);
+  });
+
   it("mongodb has a dedicated idempotent document seed", () => {
     const fixture = readJson<MongoSeedFixture>("seed.mongodb.json");
     const collectionNames = fixture.collections.map(({ name }) => name);

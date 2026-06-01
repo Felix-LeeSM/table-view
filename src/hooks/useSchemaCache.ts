@@ -15,6 +15,8 @@ import type { SchemaInfo } from "@/types/schema";
  * 책임:
  * - mount 시 자동 `loadSchemas` + 모든 schema 의 `loadTables` /
  *   `prefetchSchemaColumns`. `(connId, db)` 별로 1회만.
+ * - no-schema workbench(MySQL/MariaDB) 호출처는 mount 시 views/functions 도
+ *   같이 로드한다. schema row 가 숨겨져 lazy expand 진입점이 없기 때문.
  * - schema 한 개 단위 lazy expand (`expandSchema`) — 캐시 미존재 시에만
  *   load.
  * - 전체 / 단일 schema refresh (`refreshConnection`, `refreshSchema`).
@@ -42,10 +44,16 @@ export interface UseSchemaCacheReturn {
   expandSchema(schemaName: string): Promise<void>;
 }
 
+export interface UseSchemaCacheOptions {
+  autoLoadAuxiliaryCatalog?: boolean;
+}
+
 export function useSchemaCache(
   connectionId: string,
   db: string,
+  options: UseSchemaCacheOptions = {},
 ): UseSchemaCacheReturn {
+  const autoLoadAuxiliaryCatalog = options.autoLoadAuxiliaryCatalog === true;
   const schemas =
     useSchemaStore((s) => s.schemas[connectionId]?.[db]) ?? EMPTY_SCHEMAS;
   const loadSchemas = useSchemaStore((s) => s.loadSchemas);
@@ -57,10 +65,12 @@ export function useSchemaCache(
 
   const [loadingSchemas, setLoadingSchemas] = useState(false);
   const [loadingTables, setLoadingTables] = useState<Set<string>>(new Set());
-  // Sprint 263 — autoLoaded set keyed by `connId|db` so a re-render with
-  // a different db triggers a fresh mount-time load. Component-instance
-  // scoped (Set is recreated on remount) — production DbSwitcher does not
-  // unmount the hook on toggle, so the set survives toggles.
+  // Sprint 263 — autoLoaded set keyed by `connId|db|aux` so a re-render with
+  // a different db triggers a fresh mount-time load. The aux bit lets a
+  // no-schema DBMS rerun once when its dbType resolves and views/routines need
+  // eager loading. Component-instance scoped (Set is recreated on remount) —
+  // production DbSwitcher does not unmount the hook on toggle, so the set
+  // survives toggles.
   const autoLoadedRef = useRef<Set<string>>(new Set());
 
   // Sprint 360 Phase 2 (Q23) — also re-run the auto-load when the
@@ -75,7 +85,7 @@ export function useSchemaCache(
     // 아직 미해석된 mount 직후) sentinel. fetch 를 건너뛰고, activeDb 가
     // 잡히면 effect 가 재실행되며 정상 load 가 트리거된다.
     if (!db) return;
-    const key = `${connectionId}|${db}`;
+    const key = `${connectionId}|${db}|aux:${autoLoadAuxiliaryCatalog ? "1" : "0"}`;
     // Sprint 360 Phase 2 — when the slot is undefined (cleared) drop the
     // marker so the auto-load below fires again. This converts a
     // clearForConnection wipe into an eager refetch within the same hook
@@ -97,6 +107,24 @@ export function useSchemaCache(
               logSchemaError(`loadTables(${s.name})`, err);
             });
           }
+          if (
+            autoLoadAuxiliaryCatalog &&
+            !state.views[connectionId]?.[db]?.[s.name]
+          ) {
+            loadViews(connectionId, db, s.name).catch((err) => {
+              toast.error(`Failed to load views for ${s.name}`);
+              logSchemaError(`loadViews(${s.name})`, err);
+            });
+          }
+          if (
+            autoLoadAuxiliaryCatalog &&
+            !state.functions[connectionId]?.[db]?.[s.name]
+          ) {
+            loadFunctions(connectionId, db, s.name).catch((err) => {
+              toast.error(`Failed to load functions for ${s.name}`);
+              logSchemaError(`loadFunctions(${s.name})`, err);
+            });
+          }
           prefetchSchemaColumns(connectionId, db, s.name);
         }
       })
@@ -108,9 +136,12 @@ export function useSchemaCache(
   }, [
     connectionId,
     db,
+    autoLoadAuxiliaryCatalog,
     schemasSlot,
     loadSchemas,
     loadTables,
+    loadViews,
+    loadFunctions,
     prefetchSchemaColumns,
   ]);
 
