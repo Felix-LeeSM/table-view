@@ -115,8 +115,68 @@ async function openSeededUsersTable(database: string, dbLabel: string) {
   );
 }
 
-async function clickVisibleTab(label: string) {
+async function activateVisibleTab(label: string) {
   await switchToWorkspaceWindow();
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((expectedLabel) => {
+        return Array.from(
+          document.querySelectorAll<HTMLElement>('[role="tab"]'),
+        ).some(
+          (candidate) =>
+            candidate.offsetParent !== null &&
+            candidate.textContent?.trim() === expectedLabel,
+        );
+      }, label),
+    {
+      timeout: 10000,
+      timeoutMsg: `${label} tab did not appear in the workspace`,
+    },
+  );
+
+  await browser.execute((expectedLabel) => {
+    const tab = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="tab"]'),
+    ).find(
+      (candidate) =>
+        candidate.offsetParent !== null &&
+        candidate.textContent?.trim() === expectedLabel,
+    );
+    if (!tab) return;
+
+    tab.focus();
+
+    const pointerInit = {
+      bubbles: true,
+      cancelable: true,
+      pointerType: "mouse",
+      button: 0,
+    };
+    if (typeof PointerEvent === "function") {
+      tab.dispatchEvent(
+        new PointerEvent("pointerdown", { ...pointerInit, buttons: 1 }),
+      );
+      tab.dispatchEvent(new PointerEvent("pointerup", pointerInit));
+    }
+
+    tab.dispatchEvent(
+      new MouseEvent("mousedown", {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: 1,
+      }),
+    );
+    tab.dispatchEvent(
+      new MouseEvent("mouseup", {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+      }),
+    );
+    tab.click();
+  }, label);
+
   await browser.waitUntil(
     async () =>
       await browser.execute((expectedLabel) => {
@@ -127,13 +187,11 @@ async function clickVisibleTab(label: string) {
             candidate.offsetParent !== null &&
             candidate.textContent?.trim() === expectedLabel,
         );
-        if (!tab) return false;
-        tab.click();
-        return true;
+        return tab?.getAttribute("aria-selected") === "true";
       }, label),
     {
       timeout: 10000,
-      timeoutMsg: `${label} tab did not appear in the workspace`,
+      timeoutMsg: `${label} tab did not become active in the workspace`,
     },
   );
 }
@@ -173,14 +231,14 @@ async function browseMariaDbCatalogMetadata(database: string) {
     "MariaDB catalog metadata probe row did not appear in grid",
   );
 
-  await clickVisibleTab("Structure");
+  await activateVisibleTab("Structure");
   await waitForWorkspaceTextAll(
     ["amount", "decimal", "user_id"],
     15000,
     "MariaDB catalog probe columns did not appear in Structure view",
   );
 
-  await clickVisibleTab("Indexes");
+  await activateVisibleTab("Indexes");
   await waitForWorkspaceTextAll(
     [
       "uq_mariadb_catalog_probe_code",
@@ -192,7 +250,7 @@ async function browseMariaDbCatalogMetadata(database: string) {
     "MariaDB catalog probe indexes did not appear in Structure view",
   );
 
-  await clickVisibleTab("Constraints");
+  await activateVisibleTab("Constraints");
   await waitForWorkspaceTextAll(
     ["fk_mariadb_catalog_probe_user", "FOREIGN KEY", "users(id)"],
     15000,
