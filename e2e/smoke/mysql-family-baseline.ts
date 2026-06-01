@@ -115,6 +115,91 @@ async function openSeededUsersTable(database: string, dbLabel: string) {
   );
 }
 
+async function clickVisibleTab(label: string) {
+  await switchToWorkspaceWindow();
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((expectedLabel) => {
+        const tab = Array.from(
+          document.querySelectorAll<HTMLElement>('[role="tab"]'),
+        ).find(
+          (candidate) =>
+            candidate.offsetParent !== null &&
+            candidate.textContent?.trim() === expectedLabel,
+        );
+        if (!tab) return false;
+        tab.click();
+        return true;
+      }, label),
+    {
+      timeout: 10000,
+      timeoutMsg: `${label} tab did not appear in the workspace`,
+    },
+  );
+}
+
+async function browseMariaDbCatalogMetadata(database: string) {
+  await expandIfCollapsed(`[aria-label="Tables in ${database}"]`, 30000);
+
+  const probeTable = await $('[aria-label="catalog_metadata_probe table"]');
+  await probeTable.waitForDisplayed({ timeout: 10000 });
+
+  const viewsCategory = await $(`[aria-label="Views in ${database}"]`);
+  await viewsCategory.waitForDisplayed({ timeout: 10000 });
+  await viewsCategory.click();
+  const activeUsersView = await $('[aria-label="active_mariadb_users view"]');
+  await activeUsersView.waitForDisplayed({ timeout: 10000 });
+
+  const functionsCategory = await $(`[aria-label="Functions in ${database}"]`);
+  await functionsCategory.waitForDisplayed({ timeout: 10000 });
+  await functionsCategory.click();
+  const taxRateFunction = await $('[aria-label="mariadb_tax_rate function"]');
+  await taxRateFunction.waitForDisplayed({ timeout: 10000 });
+
+  const proceduresCategory = await $(
+    `[aria-label="Procedures in ${database}"]`,
+  );
+  await proceduresCategory.waitForDisplayed({ timeout: 10000 });
+  await proceduresCategory.click();
+  const catalogPingProcedure = await $(
+    '[aria-label="mariadb_catalog_ping function"]',
+  );
+  await catalogPingProcedure.waitForDisplayed({ timeout: 10000 });
+
+  await probeTable.click();
+  await waitForGridTextAll(
+    ["mariadb-catalog-probe", "12.34"],
+    15000,
+    "MariaDB catalog metadata probe row did not appear in grid",
+  );
+
+  await clickVisibleTab("Structure");
+  await waitForWorkspaceTextAll(
+    ["amount", "decimal", "user_id"],
+    15000,
+    "MariaDB catalog probe columns did not appear in Structure view",
+  );
+
+  await clickVisibleTab("Indexes");
+  await waitForWorkspaceTextAll(
+    [
+      "uq_mariadb_catalog_probe_code",
+      "ix_mariadb_catalog_probe_user",
+      "code",
+      "user_id",
+    ],
+    15000,
+    "MariaDB catalog probe indexes did not appear in Structure view",
+  );
+
+  await clickVisibleTab("Constraints");
+  await waitForWorkspaceTextAll(
+    ["fk_mariadb_catalog_probe_user", "FOREIGN KEY", "users(id)"],
+    15000,
+    "MariaDB catalog probe FK constraint did not appear in Structure view",
+  );
+}
+
 export function defineMysqlFamilySmoke({
   dbLabel,
   connectionName,
@@ -135,6 +220,15 @@ export function defineMysqlFamilySmoke({
           await openConnection(connectionName);
         },
       );
+
+      if (dbLabel === "MariaDB") {
+        await step(
+          "browse MariaDB catalog metadata categories and table structure",
+          async () => {
+            await browseMariaDbCatalogMetadata(database);
+          },
+        );
+      }
 
       await step("browse seeded users table", async () => {
         await openSeededUsersTable(database, dbLabel);

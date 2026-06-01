@@ -36,6 +36,35 @@ INSERT INTO users (name, email) VALUES ('Bob', 'bob@example.com')
 
 SET @alice_user_id := (SELECT id FROM users WHERE email = 'alice@example.com');
 
+CREATE TABLE IF NOT EXISTS catalog_metadata_probe (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  code VARCHAR(64) NOT NULL,
+  amount DECIMAL(10, 2) CHECK (amount >= 0),
+  UNIQUE KEY uq_mariadb_catalog_probe_code (code),
+  KEY ix_mariadb_catalog_probe_user (user_id),
+  CONSTRAINT fk_mariadb_catalog_probe_user FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO catalog_metadata_probe (user_id, code, amount)
+VALUES (@alice_user_id, 'mariadb-catalog-probe', 12.34)
+ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), amount = VALUES(amount);
+
+CREATE OR REPLACE VIEW active_mariadb_users AS
+SELECT id, name, email
+FROM users
+WHERE email IS NOT NULL;
+
+DROP FUNCTION IF EXISTS mariadb_tax_rate;
+CREATE FUNCTION mariadb_tax_rate(price DECIMAL(10, 2))
+RETURNS DECIMAL(10, 2)
+DETERMINISTIC
+RETURN price * 0.10;
+
+DROP PROCEDURE IF EXISTS mariadb_catalog_ping;
+CREATE PROCEDURE mariadb_catalog_ping(IN input_id BIGINT)
+SELECT input_id AS echoed_id;
+
 DELETE FROM orders WHERE user_id = @alice_user_id AND total = 99.99;
 INSERT INTO orders (user_id, total) VALUES (@alice_user_id, 99.99);
 

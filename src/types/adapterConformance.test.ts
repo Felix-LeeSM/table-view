@@ -142,6 +142,43 @@ describe("adapter conformance matrix", () => {
     );
   });
 
+  it("locks MariaDB catalog/workbench parity scope to version-aware CHECK context", () => {
+    const [mariadbWithoutVersion] = getAdapterConformanceMatrix({
+      dbTypes: ["mariadb"],
+      areas: ["catalog"],
+    });
+
+    expect(mariadbWithoutVersion?.areas.catalog?.checks).toEqual(
+      expect.arrayContaining([
+        "catalog.browse",
+        "catalog.schema",
+        "catalog.indexes",
+        "catalog.relationships",
+      ]),
+    );
+    expect(mariadbWithoutVersion?.areas.catalog?.deferred).toContain(
+      "catalog.constraints",
+    );
+
+    const [mariadbWithVersion] = getAdapterConformanceMatrix({
+      dbTypes: ["mariadb"],
+      areas: ["catalog"],
+      versionContext: {
+        mariadb: "10.11.8-MariaDB",
+      },
+    });
+
+    expect(mariadbWithVersion?.areas.catalog?.checks).toEqual(
+      expect.arrayContaining([
+        "catalog.browse",
+        "catalog.schema",
+        "catalog.indexes",
+        "catalog.relationships",
+        "catalog.constraints",
+      ]),
+    );
+  });
+
   it("runs a focused pilot against one RDBMS and one non-RDBMS adapter family", () => {
     const focused = getAdapterConformanceMatrix({
       dbTypes: ["postgresql", "mongodb"],
