@@ -4,6 +4,7 @@ use super::{CompletionCursorOffsets, CursorUtf16SaturatingSub};
 pub(super) struct CompletionToken {
     pub prefix: String,
     pub qualifier: Option<String>,
+    pub quote: Option<char>,
     pub from_utf16: usize,
     pub from_utf8: usize,
 }
@@ -12,24 +13,34 @@ pub(super) fn completion_token_at(text: &str, cursor: CompletionCursorOffsets) -
     let cursor_utf8 = valid_cursor_utf8(text, cursor.utf8);
     let before = &text[..cursor_utf8];
     let mut from_utf8 = cursor_utf8;
+    let mut quote = None;
+    let mut prefix;
 
-    for (idx, ch) in before.char_indices().rev() {
-        if !is_ident_char(ch) {
-            break;
-        }
-        from_utf8 = idx;
-    }
-
-    if from_utf8 == cursor_utf8 {
+    if let Some((quoted_from_utf8, quoted_prefix, quoted_quote)) = quoted_identifier_prefix(before)
+    {
+        from_utf8 = quoted_from_utf8;
+        prefix = quoted_prefix;
+        quote = Some(quoted_quote);
+    } else {
         for (idx, ch) in before.char_indices().rev() {
-            if !is_operator_char(ch) {
+            if !is_ident_char(ch) {
                 break;
             }
             from_utf8 = idx;
         }
+
+        if from_utf8 == cursor_utf8 {
+            for (idx, ch) in before.char_indices().rev() {
+                if !is_operator_char(ch) {
+                    break;
+                }
+                from_utf8 = idx;
+            }
+        }
+
+        prefix = text[from_utf8..cursor_utf8].to_string();
     }
 
-    let mut prefix = text[from_utf8..cursor_utf8].to_string();
     let mut qualifier = None;
     if from_utf8 > 0 && text[..from_utf8].ends_with('.') {
         let dot_utf8 = from_utf8 - 1;
@@ -48,11 +59,12 @@ pub(super) fn completion_token_at(text: &str, cursor: CompletionCursorOffsets) -
         }
     }
 
-    let prefix_utf16 = utf16_len(&prefix);
+    let replace_utf16 = utf16_len(&text[from_utf8..cursor_utf8]);
     CompletionToken {
         prefix,
         qualifier,
-        from_utf16: cursor.cursor_utf16_saturating_sub(prefix_utf16),
+        quote,
+        from_utf16: cursor.cursor_utf16_saturating_sub(replace_utf16),
         from_utf8,
     }
 }
@@ -91,10 +103,26 @@ fn valid_cursor_utf8(text: &str, requested: usize) -> usize {
     cursor
 }
 
+fn quoted_identifier_prefix(before: &str) -> Option<(usize, String, char)> {
+    let quote = '`';
+    if before.chars().filter(|ch| *ch == quote).count() % 2 == 0 {
+        return None;
+    }
+    let quote_start = before.rfind(quote)?;
+    let prefix = &before[quote_start + quote.len_utf8()..];
+    if prefix
+        .chars()
+        .all(|ch| ch != quote && ch != '.' && ch != '\n' && ch != '\r')
+    {
+        return Some((quote_start, prefix.to_string(), quote));
+    }
+    None
+}
+
 fn scan_qualifier_start(before_dot: &str) -> usize {
     let mut start = before_dot.len();
     for (idx, ch) in before_dot.char_indices().rev() {
-        if !(is_ident_char(ch) || ch == '.') {
+        if !(is_ident_char(ch) || ch == '.' || ch == '`') {
             break;
         }
         start = idx;

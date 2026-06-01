@@ -19,6 +19,14 @@ fn request(text: &str, cursor_utf16: usize, cursor_utf8: usize) -> SqlCompletion
         },
         catalog: SqlCompletionCatalogSnapshot {
             revision: "rev-1".to_string(),
+            schemas: vec![
+                SqlCompletionCatalogSchema {
+                    name: "public".to_string(),
+                },
+                SqlCompletionCatalogSchema {
+                    name: "analytics".to_string(),
+                },
+            ],
             objects: vec![
                 SqlCompletionCatalogObject {
                     kind: "table".to_string(),
@@ -79,6 +87,51 @@ fn empty_vocabulary_request(dialect: &str, shell: &str, text: &str) -> SqlComple
     req.shell = shell.to_string();
     req.vocabulary.keywords.clear();
     req.vocabulary.functions.clear();
+    req
+}
+
+fn mysql_catalog_request(text: &str) -> SqlCompletionRequest {
+    let mut req = empty_vocabulary_request("mysql", "mysql-client", text);
+    req.catalog.schemas = vec![
+        SqlCompletionCatalogSchema {
+            name: "app".to_string(),
+        },
+        SqlCompletionCatalogSchema {
+            name: "audit".to_string(),
+        },
+    ];
+    req.catalog.objects = vec![
+        SqlCompletionCatalogObject {
+            kind: "table".to_string(),
+            schema: "app".to_string(),
+            name: "UserAccounts".to_string(),
+            qualified_name: "app.UserAccounts".to_string(),
+        },
+        SqlCompletionCatalogObject {
+            kind: "view".to_string(),
+            schema: "app".to_string(),
+            name: "UserSummary".to_string(),
+            qualified_name: "app.UserSummary".to_string(),
+        },
+        SqlCompletionCatalogObject {
+            kind: "table".to_string(),
+            schema: "audit".to_string(),
+            name: "AuditLog".to_string(),
+            qualified_name: "audit.AuditLog".to_string(),
+        },
+    ];
+    req.catalog.columns = vec![
+        column("app", "UserAccounts", "id"),
+        column("app", "UserAccounts", "EmailAddress"),
+        column("audit", "AuditLog", "id"),
+    ];
+    req.catalog.functions = vec![SqlCompletionCatalogFunction {
+        schema: "app".to_string(),
+        name: "normalize_email".to_string(),
+        qualified_name: "app.normalize_email".to_string(),
+        arguments: Some("varchar".to_string()),
+        return_type: Some("varchar".to_string()),
+    }];
     req
 }
 
@@ -304,6 +357,56 @@ fn mysql_family_reference_vocabulary_smoke() {
     assert_builtin_completion_contains("mysql", "mysql-client", "query_a", "query_attributes");
     assert_builtin_completion_contains("mysql", "mysql-client", "delim", "delimiter");
     assert_builtin_completion_contains("mysql", "mysql-client", "sour", "source");
+}
+
+#[test]
+fn ac_446_mysql_catalog_context_suggests_schema_qualified_tables_and_routines() {
+    let result = complete_sql(mysql_catalog_request("USE ap"));
+    assert!(result.items.iter().any(|item| {
+        item.label == "app" && item.kind == "schema" && item.apply.as_deref() == Some("app")
+    }));
+
+    let result = complete_sql(mysql_catalog_request("SELECT * FROM app.User"));
+    assert!(result.items.iter().any(|item| {
+        item.label == "UserAccounts"
+            && item.kind == "table"
+            && item.detail.as_deref() == Some("app")
+    }));
+
+    let result = complete_sql(mysql_catalog_request("SELECT app.norm"));
+    assert!(result.items.iter().any(|item| {
+        item.label == "normalize_email"
+            && item.kind == "function"
+            && item.detail.as_deref() == Some("app.normalize_email -> varchar")
+    }));
+}
+
+#[test]
+fn ac_446_mysql_backtick_context_uses_catalog_replace_ranges_and_quoting() {
+    let table_result = complete_sql(mysql_catalog_request("SELECT * FROM `User"));
+    let table_item = table_result
+        .items
+        .iter()
+        .find(|item| item.label == "UserAccounts")
+        .expect("MySQL table candidate from backtick prefix");
+    assert_eq!(table_item.apply.as_deref(), Some("`UserAccounts`"));
+    assert_eq!(
+        table_result.replace_range.from,
+        CompletionCursorOffsets {
+            utf16: 14,
+            utf8: 14
+        }
+    );
+
+    let column_result = complete_sql(mysql_catalog_request("SELECT `UserAccounts`.`i"));
+    let id_items: Vec<_> = column_result
+        .items
+        .iter()
+        .filter(|item| item.label == "id")
+        .collect();
+    assert_eq!(id_items.len(), 1);
+    assert_eq!(id_items[0].detail.as_deref(), Some("app.UserAccounts"));
+    assert_eq!(id_items[0].apply.as_deref(), Some("`id`"));
 }
 
 #[test]

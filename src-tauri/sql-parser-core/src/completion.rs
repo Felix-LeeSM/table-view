@@ -8,7 +8,7 @@ mod token;
 mod vocabulary;
 
 use aliases::{resolve_alias, scan_aliases};
-use token::completion_token_at;
+use token::{completion_token_at, CompletionToken};
 use vocabulary::{
     builtin_functions, builtin_keyword_deltas, builtin_keywords, builtin_shell_commands,
     postgresql_extension_pack,
@@ -41,10 +41,16 @@ pub struct SqlCompletionVocabulary {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SqlCompletionCatalogSnapshot {
     pub revision: String,
+    pub schemas: Vec<SqlCompletionCatalogSchema>,
     pub objects: Vec<SqlCompletionCatalogObject>,
     pub columns: Vec<SqlCompletionCatalogColumn>,
     pub functions: Vec<SqlCompletionCatalogFunction>,
     pub extensions: Vec<SqlCompletionCatalogExtension>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SqlCompletionCatalogSchema {
+    pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -123,14 +129,22 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
 
     if supports_sql_completion(&request.dialect) {
         if let Some(qualifier) = &token.qualifier {
-            add_qualified_columns(&mut items, &request, qualifier, &token.prefix);
+            let normalized_qualifier = normalize_identifier_path(qualifier);
+            add_qualified_catalog_objects(&mut items, &request, &normalized_qualifier, &token);
+            add_qualified_columns(&mut items, &request, &normalized_qualifier, &token);
+            add_qualified_functions(&mut items, &request, &normalized_qualifier, &token);
         } else {
-            add_meta_commands(&mut items, &request, &token.prefix);
-            add_keywords(&mut items, &request, &token.prefix);
-            add_catalog_objects(&mut items, &request, &token.prefix);
-            add_unqualified_columns(&mut items, &request, &token.prefix);
-            add_functions(&mut items, &request, &token.prefix);
-            add_extension_pack_items(&mut items, &request, &token.prefix);
+            if token.quote.is_none() {
+                add_meta_commands(&mut items, &request, &token.prefix);
+                add_keywords(&mut items, &request, &token.prefix);
+            }
+            add_catalog_schemas(&mut items, &request, &token);
+            add_catalog_objects(&mut items, &request, &token);
+            add_unqualified_columns(&mut items, &request, &token);
+            add_functions(&mut items, &request, &token);
+            if token.quote.is_none() {
+                add_extension_pack_items(&mut items, &request, &token.prefix);
+            }
         }
     }
 
@@ -221,25 +235,43 @@ fn add_meta_commands(
     }
 }
 
+fn add_catalog_schemas(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    token: &CompletionToken,
+) {
+    for schema in &request.catalog.schemas {
+        if matches_prefix(&schema.name, &token.prefix) {
+            items.push(CompletionItem {
+                label: schema.name.clone(),
+                kind: "schema".to_string(),
+                apply: Some(apply_identifier(&schema.name, token)),
+                detail: Some("catalog schema".to_string()),
+                boost: Some(45),
+            });
+        }
+    }
+}
+
 fn add_catalog_objects(
     items: &mut Vec<CompletionItem>,
     request: &SqlCompletionRequest,
-    prefix: &str,
+    token: &CompletionToken,
 ) {
     for object in &request.catalog.objects {
         if object.kind != "table" && object.kind != "view" {
             continue;
         }
-        if matches_prefix(&object.name, prefix) {
+        if matches_prefix(&object.name, &token.prefix) {
             items.push(CompletionItem {
                 label: object.name.clone(),
                 kind: object.kind.clone(),
-                apply: Some(object.name.clone()),
+                apply: Some(apply_identifier(&object.name, token)),
                 detail: Some(object.schema.clone()),
                 boost: Some(40),
             });
         }
-        if matches_prefix(&object.qualified_name, prefix) {
+        if token.quote.is_none() && matches_prefix(&object.qualified_name, &token.prefix) {
             items.push(CompletionItem {
                 label: object.qualified_name.clone(),
                 kind: object.kind.clone(),
@@ -251,14 +283,37 @@ fn add_catalog_objects(
     }
 }
 
+fn add_qualified_catalog_objects(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    qualifier: &str,
+    token: &CompletionToken,
+) {
+    for object in &request.catalog.objects {
+        if object.kind != "table" && object.kind != "view" {
+            continue;
+        }
+        if same_identifier(&object.schema, qualifier) && matches_prefix(&object.name, &token.prefix)
+        {
+            items.push(CompletionItem {
+                label: object.name.clone(),
+                kind: object.kind.clone(),
+                apply: Some(apply_identifier(&object.name, token)),
+                detail: Some(object.schema.clone()),
+                boost: Some(38),
+            });
+        }
+    }
+}
+
 fn add_unqualified_columns(
     items: &mut Vec<CompletionItem>,
     request: &SqlCompletionRequest,
-    prefix: &str,
+    token: &CompletionToken,
 ) {
     for column in &request.catalog.columns {
-        if matches_prefix(&column.name, prefix) {
-            items.push(column_item(column));
+        if matches_prefix(&column.name, &token.prefix) {
+            items.push(column_item(column, apply_identifier(&column.name, token)));
         }
     }
 }
@@ -267,73 +322,110 @@ fn add_qualified_columns(
     items: &mut Vec<CompletionItem>,
     request: &SqlCompletionRequest,
     qualifier: &str,
-    prefix: &str,
+    token: &CompletionToken,
 ) {
     let aliases = scan_aliases(&request.text);
     let resolved = resolve_alias(&aliases, qualifier).unwrap_or(qualifier);
 
     for column in &request.catalog.columns {
-        if !matches_prefix(&column.name, prefix) {
+        if !matches_prefix(&column.name, &token.prefix) {
             continue;
         }
         if same_identifier(&column.table, resolved)
             || same_identifier(&column.qualified_table_name, resolved)
         {
-            items.push(column_item(column));
+            items.push(column_item(column, apply_identifier(&column.name, token)));
         }
     }
 }
 
-fn column_item(column: &SqlCompletionCatalogColumn) -> CompletionItem {
+fn column_item(column: &SqlCompletionCatalogColumn, apply: String) -> CompletionItem {
     CompletionItem {
         label: column.name.clone(),
         kind: "column".to_string(),
-        apply: Some(column.name.clone()),
+        apply: Some(apply),
         detail: Some(column.qualified_table_name.clone()),
         boost: Some(50),
     }
 }
 
-fn add_functions(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest, prefix: &str) {
-    for function in builtin_functions(&request.dialect) {
-        if matches_prefix(function, prefix) {
-            items.push(CompletionItem {
-                label: (*function).to_string(),
-                kind: "function".to_string(),
-                apply: Some((*function).to_string()),
-                detail: Some(function_detail(&request.dialect)),
-                boost: Some(22),
-            });
+fn add_functions(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    token: &CompletionToken,
+) {
+    if token.quote.is_none() {
+        for function in builtin_functions(&request.dialect) {
+            if matches_prefix(function, &token.prefix) {
+                items.push(CompletionItem {
+                    label: (*function).to_string(),
+                    kind: "function".to_string(),
+                    apply: Some((*function).to_string()),
+                    detail: Some(function_detail(&request.dialect)),
+                    boost: Some(22),
+                });
+            }
         }
-    }
 
-    for function in &request.vocabulary.functions {
-        if matches_prefix(function, prefix) {
-            items.push(CompletionItem {
-                label: function.clone(),
-                kind: "function".to_string(),
-                apply: Some(function.clone()),
-                detail: Some(function_detail(&request.dialect)),
-                boost: Some(20),
-            });
+        for function in &request.vocabulary.functions {
+            if matches_prefix(function, &token.prefix) {
+                items.push(CompletionItem {
+                    label: function.clone(),
+                    kind: "function".to_string(),
+                    apply: Some(function.clone()),
+                    detail: Some(function_detail(&request.dialect)),
+                    boost: Some(20),
+                });
+            }
         }
     }
 
     for function in &request.catalog.functions {
-        if matches_prefix(&function.name, prefix) {
-            let mut detail = function.qualified_name.clone();
-            if let Some(return_type) = &function.return_type {
-                detail.push_str(" -> ");
-                detail.push_str(return_type);
-            }
-            items.push(CompletionItem {
-                label: function.name.clone(),
-                kind: "function".to_string(),
-                apply: Some(function.name.clone()),
-                detail: Some(detail),
-                boost: Some(30),
-            });
+        if matches_prefix(&function.name, &token.prefix) {
+            items.push(catalog_function_item(
+                function,
+                apply_identifier(&function.name, token),
+                30,
+            ));
         }
+    }
+}
+
+fn add_qualified_functions(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    qualifier: &str,
+    token: &CompletionToken,
+) {
+    for function in &request.catalog.functions {
+        if same_identifier(&function.schema, qualifier)
+            && matches_prefix(&function.name, &token.prefix)
+        {
+            items.push(catalog_function_item(
+                function,
+                apply_identifier(&function.name, token),
+                28,
+            ));
+        }
+    }
+}
+
+fn catalog_function_item(
+    function: &SqlCompletionCatalogFunction,
+    apply: String,
+    boost: i32,
+) -> CompletionItem {
+    let mut detail = function.qualified_name.clone();
+    if let Some(return_type) = &function.return_type {
+        detail.push_str(" -> ");
+        detail.push_str(return_type);
+    }
+    CompletionItem {
+        label: function.name.clone(),
+        kind: "function".to_string(),
+        apply: Some(apply),
+        detail: Some(detail),
+        boost: Some(boost),
     }
 }
 
@@ -376,7 +468,38 @@ fn matches_prefix(candidate: &str, prefix: &str) -> bool {
 }
 
 fn same_identifier(left: &str, right: &str) -> bool {
-    left.eq_ignore_ascii_case(right)
+    normalize_identifier_path(left).eq_ignore_ascii_case(&normalize_identifier_path(right))
+}
+
+fn normalize_identifier_path(identifier: &str) -> String {
+    identifier
+        .split('.')
+        .map(normalize_identifier_part)
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+fn normalize_identifier_part(part: &str) -> String {
+    let trimmed = part.trim();
+    if trimmed.len() >= 2 && trimmed.starts_with('`') && trimmed.ends_with('`') {
+        return trimmed[1..trimmed.len() - 1].replace("``", "`");
+    }
+    trimmed.to_string()
+}
+
+fn apply_identifier(identifier: &str, token: &CompletionToken) -> String {
+    token.quote.map_or_else(
+        || identifier.to_string(),
+        |quote| quote_identifier(identifier, quote),
+    )
+}
+
+fn quote_identifier(identifier: &str, quote: char) -> String {
+    let escaped = match quote {
+        '`' => identifier.replace('`', "``"),
+        _ => identifier.to_string(),
+    };
+    format!("{quote}{escaped}{quote}")
 }
 
 fn dedupe_items(items: &mut Vec<CompletionItem>) {

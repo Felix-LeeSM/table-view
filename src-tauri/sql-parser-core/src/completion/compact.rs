@@ -1,8 +1,8 @@
 use super::{
     complete_sql, CompletionCursorOffsets, SqlCompletionCatalogColumn,
     SqlCompletionCatalogExtension, SqlCompletionCatalogFunction, SqlCompletionCatalogObject,
-    SqlCompletionCatalogSnapshot, SqlCompletionCoreResult, SqlCompletionRequest,
-    SqlCompletionVocabulary,
+    SqlCompletionCatalogSchema, SqlCompletionCatalogSnapshot, SqlCompletionCoreResult,
+    SqlCompletionRequest, SqlCompletionVocabulary,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -15,6 +15,7 @@ pub fn complete_sql_compact(
     catalog_revision: &str,
     keywords: &str,
     vocabulary_functions: &str,
+    schemas: &str,
     objects: &str,
     columns: &str,
     catalog_functions: &str,
@@ -34,6 +35,7 @@ pub fn complete_sql_compact(
         },
         catalog: SqlCompletionCatalogSnapshot {
             revision: catalog_revision.to_string(),
+            schemas: parse_schemas(schemas),
             objects: parse_objects(objects),
             columns: parse_columns(columns),
             functions: parse_functions(catalog_functions),
@@ -47,6 +49,16 @@ fn split_lines(input: &str) -> Vec<String> {
         .lines()
         .filter(|line| !line.is_empty())
         .map(str::to_string)
+        .collect()
+}
+
+fn parse_schemas(input: &str) -> Vec<SqlCompletionCatalogSchema> {
+    input
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(|line| SqlCompletionCatalogSchema {
+            name: line.to_string(),
+        })
         .collect()
 }
 
