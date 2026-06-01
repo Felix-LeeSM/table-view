@@ -1,7 +1,7 @@
 ---
 title: Multi-agent worktree runbook
 type: runbook
-updated: 2026-05-19
+updated: 2026-06-01
 task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 ---
 
@@ -68,6 +68,10 @@ outputs 를 보존하고 `release/`, `tmp/`, `*/incremental/`, coverage raw/prof
 만 제외한다. 목적은 pre-push 의 `cargo-llvm-cov` 와 DuckDB/Rust 의존성 산출물을
 재사용하되 volatile coverage output 과 최종 산출물은 피하는 것. 전체 target 이
 필요하면 `--full-target` 을 쓴다.
+
+Rust hook cache 의 기준은 이 target warm-start 다. `sccache` 는 2026-06-01
+로컬 실측에서 coverage gate Rust hit 0%, fresh target Rust hit 0% 로 나와
+setup/hook 경로에서 제외한다.
 
 ## 책임
 

@@ -20,36 +20,23 @@ Do not move a gate out of CI only because it is present locally. Local hooks can
 be misconfigured, interrupted, or absent on another machine; CI is the shared
 record.
 
-## Rust Build Cache
+## Rust Target Warm-Start
 
-Rust hooks use `sccache` when it is installed. The hook sets:
+Rust hook performance depends on Cargo target reuse, not a compiler-cache
+wrapper. New linked worktrees should use `scripts/worktree-spawn.sh` with the
+default dependency warm-start so `node_modules/` and a pruned
+`src-tauri/target/` are copied from the warm source worktree.
 
-```bash
-RUSTC_WRAPPER=sccache
-CARGO_INCREMENTAL=0
-```
+The target copy intentionally preserves `llvm-cov-target/` and DuckDB native
+build outputs while excluding volatile coverage raw/profile data, final release
+outputs, temporary files, and incremental directories. This is the supported
+local cache path for `cargo llvm-cov nextest` and DuckDB-heavy Rust gates.
 
-Each worktree keeps its own `target/`. Only cacheable `rustc` compilation
-outputs are shared. If dependency versions, features, compiler flags, target
-triple, or source inputs change, the cache key changes and compilation falls
-back to a miss. Stale entries remain harmless and age out by cache pressure.
-If `sccache` is missing, the hook prints a warning and continues with normal
-Cargo compilation because cache absence does not change correctness.
-
-The cache location is the user's sccache default unless `SCCACHE_DIR` is set
-before the sccache server starts. This keeps worktrees independent and avoids
-copying or sharing `target/`.
-The app crate may report non-cacheable calls because it builds `cdylib` outputs;
-the expected win is reused dependency compilation across worktrees and repeated
-hook runs.
-
-Useful diagnostics:
-
-```bash
-sccache --zero-stats
-lefthook run pre-push --no-auto-install --no-tty
-sccache --show-stats
-```
+`sccache` is intentionally not installed by `scripts/setup.sh` and not enabled
+by `pre-push`. Local measurements on 2026-06-01 showed no benefit for this repo:
+the Rust coverage gate had 0 cache hits, and fresh-target `cargo check --lib`
+had 0% Rust hits with no wall-clock win. Reintroduce it only with new
+repo-local measurements that beat target warm-start.
 
 ## Rust Test Runner
 

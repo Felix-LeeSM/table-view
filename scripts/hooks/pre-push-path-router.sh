@@ -21,18 +21,6 @@ COMMITS_FILE="$(mktemp "${TMPDIR:-/tmp}/pre-push-commits.XXXXXX")"
 PATHS_FILE="$(mktemp "${TMPDIR:-/tmp}/pre-push-paths.XXXXXX")"
 trap 'rm -f "$REFS_FILE" "$COMMITS_FILE" "$PATHS_FILE"' EXIT
 
-enable_sccache() {
-	if [ "$DRY_RUN" = "1" ]; then
-		return 0
-	fi
-	if command -v sccache >/dev/null 2>&1; then
-		export RUSTC_WRAPPER="${RUSTC_WRAPPER:-sccache}"
-		export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}"
-	else
-		echo "[pre-push-route] sccache missing; using cargo without shared compiler cache" >&2
-	fi
-}
-
 duration_since() {
 	local start="$1"
 	local now
@@ -305,7 +293,6 @@ run_ts_gates() {
 }
 
 run_rust_gates() {
-	enable_sccache
 	run_step_in "tauri-check" src-tauri cargo check
 	run_cargo_deny
 	run_step_in "cargo-machete" src-tauri cargo machete
