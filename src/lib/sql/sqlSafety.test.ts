@@ -1451,6 +1451,69 @@ describe("sqlSafety.analyzeStatement", () => {
     });
   });
 
+  describe("Issue 451 — MariaDB RETURNING Safe Mode decision", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-451-S01] INSERT ... RETURNING remains additive info-tier", () => {
+      const a = analyzeStatement(
+        "INSERT INTO users (id) VALUES (1) RETURNING id",
+      );
+
+      expect(a).toEqual({
+        kind: "dml-insert",
+        severity: "info",
+        reasons: [],
+      });
+    });
+
+    it("[AC-451-S02] bounded DELETE ... RETURNING remains warn-tier", () => {
+      const a = analyzeStatement("DELETE FROM users WHERE id = 1 RETURNING id");
+
+      expect(a).toEqual({
+        kind: "dml-delete",
+        severity: "warn",
+        reasons: [],
+      });
+    });
+
+    it("[AC-451-S03] WHERE-less DELETE ... RETURNING remains danger-tier", () => {
+      const a = analyzeStatement("DELETE FROM users RETURNING id");
+
+      expect(a).toEqual({
+        kind: "dml-delete",
+        severity: "danger",
+        reasons: ["DELETE without WHERE clause"],
+      });
+    });
+
+    it("[AC-451-S04] UPDATE ... RETURNING follows the normal WHERE gate", () => {
+      const bounded = analyzeStatement(
+        "UPDATE users SET active = false WHERE id = 1 RETURNING id",
+      );
+      const unbounded = analyzeStatement(
+        "UPDATE users SET active = false RETURNING id",
+      );
+
+      expect(bounded).toEqual({
+        kind: "dml-update",
+        severity: "warn",
+        reasons: [],
+      });
+      expect(unbounded).toEqual({
+        kind: "dml-update",
+        severity: "danger",
+        reasons: ["UPDATE without WHERE clause"],
+      });
+    });
+  });
+
   // -------------------------------------------------------------------------
   // Sprint 393a (2026-05-18) — AST-based SELECT classifier callsite.
   // SELECT widening (FROM-list / JOIN family / WHERE expression widening /
