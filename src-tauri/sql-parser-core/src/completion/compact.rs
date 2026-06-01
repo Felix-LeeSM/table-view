@@ -12,6 +12,7 @@ pub fn complete_sql_compact(
     cursor_utf8: usize,
     dialect: &str,
     shell: &str,
+    server_version: &str,
     catalog_revision: &str,
     keywords: &str,
     vocabulary_functions: &str,
@@ -29,6 +30,7 @@ pub fn complete_sql_compact(
         },
         dialect: dialect.to_string(),
         shell: shell.to_string(),
+        server_version: empty_to_none(server_version),
         vocabulary: SqlCompletionVocabulary {
             keywords: split_lines(keywords),
             functions: split_lines(vocabulary_functions),

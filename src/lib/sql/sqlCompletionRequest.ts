@@ -4,6 +4,10 @@ import {
   type CompletionLanguage,
 } from "@/lib/completion/coreContract";
 import {
+  parseDataSourceVersion,
+  type ParsedDataSourceVersion,
+} from "@/types/dataSourceVersionCapabilities";
+import {
   getSqlDialectProfile,
   SQL_SHELL_PROFILES,
   type SqlDialectCapabilities,
@@ -54,8 +58,47 @@ export function buildSqlCompletionRequest(
     defaultSchema: context.defaultSchema,
     searchPath: context.searchPath,
     capabilities: profile.capabilities,
-    vocabulary: profile.vocabulary,
+    vocabulary: completionVocabularyForContext(profile.vocabulary, context),
     catalog: context.catalog,
     cacheState: context.cacheState,
   };
+}
+
+function completionVocabularyForContext(
+  vocabulary: SqlDialectVocabulary,
+  context: SqlCompletionContext,
+): SqlDialectVocabulary {
+  if (context.dialect !== "mariadb") return vocabulary;
+  if (mariadbServerVersionSupportsReturning(context.serverVersion)) {
+    return vocabulary;
+  }
+
+  return {
+    ...vocabulary,
+    keywords: vocabulary.keywords.filter(
+      (keyword) => keyword.toUpperCase() !== "RETURNING",
+    ),
+  };
+}
+
+function mariadbServerVersionSupportsReturning(
+  serverVersion: string | null,
+): boolean {
+  const version = parseDataSourceVersion(serverVersion);
+  if (!version.known) return true;
+  return isParsedVersionAtLeast(version, 10, 5, 0);
+}
+
+function isParsedVersionAtLeast(
+  version: Extract<ParsedDataSourceVersion, { known: true }>,
+  major: number,
+  minor: number,
+  patch: number,
+): boolean {
+  return (
+    version.major > major ||
+    (version.major === major &&
+      (version.minor > minor ||
+        (version.minor === minor && version.patch >= patch)))
+  );
 }

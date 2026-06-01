@@ -9,6 +9,7 @@ fn request(text: &str, cursor_utf16: usize, cursor_utf8: usize) -> SqlCompletion
         },
         dialect: "postgresql".to_string(),
         shell: "psql".to_string(),
+        server_version: None,
         vocabulary: SqlCompletionVocabulary {
             keywords: vec![
                 "SELECT".to_string(),
@@ -87,6 +88,17 @@ fn empty_vocabulary_request(dialect: &str, shell: &str, text: &str) -> SqlComple
     req.shell = shell.to_string();
     req.vocabulary.keywords.clear();
     req.vocabulary.functions.clear();
+    req
+}
+
+fn empty_vocabulary_request_with_version(
+    dialect: &str,
+    shell: &str,
+    text: &str,
+    server_version: &str,
+) -> SqlCompletionRequest {
+    let mut req = empty_vocabulary_request(dialect, shell, text);
+    req.server_version = Some(server_version.to_string());
     req
 }
 
@@ -413,6 +425,41 @@ fn ac_446_mysql_backtick_context_uses_catalog_replace_ranges_and_quoting() {
 fn mariadb_returning_keyword_is_dialect_specific() {
     assert_builtin_completion_contains("mariadb", "mysql-client", "RET", "RETURNING");
     assert_builtin_completion_excludes("mysql", "mysql-client", "RET", "RETURNING");
+}
+
+#[test]
+fn mariadb_returning_keyword_is_version_sensitive() {
+    let old_result = complete_sql(empty_vocabulary_request_with_version(
+        "mariadb",
+        "mysql-client",
+        "RET",
+        "10.4.34-MariaDB",
+    ));
+    assert!(!labels(&old_result).contains(&"RETURNING".to_string()));
+
+    let mut old_with_request_vocabulary =
+        empty_vocabulary_request_with_version("mariadb", "mysql-client", "RET", "10.4.34-MariaDB");
+    old_with_request_vocabulary
+        .vocabulary
+        .keywords
+        .push("RETURNING".to_string());
+    assert!(!labels(&complete_sql(old_with_request_vocabulary)).contains(&"RETURNING".to_string()));
+
+    let boundary_result = complete_sql(empty_vocabulary_request_with_version(
+        "mariadb",
+        "mysql-client",
+        "RET",
+        "10.5.0-MariaDB",
+    ));
+    assert!(labels(&boundary_result).contains(&"RETURNING".to_string()));
+
+    let compatibility_prefix_result = complete_sql(empty_vocabulary_request_with_version(
+        "mariadb",
+        "mysql-client",
+        "RET",
+        "5.5.5-10.11.8-MariaDB",
+    ));
+    assert!(labels(&compatibility_prefix_result).contains(&"RETURNING".to_string()));
 }
 
 #[test]

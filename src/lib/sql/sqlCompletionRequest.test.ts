@@ -28,7 +28,7 @@ const pgExtension = (name: string) => ({
   comment: null,
 });
 
-function requestFor(dbType: DatabaseType) {
+function requestFor(dbType: DatabaseType, serverVersion = "test-version") {
   const snapshot = emptySnapshot();
   snapshot.tables.conn1 = {
     app: {
@@ -40,7 +40,7 @@ function requestFor(dbType: DatabaseType) {
     connectionId: "conn1",
     database: "app",
     dbType,
-    serverVersion: "test-version",
+    serverVersion,
     catalogRevision: `${dbType}-rev`,
   });
   return buildSqlCompletionRequest(
@@ -127,6 +127,23 @@ describe("buildSqlCompletionRequest", () => {
         (keyword) => !mysql.vocabulary.keywords.includes(keyword),
       ),
     ).toEqual(["RETURNING"]);
+  });
+
+  it("gates MariaDB RETURNING completion by known server version", () => {
+    const oldMariaDb = requestFor("mariadb", "10.4.34-MariaDB");
+    const boundaryMariaDb = requestFor("mariadb", "10.5.0-MariaDB");
+    const compatibilityPrefixMariaDb = requestFor(
+      "mariadb",
+      "5.5.5-10.11.8-MariaDB",
+    );
+    const unknownMariaDb = requestFor("mariadb", "test-version");
+
+    expect(oldMariaDb.vocabulary.keywords).not.toContain("RETURNING");
+    expect(boundaryMariaDb.vocabulary.keywords).toContain("RETURNING");
+    expect(compatibilityPrefixMariaDb.vocabulary.keywords).toContain(
+      "RETURNING",
+    );
+    expect(unknownMariaDb.vocabulary.keywords).toContain("RETURNING");
   });
 
   it("preserves cache state so future providers can schedule background prefetch", () => {
