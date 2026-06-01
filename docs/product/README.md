@@ -130,8 +130,9 @@ candidate-only 상태다.
   Parser/Safe Mode covers `LIMIT offset,count`,
   `ON DUPLICATE KEY UPDATE`, and narrow `CALL proc(...)`; stored routine/event
   bodies, control-flow scripting, `DELIMITER`, and `LOAD DATA` are explicit
-  unsupported boundaries. Completion context and full workbench parity remain
-  separate promotion gates.
+  unsupported boundaries. Completion uses the current catalog as editor
+  assistance only; completion runtime smoke, broader workbench breadth, and full
+  admin/import/export parity remain separate promotion gates.
 - SQLite is a file-backed DBMS lane. Current support is scoped to file
   create/open/test, read-only mode, catalog/table browse, read queries,
   writable-file DML, transactional DML batch/dry-run, and key-projected row

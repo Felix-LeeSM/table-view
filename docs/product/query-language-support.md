@@ -93,7 +93,9 @@ cannot add parser or completion vocabulary without an owner decision.
   runtime support for unsupported routine bodies or scripting.
 - Routine smoke: GitHub Runtime Happy Path covers connect, seeded table browse,
   SELECT, DML batch, row edit, cancellation/retry, history/source labels, and
-  tabular result rendering for MySQL on Ubuntu.
+  tabular result rendering for MySQL on Ubuntu. It is a baseline smoke claim,
+  not broader procedure-management, completion-runtime, admin, import/export, or
+  MySQL Workbench parity.
 
 ## Result Boundary
 
