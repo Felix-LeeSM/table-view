@@ -100,7 +100,7 @@ future smoke evidence.
 
 ## SQLite File DBMS Smoke Matrix
 
-This matrix is the SQLite file-DBMS lane inventory for #196/#242/#457. It separates
+This matrix is the SQLite file-DBMS lane inventory for #196/#242/#457/#458. It separates
 current unit/integration/fixture evidence from the absent routine desktop E2E
 claim.
 
@@ -108,7 +108,7 @@ claim.
 |---|---|---|
 | Routine desktop E2E claim | `scripts/e2e-smoke-ci.sh`, `e2e/smoke/sqlite.spec.ts`, `e2e/fixtures/seed.sqlite.sql`, #456 | GitHub Runtime Happy Path now runs a SQLite desktop smoke for deterministic file create/open, table browse, read query, writable DML, row edit, read-only write rejection, and internal app-state DB rejection. DDL rejection and extension-boundary non-claims stay routed to #460/#461 rather than broadening this smoke. |
 | File connection lifecycle | `src-tauri/src/db/sqlite/connection.rs`, `src-tauri/tests/sqlite_connection_command.rs`, `src/components/connection/forms/SqliteFormFields.test.tsx`, `src/types/dataSource.test.ts` | Absolute file paths, create-new-file, read-only mode, no host requirement, file-picker capability, and internal app-state DB rejection have evidence. Server auth, switch-database, and multi-namespace flows are not SQLite claims. |
-| Query and writable-file DML | `src-tauri/src/db/sqlite/queries.rs`, `src-tauri/src/db/sqlite/batch.rs`, `src-tauri/src/db/sqlite/queries_tests.rs`, `src-tauri/src/db/sqlite/batch_tests.rs`, `src-tauri/tests/sqlite_browse_query_adapter.rs` | Read queries, writable-file DML, transactional DML batches, dry-run rollback, cancellation, and read-only write rejection have adapter evidence. Raw SQL DDL is rejected by the adapter. |
+| Query and writable-file DML | `src-tauri/src/db/sqlite/queries.rs`, `src-tauri/src/db/sqlite/batch.rs`, `src-tauri/src/db/sqlite/queries_tests.rs`, `src-tauri/src/db/sqlite/batch_tests.rs`, `src-tauri/tests/sqlite_browse_query_adapter.rs`, #458 | Read queries, writable-file DML, transactional DML batches, dry-run rollback, cancellation, and read-only/DDL/batch-failure error normalization have adapter evidence. Raw SQL DDL is rejected by the adapter. |
 | Catalog/workbench browse | `src-tauri/src/db/sqlite/connection.rs`, `src-tauri/tests/sqlite_browse_query_adapter.rs`, `src/components/schema/SchemaTree.dbms-shape.test.tsx`, `src/components/schema/SchemaTree.rowcount.test.tsx`, #457 | Current evidence covers `main`, flat table browsing, exact row counts, columns, FKs, indexes, views, and view columns. Schemas, functions, triggers, full constraints, table stats parity, and richer admin/workbench surfaces remain future work. |
 | Row edit semantics | `src/types/dataSource.ts`, `src/components/datagrid/sqlGenerator.test.ts`, `src/components/datagrid/useDataGridEdit.safe-mode.test.ts`, `src-tauri/src/db/sqlite/queries.rs` | SQLite row writes are scoped to writable files and key/projected row identity. Identifier quoting and scalar row write SQL have coverage. Nested JSON edits, arbitrary query-result mutation, bulk/admin edit workflows, and read-only writes are not supported. |
 | DDL and unsupported ALTER behavior | `src-tauri/src/db/sqlite.rs`, `src-tauri/src/db/sqlite/queries_tests.rs`, `src-tauri/src/db/sqlite/batch_tests.rs`, `docs/product/known-limitations.md` | SQLite DDL UI/runtime parity is disabled. Unsupported ALTER behavior is explicit rejection; automatic table rebuild is a future ADR-backed implementation decision. |
