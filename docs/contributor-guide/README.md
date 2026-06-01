@@ -8,6 +8,8 @@ decision logs.
 
 - [`testing-and-quality.md`](testing-and-quality.md) — developer-facing
   verification gaps and quality follow-ups.
+- [`pr-review.md`](pr-review.md) — reviewer output contract and red/green
+  threshold.
 - [`release/homebrew-cask.md`](release/homebrew-cask.md) — Homebrew cask and release notes.
 - [`memory/engineering/architecture/data-source/adding/memory.md`](../../memory/engineering/architecture/data-source/adding/memory.md) — checklist for adding or promoting a data source.
 
