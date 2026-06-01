@@ -70,8 +70,10 @@ install_cargo_tools() {
   fi
 
   # binstall 은 이미 있으면 no-op (cargo-binstall 자체가 멱등성을 보장).
-  log "cargo-binstall: cargo-llvm-cov cargo-deny cargo-machete"
-  cargo binstall --no-confirm cargo-llvm-cov cargo-deny cargo-machete
+  # sccache 는 worktree 별 target/ 을 공유하지 않고 rustc 결과 캐시만 공유.
+  # cargo-nextest 는 pre-push Rust test/coverage 실행기로 사용한다.
+  log "cargo-binstall: cargo-llvm-cov cargo-deny cargo-machete cargo-nextest sccache"
+  cargo binstall --no-confirm cargo-llvm-cov cargo-deny cargo-machete cargo-nextest sccache
 }
 
 # ── 3. git hook 활성화 + JS 의존성 ───────────────────────────────────────
