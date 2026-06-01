@@ -67,7 +67,7 @@ fn validate_mysql_scripting_boundary(sql: &str, db_type: &DatabaseType) -> Resul
             "MySQL stored routine and event bodies are not supported in the query editor. Use a dedicated MySQL client for CREATE PROCEDURE, CREATE FUNCTION, or CREATE EVENT scripts.".into(),
         )),
         Some(MysqlScriptingFeature::ControlFlow) => Err(AppError::Unsupported(
-            "MySQL routine control-flow scripting is not supported in the query editor. Submit a single server SQL statement without BEGIN/IF/LOOP routine-body fragments.".into(),
+            "MySQL routine control-flow scripting is not supported in the query editor. Submit a single server SQL statement without IF/LOOP routine-body fragments.".into(),
         )),
         None => Ok(()),
     }
@@ -264,8 +264,7 @@ fn is_stored_routine_create_target(word: &str) -> bool {
 fn is_routine_control_flow_word(word: &str) -> bool {
     matches!(
         word,
-        "BEGIN"
-            | "DECLARE"
+        "DECLARE"
             | "IF"
             | "ELSEIF"
             | "ELSE"
@@ -1329,13 +1328,38 @@ mod tests {
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
         let stmts = vec![
             "SELECT 1".to_string(),
-            "BEGIN UPDATE users SET touched = 1".to_string(),
+            "IF user_id IS NULL THEN SELECT 1".to_string(),
         ];
 
         match execute_query_batch_inner(&state, "c", &stmts, "qb-control-flow", None).await {
             Err(AppError::Unsupported(msg)) => assert!(msg.contains("control-flow")),
             other => panic!("Expected Unsupported(control-flow), got: {:?}", other),
         }
+    }
+
+    #[tokio::test]
+    async fn execute_query_mysql_transaction_begin_is_not_control_flow_boundary() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Mysql,
+            ..StubRdbAdapter::default()
+        };
+        s.execute_sql_fn = Some(Box::new(|_| {
+            Ok(RdbQueryResult {
+                columns: vec![],
+                rows: vec![],
+                total_count: 0,
+                execution_time_ms: 0,
+                query_type: QueryType::Dml { rows_affected: 0 },
+            })
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+
+        let result = execute_query_inner(&state, "c", "BEGIN", "q-transaction-begin", None).await;
+
+        assert!(
+            result.is_ok(),
+            "transaction BEGIN must not be treated as routine control-flow"
+        );
     }
 
     #[tokio::test]

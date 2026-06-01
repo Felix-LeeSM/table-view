@@ -75,7 +75,7 @@ describe("mysql scripting boundary", () => {
 
   it("rejects MySQL routine control-flow fragments before dispatch", () => {
     const violation = findMysqlScriptingBoundaryViolation(
-      ["SELECT 1", "BEGIN UPDATE users SET touched = 1"],
+      ["SELECT 1", "IF user_id IS NULL THEN SELECT 1"],
       "mariadb",
     );
 
@@ -84,6 +84,13 @@ describe("mysql scripting boundary", () => {
       statementIndex: 1,
       message: expect.stringContaining("control-flow"),
     });
+  });
+
+  it("does not reject transaction BEGIN as routine control-flow", () => {
+    expect(findMysqlScriptingBoundaryViolation(["BEGIN"], "mysql")).toBeNull();
+    expect(
+      findMysqlScriptingBoundaryViolation(["BEGIN WORK"], "mariadb"),
+    ).toBeNull();
   });
 
   it("skips leading hash comments before unsupported statements", () => {

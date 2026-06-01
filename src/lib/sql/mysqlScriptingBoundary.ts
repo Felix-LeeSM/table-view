@@ -20,7 +20,7 @@ const MESSAGES: Record<MysqlScriptingFeature, string> = {
   "STORED ROUTINE":
     "MySQL stored routine and event bodies are not supported in the query editor. Use a dedicated MySQL client for CREATE PROCEDURE, CREATE FUNCTION, or CREATE EVENT scripts.",
   "CONTROL FLOW":
-    "MySQL routine control-flow scripting is not supported in the query editor. Submit a single server SQL statement without BEGIN/IF/LOOP routine-body fragments.",
+    "MySQL routine control-flow scripting is not supported in the query editor. Submit a single server SQL statement without IF/LOOP routine-body fragments.",
 };
 
 export function isMysqlFamilyDbType(
@@ -194,7 +194,6 @@ function isStoredRoutineCreateTarget(word: string | undefined): boolean {
 
 function isRoutineControlFlowWord(word: string | undefined): boolean {
   return (
-    word === "BEGIN" ||
     word === "DECLARE" ||
     word === "IF" ||
     word === "ELSEIF" ||
