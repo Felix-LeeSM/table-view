@@ -105,12 +105,23 @@ claims separate for the MySQL docs recheck gate.
 - Runtime: MariaDB uses a distinct `mariadb` connection/profile identity and a
   MariaDB engine fixture while reusing the MySQL-family adapter path for the
   current baseline.
+- Shared MySQL-family paths: MariaDB intentionally routes through
+  `MysqlAdapter::new_mariadb()` from `make_adapter`, the runtime
+  `src-tauri/src/db/mysql/**` catalog/query/edit/cancel implementation, the
+  shared `src-tauri/src/commands/connection/crud.rs` connection-test path, the
+  MySQL CodeMirror dialect, the MySQL-family parser/Safe Mode scripting
+  boundary, the `mysql-client` completion shell family, and the
+  `MYSQL_FAMILY_CAPABILITIES` / adapter-conformance family.
 - Parser / safety: MariaDB shares the tested MySQL-family parser/Safe Mode
   boundary today, including explicit unsupported scripting/file-import
   guardrails.
 - Completion / autocomplete: MariaDB shares MySQL-family vocabulary and exposes
   the current completion-only `RETURNING` delta. That delta is not a runtime
   support guarantee.
+- MariaDB-specific deltas: the active adapter still reports `mariadb`, the
+  profile/dialect id remains `mariadb`, CHECK/constraint catalog promotion
+  requires MariaDB version evidence at `>= 10.2.1`, and `RETURNING` remains
+  profile/completion evidence only.
 - Routine smoke: GitHub Runtime Happy Path covers connect, seeded table browse,
   SELECT, DML batch, row edit, cancellation/retry, history/source labels, and
   tabular result rendering for MariaDB on Ubuntu. It is a baseline smoke claim,

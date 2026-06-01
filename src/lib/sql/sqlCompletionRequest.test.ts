@@ -110,6 +110,25 @@ describe("buildSqlCompletionRequest", () => {
     expect(sqlite.shellProfile.commands).toContain(".tables");
   });
 
+  it("keeps MariaDB completion requests distinct without widening runtime evidence", () => {
+    const mysql = requestFor("mysql");
+    const mariadb = requestFor("mariadb");
+
+    expect(mariadb.dialect).toBe("mariadb");
+    expect(mariadb.family).toBe(mysql.family);
+    expect(mariadb.shell).toBe(mysql.shell);
+    expect(mariadb.capabilities).toEqual({
+      ...mysql.capabilities,
+      returning: true,
+    });
+    expect(mariadb.vocabulary.functions).toEqual(mysql.vocabulary.functions);
+    expect(
+      mariadb.vocabulary.keywords.filter(
+        (keyword) => !mysql.vocabulary.keywords.includes(keyword),
+      ),
+    ).toEqual(["RETURNING"]);
+  });
+
   it("preserves cache state so future providers can schedule background prefetch", () => {
     const req = requestFor("postgresql");
 

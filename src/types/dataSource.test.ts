@@ -176,7 +176,7 @@ describe("DataSourceProfile registry", () => {
   });
 
   it("keeps MariaDB capability-compatible with the MySQL-family profile", () => {
-    expect(getDataSourceProfile("mariadb").capabilities).toEqual(
+    expect(getDataSourceProfile("mariadb").capabilities).toBe(
       getDataSourceProfile("mysql").capabilities,
     );
   });
@@ -203,6 +203,26 @@ describe("DataSourceProfile registry", () => {
       family: "mysql",
       versionProbe: "mysql-family-version",
     });
+  });
+
+  it("documents the intentional MySQL-family reuse surface for MariaDB", () => {
+    const mysql = getDataSourceProfile("mysql");
+    const mariadb = getDataSourceProfile("mariadb");
+
+    expect(mariadb.connectionKind).toBe(mysql.connectionKind);
+    expect(mariadb.languages).toEqual(mysql.languages);
+    expect(mariadb.catalogModel).toBe(mysql.catalogModel);
+    expect(mariadb.resultKinds).toEqual(mysql.resultKinds);
+    expect(mariadb.safetyPolicy).toBe(mysql.safetyPolicy);
+    expect(mariadb.backendAdapter).toBe(mysql.backendAdapter);
+    expect(mariadb.capabilities).toBe(mysql.capabilities);
+    expect(mariadb.fileConnection).toBeUndefined();
+    expect(mariadb.dialect).toEqual({
+      id: "mariadb",
+      family: mysql.dialect.family,
+      versionProbe: mysql.dialect.versionProbe,
+    });
+    expect(mariadb.dialect.id).not.toBe(mysql.dialect.id);
   });
 
   it("sets connection-kind defaults for the current connection forms", () => {

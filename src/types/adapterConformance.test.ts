@@ -113,6 +113,35 @@ describe("adapter conformance matrix", () => {
     expect(mariadb?.areas.catalog?.checks).toContain("catalog.constraints");
   });
 
+  it("keeps MariaDB catalog promotion tied to MariaDB evidence, not MySQL context", () => {
+    const [mariadbWithOnlyMysqlVersion] = getAdapterConformanceMatrix({
+      dbTypes: ["mariadb"],
+      areas: ["catalog"],
+      versionContext: {
+        mysql: "8.0.16",
+      },
+    });
+
+    expect(mariadbWithOnlyMysqlVersion?.areas.catalog?.checks).not.toContain(
+      "catalog.constraints",
+    );
+    expect(mariadbWithOnlyMysqlVersion?.areas.catalog?.deferred).toContain(
+      "catalog.constraints",
+    );
+
+    const [mariadbWithMariaDbVersion] = getAdapterConformanceMatrix({
+      dbTypes: ["mariadb"],
+      areas: ["catalog"],
+      versionContext: {
+        mariadb: "10.2.1-MariaDB",
+      },
+    });
+
+    expect(mariadbWithMariaDbVersion?.areas.catalog?.checks).toContain(
+      "catalog.constraints",
+    );
+  });
+
   it("runs a focused pilot against one RDBMS and one non-RDBMS adapter family", () => {
     const focused = getAdapterConformanceMatrix({
       dbTypes: ["postgresql", "mongodb"],

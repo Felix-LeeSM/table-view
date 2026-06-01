@@ -73,6 +73,36 @@ describe("sqlDialectProfile", () => {
     expect(mariadb?.vocabulary.keywords).toContain("RETURNING");
   });
 
+  it("keeps RETURNING as the only current MariaDB SQL profile delta over MySQL", () => {
+    const mysql = getSqlDialectProfileForDatabaseType("mysql");
+    const mariadb = getSqlDialectProfileForDatabaseType("mariadb");
+
+    if (!mysql || !mariadb) {
+      throw new Error("MySQL-family SQL profiles must exist");
+    }
+
+    expect(mariadb.defaultShell).toBe(mysql.defaultShell);
+    expect(mariadb.identifierQuote).toBe(mysql.identifierQuote);
+    expect(mariadb.codeMirrorDialect).toBe(mysql.codeMirrorDialect);
+    expect(mariadb.capabilities).toEqual({
+      ...mysql.capabilities,
+      returning: true,
+    });
+    expect(mariadb.vocabulary.functions).toEqual(mysql.vocabulary.functions);
+    expect(mariadb.vocabulary.types).toEqual(mysql.vocabulary.types);
+    expect(mariadb.vocabulary.operators).toEqual(mysql.vocabulary.operators);
+    expect(
+      mariadb.vocabulary.keywords.filter(
+        (keyword) => !mysql.vocabulary.keywords.includes(keyword),
+      ),
+    ).toEqual(["RETURNING"]);
+    expect(
+      mysql.vocabulary.keywords.filter(
+        (keyword) => !mariadb.vocabulary.keywords.includes(keyword),
+      ),
+    ).toEqual([]);
+  });
+
   it("keeps psql/mysql/sqlite shell commands out of SQL dialect vocabulary", () => {
     expect(SQL_SHELL_PROFILES.psql.commands).toContain("\\dt");
     expect(SQL_SHELL_PROFILES["mysql-client"].commands).toContain("\\G");
