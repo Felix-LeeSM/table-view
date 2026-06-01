@@ -2,8 +2,8 @@
 //!
 //! Sprint 237 P5+ (2026-05-08) — DB lifecycle을 테스트 프로세스가
 //! 직접 관리. testcontainers-rs로 첫 호출 시 PG/Mongo 컨테이너를 lazy
-//! 시작하고, 프로세스 종료 시 Drop으로 자동 정리. docker-compose
-//! 외부 의존을 끊었기 때문에 `cargo pg-test`/`cargo mongo-test` 한
+//! 시작하고, 프로세스 종료 시 `docker rm -f -v` 로 자동 정리.
+//! docker-compose 외부 의존을 끊었기 때문에 `cargo pg-test`/`cargo mongo-test` 한
 //! 줄이면 호출자는 Docker daemon만 떠 있으면 된다.
 //!
 //! 빠른 iteration escape hatch: `PG_TEST_URL` (postgres://user:pass@host:port/db)
@@ -33,7 +33,10 @@ use tokio::sync::OnceCell;
 #[path = "../support/testcontainer_lifecycle.rs"]
 mod testcontainer_lifecycle;
 
-use testcontainer_lifecycle::{current_pid_label, ensure_sweep_once, OWNED_LABEL, OWNER_PID_LABEL};
+use testcontainer_lifecycle::{
+    current_pid_label, ensure_sweep_once, register_container_for_process_cleanup, OWNED_LABEL,
+    OWNER_PID_LABEL,
+};
 
 #[derive(Clone, Debug)]
 struct PgEndpoint {
@@ -75,10 +78,9 @@ struct MysqlEndpoint {
 }
 
 /// 컨테이너 핸들을 process 종료까지 살려두기 위해 `Arc<...>` 로 보관.
-/// Drop 시 testcontainers 가 stop+rm 을 시도하지만 tokio runtime 종료
-/// 타이밍에 따라 leak 되는 경우가 있다 (sprint-258 측정 결과 매 run 마다
-/// PG 2 + Mongo 1 영구 누적). owner-pid 라벨 + 시작 시 dead-owner sweep 으로
-/// 누적을 차단한다.
+/// static 은 Drop 되지 않으므로 testcontainers 기본 Drop 에 기대지 않고,
+/// owner-pid 라벨 + 시작 시 dead-owner sweep + process-exit `rm -f -v` 로
+/// 컨테이너와 anonymous volume 누적을 차단한다.
 static PG_CONTAINER: OnceCell<Option<Arc<ContainerAsync<PostgresImage>>>> = OnceCell::const_new();
 static MONGO_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MongoImage>>>> = OnceCell::const_new();
 static MYSQL_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MysqlImage>>>> = OnceCell::const_new();
@@ -113,7 +115,10 @@ async fn pg_endpoint() -> Option<PgEndpoint> {
                 .start()
                 .await
             {
-                Ok(c) => Some(Arc::new(c)),
+                Ok(c) => {
+                    register_container_for_process_cleanup(c.id().to_string());
+                    Some(Arc::new(c))
+                }
                 Err(e) => {
                     println!(
                         "SKIP: PostgreSQL testcontainer 시작 실패 ({}). \
@@ -173,7 +178,10 @@ async fn mongo_endpoint() -> Option<MongoEndpoint> {
                 .start()
                 .await
             {
-                Ok(c) => Some(Arc::new(c)),
+                Ok(c) => {
+                    register_container_for_process_cleanup(c.id().to_string());
+                    Some(Arc::new(c))
+                }
                 Err(e) => {
                     println!(
                         "SKIP: Mongo testcontainer 시작 실패 ({}). \
@@ -282,7 +290,10 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
                 .start()
                 .await
             {
-                Ok(c) => Some(Arc::new(c)),
+                Ok(c) => {
+                    register_container_for_process_cleanup(c.id().to_string());
+                    Some(Arc::new(c))
+                }
                 Err(e) => {
                     println!(
                         "SKIP: MySQL testcontainer 시작 실패 ({}). \
