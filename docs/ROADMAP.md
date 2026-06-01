@@ -88,7 +88,7 @@ fixture/smoke evidence routing 으로 제한한다.
 |---|---|---|
 | Active lane selection | `docs/ROADMAP.md`, #185 | PostgreSQL first. Full admin parity is out of scope. |
 | RDBMS common smoke matrix | `docs/contributor-guide/testing-and-quality.md`, #240 | Current remote E2E smoke proves PostgreSQL as the strongest RDBMS lane and MySQL as a narrower runtime baseline. Other RDBMS lanes use unit/integration/fixture evidence until promoted. |
-| MySQL version-aware capability gate | `src/types/dataSourceVersionCapabilities.ts`, `src/types/adapterConformance.ts`, #221 | CHECK/constraint catalog claim is enabled only with server version context (`>= 8.0.16`). |
+| MySQL version-aware capability gate | `src-tauri/src/db/mysql/version.rs`, `src-tauri/tests/mysql_integration.rs`, `src/types/dataSourceVersionCapabilities.ts`, `src/types/adapterConformance.ts`, #221 | CHECK/constraint catalog metadata uses live server version context and is enabled only at MySQL `>= 8.0.16` / MariaDB `>= 10.2.1`. |
 | MariaDB delta/evidence gate | `src/types/dataSourceRuntime.ts`, `src/lib/sql/sqlDialectProfile.ts`, `src/types/adapterConformance.ts`, #222 | MariaDB keeps identity/profile and completion-only `RETURNING` delta; runtime support remains server-resolved until engine evidence is promoted. |
 | MySQL/MariaDB support claim SOT | `docs/product/README.md`, `docs/product/known-limitations.md`, `docs/product/query-language-support.md`, #207 | Shared MySQL-family behavior and MariaDB-specific deltas are separated. |
 | RDBMS docs-code consistency | `docs/product/**`, #198 | Product-visible claims stay narrower than implemented/evidenced behavior. |

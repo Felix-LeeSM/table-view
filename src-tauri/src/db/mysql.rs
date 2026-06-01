@@ -18,6 +18,7 @@ mod connection;
 mod mutations;
 mod queries;
 mod schema;
+mod version;
 
 pub use connection::MysqlAdapter;
 

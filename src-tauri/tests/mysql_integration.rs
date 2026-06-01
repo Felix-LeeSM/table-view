@@ -40,6 +40,46 @@ use tokio_util::sync::CancellationToken;
 // = "test" 로 connect 하므로 query_table_data 의 schema 인자도 "test".
 const MYSQL_SCHEMA: &str = "test";
 
+fn expected_check_catalog_support_from_version(raw: &str) -> bool {
+    let is_mariadb = raw.to_ascii_lowercase().contains("mariadb");
+    let parse_source = if is_mariadb {
+        raw.strip_prefix("5.5.5-").unwrap_or(raw)
+    } else {
+        raw
+    };
+    let Some((major, minor, patch)) = parse_mysql_test_version(parse_source) else {
+        return false;
+    };
+    let minimum = if is_mariadb { (10, 2, 1) } else { (8, 0, 16) };
+
+    (major, minor, patch) >= minimum
+}
+
+fn parse_mysql_test_version(raw: &str) -> Option<(u32, u32, u32)> {
+    let mut start = None;
+    let mut end = raw.len();
+    for (idx, ch) in raw.char_indices() {
+        if ch.is_ascii_digit() {
+            start.get_or_insert(idx);
+            continue;
+        }
+        if start.is_some() && ch != '.' {
+            end = idx;
+            break;
+        }
+    }
+
+    let version = &raw[start?..end];
+    let mut parts = version
+        .split('.')
+        .take(3)
+        .map(|part| part.parse::<u32>().ok());
+    let major = parts.next().flatten()?;
+    let minor = parts.next().flatten().unwrap_or(0);
+    let patch = parts.next().flatten().unwrap_or(0);
+    Some((major, minor, patch))
+}
+
 async fn seed_filter_table_mysql(adapter: &table_view_lib::db::mysql::MysqlAdapter, table: &str) {
     adapter
         .execute_query(
@@ -97,6 +137,29 @@ async fn test_mysql_select_query_returns_columns_and_rows() {
     assert_eq!(result.rows.len(), 1, "Should have 1 row");
     assert_eq!(result.total_count, 1);
     assert!(matches!(result.query_type, QueryType::Select));
+
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_check_constraint_catalog_gate_uses_live_server_version() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let version = adapter
+        .execute_query("SELECT VERSION() AS version", None)
+        .await
+        .expect("SELECT VERSION()");
+    let raw = version.rows[0][0].as_str().unwrap_or_default();
+
+    assert_eq!(
+        adapter.supports_check_constraint_catalog().await,
+        expected_check_catalog_support_from_version(raw),
+        "CHECK catalog gate should match live server version {raw:?}"
+    );
 
     adapter.disconnect_pool().await.ok();
 }
@@ -1617,6 +1680,7 @@ async fn test_mysql_get_table_columns_populates_check_clauses() {
         Some(a) => a,
         None => return,
     };
+    let supports_checks = adapter.supports_check_constraint_catalog().await;
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -1644,24 +1708,30 @@ async fn test_mysql_get_table_columns_populates_check_clauses() {
         .expect("get_table_columns");
 
     let age_col = columns.iter().find(|c| c.name == "age").expect("age");
-    assert_eq!(age_col.check_clauses.len(), 1, "age has 1 check");
-    assert!(
-        age_col.check_clauses[0].contains("age >= 0")
-            || age_col.check_clauses[0].contains("`age` >= 0"),
-        "age check should include expression: {:?}",
-        age_col.check_clauses
-    );
-
     let min_col = columns.iter().find(|c| c.name == "min_v").expect("min_v");
     let max_col = columns.iter().find(|c| c.name == "max_v").expect("max_v");
-    assert_eq!(min_col.check_clauses.len(), 1, "min_v has 1 check");
-    assert_eq!(max_col.check_clauses.len(), 1, "max_v has 1 check");
-    assert!(
-        min_col.check_clauses[0].contains("min_v <= max_v")
-            || min_col.check_clauses[0].contains("`min_v` <= `max_v`"),
-        "multi-column check should include expression: {:?}",
-        min_col.check_clauses
-    );
+    if supports_checks {
+        assert_eq!(age_col.check_clauses.len(), 1, "age has 1 check");
+        assert!(
+            age_col.check_clauses[0].contains("age >= 0")
+                || age_col.check_clauses[0].contains("`age` >= 0"),
+            "age check should include expression: {:?}",
+            age_col.check_clauses
+        );
+
+        assert_eq!(min_col.check_clauses.len(), 1, "min_v has 1 check");
+        assert_eq!(max_col.check_clauses.len(), 1, "max_v has 1 check");
+        assert!(
+            min_col.check_clauses[0].contains("min_v <= max_v")
+                || min_col.check_clauses[0].contains("`min_v` <= `max_v`"),
+            "multi-column check should include expression: {:?}",
+            min_col.check_clauses
+        );
+    } else {
+        assert!(age_col.check_clauses.is_empty());
+        assert!(min_col.check_clauses.is_empty());
+        assert!(max_col.check_clauses.is_empty());
+    }
 
     let id_col = columns.iter().find(|c| c.name == "id").expect("id");
     assert!(id_col.check_clauses.is_empty(), "id has no check");
@@ -2237,6 +2307,7 @@ async fn test_mysql_list_schema_columns_aggregates_multiple_tables() {
         Some(a) => a,
         None => return,
     };
+    let supports_checks = adapter.supports_check_constraint_catalog().await;
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -2272,11 +2343,15 @@ async fn test_mysql_list_schema_columns_aggregates_multiple_tables() {
     assert!(cols_t1.iter().any(|c| c.name == "id"));
     assert!(cols_t2.iter().any(|c| c.name == "v"));
     let score = cols_t1.iter().find(|c| c.name == "score").expect("score");
-    assert_eq!(score.check_clauses.len(), 1);
-    assert!(
-        score.check_clauses[0].contains("score >= 0")
-            || score.check_clauses[0].contains("`score` >= 0")
-    );
+    if supports_checks {
+        assert_eq!(score.check_clauses.len(), 1);
+        assert!(
+            score.check_clauses[0].contains("score >= 0")
+                || score.check_clauses[0].contains("`score` >= 0")
+        );
+    } else {
+        assert!(score.check_clauses.is_empty());
+    }
 
     adapter
         .execute_query(&format!("DROP TABLE {t1}"), None)
@@ -2429,6 +2504,7 @@ async fn test_mysql_get_table_constraints_pk_unique_check() {
         Some(a) => a,
         None => return,
     };
+    let supports_checks = adapter.supports_check_constraint_catalog().await;
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -2467,12 +2543,16 @@ async fn test_mysql_get_table_constraints_pk_unique_check() {
         .expect("UNIQUE missing");
     assert_eq!(uniq.columns, vec!["email".to_string()]);
 
-    let chk = constraints
-        .iter()
-        .find(|c| c.constraint_type == "CHECK")
-        .expect("CHECK missing");
-    assert!(chk.columns.is_empty());
-    assert!(chk.reference_table.is_none());
+    if supports_checks {
+        let chk = constraints
+            .iter()
+            .find(|c| c.constraint_type == "CHECK")
+            .expect("CHECK missing");
+        assert!(chk.columns.is_empty());
+        assert!(chk.reference_table.is_none());
+    } else {
+        assert!(!constraints.iter().any(|c| c.constraint_type == "CHECK"));
+    }
 
     adapter
         .execute_query(&format!("DROP TABLE {t}"), None)

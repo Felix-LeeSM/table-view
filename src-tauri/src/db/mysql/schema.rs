@@ -8,10 +8,12 @@
 //!   `sys`) 는 사용자 surface 에서 필터.
 //! - `information_schema.columns.column_type` 은 PG `format_type` 와 동등
 //!   (`varchar(200)`, `int(11)`, `decimal(10,2)` 형식). 별도 정규화 불필요.
-//! - CHECK constraint 는 `information_schema.check_constraints` 에서 읽고
-//!   참조 컬럼별 `check_clauses` 로 투영.
+//! - CHECK constraint 는 server-version gate 가 열린 경우에만
+//!   `information_schema.check_constraints` 에서 읽고 참조 컬럼별
+//!   `check_clauses` 로 투영.
 
 use sqlx::MySqlPool;
+use std::future::Future;
 
 use crate::error::AppError;
 use crate::models::{
@@ -22,8 +24,15 @@ use crate::models::{
 use super::checks::{build_check_map, is_check_metadata_unavailable};
 use super::MysqlAdapter;
 
-fn mysql_check_rows_or_empty<T>(result: Result<Vec<T>, sqlx::Error>) -> Result<Vec<T>, AppError> {
-    match result {
+async fn mysql_check_rows_or_empty<T>(
+    supported: bool,
+    result: impl Future<Output = Result<Vec<T>, sqlx::Error>>,
+) -> Result<Vec<T>, AppError> {
+    if !supported {
+        return Ok(Vec::new());
+    }
+
+    match result.await {
         Ok(rows) => Ok(rows),
         Err(err) if is_check_metadata_unavailable(&err) => Ok(Vec::new()),
         Err(err) => Err(AppError::Connection(err.to_string())),
@@ -124,7 +133,9 @@ impl MysqlAdapter {
         self.get_table_columns_inner(&pool, table, schema).await
     }
 
-    /// PG 의 `get_table_columns_inner` 와 동일 책무. 4 round-trip:
+    /// PG 의 `get_table_columns_inner` 와 동일 책무. CHECK metadata 는
+    /// server-version gate 가 열린 경우에만 추가 조회한다.
+    /// 4 round-trip:
     /// (1) columns, (2) PK, (3) FK, (4) CHECK — MySQL 은 column comment 가
     /// `information_schema.columns.column_comment` 에 inline 으로 들어
     /// 있어 PG 처럼 별도 `col_description` round-trip 불필요.
@@ -200,6 +211,7 @@ impl MysqlAdapter {
             .collect();
 
         let check_rows: Vec<(String,)> = mysql_check_rows_or_empty(
+            self.supports_check_constraint_catalog().await,
             sqlx::query_as(
                 "SELECT CONVERT(cc.check_clause USING utf8mb4) \
              FROM information_schema.table_constraints tc \
@@ -212,9 +224,9 @@ impl MysqlAdapter {
             )
             .bind(schema)
             .bind(table)
-            .fetch_all(pool)
-            .await,
-        )?;
+            .fetch_all(pool),
+        )
+        .await?;
         let column_names: Vec<String> = rows.iter().map(|(name, ..)| name.clone()).collect();
         let mut check_map = build_check_map(
             &column_names,
@@ -335,6 +347,7 @@ impl MysqlAdapter {
             .collect();
 
         let check_rows: Vec<(String, String)> = mysql_check_rows_or_empty(
+            self.supports_check_constraint_catalog().await,
             sqlx::query_as(
                 "SELECT CONVERT(tc.table_name USING utf8mb4), \
                     CONVERT(cc.check_clause USING utf8mb4) \
@@ -346,9 +359,9 @@ impl MysqlAdapter {
              ORDER BY tc.table_name, tc.constraint_name",
             )
             .bind(schema)
-            .fetch_all(&pool)
-            .await,
-        )?;
+            .fetch_all(&pool),
+        )
+        .await?;
         let mut columns_by_table: std::collections::HashMap<String, Vec<String>> =
             std::collections::HashMap::new();
         for row in &rows {
@@ -474,9 +487,9 @@ impl MysqlAdapter {
             .collect())
     }
 
-    /// Sprint 285 (Slice E) — table-level constraint 메타. PG 와 같은 모양
-    /// 으로 PK / FK / UNIQUE / CHECK 모두 포함. CHECK 은 MySQL 8.0.16+ 에서
-    /// information_schema.check_constraints 에 등장.
+    /// Table-level constraint metadata. PK / FK / UNIQUE 는 항상 조회하고,
+    /// CHECK 은 server-version gate 가 열린 MySQL 8.0.16+ / MariaDB
+    /// 10.2.1+ 에서만 포함한다.
     #[allow(clippy::type_complexity)]
     pub async fn get_table_constraints(
         &self,
@@ -485,15 +498,7 @@ impl MysqlAdapter {
     ) -> Result<Vec<ConstraintInfo>, AppError> {
         let pool = self.active_pool().await?;
 
-        // (name, type, column, ref_table, ref_column) — FK 의 ref columns 는
-        // key_column_usage 에 들어가 있다. CHECK 은 column null.
-        let rows: Vec<(
-            String,
-            String,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-        )> = sqlx::query_as(
+        let constraint_query = if self.supports_check_constraint_catalog().await {
             "SELECT CONVERT(tc.constraint_name USING utf8mb4), \
                     CONVERT(tc.constraint_type USING utf8mb4), \
                     CONVERT(kcu.column_name USING utf8mb4), \
@@ -506,13 +511,37 @@ impl MysqlAdapter {
               AND tc.table_name = kcu.table_name \
              WHERE tc.table_schema = ? AND tc.table_name = ? \
                AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY', 'CHECK') \
-             ORDER BY tc.constraint_name, kcu.ordinal_position",
-        )
-        .bind(schema)
-        .bind(table)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| AppError::Connection(e.to_string()))?;
+             ORDER BY tc.constraint_name, kcu.ordinal_position"
+        } else {
+            "SELECT CONVERT(tc.constraint_name USING utf8mb4), \
+                    CONVERT(tc.constraint_type USING utf8mb4), \
+                    CONVERT(kcu.column_name USING utf8mb4), \
+                    CONVERT(kcu.referenced_table_name USING utf8mb4), \
+                    CONVERT(kcu.referenced_column_name USING utf8mb4) \
+             FROM information_schema.table_constraints tc \
+             LEFT JOIN information_schema.key_column_usage kcu \
+               ON tc.constraint_name = kcu.constraint_name \
+              AND tc.table_schema = kcu.table_schema \
+              AND tc.table_name = kcu.table_name \
+             WHERE tc.table_schema = ? AND tc.table_name = ? \
+               AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY') \
+             ORDER BY tc.constraint_name, kcu.ordinal_position"
+        };
+
+        // (name, type, column, ref_table, ref_column) — FK 의 ref columns 는
+        // key_column_usage 에 들어가 있다. CHECK 은 column null.
+        let rows: Vec<(
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )> = sqlx::query_as(constraint_query)
+            .bind(schema)
+            .bind(table)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
 
         type ConstraintAccum = (String, Vec<String>, Option<String>, Vec<String>);
         let mut map: std::collections::BTreeMap<String, ConstraintAccum> =
