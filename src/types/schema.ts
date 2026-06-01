@@ -274,6 +274,11 @@ export interface CreateIndexRequest {
 export interface DropIndexRequest {
   connection_id: string;
   schema: string;
+  /**
+   * MySQL requires `DROP INDEX ... ON <table>`. PostgreSQL callers may
+   * omit it; the backend defaults missing values to an empty string.
+   */
+  table?: string;
   index_name: string;
   if_exists?: boolean;
   preview_only?: boolean;

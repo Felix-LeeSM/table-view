@@ -23,6 +23,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { screen, act, fireEvent } from "@testing-library/react";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useConnectionStore } from "@stores/connectionStore";
 import {
   MOCK_TRIGGERS,
   mockGetTableTriggers,
@@ -42,6 +43,7 @@ describe("StructurePanel Triggers tab (Sprint 272)", () => {
     // post-commit `onRefresh` paths from Create/Drop can be observed.
     mockRefreshTableTriggers.mockClear();
     mockRefreshTableTriggers.mockResolvedValue(MOCK_TRIGGERS);
+    useConnectionStore.setState({ connections: [] });
     useSchemaStore.setState({
       refreshTableTriggers: mockRefreshTableTriggers,
     } as Partial<Parameters<typeof useSchemaStore.setState>[0]>);
@@ -272,5 +274,39 @@ describe("StructurePanel Triggers tab (Sprint 272)", () => {
     expect(
       screen.getByRole("button", { name: "Create trigger" }),
     ).toBeInTheDocument();
+  });
+
+  it("[AC-445-02] MySQL trigger tab is read-only: metadata renders but structured create/drop controls stay hidden", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-1",
+          name: "mysql",
+          dbType: "mysql",
+          host: "localhost",
+          port: 3306,
+          database: "app",
+          username: "u",
+          password: null,
+          environment: "development",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ],
+    });
+
+    await act(async () => {
+      renderPanel({ initialSubTab: "triggers" });
+    });
+
+    const fixture = MOCK_TRIGGERS[0]!;
+    expect(
+      screen.getByTestId(`trigger-source-${fixture.name}`),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Create trigger" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: `Drop trigger ${fixture.name}` }),
+    ).not.toBeInTheDocument();
   });
 });

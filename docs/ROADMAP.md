@@ -83,7 +83,10 @@ evidence 가 있다. MySQL parser/Safe Mode 는 `LIMIT offset,count`,
 `ON DUPLICATE KEY UPDATE`, narrow `CALL proc(...)` 와 명시 unsupported scripting
 guard 까지 닫았다. MySQL row-edit generated SQL 은 backtick quoting, primary-key
 row projection, JSON/scalar/null coercion, preview/commit/discard consistency
-까지 unit/hook evidence 가 있다. MySQL/MariaDB/SQLite/DuckDB 를 full parity lane 으로 넓히려면
+까지 unit/hook evidence 가 있다. MySQL bounded structured DDL 은
+table/index/constraint preview/confirmation evidence 로 제한되고,
+trigger create/drop 은 structured UI 에서 raw-SQL-only non-goal 로 남긴다.
+MySQL/MariaDB/SQLite/DuckDB 를 full parity lane 으로 넓히려면
 별도 runtime/parser/Safe Mode/completion/edit/fixture/E2E/support-claim gate 가 필요하다.
 MariaDB/SQLite/DuckDB 작업은 현재 claim 정합성, typed capability gate,
 fixture/smoke evidence routing 으로 제한한다.
@@ -94,6 +97,7 @@ fixture/smoke evidence routing 으로 제한한다.
 | RDBMS common smoke matrix | `docs/contributor-guide/testing-and-quality.md`, #240 | Current remote E2E smoke proves PostgreSQL as the strongest RDBMS lane and MySQL as a narrower runtime baseline. Other RDBMS lanes use unit/integration/fixture evidence until promoted. |
 | MySQL version-aware capability gate | `src-tauri/src/db/mysql/version.rs`, `src-tauri/tests/mysql_integration.rs`, `src/types/dataSourceVersionCapabilities.ts`, `src/types/adapterConformance.ts`, #221 | CHECK/constraint catalog metadata uses live server version context and is enabled only at MySQL `>= 8.0.16` / MariaDB `>= 10.2.1`. |
 | MySQL row-edit generated SQL gate | `src/components/datagrid/sqlGenerator.test.ts`, `src/components/datagrid/useDataGridEdit.mixed-batch.test.ts`, #444 | MySQL row edits have dialect-specific identifier quoting, primary-key row projection, JSON/scalar/null coverage, and preview/commit/discard consistency evidence. |
+| MySQL bounded structure DDL gate | `src-tauri/src/db/mysql/mutations.rs`, `src-tauri/tests/mysql_integration.rs`, `src/components/structure/IndexesEditor.test.tsx`, `src/components/schema/StructurePanel.triggers.test.tsx`, #445 | Table/index/constraint structured DDL has preview/confirmation evidence. MySQL trigger metadata stays readable; structured trigger create/drop controls are hidden because MySQL trigger bodies are raw-SQL-only in the current model. |
 | MariaDB delta/evidence gate | `src/types/dataSourceRuntime.ts`, `src/lib/sql/sqlDialectProfile.ts`, `src/types/adapterConformance.ts`, #222 | MariaDB keeps identity/profile and completion-only `RETURNING` delta; runtime support remains server-resolved until engine evidence is promoted. |
 | MySQL/MariaDB support claim SOT | `docs/product/README.md`, `docs/product/known-limitations.md`, `docs/product/query-language-support.md`, #207/#443 | Shared MySQL-family behavior, explicit unsupported scripting boundaries, and MariaDB-specific deltas are separated. |
 | RDBMS docs-code consistency | `docs/product/**`, #198 | Product-visible claims stay narrower than implemented/evidenced behavior. |
