@@ -5,7 +5,7 @@ export { editGridCellInRow } from "./grid-edit";
 const WORKSPACE_TITLE = "Table View — Workspace";
 const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"]';
 
-export type DbType = "postgresql" | "mongodb" | "mysql";
+export type DbType = "postgresql" | "mongodb" | "mysql" | "mariadb";
 export type ConnectionEnvironment =
   | "local"
   | "testing"
@@ -125,6 +125,7 @@ export async function selectDatabaseType(dbType: DbType) {
 function dbTypeLabel(dbType: DbType): string {
   if (dbType === "postgresql") return "PostgreSQL";
   if (dbType === "mysql") return "MySQL";
+  if (dbType === "mariadb") return "MariaDB";
   return "MongoDB";
 }
 
@@ -229,6 +230,33 @@ export async function createMysqlConnection(
   await setInput(
     "#conn-database",
     process.env.MYSQL_DATABASE ?? "table_view_test",
+  );
+
+  await saveConnectionDialog(dialog);
+  await expectConnectionVisible(name);
+}
+
+export async function createMariaDbConnection(
+  name = "E2E MariaDB",
+  environment?: ConnectionEnvironment,
+) {
+  const dialog = await openNewConnectionDialog();
+  await selectDatabaseType("mariadb");
+
+  await setInput("#conn-name", name);
+  if (environment) {
+    await selectConnectionEnvironment(environment);
+  }
+  await setInput("#conn-host", process.env.E2E_MARIADB_HOST ?? "localhost");
+  await setInput(
+    "#conn-port",
+    process.env.E2E_MARIADB_PORT ?? process.env.MARIADB_PORT ?? "23306",
+  );
+  await setInput("#conn-user", process.env.MARIADB_USER ?? "testuser");
+  await setInput("#conn-password", process.env.MARIADB_PASSWORD ?? "testpass");
+  await setInput(
+    "#conn-database",
+    process.env.MARIADB_DATABASE ?? "table_view_test",
   );
 
   await saveConnectionDialog(dialog);

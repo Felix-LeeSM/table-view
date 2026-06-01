@@ -61,6 +61,21 @@ jobs:
           --health-timeout 5s
           --health-retries 20
           --health-start-period 10s
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: testroot
+          MARIADB_USER: testuser
+          MARIADB_PASSWORD: testpass
+          MARIADB_DATABASE: table_view_test
+        ports:
+          - 23306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 10s
 
     steps:
       - name: Checkout
@@ -136,6 +151,11 @@ jobs:
           MYSQL_USER: testuser
           MYSQL_PASSWORD: testpass
           MYSQL_DATABASE: table_view_test
+          E2E_MARIADB_HOST: localhost
+          E2E_MARIADB_PORT: 23306
+          MARIADB_USER: testuser
+          MARIADB_PASSWORD: testpass
+          MARIADB_DATABASE: table_view_test
         run: bash scripts/e2e-smoke-ci.sh
 
       - name: Upload E2E artifacts

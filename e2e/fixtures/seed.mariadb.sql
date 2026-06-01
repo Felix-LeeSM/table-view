@@ -6,7 +6,8 @@
 --
 -- MariaDB shares the MySQL protocol adapter, but the fixture stays separate
 -- so feature slices can add MariaDB-specific DDL or type cases without
--- changing the MySQL baseline.
+-- changing the MySQL baseline. Re-runs also restore smoke-mutated rows so a
+-- warm volume starts from deterministic evidence.
 
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -28,17 +29,15 @@ CREATE TABLE IF NOT EXISTS products (
   price DECIMAL(10, 2)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT IGNORE INTO users (name, email) VALUES ('Alice', 'alice@example.com');
-INSERT IGNORE INTO users (name, email) VALUES ('Bob', 'bob@example.com');
+INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com')
+  ON DUPLICATE KEY UPDATE name = VALUES(name);
+INSERT INTO users (name, email) VALUES ('Bob', 'bob@example.com')
+  ON DUPLICATE KEY UPDATE name = VALUES(name);
 
-INSERT INTO orders (user_id, total)
-  SELECT 1, 99.99 FROM DUAL
-  WHERE NOT EXISTS (
-    SELECT 1 FROM orders WHERE user_id = 1 AND total = 99.99
-  );
+SET @alice_user_id := (SELECT id FROM users WHERE email = 'alice@example.com');
 
-INSERT INTO products (name, price)
-  SELECT 'Widget', 19.99 FROM DUAL
-  WHERE NOT EXISTS (
-    SELECT 1 FROM products WHERE name = 'Widget' AND price = 19.99
-  );
+DELETE FROM orders WHERE user_id = @alice_user_id AND total = 99.99;
+INSERT INTO orders (user_id, total) VALUES (@alice_user_id, 99.99);
+
+DELETE FROM products WHERE name = 'Widget';
+INSERT INTO products (name, price) VALUES ('Widget', 19.99);
