@@ -4,8 +4,8 @@
 # 책임 영역:
 #   1. 런타임 (node, rust, pnpm, lefthook, direnv) — mise → asdf 순으로 시도, 둘 다
 #      없으면 mise 설치 안내 후 종료. .tool-versions 가 단일 진실원.
-#   2. cargo 보조 도구 (cargo-binstall → cargo-llvm-cov, cargo-deny, cargo-machete)
-#      + rustup 컴포넌트 (llvm-tools-preview).
+#   2. cargo 보조 도구 (cargo-binstall → cargo-llvm-cov, cargo-deny,
+#      cargo-machete, cargo-nextest) + rustup 컴포넌트 (llvm-tools-preview).
 #   3. core.hooksPath 활성화 + pnpm install (Phase F 에서 추가됨; 현재 초안은
 #      도구 설치까지만).
 #
@@ -70,10 +70,9 @@ install_cargo_tools() {
   fi
 
   # binstall 은 이미 있으면 no-op (cargo-binstall 자체가 멱등성을 보장).
-  # sccache 는 worktree 별 target/ 을 공유하지 않고 rustc 결과 캐시만 공유.
   # cargo-nextest 는 pre-push Rust test/coverage 실행기로 사용한다.
-  log "cargo-binstall: cargo-llvm-cov cargo-deny cargo-machete cargo-nextest sccache"
-  cargo binstall --no-confirm cargo-llvm-cov cargo-deny cargo-machete cargo-nextest sccache
+  log "cargo-binstall: cargo-llvm-cov cargo-deny cargo-machete cargo-nextest"
+  cargo binstall --no-confirm cargo-llvm-cov cargo-deny cargo-machete cargo-nextest
 }
 
 # ── 3. git hook 활성화 + JS 의존성 ───────────────────────────────────────
