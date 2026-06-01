@@ -22,6 +22,7 @@ pub struct SqlCompletionRequest {
     pub cursor: CompletionCursorOffsets,
     pub dialect: String,
     pub shell: String,
+    pub server_version: Option<String>,
     pub vocabulary: SqlCompletionVocabulary,
     pub catalog: SqlCompletionCatalogSnapshot,
 }
@@ -192,7 +193,7 @@ fn add_keywords(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest,
         }
     }
 
-    for keyword in builtin_keyword_deltas(&request.dialect) {
+    for keyword in builtin_keyword_deltas(&request.dialect, request.server_version.as_deref()) {
         if matches_prefix(keyword, prefix) {
             items.push(CompletionItem {
                 label: (*keyword).to_string(),
@@ -205,6 +206,13 @@ fn add_keywords(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest,
     }
 
     for keyword in &request.vocabulary.keywords {
+        if !request_keyword_is_available(
+            &request.dialect,
+            request.server_version.as_deref(),
+            keyword,
+        ) {
+            continue;
+        }
         if matches_prefix(keyword, prefix) {
             items.push(CompletionItem {
                 label: keyword.clone(),
@@ -215,6 +223,17 @@ fn add_keywords(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest,
             });
         }
     }
+}
+
+fn request_keyword_is_available(
+    dialect: &str,
+    server_version: Option<&str>,
+    keyword: &str,
+) -> bool {
+    if dialect == "mariadb" && keyword.eq_ignore_ascii_case("RETURNING") {
+        return vocabulary::mariadb_server_version_supports_returning(server_version);
+    }
+    true
 }
 
 fn add_meta_commands(

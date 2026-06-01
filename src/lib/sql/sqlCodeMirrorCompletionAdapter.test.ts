@@ -42,4 +42,28 @@ describe("sql CodeMirror completion adapter", () => {
     });
     expect(request.catalog.revision).toBe("rev-1");
   });
+
+  it("carries MariaDB profile identity and server version from UI context", () => {
+    const completionContext = buildSqlCompletionContext({
+      ...emptySnapshot(),
+      connectionId: "conn1",
+      database: "app",
+      dbType: "mariadb",
+      serverVersion: "10.11.8-MariaDB",
+      catalogRevision: "mariadb-rev",
+    });
+    const request = buildSqlCompletionRequestFromCodeMirror(
+      contextFor("RET"),
+      completionContext,
+    );
+
+    expect(request).toMatchObject({
+      language: "sql",
+      dialect: "mariadb",
+      family: "mysql",
+      shell: "mysql-client",
+      serverVersion: "10.11.8-MariaDB",
+    });
+    expect(request.vocabulary.keywords).toContain("RETURNING");
+  });
 });

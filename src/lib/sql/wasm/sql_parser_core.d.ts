@@ -7,6 +7,7 @@ export function complete_sql(
   cursor_utf8: number,
   dialect: string,
   shell: string,
+  server_version: string,
   catalog_revision: string,
   keywords: string,
   vocabulary_functions: string,
@@ -59,6 +60,8 @@ export interface InitOutput {
     v: number,
     w: number,
     x: number,
+    y: number,
+    z: number,
   ) => number;
   readonly parse_sql: (a: number, b: number) => number;
   readonly __wbindgen_export: (a: number, b: number) => number;

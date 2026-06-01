@@ -79,6 +79,18 @@ function requestWithMysqlSchemas() {
   return buildSqlCompletionRequest("USE ap", 6, ctx);
 }
 
+function requestWithMariaDbVersion(serverVersion: string) {
+  const ctx = buildSqlCompletionContext({
+    ...emptySnapshot(),
+    connectionId: "conn1",
+    database: "app",
+    dbType: "mariadb",
+    serverVersion,
+    catalogRevision: "rev-mariadb",
+  });
+  return buildSqlCompletionRequest("RET", 3, ctx);
+}
+
 describe("sqlCompletionWasm", () => {
   beforeEach(() => {
     __resetSqlCompletionWasmModuleForTests();
@@ -109,6 +121,7 @@ describe("sqlCompletionWasm", () => {
       3,
       "postgresql",
       "psql",
+      "",
       "rev-1",
       expect.any(String),
       expect.any(String),
@@ -131,6 +144,7 @@ describe("sqlCompletionWasm", () => {
       10,
       "postgresql",
       "psql",
+      "",
       "rev-ext",
       expect.any(String),
       expect.any(String),
@@ -153,10 +167,57 @@ describe("sqlCompletionWasm", () => {
       6,
       "mysql",
       "mysql-client",
+      "",
       "rev-mysql",
       expect.any(String),
       expect.any(String),
       "app\narchive",
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+    );
+  });
+
+  it("serializes MariaDB server version and filtered vocabulary across the WASM bridge", async () => {
+    completeSqlMock.mockReturnValue(null);
+
+    await completeSqlWithWasm(requestWithMariaDbVersion("10.0.4-MariaDB"));
+
+    expect(completeSqlMock).toHaveBeenCalledWith(
+      "RET",
+      3,
+      3,
+      "mariadb",
+      "mysql-client",
+      "10.0.4-MariaDB",
+      "rev-mariadb",
+      expect.not.stringContaining("RETURNING"),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+    );
+  });
+
+  it("keeps MariaDB RETURNING vocabulary for keyword-supported versions", async () => {
+    completeSqlMock.mockReturnValue(null);
+
+    await completeSqlWithWasm(requestWithMariaDbVersion("10.4.34-MariaDB"));
+
+    expect(completeSqlMock).toHaveBeenCalledWith(
+      "RET",
+      3,
+      3,
+      "mariadb",
+      "mysql-client",
+      "10.4.34-MariaDB",
+      "rev-mariadb",
+      expect.stringContaining("RETURNING"),
+      expect.any(String),
+      expect.any(String),
       expect.any(String),
       expect.any(String),
       expect.any(String),

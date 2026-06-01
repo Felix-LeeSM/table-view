@@ -7,11 +7,60 @@ pub(super) fn builtin_keywords(dialect: &str) -> &'static [&'static str] {
     }
 }
 
-pub(super) fn builtin_keyword_deltas(dialect: &str) -> &'static [&'static str] {
+pub(super) fn builtin_keyword_deltas(
+    dialect: &str,
+    server_version: Option<&str>,
+) -> &'static [&'static str] {
     match dialect {
-        "mariadb" => MARIADB_KEYWORD_DELTAS,
+        "mariadb" if mariadb_server_version_supports_returning(server_version) => {
+            MARIADB_KEYWORD_DELTAS
+        }
         _ => &[],
     }
+}
+
+pub(super) fn mariadb_server_version_supports_returning(server_version: Option<&str>) -> bool {
+    let Some(server_version) = server_version else {
+        return true;
+    };
+    let Some(version) = parse_version_tuple(server_version) else {
+        return true;
+    };
+    version_at_least(version, (10, 0, 5))
+}
+
+fn parse_version_tuple(raw: &str) -> Option<(u64, u64, u64)> {
+    let normalized = if raw.to_ascii_lowercase().contains("mariadb") {
+        raw.strip_prefix("5.5.5-").unwrap_or(raw)
+    } else {
+        raw
+    };
+    let start = normalized.find(|character: char| character.is_ascii_digit())?;
+    let candidate = normalized[start..]
+        .split(|character: char| !(character.is_ascii_digit() || character == '.'))
+        .next()?;
+
+    let mut parts = [0_u64; 3];
+    let mut count = 0;
+    for (index, part) in candidate.split('.').take(3).enumerate() {
+        if part.is_empty() {
+            break;
+        }
+        parts[index] = part.parse().ok()?;
+        count += 1;
+    }
+
+    if count == 0 {
+        None
+    } else {
+        Some((parts[0], parts[1], parts[2]))
+    }
+}
+
+fn version_at_least(version: (u64, u64, u64), minimum: (u64, u64, u64)) -> bool {
+    version.0 > minimum.0
+        || (version.0 == minimum.0
+            && (version.1 > minimum.1 || (version.1 == minimum.1 && version.2 >= minimum.2)))
 }
 
 pub(super) fn builtin_functions(dialect: &str) -> &'static [&'static str] {

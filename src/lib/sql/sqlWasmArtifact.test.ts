@@ -14,6 +14,9 @@ import {
   parseSqlPreloaded,
   preloadSqlWasm,
 } from "./sqlAst";
+import initSqlParserCore, {
+  complete_sql as completeSqlFromWasm,
+} from "./wasm/sql_parser_core.js";
 
 vi.mock("./wasm/sql_parser_core.js", async () => {
   const actual = await vi.importActual<
@@ -168,4 +171,34 @@ describe("checked-in SQL WASM artifact", () => {
       expect(["syntax-error", "lex-error"]).toContain(result.error_kind);
     },
   );
+
+  it("[AC-454-W01] complete_sql gates MariaDB RETURNING through real WASM", async () => {
+    await initSqlParserCore();
+
+    expect(mariaDbCompletionLabels("10.0.4-MariaDB")).not.toContain(
+      "RETURNING",
+    );
+    expect(mariaDbCompletionLabels("10.0.5-MariaDB")).toContain("RETURNING");
+    expect(mariaDbCompletionLabels("10.4.34-MariaDB")).toContain("RETURNING");
+  });
 });
+
+function mariaDbCompletionLabels(serverVersion: string): string[] {
+  const result = completeSqlFromWasm(
+    "RET",
+    3,
+    3,
+    "mariadb",
+    "mysql-client",
+    serverVersion,
+    "rev-mariadb",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+  ) as { items: Array<{ label: string }> };
+  return result.items.map((item) => item.label);
+}
