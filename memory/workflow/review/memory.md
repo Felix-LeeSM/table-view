@@ -1,7 +1,7 @@
 ---
 title: PR Review Behavior
 type: workflow-rule
-updated: 2026-05-30
+updated: 2026-06-01
 task: review, pr-reviewer, delivery
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / delivery T4
@@ -23,8 +23,10 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
 - Coordinator와 subreviewer는 read-only다. commit, push, merge, branch 수정 금지.
 - Reviewer는 test/lint/build를 재실행하지 않는다. 자동 gate 결과와 PR diff,
   PR body, sprint contract, 필요한 active SOT만 읽는다.
-- Subreview 결과는 coordinator의 입력이다. PR에는 하나의 통합 scorecard와
-  action items를 repo-relative evidence로 남긴다.
+- Subreview 결과는 coordinator의 입력이다. Coordinator는 PR에 직접 하나의
+  통합 scorecard와 action items를 repo-relative evidence로 comment한다.
+- Review verdict는 `8/10` 기준이다. 적용 차원 중 하나라도 8 미만이면
+  red/blocking, 모두 8 이상이면 green/pass다.
 - 결함이 있으면 delivery owner가 수정하고 push한 뒤 review를 다시 요청한다.
 - Merge 판단은 delivery owner 책임이다. Reviewer pack은 판단 input만 제공한다.
 - External reviewer는 사용자가 명시적으로 요청했을 때만 추가한다.
