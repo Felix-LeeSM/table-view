@@ -75,6 +75,8 @@ outputs 를 보존하고 `release/`, `tmp/`, `*/incremental/`, coverage raw/prof
   worktree 생성하지 않음 (사용자가 보지 못하는 디스크 공간 차지 위험).
 - cleanup: PR 머지 직후 또는 sprint 종료 시. `gh pr merge --delete-branch`
   는 branch 만 삭제 — worktree 디스크는 별도 정리 필요.
+- `scripts/worktree-cleanup.sh` 는 dirty worktree 를 제거하지 않고 SKIP 한다.
+  dirty 는 진행 중이거나 보존 사유가 필요한 상태로 보고 먼저 확인한다.
 
 ## Primary worktree guard
 
