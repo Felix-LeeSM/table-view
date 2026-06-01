@@ -175,10 +175,11 @@ describe("checked-in SQL WASM artifact", () => {
   it("[AC-454-W01] complete_sql gates MariaDB RETURNING through real WASM", async () => {
     await initSqlParserCore();
 
-    expect(mariaDbCompletionLabels("10.4.34-MariaDB")).not.toContain(
+    expect(mariaDbCompletionLabels("10.0.4-MariaDB")).not.toContain(
       "RETURNING",
     );
-    expect(mariaDbCompletionLabels("10.5.0-MariaDB")).toContain("RETURNING");
+    expect(mariaDbCompletionLabels("10.0.5-MariaDB")).toContain("RETURNING");
+    expect(mariaDbCompletionLabels("10.4.34-MariaDB")).toContain("RETURNING");
   });
 });
 

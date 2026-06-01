@@ -86,7 +86,7 @@ function mariadbServerVersionSupportsReturning(
 ): boolean {
   const version = parseDataSourceVersion(serverVersion);
   if (!version.known) return true;
-  return isParsedVersionAtLeast(version, 10, 5, 0);
+  return isParsedVersionAtLeast(version, 10, 0, 5);
 }
 
 function isParsedVersionAtLeast(

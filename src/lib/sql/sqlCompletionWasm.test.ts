@@ -182,7 +182,7 @@ describe("sqlCompletionWasm", () => {
   it("serializes MariaDB server version and filtered vocabulary across the WASM bridge", async () => {
     completeSqlMock.mockReturnValue(null);
 
-    await completeSqlWithWasm(requestWithMariaDbVersion("10.4.34-MariaDB"));
+    await completeSqlWithWasm(requestWithMariaDbVersion("10.0.4-MariaDB"));
 
     expect(completeSqlMock).toHaveBeenCalledWith(
       "RET",
@@ -190,7 +190,7 @@ describe("sqlCompletionWasm", () => {
       3,
       "mariadb",
       "mysql-client",
-      "10.4.34-MariaDB",
+      "10.0.4-MariaDB",
       "rev-mariadb",
       expect.not.stringContaining("RETURNING"),
       expect.any(String),
@@ -202,10 +202,10 @@ describe("sqlCompletionWasm", () => {
     );
   });
 
-  it("keeps MariaDB RETURNING vocabulary for supported versions", async () => {
+  it("keeps MariaDB RETURNING vocabulary for keyword-supported versions", async () => {
     completeSqlMock.mockReturnValue(null);
 
-    await completeSqlWithWasm(requestWithMariaDbVersion("10.5.0-MariaDB"));
+    await completeSqlWithWasm(requestWithMariaDbVersion("10.4.34-MariaDB"));
 
     expect(completeSqlMock).toHaveBeenCalledWith(
       "RET",
@@ -213,7 +213,7 @@ describe("sqlCompletionWasm", () => {
       3,
       "mariadb",
       "mysql-client",
-      "10.5.0-MariaDB",
+      "10.4.34-MariaDB",
       "rev-mariadb",
       expect.stringContaining("RETURNING"),
       expect.any(String),

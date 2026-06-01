@@ -26,7 +26,7 @@ pub(super) fn mariadb_server_version_supports_returning(server_version: Option<&
     let Some(version) = parse_version_tuple(server_version) else {
         return true;
     };
-    version_at_least(version, (10, 5, 0))
+    version_at_least(version, (10, 0, 5))
 }
 
 fn parse_version_tuple(raw: &str) -> Option<(u64, u64, u64)> {

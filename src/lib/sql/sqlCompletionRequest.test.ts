@@ -130,16 +130,22 @@ describe("buildSqlCompletionRequest", () => {
   });
 
   it("gates MariaDB RETURNING completion by known server version", () => {
-    const oldMariaDb = requestFor("mariadb", "10.4.34-MariaDB");
-    const boundaryMariaDb = requestFor("mariadb", "10.5.0-MariaDB");
+    const unsupportedMariaDb = requestFor("mariadb", "10.0.4-MariaDB");
+    const deleteReturningMariaDb = requestFor("mariadb", "10.0.5-MariaDB");
+    const preInsertReturningMariaDb = requestFor("mariadb", "10.4.34-MariaDB");
+    const insertReturningMariaDb = requestFor("mariadb", "10.5.0-MariaDB");
     const compatibilityPrefixMariaDb = requestFor(
       "mariadb",
       "5.5.5-10.11.8-MariaDB",
     );
     const unknownMariaDb = requestFor("mariadb", "test-version");
 
-    expect(oldMariaDb.vocabulary.keywords).not.toContain("RETURNING");
-    expect(boundaryMariaDb.vocabulary.keywords).toContain("RETURNING");
+    expect(unsupportedMariaDb.vocabulary.keywords).not.toContain("RETURNING");
+    expect(deleteReturningMariaDb.vocabulary.keywords).toContain("RETURNING");
+    expect(preInsertReturningMariaDb.vocabulary.keywords).toContain(
+      "RETURNING",
+    );
+    expect(insertReturningMariaDb.vocabulary.keywords).toContain("RETURNING");
     expect(compatibilityPrefixMariaDb.vocabulary.keywords).toContain(
       "RETURNING",
     );

@@ -433,12 +433,12 @@ fn mariadb_returning_keyword_is_version_sensitive() {
         "mariadb",
         "mysql-client",
         "RET",
-        "10.4.34-MariaDB",
+        "10.0.4-MariaDB",
     ));
     assert!(!labels(&old_result).contains(&"RETURNING".to_string()));
 
     let mut old_with_request_vocabulary =
-        empty_vocabulary_request_with_version("mariadb", "mysql-client", "RET", "10.4.34-MariaDB");
+        empty_vocabulary_request_with_version("mariadb", "mysql-client", "RET", "10.0.4-MariaDB");
     old_with_request_vocabulary
         .vocabulary
         .keywords
@@ -449,9 +449,17 @@ fn mariadb_returning_keyword_is_version_sensitive() {
         "mariadb",
         "mysql-client",
         "RET",
-        "10.5.0-MariaDB",
+        "10.0.5-MariaDB",
     ));
     assert!(labels(&boundary_result).contains(&"RETURNING".to_string()));
+
+    let pre_insert_returning_result = complete_sql(empty_vocabulary_request_with_version(
+        "mariadb",
+        "mysql-client",
+        "RET",
+        "10.4.34-MariaDB",
+    ));
+    assert!(labels(&pre_insert_returning_result).contains(&"RETURNING".to_string()));
 
     let compatibility_prefix_result = complete_sql(empty_vocabulary_request_with_version(
         "mariadb",
