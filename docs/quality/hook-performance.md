@@ -43,7 +43,9 @@ sccache --show-stats
 ## Rust Test Runner
 
 `pre-push` uses `cargo llvm-cov nextest --profile push` for Rust coverage. The
-nextest config lives at `src-tauri/.config/nextest.toml`.
+nextest config lives at `src-tauri/.config/nextest.toml`. Hook self-checks
+validate that profile with `cargo nextest show-config`, which reads config
+without compiling test binaries.
 
 Doctests are not part of the nextest path. Run them separately when executable
 documentation examples become meaningful:

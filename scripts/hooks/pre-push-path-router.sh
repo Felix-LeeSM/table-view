@@ -313,7 +313,7 @@ run_rust_gates() {
 run_hook_gates() {
 	run_step "hook-shell-syntax" bash -n .githooks/pre-push scripts/hooks/*.sh scripts/setup.sh
 	run_step "lefthook-validate" lefthook validate
-	run_step_in "nextest-push-profile-list" src-tauri cargo nextest list --profile push --lib
+	run_step_in "nextest-push-profile-config" src-tauri cargo nextest --no-pager show-config version --profile push
 	run_step "pre-push-router-tests" bash scripts/hooks/test-pre-push-path-router.sh
 }
 
