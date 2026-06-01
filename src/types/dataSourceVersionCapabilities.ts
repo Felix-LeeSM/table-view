@@ -60,7 +60,8 @@ export function parseDataSourceVersion(
     return { known: false, raw: version.raw ?? undefined };
   }
 
-  const match = version.match(/\d+(?:\.\d+){0,2}/);
+  const comparableVersion = normalizeVersionString(version);
+  const match = comparableVersion.match(/\d+(?:\.\d+){0,2}/);
   if (!match) return { known: false, raw: version };
 
   const [major = 0, minor = 0, patch = 0] = match[0]
@@ -76,6 +77,13 @@ export function parseDataSourceVersion(
     patch,
     raw: version,
   };
+}
+
+function normalizeVersionString(version: string): string {
+  if (/mariadb/i.test(version)) {
+    return version.replace(/^5\.5\.5-/, "");
+  }
+  return version;
 }
 
 export function getVersionAwareDataSourceCapabilities(

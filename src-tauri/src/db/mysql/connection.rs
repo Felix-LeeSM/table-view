@@ -19,6 +19,8 @@ use tracing::info;
 use crate::error::AppError;
 use crate::models::ConnectionConfig;
 
+use super::version::{parse_mysql_server_version, MysqlServerVersion};
+
 /// Per-pool sqlx connection cap. PG 의 `PG_POOL_MAX_CONNECTIONS` (5) 와
 /// 동일한 의도 — interactive UI 의 동시 in-flight 1 + meta probe 몇 개를
 /// 커버하는 보수적 budget.
@@ -45,6 +47,9 @@ pub struct MysqlPoolState {
     pools: HashMap<String, MySqlPool>,
     /// 현재 활성 database. `None` 이면 disconnected.
     current_db: Option<String>,
+    /// `SELECT VERSION()` parsed at connect time. Unknown means gated
+    /// metadata features stay disabled.
+    server_version: Option<MysqlServerVersion>,
     /// LRU ordering — 오래된 것이 front, 최근 사용된 것이 back.
     lru_order: VecDeque<String>,
 }
@@ -123,6 +128,8 @@ impl MysqlAdapter {
             .await
             .map_err(|e| AppError::Connection(e.to_string()))?;
 
+        let server_version = detect_server_version(&pool, &self.kind).await;
+
         info!("Connected to MySQL at {}:{}", config.host, config.port);
 
         // PG 패턴과 동일 — clone 후 lock 안에 들어가서 multi-field 갱신.
@@ -135,6 +142,7 @@ impl MysqlAdapter {
         guard.pools.insert(db_for_pools, pool);
         guard.lru_order.push_back(db_for_lru);
         guard.current_db = Some(db_for_current);
+        guard.server_version = server_version;
         Ok(())
     }
 
@@ -144,6 +152,7 @@ impl MysqlAdapter {
         guard.lru_order.clear();
         guard.current_db = None;
         guard.config = None;
+        guard.server_version = None;
         let had_pools = !pools.is_empty();
         drop(guard);
         for pool in pools {
@@ -272,6 +281,15 @@ impl MysqlAdapter {
         self.inner.lock().await.current_db.clone()
     }
 
+    pub async fn supports_check_constraint_catalog(&self) -> bool {
+        self.inner
+            .lock()
+            .await
+            .server_version
+            .as_ref()
+            .is_some_and(MysqlServerVersion::supports_check_constraint_catalog)
+    }
+
     pub async fn ping(&self) -> Result<(), AppError> {
         let pool = self.active_pool().await?;
         sqlx::query("SELECT 1")
@@ -345,6 +363,17 @@ impl MysqlAdapter {
     }
 }
 
+async fn detect_server_version(
+    pool: &MySqlPool,
+    kind: &crate::models::DatabaseType,
+) -> Option<MysqlServerVersion> {
+    let raw = sqlx::query_scalar::<_, String>("SELECT VERSION()")
+        .fetch_one(pool)
+        .await
+        .ok()?;
+    parse_mysql_server_version(&raw, kind)
+}
+
 /// LRU front 의 `current` 가 아닌 첫 entry 를 eviction 대상으로 선택. PG
 /// `select_eviction_target` 와 동등 — 현재 active 가 우선 보호된다.
 fn select_eviction_target(lru: &VecDeque<String>, current: &str) -> Option<String> {
@@ -403,6 +432,10 @@ mod tests {
             guard.config.is_none(),
             "New adapter should have no stored config"
         );
+        assert!(
+            guard.server_version.is_none(),
+            "New adapter should have no server_version"
+        );
     }
 
     #[tokio::test]
@@ -445,6 +478,13 @@ mod tests {
             Err(AppError::Connection(msg)) => assert!(msg.contains("Not connected")),
             other => panic!("Expected Connection error, got: {:?}", other),
         }
+    }
+
+    #[tokio::test]
+    async fn check_constraint_catalog_support_is_false_without_version_context() {
+        let adapter = MysqlAdapter::new();
+
+        assert!(!adapter.supports_check_constraint_catalog().await);
     }
 
     #[test]

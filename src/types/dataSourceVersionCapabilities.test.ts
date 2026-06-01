@@ -19,6 +19,12 @@ describe("version-aware data source capability gates", () => {
       minor: 4,
       patch: 0,
     });
+    expect(parseDataSourceVersion("5.5.5-10.11.8-MariaDB")).toMatchObject({
+      known: true,
+      major: 10,
+      minor: 11,
+      patch: 8,
+    });
     expect(parseDataSourceVersion(null)).toEqual({ known: false });
   });
 
