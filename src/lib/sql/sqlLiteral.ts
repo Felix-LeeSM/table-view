@@ -96,12 +96,17 @@ export function escapeSqlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-function quoteSqlIdentifier(value: string): string {
+function quoteDoubleSqlIdentifier(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
+function quoteMysqlIdentifier(value: string): string {
+  return `\`${value.replace(/`/g, "``")}\``;
+}
+
 export function sqlIdentifier(value: string, dialect: SqlDialect): string {
-  if (dialect === "sqlite") return quoteSqlIdentifier(value);
+  if (dialect === "mysql") return quoteMysqlIdentifier(value);
+  if (dialect === "sqlite") return quoteDoubleSqlIdentifier(value);
   return value;
 }
 
@@ -110,10 +115,12 @@ export function qualifiedTableName(
   table: string,
   dialect: SqlDialect,
 ): string {
-  if (dialect !== "sqlite") return schema ? `${schema}.${table}` : table;
+  if (dialect !== "mysql" && dialect !== "sqlite") {
+    return schema ? `${schema}.${table}` : table;
+  }
   return schema
-    ? `${quoteSqlIdentifier(schema)}.${quoteSqlIdentifier(table)}`
-    : quoteSqlIdentifier(table);
+    ? `${sqlIdentifier(schema, dialect)}.${sqlIdentifier(table, dialect)}`
+    : sqlIdentifier(table, dialect);
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
