@@ -167,7 +167,7 @@ is_docs_path() {
 
 is_hook_path() {
 	case "$1" in
-	lefthook.yml | .githooks/* | scripts/hooks/* | scripts/setup.sh | src-tauri/.config/nextest.toml)
+	lefthook.yml | .githooks/* | scripts/hooks/* | scripts/setup.sh | scripts/check-coverage-ratchet.ts | scripts/coverage-ratchet-targets.json | src-tauri/.config/nextest.toml)
 		return 0
 		;;
 	*)
@@ -406,6 +406,7 @@ if [ "$has_paths" = "0" ]; then
 fi
 
 run_step "signed-commits" bash scripts/hooks/check-signed-commits.sh <"$REFS_FILE"
+run_step "coverage-ratchet" npx tsx scripts/check-coverage-ratchet.ts
 
 if [ "$has_paths" = "0" ]; then
 	echo "[pre-push-route] route: no outgoing path changes; skipping TS/Rust gates"
