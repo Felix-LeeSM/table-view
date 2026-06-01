@@ -58,6 +58,10 @@ nextest config lives at `src-tauri/.config/nextest.toml`. Hook self-checks
 validate that profile with `cargo nextest show-config`, which reads config
 without compiling test binaries.
 
+`mysql_integration` runs in a one-thread nextest group because its
+container-backed tests share MySQL state. `serial_test` only serializes inside
+one process, while nextest schedules individual tests as separate processes.
+
 Doctests are not part of the nextest path. Run them separately when executable
 documentation examples become meaningful:
 
