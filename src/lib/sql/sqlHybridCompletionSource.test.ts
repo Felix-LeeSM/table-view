@@ -125,6 +125,39 @@ describe("createSqlHybridCompletionSource", () => {
     expect(validFor.test("%")).toBe(true);
   });
 
+  it("keeps MySQL backtick catalog completions valid while typing quoted identifiers", async () => {
+    const wasmResult: CoreCompletionResult = {
+      items: [
+        { label: "UserAccounts", kind: "table", apply: "`UserAccounts`" },
+      ],
+      replaceRange: {
+        from: { utf16: 14, utf8: 14 },
+        to: { utf16: 19, utf8: 19 },
+      },
+      incomplete: false,
+      metadata: {
+        engine: "wasm",
+        dialect: "mysql",
+        shell: "mysql-client",
+        catalogRevision: "rev-1",
+      },
+    };
+    const source = createSqlHybridCompletionSource({
+      dialect: StandardSQL,
+      getNamespace: () => TEST_SCHEMA,
+      getCompletionContext: () => completionContext("mysql"),
+      completeWithPreloadedWasm: vi.fn().mockReturnValue(wasmResult),
+      completeWithWasm: vi.fn(),
+    });
+
+    const result = await source(codeMirrorContext("SELECT * FROM `User"));
+
+    expect(result?.validFor).toBeInstanceOf(RegExp);
+    const validFor = result?.validFor as RegExp;
+    expect(validFor.test("`User")).toBe(true);
+    expect(validFor.test("`UserAccounts`")).toBe(true);
+  });
+
   it("falls back to legacy TypeScript sources when WASM has no candidates", async () => {
     const emptyWasmResult: CoreCompletionResult = {
       items: [],

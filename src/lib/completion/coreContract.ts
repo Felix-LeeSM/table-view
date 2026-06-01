@@ -2,6 +2,7 @@ export type CompletionLanguage = "sql" | "mongosh";
 
 export type CompletionItemKind =
   | "keyword"
+  | "schema"
   | "table"
   | "view"
   | "column"

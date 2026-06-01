@@ -214,6 +214,68 @@ describe("buildSqlCompletionContext", () => {
     });
   });
 
+  it("scopes MySQL catalog context to the active connection and database", () => {
+    const snapshot = emptySnapshot();
+    snapshot.schemas.conn1 = {
+      app: [schema("app")],
+      other: [schema("other")],
+    };
+    snapshot.schemas.conn2 = {
+      app: [schema("foreign")],
+    };
+    snapshot.tables.conn1 = {
+      app: {
+        app: [table("app", "UserAccounts")],
+      },
+      other: {
+        other: [table("other", "OtherUsers")],
+      },
+    };
+    snapshot.tables.conn2 = {
+      app: {
+        foreign: [table("foreign", "ForeignUsers")],
+      },
+    };
+    snapshot.functions.conn1 = {
+      app: {
+        app: [fnInfo("app", "normalize_email")],
+      },
+      other: {
+        other: [fnInfo("other", "normalize_other")],
+      },
+    };
+    snapshot.tableColumnsCache.conn1 = {
+      app: {
+        app: {
+          UserAccounts: [column("EmailAddress")],
+        },
+      },
+      other: {
+        other: {
+          OtherUsers: [column("other_email")],
+        },
+      },
+    };
+
+    const ctx = buildSqlCompletionContext({
+      ...snapshot,
+      connectionId: "conn1",
+      database: "app",
+      dbType: "mysql",
+    });
+
+    expect(ctx.catalog.schemas).toEqual([{ name: "app" }]);
+    expect(ctx.catalog.objects.map((object) => object.qualifiedName)).toEqual([
+      "app.UserAccounts",
+    ]);
+    expect(ctx.catalog.columns.map((column) => column.qualifiedName)).toEqual([
+      "app.UserAccounts.EmailAddress",
+    ]);
+    expect(ctx.catalog.functions.map((fn) => fn.qualifiedName)).toEqual([
+      "app.normalize_email",
+    ]);
+  });
+
   it("changes the default revision when same-count catalog content changes", () => {
     const buildWithTable = (name: string) => {
       const snapshot = emptySnapshot();

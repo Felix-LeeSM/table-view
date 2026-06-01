@@ -24,6 +24,8 @@ export const complete_sql: (
   t: number,
   u: number,
   v: number,
+  w: number,
+  x: number,
 ) => number;
 export const parse_sql: (a: number, b: number) => number;
 export const __wbindgen_export: (a: number, b: number) => number;

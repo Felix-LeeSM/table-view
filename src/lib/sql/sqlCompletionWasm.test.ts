@@ -64,6 +64,21 @@ function requestWithExtension() {
   return buildSqlCompletionRequest("GEN_RANDOM", 10, ctx);
 }
 
+function requestWithMysqlSchemas() {
+  const snapshot = emptySnapshot();
+  snapshot.schemas.conn1 = {
+    app: [{ name: "app" }, { name: "archive" }],
+  };
+  const ctx = buildSqlCompletionContext({
+    ...snapshot,
+    connectionId: "conn1",
+    database: "app",
+    dbType: "mysql",
+    catalogRevision: "rev-mysql",
+  });
+  return buildSqlCompletionRequest("USE ap", 6, ctx);
+}
+
 describe("sqlCompletionWasm", () => {
   beforeEach(() => {
     __resetSqlCompletionWasmModuleForTests();
@@ -101,6 +116,7 @@ describe("sqlCompletionWasm", () => {
       expect.any(String),
       expect.any(String),
       expect.any(String),
+      expect.any(String),
     );
   });
 
@@ -121,7 +137,30 @@ describe("sqlCompletionWasm", () => {
       expect.any(String),
       expect.any(String),
       expect.any(String),
+      expect.any(String),
       "public\tpgcrypto\t1.3",
+    );
+  });
+
+  it("serializes current MySQL schema inventory across the WASM bridge", async () => {
+    completeSqlMock.mockReturnValue(null);
+
+    await completeSqlWithWasm(requestWithMysqlSchemas());
+
+    expect(completeSqlMock).toHaveBeenCalledWith(
+      "USE ap",
+      6,
+      6,
+      "mysql",
+      "mysql-client",
+      "rev-mysql",
+      expect.any(String),
+      expect.any(String),
+      "app\narchive",
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
     );
   });
 

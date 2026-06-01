@@ -10,6 +10,7 @@ export function complete_sql(
   catalog_revision: string,
   keywords: string,
   vocabulary_functions: string,
+  schemas: string,
   objects: string,
   columns: string,
   catalog_functions: string,
@@ -56,6 +57,8 @@ export interface InitOutput {
     t: number,
     u: number,
     v: number,
+    w: number,
+    x: number,
   ) => number;
   readonly parse_sql: (a: number, b: number) => number;
   readonly __wbindgen_export: (a: number, b: number) => number;

@@ -140,6 +140,8 @@ function coreItemToCompletion(item: CompletionItem): Completion {
 
 function codeMirrorTypeForKind(kind: CompletionItem["kind"]): string {
   switch (kind) {
+    case "schema":
+      return "namespace";
     case "table":
     case "view":
       return "type";
@@ -157,7 +159,11 @@ function coreValidFor(result: CoreCompletionResult): RegExp {
     (item) => item.kind === "meta-command",
   );
   const hasOperator = result.items.some((item) => item.kind === "operator");
+  const hasQuotedIdentifier = result.items.some(
+    (item) => typeof item.apply === "string" && item.apply.startsWith("`"),
+  );
   if (hasMetaCommand) return /^[\w$.\\]*$/;
+  if (hasQuotedIdentifier) return /^`?[\w$]*`?$/;
   return hasOperator ? /^[\w$+\-*/<>=~!@#%^&|`?]*$/ : /^[\w$]*$/;
 }
 

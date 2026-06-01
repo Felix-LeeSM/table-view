@@ -12,6 +12,7 @@ interface SqlCompletionWasmModule {
     catalogRevision: string,
     keywords: string,
     vocabularyFunctions: string,
+    schemas: string,
     objects: string,
     columns: string,
     catalogFunctions: string,
@@ -68,6 +69,7 @@ function callCompleteSql(
     request.catalog.revision,
     request.vocabulary.keywords.join("\n"),
     request.vocabulary.functions.join("\n"),
+    request.catalog.schemas.map((schema) => schema.name).join("\n"),
     request.catalog.objects
       .map((object) =>
         [object.kind, object.schema, object.name, object.qualifiedName].join(
