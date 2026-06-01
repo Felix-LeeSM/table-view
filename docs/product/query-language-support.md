@@ -78,6 +78,9 @@ cannot add parser or completion vocabulary without an owner decision.
 
 ### MySQL SQL Support Breakdown
 
+This breakdown keeps runtime, parser/safety, autocomplete, and routine smoke
+claims separate for the MySQL docs recheck gate.
+
 - Runtime: connection, database/table browse, table data reads, raw SELECT, DML
   batches, cancellation, and key-projected row edits are active through the
   MySQL adapter. Generated row-edit SQL uses MySQL backtick identifier quoting
