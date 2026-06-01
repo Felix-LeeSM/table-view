@@ -148,6 +148,7 @@ run_delete_case() {
 
 docs_output="$(run_case docs-only normal docs/notes.md README.md)"
 assert_contains "$docs_output" "RUN signed-commits:" "docs-only"
+assert_contains "$docs_output" "RUN coverage-ratchet:" "docs-only"
 assert_contains "$docs_output" "route: docs-only" "docs-only"
 assert_contains "$docs_output" "RUN check-tdd-cycle:" "docs-only"
 assert_not_contains "$docs_output" "ts-typecheck" "docs-only"
@@ -200,6 +201,12 @@ assert_contains "$nextest_config_output" "route: frontend=0 rust=0 hook=1" "next
 assert_contains "$nextest_config_output" "RUN nextest-push-profile-config:" "nextest config"
 assert_not_contains "$nextest_config_output" "RUN ts-test:" "nextest config"
 assert_not_contains "$nextest_config_output" "RUN rust-test-and-coverage:" "nextest config"
+
+ratchet_script_output="$(run_case ratchet-script normal scripts/check-coverage-ratchet.ts scripts/coverage-ratchet-targets.json)"
+assert_contains "$ratchet_script_output" "route: frontend=0 rust=0 hook=1" "ratchet script"
+assert_contains "$ratchet_script_output" "RUN coverage-ratchet:" "ratchet script"
+assert_not_contains "$ratchet_script_output" "RUN ts-test:" "ratchet script"
+assert_not_contains "$ratchet_script_output" "RUN rust-test-and-coverage:" "ratchet script"
 
 codex_workflow_output="$(run_case codex-workflow normal .codex/hooks.json)"
 assert_contains "$codex_workflow_output" "route: full" "codex workflow"

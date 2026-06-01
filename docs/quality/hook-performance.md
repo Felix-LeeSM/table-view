@@ -76,12 +76,7 @@ PRE_PUSH_PATH_ROUTER_HEARTBEAT_SECONDS=10
 PRE_PUSH_PATH_ROUTER_LOG_TAIL_LINES=120
 ```
 
-## Deferred Ratchet
+## Coverage Ratchet
 
-Coverage ratchet is planned as a separate change. Intended shape:
-
-- global baseline: no decrease with small tolerance
-- critical surfaces: stronger minimums
-- new production files: high initial threshold
-- legacy changed files: no decrease
-- baseline updates: explicit command or PR, not automatic lowering
+The first ratchet stage is threshold drift protection. See
+`docs/quality/coverage-ratchet.md`.
