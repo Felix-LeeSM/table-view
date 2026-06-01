@@ -63,6 +63,21 @@ vi.mock("@stores/workspaceStore", () => ({
     }),
 }));
 
+vi.mock("@stores/connectionStore", () => ({
+  useConnectionStore: (
+    selector: (state: {
+      connections: Array<{ id: string; dbType: string }>;
+    }) => unknown,
+  ) =>
+    selector({
+      connections: [
+        { id: "conn-pg", dbType: "postgresql" },
+        { id: "conn-mysql", dbType: "mysql" },
+        { id: "conn-mongo", dbType: "mongodb" },
+      ],
+    }),
+}));
+
 function happyBatchResolve(stmts: string[]) {
   return Promise.resolve(
     stmts.map(() => ({
@@ -109,6 +124,36 @@ const RDB_DATA: TableData = {
   executed_query: "SELECT * FROM public.users LIMIT 100 OFFSET 0",
 };
 
+const MYSQL_ROW_EDIT_DATA: TableData = {
+  columns: [
+    {
+      name: "user id",
+      data_type: "varchar",
+      nullable: false,
+      default_value: null,
+      is_primary_key: true,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+    {
+      name: "select",
+      data_type: "varchar",
+      nullable: true,
+      default_value: null,
+      is_primary_key: false,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+  ],
+  rows: [["O'Brien", "old"]],
+  total_count: 1,
+  page: 1,
+  page_size: 100,
+  executed_query: "SELECT * FROM `app-db`.`order detail` LIMIT 100 OFFSET 0",
+};
+
 const DOC_DATA: TableData = {
   columns: [
     {
@@ -151,6 +196,20 @@ function renderRdbHook(data: TableData = RDB_DATA) {
       schema: "public",
       table: "users",
       connectionId: "conn-pg",
+      page: 1,
+      fetchData: mockFetchData,
+    }),
+  );
+}
+
+function renderMysqlHook() {
+  return renderHook(() =>
+    useDataGridEdit({
+      data: MYSQL_ROW_EDIT_DATA,
+      database: "app-db",
+      schema: "app-db",
+      table: "order detail",
+      connectionId: "conn-mysql",
       page: 1,
       fetchData: mockFetchData,
     }),
@@ -290,6 +349,64 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     expect(result.current.pendingEdits.size).toBe(0);
     expect(result.current.pendingNewRows).toHaveLength(0);
     expect(result.current.pendingDeletedRowKeys.size).toBe(0);
+    expect(mockFetchData).toHaveBeenCalledTimes(1);
+  });
+
+  it("[#444] MySQL preview/discard/commit uses the same quoted key-projected SQL batch", async () => {
+    const expectedSql =
+      "UPDATE `app-db`.`order detail` SET `select` = 'new' WHERE `user id` = 'O''Brien';";
+    const { result } = renderMysqlHook();
+
+    act(() => {
+      result.current.handleStartEdit(0, 1, "old");
+    });
+    act(() => {
+      result.current.setEditValue("new");
+    });
+    act(() => {
+      result.current.saveCurrentEdit();
+    });
+
+    act(() => {
+      result.current.handleCommit();
+    });
+    expect(result.current.sqlPreview).toEqual([expectedSql]);
+
+    act(() => {
+      result.current.handleDiscard();
+    });
+    expect(result.current.sqlPreview).toBeNull();
+    expect(result.current.pendingEdits.size).toBe(0);
+    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.handleStartEdit(0, 1, "old");
+    });
+    act(() => {
+      result.current.setEditValue("new");
+    });
+    act(() => {
+      result.current.saveCurrentEdit();
+    });
+    act(() => {
+      result.current.handleCommit();
+    });
+    const previewBatch = result.current.sqlPreview;
+    expect(previewBatch).toEqual([expectedSql]);
+
+    mockExecuteQueryBatch.mockImplementationOnce((_, stmts: string[]) =>
+      happyBatchResolve(stmts),
+    );
+
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+    expect(mockExecuteQueryBatch.mock.calls[0]?.[1]).toEqual(previewBatch);
+    expect(mockExecuteQueryBatch.mock.calls[0]?.[3]).toBe("app-db");
+    expect(result.current.sqlPreview).toBeNull();
+    expect(result.current.pendingEdits.size).toBe(0);
     expect(mockFetchData).toHaveBeenCalledTimes(1);
   });
 
