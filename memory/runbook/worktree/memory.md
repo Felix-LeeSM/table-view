@@ -77,9 +77,11 @@ setup/hook 경로에서 제외한다.
 `bash scripts/target-cache.sh warm-rust-debug .`,
 `bash scripts/target-cache.sh warm-rust-coverage .` 를 실행한 뒤
 `bash scripts/target-cache.sh copy-to <worktree> .` 로 target cache 를 옮긴다.
-이 helper 는 stale 판단 / lock / 자동 spawn 소비를 하지 않는다. 기존 target 을
-overlay 하며 debug target, `llvm-cov-target`, parser-core target cache 를 가져가되
-tracked generated WASM artifact 는 worktree 를 dirty 하게 만들 수 있어 제외한다.
+`warm-rust-debug` 는 pre-push 의 `cargo check` lane 과 debug nextest test binary
+lane 을 함께 데운다. 이 helper 는 stale 판단 / lock / 자동 spawn 소비를 하지 않는다.
+기존 target 을 overlay 하며 debug target, `llvm-cov-target`, parser-core target
+cache 를 가져가되 tracked generated WASM artifact 는 worktree 를 dirty 하게 만들 수
+있어 제외한다.
 
 ## 책임
 

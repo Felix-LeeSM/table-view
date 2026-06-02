@@ -32,7 +32,7 @@ Usage:
   bash scripts/target-cache.sh copy-to <target-repo-root> [source-repo-root]
 
 Behavior:
-  warm-rust-debug     compile push-profile test binaries without running tests
+  warm-rust-debug     compile cargo-check and push-profile test binaries
   warm-rust-coverage  compile llvm-cov push-profile test binaries without running tests
   copy                overlay Rust target caches from source repo into target repo
 
@@ -142,9 +142,10 @@ warm_rust_debug() {
   root="$(repo_root "${1:-$SCRIPT_ROOT}")"
 
   require_nextest
-  echo "target-cache: compiling debug push-profile test binaries in $root" >&2
+  echo "target-cache: compiling cargo-check and debug push-profile test binaries in $root" >&2
   (
     cd "$root/src-tauri"
+    cargo check
     build_nextest_target_args
     cargo nextest list --profile push --target-dir target "${NEXTEST_TARGET_ARGS[@]}" >/dev/null
   )
