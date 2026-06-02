@@ -141,6 +141,7 @@ export default function DuckdbFileAnalyticsDialog({
 
     setQueryLoading(true);
     setError(null);
+    setQueryResult(null);
     try {
       const nextResult = await executeFileAnalyticsQuery(
         connectionId,

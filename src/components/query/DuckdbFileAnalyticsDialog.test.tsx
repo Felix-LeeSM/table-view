@@ -114,4 +114,65 @@ describe("DuckdbFileAnalyticsDialog", () => {
     expect(within(queryRegion).getByText("Bob")).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(absolutePath);
   });
+
+  it("clears stale query results when a later source query fails", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValueOnce("/Users/felix/private/sales.csv");
+    mockRegisterFileAnalyticsSource.mockResolvedValueOnce(source);
+    mockPreviewFileAnalyticsSource.mockResolvedValueOnce({
+      source,
+      executedSql: 'SELECT * FROM "sales_csv" LIMIT 100',
+      result: {
+        columns: [{ name: "name", dataType: "text", category: "string" }],
+        rows: [["Ada"]],
+        totalCount: 1,
+        executionTimeMs: 4,
+        queryType: "select",
+      },
+    });
+    mockExecuteFileAnalyticsQuery
+      .mockResolvedValueOnce({
+        source,
+        executedSql: 'SELECT name FROM "sales_csv"',
+        result: {
+          columns: [{ name: "name", dataType: "text", category: "string" }],
+          rows: [["Bob"]],
+          totalCount: 1,
+          executionTimeMs: 3,
+          queryType: "select",
+        },
+      })
+      .mockRejectedValueOnce(new Error("registered source alias is required"));
+
+    render(
+      <DuckdbFileAnalyticsDialog connectionId="conn-1" onClose={vi.fn()} />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /choose local file/i }),
+    );
+
+    const sqlInput = await screen.findByRole("textbox", {
+      name: /source sql/i,
+    });
+    await user.clear(sqlInput);
+    await user.type(sqlInput, 'SELECT name FROM "sales_csv"');
+    await user.click(screen.getByRole("button", { name: /run source query/i }));
+    expect(
+      within(
+        await screen.findByRole("region", { name: /query result/i }),
+      ).getByText("Bob"),
+    ).toBeInTheDocument();
+
+    await user.clear(sqlInput);
+    await user.type(sqlInput, "SELECT 1");
+    await user.click(screen.getByRole("button", { name: /run source query/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "registered source alias is required",
+    );
+    expect(
+      screen.queryByRole("region", { name: /query result/i }),
+    ).not.toBeInTheDocument();
+  });
 });

@@ -86,10 +86,10 @@ impl DuckdbAdapter {
         sql: &str,
     ) -> Result<FileAnalyticsQueryResponse, AppError> {
         let sql = strip_trailing_terminator(sql).to_string();
-        validate_file_analytics_sql(&sql)?;
         let source = self.get_file_analytics_source(source_id).await?;
         let settings = self.active_settings().await?;
         let source = refresh_registered_file_source(&source)?;
+        validate_file_analytics_sql(&sql, &source.public.alias)?;
         let mut redactions = redaction_needles(&settings, &source);
         redactions.extend(sql_path_literals(&sql));
         let source_for_work = source.clone();
@@ -211,17 +211,185 @@ fn normalize_preview_limit(limit: Option<u32>) -> Result<u32, AppError> {
     }
 }
 
-fn validate_file_analytics_sql(sql: &str) -> Result<(), AppError> {
+fn validate_file_analytics_sql(sql: &str, source_alias: &str) -> Result<(), AppError> {
     if sql.trim().is_empty() {
         return Err(AppError::Validation("SQL query cannot be empty".into()));
     }
     validate_supported_sql(sql)?;
     match first_sql_word(sql) {
-        Some("SELECT" | "VALUES") => Ok(()),
+        Some("SELECT") => {}
         _ => Err(AppError::Unsupported(
             "DuckDB file analytics supports read-only SELECT queries".into(),
-        )),
+        ))?,
     }
+    if !references_source_alias(sql, source_alias) {
+        return Err(AppError::Unsupported(
+            "DuckDB file analytics queries must read from the registered source alias".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn references_source_alias(sql: &str, source_alias: &str) -> bool {
+    let bytes = sql.as_bytes();
+    let mut index = 0;
+
+    while index < bytes.len() {
+        index = skip_whitespace_and_comments(bytes, index);
+        if index >= bytes.len() {
+            break;
+        }
+
+        match bytes[index] {
+            b'\'' => index = skip_sql_string(bytes, index),
+            b'"' => index = skip_quoted_identifier(bytes, index).1,
+            byte if is_word_start(byte) => {
+                let start = index;
+                index += 1;
+                while index < bytes.len() && is_word_continue(bytes[index]) {
+                    index += 1;
+                }
+                let word = sql[start..index].to_ascii_uppercase();
+                if matches!(word.as_str(), "FROM" | "JOIN")
+                    && table_reference_contains_alias(sql, index, source_alias)
+                {
+                    return true;
+                }
+            }
+            _ => index += 1,
+        }
+    }
+
+    false
+}
+
+fn table_reference_contains_alias(sql: &str, start: usize, source_alias: &str) -> bool {
+    let bytes = sql.as_bytes();
+    let mut index = skip_whitespace_and_comments(bytes, start);
+    if index >= bytes.len() || bytes[index] == b'(' {
+        return false;
+    }
+
+    if let Some((word, next_index)) = read_word(sql, index) {
+        if word.eq_ignore_ascii_case("LATERAL") {
+            index = skip_whitespace_and_comments(bytes, next_index);
+        }
+    }
+
+    loop {
+        index = skip_whitespace_and_comments(bytes, index);
+        if index >= bytes.len() {
+            return false;
+        }
+
+        let (identifier, next_index, quoted) = match bytes[index] {
+            b'"' => {
+                let (identifier, next_index) = skip_quoted_identifier(bytes, index);
+                (identifier, next_index, true)
+            }
+            byte if is_word_start(byte) => {
+                let Some((identifier, next_index)) = read_word(sql, index) else {
+                    return false;
+                };
+                (identifier, next_index, false)
+            }
+            _ => return false,
+        };
+
+        let matches_alias = if quoted {
+            identifier == source_alias
+        } else {
+            identifier.eq_ignore_ascii_case(source_alias)
+        };
+        if matches_alias {
+            return true;
+        }
+
+        index = skip_whitespace_and_comments(bytes, next_index);
+        if bytes.get(index) != Some(&b'.') {
+            return false;
+        }
+        index += 1;
+    }
+}
+
+fn read_word(sql: &str, start: usize) -> Option<(String, usize)> {
+    let bytes = sql.as_bytes();
+    if !bytes.get(start).copied().is_some_and(is_word_start) {
+        return None;
+    }
+    let mut index = start + 1;
+    while index < bytes.len() && is_word_continue(bytes[index]) {
+        index += 1;
+    }
+    Some((sql[start..index].to_string(), index))
+}
+
+fn skip_whitespace_and_comments(bytes: &[u8], mut index: usize) -> usize {
+    loop {
+        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+        if bytes.get(index..index + 2) == Some(b"--") {
+            index += 2;
+            while index < bytes.len() && bytes[index] != b'\n' {
+                index += 1;
+            }
+            continue;
+        }
+        if bytes.get(index..index + 2) == Some(b"/*") {
+            index += 2;
+            while index + 1 < bytes.len() && bytes.get(index..index + 2) != Some(b"*/") {
+                index += 1;
+            }
+            index = (index + 2).min(bytes.len());
+            continue;
+        }
+        return index;
+    }
+}
+
+fn skip_sql_string(bytes: &[u8], mut index: usize) -> usize {
+    index += 1;
+    while index < bytes.len() {
+        if bytes[index] == b'\'' {
+            index += 1;
+            if bytes.get(index) == Some(&b'\'') {
+                index += 1;
+                continue;
+            }
+            break;
+        }
+        index += 1;
+    }
+    index
+}
+
+fn skip_quoted_identifier(bytes: &[u8], mut index: usize) -> (String, usize) {
+    let mut identifier = String::new();
+    index += 1;
+    while index < bytes.len() {
+        if bytes[index] == b'"' {
+            index += 1;
+            if bytes.get(index) == Some(&b'"') {
+                identifier.push('"');
+                index += 1;
+                continue;
+            }
+            break;
+        }
+        identifier.push(bytes[index] as char);
+        index += 1;
+    }
+    (identifier, index)
+}
+
+fn is_word_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || byte == b'_'
+}
+
+fn is_word_continue(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 fn refresh_registered_file_source(
