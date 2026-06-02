@@ -181,6 +181,41 @@ describe("checked-in SQL WASM artifact", () => {
     expect(mariaDbCompletionLabels("10.0.5-MariaDB")).toContain("RETURNING");
     expect(mariaDbCompletionLabels("10.4.34-MariaDB")).toContain("RETURNING");
   });
+
+  it("[AC-461-W01] complete_sql marks SQLite dot commands non-executable through real WASM", async () => {
+    await initSqlParserCore();
+
+    const result = completeSqlFromWasm(
+      ".s",
+      2,
+      2,
+      "sqlite",
+      "sqlite-cli",
+      "",
+      "rev-sqlite",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ) as {
+      items: Array<{
+        label: string;
+        kind: string;
+        detail?: string;
+        runtimeExecutable?: boolean;
+      }>;
+    };
+    const schemaCommand = result.items.find((item) => item.label === ".schema");
+
+    expect(schemaCommand).toMatchObject({
+      kind: "meta-command",
+      runtimeExecutable: false,
+      detail: "sqlite-cli command; not executable by Table View",
+    });
+  });
 });
 
 function mariaDbCompletionLabels(serverVersion: string): string[] {

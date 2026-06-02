@@ -20,8 +20,8 @@
 - RDBMS workbench: catalog/tree browse, tabular result rendering, raw query path,
   bounded DML/row-edit path, source-specific safety confirmation. PostgreSQL 이
   routine desktop smoke-backed 주 lane 이고 MySQL/MariaDB 는 runtime smoke
-  baseline 이 있다. SQLite/DuckDB 는 adapter/unit/integration/fixture evidence
-  범위로 좁힌다.
+  baseline 이 있다. SQLite 는 deterministic file workflow smoke baseline 이 있고,
+  DuckDB 는 adapter/unit/integration/fixture evidence 범위로 좁힌다.
 - SQLite/DuckDB file workflow: local file open/create/browse/query 중심. SQLite
   는 writable-file DML 과 key-projected row edit, DuckDB 는 `.duckdb` catalog/read
   query 와 registered local CSV/Parquet/JSON/NDJSON preview slice 를 지원한다.
@@ -43,7 +43,7 @@
 | PostgreSQL | strong | strong bounded subset | WASM-first + installed-extension-gated packs | 현재 가장 강한 lane 이다. routine desktop smoke 는 connect/browse/edit/query, Explain plan-inspection UI/source-label path, seeded `pgcrypto` installed-extension completion gating, Safe Mode info/warn/destructive confirmation, raw DDL preview, grid-edit preview, and cancellation UI/history/retry behavior 를 증명한다. Cancellation claim 은 query toolbar/API boundary, cancelled history, stale-grid clearing, retry 로 제한된다. full dialect/admin/arbitrary extension semantics, catalog-backed enumeration of every extension symbol, server activity/session management UI 는 보장하지 않음 |
 | MySQL | runtime/query/edit/DDL adapter active | bounded parser/Safe Mode slice; constraint conformance version-gated | Rust/WASM MySQL-family vocabulary + current-catalog schema/table/column/routine suggestions | connection, browsing, databases/schemas, tables, views, columns, indexes, constraints/FKs, raw query, DML-oriented multi-statement batch, row edit with MySQL-quoted generated SQL/key projection, cancellation, and bounded structured table/index/constraint DDL are active. Routine desktop smoke covers connect, browse seeded table, SELECT result grid, DML batch per-statement result, row edit, cancellation/retry, history/source labels, and result-envelope rendering. Completion suggestions use the current connection/database catalog and MySQL backtick identifier context, but they do not widen runtime support for stored routine bodies or scripting. CHECK/constraint catalog metadata uses live MySQL `>= 8.0.16` context; older/unknown versions return empty CHECK hints. Stored routine/event bodies, control-flow scripting, `DELIMITER`, and `LOAD DATA` are explicit unsupported editor/backend boundaries. Trigger metadata is read-only in Structure; structured trigger create/drop and DB-level import/export/dump parity remain unsupported/follow-up |
 | MariaDB | runtime/query/edit/catalog/DDL adapter active through distinct MariaDB engine smoke | MySQL-family parser/Safe Mode path + MariaDB dialect/profile identity | Rust/WASM MySQL-family vocabulary + version-aware profile/completion MariaDB `RETURNING` delta | connection, seeded table browse, catalog/workbench metadata browse, SELECT result grid, DML batch per-statement result, row edit, cancellation/retry, history/source labels, and result-envelope rendering have wired MariaDB Runtime Happy Path evidence. Catalog/workbench coverage includes tables, views, columns, indexes, constraints/FKs, and routine metadata browse through the shared MySQL-family adapter plus MariaDB-specific smoke seed/categories. Row edit has MariaDB-specific hook evidence for quoted key-projected preview/discard/commit SQL, and bounded table/index/constraint DDL has MariaDB-specific export/backend-preview evidence. CHECK/constraint promotion remains version-gated at MariaDB `>= 10.2.1`. Intentional shared paths are the MySQL-family adapter implementation, CodeMirror dialect, parser/Safe Mode boundary, capability/conformance family, and `mysql-client` completion family. MariaDB autocomplete keeps the `mariadb` profile identity and suppresses `RETURNING` only when known server version context is below `10.0.5`. The app does not claim a MariaDB `RETURNING` runtime/version gate; raw execution remains server-resolved. MySQL-only evidence does not become a MariaDB runtime/admin/import/export claim without MariaDB-specific tests/docs |
-| SQLite | file adapter + read/writable-file DML | bounded parser/Safe Mode guardrails; DDL rejected by adapter | Rust/WASM built-in vocabulary + cached schema objects + sqlite-cli suggestions | user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의 DML/PK-projected row edit 로 제한된다. routine desktop E2E, structured DDL UI/runtime parity, unsupported `ALTER TABLE` rebuild, nested JSON edit, sqlite-cli execution, extension/capability semantics 는 unsupported |
+| SQLite | file adapter + read/writable-file DML | bounded parser/Safe Mode guardrails; DDL rejected by adapter | Rust/WASM built-in vocabulary + cached schema objects + sqlite-cli suggestions | user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의 DML/PK-projected row edit 로 제한된다. GitHub Runtime Happy Path now runs a deterministic SQLite desktop smoke for file create/open, table browse, read query, writable DML, row edit, read-only write rejection, and internal app-state DB rejection. structured DDL UI/runtime parity, unsupported `ALTER TABLE` rebuild, nested JSON edit, sqlite-cli execution, extension/capability semantics 는 unsupported |
 | DuckDB | RDBMS file adapter + registered local analytics preview | DuckDB SQL/file analytics guardrails | Rust/WASM DuckDB vocabulary | `rdb` profile + `file` connection kind 로 표현한다. local `.duckdb` file 은 catalog/table read 와 statement-level raw SQL 실행 경로를 지원한다. registered local CSV/Parquet/JSON/NDJSON analytics 는 preview basics 와 source-scoped SELECT backend path evidence 가 있다. Preview public payload 는 source alias, file name, kind, size 만 노출하고 absolute local path 는 노출하지 않는다. extension install/load/helper functions, `COPY`, `ATTACH`/`DETACH`, sensitive external-file capability settings, and arbitrary external-file SQL functions/replacement scans are adapter-blocked. 구조화된 DDL/write UI, file analytics query UI parity/history/import 는 unsupported/follow-up |
 | MongoDB | runtime-backed whitelisted document workflow | whitelisted mongosh/MQL | Rust/WASM vocabulary | connection, catalog, document query/edit, bulk/index/validator slices, cancellation, and destructive Safe Mode gates are active for tested whitelist paths. arbitrary JavaScript/shell behavior, version/deployment gates, native document-first panels, and full-support parity remain follow-up |
 | Redis | connection/profile + backend KV primitives + key browser/value preview UI | backend KV guardrails only | redis-command profile; parser/completion future-contract | key browser/value preview are live. Backend guarded string set, delete confirmation, TTL expire/persist, and bounded stream read exist as typed IPC primitives. full value editor, TTL/write/stream UI, Redis command query editor, cluster/pubsub/modules/consumer-group management, and Valkey support are follow-up |
@@ -64,7 +64,7 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 | PostgreSQL | `e2e/fixtures/seed.sql` | GitHub Runtime Happy Path 의 active RDBMS smoke seed |
 | MySQL | `e2e/fixtures/seed.mysql.sql` | wired Runtime Happy Path seed for the connect/browse/query/edit/cancel baseline |
 | MariaDB | `e2e/fixtures/seed.mariadb.sql` | wired Runtime Happy Path seed for the MariaDB connect/browse/query/edit/cancel baseline plus catalog/workbench probe objects |
-| SQLite | `e2e/fixtures/seed.sqlite.sql` | deterministic local-file seed; no desktop E2E smoke claim |
+| SQLite | `e2e/fixtures/seed.sqlite.sql` | wired Runtime Happy Path seed for deterministic file create/open, table browse, read query, writable DML, row edit, read-only write rejection, and internal app-state DB rejection |
 | DuckDB | `e2e/fixtures/seed.duckdb.sql` | `.duckdb` fixture seed; no desktop E2E smoke claim |
 | MongoDB | `e2e/fixtures/seed.mongodb.json` | document fixture used by current MongoDB smoke seed path |
 | Redis | `e2e/fixtures/seed.redis.json` | KV/stream fixture inventory for backend/fixture parity; no desktop E2E smoke claim |
@@ -151,11 +151,14 @@ candidate-only 상태다.
 - SQLite is a file-backed DBMS lane. Current support is scoped to file
   create/open/test, read-only mode, catalog/table browse, read queries,
   writable-file DML, transactional DML batch/dry-run, and key-projected row
-  edits. SQLite structured DDL, automatic ALTER rebuilds, extension/capability
-  semantics, sqlite-cli command execution, nested JSON edits, and routine
-  desktop E2E smoke remain future promotion gates.
+  edits. GitHub Runtime Happy Path now runs deterministic SQLite desktop smoke
+  for file create/open, table browse, read query, writable DML, row edit,
+  read-only write rejection, and internal app-state DB rejection. SQLite
+  structured DDL, automatic ALTER rebuilds, extension/capability semantics,
+  sqlite-cli command execution, and nested JSON edits remain future promotion
+  gates.
 - Routine runtime smoke currently proves the GitHub Runtime Happy Path for
-  PostgreSQL, MySQL, MariaDB, and MongoDB. Other smoke specs or source
+  PostgreSQL, MySQL, MariaDB, SQLite, and MongoDB. Other smoke specs or source
   inventories do not widen product support until the CI script and support docs
   promote them.
 - Destructive/security behavior is source-specific. RDB DDL preview/confirm,

@@ -331,6 +331,62 @@ describe("buildSqlCompletionContext", () => {
     expect(ctx.cacheState.extensionsLoaded).toBe(true);
   });
 
+  it("builds SQLite catalog context without extension inventory overclaim", () => {
+    const snapshot = emptySnapshot();
+    snapshot.tables.conn1 = {
+      "/tmp/app.sqlite": {
+        main: [table("main", "users", 2)],
+      },
+    };
+    snapshot.tableColumnsCache.conn1 = {
+      "/tmp/app.sqlite": {
+        main: {
+          users: [
+            column("id", "integer", {
+              nullable: false,
+              is_primary_key: true,
+            }),
+            column("email"),
+          ],
+        },
+      },
+    };
+    snapshot.postgresExtensions = {
+      conn1: {
+        "/tmp/app.sqlite": [pgExtension("fts5"), pgExtension("rtree")],
+      },
+    };
+
+    const ctx = buildSqlCompletionContext({
+      ...snapshot,
+      connectionId: "conn1",
+      database: "/tmp/app.sqlite",
+      dbType: "sqlite",
+      catalogRevision: "sqlite-rev",
+    });
+
+    expect(ctx).toMatchObject({
+      dialect: "sqlite",
+      family: "sqlite",
+      shell: "sqlite-cli",
+      defaultSchema: "main",
+      searchPath: ["main"],
+      cacheState: {
+        tablesLoaded: true,
+        columnsLoaded: true,
+        extensionsLoaded: false,
+      },
+    });
+    expect(ctx.catalog.objects.map((object) => object.qualifiedName)).toEqual([
+      "main.users",
+    ]);
+    expect(ctx.catalog.columns.map((column) => column.qualifiedName)).toEqual([
+      "main.users.email",
+      "main.users.id",
+    ]);
+    expect(ctx.catalog.extensions).toEqual([]);
+  });
+
   it("keeps MariaDB distinct while reusing the MySQL completion family", () => {
     const ctx = buildSqlCompletionContext({
       ...emptySnapshot(),

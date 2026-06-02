@@ -28,6 +28,7 @@ export interface CompletionItem {
   apply?: string;
   detail?: string;
   boost?: number;
+  runtimeExecutable?: boolean;
 }
 
 export interface CompletionResultMetadata {
