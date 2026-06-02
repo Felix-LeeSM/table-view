@@ -151,9 +151,12 @@ export function buildSqlCompletionContext(
   const functions = flattenFunctions(byConnDb.functions).sort(
     compareCatalogFunction,
   );
-  const extensions = flattenExtensions(byConnDb.postgresExtensions).sort(
-    compareCatalogExtension,
-  );
+  const supportsExtensionInventory = profile.id === "postgresql";
+  const extensions = supportsExtensionInventory
+    ? flattenExtensions(byConnDb.postgresExtensions).sort(
+        compareCatalogExtension,
+      )
+    : [];
   const schemas = mergeSchemas(
     explicitSchemas,
     Object.keys(byConnDb.tables),
@@ -200,7 +203,7 @@ export function buildSqlCompletionContext(
       viewsLoaded: byConnDb.viewsLoaded,
       columnsLoaded: byConnDb.columnsLoaded,
       functionsLoaded: byConnDb.functionsLoaded,
-      extensionsLoaded: byConnDb.extensionsLoaded,
+      extensionsLoaded: supportsExtensionInventory && byConnDb.extensionsLoaded,
     },
   };
 }

@@ -486,11 +486,66 @@ fn sqlite_returns_keywords_and_dot_shell_commands() {
     assert!(labels(&result).contains(&"PRAGMA".to_string()));
 
     let result = complete_sql(request_for_dialect("sqlite", "sqlite-cli", ".s"));
-    assert!(labels(&result).contains(&".schema".to_string()));
+    let schema_command = result
+        .items
+        .iter()
+        .find(|item| item.label == ".schema")
+        .expect("sqlite .schema completion");
+    assert_eq!(schema_command.kind, "meta-command");
+    assert_eq!(schema_command.runtime_executable, Some(false));
+    assert_eq!(
+        schema_command.detail.as_deref(),
+        Some("sqlite-cli command; not executable by Table View")
+    );
     assert_eq!(
         result.replace_range.from,
         CompletionCursorOffsets { utf16: 0, utf8: 0 }
     );
+}
+
+#[test]
+fn sqlite_catalog_context_suggests_tables_columns_and_qualified_columns() {
+    let mut req = empty_vocabulary_request("sqlite", "sqlite-cli", "SELECT * FROM us");
+    req.catalog.schemas = vec![SqlCompletionCatalogSchema {
+        name: "main".to_string(),
+    }];
+    req.catalog.objects = vec![SqlCompletionCatalogObject {
+        kind: "table".to_string(),
+        schema: "main".to_string(),
+        name: "users".to_string(),
+        qualified_name: "main.users".to_string(),
+    }];
+    req.catalog.columns = vec![column("main", "users", "email")];
+
+    let table_result = complete_sql(req.clone());
+    assert!(table_result.items.iter().any(|item| {
+        item.label == "users" && item.kind == "table" && item.detail.as_deref() == Some("main")
+    }));
+
+    req.text = "SELECT users.em FROM users".to_string();
+    req.cursor = CompletionCursorOffsets {
+        utf16: 15,
+        utf8: 15,
+    };
+    let column_result = complete_sql(req);
+    assert!(column_result.items.iter().any(|item| {
+        item.label == "email"
+            && item.kind == "column"
+            && item.detail.as_deref() == Some("main.users")
+    }));
+}
+
+#[test]
+fn sqlite_extension_inventory_does_not_enable_extension_completion_packs() {
+    let mut req = empty_vocabulary_request("sqlite", "sqlite-cli", "MATCHI");
+    req.catalog.extensions = vec![extension("fts5"), extension("rtree")];
+
+    let result = complete_sql(req);
+    let result_labels = labels(&result);
+
+    assert!(!result_labels.contains(&"MATCHINFO".to_string()));
+    assert!(!result_labels.contains(&"HIGHLIGHT".to_string()));
+    assert!(!result_labels.contains(&"RTREE".to_string()));
 }
 
 #[test]

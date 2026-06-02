@@ -122,6 +122,8 @@ pub struct CompletionItem {
     pub detail: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub boost: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_executable: Option<bool>,
 }
 
 pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
@@ -189,6 +191,7 @@ fn add_keywords(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest,
                 apply: Some((*keyword).to_string()),
                 detail: Some(keyword_detail(&request.dialect)),
                 boost: Some(12),
+                runtime_executable: None,
             });
         }
     }
@@ -201,6 +204,7 @@ fn add_keywords(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest,
                 apply: Some((*keyword).to_string()),
                 detail: Some(keyword_detail(&request.dialect)),
                 boost: Some(13),
+                runtime_executable: None,
             });
         }
     }
@@ -220,6 +224,7 @@ fn add_keywords(items: &mut Vec<CompletionItem>, request: &SqlCompletionRequest,
                 apply: Some(keyword.clone()),
                 detail: Some(keyword_detail(&request.dialect)),
                 boost: Some(10),
+                runtime_executable: None,
             });
         }
     }
@@ -249,6 +254,7 @@ fn add_meta_commands(
                 apply: Some((*command).to_string()),
                 detail: Some(shell_detail(&request.shell)),
                 boost: Some(60),
+                runtime_executable: Some(false),
             });
         }
     }
@@ -267,6 +273,7 @@ fn add_catalog_schemas(
                 apply: Some(apply_identifier(&schema.name, token)),
                 detail: Some("catalog schema".to_string()),
                 boost: Some(45),
+                runtime_executable: None,
             });
         }
     }
@@ -288,6 +295,7 @@ fn add_catalog_objects(
                 apply: Some(apply_identifier(&object.name, token)),
                 detail: Some(object.schema.clone()),
                 boost: Some(40),
+                runtime_executable: None,
             });
         }
         if token.quote.is_none() && matches_prefix(&object.qualified_name, &token.prefix) {
@@ -297,6 +305,7 @@ fn add_catalog_objects(
                 apply: Some(object.qualified_name.clone()),
                 detail: Some(object.schema.clone()),
                 boost: Some(35),
+                runtime_executable: None,
             });
         }
     }
@@ -320,6 +329,7 @@ fn add_qualified_catalog_objects(
                 apply: Some(apply_identifier(&object.name, token)),
                 detail: Some(object.schema.clone()),
                 boost: Some(38),
+                runtime_executable: None,
             });
         }
     }
@@ -365,6 +375,7 @@ fn column_item(column: &SqlCompletionCatalogColumn, apply: String) -> Completion
         apply: Some(apply),
         detail: Some(column.qualified_table_name.clone()),
         boost: Some(50),
+        runtime_executable: None,
     }
 }
 
@@ -382,6 +393,7 @@ fn add_functions(
                     apply: Some((*function).to_string()),
                     detail: Some(function_detail(&request.dialect)),
                     boost: Some(22),
+                    runtime_executable: None,
                 });
             }
         }
@@ -394,6 +406,7 @@ fn add_functions(
                     apply: Some(function.clone()),
                     detail: Some(function_detail(&request.dialect)),
                     boost: Some(20),
+                    runtime_executable: None,
                 });
             }
         }
@@ -445,6 +458,7 @@ fn catalog_function_item(
         apply: Some(apply),
         detail: Some(detail),
         boost: Some(boost),
+        runtime_executable: None,
     }
 }
 
@@ -474,6 +488,7 @@ fn add_extension_pack_items(
                     extension.name, candidate.detail
                 )),
                 boost: Some(candidate.boost),
+                runtime_executable: None,
             });
         }
     }
@@ -565,6 +580,6 @@ fn dialect_label(dialect: &str) -> &'static str {
 
 fn shell_detail(shell: &str) -> String {
     let mut detail = shell.to_string();
-    detail.push_str(" command");
+    detail.push_str(" command; not executable by Table View");
     detail
 }
