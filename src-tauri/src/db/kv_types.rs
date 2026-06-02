@@ -107,6 +107,14 @@ pub struct KvValueReadRequest {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct KvCommandRequest {
+    pub command: String,
+    #[serde(default)]
+    pub database: Option<u16>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KvValueEnvelope {
     pub key: String,
     pub metadata: KvKeyMetadata,

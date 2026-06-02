@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
+import {
+  createTabularResultEnvelope,
+  requireCompatibleQueryResult,
+  type QueryResult,
+} from "@/types/query";
 import type {
+  KvCommandRequest,
   KvDatabaseInfo,
   KvDeleteRequest,
   KvKeyScanPage,
@@ -12,6 +18,9 @@ import type {
   KvValueEnvelope,
   KvValueReadRequest,
 } from "@/types/kv";
+import { normalizeQueryResult } from "@lib/wireCamelCase";
+
+import { wrapNumericCells } from "./numericWrap";
 
 export async function listKvDatabases(
   connectionId: string,
@@ -52,6 +61,21 @@ export async function getKvValue(
     request,
     queryId,
   });
+}
+
+export async function executeKvCommand(
+  connectionId: string,
+  request: KvCommandRequest,
+  queryId?: string,
+): Promise<QueryResult> {
+  const result = await invoke<unknown>("execute_kv_command", {
+    connectionId,
+    request,
+    queryId,
+  });
+  return requireCompatibleQueryResult(
+    createTabularResultEnvelope(wrapNumericCells(normalizeQueryResult(result))),
+  );
 }
 
 export async function setKvStringValue(

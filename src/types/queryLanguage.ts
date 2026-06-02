@@ -65,8 +65,9 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
     parserOwner: "future-language-core-contract",
     completionOwner: "future-language-core-contract",
     fallbackPolicy: {
-      kind: "not-implemented",
-      reason: "Redis command query execution is not active yet.",
+      kind: "none",
+      reason:
+        "Redis command runtime uses a bounded backend allowlist; full language-core parsing remains future work.",
     },
     safetyAnalyzer: "profile-safety-policy",
   },

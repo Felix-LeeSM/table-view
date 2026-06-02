@@ -1,3 +1,6 @@
+mod command;
+mod command_parser;
+mod command_result;
 mod helpers;
 #[cfg(test)]
 mod test_support;
@@ -10,7 +13,7 @@ use crate::db::{
     BoxFuture, DbAdapter, KvAdapter, KvDatabaseInfo, KvDeleteRequest, KvKeyMetadata, KvKeyScanPage,
     KvKeyScanRequest, KvKeyType, KvMutationResult, KvSetStringRequest, KvStreamReadRequest,
     KvStreamReadResult, KvTtlState, KvTtlUpdate, KvTtlUpdateRequest, KvValue, KvValueEnvelope,
-    KvValueReadRequest, KvWriteSafety,
+    KvValueReadRequest, KvWriteSafety, RdbQueryResult,
 };
 use crate::error::AppError;
 use crate::models::{ConnectionConfig, DatabaseType};
@@ -258,6 +261,14 @@ impl KvAdapter for RedisAdapter {
                 value,
             })
         })
+    }
+
+    fn execute_command<'a>(
+        &'a self,
+        request: crate::db::KvCommandRequest,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
+        Box::pin(async move { command::execute_command(self, request, cancel).await })
     }
 
     fn set_string<'a>(

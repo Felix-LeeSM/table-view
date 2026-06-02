@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
+  KvCommandRequest,
   KvDeleteRequest,
   KvSetStringRequest,
   KvStreamReadRequest,
@@ -27,6 +28,10 @@ describe("KV Tauri wrappers", () => {
       database: 0,
       key: "profile:1",
       limit: 100,
+    };
+    const commandRequest: KvCommandRequest = {
+      database: 0,
+      command: "GET profile:1",
     };
     const setRequest: KvSetStringRequest = {
       database: 0,
@@ -69,6 +74,13 @@ describe("KV Tauri wrappers", () => {
         },
       })
       .mockResolvedValueOnce({
+        columns: [{ name: "value", data_type: "text", category: "text" }],
+        rows: [["Ada"]],
+        total_count: 1,
+        execution_time_ms: 2,
+        query_type: "select",
+      })
+      .mockResolvedValueOnce({
         key: "profile:1",
         changed: true,
         ttl: { state: "expires", seconds: 30 },
@@ -92,6 +104,21 @@ describe("KV Tauri wrappers", () => {
       connectionId: "redis-1",
       request: valueRequest,
       queryId: "read-1",
+    });
+
+    await expect(
+      callKvWrapper("executeKvCommand", "redis-1", commandRequest, "cmd-1"),
+    ).resolves.toEqual({
+      columns: [{ name: "value", dataType: "text", category: "text" }],
+      rows: [["Ada"]],
+      totalCount: 1,
+      executionTimeMs: 2,
+      queryType: "select",
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith("execute_kv_command", {
+      connectionId: "redis-1",
+      request: commandRequest,
+      queryId: "cmd-1",
     });
 
     await callKvWrapper("setKvStringValue", "redis-1", setRequest);

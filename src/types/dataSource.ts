@@ -363,6 +363,9 @@ export const REDIS_CAPABILITIES = capabilities({
   connection: {
     test: true,
   },
+  query: {
+    query: true,
+  },
   catalog: {
     browse: true,
   },
@@ -473,7 +476,7 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "server",
     ["redis-command"],
     "kv",
-    ["keyValue", "streamRecords"],
+    ["keyValue", "streamRecords", "tabular"],
     "kv-default",
     REDIS_CAPABILITIES,
   ),

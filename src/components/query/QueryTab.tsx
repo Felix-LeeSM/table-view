@@ -409,18 +409,14 @@ export default function QueryTab({ tab }: QueryTabProps) {
               );
             case "kv":
               return (
-                // Sprint 312 — KV / Search placeholders shed their
-                // `data-query-mode` attribute. They never carried a mongosh
-                // mode and the legacy workspace query-mode hint is deprecated.
-                <div
-                  className="flex h-full w-full items-center justify-center overflow-hidden bg-background p-4 text-center text-sm text-muted-foreground"
-                  role="textbox"
-                  aria-label="Key-Value Query Editor"
-                  aria-multiline="true"
-                  data-paradigm="kv"
-                >
-                  Redis query editor is planned but not yet available.
-                </div>
+                <SqlQueryEditor
+                  ref={editorRef}
+                  sql={tab.sql}
+                  onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
+                  onExecute={handleExecuteAndShowResults}
+                  onDryRun={() => undefined}
+                  sqlDialect={sqlDialect}
+                />
               );
             case "search":
               return (

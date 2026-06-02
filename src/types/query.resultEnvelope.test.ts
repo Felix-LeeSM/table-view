@@ -165,9 +165,9 @@ describe("result envelope compatibility layer", () => {
     });
   });
 
-  it("keeps typed-only source profile result kinds out of QueryResultGrid compatibility projection", () => {
+  it("keeps Redis typed result kinds out of QueryResultGrid compatibility projection", () => {
     const redis = getDataSourceProfile("redis");
-    expect(redis.resultKinds).toEqual(["keyValue", "streamRecords"]);
+    expect(redis.resultKinds).toEqual(["keyValue", "streamRecords", "tabular"]);
 
     for (const kind of ["keyValue", "streamRecords"] as const) {
       const envelope: OpaqueResultEnvelope = {

@@ -52,6 +52,11 @@ export interface KvValueReadRequest {
   cursor?: string;
 }
 
+export interface KvCommandRequest {
+  command: string;
+  database?: number;
+}
+
 export interface KvStringValue {
   type: "string";
   encoding: "utf8" | "binary";
