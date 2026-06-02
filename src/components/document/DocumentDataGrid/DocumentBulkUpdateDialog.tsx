@@ -42,6 +42,25 @@ export default function DocumentBulkUpdateDialog({
   onConfirm,
 }: DocumentBulkUpdateDialogProps) {
   const activeFilterCount = Object.keys(activeFilter).length;
+  const filterJson = safeStringifyCell(activeFilter);
+  let parsedPatch: Record<string, unknown> | null = null;
+  try {
+    const parsed: unknown = JSON.parse(patchInput);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed) &&
+      !Object.prototype.hasOwnProperty.call(parsed, "_id")
+    ) {
+      parsedPatch = parsed as Record<string, unknown>;
+    }
+  } catch {
+    parsedPatch = null;
+  }
+  const previewLine =
+    parsedPatch === null
+      ? null
+      : `db.${collection}.updateMany(${filterJson}, { $set: ${safeStringifyCell(parsedPatch)} })`;
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onOpenChange(false)}>
@@ -77,6 +96,29 @@ export default function DocumentBulkUpdateDialog({
           {error && (
             <p role="alert" className="mb-2 text-xs text-destructive">
               {error}
+            </p>
+          )}
+          {previewLine ? (
+            <>
+              <pre
+                aria-label="MQL bulk update preview"
+                className="mb-2 max-h-24 overflow-auto rounded bg-background p-2 font-mono text-xs text-foreground"
+              >
+                {previewLine}
+              </pre>
+              <div
+                role="alert"
+                aria-label="MongoDB bulk update warning"
+                className="mb-3 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-xs text-warning"
+              >
+                updateMany is not wrapped in a transaction. If MongoDB reports
+                an error after matching work starts, some matched documents may
+                already be updated.
+              </div>
+            </>
+          ) : (
+            <p className="mb-2 text-xs italic text-muted-foreground">
+              Enter a valid JSON object to preview updateMany.
             </p>
           )}
           <DialogFooter className="flex justify-end gap-2">

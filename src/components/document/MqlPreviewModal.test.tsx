@@ -30,6 +30,16 @@ describe("MqlPreviewModal", () => {
     );
   });
 
+  it("warns that multiple ordered document writes may partially commit", () => {
+    renderModal();
+
+    const warning = screen.getByLabelText("MongoDB ordered bulk write warning");
+    expect(warning).toHaveTextContent("2 ordered document writes");
+    expect(warning).toHaveTextContent(
+      "earlier writes may already be committed",
+    );
+  });
+
   it("renders the errors list when the preview reports per-row failures", () => {
     renderModal({
       errors: [

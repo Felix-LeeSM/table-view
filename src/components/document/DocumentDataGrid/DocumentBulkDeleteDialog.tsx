@@ -35,6 +35,8 @@ export default function DocumentBulkDeleteDialog({
   onConfirm,
 }: DocumentBulkDeleteDialogProps) {
   const activeFilterCount = Object.keys(activeFilter).length;
+  const filterJson = safeStringifyCell(activeFilter);
+  const previewLine = `db.${collection}.deleteMany(${filterJson})`;
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onOpenChange(false)}>
@@ -52,6 +54,21 @@ export default function DocumentBulkDeleteDialog({
             <pre className="mb-4 max-h-32 overflow-auto rounded bg-muted p-2 text-xs text-foreground">
               {safeStringifyCell(activeFilter, 2)}
             </pre>
+            <pre
+              aria-label="MQL bulk delete preview"
+              className="mb-2 max-h-24 overflow-auto rounded bg-background p-2 font-mono text-xs text-foreground"
+            >
+              {previewLine}
+            </pre>
+            <div
+              role="alert"
+              aria-label="MongoDB bulk delete warning"
+              className="mb-3 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-xs text-warning"
+            >
+              deleteMany is not wrapped in a transaction. If MongoDB reports an
+              error after matching work starts, some matched documents may
+              already be deleted.
+            </div>
           </DialogHeader>
           <DialogFooter className="flex justify-end gap-2">
             <Button

@@ -287,6 +287,44 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
     expect(mockFetchData).not.toHaveBeenCalled();
   });
 
+  it("handleExecuteCommit preserves every pending document write after ordered bulk failure", async () => {
+    mockBulkWriteDocuments.mockRejectedValueOnce(
+      new Error("bulk_write op 1 delete_one failed"),
+    );
+    const { result } = renderDocHook();
+
+    act(() => {
+      result.current.handleStartEdit(0, 1, "Ada");
+    });
+    act(() => {
+      result.current.setEditValue("Ada L.");
+    });
+    act(() => {
+      result.current.saveCurrentEdit();
+    });
+    act(() => {
+      result.current.handleSelectRow(1, false, false);
+    });
+    act(() => {
+      result.current.handleDeleteRow();
+    });
+    act(() => {
+      result.current.handleCommit();
+    });
+
+    const previewBeforeFailure = result.current.mqlPreview;
+    expect(previewBeforeFailure?.previewLines.length).toBe(2);
+
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+
+    expect(result.current.mqlPreview).toBe(previewBeforeFailure);
+    expect(result.current.pendingEdits.size).toBe(1);
+    expect(result.current.pendingDeletedRowKeys.size).toBe(1);
+    expect(mockFetchData).not.toHaveBeenCalled();
+  });
+
   it("handleCommit surfaces generator errors without opening a preview when every row is invalid", () => {
     const { result } = renderDocHook();
 
