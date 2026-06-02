@@ -73,6 +73,16 @@ Rust hook cache 의 기준은 이 target warm-start 다. `sccache` 는 2026-06-0
 로컬 실측에서 coverage gate Rust hit 0%, fresh target Rust hit 0% 로 나와
 setup/hook 경로에서 제외한다.
 
+수동 보충이 필요하면 primary 또는 이미 warm 된 checkout 에서
+`bash scripts/target-cache.sh warm-rust-debug .`,
+`bash scripts/target-cache.sh warm-rust-coverage .` 를 실행한 뒤
+`bash scripts/target-cache.sh copy-to <worktree> .` 로 target cache 를 옮긴다.
+`warm-rust-debug` 는 pre-push 의 `cargo check` lane 과 debug nextest test binary
+lane 을 함께 데운다. 이 helper 는 stale 판단 / lock / 자동 spawn 소비를 하지 않는다.
+기존 target 을 overlay 하며 debug target, `llvm-cov-target`, parser-core target
+cache 를 가져가되 tracked generated WASM artifact 는 worktree 를 dirty 하게 만들 수
+있어 제외한다.
+
 ## 책임
 
 - spawn: orchestrator (현재 메인 세션) 가 명시 호출. agent 가 자율로
