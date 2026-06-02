@@ -18,6 +18,7 @@ import {
   type SQLDialect,
 } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
+import type { RedisKeySuggestion } from "@lib/redis/redisCommandCompletion";
 import QueryTab from "./QueryTab";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -34,6 +35,17 @@ import {
   makeDocTab,
   resetQueryTabStores,
 } from "./__tests__/queryTabTestHelpers";
+
+const redisKeySuggestionFixture = vi.hoisted(
+  () =>
+    [
+      {
+        key: "profile:1",
+        keyType: "string",
+        ttl: { state: "persistent" },
+      },
+    ] as const,
+);
 beforeEach(() => {
   setupTauriMock({
     executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
@@ -72,6 +84,8 @@ vi.mock("./SqlQueryEditor", async () => {
     mockEditorProps.dialectHistory.push(props.sqlDialect);
     mockEditorProps.lastMongoExtensions = undefined;
     mockEditorProps.mongoExtensionsHistory.push(undefined);
+    mockEditorProps.lastRedisKeySuggestions = undefined;
+    mockEditorProps.redisKeySuggestionsHistory.push(undefined);
     mockEditorProps.lastParadigm = "rdb";
     mockEditorProps.lastQueryMode = "sql";
     return (
@@ -102,6 +116,8 @@ vi.mock("./MongoQueryEditor", async () => {
     mockEditorProps.dialectHistory.push(undefined);
     mockEditorProps.lastMongoExtensions = props.mongoExtensions;
     mockEditorProps.mongoExtensionsHistory.push(props.mongoExtensions);
+    mockEditorProps.lastRedisKeySuggestions = undefined;
+    mockEditorProps.redisKeySuggestionsHistory.push(undefined);
     mockEditorProps.lastParadigm = "document";
     mockEditorProps.lastQueryMode = props.queryMode;
     return (
@@ -120,6 +136,37 @@ vi.mock("./MongoQueryEditor", async () => {
   return { default: MockMongoQueryEditor };
 });
 
+vi.mock("./RedisCommandEditor", async () => {
+  const React = await import("react");
+  const MockRedisCommandEditor = React.forwardRef<
+    unknown,
+    {
+      onExecute: () => void;
+      sql: string;
+      redisKeySuggestions?: readonly RedisKeySuggestion[];
+    }
+  >(function MockRedisCommandEditor(props, _ref) {
+    void _ref;
+    mockEditorProps.lastDialect = undefined;
+    mockEditorProps.dialectHistory.push(undefined);
+    mockEditorProps.lastMongoExtensions = undefined;
+    mockEditorProps.mongoExtensionsHistory.push(undefined);
+    mockEditorProps.lastRedisKeySuggestions = props.redisKeySuggestions;
+    mockEditorProps.redisKeySuggestionsHistory.push(props.redisKeySuggestions);
+    mockEditorProps.lastParadigm = "kv";
+    mockEditorProps.lastQueryMode = "redis-command";
+    return (
+      <div data-testid="mock-editor" data-paradigm="kv" data-sql={props.sql}>
+        <button data-testid="execute-btn" onClick={props.onExecute}>
+          Execute
+        </button>
+      </div>
+    );
+  });
+  MockRedisCommandEditor.displayName = "MockRedisCommandEditor";
+  return { default: MockRedisCommandEditor };
+});
+
 vi.mock("./QueryResultGrid", () => ({
   default: ({ queryState }: { queryState: unknown }) => (
     <div data-testid="mock-result" data-status={JSON.stringify(queryState)} />
@@ -132,6 +179,14 @@ vi.mock("./QueryHistoryPanel", () => ({
 
 vi.mock("@hooks/useSqlAutocomplete", () => ({
   useSqlAutocomplete: () => ({}),
+}));
+
+vi.mock("@hooks/useRedisKeySuggestions", () => ({
+  useRedisKeySuggestions: () => ({
+    keySuggestions: redisKeySuggestionFixture,
+    status: "ready",
+    error: null,
+  }),
 }));
 
 vi.mock("@lib/sql/sqlUtils", () => ({
@@ -376,5 +431,33 @@ describe("QueryTab — dialect", () => {
 
     expect(mockEditorProps.lastMongoExtensions).toBeUndefined();
     expect(mockEditorProps.lastParadigm).toBe("rdb");
+  });
+
+  it("passes Redis key suggestions to the KV command editor", () => {
+    const kvTab = makeQueryTab({
+      connectionId: "conn-redis",
+      database: "2",
+      paradigm: "kv",
+      queryLanguage: "redis-command",
+      sql: "GET ",
+    });
+    useWorkspaceStore.setState(seedWorkspace([kvTab], kvTab.id));
+    useConnectionStore.setState({
+      connections: [
+        makeConn({
+          id: "conn-redis",
+          dbType: "redis",
+          paradigm: "kv",
+          database: "2",
+        }),
+      ],
+    });
+
+    render(<QueryTab tab={kvTab} />);
+
+    expect(mockEditorProps.lastParadigm).toBe("kv");
+    expect(mockEditorProps.lastRedisKeySuggestions).toEqual(
+      redisKeySuggestionFixture,
+    );
   });
 });

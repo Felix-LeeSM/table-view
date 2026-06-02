@@ -34,6 +34,7 @@ import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { stripSqlComments } from "@lib/sql/stripSqlComments";
+import { parseRedisDatabaseIndex } from "@lib/redis/redisDatabase";
 import { findMysqlScriptingBoundaryViolation } from "@lib/sql/mysqlScriptingBoundary";
 import {
   analyzeMongoPipeline,
@@ -391,21 +392,6 @@ function numberField(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
-}
-
-function parseKvDatabase(database: string | undefined): number | undefined {
-  if (database === undefined || database.trim().length === 0) {
-    return undefined;
-  }
-  const trimmed = database.trim();
-  if (!/^\d+$/.test(trimmed)) {
-    throw new Error("Redis database must be an integer between 0 and 65535.");
-  }
-  const parsed = Number(trimmed);
-  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
-    throw new Error("Redis database must be an integer between 0 and 65535.");
-  }
-  return parsed;
 }
 
 function isQueryCancellationMessage(message: string): boolean {
@@ -2376,7 +2362,7 @@ export function useQueryExecution({
     if (tab.paradigm === "kv") {
       let database: number | undefined;
       try {
-        database = parseKvDatabase(workspaceDb);
+        database = parseRedisDatabaseIndex(workspaceDb);
       } catch (err) {
         updateQueryState(tab.id, {
           status: "error",
