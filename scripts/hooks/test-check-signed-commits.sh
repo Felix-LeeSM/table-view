@@ -55,4 +55,25 @@ if [ "$empty_exit" -ne 0 ] || [ -n "$empty_stderr" ]; then
   exit 1
 fi
 
+printf 'two\n' >>"$TMP_DIR/file.txt"
+git -C "$TMP_DIR" add file.txt
+git -C "$TMP_DIR" commit --quiet -m "test: unsigned commit already on origin main"
+REMOTE_MAIN_SHA="$(git -C "$TMP_DIR" rev-parse HEAD)"
+git -C "$TMP_DIR" update-ref refs/remotes/origin/main "$REMOTE_MAIN_SHA"
+
+set +e
+remote_main_stderr="$(
+  cd "$TMP_DIR" &&
+    printf 'refs/heads/feature %s refs/heads/feature %s\n' "$REMOTE_MAIN_SHA" "$UNSIGNED_SHA" |
+      "$CHECK" 2>&1 >/dev/null
+)"
+remote_main_exit=$?
+set -e
+
+if [ "$remote_main_exit" -ne 0 ] || [ -n "$remote_main_stderr" ]; then
+  echo "FAIL: commits already present on origin remotes should not be rechecked" >&2
+  echo "$remote_main_stderr" >&2
+  exit 1
+fi
+
 echo "PASS: check-signed-commits smoke tests"
