@@ -217,9 +217,11 @@ describe("KvSidebar", () => {
         limit: 100,
       });
     });
-    expect(screen.getByRole("status")).toHaveTextContent(
-      /no keys match pattern session:\*/i,
-    );
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        /no keys match pattern session:\*/i,
+      );
+    });
   });
 
   it("exposes SCAN cursor state and appends the next page without blocking the first page", async () => {

@@ -64,6 +64,8 @@ export async function switchToWorkspaceWindow(timeoutMs = 30000) {
   let lastError: unknown = null;
   while (Date.now() - start < timeoutMs) {
     try {
+      if ((await browser.getTitle()) === WORKSPACE_TITLE) return;
+
       const handles = await browser.getWindowHandles();
       for (const handle of handles) {
         await browser.switchToWindow(handle);
@@ -508,18 +510,20 @@ export async function waitForWorkspaceTextAll(
   timeout: number,
   timeoutMsg: string,
 ) {
-  await switchToWorkspaceWindow();
+  const needles = snippets.map((snippet) => snippet.toLowerCase());
   await browser.waitUntil(
     async () => {
-      const text = await browser.execute(
-        () => document.body.textContent?.toLowerCase() ?? "",
-      );
-      return snippets.every((snippet) => text.includes(snippet.toLowerCase()));
+      for (const handle of await browser.getWindowHandles()) {
+        await browser.switchToWindow(handle);
+        if ((await browser.getTitle()) !== WORKSPACE_TITLE) continue;
+        const text = await browser.execute(
+          () => document.body.textContent?.toLowerCase() ?? "",
+        );
+        if (needles.every((needle) => text.includes(needle))) return true;
+      }
+      return false;
     },
-    {
-      timeout,
-      timeoutMsg,
-    },
+    { timeout, timeoutMsg },
   );
 }
 
