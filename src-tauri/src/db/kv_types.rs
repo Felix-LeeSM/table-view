@@ -111,6 +111,8 @@ pub struct KvCommandRequest {
     pub command: String,
     #[serde(default)]
     pub database: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirm_key: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -357,6 +359,19 @@ mod tests {
         assert_eq!(json["keys"][0]["keyType"], "string");
         assert!(json["keys"][0].get("key_type").is_none());
         assert_eq!(json["keys"][0]["ttl"]["state"], "expires");
+    }
+
+    #[test]
+    fn kv_command_request_serializes_confirm_key_as_camel_case() {
+        let request = KvCommandRequest {
+            command: "DEL session:1".into(),
+            database: Some(0),
+            confirm_key: Some("session:1".into()),
+        };
+
+        let json = serde_json::to_value(request).unwrap();
+        assert_eq!(json["confirmKey"], "session:1");
+        assert!(json.get("confirm_key").is_none());
     }
 
     #[test]

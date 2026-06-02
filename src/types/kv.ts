@@ -55,6 +55,7 @@ export interface KvValueReadRequest {
 export interface KvCommandRequest {
   command: string;
   database?: number;
+  confirmKey?: string;
 }
 
 export interface KvStringValue {

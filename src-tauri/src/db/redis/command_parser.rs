@@ -70,6 +70,53 @@ pub(super) enum RedisCommand {
         key: String,
         seconds: u64,
     },
+    Persist {
+        key: String,
+    },
+    Del {
+        key: String,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RedisCommandEffect {
+    Read,
+    Write,
+    Ttl,
+    Stream,
+    Destructive,
+}
+
+impl RedisCommand {
+    pub(super) fn effect(&self) -> RedisCommandEffect {
+        match self {
+            RedisCommand::Get { .. }
+            | RedisCommand::HGetAll { .. }
+            | RedisCommand::LRange { .. }
+            | RedisCommand::SMembers { .. }
+            | RedisCommand::ZRange { .. }
+            | RedisCommand::Type { .. }
+            | RedisCommand::Exists { .. } => RedisCommandEffect::Read,
+            RedisCommand::Set { .. }
+            | RedisCommand::HSet { .. }
+            | RedisCommand::LPush { .. }
+            | RedisCommand::RPush { .. }
+            | RedisCommand::SAdd { .. }
+            | RedisCommand::ZAdd { .. } => RedisCommandEffect::Write,
+            RedisCommand::Ttl { .. }
+            | RedisCommand::Expire { .. }
+            | RedisCommand::Persist { .. } => RedisCommandEffect::Ttl,
+            RedisCommand::XRange { .. } => RedisCommandEffect::Stream,
+            RedisCommand::Del { .. } => RedisCommandEffect::Destructive,
+        }
+    }
+
+    pub(super) fn required_confirmation_key(&self) -> Option<&str> {
+        match self {
+            RedisCommand::Del { key } | RedisCommand::Persist { key } => Some(key),
+            _ => None,
+        }
+    }
 }
 
 pub(super) fn parse_redis_command(input: &str) -> Result<RedisCommand, AppError> {
@@ -105,6 +152,12 @@ pub(super) fn parse_redis_command(input: &str) -> Result<RedisCommand, AppError>
         "SADD" => parse_sadd(args),
         "ZADD" => parse_zadd(args),
         "EXPIRE" => parse_expire(args),
+        "PERSIST" => Ok(RedisCommand::Persist {
+            key: one_key(args, "PERSIST")?,
+        }),
+        "DEL" => Ok(RedisCommand::Del {
+            key: one_key(args, "DEL")?,
+        }),
         _ => Err(AppError::Unsupported(format!(
             "Redis command '{upper}' is not in the bounded command allowlist"
         ))),
@@ -309,7 +362,7 @@ fn reject_command_family(command: &str) -> Result<(), AppError> {
         "XGROUP",
         "XREADGROUP",
     ];
-    const DESTRUCTIVE_WITHOUT_TYPED_CONFIRM: &[&str] = &["DEL", "UNLINK", "PERSIST", "RENAME"];
+    const DESTRUCTIVE_WITHOUT_TYPED_CONFIRM: &[&str] = &["UNLINK", "RENAME"];
     if UNSUPPORTED_PREFIXES
         .iter()
         .any(|prefix| command.starts_with(prefix))
@@ -408,25 +461,28 @@ mod tests {
 
     #[test]
     fn parser_accepts_bounded_read_write_ttl_and_stream_commands() {
+        let read = parse_redis_command("GET session:1").unwrap();
+        assert!(matches!(read, RedisCommand::Get { .. }));
+        assert_eq!(read.effect(), RedisCommandEffect::Read);
+
+        let write = parse_redis_command("HSET profile:1 name Ada").unwrap();
+        assert!(matches!(write, RedisCommand::HSet { .. }));
+        assert_eq!(write.effect(), RedisCommandEffect::Write);
+
+        let ttl = parse_redis_command("EXPIRE session:1 60").unwrap();
+        assert!(matches!(ttl, RedisCommand::Expire { .. }));
+        assert_eq!(ttl.effect(), RedisCommandEffect::Ttl);
+
+        let stream = parse_redis_command("XRANGE events - + COUNT 25").unwrap();
         assert!(matches!(
-            parse_redis_command("GET session:1").unwrap(),
-            RedisCommand::Get { .. }
-        ));
-        assert!(matches!(
-            parse_redis_command("HSET profile:1 name Ada").unwrap(),
-            RedisCommand::HSet { .. }
-        ));
-        assert!(matches!(
-            parse_redis_command("EXPIRE session:1 60").unwrap(),
-            RedisCommand::Expire { .. }
-        ));
-        assert!(matches!(
-            parse_redis_command("XRANGE events - + COUNT 25").unwrap(),
+            stream,
             RedisCommand::XRange {
                 count: Some(25),
                 ..
             }
         ));
+        assert_eq!(stream.effect(), RedisCommandEffect::Stream);
+
         assert!(matches!(
             parse_redis_command("XRANGE events - + COUNT 999999").unwrap(),
             RedisCommand::XRange {
@@ -437,13 +493,40 @@ mod tests {
     }
 
     #[test]
+    fn parser_classifies_typed_confirmation_commands() {
+        let delete = parse_redis_command("DEL session:1").unwrap();
+        assert_eq!(delete.effect(), RedisCommandEffect::Destructive);
+        assert_eq!(delete.required_confirmation_key(), Some("session:1"));
+
+        let persist = parse_redis_command("PERSIST session:1").unwrap();
+        assert_eq!(persist.effect(), RedisCommandEffect::Ttl);
+        assert_eq!(persist.required_confirmation_key(), Some("session:1"));
+    }
+
+    #[test]
     fn parser_rejects_unsupported_and_destructive_command_families() {
         assert!(matches!(
             parse_redis_command("FLUSHDB"),
             Err(AppError::Unsupported(_))
         ));
         assert!(matches!(
-            parse_redis_command("DEL session:1"),
+            parse_redis_command("UNLINK session:1"),
+            Err(AppError::Unsupported(_))
+        ));
+        assert!(matches!(
+            parse_redis_command("CLUSTER INFO"),
+            Err(AppError::Unsupported(_))
+        ));
+        assert!(matches!(
+            parse_redis_command("PUBSUB CHANNELS"),
+            Err(AppError::Unsupported(_))
+        ));
+        assert!(matches!(
+            parse_redis_command("MODULE LIST"),
+            Err(AppError::Unsupported(_))
+        ));
+        assert!(matches!(
+            parse_redis_command("XGROUP CREATE stream group $"),
             Err(AppError::Unsupported(_))
         ));
         assert!(matches!(
