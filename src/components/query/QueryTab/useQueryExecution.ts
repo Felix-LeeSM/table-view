@@ -71,6 +71,8 @@ import {
   extractDollarSet,
   buildCreateMongoIndexRequest,
   parseReplaceOneOptions,
+  applyFindCursorChain,
+  applyAggregateCursorChain,
 } from "./queryHelpers";
 
 import { logger } from "@lib/logger";
@@ -1098,6 +1100,14 @@ export function useQueryExecution({
       // ── aggregate (Safe Mode gate retained) ───────────────────────────
       if (parsed.method === "aggregate") {
         const pipelineRaw = parsed.args[0];
+        if (parsed.args.length > 1) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "aggregate() options are not supported. Use pipeline stages for sort, skip, and limit.",
+          });
+          return;
+        }
         if (!Array.isArray(pipelineRaw)) {
           updateQueryState(tab.id, {
             status: "error",
@@ -1116,7 +1126,19 @@ export function useQueryExecution({
           });
           return;
         }
-        const analysis = analyzeMongoPipeline(pipeline);
+        const cursorPipeline = applyAggregateCursorChain(
+          pipeline,
+          parsed.cursorChain,
+        );
+        if (!cursorPipeline.ok) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: cursorPipeline.error,
+          });
+          return;
+        }
+        const pipelineWithCursor = cursorPipeline.value;
+        const analysis = analyzeMongoPipeline(pipelineWithCursor);
         const decision = safeModeGate.decide(analysis);
         if (decision.action === "block") {
           updateQueryState(tab.id, {
@@ -1131,23 +1153,31 @@ export function useQueryExecution({
         // gate.
         if (decision.action === "confirm") {
           setPendingMongoConfirm({
-            pipeline,
+            pipeline: pipelineWithCursor,
             reason: decision.reason,
           });
           return;
         }
         if (analysis.severity === "warn") {
-          setPendingMongoWarn({ pipeline });
+          setPendingMongoWarn({ pipeline: pipelineWithCursor });
           return;
         }
-        await runMongoAggregateNow(pipeline, collection);
+        await runMongoAggregateNow(pipelineWithCursor, collection);
         return;
       }
 
       // ── find (FindBody from args + cursor chain) ──────────────────────
       if (parsed.method === "find") {
         const filterArg = parsed.args[0];
+        const projectionArg = parsed.args[1];
         const body: FindBody = {};
+        if (parsed.args.length > 2) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "find() accepts at most filter and projection arguments.",
+          });
+          return;
+        }
         if (isRecord(filterArg)) {
           body.filter = filterArg;
         } else if (filterArg !== undefined) {
@@ -1157,24 +1187,30 @@ export function useQueryExecution({
           });
           return;
         }
-        // D-11 — cursor chain → FindBody fields. `projection` is not
-        // captured by A1's chain shape yet; users wanting projection
-        // pass it via the A4 snippet template. `.toArray()` is parsed
-        // but a no-op (default IPC behaviour returns an array).
-        for (const step of parsed.cursorChain) {
-          if (step.name === "sort") {
-            const arg = step.args[0];
-            if (isRecord(arg)) body.sort = arg;
-          } else if (step.name === "limit") {
-            const arg = step.args[0];
-            if (typeof arg === "number") body.limit = arg;
-          } else if (step.name === "skip") {
-            const arg = step.args[0];
-            if (typeof arg === "number") body.skip = arg;
-          }
-          // `toArray` — no-op.
+        if (isRecord(projectionArg)) {
+          body.projection = projectionArg;
+        } else if (projectionArg !== undefined) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "find() projection must be an object.",
+          });
+          return;
         }
-        await runDocumentFind(connectionId, database, collection, body, rawSql);
+        const cursorBody = applyFindCursorChain(body, parsed.cursorChain);
+        if (!cursorBody.ok) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: cursorBody.error,
+          });
+          return;
+        }
+        await runDocumentFind(
+          connectionId,
+          database,
+          collection,
+          cursorBody.value,
+          rawSql,
+        );
         return;
       }
 

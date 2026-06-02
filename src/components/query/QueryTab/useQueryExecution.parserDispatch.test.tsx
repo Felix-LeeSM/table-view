@@ -154,6 +154,35 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
     expect(aggregateDocumentsMock).not.toHaveBeenCalled();
   });
 
+  // [AC-470-01] `find(filter, projection)` must preserve the projection
+  // alongside cursor-chain options in the backend FindBody.
+  it("[AC-470-01] db.users.find(filter, projection) → projection + cursor chain mapped", async () => {
+    findDocumentsMock.mockResolvedValueOnce(DOC_RESULT);
+    const tab = seedDocTab(
+      "db.users.find({active:true}, {name:1,_id:0}).sort({name:1}).limit(2)",
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    await waitFor(() => {
+      expect(findDocumentsMock).toHaveBeenCalledTimes(1);
+    });
+    expect(findDocumentsMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      "table_view_test",
+      "users",
+      {
+        filter: { active: true },
+        projection: { name: 1, _id: 0 },
+        sort: { name: 1 },
+        limit: 2,
+      },
+    );
+  });
+
   // [AC-311-01b] `db.users.find()` with no args + empty cursor chain →
   // findDocuments with `{}` (empty FindBody).
   it("[AC-311-01b] db.users.find() → findDocuments({})", async () => {
@@ -200,6 +229,35 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
     );
   });
 
+  // [AC-470-02] aggregate cursor chain is mapped to explicit read-only
+  // pipeline stages before safety analysis and dispatch.
+  it("[AC-470-02] db.users.aggregate(...).sort().skip().limit().toArray() → pipeline stages", async () => {
+    aggregateDocumentsMock.mockResolvedValueOnce(DOC_RESULT);
+    const tab = seedDocTab(
+      "db.users.aggregate([{$match:{active:true}}]).sort({name:1}).skip(5).limit(10).toArray()",
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    await waitFor(() => {
+      expect(aggregateDocumentsMock).toHaveBeenCalledTimes(1);
+    });
+    expect(aggregateDocumentsMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      "table_view_test",
+      "users",
+      [
+        { $match: { active: true } },
+        { $sort: { name: 1 } },
+        { $skip: 5 },
+        { $limit: 10 },
+      ],
+    );
+  });
+
   // [AC-311-02b] aggregate with trailing `.toArray()` is parsed and the
   // chain step is ignored (default IPC behavior already returns an array).
   it("[AC-311-02b] db.coll.aggregate([...]).toArray() → toArray ignored", async () => {
@@ -242,6 +300,48 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       expect(updated.queryState.status).toBe("error");
     });
   });
+
+  it.each([
+    [
+      "shell helper `use admin`",
+      "use admin",
+      "shell helpers (`use`, `show`) are not supported — type a `db....` expression",
+    ],
+    [
+      "shell helper `show dbs`",
+      "show dbs",
+      "shell helpers (`use`, `show`) are not supported — type a `db....` expression",
+    ],
+    [
+      "multiple statements",
+      "db.users.find({}); db.users.find({})",
+      "multiple statements separated by `;` are not supported — submit one mongosh expression at a time",
+    ],
+  ])(
+    "[AC-470-03] %s → clear error, IPC not called",
+    async (_, sql, message) => {
+      const tab = seedDocTab(sql);
+      const { result } = renderHook(() => useQueryExecution({ tab }));
+
+      await act(async () => {
+        await result.current.handleExecute();
+      });
+
+      expect(findDocumentsMock).not.toHaveBeenCalled();
+      expect(aggregateDocumentsMock).not.toHaveBeenCalled();
+      await waitFor(() => {
+        const state = getTestWorkspace("conn-mongo", "table_view_test");
+        const updated = state.tabs.find((t) => t.id === tab.id);
+        if (!updated || updated.type !== "query") {
+          throw new Error("tab not found");
+        }
+        if (updated.queryState.status !== "error") {
+          throw new Error(`expected error, got ${updated.queryState.status}`);
+        }
+        expect(updated.queryState.error).toBe(message);
+      });
+    },
+  );
 
   // [AC-311-04] collection mismatch with bound tab.collection → exact
   // error wording per contract; no IPC.
