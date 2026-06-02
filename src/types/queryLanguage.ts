@@ -63,11 +63,11 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
     label: "Redis command",
     lifecycle: "active",
     parserOwner: "future-language-core-contract",
-    completionOwner: "future-language-core-contract",
+    completionOwner: "typescript-runtime-adapter",
     fallbackPolicy: {
       kind: "none",
       reason:
-        "Redis command runtime uses a bounded backend allowlist; full language-core parsing remains future work.",
+        "Redis command runtime and TypeScript completion use a bounded allowlist; full language-core parsing remains future work.",
     },
     safetyAnalyzer: "profile-safety-policy",
   },

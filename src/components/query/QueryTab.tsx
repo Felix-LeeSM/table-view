@@ -17,6 +17,7 @@ import { useResizablePanel } from "@hooks/useResizablePanel";
 import { assertNever } from "@/lib/paradigm";
 import SqlQueryEditor from "./SqlQueryEditor";
 import MongoQueryEditor from "./MongoQueryEditor";
+import RedisCommandEditor from "./RedisCommandEditor";
 import QueryResultGrid from "./QueryResultGrid";
 import { ExplainViewer } from "./ExplainViewer";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
@@ -409,13 +410,12 @@ export default function QueryTab({ tab }: QueryTabProps) {
               );
             case "kv":
               return (
-                <SqlQueryEditor
+                <RedisCommandEditor
                   ref={editorRef}
                   sql={tab.sql}
                   onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
                   onExecute={handleExecuteAndShowResults}
-                  onDryRun={() => undefined}
-                  sqlDialect={sqlDialect}
+                  onDryRun={handleDryRunAndShowResults}
                 />
               );
             case "search":

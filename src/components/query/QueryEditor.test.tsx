@@ -363,6 +363,23 @@ describe("QueryEditor", () => {
     expect(container).not.toHaveAttribute("data-query-mode");
   });
 
+  it("uses the Redis command editor when paradigm=kv", () => {
+    render(
+      <QueryEditor
+        sql="GET session:1"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="kv"
+      />,
+    );
+
+    const container = screen.getByLabelText("Redis Command Editor");
+    expect(container).toHaveAttribute("data-paradigm", "kv");
+    expect(container.querySelector(".cm-content")?.textContent).toContain(
+      "GET session:1",
+    );
+  });
+
   // Sprint 139 — paradigm-aware split. Flipping the paradigm now swaps
   // the underlying editor component (SqlQueryEditor ↔ MongoQueryEditor),
   // so the previous "same EditorView instance" contract no longer holds.
