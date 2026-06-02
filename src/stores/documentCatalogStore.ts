@@ -18,8 +18,11 @@ export interface DocumentCatalogState {
   loading: boolean;
   error: string | null;
 
-  loadDatabases: (connectionId: string) => Promise<void>;
-  loadCollections: (connectionId: string, database: string) => Promise<void>;
+  loadDatabases: (connectionId: string) => Promise<string | null>;
+  loadCollections: (
+    connectionId: string,
+    database: string,
+  ) => Promise<string | null>;
   inferFields: (
     connectionId: string,
     database: string,
@@ -67,14 +70,17 @@ export const useDocumentCatalogStore = create<DocumentCatalogState>((set) => ({
     set({ loading: true, error: null });
     try {
       const databases = await tauri.listMongoDatabases(connectionId);
-      if (!isLatestRequest(key, reqId)) return;
+      if (!isLatestRequest(key, reqId)) return null;
       set((state) => ({
         databases: { ...state.databases, [connectionId]: databases },
         loading: false,
       }));
+      return null;
     } catch (e) {
-      if (!isLatestRequest(key, reqId)) return;
-      set({ error: String(e), loading: false });
+      if (!isLatestRequest(key, reqId)) return null;
+      const error = String(e);
+      set({ error, loading: false });
+      return error;
     }
   },
 
@@ -87,7 +93,7 @@ export const useDocumentCatalogStore = create<DocumentCatalogState>((set) => ({
         connectionId,
         database,
       );
-      if (!isLatestRequest(key, reqId)) return;
+      if (!isLatestRequest(key, reqId)) return null;
       set((state) => ({
         collections: setNested2(
           state.collections,
@@ -97,9 +103,12 @@ export const useDocumentCatalogStore = create<DocumentCatalogState>((set) => ({
         ),
         loading: false,
       }));
+      return null;
     } catch (e) {
-      if (!isLatestRequest(key, reqId)) return;
-      set({ error: String(e), loading: false });
+      if (!isLatestRequest(key, reqId)) return null;
+      const error = String(e);
+      set({ error, loading: false });
+      return error;
     }
   },
 

@@ -3,7 +3,10 @@ import {
   ChevronRight,
   Database as DbIcon,
   FileText,
+  KeyRound,
   Loader2,
+  Lock,
+  Settings2,
 } from "lucide-react";
 import {
   ContextMenu,
@@ -106,13 +109,17 @@ export function CollectionRow({
   onDoubleOpen,
   onRequestDrop,
 }: CollectionRowProps) {
+  const hasOptions = Object.keys(collection.options).length > 0;
+  const hasIdIndex = collection.id_index !== null;
+  const showType = collection.collection_type !== "collection";
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <button
           type="button"
           className={cn(
-            "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-8 hover:bg-muted",
+            "flex w-full min-w-0 cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-8 hover:bg-muted",
             isSelected
               ? "bg-primary/10 text-primary font-semibold"
               : "text-foreground",
@@ -130,12 +137,58 @@ export function CollectionRow({
           }}
         >
           <FileText size={12} className="shrink-0 text-muted-foreground" />
-          <span className="truncate text-xs">{collection.name}</span>
-          {collection.document_count != null && (
-            <span className="ml-auto text-3xs text-muted-foreground">
-              {collection.document_count.toLocaleString()}
+          <span className="min-w-0 flex-1 truncate text-xs">
+            {collection.name}
+          </span>
+          <span className="flex shrink-0 items-center gap-1 text-3xs text-muted-foreground">
+            {showType && (
+              <span
+                aria-label={`${collection.name} collection type: ${collection.collection_type}`}
+                className="font-medium uppercase"
+                title={`Collection type: ${collection.collection_type}`}
+              >
+                {collection.collection_type}
+              </span>
+            )}
+            {collection.read_only && (
+              <span
+                aria-label={`${collection.name} is read-only`}
+                role="img"
+                title="Read-only"
+              >
+                <Lock size={10} aria-hidden="true" />
+              </span>
+            )}
+            {hasOptions && (
+              <span
+                aria-label={`${collection.name} has collection options`}
+                role="img"
+                title="Collection options available"
+              >
+                <Settings2 size={10} aria-hidden="true" />
+              </span>
+            )}
+            {hasIdIndex && (
+              <span
+                aria-label={`${collection.name} has _id index metadata`}
+                role="img"
+                title="_id index metadata available"
+              >
+                <KeyRound size={10} aria-hidden="true" />
+              </span>
+            )}
+            <span
+              aria-label={
+                collection.document_count == null
+                  ? `${collection.name} document count unavailable`
+                  : `${collection.name} document count ${collection.document_count}`
+              }
+            >
+              {collection.document_count == null
+                ? "n/a"
+                : collection.document_count.toLocaleString()}
             </span>
-          )}
+          </span>
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>
