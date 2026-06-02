@@ -3,7 +3,8 @@
 #
 # Reads git pre-push stdin when available:
 #   <local-ref> <local-oid> <remote-ref> <remote-oid>
-# Falls back to @{u}..HEAD or commits not in origin remotes for manual runs.
+# Excludes commits already present on origin remotes; falls back to @{u}..HEAD
+# or commits not in origin remotes for manual runs.
 
 set -euo pipefail
 
@@ -25,7 +26,7 @@ append_commits_for_range() {
   if [ "$remote_oid" = "$ZERO_OID" ]; then
     git rev-list "$local_oid" --not --remotes=origin >>"$TMP_COMMITS"
   else
-    git rev-list "${remote_oid}..${local_oid}" >>"$TMP_COMMITS"
+    git rev-list "${remote_oid}..${local_oid}" --not --remotes=origin >>"$TMP_COMMITS"
   fi
 }
 
