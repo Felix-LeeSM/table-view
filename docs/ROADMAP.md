@@ -49,7 +49,7 @@ sequencing 을 명시 요청하면 별도 sprint contract queue 에 번호와 �
 |---:|---|---|---|
 | H1 | 현재 코드 -> data-source architecture 정렬 | RDBMS + DuckDB + Redis/Search/Graph/Vector 확장을 그냥 붙이면 switch sprawl 이 커진다. 추가 기능 전 기존 코드를 새 구조에 넣어야 한다. | 현재 `DatabaseType`/`Paradigm`/`ActiveAdapter`/workspace query/result path 가 profile, capability, query language, result envelope 로 감싸지고 사용자 회귀가 없다. |
 | H2 | RDBMS parity | 현재 아키텍처가 가장 강한 영역이고, 사용자에게 보이는 gap 이 기존 DB 클라이언트 전환 blocker 다. | DBMS 하나씩 query/workbench parity gate 를 통과한 뒤 다음 DBMS/runtime 승격을 시작한다. |
-| H3 | DuckDB + file analytics | Local-first file analytics 는 새 paradigm 없이 RDBMS 작업을 확장한다. | `.duckdb` raw SQL, registered local CSV/Parquet/JSON/NDJSON preview basics, source-scoped SELECT evidence, and documented file privacy/export boundary 가 green 이다. |
+| H3 | DuckDB + file analytics | Local-first file analytics 는 새 paradigm 없이 RDBMS 작업을 확장한다. | `.duckdb` raw SQL, registered local CSV/Parquet/JSON/NDJSON preview basics, source-scoped SELECT UI/API evidence, and documented file privacy/export boundary 가 green 이다. |
 | H4 | RDBMS intelligence | ERD 와 향후 schema diff/data compare/migration preview 는 shared `SchemaGraph`/catalog input path 를 확장해 재사용한다. Duplicate catalog parsing 은 만들지 않는다. | Production ERD 는 schema/table/column cache 와 cached/fetched explicit index/constraint metadata 를 함께 쓰는 reusable `SchemaGraph` 를 사용한다. Dependency view, migration impact analysis, dense-view screenshot smoke 는 H4 matrix 의 future promotion gate 로 라우팅돼 있다. |
 | H5 | First-class non-RDBMS | Redis/Valkey, Elasticsearch/OpenSearch, MongoDB 가 가장 명확한 non-RDBMS 사용자 workflow 를 덮는다. | MongoDB 는 whitelisted document workflow 로, Redis 는 backend KV first slice + key browser/value preview 로, Valkey 는 planned/unverified 로, Elasticsearch/OpenSearch 는 fixture-backed Search slice 로 support claim 이 정렬돼 있다. Search live HTTP 는 active parity lane 을 약화시키지 않고 promotion gate 를 통과할 때까지 deferred 다. |
 | H6 | 더 넓은 paradigm | Cassandra, DynamoDB, graph DB, vector DB, stream source 는 active work 전 명확한 workflow proof 가 필요하다. | MSSQL/Oracle 은 planned RDBMS identity 계약으로, wider source 는 candidate-only 계약으로 정렬된다. Profile target, connection kind, language, catalog model, result envelope, safety policy, fixture strategy 가 문서화되고 runtime support claim 은 생기지 않는다. |
@@ -170,17 +170,17 @@ Runtime Happy Path file smoke.
 H3 DuckDB/file analytics 는 **local-first file analytics 를 RDBMS + `file`
 connection kind 안에서 닫는 정합성 gate**다. DuckDB 를 별도 file-SQL paradigm 으로
 승격하지 않고, `.duckdb` raw SQL, registered local file preview, source-scoped
-SELECT evidence, extension/external-file blocklist, privacy/export boundary 를 현재
-지원 claim 에 맞춘다.
+SELECT UI/API evidence, extension/external-file blocklist, privacy/export
+boundary 를 현재 지원 claim 에 맞춘다.
 
 | Gate | Current owner | H3 boundary |
 |---|---|---|
 | DuckDB profile/modeling | `src/types/dataSource.ts`, `src/types/dataSource.test.ts` | DuckDB is `rdb` + `file`; profile presence does not imply full write/DDL/admin parity. |
 | `.duckdb` raw SQL path | `src-tauri/src/db/duckdb.rs`, `src-tauri/tests/duckdb_browse_query_adapter.rs` | Statement-level raw SQL and table reads are active; structured DDL/write UI parity is not claimed. |
-| File analytics preview basics | `src/lib/tauri/fileAnalytics.test.ts`, `src-tauri/tests/duckdb_file_analytics.rs` | CSV/Parquet/JSON/NDJSON registration and preview are active-session local-file flows. |
-| Source-scoped SELECT wrapper | `src-tauri/tests/duckdb_file_analytics.rs` | Backend read-only SELECT evidence exists; full query editor parity, history, and import workflows are not claimed. |
+| File analytics preview basics | `src/components/query/DuckdbFileAnalyticsDialog.test.tsx`, `src/lib/tauri/fileAnalytics.test.ts`, `src-tauri/tests/duckdb_file_analytics.rs` | CSV/Parquet/JSON/NDJSON registration and preview are active-session local-file flows that do not expose absolute paths. |
+| Source-scoped SELECT dialog | `src/components/query/DuckdbFileAnalyticsDialog.test.tsx`, `src/lib/tauri/fileAnalytics.test.ts`, `src-tauri/tests/duckdb_file_analytics.rs` | Dialog read-only SELECT evidence exists for a registered source alias; global query editor parity, history, import, and automatic export workflows are not claimed. |
 | Extension/external-file gate | `src-tauri/src/db/duckdb.rs`, `docs/product/query-language-support.md` | Extension install/load, extension helper functions, `COPY`, `ATTACH`/`DETACH`, sensitive capability settings, replacement scans, and raw external-file functions are adapter-blocked. |
-| Smoke/verification matrix | `scripts/e2e-smoke-ci.sh`, `e2e/smoke/duckdb.spec.ts`, `docs/contributor-guide/testing-and-quality.md` | DuckDB has a deterministic `.duckdb` desktop smoke for open, catalog/table browse, raw SELECT tabular result/history evidence, and read-only write rejection. Broader file analytics query UI/history/import smoke remains future promotion work before those claims widen. |
+| Smoke/verification matrix | `scripts/e2e-smoke-ci.sh`, `e2e/smoke/duckdb.spec.ts`, `docs/contributor-guide/testing-and-quality.md` | DuckDB has a deterministic `.duckdb` desktop smoke for open, catalog/table browse, raw SELECT tabular result/history evidence, and read-only write rejection. File analytics E2E/history/import smoke remains future promotion work before those claims widen. |
 
 H3 umbrella closure means DuckDB/file analytics support claims, runtime gates, and
 verification routing are aligned. It does not mean DuckDB has full desktop-client
