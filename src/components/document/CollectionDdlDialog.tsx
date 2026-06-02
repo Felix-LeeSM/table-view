@@ -34,6 +34,7 @@ export function CollectionDdlDialog({
   const [name, setName] = useState("");
   const [optionsText, setOptionsText] = useState("");
   const [renameTo, setRenameTo] = useState("");
+  const [dropConfirm, setDropConfirm] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,10 +43,17 @@ export function CollectionDdlDialog({
       setName("");
       setOptionsText("");
       setRenameTo("");
+      setDropConfirm("");
       setError(null);
       setSaving(false);
     }
   }, [open]);
+
+  const dropConfirmed =
+    mode !== "drop" ||
+    (collection !== undefined &&
+      collection !== "" &&
+      dropConfirm === collection);
 
   const handleSave = useCallback(async () => {
     setError(null);
@@ -95,6 +103,11 @@ export function CollectionDdlDialog({
           setSaving(false);
           return;
         }
+        if (dropConfirm !== collection) {
+          setError("Type the collection name to confirm drop.");
+          setSaving(false);
+          return;
+        }
         await dropCollection(connectionId, database, collection, true);
       }
       onSuccess?.();
@@ -112,6 +125,7 @@ export function CollectionDdlDialog({
     name,
     optionsText,
     renameTo,
+    dropConfirm,
     onClose,
     onSuccess,
   ]);
@@ -170,10 +184,28 @@ export function CollectionDdlDialog({
       )}
 
       {mode === "drop" && (
-        <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-          This will permanently delete <strong>{collection}</strong> and every
-          document it contains. This cannot be undone.
-        </p>
+        <>
+          <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            This will permanently delete <strong>{collection}</strong> and every
+            document it contains. This cannot be undone.
+          </p>
+          <label className="flex flex-col gap-1 text-xs">
+            <span>
+              Type{" "}
+              <code className="rounded bg-muted px-1 font-mono text-3xs">
+                {collection}
+              </code>{" "}
+              to confirm
+            </span>
+            <input
+              data-testid="collection-ddl-drop-confirm"
+              value={dropConfirm}
+              onChange={(e) => setDropConfirm(e.target.value)}
+              className="rounded-md border border-border bg-background px-2 py-1 font-mono text-xs"
+              spellCheck={false}
+            />
+          </label>
+        </>
       )}
 
       {error !== null && (
@@ -198,9 +230,10 @@ export function CollectionDdlDialog({
         </Button>
         <Button
           size="sm"
+          variant={mode === "drop" ? "destructive" : "default"}
           data-testid="collection-ddl-save"
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !dropConfirmed}
         >
           {saving ? "Working…" : mode === "drop" ? "Drop" : "Save"}
         </Button>

@@ -137,6 +137,32 @@ describe("CollectionDdlDialog (Sprint 334 — Slice L live wire)", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("keeps drop disabled until the user types the collection name", () => {
+    render(
+      <CollectionDdlDialog
+        open
+        mode="drop"
+        connectionId="conn-mongo"
+        database="app"
+        collection="users"
+        onClose={vi.fn()}
+      />,
+    );
+
+    const save = screen.getByTestId("collection-ddl-save");
+    expect(save).toBeDisabled();
+
+    fireEvent.change(screen.getByTestId("collection-ddl-drop-confirm"), {
+      target: { value: "user" },
+    });
+    expect(save).toBeDisabled();
+
+    fireEvent.change(screen.getByTestId("collection-ddl-drop-confirm"), {
+      target: { value: "users" },
+    });
+    expect(save).not.toBeDisabled();
+  });
+
   it("dispatches drop after the user confirms", async () => {
     dropCollectionMock.mockResolvedValueOnce(undefined);
     const onClose = vi.fn();
@@ -153,6 +179,9 @@ describe("CollectionDdlDialog (Sprint 334 — Slice L live wire)", () => {
       />,
     );
 
+    fireEvent.change(screen.getByTestId("collection-ddl-drop-confirm"), {
+      target: { value: "users" },
+    });
     await user.click(screen.getByTestId("collection-ddl-save"));
 
     await waitFor(() => {
