@@ -14,6 +14,7 @@ describe("useSqlAutocomplete", () => {
       tables: {},
       views: {},
       tableColumnsCache: {},
+      fileAnalyticsSources: {},
     });
   });
 
@@ -408,6 +409,39 @@ describe("useSqlAutocomplete", () => {
     expect(ns.active_users).toBeDefined();
     expect(ns.active_users).toHaveProperty("user_id");
     expect(ns["public.active_users"]).toHaveProperty("user_id");
+  });
+
+  it("includes DuckDB registered file source aliases with metadata columns", () => {
+    useSchemaStore.setState({
+      fileAnalyticsSources: {
+        conn1: [
+          {
+            source: {
+              id: "source-1",
+              alias: "sales_csv",
+              fileName: "sales.csv",
+              kind: "csv",
+              sizeBytes: 128,
+            },
+            columns: [
+              { name: "order_id", dataType: "BIGINT" },
+              { name: "amount", dataType: "DOUBLE" },
+            ],
+            previewSql: "SELECT * FROM sales_csv LIMIT 100",
+          },
+        ],
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", "main", { dbType: "duckdb" }),
+    );
+
+    const ns = result.current as Record<string, Record<string, unknown>>;
+    expect(ns).toHaveProperty("sales_csv");
+    expect(ns.sales_csv).toHaveProperty("order_id");
+    expect(ns.sales_csv).toHaveProperty("amount");
+    expect(ns["main.sales_csv"]).toHaveProperty("order_id");
   });
 
   // ── Sprint 82: dialect-aware identifier quoting ─────────────────────────

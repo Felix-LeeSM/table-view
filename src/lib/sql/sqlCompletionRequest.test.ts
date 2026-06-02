@@ -28,6 +28,21 @@ const pgExtension = (name: string) => ({
   comment: null,
 });
 
+const duckdbSource = () => ({
+  source: {
+    id: "source-1",
+    alias: "sales_csv",
+    fileName: "sales.csv",
+    kind: "csv" as const,
+    sizeBytes: 128,
+  },
+  columns: [
+    { name: "order_id", dataType: "BIGINT" },
+    { name: "amount", dataType: "DOUBLE" },
+  ],
+  previewSql: "SELECT * FROM sales_csv LIMIT 100",
+});
+
 function requestFor(dbType: DatabaseType, serverVersion = "test-version") {
   const snapshot = emptySnapshot();
   snapshot.tables.conn1 = {
@@ -190,5 +205,57 @@ describe("buildSqlCompletionRequest", () => {
 
     expect(req.catalog.extensions).toEqual([pgExtension("pgcrypto")]);
     expect(req.cacheState.extensionsLoaded).toBe(true);
+  });
+
+  it("adds DuckDB registered file sources and columns to completion catalog", () => {
+    const snapshot = emptySnapshot();
+    snapshot.fileAnalyticsSources = {
+      conn1: [duckdbSource()],
+    };
+    const ctx = buildSqlCompletionContext({
+      ...snapshot,
+      connectionId: "conn1",
+      database: "app",
+      dbType: "duckdb",
+      catalogRevision: "duckdb-source-rev",
+    });
+
+    const req = buildSqlCompletionRequest("SELECT * FROM sales", 19, ctx);
+
+    expect(req.catalog.objects).toContainEqual({
+      kind: "table",
+      schema: "main",
+      name: "sales_csv",
+      qualifiedName: "main.sales_csv",
+      rowCount: null,
+    });
+    expect(req.catalog.columns).toEqual(
+      expect.arrayContaining([
+        {
+          schema: "main",
+          table: "sales_csv",
+          name: "order_id",
+          qualifiedTableName: "main.sales_csv",
+          qualifiedName: "main.sales_csv.order_id",
+          dataType: "BIGINT",
+          nullable: true,
+          isPrimaryKey: false,
+          isForeignKey: false,
+        },
+        {
+          schema: "main",
+          table: "sales_csv",
+          name: "amount",
+          qualifiedTableName: "main.sales_csv",
+          qualifiedName: "main.sales_csv.amount",
+          dataType: "DOUBLE",
+          nullable: true,
+          isPrimaryKey: false,
+          isForeignKey: false,
+        },
+      ]),
+    );
+    expect(req.cacheState.objectsLoaded).toBe(true);
+    expect(req.cacheState.columnsLoaded).toBe(true);
   });
 });
