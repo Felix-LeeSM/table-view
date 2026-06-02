@@ -1,4 +1,4 @@
-import { $, browser, expect } from "@wdio/globals";
+import { $, $$, browser, expect } from "@wdio/globals";
 import duckdb, {
   type Connection as NativeDuckdbConnection,
   type Database as NativeDuckdbDatabase,
@@ -95,8 +95,8 @@ describe("DuckDB file workflow smoke", () => {
       );
       await runQuery();
 
-      await waitForWorkspaceTextAll(
-        ["read-only"],
+      await waitForVisibleAlertTextAny(
+        ["read-only", "read only"],
         15000,
         "DuckDB read-only write rejection did not render",
       );
@@ -216,18 +216,45 @@ async function waitForGlobalHistoryEvidence(rawFragments: string[]) {
           .querySelector<HTMLElement>('[data-testid="global-log-new-entry"]')
           ?.click();
       });
-      return await browser.execute((expectedFragments) => {
-        const bodyText = document.body.textContent ?? "";
-        return expectedFragments.every((fragment) =>
-          bodyText.includes(fragment),
-        );
-      }, rawFragments);
+      const panelText = (
+        ((await panel.getProperty("textContent")) as string) ?? ""
+      ).toLowerCase();
+      return rawFragments.every((fragment) =>
+        panelText.includes(fragment.toLowerCase()),
+      );
     },
     {
       timeout: 15000,
       timeoutMsg: `global query log missing raw entries: ${rawFragments.join(
         ", ",
       )}`,
+    },
+  );
+}
+
+async function waitForVisibleAlertTextAny(
+  snippets: string[],
+  timeout: number,
+  timeoutMsg: string,
+) {
+  await switchToWorkspaceWindow();
+  await browser.waitUntil(
+    async () => {
+      const alerts = await $$('[role="alert"]');
+      for (const alert of alerts) {
+        if (!(await alert.isDisplayed())) continue;
+        const text = (
+          ((await alert.getProperty("textContent")) as string) ?? ""
+        ).toLowerCase();
+        if (snippets.some((snippet) => text.includes(snippet.toLowerCase()))) {
+          return true;
+        }
+      }
+      return false;
+    },
+    {
+      timeout,
+      timeoutMsg,
     },
   );
 }
