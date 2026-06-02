@@ -3,8 +3,8 @@
 #
 # Reads git pre-push stdin when available:
 #   <local-ref> <local-oid> <remote-ref> <remote-oid>
-# Excludes commits already present on origin remotes; falls back to @{u}..HEAD
-# or commits not in origin remotes for manual runs.
+# Excludes commits already present on remote refs; falls back to @{u}..HEAD
+# or commits not in remote refs for manual runs.
 
 set -euo pipefail
 
@@ -24,9 +24,9 @@ append_commits_for_range() {
   fi
 
   if [ "$remote_oid" = "$ZERO_OID" ]; then
-    git rev-list "$local_oid" --not --remotes=origin >>"$TMP_COMMITS"
+    git rev-list "$local_oid" --not --remotes >>"$TMP_COMMITS"
   else
-    git rev-list "${remote_oid}..${local_oid}" --not --remotes=origin >>"$TMP_COMMITS"
+    git rev-list "${remote_oid}..${local_oid}" --not --remotes >>"$TMP_COMMITS"
   fi
 }
 
@@ -43,9 +43,9 @@ fallback_current_branch() {
   local upstream
   upstream="$(git rev-parse --verify --quiet '@{u}' 2>/dev/null || true)"
   if [ -n "$upstream" ]; then
-    git rev-list "${upstream}..HEAD" >>"$TMP_COMMITS"
+    git rev-list "${upstream}..HEAD" --not --remotes >>"$TMP_COMMITS"
   else
-    git rev-list HEAD --not --remotes=origin >>"$TMP_COMMITS"
+    git rev-list HEAD --not --remotes >>"$TMP_COMMITS"
   fi
 }
 
