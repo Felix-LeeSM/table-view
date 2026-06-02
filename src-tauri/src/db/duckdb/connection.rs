@@ -453,10 +453,12 @@ fn open_connection(settings: &DuckdbConnectionSettings) -> Result<Connection, Ap
     open_connection_with_external_access(settings, false)
 }
 
-pub(super) fn open_file_analytics_connection(
-    settings: &DuckdbConnectionSettings,
-) -> Result<Connection, AppError> {
-    open_connection_with_external_access(settings, true)
+pub(super) fn open_file_analytics_connection() -> Result<Connection, AppError> {
+    let config = Config::default()
+        .enable_external_access(true)
+        .and_then(|config| config.enable_autoload_extension(false))
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+    Connection::open_in_memory_with_flags(config).map_err(|e| AppError::Connection(e.to_string()))
 }
 
 fn open_connection_with_external_access(

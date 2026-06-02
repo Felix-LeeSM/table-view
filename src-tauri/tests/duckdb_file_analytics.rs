@@ -97,6 +97,51 @@ async fn duckdb_file_analytics_previews_and_queries_csv_without_exposing_path() 
 }
 
 #[tokio::test]
+async fn duckdb_file_analytics_requires_the_registered_source_alias() {
+    let (dir, adapter) = connected_fixture().await;
+    let csv_path = dir.path().join("people.csv");
+    fs::write(&csv_path, "id,name\n1,Ada\n").unwrap();
+    let source = adapter
+        .register_file_analytics_source(csv_path.to_str().unwrap())
+        .await
+        .unwrap();
+    adapter
+        .execute_sql("CREATE TABLE sink (id INTEGER)", None)
+        .await
+        .unwrap();
+
+    for sql in [
+        "VALUES (1)".to_string(),
+        "SELECT 1".to_string(),
+        format!("SELECT 1 AS \"{}\"", source.alias),
+        "SELECT * FROM sink".to_string(),
+    ] {
+        let unscoped = adapter.execute_file_analytics_query(&source.id, &sql).await;
+        assert!(
+            matches!(unscoped, Err(AppError::Unsupported(_))),
+            "{sql} should require the registered source alias, got {unscoped:?}"
+        );
+    }
+
+    let scoped = adapter
+        .execute_file_analytics_query(&source.id, &format!("SELECT * FROM \"{}\"", source.alias))
+        .await
+        .unwrap();
+    assert_eq!(scoped.result.rows[0][1], serde_json::json!("Ada"));
+
+    let mixed_db_table = adapter
+        .execute_file_analytics_query(
+            &source.id,
+            &format!("SELECT sink.id FROM sink JOIN \"{}\" ON true", source.alias),
+        )
+        .await;
+    assert!(
+        matches!(mixed_db_table, Err(AppError::Database(_))),
+        "file analytics must not read existing database tables, got {mixed_db_table:?}"
+    );
+}
+
+#[tokio::test]
 async fn duckdb_file_analytics_supports_json_ndjson_and_parquet_sources() {
     let (dir, adapter) = connected_fixture().await;
     let json_path = dir.path().join("people.json");
