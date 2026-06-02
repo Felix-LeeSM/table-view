@@ -148,7 +148,8 @@ semantics, or a broad desktop E2E suite.
 SQLite lane closure for #196/#242 means the file-DBMS write/parity,
 extension-boundary, and smoke inventory is explicit. It does not mean SQLite has
 structured DDL parity, automatic ALTER rebuilds, extension capability semantics,
-or a routine desktop E2E smoke path.
+sqlite-cli execution, or broader desktop scenarios beyond the wired deterministic
+Runtime Happy Path file smoke.
 
 | Gate | Current owner | SQLite boundary |
 |---|---|---|

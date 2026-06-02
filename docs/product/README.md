@@ -20,8 +20,8 @@
 - RDBMS workbench: catalog/tree browse, tabular result rendering, raw query path,
   bounded DML/row-edit path, source-specific safety confirmation. PostgreSQL 이
   routine desktop smoke-backed 주 lane 이고 MySQL/MariaDB 는 runtime smoke
-  baseline 이 있다. SQLite/DuckDB 는 adapter/unit/integration/fixture evidence
-  범위로 좁힌다.
+  baseline 이 있다. SQLite 는 deterministic file workflow smoke baseline 이 있고,
+  DuckDB 는 adapter/unit/integration/fixture evidence 범위로 좁힌다.
 - SQLite/DuckDB file workflow: local file open/create/browse/query 중심. SQLite
   는 writable-file DML 과 key-projected row edit, DuckDB 는 `.duckdb` catalog/read
   query 와 registered local CSV/Parquet/JSON/NDJSON preview slice 를 지원한다.
