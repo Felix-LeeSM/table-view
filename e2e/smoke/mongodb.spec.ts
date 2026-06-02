@@ -9,7 +9,6 @@ import {
   openNewQueryTab,
   runQuery,
   step,
-  typeQuery,
   waitForDialogTextAll,
   waitForGridTextAll,
   waitForLauncher,
@@ -22,6 +21,52 @@ const MONA_EMAIL = "mona@example.com";
 
 function monaReadQuery() {
   return `db.${SMOKE_COLLECTION}.find({email:"${MONA_EMAIL}"}, {name:1,email:1,_id:0}).sort({name:1}).limit(1)`;
+}
+
+async function typeMongoQuery(query: string) {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((nextQuery) => {
+        type CodeMirrorView = {
+          state: { doc: { toString(): string } };
+          focus(): void;
+          dispatch(update: {
+            changes: { from: number; to: number; insert: string };
+          }): void;
+        };
+        type CodeMirrorContent = HTMLElement & {
+          cmTile?: { root?: { view?: CodeMirrorView } };
+        };
+
+        const content = Array.from(
+          document.querySelectorAll<CodeMirrorContent>(".cm-content"),
+        ).find((element) => {
+          const rect = element.getBoundingClientRect();
+          const style = window.getComputedStyle(element);
+          return (
+            rect.width > 0 &&
+            rect.height > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden"
+          );
+        });
+        const view = content?.cmTile?.root?.view;
+        if (!view) return false;
+
+        const currentQuery = view.state.doc.toString();
+        view.focus();
+        if (currentQuery !== nextQuery) {
+          view.dispatch({
+            changes: { from: 0, to: currentQuery.length, insert: nextQuery },
+          });
+        }
+        return view.state.doc.toString() === nextQuery;
+      }, query),
+    {
+      timeout: 5000,
+      timeoutMsg: "MongoDB Query Editor did not accept direct input",
+    },
+  );
 }
 
 async function selectMongoQueryDatabase(database: string) {
@@ -166,7 +211,7 @@ describe("MongoDB smoke", () => {
       async () => {
         await openNewQueryTab();
         await selectMongoQueryDatabase(DATABASE_NAME);
-        await typeQuery(monaReadQuery());
+        await typeMongoQuery(monaReadQuery());
         await runQuery();
         await waitForGridTextAll(
           [MONA_EMAIL, editedName],
@@ -179,7 +224,7 @@ describe("MongoDB smoke", () => {
     await step(
       "confirm destructive runCommand is gated before mutation",
       async () => {
-        await typeQuery(
+        await typeMongoQuery(
           `db.runCommand({delete:"${SMOKE_COLLECTION}", deletes:[{q:{email:"${MONA_EMAIL}"}, limit:0}]})`,
         );
         await runQuery();
@@ -199,7 +244,7 @@ describe("MongoDB smoke", () => {
     await step(
       "verify destructive confirmation cancel left data intact",
       async () => {
-        await typeQuery(monaReadQuery());
+        await typeMongoQuery(monaReadQuery());
         await runQuery();
         await waitForGridTextAll(
           [MONA_EMAIL, editedName],
