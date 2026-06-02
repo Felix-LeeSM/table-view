@@ -109,6 +109,7 @@ export function useSqlAutocomplete(
   const tables = useSchemaStore((s) => s.tables);
   const views = useSchemaStore((s) => s.views);
   const columnsCache = useSchemaStore((s) => s.tableColumnsCache);
+  const fileAnalyticsSources = useSchemaStore((s) => s.fileAnalyticsSources);
   const opts = normalizeOptions(arg);
   const { tableColumns, dialect, dbType } = opts;
 
@@ -321,11 +322,24 @@ export function useSqlAutocomplete(
       if (!ns[bareName]) ns[bareName] = unionColumns(candidates);
     }
 
+    if (dbType === "duckdb") {
+      for (const metadata of fileAnalyticsSources[connectionId] ?? []) {
+        const sourceName = metadata.source.alias;
+        const colNs: Record<string, SQLNamespace> = {};
+        for (const column of metadata.columns) colNs[column.name] = {};
+        ns[sourceName] = colNs;
+        ns[`main.${sourceName}`] = colNs;
+        addQuotedAlias(sourceName, colNs);
+        addFullyQuotedAlias("main", sourceName, colNs);
+      }
+    }
+
     return ns as SQLNamespace;
   }, [
     tables,
     views,
     columnsCache,
+    fileAnalyticsSources,
     connectionId,
     db,
     tableColumns,

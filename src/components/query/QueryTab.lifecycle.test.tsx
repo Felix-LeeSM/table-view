@@ -20,11 +20,15 @@ import {
   mockAggregateDocuments,
   mockVerifyActiveDb,
   mockEditorProps,
+  makeConn,
   makeQueryTab,
   resetQueryTabStores,
 } from "./__tests__/queryTabTestHelpers";
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
+import type { SqlCompletionContext } from "@lib/sql/sqlCompletionContext";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
 beforeEach(() => {
   setupTauriMock({
     executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
@@ -55,12 +59,15 @@ vi.mock("./SqlQueryEditor", async () => {
       onExecute: () => void;
       sql: string;
       sqlDialect?: SQLDialect;
+      completionContext?: SqlCompletionContext;
     }
   >(function MockSqlQueryEditor(props) {
     mockEditorProps.lastDialect = props.sqlDialect;
     mockEditorProps.dialectHistory.push(props.sqlDialect);
     mockEditorProps.lastMongoExtensions = undefined;
     mockEditorProps.mongoExtensionsHistory.push(undefined);
+    mockEditorProps.lastCompletionContext = props.completionContext;
+    mockEditorProps.completionContextHistory.push(props.completionContext);
     mockEditorProps.lastParadigm = "rdb";
     mockEditorProps.lastQueryMode = "sql";
     return (
@@ -134,6 +141,59 @@ vi.mock("@lib/sql/sqlUtils", () => ({
 describe("QueryTab — lifecycle", () => {
   beforeEach(() => {
     resetQueryTabStores();
+  });
+
+  it("passes DuckDB registered source metadata into the live completion context", () => {
+    useConnectionStore.setState({
+      connections: [makeConn({ dbType: "duckdb", database: "main" })],
+    });
+    useSchemaStore.setState({
+      schemas: {},
+      tables: {},
+      views: {},
+      functions: {},
+      postgresExtensions: {},
+      tableColumnsCache: {},
+      fileAnalyticsSources: {
+        conn1: [
+          {
+            source: {
+              id: "source-1",
+              alias: "sales_csv",
+              fileName: "sales.csv",
+              kind: "csv",
+              sizeBytes: 128,
+            },
+            columns: [
+              { name: "order_id", dataType: "BIGINT" },
+              { name: "amount", dataType: "DOUBLE" },
+            ],
+            previewSql: "SELECT * FROM sales_csv LIMIT 100",
+          },
+        ],
+      },
+    });
+
+    render(<QueryTab tab={makeQueryTab({ database: "main" })} />);
+
+    expect(
+      mockEditorProps.lastCompletionContext?.catalog.objects,
+    ).toContainEqual(
+      expect.objectContaining({
+        schema: "main",
+        name: "sales_csv",
+        qualifiedName: "main.sales_csv",
+      }),
+    );
+    expect(mockEditorProps.lastCompletionContext?.catalog.columns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "sales_csv",
+          name: "order_id",
+          qualifiedName: "main.sales_csv.order_id",
+        }),
+      ]),
+    );
   });
 
   it("renders editor and result grid in idle state", () => {

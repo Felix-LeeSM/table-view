@@ -1,4 +1,5 @@
 import type { DatabaseType } from "@/types/connection";
+import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import type {
   ColumnInfo,
   FunctionInfo,
@@ -28,6 +29,7 @@ export interface SqlCompletionCatalogStoreSnapshot {
   functions: ByConn<BySchema<FunctionInfo[]>>;
   tableColumnsCache: ByConn<BySchema<ByTable<ColumnInfo[]>>>;
   postgresExtensions?: ByConn<PostgresExtensionInfo[]>;
+  fileAnalyticsSources?: Record<string, FileAnalyticsSourceMetadata[]>;
 }
 
 export interface BuildSqlCompletionContextInput extends SqlCompletionCatalogStoreSnapshot {
@@ -141,13 +143,27 @@ export function buildSqlCompletionContext(
     getSqlDialectProfile("ansi");
   const byConnDb = selectDb(input, input.connectionId, input.database);
   const explicitSchemas = byConnDb.schemas.map((s) => s.name);
+  const fileAnalyticsSources =
+    profile.id === "duckdb"
+      ? (input.fileAnalyticsSources?.[input.connectionId] ?? [])
+      : [];
+  const fileAnalyticsObjects = flattenFileAnalyticsObjects(
+    fileAnalyticsSources,
+    inferFileAnalyticsSchema(profile.id),
+  );
+  const fileAnalyticsColumns = flattenFileAnalyticsColumns(
+    fileAnalyticsSources,
+    inferFileAnalyticsSchema(profile.id),
+  );
   const objects = [
     ...flattenTables(byConnDb.tables),
     ...flattenViews(byConnDb.views),
+    ...fileAnalyticsObjects,
   ].sort(compareCatalogObject);
-  const columns = flattenColumns(byConnDb.tableColumnsCache).sort(
-    compareCatalogColumn,
-  );
+  const columns = [
+    ...flattenColumns(byConnDb.tableColumnsCache),
+    ...fileAnalyticsColumns,
+  ].sort(compareCatalogColumn);
   const functions = flattenFunctions(byConnDb.functions).sort(
     compareCatalogFunction,
   );
@@ -198,10 +214,13 @@ export function buildSqlCompletionContext(
     },
     cacheState: {
       schemasLoaded: byConnDb.schemasLoaded,
-      objectsLoaded: byConnDb.tablesLoaded || byConnDb.viewsLoaded,
+      objectsLoaded:
+        byConnDb.tablesLoaded ||
+        byConnDb.viewsLoaded ||
+        fileAnalyticsSources.length > 0,
       tablesLoaded: byConnDb.tablesLoaded,
       viewsLoaded: byConnDb.viewsLoaded,
-      columnsLoaded: byConnDb.columnsLoaded,
+      columnsLoaded: byConnDb.columnsLoaded || fileAnalyticsColumns.length > 0,
       functionsLoaded: byConnDb.functionsLoaded,
       extensionsLoaded: supportsExtensionInventory && byConnDb.extensionsLoaded,
     },
@@ -310,6 +329,41 @@ function flattenColumns(
   return columns;
 }
 
+function flattenFileAnalyticsObjects(
+  sources: readonly FileAnalyticsSourceMetadata[],
+  schema: string | null,
+): SqlCompletionCatalogObject[] {
+  if (!schema) return [];
+  return sources.map((metadata) => ({
+    kind: "table",
+    schema,
+    name: metadata.source.alias,
+    qualifiedName: qualify(schema, metadata.source.alias),
+    rowCount: null,
+  }));
+}
+
+function flattenFileAnalyticsColumns(
+  sources: readonly FileAnalyticsSourceMetadata[],
+  schema: string | null,
+): SqlCompletionCatalogColumn[] {
+  if (!schema) return [];
+  return sources.flatMap((metadata) => {
+    const qualifiedTableName = qualify(schema, metadata.source.alias);
+    return metadata.columns.map((column) => ({
+      schema,
+      table: metadata.source.alias,
+      name: column.name,
+      qualifiedTableName,
+      qualifiedName: `${qualifiedTableName}.${column.name}`,
+      dataType: column.dataType,
+      nullable: true,
+      isPrimaryKey: false,
+      isForeignKey: false,
+    }));
+  });
+}
+
 function flattenFunctions(
   functions: BySchema<FunctionInfo[]>,
 ): SqlCompletionCatalogFunction[] {
@@ -358,6 +412,10 @@ function inferDefaultSchema(
   if (dialect === "sqlite" && schemas.includes("main")) return "main";
   if (dialect === "duckdb" && schemas.includes("main")) return "main";
   return schemas[0] ?? null;
+}
+
+function inferFileAnalyticsSchema(dialect: SqlDialectId): string | null {
+  return dialect === "duckdb" ? "main" : null;
 }
 
 function inferSearchPath(
