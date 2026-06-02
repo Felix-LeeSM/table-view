@@ -1,7 +1,7 @@
 use table_view_lib::{
     db::{
-        DbAdapter, KvAdapter, KvKeyScanRequest, KvSetStringRequest, KvStreamReadRequest, KvValue,
-        KvValueReadRequest, KvWriteSafety, RedisAdapter,
+        DbAdapter, KvAdapter, KvCommandRequest, KvKeyScanRequest, KvSetStringRequest,
+        KvStreamReadRequest, KvValue, KvValueReadRequest, KvWriteSafety, RedisAdapter,
     },
     models::{ConnectionConfig, DatabaseType},
 };
@@ -115,6 +115,42 @@ async fn redis_testcontainer_covers_live_kv_catalog_values_and_streams() {
         .await
         .unwrap();
     assert!(write.changed);
+
+    let command_result = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "HGETALL tv:hash".into(),
+                database: Some(2),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(command_result.columns[0].name, "field");
+    assert_eq!(command_result.rows[0][0], serde_json::json!("name"));
+
+    let stream_result = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "XRANGE tv:events - + COUNT 10".into(),
+                database: Some(2),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(stream_result.columns[1].name, "fields");
+
+    assert!(adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "FLUSHDB".into(),
+                database: Some(2),
+            },
+            None,
+        )
+        .await
+        .is_err());
 }
 
 async fn seed_redis(port: u16) {

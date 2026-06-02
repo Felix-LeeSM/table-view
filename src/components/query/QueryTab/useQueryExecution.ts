@@ -26,6 +26,7 @@ import {
   createMongoIndex,
   dropMongoIndex,
   runMongoCommand,
+  executeKvCommand,
   executeSearchQuery,
   type CreateMongoIndexRequest,
 } from "@lib/tauri";
@@ -390,6 +391,21 @@ function numberField(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
+}
+
+function parseKvDatabase(database: string | undefined): number | undefined {
+  if (database === undefined || database.trim().length === 0) {
+    return undefined;
+  }
+  const trimmed = database.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error("Redis database must be an integer between 0 and 65535.");
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
+    throw new Error("Redis database must be an integer between 0 and 65535.");
+  }
+  return parsed;
 }
 
 function isQueryCancellationMessage(message: string): boolean {
@@ -2357,6 +2373,37 @@ export function useQueryExecution({
       return;
     }
 
+    if (tab.paradigm === "kv") {
+      let database: number | undefined;
+      try {
+        database = parseKvDatabase(workspaceDb);
+      } catch (err) {
+        updateQueryState(tab.id, {
+          status: "error",
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+
+      const queryId = `${tab.id}-${Date.now()}`;
+      updateQueryState(tab.id, { status: "running", queryId });
+      try {
+        const result = await executeKvCommand(
+          tab.connectionId,
+          { command: sql, database },
+          queryId,
+        );
+        completeQuery(tab.id, queryId, result);
+      } catch (err) {
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+      return;
+    }
+
     if (tab.paradigm === "search") {
       let request: SearchQueryRequest;
       try {
@@ -2704,6 +2751,7 @@ export function useQueryExecution({
     tab.paradigm,
     tab.database,
     tab.collection,
+    workspaceDb,
     canCancelQuery,
     dbType,
     dispatchMongoshCall,

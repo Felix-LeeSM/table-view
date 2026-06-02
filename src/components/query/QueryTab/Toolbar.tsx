@@ -109,6 +109,7 @@ export default function QueryTabToolbar({
   const runDisabledTooltip = documentNeedsDb
     ? "Pick a database from the toolbar chip to run collection commands. Admin commands (`db.runCommand({...})`) work without one."
     : undefined;
+  const isRdbTab = tab.paradigm === "rdb";
 
   return (
     <div className="flex items-center gap-2 border-b border-border bg-secondary px-2 py-1">
@@ -158,7 +159,7 @@ export default function QueryTabToolbar({
           <span className="text-3xs text-muted-foreground">{"⌘⏎"}</span>
         </Button>
       )}
-      {!isDocument && (
+      {isRdbTab && (
         <Button
           variant="ghost"
           size="xs"
@@ -172,7 +173,7 @@ export default function QueryTabToolbar({
           <span className="text-3xs text-muted-foreground">{"⌘⇧⏎"}</span>
         </Button>
       )}
-      {!isDocument && canExplain && (
+      {isRdbTab && canExplain && (
         <Button
           variant="ghost"
           size="xs"
@@ -185,7 +186,7 @@ export default function QueryTabToolbar({
           <span>Explain</span>
         </Button>
       )}
-      {!isDocument && (
+      {isRdbTab && (
         <Button
           variant="ghost"
           size="xs"

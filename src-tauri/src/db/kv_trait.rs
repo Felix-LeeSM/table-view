@@ -4,9 +4,9 @@ use crate::error::AppError;
 
 use super::types::BoxFuture;
 use super::{
-    DbAdapter, KvDatabaseInfo, KvDeleteRequest, KvKeyScanPage, KvKeyScanRequest, KvMutationResult,
-    KvSetStringRequest, KvStreamReadRequest, KvStreamReadResult, KvTtlUpdateRequest,
-    KvValueEnvelope, KvValueReadRequest,
+    DbAdapter, KvCommandRequest, KvDatabaseInfo, KvDeleteRequest, KvKeyScanPage, KvKeyScanRequest,
+    KvMutationResult, KvSetStringRequest, KvStreamReadRequest, KvStreamReadResult,
+    KvTtlUpdateRequest, KvValueEnvelope, KvValueReadRequest, RdbQueryResult,
 };
 
 pub trait KvAdapter: DbAdapter {
@@ -50,6 +50,18 @@ pub trait KvAdapter: DbAdapter {
         Box::pin(async {
             Err(AppError::Unsupported(
                 "This key-value adapter does not read values".into(),
+            ))
+        })
+    }
+
+    fn execute_command<'a>(
+        &'a self,
+        _request: KvCommandRequest,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This key-value adapter does not execute Redis commands".into(),
             ))
         })
     }

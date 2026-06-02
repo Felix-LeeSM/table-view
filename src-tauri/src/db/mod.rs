@@ -38,12 +38,12 @@ pub use sqlite::SqliteAdapter;
 pub use active::ActiveAdapter;
 pub use kv_trait::KvAdapter;
 pub use kv_types::{
-    bytes_to_kv_string, KvDatabaseInfo, KvDeleteRequest, KvHashField, KvHashValue, KvIndexedValue,
-    KvJsonValue, KvKeyMetadata, KvKeyScanPage, KvKeyScanRequest, KvKeyType, KvListValue,
-    KvMutationResult, KvScoredValue, KvSetStringRequest, KvSetValue, KvStreamEntry,
-    KvStreamReadRequest, KvStreamReadResult, KvStringEncoding, KvStringValue, KvTtl, KvTtlState,
-    KvTtlUpdate, KvTtlUpdateRequest, KvValue, KvValueEnvelope, KvValueReadRequest, KvWriteSafety,
-    KvZSetValue,
+    bytes_to_kv_string, KvCommandRequest, KvDatabaseInfo, KvDeleteRequest, KvHashField,
+    KvHashValue, KvIndexedValue, KvJsonValue, KvKeyMetadata, KvKeyScanPage, KvKeyScanRequest,
+    KvKeyType, KvListValue, KvMutationResult, KvScoredValue, KvSetStringRequest, KvSetValue,
+    KvStreamEntry, KvStreamReadRequest, KvStreamReadResult, KvStringEncoding, KvStringValue, KvTtl,
+    KvTtlState, KvTtlUpdate, KvTtlUpdateRequest, KvValue, KvValueEnvelope, KvValueReadRequest,
+    KvWriteSafety, KvZSetValue,
 };
 pub use traits::{DbAdapter, DocumentAdapter, RdbAdapter, SearchAdapter};
 pub use types::{

@@ -1,9 +1,9 @@
 use crate::commands::connection::AppState;
 use crate::commands::{not_connected, register_cancel_token, release_cancel_token};
 use crate::db::{
-    KvDatabaseInfo, KvDeleteRequest, KvKeyScanPage, KvKeyScanRequest, KvMutationResult,
-    KvSetStringRequest, KvStreamReadRequest, KvStreamReadResult, KvTtlUpdateRequest,
-    KvValueEnvelope, KvValueReadRequest,
+    KvCommandRequest, KvDatabaseInfo, KvDeleteRequest, KvKeyScanPage, KvKeyScanRequest,
+    KvMutationResult, KvSetStringRequest, KvStreamReadRequest, KvStreamReadResult,
+    KvTtlUpdateRequest, KvValueEnvelope, KvValueReadRequest, RdbQueryResult,
 };
 use crate::error::AppError;
 use crate::models::ConnectionStatus;
@@ -138,6 +138,38 @@ pub async fn get_kv_value(
     query_id: Option<String>,
 ) -> Result<KvValueEnvelope, AppError> {
     get_kv_value_inner(state.inner(), &connection_id, request, query_id.as_deref()).await
+}
+
+async fn execute_kv_command_inner(
+    state: &AppState,
+    connection_id: &str,
+    request: KvCommandRequest,
+    query_id: Option<&str>,
+) -> Result<RdbQueryResult, AppError> {
+    let cancel_handle = register_cancel_token(state, query_id).await;
+    let result = async {
+        let connections = state.active_connections.lock().await;
+        let active = connections
+            .get(connection_id)
+            .ok_or_else(|| not_connected(connection_id))?;
+        active
+            .as_kv()?
+            .execute_command(request, cancel_handle.as_ref().map(|(_, token)| token))
+            .await
+    }
+    .await;
+    release_cancel_token(state, &cancel_handle).await;
+    result
+}
+
+#[tauri::command]
+pub async fn execute_kv_command(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    request: KvCommandRequest,
+    query_id: Option<String>,
+) -> Result<RdbQueryResult, AppError> {
+    execute_kv_command_inner(state.inner(), &connection_id, request, query_id.as_deref()).await
 }
 
 async fn set_kv_string_value_inner(
@@ -293,6 +325,19 @@ mod tests {
             Err(AppError::Unsupported(_))
         ));
         assert!(matches!(
+            execute_kv_command_inner(
+                &state,
+                "kv",
+                KvCommandRequest {
+                    command: "GET session:1".into(),
+                    database: Some(0),
+                },
+                Some("command"),
+            )
+            .await,
+            Err(AppError::Unsupported(_))
+        ));
+        assert!(matches!(
             set_kv_string_value_inner(
                 &state,
                 "kv",
@@ -375,6 +420,19 @@ mod tests {
         ));
         assert!(matches!(
             get_kv_value_inner(&state, "missing", value_request(), Some("q")).await,
+            Err(AppError::NotFound(_))
+        ));
+        assert!(matches!(
+            execute_kv_command_inner(
+                &state,
+                "missing",
+                KvCommandRequest {
+                    command: "GET session:1".into(),
+                    database: Some(0),
+                },
+                Some("q"),
+            )
+            .await,
             Err(AppError::NotFound(_))
         ));
         assert!(state.query_tokens.lock().await.is_empty());
