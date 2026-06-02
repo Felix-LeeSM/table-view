@@ -225,6 +225,17 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
         />
       </div>
 
+      <div
+        className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 text-3xs text-muted-foreground"
+        data-testid="redis-scan-status"
+      >
+        <span>limit {KEY_SCAN_LIMIT}</span>
+        <span>
+          {keys.length} key{keys.length === 1 ? "" : "s"}
+          {nextCursor !== "0" ? ` · cursor ${nextCursor}` : ""}
+        </span>
+      </div>
+
       {error && (
         <div
           role="alert"
@@ -297,7 +308,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
               {loadingKeys ? (
                 <Loader2 size={12} className="animate-spin" />
               ) : null}
-              More
+              More from cursor {nextCursor}
             </Button>
           </div>
         )}
@@ -392,6 +403,17 @@ function KvValuePreview({
           <Timer size={11} aria-hidden />
           {formatKvTtl(value.metadata.ttl)}
         </span>
+      </div>
+      <div className="mb-2 flex flex-wrap items-center gap-1.5 text-3xs text-muted-foreground">
+        <span className="rounded bg-muted px-1.5 py-0.5">
+          {value.metadata.keyType}
+        </span>
+        {typeof value.metadata.length === "number" && (
+          <span>{formatCount(value.metadata.length)} item(s)</span>
+        )}
+        {typeof value.metadata.memoryBytes === "number" && (
+          <span>{formatBytes(value.metadata.memoryBytes)}</span>
+        )}
       </div>
       <pre className="max-h-48 overflow-auto rounded border border-border bg-muted/40 p-2 text-3xs text-foreground">
         {renderValueText(value)}

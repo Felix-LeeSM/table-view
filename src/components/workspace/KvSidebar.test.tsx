@@ -174,6 +174,162 @@ describe("KvSidebar", () => {
       /no keys match pattern session:\*/i,
     );
   });
+
+  it("exposes SCAN cursor state and appends the next page without blocking the first page", async () => {
+    invokeMock.mockImplementation((command: string, payload?: unknown) => {
+      if (command === "list_kv_databases") {
+        return Promise.resolve([{ name: "0", index: 0, keyCount: 2 }]);
+      }
+      if (command === "current_kv_database") return Promise.resolve(0);
+      if (command === "scan_kv_keys") {
+        const cursor = (payload as { request: { cursor: string } }).request
+          .cursor;
+        return Promise.resolve(
+          cursor === "42"
+            ? {
+                ...defaultKeyPage(),
+                cursor: "42",
+                nextCursor: "0",
+                done: true,
+                keys: [
+                  {
+                    key: "session:2",
+                    keyType: "string",
+                    ttl: { state: "expires", seconds: 30 },
+                    length: 5,
+                    memoryBytes: 96,
+                  },
+                ],
+              }
+            : {
+                ...defaultKeyPage(),
+                nextCursor: "42",
+                done: false,
+              },
+        );
+      }
+      if (command === "get_kv_value") {
+        return Promise.resolve(defaultValueEnvelope());
+      }
+      return Promise.reject(new Error(`Unhandled command: ${command}`));
+    });
+
+    render(<KvSidebar connectionId="redis-1" />);
+
+    expect(await screen.findByText("user:1")).toBeInTheDocument();
+    expect(screen.getByTestId("redis-scan-status")).toHaveTextContent(
+      /limit 100/i,
+    );
+    expect(screen.getByTestId("redis-scan-status")).toHaveTextContent(
+      /cursor 42/i,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /more from cursor 42/i }),
+    );
+
+    expect(await screen.findByText("session:2")).toBeInTheDocument();
+    const requests = scanRequests();
+    expect(requests[requests.length - 1]).toMatchObject({
+      cursor: "42",
+      limit: 100,
+    });
+    expect(screen.getByText("user:1")).toBeInTheDocument();
+  });
+
+  it("renders stream metadata in the key row and value preview", async () => {
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_kv_databases") {
+        return Promise.resolve([{ name: "0", index: 0, keyCount: 1 }]);
+      }
+      if (command === "current_kv_database") return Promise.resolve(0);
+      if (command === "scan_kv_keys") {
+        return Promise.resolve({
+          ...defaultKeyPage(),
+          keys: [
+            {
+              key: "stream:events",
+              keyType: "stream",
+              ttl: { state: "expires", seconds: 60 },
+              length: 2,
+              memoryBytes: 256,
+            },
+          ],
+        });
+      }
+      if (command === "get_kv_value") {
+        return Promise.resolve(streamValueEnvelope());
+      }
+      return Promise.reject(new Error(`Unhandled command: ${command}`));
+    });
+
+    render(<KvSidebar connectionId="redis-1" />);
+    const tree = await screen.findByRole("tree", { name: /redis keys/i });
+
+    fireEvent.click(
+      await within(tree).findByRole("treeitem", { name: /stream:events/i }),
+    );
+
+    expect(await screen.findByText(/1-0 type=login/)).toBeInTheDocument();
+    expect(screen.getAllByText("stream")).toHaveLength(2);
+    expect(screen.getByText("2 item(s)")).toBeInTheDocument();
+    expect(screen.getAllByText("256 B")).toHaveLength(2);
+  });
+
+  it("surfaces key scan refresh errors", async () => {
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_kv_databases") {
+        return Promise.resolve([{ name: "0", index: 0, keyCount: 1 }]);
+      }
+      if (command === "current_kv_database") return Promise.resolve(0);
+      if (command === "scan_kv_keys") {
+        return Promise.reject(new Error("SCAN timeout"));
+      }
+      return Promise.reject(new Error(`Unhandled command: ${command}`));
+    });
+
+    render(<KvSidebar connectionId="redis-1" />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("SCAN timeout");
+    expect(screen.getByTestId("redis-scan-status")).toHaveTextContent("0 keys");
+  });
+
+  it("keeps loaded keys visible when loading the next SCAN cursor fails", async () => {
+    invokeMock.mockImplementation((command: string, payload?: unknown) => {
+      if (command === "list_kv_databases") {
+        return Promise.resolve([{ name: "0", index: 0, keyCount: 2 }]);
+      }
+      if (command === "current_kv_database") return Promise.resolve(0);
+      if (command === "scan_kv_keys") {
+        const cursor = (payload as { request: { cursor: string } }).request
+          .cursor;
+        if (cursor === "42") {
+          return Promise.reject(new Error("SCAN cursor failed"));
+        }
+        return Promise.resolve({
+          ...defaultKeyPage(),
+          nextCursor: "42",
+          done: false,
+        });
+      }
+      return Promise.reject(new Error(`Unhandled command: ${command}`));
+    });
+
+    render(<KvSidebar connectionId="redis-1" />);
+    expect(await screen.findByText("user:1")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /more from cursor 42/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "SCAN cursor failed",
+    );
+    expect(screen.getByText("user:1")).toBeInTheDocument();
+    expect(screen.getByTestId("redis-scan-status")).toHaveTextContent(
+      /1 key · cursor 42/i,
+    );
+  });
 });
 
 function defaultKeyPage() {
@@ -211,6 +367,32 @@ function defaultValueEnvelope() {
       nextCursor: "0",
       done: true,
       total: 1,
+    },
+  };
+}
+
+function streamValueEnvelope() {
+  return {
+    key: "stream:events",
+    metadata: {
+      key: "stream:events",
+      keyType: "stream",
+      ttl: { state: "expires", seconds: 60 },
+      length: 2,
+      memoryBytes: 256,
+    },
+    value: {
+      type: "stream",
+      key: "stream:events",
+      entries: [
+        {
+          id: "1-0",
+          fields: [{ field: "type", value: "login" }],
+        },
+      ],
+      start: "0-0",
+      end: "+",
+      limit: 100,
     },
   };
 }
