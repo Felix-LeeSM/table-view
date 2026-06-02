@@ -31,6 +31,7 @@ import {
 } from "@components/ui/context-menu";
 import { Button } from "@components/ui/button";
 import type { TableInfo, FunctionInfo } from "@/types/schema";
+import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import type { ExportInclude } from "@/hooks/useMigrationExport";
 import { cn } from "@lib/utils";
 import {
@@ -283,6 +284,34 @@ export function renderEmptyRow(row: Extract<VisibleRow, { kind: "empty" }>) {
       {row.category.key === "tables" && row.hasActiveSearch
         ? "No matching tables"
         : row.category.emptyLabel}
+    </div>
+  );
+}
+
+export function renderFileAnalyticsSourceRow(
+  metadata: FileAnalyticsSourceMetadata,
+) {
+  const { source } = metadata;
+  const columnText =
+    metadata.columns
+      .map((column) => column.name)
+      .filter(Boolean)
+      .join(", ") || "No columns";
+
+  return (
+    <div
+      key={`source-${source.id}`}
+      aria-label={`${source.alias} source`}
+      className="flex w-full items-center gap-1.5 px-3 py-0.5 text-foreground hover:bg-muted"
+    >
+      <FileText size={12} className="shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1 truncate text-xs">{source.alias}</span>
+      <span className="max-w-[7rem] truncate text-3xs text-muted-foreground">
+        {source.fileName}
+      </span>
+      <span className="max-w-[8rem] truncate text-3xs text-muted-foreground">
+        {columnText}
+      </span>
     </div>
   );
 }

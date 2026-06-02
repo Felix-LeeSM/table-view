@@ -16,6 +16,7 @@ import {
   previewFileAnalyticsSource,
   registerFileAnalyticsSource,
 } from "@lib/tauri/fileAnalytics";
+import { useSchemaStore } from "@stores/schemaStore";
 import type {
   FileAnalyticsPreview,
   FileAnalyticsQueryResponse,
@@ -94,6 +95,9 @@ export default function DuckdbFileAnalyticsDialog({
   const [loading, setLoading] = useState(false);
   const [queryLoading, setQueryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadFileAnalyticsSources = useSchemaStore(
+    (s) => s.loadFileAnalyticsSources,
+  );
 
   const chooseFile = async () => {
     setLoading(true);
@@ -129,6 +133,7 @@ export default function DuckdbFileAnalyticsDialog({
       setSource(registered);
       setPreview(nextPreview);
       setQuerySql(defaultSourceSql(registered));
+      void loadFileAnalyticsSources(connectionId).catch(() => undefined);
     } catch (err) {
       setError(errorMessage(err));
     } finally {

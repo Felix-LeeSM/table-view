@@ -1,5 +1,6 @@
 import type { VirtualItem, Virtualizer } from "@tanstack/react-virtual";
 import type { TableInfo, ViewInfo, FunctionInfo } from "@/types/schema";
+import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import type { RdbTreeShape } from "../treeShape";
 import {
   CATEGORIES,
@@ -11,6 +12,7 @@ import {
 import {
   renderCategoryRow,
   renderEmptyRow,
+  renderFileAnalyticsSourceRow,
   renderItemRow,
   renderSchemaRow,
   renderSearchRow,
@@ -33,6 +35,7 @@ interface SchemaTreeBodyProps {
   tables: Record<string, TableInfo[]>;
   views: Record<string, ViewInfo[]>;
   functions: Record<string, FunctionInfo[]>;
+  fileAnalyticsSources: ReadonlyArray<FileAnalyticsSourceMetadata>;
   connectionId: string;
   selectedNodeId: string | null;
   activeSchema: string | null;
@@ -164,6 +167,7 @@ interface FlatTableListProps extends SchemaSectionProps {
 function FlatTableList({
   schema,
   schemaTables,
+  fileAnalyticsSources,
   loadingTables,
   selectedNodeId,
   activeSchema,
@@ -182,7 +186,7 @@ function FlatTableList({
     );
   }
 
-  if (schemaTables.length === 0) {
+  if (schemaTables.length === 0 && fileAnalyticsSources.length === 0) {
     return (
       <div>
         <div className="px-3 py-1 text-2xs italic text-muted-foreground">
@@ -194,6 +198,11 @@ function FlatTableList({
 
   return (
     <div>
+      {schemaTables.length === 0 && (
+        <div className="px-3 py-1 text-2xs italic text-muted-foreground">
+          No tables
+        </div>
+      )}
       {schemaTables.map((item) => {
         const itemId = nodeIdToString({
           type: "table",
@@ -215,6 +224,16 @@ function FlatTableList({
           true, // flat=true → pl-3 + table-only ContextMenu 분기
         );
       })}
+      {fileAnalyticsSources.length > 0 && (
+        <>
+          <div className="px-3 pt-2 pb-0.5 text-3xs font-medium uppercase text-muted-foreground">
+            Local sources
+          </div>
+          {fileAnalyticsSources.map((source) =>
+            renderFileAnalyticsSourceRow(source),
+          )}
+        </>
+      )}
     </div>
   );
 }

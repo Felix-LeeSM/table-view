@@ -46,6 +46,8 @@ export interface UseSchemaCacheReturn {
 
 export interface UseSchemaCacheOptions {
   autoLoadAuxiliaryCatalog?: boolean;
+  autoLoadFileAnalyticsSources?: boolean;
+  clearFileAnalyticsSourcesOnRefresh?: boolean;
 }
 
 export function useSchemaCache(
@@ -54,12 +56,22 @@ export function useSchemaCache(
   options: UseSchemaCacheOptions = {},
 ): UseSchemaCacheReturn {
   const autoLoadAuxiliaryCatalog = options.autoLoadAuxiliaryCatalog === true;
+  const autoLoadFileAnalyticsSources =
+    options.autoLoadFileAnalyticsSources === true;
+  const clearFileAnalyticsSourcesOnRefresh =
+    options.clearFileAnalyticsSourcesOnRefresh === true;
   const schemas =
     useSchemaStore((s) => s.schemas[connectionId]?.[db]) ?? EMPTY_SCHEMAS;
   const loadSchemas = useSchemaStore((s) => s.loadSchemas);
   const loadTables = useSchemaStore((s) => s.loadTables);
   const loadViews = useSchemaStore((s) => s.loadViews);
   const loadFunctions = useSchemaStore((s) => s.loadFunctions);
+  const loadFileAnalyticsSources = useSchemaStore(
+    (s) => s.loadFileAnalyticsSources,
+  );
+  const clearFileAnalyticsSources = useSchemaStore(
+    (s) => s.clearFileAnalyticsSources,
+  );
   const prefetchSchemaColumns = useSchemaStore((s) => s.prefetchSchemaColumns);
   const evictSchemaForName = useSchemaStore((s) => s.evictSchemaForName);
 
@@ -145,15 +157,42 @@ export function useSchemaCache(
     prefetchSchemaColumns,
   ]);
 
+  useEffect(() => {
+    if (!db || !autoLoadFileAnalyticsSources) return;
+    loadFileAnalyticsSources(connectionId).catch((err) => {
+      toast.error("Failed to load local file sources");
+      logSchemaError("loadFileAnalyticsSources (mount)", err);
+    });
+  }, [
+    connectionId,
+    db,
+    autoLoadFileAnalyticsSources,
+    loadFileAnalyticsSources,
+  ]);
+
   const refreshConnection = useCallback(() => {
     setLoadingSchemas(true);
-    loadSchemas(connectionId, db)
+    const clearSources = clearFileAnalyticsSourcesOnRefresh
+      ? clearFileAnalyticsSources(connectionId)
+      : Promise.resolve();
+    clearSources
+      .catch((err) => {
+        toast.error("Failed to clear local file sources");
+        logSchemaError("clearFileAnalyticsSources (refresh)", err);
+      })
+      .then(() => loadSchemas(connectionId, db))
       .catch((err) => {
         toast.error("Failed to refresh schemas");
         logSchemaError("loadSchemas (refresh)", err);
       })
       .finally(() => setLoadingSchemas(false));
-  }, [connectionId, db, loadSchemas]);
+  }, [
+    clearFileAnalyticsSources,
+    clearFileAnalyticsSourcesOnRefresh,
+    connectionId,
+    db,
+    loadSchemas,
+  ]);
 
   const refreshSchema = useCallback(
     (schemaName: string) => {

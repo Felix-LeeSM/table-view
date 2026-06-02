@@ -15,11 +15,11 @@ use crate::models::{
     ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest,
     CreateTriggerRequest, DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
     DropTableRequest, DropTriggerRequest, FileAnalyticsPreview, FileAnalyticsQueryResponse,
-    FileAnalyticsSource, FilterCondition, FunctionInfo, IndexInfo, PostgresExtensionInfo,
-    PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, SearchAliasInfo,
-    SearchClusterIdentity, SearchDeleteByQueryRequest, SearchDestructiveOperationPlan,
-    SearchIndexInfo, SearchIndexMapping, SearchIndexTemplateInfo, SearchQueryRequest,
-    SearchResultEnvelope, TableData, TableInfo, TriggerInfo, ViewInfo,
+    FileAnalyticsSource, FileAnalyticsSourceMetadata, FilterCondition, FunctionInfo, IndexInfo,
+    PostgresExtensionInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult,
+    SearchAliasInfo, SearchClusterIdentity, SearchDeleteByQueryRequest,
+    SearchDestructiveOperationPlan, SearchIndexInfo, SearchIndexMapping, SearchIndexTemplateInfo,
+    SearchQueryRequest, SearchResultEnvelope, TableData, TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::types::{
@@ -202,6 +202,24 @@ pub trait RdbAdapter: DbAdapter {
         &'a self,
         _path: &'a str,
     ) -> BoxFuture<'a, Result<FileAnalyticsSource, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support local file analytics".into(),
+            ))
+        })
+    }
+
+    fn list_file_analytics_source_metadata<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<FileAnalyticsSourceMetadata>, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support local file analytics".into(),
+            ))
+        })
+    }
+
+    fn clear_file_analytics_sources<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async {
             Err(AppError::Unsupported(
                 "This adapter does not support local file analytics".into(),

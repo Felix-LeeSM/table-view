@@ -3,6 +3,7 @@ import type {
   FileAnalyticsPreview,
   FileAnalyticsQueryResponse,
   FileAnalyticsSource,
+  FileAnalyticsSourceMetadata,
 } from "@/types/fileAnalytics";
 import { normalizeQueryResult } from "@lib/wireCamelCase";
 
@@ -45,6 +46,21 @@ export async function previewFileAnalyticsSource(
     },
   );
   return normalizeFileAnalyticsResponse(response);
+}
+
+export async function listFileAnalyticsSourceMetadata(
+  connectionId: string,
+): Promise<FileAnalyticsSourceMetadata[]> {
+  return invoke<FileAnalyticsSourceMetadata[]>(
+    "duckdb_list_file_analytics_source_metadata",
+    { connectionId },
+  );
+}
+
+export async function clearFileAnalyticsSources(
+  connectionId: string,
+): Promise<void> {
+  await invoke("duckdb_clear_file_analytics_sources", { connectionId });
 }
 
 export async function executeFileAnalyticsQuery(

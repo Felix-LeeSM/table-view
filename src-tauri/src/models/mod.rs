@@ -22,6 +22,7 @@ pub use data_source::{
 };
 pub use file_analytics::{
     FileAnalyticsPreview, FileAnalyticsQueryResponse, FileAnalyticsSource, FileAnalyticsSourceKind,
+    FileAnalyticsSourceMetadata,
 };
 pub use query::{
     CollectionStatsRow, ColumnCategory, QueryColumn, QueryResult, QueryType, ServerActivityRow,
