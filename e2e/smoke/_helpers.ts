@@ -11,7 +11,8 @@ export type DbType =
   | "mysql"
   | "mariadb"
   | "sqlite"
-  | "duckdb";
+  | "duckdb"
+  | "redis";
 export type ConnectionEnvironment =
   | "local"
   | "testing"
@@ -134,6 +135,7 @@ function dbTypeLabel(dbType: DbType): string {
   if (dbType === "mariadb") return "MariaDB";
   if (dbType === "sqlite") return "SQLite";
   if (dbType === "duckdb") return "DuckDB";
+  if (dbType === "redis") return "Redis";
   return "MongoDB";
 }
 
@@ -332,6 +334,24 @@ export async function createMongoConnection(name = "E2E MongoDB") {
     process.env.E2E_MONGO_DB ?? "table_view_test",
   );
   await setInput("#conn-auth-source", process.env.E2E_MONGO_AUTH_DB ?? "admin");
+
+  await saveConnectionDialog(dialog);
+  await expectConnectionVisible(name);
+}
+
+export async function createRedisConnection(name = "E2E Redis") {
+  const dialog = await openNewConnectionDialog();
+  await selectDatabaseType("redis");
+
+  await setInput("#conn-name", name);
+  await setInput("#conn-host", process.env.E2E_REDIS_HOST ?? "localhost");
+  await setInput(
+    "#conn-port",
+    process.env.E2E_REDIS_PORT ?? process.env.REDIS_PORT ?? "6379",
+  );
+  await setInput("#conn-user", process.env.REDIS_USER ?? "");
+  await setInput("#conn-password", process.env.REDIS_PASSWORD ?? "");
+  await setInput("#conn-database", process.env.E2E_REDIS_DB ?? "2");
 
   await saveConnectionDialog(dialog);
   await expectConnectionVisible(name);

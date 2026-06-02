@@ -171,8 +171,11 @@ claims separate for the MySQL docs recheck gate.
   where available and fall back to no key suggestions when the scan cache is
   empty, loading, failed, or unavailable.
 - Evidence: `e2e/fixtures/seed.redis.json` is fixture/contract inventory, not a
-  live runtime or desktop E2E smoke claim. Redis command dispatch remains
-  focused component/backend/core evidence below routine desktop smoke.
+  live runtime or desktop E2E smoke claim by itself. The wired Runtime Happy
+  Path Redis smoke uses that deterministic DB 2 fixture for connect, scan,
+  preview, `GET`, guarded string write, TTL, and exact-key delete coverage.
+  Broader Redis command dispatch remains focused component/backend/core evidence
+  below full CLI parity.
 
 ## Result Boundary
 
