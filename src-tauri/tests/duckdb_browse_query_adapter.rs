@@ -216,17 +216,36 @@ async fn duckdb_contract_read_only_connection_rejects_writes() {
 async fn duckdb_contract_unsupported_analytics_and_extensions_fail_clearly() {
     let (_dir, adapter) = connected_fixture(false).await;
 
-    let extension_result = adapter.execute_sql("INSTALL httpfs", None).await;
-    match extension_result {
-        Err(AppError::Unsupported(message)) => assert!(message.contains("extension")),
-        other => panic!("Expected extension Unsupported error, got: {other:?}"),
-    }
-
-    let analytics_result = adapter
-        .execute_sql("SELECT * FROM read_csv_auto('users.csv')", None)
-        .await;
-    match analytics_result {
-        Err(AppError::Unsupported(message)) => assert!(message.contains("CSV/Parquet/JSON")),
-        other => panic!("Expected analytics Unsupported error, got: {other:?}"),
+    for (sql, expected) in [
+        ("INSTALL httpfs", "extension"),
+        ("LOAD httpfs", "extension"),
+        ("SELECT load_extension('httpfs')", "extension"),
+        ("COPY app.users TO '/tmp/users.csv'", "COPY"),
+        ("ATTACH '/tmp/other.duckdb' AS other", "ATTACH/DETACH"),
+        ("DETACH other", "ATTACH/DETACH"),
+        (
+            "SET enable_external_access = true",
+            "external-file capability settings",
+        ),
+        (
+            "SELECT * FROM read_csv_auto('/tmp/users.csv')",
+            "CSV/Parquet/JSON",
+        ),
+        ("SELECT * FROM '/tmp/users.csv'", "replacement scans"),
+    ] {
+        let result = adapter.execute_sql(sql, None).await;
+        match result {
+            Err(AppError::Unsupported(message)) => {
+                assert!(
+                    message.contains(expected),
+                    "{sql} expected {expected} unsupported message, got: {message}"
+                );
+                assert!(
+                    !message.contains("/tmp/"),
+                    "{sql} leaked local path in unsupported message: {message}"
+                );
+            }
+            other => panic!("Expected Unsupported error for {sql}, got: {other:?}"),
+        }
     }
 }

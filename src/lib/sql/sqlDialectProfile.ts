@@ -161,13 +161,7 @@ const SQLITE_KEYWORDS: readonly string[] = [
   "AUTOINCREMENT",
 ];
 
-const DUCKDB_KEYWORDS: readonly string[] = [
-  "ATTACH",
-  "DETACH",
-  "DESCRIBE",
-  "SUMMARIZE",
-  "COPY",
-];
+const DUCKDB_KEYWORDS: readonly string[] = ["DESCRIBE", "SUMMARIZE"];
 
 export const COMMON_SQL_FUNCTIONS: readonly string[] = [
   "COUNT",

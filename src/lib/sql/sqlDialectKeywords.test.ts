@@ -51,8 +51,11 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
 
   it("DuckDB dialect has its own placeholder vocabulary without SQLite PRAGMA leakage", () => {
     const kws = getKeywordsForDialect("duckdb");
-    expect(kws).toContain("ATTACH");
+    expect(kws).toContain("DESCRIBE");
     expect(kws).toContain("SUMMARIZE");
+    expect(kws).not.toContain("ATTACH");
+    expect(kws).not.toContain("DETACH");
+    expect(kws).not.toContain("COPY");
     expect(kws).not.toContain("PRAGMA");
   });
 

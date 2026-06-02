@@ -54,7 +54,11 @@ describe("sqlDialectProfile", () => {
     });
     expect(duckdb?.codeMirrorDialect).toBe(StandardSQL);
     expect(duckdb?.capabilities.schemas).toBe(true);
-    expect(duckdb?.vocabulary.keywords).toContain("ATTACH");
+    expect(duckdb?.vocabulary.keywords).toContain("DESCRIBE");
+    expect(duckdb?.vocabulary.keywords).toContain("SUMMARIZE");
+    expect(duckdb?.vocabulary.keywords).not.toContain("ATTACH");
+    expect(duckdb?.vocabulary.keywords).not.toContain("DETACH");
+    expect(duckdb?.vocabulary.keywords).not.toContain("COPY");
     expect(duckdb?.vocabulary.keywords).not.toContain("PRAGMA");
   });
 
