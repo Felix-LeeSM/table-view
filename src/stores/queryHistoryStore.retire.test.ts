@@ -80,19 +80,20 @@ describe("queryHistoryStore retire (sprint-373)", () => {
 
   // sprint-373 — `sidebar-prefetch` source 가 union 에 추가됨.
   // sprint-435 — Explain plan-inspection history source 추가.
-  it("QueryHistorySource union covers all 6 source labels", () => {
+  it("QueryHistorySource union covers all 7 source labels", () => {
     const sources: QueryHistorySource[] = [
       "raw",
       "grid-edit",
       "ddl-structure",
       "mongo-op",
       "explain",
+      "file-analytics",
       "sidebar-prefetch",
     ];
     // 본 단언은 런타임보다 TS 컴파일 단계의 정합성 (모든 라벨이 union 의
     // 정확한 variant) 을 잡는다 — 추가 변종이 union 에 들어오면 위 배열
     // 의 type 이 좁아져 compile error.
-    expect(sources).toHaveLength(6);
-    expect(new Set(sources).size).toBe(6);
+    expect(sources).toHaveLength(7);
+    expect(new Set(sources).size).toBe(7);
   });
 });

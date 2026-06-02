@@ -440,6 +440,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
       {canPreviewLocalFile && showFileAnalytics && (
         <DuckdbFileAnalyticsDialog
           connectionId={tab.connectionId}
+          database={tab.database}
+          tabId={tab.id}
           onClose={() => setShowFileAnalytics(false)}
         />
       )}

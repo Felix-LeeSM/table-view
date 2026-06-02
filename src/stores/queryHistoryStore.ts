@@ -55,6 +55,7 @@ function emitLocalHistoryCreated(row: HistoryListRow): void {
  * - `mongo-op`         — Mongo-specific direct ops that bypass the grid
  *                       pending pipeline (e.g. Add Document modal).
  * - `explain`          — query editor Explain plan-inspection action.
+ * - `file-analytics`   — DuckDB local-file source-scoped query dialog.
  * - `sidebar-prefetch` — sprint-373 새 source. Sidebar 의 preview-rows
  *                       (사용자가 sidebar tree 에서 collection/table 을
  *                       클릭해 DataGrid 로 열 때) prefetch row 가 비-동
@@ -66,6 +67,7 @@ export type QueryHistorySource =
   | "ddl-structure"
   | "mongo-op"
   | "explain"
+  | "file-analytics"
   | "sidebar-prefetch";
 
 interface QueryHistoryState {
