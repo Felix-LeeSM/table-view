@@ -24,6 +24,8 @@ export interface UseDocumentDatabaseTreeData {
   collectionsByDb: Record<string, CollectionInfo[] | undefined>;
   loadingRoot: boolean;
   loadingDbs: Set<string>;
+  rootError: string | null;
+  collectionErrors: Record<string, string | undefined>;
   expandedDbs: Set<string>;
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string) => void;
@@ -63,23 +65,37 @@ export function useDocumentDatabaseTreeData(
   const [expandedDbs, setExpandedDbs] = useState<Set<string>>(new Set());
   const [loadingRoot, setLoadingRoot] = useState(false);
   const [loadingDbs, setLoadingDbs] = useState<Set<string>>(new Set());
+  const [rootError, setRootError] = useState<string | null>(null);
+  const [collectionErrors, setCollectionErrors] = useState<
+    Record<string, string | undefined>
+  >({});
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   const autoLoadedRef = useRef<string | null>(null);
 
+  const loadRoot = useCallback(async () => {
+    setRootError(null);
+    setLoadingRoot(true);
+    try {
+      setRootError(await loadDatabases(connectionId));
+    } catch (error) {
+      setRootError(String(error));
+    } finally {
+      setLoadingRoot(false);
+    }
+  }, [connectionId, loadDatabases]);
+
   useEffect(() => {
     const guardKey = `${connectionId}::${activeDb ?? ""}`;
     if (autoLoadedRef.current === guardKey) return;
     autoLoadedRef.current = guardKey;
-    setLoadingRoot(true);
-    loadDatabases(connectionId).finally(() => setLoadingRoot(false));
-  }, [connectionId, activeDb, loadDatabases]);
+    void loadRoot();
+  }, [connectionId, activeDb, loadRoot]);
 
   const handleRefresh = useCallback(() => {
-    setLoadingRoot(true);
-    loadDatabases(connectionId).finally(() => setLoadingRoot(false));
-  }, [connectionId, loadDatabases]);
+    void loadRoot();
+  }, [loadRoot]);
 
   const handleExpandDb = useCallback(
     async (dbName: string) => {
@@ -94,9 +110,16 @@ export function useDocumentDatabaseTreeData(
       }
       setExpandedDbs((prev) => new Set(prev).add(dbName));
       if (!collectionsByDb[dbName]) {
+        setCollectionErrors((prev) => ({ ...prev, [dbName]: undefined }));
         setLoadingDbs((prev) => new Set(prev).add(dbName));
         try {
-          await loadCollections(connectionId, dbName);
+          const error = await loadCollections(connectionId, dbName);
+          setCollectionErrors((prev) => ({
+            ...prev,
+            [dbName]: error ?? undefined,
+          }));
+        } catch (error) {
+          setCollectionErrors((prev) => ({ ...prev, [dbName]: String(error) }));
         } finally {
           setLoadingDbs((prev) => {
             const next = new Set(prev);
@@ -195,6 +218,8 @@ export function useDocumentDatabaseTreeData(
     collectionsByDb,
     loadingRoot,
     loadingDbs,
+    rootError,
+    collectionErrors,
     expandedDbs,
     selectedNodeId,
     setSelectedNodeId: setSelectedNodeIdStable,

@@ -92,6 +92,8 @@ export default function DocumentDatabaseTree({
     collectionsByDb,
     loadingRoot,
     loadingDbs,
+    rootError,
+    collectionErrors,
     expandedDbs,
     selectedNodeId,
     setSelectedNodeId,
@@ -158,7 +160,16 @@ export default function DocumentDatabaseTree({
         </div>
       )}
 
-      {!loadingRoot && databases.length === 0 && (
+      {!loadingRoot && rootError && (
+        <div
+          className="mx-3 my-1 rounded border border-destructive/30 bg-destructive/5 px-2 py-1 text-2xs text-destructive"
+          role="alert"
+        >
+          Database metadata unavailable: {rootError}
+        </div>
+      )}
+
+      {!loadingRoot && !rootError && databases.length === 0 && (
         <div className="px-3 py-2 text-xs italic text-muted-foreground">
           No databases visible to this connection
         </div>
@@ -180,6 +191,7 @@ export default function DocumentDatabaseTree({
         const isExpanded = expandedDbs.has(db.name);
         const isLoading = loadingDbs.has(db.name);
         const allCollections = collectionsByDb[db.name] ?? [];
+        const collectionError = collectionErrors[db.name];
         // If the query matched the DB name, show every collection. If it
         // only matched some collection names, narrow the list to those.
         const dbNameMatches =
@@ -209,17 +221,27 @@ export default function DocumentDatabaseTree({
 
             {isExpanded && (
               <div>
-                {isLoading && allCollections.length === 0 ? (
+                {collectionError && (
+                  <div
+                    className="mx-8 my-1 rounded border border-destructive/30 bg-destructive/5 px-2 py-1 text-2xs text-destructive"
+                    role="alert"
+                  >
+                    Collection metadata unavailable: {collectionError}
+                  </div>
+                )}
+                {!collectionError &&
+                isLoading &&
+                allCollections.length === 0 ? (
                   <div className="px-8 py-1 text-xs text-muted-foreground">
                     Loading...
                   </div>
-                ) : collections.length === 0 ? (
+                ) : !collectionError && collections.length === 0 ? (
                   <div className="px-8 py-1 text-2xs italic text-muted-foreground">
                     {isFiltering && allCollections.length > 0
                       ? "No matching collections"
                       : "No collections"}
                   </div>
-                ) : (
+                ) : collections.length > 0 ? (
                   collections.map((coll) => {
                     const collNodeId = `coll:${db.name}:${coll.name}`;
                     return (
@@ -239,7 +261,7 @@ export default function DocumentDatabaseTree({
                       />
                     );
                   })
-                )}
+                ) : null}
               </div>
             )}
           </div>

@@ -20,7 +20,8 @@ import { useConnectionStore } from "@stores/connectionStore";
 function collectionFixture(
   name: string,
   database: string,
-  documentCount: number,
+  documentCount: number | null,
+  overrides: Partial<CollectionInfo> = {},
 ): CollectionInfo {
   return {
     name,
@@ -30,6 +31,7 @@ function collectionFixture(
     read_only: false,
     options: {},
     id_index: null,
+    ...overrides,
   };
 }
 
@@ -140,6 +142,130 @@ describe("DocumentDatabaseTree", () => {
 
     await waitFor(() =>
       expect(screen.getByLabelText("users collection")).toBeInTheDocument(),
+    );
+  });
+
+  it("renders source metadata for views, timeseries, read-only collections, options, id index, and unknown count", async () => {
+    const tauri = await import("@lib/tauri");
+    vi.mocked(tauri.listMongoCollections).mockResolvedValueOnce([
+      collectionFixture("audit_view", "table_view_test", null, {
+        collection_type: "view",
+        read_only: true,
+        options: { viewOn: "users" },
+        id_index: { key: { _id: 1 } },
+      }),
+      collectionFixture("events_ts", "table_view_test", 42, {
+        collection_type: "timeseries",
+        options: { timeseries: { timeField: "ts" } },
+      }),
+    ]);
+
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("table_view_test database"),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("table_view_test database"));
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("audit_view collection"),
+      ).toBeInTheDocument(),
+    );
+
+    expect(
+      screen.getByLabelText("audit_view collection type: view"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("audit_view is read-only"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("audit_view has collection options"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("audit_view has _id index metadata"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("audit_view document count unavailable"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("events_ts collection type: timeseries"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("42")).toBeInTheDocument();
+  });
+
+  it("renders a database metadata fallback when database listing is unavailable", async () => {
+    const tauri = await import("@lib/tauri");
+    vi.mocked(tauri.listMongoDatabases).mockRejectedValueOnce(
+      new Error("permission denied"),
+    );
+
+    render(<DocumentDatabaseTree connectionId="conn-mongo-denied" />);
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Database metadata unavailable",
+      ),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("permission denied");
+    expect(
+      screen.queryByText("No databases visible to this connection"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps cached databases visible when refresh cannot reload metadata", async () => {
+    const tauri = await import("@lib/tauri");
+    const listDatabasesSpy = vi.mocked(tauri.listMongoDatabases);
+
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("table_view_test database"),
+      ).toBeInTheDocument(),
+    );
+
+    listDatabasesSpy.mockRejectedValueOnce(new Error("network down"));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh databases" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Database metadata unavailable",
+      ),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("network down");
+    expect(
+      screen.getByLabelText("table_view_test database"),
+    ).toBeInTheDocument();
+  });
+
+  it("renders a collection metadata fallback without collapsing the expanded database", async () => {
+    const tauri = await import("@lib/tauri");
+    vi.mocked(tauri.listMongoDatabases).mockResolvedValueOnce([
+      { name: "restricted" },
+    ]);
+    vi.mocked(tauri.listMongoCollections).mockRejectedValueOnce(
+      new Error("not authorized"),
+    );
+
+    render(<DocumentDatabaseTree connectionId="conn-mongo-restricted" />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("restricted database")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("restricted database"));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Collection metadata unavailable",
+      ),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("not authorized");
+    expect(screen.getByLabelText("restricted database")).toHaveAttribute(
+      "aria-expanded",
+      "true",
     );
   });
 
