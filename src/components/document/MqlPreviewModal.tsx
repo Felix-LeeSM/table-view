@@ -100,6 +100,17 @@ export default function MqlPreviewModal({
               {previewLines.join("\n")}
             </pre>
           )}
+          {previewLines.length > 1 && (
+            <div
+              role="alert"
+              aria-label="MongoDB ordered bulk write warning"
+              className="rounded border border-warning/30 bg-warning/10 p-2 text-xs text-warning"
+            >
+              {previewLines.length} ordered document writes will execute in one
+              bulk request. If a later command fails, earlier writes may already
+              be committed; pending edits stay available for retry.
+            </div>
+          )}
           {errors.length > 0 && (
             <div
               role="alert"
