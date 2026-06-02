@@ -221,6 +221,19 @@ impl DuckdbAdapter {
             .ok_or_else(|| AppError::NotFound(format!("File source '{source_id}' not found")))
     }
 
+    pub(super) async fn list_registered_file_analytics_sources(
+        &self,
+    ) -> Result<Vec<RegisteredFileAnalyticsSource>, AppError> {
+        let guard = self.inner.lock().await;
+        guard
+            .settings
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+        let mut sources = guard.file_sources.values().cloned().collect::<Vec<_>>();
+        sources.sort_by(|left, right| left.public.id.cmp(&right.public.id));
+        Ok(sources)
+    }
+
     pub(super) async fn clear_registered_file_analytics_sources(&self) -> Result<(), AppError> {
         let mut guard = self.inner.lock().await;
         guard

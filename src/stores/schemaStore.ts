@@ -78,7 +78,7 @@ interface SchemaState {
   tableColumnsCache: ByConn<BySchema<ByTable<ColumnInfo[]>>>;
   tableIndexesCache: ByConn<BySchema<ByTable<IndexInfo[]>>>;
   tableConstraintsCache: ByConn<BySchema<ByTable<ConstraintInfo[]>>>;
-  fileAnalyticsSources: ByConn<FileAnalyticsSourceMetadata[]>;
+  fileAnalyticsSources: Record<string, FileAnalyticsSourceMetadata[]>;
   /**
    * Sprint 272 — per-`(connId, db, schema, table)` trigger cache.
    * Populated lazily by `getTableTriggers`. Mirrors the
@@ -116,6 +116,10 @@ interface SchemaState {
     connId: string,
     db: string,
   ) => Promise<PostgresExtensionInfo[]>;
+  loadFileAnalyticsSources: (
+    connId: string,
+  ) => Promise<FileAnalyticsSourceMetadata[]>;
+  clearFileAnalyticsSources: (connId: string) => Promise<void>;
   getTableColumns: (
     connId: string,
     db: string,
@@ -380,6 +384,31 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     }
   },
 
+  loadFileAnalyticsSources: async (connId) => {
+    try {
+      const sources = await tauri.listFileAnalyticsSourceMetadata(connId);
+      set((state) => ({
+        fileAnalyticsSources: {
+          ...state.fileAnalyticsSources,
+          [connId]: sources,
+        },
+      }));
+      return sources;
+    } catch (e) {
+      set({ error: String(e) });
+      throw e;
+    }
+  },
+
+  clearFileAnalyticsSources: async (connId) => {
+    await tauri.clearFileAnalyticsSources(connId);
+    set((state) => {
+      const next = { ...state.fileAnalyticsSources };
+      delete next[connId];
+      return { fileAnalyticsSources: next };
+    });
+  },
+
   getTableColumns: async (connId, db, table, schema) => {
     try {
       const columns = await tauri.getTableColumns(connId, table, schema, db);
@@ -527,6 +556,11 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       tableIndexesCache: deleteConn(state.tableIndexesCache, connId),
       tableConstraintsCache: deleteConn(state.tableConstraintsCache, connId),
       triggers: deleteConn(state.triggers, connId),
+      fileAnalyticsSources: (() => {
+        const next = { ...state.fileAnalyticsSources };
+        delete next[connId];
+        return next;
+      })(),
     }));
   },
 

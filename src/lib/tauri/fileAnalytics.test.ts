@@ -8,7 +8,9 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import {
+  clearFileAnalyticsSources,
   executeFileAnalyticsQuery,
+  listFileAnalyticsSourceMetadata,
   previewFileAnalyticsSource,
   registerFileAnalyticsSource,
 } from "./fileAnalytics";
@@ -102,6 +104,39 @@ describe("DuckDB file analytics wrappers", () => {
         sourceId: "src-1",
         limit: null,
       },
+    );
+  });
+
+  it("lists registered source metadata without client-side path expansion", async () => {
+    invokeMock.mockResolvedValueOnce([
+      {
+        source,
+        columns: [
+          { name: "id", dataType: "INTEGER", category: "int" },
+          { name: "amount", dataType: "DECIMAL", category: "float" },
+        ],
+        previewSql: 'SELECT * FROM "sales_csv" LIMIT 100',
+      },
+    ]);
+
+    const metadata = await listFileAnalyticsSourceMetadata("conn-1");
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      "duckdb_list_file_analytics_source_metadata",
+      { connectionId: "conn-1" },
+    );
+    expect(metadata[0]?.source.fileName).toBe("sales.csv");
+    expect(JSON.stringify(metadata)).not.toContain("/tmp/sales.csv");
+  });
+
+  it("clears active-session file analytics sources", async () => {
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await clearFileAnalyticsSources("conn-1");
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      "duckdb_clear_file_analytics_sources",
+      { connectionId: "conn-1" },
     );
   });
 

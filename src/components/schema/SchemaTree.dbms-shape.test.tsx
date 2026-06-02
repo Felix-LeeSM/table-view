@@ -33,6 +33,8 @@ const mockLoadTables = vi.fn().mockResolvedValue(undefined);
 const mockLoadViews = vi.fn().mockResolvedValue(undefined);
 const mockLoadFunctions = vi.fn().mockResolvedValue(undefined);
 const mockPrefetchSchemaColumns = vi.fn().mockResolvedValue(undefined);
+const mockLoadFileAnalyticsSources = vi.fn().mockResolvedValue([]);
+const mockClearFileAnalyticsSources = vi.fn().mockResolvedValue(undefined);
 
 function makeConnection(id: string, dbType: DatabaseType): ConnectionConfig {
   return {
@@ -121,6 +123,8 @@ function setSchemaStoreState(overrides: Record<string, unknown> = {}) {
     loadTables: mockLoadTables,
     loadViews: mockLoadViews,
     loadFunctions: mockLoadFunctions,
+    loadFileAnalyticsSources: mockLoadFileAnalyticsSources,
+    clearFileAnalyticsSources: mockClearFileAnalyticsSources,
     prefetchSchemaColumns: mockPrefetchSchemaColumns,
   });
 }
@@ -139,6 +143,8 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     mockLoadViews.mockResolvedValue(undefined);
     mockLoadFunctions.mockResolvedValue(undefined);
     mockPrefetchSchemaColumns.mockResolvedValue(undefined);
+    mockLoadFileAnalyticsSources.mockResolvedValue([]);
+    mockClearFileAnalyticsSources.mockResolvedValue(undefined);
     resetStores();
   });
 
@@ -490,6 +496,13 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
         ],
       },
     });
+    mockClearFileAnalyticsSources.mockImplementationOnce(async (connId) => {
+      useSchemaStore.setState((state) => {
+        const next = { ...state.fileAnalyticsSources };
+        delete next[connId];
+        return { fileAnalyticsSources: next };
+      });
+    });
 
     await act(async () => {
       render(<SchemaTree connectionId="duck1" />);
@@ -501,6 +514,14 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     expect(screen.getByText("id, name")).toBeInTheDocument();
     expect(screen.queryByText(localPath)).toBeNull();
     expect(document.body).not.toHaveTextContent("/Users/felix/private");
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Refresh schemas"));
+    });
+    await waitFor(() => {
+      expect(mockClearFileAnalyticsSources).toHaveBeenCalledWith("duck1");
+    });
+    expect(screen.queryByLabelText("file_00000001 source")).toBeNull();
   });
 
   // ─────────────────────────────────────────────────────────────────────

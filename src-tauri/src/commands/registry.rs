@@ -76,6 +76,8 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         commands::rdb::query::cancel_query,
         commands::file_analytics::duckdb_register_file_analytics_source,
         commands::file_analytics::duckdb_preview_file_analytics_source,
+        commands::file_analytics::duckdb_list_file_analytics_source_metadata,
+        commands::file_analytics::duckdb_clear_file_analytics_sources,
         commands::file_analytics::duckdb_execute_file_analytics_query,
         // Cross-paradigm metadata
         commands::meta::list_databases,

@@ -27,6 +27,7 @@ import {
 } from "./SchemaTree/treeRows";
 import { SchemaTreeBody } from "./SchemaTree/body";
 import type { SchemaTreeRowsContext } from "./SchemaTree/rows";
+import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import {
   CreateTableDialogSlot,
   DropTableDialogSlot,
@@ -51,6 +52,8 @@ interface SchemaTreeProps {
 // the body's `useMemo`s when the slot for this `(connId, db)` is still
 // unpopulated.
 const EMPTY_BY_SCHEMA = Object.freeze({}) as Record<string, never>;
+const EMPTY_FILE_SOURCES: ReadonlyArray<FileAnalyticsSourceMetadata> =
+  Object.freeze([]);
 
 export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const connectionName = useConnectionStore(
@@ -70,6 +73,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const actions = useSchemaTreeActions({
     connectionId,
     autoLoadAuxiliaryCatalog: treeShape === "no-schema",
+    autoLoadFileAnalyticsSources: dbType === "duckdb",
+    clearFileAnalyticsSourcesOnRefresh: dbType === "duckdb",
   });
   // Destructure the fields effects depend on. Using the whole `actions`
   // object as a dep would re-run effects every render.
@@ -87,6 +92,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   );
   const functions = useSchemaStore(
     (s) => s.functions[connectionId]?.[db] ?? EMPTY_BY_SCHEMA,
+  );
+  const fileAnalyticsSources = useSchemaStore(
+    (s): ReadonlyArray<FileAnalyticsSourceMetadata> =>
+      s.fileAnalyticsSources[connectionId] ?? EMPTY_FILE_SOURCES,
   );
 
   // RDB schema-level migration export. Hidden on Mongo/Redis and when
@@ -395,6 +404,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         tables={tables}
         views={views}
         functions={functions}
+        fileAnalyticsSources={fileAnalyticsSources}
         connectionId={connectionId}
         selectedNodeId={actions.selectedNodeId}
         activeSchema={activeSchema ?? null}

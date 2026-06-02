@@ -7,7 +7,7 @@ use duckdb::Connection;
 use crate::error::AppError;
 use crate::models::{
     FileAnalyticsPreview, FileAnalyticsQueryResponse, FileAnalyticsSource, FileAnalyticsSourceKind,
-    FileAnalyticsSourceMetadata, QueryResult, QueryType,
+    FileAnalyticsSourceMetadata, QueryColumn, QueryResult, QueryType,
 };
 
 use super::connection::{
@@ -50,8 +50,35 @@ impl DuckdbAdapter {
     pub async fn list_file_analytics_source_metadata(
         &self,
     ) -> Result<Vec<FileAnalyticsSourceMetadata>, AppError> {
-        self.active_settings().await?;
-        Ok(Vec::new())
+        let settings = self.active_settings().await?;
+        let sources = self.list_registered_file_analytics_sources().await?;
+        let mut metadata = Vec::with_capacity(sources.len());
+
+        for source in sources {
+            let source = refresh_registered_file_source(&source)?;
+            let redactions = redaction_needles(&settings.path, &source);
+            let source_for_work = source.clone();
+            let item = run_blocking(move || {
+                let conn = open_file_analytics_connection()?;
+                create_source_view(&conn, &source_for_work)?;
+                disable_external_access(&conn)?;
+                let preview_sql = format!(
+                    "SELECT * FROM {} LIMIT 100",
+                    quote_identifier(&source_for_work.public.alias)
+                );
+                let columns = source_shape_columns(&conn, &source_for_work.public.alias)?;
+                Ok(FileAnalyticsSourceMetadata {
+                    source: source_for_work.public,
+                    columns,
+                    preview_sql,
+                })
+            })
+            .await
+            .map_err(|error| redact_app_error(error, &redactions))?;
+            metadata.push(item);
+        }
+
+        Ok(metadata)
     }
 
     pub async fn clear_file_analytics_sources(&self) -> Result<(), AppError> {
@@ -484,6 +511,24 @@ fn execute_select_query(
         execution_time_ms: start.elapsed().as_millis() as u64,
         query_type: QueryType::Select,
     })
+}
+
+fn source_shape_columns(
+    conn: &Connection,
+    source_alias: &str,
+) -> Result<Vec<QueryColumn>, AppError> {
+    let shape_sql = format!("SELECT * FROM {} LIMIT 0", quote_identifier(source_alias));
+    let mut stmt = conn
+        .prepare(&shape_sql)
+        .map_err(|error| AppError::Database(error.to_string()))?;
+    let rows = stmt
+        .query([])
+        .map_err(|error| AppError::Database(error.to_string()))?;
+    let statement = rows.as_ref();
+    let column_count = statement.map(|stmt| stmt.column_count()).unwrap_or(0);
+    Ok(statement
+        .map(|stmt| duckdb_query_columns(stmt, column_count))
+        .unwrap_or_default())
 }
 
 fn redaction_needles(settings_path: &str, source: &RegisteredFileAnalyticsSource) -> Vec<String> {
