@@ -349,8 +349,14 @@ export async function createRedisConnection(name = "E2E Redis") {
     "#conn-port",
     process.env.E2E_REDIS_PORT ?? process.env.REDIS_PORT ?? "6379",
   );
-  await setInput("#conn-user", process.env.REDIS_USER ?? "");
-  await setInput("#conn-password", process.env.REDIS_PASSWORD ?? "");
+  const user = process.env.REDIS_USER ?? "";
+  if (user) {
+    await setInput("#conn-user", user);
+  }
+  const password = process.env.REDIS_PASSWORD ?? "";
+  if (password) {
+    await setInput("#conn-password", password);
+  }
   await setInput("#conn-database", process.env.E2E_REDIS_DB ?? "2");
 
   await saveConnectionDialog(dialog);
