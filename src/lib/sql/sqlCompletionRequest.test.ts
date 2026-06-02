@@ -108,6 +108,13 @@ describe("buildSqlCompletionRequest", () => {
     expect(sqlite.capabilities.onConflict).toBe(true);
     expect(sqlite.vocabulary.keywords).toContain("PRAGMA");
     expect(sqlite.shellProfile.commands).toContain(".tables");
+
+    const duckdb = requestFor("duckdb");
+    expect(duckdb.vocabulary.keywords).toContain("DESCRIBE");
+    expect(duckdb.vocabulary.keywords).toContain("SUMMARIZE");
+    expect(duckdb.vocabulary.keywords).not.toContain("ATTACH");
+    expect(duckdb.vocabulary.keywords).not.toContain("DETACH");
+    expect(duckdb.vocabulary.keywords).not.toContain("COPY");
   });
 
   it("keeps MariaDB completion requests distinct without widening runtime evidence", () => {
