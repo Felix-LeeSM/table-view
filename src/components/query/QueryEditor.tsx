@@ -6,12 +6,13 @@ import type { Paradigm } from "@/types/connection";
 import { assertNever } from "@/lib/paradigm";
 import SqlQueryEditor from "./SqlQueryEditor";
 import MongoQueryEditor from "./MongoQueryEditor";
+import RedisCommandEditor from "./RedisCommandEditor";
 
 /**
  * Paradigm-aware editor router. `rdb` → `SqlQueryEditor`, `document` →
- * `MongoQueryEditor`, kv/search → placeholder textbox until dedicated
- * editors land. Each paradigm-specific editor imports only its own
- * language + autocomplete extensions.
+ * `MongoQueryEditor`, `kv` → `RedisCommandEditor`, search → placeholder
+ * textbox until a dedicated editor lands. Each paradigm-specific editor
+ * imports only its own language + autocomplete extensions.
  *
  * The single-place "paradigm → editor" mapping lives here so future
  * paradigms plug in by extending one switch, and so the existing
@@ -98,6 +99,15 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
           />
         );
       case "kv":
+        return (
+          <RedisCommandEditor
+            ref={ref}
+            sql={sql}
+            onSqlChange={onSqlChange}
+            onExecute={onExecute}
+            onDryRun={onDryRun}
+          />
+        );
       case "search":
         // Placeholder until dedicated editors land — keeps QueryTab's
         // layout stable.
@@ -105,17 +115,11 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
           <div
             className="flex h-full w-full items-center justify-center overflow-hidden bg-background p-4 text-center text-sm text-muted-foreground"
             role="textbox"
-            aria-label={
-              paradigm === "kv"
-                ? "Key-Value Query Editor"
-                : "Search Query Editor"
-            }
+            aria-label="Search Query Editor"
             aria-multiline="true"
             data-paradigm={paradigm}
           >
-            {paradigm === "kv"
-              ? "Redis query editor is planned but not yet available."
-              : "Search query editor is planned but not yet available."}
+            Search query editor is planned but not yet available.
           </div>
         );
       default:
