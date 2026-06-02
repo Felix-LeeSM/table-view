@@ -293,6 +293,43 @@ describe("KvSidebar", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("SCAN timeout");
     expect(screen.getByTestId("redis-scan-status")).toHaveTextContent("0 keys");
   });
+
+  it("keeps loaded keys visible when loading the next SCAN cursor fails", async () => {
+    invokeMock.mockImplementation((command: string, payload?: unknown) => {
+      if (command === "list_kv_databases") {
+        return Promise.resolve([{ name: "0", index: 0, keyCount: 2 }]);
+      }
+      if (command === "current_kv_database") return Promise.resolve(0);
+      if (command === "scan_kv_keys") {
+        const cursor = (payload as { request: { cursor: string } }).request
+          .cursor;
+        if (cursor === "42") {
+          return Promise.reject(new Error("SCAN cursor failed"));
+        }
+        return Promise.resolve({
+          ...defaultKeyPage(),
+          nextCursor: "42",
+          done: false,
+        });
+      }
+      return Promise.reject(new Error(`Unhandled command: ${command}`));
+    });
+
+    render(<KvSidebar connectionId="redis-1" />);
+    expect(await screen.findByText("user:1")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /more from cursor 42/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "SCAN cursor failed",
+    );
+    expect(screen.getByText("user:1")).toBeInTheDocument();
+    expect(screen.getByTestId("redis-scan-status")).toHaveTextContent(
+      /1 key · cursor 42/i,
+    );
+  });
 });
 
 function defaultKeyPage() {
