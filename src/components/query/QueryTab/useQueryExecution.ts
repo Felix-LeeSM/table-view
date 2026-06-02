@@ -2440,6 +2440,12 @@ export function useQueryExecution({
           });
           return;
         }
+        const adminRequiresConfirmation = adminAnalysis.severity !== "info";
+        const adminConfirmReason =
+          adminDecision.action === "confirm"
+            ? adminDecision.reason
+            : (adminAnalysis.reasons[0] ??
+              "MongoDB runCommand requires confirmation");
         const queryId = `${tab.id}-${Date.now()}`;
         const startTime = Date.now();
         const adminRunner = async () => {
@@ -2486,11 +2492,11 @@ export function useQueryExecution({
             });
           }
         };
-        if (adminDecision.action === "confirm") {
+        if (adminDecision.action === "confirm" || adminRequiresConfirmation) {
           pendingWriteRunnerRef.current = adminRunner;
           setPendingMongoConfirm({
             pipeline: [],
-            reason: adminDecision.reason,
+            reason: adminConfirmReason,
             previewLines: [sql],
           });
           return;
