@@ -11,8 +11,7 @@ use crate::models::{
 };
 
 use super::connection::{
-    open_file_analytics_connection, run_blocking, DuckdbAdapter, DuckdbConnectionSettings,
-    RegisteredFileAnalyticsSource,
+    open_file_analytics_connection, run_blocking, DuckdbAdapter, RegisteredFileAnalyticsSource,
 };
 use super::queries::{collect_rows, duckdb_query_columns};
 use super::sql_text::{
@@ -57,11 +56,11 @@ impl DuckdbAdapter {
         let settings = self.active_settings().await?;
         let limit = normalize_preview_limit(limit)?;
         let source = refresh_registered_file_source(&source)?;
-        let redactions = redaction_needles(&settings, &source);
+        let redactions = redaction_needles(&settings.path, &source);
         let source_for_work = source.clone();
 
         let result = run_blocking(move || {
-            let conn = open_file_analytics_connection(&settings)?;
+            let conn = open_file_analytics_connection()?;
             create_source_view(&conn, &source_for_work)?;
             disable_external_access(&conn)?;
             let executed_sql = format!(
@@ -90,12 +89,12 @@ impl DuckdbAdapter {
         let settings = self.active_settings().await?;
         let source = refresh_registered_file_source(&source)?;
         validate_file_analytics_sql(&sql, &source.public.alias)?;
-        let mut redactions = redaction_needles(&settings, &source);
+        let mut redactions = redaction_needles(&settings.path, &source);
         redactions.extend(sql_path_literals(&sql));
         let source_for_work = source.clone();
 
         let result = run_blocking(move || {
-            let conn = open_file_analytics_connection(&settings)?;
+            let conn = open_file_analytics_connection()?;
             create_source_view(&conn, &source_for_work)?;
             disable_external_access(&conn)?;
             let result = execute_select_query(&conn, &sql, Instant::now())?;
@@ -476,11 +475,8 @@ fn execute_select_query(
     })
 }
 
-fn redaction_needles(
-    settings: &DuckdbConnectionSettings,
-    source: &RegisteredFileAnalyticsSource,
-) -> Vec<String> {
-    vec![settings.path.clone(), source.path.clone()]
+fn redaction_needles(settings_path: &str, source: &RegisteredFileAnalyticsSource) -> Vec<String> {
+    vec![settings_path.to_string(), source.path.clone()]
 }
 
 fn sql_path_literals(sql: &str) -> Vec<String> {

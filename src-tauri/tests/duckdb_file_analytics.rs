@@ -128,6 +128,17 @@ async fn duckdb_file_analytics_requires_the_registered_source_alias() {
         .await
         .unwrap();
     assert_eq!(scoped.result.rows[0][1], serde_json::json!("Ada"));
+
+    let mixed_db_table = adapter
+        .execute_file_analytics_query(
+            &source.id,
+            &format!("SELECT sink.id FROM sink JOIN \"{}\" ON true", source.alias),
+        )
+        .await;
+    assert!(
+        matches!(mixed_db_table, Err(AppError::Database(_))),
+        "file analytics must not read existing database tables, got {mixed_db_table:?}"
+    );
 }
 
 #[tokio::test]
