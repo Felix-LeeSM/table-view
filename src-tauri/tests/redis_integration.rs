@@ -121,6 +121,7 @@ async fn redis_testcontainer_covers_live_kv_catalog_values_and_streams() {
             KvCommandRequest {
                 command: "HGETALL tv:hash".into(),
                 database: Some(2),
+                confirm_key: None,
             },
             None,
         )
@@ -134,6 +135,7 @@ async fn redis_testcontainer_covers_live_kv_catalog_values_and_streams() {
             KvCommandRequest {
                 command: "XRANGE tv:events - + COUNT 10".into(),
                 database: Some(2),
+                confirm_key: None,
             },
             None,
         )
@@ -146,6 +148,7 @@ async fn redis_testcontainer_covers_live_kv_catalog_values_and_streams() {
             KvCommandRequest {
                 command: "FLUSHDB".into(),
                 database: Some(2),
+                confirm_key: None,
             },
             None,
         )
