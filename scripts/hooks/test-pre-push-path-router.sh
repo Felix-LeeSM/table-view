@@ -204,6 +204,12 @@ assert_contains "$setup_output" "RUN hook-shell-syntax:" "setup"
 assert_not_contains "$setup_output" "RUN ts-test:" "setup"
 assert_not_contains "$setup_output" "RUN rust-test-and-coverage:" "setup"
 
+target_cache_output="$(run_case target-cache normal scripts/target-cache.sh)"
+assert_contains "$target_cache_output" "route: frontend=0 rust=0 hook=1" "target cache"
+assert_contains "$target_cache_output" "RUN hook-shell-syntax:" "target cache"
+assert_not_contains "$target_cache_output" "RUN ts-test:" "target cache"
+assert_not_contains "$target_cache_output" "RUN rust-test-and-coverage:" "target cache"
+
 nextest_config_output="$(run_case nextest-config normal src-tauri/.config/nextest.toml)"
 assert_contains "$nextest_config_output" "route: frontend=0 rust=0 hook=1" "nextest config"
 assert_contains "$nextest_config_output" "RUN nextest-push-profile-config:" "nextest config"
