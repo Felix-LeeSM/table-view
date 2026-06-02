@@ -210,7 +210,7 @@ async fn read_stream_command(
     end: String,
     count: Option<u32>,
 ) -> Result<RdbQueryResult, AppError> {
-    let stream = read_stream_range(adapter, &key, &start, &end, count.unwrap_or(100)).await?;
+    let stream = read_stream_range(adapter, &key, &start, &end, bounded_limit(count)).await?;
     Ok(rows_result(
         &[text_col("id"), object_col("fields")],
         stream

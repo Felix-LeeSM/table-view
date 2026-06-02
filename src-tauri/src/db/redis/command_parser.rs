@@ -164,7 +164,7 @@ fn parse_xrange(args: &[String]) -> Result<RedisCommand, AppError> {
                 "XRANGE only supports COUNT as its optional argument".into(),
             ));
         }
-        Some(parse_u32(&args[4], "XRANGE COUNT")?)
+        Some(bounded_limit(Some(parse_u32(&args[4], "XRANGE COUNT")?)))
     } else {
         None
     };
@@ -424,6 +424,13 @@ mod tests {
             parse_redis_command("XRANGE events - + COUNT 25").unwrap(),
             RedisCommand::XRange {
                 count: Some(25),
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse_redis_command("XRANGE events - + COUNT 999999").unwrap(),
+            RedisCommand::XRange {
+                count: Some(super::super::helpers::MAX_SCAN_LIMIT),
                 ..
             }
         ));
