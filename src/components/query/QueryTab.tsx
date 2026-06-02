@@ -126,6 +126,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     (s) => s.loadPostgresExtensions,
   );
   const tableColumnsCache = useSchemaStore((s) => s.tableColumnsCache);
+  const fileAnalyticsSources = useSchemaStore((s) => s.fileAnalyticsSources);
   useEffect(() => {
     if (
       tab.paradigm !== "rdb" ||
@@ -153,6 +154,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
       functions,
       postgresExtensions,
       tableColumnsCache,
+      fileAnalyticsSources,
       connectionId: tab.connectionId,
       database: tab.database ?? "",
       dbType: connection?.dbType,
@@ -164,6 +166,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     functions,
     postgresExtensions,
     tableColumnsCache,
+    fileAnalyticsSources,
     tab.paradigm,
     tab.connectionId,
     tab.database,

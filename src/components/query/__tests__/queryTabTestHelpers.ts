@@ -24,6 +24,7 @@ import type { QueryResult } from "@/types/query";
 import { useToastStore } from "@stores/toastStore";
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
+import type { SqlCompletionContext } from "@lib/sql/sqlCompletionContext";
 
 // ---------------------------------------------------------------------------
 // Fixture constants
@@ -76,6 +77,8 @@ export const mockEditorProps: {
   dialectHistory: (SQLDialect | undefined)[];
   lastMongoExtensions: readonly Extension[] | undefined;
   mongoExtensionsHistory: (readonly Extension[] | undefined)[];
+  lastCompletionContext: SqlCompletionContext | undefined;
+  completionContextHistory: (SqlCompletionContext | undefined)[];
   lastParadigm: string | undefined;
   lastQueryMode: string | undefined;
 } = {
@@ -83,6 +86,8 @@ export const mockEditorProps: {
   dialectHistory: [],
   lastMongoExtensions: undefined,
   mongoExtensionsHistory: [],
+  lastCompletionContext: undefined,
+  completionContextHistory: [],
   lastParadigm: undefined,
   lastQueryMode: undefined,
 };
@@ -169,6 +174,8 @@ export function resetQueryTabStores(): void {
   mockEditorProps.dialectHistory = [];
   mockEditorProps.lastMongoExtensions = undefined;
   mockEditorProps.mongoExtensionsHistory = [];
+  mockEditorProps.lastCompletionContext = undefined;
+  mockEditorProps.completionContextHistory = [];
   mockEditorProps.lastParadigm = undefined;
   mockEditorProps.lastQueryMode = undefined;
   __resetDocumentStoreForTests();
