@@ -10,6 +10,7 @@ import {
   __resetDocumentStoreForTests,
 } from "@/test-utils/documentStore";
 import type { CollectionInfo } from "@/types/document";
+import type { IndexInfo } from "@/types/schema";
 
 function collectionFixture(
   name: string,
@@ -24,6 +25,16 @@ function collectionFixture(
     read_only: false,
     options: {},
     id_index: null,
+  };
+}
+
+function indexFixture(name: string, columns: string[]): IndexInfo {
+  return {
+    name,
+    columns,
+    index_type: "btree",
+    is_unique: false,
+    is_primary: name === "_id_",
   };
 }
 
@@ -47,6 +58,12 @@ beforeEach(() => {
           fk_reference: null,
           comment: null,
         },
+      ]),
+    ),
+    listMongoIndexes: vi.fn(() =>
+      Promise.resolve([
+        indexFixture("_id_", ["_id"]),
+        indexFixture("email_1", ["email"]),
       ]),
     ),
     findDocuments: vi.fn(() =>
@@ -142,6 +159,22 @@ describe("documentStore", () => {
     expect(
       useDocumentStore.getState().fieldsCache["conn-1"]?.["db"]?.["users"],
     ).toHaveLength(1);
+  });
+
+  it("loadCollectionIndexes caches under indexesCache[connId][db][collection] and returns the indexes", async () => {
+    const returned = await useDocumentStore
+      .getState()
+      .loadCollectionIndexes("conn-1", "db", "users");
+    expect(returned).toHaveLength(2);
+    expect(returned[1]?.name).toBe("email_1");
+    expect(tauri.listMongoIndexes).toHaveBeenCalledWith(
+      "conn-1",
+      "db",
+      "users",
+    );
+    expect(
+      useDocumentStore.getState().indexesCache["conn-1"]?.["db"]?.["users"],
+    ).toHaveLength(2);
   });
 
   it("runFind caches the DocumentQueryResult and returns it", async () => {
@@ -247,6 +280,9 @@ describe("documentStore", () => {
     await useDocumentStore.getState().loadDatabases("conn-1");
     await useDocumentStore.getState().loadCollections("conn-1", "db");
     await useDocumentStore.getState().inferFields("conn-1", "db", "users");
+    await useDocumentStore
+      .getState()
+      .loadCollectionIndexes("conn-1", "db", "users");
     await useDocumentStore.getState().runFind("conn-1", "db", "users");
 
     useDocumentStore.getState().clearConnection("conn-1");
@@ -255,6 +291,7 @@ describe("documentStore", () => {
     expect(s.databases["conn-1"]).toBeUndefined();
     expect(s.collections["conn-1"]).toBeUndefined();
     expect(s.fieldsCache["conn-1"]).toBeUndefined();
+    expect(s.indexesCache["conn-1"]).toBeUndefined();
     expect(s.queryResults["conn-1"]).toBeUndefined();
   });
 

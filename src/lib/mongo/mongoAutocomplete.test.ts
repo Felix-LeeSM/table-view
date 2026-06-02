@@ -261,6 +261,19 @@ describe("createMongoCompletionSource — field names", () => {
     expect(got.has('"status"')).toBe(true);
   });
 
+  it("offers cached field names in createIndex key positions", () => {
+    const doc = 'db.users.createIndex({"';
+    const result = runSource(doc, doc.length, "aggregate", [
+      "_id",
+      "email",
+      "createdAt",
+    ]);
+    const got = new Set(labels(result));
+    expect(got.has('"_id"')).toBe(true);
+    expect(got.has('"email"')).toBe(true);
+    expect(got.has('"createdAt"')).toBe(true);
+  });
+
   it("does not throw when fieldNames is empty or undefined", () => {
     // Empty array.
     expect(() => runSource('{"', 2, "find", [])).not.toThrow();
@@ -342,19 +355,23 @@ describe("mongoAutocomplete — sprint-381 admin command catalog", () => {
 });
 
 describe("createMongoshDbSource — sprint-381 db-level helper exposure", () => {
-  function runDbSource(doc: string, pos: number, collectionNames?: string[]) {
+  function runDbSource(
+    doc: string,
+    pos: number,
+    opts: Parameters<typeof createMongoshDbSource>[0] = {},
+  ) {
     const state = EditorState.create({
       doc,
       extensions: [jsonLanguage()],
     });
     const context = new CompletionContext(state, pos, /* explicit */ true);
-    const source = createMongoshDbSource({ collectionNames });
+    const source = createMongoshDbSource(opts);
     return source(context);
   }
 
   it("surfaces `runCommand` when the user types `db.r`", () => {
     const doc = "db.r";
-    const result = runDbSource(doc, doc.length, []);
+    const result = runDbSource(doc, doc.length, { collectionNames: [] });
     expect(result).not.toBeNull();
     if (!result || result instanceof Promise) return;
     const labels = result.options.map((o) => o.label);
@@ -364,7 +381,9 @@ describe("createMongoshDbSource — sprint-381 db-level helper exposure", () => 
 
   it("surfaces collection names alongside the db-level helpers", () => {
     const doc = "db.";
-    const result = runDbSource(doc, doc.length, ["users", "orders"]);
+    const result = runDbSource(doc, doc.length, {
+      collectionNames: ["users", "orders"],
+    });
     expect(result).not.toBeNull();
     if (!result || result instanceof Promise) return;
     const labels = result.options.map((o) => o.label);
@@ -372,6 +391,42 @@ describe("createMongoshDbSource — sprint-381 db-level helper exposure", () => 
     expect(labels).toContain("runCommand");
     expect(labels).toContain("users");
     expect(labels).toContain("orders");
+  });
+
+  it("surfaces active collection index names in dropIndex argument position", () => {
+    const doc = 'db.users.dropIndex("em';
+    const result = runDbSource(doc, doc.length, {
+      activeCollectionName: "users",
+      indexNames: ["_id_", "email_1", "status_createdAt_1"],
+    });
+    expect(result).not.toBeNull();
+    if (!result || result instanceof Promise) return;
+    const labels = result.options.map((o) => o.label);
+    expect(labels).toContain("email_1");
+    expect(labels).toContain("status_createdAt_1");
+    expect(labels).not.toContain("_id_");
+  });
+
+  it("does not reuse active index names for a different collection expression", () => {
+    const doc = 'db.orders.dropIndex("';
+    const result = runDbSource(doc, doc.length, {
+      activeCollectionName: "users",
+      indexNames: ["email_1"],
+    });
+    expect(result).toBeNull();
+  });
+
+  it("does not suggest unsupported shell helpers as supported completions", () => {
+    const doc = "db.";
+    const result = runDbSource(doc, doc.length, { collectionNames: [] });
+    expect(result).not.toBeNull();
+    if (!result || result instanceof Promise) return;
+    const labels = result.options.map((o) => o.label);
+    expect(labels).not.toContain("getSiblingDB");
+    expect(labels).not.toContain("watch");
+    expect(labels).not.toContain("eval");
+    expect(labels).not.toContain("auth");
+    expect(labels).not.toContain("logout");
   });
 });
 

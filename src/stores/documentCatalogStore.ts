@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ColumnInfo } from "@/types/schema";
+import type { ColumnInfo, IndexInfo } from "@/types/schema";
 import type { CollectionInfo, DatabaseInfo } from "@/types/document";
 import * as tauri from "@lib/tauri";
 import {
@@ -15,6 +15,7 @@ export interface DocumentCatalogState {
   databases: ByConn<DatabaseInfo[]>;
   collections: ByConn<ByDb<CollectionInfo[]>>;
   fieldsCache: ByConn<ByDb<ByCollection<ColumnInfo[]>>>;
+  indexesCache: ByConn<ByDb<ByCollection<IndexInfo[]>>>;
   loading: boolean;
   error: string | null;
 
@@ -29,6 +30,11 @@ export interface DocumentCatalogState {
     collection: string,
     sampleSize?: number,
   ) => Promise<ColumnInfo[]>;
+  loadCollectionIndexes: (
+    connectionId: string,
+    database: string,
+    collection: string,
+  ) => Promise<IndexInfo[]>;
   clearConnection: (connectionId: string) => void;
 }
 
@@ -50,7 +56,8 @@ function clearCatalogCounters(connectionId: string): void {
     if (
       key === `databases:${connectionId}` ||
       key.startsWith(`collections:${connectionId}:`) ||
-      key.startsWith(`fields:${connectionId}:`)
+      key.startsWith(`fields:${connectionId}:`) ||
+      key.startsWith(`indexes:${connectionId}:`)
     ) {
       catalogRequestCounters.delete(key);
     }
@@ -61,6 +68,7 @@ export const useDocumentCatalogStore = create<DocumentCatalogState>((set) => ({
   databases: {},
   collections: {},
   fieldsCache: {},
+  indexesCache: {},
   loading: false,
   error: null,
 
@@ -135,11 +143,34 @@ export const useDocumentCatalogStore = create<DocumentCatalogState>((set) => ({
     return columns;
   },
 
+  loadCollectionIndexes: async (connectionId, database, collection) => {
+    const key = `indexes:${connectionId}:${database}:${collection}`;
+    const reqId = nextRequestId(key);
+    const indexes = await tauri.listMongoIndexes(
+      connectionId,
+      database,
+      collection,
+    );
+    if (isLatestRequest(key, reqId)) {
+      set((state) => ({
+        indexesCache: setNested3(
+          state.indexesCache,
+          connectionId,
+          database,
+          collection,
+          indexes,
+        ),
+      }));
+    }
+    return indexes;
+  },
+
   clearConnection: (connectionId) => {
     set((state) => ({
       databases: withoutConnection(state.databases, connectionId),
       collections: withoutConnection(state.collections, connectionId),
       fieldsCache: withoutConnection(state.fieldsCache, connectionId),
+      indexesCache: withoutConnection(state.indexesCache, connectionId),
     }));
     clearCatalogCounters(connectionId);
   },
@@ -151,6 +182,7 @@ export function __resetDocumentCatalogStoreForTests(): void {
     databases: {},
     collections: {},
     fieldsCache: {},
+    indexesCache: {},
     loading: false,
     error: null,
   });

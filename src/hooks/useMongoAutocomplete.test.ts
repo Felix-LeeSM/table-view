@@ -56,9 +56,29 @@ describe("useMongoAutocomplete (Sprint 309 unified surface)", () => {
     expect(result.current).not.toBe(first);
   });
 
+  it("produces a new memo when indexNames identity changes", () => {
+    const { result, rerender } = renderHook(
+      ({ indexes }: { indexes: readonly string[] | undefined }) =>
+        useMongoAutocomplete({
+          activeCollectionName: "users",
+          indexNames: indexes,
+        }),
+      {
+        initialProps: {
+          indexes: ["email_1"] as readonly string[] | undefined,
+        },
+      },
+    );
+    const first = result.current;
+    rerender({ indexes: ["email_1", "status_1"] });
+    expect(result.current).not.toBe(first);
+  });
+
   it("accepts undefined fieldNames without throwing", () => {
     expect(() =>
-      renderHook(() => useMongoAutocomplete({ fieldNames: undefined })),
+      renderHook(() =>
+        useMongoAutocomplete({ fieldNames: undefined, indexNames: undefined }),
+      ),
     ).not.toThrow();
   });
 

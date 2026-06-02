@@ -177,7 +177,11 @@ export default function QueryTab({ tab }: QueryTabProps) {
   // stable against unrelated cache updates. RDB tabs compute `undefined`
   // and the resulting no-op extension set is gated out by paradigm.
   const fieldsCache = useDocumentCatalogStore((s) => s.fieldsCache);
+  const indexesCache = useDocumentCatalogStore((s) => s.indexesCache);
   const collectionsCache = useDocumentCatalogStore((s) => s.collections);
+  const loadCollectionIndexes = useDocumentCatalogStore(
+    (s) => s.loadCollectionIndexes,
+  );
   const mongoFieldNames = useMemo(() => {
     if (tab.paradigm !== "document" || !tab.database || !tab.collection) {
       return undefined;
@@ -218,14 +222,50 @@ export default function QueryTab({ tab }: QueryTabProps) {
     tab.database,
     tab.paradigm,
   ]);
+  const mongoIndexNames = useMemo(() => {
+    if (tab.paradigm !== "document" || !tab.database || !tab.collection) {
+      return undefined;
+    }
+    const indexes =
+      indexesCache[tab.connectionId]?.[tab.database]?.[tab.collection];
+    if (!indexes) return undefined;
+    return indexes.map((idx) => idx.name);
+  }, [
+    indexesCache,
+    tab.connectionId,
+    tab.database,
+    tab.collection,
+    tab.paradigm,
+  ]);
+  useEffect(() => {
+    if (tab.paradigm !== "document" || !tab.database || !tab.collection) {
+      return;
+    }
+    void loadCollectionIndexes(
+      tab.connectionId,
+      tab.database,
+      tab.collection,
+    ).catch(() => {
+      // Background completion inventory; index panel remains the visible
+      // error surface for index permissions.
+    });
+  }, [
+    tab.paradigm,
+    tab.connectionId,
+    tab.database,
+    tab.collection,
+    loadCollectionIndexes,
+  ]);
   // Sprint 309 — `useMongoAutocomplete` no longer branches on the legacy
   // mode toggle. The unified completion source surfaces both the find
   // operator set and aggregate stages / accumulators so the user can type
   // either flavour without flipping a toggle; A4 owns the snippet menu
   // that distinguishes intent at insertion time.
   const mongoExtensions = useMongoAutocomplete({
+    activeCollectionName: tab.collection,
     fieldNames: mongoFieldNames,
     collectionNames: mongoCollectionNames,
+    indexNames: mongoIndexNames,
   });
   const isDocument = tab.paradigm === "document";
   const canExplainQuery =

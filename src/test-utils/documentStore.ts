@@ -32,6 +32,9 @@ function setDocumentStoreState(partial: Partial<DocumentStoreTestState>): void {
   if ("databases" in partial) catalogPatch.databases = partial.databases;
   if ("collections" in partial) catalogPatch.collections = partial.collections;
   if ("fieldsCache" in partial) catalogPatch.fieldsCache = partial.fieldsCache;
+  if ("indexesCache" in partial) {
+    catalogPatch.indexesCache = partial.indexesCache;
+  }
   if ("loading" in partial) catalogPatch.loading = partial.loading;
   if ("error" in partial) catalogPatch.error = partial.error;
   if (Object.keys(catalogPatch).length > 0) {

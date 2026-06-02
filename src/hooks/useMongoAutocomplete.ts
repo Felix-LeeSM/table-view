@@ -11,6 +11,8 @@ import {
 } from "@/lib/mongo/mongoAutocomplete";
 
 export interface UseMongoAutocompleteOptions {
+  /** Active collection in the current query tab. */
+  activeCollectionName?: string;
   /**
    * Cached collection field names to surface at JSON key positions. May be
    * `undefined` or empty — the hook treats both identically and never
@@ -29,6 +31,11 @@ export interface UseMongoAutocompleteOptions {
    * `findOne` / etc. either way.
    */
   collectionNames?: readonly string[];
+  /**
+   * Known index names for the active collection. Used for index-argument
+   * positions such as `db.users.dropIndex("...")`.
+   */
+  indexNames?: readonly string[];
 }
 
 /**
@@ -54,7 +61,8 @@ export interface UseMongoAutocompleteOptions {
 export function useMongoAutocomplete(
   opts: UseMongoAutocompleteOptions = {},
 ): Extension[] {
-  const { fieldNames, collectionNames } = opts;
+  const { activeCollectionName, fieldNames, collectionNames, indexNames } =
+    opts;
   return useMemo(
     () => [
       autocompletion({
@@ -73,12 +81,16 @@ export function useMongoAutocomplete(
           // continues to own `$operator` / quoted-key positions inside
           // JSON bodies.
           createMongoAdminCommandSource(),
-          createMongoshDbSource({ collectionNames }),
+          createMongoshDbSource({
+            activeCollectionName,
+            collectionNames,
+            indexNames,
+          }),
           createMongoCompletionSource({ queryMode: "aggregate", fieldNames }),
         ],
       }),
       createMongoOperatorHighlight(),
     ],
-    [fieldNames, collectionNames],
+    [activeCollectionName, fieldNames, collectionNames, indexNames],
   );
 }
