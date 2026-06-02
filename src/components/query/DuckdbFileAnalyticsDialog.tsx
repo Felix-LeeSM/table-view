@@ -16,6 +16,7 @@ import {
   previewFileAnalyticsSource,
   registerFileAnalyticsSource,
 } from "@lib/tauri/fileAnalytics";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { useSchemaStore } from "@stores/schemaStore";
 import type {
   FileAnalyticsPreview,
@@ -25,6 +26,8 @@ import type {
 
 interface DuckdbFileAnalyticsDialogProps {
   connectionId: string;
+  database?: string;
+  tabId?: string;
   onClose: () => void;
 }
 
@@ -85,6 +88,8 @@ function ResultTable({ result }: { result: AnalyticsResult }) {
 
 export default function DuckdbFileAnalyticsDialog({
   connectionId,
+  database,
+  tabId,
   onClose,
 }: DuckdbFileAnalyticsDialogProps) {
   const [source, setSource] = useState<FileAnalyticsSource | null>(null);
@@ -147,6 +152,7 @@ export default function DuckdbFileAnalyticsDialog({
     setQueryLoading(true);
     setError(null);
     setQueryResult(null);
+    const startedAt = Date.now();
     try {
       const nextResult = await executeFileAnalyticsQuery(
         connectionId,
@@ -154,6 +160,19 @@ export default function DuckdbFileAnalyticsDialog({
         querySql,
       );
       setQueryResult(nextResult);
+      recordHistoryEntry({
+        connectionId,
+        database,
+        tabId,
+        source: "file-analytics",
+        sql: querySql,
+        status: "success",
+        executedAt: startedAt,
+        duration: Math.max(0, Date.now() - startedAt),
+        rowsAffected: nextResult.result.rows.length,
+        paradigm: "rdb",
+        queryMode: "sql",
+      });
     } catch (err) {
       setError(errorMessage(err));
     } finally {

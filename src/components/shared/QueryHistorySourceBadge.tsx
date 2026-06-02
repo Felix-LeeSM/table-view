@@ -36,6 +36,11 @@ const META: Record<Exclude<QueryHistorySource, "raw">, SourceMeta> = {
     className: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300",
     title: "Recorded from the query editor Explain plan action",
   },
+  "file-analytics": {
+    label: "FILE",
+    className: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
+    title: "Recorded from a DuckDB local-file source query",
+  },
   // sprint-373 (2026-05-17) — sidebar 의 collection / table 클릭이 trigger
   // 한 preview-row SELECT 가 본 source 로 기록. user-initiated 지만 dialog
   // 가 없는 background-ish 경로라 muted gray 패턴.

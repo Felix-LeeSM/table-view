@@ -21,6 +21,11 @@ vi.mock("@lib/tauri/fileAnalytics", () => ({
     mockExecuteFileAnalyticsQuery(...args),
 }));
 
+const mockRecordHistoryEntry = vi.fn();
+vi.mock("@lib/runtime/history/recordHistoryEntry", () => ({
+  recordHistoryEntry: (...args: unknown[]) => mockRecordHistoryEntry(...args),
+}));
+
 const source = {
   id: "src-1",
   alias: "sales_csv",
@@ -35,6 +40,7 @@ describe("DuckdbFileAnalyticsDialog", () => {
     mockRegisterFileAnalyticsSource.mockReset();
     mockPreviewFileAnalyticsSource.mockReset();
     mockExecuteFileAnalyticsQuery.mockReset();
+    mockRecordHistoryEntry.mockReset();
   });
 
   it("registers a local source, runs source-scoped SQL, and keeps absolute paths off the dialog", async () => {
@@ -105,6 +111,17 @@ describe("DuckdbFileAnalyticsDialog", () => {
       "conn-1",
       "src-1",
       'SELECT name AS selected_name FROM "sales_csv" WHERE id = 2',
+    );
+    expect(mockRecordHistoryEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: "conn-1",
+        source: "file-analytics",
+        paradigm: "rdb",
+        queryMode: "sql",
+        sql: 'SELECT name AS selected_name FROM "sales_csv" WHERE id = 2',
+        status: "success",
+        rowsAffected: 1,
+      }),
     );
 
     const queryRegion = await screen.findByRole("region", {
