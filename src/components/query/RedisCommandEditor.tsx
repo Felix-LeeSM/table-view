@@ -16,7 +16,10 @@ import {
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
-import { createRedisCommandCompletionSource } from "@lib/redis/redisCommandCompletion";
+import {
+  createRedisCommandCompletionSource,
+  type RedisKeySuggestion,
+} from "@lib/redis/redisCommandCompletion";
 
 export interface RedisCommandEditorProps {
   sql: string;
@@ -24,15 +27,21 @@ export interface RedisCommandEditorProps {
   onExecute: () => void;
   onDryRun?: () => void;
   redisExtensions?: readonly Extension[];
+  redisKeySuggestions?: readonly RedisKeySuggestion[];
 }
-
-const REDIS_COMMAND_COMPLETION = createRedisCommandCompletionSource();
 
 function buildRedisCommandExtensions(
   redisExtensions: readonly Extension[],
+  redisKeySuggestions: readonly RedisKeySuggestion[],
 ): Extension {
   return [
-    autocompletion({ override: [REDIS_COMMAND_COMPLETION] }),
+    autocompletion({
+      override: [
+        createRedisCommandCompletionSource({
+          keySuggestions: redisKeySuggestions,
+        }),
+      ],
+    }),
     ...redisExtensions,
   ];
 }
@@ -43,7 +52,13 @@ const RedisCommandEditor = forwardRef<
 >(function RedisCommandEditor(
   // `onDryRun` is accepted for prop-shape parity with SQL/document editors.
   // Redis command dry-run has no runtime contract yet, so no key binding.
-  { sql, onSqlChange, onExecute, redisExtensions = [] },
+  {
+    sql,
+    onSqlChange,
+    onExecute,
+    redisExtensions = [],
+    redisKeySuggestions = [],
+  },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -69,7 +84,7 @@ const RedisCommandEditor = forwardRef<
         bracketMatching(),
         placeholder("GET key"),
         completionCompartment.current.of(
-          buildRedisCommandExtensions(redisExtensions),
+          buildRedisCommandExtensions(redisExtensions, redisKeySuggestions),
         ),
         syntaxHighlighting(viewTableHighlightStyle),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -145,10 +160,10 @@ const RedisCommandEditor = forwardRef<
     if (!view) return;
     view.dispatch({
       effects: completionCompartment.current.reconfigure(
-        buildRedisCommandExtensions(redisExtensions),
+        buildRedisCommandExtensions(redisExtensions, redisKeySuggestions),
       ),
     });
-  }, [redisExtensions]);
+  }, [redisExtensions, redisKeySuggestions]);
 
   useEffect(() => {
     const view = viewRef.current;

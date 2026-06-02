@@ -6,6 +6,7 @@ import {
   REDIS_COMMAND_COMPLETIONS,
   REDIS_UNSUPPORTED_COMMAND_FAMILIES,
   createRedisCommandCompletionSource,
+  type RedisKeySuggestion,
 } from "./redisCommandCompletion";
 
 const BACKEND_ALLOWLIST = [
@@ -29,9 +30,22 @@ const BACKEND_ALLOWLIST = [
   "DEL",
 ] as const;
 
-function runSource(doc: string, explicit = true) {
+const KEY_SUGGESTIONS = [
+  { key: "profile:1", keyType: "string" },
+  { key: "profiles:list", keyType: "list" },
+  { key: "profiles:set", keyType: "set" },
+  { key: "profiles:zset", keyType: "zSet" },
+  { key: "profiles:hash", keyType: "hash" },
+  { key: "profiles:stream", keyType: "stream" },
+] as const satisfies readonly RedisKeySuggestion[];
+
+function runSource(
+  doc: string,
+  explicit = true,
+  keySuggestions: readonly RedisKeySuggestion[] = [],
+) {
   const state = EditorState.create({ doc });
-  const source = createRedisCommandCompletionSource();
+  const source = createRedisCommandCompletionSource({ keySuggestions });
   const result = source(new CompletionContext(state, doc.length, explicit));
   if (result instanceof Promise) {
     throw new Error("Redis command completion source must be synchronous");
@@ -107,5 +121,67 @@ describe("redis command completion vocabulary", () => {
   it("requires explicit completion for an empty command token", () => {
     expect(labels(runSource("", false))).toEqual([]);
     expect(labels(runSource("", true))).toEqual([...BACKEND_ALLOWLIST]);
+  });
+
+  it("suggests current-DB keys when the cursor is on a key argument", () => {
+    expect(labels(runSource("GET pro", true, KEY_SUGGESTIONS))).toEqual([
+      "profile:1",
+    ]);
+    expect(labels(runSource("LRANGE profiles", true, KEY_SUGGESTIONS))).toEqual(
+      ["profiles:list"],
+    );
+    expect(
+      labels(runSource("HGETALL profiles", true, KEY_SUGGESTIONS)),
+    ).toEqual(["profiles:hash"]);
+    expect(labels(runSource("ZRANGE profiles", true, KEY_SUGGESTIONS))).toEqual(
+      ["profiles:zset"],
+    );
+    expect(labels(runSource("XRANGE profiles", true, KEY_SUGGESTIONS))).toEqual(
+      ["profiles:stream"],
+    );
+  });
+
+  it("keeps type-agnostic commands open to every cached key type", () => {
+    expect(labels(runSource("TTL profiles", true, KEY_SUGGESTIONS))).toEqual([
+      "profiles:list",
+      "profiles:set",
+      "profiles:zset",
+      "profiles:hash",
+      "profiles:stream",
+    ]);
+    expect(
+      labels(runSource("EXISTS profiles:", true, KEY_SUGGESTIONS)),
+    ).toEqual([
+      "profiles:list",
+      "profiles:set",
+      "profiles:zset",
+      "profiles:hash",
+      "profiles:stream",
+    ]);
+  });
+
+  it("does not block or synthesize key completions when the scan cache is empty", () => {
+    expect(labels(runSource("GET pro", true))).toEqual([]);
+    expect(labels(runSource("GET ", false, KEY_SUGGESTIONS))).toEqual([]);
+    expect(labels(runSource("GET ", true, KEY_SUGGESTIONS))).toEqual([
+      "profile:1",
+    ]);
+  });
+
+  it("does not suggest keys past the first key argument for fixed-arity commands", () => {
+    expect(
+      labels(runSource("HSET profiles:hash field", true, KEY_SUGGESTIONS)),
+    ).toEqual([]);
+    expect(
+      labels(
+        runSource("EXISTS profiles:list profiles:", true, KEY_SUGGESTIONS),
+      ),
+    ).toEqual([
+      "profiles:list",
+      "profiles:set",
+      "profiles:zset",
+      "profiles:hash",
+      "profiles:stream",
+    ]);
   });
 });

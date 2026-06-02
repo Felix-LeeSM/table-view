@@ -11,6 +11,7 @@ import { getDataSourceProfile } from "@/types/dataSource";
 import { buildSqlCompletionContext } from "@lib/sql/sqlCompletionContext";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
+import { useRedisKeySuggestions } from "@hooks/useRedisKeySuggestions";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
@@ -341,6 +342,11 @@ export default function QueryTab({ tab }: QueryTabProps) {
     () => tab.database ?? resolveActiveDb(tab.connectionId),
     [tab.database, tab.connectionId],
   );
+  const redisKeySuggestionState = useRedisKeySuggestions({
+    connectionId: tab.connectionId,
+    database: explainExpectedDatabase,
+    enabled: tab.paradigm === "kv",
+  });
 
   // Resizable split state
   const containerRef = useRef<HTMLDivElement>(null);
@@ -416,6 +422,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
                   onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
                   onExecute={handleExecuteAndShowResults}
                   onDryRun={handleDryRunAndShowResults}
+                  redisKeySuggestions={redisKeySuggestionState.keySuggestions}
                 />
               );
             case "search":
