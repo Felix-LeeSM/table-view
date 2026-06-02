@@ -50,4 +50,12 @@ describe("QueryHistorySourceBadge", () => {
     expect(badge.getAttribute("data-source")).toBe("explain");
     expect(badge.getAttribute("title")).toMatch(/explain plan/i);
   });
+
+  it("surfaces a FILE badge for DuckDB file analytics source queries", () => {
+    render(<QueryHistorySourceBadge source="file-analytics" />);
+    const badge = screen.getByTestId("query-history-source-badge");
+    expect(badge).toHaveTextContent("FILE");
+    expect(badge.getAttribute("data-source")).toBe("file-analytics");
+    expect(badge.getAttribute("title")).toMatch(/duckdb local-file source/i);
+  });
 });
