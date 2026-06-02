@@ -264,7 +264,7 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     expect(result.current.pendingMongoConfirm!.reason).toMatch(/drop/);
   });
 
-  it("[AC-381-S11] non-prod + warn + dropDatabase → passthrough (matrix-consistent allow path; dispatch still routes through decide)", async () => {
+  it("[AC-473-S1] non-prod + warn + dropDatabase → confirm before backend ack", async () => {
     useSafeModeStore.setState({ mode: "warn" });
     runMongoCommandMock.mockResolvedValueOnce({ ok: 1 });
     const tab = seedDocTab("db.runCommand({dropDatabase: 1})", {
@@ -277,6 +277,14 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
       await result.current.handleExecute();
     });
 
+    expect(runMongoCommandMock).not.toHaveBeenCalled();
+    expect(result.current.pendingMongoConfirm).not.toBeNull();
+    expect(result.current.pendingMongoConfirm!.reason).toMatch(/dropDatabase/);
+
+    await act(async () => {
+      await result.current.confirmMongoDangerous();
+    });
+
     await waitFor(() => {
       expect(runMongoCommandMock).toHaveBeenCalledTimes(1);
     });
@@ -286,10 +294,9 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
       { dropDatabase: 1 },
       true,
     );
-    expect(result.current.pendingMongoConfirm).toBeNull();
   });
 
-  it("[SPRINT-475] non-prod + warn + write-capable runCommand passes backend safety ack", async () => {
+  it("[AC-473-S2] non-prod + warn + write-capable runCommand confirms before backend ack", async () => {
     useSafeModeStore.setState({ mode: "warn" });
     runMongoCommandMock.mockResolvedValueOnce({ ok: 1 });
     const tab = seedDocTab(
@@ -305,6 +312,13 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
       await result.current.handleExecute();
     });
 
+    expect(runMongoCommandMock).not.toHaveBeenCalled();
+    expect(result.current.pendingMongoConfirm).not.toBeNull();
+
+    await act(async () => {
+      await result.current.confirmMongoDangerous();
+    });
+
     await waitFor(() => {
       expect(runMongoCommandMock).toHaveBeenCalledTimes(1);
     });
@@ -317,7 +331,6 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
       },
       true,
     );
-    expect(result.current.pendingMongoConfirm).toBeNull();
   });
 
   // Regression: `db.users.find({})` with empty chip → existing error

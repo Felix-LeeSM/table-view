@@ -399,11 +399,20 @@ describe("parseMongoshExpression — refusal kinds (AC-04)", () => {
     expect(result.errorKind).toBe("invalid-cursor-chain");
   });
 
-  it("transaction shell helper → unsupported-method with friendly message", () => {
-    const result = parseMongoshExpression("db.getMongo().startSession()");
-    expectError(result);
-    expect(result.errorKind).toBe("unsupported-method");
-    expect(result.message).toMatch(/Transactions are not supported/i);
+  it("transaction shell helpers → unsupported-method with friendly standalone message", () => {
+    for (const input of [
+      "db.getMongo().startSession()",
+      "session.startTransaction()",
+      "session.withTransaction(() => db.users.insertOne({}))",
+      "session.commitTransaction()",
+      "session.abortTransaction()",
+    ]) {
+      const result = parseMongoshExpression(input);
+      expectError(result);
+      expect(result.errorKind).toBe("unsupported-method");
+      expect(result.message).toMatch(/Transactions are not supported/i);
+      expect(result.message).toMatch(/standalone MongoDB servers/i);
+    }
   });
 });
 
