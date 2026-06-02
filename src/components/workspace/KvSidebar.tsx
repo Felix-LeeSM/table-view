@@ -31,6 +31,7 @@ import type {
   KvValueEnvelope,
 } from "@/types/kv";
 import { formatKvTtl } from "@/types/kv";
+import { KvMutationPanel } from "./KvMutationPanel";
 
 const KEY_SCAN_LIMIT = 100;
 
@@ -124,6 +125,14 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
       }
     },
     [connectionId, database],
+  );
+
+  const refreshAfterMutation = useCallback(
+    async (key: string) => {
+      await loadKeys("0");
+      await loadValue(key);
+    },
+    [loadKeys, loadValue],
   );
 
   useEffect(() => {
@@ -313,7 +322,13 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
           </div>
         )}
 
-        <KvValuePreview value={value} loading={loadingValue} />
+        <KvValuePreview
+          value={value}
+          loading={loadingValue}
+          connectionId={connectionId}
+          database={database}
+          onMutationSuccess={refreshAfterMutation}
+        />
       </div>
     </div>
   );
@@ -326,42 +341,17 @@ function emptyKeysMessage(pattern: string) {
 }
 
 function iconForKeyType(type: KvKeyMetadata["keyType"]) {
-  switch (type) {
-    case "hash":
-      return (
-        <Hash
-          size={12}
-          className="shrink-0 text-muted-foreground"
-          aria-hidden
-        />
-      );
-    case "list":
-    case "set":
-    case "zSet":
-      return (
-        <List
-          size={12}
-          className="shrink-0 text-muted-foreground"
-          aria-hidden
-        />
-      );
-    case "stream":
-      return (
-        <Layers3
-          size={12}
-          className="shrink-0 text-muted-foreground"
-          aria-hidden
-        />
-      );
-    default:
-      return (
-        <KeyRound
-          size={12}
-          className="shrink-0 text-muted-foreground"
-          aria-hidden
-        />
-      );
-  }
+  const Icon =
+    type === "hash"
+      ? Hash
+      : type === "stream"
+        ? Layers3
+        : type === "list" || type === "set" || type === "zSet"
+          ? List
+          : KeyRound;
+  return (
+    <Icon size={12} className="shrink-0 text-muted-foreground" aria-hidden />
+  );
 }
 
 function formatCount(value: number): string {
@@ -378,9 +368,15 @@ function formatBytes(value: number): string {
 function KvValuePreview({
   value,
   loading,
+  connectionId,
+  database,
+  onMutationSuccess,
 }: {
   value: KvValueEnvelope | null;
   loading: boolean;
+  connectionId: string;
+  database: number;
+  onMutationSuccess: (key: string) => Promise<void>;
 }) {
   if (loading) {
     return (
@@ -418,6 +414,12 @@ function KvValuePreview({
       <pre className="max-h-48 overflow-auto rounded border border-border bg-muted/40 p-2 text-3xs text-foreground">
         {renderValueText(value)}
       </pre>
+      <KvMutationPanel
+        value={value}
+        connectionId={connectionId}
+        database={database}
+        onMutationSuccess={onMutationSuccess}
+      />
     </div>
   );
 }

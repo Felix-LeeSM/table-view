@@ -9,6 +9,7 @@ import {
 import KvSidebar from "./KvSidebar";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig } from "@/types/connection";
+import type { KvValueEnvelope } from "@/types/kv";
 
 const invokeMock = vi.fn();
 
@@ -351,7 +352,7 @@ function defaultKeyPage() {
   };
 }
 
-function defaultValueEnvelope() {
+function defaultValueEnvelope(): KvValueEnvelope {
   return {
     key: "user:1",
     metadata: {
@@ -371,7 +372,7 @@ function defaultValueEnvelope() {
   };
 }
 
-function streamValueEnvelope() {
+function streamValueEnvelope(): KvValueEnvelope {
   return {
     key: "stream:events",
     metadata: {
