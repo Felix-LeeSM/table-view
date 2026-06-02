@@ -7,12 +7,14 @@ use crate::db::{KvCommandRequest, KvHashField, RdbQueryResult};
 use crate::error::AppError;
 use crate::models::QueryResult;
 
-use super::command_parser::{parse_redis_command, range_limit, RedisCommand};
+use super::command_parser::{parse_redis_command, range_limit, RedisCommand, RedisCommandEffect};
 use super::command_result::{
     float_col, int_col, key_type_label, mutation_result, object_col, rows_result, single_row,
     string_cell, text_col, ttl_state_label,
 };
-use super::helpers::{bounded_limit, ensure_not_cancelled, redis_database_error};
+use super::helpers::{
+    bounded_limit, ensure_not_cancelled, redis_database_error, require_confirm_key,
+};
 use super::values::{read_hash, read_set, read_stream_range, read_string};
 use super::RedisAdapter;
 
@@ -24,6 +26,7 @@ pub(super) async fn execute_command(
     ensure_not_cancelled(cancel)?;
     adapter.ensure_database(request.database).await?;
     let command = parse_redis_command(&request.command)?;
+    require_command_confirmation(&command, request.confirm_key.as_deref())?;
     let start = Instant::now();
     let result = dispatch_command(adapter, command, cancel).await?;
     Ok(QueryResult {
@@ -77,6 +80,25 @@ async fn dispatch_command(
             zadd_command(adapter, key, score, member).await
         }
         RedisCommand::Expire { key, seconds } => expire_command(adapter, key, seconds).await,
+        RedisCommand::Persist { key } => persist_command(adapter, key).await,
+        RedisCommand::Del { key } => delete_command(adapter, key).await,
+    }
+}
+
+fn require_command_confirmation(
+    command: &RedisCommand,
+    confirm_key: Option<&str>,
+) -> Result<(), AppError> {
+    match command.effect() {
+        RedisCommandEffect::Destructive | RedisCommandEffect::Ttl
+            if command.required_confirmation_key().is_some() =>
+        {
+            require_confirm_key(
+                command.required_confirmation_key().unwrap_or_default(),
+                confirm_key.unwrap_or_default(),
+            )
+        }
+        _ => Ok(()),
     }
 }
 
@@ -388,6 +410,32 @@ async fn expire_command(
     Ok(mutation_result(&key, "expire", u64::from(changed)))
 }
 
+async fn persist_command(adapter: &RedisAdapter, key: String) -> Result<RdbQueryResult, AppError> {
+    let changed: bool = adapter
+        .with_connection(async |connection| {
+            ::redis::cmd("PERSIST")
+                .arg(&key)
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)
+        })
+        .await?;
+    Ok(mutation_result(&key, "persist", u64::from(changed)))
+}
+
+async fn delete_command(adapter: &RedisAdapter, key: String) -> Result<RdbQueryResult, AppError> {
+    let changed: u64 = adapter
+        .with_connection(async |connection| {
+            ::redis::cmd("DEL")
+                .arg(&key)
+                .query_async(connection)
+                .await
+                .map_err(redis_database_error)
+        })
+        .await?;
+    Ok(mutation_result(&key, "delete", changed))
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -408,6 +456,15 @@ mod tests {
         KvCommandRequest {
             command: command.into(),
             database: Some(2),
+            confirm_key: None,
+        }
+    }
+
+    fn confirmed_request(command: &str, confirm_key: &str) -> KvCommandRequest {
+        KvCommandRequest {
+            command: command.into(),
+            database: Some(2),
+            confirm_key: Some(confirm_key.into()),
         }
     }
 
@@ -484,6 +541,39 @@ mod tests {
                 crate::models::QueryType::Dml { .. }
             ));
         }
+    }
+
+    #[tokio::test]
+    async fn command_runtime_requires_typed_confirmation_for_dangerous_commands() {
+        let adapter = connected_adapter().await;
+
+        assert!(matches!(
+            execute_command(&adapter, request("DEL alpha"), None).await,
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            execute_command(
+                &adapter,
+                confirmed_request("PERSIST alpha", "different"),
+                None,
+            )
+            .await,
+            Err(AppError::Validation(_))
+        ));
+
+        let persist = execute_command(&adapter, confirmed_request("PERSIST alpha", "alpha"), None)
+            .await
+            .unwrap();
+        assert_eq!(persist.rows[0][1], json!("persist"));
+
+        let delete = execute_command(&adapter, confirmed_request("DEL alpha", "alpha"), None)
+            .await
+            .unwrap();
+        assert_eq!(delete.rows[0][1], json!("delete"));
+        assert!(matches!(
+            delete.query_type,
+            crate::models::QueryType::Dml { .. }
+        ));
     }
 
     #[tokio::test]

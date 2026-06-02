@@ -331,6 +331,7 @@ mod tests {
                 KvCommandRequest {
                     command: "GET session:1".into(),
                     database: Some(0),
+                    confirm_key: None,
                 },
                 Some("command"),
             )
@@ -429,6 +430,7 @@ mod tests {
                 KvCommandRequest {
                     command: "GET session:1".into(),
                     database: Some(0),
+                    confirm_key: None,
                 },
                 Some("q"),
             )
