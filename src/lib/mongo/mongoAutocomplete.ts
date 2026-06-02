@@ -209,10 +209,17 @@ function pushOperators(
  * `db.` → method case so the user always sees the method whitelist.
  */
 export interface MongoshDbSourceOptions {
+  /** Active collection in the current query tab. */
+  activeCollectionName?: string;
   /** Known collection names for the active database. Sourced from the
    *  schema/document store; may be empty until the user has browsed
    *  the database in the sidebar. */
   collectionNames?: readonly string[];
+  /**
+   * Known index names for the active collection. Used only in index-name
+   * argument positions such as `db.users.dropIndex("...")`.
+   */
+  indexNames?: readonly string[];
 }
 
 export function createMongoshDbSource(
@@ -220,6 +227,28 @@ export function createMongoshDbSource(
 ): CompletionSource {
   return (context: CompletionContext): CompletionResult | null => {
     const upTo = context.state.doc.sliceString(0, context.pos);
+
+    const indexNameMatch =
+      /\bdb\.([A-Za-z_][A-Za-z0-9_]*)\.dropIndex\(\s*"([^"]*)$/.exec(upTo);
+    if (indexNameMatch) {
+      if (indexNameMatch[1] !== opts.activeCollectionName) return null;
+      const prefix = indexNameMatch[2] ?? "";
+      const from = context.pos - prefix.length;
+      const indexNames = (opts.indexNames ?? []).filter(
+        (name) => name !== "_id_",
+      );
+      if (indexNames.length === 0) return null;
+      return {
+        from,
+        options: indexNames.map((name) => ({
+          label: name,
+          apply: name,
+          type: "variable",
+          detail: "index",
+        })),
+        validFor: /^[^"]*$/,
+      };
+    }
 
     const methodMatch = /\bdb\.([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_]*)$/.exec(
       upTo,
