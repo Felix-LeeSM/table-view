@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::QueryResult;
+use super::{QueryColumn, QueryResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,6 +19,14 @@ pub struct FileAnalyticsSource {
     pub file_name: String,
     pub kind: FileAnalyticsSourceKind,
     pub size_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileAnalyticsSourceMetadata {
+    pub source: FileAnalyticsSource,
+    pub columns: Vec<QueryColumn>,
+    pub preview_sql: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

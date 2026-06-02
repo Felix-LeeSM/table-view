@@ -13,8 +13,8 @@ use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, DropColumnRequest,
     DropConstraintRequest, DropIndexRequest, DropTableRequest, FileAnalyticsPreview,
-    FileAnalyticsQueryResponse, FileAnalyticsSource, FilterCondition, IndexInfo,
-    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
+    FileAnalyticsQueryResponse, FileAnalyticsSource, FileAnalyticsSourceMetadata, FilterCondition,
+    IndexInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -123,6 +123,19 @@ impl RdbAdapter for DuckdbAdapter {
         path: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<FileAnalyticsSource, AppError>> + Send + 'a>> {
         Box::pin(async move { self.register_file_analytics_source(path).await })
+    }
+
+    fn list_file_analytics_source_metadata<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<FileAnalyticsSourceMetadata>, AppError>> + Send + 'a>>
+    {
+        Box::pin(async move { self.list_file_analytics_source_metadata().await })
+    }
+
+    fn clear_file_analytics_sources<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.clear_file_analytics_sources().await })
     }
 
     fn preview_file_analytics_source<'a>(

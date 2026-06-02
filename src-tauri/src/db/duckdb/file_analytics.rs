@@ -7,7 +7,7 @@ use duckdb::Connection;
 use crate::error::AppError;
 use crate::models::{
     FileAnalyticsPreview, FileAnalyticsQueryResponse, FileAnalyticsSource, FileAnalyticsSourceKind,
-    QueryResult, QueryType,
+    FileAnalyticsSourceMetadata, QueryResult, QueryType,
 };
 
 use super::connection::{
@@ -45,6 +45,17 @@ impl DuckdbAdapter {
             validated.size_bytes,
         )
         .await
+    }
+
+    pub async fn list_file_analytics_source_metadata(
+        &self,
+    ) -> Result<Vec<FileAnalyticsSourceMetadata>, AppError> {
+        self.active_settings().await?;
+        Ok(Vec::new())
+    }
+
+    pub async fn clear_file_analytics_sources(&self) -> Result<(), AppError> {
+        self.clear_registered_file_analytics_sources().await
     }
 
     pub async fn preview_file_analytics_source(

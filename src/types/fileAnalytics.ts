@@ -10,6 +10,16 @@ export interface FileAnalyticsSource {
   sizeBytes: number;
 }
 
+export interface FileAnalyticsSourceMetadata {
+  source: FileAnalyticsSource;
+  columns: Array<{
+    name: string;
+    dataType: string;
+    category?: string;
+  }>;
+  previewSql: string;
+}
+
 export interface FileAnalyticsPreview {
   source: FileAnalyticsSource;
   result: QueryResult;

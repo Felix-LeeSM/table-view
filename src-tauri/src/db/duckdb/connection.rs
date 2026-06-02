@@ -221,6 +221,17 @@ impl DuckdbAdapter {
             .ok_or_else(|| AppError::NotFound(format!("File source '{source_id}' not found")))
     }
 
+    pub(super) async fn clear_registered_file_analytics_sources(&self) -> Result<(), AppError> {
+        let mut guard = self.inner.lock().await;
+        guard
+            .settings
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+        guard.file_sources.clear();
+        guard.next_file_source_id = 0;
+        Ok(())
+    }
+
     pub(super) async fn with_connection<T, F>(&self, work: F) -> Result<T, AppError>
     where
         T: Send + 'static,

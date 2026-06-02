@@ -113,6 +113,7 @@ function setSchemaStoreState(overrides: Record<string, unknown> = {}) {
     tables: {},
     views: {},
     functions: {},
+    fileAnalyticsSources: {},
     loading: false,
     error: null,
     ...translated,
@@ -458,6 +459,48 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
 
     // No tables → "No tables" sentinel rendered directly under the root.
     expect(screen.getByText(/no tables/i)).toBeInTheDocument();
+  });
+
+  it("DuckDB flat workbench shows registered source aliases without local absolute paths (#465 RED)", async () => {
+    const localPath = "/Users/felix/private/people.csv";
+    useConnectionStore.setState({
+      connections: [makeConnection("duck1", "duckdb")],
+    });
+    setSchemaStoreState({
+      schemas: { duck1: [{ name: "main" }] },
+      tables: {
+        "duck1:main": [{ name: "events", schema: "main", row_count: 2 }],
+      },
+      fileAnalyticsSources: {
+        duck1: [
+          {
+            source: {
+              id: "duckdb-file-1",
+              alias: "file_00000001",
+              fileName: "people.csv",
+              kind: "csv",
+              sizeBytes: 32,
+            },
+            columns: [
+              { name: "id", dataType: "INTEGER" },
+              { name: "name", dataType: "VARCHAR" },
+            ],
+            previewSql: 'SELECT * FROM "file_00000001" LIMIT 100',
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="duck1" />);
+    });
+
+    expect(screen.getByLabelText("events table")).toBeInTheDocument();
+    expect(screen.getByLabelText("file_00000001 source")).toBeInTheDocument();
+    expect(screen.getByText("people.csv")).toBeInTheDocument();
+    expect(screen.getByText("id, name")).toBeInTheDocument();
+    expect(screen.queryByText(localPath)).toBeNull();
+    expect(document.body).not.toHaveTextContent("/Users/felix/private");
   });
 
   // ─────────────────────────────────────────────────────────────────────

@@ -97,6 +97,39 @@ async fn duckdb_file_analytics_previews_and_queries_csv_without_exposing_path() 
 }
 
 #[tokio::test]
+async fn duckdb_file_analytics_lists_source_metadata_and_clears_session_sources() {
+    let (dir, adapter) = connected_fixture().await;
+    let csv_path = dir.path().join("people.csv");
+    fs::write(&csv_path, "id,name\n1,Ada\n2,Bob\n").unwrap();
+    let csv_path = csv_path.to_str().unwrap();
+
+    let source = adapter
+        .register_file_analytics_source(csv_path)
+        .await
+        .unwrap();
+    let metadata = adapter.list_file_analytics_source_metadata().await.unwrap();
+
+    assert_eq!(metadata.len(), 1);
+    assert_eq!(metadata[0].source.id, source.id);
+    assert_eq!(metadata[0].source.alias, source.alias);
+    assert_eq!(metadata[0].source.file_name, "people.csv");
+    assert_eq!(metadata[0].columns[0].name, "id");
+    assert_eq!(metadata[0].columns[1].name, "name");
+    assert_eq!(
+        metadata[0].preview_sql,
+        format!("SELECT * FROM \"{}\" LIMIT 100", source.alias)
+    );
+    assert!(!serde_json::to_string(&metadata).unwrap().contains(csv_path));
+
+    adapter.clear_file_analytics_sources().await.unwrap();
+    assert!(adapter
+        .list_file_analytics_source_metadata()
+        .await
+        .unwrap()
+        .is_empty());
+}
+
+#[tokio::test]
 async fn duckdb_file_analytics_requires_the_registered_source_alias() {
     let (dir, adapter) = connected_fixture().await;
     let csv_path = dir.path().join("people.csv");

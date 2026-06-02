@@ -10,6 +10,7 @@ import type {
   TriggerInfo,
   ViewInfo,
 } from "@/types/schema";
+import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import * as tauri from "@lib/tauri";
 import {
   deleteConn,
@@ -77,6 +78,7 @@ interface SchemaState {
   tableColumnsCache: ByConn<BySchema<ByTable<ColumnInfo[]>>>;
   tableIndexesCache: ByConn<BySchema<ByTable<IndexInfo[]>>>;
   tableConstraintsCache: ByConn<BySchema<ByTable<ConstraintInfo[]>>>;
+  fileAnalyticsSources: ByConn<FileAnalyticsSourceMetadata[]>;
   /**
    * Sprint 272 — per-`(connId, db, schema, table)` trigger cache.
    * Populated lazily by `getTableTriggers`. Mirrors the
@@ -213,6 +215,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   tableColumnsCache: {},
   tableIndexesCache: {},
   tableConstraintsCache: {},
+  fileAnalyticsSources: {},
   triggers: {},
   loading: false,
   error: null,
