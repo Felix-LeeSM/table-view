@@ -8,8 +8,10 @@ import { verifyActiveDb } from "@lib/api/verifyActiveDb";
 import { toast } from "@lib/runtime/toast";
 import type { Paradigm } from "@/types/connection";
 import type { QueryTab } from "@stores/workspaceStore";
+import type { FindBody } from "@/types/document";
 import { documentIdFromRow, type DocumentId } from "@/types/documentMutate";
 import type { CreateMongoIndexRequest, MongoIndexDirection } from "@lib/tauri";
+import type { CursorChainStep } from "@lib/mongo/mongoshParser";
 
 /**
  * `QueryTab` module-top helpers:
@@ -37,6 +39,114 @@ export function readDocumentContext(
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+type CursorChainApplyResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: string };
+
+export function applyFindCursorChain(
+  body: FindBody,
+  cursorChain: readonly CursorChainStep[],
+): CursorChainApplyResult<FindBody> {
+  const next: FindBody = { ...body };
+  for (const step of cursorChain) {
+    if (step.name === "sort") {
+      const arg = readCursorObjectArg(step);
+      if (!arg.ok) return arg;
+      next.sort = arg.value;
+      continue;
+    }
+    if (step.name === "limit") {
+      const arg = readCursorNumberArg(step);
+      if (!arg.ok) return arg;
+      next.limit = arg.value;
+      continue;
+    }
+    if (step.name === "skip") {
+      const arg = readCursorNumberArg(step);
+      if (!arg.ok) return arg;
+      next.skip = arg.value;
+      continue;
+    }
+    if (step.name === "toArray") {
+      const arg = readCursorNoArg(step);
+      if (!arg.ok) return arg;
+      continue;
+    }
+    return { ok: false, error: `Unsupported cursor method '${step.name}'.` };
+  }
+  return { ok: true, value: next };
+}
+
+export function applyAggregateCursorChain(
+  pipeline: readonly Record<string, unknown>[],
+  cursorChain: readonly CursorChainStep[],
+): CursorChainApplyResult<Record<string, unknown>[]> {
+  const next = [...pipeline];
+  for (const step of cursorChain) {
+    if (step.name === "sort") {
+      const arg = readCursorObjectArg(step);
+      if (!arg.ok) return arg;
+      next.push({ $sort: arg.value });
+      continue;
+    }
+    if (step.name === "limit") {
+      const arg = readCursorNumberArg(step);
+      if (!arg.ok) return arg;
+      next.push({ $limit: arg.value });
+      continue;
+    }
+    if (step.name === "skip") {
+      const arg = readCursorNumberArg(step);
+      if (!arg.ok) return arg;
+      next.push({ $skip: arg.value });
+      continue;
+    }
+    if (step.name === "toArray") {
+      const arg = readCursorNoArg(step);
+      if (!arg.ok) return arg;
+      continue;
+    }
+    return { ok: false, error: `Unsupported cursor method '${step.name}'.` };
+  }
+  return { ok: true, value: next };
+}
+
+function readCursorObjectArg(
+  step: CursorChainStep,
+): CursorChainApplyResult<Record<string, unknown>> {
+  const arg = step.args[0];
+  if (step.args.length !== 1 || !isRecord(arg)) {
+    return { ok: false, error: `${step.name}() argument must be an object.` };
+  }
+  return { ok: true, value: arg };
+}
+
+function readCursorNumberArg(
+  step: CursorChainStep,
+): CursorChainApplyResult<number> {
+  const arg = step.args[0];
+  if (
+    step.args.length !== 1 ||
+    typeof arg !== "number" ||
+    !Number.isFinite(arg)
+  ) {
+    return {
+      ok: false,
+      error: `${step.name}() argument must be a finite number.`,
+    };
+  }
+  return { ok: true, value: arg };
+}
+
+function readCursorNoArg(
+  step: CursorChainStep,
+): CursorChainApplyResult<undefined> {
+  if (step.args.length !== 0) {
+    return { ok: false, error: `${step.name}() does not accept arguments.` };
+  }
+  return { ok: true, value: undefined };
 }
 
 type BuildCreateMongoIndexRequestResult =
