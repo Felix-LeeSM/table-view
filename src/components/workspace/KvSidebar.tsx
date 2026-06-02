@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Hash,
   KeyRound,
@@ -62,6 +62,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   const [error, setError] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [value, setValue] = useState<KvValueEnvelope | null>(null);
+  const latestKeyScanRef = useRef(0);
 
   const loadCatalog = useCallback(async () => {
     setLoadingCatalog(true);
@@ -84,6 +85,8 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
 
   const loadKeys = useCallback(
     async (cursor: string) => {
+      const scanId = latestKeyScanRef.current + 1;
+      latestKeyScanRef.current = scanId;
       setLoadingKeys(true);
       setError(null);
       try {
@@ -93,14 +96,18 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
           pattern: pattern.trim() || "*",
           limit: KEY_SCAN_LIMIT,
         });
+        if (latestKeyScanRef.current !== scanId) return;
         setKeys((prev) =>
           cursor === "0" ? page.keys : [...prev, ...page.keys],
         );
         setNextCursor(page.nextCursor);
       } catch (err) {
+        if (latestKeyScanRef.current !== scanId) return;
         setError(err instanceof Error ? err.message : String(err));
       } finally {
-        setLoadingKeys(false);
+        if (latestKeyScanRef.current === scanId) {
+          setLoadingKeys(false);
+        }
       }
     },
     [connectionId, database, pattern],
