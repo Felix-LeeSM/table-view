@@ -4,9 +4,9 @@ use table_view_lib::db::{DbAdapter, RdbAdapter, SqliteAdapter};
 use table_view_lib::error::AppError;
 use table_view_lib::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
-    ConnectionConfig, ConstraintDefinition, CreateIndexRequest, CreateTableRequest, DatabaseType,
-    DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest, QueryType,
-    RenameTableRequest, SchemaChangeResult,
+    ConnectionConfig, ConstraintDefinition, CreateIndexRequest, CreateTablePlanRequest,
+    CreateTableRequest, DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
+    DropTableRequest, QueryType, RenameTableRequest, SchemaChangeResult,
 };
 use table_view_lib::storage::local as app_sqlite_state;
 use tempfile::TempDir;
@@ -241,6 +241,11 @@ fn ddl_column(name: &str) -> ColumnDefinition {
 async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
     let (_dir, adapter) = connected_fixture().await;
 
+    assert_structured_ddl_methods_unsupported(&adapter, true).await;
+    assert_structured_ddl_methods_unsupported(&adapter, false).await;
+}
+
+async fn assert_structured_ddl_methods_unsupported(adapter: &SqliteAdapter, preview_only: bool) {
     assert_sqlite_ddl_unsupported(
         adapter
             .drop_table(&DropTableRequest {
@@ -248,7 +253,7 @@ async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
                 schema: "main".to_string(),
                 table: "users".to_string(),
                 cascade: false,
-                preview_only: true,
+                preview_only,
                 expected_database: None,
             })
             .await,
@@ -261,7 +266,7 @@ async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
                 schema: "main".to_string(),
                 table: "users".to_string(),
                 new_name: "people".to_string(),
-                preview_only: true,
+                preview_only,
                 expected_database: None,
             })
             .await,
@@ -276,7 +281,7 @@ async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
                 changes: vec![ColumnChange::Drop {
                     name: "name".to_string(),
                 }],
-                preview_only: true,
+                preview_only,
                 expected_database: None,
             })
             .await,
@@ -290,7 +295,7 @@ async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
                 table: "users".to_string(),
                 column: ddl_column("nickname"),
                 check_expression: None,
-                preview_only: true,
+                preview_only,
                 expected_database: None,
             })
             .await,
@@ -304,7 +309,7 @@ async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
                 table: "users".to_string(),
                 column_name: "name".to_string(),
                 cascade: false,
-                preview_only: true,
+                preview_only,
                 expected_database: None,
             })
             .await,
@@ -318,8 +323,25 @@ async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
                 name: "people".to_string(),
                 columns: vec![ddl_column("name")],
                 primary_key: None,
-                preview_only: true,
+                preview_only,
                 table_comment: None,
+                expected_database: None,
+            })
+            .await,
+        "table creation",
+    );
+    assert_sqlite_ddl_unsupported(
+        adapter
+            .create_table_plan(&CreateTablePlanRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                name: "people".to_string(),
+                columns: vec![ddl_column("name")],
+                primary_key: None,
+                table_comment: None,
+                indexes: Vec::new(),
+                constraints: Vec::new(),
+                preview_only,
                 expected_database: None,
             })
             .await,
@@ -335,7 +357,7 @@ async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
                 columns: vec!["email".to_string()],
                 index_type: "BTREE".to_string(),
                 is_unique: false,
-                preview_only: true,
+                preview_only,
                 expected_database: None,
             })
             .await,
@@ -349,7 +371,7 @@ async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
                 index_name: "idx_users_name".to_string(),
                 table: "users".to_string(),
                 if_exists: false,
-                preview_only: true,
+                preview_only,
                 expected_database: None,
             })
             .await,
@@ -365,7 +387,7 @@ async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
                 definition: ConstraintDefinition::Unique {
                     columns: vec!["email".to_string()],
                 },
-                preview_only: true,
+                preview_only,
                 expected_database: None,
             })
             .await,
@@ -378,7 +400,7 @@ async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
                 schema: "main".to_string(),
                 table: "users".to_string(),
                 constraint_name: "users_email_unique".to_string(),
-                preview_only: true,
+                preview_only,
                 expected_database: None,
             })
             .await,
