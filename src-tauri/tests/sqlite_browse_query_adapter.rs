@@ -2,7 +2,12 @@ use serial_test::serial;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use table_view_lib::db::{DbAdapter, RdbAdapter, SqliteAdapter};
 use table_view_lib::error::AppError;
-use table_view_lib::models::{ConnectionConfig, DatabaseType, QueryType};
+use table_view_lib::models::{
+    AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
+    ConnectionConfig, ConstraintDefinition, CreateIndexRequest, CreateTablePlanRequest,
+    CreateTableRequest, DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
+    DropTableRequest, QueryType, RenameTableRequest, SchemaChangeResult,
+};
 use table_view_lib::storage::local as app_sqlite_state;
 use tempfile::TempDir;
 
@@ -208,6 +213,198 @@ async fn sqlite_contract_execute_query_returns_tabular_result_envelope() {
             serde_json::json!(1),
             serde_json::json!("ada@example.test"),
         ]]
+    );
+}
+
+fn assert_sqlite_ddl_unsupported(result: Result<SchemaChangeResult, AppError>, feature: &str) {
+    match result {
+        Err(AppError::Unsupported(message)) => assert!(
+            message.contains(feature),
+            "expected unsupported message to mention {feature:?}, got {message:?}"
+        ),
+        other => panic!("Expected SQLite DDL unsupported error, got: {:?}", other),
+    }
+}
+
+fn ddl_column(name: &str) -> ColumnDefinition {
+    ColumnDefinition {
+        name: name.to_string(),
+        data_type: "TEXT".to_string(),
+        nullable: true,
+        default_value: None,
+        comment: None,
+        is_identity: false,
+    }
+}
+
+#[tokio::test]
+async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    assert_structured_ddl_methods_unsupported(&adapter, true).await;
+    assert_structured_ddl_methods_unsupported(&adapter, false).await;
+}
+
+async fn assert_structured_ddl_methods_unsupported(adapter: &SqliteAdapter, preview_only: bool) {
+    assert_sqlite_ddl_unsupported(
+        adapter
+            .drop_table(&DropTableRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                table: "users".to_string(),
+                cascade: false,
+                preview_only,
+                expected_database: None,
+            })
+            .await,
+        "table drop",
+    );
+    assert_sqlite_ddl_unsupported(
+        adapter
+            .rename_table(&RenameTableRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                table: "users".to_string(),
+                new_name: "people".to_string(),
+                preview_only,
+                expected_database: None,
+            })
+            .await,
+        "table rename",
+    );
+    assert_sqlite_ddl_unsupported(
+        adapter
+            .alter_table(&AlterTableRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                table: "users".to_string(),
+                changes: vec![ColumnChange::Drop {
+                    name: "name".to_string(),
+                }],
+                preview_only,
+                expected_database: None,
+            })
+            .await,
+        "table alteration",
+    );
+    assert_sqlite_ddl_unsupported(
+        adapter
+            .add_column(&AddColumnRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                table: "users".to_string(),
+                column: ddl_column("nickname"),
+                check_expression: None,
+                preview_only,
+                expected_database: None,
+            })
+            .await,
+        "column creation",
+    );
+    assert_sqlite_ddl_unsupported(
+        adapter
+            .drop_column(&DropColumnRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                table: "users".to_string(),
+                column_name: "name".to_string(),
+                cascade: false,
+                preview_only,
+                expected_database: None,
+            })
+            .await,
+        "column drop",
+    );
+    assert_sqlite_ddl_unsupported(
+        adapter
+            .create_table(&CreateTableRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                name: "people".to_string(),
+                columns: vec![ddl_column("name")],
+                primary_key: None,
+                preview_only,
+                table_comment: None,
+                expected_database: None,
+            })
+            .await,
+        "table creation",
+    );
+    assert_sqlite_ddl_unsupported(
+        adapter
+            .create_table_plan(&CreateTablePlanRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                name: "people".to_string(),
+                columns: vec![ddl_column("name")],
+                primary_key: None,
+                table_comment: None,
+                indexes: Vec::new(),
+                constraints: Vec::new(),
+                preview_only,
+                expected_database: None,
+            })
+            .await,
+        "table creation",
+    );
+    assert_sqlite_ddl_unsupported(
+        adapter
+            .create_index(&CreateIndexRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                table: "users".to_string(),
+                index_name: "idx_users_email".to_string(),
+                columns: vec!["email".to_string()],
+                index_type: "BTREE".to_string(),
+                is_unique: false,
+                preview_only,
+                expected_database: None,
+            })
+            .await,
+        "index creation",
+    );
+    assert_sqlite_ddl_unsupported(
+        adapter
+            .drop_index(&DropIndexRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                index_name: "idx_users_name".to_string(),
+                table: "users".to_string(),
+                if_exists: false,
+                preview_only,
+                expected_database: None,
+            })
+            .await,
+        "index drop",
+    );
+    assert_sqlite_ddl_unsupported(
+        adapter
+            .add_constraint(&AddConstraintRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                table: "users".to_string(),
+                constraint_name: "users_email_unique".to_string(),
+                definition: ConstraintDefinition::Unique {
+                    columns: vec!["email".to_string()],
+                },
+                preview_only,
+                expected_database: None,
+            })
+            .await,
+        "constraint creation",
+    );
+    assert_sqlite_ddl_unsupported(
+        adapter
+            .drop_constraint(&DropConstraintRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                table: "users".to_string(),
+                constraint_name: "users_email_unique".to_string(),
+                preview_only,
+                expected_database: None,
+            })
+            .await,
+        "constraint drop",
     );
 }
 
