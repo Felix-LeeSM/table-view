@@ -31,12 +31,13 @@
   destructive Safe Mode path 를 지원한다. arbitrary JavaScript shell 은 지원하지
   않는다.
 - Redis workflow: connection/profile, database/key scan, typed value preview,
-  bounded value mutation panel, backend guarded KV primitives, focused backend
-  command allowlist/dispatch evidence, and bounded Redis command vocabulary
-  completion with current-DB/type-filtered key suggestions 이 있다. Runtime Happy
-  Path smoke now covers connect/scan/preview/GET plus guarded string write, TTL,
-  and delete controls. Full CLI/admin parity, language-core parser ownership,
-  and broad destructive command execution remain follow-up.
+  bounded value mutation panel, backend guarded KV primitives, selected command
+  allowlist/dispatch with tabular result projection, and bounded Redis command
+  vocabulary completion with current-DB/type-filtered key suggestions 이 있다.
+  Runtime Happy Path smoke covers connect/scan/preview/GET plus guarded string
+  write, TTL, and delete controls. Full CLI/admin parity, language-core parser
+  ownership, stream consumer UI, cluster/pubsub/modules, Valkey compatibility,
+  and multi-key destructive command execution remain follow-up.
 - Elasticsearch/OpenSearch: embedded fixture-backed Search catalog/mapping/template
   and result rendering contract 만 있다. live HTTP connection/query/admin 은 없다.
 - MSSQL/Oracle: declared planned RDBMS identities and static seed contracts only.
