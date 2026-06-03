@@ -26,6 +26,8 @@ export interface RedisUnsupportedCommandFamily {
   readonly reason: string;
 }
 
+export type RedisCommandCompletionTarget = "redis" | "valkey";
+
 export interface RedisKeySuggestion {
   readonly key: string;
   readonly keyType: KvKeyType;
@@ -33,6 +35,7 @@ export interface RedisKeySuggestion {
 
 export interface RedisCommandCompletionSourceOptions {
   readonly keySuggestions?: readonly RedisKeySuggestion[];
+  readonly target?: RedisCommandCompletionTarget;
 }
 
 export const REDIS_COMMAND_COMPLETIONS = [
@@ -181,6 +184,8 @@ export const REDIS_COMMAND_COMPLETIONS = [
     summary: "Delete one key; backend requires exact key confirmation.",
   },
 ] as const satisfies readonly RedisCommandCompletionSpec[];
+
+export const VALKEY_COMMAND_COMPLETIONS = REDIS_COMMAND_COMPLETIONS;
 
 export const REDIS_UNSUPPORTED_COMMAND_FAMILIES = [
   {
