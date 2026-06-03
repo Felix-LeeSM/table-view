@@ -222,8 +222,15 @@ assert_contains "$ratchet_script_output" "RUN coverage-ratchet:" "ratchet script
 assert_not_contains "$ratchet_script_output" "RUN ts-test:" "ratchet script"
 assert_not_contains "$ratchet_script_output" "RUN rust-test-and-coverage:" "ratchet script"
 
+ci_workflow_output="$(run_case ci-workflow normal .github/workflows/e2e-smoke.yml)"
+assert_contains "$ci_workflow_output" "route: full" "ci workflow"
+assert_contains "$ci_workflow_output" "RUN e2e-smoke-workflow-cache:" "ci workflow"
+assert_contains "$ci_workflow_output" "RUN ts-test:" "ci workflow"
+assert_contains "$ci_workflow_output" "RUN rust-test-and-coverage:" "ci workflow"
+
 codex_workflow_output="$(run_case codex-workflow normal .codex/hooks.json)"
 assert_contains "$codex_workflow_output" "route: full" "codex workflow"
+assert_not_contains "$codex_workflow_output" "RUN e2e-smoke-workflow-cache:" "codex workflow"
 assert_contains "$codex_workflow_output" "RUN ts-test:" "codex workflow"
 assert_contains "$codex_workflow_output" "RUN rust-test-and-coverage:" "codex workflow"
 
