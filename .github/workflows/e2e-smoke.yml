@@ -68,7 +68,7 @@ jobs:
           if-no-files-found: error
 
   e2e-smoke:
-    name: Runtime Happy Path
+    name: Runtime Happy Path (${{ matrix.spec_key }}, ${{ matrix.spec }})
     needs: e2e-smoke-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -261,3 +261,19 @@ jobs:
           name: e2e-smoke-artifacts-${{ matrix.spec_key }}
           path: e2e/wdio-report
           if-no-files-found: ignore
+
+  e2e-smoke-required:
+    name: Runtime Happy Path
+    needs: e2e-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+
+    steps:
+      - name: Require runtime matrix success
+        run: |
+          if [ "${{ needs.e2e-smoke.result }}" != "success" ]; then
+            echo "Runtime matrix result: ${{ needs.e2e-smoke.result }}"
+            exit 1
+          fi
+          echo "Runtime matrix passed."
