@@ -14,9 +14,9 @@ import type { QueryResult } from "@/types/query";
  * unchanged.
  *
  * Branches:
- *   - `paradigm === "document"` → `status: "unsupported"` immediately,
- *     IPC NOT invoked. Mongo single-node drivers cannot do a real
- *     transaction-scoped dry-run, so the dialog shows a disclaimer.
+ *   - `paradigm !== "rdb"` → `status: "unsupported"` immediately,
+ *     IPC NOT invoked. Non-RDB adapters cannot use transaction-scoped
+ *     dry-run, so the dialog shows a disclaimer.
  *   - `enabled === false` → `status: "idle"`, IPC NOT invoked. The
  *     dialog is closed; we don't speculatively pre-fetch.
  *   - `enabled === true` (rdb only) → mint a `"dry:<uuid>"` query id,
@@ -49,7 +49,7 @@ export interface DryRunState {
 export interface UseDryRunArgs {
   connectionId: string;
   statements: string[];
-  paradigm: "rdb" | "document";
+  paradigm: "rdb" | "document" | "kv";
   enabled: boolean;
 }
 
@@ -68,11 +68,9 @@ const UNSUPPORTED_STATE: DryRunState = {
 export function useDryRun(args: UseDryRunArgs): DryRunState {
   const { connectionId, statements, paradigm, enabled } = args;
 
-  // Document paradigm short-circuits without IPC. Memo-free literal so
-  // every render returns the same `unsupported` state (the consumer
-  // dialog doesn't need to track transitions for Mongo).
+  // Non-RDB paradigms short-circuit without IPC.
   const initialState: DryRunState =
-    paradigm === "document"
+    paradigm !== "rdb"
       ? UNSUPPORTED_STATE
       : enabled
         ? { status: "running", results: null, error: null }
@@ -96,7 +94,7 @@ export function useDryRun(args: UseDryRunArgs): DryRunState {
   const statementsKey = statements.join("\u0000");
 
   useEffect(() => {
-    if (paradigm === "document") {
+    if (paradigm !== "rdb") {
       setState(UNSUPPORTED_STATE);
       return;
     }

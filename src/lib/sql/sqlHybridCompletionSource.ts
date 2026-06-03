@@ -66,7 +66,11 @@ export function createSqlHybridCompletionSource({
     if (coreResult.items.length === 0) {
       return completeWithLegacySources(legacySources, context);
     }
-    return coreResultToCodeMirror(coreResult);
+    const visibleCoreResult = filterShellMetaCommands(coreResult, request);
+    if (visibleCoreResult.items.length === 0) {
+      return completeWithLegacySources(legacySources, context);
+    }
+    return coreResultToCodeMirror(visibleCoreResult);
   };
 }
 
@@ -136,6 +140,36 @@ function coreItemToCompletion(item: CompletionItem): Completion {
     detail: item.detail,
     boost: item.boost,
   };
+}
+
+function filterShellMetaCommands(
+  result: CoreCompletionResult,
+  request: SqlCompletionRequest,
+): CoreCompletionResult {
+  if (isShellMetaCommandContext(request)) return result;
+  const items = result.items.filter((item) => item.kind !== "meta-command");
+  return items.length === result.items.length ? result : { ...result, items };
+}
+
+function isShellMetaCommandContext(request: SqlCompletionRequest): boolean {
+  if (request.shell === "none") return false;
+  const beforeCursor = request.text.slice(0, request.cursor.utf16);
+  const lineStart = Math.max(
+    beforeCursor.lastIndexOf("\n"),
+    beforeCursor.lastIndexOf(";"),
+  );
+  const linePrefix = beforeCursor.slice(lineStart + 1).trimStart();
+  if (linePrefix.length === 0) return true;
+
+  const commandPrefix = request.shellProfile.commandPrefix;
+  if (commandPrefix && linePrefix.startsWith(commandPrefix)) return true;
+
+  if (!/^[A-Za-z]*$/.test(linePrefix)) return false;
+  const normalized = linePrefix.toLowerCase();
+  return request.shellProfile.commands.some((command) => {
+    if (command.startsWith("\\") || command.startsWith(".")) return false;
+    return command.toLowerCase().startsWith(normalized);
+  });
 }
 
 function codeMirrorTypeForKind(kind: CompletionItem["kind"]): string {

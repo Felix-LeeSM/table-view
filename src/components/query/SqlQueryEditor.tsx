@@ -24,6 +24,7 @@ import { createSqlHybridCompletionSource } from "@lib/sql/sqlHybridCompletionSou
 import type { SqlCompletionContext } from "@lib/sql/sqlCompletionContext";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
+import { syncEditorDocument } from "./editorDocumentSync";
 
 /**
  * RDB / SQL-paradigm query editor. Imports only SQL-aware extensions —
@@ -262,13 +263,7 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
     useEffect(() => {
       const view = viewRef.current;
       if (!view) return;
-      const currentDoc = view.state.doc.toString();
-      if (currentDoc !== sql) {
-        sqlRef.current = sql;
-        view.dispatch({
-          changes: { from: 0, to: currentDoc.length, insert: sql },
-        });
-      }
+      if (syncEditorDocument(view, sql)) sqlRef.current = sql;
     }, [sql]);
 
     return (

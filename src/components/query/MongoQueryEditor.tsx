@@ -18,6 +18,7 @@ import {
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
+import { syncEditorDocument } from "./editorDocumentSync";
 
 /**
  * MongoDB / document-paradigm query editor. Imports only MQL-aware
@@ -208,13 +209,7 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
     useEffect(() => {
       const view = viewRef.current;
       if (!view) return;
-      const currentDoc = view.state.doc.toString();
-      if (currentDoc !== sql) {
-        sqlRef.current = sql;
-        view.dispatch({
-          changes: { from: 0, to: currentDoc.length, insert: sql },
-        });
-      }
+      if (syncEditorDocument(view, sql)) sqlRef.current = sql;
     }, [sql]);
 
     // Sprint 309 — aria-label is hard-coded to the single mongosh

@@ -41,7 +41,7 @@ import {
   analyzeMongoOperation,
   analyzeMongoRunCommand,
 } from "@lib/mongo/mongoSafety";
-import { analyzeStatement } from "@lib/sql/sqlSafety";
+import { analyzeStatement, type StatementAnalysis } from "@lib/sql/sqlSafety";
 import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/runtime/toast";
@@ -325,6 +325,13 @@ export interface QueryExecution {
   } | null;
   confirmRdbDangerous: () => Promise<void>;
   cancelRdbDangerous: () => void;
+  pendingKvConfirm: {
+    command: string;
+    database: number | undefined;
+    reason: string;
+  } | null;
+  confirmKvDangerous: () => Promise<void>;
+  cancelKvDangerous: () => void;
   /**
    * Sprint 255 — raw RDB WARN-tier preview payload. ADR 0023 grill Q3-(b)
    * "모든 환경 + 모든 write 표면" 의 핵심 보호. STOP-tier ConfirmDestructiveDialog
@@ -387,6 +394,21 @@ function parseSearchDslRequest(sql: string): SearchQueryRequest {
         ? parsed.trackTotalHits
         : undefined,
   };
+}
+
+function analyzeKvCommandSafety(command: string): StatementAnalysis {
+  const verb = command
+    .trim()
+    .match(/^([A-Za-z]+)/)?.[1]
+    ?.toUpperCase();
+  if (verb === "KEYS") {
+    return {
+      kind: "other",
+      severity: "danger",
+      reasons: ["Redis KEYS scans the full keyspace"],
+    };
+  }
+  return { kind: "other", severity: "info", reasons: [] };
 }
 
 function numberField(value: unknown): number | undefined {
@@ -597,7 +619,7 @@ export function useQueryExecution({
   // While a warn-tier dialog is open, `pendingMongoConfirm` /
   // `pendingRdbConfirm` retains the exact pipeline / statements + reason
   // so the re-dispatch on confirm runs the same input the user typed.
-  const safeModeGate = useSafeModeGate(tab.connectionId, {
+  const { decide: decideSafeMode } = useSafeModeGate(tab.connectionId, {
     // Fail closed until workspace snapshot hydrates connection metadata.
     missingConnectionEnvironment: "production",
   });
@@ -621,6 +643,11 @@ export function useQueryExecution({
     statements: string[];
     reason: string;
   } | null>(null);
+  const [pendingKvConfirm, setPendingKvConfirm] = useState<{
+    command: string;
+    database: number | undefined;
+    reason: string;
+  } | null>(null);
   // Sprint 255 — raw RDB / Mongo WARN-tier pending state. `null` until a
   // non-INFO safe statement (INSERT / UPDATE WHERE / CREATE / ALTER additive
   // for RDB; non-read-only aggregate for Mongo) is detected. Distinct from
@@ -636,6 +663,39 @@ export function useQueryExecution({
     pipeline: Record<string, unknown>[];
     previewLines?: string[];
   } | null>(null);
+
+  const runKvCommandNow = useCallback(
+    async (command: string, database: number | undefined) => {
+      const queryId = `${tab.id}-${Date.now()}`;
+      updateQueryState(tab.id, { status: "running", queryId });
+      try {
+        const result = await executeKvCommand(
+          tab.connectionId,
+          { command, database },
+          queryId,
+        );
+        completeQuery(tab.id, queryId, result);
+      } catch (err) {
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    },
+    [tab.id, tab.connectionId, updateQueryState, completeQuery, failQuery],
+  );
+
+  const confirmKvDangerous = useCallback(async () => {
+    const pending = pendingKvConfirm;
+    if (!pending) return;
+    setPendingKvConfirm(null);
+    await runKvCommandNow(pending.command, pending.database);
+  }, [pendingKvConfirm, runKvCommandNow]);
+
+  const cancelKvDangerous = useCallback(() => {
+    setPendingKvConfirm(null);
+  }, []);
 
   // Aggregate dispatch + book-keeping, extracted so the warn-confirm
   // dialog can re-enter the same path with the pending pipeline. Mirrors
@@ -1148,7 +1208,7 @@ export function useQueryExecution({
         }
         const pipelineWithCursor = cursorPipeline.value;
         const analysis = analyzeMongoPipeline(pipelineWithCursor);
-        const decision = safeModeGate.decide(analysis);
+        const decision = decideSafeMode(analysis);
         if (decision.action === "block") {
           updateQueryState(tab.id, {
             status: "error",
@@ -1353,7 +1413,7 @@ export function useQueryExecution({
           return;
         }
         const analysis = analyzeMongoOperation({ kind: "deleteMany", filter });
-        const decision = safeModeGate.decide(analysis);
+        const decision = decideSafeMode(analysis);
         const runner = () =>
           runDeleteMany(connectionId, database, collection, filter, rawSql);
         if (decision.action === "block") {
@@ -1406,7 +1466,7 @@ export function useQueryExecution({
           filter,
           patch,
         });
-        const decision = safeModeGate.decide(analysis);
+        const decision = decideSafeMode(analysis);
         const runner = () =>
           runUpdateMany(
             connectionId,
@@ -1548,7 +1608,7 @@ export function useQueryExecution({
           kind: "bulkWrite",
           ops: [op],
         });
-        const decision = safeModeGate.decide(analysis);
+        const decision = decideSafeMode(analysis);
         const runner = () =>
           runReplaceOne(connectionId, database, collection, op, rawSql);
         if (decision.action === "block") {
@@ -1602,7 +1662,7 @@ export function useQueryExecution({
           return;
         }
         const analysis = analyzeMongoOperation({ kind: "bulkWrite", ops });
-        const decision = safeModeGate.decide(analysis);
+        const decision = decideSafeMode(analysis);
         const runner = () =>
           runBulkWrite(connectionId, database, collection, ops, rawSql);
         if (decision.action === "block") {
@@ -1665,7 +1725,7 @@ export function useQueryExecution({
           severity: "danger" as const,
           reasons: ["MongoDB dropIndex (index removal)"],
         };
-        const decision = safeModeGate.decide(analysis);
+        const decision = decideSafeMode(analysis);
         const runner = () =>
           runDropIndex(connectionId, database, collection, indexName, rawSql);
         if (decision.action === "block") {
@@ -1697,7 +1757,7 @@ export function useQueryExecution({
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tab.id, safeModeGate, runMongoAggregateNow, updateQueryState],
+    [tab.id, decideSafeMode, runMongoAggregateNow, updateQueryState],
   );
 
   // Sprint 311 — find dispatch helper. Mirrors the previous inline
@@ -2386,22 +2446,20 @@ export function useQueryExecution({
         return;
       }
 
-      const queryId = `${tab.id}-${Date.now()}`;
-      updateQueryState(tab.id, { status: "running", queryId });
-      try {
-        const result = await executeKvCommand(
-          tab.connectionId,
-          { command: sql, database },
-          queryId,
-        );
-        completeQuery(tab.id, queryId, result);
-      } catch (err) {
-        failQuery(
-          tab.id,
-          queryId,
-          err instanceof Error ? err.message : String(err),
-        );
+      const decision = decideSafeMode(analyzeKvCommandSafety(sql));
+      if (decision.action === "confirm") {
+        setPendingKvConfirm({
+          command: sql,
+          database,
+          reason: decision.reason,
+        });
+        return;
       }
+      if (decision.action === "block") {
+        updateQueryState(tab.id, { status: "error", error: decision.reason });
+        return;
+      }
+      await runKvCommandNow(sql, database);
       return;
     }
 
@@ -2477,10 +2535,10 @@ export function useQueryExecution({
         // `dropDatabase` / `dropIndexes` / `killOp` / `renameCollection`
         // 를 1-click 추천하므로, `db.runCommand({...})` dispatch 가 다른
         // Mongo write path (deleteMany / dropCollection / $out 등) 와
-        // 동일하게 `safeModeGate.decide` 를 통과한다. sprint-382 의 AST
+        // 동일하게 `decideSafeMode` 를 통과한다. sprint-382 의 AST
         // 가 promote 한 뒤에도 본 gate 호출 자체는 lock.
         const adminAnalysis = analyzeMongoRunCommand(body);
-        const adminDecision = safeModeGate.decide(adminAnalysis);
+        const adminDecision = decideSafeMode(adminAnalysis);
         if (adminDecision.action === "block") {
           updateQueryState(tab.id, {
             status: "error",
@@ -2642,7 +2700,7 @@ export function useQueryExecution({
     const escalationCandidates: { stmt: string; reason: string }[] = [];
     for (const stmt of statements) {
       const analysis = analyzeStatement(stmt);
-      const decision = safeModeGate.decide(analysis);
+      const decision = decideSafeMode(analysis);
       if (decision.action === "block") {
         worstAction = "block";
         worstReason = decision.reason;
@@ -2757,10 +2815,12 @@ export function useQueryExecution({
     canExecuteQuery,
     dbType,
     queryProductLabel,
+    decideSafeMode,
     dispatchMongoshCall,
     completeSearchQuery,
     failQuery,
     updateQueryState,
+    runKvCommandNow,
     runRdbSingleNow,
     runRdbBatchNow,
   ]);
@@ -2887,6 +2947,9 @@ export function useQueryExecution({
     pendingRdbConfirm,
     confirmRdbDangerous,
     cancelRdbDangerous,
+    pendingKvConfirm,
+    confirmKvDangerous,
+    cancelKvDangerous,
     pendingRdbWarn,
     confirmRdbWarn,
     cancelRdbWarn,

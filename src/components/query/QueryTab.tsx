@@ -283,6 +283,9 @@ export default function QueryTab({ tab }: QueryTabProps) {
     pendingRdbConfirm,
     confirmRdbDangerous,
     cancelRdbDangerous,
+    pendingKvConfirm,
+    confirmKvDangerous,
+    cancelKvDangerous,
     pendingRdbWarn,
     confirmRdbWarn,
     cancelRdbWarn,
@@ -536,6 +539,20 @@ export default function QueryTab({ tab }: QueryTabProps) {
           paradigm="rdb"
           onConfirm={confirmRdbDangerous}
           onCancel={cancelRdbDangerous}
+        />
+      )}
+
+      {pendingKvConfirm && (
+        <ConfirmDestructiveDialog
+          open
+          reason={pendingKvConfirm.reason}
+          sqlPreview={pendingKvConfirm.command}
+          environment={destructiveDialogEnvironment}
+          connectionId={tab.connectionId}
+          statements={[pendingKvConfirm.command]}
+          paradigm="kv"
+          onConfirm={confirmKvDangerous}
+          onCancel={cancelKvDangerous}
         />
       )}
 

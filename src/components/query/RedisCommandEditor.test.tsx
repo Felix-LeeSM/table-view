@@ -73,6 +73,36 @@ describe("RedisCommandEditor", () => {
     expect(onSqlChange).toHaveBeenCalledWith("TTL session:1");
   });
 
+  it("preserves cursor position across external command text sync", () => {
+    const { rerender } = render(
+      <RedisCommandEditor
+        sql="GET profile:1"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+    const view = getEditorView();
+    const cursorAfterDeletedChar = "GET profil".length;
+    act(() => {
+      view.dispatch({
+        selection: { anchor: cursorAfterDeletedChar },
+      });
+    });
+
+    rerender(
+      <RedisCommandEditor
+        sql="GET profie:1"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    expect(getEditorView().state.doc.toString()).toBe("GET profie:1");
+    expect(getEditorView().state.selection.main.head).toBe(
+      cursorAfterDeletedChar - 1,
+    );
+  });
+
   it("binds Mod-Enter to execute without binding dry-run", () => {
     const onExecute = vi.fn();
     render(

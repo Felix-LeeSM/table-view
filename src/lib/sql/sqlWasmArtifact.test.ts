@@ -216,6 +216,61 @@ describe("checked-in SQL WASM artifact", () => {
       detail: "sqlite-cli command; not executable by Table View",
     });
   });
+
+  it("complete_sql returns relation catalog candidates, not psql commands, after FROM through real WASM", async () => {
+    await initSqlParserCore();
+
+    const result = completeSqlFromWasm(
+      "SELECT * FROM ",
+      14,
+      14,
+      "postgresql",
+      "psql",
+      "",
+      "rev-catalog",
+      "",
+      "",
+      "public\nanalytics",
+      [
+        "table\tpublic\tusers\tpublic.users",
+        "view\tanalytics\tactive_users\tanalytics.active_users",
+      ].join("\n"),
+      "public\tusers\temail\tpublic.users",
+      "public\tslugify\tpublic.slugify\ttext\ttext",
+      "",
+    ) as {
+      items: Array<{
+        label: string;
+        kind: string;
+        apply?: string;
+        detail?: string;
+      }>;
+    };
+
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "public",
+          kind: "schema",
+          apply: "public",
+        }),
+        expect.objectContaining({
+          label: "users",
+          kind: "table",
+          detail: "public",
+        }),
+        expect.objectContaining({
+          label: "active_users",
+          kind: "view",
+          detail: "analytics",
+        }),
+      ]),
+    );
+    expect(result.items.map((item) => item.kind)).not.toContain("meta-command");
+    expect(result.items.map((item) => item.kind)).not.toContain("column");
+    expect(result.items.map((item) => item.kind)).not.toContain("function");
+    expect(result.items.map((item) => item.kind)).not.toContain("keyword");
+  });
 });
 
 function mariaDbCompletionLabels(serverVersion: string): string[] {
