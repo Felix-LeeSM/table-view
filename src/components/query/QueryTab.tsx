@@ -347,6 +347,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
     database: explainExpectedDatabase,
     enabled: tab.paradigm === "kv",
   });
+  const redisCommandTarget =
+    connection?.dbType === "valkey" ? "valkey" : "redis";
 
   // Resizable split state
   const containerRef = useRef<HTMLDivElement>(null);
@@ -423,6 +425,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
                   onExecute={handleExecuteAndShowResults}
                   onDryRun={handleDryRunAndShowResults}
                   redisKeySuggestions={redisKeySuggestionState.keySuggestions}
+                  redisCommandTarget={redisCommandTarget}
                 />
               );
             case "search":

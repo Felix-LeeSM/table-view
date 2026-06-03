@@ -47,6 +47,7 @@ command runtime contract exists.
 ## Required Checks
 
 1. `pnpm vitest run src/lib/redis/redisCommandCompletion.test.ts src/components/query/RedisCommandEditor.test.tsx src/components/query/QueryTab.dialect.test.tsx --reporter=dot`
-2. `pnpm exec tsc -b --pretty false`
-3. `pnpm exec prettier --check docs/sprints/sprint-490/contract.md src/lib/redis/redisCommandCompletion.ts src/lib/redis/redisCommandCompletion.test.ts src/components/query/RedisCommandEditor.tsx src/components/query/RedisCommandEditor.test.tsx src/components/query/QueryTab.tsx src/components/query/QueryTab.dialect.test.tsx src/components/query/__tests__/queryTabTestHelpers.ts docs/ROADMAP.md docs/product/README.md docs/product/query-language-support.md docs/product/known-limitations.md docs/contributor-guide/testing-and-quality.md`
-4. `git diff --check origin/main...HEAD`
+2. `pnpm vitest run scripts/fixtures/dbms-seeds.test.ts --reporter=dot`
+3. `pnpm exec tsc -b --pretty false`
+4. `pnpm exec prettier --check docs/sprints/sprint-490/contract.md src/lib/redis/redisCommandCompletion.ts src/lib/redis/redisCommandCompletion.test.ts src/components/query/RedisCommandEditor.tsx src/components/query/RedisCommandEditor.test.tsx src/components/query/QueryTab.tsx src/components/query/QueryTab.dialect.test.tsx src/components/query/__tests__/queryTabTestHelpers.ts e2e/fixtures/valkey.redis-compatibility.json docs/ROADMAP.md docs/product/README.md docs/product/query-language-support.md docs/product/known-limitations.md docs/contributor-guide/testing-and-quality.md`
+5. `git diff --check origin/main...HEAD`
