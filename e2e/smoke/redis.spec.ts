@@ -81,7 +81,9 @@ describe("Redis smoke", () => {
         "Redis expire preview did not appear",
       );
       await clickButton("Confirm Expire");
-      await waitForRedisTtlSeconds(60000);
+      await setCodeMirrorText("TTL tv:string");
+      await runQuery();
+      await waitForRedisTtlCommandResult(30000);
     });
 
     await step("require exact key confirmation before delete", async () => {
@@ -198,25 +200,26 @@ async function clickButton(label: string) {
   await button.click();
 }
 
-async function waitForRedisTtlSeconds(timeout: number) {
+async function waitForRedisTtlCommandResult(timeout: number) {
   await browser.waitUntil(
     async () => {
       for (const handle of await browser.getWindowHandles()) {
         await browser.switchToWindow(handle);
-        const hasTtl = await browser.execute(() => {
+        const hasTtlResult = await browser.execute(() => {
           if (!document.querySelector('[aria-label="Back to connections"]')) {
             return false;
           }
-          const text = document.body.textContent ?? "";
-          return /\b(1[01][0-9]|120)s\b/.test(text);
+          const grid = document.querySelector('[role="grid"]');
+          const text = grid?.textContent ?? "";
+          return text.includes("expires") && /\b(1[01][0-9]|120)\b/.test(text);
         });
-        if (hasTtl) return true;
+        if (hasTtlResult) return true;
       }
       return false;
     },
     {
       timeout,
-      timeoutMsg: "Redis expire mutation did not refresh TTL metadata",
+      timeoutMsg: "Redis expire mutation did not return TTL command evidence",
     },
   );
 }
