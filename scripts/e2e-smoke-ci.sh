@@ -34,6 +34,11 @@ export E2E_REDIS_PORT="${E2E_REDIS_PORT:-${REDIS_PORT:-6379}}"
 export E2E_REDIS_DB="${E2E_REDIS_DB:-2}"
 export REDIS_PASSWORD="${REDIS_PASSWORD:-}"
 
+export E2E_VALKEY_HOST="${E2E_VALKEY_HOST:-${VALKEY_HOST:-localhost}}"
+export E2E_VALKEY_PORT="${E2E_VALKEY_PORT:-${VALKEY_PORT:-16379}}"
+export E2E_VALKEY_DB="${E2E_VALKEY_DB:-2}"
+export VALKEY_PASSWORD="${VALKEY_PASSWORD:-}"
+
 REPORT_DIR="$ROOT_DIR/e2e/wdio-report"
 SPEC_TO_RUN="${E2E_SPEC:-}"
 if [[ -n "$SPEC_TO_RUN" ]]; then
@@ -86,4 +91,5 @@ else
   run_wdio "$BASE_DATA_DIR/duckdb" "e2e/smoke/duckdb.spec.ts"
   run_wdio "$BASE_DATA_DIR/mongodb" "e2e/smoke/mongodb.spec.ts"
   run_wdio "$BASE_DATA_DIR/redis" "e2e/smoke/redis.spec.ts"
+  run_wdio "$BASE_DATA_DIR/valkey" "e2e/smoke/valkey.spec.ts"
 fi

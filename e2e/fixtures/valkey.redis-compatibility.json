@@ -41,17 +41,17 @@
       "status": "proven-local-valkey-runtime",
       "redisCommands": ["SELECT", "SCAN", "TYPE", "EXISTS"],
       "currentEvidence": "Local Valkey testcontainer covers DB 2 connection/listing, bounded key scan, and typed value preview through the Valkey adapter.",
-      "knownValkeyDelta": "Runtime proof is local-first focused evidence, not Runtime Happy Path smoke or broader compatibility proof.",
-      "promotionGate": "Valkey smoke must prove the same path in CI before it becomes Runtime Happy Path evidence.",
+      "knownValkeyDelta": "Runtime proof is local-first focused evidence plus wired Runtime Happy Path smoke for the representative path, not broader compatibility proof.",
+      "promotionGate": "The wired Valkey smoke now proves this path in CI as Runtime Happy Path evidence; broader keyspace claims still need separate Valkey evidence.",
       "unsupportedAssumption": "Do not use Redis scan/key metadata smoke as Valkey keyspace evidence."
     },
     {
       "family": "string-read-preview",
       "status": "proven-local-valkey-runtime",
       "redisCommands": ["GET"],
-      "currentEvidence": "Local Valkey testcontainer covers string typed value preview through the Valkey adapter.",
-      "knownValkeyDelta": "GET command-editor dispatch is not separately promoted beyond the typed value preview proof.",
-      "promotionGate": "Valkey smoke or focused command evidence must prove command-editor GET dispatch before claiming that path.",
+      "currentEvidence": "Local Valkey testcontainer covers string typed value preview through the Valkey adapter; Runtime Happy Path smoke covers command-editor GET dispatch.",
+      "knownValkeyDelta": "GET command-editor dispatch is promoted only for the bounded smoke/query path, not broader string command parity.",
+      "promotionGate": "Broader Valkey string read support must add command-specific runtime evidence and docs.",
       "unsupportedAssumption": "Do not inherit Redis GET command UI evidence as Valkey command-editor proof."
     },
     {
@@ -150,7 +150,7 @@
       "redisCommands": ["EXPIRE", "PERSIST"],
       "currentEvidence": "Local Valkey testcontainer covers EXPIRE command dispatch and exact-key PERSIST confirmation through the bounded command policy.",
       "knownValkeyDelta": "TTL read labels and post-mutation UI refresh remain outside this focused proof.",
-      "promotionGate": "Valkey smoke must prove the same path before it becomes Runtime Happy Path evidence.",
+      "promotionGate": "The wired Valkey smoke now proves EXPIRE dispatch. Exact-key PERSIST success remains focused backend evidence until a UI path can supply confirmKey.",
       "unsupportedAssumption": "Do not reuse Redis TTL confirmation evidence for Valkey."
     },
     {
@@ -177,7 +177,7 @@
       "redisCommands": ["DEL"],
       "currentEvidence": "Local Valkey testcontainer covers exact-key DEL confirmation and command projection.",
       "knownValkeyDelta": "Missing-key projection and key browser refresh are not promoted by this focused proof.",
-      "promotionGate": "Valkey smoke must prove browser refresh before this becomes Runtime Happy Path evidence.",
+      "promotionGate": "The wired Valkey smoke proves the destructive exact-key guard error. Confirmed delete and browser refresh remain future UI evidence because the query editor does not collect confirmKey.",
       "unsupportedAssumption": "Do not enable broad or multi-key destructive Valkey commands because single-key DEL is proven."
     },
     {
@@ -231,7 +231,7 @@
   "knownValkeyDeltas": [
     "Valkey identity must be proven with Valkey-specific server fields, not redis_version alone.",
     "Redis Runtime Happy Path smoke is not Valkey runtime evidence.",
-    "Static seed/reset commands are fixture inventory only until executed against a local Valkey runtime.",
+    "Valkey seed/reset commands are wired to Runtime Happy Path smoke for the promoted slice; broader fixture rows remain inventory until separately proven.",
     "Focused local Valkey testcontainer evidence promotes only the explicitly marked proven command/query families.",
     "Admin, broad destructive, cluster, pub/sub, modules/functions, scripting, and consumer-group workflows remain rejected even if Valkey accepts Redis-compatible command names."
   ],

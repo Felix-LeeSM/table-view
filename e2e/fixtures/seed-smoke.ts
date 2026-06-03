@@ -47,6 +47,13 @@ const redisConfig = {
   database: Number(process.env.E2E_REDIS_DB ?? 2),
 };
 
+const valkeyConfig = {
+  host: process.env.E2E_VALKEY_HOST ?? process.env.VALKEY_HOST ?? "localhost",
+  port: Number(process.env.E2E_VALKEY_PORT ?? process.env.VALKEY_PORT ?? 16379),
+  password: process.env.VALKEY_PASSWORD ?? "",
+  database: Number(process.env.E2E_VALKEY_DB ?? 2),
+};
+
 type MongoSeedIndex = {
   name?: string;
   keys: Document;
@@ -237,6 +244,70 @@ async function seedRedis() {
   });
 }
 
+async function seedValkey() {
+  const fixture = JSON.parse(
+    await readFile(resolve("e2e/fixtures/seed.valkey.json"), "utf-8"),
+  ) as RedisSeedFixture;
+
+  await retry("Valkey", async () => {
+    const client = new Redis({
+      host: valkeyConfig.host,
+      port: valkeyConfig.port,
+      password: valkeyConfig.password || undefined,
+      db: valkeyConfig.database,
+      lazyConnect: true,
+    });
+    await client.connect();
+    try {
+      for (const command of fixture.commands) {
+        switch (command.command) {
+          case "SELECT":
+            await client.select(command.database);
+            break;
+          case "FLUSHDB":
+            await client.flushdb();
+            break;
+          case "SET":
+            if (command.ttlSeconds) {
+              await client.set(
+                command.key,
+                command.value,
+                "EX",
+                command.ttlSeconds,
+              );
+            } else {
+              await client.set(command.key, command.value);
+            }
+            break;
+          case "HSET":
+            await client.hset(command.key, command.fields);
+            break;
+          case "XADD":
+            await client.xadd(
+              command.key,
+              command.id,
+              ...Object.entries(command.fields).flat(),
+            );
+            break;
+          case "SADD":
+            await client.sadd(command.key, ...command.members);
+            break;
+          case "ZADD":
+            await client.zadd(
+              command.key,
+              ...command.members.flatMap(({ score, member }) => [
+                String(score),
+                member,
+              ]),
+            );
+        }
+      }
+    } finally {
+      await client.quit();
+    }
+  });
+}
+
 function seedDocumentFilter(document: Document): Document {
   if (document._id !== undefined) return { _id: document._id };
   if (document.email !== undefined) return { email: document.email };
@@ -248,6 +319,7 @@ await seedMongo();
 await seedMysql();
 await seedMariadb();
 await seedRedis();
+await seedValkey();
 console.log(
-  "[e2e:seed] Postgres, MongoDB, MySQL, MariaDB, and Redis smoke fixtures are ready.",
+  "[e2e:seed] Postgres, MongoDB, MySQL, MariaDB, Redis, and Valkey smoke fixtures are ready.",
 );

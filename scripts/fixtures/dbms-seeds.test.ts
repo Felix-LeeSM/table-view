@@ -33,9 +33,9 @@ type RedisSeedFixture = {
 
 type ValkeySeedFixture = RedisSeedFixture & {
   product: "valkey";
-  supportLevel: "static-fixture-only";
+  supportLevel: "runtime-smoke-seed";
   compatibilityTarget: "redis-command";
-  runtimeSupport: false;
+  runtimeSupport: true;
   promotionGate: string;
 };
 
@@ -148,7 +148,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(payload).toContain("tv:events");
   });
 
-  it("valkey has a static Redis-compatible fixture without a runtime claim", () => {
+  it("valkey has a dedicated Runtime Happy Path smoke seed", () => {
     const fixture = readJson<ValkeySeedFixture>("seed.valkey.json");
     const commandNames = fixture.commands.map(({ command }) => command);
     const payload = JSON.stringify(fixture);
@@ -158,14 +158,15 @@ describe("DBMS-specific E2E seed fixtures", () => {
     );
 
     expect(fixture.product).toBe("valkey");
-    expect(fixture.supportLevel).toBe("static-fixture-only");
+    expect(fixture.supportLevel).toBe("runtime-smoke-seed");
     expect(fixture.compatibilityTarget).toBe("redis-command");
-    expect(fixture.runtimeSupport).toBe(false);
+    expect(fixture.runtimeSupport).toBe(true);
     expect(fixture.idempotencyContract).toContain("Idempotency contract");
     expect(fixture.idempotencyContract).toContain(
-      "not wired to Valkey runtime smoke",
+      "Valkey Runtime Happy Path smoke",
     );
-    expect(fixture.promotionGate).toContain("local Valkey container");
+    expect(fixture.promotionGate).toContain("Current Valkey smoke proves");
+    expect(fixture.promotionGate).toContain("without inheriting Redis smoke");
     expect(fixture.database).toBe(2);
     expect(commandNames).toEqual([
       "SELECT",
