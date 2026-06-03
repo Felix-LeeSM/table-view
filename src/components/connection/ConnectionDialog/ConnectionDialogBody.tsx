@@ -134,6 +134,7 @@ export default function ConnectionDialogBody({
             );
           case "mssql":
           case "oracle":
+          case "valkey":
           case "elasticsearch":
           case "opensearch":
             return (
@@ -207,6 +208,7 @@ export default function ConnectionDialogBody({
           case "oracle":
           case "mongodb":
           case "redis":
+          case "valkey":
           case "elasticsearch":
           case "opensearch":
             throw unsupportedConnectionKindForForm(

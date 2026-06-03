@@ -283,8 +283,9 @@ are:
   fixture inventory, but fixture inventory is contract evidence only and does
   not become live runtime or E2E smoke support. Redis command completion is a
   TypeScript allowlist vocabulary surface only, not language-core parser
-  ownership or catalog-aware key completion. Valkey has no active
-  profile/runtime evidence.
+  ownership or catalog-aware key completion. Valkey uses `redis-command` only
+  as a deferred compatibility target on a capability-empty profile identity; it
+  has no runtime, fixture, live, or Redis-compatibility evidence.
 - Search DSL is fixture-backed for Elasticsearch/OpenSearch result rendering and
   adapter contracts only. Live HTTP Search support waits for explicit
   connection/auth/TLS, catalog/search execution, admin, observability, and

@@ -21,6 +21,7 @@ export const DB_TYPE_META: Record<DatabaseType, DbMeta> = {
   oracle: { label: "Oracle", short: "OR", color: "#F80000" },
   mongodb: { label: "MongoDB", short: "MG", color: "#47A248" },
   redis: { label: "Redis", short: "RD", color: "#DC382D" },
+  valkey: { label: "Valkey", short: "VK", color: "#7A4EA3" },
   elasticsearch: { label: "Elasticsearch", short: "ES", color: "#00BFB3" },
   opensearch: { label: "OpenSearch", short: "OS", color: "#005EB8" },
 };

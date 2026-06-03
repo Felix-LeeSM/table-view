@@ -187,6 +187,12 @@ const DEFERRED_FEATURES = Object.freeze({
     query: ["query.query", "query.cancel", "query.explain"],
     edit: ["edit.bulkWrite"],
   },
+  valkey: {
+    connection: ["connection.test"],
+    catalog: ["catalog.browse"],
+    query: ["query.query"],
+    edit: ["edit.editKeys"],
+  },
   elasticsearch: {
     connection: ["connection.switchDatabase"],
     catalog: ["catalog.browse", "catalog.schema", "catalog.indexes"],

@@ -137,6 +137,7 @@ describe("DataSourceProfile registry", () => {
       edit: { editKeys: true },
       paradigmSpecific: { keyBrowser: true },
     }),
+    valkey: createEmptyDataSourceCapabilities(),
     elasticsearch: expectedCapabilities(),
     opensearch: expectedCapabilities(),
   };
@@ -294,6 +295,23 @@ describe("DataSourceProfile registry", () => {
     expect(redis.capabilities.paradigmSpecific.streamConsumer).toBe(false);
   });
 
+  it("keeps Valkey as an unsupported KV identity until compatibility evidence lands", () => {
+    const valkey = getDataSourceProfile("valkey");
+
+    expect(valkey.paradigm).toBe("kv");
+    expect(valkey.connectionKind).toBe("server");
+    expect(valkey.languages).toEqual(["redis-command"]);
+    expect(valkey.catalogModel).toBe("kv");
+    expect(valkey.resultKinds).toEqual(["keyValue", "streamRecords"]);
+    expect(valkey.backendAdapter).toEqual({
+      id: "marker",
+      kind: "kv",
+      capabilitySource: "marker",
+    });
+    expect(valkey.capabilities).toEqual(createEmptyDataSourceCapabilities());
+    expect(isConnectionSupportedDatabaseType("valkey")).toBe(false);
+  });
+
   it("keeps unsupported profiles structurally present but capability-empty", () => {
     for (const dbType of ["mssql", "oracle"] satisfies DatabaseType[]) {
       expect(getDataSourceProfile(dbType).capabilities).toEqual(
@@ -316,6 +334,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("mongodb")).toBe(true);
     expect(isConnectionSupportedDatabaseType("duckdb")).toBe(true);
     expect(isConnectionSupportedDatabaseType("redis")).toBe(true);
+    expect(isConnectionSupportedDatabaseType("valkey")).toBe(false);
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
     expect(isConnectionSupportedDatabaseType("elasticsearch")).toBe(false);

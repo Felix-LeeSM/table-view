@@ -198,6 +198,7 @@ pub enum DataSourceDialectId {
     Oracle,
     Mongodb,
     Redis,
+    Valkey,
     Elasticsearch,
     Opensearch,
 }
@@ -212,6 +213,7 @@ pub enum DataSourceDialectFamily {
     Oracle,
     Mongodb,
     Redis,
+    Valkey,
     Elasticsearch,
     Opensearch,
 }
@@ -486,6 +488,11 @@ const REDIS_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
     family: DataSourceDialectFamily::Redis,
     version_probe: ServerVersionProbeId::None,
 };
+const VALKEY_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
+    id: DataSourceDialectId::Valkey,
+    family: DataSourceDialectFamily::Valkey,
+    version_probe: ServerVersionProbeId::None,
+};
 const ELASTICSEARCH_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
     id: DataSourceDialectId::Elasticsearch,
     family: DataSourceDialectFamily::Elasticsearch,
@@ -570,6 +577,19 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             backend_adapter: FACTORY_REDIS_KV_CONTRACT.profile(),
             dialect: REDIS_DIALECT,
             adapter_contract: FACTORY_REDIS_KV_CONTRACT,
+            file_connection: None,
+        },
+        DatabaseType::Valkey => DataSourceProfile {
+            id: DatabaseType::Valkey,
+            paradigm: Paradigm::Kv,
+            connection_kind: ConnectionKind::Server,
+            languages: REDIS_COMMAND,
+            catalog_model: CatalogModelKind::Kv,
+            result_kinds: KV_RESULTS,
+            safety_policy: SafetyPolicyId::KvDefault,
+            backend_adapter: KV_MARKER_CONTRACT.profile(),
+            dialect: VALKEY_DIALECT,
+            adapter_contract: KV_MARKER_CONTRACT,
             file_connection: None,
         },
         DatabaseType::Elasticsearch => {
