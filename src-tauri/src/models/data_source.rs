@@ -120,6 +120,7 @@ pub enum BackendAdapterId {
     Duckdb,
     Mongodb,
     Redis,
+    Valkey,
     DeclaredRdb,
     SearchEngine,
     Marker,
@@ -133,6 +134,7 @@ pub enum BackendAdapterCapabilitySource {
     Duckdb,
     Mongodb,
     Redis,
+    Valkey,
     DeclaredRdb,
     SearchEngine,
     Marker,
@@ -303,6 +305,11 @@ const REDIS_KV_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::KeyValueRead,
     BackendAdapterCapability::KeyValueMutation,
 ];
+const VALKEY_KV_CAPABILITIES: &[BackendAdapterCapability] = &[
+    BackendAdapterCapability::Lifecycle,
+    BackendAdapterCapability::KeyValueCatalog,
+    BackendAdapterCapability::KeyValueRead,
+];
 const SEARCH_MARKER_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::SearchMarker,
@@ -362,6 +369,13 @@ const FACTORY_REDIS_KV_CONTRACT: BackendAdapterContract = BackendAdapterContract
     implementation: BackendAdapterId::Redis,
     capability_source: BackendAdapterCapabilitySource::Redis,
     capabilities: REDIS_KV_CAPABILITIES,
+};
+const FACTORY_VALKEY_KV_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+    kind: BackendAdapterContractKind::Kv,
+    state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::Valkey,
+    capability_source: BackendAdapterCapabilitySource::Valkey,
+    capabilities: VALKEY_KV_CAPABILITIES,
 };
 pub const KV_MARKER_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Kv,
@@ -587,9 +601,9 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             catalog_model: CatalogModelKind::Kv,
             result_kinds: KV_RESULTS,
             safety_policy: SafetyPolicyId::KvDefault,
-            backend_adapter: KV_MARKER_CONTRACT.profile(),
+            backend_adapter: FACTORY_VALKEY_KV_CONTRACT.profile(),
             dialect: VALKEY_DIALECT,
-            adapter_contract: KV_MARKER_CONTRACT,
+            adapter_contract: FACTORY_VALKEY_KV_CONTRACT,
             file_connection: None,
         },
         DatabaseType::Elasticsearch => {

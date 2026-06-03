@@ -46,6 +46,7 @@ import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/runtime/toast";
 import { getDataSourceProfile } from "@/types/dataSource";
+import { DATABASE_TYPE_LABELS } from "@/types/connection";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";
 import type { BulkWriteOp, BulkWriteResult } from "@/types/documentMutate";
@@ -423,6 +424,12 @@ export function useQueryExecution({
   const canCancelQuery = dbType
     ? getDataSourceProfile(dbType).capabilities.query.cancel
     : true;
+  const canExecuteQuery = dbType
+    ? getDataSourceProfile(dbType).capabilities.query.query
+    : true;
+  const queryProductLabel = dbType
+    ? DATABASE_TYPE_LABELS[dbType]
+    : "This adapter";
   const wsConnId = tab.connectionId;
   const updateQueryStateAction = useWorkspaceStore((s) => s.updateQueryState);
   const completeQueryAction = useWorkspaceStore((s) => s.completeQuery);
@@ -2360,6 +2367,14 @@ export function useQueryExecution({
     }
 
     if (tab.paradigm === "kv") {
+      if (!canExecuteQuery) {
+        updateQueryState(tab.id, {
+          status: "error",
+          error: `${queryProductLabel} command query is not supported yet.`,
+        });
+        return;
+      }
+
       let database: number | undefined;
       try {
         database = parseRedisDatabaseIndex(workspaceDb);
@@ -2739,7 +2754,9 @@ export function useQueryExecution({
     tab.collection,
     workspaceDb,
     canCancelQuery,
+    canExecuteQuery,
     dbType,
+    queryProductLabel,
     dispatchMongoshCall,
     completeSearchQuery,
     failQuery,

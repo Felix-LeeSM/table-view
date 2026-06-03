@@ -240,6 +240,18 @@ const PASTE_CASES: PasteCase[] = [
     },
   },
   {
+    scheme: "valkey",
+    url: "valkey://valkeyu:valkeyp@valkey.local:6379/3",
+    expected: {
+      dbType: "valkey",
+      host: "valkey.local",
+      port: 6379,
+      user: "valkeyu",
+      database: "3",
+      password: "valkeyp",
+    },
+  },
+  {
     scheme: "rediss",
     url: "rediss://rediu:redip@secure.redis.local:6380/5",
     expected: {
@@ -291,30 +303,31 @@ describe("[AC-178-01] form-mode host paste detection", () => {
       expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
         String(c.expected.port),
       );
-      // Mongo and Redis label the user input differently — match by
+      // Mongo and KV protocols label the user input differently — match by
       // partial text where the label permutes by paradigm.
+      const isKvProtocol =
+        c.expected.dbType === "redis" || c.expected.dbType === "valkey";
       const userInput =
         c.expected.dbType === "mongodb"
           ? (screen.getByLabelText(/^User \(optional\)/) as HTMLInputElement)
-          : c.expected.dbType === "redis"
+          : isKvProtocol
             ? (screen.getByLabelText(
                 /^Username \(optional\)/,
               ) as HTMLInputElement)
             : (screen.getByLabelText("User") as HTMLInputElement);
       expect(userInput.value).toBe(c.expected.user ?? "");
-      // Database field has paradigm-specific labels — Redis uses
-      // "Redis database index (0-15)" via aria-label; non-Redis uses
+      // Database field has paradigm-specific labels — KV protocols use
+      // "<Product> database index (0-15)" via aria-label; non-KV uses
       // "Database" or "Database (optional)" via <label>.
-      const dbInput =
-        c.expected.dbType === "redis"
-          ? (screen.getByLabelText(
-              "Redis database index (0-15)",
-            ) as HTMLInputElement)
-          : (screen
-              .getAllByLabelText(/^Database( \(optional\))?$/)
-              .find((el) => el.tagName === "INPUT") as HTMLInputElement);
+      const dbInput = isKvProtocol
+        ? (screen.getByLabelText(
+            `${c.expected.dbType === "valkey" ? "Valkey" : "Redis"} database index (0-15)`,
+          ) as HTMLInputElement)
+        : (screen
+            .getAllByLabelText(/^Database( \(optional\))?$/)
+            .find((el) => el.tagName === "INPUT") as HTMLInputElement);
       expect(dbInput.value).toBe(c.expected.database ?? "");
-      if (c.expected.dbType === "redis") {
+      if (isKvProtocol) {
         const tlsInput = screen.getByLabelText(
           "Enable TLS",
         ) as HTMLInputElement;
@@ -551,7 +564,7 @@ describe("[AC-178-03] host:port blur split", () => {
 // 경로이므로 alert 없이 단순히 form 을 건드리지 않음). URL 모드의 Parse &
 // Continue 는 명시적 사용자 액션이라 거부 메시지를 노출 — 별도 그룹.
 //
-// MySQL/MariaDB/SQLite/Redis 는 supported 이므로 본 silent-reject list 에서 제외.
+// MySQL/MariaDB/SQLite/Redis/Valkey 는 supported 이므로 본 silent-reject list 에서 제외.
 // Search 는 fixture-backed only 이므로 live connection paste 를 거부한다.
 // ===========================================================================
 

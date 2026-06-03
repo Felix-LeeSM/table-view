@@ -137,7 +137,11 @@ describe("DataSourceProfile registry", () => {
       edit: { editKeys: true },
       paradigmSpecific: { keyBrowser: true },
     }),
-    valkey: createEmptyDataSourceCapabilities(),
+    valkey: expectedCapabilities({
+      connection: { test: true },
+      catalog: { browse: true },
+      paradigmSpecific: { keyBrowser: true },
+    }),
     elasticsearch: expectedCapabilities(),
     opensearch: expectedCapabilities(),
   };
@@ -295,7 +299,7 @@ describe("DataSourceProfile registry", () => {
     expect(redis.capabilities.paradigmSpecific.streamConsumer).toBe(false);
   });
 
-  it("keeps Valkey as an unsupported KV identity until compatibility evidence lands", () => {
+  it("exposes Valkey as a read-only KV key-browser runtime", () => {
     const valkey = getDataSourceProfile("valkey");
 
     expect(valkey.paradigm).toBe("kv");
@@ -304,12 +308,15 @@ describe("DataSourceProfile registry", () => {
     expect(valkey.catalogModel).toBe("kv");
     expect(valkey.resultKinds).toEqual(["keyValue", "streamRecords"]);
     expect(valkey.backendAdapter).toEqual({
-      id: "marker",
+      id: "valkey",
       kind: "kv",
-      capabilitySource: "marker",
+      capabilitySource: "valkey",
     });
-    expect(valkey.capabilities).toEqual(createEmptyDataSourceCapabilities());
-    expect(isConnectionSupportedDatabaseType("valkey")).toBe(false);
+    expect(valkey.capabilities).toEqual(expectedCapabilitiesByType.valkey);
+    expect(valkey.capabilities.query.query).toBe(false);
+    expect(valkey.capabilities.edit.editKeys).toBe(false);
+    expect(valkey.capabilities.paradigmSpecific.keyBrowser).toBe(true);
+    expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
   it("keeps unsupported profiles structurally present but capability-empty", () => {
@@ -329,12 +336,13 @@ describe("DataSourceProfile registry", () => {
       "duckdb",
       "mongodb",
       "redis",
+      "valkey",
     ]);
     expect(isConnectionSupportedDatabaseType("postgresql")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mongodb")).toBe(true);
     expect(isConnectionSupportedDatabaseType("duckdb")).toBe(true);
     expect(isConnectionSupportedDatabaseType("redis")).toBe(true);
-    expect(isConnectionSupportedDatabaseType("valkey")).toBe(false);
+    expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
     expect(isConnectionSupportedDatabaseType("elasticsearch")).toBe(false);
@@ -468,6 +476,7 @@ describe("DataSourceProfile registry", () => {
     expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("redis", "switchDatabase")).toBe(false);
+    expect(hasConnectionCapability("valkey", "switchDatabase")).toBe(false);
   });
 
   it("keeps SQLite file picker and read-only capabilities explicit while missing profiles stay disabled", () => {

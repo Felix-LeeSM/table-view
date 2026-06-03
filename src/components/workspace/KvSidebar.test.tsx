@@ -34,6 +34,15 @@ function redisConnection(): ConnectionConfig {
   };
 }
 
+function valkeyConnection(): ConnectionConfig {
+  return {
+    ...redisConnection(),
+    id: "valkey-1",
+    name: "Valkey",
+    dbType: "valkey",
+  };
+}
+
 describe("KvSidebar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -117,6 +126,26 @@ describe("KvSidebar", () => {
     });
     expect(screen.getByText(/name: Ada/)).toBeInTheDocument();
     expect(screen.getAllByText(/persistent/)).toHaveLength(2);
+  });
+
+  it("labels Valkey key browsing and hides mutation controls", async () => {
+    useConnectionStore.setState({
+      connections: [valkeyConnection()],
+      activeStatuses: { "valkey-1": { type: "connected", activeDb: "0" } },
+    });
+    render(<KvSidebar connectionId="valkey-1" />);
+
+    expect(
+      await screen.findByRole("combobox", { name: /valkey database/i }),
+    ).toBeInTheDocument();
+    const tree = await screen.findByRole("tree", { name: /valkey keys/i });
+
+    fireEvent.click(
+      await within(tree).findByRole("treeitem", { name: /user:1/i }),
+    );
+
+    expect(await screen.findByText(/name: Ada/)).toBeInTheDocument();
+    expect(screen.queryByText("Mutation")).not.toBeInTheDocument();
   });
 
   it("switches database through KV IPC and reloads keys", async () => {

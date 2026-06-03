@@ -1,3 +1,5 @@
+use std::mem;
+
 use table_view_lib::{
     db::{
         DbAdapter, KvAdapter, KvCommandRequest, KvKeyScanRequest, KvSetStringRequest,
@@ -5,8 +7,9 @@ use table_view_lib::{
     },
     models::{ConnectionConfig, DatabaseType},
 };
-use testcontainers::core::ImageExt;
+use testcontainers::core::{IntoContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
+use testcontainers::{GenericImage, ImageExt};
 use testcontainers_modules::redis::{Redis as RedisImage, REDIS_PORT};
 
 #[path = "support/testcontainer_lifecycle.rs"]
@@ -156,6 +159,118 @@ async fn redis_testcontainer_covers_live_kv_catalog_values_and_streams() {
         .is_err());
 }
 
+#[tokio::test]
+async fn valkey_testcontainer_covers_connection_key_browse_and_read_only_contract() {
+    testcontainer_lifecycle::ensure_sweep_once().await;
+    let pid = testcontainer_lifecycle::current_pid_label();
+    let container = match GenericImage::new("valkey/valkey", "8.0-alpine")
+        .with_exposed_port(6379.tcp())
+        .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
+        .with_label(testcontainer_lifecycle::OWNED_LABEL, "1")
+        .with_label(testcontainer_lifecycle::OWNER_PID_LABEL, &pid)
+        .start()
+        .await
+    {
+        Ok(container) => {
+            testcontainer_lifecycle::register_container_for_process_cleanup(
+                container.id().to_string(),
+            );
+            container
+        }
+        Err(error) => {
+            skip_or_fail_on_ci(format!(
+                "Valkey testcontainer start failed ({error}). Docker daemon required."
+            ));
+            return;
+        }
+    };
+    let port = match container.get_host_port_ipv4(6379.tcp()).await {
+        Ok(port) => port,
+        Err(error) => {
+            skip_or_fail_on_ci(format!("Valkey container port mapping failed ({error})"));
+            return;
+        }
+    };
+    let config = valkey_config(port, "2");
+    seed_valkey(port).await;
+
+    RedisAdapter::test_valkey(&config).await.unwrap();
+    let adapter = RedisAdapter::new_valkey();
+    assert_eq!(
+        mem::discriminant(&adapter.kind()),
+        mem::discriminant(&DatabaseType::Valkey)
+    );
+    adapter.connect(&config).await.unwrap();
+    adapter.ping().await.unwrap();
+
+    let databases = adapter.list_databases().await.unwrap();
+    assert!(databases
+        .iter()
+        .any(|database| database.index == 2 && database.key_count.unwrap_or_default() >= 2));
+
+    let keys = adapter
+        .scan_keys(
+            KvKeyScanRequest {
+                database: Some(2),
+                cursor: None,
+                pattern: Some("tv:*".into()),
+                limit: Some(25),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(keys.keys.iter().any(|key| key.key == "tv:string"));
+    assert!(keys.keys.iter().any(|key| key.key == "tv:hash"));
+
+    match adapter
+        .read_value(
+            KvValueReadRequest {
+                key: "tv:string".into(),
+                database: Some(2),
+                limit: Some(10),
+                cursor: None,
+            },
+            None,
+        )
+        .await
+        .unwrap()
+        .value
+    {
+        KvValue::String(value) => assert_eq!(value.text.as_deref(), Some("hello")),
+        other => panic!("expected string value, got {other:?}"),
+    }
+
+    let command_error = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "HGETALL tv:hash".into(),
+                database: Some(2),
+                confirm_key: None,
+            },
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert!(command_error
+        .to_string()
+        .contains("Valkey command queries are not supported yet"));
+
+    let mutation_error = adapter
+        .set_string(KvSetStringRequest {
+            key: "tv:written".into(),
+            value: "ok".into(),
+            database: Some(2),
+            ttl_seconds: Some(30),
+            safety: KvWriteSafety::RejectOverwrite,
+        })
+        .await
+        .unwrap_err();
+    assert!(mutation_error
+        .to_string()
+        .contains("Valkey key mutation is not supported yet"));
+}
+
 async fn seed_redis(port: u16) {
     let client = ::redis::Client::open(format!("redis://127.0.0.1:{port}/2")).unwrap();
     let mut connection = client.get_multiplexed_async_connection().await.unwrap();
@@ -188,11 +303,57 @@ async fn seed_redis(port: u16) {
         .unwrap();
 }
 
+async fn seed_valkey(port: u16) {
+    let client = ::redis::Client::open(format!("redis://127.0.0.1:{port}/2")).unwrap();
+    let mut connection = client.get_multiplexed_async_connection().await.unwrap();
+    let _: () = ::redis::cmd("FLUSHDB")
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+    let _: () = ::redis::cmd("SET")
+        .arg("tv:string")
+        .arg("hello")
+        .arg("EX")
+        .arg(60)
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+    let _: () = ::redis::cmd("HSET")
+        .arg("tv:hash")
+        .arg("name")
+        .arg("Ada")
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+}
+
 fn skip_or_fail_on_ci(reason: String) {
     if std::env::var_os("CI").is_some() || std::env::var_os("GITHUB_ACTIONS").is_some() {
         panic!("{reason}");
     }
     println!("SKIP: {reason}");
+}
+
+fn valkey_config(port: u16, database: &str) -> ConnectionConfig {
+    ConnectionConfig {
+        id: "valkey-live".into(),
+        name: "Valkey live".into(),
+        db_type: DatabaseType::Valkey,
+        host: "127.0.0.1".into(),
+        port,
+        user: String::new(),
+        password: String::new(),
+        database: database.into(),
+        read_only: false,
+        group_id: None,
+        color: None,
+        connection_timeout: Some(10),
+        keep_alive_interval: None,
+        environment: None,
+        auth_source: None,
+        replica_set: None,
+        tls_enabled: None,
+    }
 }
 
 fn redis_config(port: u16, database: &str) -> ConnectionConfig {

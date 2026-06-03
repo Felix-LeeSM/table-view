@@ -134,7 +134,6 @@ export default function ConnectionDialogBody({
             );
           case "mssql":
           case "oracle":
-          case "valkey":
           case "elasticsearch":
           case "opensearch":
             return (
@@ -149,6 +148,7 @@ export default function ConnectionDialogBody({
               />
             );
           case "redis":
+          case "valkey":
             return (
               <RedisFormFields
                 draft={form}

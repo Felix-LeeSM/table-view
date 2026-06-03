@@ -12,7 +12,7 @@
  *   - `tlsEnabled` is shared with Mongo's TLS toggle for code reuse and
  *     maps to `rediss://` in the Redis adapter.
  */
-import type { ConnectionDraft } from "@/types/connection";
+import { DATABASE_TYPE_LABELS, type ConnectionDraft } from "@/types/connection";
 
 export interface RedisFormFieldsProps {
   draft: ConnectionDraft;
@@ -51,6 +51,8 @@ export default function RedisFormFields({
   inputClass,
   labelClass,
 }: RedisFormFieldsProps) {
+  const productLabel = DATABASE_TYPE_LABELS[draft.dbType];
+
   return (
     <>
       {/* Host & Port */}
@@ -158,10 +160,10 @@ export default function RedisFormFields({
           max={REDIS_DB_MAX}
           value={draft.database}
           onChange={(e) => onChange({ database: clampDbIndex(e.target.value) })}
-          aria-label="Redis database index (0-15)"
+          aria-label={`${productLabel} database index (0-15)`}
         />
         <p className="mt-1 text-2xs text-muted-foreground">
-          Redis numeric DB index. Default is 0; valid range 0–15.
+          {productLabel} numeric DB index. Default is 0; valid range 0–15.
         </p>
       </div>
 

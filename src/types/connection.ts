@@ -35,6 +35,7 @@ export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "duckdb",
   "mongodb",
   "redis",
+  "valkey",
 ];
 
 export function isSupportedDatabaseType(t: DatabaseType): boolean {

@@ -54,6 +54,7 @@ const RECOGNISED_SCHEMES = [
   "mongodb+srv",
   "redis",
   "rediss",
+  "valkey",
   "elasticsearch",
   "elastic",
   "es",

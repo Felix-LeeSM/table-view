@@ -16,7 +16,7 @@
 경계, fixture/live evidence 가 같이 있는 범위만 의미한다.
 
 - Active connection UI/runtime 대상: PostgreSQL, MySQL, MariaDB, SQLite,
-  DuckDB, MongoDB, Redis.
+  DuckDB, MongoDB, Redis, Valkey.
 - RDBMS workbench: catalog/tree browse, tabular result rendering, raw query path,
   bounded DML/row-edit path, source-specific safety confirmation. PostgreSQL 이
   routine desktop smoke-backed 주 lane 이고 MySQL/MariaDB 는 runtime smoke
@@ -36,8 +36,12 @@
   vocabulary completion with current-DB/type-filtered key suggestions 이 있다.
   Runtime Happy Path smoke covers connect/scan/preview/GET plus guarded string
   write, TTL, and delete controls. Full CLI/admin parity, language-core parser
-  ownership, stream consumer UI, cluster/pubsub/modules, Valkey compatibility,
-  and multi-key destructive command execution remain follow-up.
+  ownership, stream consumer UI, cluster/pubsub/modules, Valkey command
+  compatibility, and multi-key destructive command execution remain follow-up.
+- Valkey workflow: connection/profile, database/key scan, and typed value
+  preview are active as a read-only KV runtime slice. Command query execution,
+  key mutation, full Redis compatibility, and Runtime Happy Path smoke are not
+  claimed yet.
 - Elasticsearch/OpenSearch: embedded fixture-backed Search catalog/mapping/template
   and result rendering contract 만 있다. live HTTP connection/query/admin 은 없다.
 - MSSQL/Oracle: declared planned RDBMS identities and static seed contracts only.
@@ -53,8 +57,8 @@
 | SQLite | file adapter + read/writable-file DML | bounded parser/Safe Mode guardrails; DDL rejected by adapter | Rust/WASM built-in vocabulary + cached schema objects + sqlite-cli suggestions | user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의 DML/PK-projected row edit 로 제한된다. GitHub Runtime Happy Path now runs a deterministic SQLite desktop smoke for file create/open, table browse, read query, writable DML, row edit, read-only write rejection, and internal app-state DB rejection. structured DDL UI/runtime parity, unsupported `ALTER TABLE` rebuild, nested JSON edit, sqlite-cli execution, extension/capability semantics 는 unsupported |
 | DuckDB | RDBMS file adapter + registered local analytics query | DuckDB SQL/file analytics guardrails | Rust/WASM DuckDB editor vocabulary + cached schema objects | `rdb` profile + `file` connection kind 로 표현한다. local `.duckdb` file 은 catalog/table read 와 statement-level raw SQL 실행 경로를 지원한다. GitHub Runtime Happy Path now runs a deterministic DuckDB desktop smoke for `.duckdb` open, catalog/table browse, raw SELECT tabular result/history evidence, and read-only write rejection. registered local CSV/Parquet/JSON/NDJSON analytics 는 active-session source alias 등록, source metadata/workbench alias 표시, preview, focused dialog/API source-scoped SELECT evidence, and a distinct `FILE` history source label for source-scoped dialog queries 가 있다. 이 focused evidence 는 Runtime Happy Path smoke 나 global query editor/import/export parity 로 승격하지 않는다. Public payload 는 source alias, file name, kind, size, columns, preview SQL 만 노출하고 absolute local path 는 노출하지 않는다. Completion 은 editor assistance 이며 runtime support 를 넓히지 않는다. extension install/load/helper functions, `COPY`, `ATTACH`/`DETACH`, sensitive external-file capability settings, and arbitrary external-file SQL functions/replacement scans are adapter-blocked. 구조화된 DDL/write UI, file analytics import/export/global query editor parity 는 unsupported/follow-up |
 | MongoDB | runtime-backed whitelisted document workflow | whitelisted mongosh/MQL | Rust/WASM vocabulary + cached catalog context | connection, source-aware catalog metadata, workbench metadata panels, document query/edit with MQL preview/discard, catalog-aware collection/field/index-name autocomplete, bulk delete/update previews with partial-commit warnings, bulk/index/validator slices, cancellation, destructive collection/admin confirmations, and transaction-helper unsupported gates are active for tested whitelist paths. Runtime Happy Path smoke proves seeded collection browse, row-edit MQL preview/execute, query-tab `find` projection/sort/limit, destructive `runCommand` confirmation, and cancel/no-mutation re-read. Focused component/backend tests cover broader catalog, autocomplete, bulk, index, validator, parser, cancellation, and unsupported-helper gates below smoke. arbitrary JavaScript/shell behavior, unsupported cursor helpers, server-version feature promotion gates, native document-first result panels, and full-support parity remain follow-up |
-| Redis | connection/profile + backend KV primitives + key browser/value preview/edit UI + bounded command editor vocabulary/key suggestions | backend KV guardrails plus bounded command allowlist and typed-confirm mutation controls; not language-core parser ownership | TypeScript bounded command vocabulary + current-DB/type-filtered key suggestions | key browser/value preview are live. Runtime Happy Path smoke covers Redis connection, deterministic DB 2 seed/reset, key scan, string value preview, `GET` command result, guarded string overwrite, TTL update, and exact-key delete confirmation. The value panel promotes bounded string/hash/list/set/zset edits plus expire/persist/delete preview/confirm flows, while partial/unsupported surfaces fail visibly. Backend guarded string set, delete confirmation, TTL expire/persist, bounded stream read, selected read/write/TTL/stream command dispatch, tabular projection, and exact-key `confirmKey` enforcement for single-key `DEL`/`PERSIST` have focused IPC/runtime evidence. The Redis command editor suggests the backend allowlist command names with arity hints/snippets plus current-DB key suggestions filtered by command key type. It still does not own full Redis CLI parsing or admin parity. Full CLI/admin parity, stream consumer UI, cluster/pubsub/modules/consumer-group management, multi-key destructive commands, broader command coverage, language-core parser/completion ownership, and Valkey support are follow-up |
-| Valkey | capability-empty KV identity/profile only | no runtime parser/safety or connection support | deferred compatibility target only | `valkey` is an active `DatabaseType`/profile identity with server connection kind, product label, KV paradigm, marker-only backend adapter, and `redis-command` compatibility target. All runtime capabilities are empty, connection UI/runtime support is not exposed, and `e2e/fixtures/seed.valkey.json` is static fixture inventory only. Redis compatibility remains unverified and is not a support claim |
+| Redis | connection/profile + backend KV primitives + key browser/value preview/edit UI + bounded command editor vocabulary/key suggestions | backend KV guardrails plus bounded command allowlist and typed-confirm mutation controls; not language-core parser ownership | TypeScript bounded command vocabulary + current-DB/type-filtered key suggestions | key browser/value preview are live. Runtime Happy Path smoke covers Redis connection, deterministic DB 2 seed/reset, key scan, string value preview, `GET` command result, guarded string overwrite, TTL update, and exact-key delete confirmation. The value panel promotes bounded string/hash/list/set/zset edits plus expire/persist/delete preview/confirm flows, while partial/unsupported surfaces fail visibly. Backend guarded string set, delete confirmation, TTL expire/persist, bounded stream read, selected read/write/TTL/stream command dispatch, tabular projection, and exact-key `confirmKey` enforcement for single-key `DEL`/`PERSIST` have focused IPC/runtime evidence. The Redis command editor suggests the backend allowlist command names with arity hints/snippets plus current-DB key suggestions filtered by command key type. It still does not own full Redis CLI parsing or admin parity. Full CLI/admin parity, stream consumer UI, cluster/pubsub/modules/consumer-group management, multi-key destructive commands, broader command coverage, language-core parser/completion ownership, and Valkey command compatibility are follow-up |
+| Valkey | read-only KV runtime for connection + key browser/value preview | no command query or mutation safety surface yet | deferred compatibility target only | `valkey` is an active `DatabaseType`/profile identity with server connection kind, product label, KV paradigm, Valkey backend adapter profile, and `redis-command` compatibility target. Connection UI/runtime support is exposed for test/connect/key browse/value preview only. Command query execution, key mutation, full Redis compatibility, and Runtime Happy Path smoke are not claimed |
 | Elasticsearch/OpenSearch | fixture-backed Search slice only | index/mapping/search envelope guardrails | bounded fixture DSL only | fixture identity/catalog/mapping/template/search result and destructive plan contracts exist. live connection UI, HTTP auth/TLS, catalog/query execution, admin APIs, observability, and product-specific live deltas are deferred |
 | MSSQL | planned declared RDBMS identity only | no active T-SQL parser/runtime safety claim | deferred | `mssql` profile/dialect identity exists as capability-empty `declared-rdb`. Static SQL seed contract exists for future promotion, but connection UI, runtime query/catalog/edit, SQL Server auth/TLS/encryption/instance behavior, runtime fixture, and live evidence are not implemented |
 | Oracle | planned declared RDBMS identity only | no active Oracle SQL/PL/SQL parser/runtime safety claim | deferred | `oracle` profile/dialect identity exists as capability-empty `declared-rdb`. Static SQL seed contract exists for future promotion, but connection UI, runtime query/catalog/edit, service/SID/wallet/TNS behavior, runtime fixture, and live evidence are not implemented |
@@ -79,7 +83,7 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 | OpenSearch | `e2e/fixtures/seed.search.opensearch.json`, `src-tauri/src/db/search.rs` | embedded Search fixture contract; no live HTTP support |
 | MSSQL | `e2e/fixtures/seed.mssql.sql` | planned static SQL seed contract only |
 | Oracle | `e2e/fixtures/seed.oracle.sql` | planned static SQL seed contract only |
-| Valkey | `e2e/fixtures/seed.valkey.json` | static Redis-compatible fixture contract only; no runtime/live support claim. Future promotion must run the seed against a local Valkey container or equivalent local-first fixture before Redis compatibility is claimed |
+| Valkey | `e2e/fixtures/seed.valkey.json` | static Redis-compatible fixture contract plus focused local Valkey testcontainer evidence for connect/key scan/value preview. Command query, mutation, Redis compatibility, and Runtime Happy Path smoke remain future promotion gates |
 | Wider candidates | none | no active fixture/live evidence |
 
 ## Profile Registry Boundary
@@ -87,13 +91,13 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 `src/types/dataSource.ts` 의 `DATA_SOURCE_PROFILES` 는 모든 `DatabaseType` identity 를
 포함한다. Profile 존재는 곧 runtime support claim 이 아니다. 현재 connection dialog
 와 runtime connection support 는 `capabilities.connection.test` 가 true 인
-PostgreSQL, MySQL, MariaDB, SQLite, DuckDB, MongoDB, Redis 로 제한된다.
-Valkey 는 active capability-empty `DatabaseType`/profile identity 를 갖지만
-`capabilities.connection.test=false` 이고 runtime/live evidence 가 없다. Static
-`e2e/fixtures/seed.valkey.json` 는 future Redis-compatible seed/reset contract 일 뿐,
-local Valkey container/testcontainer evidence 가 쌓이기 전까지 support claim 이
-아니다. `redis-command` 는 compatibility target 일 뿐, Redis compatibility evidence
-가 쌓이기 전까지 support claim 이 아니다.
+PostgreSQL, MySQL, MariaDB, SQLite, DuckDB, MongoDB, Redis, Valkey 로 제한된다.
+Valkey 는 read-only KV runtime slice 이며 `connection.test`, `catalog.browse`,
+`paradigmSpecific.keyBrowser` 만 true 다. Static `e2e/fixtures/seed.valkey.json` 는
+future Redis-compatible seed/reset contract 이고, focused local Valkey
+testcontainer evidence 는 connect/key scan/value preview 까지만 support claim 을
+넓힌다. `redis-command` 는 compatibility target 일 뿐, command query execution 이나
+Redis compatibility claim 이 아니다.
 
 MSSQL 과 Oracle 은 별도의 capability-empty declared RDB identities 다.
 Elasticsearch/OpenSearch 는 Search identity 와 fixture-backed contract 만 갖고

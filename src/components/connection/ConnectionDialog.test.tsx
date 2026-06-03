@@ -110,6 +110,7 @@ describe("ConnectionDialog", () => {
     expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "MongoDB" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Redis" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Valkey" })).toBeInTheDocument();
 
     // Unsupported — 안 보임.
     expect(
@@ -1713,6 +1714,13 @@ describe("ConnectionDialog", () => {
           userLabel: "User (optional)",
           passwordLabel: "Password (optional)",
           databaseLabel: "Database (optional)",
+        },
+        {
+          label: "Valkey",
+          dbType: "valkey",
+          userLabel: "Username (optional)",
+          passwordLabel: "Password (optional)",
+          databaseLabel: "Valkey database index (0-15)",
         },
       ] as const) {
         expect(
