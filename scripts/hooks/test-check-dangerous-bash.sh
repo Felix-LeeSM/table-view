@@ -24,6 +24,16 @@ fi
 PASS_COUNT=0
 FAIL_COUNT=0
 FAIL_DETAILS=()
+ORIGINAL_HOOKS_PATH="$(git config --get core.hooksPath 2>/dev/null || true)"
+
+restore_hooks_path() {
+  if [ -n "$ORIGINAL_HOOKS_PATH" ]; then
+    git config core.hooksPath "$ORIGINAL_HOOKS_PATH"
+  else
+    git config --unset-all core.hooksPath || true
+  fi
+}
+trap restore_hooks_path EXIT
 
 # run_case <name> <expected_exit> <input_cmd_json> <stderr_must_contain_or_empty>
 # - stderr_must_contain_or_empty: "EMPTY" 면 stderr 가 빈 문자열이어야 함.
@@ -115,6 +125,51 @@ run_case \
   0 \
   '{"tool_input":{"command":"gh pr merge 123 --squash --delete-branch"}}' \
   'MATCH:WARNING|worktree-cleanup.sh|memory/runbook/worktree/memory.md|memory/workflow/delivery/memory.md'
+
+# Case 5b — core.hooksPath 조작은 git commit/push 차단 조건에서 즉시 실패.
+run_case \
+  "case5a: git -c core.hooksPath=.no-hooks commit → block" \
+  1 \
+  '{"tool_input":{"command":"git -c core.hooksPath=.no-hooks commit -m \"test: block hooksPath\""}}' \
+  'MATCH:Git hooks 경로를 임시|core.hooksPath|hooks 경로를 임시|BLOCKED|bash scripts/setup.sh'
+
+run_case \
+  "case5b: git config --get core.hooksPath --local → allow" \
+  0 \
+  '{"tool_input":{"command":"git config --get core.hooksPath --local"}}' \
+  EMPTY
+
+git config core.hooksPath .no-hooks
+run_case \
+  "case5c: git commit with core.hooksPath=.no-hooks → block" \
+  1 \
+  '{"tool_input":{"command":"git commit -m \"test: block hooksPath\""}}' \
+  'MATCH:core.hooksPath|.githooks|Blocked'
+git config --unset-all core.hooksPath
+run_case \
+  "case5d: git commit with core.hooksPath unset → block" \
+  1 \
+  '{"tool_input":{"command":"git commit -m \"test: no hooksPath\""}}' \
+  'MATCH:core.hooksPath|default .git/hooks|bash scripts/setup.sh'
+
+run_case \
+  "case5e: git config --local core.hooksPath .no-hooks && git commit → block" \
+  1 \
+  '{"tool_input":{"command":"git config --local core.hooksPath .no-hooks && git commit -m \"test: block hooksPath\""}}' \
+  'MATCH:core.hooksPath|.githooks|BLOCKED|git config'
+
+run_case \
+  "case5f: git config --global core.hooksPath .no-hooks && git push → block" \
+  1 \
+  '{"tool_input":{"command":"git config --global core.hooksPath .no-hooks && git push"}}' \
+  'MATCH:core.hooksPath|.githooks|BLOCKED|git config'
+
+run_case \
+  "case5g: GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=.no-hooks git commit → block" \
+  1 \
+  '{"tool_input":{"command":"GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=.no-hooks git commit -m \"test: block hooksPath\""}}' \
+  'MATCH:core.hooksPath|Git hooks 경로를 임시|BLOCKED'
+restore_hooks_path
 
 # Case 6 — gh pr merge command that already chains cleanup stays quiet.
 run_case \
