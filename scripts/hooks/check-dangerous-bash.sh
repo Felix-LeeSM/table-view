@@ -332,7 +332,7 @@ EOF
     githooks_path_override | git_config_set_hooks_path | githooks_path_env_key)
       cat >&2 <<EOF
 Git hooks 경로를 임시/영속적으로 바꾸는 명령은 hook 우회 우려가 큽니다.
-허용: `git config core.hooksPath .githooks` (setup.sh 완료 상태).
+허용: git config core.hooksPath .githooks (setup.sh 완료 상태).
 
 차단된 형태:
   - git -c core.hooksPath=...
@@ -538,7 +538,7 @@ check_git_hooks() {
 
   hooks_dir="$(git config --get core.hooksPath 2>/dev/null || true)"
   if [ -z "$hooks_dir" ]; then
-    block "Blocked: core.hooksPath is unset (default .git/hooks). This repo requires core.hooksPath=.githooks."
+    block "Blocked: core.hooksPath is unset (default .git/hooks). This repo requires core.hooksPath=.githooks. Run 'bash scripts/setup.sh'."
   fi
   if [ "${hooks_dir#/}" = "$hooks_dir" ]; then
     hooks_dir="$repo_root/$hooks_dir"

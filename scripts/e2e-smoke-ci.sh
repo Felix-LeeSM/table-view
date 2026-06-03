@@ -44,10 +44,15 @@ fi
 mkdir -p "$REPORT_DIR"
 find "$REPORT_DIR" -type f ! -name .gitkeep -delete
 
-if [[ "${E2E_SKIP_PREPARE:-0}" != "1" ]]; then
-  pnpm tsx scripts/e2e-pre-smoke-release-gate.ts
+pnpm tsx scripts/e2e-pre-smoke-release-gate.ts
+if [[ "${E2E_BUILD_ONLY:-0}" != "1" ]]; then
   pnpm tsx e2e/fixtures/seed-smoke.ts
+fi
+if [[ "${E2E_SKIP_BUILD:-0}" != "1" ]]; then
   pnpm tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
+fi
+if [[ "${E2E_BUILD_ONLY:-0}" = "1" ]]; then
+  exit 0
 fi
 
 BASE_DATA_DIR="${TABLE_VIEW_TEST_DATA_DIR:-${RUNNER_TEMP:-/tmp}/table-view-smoke}"
@@ -80,5 +85,5 @@ else
   run_wdio "$BASE_DATA_DIR/sqlite" "e2e/smoke/sqlite.spec.ts"
   run_wdio "$BASE_DATA_DIR/duckdb" "e2e/smoke/duckdb.spec.ts"
   run_wdio "$BASE_DATA_DIR/mongodb" "e2e/smoke/mongodb.spec.ts"
+  run_wdio "$BASE_DATA_DIR/redis" "e2e/smoke/redis.spec.ts"
 fi
-run_wdio "$BASE_DATA_DIR/redis" "e2e/smoke/redis.spec.ts"

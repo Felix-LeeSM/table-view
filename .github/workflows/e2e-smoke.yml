@@ -20,63 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: testuser
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: table_view_test
-        ports:
-          - 15432:5432
-        options: >-
-          --health-cmd "pg_isready -U testuser -d table_view_test"
-          --health-interval 2s
-          --health-timeout 3s
-          --health-retries 20
-      mongodb:
-        image: mongo:7
-        env:
-          MONGO_INITDB_ROOT_USERNAME: testuser
-          MONGO_INITDB_ROOT_PASSWORD: testpass
-        ports:
-          - 37017:27017
-        options: >-
-          --health-cmd "mongosh --quiet -u testuser -p testpass --authenticationDatabase admin --eval 'db.runCommand({ ping: 1 }).ok' || exit 1"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 15
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: testroot
-          MYSQL_USER: testuser
-          MYSQL_PASSWORD: testpass
-          MYSQL_DATABASE: table_view_test
-        ports:
-          - 13306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h localhost -u root -ptestroot --silent"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-          --health-start-period 10s
-      mariadb:
-        image: mariadb:11
-        env:
-          MARIADB_ROOT_PASSWORD: testroot
-          MARIADB_USER: testuser
-          MARIADB_PASSWORD: testpass
-          MARIADB_DATABASE: table_view_test
-        ports:
-          - 23306:3306
-        options: >-
-          --health-cmd "healthcheck.sh --connect --innodb_initialized"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-          --health-start-period 10s
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -112,29 +55,9 @@ jobs:
         with:
           toolchain: 1.91.0
 
-      - name: Prepare E2E smoke environment
+      - name: Build E2E smoke binary
         env:
-          E2E_PG_HOST: localhost
-          E2E_PG_PORT: 15432
-          PGUSER: testuser
-          PGPASSWORD: testpass
-          PGDATABASE: table_view_test
-          E2E_MONGO_HOST: localhost
-          E2E_MONGO_PORT: 37017
-          MONGO_USER: testuser
-          MONGO_PASSWORD: testpass
-          E2E_MONGO_DB: table_view_test
-          E2E_MONGO_AUTH_DB: admin
-          E2E_MYSQL_HOST: localhost
-          E2E_MYSQL_PORT: 13306
-          MYSQL_USER: testuser
-          MYSQL_PASSWORD: testpass
-          MYSQL_DATABASE: table_view_test
-          E2E_MARIADB_HOST: localhost
-          E2E_MARIADB_PORT: 23306
-          MARIADB_USER: testuser
-          MARIADB_PASSWORD: testpass
-          MARIADB_DATABASE: table_view_test
+          E2E_BUILD_ONLY: "1"
         run: bash scripts/e2e-smoke-ci.sh
 
       - name: Upload tauri binary
@@ -175,6 +98,8 @@ jobs:
             spec: e2e/smoke/duckdb.spec.ts
           - spec_key: mongodb
             spec: e2e/smoke/mongodb.spec.ts
+          - spec_key: redis
+            spec: e2e/smoke/redis.spec.ts
 
     services:
       postgres:
@@ -232,6 +157,15 @@ jobs:
           --health-timeout 5s
           --health-retries 20
           --health-start-period 10s
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
     steps:
       - name: Checkout
@@ -272,6 +206,11 @@ jobs:
       - name: Make tauri binary executable
         run: chmod +x src-tauri/target/debug/table-view
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+
       - name: Cache tauri-driver binary
         id: cache-tauri-driver
         uses: actions/cache@v4
@@ -306,7 +245,10 @@ jobs:
           MARIADB_USER: testuser
           MARIADB_PASSWORD: testpass
           MARIADB_DATABASE: table_view_test
-          E2E_SKIP_PREPARE: "1"
+          E2E_REDIS_HOST: localhost
+          E2E_REDIS_PORT: 6379
+          E2E_REDIS_DB: 2
+          E2E_SKIP_BUILD: "1"
           E2E_SPEC: ${{ matrix.spec }}
           E2E_SPEC_KEY: ${{ matrix.spec_key }}
           E2E_REPORT_DIR: e2e/wdio-report/${{ matrix.spec_key }}

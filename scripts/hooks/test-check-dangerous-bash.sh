@@ -131,7 +131,7 @@ run_case \
   "case5a: git -c core.hooksPath=.no-hooks commit → block" \
   1 \
   '{"tool_input":{"command":"git -c core.hooksPath=.no-hooks commit -m \"test: block hooksPath\""}}' \
-  'MATCH:Git hooks 경로를 임시|core.hooksPath|hooks 경로를 임시|Blocked|bash scripts/setup.sh'
+  'MATCH:Git hooks 경로를 임시|core.hooksPath|hooks 경로를 임시|BLOCKED|bash scripts/setup.sh'
 
 run_case \
   "case5b: git config --get core.hooksPath --local → allow" \
@@ -156,19 +156,19 @@ run_case \
   "case5e: git config --local core.hooksPath .no-hooks && git commit → block" \
   1 \
   '{"tool_input":{"command":"git config --local core.hooksPath .no-hooks && git commit -m \"test: block hooksPath\""}}' \
-  'MATCH:core.hooksPath|.githooks|Blocked|git config'
+  'MATCH:core.hooksPath|.githooks|BLOCKED|git config'
 
 run_case \
   "case5f: git config --global core.hooksPath .no-hooks && git push → block" \
   1 \
   '{"tool_input":{"command":"git config --global core.hooksPath .no-hooks && git push"}}' \
-  'MATCH:core.hooksPath|.githooks|Blocked|git config'
+  'MATCH:core.hooksPath|.githooks|BLOCKED|git config'
 
 run_case \
   "case5g: GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=.no-hooks git commit → block" \
   1 \
   '{"tool_input":{"command":"GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=.no-hooks git commit -m \"test: block hooksPath\""}}' \
-  'MATCH:core.hooksPath|Git hooks 경로를 임시|Blocked'
+  'MATCH:core.hooksPath|Git hooks 경로를 임시|BLOCKED'
 restore_hooks_path
 
 # Case 6 — gh pr merge command that already chains cleanup stays quiet.
