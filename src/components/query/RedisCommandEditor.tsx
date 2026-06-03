@@ -21,6 +21,7 @@ import {
   type RedisCommandCompletionTarget,
   type RedisKeySuggestion,
 } from "@lib/redis/redisCommandCompletion";
+import { syncEditorDocument } from "./editorDocumentSync";
 
 export interface RedisCommandEditorProps {
   sql: string;
@@ -162,6 +163,9 @@ const RedisCommandEditor = forwardRef<
       view.destroy();
       viewRef.current = null;
     };
+    // Completion props reconfigure in the effect below; remounting would
+    // drop cursor and undo history.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -181,12 +185,7 @@ const RedisCommandEditor = forwardRef<
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    const currentDoc = view.state.doc.toString();
-    if (currentDoc === sql) return;
-    sqlRef.current = sql;
-    view.dispatch({
-      changes: { from: 0, to: currentDoc.length, insert: sql },
-    });
+    if (syncEditorDocument(view, sql)) sqlRef.current = sql;
   }, [sql]);
 
   const editorLabel =

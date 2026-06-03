@@ -196,6 +196,122 @@ describe("createSqlHybridCompletionSource", () => {
     expect(legacySource).toHaveBeenCalledOnce();
   });
 
+  it("filters psql meta commands out of SQL statement contexts", async () => {
+    const wasmResult: CoreCompletionResult = {
+      items: [
+        { label: "\\dt", kind: "meta-command", apply: "\\dt" },
+        { label: "COUNT", kind: "function", apply: "COUNT()" },
+      ],
+      replaceRange: {
+        from: { utf16: 7, utf8: 7 },
+        to: { utf16: 7, utf8: 7 },
+      },
+      incomplete: false,
+      metadata: {
+        engine: "wasm",
+        dialect: "postgresql",
+        shell: "psql",
+        catalogRevision: "rev-1",
+      },
+    };
+    const source = createSqlHybridCompletionSource({
+      dialect: StandardSQL,
+      getNamespace: () => TEST_SCHEMA,
+      getCompletionContext: () => completionContext(),
+      completeWithPreloadedWasm: vi.fn().mockReturnValue(wasmResult),
+      completeWithWasm: vi.fn(),
+    });
+
+    const result = await source(codeMirrorContext("SELECT "));
+
+    expect(result?.options.map((option) => option.label)).toEqual(["COUNT"]);
+  });
+
+  it("falls back to legacy sources only when filtering leaves no core candidates", async () => {
+    const wasmResult: CoreCompletionResult = {
+      items: [{ label: "\\dt", kind: "meta-command", apply: "\\dt" }],
+      replaceRange: {
+        from: { utf16: 14, utf8: 14 },
+        to: { utf16: 14, utf8: 14 },
+      },
+      incomplete: false,
+      metadata: {
+        engine: "wasm",
+        dialect: "postgresql",
+        shell: "psql",
+        catalogRevision: "rev-1",
+      },
+    };
+    const legacySource = vi.fn<CompletionSource>().mockReturnValue({
+      from: 14,
+      options: [{ label: "users", type: "type" }],
+    });
+
+    const source = createSqlHybridCompletionSource({
+      dialect: StandardSQL,
+      getNamespace: () => TEST_SCHEMA,
+      getCompletionContext: () => completionContext(),
+      completeWithPreloadedWasm: vi.fn().mockReturnValue(wasmResult),
+      completeWithWasm: vi.fn(),
+      legacySources: [legacySource],
+    });
+
+    await expect(
+      source(codeMirrorContext("SELECT * FROM ")),
+    ).resolves.toMatchObject({
+      from: 14,
+      options: [{ label: "users", type: "type" }],
+    });
+    expect(legacySource).toHaveBeenCalledOnce();
+  });
+
+  it("uses filtered core relation candidates when a legacy source is available", async () => {
+    const wasmResult: CoreCompletionResult = {
+      items: [
+        { label: "\\dt", kind: "meta-command", apply: "\\dt" },
+        { label: "users", kind: "table", apply: "users", detail: "public" },
+      ],
+      replaceRange: {
+        from: { utf16: 14, utf8: 14 },
+        to: { utf16: 14, utf8: 14 },
+      },
+      incomplete: false,
+      metadata: {
+        engine: "wasm",
+        dialect: "postgresql",
+        shell: "psql",
+        catalogRevision: "rev-1",
+      },
+    };
+    const legacySource = vi.fn<CompletionSource>().mockReturnValue({
+      from: 14,
+      options: [{ label: "users", type: "type" }],
+    });
+
+    const source = createSqlHybridCompletionSource({
+      dialect: StandardSQL,
+      getNamespace: () => TEST_SCHEMA,
+      getCompletionContext: () => completionContext(),
+      completeWithPreloadedWasm: vi.fn().mockReturnValue(wasmResult),
+      completeWithWasm: vi.fn(),
+      legacySources: [legacySource],
+    });
+
+    await expect(
+      source(codeMirrorContext("SELECT * FROM ")),
+    ).resolves.toMatchObject({
+      options: [
+        {
+          label: "users",
+          type: "type",
+          apply: "users",
+          detail: "public",
+        },
+      ],
+    });
+    expect(legacySource).not.toHaveBeenCalled();
+  });
+
   it("keeps the legacy path when completion context has not loaded", async () => {
     const legacySource = vi.fn<CompletionSource>().mockReturnValue({
       from: 0,

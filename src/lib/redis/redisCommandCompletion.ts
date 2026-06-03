@@ -40,6 +40,22 @@ export interface RedisCommandCompletionSourceOptions {
 
 export const REDIS_COMMAND_COMPLETIONS = [
   {
+    name: "SCAN",
+    effect: "read",
+    arity: "cursor [MATCH pattern] [COUNT n]",
+    arguments: ["cursor", "MATCH", "COUNT"],
+    snippet: "SCAN 0 MATCH ${pattern} COUNT 100",
+    summary: "Incrementally scan the keyspace.",
+  },
+  {
+    name: "KEYS",
+    effect: "read",
+    arity: "pattern",
+    arguments: ["pattern"],
+    snippet: "KEYS ${pattern}",
+    summary: "Scan the full keyspace; Safe Mode gates this command.",
+  },
+  {
     name: "GET",
     effect: "read",
     arity: "1 key",
@@ -233,6 +249,8 @@ export const REDIS_UNSUPPORTED_COMMAND_FAMILIES = [
 ] as const satisfies readonly RedisUnsupportedCommandFamily[];
 
 const REDIS_KEY_ARGUMENTS = {
+  SCAN: "none",
+  KEYS: "none",
   GET: ["string"],
   HGETALL: ["hash"],
   LRANGE: ["list"],
@@ -253,7 +271,7 @@ const REDIS_KEY_ARGUMENTS = {
   DEL: "any",
 } as const satisfies Record<
   (typeof REDIS_COMMAND_COMPLETIONS)[number]["name"],
-  readonly KvKeyType[] | "any" | "variadic-any"
+  readonly KvKeyType[] | "any" | "variadic-any" | "none"
 >;
 
 export function createRedisCommandCompletionSource(
@@ -352,6 +370,7 @@ function readKeyPosition(
   const prefix = endsWithWhitespace ? "" : tokens[tokens.length - 1]!;
   const keyMode =
     REDIS_KEY_ARGUMENTS[command as keyof typeof REDIS_KEY_ARGUMENTS];
+  if (keyMode === "none") return null;
   const acceptsArgument =
     keyMode === "variadic-any" ? argumentIndex >= 0 : argumentIndex === 0;
   if (!acceptsArgument) return null;
@@ -366,6 +385,7 @@ function readKeyPosition(
 function keyMatchesCommand(command: string, keyType: KvKeyType): boolean {
   const keyMode =
     REDIS_KEY_ARGUMENTS[command as keyof typeof REDIS_KEY_ARGUMENTS];
+  if (keyMode === "none") return false;
   if (keyMode === "any" || keyMode === "variadic-any") return true;
   return (keyMode as readonly KvKeyType[]).includes(keyType);
 }

@@ -25,6 +25,18 @@ pub(super) fn require_confirm_key(key: &str, confirm_key: &str) -> Result<(), Ap
     Ok(())
 }
 
+pub(super) fn require_confirm_pattern(
+    pattern: &str,
+    confirm_pattern: &str,
+) -> Result<(), AppError> {
+    if pattern != confirm_pattern {
+        return Err(AppError::Validation(
+            "Confirmation pattern must exactly match the Redis pattern".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn bounded_limit(limit: Option<u32>) -> u32 {
     limit.unwrap_or(DEFAULT_SCAN_LIMIT).clamp(1, MAX_SCAN_LIMIT)
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { EditorView, keymap } from "@codemirror/view";
 import { ensureSyntaxTree, language } from "@codemirror/language";
 import { MySQL, PostgreSQL, SQLite } from "@codemirror/lang-sql";
@@ -271,6 +271,36 @@ describe("SqlQueryEditor (Sprint 139)", () => {
       const content = getContainer().querySelector(".cm-content");
       expect(content?.textContent).toContain("SELECT * FROM users");
     });
+  });
+
+  it("preserves cursor position across external sql prop sync", () => {
+    const { rerender } = render(
+      <SqlQueryEditor
+        sql="SELECT profile_id FROM users"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+      />,
+    );
+    const view = getEditorView();
+    const cursorAfterDeletedChar = "SELECT profil".length;
+    act(() => {
+      view.dispatch({ selection: { anchor: cursorAfterDeletedChar } });
+    });
+
+    rerender(
+      <SqlQueryEditor
+        sql="SELECT profie_id FROM users"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+      />,
+    );
+
+    expect(getEditorView().state.doc.toString()).toBe(
+      "SELECT profie_id FROM users",
+    );
+    expect(getEditorView().state.selection.main.head).toBe(
+      cursorAfterDeletedChar - 1,
+    );
   });
 
   // schemaNamespace reconfigure preserves the EditorView.

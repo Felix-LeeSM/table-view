@@ -12,6 +12,8 @@ import {
 } from "./redisCommandCompletion";
 
 const BACKEND_ALLOWLIST = [
+  "SCAN",
+  "KEYS",
   "GET",
   "HGETALL",
   "LRANGE",
@@ -98,6 +100,8 @@ describe("redis command completion vocabulary", () => {
 
   it("suggests command names by first-token prefix only", () => {
     expect(labels(runSource("XR"))).toEqual(["XRANGE"]);
+    expect(labels(runSource("SC"))).toEqual(["SCAN"]);
+    expect(labels(runSource("KE"))).toEqual(["KEYS"]);
     expect(labels(runSource("  z"))).toEqual(["ZRANGE", "ZADD"]);
     expect(labels(runSource("GET "))).toEqual([]);
     expect(labels(runSource("SET session:1"))).toEqual([]);
@@ -189,6 +193,11 @@ describe("redis command completion vocabulary", () => {
       "profiles:hash",
       "profiles:stream",
     ]);
+  });
+
+  it("treats SCAN cursor and KEYS pattern as non-key arguments", () => {
+    expect(labels(runSource("SCAN ", true, KEY_SUGGESTIONS))).toEqual([]);
+    expect(labels(runSource("KEYS pro", true, KEY_SUGGESTIONS))).toEqual([]);
   });
 
   it("uses the proven Valkey command subset as the Valkey vocabulary source", () => {

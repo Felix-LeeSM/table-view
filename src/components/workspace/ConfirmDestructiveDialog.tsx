@@ -60,11 +60,10 @@ export interface ConfirmDestructiveDialogProps {
    */
   statements: string[];
   /**
-   * Sprint 247 — paradigm gate. `"document"` skips IPC entirely and
-   * renders the Mongo disclaimer; `"rdb"` invokes
-   * `execute_query_dry_run` while the dialog is open.
+   * Sprint 247 — paradigm gate. Non-RDB skips IPC entirely; `"rdb"`
+   * invokes `execute_query_dry_run` while the dialog is open.
    */
-  paradigm: "rdb" | "document";
+  paradigm: "rdb" | "document" | "kv";
   /**
    * Sprint 256 (ADR 0023, AC-256-05) — connection display name for the
    * env-aware footer ExecuteButton ("Execute on <conn>"). Optional;

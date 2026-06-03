@@ -3,7 +3,7 @@ use std::time::Instant;
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
-use crate::db::{KvCommandRequest, KvHashField, RdbQueryResult};
+use crate::db::{KvCommandRequest, KvHashField, KvKeyMetadata, RdbQueryResult};
 use crate::error::AppError;
 use crate::models::QueryResult;
 
@@ -12,7 +12,9 @@ use super::command_result::{
     float_col, int_col, key_type_label, mutation_result, object_col, rows_result, single_row,
     string_cell, text_col, ttl_state_label,
 };
-use super::helpers::{bounded_limit, ensure_not_cancelled, require_confirm_key};
+use super::helpers::{
+    bounded_limit, ensure_not_cancelled, require_confirm_key, require_confirm_pattern,
+};
 use super::values::{read_hash, read_set, read_stream_range, read_string};
 use super::RedisAdapter;
 
@@ -40,6 +42,12 @@ async fn dispatch_command(
 ) -> Result<RdbQueryResult, AppError> {
     ensure_not_cancelled(cancel)?;
     match command {
+        RedisCommand::Scan {
+            cursor,
+            pattern,
+            count,
+        } => scan_command(adapter, cursor, pattern, count, cancel).await,
+        RedisCommand::Keys { pattern } => keys_command(adapter, pattern, cancel).await,
         RedisCommand::Get { key } => read_string_command(adapter, key).await,
         RedisCommand::HGetAll { key } => read_hash_command(adapter, key).await,
         RedisCommand::LRange { key, start, stop } => {
@@ -87,6 +95,9 @@ fn require_command_confirmation(
     command: &RedisCommand,
     confirm_key: Option<&str>,
 ) -> Result<(), AppError> {
+    if let RedisCommand::Keys { pattern } = command {
+        return require_confirm_pattern(pattern, confirm_key.unwrap_or_default());
+    }
     match command.effect() {
         RedisCommandEffect::Destructive | RedisCommandEffect::Ttl
             if command.required_confirmation_key().is_some() =>
@@ -98,6 +109,93 @@ fn require_command_confirmation(
         }
         _ => Ok(()),
     }
+}
+
+async fn scan_command(
+    adapter: &RedisAdapter,
+    cursor: String,
+    pattern: Option<String>,
+    count: Option<u32>,
+    cancel: Option<&CancellationToken>,
+) -> Result<RdbQueryResult, AppError> {
+    let limit = bounded_limit(count);
+    let pattern = pattern.unwrap_or_else(|| "*".into());
+    let (next_cursor, keys): (String, Vec<String>) = adapter
+        .with_connection(async |connection| {
+            ::redis::cmd("SCAN")
+                .arg(&cursor)
+                .arg("MATCH")
+                .arg(&pattern)
+                .arg("COUNT")
+                .arg(limit)
+                .query_async(connection)
+                .await
+                .map_err(|err| adapter.database_error(err))
+        })
+        .await?;
+    let mut rows = Vec::with_capacity(keys.len());
+    for key in keys {
+        ensure_not_cancelled(cancel)?;
+        let metadata = adapter.key_metadata(&key).await?;
+        let mut row = vec![json!(&cursor), json!(&next_cursor)];
+        row.extend(key_metadata_cells(metadata));
+        rows.push(row);
+    }
+    Ok(rows_result(
+        &[
+            text_col("cursor"),
+            text_col("nextCursor"),
+            text_col("key"),
+            text_col("type"),
+            text_col("ttlState"),
+            int_col("ttlSeconds"),
+            int_col("length"),
+            int_col("memoryBytes"),
+        ],
+        rows,
+    ))
+}
+async fn keys_command(
+    adapter: &RedisAdapter,
+    pattern: String,
+    cancel: Option<&CancellationToken>,
+) -> Result<RdbQueryResult, AppError> {
+    let mut keys: Vec<String> = adapter
+        .with_connection(async |connection| {
+            ::redis::cmd("KEYS")
+                .arg(&pattern)
+                .query_async(connection)
+                .await
+                .map_err(|err| adapter.database_error(err))
+        })
+        .await?;
+    keys.sort();
+    let mut rows = Vec::with_capacity(keys.len());
+    for key in keys {
+        ensure_not_cancelled(cancel)?;
+        rows.push(key_metadata_cells(adapter.key_metadata(&key).await?));
+    }
+    Ok(rows_result(
+        &[
+            text_col("key"),
+            text_col("type"),
+            text_col("ttlState"),
+            int_col("ttlSeconds"),
+            int_col("length"),
+            int_col("memoryBytes"),
+        ],
+        rows,
+    ))
+}
+fn key_metadata_cells(metadata: KvKeyMetadata) -> Vec<Value> {
+    vec![
+        json!(metadata.key),
+        json!(key_type_label(metadata.key_type)),
+        json!(ttl_state_label(metadata.ttl.state)),
+        json!(metadata.ttl.seconds),
+        json!(metadata.length),
+        json!(metadata.memory_bytes),
+    ]
 }
 
 async fn read_string_command(
@@ -515,6 +613,18 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(exists.rows[0][0], json!(1));
+
+        let scan = execute_command(&adapter, request("SCAN 0 COUNT 25"), None)
+            .await
+            .unwrap();
+        assert_eq!(scan.columns[0].name, "cursor");
+        assert_eq!(scan.rows[0][2], json!("alpha"));
+
+        let keys = execute_command(&adapter, confirmed_request("KEYS *", "*"), None)
+            .await
+            .unwrap();
+        assert_eq!(keys.columns[0].name, "key");
+        assert_eq!(keys.rows[0][0], json!("alpha"));
     }
 
     #[tokio::test]
@@ -545,19 +655,17 @@ mod tests {
     async fn command_runtime_requires_typed_confirmation_for_dangerous_commands() {
         let adapter = connected_adapter().await;
 
-        assert!(matches!(
-            execute_command(&adapter, request("DEL alpha"), None).await,
-            Err(AppError::Validation(_))
-        ));
-        assert!(matches!(
-            execute_command(
-                &adapter,
-                confirmed_request("PERSIST alpha", "different"),
-                None,
-            )
-            .await,
-            Err(AppError::Validation(_))
-        ));
+        for request in [
+            request("KEYS *"),
+            confirmed_request("KEYS *", "alpha"),
+            request("DEL alpha"),
+            confirmed_request("PERSIST alpha", "different"),
+        ] {
+            assert!(matches!(
+                execute_command(&adapter, request, None).await,
+                Err(AppError::Validation(_))
+            ));
+        }
 
         let persist = execute_command(&adapter, confirmed_request("PERSIST alpha", "alpha"), None)
             .await

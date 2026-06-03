@@ -4,6 +4,14 @@ use super::helpers::{bounded_limit, validate_key};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum RedisCommand {
+    Scan {
+        cursor: String,
+        pattern: Option<String>,
+        count: Option<u32>,
+    },
+    Keys {
+        pattern: String,
+    },
     Get {
         key: String,
     },
@@ -90,7 +98,9 @@ pub(super) enum RedisCommandEffect {
 impl RedisCommand {
     pub(super) fn effect(&self) -> RedisCommandEffect {
         match self {
-            RedisCommand::Get { .. }
+            RedisCommand::Scan { .. }
+            | RedisCommand::Keys { .. }
+            | RedisCommand::Get { .. }
             | RedisCommand::HGetAll { .. }
             | RedisCommand::LRange { .. }
             | RedisCommand::SMembers { .. }
@@ -127,6 +137,8 @@ pub(super) fn parse_redis_command(input: &str) -> Result<RedisCommand, AppError>
     let upper = command.to_ascii_uppercase();
     reject_command_family(&upper)?;
     match upper.as_str() {
+        "SCAN" => parse_scan(args),
+        "KEYS" => parse_keys(args),
         "GET" => Ok(RedisCommand::Get {
             key: one_key(args, "GET")?,
         }),
@@ -162,6 +174,52 @@ pub(super) fn parse_redis_command(input: &str) -> Result<RedisCommand, AppError>
             "Redis command '{upper}' is not in the bounded command allowlist"
         ))),
     }
+}
+
+fn parse_scan(args: &[String]) -> Result<RedisCommand, AppError> {
+    if args.is_empty() {
+        return Err(AppError::Validation(
+            "SCAN requires cursor and optional MATCH pattern / COUNT n".into(),
+        ));
+    }
+    let mut pattern = None;
+    let mut count = None;
+    let mut index = 1;
+    while index < args.len() {
+        match args[index].to_ascii_uppercase().as_str() {
+            "MATCH" => {
+                let raw = args
+                    .get(index + 1)
+                    .ok_or_else(|| AppError::Validation("SCAN MATCH requires a pattern".into()))?;
+                pattern = Some(checked_pattern(raw)?);
+                index += 2;
+            }
+            "COUNT" => {
+                let raw = args
+                    .get(index + 1)
+                    .ok_or_else(|| AppError::Validation("SCAN COUNT requires n".into()))?;
+                count = Some(bounded_limit(Some(parse_u32(raw, "SCAN COUNT")?)));
+                index += 2;
+            }
+            other => {
+                return Err(AppError::Unsupported(format!(
+                    "SCAN option '{other}' is not supported in the bounded Redis command slice"
+                )));
+            }
+        }
+    }
+    Ok(RedisCommand::Scan {
+        cursor: checked_pattern(&args[0])?,
+        pattern,
+        count,
+    })
+}
+
+fn parse_keys(args: &[String]) -> Result<RedisCommand, AppError> {
+    require_arg_count(args, 1, "KEYS")?;
+    Ok(RedisCommand::Keys {
+        pattern: checked_pattern(&args[0])?,
+    })
 }
 
 pub(super) fn range_limit(start: i64, stop: i64) -> Result<u32, AppError> {
@@ -426,6 +484,13 @@ fn checked_key(key: &str) -> Result<String, AppError> {
     Ok(key.to_string())
 }
 
+fn checked_pattern(pattern: &str) -> Result<String, AppError> {
+    if pattern.is_empty() {
+        return Err(AppError::Validation("Redis pattern is required".into()));
+    }
+    Ok(pattern.to_string())
+}
+
 fn require_arg_count(args: &[String], expected: usize, command: &str) -> Result<(), AppError> {
     if args.len() != expected {
         return Err(AppError::Validation(format!(
@@ -490,6 +555,27 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn parser_accepts_scan_and_keys_commands() {
+        let scan = parse_redis_command("SCAN 0 MATCH profile:* COUNT 25").unwrap();
+        assert!(matches!(
+            scan,
+            RedisCommand::Scan {
+                ref cursor,
+                pattern: Some(ref pattern),
+                count: Some(25),
+            } if cursor == "0" && pattern == "profile:*"
+        ));
+        assert_eq!(scan.effect(), RedisCommandEffect::Read);
+
+        let keys = parse_redis_command("KEYS *").unwrap();
+        assert!(matches!(
+            keys,
+            RedisCommand::Keys { ref pattern } if pattern == "*"
+        ));
+        assert_eq!(keys.effect(), RedisCommandEffect::Read);
     }
 
     #[test]

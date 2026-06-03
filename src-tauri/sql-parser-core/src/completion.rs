@@ -4,10 +4,12 @@ mod aliases;
 mod compact;
 #[cfg(test)]
 mod completion_tests;
+mod context;
 mod token;
 mod vocabulary;
 
 use aliases::{resolve_alias, scan_aliases};
+use context::{completion_context_kind, CompletionContextKind};
 use token::{completion_token_at, CompletionToken};
 use vocabulary::{
     builtin_functions, builtin_keyword_deltas, builtin_keywords, builtin_shell_commands,
@@ -128,25 +130,50 @@ pub struct CompletionItem {
 
 pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
     let token = completion_token_at(&request.text, request.cursor);
+    let context = completion_context_kind(&request, &token);
     let mut items = Vec::new();
 
     if supports_sql_completion(&request.dialect) {
         if let Some(qualifier) = &token.qualifier {
             let normalized_qualifier = normalize_identifier_path(qualifier);
-            add_qualified_catalog_objects(&mut items, &request, &normalized_qualifier, &token);
-            add_qualified_columns(&mut items, &request, &normalized_qualifier, &token);
-            add_qualified_functions(&mut items, &request, &normalized_qualifier, &token);
-        } else {
-            if token.quote.is_none() {
-                add_meta_commands(&mut items, &request, &token.prefix);
-                add_keywords(&mut items, &request, &token.prefix);
+            match context {
+                CompletionContextKind::Relation => {
+                    add_qualified_catalog_objects(
+                        &mut items,
+                        &request,
+                        &normalized_qualifier,
+                        &token,
+                    );
+                }
+                CompletionContextKind::General => {
+                    add_qualified_catalog_objects(
+                        &mut items,
+                        &request,
+                        &normalized_qualifier,
+                        &token,
+                    );
+                    add_qualified_columns(&mut items, &request, &normalized_qualifier, &token);
+                    add_qualified_functions(&mut items, &request, &normalized_qualifier, &token);
+                }
+                CompletionContextKind::ShellMeta => {}
             }
-            add_catalog_schemas(&mut items, &request, &token);
-            add_catalog_objects(&mut items, &request, &token);
-            add_unqualified_columns(&mut items, &request, &token);
-            add_functions(&mut items, &request, &token);
-            if token.quote.is_none() {
-                add_extension_pack_items(&mut items, &request, &token.prefix);
+        } else {
+            if context == CompletionContextKind::ShellMeta {
+                add_meta_commands(&mut items, &request, &token.prefix);
+            } else if context == CompletionContextKind::Relation {
+                add_catalog_schemas(&mut items, &request, &token);
+                add_catalog_objects(&mut items, &request, &token);
+            } else {
+                if token.quote.is_none() {
+                    add_keywords(&mut items, &request, &token.prefix);
+                }
+                add_catalog_schemas(&mut items, &request, &token);
+                add_catalog_objects(&mut items, &request, &token);
+                add_unqualified_columns(&mut items, &request, &token);
+                add_functions(&mut items, &request, &token);
+                if token.quote.is_none() {
+                    add_extension_pack_items(&mut items, &request, &token.prefix);
+                }
             }
         }
     }

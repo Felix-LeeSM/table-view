@@ -204,6 +204,69 @@ fn returns_keyword_table_column_and_function_candidates() {
 }
 
 #[test]
+fn sql_statement_context_does_not_suggest_shell_meta_commands() {
+    let result = complete_sql(request("SELECT ", 7, 7));
+
+    assert!(
+        !result.items.iter().any(|item| item.kind == "meta-command"),
+        "SQL statement completion should not include shell meta commands: {:?}",
+        result.items
+    );
+    assert!(labels(&result).contains(&"COUNT".to_string()));
+}
+
+#[test]
+fn relation_context_suggests_catalog_relations_only() {
+    let result = complete_sql(request("SELECT * FROM ", 14, 14));
+    let result_labels = labels(&result);
+
+    assert!(result.items.iter().any(|item| {
+        item.label == "public" && item.kind == "schema" && item.apply.as_deref() == Some("public")
+    }));
+    assert!(result.items.iter().any(|item| {
+        item.label == "users" && item.kind == "table" && item.detail.as_deref() == Some("public")
+    }));
+    assert!(result.items.iter().any(|item| {
+        item.label == "active_users"
+            && item.kind == "view"
+            && item.detail.as_deref() == Some("analytics")
+    }));
+    assert!(
+        !result.items.iter().any(|item| matches!(
+            item.kind.as_str(),
+            "meta-command" | "column" | "function" | "keyword"
+        )),
+        "FROM completion should only include relation candidates; got {result_labels:?}"
+    );
+
+    let join_result = complete_sql(request("SELECT * FROM users JOIN ", 25, 25));
+    let join_labels = labels(&join_result);
+    assert!(join_result.items.iter().any(|item| {
+        item.label == "active_users"
+            && item.kind == "view"
+            && item.detail.as_deref() == Some("analytics")
+    }));
+    assert!(
+        !join_result.items.iter().any(|item| matches!(
+            item.kind.as_str(),
+            "meta-command" | "column" | "function" | "keyword"
+        )),
+        "JOIN completion should only include relation candidates; got {join_labels:?}"
+    );
+}
+
+#[test]
+fn psql_command_context_still_suggests_shell_meta_commands() {
+    let result = complete_sql(request("\\wa", 3, 3));
+
+    assert!(result.items.iter().any(|item| {
+        item.label == "\\watch"
+            && item.kind == "meta-command"
+            && item.runtime_executable == Some(false)
+    }));
+}
+
+#[test]
 fn resolves_alias_qualified_columns() {
     let result = complete_sql(request("SELECT u.em FROM users u", 11, 11));
 

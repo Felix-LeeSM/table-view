@@ -46,6 +46,15 @@
       "unsupportedAssumption": "Do not use Redis scan/key metadata smoke as Valkey keyspace evidence."
     },
     {
+      "family": "broad-keyspace-read-command",
+      "status": "candidate-after-local-valkey-proof",
+      "redisCommands": ["KEYS"],
+      "currentEvidence": "Redis command completion and command parsing are wired behind Safe Mode, but no local Valkey command-runtime evidence exists for full-keyspace KEYS projection.",
+      "knownValkeyDelta": "KEYS scans the full keyspace; Valkey support needs separate Safe Mode and projection evidence rather than inheriting SCAN proof.",
+      "promotionGate": "local Valkey focused evidence must prove Safe Mode-gated KEYS dispatch and full-keyspace projection before Valkey support is claimed.",
+      "unsupportedAssumption": "Do not treat bounded SCAN evidence as broad KEYS evidence."
+    },
+    {
       "family": "string-read-preview",
       "status": "proven-local-valkey-runtime",
       "redisCommands": ["GET"],

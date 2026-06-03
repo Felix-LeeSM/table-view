@@ -15,8 +15,7 @@ import { useDryRun } from "@hooks/useDryRun";
  *                   backend error (typically the canonical `"statement
  *                   K of N failed: <msg>"` shape so preview and commit
  *                   error copy match 1:1).
- *   - `unsupported` → grey disclaimer "Dry-run not supported for this
- *                   connection (MongoDB).".
+ *   - `unsupported` → grey disclaimer.
  *   - `idle`      → empty (dialog closed, no IPC fired).
  *
  * The component does not read or write any global store; it is
@@ -28,7 +27,7 @@ import { useDryRun } from "@hooks/useDryRun";
 export interface DryRunPreviewProps {
   connectionId: string;
   statements: string[];
-  paradigm: "rdb" | "document";
+  paradigm: "rdb" | "document" | "kv";
   /** Mirror the dialog's `open` so the hook gates IPC on dialog mount. */
   open: boolean;
 }
@@ -43,10 +42,7 @@ export default function DryRunPreview({
     connectionId,
     statements,
     paradigm,
-    // paradigm="document" must surface `unsupported` even when the
-    // dialog is closed (Mongo dialogs render the disclaimer
-    // pre-mount). The hook handles that; here we only gate the rdb
-    // IPC on `open`.
+    // Non-RDB paradigms surface `unsupported`; only rdb can dry-run.
     enabled: open && paradigm === "rdb",
   });
 
@@ -89,9 +85,7 @@ export default function DryRunPreview({
       )}
 
       {state.status === "unsupported" && (
-        <p className="italic">
-          Dry-run not supported for this connection (MongoDB).
-        </p>
+        <p className="italic">Dry-run not supported for this connection.</p>
       )}
 
       {state.status === "idle" && <span className="sr-only">Dry-run idle</span>}

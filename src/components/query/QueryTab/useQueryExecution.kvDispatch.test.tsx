@@ -6,6 +6,7 @@ import {
   seedWorkspace,
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useQueryExecution } from "./useQueryExecution";
 import { makeConn, makeQueryTab } from "../__tests__/queryTabTestHelpers";
@@ -39,7 +40,11 @@ const REDIS_RESULT: QueryResult = {
   queryType: "select",
 };
 
-function seedRedisTab(sql: string, database = "2") {
+function seedRedisTab(
+  sql: string,
+  database = "2",
+  environment = "development",
+) {
   const tab = makeQueryTab({
     id: "query-redis",
     connectionId: "conn-redis",
@@ -58,6 +63,7 @@ function seedRedisTab(sql: string, database = "2") {
         dbType: "redis",
         paradigm: "kv",
         database,
+        environment,
       }),
     ],
   });
@@ -95,6 +101,7 @@ describe("useQueryExecution — Redis command dispatch", () => {
     cancelQueryMock.mockReset();
     useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({ connections: [] });
+    useSafeModeStore.setState({ mode: "strict" });
   });
 
   it("runs bounded Redis commands through the KV IPC wrapper", async () => {
@@ -122,6 +129,69 @@ describe("useQueryExecution — Redis command dispatch", () => {
       status: "completed",
       result: REDIS_RESULT,
     });
+  });
+
+  it("runs Redis SCAN directly through the KV IPC wrapper", async () => {
+    executeKvCommandMock.mockResolvedValueOnce(REDIS_RESULT);
+    const tab = seedRedisTab("SCAN 0 MATCH profile:* COUNT 25", "2");
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(result.current.pendingKvConfirm).toBeNull();
+    expect(executeKvCommandMock).toHaveBeenCalledWith(
+      "conn-redis",
+      { command: "SCAN 0 MATCH profile:* COUNT 25", database: 2 },
+      expect.stringMatching(/^query-redis-/),
+    );
+  });
+
+  it("routes Redis KEYS through Safe Mode strict confirmation before IPC", async () => {
+    executeKvCommandMock.mockResolvedValueOnce(REDIS_RESULT);
+    useSafeModeStore.setState({ mode: "strict" });
+    const tab = seedRedisTab("KEYS *", "2", "development");
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(executeKvCommandMock).not.toHaveBeenCalled();
+    expect(result.current.pendingKvConfirm).toMatchObject({
+      command: "KEYS *",
+      confirmKey: "*",
+      reason: expect.stringContaining("KEYS scans"),
+    });
+
+    await act(async () => {
+      await result.current.confirmKvDangerous();
+    });
+
+    expect(executeKvCommandMock).toHaveBeenCalledWith(
+      "conn-redis",
+      { command: "KEYS *", database: 2, confirmKey: "*" },
+      expect.stringMatching(/^query-redis-/),
+    );
+  });
+
+  it("allows Redis KEYS in non-production warn mode", async () => {
+    executeKvCommandMock.mockResolvedValueOnce(REDIS_RESULT);
+    useSafeModeStore.setState({ mode: "warn" });
+    const tab = seedRedisTab("KEYS *", "2", "development");
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(result.current.pendingKvConfirm).toBeNull();
+    expect(executeKvCommandMock).toHaveBeenCalledWith(
+      "conn-redis",
+      { command: "KEYS *", database: 2, confirmKey: "*" },
+      expect.stringMatching(/^query-redis-/),
+    );
   });
 
   it("rejects invalid Redis database chips before IPC dispatch", async () => {
