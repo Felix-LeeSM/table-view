@@ -3,7 +3,7 @@
  *
  * 사유: Sidebar header 의 "Collapse all *" / "Expand all *" 버튼이 DB type 별
  * 적절한 객체 이름을 노출해야 한다. PG/MSSQL/Oracle → schemas,
- * MySQL/MariaDB/SQLite → tables, Mongo → collections, Redis → keys.
+ * MySQL/MariaDB/SQLite → tables, Mongo → collections, Redis/Valkey → keys.
  * 매핑 dictionary 는 sprint-380
  * (mysql-sidebar-naming) 과 공유되므로 *단일 모듈* + *순수 함수* 로 격리한다.
  */
@@ -72,6 +72,13 @@ describe("getSidebarObjectLabel", () => {
     // Redis 는 supported connection profile 이면서 non-RDBMS sidebar label 을
     // 별도로 유지해야 한다.
     expect(getSidebarObjectLabel("redis")).toEqual({
+      single: "key",
+      plural: "keys",
+    });
+  });
+
+  it("valkey → key/keys", () => {
+    expect(getSidebarObjectLabel("valkey")).toEqual({
       single: "key",
       plural: "keys",
     });

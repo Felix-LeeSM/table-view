@@ -12,7 +12,7 @@ import type { DatabaseType } from "@/types/connection";
  *   - `flat`        — SQLite/DuckDB: file *is* the database, so just one
  *     level of tables under the sidebar root.
  *
- * MongoDB/Redis route elsewhere via `pickSidebar` and are deliberately
+ * MongoDB/Redis/Valkey/Search route elsewhere via `pickSidebar` and are deliberately
  * excluded from the union.
  */
 export type RdbTreeShape = "with-schema" | "no-schema" | "flat";
@@ -37,6 +37,7 @@ export function resolveRdbTreeShape(dbType: DatabaseType): RdbTreeShape {
       return "flat";
     case "mongodb":
     case "redis":
+    case "valkey":
     case "elasticsearch":
     case "opensearch":
       return "with-schema";

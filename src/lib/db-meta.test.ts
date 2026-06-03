@@ -13,6 +13,7 @@ describe("DB_TYPE_META", () => {
     "oracle",
     "mongodb",
     "redis",
+    "valkey",
     "elasticsearch",
     "opensearch",
   ];

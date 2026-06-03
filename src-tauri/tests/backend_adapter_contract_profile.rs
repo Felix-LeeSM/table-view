@@ -29,6 +29,7 @@ fn database_type_label(db_type: &DatabaseType) -> &'static str {
         DatabaseType::Oracle => "oracle",
         DatabaseType::Mongodb => "mongodb",
         DatabaseType::Redis => "redis",
+        DatabaseType::Valkey => "valkey",
         DatabaseType::Elasticsearch => "elasticsearch",
         DatabaseType::Opensearch => "opensearch",
     }
@@ -50,6 +51,7 @@ fn backend_adapter_contract_profiles_are_encoded() {
         DatabaseType::Oracle,
         DatabaseType::Mongodb,
         DatabaseType::Redis,
+        DatabaseType::Valkey,
         DatabaseType::Elasticsearch,
         DatabaseType::Opensearch,
     ];
@@ -152,6 +154,28 @@ fn backend_profiles_encode_current_database_type_contracts() {
     );
     assert!(redis.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
     assert!(!redis.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
+
+    let valkey = get_data_source_profile(&DatabaseType::Valkey);
+    assert_eq!(valkey.paradigm, Paradigm::Kv);
+    assert_eq!(valkey.connection_kind, ConnectionKind::Server);
+    assert_eq!(valkey.languages, [QueryLanguageId::RedisCommand]);
+    assert_eq!(valkey.catalog_model, CatalogModelKind::Kv);
+    assert_eq!(
+        valkey.result_kinds,
+        [
+            ResultEnvelopeKind::KeyValue,
+            ResultEnvelopeKind::StreamRecords
+        ]
+    );
+    assert_eq!(
+        valkey.adapter_contract.state,
+        BackendAdapterContractState::MarkerOnly
+    );
+    assert_eq!(valkey.backend_adapter.id, BackendAdapterId::Marker);
+    assert_eq!(valkey.dialect.id, DataSourceDialectId::Valkey);
+    assert_eq!(valkey.dialect.family, DataSourceDialectFamily::Valkey);
+    assert!(valkey.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
+    assert!(!valkey.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
 
     let elasticsearch = get_data_source_profile(&DatabaseType::Elasticsearch);
     assert_eq!(elasticsearch.paradigm, Paradigm::Search);

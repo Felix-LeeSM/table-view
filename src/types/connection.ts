@@ -8,6 +8,7 @@ export type DatabaseType =
   | "oracle"
   | "mongodb"
   | "redis"
+  | "valkey"
   | "elasticsearch"
   | "opensearch";
 
@@ -52,6 +53,7 @@ export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
   oracle: "Oracle",
   mongodb: "MongoDB",
   redis: "Redis",
+  valkey: "Valkey",
   elasticsearch: "Elasticsearch",
   opensearch: "OpenSearch",
 };
@@ -144,6 +146,7 @@ export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
   oracle: 1521,
   mongodb: 27017,
   redis: 6379,
+  valkey: 6379,
   elasticsearch: 9200,
   opensearch: 9200,
 };
@@ -161,8 +164,8 @@ export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
  * - `mssql`: `sa` / `master` default.
  * - `oracle`: common local Oracle Free service default.
  * - `mongodb`: optional auth — empty user/db.
- * - `redis`: ACL optional, default DB index `"0"` (kept as string for
- *   ConnectionConfig parity).
+ * - `redis` / `valkey`: ACL optional, default DB index `"0"` (kept as
+ *   string for ConnectionConfig parity).
  */
 export interface ConnectionDefaultFields {
   port: number;
@@ -183,6 +186,7 @@ export const DATABASE_DEFAULT_FIELDS: Record<
   oracle: { port: 1521, user: "system", database: "FREEPDB1" },
   mongodb: { port: 27017, user: "", database: "admin" },
   redis: { port: 6379, user: "", database: "0" },
+  valkey: { port: 6379, user: "", database: "0" },
   elasticsearch: { port: 9200, user: "", database: "" },
   opensearch: { port: 9200, user: "", database: "" },
 };
@@ -202,6 +206,7 @@ export function paradigmOf(dbType: DatabaseType): Paradigm {
     case "mongodb":
       return "document";
     case "redis":
+    case "valkey":
       return "kv";
     case "elasticsearch":
     case "opensearch":
@@ -306,6 +311,7 @@ export function parseConnectionUrl(
       "mongodb+srv": "mongodb",
       redis: "redis",
       rediss: "redis",
+      valkey: "valkey",
       elasticsearch: "elasticsearch",
       elastic: "elasticsearch",
       es: "elasticsearch",
@@ -325,7 +331,10 @@ export function parseConnectionUrl(
       port: parsed.port ? parseInt(parsed.port, 10) : DATABASE_DEFAULTS[dbType],
       user: decodeURIComponent(parsed.username),
       password: decodeURIComponent(parsed.password),
-      database: dbType === "redis" && database === "" ? "0" : database,
+      database:
+        (dbType === "redis" || dbType === "valkey") && database === ""
+          ? "0"
+          : database,
       ...(parsed.protocol === "rediss:" ? { tlsEnabled: true } : {}),
       paradigm: paradigmOf(dbType),
     };
