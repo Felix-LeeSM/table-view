@@ -76,18 +76,32 @@ describe("Valkey smoke", () => {
     await step("run bounded Valkey write and TTL commands", async () => {
       await setCodeMirrorText("SET vk:cmd written EX 120");
       await runQuery();
-      await waitForValkeyGridTextAll(
-        ["vk:cmd", "set"],
+      await waitForWorkspaceTextAll(
+        ["1 row affected"],
         15000,
-        "Valkey SET command did not render tabular write result",
+        "Valkey SET command did not render DML summary",
+      );
+      await setCodeMirrorText("GET vk:cmd");
+      await runQuery();
+      await waitForValkeyGridTextAll(
+        ["vk:cmd", "written"],
+        15000,
+        "Valkey SET command did not persist the written value",
       );
 
       await setCodeMirrorText("EXPIRE vk:cmd 60");
       await runQuery();
-      await waitForValkeyGridTextAll(
-        ["vk:cmd", "expire"],
+      await waitForWorkspaceTextAll(
+        ["1 row affected"],
         15000,
-        "Valkey EXPIRE command did not render TTL mutation result",
+        "Valkey EXPIRE command did not render DML summary",
+      );
+      await setCodeMirrorText("TTL vk:cmd");
+      await runQuery();
+      await waitForValkeyGridTextAll(
+        ["vk:cmd", "expires"],
+        15000,
+        "Valkey TTL command did not confirm expire state",
       );
     });
 

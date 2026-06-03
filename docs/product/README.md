@@ -41,9 +41,10 @@
 - Valkey workflow: connection/profile, database/key scan, typed value preview,
   bounded Redis-compatible command query execution, and bounded command
   completion for proven local-runtime rows are active. Runtime Happy Path smoke
-  covers connect/scan/preview/GET/HGETALL/XRANGE plus bounded SET/EXPIRE and
-  destructive/unsupported command guards. Key mutation panel controls and full
-  Redis compatibility are not claimed.
+  covers connect/scan/preview/GET/HGETALL/XRANGE plus bounded SET/EXPIRE DML
+  summaries with readback/TTL verification and destructive/unsupported command
+  guards. Key mutation panel controls and full Redis compatibility are not
+  claimed.
 - Elasticsearch/OpenSearch: embedded fixture-backed Search catalog/mapping/template
   and result rendering contract 만 있다. live HTTP connection/query/admin 은 없다.
 - MSSQL/Oracle: declared planned RDBMS identities and static seed contracts only.
