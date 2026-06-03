@@ -202,8 +202,22 @@ async function waitForRedisTtlSeconds(timeout: number) {
   await browser.waitUntil(
     async () =>
       await browser.execute(() => {
-        const text = document.body.textContent ?? "";
-        return /\b(1[01][0-9]|120)s\b/.test(text);
+        return Array.from(document.querySelectorAll<HTMLElement>("span")).some(
+          (element) => {
+            const style = window.getComputedStyle(element);
+            if (
+              element.offsetParent === null ||
+              style.display === "none" ||
+              style.visibility === "hidden"
+            ) {
+              return false;
+            }
+            const match = element.textContent?.trim().match(/^(\d{1,3})s$/);
+            if (!match) return false;
+            const seconds = Number(match[1]);
+            return seconds >= 60 && seconds <= 120;
+          },
+        );
       }),
     {
       timeout,
