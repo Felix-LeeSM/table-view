@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "product": "valkey",
+  "supportLevel": "static-fixture-only",
+  "compatibilityTarget": "redis-command",
+  "runtimeSupport": false,
+  "database": 2,
+  "idempotencyContract": "Idempotency contract: select isolated fixture DB 2, clear it, then recreate stable Redis-compatible keys. This fixture is not wired to Valkey runtime smoke.",
+  "promotionGate": "Future Valkey support must run this seed against a local Valkey container or equivalent local-first fixture, then prove connect, scan, preview, command dispatch, mutation, TTL, and delete behavior without inheriting Redis smoke evidence.",
+  "commands": [
+    {
+      "command": "SELECT",
+      "database": 2
+    },
+    {
+      "command": "FLUSHDB"
+    },
+    {
+      "command": "SET",
+      "key": "vk:string",
+      "value": "hello-valkey",
+      "ttlSeconds": 3600
+    },
+    {
+      "command": "HSET",
+      "key": "vk:hash",
+      "fields": {
+        "name": "Ada",
+        "role": "engineer"
+      }
+    },
+    {
+      "command": "XADD",
+      "key": "vk:events",
+      "id": "1-0",
+      "fields": {
+        "type": "login",
+        "user": "ada"
+      }
+    },
+    {
+      "command": "SADD",
+      "key": "idx:valkey-customer",
+      "members": ["customer-1", "customer-2"]
+    },
+    {
+      "command": "HSET",
+      "key": "valkey-customer:customer-1",
+      "fields": {
+        "id": "customer-1",
+        "name": "Ada Lovelace",
+        "email": "ada@example.com",
+        "tier": "enterprise"
+      }
+    },
+    {
+      "command": "ZADD",
+      "key": "valkey-orders:by_total",
+      "members": [
+        {
+          "score": 178.99,
+          "member": "order-ada-001"
+        },
+        {
+          "score": 49.99,
+          "member": "order-grace-001"
+        }
+      ]
+    }
+  ]
+}
