@@ -2,7 +2,8 @@ import { $, $$, browser, expect } from "@wdio/globals";
 
 export { editGridCellInRow } from "./grid-edit";
 
-const WORKSPACE_TITLE = "Table View — Workspace";
+const LAUNCHER_MARKER_SELECTOR = '[aria-label="New Connection"]';
+const WORKSPACE_MARKER_SELECTOR = '[aria-label="Back to connections"]';
 const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"]';
 
 export type DbType =
@@ -35,7 +36,7 @@ export async function step<T>(label: string, action: () => Promise<T>) {
 
 export async function waitForLauncher() {
   await switchToLauncherWindow();
-  await waitForDomSelector('[aria-label="New Connection"]', 30000);
+  await waitForDomSelector(LAUNCHER_MARKER_SELECTOR, 30000);
 }
 
 export async function switchToLauncherWindow(timeoutMs = 15000) {
@@ -43,11 +44,12 @@ export async function switchToLauncherWindow(timeoutMs = 15000) {
   let lastError: unknown = null;
   while (Date.now() - start < timeoutMs) {
     try {
+      if (await isLauncherDocument()) return;
+
       const handles = await browser.getWindowHandles();
       for (const handle of handles) {
         await browser.switchToWindow(handle);
-        const title = await browser.getTitle();
-        if (title === "Table View") return;
+        if (await isLauncherDocument()) return;
       }
     } catch (e) {
       lastError = e;
@@ -64,13 +66,12 @@ export async function switchToWorkspaceWindow(timeoutMs = 30000) {
   let lastError: unknown = null;
   while (Date.now() - start < timeoutMs) {
     try {
-      if ((await browser.getTitle()) === WORKSPACE_TITLE) return;
+      if (await isWorkspaceDocument()) return;
 
       const handles = await browser.getWindowHandles();
       for (const handle of handles) {
         await browser.switchToWindow(handle);
-        const title = await browser.getTitle();
-        if (title === WORKSPACE_TITLE) return;
+        if (await isWorkspaceDocument()) return;
       }
     } catch (e) {
       lastError = e;
@@ -90,18 +91,26 @@ export async function openNewConnectionDialog() {
   return dialog;
 }
 
-async function waitForDomSelector(selector: string, timeout = 10000) {
-  await browser.waitUntil(
-    async () =>
-      await browser.execute(
-        (sel) => Boolean(document.querySelector(sel)),
-        selector,
-      ),
-    {
-      timeout,
-      timeoutMsg: `${selector} did not appear in the DOM`,
-    },
+async function isLauncherDocument() {
+  return await hasDomSelector(LAUNCHER_MARKER_SELECTOR);
+}
+
+async function isWorkspaceDocument() {
+  return await hasDomSelector(WORKSPACE_MARKER_SELECTOR);
+}
+
+async function hasDomSelector(selector: string) {
+  return await browser.execute(
+    (sel) => Boolean(document.querySelector(sel)),
+    selector,
   );
+}
+
+async function waitForDomSelector(selector: string, timeout = 10000) {
+  await browser.waitUntil(async () => await hasDomSelector(selector), {
+    timeout,
+    timeoutMsg: `${selector} did not appear in the DOM`,
+  });
 }
 
 async function clickDomSelector(selector: string) {
@@ -402,7 +411,7 @@ export async function openConnection(name: string) {
     );
   }, row);
   await switchToWorkspaceWindow();
-  const back = await $('[aria-label="Back to connections"]');
+  const back = await $(WORKSPACE_MARKER_SELECTOR);
   await back.waitForDisplayed({ timeout: 30000 });
 }
 
@@ -515,7 +524,7 @@ export async function waitForWorkspaceTextAll(
     async () => {
       for (const handle of await browser.getWindowHandles()) {
         await browser.switchToWindow(handle);
-        if ((await browser.getTitle()) !== WORKSPACE_TITLE) continue;
+        if (!(await isWorkspaceDocument())) continue;
         const text = await browser.execute(
           () => document.body.textContent?.toLowerCase() ?? "",
         );
