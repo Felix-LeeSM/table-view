@@ -5,41 +5,13 @@ import {
   openNewQueryTab,
   runQuery,
   step,
-  switchToWorkspaceWindow,
   typeQuery,
   waitForGridTextAll,
   waitForLauncher,
 } from "./_helpers";
+import { waitForTabHistoryStatuses } from "./query-history-helpers";
 
 const CONNECTION_NAME = "E2E Postgres Cancellation";
-
-async function waitForHistoryStatuses(statuses: string[]) {
-  await switchToWorkspaceWindow();
-  await browser.waitUntil(
-    async () => {
-      await switchToWorkspaceWindow();
-      await browser.execute(() => {
-        document
-          .querySelector<HTMLElement>(
-            '[data-testid="query-history-panel-new-entry"]',
-          )
-          ?.click();
-      });
-      return await browser.execute((expected) => {
-        const actual = Array.from(
-          document.querySelectorAll(
-            '[data-testid="query-history-panel-rows"] [title]',
-          ),
-        ).map((el) => el.getAttribute("title"));
-        return expected.every((status) => actual.includes(status));
-      }, statuses);
-    },
-    {
-      timeout: 10000,
-      timeoutMsg: `tab history did not include statuses: ${statuses.join(", ")}`,
-    },
-  );
-}
 
 describe("PostgreSQL cancellation smoke", () => {
   it("cancels a long query, shows cancellation, preserves history, and retries cleanly", async () => {
@@ -82,7 +54,7 @@ describe("PostgreSQL cancellation smoke", () => {
           timeoutMsg: "cancelled query left a stale result grid visible",
         },
       );
-      await waitForHistoryStatuses(["cancelled"]);
+      await waitForTabHistoryStatuses(["cancelled"]);
     });
 
     await step("retry a fast query after cancellation", async () => {
@@ -93,7 +65,7 @@ describe("PostgreSQL cancellation smoke", () => {
         15000,
         "fast retry result did not render after cancellation",
       );
-      await waitForHistoryStatuses(["cancelled", "success"]);
+      await waitForTabHistoryStatuses(["cancelled", "success"]);
     });
   });
 });

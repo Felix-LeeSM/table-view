@@ -34,6 +34,14 @@ const row = (id: number, sqlRedacted = `SELECT ${id}`) => ({
   executedAt: 1_700_000_000_000 + id,
 });
 
+async function expandHistoryPanel() {
+  const toggle = screen.getByRole("button", { name: /tab history/i });
+  await act(async () => {
+    toggle.click();
+  });
+  return toggle;
+}
+
 describe("QueryHistoryPanel per-tab (sprint-372)", () => {
   beforeEach(() => {
     invokeMock.mockReset();
@@ -56,6 +64,29 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
     expect(invokeMock).toHaveBeenCalledTimes(1);
   });
 
+  it("defaults to collapsed and expands tab history rows on demand", async () => {
+    invokeMock.mockResolvedValueOnce({ rows: [row(1)] });
+    render(<QueryHistoryPanel connectionId="conn-1" tabId="tab-1" />);
+
+    const toggle = screen.getByRole("button", { name: /tab history/i });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByTestId("query-history-panel-rows"),
+    ).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("query-history-panel-count")).toHaveTextContent(
+        "1",
+      );
+    });
+
+    await expandHistoryPanel();
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("query-history-panel-rows")).toBeInTheDocument();
+    expect(screen.getByTestId("query-history-panel-row-1")).toBeInTheDocument();
+  });
+
   // AC-372-08 — redact-only display. 원문 sql 은 list 응답에 없고
   // panel 어디에도 노출되어선 안 된다.
   // 작성 2026-05-17. 사유: privacy invariant (strategy F.5 line 537).
@@ -71,6 +102,7 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
       ],
     });
     render(<QueryHistoryPanel connectionId="conn-1" tabId="tab-1" />);
+    await expandHistoryPanel();
 
     const panel = await screen.findByTestId("query-history-panel");
     await waitFor(() => {
@@ -94,6 +126,7 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
       nextCursor: 10,
     });
     render(<QueryHistoryPanel connectionId="conn-1" tabId="tab-1" />);
+    await expandHistoryPanel();
 
     await waitFor(() => {
       expect(
@@ -134,6 +167,7 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
   it("renders empty state when backend returns no rows", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [] });
     render(<QueryHistoryPanel connectionId="conn-1" tabId="tab-1" />);
+    await expandHistoryPanel();
 
     await waitFor(() => {
       expect(
@@ -148,6 +182,7 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
   it("shows 'End of history' marker when nextCursor is absent", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [row(1), row(2)] });
     render(<QueryHistoryPanel connectionId="conn-1" tabId="tab-1" />);
+    await expandHistoryPanel();
 
     await waitFor(() => {
       expect(screen.getByTestId("query-history-panel-end")).toBeInTheDocument();
@@ -164,6 +199,7 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
   it("clicking a row opens the detail modal and triggers get_history_detail IPC", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [row(42)] });
     render(<QueryHistoryPanel connectionId="conn-1" tabId="tab-1" />);
+    await expandHistoryPanel();
 
     const rowBtn = await screen.findByTestId("query-history-panel-row-42");
 

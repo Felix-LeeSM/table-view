@@ -19,6 +19,7 @@ import {
   waitForLauncher,
   waitForWorkspaceTextAll,
 } from "./_helpers";
+import { waitForTabHistoryStatuses } from "./query-history-helpers";
 
 const WRITABLE_CONNECTION = "E2E DuckDB";
 const READ_ONLY_CONNECTION = "E2E DuckDB Read Only";
@@ -164,34 +165,6 @@ async function closeDuckdb(
       else resolve();
     });
   });
-}
-
-async function waitForTabHistoryStatuses(statuses: string[]) {
-  await switchToWorkspaceWindow();
-  await browser.waitUntil(
-    async () => {
-      await switchToWorkspaceWindow();
-      await browser.execute(() => {
-        document
-          .querySelector<HTMLElement>(
-            '[data-testid="query-history-panel-new-entry"]',
-          )
-          ?.click();
-      });
-      return await browser.execute((expected) => {
-        const actual = Array.from(
-          document.querySelectorAll(
-            '[data-testid="query-history-panel-rows"] [title]',
-          ),
-        ).map((el) => el.getAttribute("title"));
-        return expected.every((status) => actual.includes(status));
-      }, statuses);
-    },
-    {
-      timeout: 10000,
-      timeoutMsg: `tab history did not include statuses: ${statuses.join(", ")}`,
-    },
-  );
 }
 
 async function waitForGlobalHistoryEvidence(rawFragments: string[]) {
