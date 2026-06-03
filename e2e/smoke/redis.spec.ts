@@ -204,16 +204,31 @@ async function waitForRedisTtlCommandResult(timeout: number) {
   await browser.waitUntil(
     async () => {
       for (const handle of await browser.getWindowHandles()) {
-        await browser.switchToWindow(handle);
-        const hasTtlResult = await browser.execute(() => {
-          if (!document.querySelector('[aria-label="Back to connections"]')) {
-            return false;
-          }
-          const grid = document.querySelector('[role="grid"]');
-          const text = grid?.textContent ?? "";
-          return text.includes("expires") && /\b(1[01][0-9]|120)\b/.test(text);
-        });
-        if (hasTtlResult) return true;
+        try {
+          await browser.switchToWindow(handle);
+          const hasTtlResult = await browser.execute(() => {
+            if (!document.querySelector('[aria-label="Back to connections"]')) {
+              return false;
+            }
+            const grid = document.querySelector('[role="grid"]');
+            if (!grid) return false;
+            return Array.from(
+              grid.querySelectorAll<HTMLElement>('[role="row"]'),
+            ).some((row) => {
+              const cells = Array.from(
+                row.querySelectorAll<HTMLElement>('[role="gridcell"]'),
+              ).map((cell) => (cell.textContent ?? "").trim());
+              return (
+                cells.includes("tv:string") &&
+                cells.includes("expires") &&
+                cells.some((cell) => /^(1[01][0-9]|120)$/.test(cell))
+              );
+            });
+          });
+          if (hasTtlResult) return true;
+        } catch {
+          // Closed Tauri windows can leave stale handles during smoke cleanup.
+        }
       }
       return false;
     },
