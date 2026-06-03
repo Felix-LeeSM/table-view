@@ -5,6 +5,7 @@ import {
   openNewQueryTab,
   runQuery,
   step,
+  switchToWorkspaceWindow,
   waitForGridTextAll,
   waitForLauncher,
   waitForWorkspaceTextAll,
@@ -200,11 +201,13 @@ async function clickButton(label: string) {
 
 async function waitForRedisTtlSeconds(timeout: number) {
   await browser.waitUntil(
-    async () =>
-      await browser.execute(() => {
+    async () => {
+      await switchToWorkspaceWindow();
+      return await browser.execute(() => {
         const text = document.body.textContent ?? "";
         return /\b(1[01][0-9]|120)s\b/.test(text);
-      }),
+      });
+    },
     {
       timeout,
       timeoutMsg: "Redis expire mutation did not refresh TTL metadata",
