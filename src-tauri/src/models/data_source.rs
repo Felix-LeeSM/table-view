@@ -269,6 +269,7 @@ const DOCUMENT_RESULTS: &[ResultEnvelopeKind] =
 const KV_RESULTS: &[ResultEnvelopeKind] = &[
     ResultEnvelopeKind::KeyValue,
     ResultEnvelopeKind::StreamRecords,
+    ResultEnvelopeKind::Tabular,
 ];
 const SEARCH_RESULTS: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::SearchHits];
 
@@ -668,7 +669,8 @@ mod tests {
             profile.result_kinds,
             &[
                 ResultEnvelopeKind::KeyValue,
-                ResultEnvelopeKind::StreamRecords
+                ResultEnvelopeKind::StreamRecords,
+                ResultEnvelopeKind::Tabular
             ]
         );
         assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));

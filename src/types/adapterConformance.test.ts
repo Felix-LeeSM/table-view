@@ -226,7 +226,7 @@ describe("adapter conformance matrix", () => {
     ]);
   });
 
-  it("locks the Valkey read-only runtime claim to connection and key browsing", () => {
+  it("locks the Valkey runtime claim to connection, key browsing, and command query", () => {
     const valkey = ADAPTER_CONFORMANCE_MATRIX.valkey;
 
     expect(valkey.level).toBe("runtime");
@@ -244,9 +244,8 @@ describe("adapter conformance matrix", () => {
       "catalog.indexes",
       "catalog.relationships",
     ]);
-    expect(valkey.areas.query.checks).toEqual([]);
+    expect(valkey.areas.query.checks).toEqual(["query.query"]);
     expect(valkey.areas.query.deferred).toEqual([
-      "query.query",
       "query.cancel",
       "query.explain",
     ]);

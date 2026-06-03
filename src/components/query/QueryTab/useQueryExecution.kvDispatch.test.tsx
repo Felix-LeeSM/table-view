@@ -143,7 +143,8 @@ describe("useQueryExecution — Redis command dispatch", () => {
     });
   });
 
-  it("blocks Valkey command query tabs before IPC dispatch", async () => {
+  it("runs bounded Valkey commands through the KV IPC wrapper", async () => {
+    executeKvCommandMock.mockResolvedValueOnce(REDIS_RESULT);
     const tab = seedValkeyTab("GET profile:1", "2");
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
@@ -151,14 +152,21 @@ describe("useQueryExecution — Redis command dispatch", () => {
       await result.current.handleExecute();
     });
 
-    expect(executeKvCommandMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(executeKvCommandMock).toHaveBeenCalledTimes(1);
+    });
+    expect(executeKvCommandMock).toHaveBeenCalledWith(
+      "conn-valkey",
+      { command: "GET profile:1", database: 2 },
+      expect.stringMatching(/^query-valkey-/),
+    );
     const updated = getTestWorkspace("conn-valkey", "2").tabs[0];
     if (!updated || updated.type !== "query") {
       throw new Error("Expected Valkey query tab to stay active");
     }
     expect(updated.queryState).toEqual({
-      status: "error",
-      error: "Valkey command query is not supported yet.",
+      status: "completed",
+      result: REDIS_RESULT,
     });
   });
 });

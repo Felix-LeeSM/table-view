@@ -12,9 +12,7 @@ use super::command_result::{
     float_col, int_col, key_type_label, mutation_result, object_col, rows_result, single_row,
     string_cell, text_col, ttl_state_label,
 };
-use super::helpers::{
-    bounded_limit, ensure_not_cancelled, redis_database_error, require_confirm_key,
-};
+use super::helpers::{bounded_limit, ensure_not_cancelled, require_confirm_key};
 use super::values::{read_hash, read_set, read_stream_range, read_string};
 use super::RedisAdapter;
 
@@ -147,7 +145,7 @@ async fn read_list_command(
                 .arg(stop)
                 .query_async(connection)
                 .await
-                .map_err(redis_database_error)
+                .map_err(|err| adapter.database_error(err))
         })
         .await?;
     Ok(rows_result(
@@ -191,7 +189,7 @@ async fn read_zset_command(
                     .arg("WITHSCORES")
                     .query_async(connection)
                     .await
-                    .map_err(redis_database_error)
+                    .map_err(|err| adapter.database_error(err))
             })
             .await?;
         return Ok(rows_result(
@@ -212,7 +210,7 @@ async fn read_zset_command(
                 .arg(stop)
                 .query_async(connection)
                 .await
-                .map_err(redis_database_error)
+                .map_err(|err| adapter.database_error(err))
         })
         .await?;
     Ok(rows_result(
@@ -282,7 +280,7 @@ async fn exists_command(
             }
             cmd.query_async(connection)
                 .await
-                .map_err(redis_database_error)
+                .map_err(|err| adapter.database_error(err))
         })
         .await?;
     Ok(single_row(&[int_col("existingKeys")], vec![json!(count)]))
@@ -304,7 +302,7 @@ async fn set_command(
             let _: String = cmd
                 .query_async(connection)
                 .await
-                .map_err(redis_database_error)?;
+                .map_err(|err| adapter.database_error(err))?;
             Ok(())
         })
         .await?;
@@ -325,7 +323,7 @@ async fn hset_command(
                 .arg(&value)
                 .query_async(connection)
                 .await
-                .map_err(redis_database_error)
+                .map_err(|err| adapter.database_error(err))
         })
         .await?;
     Ok(mutation_result(&key, "hset", changed))
@@ -346,7 +344,7 @@ async fn list_push_command(
             }
             cmd.query_async(connection)
                 .await
-                .map_err(redis_database_error)
+                .map_err(|err| adapter.database_error(err))
         })
         .await?;
     Ok(mutation_result(&key, &verb.to_ascii_lowercase(), length))
@@ -366,7 +364,7 @@ async fn sadd_command(
             }
             cmd.query_async(connection)
                 .await
-                .map_err(redis_database_error)
+                .map_err(|err| adapter.database_error(err))
         })
         .await?;
     Ok(mutation_result(&key, "sadd", changed))
@@ -386,7 +384,7 @@ async fn zadd_command(
                 .arg(&member)
                 .query_async(connection)
                 .await
-                .map_err(redis_database_error)
+                .map_err(|err| adapter.database_error(err))
         })
         .await?;
     Ok(mutation_result(&key, "zadd", changed))
@@ -404,7 +402,7 @@ async fn expire_command(
                 .arg(seconds)
                 .query_async(connection)
                 .await
-                .map_err(redis_database_error)
+                .map_err(|err| adapter.database_error(err))
         })
         .await?;
     Ok(mutation_result(&key, "expire", u64::from(changed)))
@@ -417,7 +415,7 @@ async fn persist_command(adapter: &RedisAdapter, key: String) -> Result<RdbQuery
                 .arg(&key)
                 .query_async(connection)
                 .await
-                .map_err(redis_database_error)
+                .map_err(|err| adapter.database_error(err))
         })
         .await?;
     Ok(mutation_result(&key, "persist", u64::from(changed)))
@@ -430,7 +428,7 @@ async fn delete_command(adapter: &RedisAdapter, key: String) -> Result<RdbQueryR
                 .arg(&key)
                 .query_async(connection)
                 .await
-                .map_err(redis_database_error)
+                .map_err(|err| adapter.database_error(err))
         })
         .await?;
     Ok(mutation_result(&key, "delete", changed))

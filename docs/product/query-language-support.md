@@ -17,11 +17,10 @@ widening work lives in `docs/ROADMAP.md`.
   TypeScript command-name completion plus current-DB/type-filtered key
   suggestions. It is not full language-core parser ownership or full Redis
   autocomplete parity.
-- Valkey uses `redis-command` only as a compatibility target for its profile.
-  Valkey command query execution is disabled while its read-only key browser
-  slice is active.
+- Valkey uses `redis-command` for bounded Redis-compatible command query
+  dispatch and the active key browser/value-preview slice.
   `e2e/fixtures/valkey.redis-compatibility.json` records a static command-family
-  matrix for future proof work; it is not command query, mutation, Redis
+  matrix; it is not command completion, direct key mutation, full Redis
   compatibility, or smoke support.
 
 ## Ownership Snapshot
@@ -34,15 +33,14 @@ Oracle carry planned `sql` profile metadata, but their capabilities are empty;
 that metadata does not create T-SQL, Oracle SQL/PL/SQL, runtime query, catalog,
 edit, parser, completion, or E2E smoke claims.
 
-`redis-command` is active because Redis is a connection-supported KV profile.
-Valkey also carries the language id for compatibility metadata, but its
-capability profile leaves `query.query=false`, so the query tab rejects Valkey
-command execution before IPC dispatch. Current Redis support still separates the
-shipped key browser/value panel from the focused backend command allowlist and
-`useQueryExecution` dispatch tests. The Redis command editor owns allowlist
-command-name vocabulary, arity hints, and snippets plus key suggestions from the
-current Redis DB scan cache. Empty, failed, or stale scan states fall back to no
-key suggestions instead of blocking the editor.
+`redis-command` is active because Redis and Valkey are connection-supported KV
+profiles. Redis has key browser/value panel support plus focused backend
+command allowlist and `useQueryExecution` dispatch tests. Valkey reuses the same
+bounded command allowlist for query dispatch, while direct key mutation controls
+and command completion remain unpromoted for Valkey. The Redis command editor
+owns allowlist command-name vocabulary, arity hints, and snippets plus key
+suggestions from the current Redis DB scan cache. Empty, failed, or stale scan
+states fall back to no key suggestions instead of blocking the editor.
 
 | QueryLanguageId | Lifecycle | Parser owner | Completion owner | Fallback policy | Safety analyzer |
 |---|---|---|---|---|---|
@@ -74,8 +72,8 @@ cannot add parser or completion vocabulary without an owner decision.
 | SQLite SQL | File connection, table browsing, raw read queries, writable-file DML, transactional DML batches, dry-run rollback, and primary-key-scoped row edits are supported. Completion covers built-in SQLite keywords/functions, cached schema objects, and sqlite-cli dot-command vocabulary as suggestions with non-executable metadata. | Raw SQL DDL is rejected by the SQLite adapter, and structured DDL UI parity is not implemented. Unsupported `ALTER TABLE` actions are not auto-rebuilt, row edits require key/projected row identity, read-only file connections reject writes, nested JSON edits are deferred, sqlite-cli dot commands are not executed, and JSON1/FTS/RTREE/loadable-extension semantics are not detected, gated, dispatched, or validated client-side. SQLite completion does not consume extension inventory or enable extension-specific packs. |
 | DuckDB SQL | DuckDB is a file-backed RDBMS profile (`rdb` + `file` connection kind). Local `.duckdb` files can be opened for catalog browsing, table reads, and statement-level raw SQL execution through the RDBMS tabular result path. GitHub Runtime Happy Path now wires a deterministic `.duckdb` desktop smoke for open, catalog/table browse, raw SELECT tabular result/history evidence, and read-only write rejection. Registered local CSV/Parquet/JSON/NDJSON analytics sources can be previewed from the DuckDB query toolbar and queried in the file-analytics dialog opened from that toolbar; the focused dialog/API evidence chooses a local file, registers an active-session source alias, exposes source alias/columns in workbench metadata, previews up to 100 rows, runs source-scoped SELECT against that alias, and records successful dialog queries with a distinct `FILE` history label. Public source/query payloads expose id, alias, file name, kind, size, columns, and preview SQL, not absolute local paths. Completion covers editor vocabulary, cached `.duckdb` schema objects, and active-session registered source aliases/columns after source metadata is loaded. | Structured DDL/write UI parity and file analytics global query editor/import/export parity are not implemented. Completion suggestions are editor assistance and do not override adapter blocklists. Extension install/load statements and helper functions, `COPY` file import/export, `ATTACH`/`DETACH`, sensitive external-file capability settings, shell commands, cloud/object-store access, and arbitrary external-file SQL functions or replacement scans are adapter-rejected; extension autoload is disabled. Read-only `.duckdb` files reject writes. |
 | MongoDB Mongosh/MQL | Whitelisted `db...` collection/admin commands, JSON-like bodies, BSON literals, `find(filter, projection)`, cursor-chain `sort`/`skip`/`limit` dispatch, aggregate cursor-chain lowering, operator/stage/expression completion, cached collection and field-name suggestions, active-collection index-name suggestions for `dropIndex`, destructive collection/admin confirmations, and transaction-helper unsupported gates are supported. Routine desktop smoke proves seeded collection browse, row-edit MQL preview/execute, query-tab `find` projection/sort/limit, destructive `runCommand` confirmation, and cancel/no-mutation re-read. | Completion suggestions are editor assistance and stay aligned to the runtime whitelist. Smoke evidence is runtime evidence for the whitelisted paths above, while broader component/backend tests remain below-smoke focused evidence. Arbitrary JavaScript, shell helpers such as `use`/`show`, multiple statements, unsupported cursor helpers, cross-db shell navigation, server-version feature promotion gates, and native document-first result panels remain out of scope. |
-| Redis command | Redis connection/profile, backend KV primitives, key browser, value preview/edit UI, bounded command editor vocabulary/key suggestions, and static KV/stream fixture inventory are active. Backend primitives are typed IPC calls for database/key scan, typed value reads, guarded string set, delete confirmation, TTL expire/persist, and bounded stream reads. The backend command allowlist classifies read/write/TTL/stream/destructive effects and only allows single-key destructive `DEL`/TTL-removal `PERSIST` when the request carries an exact `confirmKey`. The value panel promotes bounded string/hash/list/set/zset edits and expire/persist/delete preview/confirm controls; partial or unsupported key types fail visibly. The Redis command editor suggests selected read/write/TTL/stream/destructive allowlist commands with arity hints/snippets and suggests current-DB keys filtered by command key type when scan cache is available. Focused tests cover dispatch through `executeKvCommand`, tabular projection, and non-blocking scan-cache fallback. Valkey reuses the KV protocol for connection/key scan/value preview only and blocks command query dispatch. | Redis command parser is not owned by language-core yet, and the current backend parser is an allowlist, not arbitrary Redis CLI support. Completion is TypeScript allowlist vocabulary plus current scan-cache key suggestions; it is not an unsupported command-family surface or full Redis autocomplete implementation. Unsupported command families reject with explicit messages. Key suggestions are hints only and can be stale if Redis keyspace changes after scan. Full Redis CLI/admin parity, stream consumer UI, broader command coverage, cluster/pubsub/modules/consumer-group management, multi-key destructive commands, Valkey command compatibility, and Valkey mutation support are not claimed. |
-| Valkey `redis-command` target | Valkey has a read-only KV runtime slice for connection, database/key scan, and typed value preview, but no runtime-active command query surface. Static fixture inventory includes `e2e/fixtures/valkey.redis-compatibility.json`, which maps Table View's bounded Redis command slice into candidate families for future Valkey proof: identity/protocol detection, DB/keyspace scan, string/hash/list/set/zset read-write, TTL, stream read, and exact-key destructive delete. | The matrix is not live command-query or mutation evidence. Future support must prove Valkey identity with Valkey-specific server fields, run the seed and candidate command families against a local Valkey runtime, and keep admin/server-control, broad destructive, cluster, pub/sub, modules/functions, scripting, and consumer-group commands rejected until separate workflow-specific safety/result-envelope decisions land. |
+| Redis command | Redis connection/profile, backend KV primitives, key browser, value preview/edit UI, bounded command editor vocabulary/key suggestions, and static KV/stream fixture inventory are active. Backend primitives are typed IPC calls for database/key scan, typed value reads, guarded string set, delete confirmation, TTL expire/persist, and bounded stream reads. The backend command allowlist classifies read/write/TTL/stream/destructive effects and only allows single-key destructive `DEL`/TTL-removal `PERSIST` when the request carries an exact `confirmKey`. The value panel promotes bounded string/hash/list/set/zset edits and expire/persist/delete preview/confirm controls; partial or unsupported key types fail visibly. The Redis command editor suggests selected read/write/TTL/stream/destructive allowlist commands with arity hints/snippets and suggests current-DB keys filtered by command key type when scan cache is available. Focused tests cover dispatch through `executeKvCommand`, tabular projection, and non-blocking scan-cache fallback. Valkey reuses the KV protocol for connection/key scan/value preview and bounded command query dispatch. | Redis command parser is not owned by language-core yet, and the current backend parser is an allowlist, not arbitrary Redis CLI support. Completion is TypeScript allowlist vocabulary plus current scan-cache key suggestions; it is not an unsupported command-family surface or full Redis autocomplete implementation. Unsupported command families reject with explicit messages. Key suggestions are hints only and can be stale if Redis keyspace changes after scan. Full Redis CLI/admin parity, stream consumer UI, broader command coverage, cluster/pubsub/modules/consumer-group management, multi-key destructive commands, Valkey command completion, and Valkey mutation support are not claimed. |
+| Valkey `redis-command` target | Valkey has a KV runtime slice for connection, database/key scan, typed value preview, and bounded Redis-compatible command query dispatch. Focused local Valkey testcontainer evidence covers selected read/write/TTL/stream/destructive command families and exact-key confirmation through the shared bounded allowlist. Static fixture inventory includes `e2e/fixtures/valkey.redis-compatibility.json`, which maps Table View's bounded Redis command slice into candidate families and rejected Redis assumptions. | The matrix is not direct key mutation, completion, full Redis compatibility, or smoke evidence. Future support must prove Valkey identity with Valkey-specific server fields for broader compatibility claims and keep admin/server-control, broad destructive, cluster, pub/sub, modules/functions, scripting, and consumer-group commands rejected until separate workflow-specific safety/result-envelope decisions land. |
 | Search DSL | Fixture-backed Search identities and bounded fixture DSL exist for Elasticsearch/OpenSearch fixture catalog/search result paths. | Live HTTP execution, connection/auth/TLS handling, response parsing, admin APIs, observability, and full query-language support are deferred. Search fixture files mirror embedded adapter contracts only. |
 | MSSQL SQL | Planned profile metadata and a static SQL seed contract declare SQL Server as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no SQL Server connection UI, runtime query/catalog/edit path, T-SQL parser/completion claim, auth/TLS/encryption/instance contract, runtime fixture/live evidence, or desktop E2E smoke. |
 | Oracle SQL | Planned profile metadata and a static SQL seed contract declare Oracle as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no Oracle connection UI, runtime query/catalog/edit path, Oracle SQL/PL/SQL parser/completion claim, service/SID/wallet/TNS contract, runtime fixture/live evidence, or desktop E2E smoke. |
@@ -188,10 +186,10 @@ claims separate for the MySQL docs recheck gate.
 
 ### Valkey Redis Compatibility Boundary
 
-- Current status: Valkey has a read-only KV runtime slice for connection
-  test/connect, database/key scan, and typed value preview. Command query
-  execution, key mutation, completion support, Runtime Happy Path smoke, and
-  full Redis compatibility are not claimed.
+- Current status: Valkey has a KV runtime slice for connection test/connect,
+  database/key scan, typed value preview, and bounded Redis-compatible command
+  query dispatch. Direct key mutation controls, completion support, Runtime
+  Happy Path smoke, and full Redis compatibility are not claimed.
 - Static matrix: `e2e/fixtures/valkey.redis-compatibility.json` covers the
   bounded Redis command families that may become Valkey candidates after local
   proof. It also records the unsupported assumptions that must stay rejected:
@@ -200,9 +198,9 @@ claims separate for the MySQL docs recheck gate.
   widen for Valkey without separate safety and result-envelope decisions.
 - Detection delta: future Valkey promotion must prove Valkey-specific server
   identity instead of relying on Redis-compatible identity fields alone.
-- Candidate families: string/hash/list/set/zset read-write, TTL, bounded stream
-  read, and exact-key delete are candidates only after the seed and command
-  family run against a local Valkey runtime.
+- Proven command families: selected string/hash read-write, TTL, bounded stream
+  read, unsupported-family rejection, and exact-key destructive confirmation run
+  against a local Valkey runtime.
 - Rejected families: admin/server-control, broad destructive commands, cluster,
   pub/sub, modules/functions, arbitrary scripting, and consumer-group workflows
   remain out of scope even if a Valkey server accepts Redis-compatible command
@@ -320,10 +318,9 @@ are:
   evidence only for paths wired into that smoke. Redis completion remains a
   TypeScript allowlist/key-suggestion surface, not language-core parser or full
   Redis completion ownership. Valkey now has focused local testcontainer
-  evidence for connection, key scan, and value preview only. It uses
-  `redis-command` as a deferred compatibility target, but command query
-  execution, key mutation, Runtime Happy Path smoke, and Redis compatibility are
-  not claimed.
+  evidence for connection, key scan, value preview, and bounded command query
+  dispatch. Direct key mutation controls, command completion, Runtime Happy Path
+  smoke, and full Redis compatibility are not claimed.
 - Search DSL is fixture-backed for Elasticsearch/OpenSearch result rendering and
   adapter contracts only. Live HTTP Search support waits for explicit
   connection/auth/TLS, catalog/search execution, admin, observability, and

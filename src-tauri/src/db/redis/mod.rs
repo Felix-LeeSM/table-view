@@ -76,15 +76,6 @@ impl RedisProtocolProduct {
         format!("Unsupported {} key type", self.label())
     }
 
-    fn command_query_unsupported(self) -> Option<AppError> {
-        match self {
-            Self::Redis => None,
-            Self::Valkey => Some(AppError::Unsupported(
-                "Valkey command queries are not supported yet".into(),
-            )),
-        }
-    }
-
     fn mutation_unsupported(self) -> Option<AppError> {
         match self {
             Self::Redis => None,
@@ -155,6 +146,10 @@ impl RedisAdapter {
             AppError::Connection(format!("{} connection is not open", self.product.label()))
         })?;
         f(connection).await
+    }
+
+    pub(super) fn database_error(&self, err: ::redis::RedisError) -> AppError {
+        self.product.database_error(err)
     }
 
     async fn ensure_database(&self, database: Option<u16>) -> Result<u16, AppError> {
@@ -356,12 +351,7 @@ impl KvAdapter for RedisAdapter {
         request: crate::db::KvCommandRequest,
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
-        Box::pin(async move {
-            if let Some(error) = self.product.command_query_unsupported() {
-                return Err(error);
-            }
-            command::execute_command(self, request, cancel).await
-        })
+        Box::pin(async move { command::execute_command(self, request, cancel).await })
     }
 
     fn set_string<'a>(
