@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  REDIS_COMMAND_COMPLETIONS,
+  REDIS_UNSUPPORTED_COMMAND_FAMILIES,
+} from "../../src/lib/redis/redisCommandCompletion";
 
 const DBMS_SEED_FILES = [
   ["postgresql", "seed.sql"],
@@ -33,6 +37,33 @@ type ValkeySeedFixture = RedisSeedFixture & {
   compatibilityTarget: "redis-command";
   runtimeSupport: false;
   promotionGate: string;
+};
+
+type ValkeyCompatibilityStatus =
+  | "candidate-after-local-valkey-proof"
+  | "detection-required"
+  | "rejected-until-separate-scope";
+
+type ValkeyCompatibilityMatrixEntry = {
+  family: string;
+  status: ValkeyCompatibilityStatus;
+  redisCommands: string[];
+  unsupportedFamilyLabels?: string[];
+  currentEvidence: string;
+  knownValkeyDelta: string;
+  promotionGate: string;
+  unsupportedAssumption: string;
+};
+
+type ValkeyRedisCompatibilityFixture = {
+  product: "valkey";
+  supportLevel: "static-fixture-only";
+  compatibilityTarget: "redis-command";
+  runtimeSupport: false;
+  detectionRules: string[];
+  commandFamilyMatrix: ValkeyCompatibilityMatrixEntry[];
+  knownValkeyDeltas: string[];
+  unsupportedRedisAssumptions: string[];
 };
 
 type SearchSeedFixture = {
@@ -154,6 +185,61 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(payload).toContain("vk:string");
     expect(payload).toContain("vk:hash");
     expect(payload).toContain("vk:events");
+  });
+
+  it("valkey Redis compatibility matrix covers the bounded command slice and rejects Redis assumptions", () => {
+    const seed = readJson<ValkeySeedFixture>("seed.valkey.json");
+    const fixture = readJson<ValkeyRedisCompatibilityFixture>(
+      "valkey.redis-compatibility.json",
+    );
+    const matrixCommands = new Set(
+      fixture.commandFamilyMatrix.flatMap(({ redisCommands }) =>
+        redisCommands.map((command) => command.toUpperCase()),
+      ),
+    );
+    const unsupportedLabels = new Set(
+      fixture.commandFamilyMatrix.flatMap(
+        ({ unsupportedFamilyLabels = [] }) => unsupportedFamilyLabels,
+      ),
+    );
+
+    expect(fixture.product).toBe("valkey");
+    expect(fixture.supportLevel).toBe("static-fixture-only");
+    expect(fixture.compatibilityTarget).toBe("redis-command");
+    expect(fixture.runtimeSupport).toBe(false);
+    expect(fixture.detectionRules.join(" ")).toContain("valkey_version");
+
+    for (const command of REDIS_COMMAND_COMPLETIONS) {
+      expect(matrixCommands.has(command.name)).toBe(true);
+    }
+    for (const command of seed.commands) {
+      expect(matrixCommands.has(command.command)).toBe(true);
+    }
+    for (const family of REDIS_UNSUPPORTED_COMMAND_FAMILIES) {
+      expect(unsupportedLabels.has(family.label)).toBe(true);
+    }
+
+    expect(fixture.knownValkeyDeltas).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("redis_version"),
+        expect.stringContaining("Redis Runtime Happy Path smoke"),
+      ]),
+    );
+    expect(fixture.unsupportedRedisAssumptions).toEqual(
+      expect.arrayContaining([
+        "Do not reuse Redis Runtime Happy Path smoke as Valkey evidence.",
+        "Do not enable Valkey connection UI/runtime from profile identity alone.",
+      ]),
+    );
+
+    const candidateRows = fixture.commandFamilyMatrix.filter(
+      ({ status }) => status === "candidate-after-local-valkey-proof",
+    );
+    expect(candidateRows.length).toBeGreaterThan(0);
+    for (const row of candidateRows) {
+      expect(row.promotionGate).toContain("local Valkey");
+      expect(row.currentEvidence).not.toContain("Valkey runtime evidence");
+    }
   });
 
   it.each([
