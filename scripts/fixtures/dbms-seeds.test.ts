@@ -42,6 +42,7 @@ type ValkeySeedFixture = RedisSeedFixture & {
 type ValkeyCompatibilityStatus =
   | "candidate-after-local-valkey-proof"
   | "detection-required"
+  | "proven-local-valkey-runtime"
   | "rejected-until-separate-scope";
 
 type ValkeyCompatibilityMatrixEntry = {
@@ -57,9 +58,9 @@ type ValkeyCompatibilityMatrixEntry = {
 
 type ValkeyRedisCompatibilityFixture = {
   product: "valkey";
-  supportLevel: "static-fixture-only";
+  supportLevel: "static-matrix-plus-focused-runtime-proof";
   compatibilityTarget: "redis-command";
-  runtimeSupport: false;
+  runtimeSupport: true;
   detectionRules: string[];
   commandFamilyMatrix: ValkeyCompatibilityMatrixEntry[];
   knownValkeyDeltas: string[];
@@ -204,9 +205,11 @@ describe("DBMS-specific E2E seed fixtures", () => {
     );
 
     expect(fixture.product).toBe("valkey");
-    expect(fixture.supportLevel).toBe("static-fixture-only");
+    expect(fixture.supportLevel).toBe(
+      "static-matrix-plus-focused-runtime-proof",
+    );
     expect(fixture.compatibilityTarget).toBe("redis-command");
-    expect(fixture.runtimeSupport).toBe(false);
+    expect(fixture.runtimeSupport).toBe(true);
     expect(fixture.detectionRules.join(" ")).toContain("valkey_version");
 
     for (const command of REDIS_COMMAND_COMPLETIONS) {
@@ -228,9 +231,27 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(fixture.unsupportedRedisAssumptions).toEqual(
       expect.arrayContaining([
         "Do not reuse Redis Runtime Happy Path smoke as Valkey evidence.",
-        "Do not enable Valkey connection UI/runtime from profile identity alone.",
+        "Do not widen Valkey runtime support from profile identity alone.",
       ]),
     );
+
+    const provenRows = fixture.commandFamilyMatrix.filter(
+      ({ status }) => status === "proven-local-valkey-runtime",
+    );
+    expect(provenRows.map(({ family }) => family)).toEqual(
+      expect.arrayContaining([
+        "database-and-keyspace",
+        "string-read-preview",
+        "string-write-command",
+        "hash-read-command",
+        "ttl-mutation-command",
+        "stream-read-command",
+        "single-key-destructive",
+      ]),
+    );
+    for (const row of provenRows) {
+      expect(row.currentEvidence).toContain("Local Valkey testcontainer");
+    }
 
     const candidateRows = fixture.commandFamilyMatrix.filter(
       ({ status }) => status === "candidate-after-local-valkey-proof",
@@ -238,7 +259,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(candidateRows.length).toBeGreaterThan(0);
     for (const row of candidateRows) {
       expect(row.promotionGate).toContain("local Valkey");
-      expect(row.currentEvidence).not.toContain("Valkey runtime evidence");
+      expect(row.currentEvidence).not.toContain("Local Valkey testcontainer");
     }
   });
 
