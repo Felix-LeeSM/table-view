@@ -43,16 +43,19 @@ export async function switchToLauncherWindow(timeoutMs = 15000) {
   const start = Date.now();
   let lastError: unknown = null;
   while (Date.now() - start < timeoutMs) {
+    let handles: string[] = [];
     try {
-      if (await isLauncherDocument()) return;
-
-      const handles = await browser.getWindowHandles();
-      for (const handle of handles) {
-        await browser.switchToWindow(handle);
-        if (await isLauncherDocument()) return;
-      }
+      handles = await browser.getWindowHandles();
     } catch (e) {
       lastError = e;
+    }
+    for (const handle of handles) {
+      try {
+        await browser.switchToWindow(handle);
+        if (await isLauncherDocument()) return;
+      } catch (e) {
+        lastError = e;
+      }
     }
     await browser.pause(200);
   }
@@ -65,16 +68,19 @@ export async function switchToWorkspaceWindow(timeoutMs = 30000) {
   const start = Date.now();
   let lastError: unknown = null;
   while (Date.now() - start < timeoutMs) {
+    let handles: string[] = [];
     try {
-      if (await isWorkspaceDocument()) return;
-
-      const handles = await browser.getWindowHandles();
-      for (const handle of handles) {
-        await browser.switchToWindow(handle);
-        if (await isWorkspaceDocument()) return;
-      }
+      handles = await browser.getWindowHandles();
     } catch (e) {
       lastError = e;
+    }
+    for (const handle of handles) {
+      try {
+        await browser.switchToWindow(handle);
+        if (await isWorkspaceDocument()) return;
+      } catch (e) {
+        lastError = e;
+      }
     }
     await browser.pause(200);
   }
