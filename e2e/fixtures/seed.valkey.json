@@ -32,7 +32,7 @@
     {
       "command": "XADD",
       "key": "vk:events",
-      "id": "*",
+      "id": "1-0",
       "fields": {
         "type": "login",
         "user": "ada"

@@ -120,6 +120,10 @@ describe("DBMS-specific E2E seed fixtures", () => {
     const fixture = readJson<ValkeySeedFixture>("seed.valkey.json");
     const commandNames = fixture.commands.map(({ command }) => command);
     const payload = JSON.stringify(fixture);
+    const streamSeed = fixture.commands.find(
+      (command): command is { command: string; key: string; id: string } =>
+        command.command === "XADD",
+    );
 
     expect(fixture.product).toBe("valkey");
     expect(fixture.supportLevel).toBe("static-fixture-only");
@@ -131,8 +135,21 @@ describe("DBMS-specific E2E seed fixtures", () => {
     );
     expect(fixture.promotionGate).toContain("local Valkey container");
     expect(fixture.database).toBe(2);
-    expect(commandNames).toEqual(
-      expect.arrayContaining(["SELECT", "FLUSHDB", "SET", "HSET", "XADD"]),
+    expect(commandNames).toEqual([
+      "SELECT",
+      "FLUSHDB",
+      "SET",
+      "HSET",
+      "XADD",
+      "SADD",
+      "HSET",
+      "ZADD",
+    ]);
+    expect(streamSeed).toEqual(
+      expect.objectContaining({
+        key: "vk:events",
+        id: "1-0",
+      }),
     );
     expect(payload).toContain("vk:string");
     expect(payload).toContain("vk:hash");
