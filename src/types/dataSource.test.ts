@@ -139,6 +139,7 @@ describe("DataSourceProfile registry", () => {
     }),
     valkey: expectedCapabilities({
       connection: { test: true },
+      query: { query: true },
       catalog: { browse: true },
       paradigmSpecific: { keyBrowser: true },
     }),
@@ -299,21 +300,25 @@ describe("DataSourceProfile registry", () => {
     expect(redis.capabilities.paradigmSpecific.streamConsumer).toBe(false);
   });
 
-  it("exposes Valkey as a read-only KV key-browser runtime", () => {
+  it("exposes Valkey as a KV key-browser runtime with bounded command query", () => {
     const valkey = getDataSourceProfile("valkey");
 
     expect(valkey.paradigm).toBe("kv");
     expect(valkey.connectionKind).toBe("server");
     expect(valkey.languages).toEqual(["redis-command"]);
     expect(valkey.catalogModel).toBe("kv");
-    expect(valkey.resultKinds).toEqual(["keyValue", "streamRecords"]);
+    expect(valkey.resultKinds).toEqual([
+      "keyValue",
+      "streamRecords",
+      "tabular",
+    ]);
     expect(valkey.backendAdapter).toEqual({
       id: "valkey",
       kind: "kv",
       capabilitySource: "valkey",
     });
     expect(valkey.capabilities).toEqual(expectedCapabilitiesByType.valkey);
-    expect(valkey.capabilities.query.query).toBe(false);
+    expect(valkey.capabilities.query.query).toBe(true);
     expect(valkey.capabilities.edit.editKeys).toBe(false);
     expect(valkey.capabilities.paradigmSpecific.keyBrowser).toBe(true);
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);

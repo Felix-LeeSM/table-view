@@ -160,7 +160,7 @@ async fn redis_testcontainer_covers_live_kv_catalog_values_and_streams() {
 }
 
 #[tokio::test]
-async fn valkey_testcontainer_covers_connection_key_browse_and_read_only_contract() {
+async fn valkey_testcontainer_covers_connection_key_browse_and_command_policy() {
     testcontainer_lifecycle::ensure_sweep_once().await;
     let pid = testcontainer_lifecycle::current_pid_label();
     let container = match GenericImage::new("valkey/valkey", "8.0-alpine")
@@ -241,7 +241,7 @@ async fn valkey_testcontainer_covers_connection_key_browse_and_read_only_contrac
         other => panic!("expected string value, got {other:?}"),
     }
 
-    let command_error = adapter
+    let read_result = adapter
         .execute_command(
             KvCommandRequest {
                 command: "HGETALL tv:hash".into(),
@@ -251,10 +251,119 @@ async fn valkey_testcontainer_covers_connection_key_browse_and_read_only_contrac
             None,
         )
         .await
+        .unwrap();
+    assert_eq!(read_result.columns[0].name, "field");
+    assert_eq!(read_result.rows[0][0], serde_json::json!("name"));
+
+    let write_result = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "SET tv:cmd written EX 30".into(),
+                database: Some(2),
+                confirm_key: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(write_result.rows[0][1], serde_json::json!("set"));
+
+    let stream_result = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "XRANGE tv:events - + COUNT 10".into(),
+                database: Some(2),
+                confirm_key: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(stream_result.columns[1].name, "fields");
+
+    let ttl_result = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "EXPIRE tv:cmd 60".into(),
+                database: Some(2),
+                confirm_key: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(ttl_result.rows[0][1], serde_json::json!("expire"));
+
+    let persist_error = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "PERSIST tv:cmd".into(),
+                database: Some(2),
+                confirm_key: None,
+            },
+            None,
+        )
+        .await
         .unwrap_err();
-    assert!(command_error
+    assert!(persist_error
         .to_string()
-        .contains("Valkey command queries are not supported yet"));
+        .contains("Confirmation key must exactly match the Redis key"));
+
+    let persist_result = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "PERSIST tv:cmd".into(),
+                database: Some(2),
+                confirm_key: Some("tv:cmd".into()),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(persist_result.rows[0][1], serde_json::json!("persist"));
+
+    let delete_error = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "DEL tv:cmd".into(),
+                database: Some(2),
+                confirm_key: None,
+            },
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert!(delete_error
+        .to_string()
+        .contains("Confirmation key must exactly match the Redis key"));
+
+    let delete_result = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "DEL tv:cmd".into(),
+                database: Some(2),
+                confirm_key: Some("tv:cmd".into()),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(delete_result.rows[0][1], serde_json::json!("delete"));
+
+    let unsupported_error = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "FLUSHDB".into(),
+                database: Some(2),
+                confirm_key: None,
+            },
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert!(unsupported_error
+        .to_string()
+        .contains("outside the bounded runtime slice"));
 
     let mutation_error = adapter
         .set_string(KvSetStringRequest {
@@ -322,6 +431,14 @@ async fn seed_valkey(port: u16) {
         .arg("tv:hash")
         .arg("name")
         .arg("Ada")
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+    let _: String = ::redis::cmd("XADD")
+        .arg("tv:events")
+        .arg("*")
+        .arg("type")
+        .arg("login")
         .query_async(&mut connection)
         .await
         .unwrap();

@@ -139,7 +139,8 @@ fn backend_profiles_encode_current_database_type_contracts() {
         redis.result_kinds,
         [
             ResultEnvelopeKind::KeyValue,
-            ResultEnvelopeKind::StreamRecords
+            ResultEnvelopeKind::StreamRecords,
+            ResultEnvelopeKind::Tabular
         ]
     );
     assert_eq!(redis.adapter_contract.kind, BackendAdapterContractKind::Kv);
@@ -164,7 +165,8 @@ fn backend_profiles_encode_current_database_type_contracts() {
         valkey.result_kinds,
         [
             ResultEnvelopeKind::KeyValue,
-            ResultEnvelopeKind::StreamRecords
+            ResultEnvelopeKind::StreamRecords,
+            ResultEnvelopeKind::Tabular
         ]
     );
     assert_eq!(

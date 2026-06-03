@@ -1,105 +1,168 @@
 {
   "schemaVersion": 1,
   "product": "valkey",
-  "supportLevel": "static-fixture-only",
+  "supportLevel": "static-matrix-plus-focused-runtime-proof",
   "compatibilityTarget": "redis-command",
-  "runtimeSupport": false,
-  "matrixScope": "Static compatibility matrix for Table View's bounded Redis command slice. This is not live Valkey runtime evidence.",
+  "runtimeSupport": true,
+  "matrixScope": "Redis-compatible command-family matrix for Table View's bounded Redis command slice, with focused local Valkey testcontainer proof for selected rows. This is not Runtime Happy Path smoke, direct mutation UI, command completion, or full Valkey compatibility evidence.",
   "detectionRules": [
-    "Do not identify Valkey by redis_version alone; future runtime promotion must use server_name/valkey_version or HELLO server/version evidence.",
+    "Do not identify Valkey by redis_version alone; future broader runtime promotion must use server_name/valkey_version or HELLO server/version evidence.",
     "Do not reuse Redis Runtime Happy Path smoke as Valkey evidence.",
-    "Do not expose Valkey connection UI/runtime until a local Valkey container or equivalent local-first fixture proves connect, scan, preview, command dispatch, mutation, TTL, and delete behavior."
+    "Do not widen Valkey runtime or command-family claims beyond local Valkey evidence recorded by this matrix."
   ],
   "commandFamilyMatrix": [
     {
       "family": "identity-and-protocol",
       "status": "detection-required",
       "redisCommands": ["HELLO", "INFO"],
-      "currentEvidence": "profile identity and static fixture inventory only",
-      "knownValkeyDelta": "Valkey can expose Redis-compatible identity fields for client compatibility, so redis_version is not enough to prove a Valkey runtime.",
-      "promotionGate": "local Valkey runtime probe must record Valkey-specific server identity before any Redis-compatible behavior is promoted.",
+      "currentEvidence": "profile identity plus local Valkey container execution path; broader identity detection still needs Valkey-specific server fields.",
+      "knownValkeyDelta": "Valkey can expose Redis-compatible identity fields for client compatibility, so redis_version is not enough to prove a broader Valkey runtime.",
+      "promotionGate": "broader Valkey runtime promotion must record Valkey-specific server identity before any Redis-compatible behavior is widened.",
       "unsupportedAssumption": "Do not treat a Redis-looking server identity or Redis service smoke as Valkey support."
     },
     {
       "family": "database-and-keyspace",
-      "status": "candidate-after-local-valkey-proof",
+      "status": "proven-local-valkey-runtime",
       "redisCommands": ["SELECT", "SCAN", "TYPE", "EXISTS"],
-      "currentEvidence": "Valkey seed selects DB 2 statically; Redis backend/smoke evidence does not count for Valkey.",
-      "knownValkeyDelta": "No Table View Valkey runtime proof exists for DB selection, scan pagination, or key metadata.",
-      "promotionGate": "local Valkey smoke must prove DB 2 selection, bounded scan, key type metadata, and missing-key behavior.",
-      "unsupportedAssumption": "Do not assume Redis scan/key metadata behavior is enough for Valkey."
+      "currentEvidence": "Local Valkey testcontainer covers DB 2 connection/listing, bounded key scan, and typed value preview through the Valkey adapter.",
+      "knownValkeyDelta": "Runtime proof is local-first focused evidence, not Runtime Happy Path smoke or broader compatibility proof.",
+      "promotionGate": "Valkey smoke must prove the same path in CI before it becomes Runtime Happy Path evidence.",
+      "unsupportedAssumption": "Do not use Redis scan/key metadata smoke as Valkey keyspace evidence."
     },
     {
-      "family": "string-read-write",
-      "status": "candidate-after-local-valkey-proof",
-      "redisCommands": ["GET", "SET"],
-      "currentEvidence": "Valkey seed contains deterministic string data only; Redis GET/SET smoke is Redis evidence.",
-      "knownValkeyDelta": "No Table View Valkey runtime proof exists for string encoding, SET EX behavior, or NX/XX rejection parity.",
-      "promotionGate": "local Valkey smoke must prove GET, SET, SET EX, visible result projection, and existing typed-control safety boundaries.",
-      "unsupportedAssumption": "Do not inherit Redis string write support or SET option policy without Valkey-specific tests."
+      "family": "string-read-preview",
+      "status": "proven-local-valkey-runtime",
+      "redisCommands": ["GET"],
+      "currentEvidence": "Local Valkey testcontainer covers string typed value preview through the Valkey adapter.",
+      "knownValkeyDelta": "GET command-editor dispatch is not separately promoted beyond the typed value preview proof.",
+      "promotionGate": "Valkey smoke or focused command evidence must prove command-editor GET dispatch before claiming that path.",
+      "unsupportedAssumption": "Do not inherit Redis GET command UI evidence as Valkey command-editor proof."
     },
     {
-      "family": "hash-read-write",
-      "status": "candidate-after-local-valkey-proof",
-      "redisCommands": ["HGETALL", "HSET"],
-      "currentEvidence": "Valkey seed contains deterministic hash data only.",
-      "knownValkeyDelta": "No Table View Valkey runtime proof exists for hash field ordering, binary values, or hash mutation projection.",
-      "promotionGate": "local Valkey smoke or focused integration must prove hash read/write projection with the same bounded UI/API contract.",
-      "unsupportedAssumption": "Do not reuse Redis hash UI evidence as Valkey mutation evidence."
+      "family": "string-write-command",
+      "status": "proven-local-valkey-runtime",
+      "redisCommands": ["SET"],
+      "currentEvidence": "Local Valkey testcontainer covers SET with EX through bounded command query dispatch and tabular projection.",
+      "knownValkeyDelta": "SET NX/XX and broader string option policy are not proven by this focused slice.",
+      "promotionGate": "broader Valkey string write support must add option-specific runtime evidence and docs.",
+      "unsupportedAssumption": "Do not inherit Redis string write option coverage without Valkey-specific tests."
     },
     {
-      "family": "list-read-write",
+      "family": "hash-read-command",
+      "status": "proven-local-valkey-runtime",
+      "redisCommands": ["HGETALL"],
+      "currentEvidence": "Local Valkey testcontainer covers HGETALL command dispatch and tabular hash field projection.",
+      "knownValkeyDelta": "Hash write behavior, binary values, and ordering-sensitive projections remain outside this proof.",
+      "promotionGate": "broader Valkey hash support must add write/runtime projection evidence.",
+      "unsupportedAssumption": "Do not reuse Redis hash UI or mutation evidence as Valkey hash write proof."
+    },
+    {
+      "family": "hash-write-command",
       "status": "candidate-after-local-valkey-proof",
-      "redisCommands": ["LRANGE", "LPUSH", "RPUSH"],
-      "currentEvidence": "No live Valkey list fixture or runtime path exists.",
-      "knownValkeyDelta": "No Table View Valkey runtime proof exists for bounded list ranges or push result semantics.",
-      "promotionGate": "local Valkey focused evidence must prove non-negative bounded ranges and list push projection.",
+      "redisCommands": ["HSET"],
+      "currentEvidence": "No local Valkey command-runtime evidence exists for HSET dispatch or hash mutation projection.",
+      "knownValkeyDelta": "Hash write projection and binary field behavior require separate Valkey evidence.",
+      "promotionGate": "local Valkey focused evidence must prove hash write projection with the bounded UI/API contract.",
+      "unsupportedAssumption": "Do not reuse Redis HSET support as Valkey hash mutation evidence."
+    },
+    {
+      "family": "list-read-command",
+      "status": "candidate-after-local-valkey-proof",
+      "redisCommands": ["LRANGE"],
+      "currentEvidence": "No local Valkey command-runtime evidence exists for bounded list ranges.",
+      "knownValkeyDelta": "List range bounds and result ordering require separate Valkey evidence.",
+      "promotionGate": "local Valkey focused evidence must prove non-negative bounded ranges and list projection.",
       "unsupportedAssumption": "Do not claim Valkey list parity from Redis allowlist coverage alone."
     },
     {
-      "family": "set-read-write",
+      "family": "list-write-command",
       "status": "candidate-after-local-valkey-proof",
-      "redisCommands": ["SMEMBERS", "SADD"],
-      "currentEvidence": "Valkey seed contains deterministic set data only.",
-      "knownValkeyDelta": "No Table View Valkey runtime proof exists for set member ordering or mutation projection.",
-      "promotionGate": "local Valkey focused evidence must prove set read/write projection and visible refresh behavior.",
+      "redisCommands": ["LPUSH", "RPUSH"],
+      "currentEvidence": "No local Valkey command-runtime evidence exists for list push result semantics.",
+      "knownValkeyDelta": "List write result projection and refresh behavior require separate Valkey evidence.",
+      "promotionGate": "local Valkey focused evidence must prove list push projection.",
+      "unsupportedAssumption": "Do not inherit Redis list write support without Valkey runtime evidence."
+    },
+    {
+      "family": "set-read-command",
+      "status": "candidate-after-local-valkey-proof",
+      "redisCommands": ["SMEMBERS"],
+      "currentEvidence": "No local Valkey command-runtime evidence exists for set member projection.",
+      "knownValkeyDelta": "Set member ordering and projection require separate Valkey evidence.",
+      "promotionGate": "local Valkey focused evidence must prove set read projection.",
       "unsupportedAssumption": "Do not treat static set fixture inventory as live Valkey support."
     },
     {
-      "family": "sorted-set-read-write",
+      "family": "set-write-command",
       "status": "candidate-after-local-valkey-proof",
-      "redisCommands": ["ZRANGE", "ZADD"],
-      "currentEvidence": "Valkey seed contains deterministic sorted-set data only.",
-      "knownValkeyDelta": "No Table View Valkey runtime proof exists for scores, WITHSCORES projection, or sorted-set mutation projection.",
-      "promotionGate": "local Valkey focused evidence must prove sorted-set read/write projection with score handling.",
+      "redisCommands": ["SADD"],
+      "currentEvidence": "No local Valkey command-runtime evidence exists for set write projection.",
+      "knownValkeyDelta": "Set write result projection and refresh behavior require separate Valkey evidence.",
+      "promotionGate": "local Valkey focused evidence must prove set write projection.",
+      "unsupportedAssumption": "Do not inherit Redis set write support without Valkey runtime evidence."
+    },
+    {
+      "family": "sorted-set-read-command",
+      "status": "candidate-after-local-valkey-proof",
+      "redisCommands": ["ZRANGE"],
+      "currentEvidence": "No local Valkey command-runtime evidence exists for sorted-set range projection.",
+      "knownValkeyDelta": "Scores, WITHSCORES projection, and ordering behavior require separate Valkey evidence.",
+      "promotionGate": "local Valkey focused evidence must prove sorted-set read projection with score handling.",
       "unsupportedAssumption": "Do not inherit Redis sorted-set projection claims without Valkey runtime evidence."
     },
     {
-      "family": "ttl",
+      "family": "sorted-set-write-command",
       "status": "candidate-after-local-valkey-proof",
-      "redisCommands": ["TTL", "EXPIRE", "PERSIST"],
-      "currentEvidence": "Redis TTL smoke is wired; Valkey has no runtime TTL evidence.",
-      "knownValkeyDelta": "No Table View Valkey runtime proof exists for TTL state labels, expiration timing tolerance, or exact-key PERSIST confirmation.",
-      "promotionGate": "local Valkey smoke must prove TTL read, EXPIRE update, PERSIST exact-key confirmation, and post-mutation refresh.",
-      "unsupportedAssumption": "Do not reuse Redis TTL timing or confirmation evidence for Valkey."
+      "redisCommands": ["ZADD"],
+      "currentEvidence": "No local Valkey command-runtime evidence exists for sorted-set write projection.",
+      "knownValkeyDelta": "Sorted-set write result projection and score handling require separate Valkey evidence.",
+      "promotionGate": "local Valkey focused evidence must prove sorted-set write projection with score handling.",
+      "unsupportedAssumption": "Do not inherit Redis sorted-set write support without Valkey runtime evidence."
     },
     {
-      "family": "stream-read",
+      "family": "ttl-read-command",
       "status": "candidate-after-local-valkey-proof",
-      "redisCommands": ["XADD", "XRANGE"],
-      "currentEvidence": "Valkey seed has a stable XADD id; Redis has bounded XRANGE focused evidence.",
-      "knownValkeyDelta": "No Table View Valkey runtime proof exists for stream ID ordering, COUNT bounds, or stream result projection.",
-      "promotionGate": "local Valkey focused evidence must prove deterministic stream seed/read behavior before stream support is claimed.",
-      "unsupportedAssumption": "Do not claim Valkey stream support from static XADD inventory or Redis XRANGE tests."
+      "redisCommands": ["TTL"],
+      "currentEvidence": "No local Valkey command-runtime evidence exists for TTL read result projection.",
+      "knownValkeyDelta": "TTL timing tolerance and state labels require separate Valkey evidence.",
+      "promotionGate": "local Valkey focused evidence must prove TTL read labels and timing tolerance.",
+      "unsupportedAssumption": "Do not reuse Redis TTL timing evidence for Valkey."
+    },
+    {
+      "family": "ttl-mutation-command",
+      "status": "proven-local-valkey-runtime",
+      "redisCommands": ["EXPIRE", "PERSIST"],
+      "currentEvidence": "Local Valkey testcontainer covers EXPIRE command dispatch and exact-key PERSIST confirmation through the bounded command policy.",
+      "knownValkeyDelta": "TTL read labels and post-mutation UI refresh remain outside this focused proof.",
+      "promotionGate": "Valkey smoke must prove the same path before it becomes Runtime Happy Path evidence.",
+      "unsupportedAssumption": "Do not reuse Redis TTL confirmation evidence for Valkey."
+    },
+    {
+      "family": "stream-read-command",
+      "status": "proven-local-valkey-runtime",
+      "redisCommands": ["XRANGE"],
+      "currentEvidence": "Local Valkey testcontainer covers bounded XRANGE command dispatch and stream result projection.",
+      "knownValkeyDelta": "Stream write and consumer-group behavior remain outside this proof.",
+      "promotionGate": "broader Valkey stream support must add workflow-specific runtime evidence.",
+      "unsupportedAssumption": "Do not claim Valkey stream consumer support from XRANGE proof."
+    },
+    {
+      "family": "stream-write-seed",
+      "status": "candidate-after-local-valkey-proof",
+      "redisCommands": ["XADD"],
+      "currentEvidence": "Valkey seed setup uses XADD, but Table View command-runtime dispatch for XADD is not promoted.",
+      "knownValkeyDelta": "Stream write result projection and consumer semantics require separate Valkey evidence.",
+      "promotionGate": "local Valkey focused evidence must prove stream write projection before stream write support is claimed.",
+      "unsupportedAssumption": "Do not claim Valkey stream write support from static seed/setup commands."
     },
     {
       "family": "single-key-destructive",
-      "status": "candidate-after-local-valkey-proof",
+      "status": "proven-local-valkey-runtime",
       "redisCommands": ["DEL"],
-      "currentEvidence": "Redis delete smoke proves exact-key confirmation for Redis only.",
-      "knownValkeyDelta": "No Table View Valkey runtime proof exists for delete confirmation, refresh behavior, or missing-key result projection.",
-      "promotionGate": "local Valkey smoke must prove exact-key delete confirmation and key browser refresh.",
-      "unsupportedAssumption": "Do not enable Valkey destructive command execution because Redis exact-key delete is green."
+      "currentEvidence": "Local Valkey testcontainer covers exact-key DEL confirmation and command projection.",
+      "knownValkeyDelta": "Missing-key projection and key browser refresh are not promoted by this focused proof.",
+      "promotionGate": "Valkey smoke must prove browser refresh before this becomes Runtime Happy Path evidence.",
+      "unsupportedAssumption": "Do not enable broad or multi-key destructive Valkey commands because single-key DEL is proven."
     },
     {
       "family": "admin-server-control",
@@ -119,7 +182,7 @@
         "ACL / CLIENT / CONFIG / DEBUG",
         "FLUSH* / UNLINK / RENAME"
       ],
-      "currentEvidence": "Rejected by Redis bounded command policy; Valkey support would need a separate admin/safety scope.",
+      "currentEvidence": "Rejected by bounded command policy; local Valkey testcontainer verifies FLUSHDB rejection.",
       "knownValkeyDelta": "Valkey server-control and protocol-push behaviors are not part of Table View's KV product slice.",
       "promotionGate": "separate admin/safety PR with explicit UX, confirmation policy, and Valkey runtime evidence.",
       "unsupportedAssumption": "Do not allow admin or broad destructive commands just because a Valkey server accepts Redis-compatible command names."
@@ -153,11 +216,12 @@
     "Valkey identity must be proven with Valkey-specific server fields, not redis_version alone.",
     "Redis Runtime Happy Path smoke is not Valkey runtime evidence.",
     "Static seed/reset commands are fixture inventory only until executed against a local Valkey runtime.",
+    "Focused local Valkey testcontainer evidence promotes only the explicitly marked proven command/query families.",
     "Admin, broad destructive, cluster, pub/sub, modules/functions, scripting, and consumer-group workflows remain rejected even if Valkey accepts Redis-compatible command names."
   ],
   "unsupportedRedisAssumptions": [
     "Do not reuse Redis Runtime Happy Path smoke as Valkey evidence.",
-    "Do not enable Valkey connection UI/runtime from profile identity alone.",
+    "Do not widen Valkey runtime support from profile identity alone.",
     "Do not promote a Redis command family for Valkey until that family has local Valkey runtime evidence and docs.",
     "Do not widen Redis unsupported command families for Valkey without a separate safety and result-envelope decision."
   ]
