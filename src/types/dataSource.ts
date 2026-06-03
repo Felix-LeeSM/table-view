@@ -480,6 +480,15 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "kv-default",
     REDIS_CAPABILITIES,
   ),
+  valkey: profile(
+    "valkey",
+    "server",
+    ["redis-command"],
+    "kv",
+    ["keyValue", "streamRecords"],
+    "kv-default",
+    UNSUPPORTED_CAPABILITIES,
+  ),
   elasticsearch: profile(
     "elasticsearch",
     "server",

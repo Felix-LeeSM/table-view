@@ -288,7 +288,9 @@ are:
   wired representative Runtime Happy Path smoke. Fixture inventory is runtime
   evidence only for paths wired into that smoke. Redis completion remains a
   TypeScript allowlist/key-suggestion surface, not language-core parser or full
-  Redis completion ownership. Valkey has no active profile/runtime evidence.
+  Redis completion ownership. Valkey uses `redis-command` only as a deferred
+  compatibility target on a capability-empty profile identity; it has no
+  runtime, fixture, live, or Redis-compatibility evidence.
 - Search DSL is fixture-backed for Elasticsearch/OpenSearch result rendering and
   adapter contracts only. Live HTTP Search support waits for explicit
   connection/auth/TLS, catalog/search execution, admin, observability, and

@@ -345,6 +345,14 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
     });
   });
 
+  it("Valkey defaults: port=6379, user='', database='0'", () => {
+    expect(DATABASE_DEFAULT_FIELDS.valkey).toEqual({
+      port: 6379,
+      user: "",
+      database: "0",
+    });
+  });
+
   it("only PG defaults user to 'postgres' (regression guard for #4)", () => {
     expect(DATABASE_DEFAULT_FIELDS.postgresql.user).toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.mysql.user).not.toBe("postgres");
@@ -354,6 +362,7 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
     expect(DATABASE_DEFAULT_FIELDS.mssql.user).not.toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.mongodb.user).not.toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.redis.user).not.toBe("postgres");
+    expect(DATABASE_DEFAULT_FIELDS.valkey.user).not.toBe("postgres");
   });
 });
 
@@ -384,6 +393,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("duckdb")).toBe(true);
     expect(isSupportedDatabaseType("mongodb")).toBe(true);
     expect(isSupportedDatabaseType("redis")).toBe(true);
+    expect(isSupportedDatabaseType("valkey")).toBe(false);
     expect(isSupportedDatabaseType("elasticsearch")).toBe(false);
     expect(isSupportedDatabaseType("opensearch")).toBe(false);
     expect(isSupportedDatabaseType("mssql")).toBe(false);
@@ -402,6 +412,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(DATABASE_TYPE_LABELS.oracle).toBe("Oracle");
     expect(DATABASE_TYPE_LABELS.mongodb).toBe("MongoDB");
     expect(DATABASE_TYPE_LABELS.redis).toBe("Redis");
+    expect(DATABASE_TYPE_LABELS.valkey).toBe("Valkey");
     expect(DATABASE_TYPE_LABELS.elasticsearch).toBe("Elasticsearch");
     expect(DATABASE_TYPE_LABELS.opensearch).toBe("OpenSearch");
   });

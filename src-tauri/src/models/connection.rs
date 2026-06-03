@@ -14,6 +14,7 @@ pub enum DatabaseType {
     Oracle,
     Mongodb,
     Redis,
+    Valkey,
     Elasticsearch,
     Opensearch,
 }
@@ -30,7 +31,7 @@ impl DatabaseType {
             DatabaseType::Mssql => 1433,
             DatabaseType::Oracle => 1521,
             DatabaseType::Mongodb => 27017,
-            DatabaseType::Redis => 6379,
+            DatabaseType::Redis | DatabaseType::Valkey => 6379,
             DatabaseType::Elasticsearch | DatabaseType::Opensearch => 9200,
         }
     }
@@ -49,7 +50,7 @@ impl DatabaseType {
             | DatabaseType::Mssql
             | DatabaseType::Oracle => Paradigm::Rdb,
             DatabaseType::Mongodb => Paradigm::Document,
-            DatabaseType::Redis => Paradigm::Kv,
+            DatabaseType::Redis | DatabaseType::Valkey => Paradigm::Kv,
             DatabaseType::Elasticsearch | DatabaseType::Opensearch => Paradigm::Search,
         }
     }
@@ -69,6 +70,7 @@ impl FromStr for DatabaseType {
             "oracle" => Ok(DatabaseType::Oracle),
             "mongodb" => Ok(DatabaseType::Mongodb),
             "redis" => Ok(DatabaseType::Redis),
+            "valkey" => Ok(DatabaseType::Valkey),
             "elasticsearch" | "elastic" | "es" => Ok(DatabaseType::Elasticsearch),
             "opensearch" | "os" => Ok(DatabaseType::Opensearch),
             _ => Err(()),
@@ -295,6 +297,7 @@ mod tests {
         assert_eq!(DatabaseType::Oracle.default_port(), 1521);
         assert_eq!(DatabaseType::Mongodb.default_port(), 27017);
         assert_eq!(DatabaseType::Redis.default_port(), 6379);
+        assert_eq!(DatabaseType::Valkey.default_port(), 6379);
     }
 
     #[test]
@@ -317,6 +320,7 @@ mod tests {
             DatabaseType::Oracle,
             DatabaseType::Mongodb,
             DatabaseType::Redis,
+            DatabaseType::Valkey,
         ];
         for db_type in types {
             let json = serde_json::to_string(&db_type).unwrap();
@@ -339,6 +343,8 @@ mod tests {
         assert_eq!(json, "\"mssql\"");
         let json = serde_json::to_string(&DatabaseType::Oracle).unwrap();
         assert_eq!(json, "\"oracle\"");
+        let json = serde_json::to_string(&DatabaseType::Valkey).unwrap();
+        assert_eq!(json, "\"valkey\"");
     }
 
     #[test]
@@ -352,6 +358,7 @@ mod tests {
         assert_eq!(DatabaseType::Oracle.paradigm(), Paradigm::Rdb);
         assert_eq!(DatabaseType::Mongodb.paradigm(), Paradigm::Document);
         assert_eq!(DatabaseType::Redis.paradigm(), Paradigm::Kv);
+        assert_eq!(DatabaseType::Valkey.paradigm(), Paradigm::Kv);
     }
 
     #[test]

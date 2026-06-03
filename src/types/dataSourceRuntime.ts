@@ -38,6 +38,7 @@ export type DataSourceDialectFamily =
   | "oracle"
   | "mongodb"
   | "redis"
+  | "valkey"
   | "elasticsearch"
   | "opensearch";
 
@@ -109,6 +110,7 @@ export const DIALECT_METADATA = Object.freeze({
   oracle: dialectMetadata("oracle", "oracle", "none"),
   mongodb: dialectMetadata("mongodb", "mongodb", "mongodb-build-info"),
   redis: dialectMetadata("redis", "redis", "none"),
+  valkey: dialectMetadata("valkey", "valkey", "none"),
   elasticsearch: dialectMetadata(
     "elasticsearch",
     "elasticsearch",
@@ -127,6 +129,7 @@ export const BACKEND_ADAPTER_BY_TYPE = Object.freeze({
   oracle: BACKEND_ADAPTER_PROFILES.declaredRdb,
   mongodb: BACKEND_ADAPTER_PROFILES.mongodb,
   redis: BACKEND_ADAPTER_PROFILES.redis,
+  valkey: BACKEND_ADAPTER_PROFILES.markerKv,
   elasticsearch: BACKEND_ADAPTER_PROFILES.searchEngine,
   opensearch: BACKEND_ADAPTER_PROFILES.searchEngine,
 }) satisfies Readonly<Record<DatabaseType, BackendAdapterProfile>>;
