@@ -27,6 +27,14 @@ type RedisSeedFixture = {
   commands: Array<{ command: string; key?: string }>;
 };
 
+type ValkeySeedFixture = RedisSeedFixture & {
+  product: "valkey";
+  supportLevel: "static-fixture-only";
+  compatibilityTarget: "redis-command";
+  runtimeSupport: false;
+  promotionGate: string;
+};
+
 type SearchSeedFixture = {
   product: string;
   idempotencyContract: string;
@@ -106,6 +114,29 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(payload).toContain("tv:string");
     expect(payload).toContain("tv:hash");
     expect(payload).toContain("tv:events");
+  });
+
+  it("valkey has a static Redis-compatible fixture without a runtime claim", () => {
+    const fixture = readJson<ValkeySeedFixture>("seed.valkey.json");
+    const commandNames = fixture.commands.map(({ command }) => command);
+    const payload = JSON.stringify(fixture);
+
+    expect(fixture.product).toBe("valkey");
+    expect(fixture.supportLevel).toBe("static-fixture-only");
+    expect(fixture.compatibilityTarget).toBe("redis-command");
+    expect(fixture.runtimeSupport).toBe(false);
+    expect(fixture.idempotencyContract).toContain("Idempotency contract");
+    expect(fixture.idempotencyContract).toContain(
+      "not wired to Valkey runtime smoke",
+    );
+    expect(fixture.promotionGate).toContain("local Valkey container");
+    expect(fixture.database).toBe(2);
+    expect(commandNames).toEqual(
+      expect.arrayContaining(["SELECT", "FLUSHDB", "SET", "HSET", "XADD"]),
+    );
+    expect(payload).toContain("vk:string");
+    expect(payload).toContain("vk:hash");
+    expect(payload).toContain("vk:events");
   });
 
   it.each([
