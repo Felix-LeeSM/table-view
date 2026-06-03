@@ -238,6 +238,21 @@ fn relation_context_suggests_catalog_relations_only() {
         )),
         "FROM completion should only include relation candidates; got {result_labels:?}"
     );
+
+    let join_result = complete_sql(request("SELECT * FROM users JOIN ", 25, 25));
+    let join_labels = labels(&join_result);
+    assert!(join_result.items.iter().any(|item| {
+        item.label == "active_users"
+            && item.kind == "view"
+            && item.detail.as_deref() == Some("analytics")
+    }));
+    assert!(
+        !join_result.items.iter().any(|item| matches!(
+            item.kind.as_str(),
+            "meta-command" | "column" | "function" | "keyword"
+        )),
+        "JOIN completion should only include relation candidates; got {join_labels:?}"
+    );
 }
 
 #[test]

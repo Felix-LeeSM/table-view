@@ -161,6 +161,7 @@ describe("useQueryExecution — Redis command dispatch", () => {
     expect(executeKvCommandMock).not.toHaveBeenCalled();
     expect(result.current.pendingKvConfirm).toMatchObject({
       command: "KEYS *",
+      confirmKey: "*",
       reason: expect.stringContaining("KEYS scans"),
     });
 
@@ -170,7 +171,7 @@ describe("useQueryExecution — Redis command dispatch", () => {
 
     expect(executeKvCommandMock).toHaveBeenCalledWith(
       "conn-redis",
-      { command: "KEYS *", database: 2 },
+      { command: "KEYS *", database: 2, confirmKey: "*" },
       expect.stringMatching(/^query-redis-/),
     );
   });
@@ -188,7 +189,7 @@ describe("useQueryExecution — Redis command dispatch", () => {
     expect(result.current.pendingKvConfirm).toBeNull();
     expect(executeKvCommandMock).toHaveBeenCalledWith(
       "conn-redis",
-      { command: "KEYS *", database: 2 },
+      { command: "KEYS *", database: 2, confirmKey: "*" },
       expect.stringMatching(/^query-redis-/),
     );
   });

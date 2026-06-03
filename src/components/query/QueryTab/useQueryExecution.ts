@@ -77,6 +77,7 @@ import {
   applyFindCursorChain,
   applyAggregateCursorChain,
 } from "./queryHelpers";
+import { kvCommandConfirmationKey } from "./kvCommandConfirmation";
 
 import { logger } from "@lib/logger";
 
@@ -646,6 +647,7 @@ export function useQueryExecution({
   const [pendingKvConfirm, setPendingKvConfirm] = useState<{
     command: string;
     database: number | undefined;
+    confirmKey?: string;
     reason: string;
   } | null>(null);
   // Sprint 255 — raw RDB / Mongo WARN-tier pending state. `null` until a
@@ -665,13 +667,17 @@ export function useQueryExecution({
   } | null>(null);
 
   const runKvCommandNow = useCallback(
-    async (command: string, database: number | undefined) => {
+    async (
+      command: string,
+      database: number | undefined,
+      confirmKey?: string,
+    ) => {
       const queryId = `${tab.id}-${Date.now()}`;
       updateQueryState(tab.id, { status: "running", queryId });
       try {
         const result = await executeKvCommand(
           tab.connectionId,
-          { command, database },
+          { command, database, ...(confirmKey ? { confirmKey } : {}) },
           queryId,
         );
         completeQuery(tab.id, queryId, result);
@@ -690,7 +696,11 @@ export function useQueryExecution({
     const pending = pendingKvConfirm;
     if (!pending) return;
     setPendingKvConfirm(null);
-    await runKvCommandNow(pending.command, pending.database);
+    await runKvCommandNow(
+      pending.command,
+      pending.database,
+      pending.confirmKey,
+    );
   }, [pendingKvConfirm, runKvCommandNow]);
 
   const cancelKvDangerous = useCallback(() => {
@@ -2447,10 +2457,12 @@ export function useQueryExecution({
       }
 
       const decision = decideSafeMode(analyzeKvCommandSafety(sql));
+      const confirmKey = kvCommandConfirmationKey(sql);
       if (decision.action === "confirm") {
         setPendingKvConfirm({
           command: sql,
           database,
+          confirmKey,
           reason: decision.reason,
         });
         return;
@@ -2459,7 +2471,7 @@ export function useQueryExecution({
         updateQueryState(tab.id, { status: "error", error: decision.reason });
         return;
       }
-      await runKvCommandNow(sql, database);
+      await runKvCommandNow(sql, database, confirmKey);
       return;
     }
 

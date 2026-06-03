@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, renderHook, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { EditorView, keymap } from "@codemirror/view";
 import { language } from "@codemirror/language";
 import { CompletionContext } from "@codemirror/autocomplete";
@@ -208,6 +214,38 @@ describe("MongoQueryEditor (Sprint 139)", () => {
       if (typeof b.run === "function") b.run(view);
     }
     expect(localOnExecute).toHaveBeenCalled();
+  });
+
+  it("preserves cursor position across external query text sync", () => {
+    const { rerender } = render(
+      <MongoQueryEditor
+        sql='{ "profile": 1 }'
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        mongoExtensions={[]}
+      />,
+    );
+    const view = getEditorView("MongoDB Query Editor");
+    const cursorAfterDeletedChar = '{ "profil'.length;
+    act(() => {
+      view.dispatch({ selection: { anchor: cursorAfterDeletedChar } });
+    });
+
+    rerender(
+      <MongoQueryEditor
+        sql='{ "profie": 1 }'
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        mongoExtensions={[]}
+      />,
+    );
+
+    expect(getEditorView("MongoDB Query Editor").state.doc.toString()).toBe(
+      '{ "profie": 1 }',
+    );
+    expect(
+      getEditorView("MongoDB Query Editor").state.selection.main.head,
+    ).toBe(cursorAfterDeletedChar - 1);
   });
 
   // Reconfigure-in-place: same EditorView instance survives mongoExtensions

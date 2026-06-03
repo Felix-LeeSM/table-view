@@ -12,7 +12,9 @@ use super::command_result::{
     float_col, int_col, key_type_label, mutation_result, object_col, rows_result, single_row,
     string_cell, text_col, ttl_state_label,
 };
-use super::helpers::{bounded_limit, ensure_not_cancelled, require_confirm_key};
+use super::helpers::{
+    bounded_limit, ensure_not_cancelled, require_confirm_key, require_confirm_pattern,
+};
 use super::values::{read_hash, read_set, read_stream_range, read_string};
 use super::RedisAdapter;
 
@@ -93,6 +95,9 @@ fn require_command_confirmation(
     command: &RedisCommand,
     confirm_key: Option<&str>,
 ) -> Result<(), AppError> {
+    if let RedisCommand::Keys { pattern } = command {
+        return require_confirm_pattern(pattern, confirm_key.unwrap_or_default());
+    }
     match command.effect() {
         RedisCommandEffect::Destructive | RedisCommandEffect::Ttl
             if command.required_confirmation_key().is_some() =>
@@ -615,7 +620,7 @@ mod tests {
         assert_eq!(scan.columns[0].name, "cursor");
         assert_eq!(scan.rows[0][2], json!("alpha"));
 
-        let keys = execute_command(&adapter, request("KEYS *"), None)
+        let keys = execute_command(&adapter, confirmed_request("KEYS *", "*"), None)
             .await
             .unwrap();
         assert_eq!(keys.columns[0].name, "key");
@@ -650,19 +655,17 @@ mod tests {
     async fn command_runtime_requires_typed_confirmation_for_dangerous_commands() {
         let adapter = connected_adapter().await;
 
-        assert!(matches!(
-            execute_command(&adapter, request("DEL alpha"), None).await,
-            Err(AppError::Validation(_))
-        ));
-        assert!(matches!(
-            execute_command(
-                &adapter,
-                confirmed_request("PERSIST alpha", "different"),
-                None,
-            )
-            .await,
-            Err(AppError::Validation(_))
-        ));
+        for request in [
+            request("KEYS *"),
+            confirmed_request("KEYS *", "alpha"),
+            request("DEL alpha"),
+            confirmed_request("PERSIST alpha", "different"),
+        ] {
+            assert!(matches!(
+                execute_command(&adapter, request, None).await,
+                Err(AppError::Validation(_))
+            ));
+        }
 
         let persist = execute_command(&adapter, confirmed_request("PERSIST alpha", "alpha"), None)
             .await
