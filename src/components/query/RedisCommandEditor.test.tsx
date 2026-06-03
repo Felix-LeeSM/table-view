@@ -33,9 +33,25 @@ describe("RedisCommandEditor", () => {
     expect(container).toHaveAttribute("role", "textbox");
     expect(container).toHaveAttribute("aria-multiline", "true");
     expect(container).toHaveAttribute("data-paradigm", "kv");
+    expect(container).toHaveAttribute("data-command-target", "redis");
     expect(container.querySelector(".cm-content")?.textContent).toContain(
       "GET session:1",
     );
+  });
+
+  it("labels the Valkey command editor target", () => {
+    render(
+      <RedisCommandEditor
+        sql="GET session:1"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+        redisCommandTarget="valkey"
+      />,
+    );
+
+    const container = screen.getByLabelText("Valkey Command Editor");
+    expect(container).toHaveAttribute("role", "textbox");
+    expect(container).toHaveAttribute("data-command-target", "valkey");
   });
 
   it("calls onSqlChange when command text changes", () => {

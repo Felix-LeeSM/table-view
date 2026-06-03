@@ -4,7 +4,23 @@
   "supportLevel": "static-matrix-plus-focused-runtime-proof",
   "compatibilityTarget": "redis-command",
   "runtimeSupport": true,
-  "matrixScope": "Redis-compatible command-family matrix for Table View's bounded Redis command slice, with focused local Valkey testcontainer proof for selected rows. This is not Runtime Happy Path smoke, direct mutation UI, command completion, or full Valkey compatibility evidence.",
+  "completionSupport": {
+    "status": "proven-row-editor-assistance",
+    "source": "Table View Valkey completion uses the proven local-runtime command rows only.",
+    "commands": [
+      "GET",
+      "HGETALL",
+      "XRANGE",
+      "TYPE",
+      "EXISTS",
+      "SET",
+      "EXPIRE",
+      "PERSIST",
+      "DEL"
+    ],
+    "nonClaim": "Completion is not Runtime Happy Path smoke, direct mutation UI, broader command-family runtime promotion, or full Valkey compatibility evidence."
+  },
+  "matrixScope": "Redis-compatible command-family matrix for Table View's bounded Redis command slice, with focused local Valkey testcontainer proof for selected rows and editor-assistance completion for proven rows only. This is not Runtime Happy Path smoke, direct mutation UI, or full Valkey compatibility evidence.",
   "detectionRules": [
     "Do not identify Valkey by redis_version alone; future broader runtime promotion must use server_name/valkey_version or HELLO server/version evidence.",
     "Do not reuse Redis Runtime Happy Path smoke as Valkey evidence.",

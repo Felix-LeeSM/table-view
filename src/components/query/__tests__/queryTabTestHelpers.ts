@@ -25,7 +25,10 @@ import { useToastStore } from "@stores/toastStore";
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
 import type { SqlCompletionContext } from "@lib/sql/sqlCompletionContext";
-import type { RedisKeySuggestion } from "@lib/redis/redisCommandCompletion";
+import type {
+  RedisCommandCompletionTarget,
+  RedisKeySuggestion,
+} from "@lib/redis/redisCommandCompletion";
 
 // ---------------------------------------------------------------------------
 // Fixture constants
@@ -80,6 +83,8 @@ export const mockEditorProps: {
   mongoExtensionsHistory: (readonly Extension[] | undefined)[];
   lastRedisKeySuggestions: readonly RedisKeySuggestion[] | undefined;
   redisKeySuggestionsHistory: (readonly RedisKeySuggestion[] | undefined)[];
+  lastRedisCommandTarget: RedisCommandCompletionTarget | undefined;
+  redisCommandTargetHistory: (RedisCommandCompletionTarget | undefined)[];
   lastCompletionContext: SqlCompletionContext | undefined;
   completionContextHistory: (SqlCompletionContext | undefined)[];
   lastParadigm: string | undefined;
@@ -91,6 +96,8 @@ export const mockEditorProps: {
   mongoExtensionsHistory: [],
   lastRedisKeySuggestions: undefined,
   redisKeySuggestionsHistory: [],
+  lastRedisCommandTarget: undefined,
+  redisCommandTargetHistory: [],
   lastCompletionContext: undefined,
   completionContextHistory: [],
   lastParadigm: undefined,
@@ -181,6 +188,8 @@ export function resetQueryTabStores(): void {
   mockEditorProps.mongoExtensionsHistory = [];
   mockEditorProps.lastRedisKeySuggestions = undefined;
   mockEditorProps.redisKeySuggestionsHistory = [];
+  mockEditorProps.lastRedisCommandTarget = undefined;
+  mockEditorProps.redisCommandTargetHistory = [];
   mockEditorProps.lastCompletionContext = undefined;
   mockEditorProps.completionContextHistory = [];
   mockEditorProps.lastParadigm = undefined;

@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest";
 import {
   REDIS_COMMAND_COMPLETIONS,
   REDIS_UNSUPPORTED_COMMAND_FAMILIES,
+  VALKEY_COMMAND_COMPLETIONS,
   createRedisCommandCompletionSource,
+  type RedisCommandCompletionTarget,
   type RedisKeySuggestion,
 } from "./redisCommandCompletion";
 
@@ -43,9 +45,13 @@ function runSource(
   doc: string,
   explicit = true,
   keySuggestions: readonly RedisKeySuggestion[] = [],
+  target: RedisCommandCompletionTarget = "redis",
 ) {
   const state = EditorState.create({ doc });
-  const source = createRedisCommandCompletionSource({ keySuggestions });
+  const source = createRedisCommandCompletionSource({
+    keySuggestions,
+    target,
+  });
   const result = source(new CompletionContext(state, doc.length, explicit));
   if (result instanceof Promise) {
     throw new Error("Redis command completion source must be synchronous");
@@ -183,5 +189,37 @@ describe("redis command completion vocabulary", () => {
       "profiles:hash",
       "profiles:stream",
     ]);
+  });
+
+  it("uses the proven Valkey command subset as the Valkey vocabulary source", () => {
+    expect(VALKEY_COMMAND_COMPLETIONS.map((command) => command.name)).toEqual([
+      "GET",
+      "HGETALL",
+      "XRANGE",
+      "TYPE",
+      "EXISTS",
+      "SET",
+      "EXPIRE",
+      "PERSIST",
+      "DEL",
+    ]);
+    expect(labels(runSource("", true, [], "valkey"))).toEqual(
+      VALKEY_COMMAND_COMPLETIONS.map((command) => command.name),
+    );
+    expect(labels(runSource("H", true, [], "valkey"))).toEqual(["HGETALL"]);
+    expect(labels(runSource("L", true, [], "valkey"))).toEqual([]);
+    expect(labels(runSource("Z", true, [], "valkey"))).toEqual([]);
+  });
+
+  it("keeps Valkey key suggestions on the proven current-keyspace commands", () => {
+    expect(
+      labels(runSource("HGETALL profiles", true, KEY_SUGGESTIONS, "valkey")),
+    ).toEqual(["profiles:hash"]);
+    expect(
+      labels(runSource("XRANGE profiles", true, KEY_SUGGESTIONS, "valkey")),
+    ).toEqual(["profiles:stream"]);
+    expect(
+      labels(runSource("LRANGE profiles", true, KEY_SUGGESTIONS, "valkey")),
+    ).toEqual([]);
   });
 });

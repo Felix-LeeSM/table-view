@@ -26,6 +26,8 @@ export interface RedisUnsupportedCommandFamily {
   readonly reason: string;
 }
 
+export type RedisCommandCompletionTarget = "redis" | "valkey";
+
 export interface RedisKeySuggestion {
   readonly key: string;
   readonly keyType: KvKeyType;
@@ -33,6 +35,7 @@ export interface RedisKeySuggestion {
 
 export interface RedisCommandCompletionSourceOptions {
   readonly keySuggestions?: readonly RedisKeySuggestion[];
+  readonly target?: RedisCommandCompletionTarget;
 }
 
 export const REDIS_COMMAND_COMPLETIONS = [
@@ -182,6 +185,29 @@ export const REDIS_COMMAND_COMPLETIONS = [
   },
 ] as const satisfies readonly RedisCommandCompletionSpec[];
 
+export type RedisCommandCompletionName =
+  (typeof REDIS_COMMAND_COMPLETIONS)[number]["name"];
+
+const REDIS_COMMAND_COMPLETION_NAMES = new Set<RedisCommandCompletionName>(
+  REDIS_COMMAND_COMPLETIONS.map((command) => command.name),
+);
+
+const VALKEY_COMMAND_COMPLETION_NAMES = new Set<RedisCommandCompletionName>([
+  "GET",
+  "HGETALL",
+  "XRANGE",
+  "TYPE",
+  "EXISTS",
+  "SET",
+  "EXPIRE",
+  "PERSIST",
+  "DEL",
+]);
+
+export const VALKEY_COMMAND_COMPLETIONS = REDIS_COMMAND_COMPLETIONS.filter(
+  (command) => VALKEY_COMMAND_COMPLETION_NAMES.has(command.name),
+);
+
 export const REDIS_UNSUPPORTED_COMMAND_FAMILIES = [
   {
     label: "ACL / CLIENT / CONFIG / DEBUG",
@@ -233,10 +259,11 @@ const REDIS_KEY_ARGUMENTS = {
 export function createRedisCommandCompletionSource(
   options: RedisCommandCompletionSourceOptions = {},
 ): CompletionSource {
+  const target = options.target ?? "redis";
   return (context) => {
     const line = context.state.doc.lineAt(context.pos);
     const cursorOffset = context.pos - line.from;
-    const keyPosition = readKeyPosition(line.text, cursorOffset);
+    const keyPosition = readKeyPosition(line.text, cursorOffset, target);
     if (keyPosition) {
       const { fromOffset, prefix, command } = keyPosition;
       if (!context.explicit && prefix.length === 0) return null;
@@ -247,7 +274,7 @@ export function createRedisCommandCompletionSource(
           label: suggestion.key,
           type: "variable",
           detail: suggestion.keyType,
-          info: `Redis ${suggestion.keyType} key`,
+          info: `${targetLabel(target)} ${suggestion.keyType} key`,
           boost: 5,
         }));
 
@@ -265,17 +292,17 @@ export function createRedisCommandCompletionSource(
     if (!context.explicit && prefix.length === 0) return null;
 
     const upperPrefix = prefix.toUpperCase();
-    const commandOptions = REDIS_COMMAND_COMPLETIONS.filter((command) =>
-      command.name.startsWith(upperPrefix),
-    ).map((command) =>
-      snippetCompletion(command.snippet, {
-        label: command.name,
-        type: command.effect === "destructive" ? "warning" : "keyword",
-        detail: command.arity,
-        info: `${command.summary} Args: ${command.arguments.join(", ")}`,
-        boost: commandBoost(command.effect),
-      }),
-    );
+    const commandOptions = commandCompletionsForTarget(target)
+      .filter((command) => command.name.startsWith(upperPrefix))
+      .map((command) =>
+        snippetCompletion(command.snippet, {
+          label: command.name,
+          type: command.effect === "destructive" ? "warning" : "keyword",
+          detail: command.arity,
+          info: `${command.summary} Args: ${command.arguments.join(", ")}`,
+          boost: commandBoost(command.effect),
+        }),
+      );
 
     if (commandOptions.length === 0) return null;
     return {
@@ -302,13 +329,19 @@ function readCommandPosition(
 function readKeyPosition(
   lineText: string,
   cursorOffset: number,
+  target: RedisCommandCompletionTarget,
 ): { fromOffset: number; prefix: string; command: string } | null {
   const beforeCursor = lineText.slice(0, cursorOffset);
   const match = beforeCursor.match(/^(\s*)([A-Za-z]+)(\s+.*)$/);
   if (!match) return null;
 
   const command = match[2]!.toUpperCase();
-  if (!(command in REDIS_KEY_ARGUMENTS)) return null;
+  if (
+    !isRedisCommandCompletionName(command) ||
+    !targetSupportsCommand(target, command)
+  ) {
+    return null;
+  }
 
   const argsText = match[3]!;
   const leadingWhitespace = argsText.match(/^\s*/)?.[0] ?? "";
@@ -335,6 +368,35 @@ function keyMatchesCommand(command: string, keyType: KvKeyType): boolean {
     REDIS_KEY_ARGUMENTS[command as keyof typeof REDIS_KEY_ARGUMENTS];
   if (keyMode === "any" || keyMode === "variadic-any") return true;
   return (keyMode as readonly KvKeyType[]).includes(keyType);
+}
+
+function commandCompletionsForTarget(
+  target: RedisCommandCompletionTarget,
+): readonly RedisCommandCompletionSpec[] {
+  return target === "valkey"
+    ? VALKEY_COMMAND_COMPLETIONS
+    : REDIS_COMMAND_COMPLETIONS;
+}
+
+function targetSupportsCommand(
+  target: RedisCommandCompletionTarget,
+  command: RedisCommandCompletionName,
+): boolean {
+  return target === "valkey"
+    ? VALKEY_COMMAND_COMPLETION_NAMES.has(command)
+    : REDIS_COMMAND_COMPLETION_NAMES.has(command);
+}
+
+function isRedisCommandCompletionName(
+  command: string,
+): command is RedisCommandCompletionName {
+  return REDIS_COMMAND_COMPLETION_NAMES.has(
+    command as RedisCommandCompletionName,
+  );
+}
+
+function targetLabel(target: RedisCommandCompletionTarget): string {
+  return target === "valkey" ? "Valkey" : "Redis";
 }
 
 function commandBoost(effect: RedisCommandCompletionEffect): number {

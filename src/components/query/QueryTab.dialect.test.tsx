@@ -18,7 +18,10 @@ import {
   type SQLDialect,
 } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
-import type { RedisKeySuggestion } from "@lib/redis/redisCommandCompletion";
+import type {
+  RedisCommandCompletionTarget,
+  RedisKeySuggestion,
+} from "@lib/redis/redisCommandCompletion";
 import QueryTab from "./QueryTab";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -86,6 +89,8 @@ vi.mock("./SqlQueryEditor", async () => {
     mockEditorProps.mongoExtensionsHistory.push(undefined);
     mockEditorProps.lastRedisKeySuggestions = undefined;
     mockEditorProps.redisKeySuggestionsHistory.push(undefined);
+    mockEditorProps.lastRedisCommandTarget = undefined;
+    mockEditorProps.redisCommandTargetHistory.push(undefined);
     mockEditorProps.lastParadigm = "rdb";
     mockEditorProps.lastQueryMode = "sql";
     return (
@@ -118,6 +123,8 @@ vi.mock("./MongoQueryEditor", async () => {
     mockEditorProps.mongoExtensionsHistory.push(props.mongoExtensions);
     mockEditorProps.lastRedisKeySuggestions = undefined;
     mockEditorProps.redisKeySuggestionsHistory.push(undefined);
+    mockEditorProps.lastRedisCommandTarget = undefined;
+    mockEditorProps.redisCommandTargetHistory.push(undefined);
     mockEditorProps.lastParadigm = "document";
     mockEditorProps.lastQueryMode = props.queryMode;
     return (
@@ -144,6 +151,7 @@ vi.mock("./RedisCommandEditor", async () => {
       onExecute: () => void;
       sql: string;
       redisKeySuggestions?: readonly RedisKeySuggestion[];
+      redisCommandTarget?: RedisCommandCompletionTarget;
     }
   >(function MockRedisCommandEditor(props, _ref) {
     void _ref;
@@ -153,6 +161,8 @@ vi.mock("./RedisCommandEditor", async () => {
     mockEditorProps.mongoExtensionsHistory.push(undefined);
     mockEditorProps.lastRedisKeySuggestions = props.redisKeySuggestions;
     mockEditorProps.redisKeySuggestionsHistory.push(props.redisKeySuggestions);
+    mockEditorProps.lastRedisCommandTarget = props.redisCommandTarget;
+    mockEditorProps.redisCommandTargetHistory.push(props.redisCommandTarget);
     mockEditorProps.lastParadigm = "kv";
     mockEditorProps.lastQueryMode = "redis-command";
     return (
@@ -459,5 +469,32 @@ describe("QueryTab — dialect", () => {
     expect(mockEditorProps.lastRedisKeySuggestions).toEqual(
       redisKeySuggestionFixture,
     );
+    expect(mockEditorProps.lastRedisCommandTarget).toBe("redis");
+  });
+
+  it("passes Valkey as the KV command editor target", () => {
+    const kvTab = makeQueryTab({
+      connectionId: "conn-valkey",
+      database: "2",
+      paradigm: "kv",
+      queryLanguage: "redis-command",
+      sql: "GET ",
+    });
+    useWorkspaceStore.setState(seedWorkspace([kvTab], kvTab.id));
+    useConnectionStore.setState({
+      connections: [
+        makeConn({
+          id: "conn-valkey",
+          dbType: "valkey",
+          paradigm: "kv",
+          database: "2",
+        }),
+      ],
+    });
+
+    render(<QueryTab tab={kvTab} />);
+
+    expect(mockEditorProps.lastParadigm).toBe("kv");
+    expect(mockEditorProps.lastRedisCommandTarget).toBe("valkey");
   });
 });

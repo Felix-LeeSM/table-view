@@ -18,6 +18,7 @@ import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 import {
   createRedisCommandCompletionSource,
+  type RedisCommandCompletionTarget,
   type RedisKeySuggestion,
 } from "@lib/redis/redisCommandCompletion";
 
@@ -28,17 +29,20 @@ export interface RedisCommandEditorProps {
   onDryRun?: () => void;
   redisExtensions?: readonly Extension[];
   redisKeySuggestions?: readonly RedisKeySuggestion[];
+  redisCommandTarget?: RedisCommandCompletionTarget;
 }
 
 function buildRedisCommandExtensions(
   redisExtensions: readonly Extension[],
   redisKeySuggestions: readonly RedisKeySuggestion[],
+  redisCommandTarget: RedisCommandCompletionTarget,
 ): Extension {
   return [
     autocompletion({
       override: [
         createRedisCommandCompletionSource({
           keySuggestions: redisKeySuggestions,
+          target: redisCommandTarget,
         }),
       ],
     }),
@@ -58,6 +62,7 @@ const RedisCommandEditor = forwardRef<
     onExecute,
     redisExtensions = [],
     redisKeySuggestions = [],
+    redisCommandTarget = "redis",
   },
   ref,
 ) {
@@ -84,7 +89,11 @@ const RedisCommandEditor = forwardRef<
         bracketMatching(),
         placeholder("GET key"),
         completionCompartment.current.of(
-          buildRedisCommandExtensions(redisExtensions, redisKeySuggestions),
+          buildRedisCommandExtensions(
+            redisExtensions,
+            redisKeySuggestions,
+            redisCommandTarget,
+          ),
         ),
         syntaxHighlighting(viewTableHighlightStyle),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -160,10 +169,14 @@ const RedisCommandEditor = forwardRef<
     if (!view) return;
     view.dispatch({
       effects: completionCompartment.current.reconfigure(
-        buildRedisCommandExtensions(redisExtensions, redisKeySuggestions),
+        buildRedisCommandExtensions(
+          redisExtensions,
+          redisKeySuggestions,
+          redisCommandTarget,
+        ),
       ),
     });
-  }, [redisExtensions, redisKeySuggestions]);
+  }, [redisExtensions, redisKeySuggestions, redisCommandTarget]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -176,14 +189,20 @@ const RedisCommandEditor = forwardRef<
     });
   }, [sql]);
 
+  const editorLabel =
+    redisCommandTarget === "valkey"
+      ? "Valkey Command Editor"
+      : "Redis Command Editor";
+
   return (
     <div
       ref={containerRef}
       className="h-full w-full overflow-hidden"
       role="textbox"
-      aria-label="Redis Command Editor"
+      aria-label={editorLabel}
       aria-multiline="true"
       data-paradigm="kv"
+      data-command-target={redisCommandTarget}
     />
   );
 });
