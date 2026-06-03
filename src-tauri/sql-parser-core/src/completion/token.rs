@@ -1,4 +1,4 @@
-use super::{CompletionCursorOffsets, CursorUtf16SaturatingSub};
+use super::CompletionCursorOffsets;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CompletionToken {
@@ -64,7 +64,7 @@ pub(super) fn completion_token_at(text: &str, cursor: CompletionCursorOffsets) -
         prefix,
         qualifier,
         quote,
-        from_utf16: cursor.cursor_utf16_saturating_sub(replace_utf16),
+        from_utf16: cursor.utf16.saturating_sub(replace_utf16),
         from_utf8,
     }
 }

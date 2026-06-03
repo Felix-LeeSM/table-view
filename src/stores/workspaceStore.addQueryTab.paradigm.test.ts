@@ -85,6 +85,7 @@ describe("workspaceStore.addQueryTab — paradigm auto-detection", () => {
     // editor surface is mongosh-flavoured (Sprint 309 lock).
     expect(tab.queryMode).toBeUndefined();
     expect(tab.queryLanguage).toBe("mongosh");
+    expect(tab.database).toBe("appdb");
   });
 
   it("keeps the rdb paradigm for Postgres connections (regression guard)", () => {

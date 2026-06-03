@@ -119,7 +119,7 @@ export function CollectionRow({
         <button
           type="button"
           className={cn(
-            "flex w-full min-w-0 cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-8 hover:bg-muted",
+            "flex w-full min-w-0 cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-8 text-left hover:bg-muted",
             isSelected
               ? "bg-primary/10 text-primary font-semibold"
               : "text-foreground",
@@ -137,10 +137,10 @@ export function CollectionRow({
           }}
         >
           <FileText size={12} className="shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate text-xs">
+          <span className="min-w-0 truncate text-xs leading-5">
             {collection.name}
           </span>
-          <span className="flex shrink-0 items-center gap-1 text-3xs text-muted-foreground">
+          <span className="ml-auto flex shrink-0 items-center gap-1 text-3xs text-muted-foreground">
             {showType && (
               <span
                 aria-label={`${collection.name} collection type: ${collection.collection_type}`}
@@ -177,17 +177,13 @@ export function CollectionRow({
                 <KeyRound size={10} aria-hidden="true" />
               </span>
             )}
-            <span
-              aria-label={
-                collection.document_count == null
-                  ? `${collection.name} document count unavailable`
-                  : `${collection.name} document count ${collection.document_count}`
-              }
-            >
-              {collection.document_count == null
-                ? "n/a"
-                : collection.document_count.toLocaleString()}
-            </span>
+            {collection.document_count != null && (
+              <span
+                aria-label={`${collection.name} document count ${collection.document_count}`}
+              >
+                {collection.document_count.toLocaleString()}
+              </span>
+            )}
           </span>
         </button>
       </ContextMenuTrigger>

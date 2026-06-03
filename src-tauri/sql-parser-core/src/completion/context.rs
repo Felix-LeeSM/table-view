@@ -1,25 +1,51 @@
 use super::token::{is_ident_char, CompletionToken};
-use super::vocabulary::builtin_shell_commands;
+use super::vocabulary::{builtin_functions, builtin_shell_commands, postgresql_extension_pack};
 use super::{CompletionCursorOffsets, SqlCompletionRequest};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum CompletionContextKind {
-    General,
-    Relation,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum CompletionState {
+    StatementStart,
+    SelectList,
+    RelationName,
+    ColumnRef,
+    FunctionRef,
+    InsertColumns,
+    UpdateSetTarget,
+    OrderByExpr,
     ShellMeta,
+    Unsupported,
 }
 
-pub(super) fn completion_context_kind(
+pub(super) fn completion_state(
     request: &SqlCompletionRequest,
     token: &CompletionToken,
-) -> CompletionContextKind {
+) -> CompletionState {
     if is_shell_meta_command_context(request, token) {
-        return CompletionContextKind::ShellMeta;
+        return CompletionState::ShellMeta;
+    }
+    if insert_columns_target(&request.text, request.cursor).is_some() {
+        return CompletionState::InsertColumns;
+    }
+    if update_set_target(&request.text, request.cursor).is_some() {
+        return CompletionState::UpdateSetTarget;
+    }
+    if is_order_by_context(&request.text, request.cursor, token) {
+        return CompletionState::OrderByExpr;
     }
     if is_relation_completion_context(&request.text, request.cursor) {
-        return CompletionContextKind::Relation;
+        return CompletionState::RelationName;
     }
-    CompletionContextKind::General
+    if is_statement_start_context(&request.text, token) {
+        return CompletionState::StatementStart;
+    }
+    if is_function_ref_context(request, token) {
+        return CompletionState::FunctionRef;
+    }
+    if token.qualifier.is_some() || is_column_ref_context(&request.text, request.cursor, token) {
+        return CompletionState::ColumnRef;
+    }
+    CompletionState::SelectList
 }
 
 fn is_shell_meta_command_context(request: &SqlCompletionRequest, token: &CompletionToken) -> bool {
@@ -60,8 +86,114 @@ fn is_relation_completion_context(text: &str, cursor: CompletionCursorOffsets) -
 
     matches!(
         keyword.to_ascii_uppercase().as_str(),
-        "FROM" | "JOIN" | "UPDATE" | "INTO"
+        "FROM" | "JOIN" | "UPDATE" | "INTO" | "USE"
     )
+}
+
+pub(super) fn insert_columns_target(text: &str, cursor: CompletionCursorOffsets) -> Option<String> {
+    let before = before_cursor(text, cursor);
+    let lower = before.to_ascii_lowercase();
+    let insert_pos = lower.rfind("insert")?;
+    let tail = &before[insert_pos..];
+    let lower_tail = tail.to_ascii_lowercase();
+    if !lower_tail.starts_with("insert") {
+        return None;
+    }
+    let into_pos = lower_tail.find("into")?;
+    let after_into = &tail[into_pos + "into".len()..];
+    let open_pos = after_into.rfind('(')?;
+    if after_into[open_pos + 1..].contains(')') {
+        return None;
+    }
+    let target_part = after_into[..open_pos].trim();
+    if target_part.is_empty()
+        || target_part.to_ascii_lowercase().contains(" values")
+        || target_part.to_ascii_lowercase().contains(" select")
+    {
+        return None;
+    }
+    last_identifier_path(target_part)
+}
+
+pub(super) fn update_set_target(text: &str, cursor: CompletionCursorOffsets) -> Option<String> {
+    let before = before_cursor(text, cursor);
+    let lower = before.to_ascii_lowercase();
+    let update_pos = lower.rfind("update")?;
+    let tail = &before[update_pos + "update".len()..];
+    let lower_tail = tail.to_ascii_lowercase();
+    let set_pos = lower_tail.rfind(" set")?;
+    if lower_tail[set_pos + " set".len()..].contains('=') {
+        return None;
+    }
+    let target_part = tail[..set_pos].trim();
+    last_identifier_path(target_part)
+}
+
+fn is_statement_start_context(text: &str, token: &CompletionToken) -> bool {
+    text[..token.from_utf8.min(text.len())].trim().is_empty()
+}
+
+fn is_order_by_context(
+    text: &str,
+    cursor: CompletionCursorOffsets,
+    token: &CompletionToken,
+) -> bool {
+    let before_token = &text[..token.from_utf8.min(text.len())];
+    let before_cursor = before_cursor(text, cursor);
+    let lower = before_token.to_ascii_lowercase();
+    let Some(order_pos) = lower.rfind("order") else {
+        return false;
+    };
+    let after_order = before_cursor[order_pos..].to_ascii_lowercase();
+    after_order.contains("order by")
+        && !after_order.contains(" limit ")
+        && !after_order.contains(" offset ")
+}
+
+fn is_column_ref_context(
+    text: &str,
+    _cursor: CompletionCursorOffsets,
+    token: &CompletionToken,
+) -> bool {
+    let before_token = &text[..token.from_utf8.min(text.len())];
+    let lower = before_token.to_ascii_lowercase();
+    [" where ", " on ", " group by ", " having "]
+        .iter()
+        .any(|needle| lower.contains(needle))
+}
+
+fn is_function_ref_context(request: &SqlCompletionRequest, token: &CompletionToken) -> bool {
+    if token.quote.is_some() || token.prefix.is_empty() {
+        return false;
+    }
+
+    if let Some(qualifier) = &token.qualifier {
+        let qualifier = qualifier.trim_matches('`');
+        return request.catalog.functions.iter().any(|function| {
+            function.schema.eq_ignore_ascii_case(qualifier)
+                && matches_prefix(&function.name, &token.prefix)
+        });
+    }
+
+    builtin_functions(&request.dialect)
+        .iter()
+        .any(|function| matches_prefix(function, &token.prefix))
+        || request
+            .vocabulary
+            .functions
+            .iter()
+            .any(|function| matches_prefix(function, &token.prefix))
+        || request
+            .catalog
+            .functions
+            .iter()
+            .any(|function| matches_prefix(&function.name, &token.prefix))
+        || request.catalog.extensions.iter().any(|extension| {
+            postgresql_extension_pack(&extension.name).is_some_and(|pack| {
+                pack.iter()
+                    .any(|candidate| matches_prefix(candidate.label, &token.prefix))
+            })
+        })
 }
 
 fn before_cursor(text: &str, cursor: CompletionCursorOffsets) -> &str {
@@ -91,6 +223,40 @@ fn trim_identifier_path_suffix(input: &str) -> &str {
         }
     }
     &input[..end]
+}
+
+fn last_identifier_path(input: &str) -> Option<String> {
+    let mut end = input.len();
+    while end > 0 {
+        let Some((idx, ch)) = input[..end].char_indices().next_back() else {
+            break;
+        };
+        if ch.is_whitespace() {
+            end = idx;
+            continue;
+        }
+        break;
+    }
+
+    let mut start = end;
+    while start > 0 {
+        let Some((idx, ch)) = input[..start].char_indices().next_back() else {
+            break;
+        };
+        if !(is_ident_char(ch) || ch == '.' || ch == '`' || ch == '"') {
+            break;
+        }
+        start = idx;
+    }
+
+    (start < end).then(|| input[start..end].trim_matches('"').to_string())
+}
+
+fn matches_prefix(candidate: &str, prefix: &str) -> bool {
+    prefix.is_empty()
+        || candidate
+            .to_ascii_lowercase()
+            .starts_with(&prefix.to_ascii_lowercase())
 }
 
 fn trailing_word(input: &str) -> Option<&str> {
