@@ -271,6 +271,34 @@ describe("checked-in SQL WASM artifact", () => {
     expect(result.items.map((item) => item.kind)).not.toContain("function");
     expect(result.items.map((item) => item.kind)).not.toContain("keyword");
   });
+
+  it("complete_sql returns empty relation completions for an empty catalog through real WASM", async () => {
+    await initSqlParserCore();
+
+    const result = completeSqlFromWasm(
+      "SELECT * FROM ",
+      14,
+      14,
+      "postgresql",
+      "psql",
+      "",
+      "rev-empty-catalog",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ) as {
+      items: Array<{
+        label: string;
+        kind: string;
+      }>;
+    };
+
+    expect(result.items).toEqual([]);
+  });
 });
 
 function mariaDbCompletionLabels(serverVersion: string): string[] {
