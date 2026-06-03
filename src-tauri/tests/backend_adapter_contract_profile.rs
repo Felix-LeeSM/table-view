@@ -169,13 +169,19 @@ fn backend_profiles_encode_current_database_type_contracts() {
     );
     assert_eq!(
         valkey.adapter_contract.state,
-        BackendAdapterContractState::MarkerOnly
+        BackendAdapterContractState::FactoryBacked
     );
-    assert_eq!(valkey.backend_adapter.id, BackendAdapterId::Marker);
+    assert_eq!(valkey.backend_adapter.id, BackendAdapterId::Valkey);
+    assert_eq!(
+        valkey.backend_adapter.capability_source,
+        BackendAdapterCapabilitySource::Valkey
+    );
     assert_eq!(valkey.dialect.id, DataSourceDialectId::Valkey);
     assert_eq!(valkey.dialect.family, DataSourceDialectFamily::Valkey);
-    assert!(valkey.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
-    assert!(!valkey.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
+    assert!(valkey.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
+    assert!(valkey.has_backend_capability(BackendAdapterCapability::KeyValueRead));
+    assert!(!valkey.has_backend_capability(BackendAdapterCapability::KeyValueMutation));
+    assert!(!valkey.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
 
     let elasticsearch = get_data_source_profile(&DatabaseType::Elasticsearch);
     assert_eq!(elasticsearch.paradigm, Paradigm::Search);

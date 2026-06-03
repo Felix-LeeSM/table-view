@@ -31,6 +31,8 @@ import type {
   KvValueEnvelope,
 } from "@/types/kv";
 import { formatKvTtl } from "@/types/kv";
+import { DATABASE_TYPE_LABELS } from "@/types/connection";
+import { getDataSourceProfile } from "@/types/dataSource";
 import { KvMutationPanel } from "./KvMutationPanel";
 
 const KEY_SCAN_LIMIT = 100;
@@ -44,6 +46,12 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     s.connections.find((c) => c.id === connectionId),
   );
   const status = useConnectionStore((s) => s.activeStatuses[connectionId]);
+  const productLabel = connection
+    ? DATABASE_TYPE_LABELS[connection.dbType]
+    : "Redis";
+  const mutationEnabled = connection
+    ? getDataSourceProfile(connection.dbType).capabilities.edit.editKeys
+    : true;
   const initialDatabase = useMemo(() => {
     const activeDb = status?.type === "connected" ? status.activeDb : undefined;
     const raw = activeDb ?? connection?.database ?? "0";
@@ -191,7 +199,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
               <SelectTrigger
                 size="xs"
                 className="h-6 max-w-28 rounded border-border bg-background px-1.5 text-3xs text-secondary-foreground"
-                aria-label="Redis database"
+                aria-label={`${productLabel} database`}
               >
                 <SelectValue />
               </SelectTrigger>
@@ -211,8 +219,8 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label="Refresh Redis keys"
-          title="Refresh Redis keys"
+          aria-label={`Refresh ${productLabel} keys`}
+          title={`Refresh ${productLabel} keys`}
           disabled={loadingCatalog || loadingKeys}
           onClick={() => {
             void loadCatalog();
@@ -231,7 +239,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
         <Search size={12} className="text-muted-foreground" aria-hidden />
         <input
           className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-          aria-label="Redis key pattern"
+          aria-label={`${productLabel} key pattern`}
           value={pattern}
           onChange={(event) => setPattern(event.target.value)}
           onKeyDown={(event) => {
@@ -262,7 +270,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div role="tree" aria-label="Redis keys" className="py-1">
+        <div role="tree" aria-label={`${productLabel} keys`} className="py-1">
           {keys.map((item) => (
             <button
               key={item.key}
@@ -334,6 +342,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
           loading={loadingValue}
           connectionId={connectionId}
           database={database}
+          mutationEnabled={mutationEnabled}
           onMutationSuccess={refreshAfterMutation}
         />
       </div>
@@ -377,12 +386,14 @@ function KvValuePreview({
   loading,
   connectionId,
   database,
+  mutationEnabled,
   onMutationSuccess,
 }: {
   value: KvValueEnvelope | null;
   loading: boolean;
   connectionId: string;
   database: number;
+  mutationEnabled: boolean;
   onMutationSuccess: (key: string) => Promise<void>;
 }) {
   if (loading) {
@@ -421,12 +432,14 @@ function KvValuePreview({
       <pre className="max-h-48 overflow-auto rounded border border-border bg-muted/40 p-2 text-3xs text-foreground">
         {renderValueText(value)}
       </pre>
-      <KvMutationPanel
-        value={value}
-        connectionId={connectionId}
-        database={database}
-        onMutationSuccess={onMutationSuccess}
-      />
+      {mutationEnabled && (
+        <KvMutationPanel
+          value={value}
+          connectionId={connectionId}
+          database={database}
+          onMutationSuccess={onMutationSuccess}
+        />
+      )}
     </div>
   );
 }

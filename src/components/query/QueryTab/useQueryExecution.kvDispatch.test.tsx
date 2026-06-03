@@ -64,6 +64,31 @@ function seedRedisTab(sql: string, database = "2") {
   return tab;
 }
 
+function seedValkeyTab(sql: string, database = "2") {
+  const tab = makeQueryTab({
+    id: "query-valkey",
+    connectionId: "conn-valkey",
+    paradigm: "kv",
+    queryLanguage: "redis-command",
+    sql,
+    database,
+  });
+  useWorkspaceStore.setState(
+    seedWorkspace([tab], tab.id, "conn-valkey", database),
+  );
+  useConnectionStore.setState({
+    connections: [
+      makeConn({
+        id: "conn-valkey",
+        dbType: "valkey",
+        paradigm: "kv",
+        database,
+      }),
+    ],
+  });
+  return tab;
+}
+
 describe("useQueryExecution — Redis command dispatch", () => {
   beforeEach(() => {
     executeKvCommandMock.mockReset();
@@ -115,6 +140,25 @@ describe("useQueryExecution — Redis command dispatch", () => {
     expect(updated.queryState).toEqual({
       status: "error",
       error: "Redis database must be an integer between 0 and 65535.",
+    });
+  });
+
+  it("blocks Valkey command query tabs before IPC dispatch", async () => {
+    const tab = seedValkeyTab("GET profile:1", "2");
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(executeKvCommandMock).not.toHaveBeenCalled();
+    const updated = getTestWorkspace("conn-valkey", "2").tabs[0];
+    if (!updated || updated.type !== "query") {
+      throw new Error("Expected Valkey query tab to stay active");
+    }
+    expect(updated.queryState).toEqual({
+      status: "error",
+      error: "Valkey command query is not supported yet.",
     });
   });
 });

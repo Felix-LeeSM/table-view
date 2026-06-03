@@ -378,6 +378,18 @@ export const REDIS_CAPABILITIES = capabilities({
   },
 });
 
+export const VALKEY_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+  catalog: {
+    browse: true,
+  },
+  paradigmSpecific: {
+    keyBrowser: true,
+  },
+});
+
 export const SEARCH_CAPABILITIES = capabilities();
 
 function profile(
@@ -487,7 +499,7 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "kv",
     ["keyValue", "streamRecords"],
     "kv-default",
-    UNSUPPORTED_CAPABILITIES,
+    VALKEY_CAPABILITIES,
   ),
   elasticsearch: profile(
     "elasticsearch",

@@ -7,6 +7,7 @@ export type BackendAdapterProfileId =
   | "duckdb"
   | "mongodb"
   | "redis"
+  | "valkey"
   | "declared-rdb"
   | "search-engine"
   | "marker";
@@ -18,6 +19,7 @@ export type BackendAdapterCapabilitySource =
   | "duckdb"
   | "mongodb"
   | "redis"
+  | "valkey"
   | "declared-rdb"
   | "search-engine"
   | "marker";
@@ -75,6 +77,7 @@ const BACKEND_ADAPTER_PROFILES = Object.freeze({
   duckdb: backendAdapterProfile("duckdb", "rdb", "duckdb"),
   mongodb: backendAdapterProfile("mongodb", "document", "mongodb"),
   redis: backendAdapterProfile("redis", "kv", "redis"),
+  valkey: backendAdapterProfile("valkey", "kv", "valkey"),
   declaredRdb: backendAdapterProfile("declared-rdb", "rdb", "declared-rdb"),
   searchEngine: backendAdapterProfile(
     "search-engine",
@@ -129,7 +132,7 @@ export const BACKEND_ADAPTER_BY_TYPE = Object.freeze({
   oracle: BACKEND_ADAPTER_PROFILES.declaredRdb,
   mongodb: BACKEND_ADAPTER_PROFILES.mongodb,
   redis: BACKEND_ADAPTER_PROFILES.redis,
-  valkey: BACKEND_ADAPTER_PROFILES.markerKv,
+  valkey: BACKEND_ADAPTER_PROFILES.valkey,
   elasticsearch: BACKEND_ADAPTER_PROFILES.searchEngine,
   opensearch: BACKEND_ADAPTER_PROFILES.searchEngine,
 }) satisfies Readonly<Record<DatabaseType, BackendAdapterProfile>>;

@@ -19,9 +19,9 @@ use crate::error::AppError;
 use crate::models::{ConnectionConfig, DatabaseType};
 
 use helpers::{
-    bounded_limit, connection_url, ensure_not_cancelled, redis_connection_error,
-    redis_database_error, require_confirm_key, validate_key, RedisConnection,
-    DEFAULT_REDIS_DATABASES,
+    bounded_limit, connection_url, connection_url_for, ensure_not_cancelled,
+    redis_connection_error, redis_database_error, require_confirm_key, validate_key,
+    RedisConnection, DEFAULT_REDIS_DATABASES,
 };
 use values::{
     read_database_count, read_hash, read_json, read_key_length, read_key_type,
@@ -29,8 +29,75 @@ use values::{
     read_zset, ttl_from_seconds,
 };
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum RedisProtocolProduct {
+    #[default]
+    Redis,
+    Valkey,
+}
+
+impl RedisProtocolProduct {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Redis => "Redis",
+            Self::Valkey => "Valkey",
+        }
+    }
+
+    fn kind(self) -> DatabaseType {
+        match self {
+            Self::Redis => DatabaseType::Redis,
+            Self::Valkey => DatabaseType::Valkey,
+        }
+    }
+
+    fn connection_url(self, config: &ConnectionConfig) -> Result<(String, u16), AppError> {
+        match self {
+            Self::Redis => connection_url(config),
+            Self::Valkey => connection_url_for(self.label(), config),
+        }
+    }
+
+    fn connection_error(self, err: ::redis::RedisError) -> AppError {
+        match self {
+            Self::Redis => redis_connection_error(err),
+            Self::Valkey => AppError::Connection(format!("Valkey connection failed: {err}")),
+        }
+    }
+
+    fn database_error(self, err: ::redis::RedisError) -> AppError {
+        match self {
+            Self::Redis => redis_database_error(err),
+            Self::Valkey => AppError::Database(format!("Valkey command failed: {err}")),
+        }
+    }
+
+    fn unsupported_key_type_message(self) -> String {
+        format!("Unsupported {} key type", self.label())
+    }
+
+    fn command_query_unsupported(self) -> Option<AppError> {
+        match self {
+            Self::Redis => None,
+            Self::Valkey => Some(AppError::Unsupported(
+                "Valkey command queries are not supported yet".into(),
+            )),
+        }
+    }
+
+    fn mutation_unsupported(self) -> Option<AppError> {
+        match self {
+            Self::Redis => None,
+            Self::Valkey => Some(AppError::Unsupported(
+                "Valkey key mutation is not supported yet".into(),
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct RedisAdapter {
+    product: RedisProtocolProduct,
     connection: Mutex<Option<RedisConnection>>,
     current_database: Mutex<u16>,
     database_count: Mutex<u16>,
@@ -38,7 +105,16 @@ pub struct RedisAdapter {
 
 impl RedisAdapter {
     pub fn new() -> Self {
+        Self::new_for(RedisProtocolProduct::Redis)
+    }
+
+    pub fn new_valkey() -> Self {
+        Self::new_for(RedisProtocolProduct::Valkey)
+    }
+
+    fn new_for(product: RedisProtocolProduct) -> Self {
         Self {
+            product,
             connection: Mutex::new(None),
             current_database: Mutex::new(0),
             database_count: Mutex::new(DEFAULT_REDIS_DATABASES),
@@ -46,16 +122,27 @@ impl RedisAdapter {
     }
 
     pub async fn test(config: &ConnectionConfig) -> Result<(), AppError> {
-        let (url, _) = connection_url(config)?;
-        let client = ::redis::Client::open(url).map_err(redis_connection_error)?;
+        Self::test_for(RedisProtocolProduct::Redis, config).await
+    }
+
+    pub async fn test_valkey(config: &ConnectionConfig) -> Result<(), AppError> {
+        Self::test_for(RedisProtocolProduct::Valkey, config).await
+    }
+
+    async fn test_for(
+        product: RedisProtocolProduct,
+        config: &ConnectionConfig,
+    ) -> Result<(), AppError> {
+        let (url, _) = product.connection_url(config)?;
+        let client = ::redis::Client::open(url).map_err(|err| product.connection_error(err))?;
         let mut connection = client
             .get_multiplexed_async_connection()
             .await
-            .map_err(redis_connection_error)?;
+            .map_err(|err| product.connection_error(err))?;
         let _: String = ::redis::cmd("PING")
             .query_async(&mut connection)
             .await
-            .map_err(redis_connection_error)?;
+            .map_err(|err| product.connection_error(err))?;
         Ok(())
     }
 
@@ -64,9 +151,9 @@ impl RedisAdapter {
         F: AsyncFnOnce(&mut RedisConnection) -> Result<T, AppError>,
     {
         let mut guard = self.connection.lock().await;
-        let connection = guard
-            .as_mut()
-            .ok_or_else(|| AppError::Connection("Redis connection is not open".into()))?;
+        let connection = guard.as_mut().ok_or_else(|| {
+            AppError::Connection(format!("{} connection is not open", self.product.label()))
+        })?;
         f(connection).await
     }
 
@@ -81,7 +168,7 @@ impl RedisAdapter {
                 .arg(target)
                 .query_async(connection)
                 .await
-                .map_err(redis_database_error)?;
+                .map_err(|err| self.product.database_error(err))?;
             Ok(())
         })
         .await?;
@@ -96,7 +183,7 @@ impl RedisAdapter {
                 .arg(key)
                 .query_async(connection)
                 .await
-                .map_err(redis_database_error)?;
+                .map_err(|err| self.product.database_error(err))?;
             let length = read_key_length(connection, key, key_type).await?;
             let memory_bytes = read_memory_usage(connection, key).await;
             Ok(KvKeyMetadata {
@@ -113,21 +200,22 @@ impl RedisAdapter {
 
 impl DbAdapter for RedisAdapter {
     fn kind(&self) -> DatabaseType {
-        DatabaseType::Redis
+        self.product.kind()
     }
 
     fn connect<'a>(&'a self, config: &'a ConnectionConfig) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move {
-            let (url, database) = connection_url(config)?;
-            let client = ::redis::Client::open(url).map_err(redis_connection_error)?;
+            let (url, database) = self.product.connection_url(config)?;
+            let client =
+                ::redis::Client::open(url).map_err(|err| self.product.connection_error(err))?;
             let mut connection = client
                 .get_multiplexed_async_connection()
                 .await
-                .map_err(redis_connection_error)?;
+                .map_err(|err| self.product.connection_error(err))?;
             let _: String = ::redis::cmd("PING")
                 .query_async(&mut connection)
                 .await
-                .map_err(redis_connection_error)?;
+                .map_err(|err| self.product.connection_error(err))?;
 
             *self.database_count.lock().await = read_database_count(&mut connection).await;
             *self.current_database.lock().await = database;
@@ -149,7 +237,7 @@ impl DbAdapter for RedisAdapter {
                 let _: String = ::redis::cmd("PING")
                     .query_async(connection)
                     .await
-                    .map_err(redis_connection_error)?;
+                    .map_err(|err| self.product.connection_error(err))?;
                 Ok(())
             })
             .await
@@ -207,7 +295,7 @@ impl KvAdapter for RedisAdapter {
                         .arg(limit)
                         .query_async(connection)
                         .await
-                        .map_err(redis_database_error)
+                        .map_err(|err| self.product.database_error(err))
                 })
                 .await?;
 
@@ -252,7 +340,7 @@ impl KvAdapter for RedisAdapter {
                 KvKeyType::Json => KvValue::Json(read_json(self, &request.key).await?),
                 KvKeyType::Unknown if metadata.ttl.state == KvTtlState::Missing => KvValue::Missing,
                 KvKeyType::Unknown => KvValue::Unsupported {
-                    message: "Unsupported Redis key type".into(),
+                    message: self.product.unsupported_key_type_message(),
                 },
             };
             Ok(KvValueEnvelope {
@@ -268,7 +356,12 @@ impl KvAdapter for RedisAdapter {
         request: crate::db::KvCommandRequest,
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
-        Box::pin(async move { command::execute_command(self, request, cancel).await })
+        Box::pin(async move {
+            if let Some(error) = self.product.command_query_unsupported() {
+                return Err(error);
+            }
+            command::execute_command(self, request, cancel).await
+        })
     }
 
     fn set_string<'a>(
@@ -276,6 +369,9 @@ impl KvAdapter for RedisAdapter {
         request: KvSetStringRequest,
     ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
         Box::pin(async move {
+            if let Some(error) = self.product.mutation_unsupported() {
+                return Err(error);
+            }
             validate_key(&request.key)?;
             let cmd = build_set_string_command(&request)?;
             self.ensure_database(request.database).await?;
@@ -285,7 +381,7 @@ impl KvAdapter for RedisAdapter {
                     let result: Option<String> = cmd
                         .query_async(connection)
                         .await
-                        .map_err(redis_database_error)?;
+                        .map_err(|err| self.product.database_error(err))?;
                     Ok(result.is_some())
                 })
                 .await?;
@@ -307,6 +403,9 @@ impl KvAdapter for RedisAdapter {
         request: KvDeleteRequest,
     ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
         Box::pin(async move {
+            if let Some(error) = self.product.mutation_unsupported() {
+                return Err(error);
+            }
             validate_key(&request.key)?;
             require_confirm_key(&request.key, &request.confirm_key)?;
             self.ensure_database(request.database).await?;
@@ -316,7 +415,7 @@ impl KvAdapter for RedisAdapter {
                         .arg(&request.key)
                         .query_async(connection)
                         .await
-                        .map_err(redis_database_error)?;
+                        .map_err(|err| self.product.database_error(err))?;
                     Ok(deleted > 0)
                 })
                 .await?;
@@ -333,6 +432,9 @@ impl KvAdapter for RedisAdapter {
         request: KvTtlUpdateRequest,
     ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
         Box::pin(async move {
+            if let Some(error) = self.product.mutation_unsupported() {
+                return Err(error);
+            }
             validate_key(&request.key)?;
             self.ensure_database(request.database).await?;
             let changed = match &request.update {

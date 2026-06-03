@@ -225,4 +225,35 @@ describe("adapter conformance matrix", () => {
       "edit.editKeys",
     ]);
   });
+
+  it("locks the Valkey read-only runtime claim to connection and key browsing", () => {
+    const valkey = ADAPTER_CONFORMANCE_MATRIX.valkey;
+
+    expect(valkey.level).toBe("runtime");
+    expect(valkey.areas.connection.checks).toEqual(["connection.test"]);
+    expect(valkey.areas.connection.deferred).toEqual([
+      "connection.switchDatabase",
+    ]);
+    expect(valkey.areas.connection.unsupported).toEqual([
+      "connection.readOnly",
+      "connection.filePicker",
+    ]);
+    expect(valkey.areas.catalog.checks).toEqual(["catalog.browse"]);
+    expect(valkey.areas.catalog.deferred).toEqual([
+      "catalog.schema",
+      "catalog.indexes",
+      "catalog.relationships",
+    ]);
+    expect(valkey.areas.query.checks).toEqual([]);
+    expect(valkey.areas.query.deferred).toEqual([
+      "query.query",
+      "query.cancel",
+      "query.explain",
+    ]);
+    expect(valkey.areas.edit.checks).toEqual([]);
+    expect(valkey.areas.edit.deferred).toEqual([
+      "edit.editKeys",
+      "edit.bulkWrite",
+    ]);
+  });
 });

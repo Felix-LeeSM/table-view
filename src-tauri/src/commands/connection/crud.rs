@@ -120,6 +120,9 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         DatabaseType::Redis => {
             RedisAdapter::test(&full).await?;
         }
+        DatabaseType::Valkey => {
+            RedisAdapter::test_valkey(&full).await?;
+        }
         DatabaseType::Elasticsearch | DatabaseType::Opensearch => {
             SearchEngineAdapter::test(&full).await?;
         }
@@ -592,6 +595,39 @@ mod tests {
                 }
                 other => panic!("Expected search Unsupported, got: {:?}", other),
             }
+        }
+
+        cleanup_test_env();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_test_connection_routes_valkey_to_valkey_adapter() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("v1", "Valkey1");
+        conn.db_type = DatabaseType::Valkey;
+        conn.port = 6379;
+        conn.host = "definitely-not-a-real-host.invalid".into();
+        conn.database = "0".into();
+        conn.password = String::new();
+        conn.user = String::new();
+
+        let req = TestConnectionRequest {
+            config: ConnectionConfigPublic::from(&conn),
+            password: Some(String::new()),
+            existing_id: None,
+        };
+        let result = test_connection(req).await;
+
+        match result {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Valkey connection failed"));
+            }
+            Err(AppError::Unsupported(msg)) => {
+                panic!("Valkey routing regressed — got Unsupported: {msg}");
+            }
+            other => panic!("Expected Valkey connection error, got: {:?}", other),
         }
 
         cleanup_test_env();

@@ -45,7 +45,14 @@ pub(super) fn redis_database_error(err: ::redis::RedisError) -> AppError {
 }
 
 pub(super) fn connection_url(config: &ConnectionConfig) -> Result<(String, u16), AppError> {
-    let database = parse_database_index(&config.database)?;
+    connection_url_for("Redis", config)
+}
+
+pub(super) fn connection_url_for(
+    product_label: &'static str,
+    config: &ConnectionConfig,
+) -> Result<(String, u16), AppError> {
+    let database = parse_database_index(product_label, &config.database)?;
     let scheme = if config.tls_enabled.unwrap_or(false) {
         "rediss"
     } else {
@@ -59,12 +66,14 @@ pub(super) fn connection_url(config: &ConnectionConfig) -> Result<(String, u16),
     ))
 }
 
-fn parse_database_index(raw: &str) -> Result<u16, AppError> {
+fn parse_database_index(product_label: &'static str, raw: &str) -> Result<u16, AppError> {
     if raw.trim().is_empty() {
         return Ok(0);
     }
     raw.trim().parse::<u16>().map_err(|_| {
-        AppError::Validation("Redis database must be a non-negative numeric index".into())
+        AppError::Validation(format!(
+            "{product_label} database must be a non-negative numeric index"
+        ))
     })
 }
 
