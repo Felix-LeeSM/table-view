@@ -102,7 +102,7 @@ describe("Redis smoke", () => {
       );
       await clickButton("Confirm Delete");
       await waitForWorkspaceTextAll(
-        ["No keys found."],
+        ["0 keys", "No keys match pattern tv:string.", "missing"],
         15000,
         "Redis delete mutation did not refresh key scan",
       );
