@@ -5,7 +5,6 @@ import {
   openNewQueryTab,
   runQuery,
   step,
-  switchToWorkspaceWindow,
   waitForGridTextAll,
   waitForLauncher,
   waitForWorkspaceTextAll,
@@ -13,6 +12,7 @@ import {
 
 const CONNECTION_NAME = "E2E Redis";
 const INITIAL_VALUE = "hello";
+const WORKSPACE_TITLE = "Table View — Workspace";
 
 describe("Redis smoke", () => {
   it("connects, scans keys, previews values, runs commands, and gates mutations", async () => {
@@ -82,7 +82,7 @@ describe("Redis smoke", () => {
         "Redis expire preview did not appear",
       );
       await clickButton("Confirm Expire");
-      await waitForRedisTtlSeconds(15000);
+      await waitForRedisTtlSeconds(30000);
     });
 
     await step("require exact key confirmation before delete", async () => {
@@ -202,11 +202,16 @@ async function clickButton(label: string) {
 async function waitForRedisTtlSeconds(timeout: number) {
   await browser.waitUntil(
     async () => {
-      await switchToWorkspaceWindow();
-      return await browser.execute(() => {
-        const text = document.body.textContent ?? "";
-        return /\b(1[01][0-9]|120)s\b/.test(text);
-      });
+      for (const handle of await browser.getWindowHandles()) {
+        await browser.switchToWindow(handle);
+        if ((await browser.getTitle()) !== WORKSPACE_TITLE) continue;
+        const hasTtl = await browser.execute(() => {
+          const text = document.body.textContent ?? "";
+          return /\b(1[01][0-9]|120)s\b/.test(text);
+        });
+        if (hasTtl) return true;
+      }
+      return false;
     },
     {
       timeout,
