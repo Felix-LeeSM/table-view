@@ -260,6 +260,34 @@ describe("createSqlHybridCompletionSource", () => {
     expect(legacySource).toHaveBeenCalledOnce();
   });
 
+  it("keeps legacy fallback when async WASM fails after a preloaded miss", async () => {
+    const legacySource = vi.fn<CompletionSource>().mockReturnValue({
+      from: 0,
+      options: [{ label: "SELECT", type: "keyword" }],
+    });
+    const completeWithPreloadedWasm = vi.fn().mockReturnValue(null);
+    const completeWithWasm = vi
+      .fn()
+      .mockRejectedValue(new Error("wasm unavailable"));
+
+    const source = createSqlHybridCompletionSource({
+      dialect: StandardSQL,
+      getNamespace: () => TEST_SCHEMA,
+      getCompletionContext: () => completionContext(),
+      completeWithPreloadedWasm,
+      completeWithWasm,
+      legacySources: [legacySource],
+    });
+
+    await expect(source(codeMirrorContext("SEL"))).resolves.toMatchObject({
+      from: 0,
+      options: [{ label: "SELECT", type: "keyword" }],
+    });
+    expect(completeWithPreloadedWasm).toHaveBeenCalledOnce();
+    expect(completeWithWasm).toHaveBeenCalledOnce();
+    expect(legacySource).toHaveBeenCalledOnce();
+  });
+
   it("filters psql meta commands out of SQL statement contexts", async () => {
     const wasmResult: CoreCompletionResult = {
       items: [
