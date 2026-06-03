@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -142,6 +143,51 @@ describe("KvSidebar", () => {
     });
   });
 
+  it("ignores stale key scans after catalog discovers a different Redis database", async () => {
+    const staleDb0Scan = deferred<ReturnType<typeof defaultKeyPage>>();
+    invokeMock.mockImplementation((command: string, payload?: unknown) => {
+      if (command === "list_kv_databases") {
+        return Promise.resolve([
+          { name: "0", index: 0, keyCount: 0 },
+          { name: "2", index: 2, keyCount: 1 },
+        ]);
+      }
+      if (command === "current_kv_database") return Promise.resolve(2);
+      if (command === "scan_kv_keys") {
+        const database = (payload as { request: { database: number } }).request
+          .database;
+        if (database === 0) return staleDb0Scan.promise;
+        return Promise.resolve({
+          ...defaultKeyPage(),
+          database: 2,
+          keys: [
+            {
+              key: "tv:string",
+              keyType: "string",
+              ttl: { state: "persistent" },
+              length: 5,
+              memoryBytes: 80,
+            },
+          ],
+        });
+      }
+      return Promise.reject(new Error(`Unhandled command: ${command}`));
+    });
+
+    render(<KvSidebar connectionId="redis-1" />);
+
+    expect(await screen.findByText("tv:string")).toBeInTheDocument();
+    expect(screen.getByTestId("redis-scan-status")).toHaveTextContent("1 key");
+
+    await act(async () => {
+      staleDb0Scan.resolve({ ...defaultKeyPage(), keys: [] });
+      await staleDb0Scan.promise;
+    });
+
+    expect(screen.getByText("tv:string")).toBeInTheDocument();
+    expect(screen.getByTestId("redis-scan-status")).toHaveTextContent("1 key");
+  });
+
   it("names the pattern when a filtered key scan returns empty", async () => {
     invokeMock.mockImplementation((command: string) => {
       if (command === "list_kv_databases") {
@@ -171,9 +217,11 @@ describe("KvSidebar", () => {
         limit: 100,
       });
     });
-    expect(screen.getByRole("status")).toHaveTextContent(
-      /no keys match pattern session:\*/i,
-    );
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        /no keys match pattern session:\*/i,
+      );
+    });
   });
 
   it("exposes SCAN cursor state and appends the next page without blocking the first page", async () => {
@@ -402,4 +450,14 @@ function scanRequests() {
   return invokeMock.mock.calls
     .filter(([command]) => command === "scan_kv_keys")
     .map(([, payload]) => (payload as { request: unknown }).request);
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }

@@ -11,7 +11,8 @@ export type DbType =
   | "mysql"
   | "mariadb"
   | "sqlite"
-  | "duckdb";
+  | "duckdb"
+  | "redis";
 export type ConnectionEnvironment =
   | "local"
   | "testing"
@@ -63,6 +64,8 @@ export async function switchToWorkspaceWindow(timeoutMs = 30000) {
   let lastError: unknown = null;
   while (Date.now() - start < timeoutMs) {
     try {
+      if ((await browser.getTitle()) === WORKSPACE_TITLE) return;
+
       const handles = await browser.getWindowHandles();
       for (const handle of handles) {
         await browser.switchToWindow(handle);
@@ -134,6 +137,7 @@ function dbTypeLabel(dbType: DbType): string {
   if (dbType === "mariadb") return "MariaDB";
   if (dbType === "sqlite") return "SQLite";
   if (dbType === "duckdb") return "DuckDB";
+  if (dbType === "redis") return "Redis";
   return "MongoDB";
 }
 
@@ -337,6 +341,30 @@ export async function createMongoConnection(name = "E2E MongoDB") {
   await expectConnectionVisible(name);
 }
 
+export async function createRedisConnection(name = "E2E Redis") {
+  const dialog = await openNewConnectionDialog();
+  await selectDatabaseType("redis");
+
+  await setInput("#conn-name", name);
+  await setInput("#conn-host", process.env.E2E_REDIS_HOST ?? "localhost");
+  await setInput(
+    "#conn-port",
+    process.env.E2E_REDIS_PORT ?? process.env.REDIS_PORT ?? "6379",
+  );
+  const user = process.env.REDIS_USER ?? "";
+  if (user) {
+    await setInput("#conn-user", user);
+  }
+  const password = process.env.REDIS_PASSWORD ?? "";
+  if (password) {
+    await setInput("#conn-password", password);
+  }
+  await setInput("#conn-database", process.env.E2E_REDIS_DB ?? "2");
+
+  await saveConnectionDialog(dialog);
+  await expectConnectionVisible(name);
+}
+
 async function setInput(selector: string, value: string) {
   const input = await $(selector);
   await input.waitForDisplayed({ timeout: 5000 });
@@ -482,18 +510,20 @@ export async function waitForWorkspaceTextAll(
   timeout: number,
   timeoutMsg: string,
 ) {
-  await switchToWorkspaceWindow();
+  const needles = snippets.map((snippet) => snippet.toLowerCase());
   await browser.waitUntil(
     async () => {
-      const text = await browser.execute(
-        () => document.body.textContent?.toLowerCase() ?? "",
-      );
-      return snippets.every((snippet) => text.includes(snippet.toLowerCase()));
+      for (const handle of await browser.getWindowHandles()) {
+        await browser.switchToWindow(handle);
+        if ((await browser.getTitle()) !== WORKSPACE_TITLE) continue;
+        const text = await browser.execute(
+          () => document.body.textContent?.toLowerCase() ?? "",
+        );
+        if (needles.every((needle) => text.includes(needle))) return true;
+      }
+      return false;
     },
-    {
-      timeout,
-      timeoutMsg,
-    },
+    { timeout, timeoutMsg },
   );
 }
 
