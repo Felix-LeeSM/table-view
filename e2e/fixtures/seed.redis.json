@@ -14,7 +14,7 @@
       "command": "SET",
       "key": "tv:string",
       "value": "hello",
-      "ttlSeconds": 60
+      "ttlSeconds": 3600
     },
     {
       "command": "HSET",
