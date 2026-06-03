@@ -55,6 +55,16 @@ jobs:
         with:
           toolchain: 1.91.0
 
+      - name: Cache Rust dependencies and build output
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-workspace-crates: false
+          cache-bin: false
+          cache-on-failure: true
+          shared-key: e2e-smoke-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Build E2E smoke binary
         env:
           E2E_BUILD_ONLY: "1"

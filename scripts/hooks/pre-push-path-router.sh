@@ -176,6 +176,17 @@ is_workflow_path() {
 	esac
 }
 
+is_ci_workflow_path() {
+	case "$1" in
+	.github/workflows/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
 is_frontend_path() {
 	case "$1" in
 	src/* | src/**/* | e2e/* | e2e/**/* | tests/* | tests/**/* | public/* | public/**/* | index.html)
@@ -307,6 +318,10 @@ run_hook_gates() {
 	run_step "pre-push-router-tests" bash scripts/hooks/test-pre-push-path-router.sh
 }
 
+run_ci_workflow_gates() {
+	run_step "e2e-smoke-workflow-cache" bash scripts/hooks/test-e2e-smoke-workflow.sh
+}
+
 run_frontend_and_rust_gates() {
 	if [ "$needs_frontend" = "1" ] && [ "$needs_rust" = "1" ]; then
 		if [ "$PARALLEL_GATES" != "1" ]; then
@@ -373,6 +388,7 @@ docs_only=1
 needs_frontend=0
 needs_rust=0
 needs_hook=0
+needs_ci_workflow=0
 needs_full=0
 
 while read -r path; do
@@ -390,6 +406,9 @@ while read -r path; do
 	if is_workflow_path "$path"; then
 		docs_only=0
 		needs_full=1
+	fi
+	if is_ci_workflow_path "$path"; then
+		needs_ci_workflow=1
 	fi
 	if is_frontend_path "$path"; then
 		needs_frontend=1
@@ -424,6 +443,9 @@ else
 
 	if [ "$needs_hook" = "1" ]; then
 		run_hook_gates
+	fi
+	if [ "$needs_ci_workflow" = "1" ]; then
+		run_ci_workflow_gates
 	fi
 	run_frontend_and_rust_gates
 fi
