@@ -35,12 +35,20 @@ export E2E_REDIS_DB="${E2E_REDIS_DB:-2}"
 export REDIS_PASSWORD="${REDIS_PASSWORD:-}"
 
 REPORT_DIR="$ROOT_DIR/e2e/wdio-report"
+SPEC_TO_RUN="${E2E_SPEC:-}"
+if [[ -n "$SPEC_TO_RUN" ]]; then
+  REPORT_DIR="${E2E_REPORT_DIR:-$ROOT_DIR/e2e/wdio-report/${E2E_SPEC_KEY:-single-spec}}"
+else
+  REPORT_DIR="${E2E_REPORT_DIR:-$ROOT_DIR/e2e/wdio-report}"
+fi
 mkdir -p "$REPORT_DIR"
 find "$REPORT_DIR" -type f ! -name .gitkeep -delete
 
-pnpm tsx scripts/e2e-pre-smoke-release-gate.ts
-pnpm tsx e2e/fixtures/seed-smoke.ts
-pnpm tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
+if [[ "${E2E_SKIP_PREPARE:-0}" != "1" ]]; then
+  pnpm tsx scripts/e2e-pre-smoke-release-gate.ts
+  pnpm tsx e2e/fixtures/seed-smoke.ts
+  pnpm tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
+fi
 
 BASE_DATA_DIR="${TABLE_VIEW_TEST_DATA_DIR:-${RUNNER_TEMP:-/tmp}/table-view-smoke}"
 rm -rf "$BASE_DATA_DIR"
@@ -57,14 +65,20 @@ run_wdio() {
   fi
 }
 
-run_wdio "$BASE_DATA_DIR/postgres" "e2e/smoke/postgres.spec.ts"
-run_wdio "$BASE_DATA_DIR/postgres-safe-mode" "e2e/smoke/postgres-safe-mode.spec.ts"
-run_wdio "$BASE_DATA_DIR/postgres-explain" "e2e/smoke/postgres-explain.spec.ts"
-run_wdio "$BASE_DATA_DIR/postgres-extension-completion" "e2e/smoke/postgres-extension-completion.spec.ts"
-run_wdio "$BASE_DATA_DIR/postgres-cancellation" "e2e/smoke/postgres-cancellation.spec.ts"
-run_wdio "$BASE_DATA_DIR/mysql" "e2e/smoke/mysql.spec.ts"
-run_wdio "$BASE_DATA_DIR/mariadb" "e2e/smoke/mariadb.spec.ts"
-run_wdio "$BASE_DATA_DIR/sqlite" "e2e/smoke/sqlite.spec.ts"
-run_wdio "$BASE_DATA_DIR/duckdb" "e2e/smoke/duckdb.spec.ts"
-run_wdio "$BASE_DATA_DIR/mongodb" "e2e/smoke/mongodb.spec.ts"
+if [[ -n "$SPEC_TO_RUN" ]]; then
+  SAFE_SPEC_NAME="${E2E_SPEC_KEY:-$(basename "$SPEC_TO_RUN" .spec.ts)}"
+  SAFE_SPEC_NAME="$(printf '%s' "$SAFE_SPEC_NAME" | tr '/ ' '-' )"
+  run_wdio "$BASE_DATA_DIR/$SAFE_SPEC_NAME" "$SPEC_TO_RUN"
+else
+  run_wdio "$BASE_DATA_DIR/postgres" "e2e/smoke/postgres.spec.ts"
+  run_wdio "$BASE_DATA_DIR/postgres-safe-mode" "e2e/smoke/postgres-safe-mode.spec.ts"
+  run_wdio "$BASE_DATA_DIR/postgres-explain" "e2e/smoke/postgres-explain.spec.ts"
+  run_wdio "$BASE_DATA_DIR/postgres-extension-completion" "e2e/smoke/postgres-extension-completion.spec.ts"
+  run_wdio "$BASE_DATA_DIR/postgres-cancellation" "e2e/smoke/postgres-cancellation.spec.ts"
+  run_wdio "$BASE_DATA_DIR/mysql" "e2e/smoke/mysql.spec.ts"
+  run_wdio "$BASE_DATA_DIR/mariadb" "e2e/smoke/mariadb.spec.ts"
+  run_wdio "$BASE_DATA_DIR/sqlite" "e2e/smoke/sqlite.spec.ts"
+  run_wdio "$BASE_DATA_DIR/duckdb" "e2e/smoke/duckdb.spec.ts"
+  run_wdio "$BASE_DATA_DIR/mongodb" "e2e/smoke/mongodb.spec.ts"
+fi
 run_wdio "$BASE_DATA_DIR/redis" "e2e/smoke/redis.spec.ts"

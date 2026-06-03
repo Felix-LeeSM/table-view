@@ -1,0 +1,44 @@
+name: Prune GitHub Caches
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: "Run in dry-run mode"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      maxAgeDays:
+        description: "Delete caches not accessed for at least this many days"
+        required: false
+        default: "30"
+        type: string
+      minSizeGb:
+        description: "Delete only caches larger than this size in GiB"
+        required: false
+        default: "1"
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  prune:
+    name: Remove stale caches
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Run cache prune script
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRUNE_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dryRun || 'false' }}
+          PRUNE_MAX_AGE_DAYS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.maxAgeDays || '30' }}
+          PRUNE_MIN_SIZE_GB: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.minSizeGb || '1' }}
+        run: |
+          bash scripts/prune-gh-caches.sh
