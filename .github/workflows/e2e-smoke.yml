@@ -15,10 +15,91 @@ env:
   TAURI_DRIVER_VERSION: "2.0.6"
 
 jobs:
-  e2e-smoke:
-    name: Runtime Happy Path
+  e2e-smoke-prepare:
+    name: Prepare E2E runtime artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            webkit2gtk-driver \
+            xvfb
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+
+      - name: Build E2E smoke binary
+        env:
+          E2E_BUILD_ONLY: "1"
+        run: bash scripts/e2e-smoke-ci.sh
+
+      - name: Upload tauri binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-tauri-binary
+          path: src-tauri/target/debug/table-view
+          if-no-files-found: error
+
+  e2e-smoke:
+    name: Runtime Happy Path (${{ matrix.spec_key }}, ${{ matrix.spec }})
+    needs: e2e-smoke-prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include:
+          - spec_key: postgres
+            spec: e2e/smoke/postgres.spec.ts
+          - spec_key: postgres-safe-mode
+            spec: e2e/smoke/postgres-safe-mode.spec.ts
+          - spec_key: postgres-explain
+            spec: e2e/smoke/postgres-explain.spec.ts
+          - spec_key: postgres-extension-completion
+            spec: e2e/smoke/postgres-extension-completion.spec.ts
+          - spec_key: postgres-cancellation
+            spec: e2e/smoke/postgres-cancellation.spec.ts
+          - spec_key: mysql
+            spec: e2e/smoke/mysql.spec.ts
+          - spec_key: mariadb
+            spec: e2e/smoke/mariadb.spec.ts
+          - spec_key: sqlite
+            spec: e2e/smoke/sqlite.spec.ts
+          - spec_key: duckdb
+            spec: e2e/smoke/duckdb.spec.ts
+          - spec_key: mongodb
+            spec: e2e/smoke/mongodb.spec.ts
+          - spec_key: redis
+            spec: e2e/smoke/redis.spec.ts
 
     services:
       postgres:
@@ -116,20 +197,19 @@ jobs:
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Restore tauri binary
+        uses: actions/download-artifact@v5
+        with:
+          name: e2e-smoke-tauri-binary
+          path: src-tauri/target/debug
+
+      - name: Make tauri binary executable
+        run: chmod +x src-tauri/target/debug/table-view
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.91.0
-
-      - name: Cache Rust dependencies and build output
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-          cache-workspace-crates: false
-          cache-bin: false
-          cache-on-failure: true
-          shared-key: e2e-smoke-linux
-          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Cache tauri-driver binary
         id: cache-tauri-driver
@@ -168,12 +248,32 @@ jobs:
           E2E_REDIS_HOST: localhost
           E2E_REDIS_PORT: 6379
           E2E_REDIS_DB: 2
+          E2E_SKIP_BUILD: "1"
+          E2E_SPEC: ${{ matrix.spec }}
+          E2E_SPEC_KEY: ${{ matrix.spec_key }}
+          E2E_REPORT_DIR: e2e/wdio-report/${{ matrix.spec_key }}
         run: bash scripts/e2e-smoke-ci.sh
 
       - name: Upload E2E artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-smoke-artifacts
-          path: e2e/wdio-report/
+          name: e2e-smoke-artifacts-${{ matrix.spec_key }}
+          path: e2e/wdio-report
           if-no-files-found: ignore
+
+  e2e-smoke-required:
+    name: Runtime Happy Path
+    needs: e2e-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+
+    steps:
+      - name: Require runtime matrix success
+        run: |
+          if [ "${{ needs.e2e-smoke.result }}" != "success" ]; then
+            echo "Runtime matrix result: ${{ needs.e2e-smoke.result }}"
+            exit 1
+          fi
+          echo "Runtime matrix passed."

@@ -87,7 +87,8 @@ fi
 # Pattern IDs (block 메시지 dispatch key):
 #   rm_destructive / sql_drop / sql_truncate / git_push_force / git_reset_hard
 #   / git_remote_ref_mutation / base64_shell_pipe / eval_cmd_subst / no_verify
-#   / no_gpg_sign / gpgsign_false / gpgsign_env_key / lefthook_env_zero
+#   / no_gpg_sign / gpgsign_false / gpgsign_env_key / githooks_path_override
+#   / git_config_set_hooks_path / githooks_path_env_key / lefthook_env_zero
 #   / lefthook_skip / husky_zero / dd_if / mkfs / dev_write
 DANGEROUS_PATTERNS=(
   'rm_destructive::(^|[^a-zA-Z0-9_])rm[[:space:]]+-[rRfF]*[rR][rRfF]*[[:space:]]+(/|~|\*|\.|src|node_modules|target)([[:space:]/]|$)'
@@ -99,10 +100,13 @@ DANGEROUS_PATTERNS=(
   'git_reset_hard::(^|[^a-zA-Z0-9_])git[[:space:]]+reset[[:space:]]+--hard'
   'git_pull::(^|[^a-zA-Z0-9_])git[[:space:]]+pull([^a-zA-Z0-9_]|$)'
   'git_remote_ref_mutation::(^|[^a-zA-Z0-9_])git[[:space:]]+(reset|checkout)[[:space:]]+(FETCH_HEAD|ORIG_HEAD|@\{u\}|origin/[^[:space:];&|]+|upstream/[^[:space:];&|]+|refs/remotes/[^[:space:];&|]+)([^a-zA-Z0-9_]|$)'
+  'githooks_path_override::(^|[^a-zA-Z0-9_])git[[:space:]].*-c[[:space:]]+core[.]hooksPath[[:space:]]*='
+  'git_config_set_hooks_path::(^|[^a-zA-Z0-9_])git[[:space:]]+config[[:space:]]+(-[a-zA-Z0-9-]+([[:space:]]+|=)[[:space:]]*)*core[.]hooksPath[[:space:]]+[^-[:space:];&|][^[:space:];&|]*'
   'no_verify::--no-verify([^a-zA-Z0-9_]|$)'
   'no_gpg_sign::--no-gpg-sign([^a-zA-Z0-9_]|$)'
   'gpgsign_false::commit[.]gpgsign([[:space:]]*=[[:space:]]*|[[:space:]]+)false([^a-zA-Z0-9_]|$)'
   'gpgsign_env_key::GIT_CONFIG_KEY_[0-9]+=commit[.]gpgsign'
+  'githooks_path_env_key::GIT_CONFIG_KEY_[0-9]+=core[.]hooksPath'
   'lefthook_env_zero::(^|[^a-zA-Z0-9_])LEFTHOOK=0([^a-zA-Z0-9_]|$)'
   'lefthook_skip::(^|[^a-zA-Z0-9_])LEFTHOOK_SKIP='
   'husky_zero::(^|[^a-zA-Z0-9_])HUSKY=0([^a-zA-Z0-9_]|$)'
@@ -325,6 +329,22 @@ Allowed read-only inspection examples:
 자세히: $MEMORY_POINTER (Push reject 절 + hook 회피 금지)
 EOF
       ;;
+    githooks_path_override | git_config_set_hooks_path | githooks_path_env_key)
+      cat >&2 <<EOF
+Git hooks 경로를 임시/영속적으로 바꾸는 명령은 hook 우회 우려가 큽니다.
+허용: git config core.hooksPath .githooks (setup.sh 완료 상태).
+
+차단된 형태:
+  - git -c core.hooksPath=...
+  - git config --global/--local core.hooksPath ...
+  - GIT_CONFIG_KEY_*=core.hooksPath ...
+
+복구:
+  - bash scripts/setup.sh
+
+자세히: $MEMORY_POINTER
+EOF
+      ;;
     git_reset_hard)
       # Sprint 400 — target argument 별 case dispatch.
       # 마지막 토큰 = `git reset --hard <target>` 의 <target>. 토큰 형식별로
@@ -510,16 +530,22 @@ check_git_hooks() {
   # `lefthook install` 이 불필요 — .githooks/ 는 working tree 의 tracked
   # 파일이라 모든 worktree 가 같은 wrapper 를 자동 공유.
   local hooks_dir
+  local repo_root
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -z "$repo_root" ]; then
+    block "Unable to resolve git repository root. Run command from a git repository."
+  fi
+
   hooks_dir="$(git config --get core.hooksPath 2>/dev/null || true)"
   if [ -z "$hooks_dir" ]; then
-    hooks_dir="$(git rev-parse --git-dir 2>/dev/null)/hooks"
-  elif [ "${hooks_dir#/}" = "$hooks_dir" ]; then
-    # 상대 경로 — repo root 기준으로 resolve.
-    local repo_root
-    repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-    if [ -n "$repo_root" ]; then
-      hooks_dir="$repo_root/$hooks_dir"
-    fi
+    block "Blocked: core.hooksPath is unset (default .git/hooks). This repo requires core.hooksPath=.githooks. Run 'bash scripts/setup.sh'."
+  fi
+  if [ "${hooks_dir#/}" = "$hooks_dir" ]; then
+    hooks_dir="$repo_root/$hooks_dir"
+  fi
+
+  if [ "$hooks_dir" != "$repo_root/.githooks" ]; then
+    block "Blocked: core.hooksPath is '$hooks_dir'. Must be '$repo_root/.githooks'. Run 'bash scripts/setup.sh'."
   fi
 
   if echo "$CMD" | grep -qi -e "git commit"; then

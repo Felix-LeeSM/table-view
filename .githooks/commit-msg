@@ -13,6 +13,13 @@ if [ -d "$HOME/.local/share/mise/shims" ]; then
   export PATH
 fi
 
+VERIFY_HOOK_PATH="$(cd "$(dirname "$0")/../scripts/hooks" && pwd)/verify-git-hooks-path.sh"
+if [ ! -x "$VERIFY_HOOK_PATH" ]; then
+  echo "ERROR: 훅 경로 검증 스크립트가 없습니다: $VERIFY_HOOK_PATH" >&2
+  exit 1
+fi
+"$VERIFY_HOOK_PATH"
+
 if ! command -v lefthook >/dev/null 2>&1; then
   echo "ERROR: lefthook 이 PATH 에 없습니다." >&2
   echo "       먼저 'bash scripts/setup.sh' 를 실행하세요." >&2
