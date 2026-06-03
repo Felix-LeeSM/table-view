@@ -29,6 +29,11 @@ export MARIADB_USER="${MARIADB_USER:-testuser}"
 export MARIADB_PASSWORD="${MARIADB_PASSWORD:-testpass}"
 export MARIADB_DATABASE="${MARIADB_DATABASE:-table_view_test}"
 
+export E2E_REDIS_HOST="${E2E_REDIS_HOST:-${REDIS_HOST:-localhost}}"
+export E2E_REDIS_PORT="${E2E_REDIS_PORT:-${REDIS_PORT:-6379}}"
+export E2E_REDIS_DB="${E2E_REDIS_DB:-2}"
+export REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+
 REPORT_DIR="$ROOT_DIR/e2e/wdio-report"
 mkdir -p "$REPORT_DIR"
 find "$REPORT_DIR" -type f ! -name .gitkeep -delete
@@ -62,3 +67,4 @@ run_wdio "$BASE_DATA_DIR/mariadb" "e2e/smoke/mariadb.spec.ts"
 run_wdio "$BASE_DATA_DIR/sqlite" "e2e/smoke/sqlite.spec.ts"
 run_wdio "$BASE_DATA_DIR/duckdb" "e2e/smoke/duckdb.spec.ts"
 run_wdio "$BASE_DATA_DIR/mongodb" "e2e/smoke/mongodb.spec.ts"
+run_wdio "$BASE_DATA_DIR/redis" "e2e/smoke/redis.spec.ts"

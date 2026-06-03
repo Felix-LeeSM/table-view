@@ -76,6 +76,15 @@ jobs:
           --health-timeout 5s
           --health-retries 20
           --health-start-period 10s
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
     steps:
       - name: Checkout
@@ -156,6 +165,9 @@ jobs:
           MARIADB_USER: testuser
           MARIADB_PASSWORD: testpass
           MARIADB_DATABASE: table_view_test
+          E2E_REDIS_HOST: localhost
+          E2E_REDIS_PORT: 6379
+          E2E_REDIS_DB: 2
         run: bash scripts/e2e-smoke-ci.sh
 
       - name: Upload E2E artifacts
