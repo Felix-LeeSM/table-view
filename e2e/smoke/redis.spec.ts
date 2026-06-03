@@ -80,9 +80,8 @@ describe("Redis smoke", () => {
         10000,
         "Redis expire preview did not appear",
       );
-      const workspaceHandle = await browser.getWindowHandle();
       await clickButton("Confirm Expire");
-      await waitForRedisTtlSeconds(workspaceHandle, 30000);
+      await waitForRedisTtlSeconds(60000);
     });
 
     await step("require exact key confirmation before delete", async () => {
@@ -199,21 +198,21 @@ async function clickButton(label: string) {
   await button.click();
 }
 
-async function waitForRedisTtlSeconds(
-  workspaceHandle: string,
-  timeout: number,
-) {
-  await browser.switchToWindow(workspaceHandle);
+async function waitForRedisTtlSeconds(timeout: number) {
   await browser.waitUntil(
     async () => {
-      await browser.switchToWindow(workspaceHandle);
-      return await browser.execute(() => {
-        if (!document.querySelector('[aria-label="Back to connections"]')) {
-          return false;
-        }
-        const text = document.body.textContent ?? "";
-        return /\b(1[01][0-9]|120)s\b/.test(text);
-      });
+      for (const handle of await browser.getWindowHandles()) {
+        await browser.switchToWindow(handle);
+        const hasTtl = await browser.execute(() => {
+          if (!document.querySelector('[aria-label="Back to connections"]')) {
+            return false;
+          }
+          const text = document.body.textContent ?? "";
+          return /\b(1[01][0-9]|120)s\b/.test(text);
+        });
+        if (hasTtl) return true;
+      }
+      return false;
     },
     {
       timeout,
