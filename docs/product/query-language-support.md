@@ -264,11 +264,12 @@ are:
   tabular projection evidence; unsupported command families fail clearly. The
   value panel is limited to bounded string/hash/list/set/zset edits plus
   expire/persist/delete preview/confirm controls. The shipped Redis command
-  editor only adds bounded allowlist command vocabulary with arity hints and
-  snippets, so this is not full Redis CLI/admin parity, language-core parser
-  ownership, catalog-aware key completion, broader command coverage, stream
-  consumer UI, cluster/pubsub/modules/consumer-group management, multi-key
-  destructive command support, or Valkey support claim.
+  editor adds bounded allowlist command vocabulary with arity hints/snippets and
+  current-DB/type-filtered key suggestions. This is not full Redis CLI/admin
+  parity, language-core parser ownership, broader Redis completion ownership,
+  broader command coverage, stream consumer UI, cluster/pubsub/modules/
+  consumer-group management, multi-key destructive command support, or Valkey
+  support claim.
 - MongoDB support is limited to the tested whitelist. Arbitrary JavaScript,
   shell helpers, multiple statements, and cross-db shell navigation are
   intentionally unsupported and are not suggested as supported completions.
@@ -282,12 +283,12 @@ are:
   `commitTransaction`, `abortTransaction`) fail at parse time with an explicit
   standalone-deployment unsupported message rather than attempting partial
   transaction emulation.
-- Redis has backend KV primitives, key browser/value preview UI, and a static
-  fixture inventory, but fixture inventory is contract evidence only and does
-  not become live runtime or E2E smoke support. Redis command completion is a
-  TypeScript allowlist vocabulary surface only, not language-core parser
-  ownership or catalog-aware key completion. Valkey has no active
-  profile/runtime evidence.
+- Redis has backend KV primitives, key browser/value preview/edit UI, bounded
+  command dispatch/completion, current-DB/type-filtered key suggestions, and a
+  wired representative Runtime Happy Path smoke. Fixture inventory is runtime
+  evidence only for paths wired into that smoke. Redis completion remains a
+  TypeScript allowlist/key-suggestion surface, not language-core parser or full
+  Redis completion ownership. Valkey has no active profile/runtime evidence.
 - Search DSL is fixture-backed for Elasticsearch/OpenSearch result rendering and
   adapter contracts only. Live HTTP Search support waits for explicit
   connection/auth/TLS, catalog/search execution, admin, observability, and
