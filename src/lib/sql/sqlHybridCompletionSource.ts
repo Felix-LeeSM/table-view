@@ -63,13 +63,7 @@ export function createSqlHybridCompletionSource({
       return completeWithLegacySources(legacySources, context);
     }
 
-    if (coreResult.items.length === 0) {
-      return completeWithLegacySources(legacySources, context);
-    }
     const visibleCoreResult = filterShellMetaCommands(coreResult, request);
-    if (visibleCoreResult.items.length === 0) {
-      return completeWithLegacySources(legacySources, context);
-    }
     return coreResultToCodeMirror(visibleCoreResult);
   };
 }

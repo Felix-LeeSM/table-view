@@ -158,7 +158,7 @@ describe("createSqlHybridCompletionSource", () => {
     expect(validFor.test("`UserAccounts`")).toBe(true);
   });
 
-  it("falls back to legacy TypeScript sources when WASM has no candidates", async () => {
+  it("returns an empty completion result when WASM has no candidates", async () => {
     const emptyWasmResult: CoreCompletionResult = {
       items: [],
       replaceRange: {
@@ -191,8 +191,100 @@ describe("createSqlHybridCompletionSource", () => {
       source(codeMirrorContext("SELECT * FROM ")),
     ).resolves.toMatchObject({
       from: 14,
-      options: [{ label: "users", type: "type" }],
+      to: 14,
+      options: [],
     });
+    expect(legacySource).not.toHaveBeenCalled();
+  });
+
+  it("treats preloaded empty WASM output as authoritative", async () => {
+    const emptyWasmResult: CoreCompletionResult = {
+      items: [],
+      replaceRange: {
+        from: { utf16: 0, utf8: 0 },
+        to: { utf16: 3, utf8: 3 },
+      },
+      incomplete: false,
+      metadata: {
+        engine: "wasm",
+        dialect: "postgresql",
+        shell: "psql",
+        catalogRevision: "rev-1",
+      },
+    };
+    const legacySource = vi.fn<CompletionSource>().mockReturnValue({
+      from: 0,
+      options: [{ label: "SELECT", type: "keyword" }],
+    });
+    const completeWithWasm = vi.fn();
+
+    const source = createSqlHybridCompletionSource({
+      dialect: StandardSQL,
+      getNamespace: () => TEST_SCHEMA,
+      getCompletionContext: () => completionContext(),
+      completeWithPreloadedWasm: vi.fn().mockReturnValue(emptyWasmResult),
+      completeWithWasm,
+      legacySources: [legacySource],
+    });
+
+    await expect(source(codeMirrorContext("SEL"))).resolves.toMatchObject({
+      from: 0,
+      to: 3,
+      options: [],
+    });
+    expect(completeWithWasm).not.toHaveBeenCalled();
+    expect(legacySource).not.toHaveBeenCalled();
+  });
+
+  it("keeps legacy fallback when WASM fails before returning a result", async () => {
+    const legacySource = vi.fn<CompletionSource>().mockReturnValue({
+      from: 0,
+      options: [{ label: "SELECT", type: "keyword" }],
+    });
+
+    const source = createSqlHybridCompletionSource({
+      dialect: StandardSQL,
+      getNamespace: () => TEST_SCHEMA,
+      getCompletionContext: () => completionContext(),
+      completeWithPreloadedWasm: vi.fn(() => {
+        throw new Error("wasm unavailable");
+      }),
+      completeWithWasm: vi.fn(),
+      legacySources: [legacySource],
+    });
+
+    await expect(source(codeMirrorContext("SEL"))).resolves.toMatchObject({
+      from: 0,
+      options: [{ label: "SELECT", type: "keyword" }],
+    });
+    expect(legacySource).toHaveBeenCalledOnce();
+  });
+
+  it("keeps legacy fallback when async WASM fails after a preloaded miss", async () => {
+    const legacySource = vi.fn<CompletionSource>().mockReturnValue({
+      from: 0,
+      options: [{ label: "SELECT", type: "keyword" }],
+    });
+    const completeWithPreloadedWasm = vi.fn().mockReturnValue(null);
+    const completeWithWasm = vi
+      .fn()
+      .mockRejectedValue(new Error("wasm unavailable"));
+
+    const source = createSqlHybridCompletionSource({
+      dialect: StandardSQL,
+      getNamespace: () => TEST_SCHEMA,
+      getCompletionContext: () => completionContext(),
+      completeWithPreloadedWasm,
+      completeWithWasm,
+      legacySources: [legacySource],
+    });
+
+    await expect(source(codeMirrorContext("SEL"))).resolves.toMatchObject({
+      from: 0,
+      options: [{ label: "SELECT", type: "keyword" }],
+    });
+    expect(completeWithPreloadedWasm).toHaveBeenCalledOnce();
+    expect(completeWithWasm).toHaveBeenCalledOnce();
     expect(legacySource).toHaveBeenCalledOnce();
   });
 
@@ -227,7 +319,7 @@ describe("createSqlHybridCompletionSource", () => {
     expect(result?.options.map((option) => option.label)).toEqual(["COUNT"]);
   });
 
-  it("falls back to legacy sources only when filtering leaves no core candidates", async () => {
+  it("returns empty SQL statement completions when filtering leaves no core candidates", async () => {
     const wasmResult: CoreCompletionResult = {
       items: [{ label: "\\dt", kind: "meta-command", apply: "\\dt" }],
       replaceRange: {
@@ -260,9 +352,10 @@ describe("createSqlHybridCompletionSource", () => {
       source(codeMirrorContext("SELECT * FROM ")),
     ).resolves.toMatchObject({
       from: 14,
-      options: [{ label: "users", type: "type" }],
+      to: 14,
+      options: [],
     });
-    expect(legacySource).toHaveBeenCalledOnce();
+    expect(legacySource).not.toHaveBeenCalled();
   });
 
   it("uses filtered core relation candidates when a legacy source is available", async () => {
