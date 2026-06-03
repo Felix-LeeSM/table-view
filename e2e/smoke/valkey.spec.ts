@@ -6,7 +6,7 @@ import {
   openNewQueryTab,
   runQuery,
   step,
-  waitForGridTextAll,
+  switchToWorkspaceWindow,
   waitForLauncher,
   waitForWorkspaceTextAll,
 } from "./_helpers";
@@ -49,7 +49,7 @@ describe("Valkey smoke", () => {
         await openNewQueryTab();
         await setCodeMirrorText("GET vk:string");
         await runQuery();
-        await waitForGridTextAll(
+        await waitForValkeyGridTextAll(
           [INITIAL_VALUE],
           15000,
           "Valkey GET command did not render the seeded string value",
@@ -57,7 +57,7 @@ describe("Valkey smoke", () => {
 
         await setCodeMirrorText("HGETALL vk:hash");
         await runQuery();
-        await waitForGridTextAll(
+        await waitForValkeyGridTextAll(
           ["name", "Ada", "role", "engineer"],
           15000,
           "Valkey HGETALL command did not render hash projection",
@@ -65,7 +65,7 @@ describe("Valkey smoke", () => {
 
         await setCodeMirrorText("XRANGE vk:events - + COUNT 10");
         await runQuery();
-        await waitForGridTextAll(
+        await waitForValkeyGridTextAll(
           ["1-0", "login", "ada"],
           15000,
           "Valkey XRANGE command did not render stream projection",
@@ -76,7 +76,7 @@ describe("Valkey smoke", () => {
     await step("run bounded Valkey write and TTL commands", async () => {
       await setCodeMirrorText("SET vk:cmd written EX 120");
       await runQuery();
-      await waitForGridTextAll(
+      await waitForValkeyGridTextAll(
         ["vk:cmd", "set"],
         15000,
         "Valkey SET command did not render tabular write result",
@@ -84,7 +84,7 @@ describe("Valkey smoke", () => {
 
       await setCodeMirrorText("EXPIRE vk:cmd 60");
       await runQuery();
-      await waitForGridTextAll(
+      await waitForValkeyGridTextAll(
         ["vk:cmd", "expire"],
         15000,
         "Valkey EXPIRE command did not render TTL mutation result",
@@ -115,6 +115,7 @@ describe("Valkey smoke", () => {
 });
 
 async function clickKvKey(key: string) {
+  await switchToWorkspaceWindow();
   await browser.waitUntil(
     async () =>
       await browser.execute((label) => {
@@ -144,7 +145,39 @@ async function clickKvKey(key: string) {
   }, key);
 }
 
+async function waitForValkeyGridTextAll(
+  snippets: string[],
+  timeout: number,
+  timeoutMsg: string,
+) {
+  const needles = snippets.map((snippet) => snippet.toLowerCase());
+  await browser.waitUntil(
+    async () => {
+      for (const handle of await browser.getWindowHandles()) {
+        try {
+          await browser.switchToWindow(handle);
+          const hasExpectedGridText = await browser.execute((expected) => {
+            if (!document.querySelector('[aria-label="Back to connections"]')) {
+              return false;
+            }
+            const grid = document.querySelector('[role="grid"]');
+            if (!grid) return false;
+            const text = (grid.textContent ?? "").toLowerCase();
+            return expected.every((needle) => text.includes(needle));
+          }, needles);
+          if (hasExpectedGridText) return true;
+        } catch {
+          // Closed Tauri windows can leave stale handles during smoke cleanup.
+        }
+      }
+      return false;
+    },
+    { timeout, timeoutMsg },
+  );
+}
+
 async function setCodeMirrorText(text: string) {
+  await switchToWorkspaceWindow();
   await browser.waitUntil(
     async () =>
       await browser.execute((nextText) => {
@@ -190,6 +223,7 @@ async function setCodeMirrorText(text: string) {
 }
 
 async function setField(label: string, value: string) {
+  await switchToWorkspaceWindow();
   const field = await $(`[aria-label="${label}"]`);
   await field.waitForDisplayed({ timeout: 10000 });
   await field.clearValue();
