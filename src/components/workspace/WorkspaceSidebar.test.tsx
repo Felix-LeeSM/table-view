@@ -277,22 +277,47 @@ describe("WorkspaceSidebar", () => {
     expect(screen.queryByTestId("document-database-tree")).toBeNull();
   });
 
-  it("renders the search placeholder for paradigm 'search'", () => {
-    // We don't have a "search" dbType yet but the type system permits
-    // the paradigm value, so seed one directly to exercise the branch.
-    const searchConn = makeConn("s1");
-    (searchConn as ConnectionConfig).paradigm = "search";
+  it("renders SearchSidebar for paradigm 'search'", async () => {
+    const searchConn = makeConn("s1", {
+      dbType: "elasticsearch",
+      paradigm: "search",
+    });
+    invokeMock.mockResolvedValueOnce({
+      identity: {
+        product: "elasticsearch",
+        clusterName: "Elasticsearch fixture",
+        version: { number: "8.12.2", distribution: "elasticsearch" },
+        capabilities: {
+          search: true,
+          aggregations: true,
+          aliases: true,
+          mappings: true,
+          legacyIndexTemplates: true,
+          composableIndexTemplates: true,
+          deleteByQuery: true,
+        },
+        productDelta: {
+          product: "elasticsearch",
+          supportsElasticLicenseApi: true,
+          supportsOpensearchPluginsApi: false,
+          defaultTemplateEndpoint: "composableIndexTemplate",
+        },
+      },
+      indexes: [],
+      aliases: [],
+      dataStreams: [],
+    });
     setupStore({ connections: [searchConn], active: ["s1"] });
     render(<WorkspaceSidebar selectedId="s1" />);
-    const placeholder = screen.getByRole("status", {
-      name: /search workspace placeholder/i,
-    });
-    expect(placeholder).toBeInTheDocument();
+
     expect(
-      screen.getByText(
-        /search database support is planned but not yet implemented/i,
-      ),
+      await screen.findByRole("tree", {
+        name: /elasticsearch search catalog/i,
+      }),
     ).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith("list_search_catalog_summary", {
+      connectionId: "s1",
+    });
   });
 
   // ------------------------------------------------------------------

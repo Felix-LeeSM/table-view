@@ -3,11 +3,12 @@ use serde_json::{json, Value};
 use crate::error::{AppError, CancelError};
 use crate::models::{
     validate_search_destructive_request, ConnectionConfig, DatabaseType, SearchAliasInfo,
-    SearchClusterCapabilities, SearchClusterIdentity, SearchDeleteByQueryRequest,
-    SearchDestructiveOperationPlan, SearchHitEnvelope, SearchIndexHealth, SearchIndexInfo,
-    SearchIndexMapping, SearchIndexTemplateInfo, SearchMappingField, SearchProductDelta,
-    SearchProductKind, SearchQueryRequest, SearchResultEnvelope, SearchTemplateEndpointKind,
-    SearchTotalHits, SearchTotalHitsRelation, SearchVersionInfo,
+    SearchClusterCapabilities, SearchClusterIdentity, SearchDataStreamInfo,
+    SearchDeleteByQueryRequest, SearchDestructiveOperationPlan, SearchHitEnvelope,
+    SearchIndexHealth, SearchIndexInfo, SearchIndexMapping, SearchIndexTemplateInfo,
+    SearchMappingField, SearchProductDelta, SearchProductKind, SearchQueryRequest,
+    SearchResultEnvelope, SearchTemplateEndpointKind, SearchTotalHits, SearchTotalHitsRelation,
+    SearchVersionInfo,
 };
 
 use super::search_executor::execute_fixture_search;
@@ -19,6 +20,7 @@ pub struct SearchCatalogFixture {
     pub identity: SearchClusterIdentity,
     pub indexes: Vec<SearchIndexInfo>,
     pub aliases: Vec<SearchAliasInfo>,
+    pub data_streams: Vec<SearchDataStreamInfo>,
     pub mappings: Vec<SearchIndexMapping>,
     pub templates: Vec<SearchIndexTemplateInfo>,
     pub search_result: SearchResultEnvelope,
@@ -134,6 +136,12 @@ impl SearchAdapter for SearchEngineAdapter {
         Box::pin(async move { Ok(self.fixture()?.aliases.clone()) })
     }
 
+    fn list_data_streams<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<SearchDataStreamInfo>, AppError>> {
+        Box::pin(async move { Ok(self.fixture()?.data_streams.clone()) })
+    }
+
     fn get_index_mapping<'a>(
         &'a self,
         index: &'a str,
@@ -201,6 +209,10 @@ impl SearchCatalogFixture {
             SearchProductKind::Elasticsearch => "logs-elastic-template",
             SearchProductKind::OpenSearch => "logs-opensearch-template",
         };
+        let data_stream_name = match product {
+            SearchProductKind::Elasticsearch => "logs-elastic-default",
+            SearchProductKind::OpenSearch => "logs-opensearch-default",
+        };
         let distribution = match product {
             SearchProductKind::Elasticsearch => Some("elasticsearch".to_string()),
             SearchProductKind::OpenSearch => Some("opensearch".to_string()),
@@ -245,6 +257,16 @@ impl SearchCatalogFixture {
                 filter: None,
                 routing: None,
                 write_index: true,
+            }],
+            data_streams: vec![SearchDataStreamInfo {
+                name: data_stream_name.into(),
+                backing_indices: vec![format!(".ds-{}-2026.05.24-000001", data_stream_name)],
+                health: SearchIndexHealth::Green,
+                docs_count: Some(2),
+                store_size_bytes: Some(4096),
+                primary_shards: Some(1),
+                replica_shards: Some(1),
+                hidden: false,
             }],
             mappings: vec![SearchIndexMapping {
                 index: index_name.into(),
@@ -351,6 +373,9 @@ mod tests {
         let indexes = adapter.list_indexes().await.unwrap();
         assert_eq!(indexes.len(), 1);
         assert!(indexes[0].aliases.contains(&"logs-elastic".to_string()));
+
+        let data_streams = adapter.list_data_streams().await.unwrap();
+        assert_eq!(data_streams[0].name, "logs-elastic-default");
 
         let mapping = adapter
             .get_index_mapping("logs-elastic-2026.05.24")

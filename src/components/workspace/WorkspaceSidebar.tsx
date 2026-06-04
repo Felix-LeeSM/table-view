@@ -9,7 +9,7 @@ import { assertNever } from "@lib/paradigm";
 import DocumentSidebar from "./DocumentSidebar";
 import KvSidebar from "./KvSidebar";
 import RdbSidebar from "./RdbSidebar";
-import UnsupportedShellNotice from "./UnsupportedShellNotice";
+import SearchSidebar from "./SearchSidebar";
 import { pickSidebar, type SidebarKind } from "./pickSidebar";
 
 export interface WorkspaceSidebarProps {
@@ -193,7 +193,7 @@ function renderKind(kind: SidebarKind, connectionId: string): ReactNode {
     case "kv":
       return <KvSidebar connectionId={connectionId} />;
     case "search":
-      return <UnsupportedShellNotice paradigm="search" />;
+      return <SearchSidebar connectionId={connectionId} />;
     default:
       return assertNever(kind);
   }

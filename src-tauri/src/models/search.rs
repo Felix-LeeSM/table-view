@@ -121,6 +121,25 @@ pub struct SearchIndexInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SearchDataStreamInfo {
+    pub name: String,
+    #[serde(default)]
+    pub backing_indices: Vec<String>,
+    pub health: SearchIndexHealth,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub docs_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store_size_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primary_shards: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replica_shards: Option<u32>,
+    #[serde(default)]
+    pub hidden: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchAliasInfo {
     pub name: String,
     pub index: String,
@@ -130,6 +149,15 @@ pub struct SearchAliasInfo {
     pub routing: Option<String>,
     #[serde(default)]
     pub write_index: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchCatalogSummary {
+    pub identity: SearchClusterIdentity,
+    pub indexes: Vec<SearchIndexInfo>,
+    pub aliases: Vec<SearchAliasInfo>,
+    pub data_streams: Vec<SearchDataStreamInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
