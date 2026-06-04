@@ -24,6 +24,7 @@ pub mod redis;
 pub mod search;
 pub(crate) mod search_executor;
 pub(crate) mod search_http;
+pub(crate) mod search_live_query;
 pub mod sqlite;
 pub mod traits;
 pub mod types;

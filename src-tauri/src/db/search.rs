@@ -167,13 +167,6 @@ impl SearchEngineAdapter {
             .clone()
             .ok_or_else(|| self.not_connected_error())
     }
-
-    fn live_query_deferred_error(&self) -> AppError {
-        AppError::Unsupported(format!(
-            "{} live Search query execution is not wired yet",
-            self.product.label()
-        ))
-    }
 }
 
 impl DbAdapter for SearchEngineAdapter {
@@ -334,7 +327,10 @@ impl SearchAdapter for SearchEngineAdapter {
             if let Some(fixture) = self.fixture.as_ref() {
                 return Self::sample_documents_for_fixture(fixture, index, limit);
             }
-            Err(self.live_query_deferred_error())
+            self.live_connection()
+                .await?
+                .sample_documents(index, limit)
+                .await
         })
     }
 
@@ -350,7 +346,7 @@ impl SearchAdapter for SearchEngineAdapter {
             if let Some(fixture) = self.fixture.as_ref() {
                 return execute_fixture_search(fixture, request);
             }
-            Err(self.live_query_deferred_error())
+            self.live_connection().await?.search(request, cancel).await
         })
     }
 

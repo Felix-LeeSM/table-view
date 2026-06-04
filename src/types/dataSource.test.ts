@@ -145,6 +145,7 @@ describe("DataSourceProfile registry", () => {
     }),
     elasticsearch: expectedCapabilities({
       connection: { test: true },
+      query: { query: true, cancel: true },
       catalog: { browse: true, indexes: true },
     }),
     opensearch: expectedCapabilities(),
@@ -358,12 +359,14 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("opensearch")).toBe(false);
   });
 
-  it("exposes Elasticsearch connection and live catalog without widening query claims", () => {
+  it("exposes Elasticsearch live connection, catalog, and bounded query claims", () => {
     const profile = getDataSourceProfile("elasticsearch");
 
     expect(profile.capabilities.connection.test).toBe(true);
     expect(profile.capabilities.catalog.browse).toBe(true);
-    expect(profile.capabilities.query.query).toBe(false);
+    expect(profile.capabilities.query.query).toBe(true);
+    expect(profile.capabilities.query.cancel).toBe(true);
+    expect(profile.capabilities.query.explain).toBe(false);
     expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);
   });
 

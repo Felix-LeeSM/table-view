@@ -2,6 +2,9 @@ use super::*;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
+use tokio::time::{sleep, Duration};
+
+mod live_query;
 
 #[tokio::test]
 async fn fixture_adapter_returns_catalog_without_network() {
@@ -311,29 +314,6 @@ async fn elasticsearch_live_catalog_reads_mappings_settings_and_templates() {
 }
 
 #[tokio::test]
-async fn elasticsearch_live_catalog_keeps_search_execution_deferred() {
-    let (port, server) = spawn_search_http_server(vec![route(
-        "/ ",
-        r#"{
-            "cluster_name": "elastic-dev",
-            "version": { "number": "8.12.2" }
-        }"#,
-    )])
-    .await;
-    let adapter = SearchEngineAdapter::new_elasticsearch();
-    let config = search_config(port);
-    adapter.connect(&config).await.unwrap();
-    server.await.unwrap();
-
-    match adapter.sample_documents("logs-elastic-2026.05.24", 5).await {
-        Err(AppError::Unsupported(message)) => {
-            assert!(message.contains("live Search query execution is not wired yet"));
-        }
-        other => panic!("Expected deferred live Search query execution, got {other:?}"),
-    }
-}
-
-#[tokio::test]
 async fn elasticsearch_test_connection_surfaces_auth_failures() {
     let (port, server) =
         spawn_root_probe_server(401, r#"{"error":"missing credentials"}"#, None).await;
@@ -425,12 +405,62 @@ async fn spawn_root_probe_server(
 }
 
 struct SearchHttpRoute {
+    method: &'static str,
     path_prefix: &'static str,
+    status: u16,
+    expected_body: Option<&'static str>,
     body: &'static str,
+    delay_ms: u64,
 }
 
 fn route(path_prefix: &'static str, body: &'static str) -> SearchHttpRoute {
-    SearchHttpRoute { path_prefix, body }
+    SearchHttpRoute {
+        method: "GET",
+        path_prefix,
+        status: 200,
+        expected_body: None,
+        body,
+        delay_ms: 0,
+    }
+}
+
+fn post_route(
+    path_prefix: &'static str,
+    expected_body: &'static str,
+    body: &'static str,
+) -> SearchHttpRoute {
+    post_route_with_status(path_prefix, 200, Some(expected_body), body)
+}
+
+fn post_route_with_status(
+    path_prefix: &'static str,
+    status: u16,
+    expected_body: Option<&'static str>,
+    body: &'static str,
+) -> SearchHttpRoute {
+    SearchHttpRoute {
+        method: "POST",
+        path_prefix,
+        status,
+        expected_body,
+        body,
+        delay_ms: 0,
+    }
+}
+
+fn delayed_post_route(
+    path_prefix: &'static str,
+    delay_ms: u64,
+    body: &'static str,
+) -> SearchHttpRoute {
+    SearchHttpRoute {
+        method: "POST",
+        path_prefix,
+        status: 200,
+        expected_body: None,
+        body,
+        delay_ms,
+    }
 }
 
 async fn spawn_search_http_server(routes: Vec<SearchHttpRoute>) -> (u16, JoinHandle<()>) {
@@ -442,17 +472,29 @@ async fn spawn_search_http_server(routes: Vec<SearchHttpRoute>) -> (u16, JoinHan
             let mut buf = [0; 4096];
             let n = socket.read(&mut buf).await.unwrap();
             let request = String::from_utf8_lossy(&buf[..n]);
-            let expected_prefix = format!("GET {}", route.path_prefix);
+            let expected_prefix = format!("{} {}", route.method, route.path_prefix);
             assert!(
                 request.starts_with(&expected_prefix),
                 "expected {expected_prefix:?}, got request:\n{request}"
             );
+            if let Some(expected_body) = route.expected_body {
+                let actual_body = request.split("\r\n\r\n").nth(1).unwrap_or("");
+                let actual_json: serde_json::Value = serde_json::from_str(actual_body)
+                    .unwrap_or_else(|err| panic!("invalid request JSON {err}: {actual_body}"));
+                let expected_json: serde_json::Value = serde_json::from_str(expected_body)
+                    .expect("expected request body fixture should be valid JSON");
+                assert_eq!(actual_json, expected_json, "request body drift");
+            }
+            if route.delay_ms > 0 {
+                sleep(Duration::from_millis(route.delay_ms)).await;
+            }
             let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                "HTTP/1.1 {} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                route.status,
                 route.body.len(),
                 route.body
             );
-            socket.write_all(response.as_bytes()).await.unwrap();
+            let _ = socket.write_all(response.as_bytes()).await;
         }
     });
     (port, handle)
