@@ -193,6 +193,49 @@ pub struct SearchIndexTemplateInfo {
     pub raw: Value,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchAnalyzerInfo {
+    pub name: String,
+    pub analyzer_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tokenizer: Option<String>,
+    #[serde(default)]
+    pub filters: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchIndexSettings {
+    pub index: String,
+    pub raw: Value,
+    #[serde(default)]
+    pub analyzers: Vec<SearchAnalyzerInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchFieldStatsInfo {
+    pub path: String,
+    pub field_type: String,
+    #[serde(default)]
+    pub searchable: bool,
+    #[serde(default)]
+    pub aggregatable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub docs_count: Option<u64>,
+    #[serde(default)]
+    pub sample_values: Vec<Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchFieldStatsEnvelope {
+    pub index: String,
+    #[serde(default)]
+    pub fields: Vec<SearchFieldStatsInfo>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchQueryRequest {

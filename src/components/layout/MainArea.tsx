@@ -25,6 +25,7 @@ import GlobalQueryLogPanel from "@components/query/GlobalQueryLogPanel";
 import { Button } from "@components/ui/button";
 import { Skeleton } from "@components/ui/skeleton";
 import { LogoWordmark } from "@components/shared/Logo";
+import SearchIndexDetailPanel from "@components/search/SearchIndexDetailPanel";
 import { assertNever, type Paradigm } from "@/lib/paradigm";
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
 
@@ -123,8 +124,13 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
         </div>
       );
     }
+    case "search": {
+      const index = tab.table ?? "";
+      return (
+        <SearchIndexDetailPanel connectionId={tab.connectionId} index={index} />
+      );
+    }
     case "rdb":
-    case "search":
     case "kv":
       return (
         <div className="flex flex-1 flex-col overflow-hidden">

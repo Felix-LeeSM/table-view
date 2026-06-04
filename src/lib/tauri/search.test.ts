@@ -7,7 +7,15 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import { executeSearchQuery, listSearchCatalogSummary } from "./search";
+import {
+  executeSearchQuery,
+  getSearchIndexFieldStats,
+  getSearchIndexMapping,
+  getSearchIndexSettings,
+  listSearchCatalogSummary,
+  listSearchIndexTemplates,
+  sampleSearchDocuments,
+} from "./search";
 
 describe("Search Tauri wrappers", () => {
   beforeEach(() => {
@@ -46,6 +54,43 @@ describe("Search Tauri wrappers", () => {
     expect(invokeMock).toHaveBeenLastCalledWith("list_search_catalog_summary", {
       connectionId: "search-1",
     });
+  });
+
+  it("forwards selected-index lazy detail requests", async () => {
+    invokeMock.mockResolvedValue({});
+
+    await getSearchIndexMapping("search-1", "logs-2026.05.24");
+    expect(invokeMock).toHaveBeenLastCalledWith("get_search_index_mapping", {
+      connectionId: "search-1",
+      index: "logs-2026.05.24",
+    });
+
+    await getSearchIndexSettings("search-1", "logs-2026.05.24");
+    expect(invokeMock).toHaveBeenLastCalledWith("get_search_index_settings", {
+      connectionId: "search-1",
+      index: "logs-2026.05.24",
+    });
+
+    await listSearchIndexTemplates("search-1");
+    expect(invokeMock).toHaveBeenLastCalledWith("list_search_index_templates", {
+      connectionId: "search-1",
+    });
+
+    await sampleSearchDocuments("search-1", "logs-2026.05.24", 3);
+    expect(invokeMock).toHaveBeenLastCalledWith("sample_search_documents", {
+      connectionId: "search-1",
+      index: "logs-2026.05.24",
+      limit: 3,
+    });
+
+    await getSearchIndexFieldStats("search-1", "logs-2026.05.24");
+    expect(invokeMock).toHaveBeenLastCalledWith(
+      "get_search_index_field_stats",
+      {
+        connectionId: "search-1",
+        index: "logs-2026.05.24",
+      },
+    );
   });
 
   it("forwards bounded Search DSL execution requests", async () => {

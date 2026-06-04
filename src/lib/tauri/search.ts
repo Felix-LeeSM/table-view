@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   SearchCatalogSummary,
+  SearchFieldStatsEnvelope,
+  SearchIndexMapping,
+  SearchIndexSettings,
+  SearchIndexTemplateInfo,
   SearchQueryRequest,
   SearchResultEnvelope,
 } from "@/types/search";
@@ -10,6 +14,56 @@ export async function listSearchCatalogSummary(
 ): Promise<SearchCatalogSummary> {
   return invoke<SearchCatalogSummary>("list_search_catalog_summary", {
     connectionId,
+  });
+}
+
+export async function getSearchIndexMapping(
+  connectionId: string,
+  index: string,
+): Promise<SearchIndexMapping> {
+  return invoke<SearchIndexMapping>("get_search_index_mapping", {
+    connectionId,
+    index,
+  });
+}
+
+export async function getSearchIndexSettings(
+  connectionId: string,
+  index: string,
+): Promise<SearchIndexSettings> {
+  return invoke<SearchIndexSettings>("get_search_index_settings", {
+    connectionId,
+    index,
+  });
+}
+
+export async function listSearchIndexTemplates(
+  connectionId: string,
+): Promise<SearchIndexTemplateInfo[]> {
+  return invoke<SearchIndexTemplateInfo[]>("list_search_index_templates", {
+    connectionId,
+  });
+}
+
+export async function sampleSearchDocuments(
+  connectionId: string,
+  index: string,
+  limit = 5,
+): Promise<SearchResultEnvelope> {
+  return invoke<SearchResultEnvelope>("sample_search_documents", {
+    connectionId,
+    index,
+    limit,
+  });
+}
+
+export async function getSearchIndexFieldStats(
+  connectionId: string,
+  index: string,
+): Promise<SearchFieldStatsEnvelope> {
+  return invoke<SearchFieldStatsEnvelope>("get_search_index_field_stats", {
+    connectionId,
+    index,
   });
 }
 

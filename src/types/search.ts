@@ -89,6 +89,33 @@ export interface SearchIndexTemplateInfo {
   raw: unknown;
 }
 
+export interface SearchAnalyzerInfo {
+  name: string;
+  analyzerType: string;
+  tokenizer?: string;
+  filters: string[];
+}
+
+export interface SearchIndexSettings {
+  index: string;
+  raw: unknown;
+  analyzers: SearchAnalyzerInfo[];
+}
+
+export interface SearchFieldStatsInfo {
+  path: string;
+  fieldType: string;
+  searchable: boolean;
+  aggregatable: boolean;
+  docsCount?: number;
+  sampleValues: unknown[];
+}
+
+export interface SearchFieldStatsEnvelope {
+  index: string;
+  fields: SearchFieldStatsInfo[];
+}
+
 export interface SearchQueryRequest {
   index: string;
   body: unknown;

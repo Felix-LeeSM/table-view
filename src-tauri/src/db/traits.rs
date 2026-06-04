@@ -18,8 +18,9 @@ use crate::models::{
     FileAnalyticsSource, FileAnalyticsSourceMetadata, FilterCondition, FunctionInfo, IndexInfo,
     PostgresExtensionInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult,
     SearchAliasInfo, SearchClusterIdentity, SearchDataStreamInfo, SearchDeleteByQueryRequest,
-    SearchDestructiveOperationPlan, SearchIndexInfo, SearchIndexMapping, SearchIndexTemplateInfo,
-    SearchQueryRequest, SearchResultEnvelope, TableData, TableInfo, TriggerInfo, ViewInfo,
+    SearchDestructiveOperationPlan, SearchFieldStatsEnvelope, SearchIndexInfo, SearchIndexMapping,
+    SearchIndexSettings, SearchIndexTemplateInfo, SearchQueryRequest, SearchResultEnvelope,
+    TableData, TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::types::{
@@ -1148,12 +1149,46 @@ pub trait SearchAdapter: DbAdapter {
         })
     }
 
+    fn get_index_settings<'a>(
+        &'a self,
+        _index: &'a str,
+    ) -> BoxFuture<'a, Result<SearchIndexSettings, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This search adapter does not expose index settings".into(),
+            ))
+        })
+    }
+
+    fn get_index_field_stats<'a>(
+        &'a self,
+        _index: &'a str,
+    ) -> BoxFuture<'a, Result<SearchFieldStatsEnvelope, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This search adapter does not expose field stats".into(),
+            ))
+        })
+    }
+
     fn list_index_templates<'a>(
         &'a self,
     ) -> BoxFuture<'a, Result<Vec<SearchIndexTemplateInfo>, AppError>> {
         Box::pin(async {
             Err(AppError::Unsupported(
                 "This search adapter does not expose index templates".into(),
+            ))
+        })
+    }
+
+    fn sample_documents<'a>(
+        &'a self,
+        _index: &'a str,
+        _limit: u64,
+    ) -> BoxFuture<'a, Result<SearchResultEnvelope, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This search adapter does not expose sample documents".into(),
             ))
         })
     }
