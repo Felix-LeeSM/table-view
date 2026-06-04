@@ -180,9 +180,16 @@ function prepareSqliteFixture(path: string) {
 }
 
 async function returnToLauncher() {
+  await switchToWorkspaceWindow();
   const back = await $('[aria-label="Back to connections"]');
   await back.waitForDisplayed({ timeout: 10000 });
-  await back.click();
+  try {
+    await back.click();
+  } catch (error) {
+    if (!String(error).toLowerCase().includes("no such window")) {
+      throw error;
+    }
+  }
   await switchToLauncherWindow();
 }
 
