@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import KvSidebar from "./KvSidebar";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import type { ConnectionConfig } from "@/types/connection";
 import type { KvValueEnvelope } from "@/types/kv";
 
@@ -24,6 +25,7 @@ describe("KvSidebar mutations", () => {
       connections: [redisConnection()],
       activeStatuses: { "redis-1": { type: "connected", activeDb: "0" } },
     });
+    useSafeModeStore.setState({ mode: "strict" });
   });
 
   it("previews and confirms string overwrite before refreshing the selected value", async () => {
@@ -286,6 +288,11 @@ function mockRedisRuntime(
 }
 
 async function selectRenderedKey() {
+  const scanButton = await screen.findByRole("button", {
+    name: /scan 100 keys/i,
+  });
+  await waitFor(() => expect(scanButton).toBeEnabled());
+  fireEvent.click(scanButton);
   const tree = await screen.findByRole("tree", { name: /redis keys/i });
   fireEvent.click((await within(tree).findAllByRole("treeitem"))[0]!);
   await waitFor(() =>
