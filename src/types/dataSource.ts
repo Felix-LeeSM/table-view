@@ -393,6 +393,12 @@ export const VALKEY_CAPABILITIES = capabilities({
   },
 });
 
+export const ELASTICSEARCH_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+});
+
 export const SEARCH_CAPABILITIES = capabilities();
 
 function profile(
@@ -511,7 +517,7 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "search",
     ["searchHits"],
     "search-default",
-    SEARCH_CAPABILITIES,
+    ELASTICSEARCH_CAPABILITIES,
   ),
   opensearch: profile(
     "opensearch",
