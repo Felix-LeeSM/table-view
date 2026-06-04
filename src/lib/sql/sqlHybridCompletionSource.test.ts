@@ -236,7 +236,7 @@ describe("createSqlHybridCompletionSource", () => {
     expect(legacySource).not.toHaveBeenCalled();
   });
 
-  it("keeps legacy fallback when WASM fails before returning a result", async () => {
+  it("does not use legacy fallback by default when WASM fails before returning a result", async () => {
     const legacySource = vi.fn<CompletionSource>().mockReturnValue({
       from: 0,
       options: [{ label: "SELECT", type: "keyword" }],
@@ -253,6 +253,28 @@ describe("createSqlHybridCompletionSource", () => {
       legacySources: [legacySource],
     });
 
+    await expect(source(codeMirrorContext("SEL"))).resolves.toBeNull();
+    expect(legacySource).not.toHaveBeenCalled();
+  });
+
+  it("gates temporary legacy fallback behind an explicit compatibility switch", async () => {
+    const legacySource = vi.fn<CompletionSource>().mockReturnValue({
+      from: 0,
+      options: [{ label: "SELECT", type: "keyword" }],
+    });
+
+    const source = createSqlHybridCompletionSource({
+      dialect: StandardSQL,
+      getNamespace: () => TEST_SCHEMA,
+      getCompletionContext: () => completionContext(),
+      completeWithPreloadedWasm: vi.fn(() => {
+        throw new Error("wasm unavailable");
+      }),
+      completeWithWasm: vi.fn(),
+      legacySources: [legacySource],
+      enableLegacyCompatibilityFallback: true,
+    });
+
     await expect(source(codeMirrorContext("SEL"))).resolves.toMatchObject({
       from: 0,
       options: [{ label: "SELECT", type: "keyword" }],
@@ -260,7 +282,7 @@ describe("createSqlHybridCompletionSource", () => {
     expect(legacySource).toHaveBeenCalledOnce();
   });
 
-  it("keeps legacy fallback when async WASM fails after a preloaded miss", async () => {
+  it("keeps enabled legacy fallback when async WASM fails after a preloaded miss", async () => {
     const legacySource = vi.fn<CompletionSource>().mockReturnValue({
       from: 0,
       options: [{ label: "SELECT", type: "keyword" }],
@@ -277,6 +299,7 @@ describe("createSqlHybridCompletionSource", () => {
       completeWithPreloadedWasm,
       completeWithWasm,
       legacySources: [legacySource],
+      enableLegacyCompatibilityFallback: true,
     });
 
     await expect(source(codeMirrorContext("SEL"))).resolves.toMatchObject({
@@ -405,7 +428,7 @@ describe("createSqlHybridCompletionSource", () => {
     expect(legacySource).not.toHaveBeenCalled();
   });
 
-  it("keeps the legacy path when completion context has not loaded", async () => {
+  it("returns null when completion context has not loaded without the legacy switch", async () => {
     const legacySource = vi.fn<CompletionSource>().mockReturnValue({
       from: 0,
       options: [{ label: "SELECT", type: "keyword" }],
@@ -418,6 +441,27 @@ describe("createSqlHybridCompletionSource", () => {
       getCompletionContext: () => undefined,
       completeWithPreloadedWasm,
       legacySources: [legacySource],
+    });
+
+    await expect(source(codeMirrorContext("SEL"))).resolves.toBeNull();
+    expect(completeWithPreloadedWasm).not.toHaveBeenCalled();
+    expect(legacySource).not.toHaveBeenCalled();
+  });
+
+  it("uses the gated legacy path when completion context has not loaded", async () => {
+    const legacySource = vi.fn<CompletionSource>().mockReturnValue({
+      from: 0,
+      options: [{ label: "SELECT", type: "keyword" }],
+    });
+    const completeWithPreloadedWasm = vi.fn();
+
+    const source = createSqlHybridCompletionSource({
+      dialect: StandardSQL,
+      getNamespace: () => TEST_SCHEMA,
+      getCompletionContext: () => undefined,
+      completeWithPreloadedWasm,
+      legacySources: [legacySource],
+      enableLegacyCompatibilityFallback: true,
     });
 
     await expect(source(codeMirrorContext("SEL"))).resolves.toMatchObject({

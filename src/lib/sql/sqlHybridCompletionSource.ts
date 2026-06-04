@@ -9,9 +9,6 @@ import type {
   CompletionItem,
   CompletionResult as CoreCompletionResult,
 } from "@/lib/completion/coreContract";
-import { aliasColumnCompletionSource } from "./aliasColumnCompletion";
-import { cteColumnCompletionSource } from "./cteColumnCompletion";
-import { wrappedSchemaCompletionSource } from "./schemaCompletionWrapper";
 import { buildSqlCompletionRequestFromCodeMirror } from "./sqlCodeMirrorCompletionAdapter";
 import type { SqlCompletionContext } from "./sqlCompletionContext";
 import type { SqlCompletionRequest } from "./sqlCompletionRequest";
@@ -19,7 +16,6 @@ import {
   completeSqlWithPreloadedWasm,
   completeSqlWithWasm,
 } from "./sqlCompletionWasm";
-import { updateColumnCompletionSource } from "./updateColumnCompletion";
 
 type CompleteSqlSync = (
   request: SqlCompletionRequest,
@@ -35,20 +31,29 @@ export interface SqlHybridCompletionSourceOptions {
   completeWithPreloadedWasm?: CompleteSqlSync;
   completeWithWasm?: CompleteSqlAsync;
   legacySources?: readonly CompletionSource[];
+  enableLegacyCompatibilityFallback?: boolean;
 }
 
-export function createSqlHybridCompletionSource({
-  dialect,
-  getNamespace,
-  getCompletionContext,
-  completeWithPreloadedWasm = completeSqlWithPreloadedWasm,
-  completeWithWasm = completeSqlWithWasm,
-  legacySources = defaultLegacySources(getNamespace, dialect),
-}: SqlHybridCompletionSourceOptions): CompletionSource {
+export const SQL_COMPLETION_LEGACY_COMPATIBILITY_OWNER_ISSUE = 682;
+
+export function createSqlHybridCompletionSource(
+  options: SqlHybridCompletionSourceOptions,
+): CompletionSource {
+  const {
+    getCompletionContext,
+    completeWithPreloadedWasm = completeSqlWithPreloadedWasm,
+    completeWithWasm = completeSqlWithWasm,
+    legacySources = [],
+    enableLegacyCompatibilityFallback = false,
+  } = options;
   return async (context) => {
     const completionContext = getCompletionContext();
     if (!completionContext) {
-      return completeWithLegacySources(legacySources, context);
+      return maybeCompleteWithLegacySources(
+        enableLegacyCompatibilityFallback,
+        legacySources,
+        context,
+      );
     }
 
     const request = buildSqlCompletionRequestFromCodeMirror(
@@ -60,7 +65,11 @@ export function createSqlHybridCompletionSource({
       coreResult = completeWithPreloadedWasm(request);
       coreResult ??= await completeWithWasm(request);
     } catch {
-      return completeWithLegacySources(legacySources, context);
+      return maybeCompleteWithLegacySources(
+        enableLegacyCompatibilityFallback,
+        legacySources,
+        context,
+      );
     }
 
     const visibleCoreResult = filterShellMetaCommands(coreResult, request);
@@ -68,16 +77,13 @@ export function createSqlHybridCompletionSource({
   };
 }
 
-function defaultLegacySources(
-  getNamespace: () => SQLNamespace | undefined,
-  dialect: SQLDialect,
-): readonly CompletionSource[] {
-  return [
-    wrappedSchemaCompletionSource(getNamespace, dialect),
-    updateColumnCompletionSource(getNamespace),
-    aliasColumnCompletionSource(getNamespace),
-    cteColumnCompletionSource(getNamespace),
-  ];
+async function maybeCompleteWithLegacySources(
+  enabled: boolean,
+  sources: readonly CompletionSource[],
+  context: CompletionContext,
+): Promise<CompletionResult | null> {
+  if (!enabled) return null;
+  return completeWithLegacySources(sources, context);
 }
 
 async function completeWithLegacySources(

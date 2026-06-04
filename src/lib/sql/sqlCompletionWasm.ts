@@ -125,6 +125,7 @@ function normalizeCompletionResult(
       dialect: request.dialect,
       shell: request.shell,
       catalogRevision: request.catalog.revision,
+      completionState: "Unsupported",
     },
   };
 }

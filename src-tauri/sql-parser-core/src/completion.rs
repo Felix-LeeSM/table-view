@@ -3,13 +3,15 @@ use serde::Serialize;
 mod aliases;
 mod compact;
 #[cfg(test)]
+mod completion_state_tests;
+#[cfg(test)]
 mod completion_tests;
 mod context;
 mod token;
 mod vocabulary;
 
-use aliases::{resolve_alias, scan_aliases};
-use context::{completion_context_kind, CompletionContextKind};
+use aliases::{resolve_alias, scan_aliases, scan_cte_columns};
+use context::{completion_state, insert_columns_target, update_set_target};
 use token::{completion_token_at, CompletionToken};
 use vocabulary::{
     builtin_functions, builtin_keyword_deltas, builtin_keywords, builtin_shell_commands,
@@ -17,6 +19,7 @@ use vocabulary::{
 };
 
 pub use compact::complete_sql_compact;
+pub use context::CompletionState;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SqlCompletionRequest {
@@ -111,6 +114,7 @@ pub struct CompletionResultMetadata {
     pub dialect: String,
     pub shell: String,
     pub catalog_revision: String,
+    pub completion_state: CompletionState,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -130,14 +134,18 @@ pub struct CompletionItem {
 
 pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
     let token = completion_token_at(&request.text, request.cursor);
-    let context = completion_context_kind(&request, &token);
+    let state = if supports_sql_completion(&request.dialect) {
+        completion_state(&request, &token)
+    } else {
+        CompletionState::Unsupported
+    };
     let mut items = Vec::new();
 
     if supports_sql_completion(&request.dialect) {
         if let Some(qualifier) = &token.qualifier {
             let normalized_qualifier = normalize_identifier_path(qualifier);
-            match context {
-                CompletionContextKind::Relation => {
+            match state {
+                CompletionState::RelationName => {
                     add_qualified_catalog_objects(
                         &mut items,
                         &request,
@@ -145,7 +153,11 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
                         &token,
                     );
                 }
-                CompletionContextKind::General => {
+                CompletionState::FunctionRef => {
+                    add_qualified_functions(&mut items, &request, &normalized_qualifier, &token);
+                }
+                CompletionState::ShellMeta | CompletionState::Unsupported => {}
+                _ => {
                     add_qualified_catalog_objects(
                         &mut items,
                         &request,
@@ -155,25 +167,61 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
                     add_qualified_columns(&mut items, &request, &normalized_qualifier, &token);
                     add_qualified_functions(&mut items, &request, &normalized_qualifier, &token);
                 }
-                CompletionContextKind::ShellMeta => {}
             }
         } else {
-            if context == CompletionContextKind::ShellMeta {
-                add_meta_commands(&mut items, &request, &token.prefix);
-            } else if context == CompletionContextKind::Relation {
-                add_catalog_schemas(&mut items, &request, &token);
-                add_catalog_objects(&mut items, &request, &token);
-            } else {
-                if token.quote.is_none() {
-                    add_keywords(&mut items, &request, &token.prefix);
+            match state {
+                CompletionState::ShellMeta => {
+                    add_meta_commands(&mut items, &request, &token.prefix)
                 }
-                add_catalog_schemas(&mut items, &request, &token);
-                add_catalog_objects(&mut items, &request, &token);
-                add_unqualified_columns(&mut items, &request, &token);
-                add_functions(&mut items, &request, &token);
-                if token.quote.is_none() {
-                    add_extension_pack_items(&mut items, &request, &token.prefix);
+                CompletionState::RelationName => {
+                    add_catalog_schemas(&mut items, &request, &token);
+                    add_catalog_objects(&mut items, &request, &token);
                 }
+                CompletionState::InsertColumns => {
+                    add_target_columns(
+                        &mut items,
+                        &request,
+                        insert_columns_target(&request.text, request.cursor).as_deref(),
+                        &token,
+                    );
+                }
+                CompletionState::UpdateSetTarget => {
+                    add_target_columns(
+                        &mut items,
+                        &request,
+                        update_set_target(&request.text, request.cursor).as_deref(),
+                        &token,
+                    );
+                }
+                CompletionState::ColumnRef => {
+                    add_unqualified_columns(&mut items, &request, &token);
+                }
+                CompletionState::FunctionRef => {
+                    add_functions(&mut items, &request, &token);
+                    if token.quote.is_none() {
+                        add_extension_pack_items(&mut items, &request, &token.prefix);
+                    }
+                }
+                CompletionState::OrderByExpr => {
+                    add_unqualified_columns(&mut items, &request, &token);
+                    add_functions(&mut items, &request, &token);
+                    if token.quote.is_none() {
+                        add_extension_pack_items(&mut items, &request, &token.prefix);
+                    }
+                }
+                CompletionState::StatementStart | CompletionState::SelectList => {
+                    if token.quote.is_none() {
+                        add_keywords(&mut items, &request, &token.prefix);
+                    }
+                    add_catalog_schemas(&mut items, &request, &token);
+                    add_catalog_objects(&mut items, &request, &token);
+                    add_unqualified_columns(&mut items, &request, &token);
+                    add_functions(&mut items, &request, &token);
+                    if token.quote.is_none() {
+                        add_extension_pack_items(&mut items, &request, &token.prefix);
+                    }
+                }
+                CompletionState::Unsupported => {}
             }
         }
     }
@@ -195,17 +243,8 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
             dialect: request.dialect,
             shell: request.shell,
             catalog_revision: request.catalog.revision,
+            completion_state: state,
         },
-    }
-}
-
-trait CursorUtf16SaturatingSub {
-    fn cursor_utf16_saturating_sub(self, rhs: usize) -> usize;
-}
-
-impl CursorUtf16SaturatingSub for CompletionCursorOffsets {
-    fn cursor_utf16_saturating_sub(self, rhs: usize) -> usize {
-        self.utf16.saturating_sub(rhs)
     }
 }
 
@@ -374,6 +413,29 @@ fn add_unqualified_columns(
     }
 }
 
+fn add_target_columns(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    target: Option<&str>,
+    token: &CompletionToken,
+) {
+    let Some(target) = target else {
+        add_unqualified_columns(items, request, token);
+        return;
+    };
+    let normalized_target = normalize_identifier_path(target);
+    for column in &request.catalog.columns {
+        if !matches_prefix(&column.name, &token.prefix) {
+            continue;
+        }
+        if same_identifier(&column.table, &normalized_target)
+            || same_identifier(&column.qualified_table_name, &normalized_target)
+        {
+            items.push(column_item(column, apply_identifier(&column.name, token)));
+        }
+    }
+}
+
 fn add_qualified_columns(
     items: &mut Vec<CompletionItem>,
     request: &SqlCompletionRequest,
@@ -382,6 +444,24 @@ fn add_qualified_columns(
 ) {
     let aliases = scan_aliases(&request.text);
     let resolved = resolve_alias(&aliases, qualifier).unwrap_or(qualifier);
+    let cte_columns = scan_cte_columns(&request.text);
+    for cte in &cte_columns {
+        if !same_identifier(&cte.name, qualifier) {
+            continue;
+        }
+        for column in &cte.columns {
+            if matches_prefix(column, &token.prefix) {
+                items.push(CompletionItem {
+                    label: column.clone(),
+                    kind: "column".to_string(),
+                    apply: Some(apply_identifier(column, token)),
+                    detail: Some(cte.name.clone()),
+                    boost: Some(52),
+                    runtime_executable: None,
+                });
+            }
+        }
+    }
 
     for column in &request.catalog.columns {
         if !matches_prefix(&column.name, &token.prefix) {

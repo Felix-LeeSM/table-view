@@ -111,7 +111,9 @@ export function createQuerySlice(
             paradigm,
             queryMode,
             queryLanguage,
-            database: opts.database ?? (paradigm === "rdb" ? db : undefined),
+            database:
+              opts.database ??
+              (paradigm === "rdb" || paradigm === "document" ? db : undefined),
             collection: opts.collection,
           };
           return {

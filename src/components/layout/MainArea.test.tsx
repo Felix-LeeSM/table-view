@@ -795,6 +795,38 @@ describe("MainArea", () => {
       expect(state.tabs[0]!.connectionId).toBe("c1");
     });
 
+    it("clicking New Query on Mongo uses the configured database when activeDb is not selected", () => {
+      const mongoConnection: ConnectionConfig = {
+        ...makeConnection("m1"),
+        dbType: "mongodb",
+        database: "analytics",
+        paradigm: "document",
+      };
+      setConnections({
+        connections: [mongoConnection],
+        active: ["m1"],
+      });
+      useConnectionStore.setState({
+        activeStatuses: { m1: { type: "connected" } },
+      });
+
+      render(<MainArea />);
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /new query/i }));
+      });
+
+      const state = getTestWorkspace("m1", "analytics");
+      expect(state.tabs).toHaveLength(1);
+      const tab = state.tabs[0]!;
+      expect(tab.type).toBe("query");
+      if (tab.type === "query") {
+        expect(tab.paradigm).toBe("document");
+        expect(tab.queryLanguage).toBe("mongosh");
+        expect(tab.database).toBe("analytics");
+      }
+    });
+
     it("does not show New Query button when no connection is connected", () => {
       setConnections({
         connections: [makeConnection("c1")],

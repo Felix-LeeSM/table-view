@@ -1,5 +1,17 @@
 export type CompletionLanguage = "sql" | "mongosh";
 
+export type SqlCompletionState =
+  | "StatementStart"
+  | "SelectList"
+  | "RelationName"
+  | "ColumnRef"
+  | "FunctionRef"
+  | "InsertColumns"
+  | "UpdateSetTarget"
+  | "OrderByExpr"
+  | "ShellMeta"
+  | "Unsupported";
+
 export type CompletionItemKind =
   | "keyword"
   | "schema"
@@ -36,6 +48,7 @@ export interface CompletionResultMetadata {
   dialect?: string;
   shell?: string;
   catalogRevision?: string;
+  completionState?: SqlCompletionState;
 }
 
 export interface CompletionResult {

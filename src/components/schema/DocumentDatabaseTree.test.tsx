@@ -145,7 +145,7 @@ describe("DocumentDatabaseTree", () => {
     );
   });
 
-  it("renders source metadata for views, timeseries, read-only collections, options, id index, and unknown count", async () => {
+  it("renders source metadata and omits unknown collection counts", async () => {
     const tauri = await import("@lib/tauri");
     vi.mocked(tauri.listMongoCollections).mockResolvedValueOnce([
       collectionFixture("audit_view", "table_view_test", null, {
@@ -188,8 +188,9 @@ describe("DocumentDatabaseTree", () => {
       screen.getByLabelText("audit_view has _id index metadata"),
     ).toBeInTheDocument();
     expect(
-      screen.getByLabelText("audit_view document count unavailable"),
-    ).toBeInTheDocument();
+      screen.queryByLabelText("audit_view document count unavailable"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/n\/a/i)).not.toBeInTheDocument();
     expect(
       screen.getByLabelText("events_ts collection type: timeseries"),
     ).toBeInTheDocument();
