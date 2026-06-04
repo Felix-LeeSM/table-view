@@ -264,6 +264,18 @@ const PASTE_CASES: PasteCase[] = [
       tlsEnabled: true,
     },
   },
+  {
+    scheme: "elasticsearch",
+    url: "elasticsearch://elastic:secret@elastic.local:9200",
+    expected: {
+      dbType: "elasticsearch",
+      host: "elastic.local",
+      port: 9200,
+      user: "elastic",
+      database: "",
+      password: "secret",
+    },
+  },
 ];
 
 describe("[AC-178-01] form-mode host paste detection", () => {
@@ -307,10 +319,11 @@ describe("[AC-178-01] form-mode host paste detection", () => {
       // partial text where the label permutes by paradigm.
       const isKvProtocol =
         c.expected.dbType === "redis" || c.expected.dbType === "valkey";
+      const isSearchProtocol = c.expected.dbType === "elasticsearch";
       const userInput =
         c.expected.dbType === "mongodb"
           ? (screen.getByLabelText(/^User \(optional\)/) as HTMLInputElement)
-          : isKvProtocol
+          : isKvProtocol || isSearchProtocol
             ? (screen.getByLabelText(
                 /^Username \(optional\)/,
               ) as HTMLInputElement)
@@ -319,15 +332,22 @@ describe("[AC-178-01] form-mode host paste detection", () => {
       // Database field has paradigm-specific labels — KV protocols use
       // "<Product> database index (0-15)" via aria-label; non-KV uses
       // "Database" or "Database (optional)" via <label>.
-      const dbInput = isKvProtocol
-        ? (screen.getByLabelText(
-            `${c.expected.dbType === "valkey" ? "Valkey" : "Redis"} database index (0-15)`,
-          ) as HTMLInputElement)
-        : (screen
-            .getAllByLabelText(/^Database( \(optional\))?$/)
-            .find((el) => el.tagName === "INPUT") as HTMLInputElement);
-      expect(dbInput.value).toBe(c.expected.database ?? "");
-      if (isKvProtocol) {
+      if (isSearchProtocol) {
+        const databaseInputs = screen
+          .queryAllByLabelText(/^Database( \(optional\))?$/)
+          .filter((el) => el.tagName === "INPUT");
+        expect(databaseInputs).toHaveLength(0);
+      } else {
+        const dbInput = isKvProtocol
+          ? (screen.getByLabelText(
+              `${c.expected.dbType === "valkey" ? "Valkey" : "Redis"} database index (0-15)`,
+            ) as HTMLInputElement)
+          : (screen
+              .getAllByLabelText(/^Database( \(optional\))?$/)
+              .find((el) => el.tagName === "INPUT") as HTMLInputElement);
+        expect(dbInput.value).toBe(c.expected.database ?? "");
+      }
+      if (isKvProtocol || isSearchProtocol) {
         const tlsInput = screen.getByLabelText(
           "Enable TLS",
         ) as HTMLInputElement;
@@ -564,15 +584,14 @@ describe("[AC-178-03] host:port blur split", () => {
 // 경로이므로 alert 없이 단순히 form 을 건드리지 않음). URL 모드의 Parse &
 // Continue 는 명시적 사용자 액션이라 거부 메시지를 노출 — 별도 그룹.
 //
-// MySQL/MariaDB/SQLite/Redis/Valkey 는 supported 이므로 본 silent-reject list 에서 제외.
-// Search 는 fixture-backed only 이므로 live connection paste 를 거부한다.
+// MySQL/MariaDB/SQLite/Redis/Valkey/Elasticsearch 는 supported 이므로 본 silent-reject list 에서 제외.
+// OpenSearch 는 fixture-backed only 이므로 live connection paste 를 거부한다.
 // ===========================================================================
 
 describe("[Sprint 281] unsupported DBMS paste is silent (no form change)", () => {
   const unsupportedPastes = [
     { scheme: "mssql", url: "mssql://sa:pw@mssql.local:1433/master" },
     { scheme: "oracle", url: "oracle://system:pw@oracle.local:1521/FREEPDB1" },
-    { scheme: "elasticsearch", url: "elasticsearch://elastic.local:9200" },
     { scheme: "opensearch", url: "opensearch://open.local:9200" },
   ];
 

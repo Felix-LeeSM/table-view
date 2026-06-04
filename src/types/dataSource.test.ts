@@ -143,7 +143,9 @@ describe("DataSourceProfile registry", () => {
       catalog: { browse: true },
       paradigmSpecific: { keyBrowser: true },
     }),
-    elasticsearch: expectedCapabilities(),
+    elasticsearch: expectedCapabilities({
+      connection: { test: true },
+    }),
     opensearch: expectedCapabilities(),
   };
 
@@ -342,6 +344,7 @@ describe("DataSourceProfile registry", () => {
       "mongodb",
       "redis",
       "valkey",
+      "elasticsearch",
     ]);
     expect(isConnectionSupportedDatabaseType("postgresql")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mongodb")).toBe(true);
@@ -350,22 +353,26 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
-    expect(isConnectionSupportedDatabaseType("elasticsearch")).toBe(false);
+    expect(isConnectionSupportedDatabaseType("elasticsearch")).toBe(true);
     expect(isConnectionSupportedDatabaseType("opensearch")).toBe(false);
   });
 
-  it("keeps search profiles fixture-backed only until live HTTP catalog lands", () => {
-    for (const dbType of [
-      "elasticsearch",
-      "opensearch",
-    ] satisfies DatabaseType[]) {
-      const profile = getDataSourceProfile(dbType);
+  it("exposes Elasticsearch connection testing without widening catalog/query claims", () => {
+    const profile = getDataSourceProfile("elasticsearch");
 
-      expect(profile.capabilities.connection.test).toBe(false);
-      expect(profile.capabilities.catalog.browse).toBe(false);
-      expect(profile.capabilities.query.query).toBe(false);
-      expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);
-    }
+    expect(profile.capabilities.connection.test).toBe(true);
+    expect(profile.capabilities.catalog.browse).toBe(false);
+    expect(profile.capabilities.query.query).toBe(false);
+    expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);
+  });
+
+  it("keeps OpenSearch fixture-backed only until its own live HTTP milestone", () => {
+    const profile = getDataSourceProfile("opensearch");
+
+    expect(profile.capabilities.connection.test).toBe(false);
+    expect(profile.capabilities.catalog.browse).toBe(false);
+    expect(profile.capabilities.query.query).toBe(false);
+    expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);
   });
 
   it("keeps legacy URL supported DBMS list aligned with profile-supported DBMS", () => {
@@ -443,7 +450,7 @@ describe("DataSourceProfile registry", () => {
     const activeLanguages = [
       ...new Set(
         Object.values(DATA_SOURCE_PROFILES).flatMap((profile) =>
-          profile.capabilities.connection.test ? profile.languages : [],
+          profile.capabilities.query.query ? profile.languages : [],
         ),
       ),
     ].sort();

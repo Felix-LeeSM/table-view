@@ -27,6 +27,7 @@ import MysqlFormFields from "../forms/MysqlFormFields";
 import SqliteFormFields from "../forms/SqliteFormFields";
 import MongoFormFields from "../forms/MongoFormFields";
 import RedisFormFields from "../forms/RedisFormFields";
+import SearchFormFields from "../forms/SearchFormFields";
 
 // Sprint-112: Radix `<SelectItem>` cannot have an empty value, so we use
 // sentinel string `__none__` to represent the "None" environment option.
@@ -134,10 +135,17 @@ export default function ConnectionDialogBody({
             );
           case "mssql":
           case "oracle":
+            return (
+              <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
+            );
           case "elasticsearch":
           case "opensearch":
             return (
-              <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
+              <SearchFormFields
+                draft={form}
+                onChange={onChange}
+                {...sharedAuth}
+              />
             );
           case "mongodb":
             return (

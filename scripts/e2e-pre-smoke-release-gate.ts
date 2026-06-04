@@ -3,10 +3,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { upsertConnections } from "./fixtures/connections.js";
 import { loadSpec } from "./fixtures/spec.js";
-import {
-  isSupportedDatabaseType,
-  type DatabaseType,
-} from "../src/types/connection.js";
+import { isSupportedDatabaseType } from "../src/types/connection.js";
 import { hasConnectionCapability } from "../src/types/dataSource.js";
 
 type StoredConnection = {
@@ -94,21 +91,27 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
   }
 }
 
-function verifySearchNotAdvertisedAsLive(): void {
-  for (const dbType of ["elasticsearch", "opensearch"] as DatabaseType[]) {
-    assert(
-      !isSupportedDatabaseType(dbType),
-      `${dbType}: fixture-backed search must not be advertised as connectable`,
-    );
-    assert(
-      !hasConnectionCapability(dbType, "test"),
-      `${dbType}: fixture-backed search must not expose live test capability`,
-    );
-  }
+function verifySearchConnectionPromotionBoundary(): void {
+  assert(
+    isSupportedDatabaseType("elasticsearch"),
+    "elasticsearch: live connection test should be advertised as connectable",
+  );
+  assert(
+    hasConnectionCapability("elasticsearch", "test"),
+    "elasticsearch: live connection test capability should be exposed",
+  );
+  assert(
+    !isSupportedDatabaseType("opensearch"),
+    "opensearch: fixture-backed search must not be advertised as connectable",
+  );
+  assert(
+    !hasConnectionCapability("opensearch", "test"),
+    "opensearch: fixture-backed search must not expose live test capability",
+  );
 }
 
 await verifyProfile("development");
 await verifyProfile("e2e");
-verifySearchNotAdvertisedAsLive();
+verifySearchConnectionPromotionBoundary();
 
 console.log("[e2e:pre-smoke] release gate fixture assertions passed.");

@@ -253,6 +253,7 @@ mod tests {
     use super::super::test_helpers::*;
     use super::*;
     use serial_test::serial;
+    use tokio::net::TcpListener;
 
     // AC-11: save_connection validates empty name and empty host
     #[test]
@@ -568,33 +569,66 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_test_connection_routes_search_types_to_search_adapter() {
+    async fn test_test_connection_routes_elasticsearch_to_live_search_adapter() {
         let _dir = setup_test_env();
 
-        for db_type in [DatabaseType::Elasticsearch, DatabaseType::Opensearch] {
-            let mut conn = sample_connection("s1", "Search1");
-            conn.port = match &db_type {
-                DatabaseType::Elasticsearch => 9200,
-                DatabaseType::Opensearch => 9200,
-                _ => unreachable!(),
-            };
-            conn.db_type = db_type;
-            conn.password = String::new();
-            conn.user = String::new();
+        let mut conn = sample_connection("s1", "Search1");
+        conn.db_type = DatabaseType::Elasticsearch;
+        conn.port = unused_tcp_port().await;
+        conn.host = "127.0.0.1".into();
+        conn.password = String::new();
+        conn.user = String::new();
+        conn.database = String::new();
+        conn.connection_timeout = Some(1);
 
-            let req = TestConnectionRequest {
-                config: ConnectionConfigPublic::from(&conn),
-                password: Some(String::new()),
-                existing_id: None,
-            };
-            let result = test_connection(req).await;
+        let req = TestConnectionRequest {
+            config: ConnectionConfigPublic::from(&conn),
+            password: Some(String::new()),
+            existing_id: None,
+        };
+        let result = test_connection(req).await;
 
-            match result {
-                Err(AppError::Unsupported(msg)) => {
-                    assert!(msg.contains("network connection is not wired"));
-                }
-                other => panic!("Expected search Unsupported, got: {:?}", other),
+        match result {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Elasticsearch network error"));
             }
+            Err(AppError::Unsupported(msg)) => {
+                panic!("Elasticsearch routing regressed — got Unsupported: {msg}");
+            }
+            other => panic!("Expected Elasticsearch connection error, got: {:?}", other),
+        }
+
+        cleanup_test_env();
+    }
+
+    async fn unused_tcp_port() -> u16 {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        listener.local_addr().unwrap().port()
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_test_connection_keeps_opensearch_fixture_only() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("s1", "OpenSearch1");
+        conn.port = 9200;
+        conn.db_type = DatabaseType::Opensearch;
+        conn.password = String::new();
+        conn.user = String::new();
+
+        let req = TestConnectionRequest {
+            config: ConnectionConfigPublic::from(&conn),
+            password: Some(String::new()),
+            existing_id: None,
+        };
+        let result = test_connection(req).await;
+
+        match result {
+            Err(AppError::Unsupported(msg)) => {
+                assert!(msg.contains("OpenSearch live HTTP connection is not wired"));
+            }
+            other => panic!("Expected OpenSearch Unsupported, got: {:?}", other),
         }
 
         cleanup_test_env();

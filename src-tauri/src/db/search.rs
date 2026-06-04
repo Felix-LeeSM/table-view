@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use serde_json::{json, Value};
+use tokio::sync::Mutex;
 
 use crate::error::{AppError, CancelError};
 use crate::models::{
@@ -12,6 +15,7 @@ use crate::models::{
 };
 
 use super::search_executor::execute_fixture_search;
+use super::search_http::{open_elasticsearch_connection, SearchHttpConnection};
 use super::traits::{DbAdapter, SearchAdapter};
 use super::types::BoxFuture;
 
@@ -32,6 +36,7 @@ pub struct SearchCatalogFixture {
 pub struct SearchEngineAdapter {
     product: SearchProductKind,
     fixture: Option<SearchCatalogFixture>,
+    live: Arc<Mutex<Option<SearchHttpConnection>>>,
 }
 
 impl SearchEngineAdapter {
@@ -39,6 +44,7 @@ impl SearchEngineAdapter {
         Self {
             product: SearchProductKind::Elasticsearch,
             fixture: None,
+            live: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -46,6 +52,7 @@ impl SearchEngineAdapter {
         Self {
             product: SearchProductKind::OpenSearch,
             fixture: None,
+            live: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -55,6 +62,7 @@ impl SearchEngineAdapter {
             fixture: Some(SearchCatalogFixture::sample(
                 SearchProductKind::Elasticsearch,
             )),
+            live: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -62,6 +70,7 @@ impl SearchEngineAdapter {
         Self {
             product: SearchProductKind::OpenSearch,
             fixture: Some(SearchCatalogFixture::sample(SearchProductKind::OpenSearch)),
+            live: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -70,10 +79,19 @@ impl SearchEngineAdapter {
     }
 
     pub async fn test(config: &ConnectionConfig) -> Result<(), AppError> {
-        Err(AppError::Unsupported(format!(
-            "{:?} network connection is not wired in Sprint 470; catalog tests use fixtures",
-            config.db_type
-        )))
+        match config.db_type {
+            DatabaseType::Elasticsearch => {
+                open_elasticsearch_connection(config).await?;
+                Ok(())
+            }
+            DatabaseType::Opensearch => Err(AppError::Unsupported(
+                "OpenSearch live HTTP connection is not wired yet".into(),
+            )),
+            _ => Err(AppError::Unsupported(format!(
+                "{:?} is not a Search live HTTP connection",
+                config.db_type
+            ))),
+        }
     }
 
     fn fixture(&self) -> Result<&SearchCatalogFixture, AppError> {
@@ -143,6 +161,13 @@ impl SearchEngineAdapter {
         result.total.value = result.hits.len() as u64;
         Ok(result)
     }
+
+    fn not_connected_error(&self) -> AppError {
+        AppError::Connection(format!(
+            "{} connection is not established",
+            self.product.label()
+        ))
+    }
 }
 
 impl DbAdapter for SearchEngineAdapter {
@@ -153,20 +178,45 @@ impl DbAdapter for SearchEngineAdapter {
         }
     }
 
-    fn connect<'a>(&'a self, _config: &'a ConnectionConfig) -> BoxFuture<'a, Result<(), AppError>> {
+    fn connect<'a>(&'a self, config: &'a ConnectionConfig) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move {
-            self.fixture()?;
+            if self.fixture.is_some() {
+                return Ok(());
+            }
+            match self.product {
+                SearchProductKind::Elasticsearch => {
+                    let connection = open_elasticsearch_connection(config).await?;
+                    *self.live.lock().await = Some(connection);
+                }
+                SearchProductKind::OpenSearch => {
+                    return Err(AppError::Unsupported(
+                        "OpenSearch live HTTP connection is not wired yet".into(),
+                    ));
+                }
+            }
             Ok(())
         })
     }
 
     fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async { Ok(()) })
+        Box::pin(async move {
+            *self.live.lock().await = None;
+            Ok(())
+        })
     }
 
     fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move {
-            self.fixture()?;
+            if self.fixture.is_some() {
+                return Ok(());
+            }
+            let connection = self
+                .live
+                .lock()
+                .await
+                .clone()
+                .ok_or_else(|| self.not_connected_error())?;
+            connection.ping().await?;
             Ok(())
         })
     }
@@ -174,7 +224,17 @@ impl DbAdapter for SearchEngineAdapter {
 
 impl SearchAdapter for SearchEngineAdapter {
     fn cluster_identity<'a>(&'a self) -> BoxFuture<'a, Result<SearchClusterIdentity, AppError>> {
-        Box::pin(async move { Ok(self.fixture()?.identity.clone()) })
+        Box::pin(async move {
+            if let Some(fixture) = self.fixture.as_ref() {
+                return Ok(fixture.identity.clone());
+            }
+            self.live
+                .lock()
+                .await
+                .as_ref()
+                .map(SearchHttpConnection::identity)
+                .ok_or_else(|| self.not_connected_error())
+        })
     }
 
     fn list_indexes<'a>(&'a self) -> BoxFuture<'a, Result<Vec<SearchIndexInfo>, AppError>> {
@@ -496,59 +556,4 @@ fn settings_raw() -> Value {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn fixture_adapter_returns_catalog_without_network() {
-        let adapter = SearchEngineAdapter::fixture_elasticsearch();
-
-        let identity = adapter.cluster_identity().await.unwrap();
-        assert_eq!(identity.product, SearchProductKind::Elasticsearch);
-
-        let indexes = adapter.list_indexes().await.unwrap();
-        assert_eq!(indexes.len(), 1);
-        assert!(indexes[0].aliases.contains(&"logs-elastic".to_string()));
-
-        let data_streams = adapter.list_data_streams().await.unwrap();
-        assert_eq!(data_streams[0].name, "logs-elastic-default");
-
-        let mapping = adapter
-            .get_index_mapping("logs-elastic-2026.05.24")
-            .await
-            .unwrap();
-        assert_eq!(mapping.fields[0].path, "@timestamp");
-
-        let settings = adapter
-            .get_index_settings("logs-elastic-2026.05.24")
-            .await
-            .unwrap();
-        assert_eq!(settings.analyzers[0].name, "default");
-
-        let stats = adapter
-            .get_index_field_stats("logs-elastic-2026.05.24")
-            .await
-            .unwrap();
-        assert_eq!(stats.fields[2].sample_values[0], json!("ok"));
-
-        let samples = adapter
-            .sample_documents("logs-elastic-2026.05.24", 1)
-            .await
-            .unwrap();
-        assert_eq!(samples.hits.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn network_adapter_returns_safe_unsupported_without_http_dependency() {
-        let adapter = SearchEngineAdapter::new_opensearch();
-
-        assert!(matches!(
-            adapter.list_indexes().await,
-            Err(AppError::Unsupported(_))
-        ));
-        assert!(matches!(
-            adapter.ping().await,
-            Err(AppError::Unsupported(_))
-        ));
-    }
-}
+mod tests;

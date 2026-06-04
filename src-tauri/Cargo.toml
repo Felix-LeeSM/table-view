@@ -56,6 +56,7 @@ regex = "1"
 # Sprint 466 — Redis/Valkey KV adapter. `tokio-rustls-comp` gives async
 # command support on the existing Tokio runtime and `rediss://` TLS.
 redis = { version = "0.32", features = ["tokio-rustls-comp"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 # Sprint 356 (2026-05-16) — Q22 keyring file-key migration.
 # Cross-platform abstraction lives in `storage::crypto::KeyringBackend`;
 # the in-memory backend used by tests means we never link against the

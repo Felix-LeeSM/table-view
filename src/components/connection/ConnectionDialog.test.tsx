@@ -111,11 +111,11 @@ describe("ConnectionDialog", () => {
     expect(screen.getByRole("option", { name: "MongoDB" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Redis" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Valkey" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Elasticsearch" }),
+    ).toBeInTheDocument();
 
     // Unsupported — 안 보임.
-    expect(
-      screen.queryByRole("option", { name: "Elasticsearch" }),
-    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("option", { name: "OpenSearch" }),
     ).not.toBeInTheDocument();
@@ -487,7 +487,6 @@ describe("ConnectionDialog", () => {
   it.each([
     ["mssql", "mssql://sa:pw@mssql.local:1433/master", "Microsoft SQL Server"],
     ["oracle", "oracle://system:pw@oracle.local:1521/FREEPDB1", "Oracle"],
-    ["elasticsearch", "elasticsearch://elastic.local:9200", "Elasticsearch"],
     ["opensearch", "opensearch://open.local:9200", "OpenSearch"],
   ])(
     "rejects unsupported %s URL with explanatory error",
@@ -1050,6 +1049,53 @@ describe("ConnectionDialog", () => {
         "Database is required",
       );
       expect(mockAddConnection).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Elasticsearch conditional fields", () => {
+    it("renders URL/auth/TLS fields without a database field", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+
+      await user.click(screen.getByLabelText("Database Type"));
+      await user.click(screen.getByRole("option", { name: "Elasticsearch" }));
+
+      expect(screen.getByLabelText("Host")).toBeInTheDocument();
+      expect(screen.getByLabelText("Port")).toHaveValue(9200);
+      expect(screen.getByLabelText("Username (optional)")).toBeInTheDocument();
+      expect(screen.getByLabelText("Password (optional)")).toBeInTheDocument();
+      expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Database")).not.toBeInTheDocument();
+    });
+
+    it("saves Elasticsearch with TLS enabled and no database requirement", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText("Name"), {
+          target: { value: "Elastic local" },
+        });
+      });
+      await user.click(screen.getByLabelText("Database Type"));
+      await user.click(screen.getByRole("option", { name: "Elasticsearch" }));
+      await act(async () => {
+        fireEvent.click(screen.getByLabelText("Enable TLS"));
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Save"));
+      });
+
+      expect(
+        screen.queryByText("Database is required"),
+      ).not.toBeInTheDocument();
+      expect(mockAddConnection).toHaveBeenCalledTimes(1);
+      const draft = mockAddConnection.mock.calls[0]![0] as ConnectionDraft;
+      expect(draft.dbType).toBe("elasticsearch");
+      expect(draft.paradigm).toBe("search");
+      expect(draft.database).toBe("");
+      expect(draft.tlsEnabled).toBe(true);
     });
   });
 
