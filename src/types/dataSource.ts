@@ -397,6 +397,10 @@ export const ELASTICSEARCH_CAPABILITIES = capabilities({
   connection: {
     test: true,
   },
+  catalog: {
+    browse: true,
+    indexes: true,
+  },
 });
 
 export const SEARCH_CAPABILITIES = capabilities();

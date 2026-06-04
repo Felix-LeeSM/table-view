@@ -82,6 +82,258 @@ async fn elasticsearch_network_adapter_detects_root_identity() {
 }
 
 #[tokio::test]
+async fn elasticsearch_live_catalog_reads_indexes_aliases_and_streams() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "elastic-dev",
+                "cluster_uuid": "elastic-uuid-1",
+                "version": { "number": "8.12.2", "lucene_version": "9.9.2" }
+            }"#,
+        ),
+        route(
+            "/_cat/indices?",
+            r#"[
+                {
+                    "health": "green",
+                    "status": "open",
+                    "index": "logs-elastic-2026.05.24",
+                    "uuid": "idx-1",
+                    "docs.count": "42",
+                    "store.size": "8192",
+                    "pri": "1",
+                    "rep": "1"
+                },
+                {
+                    "health": "yellow",
+                    "status": "close",
+                    "index": ".kibana_8.12.2",
+                    "uuid": "idx-2",
+                    "docs.count": "0",
+                    "store.size": "512",
+                    "pri": "1",
+                    "rep": "0"
+                }
+            ]"#,
+        ),
+        route(
+            "/_aliases",
+            r#"{
+                "logs-elastic-2026.05.24": {
+                    "aliases": {
+                        "logs-current": {
+                            "is_write_index": true,
+                            "search_routing": "tenant-1"
+                        }
+                    }
+                }
+            }"#,
+        ),
+        route(
+            "/_aliases",
+            r#"{
+                "logs-elastic-2026.05.24": {
+                    "aliases": {
+                        "logs-current": {
+                            "is_write_index": true,
+                            "search_routing": "tenant-1"
+                        }
+                    }
+                }
+            }"#,
+        ),
+        route(
+            "/_data_stream",
+            r#"{
+                "data_streams": [
+                    {
+                        "name": "logs-elastic-default",
+                        "status": "GREEN",
+                        "hidden": false,
+                        "indices": [
+                            { "index_name": ".ds-logs-elastic-default-2026.05.24-000001" }
+                        ]
+                    }
+                ]
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        let indexes = adapter.list_indexes().await?;
+        let aliases = adapter.list_aliases().await?;
+        let streams = adapter.list_data_streams().await?;
+        Ok::<_, AppError>((indexes, aliases, streams))
+    }
+    .await;
+    if result.is_err() {
+        server.abort();
+    }
+    let (indexes, aliases, streams) = result.unwrap();
+    server.await.unwrap();
+
+    assert_eq!(indexes[0].name, "logs-elastic-2026.05.24");
+    assert!(indexes[0].open);
+    assert_eq!(indexes[0].docs_count, Some(42));
+    assert_eq!(indexes[0].store_size_bytes, Some(8192));
+    assert_eq!(indexes[0].aliases, vec!["logs-current"]);
+    assert_eq!(indexes[1].health, SearchIndexHealth::Yellow);
+    assert!(!indexes[1].open);
+    assert_eq!(aliases[0].name, "logs-current");
+    assert_eq!(aliases[0].index, "logs-elastic-2026.05.24");
+    assert_eq!(aliases[0].routing.as_deref(), Some("tenant-1"));
+    assert!(aliases[0].write_index);
+    assert_eq!(streams[0].name, "logs-elastic-default");
+    assert_eq!(
+        streams[0].backing_indices,
+        vec![".ds-logs-elastic-default-2026.05.24-000001"]
+    );
+}
+
+#[tokio::test]
+async fn elasticsearch_live_catalog_reads_mappings_settings_and_templates() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "elastic-dev",
+                "version": { "number": "8.12.2" }
+            }"#,
+        ),
+        route(
+            "/logs-elastic-2026.05.24/_mapping",
+            r#"{
+                "logs-elastic-2026.05.24": {
+                    "mappings": {
+                        "properties": {
+                            "@timestamp": { "type": "date" },
+                            "message": {
+                                "type": "text",
+                                "analyzer": "standard",
+                                "fields": {
+                                    "keyword": { "type": "keyword" }
+                                }
+                            },
+                            "user": {
+                                "properties": {
+                                    "name": { "type": "keyword" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+        ),
+        route(
+            "/logs-elastic-2026.05.24/_settings",
+            r#"{
+                "logs-elastic-2026.05.24": {
+                    "settings": {
+                        "index": {
+                            "analysis": {
+                                "analyzer": {
+                                    "default": {
+                                        "type": "standard",
+                                        "tokenizer": "standard",
+                                        "filter": ["lowercase"]
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+        ),
+        route(
+            "/_index_template",
+            r#"{
+                "index_templates": [
+                    {
+                        "name": "logs-elastic-template",
+                        "index_template": {
+                            "index_patterns": ["logs-elastic-*"],
+                            "priority": 100
+                        }
+                    }
+                ]
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        let mapping = adapter.get_index_mapping("logs-elastic-2026.05.24").await?;
+        let settings = adapter
+            .get_index_settings("logs-elastic-2026.05.24")
+            .await?;
+        let templates = adapter.list_index_templates().await?;
+        Ok::<_, AppError>((mapping, settings, templates))
+    }
+    .await;
+    if result.is_err() {
+        server.abort();
+    }
+    let (mapping, settings, templates) = result.unwrap();
+    server.await.unwrap();
+
+    assert_eq!(mapping.index, "logs-elastic-2026.05.24");
+    assert!(mapping.fields.iter().any(|field| field.path == "@timestamp"
+        && field.field_type == "date"
+        && field.aggregatable));
+    assert!(mapping.fields.iter().any(|field| field.path == "message"
+        && field.field_type == "text"
+        && field.analyzer.as_deref() == Some("standard")
+        && !field.aggregatable));
+    assert!(mapping
+        .fields
+        .iter()
+        .any(|field| field.path == "message.keyword"
+            && field.field_type == "keyword"
+            && field.aggregatable));
+    assert!(mapping
+        .fields
+        .iter()
+        .any(|field| field.path == "user.name" && field.field_type == "keyword"));
+    assert_eq!(settings.analyzers[0].name, "default");
+    assert_eq!(settings.analyzers[0].tokenizer.as_deref(), Some("standard"));
+    assert_eq!(settings.analyzers[0].filters, vec!["lowercase"]);
+    assert_eq!(templates[0].name, "logs-elastic-template");
+    assert_eq!(templates[0].index_patterns, vec!["logs-elastic-*"]);
+    assert_eq!(templates[0].priority, Some(100));
+}
+
+#[tokio::test]
+async fn elasticsearch_live_catalog_keeps_search_execution_deferred() {
+    let (port, server) = spawn_search_http_server(vec![route(
+        "/ ",
+        r#"{
+            "cluster_name": "elastic-dev",
+            "version": { "number": "8.12.2" }
+        }"#,
+    )])
+    .await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+    adapter.connect(&config).await.unwrap();
+    server.await.unwrap();
+
+    match adapter.sample_documents("logs-elastic-2026.05.24", 5).await {
+        Err(AppError::Unsupported(message)) => {
+            assert!(message.contains("live Search query execution is not wired yet"));
+        }
+        other => panic!("Expected deferred live Search query execution, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn elasticsearch_test_connection_surfaces_auth_failures() {
     let (port, server) =
         spawn_root_probe_server(401, r#"{"error":"missing credentials"}"#, None).await;
@@ -168,6 +420,40 @@ async fn spawn_root_probe_server(
             body
         );
         socket.write_all(response.as_bytes()).await.unwrap();
+    });
+    (port, handle)
+}
+
+struct SearchHttpRoute {
+    path_prefix: &'static str,
+    body: &'static str,
+}
+
+fn route(path_prefix: &'static str, body: &'static str) -> SearchHttpRoute {
+    SearchHttpRoute { path_prefix, body }
+}
+
+async fn spawn_search_http_server(routes: Vec<SearchHttpRoute>) -> (u16, JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let handle = tokio::spawn(async move {
+        for route in routes {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = [0; 4096];
+            let n = socket.read(&mut buf).await.unwrap();
+            let request = String::from_utf8_lossy(&buf[..n]);
+            let expected_prefix = format!("GET {}", route.path_prefix);
+            assert!(
+                request.starts_with(&expected_prefix),
+                "expected {expected_prefix:?}, got request:\n{request}"
+            );
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                route.body.len(),
+                route.body
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+        }
     });
     (port, handle)
 }

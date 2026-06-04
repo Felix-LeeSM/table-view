@@ -147,6 +147,9 @@ describe("SearchSidebar", () => {
     expect(within(tree).getByText("logs-elastic")).toBeInTheDocument();
     expect(within(tree).getByText("logs-elastic-default")).toBeInTheDocument();
     expect(screen.getByTestId("search-catalog-status")).toHaveTextContent(
+      "search-native",
+    );
+    expect(screen.getByTestId("search-catalog-status")).toHaveTextContent(
       "2 indexes · 1 alias · 2 data streams",
     );
     expect(invokeMock).toHaveBeenCalledWith("list_search_catalog_summary", {

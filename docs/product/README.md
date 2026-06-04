@@ -45,11 +45,12 @@
   summaries with readback/TTL verification and destructive/unsupported command
   guards. Key mutation panel controls and full Redis compatibility are not
   claimed.
-- Elasticsearch/OpenSearch: embedded fixture-backed Search catalog, selected-index
-  lazy detail, mapping/template, and Search-native result/state rendering contract 가
-  있다. Elasticsearch 는 live HTTP root-probe connection test 로 URL/auth/TLS 와
-  product/version detection 을 지원한다. OpenSearch live connection, live
-  catalog/query/admin 은 아직 없다.
+- Elasticsearch/OpenSearch: embedded fixture-backed Search query/admin/result
+  rendering contract 가 있다. Elasticsearch 는 live HTTP root-probe connection
+  test 와 live catalog 로 URL/auth/TLS, product/version detection, indexes,
+  aliases, data streams, mappings, settings/analyzers, templates, field paths 를
+  지원한다. OpenSearch catalog 와 Elasticsearch/OpenSearch query/admin 은
+  fixture-backed/deferred 다.
 - MSSQL/Oracle: declared planned RDBMS identities and static seed contracts only.
   connection UI/runtime/parser/completion support 는 아직 없다.
 
@@ -65,7 +66,7 @@
 | MongoDB | runtime-backed whitelisted document workflow | whitelisted mongosh/MQL | Rust/WASM vocabulary + cached catalog context | connection, source-aware catalog metadata, workbench metadata panels, document query/edit with MQL preview/discard, catalog-aware collection/field/index-name autocomplete, bulk delete/update previews with partial-commit warnings, bulk/index/validator slices, cancellation, destructive collection/admin confirmations, and transaction-helper unsupported gates are active for tested whitelist paths. Runtime Happy Path smoke proves seeded collection browse, row-edit MQL preview/execute, query-tab `find` projection/sort/limit, destructive `runCommand` confirmation, and cancel/no-mutation re-read. Focused component/backend tests cover broader catalog, autocomplete, bulk, index, validator, parser, cancellation, and unsupported-helper gates below smoke. arbitrary JavaScript/shell behavior, unsupported cursor helpers, server-version feature promotion gates, native document-first result panels, and full-support parity remain follow-up |
 | Redis | connection/profile + backend KV primitives + key browser/value preview/edit UI + bounded command editor vocabulary/key suggestions | backend KV guardrails plus bounded command allowlist and typed-confirm mutation controls; not language-core parser ownership | TypeScript bounded command vocabulary + current-DB/type-filtered key suggestions | key browser/value preview are live. Runtime Happy Path smoke covers Redis connection, deterministic DB 2 seed/reset, key scan, string value preview, `GET` command result, guarded string overwrite, TTL update, and exact-key delete confirmation. The value panel promotes bounded string/hash/list/set/zset edits plus expire/persist/delete preview/confirm flows, while partial/unsupported surfaces fail visibly. Backend guarded string set, delete confirmation, TTL expire/persist, bounded stream read, selected read/write/TTL/stream command dispatch, tabular projection, and exact-key `confirmKey` enforcement for single-key `DEL`/`PERSIST` have focused IPC/runtime evidence. The Redis command editor suggests the backend allowlist command names with arity hints/snippets plus current-DB key suggestions filtered by command key type. It still does not own full Redis CLI parsing or admin parity. Full CLI/admin parity, stream consumer UI, cluster/pubsub/modules/consumer-group management, multi-key destructive commands, broader command coverage, language-core parser/completion ownership, and Valkey command compatibility are follow-up |
 | Valkey | KV runtime for connection + key browser/value preview + bounded command query | Redis-compatible bounded command allowlist and typed confirmation; key mutation panel remains off | TypeScript proven Valkey command subset + current-DB/type-filtered key suggestions | `valkey` is an active `DatabaseType`/profile identity with server connection kind, product label, KV paradigm, Valkey backend adapter profile, and `redis-command` compatibility target. Connection UI/runtime support is exposed for test/connect/key browse/value preview and selected bounded command query rows through the same Redis command allowlist. Runtime Happy Path smoke uses `e2e/fixtures/seed.valkey.json` for connect/key scan/value preview, `GET`, `HGETALL`, `XRANGE`, bounded `SET`/`EXPIRE`, and destructive/unsupported guard evidence. Command completion is limited to the proven local Valkey runtime rows plus safe current-keyspace hints. `e2e/fixtures/valkey.redis-compatibility.json` separates proven local-runtime rows from candidate/rejected command families. Direct key mutation controls and full Redis compatibility are not claimed |
-| Elasticsearch/OpenSearch | Elasticsearch live connection test plus fixture-backed Search slice | index-catalog sidebar shell plus selected-index lazy detail and mapping/search envelope guardrails | bounded fixture DSL only | Elasticsearch exposes URL/auth/TLS connection UI and a live HTTP root probe that detects product/version/distribution and surfaces network/auth failures. Fixture identity/catalog summary, index/alias/data-stream shell, explicit mapping/settings/analyzers/templates/sample-document/field-stats detail, Search-native result/state rendering, raw aggregation fallback, and destructive plan contracts exist. OpenSearch live connection, live catalog/query execution, admin APIs, observability, and product-specific live deltas beyond the root probe are deferred |
+| Elasticsearch/OpenSearch | Elasticsearch live connection + live catalog plus fixture-backed Search query slice | index-catalog sidebar shell plus selected-index lazy detail and mapping/search envelope guardrails | bounded fixture DSL only | Elasticsearch exposes URL/auth/TLS connection UI, a live HTTP root probe that detects product/version/distribution and surfaces network/auth failures, and live catalog reads for indexes, aliases, data streams, mappings, settings/analyzers, templates, and field paths. Fixture sample documents, fixture search result rendering, raw aggregation fallback, and destructive plan contracts remain available for the embedded Search slice. OpenSearch live connection/catalog, Elasticsearch/OpenSearch live query execution, admin APIs, observability, and product-specific live deltas beyond the Elasticsearch catalog slice are deferred |
 | MSSQL | planned declared RDBMS identity only | no active T-SQL parser/runtime safety claim | deferred | `mssql` profile/dialect identity exists as capability-empty `declared-rdb`. Static SQL seed contract exists for future promotion, but connection UI, runtime query/catalog/edit, SQL Server auth/TLS/encryption/instance behavior, runtime fixture, and live evidence are not implemented |
 | Oracle | planned declared RDBMS identity only | no active Oracle SQL/PL/SQL parser/runtime safety claim | deferred | `oracle` profile/dialect identity exists as capability-empty `declared-rdb`. Static SQL seed contract exists for future promotion, but connection UI, runtime query/catalog/edit, service/SID/wallet/TNS behavior, runtime fixture, and live evidence are not implemented |
 | Cassandra/Scylla, DynamoDB, graph, vector, stream | candidate only | deferred language ids only | deferred | no active `DatabaseType`/profile/runtime identity. Workflow value, profile target, connection kind, language owner, catalog model, result envelope, safety policy, fixture strategy, and smoke evidence must be locked before promotion |
@@ -85,7 +86,7 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 | DuckDB | `e2e/fixtures/seed.duckdb.sql` | wired Runtime Happy Path seed for `.duckdb` open, catalog/table browse, raw SELECT result/history evidence, and read-only write rejection. Registered local CSV/Parquet/JSON/NDJSON source preview/query remains focused evidence outside this fixture smoke |
 | MongoDB | `e2e/fixtures/seed.mongodb.json` | document fixture used by current MongoDB smoke seed path |
 | Redis | `e2e/fixtures/seed.redis.json` | wired Runtime Happy Path seed for Redis DB 2 connect/scan/preview/GET plus guarded string write, TTL, and exact-key delete smoke. Broader stream consumer, cluster/pubsub/modules, admin, and Valkey parity remain future work |
-| Elasticsearch | `e2e/fixtures/seed.search.elasticsearch.json`, `src-tauri/src/db/search.rs`, `src-tauri/src/db/search_http.rs` | embedded Search fixture contract plus live HTTP root-probe connection test; no live catalog/query support |
+| Elasticsearch | `e2e/fixtures/seed.search.elasticsearch.json`, `src-tauri/src/db/search.rs`, `src-tauri/src/db/search_http.rs` | embedded Search fixture contract plus live HTTP connection/catalog support; live query/admin support deferred |
 | OpenSearch | `e2e/fixtures/seed.search.opensearch.json`, `src-tauri/src/db/search.rs` | embedded Search fixture contract; no live HTTP support |
 | MSSQL | `e2e/fixtures/seed.mssql.sql` | planned static SQL seed contract only |
 | Oracle | `e2e/fixtures/seed.oracle.sql` | planned static SQL seed contract only |
@@ -113,16 +114,15 @@ MSSQL 과 Oracle 은 별도의 capability-empty declared RDB identities 다.
 Elasticsearch/OpenSearch 는 Search identity 와 fixture-backed contract 를 갖고
 있다. Elasticsearch 는 connection dialog 와 backend `test_connection` 에서
 URL/auth/TLS 기반 live HTTP root probe 를 지원하고, product/version/distribution
-detection 과 auth/network error surfacing 을 제공한다. Search sidebar 는 embedded
-fixture catalog summary 로 index/alias/data-stream shell 만 보여준다. Search index
-detail panel 은 selected index tab 에서 명시적으로 선택한
-mapping/settings/templates/sample documents/field stats 만 lazy fetch 한다. Search
-query result 는 `_id`/`_index`/`_source`/score/fields/highlight/sort,
+detection 과 auth/network error surfacing 을 제공한다. Elasticsearch live catalog
+는 sidebar 에서 index/alias/data-stream shell 을 보여주고, selected index tab 에서
+명시적으로 선택한 mappings/settings/analyzers/templates/field stats 를 lazy fetch
+한다. Fixture-backed Search slice 는 sample documents/search results/destructive
+plans 를 유지한다. Search query result 는 `_id`/`_index`/`_source`/score/fields/highlight/sort,
 shards/timeout/total relation/took, aggregations, explain/profile payload 를
 Search-native renderer 에서 다룬다. Initial sidebar load 는 search hits,
-explain/profile/admin plan 을 가져오지 않는다. OpenSearch live connection,
-Elasticsearch/OpenSearch live catalog/query execution, admin/observability 는 아직
-deferred 다.
+explain/profile/admin plan 을 가져오지 않는다. Elasticsearch live query/admin 과
+OpenSearch live connection/catalog/query/admin/observability 는 아직 deferred 다.
 
 Cassandra/Scylla, DynamoDB, graph, vector, stream 은 active `DatabaseType`,
 profile, runtime, parser/completion, fixture/live evidence 가 없다. 이 후보들은

@@ -94,15 +94,6 @@ impl SearchEngineAdapter {
         }
     }
 
-    fn fixture(&self) -> Result<&SearchCatalogFixture, AppError> {
-        self.fixture.as_ref().ok_or_else(|| {
-            AppError::Unsupported(format!(
-                "{} network Search adapter is not wired in Sprint 470",
-                self.product.label()
-            ))
-        })
-    }
-
     fn mapping_for_fixture(
         fixture: &SearchCatalogFixture,
         index: &str,
@@ -165,6 +156,21 @@ impl SearchEngineAdapter {
     fn not_connected_error(&self) -> AppError {
         AppError::Connection(format!(
             "{} connection is not established",
+            self.product.label()
+        ))
+    }
+
+    async fn live_connection(&self) -> Result<SearchHttpConnection, AppError> {
+        self.live
+            .lock()
+            .await
+            .clone()
+            .ok_or_else(|| self.not_connected_error())
+    }
+
+    fn live_query_deferred_error(&self) -> AppError {
+        AppError::Unsupported(format!(
+            "{} live Search query execution is not wired yet",
             self.product.label()
         ))
     }
@@ -238,44 +244,85 @@ impl SearchAdapter for SearchEngineAdapter {
     }
 
     fn list_indexes<'a>(&'a self) -> BoxFuture<'a, Result<Vec<SearchIndexInfo>, AppError>> {
-        Box::pin(async move { Ok(self.fixture()?.indexes.clone()) })
+        Box::pin(async move {
+            if let Some(fixture) = self.fixture.as_ref() {
+                return Ok(fixture.indexes.clone());
+            }
+            self.live_connection().await?.list_indexes().await
+        })
     }
 
     fn list_aliases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<SearchAliasInfo>, AppError>> {
-        Box::pin(async move { Ok(self.fixture()?.aliases.clone()) })
+        Box::pin(async move {
+            if let Some(fixture) = self.fixture.as_ref() {
+                return Ok(fixture.aliases.clone());
+            }
+            self.live_connection().await?.list_aliases().await
+        })
     }
 
     fn list_data_streams<'a>(
         &'a self,
     ) -> BoxFuture<'a, Result<Vec<SearchDataStreamInfo>, AppError>> {
-        Box::pin(async move { Ok(self.fixture()?.data_streams.clone()) })
+        Box::pin(async move {
+            if let Some(fixture) = self.fixture.as_ref() {
+                return Ok(fixture.data_streams.clone());
+            }
+            self.live_connection().await?.list_data_streams().await
+        })
     }
 
     fn get_index_mapping<'a>(
         &'a self,
         index: &'a str,
     ) -> BoxFuture<'a, Result<SearchIndexMapping, AppError>> {
-        Box::pin(async move { Self::mapping_for_fixture(self.fixture()?, index) })
+        Box::pin(async move {
+            if let Some(fixture) = self.fixture.as_ref() {
+                return Self::mapping_for_fixture(fixture, index);
+            }
+            self.live_connection().await?.get_index_mapping(index).await
+        })
     }
 
     fn get_index_settings<'a>(
         &'a self,
         index: &'a str,
     ) -> BoxFuture<'a, Result<SearchIndexSettings, AppError>> {
-        Box::pin(async move { Self::settings_for_fixture(self.fixture()?, index) })
+        Box::pin(async move {
+            if let Some(fixture) = self.fixture.as_ref() {
+                return Self::settings_for_fixture(fixture, index);
+            }
+            self.live_connection()
+                .await?
+                .get_index_settings(index)
+                .await
+        })
     }
 
     fn get_index_field_stats<'a>(
         &'a self,
         index: &'a str,
     ) -> BoxFuture<'a, Result<SearchFieldStatsEnvelope, AppError>> {
-        Box::pin(async move { Self::field_stats_for_fixture(self.fixture()?, index) })
+        Box::pin(async move {
+            if let Some(fixture) = self.fixture.as_ref() {
+                return Self::field_stats_for_fixture(fixture, index);
+            }
+            self.live_connection()
+                .await?
+                .get_index_field_stats(index)
+                .await
+        })
     }
 
     fn list_index_templates<'a>(
         &'a self,
     ) -> BoxFuture<'a, Result<Vec<SearchIndexTemplateInfo>, AppError>> {
-        Box::pin(async move { Ok(self.fixture()?.templates.clone()) })
+        Box::pin(async move {
+            if let Some(fixture) = self.fixture.as_ref() {
+                return Ok(fixture.templates.clone());
+            }
+            self.live_connection().await?.list_index_templates().await
+        })
     }
 
     fn sample_documents<'a>(
@@ -283,7 +330,12 @@ impl SearchAdapter for SearchEngineAdapter {
         index: &'a str,
         limit: u64,
     ) -> BoxFuture<'a, Result<SearchResultEnvelope, AppError>> {
-        Box::pin(async move { Self::sample_documents_for_fixture(self.fixture()?, index, limit) })
+        Box::pin(async move {
+            if let Some(fixture) = self.fixture.as_ref() {
+                return Self::sample_documents_for_fixture(fixture, index, limit);
+            }
+            Err(self.live_query_deferred_error())
+        })
     }
 
     fn search<'a>(
@@ -295,7 +347,10 @@ impl SearchAdapter for SearchEngineAdapter {
             if cancel.is_some_and(|token| token.is_cancelled()) {
                 return Err(AppError::Cancel(CancelError::AlreadyCompleted));
             }
-            execute_fixture_search(self.fixture()?, request)
+            if let Some(fixture) = self.fixture.as_ref() {
+                return execute_fixture_search(fixture, request);
+            }
+            Err(self.live_query_deferred_error())
         })
     }
 
@@ -307,6 +362,12 @@ impl SearchAdapter for SearchEngineAdapter {
         let target = request.index_pattern.clone();
         let preview_only = request.preview_only;
         Box::pin(async move {
+            if self.fixture.is_none() {
+                return Err(AppError::Unsupported(format!(
+                    "{} live destructive Search planning is not wired yet",
+                    self.product.label()
+                )));
+            }
             validation?;
             Ok(SearchDestructiveOperationPlan {
                 operation: "deleteByQuery".into(),
