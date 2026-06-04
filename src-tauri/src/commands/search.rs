@@ -1,7 +1,38 @@
 use crate::commands::connection::AppState;
 use crate::commands::{not_connected, register_cancel_token, release_cancel_token};
 use crate::error::AppError;
-use crate::models::{SearchQueryRequest, SearchResultEnvelope};
+use crate::models::{SearchCatalogSummary, SearchQueryRequest, SearchResultEnvelope};
+
+async fn list_search_catalog_summary_inner(
+    state: &AppState,
+    connection_id: &str,
+) -> Result<SearchCatalogSummary, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    let search = active.as_search()?;
+    let (identity, indexes, aliases, data_streams) = tokio::try_join!(
+        search.cluster_identity(),
+        search.list_indexes(),
+        search.list_aliases(),
+        search.list_data_streams(),
+    )?;
+    Ok(SearchCatalogSummary {
+        identity,
+        indexes,
+        aliases,
+        data_streams,
+    })
+}
+
+#[tauri::command]
+pub async fn list_search_catalog_summary(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+) -> Result<SearchCatalogSummary, AppError> {
+    list_search_catalog_summary_inner(state.inner(), &connection_id).await
+}
 
 async fn execute_search_query_inner(
     state: &AppState,
@@ -39,8 +70,18 @@ pub async fn execute_search_query(
 mod tests {
     use super::*;
     use crate::db::search::SearchEngineAdapter;
-    use crate::db::ActiveAdapter;
+    use crate::db::traits::{DbAdapter, SearchAdapter};
+    use crate::db::{ActiveAdapter, BoxFuture};
+    use crate::models::{
+        ConnectionConfig, DatabaseType, SearchAliasInfo, SearchClusterCapabilities,
+        SearchClusterIdentity, SearchDataStreamInfo, SearchIndexHealth, SearchIndexInfo,
+        SearchProductDelta, SearchProductKind, SearchTemplateEndpointKind, SearchVersionInfo,
+    };
     use serde_json::json;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
 
     async fn search_state() -> AppState {
         let state = AppState::new();
@@ -81,6 +122,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn list_search_catalog_summary_uses_catalog_only_methods() {
+        let deep_fetches = Arc::new(AtomicUsize::new(0));
+        let state = AppState::new();
+        state.active_connections.lock().await.insert(
+            "search".into(),
+            ActiveAdapter::Search(Box::new(SummaryOnlySearchAdapter {
+                deep_fetches: Arc::clone(&deep_fetches),
+            })),
+        );
+
+        let summary = list_search_catalog_summary_inner(&state, "search")
+            .await
+            .unwrap();
+
+        assert_eq!(summary.identity.cluster_name, "Search fixture");
+        assert_eq!(summary.indexes[0].name, "logs-2026.05.24");
+        assert_eq!(summary.aliases[0].name, "logs-current");
+        assert_eq!(summary.data_streams[0].name, "logs-default");
+        assert_eq!(deep_fetches.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
     async fn execute_search_query_rejects_unknown_connection() {
         let state = AppState::new();
 
@@ -88,5 +151,126 @@ mod tests {
             execute_search_query_inner(&state, "missing", search_request(), None).await,
             Err(AppError::NotFound(message)) if message.contains("missing")
         ));
+    }
+
+    struct SummaryOnlySearchAdapter {
+        deep_fetches: Arc<AtomicUsize>,
+    }
+
+    impl DbAdapter for SummaryOnlySearchAdapter {
+        fn kind(&self) -> DatabaseType {
+            DatabaseType::Elasticsearch
+        }
+
+        fn connect<'a>(
+            &'a self,
+            _config: &'a ConnectionConfig,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    impl SearchAdapter for SummaryOnlySearchAdapter {
+        fn cluster_identity<'a>(
+            &'a self,
+        ) -> BoxFuture<'a, Result<SearchClusterIdentity, AppError>> {
+            Box::pin(async {
+                Ok(SearchClusterIdentity {
+                    product: SearchProductKind::Elasticsearch,
+                    cluster_name: "Search fixture".into(),
+                    cluster_uuid: Some("fixture-search".into()),
+                    version: SearchVersionInfo {
+                        number: "8.12.2".into(),
+                        distribution: Some("elasticsearch".into()),
+                        lucene: None,
+                        build_flavor: None,
+                    },
+                    capabilities: SearchClusterCapabilities {
+                        search: true,
+                        aggregations: true,
+                        aliases: true,
+                        mappings: true,
+                        legacy_index_templates: true,
+                        composable_index_templates: true,
+                        delete_by_query: true,
+                    },
+                    product_delta: SearchProductDelta {
+                        product: SearchProductKind::Elasticsearch,
+                        supports_elastic_license_api: true,
+                        supports_opensearch_plugins_api: false,
+                        default_template_endpoint:
+                            SearchTemplateEndpointKind::ComposableIndexTemplate,
+                    },
+                })
+            })
+        }
+
+        fn list_indexes<'a>(&'a self) -> BoxFuture<'a, Result<Vec<SearchIndexInfo>, AppError>> {
+            Box::pin(async {
+                Ok(vec![SearchIndexInfo {
+                    name: "logs-2026.05.24".into(),
+                    uuid: Some("idx-1".into()),
+                    health: SearchIndexHealth::Green,
+                    open: true,
+                    docs_count: Some(2),
+                    store_size_bytes: Some(4096),
+                    aliases: vec!["logs-current".into()],
+                    primary_shards: Some(1),
+                    replica_shards: Some(1),
+                }])
+            })
+        }
+
+        fn list_aliases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<SearchAliasInfo>, AppError>> {
+            Box::pin(async {
+                Ok(vec![SearchAliasInfo {
+                    name: "logs-current".into(),
+                    index: "logs-2026.05.24".into(),
+                    filter: None,
+                    routing: None,
+                    write_index: true,
+                }])
+            })
+        }
+
+        fn list_data_streams<'a>(
+            &'a self,
+        ) -> BoxFuture<'a, Result<Vec<SearchDataStreamInfo>, AppError>> {
+            Box::pin(async {
+                Ok(vec![SearchDataStreamInfo {
+                    name: "logs-default".into(),
+                    backing_indices: vec![".ds-logs-default-000001".into()],
+                    health: SearchIndexHealth::Green,
+                    docs_count: Some(2),
+                    store_size_bytes: Some(4096),
+                    primary_shards: Some(1),
+                    replica_shards: Some(1),
+                    hidden: false,
+                }])
+            })
+        }
+
+        fn get_index_mapping<'a>(
+            &'a self,
+            _index: &'a str,
+        ) -> BoxFuture<'a, Result<crate::models::SearchIndexMapping, AppError>> {
+            self.deep_fetches.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Err(AppError::Unsupported("deep fetch".into())) })
+        }
+
+        fn list_index_templates<'a>(
+            &'a self,
+        ) -> BoxFuture<'a, Result<Vec<crate::models::SearchIndexTemplateInfo>, AppError>> {
+            self.deep_fetches.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Err(AppError::Unsupported("deep fetch".into())) })
+        }
     }
 }

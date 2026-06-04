@@ -41,12 +41,30 @@ export interface SearchIndexInfo {
   replicaShards?: number;
 }
 
+export interface SearchDataStreamInfo {
+  name: string;
+  backingIndices: string[];
+  health: "green" | "yellow" | "red" | "unknown";
+  docsCount?: number;
+  storeSizeBytes?: number;
+  primaryShards?: number;
+  replicaShards?: number;
+  hidden: boolean;
+}
+
 export interface SearchAliasInfo {
   name: string;
   index: string;
   filter?: unknown;
   routing?: string;
   writeIndex: boolean;
+}
+
+export interface SearchCatalogSummary {
+  identity: SearchClusterIdentity;
+  indexes: SearchIndexInfo[];
+  aliases: SearchAliasInfo[];
+  dataStreams: SearchDataStreamInfo[];
 }
 
 export interface SearchMappingField {

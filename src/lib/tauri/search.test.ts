@@ -7,11 +7,45 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import { executeSearchQuery } from "./search";
+import { executeSearchQuery, listSearchCatalogSummary } from "./search";
 
 describe("Search Tauri wrappers", () => {
   beforeEach(() => {
     invokeMock.mockReset();
+  });
+
+  it("forwards fixture-backed catalog summary requests", async () => {
+    invokeMock.mockResolvedValueOnce({
+      identity: {
+        product: "elasticsearch",
+        clusterName: "Elasticsearch fixture",
+        version: { number: "8.12.2", distribution: "elasticsearch" },
+        capabilities: {
+          search: true,
+          aggregations: true,
+          aliases: true,
+          mappings: true,
+          legacyIndexTemplates: true,
+          composableIndexTemplates: true,
+          deleteByQuery: true,
+        },
+        productDelta: {
+          product: "elasticsearch",
+          supportsElasticLicenseApi: true,
+          supportsOpensearchPluginsApi: false,
+          defaultTemplateEndpoint: "composableIndexTemplate",
+        },
+      },
+      indexes: [],
+      aliases: [],
+      dataStreams: [],
+    });
+
+    await listSearchCatalogSummary("search-1");
+
+    expect(invokeMock).toHaveBeenLastCalledWith("list_search_catalog_summary", {
+      connectionId: "search-1",
+    });
   });
 
   it("forwards bounded Search DSL execution requests", async () => {

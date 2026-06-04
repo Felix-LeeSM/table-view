@@ -1,0 +1,239 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { useConnectionStore } from "@stores/connectionStore";
+import type { SearchCatalogSummary } from "@/types/search";
+import SearchSidebar from "./SearchSidebar";
+
+const invokeMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => invokeMock(...args),
+}));
+
+const catalog: SearchCatalogSummary = {
+  identity: {
+    product: "elasticsearch",
+    clusterName: "Elasticsearch fixture",
+    clusterUuid: "fixture-elasticsearch",
+    version: {
+      number: "8.12.2",
+      distribution: "elasticsearch",
+      lucene: "9.9.2",
+      buildFlavor: "default",
+    },
+    capabilities: {
+      search: true,
+      aggregations: true,
+      aliases: true,
+      mappings: true,
+      legacyIndexTemplates: true,
+      composableIndexTemplates: true,
+      deleteByQuery: true,
+    },
+    productDelta: {
+      product: "elasticsearch",
+      supportsElasticLicenseApi: true,
+      supportsOpensearchPluginsApi: false,
+      defaultTemplateEndpoint: "composableIndexTemplate",
+    },
+  },
+  indexes: [
+    {
+      name: "logs-elastic-2026.05.24",
+      uuid: "idx-1",
+      health: "green",
+      open: true,
+      docsCount: 2,
+      storeSizeBytes: 4096,
+      aliases: ["logs-elastic"],
+      primaryShards: 1,
+      replicaShards: 1,
+    },
+    {
+      name: ".kibana_8.12.2",
+      health: "yellow",
+      open: true,
+      docsCount: 12,
+      storeSizeBytes: 2048,
+      aliases: [],
+      primaryShards: 1,
+      replicaShards: 0,
+    },
+  ],
+  aliases: [
+    {
+      name: "logs-elastic",
+      index: "logs-elastic-2026.05.24",
+      writeIndex: true,
+    },
+  ],
+  dataStreams: [
+    {
+      name: "logs-elastic-default",
+      backingIndices: [".ds-logs-elastic-default-2026.05.24-000001"],
+      health: "green",
+      docsCount: 2,
+      storeSizeBytes: 4096,
+      primaryShards: 1,
+      replicaShards: 1,
+      hidden: false,
+    },
+    {
+      name: ".fleet-actions",
+      backingIndices: [".ds-.fleet-actions-000001"],
+      health: "green",
+      docsCount: 1,
+      storeSizeBytes: 512,
+      primaryShards: 1,
+      replicaShards: 0,
+      hidden: true,
+    },
+  ],
+};
+
+describe("SearchSidebar", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    invokeMock.mockResolvedValue(catalog);
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "search-1",
+          name: "Elastic fixture",
+          dbType: "elasticsearch",
+          host: "localhost",
+          port: 9200,
+          user: "",
+          hasPassword: false,
+          database: "",
+          groupId: null,
+          color: null,
+          environment: null,
+          paradigm: "search",
+        },
+      ],
+      activeStatuses: { "search-1": { type: "connected" } },
+      hasLoadedOnce: true,
+    });
+  });
+
+  it("loads fixture-backed index, alias, and data-stream catalog without deep metadata", async () => {
+    render(<SearchSidebar connectionId="search-1" />);
+
+    expect(
+      await screen.findByText(/Elasticsearch fixture/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/8\.12\.2 · elasticsearch/)).toBeInTheDocument();
+
+    const tree = screen.getByRole("tree", {
+      name: /elasticsearch search catalog/i,
+    });
+    expect(
+      within(tree).getByText("logs-elastic-2026.05.24"),
+    ).toBeInTheDocument();
+    expect(within(tree).getByText("logs-elastic")).toBeInTheDocument();
+    expect(within(tree).getByText("logs-elastic-default")).toBeInTheDocument();
+    expect(screen.getByTestId("search-catalog-status")).toHaveTextContent(
+      "2 indexes · 1 alias · 2 data streams",
+    );
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).toHaveBeenCalledWith("list_search_catalog_summary", {
+      connectionId: "search-1",
+    });
+  });
+
+  it("keeps hidden/system entries behind an explicit toggle", async () => {
+    render(<SearchSidebar connectionId="search-1" />);
+
+    await screen.findByText("logs-elastic-2026.05.24");
+    expect(screen.queryByText(".kibana_8.12.2")).not.toBeInTheDocument();
+    expect(screen.queryByText(".fleet-actions")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /show system/i }));
+
+    expect(screen.getByText(".kibana_8.12.2")).toBeInTheDocument();
+    expect(screen.getByText(".fleet-actions")).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("filters entries locally and selected rows do not fetch mapping/settings/sample documents", async () => {
+    render(<SearchSidebar connectionId="search-1" />);
+
+    await screen.findByText("logs-elastic-2026.05.24");
+    fireEvent.change(
+      screen.getByRole("textbox", { name: /elasticsearch catalog filter/i }),
+      { target: { value: "default" } },
+    );
+
+    expect(
+      screen.queryByText("logs-elastic-2026.05.24"),
+    ).not.toBeInTheDocument();
+    const row = screen.getByRole("treeitem", {
+      name: /logs-elastic-default/i,
+    });
+    fireEvent.click(row);
+    expect(row).toHaveAttribute("aria-selected", "true");
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders many-index summaries without changing the sidebar shell", async () => {
+    invokeMock.mockResolvedValueOnce({
+      ...catalog,
+      indexes: Array.from({ length: 25 }, (_, index) => ({
+        name: `logs-${String(index + 1).padStart(2, "0")}`,
+        health: index % 3 === 0 ? "yellow" : "green",
+        open: true,
+        docsCount: index + 1,
+        storeSizeBytes: 1024 * (index + 1),
+        aliases: [],
+        primaryShards: 1,
+        replicaShards: 1,
+      })),
+      aliases: [],
+      dataStreams: [],
+    } satisfies SearchCatalogSummary);
+
+    render(<SearchSidebar connectionId="search-1" />);
+
+    expect(await screen.findByText("logs-01")).toBeInTheDocument();
+    expect(screen.getByText("logs-25")).toBeInTheDocument();
+    expect(screen.getByTestId("search-catalog-status")).toHaveTextContent(
+      "25 indexes · 0 aliases · 0 data streams",
+    );
+  });
+
+  it("renders empty, loading, refresh, and error states", async () => {
+    invokeMock.mockResolvedValueOnce({
+      ...catalog,
+      indexes: [],
+      aliases: [],
+      dataStreams: [],
+    });
+
+    render(<SearchSidebar connectionId="search-1" />);
+
+    expect(
+      screen.getByRole("status", { name: /loading search catalog/i }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("No indexes found.")).toBeInTheDocument();
+    expect(screen.getByText("No aliases found.")).toBeInTheDocument();
+    expect(screen.getByText("No data streams found.")).toBeInTheDocument();
+
+    invokeMock.mockRejectedValueOnce(new Error("fixture catalog unavailable"));
+    fireEvent.click(
+      screen.getByRole("button", { name: /refresh elasticsearch catalog/i }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "fixture catalog unavailable",
+      ),
+    );
+  });
+});

@@ -17,7 +17,7 @@ use crate::models::{
     DropTableRequest, DropTriggerRequest, FileAnalyticsPreview, FileAnalyticsQueryResponse,
     FileAnalyticsSource, FileAnalyticsSourceMetadata, FilterCondition, FunctionInfo, IndexInfo,
     PostgresExtensionInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult,
-    SearchAliasInfo, SearchClusterIdentity, SearchDeleteByQueryRequest,
+    SearchAliasInfo, SearchClusterIdentity, SearchDataStreamInfo, SearchDeleteByQueryRequest,
     SearchDestructiveOperationPlan, SearchIndexInfo, SearchIndexMapping, SearchIndexTemplateInfo,
     SearchQueryRequest, SearchResultEnvelope, TableData, TableInfo, TriggerInfo, ViewInfo,
 };
@@ -1129,6 +1129,12 @@ pub trait SearchAdapter: DbAdapter {
                 "This search adapter does not expose aliases".into(),
             ))
         })
+    }
+
+    fn list_data_streams<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<SearchDataStreamInfo>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
     }
 
     fn get_index_mapping<'a>(
