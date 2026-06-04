@@ -160,7 +160,7 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
         className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 text-3xs text-muted-foreground"
         data-testid="search-catalog-status"
       >
-        <span>fixture-backed</span>
+        <span>search-native</span>
         <span>{summaryText}</span>
       </div>
 

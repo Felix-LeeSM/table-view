@@ -4,7 +4,10 @@ import { resolve } from "node:path";
 import { upsertConnections } from "./fixtures/connections.js";
 import { loadSpec } from "./fixtures/spec.js";
 import { isSupportedDatabaseType } from "../src/types/connection.js";
-import { hasConnectionCapability } from "../src/types/dataSource.js";
+import {
+  getDataSourceProfile,
+  hasConnectionCapability,
+} from "../src/types/dataSource.js";
 
 type StoredConnection = {
   id: string;
@@ -92,6 +95,8 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
 }
 
 function verifySearchConnectionPromotionBoundary(): void {
+  const elasticsearch = getDataSourceProfile("elasticsearch");
+
   assert(
     isSupportedDatabaseType("elasticsearch"),
     "elasticsearch: live connection test should be advertised as connectable",
@@ -99,6 +104,15 @@ function verifySearchConnectionPromotionBoundary(): void {
   assert(
     hasConnectionCapability("elasticsearch", "test"),
     "elasticsearch: live connection test capability should be exposed",
+  );
+  assert(
+    elasticsearch.capabilities.catalog.browse &&
+      elasticsearch.capabilities.catalog.indexes,
+    "elasticsearch: live catalog browse/index capability should be exposed",
+  );
+  assert(
+    !elasticsearch.capabilities.query.query,
+    "elasticsearch: live query execution should remain deferred",
   );
   assert(
     !isSupportedDatabaseType("opensearch"),
