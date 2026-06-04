@@ -20,6 +20,7 @@ import SqlQueryEditor from "./SqlQueryEditor";
 import MongoQueryEditor from "./MongoQueryEditor";
 import RedisCommandEditor from "./RedisCommandEditor";
 import QueryResultGrid from "./QueryResultGrid";
+import { SearchResultView } from "@components/search/SearchResultView";
 import { ExplainViewer } from "./ExplainViewer";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
@@ -466,6 +467,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
             expectedDatabase={explainExpectedDatabase ?? undefined}
             onPlanSettled={handleExplainSettled}
           />
+        ) : tab.paradigm === "search" ? (
+          <SearchResultView queryState={tab.queryState} />
         ) : (
           <QueryResultGrid
             queryState={tab.queryState}

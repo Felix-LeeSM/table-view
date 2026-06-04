@@ -51,6 +51,7 @@ pub use search::{
     SearchDestructiveSafety, SearchFieldStatsEnvelope, SearchFieldStatsInfo, SearchHitEnvelope,
     SearchIndexHealth, SearchIndexInfo, SearchIndexMapping, SearchIndexSettings,
     SearchIndexTemplateInfo, SearchMappingField, SearchProductDelta, SearchProductKind,
-    SearchQueryRequest, SearchResultEnvelope, SearchTemplateEndpointKind, SearchTermsBucket,
-    SearchTotalHits, SearchTotalHitsRelation, SearchVersionInfo,
+    SearchQueryRequest, SearchResultEnvelope, SearchShardFailure, SearchShardSummary,
+    SearchTemplateEndpointKind, SearchTermsBucket, SearchTotalHits, SearchTotalHitsRelation,
+    SearchVersionInfo,
 };

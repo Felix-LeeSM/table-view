@@ -437,6 +437,7 @@ impl SearchCatalogFixture {
                         }),
                         fields: None,
                         highlight: None,
+                        explanation: None,
                         sort: Vec::<Value>::new(),
                     },
                     SearchHitEnvelope {
@@ -450,10 +451,14 @@ impl SearchCatalogFixture {
                         }),
                         fields: None,
                         highlight: None,
+                        explanation: None,
                         sort: Vec::<Value>::new(),
                     },
                 ],
                 aggregations: Vec::new(),
+                shards: None,
+                explain: None,
+                profile: None,
             },
         }
     }

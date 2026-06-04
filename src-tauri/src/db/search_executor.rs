@@ -240,10 +240,11 @@ fn aggregation_envelope(
     match kind.as_str() {
         "terms" => terms_aggregation(name, config, hits),
         "value_count" => value_count_aggregation(name, config, hits),
-        other => Err(AppError::Unsupported(format!(
-            "Search aggregation '{}' uses unsupported kind '{}'",
-            name, other
-        ))),
+        other => Ok(SearchAggregationEnvelope::Raw {
+            name: name.into(),
+            aggregation_type: Some(other.into()),
+            raw: Value::Object(spec.clone()),
+        }),
     }
 }
 
@@ -480,15 +481,32 @@ mod tests {
     }
 
     #[test]
-    fn aggregation_envelope_rejects_unknown_raw_kind() {
-        let raw = json!({
-            "kind": "raw",
-            "name": "raw_payload",
-            "value": { "opaque": true }
-        });
+    fn fixture_search_keeps_unsupported_aggregations_as_raw_fallback() {
+        let result = execute_fixture_search(
+            &fixture(),
+            &request(json!({
+                "query": { "match_all": {} },
+                "aggs": {
+                    "latency_percentiles": {
+                        "percentiles": { "field": "latency_ms" }
+                    }
+                }
+            })),
+        )
+        .unwrap();
 
-        let result = serde_json::from_value::<SearchAggregationEnvelope>(raw);
-
-        assert!(result.is_err());
+        assert_eq!(result.aggregations.len(), 1);
+        match &result.aggregations[0] {
+            SearchAggregationEnvelope::Raw {
+                name,
+                aggregation_type,
+                raw,
+            } => {
+                assert_eq!(name, "latency_percentiles");
+                assert_eq!(aggregation_type.as_deref(), Some("percentiles"));
+                assert_eq!(raw["percentiles"]["field"], "latency_ms");
+            }
+            other => panic!("expected raw aggregation, got {other:?}"),
+        }
     }
 }

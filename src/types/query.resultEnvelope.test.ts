@@ -14,9 +14,10 @@ import {
 import type { SearchAggregationEnvelope, SearchResultEnvelope } from "./search";
 
 const rawAggregationEnvelope: SearchAggregationEnvelope = {
-  // @ts-expect-error Raw aggregation payload bags must not type-check.
   kind: "raw",
   name: "opaque",
+  aggregationType: "unsupported",
+  raw: { opaque: true },
 };
 void rawAggregationEnvelope;
 

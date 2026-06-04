@@ -131,6 +131,7 @@ export interface SearchHitEnvelope {
   source: unknown;
   fields?: unknown;
   highlight?: unknown;
+  explanation?: unknown;
   sort: unknown[];
 }
 
@@ -141,7 +142,8 @@ export interface SearchTermsBucket {
 
 export type SearchAggregationEnvelope =
   | SearchTermsAggregationEnvelope
-  | SearchValueCountAggregationEnvelope;
+  | SearchValueCountAggregationEnvelope
+  | SearchRawAggregationEnvelope;
 
 export interface SearchTermsAggregationEnvelope {
   kind: "terms";
@@ -155,6 +157,28 @@ export interface SearchValueCountAggregationEnvelope {
   value: number;
 }
 
+export interface SearchRawAggregationEnvelope {
+  kind: "raw";
+  name: string;
+  aggregationType?: string;
+  raw: unknown;
+}
+
+export interface SearchShardFailure {
+  shard?: number;
+  index?: string;
+  node?: string;
+  reason: unknown;
+}
+
+export interface SearchShardSummary {
+  total: number;
+  successful: number;
+  skipped: number;
+  failed: number;
+  failures: SearchShardFailure[];
+}
+
 export interface SearchResultEnvelope {
   tookMs: number;
   timedOut: boolean;
@@ -164,4 +188,7 @@ export interface SearchResultEnvelope {
   };
   hits: SearchHitEnvelope[];
   aggregations: SearchAggregationEnvelope[];
+  shards?: SearchShardSummary;
+  explain?: unknown;
+  profile?: unknown;
 }
