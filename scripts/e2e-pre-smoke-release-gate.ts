@@ -111,8 +111,10 @@ function verifySearchConnectionPromotionBoundary(): void {
     "elasticsearch: live catalog browse/index capability should be exposed",
   );
   assert(
-    !elasticsearch.capabilities.query.query,
-    "elasticsearch: live query execution should remain deferred",
+    elasticsearch.capabilities.query.query &&
+      elasticsearch.capabilities.query.cancel &&
+      !elasticsearch.capabilities.query.explain,
+    "elasticsearch: bounded live query/cancel should be exposed without explain",
   );
   assert(
     !isSupportedDatabaseType("opensearch"),

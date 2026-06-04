@@ -28,8 +28,9 @@ widening work lives in `docs/ROADMAP.md`.
 
 Runtime-active languages are the languages used by `DataSourceProfile` entries
 with active query execution capability. Elasticsearch now has a live connection
-test and live catalog, but `search-dsl` stays deferred because live Search query
-execution is not promoted.
+test, live catalog, and bounded live Search query dispatch. `search-dsl` parser
+and completion ownership stay deferred until the DSL parser/completion
+milestones land.
 
 `sql` is active for connection-supported SQL/RDBMS profiles only. MSSQL and
 Oracle carry planned `sql` profile metadata, but their capabilities are empty;
@@ -51,13 +52,13 @@ suggestions instead of blocking the editor.
 | `sql` | `active` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
 | `mongosh` | `active` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
 | `redis-command` | `active` | `future-language-core-contract` | `typescript-runtime-adapter` | `none` | `profile-safety-policy` |
+| `search-dsl` | `active` | `future-language-core-contract` | `future-language-core-contract` | `none` | `profile-safety-policy` |
 
 Declared or deferred language ids stay in the registry so future active profiles
 cannot add parser or completion vocabulary without an owner decision.
 
 | QueryLanguageId | Lifecycle | Parser owner | Completion owner | Fallback policy | Safety analyzer | Current boundary |
 |---|---|---|---|---|---|---|
-| `search-dsl` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Elasticsearch live connection/catalog exists; Search query execution remains fixture-backed until live HTTP query promotion lands. |
 | `cql` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Cassandra/Scylla profiles are not active. |
 | `partiql` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | DynamoDB profiles are not active. |
 | `cypher` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Graph profiles are not active. |
@@ -78,7 +79,7 @@ cannot add parser or completion vocabulary without an owner decision.
 | MongoDB Mongosh/MQL | Whitelisted `db...` collection/admin commands, JSON-like bodies, BSON literals, `find(filter, projection)`, cursor-chain `sort`/`skip`/`limit` dispatch, aggregate cursor-chain lowering, operator/stage/expression completion, cached collection and field-name suggestions, active-collection index-name suggestions for `dropIndex`, destructive collection/admin confirmations, and transaction-helper unsupported gates are supported. Routine desktop smoke proves seeded collection browse, row-edit MQL preview/execute, query-tab `find` projection/sort/limit, destructive `runCommand` confirmation, and cancel/no-mutation re-read. | Completion suggestions are editor assistance and stay aligned to the runtime whitelist. Smoke evidence is runtime evidence for the whitelisted paths above, while broader component/backend tests remain below-smoke focused evidence. Arbitrary JavaScript, shell helpers such as `use`/`show`, multiple statements, unsupported cursor helpers, cross-db shell navigation, server-version feature promotion gates, and native document-first result panels remain out of scope. |
 | Redis command | Redis connection/profile, backend KV primitives, key browser, value preview/edit UI, bounded command editor vocabulary/key suggestions, and static KV/stream fixture inventory are active. Backend primitives are typed IPC calls for database/key scan, typed value reads, guarded string set, delete confirmation, TTL expire/persist, and bounded stream reads. The backend command allowlist classifies read/write/TTL/stream/destructive effects and only allows single-key destructive `DEL`/TTL-removal `PERSIST` when the request carries an exact `confirmKey`. The value panel promotes bounded string/hash/list/set/zset edits and expire/persist/delete preview/confirm controls; partial or unsupported key types fail visibly. The Redis command editor suggests selected read/write/TTL/stream/destructive allowlist commands with arity hints/snippets and suggests current-DB keys filtered by command key type when scan cache is available. Focused tests cover dispatch through `executeKvCommand`, tabular projection, and non-blocking scan-cache fallback. Valkey reuses the KV protocol for connection/key scan/value preview, bounded command query dispatch, and a narrower command completion target for proven Valkey rows. | Redis command parser is not owned by language-core yet, and the current backend parser is an allowlist, not arbitrary Redis CLI support. Completion is TypeScript allowlist vocabulary plus current scan-cache key suggestions; it is not an unsupported command-family surface or full Redis autocomplete implementation. Unsupported command families reject with explicit messages. Key suggestions are hints only and can be stale if Redis/Valkey keyspace changes after scan. Full Redis CLI/admin parity, stream consumer UI, broader command coverage, cluster/pubsub/modules/consumer-group management, multi-key destructive commands, and Valkey mutation support are not claimed. |
 | Valkey `redis-command` target | Valkey has a KV runtime slice for connection, database/key scan, typed value preview, bounded Redis-compatible command query dispatch, and TypeScript command completion for proven local-runtime rows (`GET`, `HGETALL`, `XRANGE`, `TYPE`, `EXISTS`, `SET`, `EXPIRE`, `PERSIST`, `DEL`). Runtime Happy Path smoke covers connect/key scan/value preview, `GET`, `HGETALL`, `XRANGE`, bounded `SET`/`EXPIRE` DML summaries with readback/TTL verification, and destructive/unsupported command guards through the Valkey service and `e2e/fixtures/seed.valkey.json`. Focused local Valkey testcontainer evidence still owns exact-key `PERSIST`/`DEL` confirmation success and broader proven-row backend details below smoke. Completion key suggestions use the current DB scan cache and stay hidden for unpromoted command families. Static fixture inventory includes `e2e/fixtures/valkey.redis-compatibility.json`, which separates proven local runtime rows from candidate families and rejected Redis assumptions. | The matrix is not direct key mutation or full Redis compatibility evidence. Future support must prove Valkey identity with Valkey-specific server fields for broader compatibility claims and keep admin/server-control, broad destructive, cluster, pub/sub, modules/functions, scripting, and consumer-group commands rejected until separate workflow-specific safety/result-envelope decisions land. |
-| Search DSL | Fixture-backed Search identities and bounded fixture DSL exist for Elasticsearch/OpenSearch fixture search result paths. Elasticsearch connection/auth/TLS root probe is active, detects product/version/distribution, and live catalog reads indexes, aliases, data streams, mappings, settings/analyzers, templates, and field paths without promoting Search query execution. Search result rendering stays Search-native for hits, shard/timeout metadata, aggregations, and explain/profile payloads. | Live HTTP query execution, response parsing, admin APIs, observability, OpenSearch live connection/catalog, and full query-language support are deferred. Search fixture files mirror embedded adapter contracts only. |
+| Search DSL | Fixture-backed Search identities and bounded fixture DSL exist for Elasticsearch/OpenSearch fixture result paths. Elasticsearch connection/auth/TLS root probe is active, detects product/version/distribution, live catalog reads indexes, aliases, data streams, mappings, settings/analyzers, templates, and field paths, and bounded live `_search` dispatch parses hits/source/fields/highlights/sort, shard/timeout metadata, aggregations, and explain/profile payloads into the Search-native renderer. | Search DSL parser/completion ownership, admin APIs, observability, OpenSearch live connection/catalog/query, and full query-language support are deferred. Search fixture files mirror embedded adapter contracts only. |
 | MSSQL SQL | Planned profile metadata and a static SQL seed contract declare SQL Server as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no SQL Server connection UI, runtime query/catalog/edit path, T-SQL parser/completion claim, auth/TLS/encryption/instance contract, runtime fixture/live evidence, or desktop E2E smoke. |
 | Oracle SQL | Planned profile metadata and a static SQL seed contract declare Oracle as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no Oracle connection UI, runtime query/catalog/edit path, Oracle SQL/PL/SQL parser/completion claim, service/SID/wallet/TNS contract, runtime fixture/live evidence, or desktop E2E smoke. |
 
@@ -327,11 +328,10 @@ are:
   dispatch plus wired Runtime Happy Path smoke and proven-row command
   completion. Direct key mutation controls and full Redis compatibility are not
   claimed.
-- Search DSL is fixture-backed for Elasticsearch/OpenSearch result rendering and
-  adapter query/admin contracts only. Elasticsearch live connection/auth/TLS root
-  probe and live catalog are active, but Search result state hardening does not
-  promote live HTTP Search query support, which still waits for search execution,
-  admin, observability, and product-delta gates.
+- Search DSL has bounded live Elasticsearch `_search` dispatch and response
+  parsing, plus fixture-backed Elasticsearch/OpenSearch renderer/admin
+  contracts. Parser/completion ownership, admin, observability, OpenSearch live
+  behavior, and product-delta gates remain deferred.
 - MSSQL and Oracle are planned SQL/RDBMS identities only. Declared profile
   metadata and static seed contracts do not imply active T-SQL, Oracle
   SQL/PL/SQL, connection, query, catalog, edit, parser/completion, runtime

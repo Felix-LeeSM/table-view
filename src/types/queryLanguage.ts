@@ -74,13 +74,13 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
   "search-dsl": {
     id: "search-dsl",
     label: "Search DSL",
-    lifecycle: "deferred",
+    lifecycle: "active",
     parserOwner: "future-language-core-contract",
     completionOwner: "future-language-core-contract",
     fallbackPolicy: {
-      kind: "not-implemented",
+      kind: "none",
       reason:
-        "Search DSL is fixture-backed only until live HTTP execution lands.",
+        "Elasticsearch dispatches JSON Search DSL request bodies directly; parser and completion ownership remain future work.",
     },
     safetyAnalyzer: "profile-safety-policy",
   },

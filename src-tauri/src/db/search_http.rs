@@ -1,16 +1,21 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use reqwest::StatusCode;
-use serde_json::{Map, Value};
+use reqwest::{RequestBuilder, Response, StatusCode};
+use serde_json::{json, Map, Value};
+use tokio_util::sync::CancellationToken;
 
-use crate::error::AppError;
+use crate::error::{AppError, CancelError};
 use crate::models::{
     ConnectionConfig, SearchAliasInfo, SearchAnalyzerInfo, SearchClusterCapabilities,
     SearchClusterIdentity, SearchDataStreamInfo, SearchFieldStatsEnvelope, SearchFieldStatsInfo,
     SearchIndexHealth, SearchIndexInfo, SearchIndexMapping, SearchIndexSettings,
     SearchIndexTemplateInfo, SearchMappingField, SearchProductDelta, SearchProductKind,
-    SearchTemplateEndpointKind, SearchVersionInfo,
+    SearchQueryRequest, SearchResultEnvelope, SearchTemplateEndpointKind, SearchVersionInfo,
+};
+
+use super::search_live_query::{
+    live_search_body, parse_search_response, search_error_detail, validate_live_search_request,
 };
 
 #[derive(Debug, Clone)]
@@ -137,6 +142,36 @@ impl SearchHttpConnection {
         parse_index_templates(&payload)
     }
 
+    pub(crate) async fn sample_documents(
+        &self,
+        index: &str,
+        limit: u64,
+    ) -> Result<SearchResultEnvelope, AppError> {
+        self.search(
+            &SearchQueryRequest {
+                index: index.to_string(),
+                body: json!({ "query": { "match_all": {} } }),
+                from: None,
+                size: Some(limit),
+                track_total_hits: Some(true),
+            },
+            None,
+        )
+        .await
+    }
+
+    pub(crate) async fn search(
+        &self,
+        request: &SearchQueryRequest,
+        cancel: Option<&CancellationToken>,
+    ) -> Result<SearchResultEnvelope, AppError> {
+        validate_live_search_request(request)?;
+        let path = format!("/{}/_search", request.index.trim());
+        let body = live_search_body(request)?;
+        let payload = self.post_json(&path, &Value::Object(body), cancel).await?;
+        parse_search_response(&payload)
+    }
+
     async fn get_json(&self, path: &str) -> Result<Value, AppError> {
         let request = self.auth.apply(self.client.get(format!(
             "{}{}",
@@ -164,6 +199,57 @@ impl SearchHttpConnection {
             ))
         })
     }
+
+    async fn post_json(
+        &self,
+        path: &str,
+        body: &Value,
+        cancel: Option<&CancellationToken>,
+    ) -> Result<Value, AppError> {
+        let request = self.auth.apply(
+            self.client
+                .post(format!("{}{}", self.base_url.trim_end_matches('/'), path))
+                .json(body),
+        );
+        let response = send_with_cancel(request, cancel).await?;
+        let status = response.status();
+        if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+            return Err(AppError::Connection(format!(
+                "Elasticsearch authentication failed ({status})"
+            )));
+        }
+        if !status.is_success() {
+            let detail = response
+                .text()
+                .await
+                .map(search_error_detail)
+                .unwrap_or_else(|err| format!("failed to read error body: {err}"));
+            return Err(AppError::Connection(format!(
+                "Elasticsearch search request {path} failed with HTTP {status}: {detail}"
+            )));
+        }
+        response.json::<Value>().await.map_err(|err| {
+            AppError::Connection(format!(
+                "Elasticsearch search request {path} returned invalid JSON: {err}"
+            ))
+        })
+    }
+}
+
+async fn send_with_cancel(
+    request: RequestBuilder,
+    cancel: Option<&CancellationToken>,
+) -> Result<Response, AppError> {
+    let response = if let Some(token) = cancel {
+        tokio::select! {
+            biased;
+            _ = token.cancelled() => return Err(AppError::Cancel(CancelError::AlreadyCompleted)),
+            response = request.send() => response,
+        }
+    } else {
+        request.send().await
+    };
+    response.map_err(|err| AppError::Connection(format!("Elasticsearch network error: {err}")))
 }
 
 impl SearchHttpAuth {
@@ -291,8 +377,8 @@ fn identity_from_root(
                 .map(str::to_string),
         },
         capabilities: SearchClusterCapabilities {
-            search: false,
-            aggregations: false,
+            search: true,
+            aggregations: true,
             aliases: true,
             mappings: true,
             legacy_index_templates: false,
