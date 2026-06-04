@@ -14,6 +14,7 @@ import {
   selectDatabaseType,
   step,
   switchToLauncherWindow,
+  switchToWorkspaceWindow,
   typeQuery,
   waitForGridTextAll,
   waitForLauncher,
