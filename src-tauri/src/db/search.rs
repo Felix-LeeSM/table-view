@@ -3,12 +3,12 @@ use serde_json::{json, Value};
 use crate::error::{AppError, CancelError};
 use crate::models::{
     validate_search_destructive_request, ConnectionConfig, DatabaseType, SearchAliasInfo,
-    SearchClusterCapabilities, SearchClusterIdentity, SearchDataStreamInfo,
-    SearchDeleteByQueryRequest, SearchDestructiveOperationPlan, SearchHitEnvelope,
-    SearchIndexHealth, SearchIndexInfo, SearchIndexMapping, SearchIndexTemplateInfo,
-    SearchMappingField, SearchProductDelta, SearchProductKind, SearchQueryRequest,
-    SearchResultEnvelope, SearchTemplateEndpointKind, SearchTotalHits, SearchTotalHitsRelation,
-    SearchVersionInfo,
+    SearchAnalyzerInfo, SearchClusterCapabilities, SearchClusterIdentity, SearchDataStreamInfo,
+    SearchDeleteByQueryRequest, SearchDestructiveOperationPlan, SearchFieldStatsEnvelope,
+    SearchFieldStatsInfo, SearchHitEnvelope, SearchIndexHealth, SearchIndexInfo,
+    SearchIndexMapping, SearchIndexSettings, SearchIndexTemplateInfo, SearchMappingField,
+    SearchProductDelta, SearchProductKind, SearchQueryRequest, SearchResultEnvelope,
+    SearchTemplateEndpointKind, SearchTotalHits, SearchTotalHitsRelation, SearchVersionInfo,
 };
 
 use super::search_executor::execute_fixture_search;
@@ -22,6 +22,8 @@ pub struct SearchCatalogFixture {
     pub aliases: Vec<SearchAliasInfo>,
     pub data_streams: Vec<SearchDataStreamInfo>,
     pub mappings: Vec<SearchIndexMapping>,
+    pub settings: Vec<SearchIndexSettings>,
+    pub field_stats: Vec<SearchFieldStatsEnvelope>,
     pub templates: Vec<SearchIndexTemplateInfo>,
     pub search_result: SearchResultEnvelope,
 }
@@ -94,6 +96,53 @@ impl SearchEngineAdapter {
             .cloned()
             .ok_or_else(|| AppError::NotFound(format!("Search index '{}' not found", index)))
     }
+
+    fn settings_for_fixture(
+        fixture: &SearchCatalogFixture,
+        index: &str,
+    ) -> Result<SearchIndexSettings, AppError> {
+        fixture
+            .settings
+            .iter()
+            .find(|settings| settings.index == index)
+            .cloned()
+            .ok_or_else(|| AppError::NotFound(format!("Search index '{}' not found", index)))
+    }
+
+    fn field_stats_for_fixture(
+        fixture: &SearchCatalogFixture,
+        index: &str,
+    ) -> Result<SearchFieldStatsEnvelope, AppError> {
+        fixture
+            .field_stats
+            .iter()
+            .find(|stats| stats.index == index)
+            .cloned()
+            .ok_or_else(|| AppError::NotFound(format!("Search index '{}' not found", index)))
+    }
+
+    fn sample_documents_for_fixture(
+        fixture: &SearchCatalogFixture,
+        index: &str,
+        limit: u64,
+    ) -> Result<SearchResultEnvelope, AppError> {
+        let known = fixture.indexes.iter().any(|item| item.name == index)
+            || fixture
+                .mappings
+                .iter()
+                .any(|mapping| mapping.index == index);
+        if !known {
+            return Err(AppError::NotFound(format!(
+                "Search index '{}' not found",
+                index
+            )));
+        }
+        let mut result = fixture.search_result.clone();
+        result.hits.retain(|hit| hit.index == index);
+        result.hits.truncate(limit as usize);
+        result.total.value = result.hits.len() as u64;
+        Ok(result)
+    }
 }
 
 impl DbAdapter for SearchEngineAdapter {
@@ -149,10 +198,32 @@ impl SearchAdapter for SearchEngineAdapter {
         Box::pin(async move { Self::mapping_for_fixture(self.fixture()?, index) })
     }
 
+    fn get_index_settings<'a>(
+        &'a self,
+        index: &'a str,
+    ) -> BoxFuture<'a, Result<SearchIndexSettings, AppError>> {
+        Box::pin(async move { Self::settings_for_fixture(self.fixture()?, index) })
+    }
+
+    fn get_index_field_stats<'a>(
+        &'a self,
+        index: &'a str,
+    ) -> BoxFuture<'a, Result<SearchFieldStatsEnvelope, AppError>> {
+        Box::pin(async move { Self::field_stats_for_fixture(self.fixture()?, index) })
+    }
+
     fn list_index_templates<'a>(
         &'a self,
     ) -> BoxFuture<'a, Result<Vec<SearchIndexTemplateInfo>, AppError>> {
         Box::pin(async move { Ok(self.fixture()?.templates.clone()) })
+    }
+
+    fn sample_documents<'a>(
+        &'a self,
+        index: &'a str,
+        limit: u64,
+    ) -> BoxFuture<'a, Result<SearchResultEnvelope, AppError>> {
+        Box::pin(async move { Self::sample_documents_for_fixture(self.fixture()?, index, limit) })
     }
 
     fn search<'a>(
@@ -295,6 +366,48 @@ impl SearchCatalogFixture {
                 ],
                 raw: mapping_raw(),
             }],
+            settings: vec![SearchIndexSettings {
+                index: index_name.into(),
+                raw: settings_raw(),
+                analyzers: vec![SearchAnalyzerInfo {
+                    name: "default".into(),
+                    analyzer_type: "standard".into(),
+                    tokenizer: Some("standard".into()),
+                    filters: vec!["lowercase".into()],
+                }],
+            }],
+            field_stats: vec![SearchFieldStatsEnvelope {
+                index: index_name.into(),
+                fields: vec![
+                    SearchFieldStatsInfo {
+                        path: "@timestamp".into(),
+                        field_type: "date".into(),
+                        searchable: true,
+                        aggregatable: true,
+                        docs_count: Some(2),
+                        sample_values: vec![
+                            json!("2026-05-24T00:00:00Z"),
+                            json!("2026-05-24T00:01:00Z"),
+                        ],
+                    },
+                    SearchFieldStatsInfo {
+                        path: "message".into(),
+                        field_type: "text".into(),
+                        searchable: true,
+                        aggregatable: false,
+                        docs_count: Some(2),
+                        sample_values: vec![json!("fixture log"), json!("fixture error")],
+                    },
+                    SearchFieldStatsInfo {
+                        path: "status".into(),
+                        field_type: "keyword".into(),
+                        searchable: true,
+                        aggregatable: true,
+                        docs_count: Some(2),
+                        sample_values: vec![json!("ok"), json!("error")],
+                    },
+                ],
+            }],
             templates: vec![SearchIndexTemplateInfo {
                 name: template_name.into(),
                 endpoint: SearchTemplateEndpointKind::ComposableIndexTemplate,
@@ -359,6 +472,24 @@ fn mapping_raw() -> Value {
     })
 }
 
+fn settings_raw() -> Value {
+    json!({
+        "index": {
+            "number_of_shards": "1",
+            "number_of_replicas": "1",
+            "analysis": {
+                "analyzer": {
+                    "default": {
+                        "type": "standard",
+                        "tokenizer": "standard",
+                        "filter": ["lowercase"]
+                    }
+                }
+            }
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,6 +513,24 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(mapping.fields[0].path, "@timestamp");
+
+        let settings = adapter
+            .get_index_settings("logs-elastic-2026.05.24")
+            .await
+            .unwrap();
+        assert_eq!(settings.analyzers[0].name, "default");
+
+        let stats = adapter
+            .get_index_field_stats("logs-elastic-2026.05.24")
+            .await
+            .unwrap();
+        assert_eq!(stats.fields[2].sample_values[0], json!("ok"));
+
+        let samples = adapter
+            .sample_documents("logs-elastic-2026.05.24", 1)
+            .await
+            .unwrap();
+        assert_eq!(samples.hits.len(), 1);
     }
 
     #[tokio::test]

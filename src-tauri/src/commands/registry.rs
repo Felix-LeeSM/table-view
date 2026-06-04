@@ -104,6 +104,11 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         commands::kv::read_kv_stream,
         // Search catalog/query execution
         commands::search::list_search_catalog_summary,
+        commands::search::get_search_index_mapping,
+        commands::search::get_search_index_settings,
+        commands::search::list_search_index_templates,
+        commands::search::sample_search_documents,
+        commands::search::get_search_index_field_stats,
         commands::search::execute_search_query,
         // Mongo browse and query
         commands::document::browse::list_mongo_databases,

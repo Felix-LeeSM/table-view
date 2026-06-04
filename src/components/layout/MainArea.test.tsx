@@ -109,6 +109,22 @@ vi.mock("@components/query/QueryTab", () => ({
   ),
 }));
 
+vi.mock("@components/search/SearchIndexDetailPanel", () => ({
+  default: ({
+    connectionId,
+    index,
+  }: {
+    connectionId: string;
+    index: string;
+  }) => (
+    <div
+      data-testid="mock-search-index-detail"
+      data-connection={connectionId}
+      data-index={index}
+    />
+  ),
+}));
+
 // Sprint 350 (2026-05-15) — Mongo document-paradigm branch now renders a
 // Records/Structure sub-tab bar that mounts `DocumentDataGrid` (Records)
 // or `MongoStructurePanel` (Structure). Both are mocked so this suite
@@ -385,6 +401,35 @@ describe("MainArea", () => {
       "data-table",
       "users",
     );
+  });
+
+  it("renders SearchIndexDetailPanel for search index tabs", () => {
+    const tab = makeTableTab({
+      id: "search-tab-1",
+      title: "logs-elastic-2026.05.24",
+      connectionId: "search-1",
+      database: "_search",
+      schema: "_search",
+      table: "logs-elastic-2026.05.24",
+      subView: "structure",
+      paradigm: "search",
+    });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+    render(<MainArea />);
+
+    expect(screen.getByTestId("mock-search-index-detail")).toHaveAttribute(
+      "data-connection",
+      "search-1",
+    );
+    expect(screen.getByTestId("mock-search-index-detail")).toHaveAttribute(
+      "data-index",
+      "logs-elastic-2026.05.24",
+    );
+    expect(screen.queryByTestId("mock-datagrid")).toBeNull();
+    expect(
+      screen.queryByRole("tablist", { name: "Table view" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders sub-tab bar with Records, Structure, and ERD tabs for table tab", () => {

@@ -1,7 +1,10 @@
 use crate::commands::connection::AppState;
 use crate::commands::{not_connected, register_cancel_token, release_cancel_token};
 use crate::error::AppError;
-use crate::models::{SearchCatalogSummary, SearchQueryRequest, SearchResultEnvelope};
+use crate::models::{
+    SearchCatalogSummary, SearchFieldStatsEnvelope, SearchIndexMapping, SearchIndexSettings,
+    SearchIndexTemplateInfo, SearchQueryRequest, SearchResultEnvelope,
+};
 
 async fn list_search_catalog_summary_inner(
     state: &AppState,
@@ -32,6 +35,114 @@ pub async fn list_search_catalog_summary(
     connection_id: String,
 ) -> Result<SearchCatalogSummary, AppError> {
     list_search_catalog_summary_inner(state.inner(), &connection_id).await
+}
+
+async fn get_search_index_mapping_inner(
+    state: &AppState,
+    connection_id: &str,
+    index: &str,
+) -> Result<SearchIndexMapping, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active.as_search()?.get_index_mapping(index).await
+}
+
+#[tauri::command]
+pub async fn get_search_index_mapping(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    index: String,
+) -> Result<SearchIndexMapping, AppError> {
+    get_search_index_mapping_inner(state.inner(), &connection_id, &index).await
+}
+
+async fn get_search_index_settings_inner(
+    state: &AppState,
+    connection_id: &str,
+    index: &str,
+) -> Result<SearchIndexSettings, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active.as_search()?.get_index_settings(index).await
+}
+
+#[tauri::command]
+pub async fn get_search_index_settings(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    index: String,
+) -> Result<SearchIndexSettings, AppError> {
+    get_search_index_settings_inner(state.inner(), &connection_id, &index).await
+}
+
+async fn list_search_index_templates_inner(
+    state: &AppState,
+    connection_id: &str,
+) -> Result<Vec<SearchIndexTemplateInfo>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active.as_search()?.list_index_templates().await
+}
+
+#[tauri::command]
+pub async fn list_search_index_templates(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+) -> Result<Vec<SearchIndexTemplateInfo>, AppError> {
+    list_search_index_templates_inner(state.inner(), &connection_id).await
+}
+
+async fn sample_search_documents_inner(
+    state: &AppState,
+    connection_id: &str,
+    index: &str,
+    limit: Option<u64>,
+) -> Result<SearchResultEnvelope, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_search()?
+        .sample_documents(index, limit.unwrap_or(5).clamp(1, 50))
+        .await
+}
+
+#[tauri::command]
+pub async fn sample_search_documents(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    index: String,
+    limit: Option<u64>,
+) -> Result<SearchResultEnvelope, AppError> {
+    sample_search_documents_inner(state.inner(), &connection_id, &index, limit).await
+}
+
+async fn get_search_index_field_stats_inner(
+    state: &AppState,
+    connection_id: &str,
+    index: &str,
+) -> Result<SearchFieldStatsEnvelope, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active.as_search()?.get_index_field_stats(index).await
+}
+
+#[tauri::command]
+pub async fn get_search_index_field_stats(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    index: String,
+) -> Result<SearchFieldStatsEnvelope, AppError> {
+    get_search_index_field_stats_inner(state.inner(), &connection_id, &index).await
 }
 
 async fn execute_search_query_inner(
@@ -74,8 +185,9 @@ mod tests {
     use crate::db::{ActiveAdapter, BoxFuture};
     use crate::models::{
         ConnectionConfig, DatabaseType, SearchAliasInfo, SearchClusterCapabilities,
-        SearchClusterIdentity, SearchDataStreamInfo, SearchIndexHealth, SearchIndexInfo,
-        SearchProductDelta, SearchProductKind, SearchTemplateEndpointKind, SearchVersionInfo,
+        SearchClusterIdentity, SearchDataStreamInfo, SearchFieldStatsEnvelope, SearchIndexHealth,
+        SearchIndexInfo, SearchIndexSettings, SearchProductDelta, SearchProductKind,
+        SearchTemplateEndpointKind, SearchVersionInfo,
     };
     use serde_json::json;
     use std::sync::{
@@ -141,6 +253,37 @@ mod tests {
         assert_eq!(summary.aliases[0].name, "logs-current");
         assert_eq!(summary.data_streams[0].name, "logs-default");
         assert_eq!(deep_fetches.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn selected_index_detail_commands_are_explicit() {
+        let state = search_state().await;
+
+        let mapping = get_search_index_mapping_inner(&state, "search", "logs-elastic-2026.05.24")
+            .await
+            .unwrap();
+        assert_eq!(mapping.fields[1].path, "message");
+
+        let settings = get_search_index_settings_inner(&state, "search", "logs-elastic-2026.05.24")
+            .await
+            .unwrap();
+        assert_eq!(settings.analyzers[0].analyzer_type, "standard");
+
+        let templates = list_search_index_templates_inner(&state, "search")
+            .await
+            .unwrap();
+        assert_eq!(templates[0].name, "logs-elastic-template");
+
+        let samples =
+            sample_search_documents_inner(&state, "search", "logs-elastic-2026.05.24", Some(1))
+                .await
+                .unwrap();
+        assert_eq!(samples.hits.len(), 1);
+
+        let stats = get_search_index_field_stats_inner(&state, "search", "logs-elastic-2026.05.24")
+            .await
+            .unwrap();
+        assert_eq!(stats.fields[2].sample_values[0], json!("ok"));
     }
 
     #[tokio::test]
@@ -266,9 +409,34 @@ mod tests {
             Box::pin(async { Err(AppError::Unsupported("deep fetch".into())) })
         }
 
+        fn get_index_settings<'a>(
+            &'a self,
+            _index: &'a str,
+        ) -> BoxFuture<'a, Result<SearchIndexSettings, AppError>> {
+            self.deep_fetches.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Err(AppError::Unsupported("deep fetch".into())) })
+        }
+
+        fn get_index_field_stats<'a>(
+            &'a self,
+            _index: &'a str,
+        ) -> BoxFuture<'a, Result<SearchFieldStatsEnvelope, AppError>> {
+            self.deep_fetches.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Err(AppError::Unsupported("deep fetch".into())) })
+        }
+
         fn list_index_templates<'a>(
             &'a self,
         ) -> BoxFuture<'a, Result<Vec<crate::models::SearchIndexTemplateInfo>, AppError>> {
+            self.deep_fetches.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Err(AppError::Unsupported("deep fetch".into())) })
+        }
+
+        fn sample_documents<'a>(
+            &'a self,
+            _index: &'a str,
+            _limit: u64,
+        ) -> BoxFuture<'a, Result<SearchResultEnvelope, AppError>> {
             self.deep_fetches.fetch_add(1, Ordering::SeqCst);
             Box::pin(async { Err(AppError::Unsupported("deep fetch".into())) })
         }

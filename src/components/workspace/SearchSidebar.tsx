@@ -11,6 +11,8 @@ import { Button } from "@components/ui/button";
 import { Checkbox } from "@components/ui/checkbox";
 import { Skeleton } from "@components/ui/skeleton";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useMruStore } from "@stores/mruStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { listSearchCatalogSummary } from "@lib/tauri/search";
 import type {
   SearchAliasInfo,
@@ -29,6 +31,8 @@ type CatalogEntry =
   | { kind: "alias"; id: string; item: SearchAliasInfo }
   | { kind: "dataStream"; id: string; item: SearchDataStreamInfo };
 
+const SEARCH_WORKSPACE_DB = "_search";
+
 export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
   const connection = useConnectionStore((s) =>
     s.connections.find((c) => c.id === connectionId),
@@ -36,6 +40,9 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
   const productLabel = connection
     ? DATABASE_TYPE_LABELS[connection.dbType]
     : "Search";
+  const addTab = useWorkspaceStore((s) => s.addTab);
+  const setActiveDb = useConnectionStore((s) => s.setActiveDb);
+  const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
   const [catalog, setCatalog] = useState<SearchCatalogSummary | null>(null);
   const [filter, setFilter] = useState("");
   const [showSystem, setShowSystem] = useState(false);
@@ -77,6 +84,27 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
   const summaryText = catalog
     ? `${catalog.indexes.length} index${catalog.indexes.length === 1 ? "" : "es"} · ${catalog.aliases.length} alias${catalog.aliases.length === 1 ? "" : "es"} · ${catalog.dataStreams.length} data stream${catalog.dataStreams.length === 1 ? "" : "s"}`
     : "catalog pending";
+  const openIndex = useCallback(
+    (entry: CatalogEntry, permanent = false) => {
+      setSelectedId(entry.id);
+      if (entry.kind !== "index") return;
+      setActiveDb(connectionId, SEARCH_WORKSPACE_DB);
+      addTab(connectionId, {
+        title: entry.item.name,
+        connectionId,
+        type: "table",
+        closable: true,
+        database: SEARCH_WORKSPACE_DB,
+        schema: SEARCH_WORKSPACE_DB,
+        table: entry.item.name,
+        subView: "structure",
+        paradigm: "search",
+        permanent,
+      });
+      markConnectionUsed(connectionId);
+    },
+    [addTab, connectionId, markConnectionUsed, setActiveDb],
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col text-xs">
@@ -160,7 +188,7 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
                   key={item.name}
                   entry={{ kind: "index", id: `index:${item.name}`, item }}
                   selectedId={selectedId}
-                  onSelect={setSelectedId}
+                  onSelect={openIndex}
                 />
               ))}
             </CatalogSection>
@@ -174,7 +202,7 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
                     item,
                   }}
                   selectedId={selectedId}
-                  onSelect={setSelectedId}
+                  onSelect={openIndex}
                 />
               ))}
             </CatalogSection>
@@ -188,7 +216,7 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
                     item,
                   }}
                   selectedId={selectedId}
-                  onSelect={setSelectedId}
+                  onSelect={openIndex}
                 />
               ))}
             </CatalogSection>
@@ -231,7 +259,7 @@ function CatalogRow({
 }: {
   entry: CatalogEntry;
   selectedId: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (entry: CatalogEntry, permanent?: boolean) => void;
 }) {
   const selected = selectedId === entry.id;
   const Icon =
@@ -247,7 +275,8 @@ function CatalogRow({
       aria-selected={selected}
       data-selected={selected || undefined}
       className="grid min-h-9 w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2 px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground data-[selected]:bg-accent data-[selected]:text-accent-foreground"
-      onClick={() => onSelect(entry.id)}
+      onClick={() => onSelect(entry)}
+      onDoubleClick={() => onSelect(entry, true)}
     >
       <div className="flex min-w-0 items-center gap-2">
         <Icon

@@ -46,9 +46,10 @@ pub use schema::{
 };
 pub use search::{
     validate_search_destructive_request, SearchAggregationEnvelope, SearchAliasInfo,
-    SearchCatalogSummary, SearchClusterCapabilities, SearchClusterIdentity, SearchDataStreamInfo,
-    SearchDeleteByQueryRequest, SearchDestructiveOperationPlan, SearchDestructiveSafety,
-    SearchHitEnvelope, SearchIndexHealth, SearchIndexInfo, SearchIndexMapping,
+    SearchAnalyzerInfo, SearchCatalogSummary, SearchClusterCapabilities, SearchClusterIdentity,
+    SearchDataStreamInfo, SearchDeleteByQueryRequest, SearchDestructiveOperationPlan,
+    SearchDestructiveSafety, SearchFieldStatsEnvelope, SearchFieldStatsInfo, SearchHitEnvelope,
+    SearchIndexHealth, SearchIndexInfo, SearchIndexMapping, SearchIndexSettings,
     SearchIndexTemplateInfo, SearchMappingField, SearchProductDelta, SearchProductKind,
     SearchQueryRequest, SearchResultEnvelope, SearchTemplateEndpointKind, SearchTermsBucket,
     SearchTotalHits, SearchTotalHitsRelation, SearchVersionInfo,

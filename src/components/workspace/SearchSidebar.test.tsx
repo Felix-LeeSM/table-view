@@ -7,6 +7,8 @@ import {
   within,
 } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
+import { getAllTabsForConnection } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import type { SearchCatalogSummary } from "@/types/search";
 import SearchSidebar from "./SearchSidebar";
 
@@ -15,6 +17,10 @@ const invokeMock = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
+
+function commandCount(command: string) {
+  return invokeMock.mock.calls.filter(([name]) => name === command).length;
+}
 
 const catalog: SearchCatalogSummary = {
   identity: {
@@ -101,6 +107,7 @@ describe("SearchSidebar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     invokeMock.mockResolvedValue(catalog);
+    useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({
       connections: [
         {
@@ -142,10 +149,13 @@ describe("SearchSidebar", () => {
     expect(screen.getByTestId("search-catalog-status")).toHaveTextContent(
       "2 indexes · 1 alias · 2 data streams",
     );
-    expect(invokeMock).toHaveBeenCalledTimes(1);
     expect(invokeMock).toHaveBeenCalledWith("list_search_catalog_summary", {
       connectionId: "search-1",
     });
+    expect(commandCount("list_search_catalog_summary")).toBe(1);
+    expect(commandCount("get_search_index_mapping")).toBe(0);
+    expect(commandCount("get_search_index_settings")).toBe(0);
+    expect(commandCount("sample_search_documents")).toBe(0);
   });
 
   it("keeps hidden/system entries behind an explicit toggle", async () => {
@@ -180,6 +190,36 @@ describe("SearchSidebar", () => {
     fireEvent.click(row);
     expect(row).toHaveAttribute("aria-selected", "true");
     expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens a Search index detail tab without fetching deep metadata from the sidebar", async () => {
+    render(<SearchSidebar connectionId="search-1" />);
+
+    const rowText = await screen.findByText("logs-elastic-2026.05.24");
+    const row = rowText.closest("button");
+    expect(row).not.toBeNull();
+    if (!row) return;
+    fireEvent.click(row);
+
+    expect(row).toHaveAttribute("aria-selected", "true");
+    const tabs = getAllTabsForConnection("search-1");
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]).toMatchObject({
+      type: "table",
+      title: "logs-elastic-2026.05.24",
+      database: "_search",
+      schema: "_search",
+      table: "logs-elastic-2026.05.24",
+      paradigm: "search",
+      subView: "structure",
+    });
+    expect(invokeMock).toHaveBeenCalledWith("list_search_catalog_summary", {
+      connectionId: "search-1",
+    });
+    expect(commandCount("list_search_catalog_summary")).toBe(1);
+    expect(commandCount("get_search_index_mapping")).toBe(0);
+    expect(commandCount("get_search_index_settings")).toBe(0);
+    expect(commandCount("sample_search_documents")).toBe(0);
   });
 
   it("renders many-index summaries without changing the sidebar shell", async () => {
