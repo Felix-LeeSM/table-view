@@ -275,6 +275,8 @@ pub struct SearchHitEnvelope {
     pub fields: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub highlight: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub explanation: Option<Value>,
     #[serde(default)]
     pub sort: Vec<Value>,
 }
@@ -297,15 +299,76 @@ pub enum SearchAggregationEnvelope {
         name: String,
         value: u64,
     },
+    Raw {
+        name: String,
+        #[serde(
+            rename = "aggregationType",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        aggregation_type: Option<String>,
+        raw: Value,
+    },
 }
 
 impl SearchAggregationEnvelope {
     pub fn name(&self) -> &str {
         match self {
             SearchAggregationEnvelope::Terms { name, .. }
-            | SearchAggregationEnvelope::ValueCount { name, .. } => name,
+            | SearchAggregationEnvelope::ValueCount { name, .. }
+            | SearchAggregationEnvelope::Raw { name, .. } => name,
         }
     }
+}
+
+#[cfg(test)]
+mod search_aggregation_tests {
+    use serde_json::json;
+
+    use super::SearchAggregationEnvelope;
+
+    #[test]
+    fn raw_aggregation_serializes_frontend_contract_field_names() {
+        let value = serde_json::to_value(SearchAggregationEnvelope::Raw {
+            name: "latency".into(),
+            aggregation_type: Some("percentiles".into()),
+            raw: json!({ "percentiles": { "field": "duration_ms" } }),
+        })
+        .expect("raw aggregation should serialize");
+
+        assert_eq!(
+            value,
+            json!({
+                "kind": "raw",
+                "name": "latency",
+                "aggregationType": "percentiles",
+                "raw": { "percentiles": { "field": "duration_ms" } }
+            })
+        );
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchShardFailure {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shard: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node: Option<String>,
+    pub reason: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchShardSummary {
+    pub total: u64,
+    pub successful: u64,
+    pub skipped: u64,
+    pub failed: u64,
+    #[serde(default)]
+    pub failures: Vec<SearchShardFailure>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -317,6 +380,12 @@ pub struct SearchResultEnvelope {
     pub hits: Vec<SearchHitEnvelope>,
     #[serde(default)]
     pub aggregations: Vec<SearchAggregationEnvelope>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shards: Option<SearchShardSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub explain: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

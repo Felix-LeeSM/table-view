@@ -159,4 +159,43 @@ describe("QueryTab search route", () => {
     );
     expect(screen.queryByRole("grid")).not.toBeInTheDocument();
   });
+
+  it("routes Search loading and error states through the Search-native result surface", () => {
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_history") {
+        return Promise.resolve({ rows: [] });
+      }
+      throw new Error(`unexpected invoke: ${command}`);
+    });
+
+    const runningTab: QueryTabType = {
+      ...makeSearchTab(),
+      queryState: { status: "running", queryId: "search-q-1" },
+    };
+    useWorkspaceStore.setState(
+      seedWorkspace([runningTab], runningTab.id, "search-1", "db1"),
+    );
+
+    const { unmount } = render(<LiveQueryTab />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Search query running",
+    );
+    expect(screen.queryByRole("grid")).not.toBeInTheDocument();
+    unmount();
+
+    const errorTab: QueryTabType = {
+      ...makeSearchTab(),
+      queryState: { status: "error", error: "Search parser failed" },
+    };
+    useWorkspaceStore.setState(
+      seedWorkspace([errorTab], errorTab.id, "search-1", "db1"),
+    );
+
+    render(<LiveQueryTab />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Search query failed");
+    expect(screen.getByRole("alert")).toHaveTextContent("Search parser failed");
+    expect(screen.queryByRole("grid")).not.toBeInTheDocument();
+  });
 });
