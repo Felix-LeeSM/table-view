@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@components/ui/select";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import {
   currentKvDatabase,
   getKvValue,
@@ -46,6 +47,8 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     s.connections.find((c) => c.id === connectionId),
   );
   const status = useConnectionStore((s) => s.activeStatuses[connectionId]);
+  const safeMode = useSafeModeStore((s) => s.mode);
+  const autoScanAllowed = safeMode === "off";
   const productLabel = connection
     ? DATABASE_TYPE_LABELS[connection.dbType]
     : "Redis";
@@ -64,16 +67,21 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   const [pattern, setPattern] = useState("*");
   const [keys, setKeys] = useState<KvKeyMetadata[]>([]);
   const [nextCursor, setNextCursor] = useState("0");
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [hasScannedKeys, setHasScannedKeys] = useState(false);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [loadingKeys, setLoadingKeys] = useState(false);
   const [loadingValue, setLoadingValue] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [value, setValue] = useState<KvValueEnvelope | null>(null);
+  const autoScanRef = useRef(false);
+  const rootScanInFlightRef = useRef<string | null>(null);
   const latestKeyScanRef = useRef(0);
 
   const loadCatalog = useCallback(async () => {
     setLoadingCatalog(true);
+    setCatalogLoaded(false);
     setError(null);
     try {
       const [databaseList, currentDatabase] = await Promise.all([
@@ -88,20 +96,29 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoadingCatalog(false);
+      setCatalogLoaded(true);
     }
   }, [connectionId, initialDatabase]);
 
   const loadKeys = useCallback(
     async (cursor: string) => {
+      const normalizedPattern = pattern.trim() || "*";
+      const rootScanKey =
+        cursor === "0"
+          ? `${connectionId}:${database}:${normalizedPattern}`
+          : null;
+      if (rootScanKey && rootScanInFlightRef.current === rootScanKey) return;
+      if (rootScanKey) rootScanInFlightRef.current = rootScanKey;
       const scanId = latestKeyScanRef.current + 1;
       latestKeyScanRef.current = scanId;
+      if (cursor === "0") setHasScannedKeys(true);
       setLoadingKeys(true);
       setError(null);
       try {
         const page = await scanKvKeys(connectionId, {
           database,
           cursor,
-          pattern: pattern.trim() || "*",
+          pattern: normalizedPattern,
           limit: KEY_SCAN_LIMIT,
         });
         if (latestKeyScanRef.current !== scanId) return;
@@ -115,6 +132,9 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
       } finally {
         if (latestKeyScanRef.current === scanId) {
           setLoadingKeys(false);
+        }
+        if (rootScanKey && rootScanInFlightRef.current === rootScanKey) {
+          rootScanInFlightRef.current = null;
         }
       }
     },
@@ -151,16 +171,35 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   );
 
   useEffect(() => {
-    void loadCatalog();
-  }, [loadCatalog]);
-
-  useEffect(() => {
+    latestKeyScanRef.current += 1;
+    autoScanRef.current = false;
+    rootScanInFlightRef.current = null;
+    setCatalogLoaded(false);
     setKeys([]);
     setNextCursor("0");
     setSelectedKey(null);
     setValue(null);
+    setHasScannedKeys(false);
+  }, [connectionId]);
+
+  useEffect(() => {
+    void loadCatalog();
+  }, [loadCatalog]);
+
+  useEffect(() => {
+    latestKeyScanRef.current += 1;
+    setKeys([]);
+    setNextCursor("0");
+    setSelectedKey(null);
+    setValue(null);
+    setHasScannedKeys(false);
+  }, [connectionId, database]);
+
+  useEffect(() => {
+    if (!catalogLoaded || !autoScanAllowed || autoScanRef.current) return;
+    autoScanRef.current = true;
     void loadKeys("0");
-  }, [database, loadKeys]);
+  }, [autoScanAllowed, catalogLoaded, loadKeys]);
 
   const handleDatabaseChange = async (value: string) => {
     const nextDatabase = Number.parseInt(value, 10);
@@ -181,6 +220,14 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     databases.length > 0
       ? databases
       : [{ name: String(database), index: database } satisfies KvDatabaseInfo];
+  const canScanKeys = catalogLoaded && !loadingCatalog && !loadingKeys;
+  const scanStatusText = hasScannedKeys
+    ? `${keys.length} key${keys.length === 1 ? "" : "s"}${
+        nextCursor !== "0" ? ` · cursor ${nextCursor}` : ""
+      }`
+    : safeMode === "off"
+      ? "scan pending"
+      : "scan paused";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col text-xs">
@@ -219,15 +266,14 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label={`Refresh ${productLabel} keys`}
-          title={`Refresh ${productLabel} keys`}
-          disabled={loadingCatalog || loadingKeys}
+          aria-label={`Refresh ${productLabel} catalog`}
+          title={`Refresh ${productLabel} catalog`}
+          disabled={loadingCatalog}
           onClick={() => {
             void loadCatalog();
-            void loadKeys("0");
           }}
         >
-          {loadingCatalog || loadingKeys ? (
+          {loadingCatalog ? (
             <Loader2 size={12} className="animate-spin" />
           ) : (
             <RefreshCw size={12} />
@@ -243,10 +289,24 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
           value={pattern}
           onChange={(event) => setPattern(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") void loadKeys("0");
+            if (event.key === "Enter" && canScanKeys) void loadKeys("0");
           }}
           placeholder="*"
         />
+        <Button
+          variant="secondary"
+          size="xs"
+          className="shrink-0"
+          disabled={!canScanKeys}
+          onClick={() => void loadKeys("0")}
+        >
+          {loadingKeys ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Search size={12} />
+          )}
+          Scan {KEY_SCAN_LIMIT} keys
+        </Button>
       </div>
 
       <div
@@ -254,10 +314,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
         data-testid="redis-scan-status"
       >
         <span>limit {KEY_SCAN_LIMIT}</span>
-        <span>
-          {keys.length} key{keys.length === 1 ? "" : "s"}
-          {nextCursor !== "0" ? ` · cursor ${nextCursor}` : ""}
-        </span>
+        <span>{scanStatusText}</span>
       </div>
 
       {error && (
@@ -316,7 +373,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
 
         {keys.length === 0 && !loadingKeys && !error && (
           <div role="status" className="px-3 py-3 text-muted-foreground">
-            {emptyKeysMessage(pattern)}
+            {emptyKeysMessage(pattern, hasScannedKeys, safeMode)}
           </div>
         )}
 
@@ -350,7 +407,15 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   );
 }
 
-function emptyKeysMessage(pattern: string) {
+function emptyKeysMessage(
+  pattern: string,
+  hasScannedKeys: boolean,
+  safeMode: "strict" | "warn" | "off",
+) {
+  if (!hasScannedKeys) {
+    if (safeMode === "off") return "Waiting for bounded key scan.";
+    return `Safe Mode paused automatic key scan. Run Scan ${KEY_SCAN_LIMIT} keys to load a bounded page.`;
+  }
   const normalized = pattern.trim();
   if (!normalized || normalized === "*") return "No keys found.";
   return `No keys match pattern ${normalized}.`;
