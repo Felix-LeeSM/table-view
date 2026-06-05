@@ -205,19 +205,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 20
-      opensearch:
-        image: opensearchproject/opensearch:2.13.0
-        env:
-          discovery.type: single-node
-          DISABLE_SECURITY_PLUGIN: "true"
-          OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
-        ports:
-          - 29200:9200
-        options: >-
-          --health-cmd "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 20
 
     steps:
       - name: Checkout
@@ -274,6 +261,31 @@ jobs:
         if: steps.cache-tauri-driver.outputs.cache-hit != 'true'
         run: cargo install tauri-driver --version ${{ env.TAURI_DRIVER_VERSION }} --locked
 
+      - name: Start OpenSearch service
+        if: matrix.spec_key == 'opensearch'
+        run: |
+          docker run -d \
+            --name table-view-opensearch \
+            --publish 29200:9200 \
+            --env "discovery.type=single-node" \
+            --env "DISABLE_INSTALL_DEMO_CONFIG=true" \
+            --env "DISABLE_SECURITY_PLUGIN=true" \
+            --env "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" \
+            --ulimit memlock=-1:-1 \
+            --ulimit nofile=65536:65536 \
+            opensearchproject/opensearch:2.13.0
+
+          for attempt in {1..40}; do
+            if curl -fsS "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s"; then
+              exit 0
+            fi
+            echo "OpenSearch is not ready yet (attempt ${attempt}/40)."
+            sleep 5
+          done
+
+          docker logs table-view-opensearch || true
+          exit 1
+
       - name: Run E2E smoke
         env:
           E2E_PG_HOST: localhost
@@ -312,6 +324,10 @@ jobs:
           E2E_SPEC_KEY: ${{ matrix.spec_key }}
           E2E_REPORT_DIR: e2e/wdio-report/${{ matrix.spec_key }}
         run: bash scripts/e2e-smoke-ci.sh
+
+      - name: Stop OpenSearch service
+        if: always() && matrix.spec_key == 'opensearch'
+        run: docker rm --force table-view-opensearch || true
 
       - name: Upload E2E artifacts
         if: always()
