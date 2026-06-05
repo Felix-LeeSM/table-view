@@ -44,6 +44,11 @@ export E2E_ELASTICSEARCH_PORT="${E2E_ELASTICSEARCH_PORT:-${ELASTICSEARCH_PORT:-1
 export ELASTICSEARCH_USER="${ELASTICSEARCH_USER:-}"
 export ELASTICSEARCH_PASSWORD="${ELASTICSEARCH_PASSWORD:-}"
 
+export E2E_OPENSEARCH_HOST="${E2E_OPENSEARCH_HOST:-${OPENSEARCH_HOST:-localhost}}"
+export E2E_OPENSEARCH_PORT="${E2E_OPENSEARCH_PORT:-${OPENSEARCH_PORT:-29200}}"
+export OPENSEARCH_USER="${OPENSEARCH_USER:-}"
+export OPENSEARCH_PASSWORD="${OPENSEARCH_PASSWORD:-}"
+
 REPORT_DIR="$ROOT_DIR/e2e/wdio-report"
 SPEC_TO_RUN="${E2E_SPEC:-}"
 if [[ -n "$SPEC_TO_RUN" ]]; then
@@ -98,4 +103,5 @@ else
   run_wdio "$BASE_DATA_DIR/redis" "e2e/smoke/redis.spec.ts"
   run_wdio "$BASE_DATA_DIR/valkey" "e2e/smoke/valkey.spec.ts"
   run_wdio "$BASE_DATA_DIR/elasticsearch" "e2e/smoke/elasticsearch.spec.ts"
+  run_wdio "$BASE_DATA_DIR/opensearch" "e2e/smoke/opensearch.spec.ts"
 fi

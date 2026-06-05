@@ -69,6 +69,19 @@ const elasticsearchConfig = {
   index: process.env.E2E_ELASTICSEARCH_INDEX ?? "table-view-elastic-2026.05.24",
 };
 
+const opensearchConfig = {
+  host:
+    process.env.E2E_OPENSEARCH_HOST ??
+    process.env.OPENSEARCH_HOST ??
+    "localhost",
+  port: Number(
+    process.env.E2E_OPENSEARCH_PORT ?? process.env.OPENSEARCH_PORT ?? 29200,
+  ),
+  user: process.env.OPENSEARCH_USER ?? "",
+  password: process.env.OPENSEARCH_PASSWORD ?? "",
+  index: process.env.E2E_OPENSEARCH_INDEX ?? "table-view-opensearch-2026.05.24",
+};
+
 type MongoSeedIndex = {
   name?: string;
   keys: Document;
@@ -113,6 +126,16 @@ type SearchSeedFixture = {
   };
 };
 
+type SearchSeedRuntime = {
+  label: string;
+  fixturePath: string;
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  index: string;
+};
+
 type SeedTarget =
   | "postgres"
   | "mongodb"
@@ -120,7 +143,8 @@ type SeedTarget =
   | "mariadb"
   | "redis"
   | "valkey"
-  | "elasticsearch";
+  | "elasticsearch"
+  | "opensearch";
 
 const ALL_SEED_TARGETS = [
   "postgres",
@@ -130,6 +154,7 @@ const ALL_SEED_TARGETS = [
   "redis",
   "valkey",
   "elasticsearch",
+  "opensearch",
 ] as const satisfies readonly SeedTarget[];
 
 const SEED_TARGETS_BY_SPEC_KEY: Record<string, readonly SeedTarget[]> = {
@@ -145,6 +170,7 @@ const SEED_TARGETS_BY_SPEC_KEY: Record<string, readonly SeedTarget[]> = {
   redis: ["redis"],
   valkey: ["valkey"],
   elasticsearch: ["elasticsearch"],
+  opensearch: ["opensearch"],
   "history-source-5": ["postgres", "mongodb"],
   sqlite: [],
   duckdb: [],
@@ -370,23 +396,23 @@ async function seedValkey() {
   });
 }
 
-async function seedElasticsearch() {
+async function seedSearch(runtime: SearchSeedRuntime) {
   const fixture = JSON.parse(
-    await readFile(
-      resolve("e2e/fixtures/seed.search.elasticsearch.json"),
-      "utf-8",
-    ),
+    await readFile(resolve(runtime.fixturePath), "utf-8"),
   ) as SearchSeedFixture;
   const fixtureIndex = fixture.indexes[0]?.name;
   if (!fixtureIndex) {
-    throw new Error("Elasticsearch seed fixture requires at least one index");
+    throw new Error(
+      `${runtime.label} seed fixture requires at least one index`,
+    );
   }
-  const index = elasticsearchConfig.index;
+  const index = runtime.index;
 
-  await retry("Elasticsearch", async () => {
-    await searchRequest("/");
+  await retry(runtime.label, async () => {
+    await searchRequest(runtime, "/");
     for (const template of fixture.templates ?? []) {
       await searchRequest(
+        runtime,
         `/_index_template/${encodeURIComponent(template.name)}`,
         {
           method: "DELETE",
@@ -395,7 +421,7 @@ async function seedElasticsearch() {
       );
     }
     for (const indexName of new Set([fixtureIndex, index])) {
-      await searchRequest(`/${encodeURIComponent(indexName)}`, {
+      await searchRequest(runtime, `/${encodeURIComponent(indexName)}`, {
         method: "DELETE",
         allowNotFound: true,
       });
@@ -404,7 +430,7 @@ async function seedElasticsearch() {
     const mapping = fixture.mappings.find(
       (item) => item.index === fixtureIndex,
     );
-    await searchRequest(`/${encodeURIComponent(index)}`, {
+    await searchRequest(runtime, `/${encodeURIComponent(index)}`, {
       method: "PUT",
       body: JSON.stringify({
         mappings: mapping?.raw ?? { properties: {} },
@@ -413,6 +439,7 @@ async function seedElasticsearch() {
 
     for (const template of fixture.templates ?? []) {
       await searchRequest(
+        runtime,
         `/_index_template/${encodeURIComponent(template.name)}`,
         {
           method: "PUT",
@@ -422,8 +449,9 @@ async function seedElasticsearch() {
     }
 
     for (const alias of fixture.aliases ?? []) {
-      if (alias.index !== index) continue;
+      if (alias.index !== fixtureIndex && alias.index !== index) continue;
       await searchRequest(
+        runtime,
         `/${encodeURIComponent(index)}/_alias/${encodeURIComponent(alias.name)}`,
         {
           method: "PUT",
@@ -438,19 +466,36 @@ async function seedElasticsearch() {
         JSON.stringify(hit.source),
       ])
       .join("\n");
-    const bulkResult = await searchRequest("/_bulk?refresh=true", {
+    const bulkResult = await searchRequest(runtime, "/_bulk?refresh=true", {
       method: "POST",
       body: `${bulkBody}\n`,
     });
     if (isRecord(bulkResult) && bulkResult.errors === true) {
       throw new Error(
-        `Elasticsearch bulk seed failed: ${JSON.stringify(bulkResult)}`,
+        `${runtime.label} bulk seed failed: ${JSON.stringify(bulkResult)}`,
       );
     }
   });
 }
 
+async function seedElasticsearch() {
+  await seedSearch({
+    label: "Elasticsearch",
+    fixturePath: "e2e/fixtures/seed.search.elasticsearch.json",
+    ...elasticsearchConfig,
+  });
+}
+
+async function seedOpenSearch() {
+  await seedSearch({
+    label: "OpenSearch",
+    fixturePath: "e2e/fixtures/seed.search.opensearch.json",
+    ...opensearchConfig,
+  });
+}
+
 async function searchRequest(
+  runtime: SearchSeedRuntime,
   path: string,
   options: {
     method?: string;
@@ -461,13 +506,13 @@ async function searchRequest(
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (elasticsearchConfig.user || elasticsearchConfig.password) {
+  if (runtime.user || runtime.password) {
     headers.Authorization = `Basic ${Buffer.from(
-      `${elasticsearchConfig.user}:${elasticsearchConfig.password}`,
+      `${runtime.user}:${runtime.password}`,
     ).toString("base64")}`;
   }
   const response = await fetch(
-    `http://${elasticsearchConfig.host}:${elasticsearchConfig.port}${path}`,
+    `http://${runtime.host}:${runtime.port}${path}`,
     {
       method: options.method ?? "GET",
       headers,
@@ -477,7 +522,7 @@ async function searchRequest(
   if (options.allowNotFound && response.status === 404) return null;
   if (!response.ok) {
     throw new Error(
-      `Elasticsearch ${options.method ?? "GET"} ${path} failed with ${response.status}: ${await response.text()}`,
+      `${runtime.label} ${options.method ?? "GET"} ${path} failed with ${response.status}: ${await response.text()}`,
     );
   }
   const text = await response.text();
@@ -512,6 +557,9 @@ async function seedTarget(target: SeedTarget) {
       return;
     case "elasticsearch":
       await seedElasticsearch();
+      return;
+    case "opensearch":
+      await seedOpenSearch();
       return;
   }
 }
