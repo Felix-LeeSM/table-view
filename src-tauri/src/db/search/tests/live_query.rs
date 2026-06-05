@@ -16,7 +16,16 @@ async fn elasticsearch_live_search_dispatches_request_and_parses_result_envelope
         post_route(
             "/logs-elastic-2026.05.24/_search",
             r#"{
-                "query": { "match_all": {} },
+                "query": {
+                    "bool": {
+                        "filter": [{ "term": { "status.keyword": "ok" } }],
+                        "must": { "match": { "message": "live" } }
+                    }
+                },
+                "aggs": {
+                    "by_status": { "terms": { "field": "status.keyword" } },
+                    "message_count": { "value_count": { "field": "message" } }
+                },
                 "from": 5,
                 "size": 10,
                 "track_total_hits": true
@@ -80,7 +89,18 @@ async fn elasticsearch_live_search_dispatches_request_and_parses_result_envelope
             .search(
                 &SearchQueryRequest {
                     index: "logs-elastic-2026.05.24".into(),
-                    body: json!({ "query": { "match_all": {} } }),
+                    body: json!({
+                        "query": {
+                            "bool": {
+                                "filter": [{ "term": { "status.keyword": "ok" } }],
+                                "must": { "match": { "message": "live" } }
+                            }
+                        },
+                        "aggs": {
+                            "by_status": { "terms": { "field": "status.keyword" } },
+                            "message_count": { "value_count": { "field": "message" } }
+                        }
+                    }),
                     from: Some(5),
                     size: Some(10),
                     track_total_hits: Some(true),
@@ -365,4 +385,38 @@ async fn elasticsearch_live_search_blocks_raw_or_destructive_paths() {
         }
         other => panic!("Expected body object validation, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn elasticsearch_live_search_rejects_unsupported_admin_body_features_before_http() {
+    let (port, server) = spawn_search_http_server(vec![route(
+        "/ ",
+        r#"{
+            "cluster_name": "elastic-dev",
+            "version": { "number": "8.12.2" }
+        }"#,
+    )])
+    .await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+    adapter.connect(&config).await.unwrap();
+    server.await.unwrap();
+
+    let result = adapter
+        .search(
+            &SearchQueryRequest {
+                index: "logs-elastic-2026.05.24".into(),
+                body: json!({
+                    "query": { "match_all": {} },
+                    "profile": true
+                }),
+                from: None,
+                size: None,
+                track_total_hits: None,
+            },
+            None,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AppError::Unsupported(message)) if message.contains("profile")));
 }

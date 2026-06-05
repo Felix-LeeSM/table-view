@@ -1,5 +1,6 @@
 use serde_json::{json, Map, Value};
 
+use crate::db::search_dsl::{search_body_object, validate_search_dsl_request};
 use crate::error::AppError;
 use crate::models::{
     SearchAggregationEnvelope, SearchHitEnvelope, SearchQueryRequest, SearchResultEnvelope,
@@ -8,51 +9,13 @@ use crate::models::{
 };
 
 pub(crate) fn validate_live_search_request(request: &SearchQueryRequest) -> Result<(), AppError> {
-    let target = request.index.trim();
-    if target.is_empty() {
-        return Err(AppError::Validation(
-            "Search DSL requires an index target".into(),
-        ));
-    }
-    if target == "_all" || target.contains('*') {
-        return Err(AppError::Validation(
-            "Search DSL wildcard targets require an explicit safe contract".into(),
-        ));
-    }
-    let lower = target.to_ascii_lowercase();
-    if target.contains('/')
-        || target.contains('\\')
-        || target.contains('?')
-        || target.contains('#')
-        || lower.contains("%2f")
-        || lower.contains("%5c")
-        || lower.contains("_delete_by_query")
-        || lower.contains("_update_by_query")
-        || lower.contains("_bulk")
-        || lower.contains("_reindex")
-        || lower.contains("_scripts")
-    {
-        return Err(AppError::Validation(
-            "Search DSL execution only accepts index or alias targets, not raw/destructive paths"
-                .into(),
-        ));
-    }
-    if !request.body.is_object() {
-        return Err(AppError::Validation(
-            "Search DSL body must be a JSON object".into(),
-        ));
-    }
-    Ok(())
+    validate_search_dsl_request(request)
 }
 
 pub(crate) fn live_search_body(
     request: &SearchQueryRequest,
 ) -> Result<Map<String, Value>, AppError> {
-    let mut body = request
-        .body
-        .as_object()
-        .cloned()
-        .ok_or_else(|| AppError::Validation("Search DSL body must be a JSON object".into()))?;
+    let mut body = search_body_object(request)?.clone();
     if let Some(from) = request.from {
         body.insert("from".into(), json!(from));
     }
