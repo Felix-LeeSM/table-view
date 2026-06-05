@@ -23,6 +23,32 @@ describe("fixture stack wiring", () => {
     expect(pkg.scripts["db:down"]).toBe("docker compose down -v");
   });
 
+  it("exposes semantic fixture script aliases without removing legacy db scripts", () => {
+    const pkg = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+
+    expect(pkg.scripts["fixtures:load"]).toBe(
+      "tsx scripts/fixtures/index.ts load",
+    );
+    expect(pkg.scripts["fixtures:rebuild"]).toBe(
+      "tsx scripts/fixtures/index.ts rebuild",
+    );
+    expect(pkg.scripts["fixtures:preview"]).toBe(
+      "tsx scripts/fixtures/index.ts preview",
+    );
+    expect(pkg.scripts["fixtures:register-connections"]).toBe(
+      "tsx scripts/fixtures/index.ts register-connections",
+    );
+    expect(pkg.scripts["fixtures:clear-connections"]).toBe(
+      "tsx scripts/fixtures/index.ts clear-connections",
+    );
+    expect(pkg.scripts["db:seed"]).toBe("tsx scripts/fixtures/index.ts seed");
+    expect(pkg.scripts["db:generate"]).toBe(
+      "tsx scripts/fixtures/index.ts generate",
+    );
+  });
+
   it("waits for every compose fixture container", () => {
     const compose = parse(readFileSync(resolve("docker-compose.yml"), "utf8"));
     const waitScript = readFileSync(resolve("scripts/db/wait.sh"), "utf8");
@@ -34,6 +60,15 @@ describe("fixture stack wiring", () => {
       expect(service.container_name).toBeTruthy();
       expect(waitScript).toContain(service.container_name);
     }
+  });
+
+  it("seeds Redis after the Redis fixture is ready", () => {
+    const waitScript = readFileSync(resolve("scripts/db/wait.sh"), "utf8");
+
+    expect(waitScript).toContain('check_container "table_view_redis" "redis"');
+    expect(waitScript).toContain(
+      "pnpm fixtures:load development --target redis --quiet",
+    );
   });
 
   it("keeps docker-compose.yml parseable with the MSSQL healthcheck", () => {
@@ -58,6 +93,6 @@ describe("fixture stack wiring", () => {
       { cwd: process.cwd(), encoding: "utf8" },
     );
 
-    expect(out).toContain("# db:generate e2e (target=sqlite)");
+    expect(out).toContain("# fixtures:preview e2e (target=sqlite)");
   });
 });

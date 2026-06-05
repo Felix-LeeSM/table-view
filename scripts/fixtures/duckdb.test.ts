@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -23,15 +24,16 @@ afterEach(() => {
 });
 
 describe("duckdb fixture file lifecycle", () => {
-  it("defaults fixture files to OS temp rather than app data", () => {
+  it("defaults fixture files to the primary worktree tmp directory", () => {
     delete process.env.TABLE_VIEW_TEST_DATA_DIR;
     delete process.env.DUCKDB_FIXTURE_DIR;
 
     const path = duckdbEnvPath();
 
     expect(path.directory).toBe(
-      resolve(tmpdir(), "table-view-fixtures", "duckdb"),
+      resolve(primaryWorktreeRootForTest(), "tmp", "fixtures", "duckdb"),
     );
+    expect(path.directory).not.toContain(tmpdir());
     expect(path.directory).not.toContain("Application Support");
   });
 
@@ -62,4 +64,18 @@ describe("duckdb fixture file lifecycle", () => {
 function restoreEnv(key: string, value: string | undefined): void {
   if (value === undefined) delete process.env[key];
   else process.env[key] = value;
+}
+
+function primaryWorktreeRootForTest(): string {
+  const output = execFileSync("git", ["worktree", "list", "--porcelain"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  return (
+    output
+      .split(/\r?\n/)
+      .find((line) => line.startsWith("worktree "))
+      ?.slice("worktree ".length)
+      .trim() ?? process.cwd()
+  );
 }
