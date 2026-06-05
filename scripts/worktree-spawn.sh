@@ -188,6 +188,8 @@ MANDATORY first command:
 
 Hard rules:
   - Do not create another worktree.
+  - Do not edit the primary checkout or any path outside $WORKTREE_PATH.
+  - Do not use absolute paths, ../ traversal, or copied commands that write back to the primary checkout.
   - Do not pull from git.
   - Do not hard-reset to FETCH_HEAD, ORIG_HEAD, upstream, origin/*, or refs/remotes/*.
   - Do not bypass hooks with verification-skip flags or hook-disabling env vars.

@@ -7,12 +7,13 @@
 
 set -euo pipefail
 
+SCRIPT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ROOT="${CLAUDE_PROJECT_DIR:-}"
 if [ -z "$ROOT" ]; then
 	if ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
 		:
 	else
-		ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+		ROOT="$SCRIPT_ROOT"
 	fi
 fi
 
@@ -46,7 +47,7 @@ run_main_worktree_source_check() {
 	local status=0
 	local stderr=""
 
-	stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$ROOT" bash "$ROOT/scripts/hooks/check-main-worktree-source-edit.sh" "$@" 2>&1 >/dev/null)" || status=$?
+	stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$ROOT" bash "$SCRIPT_ROOT/scripts/hooks/check-main-worktree-source-edit.sh" "$@" 2>&1 >/dev/null)" || status=$?
 	if [ "$status" -ne 0 ]; then
 		if [ -n "$stderr" ]; then
 			printf '%s\n' "$stderr" >&2

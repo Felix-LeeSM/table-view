@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Block source/app edits from the primary worktree; no-op in linked worktrees.
+# Block non-orchestration edits from the primary worktree; no-op in linked worktrees.
 
 set -euo pipefail
 
@@ -158,14 +158,11 @@ relative_path() {
 	printf '%s\n' "$raw"
 }
 
-is_orchestration_path() {
+is_primary_allowed_path() {
 	local rel="$1"
 
 	case "$rel" in
-		AGENTS.md | *.md | memory/* | docs/* | scripts/* | .agents/* | .codex/*)
-			return 0
-			;;
-		.claude/agents/* | .claude/hooks/* | .claude/rules/* | .claude/commands/* | .claude/settings.json)
+		AGENTS.md | memory/*)
 			return 0
 			;;
 	esac
@@ -185,62 +182,11 @@ is_linked_worktree_target_path() {
 	return 1
 }
 
-is_app_config_or_manifest_path() {
-	local rel="$1"
-
-	case "$rel" in
-		package.json | */package.json | package-lock.json | */package-lock.json | npm-shrinkwrap.json | */npm-shrinkwrap.json)
-			return 0
-			;;
-		pnpm-lock.yaml | */pnpm-lock.yaml | pnpm-workspace.yaml | yarn.lock | */yarn.lock | bun.lock | */bun.lock | bun.lockb | */bun.lockb)
-			return 0
-			;;
-		components.json | */components.json)
-			return 0
-			;;
-		Cargo.toml | */Cargo.toml | Cargo.lock | */Cargo.lock)
-			return 0
-			;;
-		tsconfig.json | tsconfig.*.json | vite.config.* | vitest.config.* | eslint.config.* | .eslintrc | .eslintrc.*)
-			return 0
-			;;
-		src-tauri/tauri.conf.json | src-tauri/tauri.*.conf.json | src-tauri/deny.toml)
-			return 0
-			;;
-		src-tauri/capabilities/*.json | src-tauri/capabilities/*.toml | src-tauri/permissions/*.json | src-tauri/permissions/*.toml)
-			return 0
-			;;
-	esac
-
-	return 1
-}
-
-is_source_or_app_path() {
-	local rel="$1"
-
-	case "$rel" in
-		src | src/* | src-tauri/src | src-tauri/src/* | e2e | e2e/* | tests | tests/* | test | test/*)
-			return 0
-			;;
-		*.ts | *.tsx | *.js | *.jsx | *.mjs | *.cjs | *.rs | *.css | *.scss | *.sass | *.less | *.html)
-			return 0
-			;;
-		*.vue | *.svelte | *.py | *.go | *.java | *.kt | *.kts | *.swift | *.c | *.h | *.cc | *.cpp | *.cxx | *.hpp)
-			return 0
-			;;
-		*.cs | *.rb | *.php)
-			return 0
-			;;
-	esac
-
-	return 1
-}
-
 deny_path() {
 	local rel="$1"
 	cat >&2 <<EOF
-BLOCKED: source/app edit in primary worktree: $rel
-Primary worktree is orchestration-only. Make implementation/review source edits from a linked worktree instead.
+BLOCKED: non-orchestration edit in primary worktree: $rel
+Primary worktree is orchestration-only. Make repo edits from a linked worktree instead.
 Create one with: bash scripts/worktree-spawn.sh <branch-name>
 EOF
 	exit 1
@@ -254,13 +200,11 @@ check_path() {
 		return 0
 	fi
 
-	if is_orchestration_path "$rel"; then
+	if is_primary_allowed_path "$rel"; then
 		return 0
 	fi
 
-	if is_app_config_or_manifest_path "$rel" || is_source_or_app_path "$rel"; then
-		deny_path "$rel"
-	fi
+	deny_path "$rel"
 }
 
 emit_path() {

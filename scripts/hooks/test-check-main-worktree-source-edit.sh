@@ -97,7 +97,7 @@ run_codex_hook_case() {
 	local expected_decision="$4"
 
 	local output actual_decision
-	output="$(printf '%s' "$payload" | bash "$CODEX_HOOK" 2>&1)"
+	output="$(printf '%s' "$payload" | CLAUDE_PROJECT_DIR="$MAIN_ROOT" bash "$CODEX_HOOK" 2>&1)"
 
 	if printf '%s' "$output" | grep -q '"permissionDecision": "deny"'; then
 		actual_decision="deny"
@@ -154,14 +154,15 @@ run_case "main: Tauri deny config blocked" 1 main-path "src-tauri/deny.toml"
 run_case "main: Tauri capability blocked" 1 main-path "src-tauri/capabilities/default.json"
 run_case "main: Tauri permission blocked" 1 main-path "src-tauri/permissions/fs.json"
 
-run_case "main: scripts orchestration allowed" 0 main-path "scripts/hooks/example.sh"
+run_case "main: scripts edit blocked" 1 main-path "scripts/hooks/example.sh"
 run_case "main: memory orchestration allowed" 0 main-path "memory/runbook/worktree/memory.md"
-run_case "main: docs orchestration allowed" 0 main-path "docs/PLAN.md"
-run_case "main: Claude settings allowed" 0 main-path ".claude/settings.json"
+run_case "main: docs edit blocked" 1 main-path "docs/PLAN.md"
+run_case "main: Codex config blocked" 1 main-path ".codex/config.toml"
+run_case "main: Claude settings blocked" 1 main-path ".claude/settings.json"
 run_case "main: AGENTS allowed" 0 main-path "AGENTS.md"
-run_case "main: markdown allowed" 0 main-path "notes/review.md"
-run_case "main: agent skills orchestration allowed" 0 main-path ".agents/skills/tdd/SKILL.md"
-run_case "main: non-source Tauri asset allowed" 0 main-path "src-tauri/icons/icon.png"
+run_case "main: markdown note blocked" 1 main-path "notes/review.md"
+run_case "main: agent skills blocked" 1 main-path ".agents/skills/tdd/SKILL.md"
+run_case "main: Tauri asset blocked" 1 main-path "src-tauri/icons/icon.png"
 
 run_case "main command: redirection to src blocked" 1 main-command "cat > src/App.tsx <<'EOF'"
 run_case "main command: redirection traversal to src blocked" 1 main-command "cat > docs/../src/App.tsx <<'EOF'"
@@ -192,9 +193,14 @@ run_codex_hook_case \
 	'{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"src/App.tsx"}}' \
 	allow
 run_codex_hook_case \
-	"Codex hook: .agents skills allowed" \
+	"Codex hook: .agents skills denied" \
 	"Edit" \
 	'{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":".agents/skills/tdd/SKILL.md"}}' \
+	deny
+run_codex_hook_case \
+	"Codex hook: memory edit allowed" \
+	"Edit" \
+	'{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"memory/runbook/worktree/memory.md"}}' \
 	allow
 run_codex_hook_case \
 	"Codex hook: Bash source write denied" \

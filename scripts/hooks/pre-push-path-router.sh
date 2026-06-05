@@ -156,7 +156,7 @@ is_docs_path() {
 
 is_hook_path() {
 	case "$1" in
-	lefthook.yml | .githooks/* | scripts/hooks/* | scripts/setup.sh | scripts/target-cache.sh | scripts/check-coverage-ratchet.ts | scripts/coverage-ratchet-targets.json | src-tauri/.config/nextest.toml)
+	lefthook.yml | .githooks/* | scripts/hooks/* | scripts/setup.sh | scripts/target-cache.sh | scripts/worktree-spawn.sh | scripts/worktree-cleanup.sh | scripts/worktree-bootstrap-deps.sh | scripts/check-coverage-ratchet.ts | scripts/coverage-ratchet-targets.json | src-tauri/.config/nextest.toml)
 		return 0
 		;;
 	*)
@@ -167,7 +167,29 @@ is_hook_path() {
 
 is_workflow_path() {
 	case "$1" in
-	.github/* | .claude/* | .codex/* | memory/*)
+	.github/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+is_agent_path() {
+	case "$1" in
+	.claude/* | .codex/* | .agents/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+is_memory_path() {
+	case "$1" in
+	memory/*)
 		return 0
 		;;
 	*)
@@ -311,7 +333,7 @@ run_rust_gates() {
 }
 
 run_hook_gates() {
-	run_step "hook-shell-syntax" bash -n .githooks/pre-push scripts/hooks/*.sh scripts/setup.sh scripts/target-cache.sh
+	run_step "hook-shell-syntax" bash -n .githooks/pre-push scripts/hooks/*.sh scripts/setup.sh scripts/target-cache.sh scripts/worktree-spawn.sh scripts/worktree-cleanup.sh scripts/worktree-bootstrap-deps.sh
 	run_step "lefthook-validate" lefthook validate
 	run_step_in "nextest-push-profile-config" src-tauri cargo nextest --no-pager show-config version --profile push
 	run_step "coverage-ratchet-tests" bash scripts/hooks/test-coverage-ratchet.sh
@@ -320,6 +342,11 @@ run_hook_gates() {
 
 run_ci_workflow_gates() {
 	run_step "e2e-smoke-workflow-cache" bash scripts/hooks/test-e2e-smoke-workflow.sh
+}
+
+run_memory_gates() {
+	run_step "memory-structure" bash scripts/hooks/check-memory-structure.sh --strict
+	run_step "memory-size" bash scripts/hooks/check-memory-size.sh --strict
 }
 
 run_frontend_and_rust_gates() {
@@ -388,6 +415,8 @@ docs_only=1
 needs_frontend=0
 needs_rust=0
 needs_hook=0
+needs_memory=0
+needs_agent=0
 needs_ci_workflow=0
 needs_full=0
 
@@ -403,6 +432,16 @@ while read -r path; do
 		needs_hook=1
 		continue
 	fi
+	if is_agent_path "$path"; then
+		docs_only=0
+		needs_agent=1
+		continue
+	fi
+	if is_memory_path "$path"; then
+		docs_only=0
+		needs_memory=1
+		continue
+	fi
 	if is_workflow_path "$path"; then
 		docs_only=0
 		needs_full=1
@@ -416,7 +455,7 @@ while read -r path; do
 	if is_rust_path "$path"; then
 		needs_rust=1
 	fi
-	if ! is_docs_path "$path" && ! is_hook_path "$path" && ! is_workflow_path "$path" && ! is_frontend_path "$path" && ! is_rust_path "$path"; then
+	if ! is_docs_path "$path" && ! is_hook_path "$path" && ! is_agent_path "$path" && ! is_memory_path "$path" && ! is_workflow_path "$path" && ! is_frontend_path "$path" && ! is_rust_path "$path"; then
 		needs_full=1
 	fi
 done <"$PATHS_FILE"
@@ -438,11 +477,14 @@ else
 		needs_rust=1
 		echo "[pre-push-route] route: full (workflow or unknown path)"
 	else
-		echo "[pre-push-route] route: frontend=$needs_frontend rust=$needs_rust hook=$needs_hook"
+		echo "[pre-push-route] route: frontend=$needs_frontend rust=$needs_rust hook=$needs_hook memory=$needs_memory agent=$needs_agent"
 	fi
 
 	if [ "$needs_hook" = "1" ]; then
 		run_hook_gates
+	fi
+	if [ "$needs_memory" = "1" ]; then
+		run_memory_gates
 	fi
 	if [ "$needs_ci_workflow" = "1" ]; then
 		run_ci_workflow_gates

@@ -120,9 +120,9 @@ pre-push:
     0_path-routed-gates:
       # `scripts/hooks/pre-push-path-router.sh` preserves signed-commit and
       # TDD-cycle gates, then routes TS/Rust checks from outgoing changed paths:
-      # docs-only => signed/TDD only; frontend => TS checks/tests; Rust => cargo
-      # checks/coverage; hook changes => hook self-checks; workflow/unknown =>
-      # conservative full checks.
+      # docs/agent-only => signed/TDD only; memory => memory checks; frontend =>
+      # TS checks/tests; Rust => cargo checks/coverage; hook changes => hook
+      # self-checks; GitHub workflow/unknown => conservative full checks.
       # Cargo-deny still unsets Git-local env before nested Git can run.
       tags: security git lint test frontend rust
       run: bash scripts/hooks/pre-push-path-router.sh
