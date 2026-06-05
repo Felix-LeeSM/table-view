@@ -29,7 +29,7 @@ use super::types::{
     CreateMongoIndexResult, DocumentCollectionInfo, DocumentId, DocumentQueryResult, DocumentRow,
     FindBody, NamespaceInfo, NamespaceLabel, RdbQueryResult,
 };
-use super::KvAdapter;
+use super::{KvAdapter, KvDatabaseInfo};
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
@@ -1313,12 +1313,18 @@ impl SearchAdapter for StubSearchAdapter {}
 
 pub(crate) struct StubKvAdapter {
     pub kind_value: DatabaseType,
+    pub list_databases_fn: Option<FnZero<Vec<KvDatabaseInfo>>>,
+    pub current_database_fn: Option<FnZero<Option<u16>>>,
+    pub switch_database_fn: Option<FnOne<u16, ()>>,
 }
 
 impl Default for StubKvAdapter {
     fn default() -> Self {
         Self {
-            kind_value: DatabaseType::Mongodb,
+            kind_value: DatabaseType::Redis,
+            list_databases_fn: None,
+            current_database_fn: None,
+            switch_database_fn: None,
         }
     }
 }
@@ -1338,7 +1344,39 @@ impl DbAdapter for StubKvAdapter {
     }
 }
 
-impl KvAdapter for StubKvAdapter {}
+impl KvAdapter for StubKvAdapter {
+    fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<KvDatabaseInfo>, AppError>> {
+        let r = self.list_databases_fn.as_ref().map_or_else(
+            || {
+                Err(AppError::Unsupported(
+                    "This key-value adapter does not list databases".into(),
+                ))
+            },
+            |f| f(),
+        );
+        Box::pin(async move { r })
+    }
+
+    fn switch_database<'a>(&'a self, database: u16) -> BoxFuture<'a, Result<(), AppError>> {
+        let r = self.switch_database_fn.as_ref().map_or_else(
+            || {
+                Err(AppError::Unsupported(
+                    "This key-value adapter does not support database switching".into(),
+                ))
+            },
+            |f| f(&database),
+        );
+        Box::pin(async move { r })
+    }
+
+    fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<u16>, AppError>> {
+        let r = self
+            .current_database_fn
+            .as_ref()
+            .map_or_else(|| Ok(None), |f| f());
+        Box::pin(async move { r })
+    }
+}
 
 // ── helpers ─────────────────────────────────────────────────────────────
 

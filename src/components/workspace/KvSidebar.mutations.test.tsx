@@ -47,7 +47,7 @@ describe("KvSidebar mutations", () => {
       screen.getByRole("button", { name: /preview string set/i }),
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent(
+    expect(await screen.findByRole("status")).toHaveTextContent(
       /preview: set user:1/i,
     );
     expect(commandCalls("set_kv_string_value")).toHaveLength(0);
@@ -124,7 +124,7 @@ describe("KvSidebar mutations", () => {
       }
       fireEvent.click(screen.getByRole("button", { name: preview }));
 
-      expect(screen.getByRole("status")).toHaveTextContent(command);
+      expect(await screen.findByRole("status")).toHaveTextContent(command);
       expect(commandCalls("execute_kv_command")).toHaveLength(0);
 
       fireEvent.click(screen.getByRole("button", { name: confirm }));

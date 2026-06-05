@@ -35,7 +35,7 @@ describe("verifyActiveDb (Sprint 132 wrapper)", () => {
         "Unsupported operation: verify_active_db not supported for this paradigm",
       ),
     );
-    await expect(verifyActiveDb("conn-redis")).rejects.toThrow(/Unsupported/);
+    await expect(verifyActiveDb("conn-search")).rejects.toThrow(/Unsupported/);
   });
 
   it("propagates NotFound when the connection id has no live adapter", async () => {

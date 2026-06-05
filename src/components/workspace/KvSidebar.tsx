@@ -10,27 +10,10 @@ import {
   Timer,
 } from "lucide-react";
 import { Button } from "@components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@components/ui/select";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
-import {
-  currentKvDatabase,
-  getKvValue,
-  listKvDatabases,
-  scanKvKeys,
-  switchKvDatabase,
-} from "@lib/tauri/kv";
-import type {
-  KvDatabaseInfo,
-  KvKeyMetadata,
-  KvValueEnvelope,
-} from "@/types/kv";
+import { currentKvDatabase, getKvValue, scanKvKeys } from "@lib/tauri/kv";
+import type { KvKeyMetadata, KvValueEnvelope } from "@/types/kv";
 import { formatKvTtl } from "@/types/kv";
 import { DATABASE_TYPE_LABELS } from "@/types/connection";
 import { getDataSourceProfile } from "@/types/dataSource";
@@ -63,7 +46,6 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   }, [connection?.database, status]);
 
   const [database, setDatabase] = useState(initialDatabase);
-  const [databases, setDatabases] = useState<KvDatabaseInfo[]>([]);
   const [pattern, setPattern] = useState("*");
   const [keys, setKeys] = useState<KvKeyMetadata[]>([]);
   const [nextCursor, setNextCursor] = useState("0");
@@ -84,14 +66,9 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     setCatalogLoaded(false);
     setError(null);
     try {
-      const [databaseList, currentDatabase] = await Promise.all([
-        listKvDatabases(connectionId),
-        currentKvDatabase(connectionId),
-      ]);
-      setDatabases(databaseList);
+      const currentDatabase = await currentKvDatabase(connectionId);
       setDatabase(currentDatabase);
     } catch (err) {
-      setDatabases([]);
       setDatabase(initialDatabase);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -187,6 +164,10 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   }, [loadCatalog]);
 
   useEffect(() => {
+    setDatabase(initialDatabase);
+  }, [initialDatabase]);
+
+  useEffect(() => {
     latestKeyScanRef.current += 1;
     setKeys([]);
     setNextCursor("0");
@@ -201,25 +182,6 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     void loadKeys("0");
   }, [autoScanAllowed, catalogLoaded, loadKeys]);
 
-  const handleDatabaseChange = async (value: string) => {
-    const nextDatabase = Number.parseInt(value, 10);
-    if (!Number.isFinite(nextDatabase) || nextDatabase < 0) return;
-    setLoadingCatalog(true);
-    setError(null);
-    try {
-      const switched = await switchKvDatabase(connectionId, nextDatabase);
-      setDatabase(switched);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoadingCatalog(false);
-    }
-  };
-
-  const databaseOptions =
-    databases.length > 0
-      ? databases
-      : [{ name: String(database), index: database } satisfies KvDatabaseInfo];
   const canScanKeys = catalogLoaded && !loadingCatalog && !loadingKeys;
   const scanStatusText = hasScannedKeys
     ? `${keys.length} key${keys.length === 1 ? "" : "s"}${
@@ -236,31 +198,6 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
           <div className="flex items-center gap-1.5 font-medium text-secondary-foreground">
             <KeyRound size={13} aria-hidden />
             <span className="truncate">Keys</span>
-          </div>
-          <div className="mt-1 flex items-center gap-1.5">
-            <Select
-              value={String(database)}
-              disabled={loadingCatalog}
-              onValueChange={(value) => void handleDatabaseChange(value)}
-            >
-              <SelectTrigger
-                size="xs"
-                className="h-6 max-w-28 rounded border-border bg-background px-1.5 text-3xs text-secondary-foreground"
-                aria-label={`${productLabel} database`}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {databaseOptions.map((item) => (
-                  <SelectItem key={item.index} value={String(item.index)}>
-                    DB {item.index}
-                    {typeof item.keyCount === "number"
-                      ? ` (${item.keyCount})`
-                      : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </div>
         <Button

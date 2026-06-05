@@ -226,14 +226,15 @@ describe("adapter conformance matrix", () => {
     ]);
   });
 
-  it("locks the Valkey runtime claim to connection, key browsing, and command query", () => {
+  it("locks the Valkey runtime claim to connection, db switching, key browsing, and command query", () => {
     const valkey = ADAPTER_CONFORMANCE_MATRIX.valkey;
 
     expect(valkey.level).toBe("runtime");
-    expect(valkey.areas.connection.checks).toEqual(["connection.test"]);
-    expect(valkey.areas.connection.deferred).toEqual([
+    expect(valkey.areas.connection.checks).toEqual([
+      "connection.test",
       "connection.switchDatabase",
     ]);
+    expect(valkey.areas.connection.deferred).toEqual([]);
     expect(valkey.areas.connection.unsupported).toEqual([
       "connection.readOnly",
       "connection.filePicker",

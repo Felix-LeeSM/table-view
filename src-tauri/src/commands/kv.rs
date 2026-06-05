@@ -280,6 +280,7 @@ mod tests {
             "kv".into(),
             ActiveAdapter::Kv(Box::new(StubKvAdapter {
                 kind_value: DatabaseType::Redis,
+                ..Default::default()
             })),
         );
         state

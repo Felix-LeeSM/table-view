@@ -28,7 +28,7 @@ describe("listDatabases (Sprint 128 wrapper)", () => {
     expect(result).toEqual([{ name: "admin" }, { name: "table_view_test" }]);
   });
 
-  it("propagates an empty array when the backend returns one (search/kv paradigm)", async () => {
+  it("propagates an empty array when the backend returns one", async () => {
     invokeMock.mockResolvedValueOnce([]);
     const result = await listDatabases("conn-redis");
     expect(result).toEqual([]);
