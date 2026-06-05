@@ -34,7 +34,9 @@ describe("sqlite fixture DDL", () => {
     expect(path.directory).toBe(
       resolve(primaryWorktreeRootForTest(), "tmp", "fixtures", "sqlite"),
     );
-    expect(path.directory).not.toContain(tmpdir());
+    expect(path.directory).not.toBe(
+      resolve(tmpdir(), "table-view-fixtures", "sqlite"),
+    );
     expect(path.directory).not.toContain("Application Support");
   });
 

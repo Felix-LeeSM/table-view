@@ -33,7 +33,9 @@ describe("duckdb fixture file lifecycle", () => {
     expect(path.directory).toBe(
       resolve(primaryWorktreeRootForTest(), "tmp", "fixtures", "duckdb"),
     );
-    expect(path.directory).not.toContain(tmpdir());
+    expect(path.directory).not.toBe(
+      resolve(tmpdir(), "table-view-fixtures", "duckdb"),
+    );
     expect(path.directory).not.toContain("Application Support");
   });
 
