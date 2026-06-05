@@ -200,7 +200,7 @@ impl SearchHttpConnection {
         })
     }
 
-    async fn post_json(
+    pub(crate) async fn post_json(
         &self,
         path: &str,
         body: &Value,

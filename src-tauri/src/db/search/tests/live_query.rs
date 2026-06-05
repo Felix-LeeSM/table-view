@@ -228,6 +228,70 @@ async fn elasticsearch_live_sample_documents_uses_bounded_match_all_search() {
 }
 
 #[tokio::test]
+async fn elasticsearch_live_delete_by_query_preview_uses_safe_search_estimate() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "elastic-dev",
+                "version": { "number": "8.12.2" }
+            }"#,
+        ),
+        post_route(
+            "/logs-elastic-2026.05.24/_search",
+            r#"{
+                "query": { "term": { "status.keyword": "error" } },
+                "size": 0,
+                "track_total_hits": true
+            }"#,
+            r#"{
+                "took": 3,
+                "timed_out": false,
+                "hits": {
+                    "total": { "value": 7, "relation": "eq" },
+                    "hits": []
+                }
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        adapter
+            .plan_delete_by_query(&SearchDeleteByQueryRequest {
+                index_pattern: "logs-elastic-2026.05.24".into(),
+                body: json!({
+                    "query": { "term": { "status.keyword": "error" } }
+                }),
+                preview_only: true,
+                safety: SearchDestructiveSafety {
+                    acknowledged_risk: false,
+                    allow_wildcard: false,
+                    expected_target: None,
+                },
+            })
+            .await
+    }
+    .await;
+    if result.is_err() {
+        server.abort();
+    }
+    let plan = result.unwrap();
+    server.await.unwrap();
+
+    assert_eq!(plan.estimated_document_count, Some(7));
+    assert!(plan.requires_confirmation);
+    assert!(plan.preview_only);
+    assert!(plan
+        .warnings
+        .iter()
+        .any(|warning| warning.contains("confirmed before execution")));
+}
+
+#[tokio::test]
 async fn elasticsearch_live_search_surfaces_http_error_body() {
     let routes = vec![
         route(

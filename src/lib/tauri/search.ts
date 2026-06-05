@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   SearchCatalogSummary,
+  SearchDeleteByQueryRequest,
+  SearchDestructiveOperationPlan,
   SearchFieldStatsEnvelope,
   SearchIndexMapping,
   SearchIndexSettings,
@@ -76,5 +78,15 @@ export async function executeSearchQuery(
     connectionId,
     request,
     queryId,
+  });
+}
+
+export async function planSearchDeleteByQuery(
+  connectionId: string,
+  request: SearchDeleteByQueryRequest,
+): Promise<SearchDestructiveOperationPlan> {
+  return invoke<SearchDestructiveOperationPlan>("plan_search_delete_by_query", {
+    connectionId,
+    request,
   });
 }

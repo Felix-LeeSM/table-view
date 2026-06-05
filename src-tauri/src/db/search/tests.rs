@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::{SearchDeleteByQueryRequest, SearchDestructiveSafety};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
@@ -365,6 +366,80 @@ fn search_config(port: u16) -> ConnectionConfig {
         auth_source: None,
         replica_set: None,
         tls_enabled: Some(false),
+    }
+}
+
+fn delete_by_query_request(
+    preview_only: bool,
+    acknowledged_risk: bool,
+    expected_target: Option<&str>,
+) -> SearchDeleteByQueryRequest {
+    SearchDeleteByQueryRequest {
+        index_pattern: "logs-elastic-2026.05.24".into(),
+        body: json!({
+            "query": { "term": { "status.keyword": "ok" } }
+        }),
+        preview_only,
+        safety: SearchDestructiveSafety {
+            acknowledged_risk,
+            allow_wildcard: false,
+            expected_target: expected_target.map(str::to_string),
+        },
+    }
+}
+
+#[tokio::test]
+async fn fixture_delete_by_query_preview_estimates_and_requires_confirmation() {
+    let adapter = SearchEngineAdapter::fixture_elasticsearch();
+
+    let plan = adapter
+        .plan_delete_by_query(&delete_by_query_request(true, false, None))
+        .await
+        .unwrap();
+
+    assert_eq!(plan.operation, "deleteByQuery");
+    assert_eq!(plan.target, "logs-elastic-2026.05.24");
+    assert!(plan.preview_only);
+    assert!(plan.requires_confirmation);
+    assert_eq!(plan.estimated_document_count, Some(1));
+    assert!(plan
+        .warnings
+        .iter()
+        .any(|warning| warning.contains("confirmed before execution")));
+}
+
+#[tokio::test]
+async fn fixture_delete_by_query_confirmed_plan_satisfies_confirmation_gate() {
+    let adapter = SearchEngineAdapter::fixture_elasticsearch();
+
+    let plan = adapter
+        .plan_delete_by_query(&delete_by_query_request(
+            false,
+            true,
+            Some("logs-elastic-2026.05.24"),
+        ))
+        .await
+        .unwrap();
+
+    assert!(!plan.preview_only);
+    assert!(!plan.requires_confirmation);
+    assert_eq!(plan.estimated_document_count, Some(1));
+}
+
+#[tokio::test]
+async fn fixture_delete_by_query_rejects_raw_destructive_paths() {
+    let adapter = SearchEngineAdapter::fixture_elasticsearch();
+    let mut request = delete_by_query_request(false, true, Some("logs-elastic-2026.05.24"));
+    request.index_pattern = "logs-elastic-2026.05.24/_delete_by_query".into();
+    request.safety.expected_target = Some(request.index_pattern.clone());
+
+    let result = adapter.plan_delete_by_query(&request).await;
+
+    match result {
+        Err(AppError::Validation(message)) => {
+            assert!(message.contains("raw/destructive paths"));
+        }
+        other => panic!("Expected raw/destructive path validation, got {other:?}"),
     }
 }
 
