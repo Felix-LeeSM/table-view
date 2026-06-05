@@ -121,6 +121,10 @@ async fn opensearch_network_adapter_detects_root_identity() {
     assert_eq!(identity.version.lucene.as_deref(), Some("9.10.0"));
     assert_eq!(identity.version.distribution.as_deref(), Some("opensearch"));
     assert!(!identity.capabilities.search);
+    assert!(identity.capabilities.aliases);
+    assert!(identity.capabilities.mappings);
+    assert!(identity.capabilities.legacy_index_templates);
+    assert!(identity.capabilities.composable_index_templates);
     assert!(identity.product_delta.supports_opensearch_plugins_api);
 }
 
@@ -351,6 +355,298 @@ async fn elasticsearch_live_catalog_reads_mappings_settings_and_templates() {
     assert_eq!(templates[0].name, "logs-elastic-template");
     assert_eq!(templates[0].index_patterns, vec!["logs-elastic-*"]);
     assert_eq!(templates[0].priority, Some(100));
+}
+
+#[tokio::test]
+async fn opensearch_live_catalog_reads_indexes_aliases_and_streams() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "open-dev",
+                "cluster_uuid": "open-uuid-1",
+                "version": {
+                    "number": "2.13.0",
+                    "distribution": "opensearch",
+                    "lucene_version": "9.10.0"
+                },
+                "tagline": "The OpenSearch Project: https://opensearch.org/"
+            }"#,
+        ),
+        route(
+            "/_cat/indices?",
+            r#"[
+                {
+                    "health": "green",
+                    "status": "open",
+                    "index": "logs-opensearch-2026.05.24",
+                    "uuid": "open-idx-1",
+                    "docs.count": "31",
+                    "store.size": "4096",
+                    "pri": "1",
+                    "rep": "1"
+                }
+            ]"#,
+        ),
+        route(
+            "/_aliases",
+            r#"{
+                "logs-opensearch-2026.05.24": {
+                    "aliases": {
+                        "logs-open-current": {
+                            "is_write_index": true,
+                            "routing": "tenant-open"
+                        }
+                    }
+                }
+            }"#,
+        ),
+        route(
+            "/_aliases",
+            r#"{
+                "logs-opensearch-2026.05.24": {
+                    "aliases": {
+                        "logs-open-current": {
+                            "is_write_index": true,
+                            "routing": "tenant-open"
+                        }
+                    }
+                }
+            }"#,
+        ),
+        route(
+            "/_data_stream",
+            r#"{
+                "data_streams": [
+                    {
+                        "name": "logs-opensearch-default",
+                        "status": "GREEN",
+                        "hidden": false,
+                        "indices": [
+                            { "index_name": ".ds-logs-opensearch-default-000001" }
+                        ]
+                    }
+                ]
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_opensearch();
+    let config = search_config_for(port, DatabaseType::Opensearch);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        let indexes = adapter.list_indexes().await?;
+        let aliases = adapter.list_aliases().await?;
+        let streams = adapter.list_data_streams().await?;
+        Ok::<_, AppError>((indexes, aliases, streams))
+    }
+    .await;
+    if result.is_err() {
+        server.abort();
+    }
+    let (indexes, aliases, streams) = result.unwrap();
+    server.await.unwrap();
+
+    assert_eq!(indexes[0].name, "logs-opensearch-2026.05.24");
+    assert_eq!(indexes[0].docs_count, Some(31));
+    assert_eq!(indexes[0].aliases, vec!["logs-open-current"]);
+    assert_eq!(aliases[0].routing.as_deref(), Some("tenant-open"));
+    assert!(aliases[0].write_index);
+    assert_eq!(streams[0].name, "logs-opensearch-default");
+    assert_eq!(
+        streams[0].backing_indices,
+        vec![".ds-logs-opensearch-default-000001"]
+    );
+}
+
+#[tokio::test]
+async fn opensearch_live_catalog_reads_mappings_settings_and_template_variants() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "open-dev",
+                "version": {
+                    "number": "2.13.0",
+                    "distribution": "opensearch"
+                },
+                "tagline": "The OpenSearch Project: https://opensearch.org/"
+            }"#,
+        ),
+        route(
+            "/logs-opensearch-2026.05.24/_mapping",
+            r#"{
+                "logs-opensearch-2026.05.24": {
+                    "mappings": {
+                        "properties": {
+                            "@timestamp": { "type": "date" },
+                            "message": {
+                                "type": "text",
+                                "fields": {
+                                    "keyword": { "type": "keyword" }
+                                }
+                            },
+                            "http": {
+                                "properties": {
+                                    "response": {
+                                        "properties": {
+                                            "status_code": { "type": "integer" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+        ),
+        route(
+            "/logs-opensearch-2026.05.24/_settings",
+            r#"{
+                "logs-opensearch-2026.05.24": {
+                    "settings": {
+                        "index": {
+                            "analysis": {
+                                "analyzer": {
+                                    "open_default": {
+                                        "type": "custom",
+                                        "tokenizer": "standard",
+                                        "filter": ["lowercase", "asciifolding"]
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+        ),
+        route(
+            "/_index_template",
+            r#"{
+                "index_templates": [
+                    {
+                        "name": "logs-opensearch-template",
+                        "index_template": {
+                            "index_patterns": ["logs-opensearch-*"],
+                            "priority": 90
+                        }
+                    }
+                ]
+            }"#,
+        ),
+        route(
+            "/_template",
+            r#"{
+                "logs-opensearch-legacy": {
+                    "template": "logs-opensearch-*",
+                    "settings": { "number_of_shards": 1 }
+                }
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_opensearch();
+    let config = search_config_for(port, DatabaseType::Opensearch);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        let mapping = adapter
+            .get_index_mapping("logs-opensearch-2026.05.24")
+            .await?;
+        let settings = adapter
+            .get_index_settings("logs-opensearch-2026.05.24")
+            .await?;
+        let templates = adapter.list_index_templates().await?;
+        Ok::<_, AppError>((mapping, settings, templates))
+    }
+    .await;
+    if result.is_err() {
+        server.abort();
+    }
+    let (mapping, settings, templates) = result.unwrap();
+    server.await.unwrap();
+
+    assert!(mapping
+        .fields
+        .iter()
+        .any(|field| field.path == "message.keyword"
+            && field.field_type == "keyword"
+            && field.aggregatable));
+    assert!(mapping.fields.iter().any(|field| {
+        field.path == "http.response.status_code" && field.field_type == "integer"
+    }));
+    assert_eq!(settings.analyzers[0].name, "open_default");
+    assert_eq!(
+        settings.analyzers[0].filters,
+        vec!["lowercase", "asciifolding"]
+    );
+    assert_eq!(templates.len(), 2);
+    assert_eq!(templates[0].name, "logs-opensearch-template");
+    assert_eq!(
+        templates[0].endpoint,
+        SearchTemplateEndpointKind::ComposableIndexTemplate
+    );
+    assert_eq!(templates[0].priority, Some(90));
+    assert_eq!(templates[1].name, "logs-opensearch-legacy");
+    assert_eq!(
+        templates[1].endpoint,
+        SearchTemplateEndpointKind::LegacyIndexTemplate
+    );
+    assert_eq!(templates[1].index_patterns, vec!["logs-opensearch-*"]);
+}
+
+#[tokio::test]
+async fn opensearch_live_catalog_does_not_promote_query_or_destructive_plan() {
+    let routes = vec![route(
+        "/ ",
+        r#"{
+            "cluster_name": "open-dev",
+            "version": {
+                "number": "2.13.0",
+                "distribution": "opensearch"
+            },
+            "tagline": "The OpenSearch Project: https://opensearch.org/"
+        }"#,
+    )];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_opensearch();
+    let config = search_config_for(port, DatabaseType::Opensearch);
+    adapter.connect(&config).await.unwrap();
+    server.await.unwrap();
+
+    let request = SearchQueryRequest {
+        index: "logs-opensearch-2026.05.24".into(),
+        body: json!({ "query": { "match_all": {} } }),
+        from: None,
+        size: Some(5),
+        track_total_hits: Some(true),
+    };
+    match adapter.search(&request, None).await {
+        Err(AppError::Unsupported(message)) => {
+            assert!(message.contains("OpenSearch live query is deferred"));
+        }
+        other => panic!("Expected OpenSearch live query deferral, got {other:?}"),
+    }
+
+    match adapter
+        .sample_documents("logs-opensearch-2026.05.24", 1)
+        .await
+    {
+        Err(AppError::Unsupported(message)) => {
+            assert!(message.contains("OpenSearch live sample documents is deferred"));
+        }
+        other => panic!("Expected OpenSearch live sample deferral, got {other:?}"),
+    }
+
+    let mut delete_request = delete_by_query_request(true, false, None);
+    delete_request.index_pattern = "logs-opensearch-2026.05.24".into();
+    match adapter.plan_delete_by_query(&delete_request).await {
+        Err(AppError::Unsupported(message)) => {
+            assert!(message.contains("OpenSearch live delete-by-query planning is deferred"));
+        }
+        other => panic!("Expected OpenSearch live delete-by-query deferral, got {other:?}"),
+    }
 }
 
 #[tokio::test]

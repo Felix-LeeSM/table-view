@@ -93,7 +93,7 @@ impl SearchHttpConnection {
                     acc.entry(alias.index).or_default().push(alias.name);
                     acc
                 });
-        let mut indexes = parse_cat_indices(&payload)?;
+        let mut indexes = parse_cat_indices(&payload, self.label())?;
         for index in &mut indexes {
             index.aliases = aliases_by_index
                 .get(&index.name)
@@ -105,12 +105,12 @@ impl SearchHttpConnection {
 
     pub(crate) async fn list_aliases(&self) -> Result<Vec<SearchAliasInfo>, AppError> {
         let payload = self.get_json("/_aliases").await?;
-        parse_aliases(&payload)
+        parse_aliases(&payload, self.label())
     }
 
     pub(crate) async fn list_data_streams(&self) -> Result<Vec<SearchDataStreamInfo>, AppError> {
         let payload = self.get_json("/_data_stream").await?;
-        parse_data_streams(&payload)
+        parse_data_streams(&payload, self.label())
     }
 
     pub(crate) async fn get_index_mapping(
@@ -154,8 +154,16 @@ impl SearchHttpConnection {
     pub(crate) async fn list_index_templates(
         &self,
     ) -> Result<Vec<SearchIndexTemplateInfo>, AppError> {
-        let payload = self.get_json("/_index_template").await?;
-        parse_index_templates(&payload)
+        let mut templates = Vec::new();
+        if self.identity.capabilities.composable_index_templates {
+            let payload = self.get_json("/_index_template").await?;
+            templates.extend(parse_composable_index_templates(&payload, self.label())?);
+        }
+        if self.identity.capabilities.legacy_index_templates {
+            let payload = self.get_json("/_template").await?;
+            templates.extend(parse_legacy_index_templates(&payload, self.label())?);
+        }
+        Ok(templates)
     }
 
     pub(crate) async fn sample_documents(
@@ -455,26 +463,26 @@ fn root_probe_capabilities(product: SearchProductKind) -> SearchClusterCapabilit
         SearchProductKind::OpenSearch => SearchClusterCapabilities {
             search: false,
             aggregations: false,
-            aliases: false,
-            mappings: false,
-            legacy_index_templates: false,
-            composable_index_templates: false,
+            aliases: true,
+            mappings: true,
+            legacy_index_templates: true,
+            composable_index_templates: true,
             delete_by_query: false,
         },
     }
 }
 
-fn parse_cat_indices(payload: &Value) -> Result<Vec<SearchIndexInfo>, AppError> {
+fn parse_cat_indices(payload: &Value, label: &str) -> Result<Vec<SearchIndexInfo>, AppError> {
     let rows = payload.as_array().ok_or_else(|| {
-        AppError::Connection("Elasticsearch indices catalog returned non-array JSON".into())
+        AppError::Connection(format!("{label} indices catalog returned non-array JSON"))
     })?;
     rows.iter()
         .map(|row| {
             let item = row.as_object().ok_or_else(|| {
-                AppError::Connection("Elasticsearch index catalog row is not an object".into())
+                AppError::Connection(format!("{label} index catalog row is not an object"))
             })?;
             let name = string_field(item, "index").ok_or_else(|| {
-                AppError::Connection("Elasticsearch index catalog row is missing index".into())
+                AppError::Connection(format!("{label} index catalog row is missing index"))
             })?;
             let status = string_field(item, "status").unwrap_or_else(|| "open".into());
             Ok(SearchIndexInfo {
@@ -492,9 +500,9 @@ fn parse_cat_indices(payload: &Value) -> Result<Vec<SearchIndexInfo>, AppError> 
         .collect()
 }
 
-fn parse_aliases(payload: &Value) -> Result<Vec<SearchAliasInfo>, AppError> {
+fn parse_aliases(payload: &Value, label: &str) -> Result<Vec<SearchAliasInfo>, AppError> {
     let root = payload.as_object().ok_or_else(|| {
-        AppError::Connection("Elasticsearch aliases catalog returned non-object JSON".into())
+        AppError::Connection(format!("{label} aliases catalog returned non-object JSON"))
     })?;
     let mut aliases = Vec::new();
     for (index, entry) in root {
@@ -520,21 +528,21 @@ fn parse_aliases(payload: &Value) -> Result<Vec<SearchAliasInfo>, AppError> {
     Ok(aliases)
 }
 
-fn parse_data_streams(payload: &Value) -> Result<Vec<SearchDataStreamInfo>, AppError> {
+fn parse_data_streams(payload: &Value, label: &str) -> Result<Vec<SearchDataStreamInfo>, AppError> {
     let streams = payload
         .get("data_streams")
         .and_then(Value::as_array)
         .ok_or_else(|| {
-            AppError::Connection("Elasticsearch data stream catalog returned invalid JSON".into())
+            AppError::Connection(format!("{label} data stream catalog returned invalid JSON"))
         })?;
     streams
         .iter()
         .map(|stream| {
             let item = stream.as_object().ok_or_else(|| {
-                AppError::Connection("Elasticsearch data stream row is not an object".into())
+                AppError::Connection(format!("{label} data stream row is not an object"))
             })?;
             let name = string_field(item, "name").ok_or_else(|| {
-                AppError::Connection("Elasticsearch data stream row is missing name".into())
+                AppError::Connection(format!("{label} data stream row is missing name"))
             })?;
             Ok(SearchDataStreamInfo {
                 name,
@@ -586,12 +594,15 @@ fn parse_settings_response(index: &str, payload: &Value) -> Result<SearchIndexSe
     })
 }
 
-fn parse_index_templates(payload: &Value) -> Result<Vec<SearchIndexTemplateInfo>, AppError> {
+fn parse_composable_index_templates(
+    payload: &Value,
+    label: &str,
+) -> Result<Vec<SearchIndexTemplateInfo>, AppError> {
     let templates = payload
         .get("index_templates")
         .and_then(Value::as_array)
         .ok_or_else(|| {
-            AppError::Connection("Elasticsearch index templates returned invalid JSON".into())
+            AppError::Connection(format!("{label} index templates returned invalid JSON"))
         })?;
     Ok(templates
         .iter()
@@ -601,8 +612,33 @@ fn parse_index_templates(payload: &Value) -> Result<Vec<SearchIndexTemplateInfo>
             Some(SearchIndexTemplateInfo {
                 name,
                 endpoint: SearchTemplateEndpointKind::ComposableIndexTemplate,
-                index_patterns: string_array(body.get("index_patterns")),
+                index_patterns: template_patterns(body),
                 priority: body.get("priority").and_then(Value::as_i64),
+                raw: body.clone(),
+            })
+        })
+        .collect())
+}
+
+fn parse_legacy_index_templates(
+    payload: &Value,
+    label: &str,
+) -> Result<Vec<SearchIndexTemplateInfo>, AppError> {
+    let templates = payload.as_object().ok_or_else(|| {
+        AppError::Connection(format!("{label} legacy templates returned invalid JSON"))
+    })?;
+    Ok(templates
+        .iter()
+        .filter_map(|(name, body)| {
+            let patterns = template_patterns(body);
+            if patterns.is_empty() {
+                return None;
+            }
+            Some(SearchIndexTemplateInfo {
+                name: name.clone(),
+                endpoint: SearchTemplateEndpointKind::LegacyIndexTemplate,
+                index_patterns: patterns,
+                priority: None,
                 raw: body.clone(),
             })
         })
@@ -755,6 +791,15 @@ fn string_array(value: Option<&Value>) -> Vec<String> {
         Some(Value::Array(items)) => items.iter().filter_map(value_to_string).collect(),
         Some(item) => value_to_string(item).into_iter().collect(),
         None => Vec::new(),
+    }
+}
+
+fn template_patterns(template: &Value) -> Vec<String> {
+    let modern = string_array(template.get("index_patterns"));
+    if modern.is_empty() {
+        string_array(template.get("template"))
+    } else {
+        modern
     }
 }
 

@@ -119,22 +119,22 @@ function verifySearchConnectionPromotionBoundary(): void {
   );
   assert(
     isSupportedDatabaseType("opensearch"),
-    "opensearch: live root-probe connection test should be advertised as connectable",
+    "opensearch: live connection/catalog slice should be advertised as connectable",
   );
   assert(
     hasConnectionCapability("opensearch", "test"),
-    "opensearch: live root-probe connection test capability should be exposed",
+    "opensearch: live connection test capability should be exposed",
   );
   assert(
-    !opensearch.capabilities.catalog.browse &&
-      !opensearch.capabilities.catalog.indexes,
-    "opensearch: root-probe slice must not expose catalog browse/index capability",
+    opensearch.capabilities.catalog.browse &&
+      opensearch.capabilities.catalog.indexes,
+    "opensearch: live catalog browse/index capability should be exposed",
   );
   assert(
     !opensearch.capabilities.query.query &&
       !opensearch.capabilities.query.cancel &&
       !opensearch.capabilities.query.explain,
-    "opensearch: root-probe slice must not expose query/cancel/explain capability",
+    "opensearch: catalog slice must not expose query/cancel/explain capability",
   );
 }
 

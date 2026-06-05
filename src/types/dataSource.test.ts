@@ -150,6 +150,7 @@ describe("DataSourceProfile registry", () => {
     }),
     opensearch: expectedCapabilities({
       connection: { test: true },
+      catalog: { browse: true, indexes: true },
     }),
   };
 
@@ -373,11 +374,12 @@ describe("DataSourceProfile registry", () => {
     expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);
   });
 
-  it("exposes OpenSearch live connection while keeping catalog and query deferred", () => {
+  it("exposes OpenSearch live connection and catalog while keeping query deferred", () => {
     const profile = getDataSourceProfile("opensearch");
 
     expect(profile.capabilities.connection.test).toBe(true);
-    expect(profile.capabilities.catalog.browse).toBe(false);
+    expect(profile.capabilities.catalog.browse).toBe(true);
+    expect(profile.capabilities.catalog.indexes).toBe(true);
     expect(profile.capabilities.query.query).toBe(false);
     expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);
   });

@@ -182,12 +182,26 @@ export default function SearchIndexDetailPanel({
 
   const indexInfo = catalog.data?.indexes.find((item) => item.name === index);
   const identity = catalog.data?.identity;
+  const supportsSearchSamples = identity?.capabilities.search === true;
+  const availableTabs = useMemo(
+    () =>
+      tabItems.filter(
+        (item) => item.value !== "samples" || supportsSearchSamples,
+      ),
+    [supportsSearchSamples],
+  );
   const matchingTemplates = useMemo(() => {
     if (templates.status !== "loaded") return [];
     return templates.data.filter((template) =>
       template.indexPatterns.some((pattern) => matchesPattern(index, pattern)),
     );
   }, [index, templates]);
+
+  useEffect(() => {
+    if (active === "samples" && !supportsSearchSamples) {
+      setActive("overview");
+    }
+  }, [active, supportsSearchSamples]);
 
   return (
     <section
@@ -230,7 +244,7 @@ export default function SearchIndexDetailPanel({
         aria-label="Search index detail sections"
         className="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-border bg-secondary"
       >
-        {tabItems.map((item) => {
+        {availableTabs.map((item) => {
           const Icon = item.icon;
           return (
             <button
