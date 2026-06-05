@@ -114,11 +114,11 @@ describe("ConnectionDialog", () => {
     expect(
       screen.getByRole("option", { name: "Elasticsearch" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "OpenSearch" }),
+    ).toBeInTheDocument();
 
     // Unsupported — 안 보임.
-    expect(
-      screen.queryByRole("option", { name: "OpenSearch" }),
-    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("option", { name: "Oracle" }),
     ).not.toBeInTheDocument();
@@ -487,7 +487,6 @@ describe("ConnectionDialog", () => {
   it.each([
     ["mssql", "mssql://sa:pw@mssql.local:1433/master", "Microsoft SQL Server"],
     ["oracle", "oracle://system:pw@oracle.local:1521/FREEPDB1", "Oracle"],
-    ["opensearch", "opensearch://open.local:9200", "OpenSearch"],
   ])(
     "rejects unsupported %s URL with explanatory error",
     async (_scheme, url, label) => {

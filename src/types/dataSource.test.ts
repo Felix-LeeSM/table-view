@@ -148,7 +148,9 @@ describe("DataSourceProfile registry", () => {
       query: { query: true, cancel: true },
       catalog: { browse: true, indexes: true },
     }),
-    opensearch: expectedCapabilities(),
+    opensearch: expectedCapabilities({
+      connection: { test: true },
+    }),
   };
 
   it("contains exactly one profile for every DatabaseType", () => {
@@ -347,6 +349,7 @@ describe("DataSourceProfile registry", () => {
       "redis",
       "valkey",
       "elasticsearch",
+      "opensearch",
     ]);
     expect(isConnectionSupportedDatabaseType("postgresql")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mongodb")).toBe(true);
@@ -356,7 +359,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
     expect(isConnectionSupportedDatabaseType("elasticsearch")).toBe(true);
-    expect(isConnectionSupportedDatabaseType("opensearch")).toBe(false);
+    expect(isConnectionSupportedDatabaseType("opensearch")).toBe(true);
   });
 
   it("exposes Elasticsearch live connection, catalog, and bounded query claims", () => {
@@ -370,10 +373,10 @@ describe("DataSourceProfile registry", () => {
     expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);
   });
 
-  it("keeps OpenSearch fixture-backed only until its own live HTTP milestone", () => {
+  it("exposes OpenSearch live connection while keeping catalog and query deferred", () => {
     const profile = getDataSourceProfile("opensearch");
 
-    expect(profile.capabilities.connection.test).toBe(false);
+    expect(profile.capabilities.connection.test).toBe(true);
     expect(profile.capabilities.catalog.browse).toBe(false);
     expect(profile.capabilities.query.query).toBe(false);
     expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);

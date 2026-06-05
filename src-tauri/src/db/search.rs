@@ -16,7 +16,9 @@ use crate::models::{
 
 use super::search_destructive::{build_delete_by_query_plan, validate_delete_by_query_request};
 use super::search_executor::{estimate_fixture_delete_by_query, execute_fixture_search};
-use super::search_http::{open_elasticsearch_connection, SearchHttpConnection};
+use super::search_http::{
+    open_elasticsearch_connection, open_opensearch_connection, SearchHttpConnection,
+};
 use super::traits::{DbAdapter, SearchAdapter};
 use super::types::BoxFuture;
 
@@ -85,9 +87,10 @@ impl SearchEngineAdapter {
                 open_elasticsearch_connection(config).await?;
                 Ok(())
             }
-            DatabaseType::Opensearch => Err(AppError::Unsupported(
-                "OpenSearch live HTTP connection is not wired yet".into(),
-            )),
+            DatabaseType::Opensearch => {
+                open_opensearch_connection(config).await?;
+                Ok(())
+            }
             _ => Err(AppError::Unsupported(format!(
                 "{:?} is not a Search live HTTP connection",
                 config.db_type
@@ -189,9 +192,8 @@ impl DbAdapter for SearchEngineAdapter {
                     *self.live.lock().await = Some(connection);
                 }
                 SearchProductKind::OpenSearch => {
-                    return Err(AppError::Unsupported(
-                        "OpenSearch live HTTP connection is not wired yet".into(),
-                    ));
+                    let connection = open_opensearch_connection(config).await?;
+                    *self.live.lock().await = Some(connection);
                 }
             }
             Ok(())
