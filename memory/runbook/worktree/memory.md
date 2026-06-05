@@ -74,14 +74,18 @@ Rust hook cache 의 기준은 이 target warm-start 다. `sccache` 는 2026-06-0
 setup/hook 경로에서 제외한다.
 
 수동 보충이 필요하면 primary 또는 이미 warm 된 checkout 에서
-`bash scripts/target-cache.sh warm-rust-debug .`,
-`bash scripts/target-cache.sh warm-rust-coverage .` 를 실행한 뒤
-`bash scripts/target-cache.sh copy-to <worktree> .` 로 target cache 를 옮긴다.
-`warm-rust-debug` 는 pre-push 의 `cargo check` lane 과 debug nextest test binary
-lane 을 함께 데운다. 이 helper 는 stale 판단 / lock / 자동 spawn 소비를 하지 않는다.
-기존 target 을 overlay 하며 debug target, `llvm-cov-target`, parser-core target
-cache 를 가져가되 tracked generated WASM artifact 는 worktree 를 dirty 하게 만들 수
-있어 제외한다.
+`bash scripts/target-cache.sh .` 또는
+`bash scripts/target-cache.sh warm-all .` 로 routine Rust target cache 를 전부
+데운 뒤 `bash scripts/target-cache.sh copy-to <worktree> .` 로 target cache 를
+옮긴다. 기본 동작은 `cargo check` lane, debug nextest test binary lane,
+`llvm-cov-target` coverage lane 을 함께 데운다. 세부 lane 만 필요하면
+`--debug-only` 또는 `--coverage-only` 를 직접 실행한다. 이 helper 는 stale
+판단 / lock / 자동 spawn 소비를 하지 않는다. 기존 target 을 overlay 하며 debug
+target, `llvm-cov-target`, parser-core target cache 를 가져가되 tracked generated
+WASM artifact 는 worktree 를 dirty 하게 만들 수 있어 제외한다.
+target cache 의 주목적은 test warm-start 다. helper 변경 시 debug nextest test
+binary lane 과 `llvm-cov-target` coverage test lane 이 빠지면 안 되며,
+`scripts/hooks/test-target-cache.sh` 가 이 계약을 고정한다.
 
 ## 책임
 
