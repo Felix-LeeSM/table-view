@@ -46,6 +46,14 @@ function makeSearchConnection(): ConnectionConfig {
   };
 }
 
+function makeOpenSearchConnection(): ConnectionConfig {
+  return {
+    ...makeSearchConnection(),
+    name: "OpenSearch",
+    dbType: "opensearch",
+  };
+}
+
 function makeSearchTab(): QueryTabType {
   return {
     type: "query",
@@ -67,6 +75,23 @@ function makeSearchTab(): QueryTabType {
       trackTotalHits: true,
     }),
     queryState: { status: "idle" },
+  };
+}
+
+function makeOpenSearchTab(): QueryTabType {
+  return {
+    ...makeSearchTab(),
+    sql: JSON.stringify({
+      index: "logs-opensearch-2026.05.24",
+      body: {
+        query: { match_all: {} },
+        aggs: {
+          by_status: { terms: { field: "status.keyword" } },
+        },
+      },
+      size: 5,
+      trackTotalHits: true,
+    }),
   };
 }
 
@@ -126,6 +151,46 @@ const searchMapping = {
     },
   ],
   raw: {},
+} as const satisfies SearchIndexMapping;
+
+const opensearchCatalog = {
+  ...searchCatalog,
+  identity: {
+    ...searchCatalog.identity,
+    product: "opensearch",
+    clusterName: "open-dev",
+    version: { number: "2.13.0", distribution: "opensearch" },
+    capabilities: {
+      ...searchCatalog.identity.capabilities,
+      deleteByQuery: false,
+    },
+    productDelta: {
+      product: "opensearch",
+      supportsElasticLicenseApi: false,
+      supportsOpensearchPluginsApi: true,
+      defaultTemplateEndpoint: "composableIndexTemplate",
+    },
+  },
+  indexes: [
+    {
+      name: "logs-opensearch-2026.05.24",
+      health: "green",
+      open: true,
+      aliases: ["logs-opensearch"],
+    },
+  ],
+  aliases: [
+    {
+      name: "logs-opensearch",
+      index: "logs-opensearch-2026.05.24",
+      writeIndex: true,
+    },
+  ],
+} as const satisfies SearchCatalogSummary;
+
+const opensearchMapping = {
+  ...searchMapping,
+  index: "logs-opensearch-2026.05.24",
 } as const satisfies SearchIndexMapping;
 
 function LiveQueryTab() {
@@ -238,6 +303,85 @@ describe("QueryTab search route", () => {
         index: "logs-elastic-2026.05.24",
       });
     });
+  });
+
+  it("dispatches OpenSearch Search DSL and renders hits and aggregations", async () => {
+    useConnectionStore.setState({
+      connections: [makeOpenSearchConnection()],
+      activeStatuses: {
+        "search-1": { type: "connected", activeDb: "db1" },
+      },
+      focusedConnId: "search-1",
+    });
+    const tab = makeOpenSearchTab();
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id, "search-1", "db1"));
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_history") {
+        return Promise.resolve({ rows: [] });
+      }
+      if (command === "list_search_catalog_summary") {
+        return Promise.resolve(opensearchCatalog);
+      }
+      if (command === "get_search_index_mapping") {
+        return Promise.resolve(opensearchMapping);
+      }
+      if (command === "execute_search_query") {
+        return Promise.resolve({
+          tookMs: 4,
+          timedOut: false,
+          total: { value: 1, relation: "eq" },
+          hits: [
+            {
+              index: "logs-opensearch-2026.05.24",
+              id: "open-doc-1",
+              score: 1.2,
+              source: { message: "OpenSearch live log", status: "ok" },
+              sort: [],
+            },
+          ],
+          aggregations: [
+            {
+              kind: "terms",
+              name: "by_status",
+              buckets: [{ key: "ok", docCount: 1 }],
+            },
+          ],
+        });
+      }
+      throw new Error(`unexpected invoke: ${command}`);
+    });
+
+    render(<LiveQueryTab />);
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("execute_search_query", {
+        connectionId: "search-1",
+        request: {
+          index: "logs-opensearch-2026.05.24",
+          body: {
+            query: { match_all: {} },
+            aggs: {
+              by_status: { terms: { field: "status.keyword" } },
+            },
+          },
+          from: undefined,
+          size: 5,
+          trackTotalHits: true,
+        },
+        queryId: expect.stringMatching(/^query-search-/),
+      });
+    });
+
+    expect(await screen.findByLabelText("Search results")).toHaveTextContent(
+      "1 hit",
+    );
+    expect(screen.getByLabelText("Search hits")).toHaveTextContent(
+      "OpenSearch live log",
+    );
+    expect(screen.getByLabelText("Search aggregations")).toHaveTextContent(
+      "by_status",
+    );
   });
 
   it("routes Search loading and error states through the Search-native result surface", () => {

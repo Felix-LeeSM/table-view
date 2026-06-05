@@ -120,7 +120,8 @@ async fn opensearch_network_adapter_detects_root_identity() {
     assert_eq!(identity.version.number, "2.13.0");
     assert_eq!(identity.version.lucene.as_deref(), Some("9.10.0"));
     assert_eq!(identity.version.distribution.as_deref(), Some("opensearch"));
-    assert!(!identity.capabilities.search);
+    assert!(identity.capabilities.search);
+    assert!(identity.capabilities.aggregations);
     assert!(identity.capabilities.aliases);
     assert!(identity.capabilities.mappings);
     assert!(identity.capabilities.legacy_index_templates);
@@ -597,7 +598,7 @@ async fn opensearch_live_catalog_reads_mappings_settings_and_template_variants()
 }
 
 #[tokio::test]
-async fn opensearch_live_catalog_does_not_promote_query_or_destructive_plan() {
+async fn opensearch_live_query_remains_separate_from_destructive_plan() {
     let routes = vec![route(
         "/ ",
         r#"{
@@ -615,35 +616,12 @@ async fn opensearch_live_catalog_does_not_promote_query_or_destructive_plan() {
     adapter.connect(&config).await.unwrap();
     server.await.unwrap();
 
-    let request = SearchQueryRequest {
-        index: "logs-opensearch-2026.05.24".into(),
-        body: json!({ "query": { "match_all": {} } }),
-        from: None,
-        size: Some(5),
-        track_total_hits: Some(true),
-    };
-    match adapter.search(&request, None).await {
-        Err(AppError::Unsupported(message)) => {
-            assert!(message.contains("OpenSearch live query is deferred"));
-        }
-        other => panic!("Expected OpenSearch live query deferral, got {other:?}"),
-    }
-
-    match adapter
-        .sample_documents("logs-opensearch-2026.05.24", 1)
-        .await
-    {
-        Err(AppError::Unsupported(message)) => {
-            assert!(message.contains("OpenSearch live sample documents is deferred"));
-        }
-        other => panic!("Expected OpenSearch live sample deferral, got {other:?}"),
-    }
-
     let mut delete_request = delete_by_query_request(true, false, None);
     delete_request.index_pattern = "logs-opensearch-2026.05.24".into();
     match adapter.plan_delete_by_query(&delete_request).await {
         Err(AppError::Unsupported(message)) => {
             assert!(message.contains("OpenSearch live delete-by-query planning is deferred"));
+            assert!(message.contains("query/catalog APIs are supported"));
         }
         other => panic!("Expected OpenSearch live delete-by-query deferral, got {other:?}"),
     }

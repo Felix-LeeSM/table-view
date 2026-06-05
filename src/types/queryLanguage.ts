@@ -80,7 +80,7 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
     fallbackPolicy: {
       kind: "none",
       reason:
-        "Elasticsearch validates bounded JSON Search DSL request bodies in the backend before dispatch and owns bounded TypeScript editor completion; full parser ownership and OpenSearch completion remain future work.",
+        "Elasticsearch/OpenSearch validate bounded JSON Search DSL request bodies in the backend before dispatch and use bounded TypeScript editor completion; full parser ownership remains future work.",
     },
     safetyAnalyzer: "profile-safety-policy",
   },

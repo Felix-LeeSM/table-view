@@ -119,7 +119,7 @@ function verifySearchConnectionPromotionBoundary(): void {
   );
   assert(
     isSupportedDatabaseType("opensearch"),
-    "opensearch: live connection/catalog slice should be advertised as connectable",
+    "opensearch: live connection/catalog/query slice should be advertised as connectable",
   );
   assert(
     hasConnectionCapability("opensearch", "test"),
@@ -131,10 +131,10 @@ function verifySearchConnectionPromotionBoundary(): void {
     "opensearch: live catalog browse/index capability should be exposed",
   );
   assert(
-    !opensearch.capabilities.query.query &&
-      !opensearch.capabilities.query.cancel &&
+    opensearch.capabilities.query.query &&
+      opensearch.capabilities.query.cancel &&
       !opensearch.capabilities.query.explain,
-    "opensearch: catalog slice must not expose query/cancel/explain capability",
+    "opensearch: live query/cancel should be exposed while explain remains deferred",
   );
 }
 

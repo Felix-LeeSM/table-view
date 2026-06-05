@@ -80,8 +80,8 @@ const opensearchCatalog: SearchCatalogSummary = {
       lucene: "9.10.0",
     },
     capabilities: {
-      search: false,
-      aggregations: false,
+      search: true,
+      aggregations: true,
       aliases: true,
       mappings: true,
       legacyIndexTemplates: true,
@@ -192,6 +192,22 @@ const samples: SearchResultEnvelope = {
       id: "doc-2",
       score: 0.8,
       source: { message: "fixture error" },
+      sort: [],
+    },
+  ],
+  aggregations: [],
+};
+
+const opensearchSamples: SearchResultEnvelope = {
+  tookMs: 3,
+  timedOut: false,
+  total: { value: 1, relation: "eq" },
+  hits: [
+    {
+      index: "logs-opensearch-2026.05.24",
+      id: "open-doc-1",
+      score: 1.2,
+      source: { message: "OpenSearch live sample", status: "ok" },
       sort: [],
     },
   ],
@@ -323,10 +339,11 @@ describe("SearchIndexDetailPanel", () => {
     expect(commandCount("get_search_index_field_stats")).toBe(1);
   });
 
-  it("keeps OpenSearch index details catalog-only while exposing mapping, templates, and field paths", async () => {
+  it("loads OpenSearch index details, samples, templates, and field paths lazily", async () => {
     installInvokeMock({
       list_search_catalog_summary: opensearchCatalog,
       list_search_index_templates: opensearchTemplates,
+      sample_search_documents: opensearchSamples,
     });
     render(
       <SearchIndexDetailPanel
@@ -338,7 +355,6 @@ describe("SearchIndexDetailPanel", () => {
     expect(await screen.findByText(/OpenSearch dev/)).toBeInTheDocument();
     expect(screen.getByText("2.13.0")).toBeInTheDocument();
     expect(screen.getAllByText("opensearch").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("tab", { name: /samples/i })).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: /mapping/i }));
     expect(await screen.findByText("60 fields")).toBeInTheDocument();
@@ -350,10 +366,16 @@ describe("SearchIndexDetailPanel", () => {
     expect(screen.getByText("logs-opensearch-legacy")).toBeInTheDocument();
     expect(screen.getByText("legacyIndexTemplate")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("tab", { name: /samples/i }));
+    expect(await screen.findByText("1 hits")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search hits")).toHaveTextContent(
+      "OpenSearch live sample",
+    );
+
     fireEvent.click(screen.getByRole("tab", { name: /field stats/i }));
     expect(await screen.findByText("status")).toBeInTheDocument();
 
-    expect(commandCount("sample_search_documents")).toBe(0);
+    expect(commandCount("sample_search_documents")).toBe(1);
   });
 
   it("surfaces hidden/system and error states without fetching other detail tabs", async () => {
