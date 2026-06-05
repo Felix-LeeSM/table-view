@@ -276,7 +276,7 @@ jobs:
             opensearchproject/opensearch:2.13.0
 
           for attempt in {1..40}; do
-            if curl -fsS "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s"; then
+            if curl -fsS "http://localhost:29200/_cluster/health?wait_for_status=yellow&timeout=1s"; then
               exit 0
             fi
             echo "OpenSearch is not ready yet (attempt ${attempt}/40)."
