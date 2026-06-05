@@ -48,12 +48,14 @@
 - Elasticsearch/OpenSearch: embedded fixture-backed Search admin/result
   contract 가 있다. Elasticsearch 는 live HTTP root-probe connection test,
   live catalog, bounded live `_search` query dispatch, backend Search DSL
-  validator, Runtime Happy Path smoke, and delete-by-query plan estimates 로 URL/auth/TLS,
-  product/version detection, indexes, aliases, data streams,
+  validator, Runtime Happy Path smoke, and delete-by-query plan estimates 로
+  URL/auth/TLS, product/version detection, indexes, aliases, data streams,
   mappings/settings/analyzers/templates/field paths, query/filter/aggs
   preflight, hits/fields/highlights/sort/aggs response parsing, and
-  destructive confirmation gate 를 지원한다. OpenSearch catalog/query 와 actual
-  Search admin execution 은 fixture-backed/deferred 다.
+  destructive confirmation gate 를 지원한다. Elasticsearch smoke 는 live
+  runtime evidence 이고 Search fixture files 는 contract evidence 다.
+  OpenSearch catalog/query 와 actual Search admin execution 은
+  fixture-backed/deferred 다.
 - MSSQL/Oracle: declared planned RDBMS identities and static seed contracts only.
   connection UI/runtime/parser/completion support 는 아직 없다.
 
@@ -90,7 +92,7 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 | MongoDB | `e2e/fixtures/seed.mongodb.json` | document fixture used by current MongoDB smoke seed path |
 | Redis | `e2e/fixtures/seed.redis.json` | wired Runtime Happy Path seed for Redis DB 2 connect/scan/preview/GET plus guarded string write, TTL, and exact-key delete smoke. Broader stream consumer, cluster/pubsub/modules, admin, and Valkey parity remain future work |
 | Elasticsearch | `e2e/fixtures/seed.search.elasticsearch.json`, `e2e/smoke/elasticsearch.spec.ts`, `src-tauri/src/db/search.rs`, `src-tauri/src/db/search_destructive.rs`, `src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_http.rs`, `src-tauri/src/db/search_live_destructive.rs`, `src-tauri/src/db/search_live_query.rs` | embedded Search fixture contract plus wired Runtime Happy Path smoke for live HTTP connection/catalog/query support with bounded Search DSL request validation and live delete-by-query safety planning; actual live admin execution deferred |
-| OpenSearch | `e2e/fixtures/seed.search.opensearch.json`, `src-tauri/src/db/search.rs` | embedded Search fixture contract; no live HTTP support |
+| OpenSearch | `e2e/fixtures/seed.search.opensearch.json`, `src-tauri/src/db/search.rs` | embedded Search fixture contract only; no live HTTP support, Runtime Happy Path smoke, or OpenSearch catalog/query runtime claim |
 | MSSQL | `e2e/fixtures/seed.mssql.sql` | planned static SQL seed contract only |
 | Oracle | `e2e/fixtures/seed.oracle.sql` | planned static SQL seed contract only |
 | Valkey | `e2e/fixtures/seed.valkey.json`, `e2e/fixtures/valkey.redis-compatibility.json` | wired Runtime Happy Path seed for Valkey DB 2 connect/scan/preview/GET/HGETALL/XRANGE plus bounded SET/EXPIRE and destructive/unsupported command guards. The compatibility matrix separates proven local-runtime rows from candidate/rejected command families; direct mutation controls, broader command families, and full Redis compatibility remain future gates |
