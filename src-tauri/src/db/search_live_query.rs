@@ -28,21 +28,24 @@ pub(crate) fn live_search_body(
     Ok(body)
 }
 
-pub(crate) fn parse_search_response(payload: &Value) -> Result<SearchResultEnvelope, AppError> {
+pub(crate) fn parse_search_response(
+    payload: &Value,
+    label: &str,
+) -> Result<SearchResultEnvelope, AppError> {
     let hits_root = payload
         .get("hits")
         .and_then(Value::as_object)
         .ok_or_else(|| {
-            AppError::Connection("Elasticsearch search response missing hits object".into())
+            AppError::Connection(format!("{label} search response missing hits object"))
         })?;
     let hits = hits_root
         .get("hits")
         .and_then(Value::as_array)
         .ok_or_else(|| {
-            AppError::Connection("Elasticsearch search response missing hits.hits array".into())
+            AppError::Connection(format!("{label} search response missing hits.hits array"))
         })?
         .iter()
-        .map(parse_search_hit)
+        .map(|hit| parse_search_hit(hit, label))
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(SearchResultEnvelope {
@@ -53,8 +56,8 @@ pub(crate) fn parse_search_response(payload: &Value) -> Result<SearchResultEnvel
             .unwrap_or(false),
         total: parse_total_hits(hits_root.get("total")),
         hits,
-        aggregations: parse_search_aggregations(payload.get("aggregations"))?,
-        shards: parse_shards(payload.get("_shards"))?,
+        aggregations: parse_search_aggregations(payload.get("aggregations"), label)?,
+        shards: parse_shards(payload.get("_shards"), label)?,
         explain: payload.get("explain").cloned(),
         profile: payload.get("profile").cloned(),
     })
@@ -113,10 +116,10 @@ fn parse_total_hits_relation(value: &str) -> SearchTotalHitsRelation {
     }
 }
 
-fn parse_search_hit(hit: &Value) -> Result<SearchHitEnvelope, AppError> {
-    let object = hit.as_object().ok_or_else(|| {
-        AppError::Connection("Elasticsearch search hit row is not an object".into())
-    })?;
+fn parse_search_hit(hit: &Value, label: &str) -> Result<SearchHitEnvelope, AppError> {
+    let object = hit
+        .as_object()
+        .ok_or_else(|| AppError::Connection(format!("{label} search hit row is not an object")))?;
     Ok(SearchHitEnvelope {
         index: string_field(object, "_index").unwrap_or_default(),
         id: string_field(object, "_id").unwrap_or_default(),
@@ -135,12 +138,13 @@ fn parse_search_hit(hit: &Value) -> Result<SearchHitEnvelope, AppError> {
 
 fn parse_search_aggregations(
     value: Option<&Value>,
+    label: &str,
 ) -> Result<Vec<SearchAggregationEnvelope>, AppError> {
     let Some(value) = value else {
         return Ok(Vec::new());
     };
     let object = value.as_object().ok_or_else(|| {
-        AppError::Connection("Elasticsearch aggregations response is not an object".into())
+        AppError::Connection(format!("{label} aggregations response is not an object"))
     })?;
     object
         .iter()
@@ -196,13 +200,16 @@ fn raw_aggregation(
     }
 }
 
-fn parse_shards(value: Option<&Value>) -> Result<Option<SearchShardSummary>, AppError> {
+fn parse_shards(
+    value: Option<&Value>,
+    label: &str,
+) -> Result<Option<SearchShardSummary>, AppError> {
     let Some(value) = value else {
         return Ok(None);
     };
-    let object = value.as_object().ok_or_else(|| {
-        AppError::Connection("Elasticsearch shard summary is not an object".into())
-    })?;
+    let object = value
+        .as_object()
+        .ok_or_else(|| AppError::Connection(format!("{label} shard summary is not an object")))?;
     Ok(Some(SearchShardSummary {
         total: optional_u64_fields(object, &["total"]).unwrap_or(0),
         successful: optional_u64_fields(object, &["successful"]).unwrap_or(0),
@@ -211,16 +218,21 @@ fn parse_shards(value: Option<&Value>) -> Result<Option<SearchShardSummary>, App
         failures: object
             .get("failures")
             .and_then(Value::as_array)
-            .map(|items| items.iter().map(parse_shard_failure).collect())
+            .map(|items| {
+                items
+                    .iter()
+                    .map(|failure| parse_shard_failure(failure, label))
+                    .collect()
+            })
             .transpose()?
             .unwrap_or_default(),
     }))
 }
 
-fn parse_shard_failure(value: &Value) -> Result<SearchShardFailure, AppError> {
-    let object = value.as_object().ok_or_else(|| {
-        AppError::Connection("Elasticsearch shard failure is not an object".into())
-    })?;
+fn parse_shard_failure(value: &Value, label: &str) -> Result<SearchShardFailure, AppError> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| AppError::Connection(format!("{label} shard failure is not an object")))?;
     Ok(SearchShardFailure {
         shard: optional_u64_fields(object, &["shard"]),
         index: string_field(object, "index"),

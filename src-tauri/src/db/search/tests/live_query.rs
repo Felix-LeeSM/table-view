@@ -175,6 +175,159 @@ async fn elasticsearch_live_search_dispatches_request_and_parses_result_envelope
 }
 
 #[tokio::test]
+async fn opensearch_live_search_dispatches_request_and_parses_result_envelope() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "open-dev",
+                "version": {
+                    "number": "2.13.0",
+                    "distribution": "opensearch"
+                },
+                "tagline": "The OpenSearch Project: https://opensearch.org/"
+            }"#,
+        ),
+        post_route(
+            "/logs-opensearch-2026.05.24/_search",
+            r#"{
+                "query": {
+                    "bool": {
+                        "filter": [{ "term": { "status.keyword": "ok" } }],
+                        "must": { "match": { "message": "live" } }
+                    }
+                },
+                "aggs": {
+                    "by_status": { "terms": { "field": "status.keyword" } },
+                    "message_count": { "value_count": { "field": "message" } }
+                },
+                "from": 5,
+                "size": 10,
+                "track_total_hits": true
+            }"#,
+            r#"{
+                "took": 9,
+                "timed_out": false,
+                "_shards": {
+                    "total": 2,
+                    "successful": 1,
+                    "skipped": 0,
+                    "failed": 1,
+                    "failures": [
+                        {
+                            "shard": 0,
+                            "index": "logs-opensearch-2026.05.24",
+                            "node": "node-open-a",
+                            "reason": {
+                                "type": "query_shard_exception",
+                                "reason": "bad OpenSearch shard"
+                            }
+                        }
+                    ]
+                },
+                "hits": {
+                    "total": { "value": 31, "relation": "eq" },
+                    "hits": [
+                        {
+                            "_index": "logs-opensearch-2026.05.24",
+                            "_id": "open-doc-1",
+                            "_score": 1.25,
+                            "_source": {
+                                "message": "OpenSearch live log",
+                                "status": "ok"
+                            },
+                            "fields": { "host.keyword": ["open-api-1"] },
+                            "highlight": { "message": ["<em>OpenSearch</em> live log"] },
+                            "sort": ["2026-05-24T00:00:00Z", "open-doc-1"]
+                        }
+                    ]
+                },
+                "aggregations": {
+                    "by_status": {
+                        "buckets": [{ "key": "ok", "doc_count": 5 }]
+                    },
+                    "message_count": { "value": 31 }
+                },
+                "profile": { "shards": [{ "id": "open-profile-1" }] }
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_opensearch();
+    let config = search_config_for(port, DatabaseType::Opensearch);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        adapter
+            .search(
+                &SearchQueryRequest {
+                    index: "logs-opensearch-2026.05.24".into(),
+                    body: json!({
+                        "query": {
+                            "bool": {
+                                "filter": [{ "term": { "status.keyword": "ok" } }],
+                                "must": { "match": { "message": "live" } }
+                            }
+                        },
+                        "aggs": {
+                            "by_status": { "terms": { "field": "status.keyword" } },
+                            "message_count": { "value_count": { "field": "message" } }
+                        }
+                    }),
+                    from: Some(5),
+                    size: Some(10),
+                    track_total_hits: Some(true),
+                },
+                None,
+            )
+            .await
+    }
+    .await;
+    if result.is_err() {
+        server.abort();
+    }
+    let result = result.unwrap();
+    server.await.unwrap();
+
+    assert_eq!(result.took_ms, 9);
+    assert_eq!(result.total.value, 31);
+    assert_eq!(result.hits[0].id, "open-doc-1");
+    assert_eq!(
+        result.hits[0].source["message"],
+        json!("OpenSearch live log")
+    );
+    assert_eq!(
+        result.hits[0].fields.as_ref().unwrap()["host.keyword"][0],
+        json!("open-api-1")
+    );
+    assert_eq!(
+        result.hits[0].highlight.as_ref().unwrap()["message"][0],
+        json!("<em>OpenSearch</em> live log")
+    );
+    assert_eq!(result.hits[0].sort[1], json!("open-doc-1"));
+    assert_eq!(result.shards.as_ref().unwrap().failed, 1);
+    assert_eq!(
+        result.profile.as_ref().unwrap()["shards"][0]["id"],
+        json!("open-profile-1")
+    );
+    match &result.aggregations[0] {
+        SearchAggregationEnvelope::Terms { name, buckets } => {
+            assert_eq!(name, "by_status");
+            assert_eq!(buckets[0].key, "ok");
+            assert_eq!(buckets[0].doc_count, 5);
+        }
+        other => panic!("expected OpenSearch terms aggregation, got {other:?}"),
+    }
+    assert_eq!(
+        result.aggregations[1],
+        SearchAggregationEnvelope::ValueCount {
+            name: "message_count".into(),
+            value: 31
+        }
+    );
+}
+
+#[tokio::test]
 async fn elasticsearch_live_sample_documents_uses_bounded_match_all_search() {
     let routes = vec![
         route(
@@ -224,6 +377,65 @@ async fn elasticsearch_live_sample_documents_uses_bounded_match_all_search() {
 
     assert_eq!(result.hits.len(), 1);
     assert_eq!(result.hits[0].source["message"], json!("sample"));
+    assert_eq!(result.total.value, 1);
+}
+
+#[tokio::test]
+async fn opensearch_live_sample_documents_uses_bounded_match_all_search() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "open-dev",
+                "version": {
+                    "number": "2.13.0",
+                    "distribution": "opensearch"
+                },
+                "tagline": "The OpenSearch Project: https://opensearch.org/"
+            }"#,
+        ),
+        post_route(
+            "/logs-opensearch-2026.05.24/_search",
+            r#"{
+                "query": { "match_all": {} },
+                "size": 3,
+                "track_total_hits": true
+            }"#,
+            r#"{
+                "took": 4,
+                "timed_out": false,
+                "hits": {
+                    "total": 1,
+                    "hits": [
+                        {
+                            "_index": "logs-opensearch-2026.05.24",
+                            "_id": "open-doc-1",
+                            "_source": { "message": "OpenSearch sample" }
+                        }
+                    ]
+                }
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_opensearch();
+    let config = search_config_for(port, DatabaseType::Opensearch);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        adapter
+            .sample_documents("logs-opensearch-2026.05.24", 3)
+            .await
+    }
+    .await;
+    if result.is_err() {
+        server.abort();
+    }
+    let result = result.unwrap();
+    server.await.unwrap();
+
+    assert_eq!(result.hits.len(), 1);
+    assert_eq!(result.hits[0].source["message"], json!("OpenSearch sample"));
     assert_eq!(result.total.value, 1);
 }
 
@@ -345,6 +557,63 @@ async fn elasticsearch_live_search_surfaces_http_error_body() {
 }
 
 #[tokio::test]
+async fn opensearch_live_search_surfaces_http_error_body() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "open-dev",
+                "version": {
+                    "number": "2.13.0",
+                    "distribution": "opensearch"
+                },
+                "tagline": "The OpenSearch Project: https://opensearch.org/"
+            }"#,
+        ),
+        post_route_with_status(
+            "/logs-opensearch-2026.05.24/_search",
+            400,
+            None,
+            r#"{
+                "error": {
+                    "type": "parse_exception",
+                    "reason": "failed to parse OpenSearch query"
+                }
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_opensearch();
+    let config = search_config_for(port, DatabaseType::Opensearch);
+    adapter.connect(&config).await.unwrap();
+
+    let result = adapter
+        .search(
+            &SearchQueryRequest {
+                index: "logs-opensearch-2026.05.24".into(),
+                body: json!({ "query": { "match_all": {} } }),
+                from: None,
+                size: None,
+                track_total_hits: None,
+            },
+            None,
+        )
+        .await;
+    if result.is_err() {
+        server.abort();
+    }
+
+    match result {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("OpenSearch search request"));
+            assert!(message.contains("400"));
+            assert!(message.contains("parse_exception"));
+        }
+        other => panic!("Expected OpenSearch live Search HTTP error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn elasticsearch_live_search_honors_in_flight_cancel_token() {
     let routes = vec![
         route(
@@ -371,6 +640,56 @@ async fn elasticsearch_live_search_honors_in_flight_cancel_token() {
     let token = CancellationToken::new();
     let request = SearchQueryRequest {
         index: "logs-elastic-2026.05.24".into(),
+        body: json!({ "query": { "match_all": {} } }),
+        from: None,
+        size: None,
+        track_total_hits: None,
+    };
+
+    let result = tokio::join!(
+        async {
+            sleep(Duration::from_millis(50)).await;
+            token.cancel();
+        },
+        adapter.search(&request, Some(&token))
+    )
+    .1;
+    server.abort();
+
+    assert!(matches!(result, Err(AppError::Cancel(_))));
+}
+
+#[tokio::test]
+async fn opensearch_live_search_honors_in_flight_cancel_token() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "open-dev",
+                "version": {
+                    "number": "2.13.0",
+                    "distribution": "opensearch"
+                },
+                "tagline": "The OpenSearch Project: https://opensearch.org/"
+            }"#,
+        ),
+        delayed_post_route(
+            "/logs-opensearch-2026.05.24/_search",
+            2_000,
+            r#"{
+                "took": 2000,
+                "timed_out": false,
+                "hits": { "total": 0, "hits": [] }
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_opensearch();
+    let config = search_config_for(port, DatabaseType::Opensearch);
+    adapter.connect(&config).await.unwrap();
+    let token = CancellationToken::new();
+    let request = SearchQueryRequest {
+        index: "logs-opensearch-2026.05.24".into(),
         body: json!({ "query": { "match_all": {} } }),
         from: None,
         size: None,

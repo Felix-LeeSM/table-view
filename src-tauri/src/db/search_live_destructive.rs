@@ -17,7 +17,7 @@ impl SearchHttpConnection {
         let path = format!("/{}/_search", delete_by_query_target(request));
         let body = delete_by_query_estimate_body(request)?;
         let payload = self.post_json(&path, &body, None).await?;
-        let result = parse_search_response(&payload)?;
+        let result = parse_search_response(&payload, self.label())?;
         Ok(build_delete_by_query_plan(
             request,
             Some(result.total.value),

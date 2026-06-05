@@ -193,7 +193,7 @@ impl SearchHttpConnection {
         let path = format!("/{}/_search", request.index.trim());
         let body = live_search_body(request)?;
         let payload = self.post_json(&path, &Value::Object(body), cancel).await?;
-        parse_search_response(&payload)
+        parse_search_response(&payload, self.label())
     }
 
     async fn get_json(&self, path: &str) -> Result<Value, AppError> {
@@ -264,7 +264,7 @@ impl SearchHttpConnection {
         })
     }
 
-    fn label(&self) -> &'static str {
+    pub(crate) fn label(&self) -> &'static str {
         self.product.label()
     }
 }
@@ -461,8 +461,8 @@ fn root_probe_capabilities(product: SearchProductKind) -> SearchClusterCapabilit
             delete_by_query: false,
         },
         SearchProductKind::OpenSearch => SearchClusterCapabilities {
-            search: false,
-            aggregations: false,
+            search: true,
+            aggregations: true,
             aliases: true,
             mappings: true,
             legacy_index_templates: true,

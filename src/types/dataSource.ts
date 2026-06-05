@@ -411,6 +411,10 @@ export const OPENSEARCH_CAPABILITIES = capabilities({
   connection: {
     test: true,
   },
+  query: {
+    query: true,
+    cancel: true,
+  },
   catalog: {
     browse: true,
     indexes: true,

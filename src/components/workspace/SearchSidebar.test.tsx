@@ -114,8 +114,8 @@ const opensearchCatalog: SearchCatalogSummary = {
       lucene: "9.10.0",
     },
     capabilities: {
-      search: false,
-      aggregations: false,
+      search: true,
+      aggregations: true,
       aliases: true,
       mappings: true,
       legacyIndexTemplates: true,
