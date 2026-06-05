@@ -7,12 +7,13 @@ import { assertNever } from "@/lib/paradigm";
 import SqlQueryEditor from "./SqlQueryEditor";
 import MongoQueryEditor from "./MongoQueryEditor";
 import RedisCommandEditor from "./RedisCommandEditor";
+import SearchQueryEditor from "./SearchQueryEditor";
 
 /**
  * Paradigm-aware editor router. `rdb` → `SqlQueryEditor`, `document` →
- * `MongoQueryEditor`, `kv` → `RedisCommandEditor`, search → placeholder
- * textbox until a dedicated editor lands. Each paradigm-specific editor
- * imports only its own language + autocomplete extensions.
+ * `MongoQueryEditor`, `kv` → `RedisCommandEditor`, `search` →
+ * `SearchQueryEditor`. Each paradigm-specific editor imports only its own
+ * language + autocomplete extensions.
  *
  * The single-place "paradigm → editor" mapping lives here so future
  * paradigms plug in by extending one switch, and so the existing
@@ -56,6 +57,7 @@ interface QueryEditorProps {
    * can pass it unconditionally.
    */
   mongoExtensions?: readonly Extension[];
+  searchExtensions?: readonly Extension[];
 }
 
 const EMPTY_EXTENSIONS: readonly Extension[] = [];
@@ -71,6 +73,7 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
       paradigm = "rdb",
       sqlDialect,
       mongoExtensions,
+      searchExtensions,
     },
     ref,
   ) {
@@ -109,18 +112,15 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
           />
         );
       case "search":
-        // Placeholder until dedicated editors land — keeps QueryTab's
-        // layout stable.
         return (
-          <div
-            className="flex h-full w-full items-center justify-center overflow-hidden bg-background p-4 text-center text-sm text-muted-foreground"
-            role="textbox"
-            aria-label="Search Query Editor"
-            aria-multiline="true"
-            data-paradigm={paradigm}
-          >
-            Search query editor is planned but not yet available.
-          </div>
+          <SearchQueryEditor
+            ref={ref}
+            sql={sql}
+            onSqlChange={onSqlChange}
+            onExecute={onExecute}
+            onDryRun={onDryRun}
+            searchExtensions={searchExtensions ?? EMPTY_EXTENSIONS}
+          />
         );
       default:
         return assertNever(paradigm);

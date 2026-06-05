@@ -7,6 +7,7 @@ import {
   type QueryTab as QueryTabType,
 } from "@stores/workspaceStore";
 import type { ConnectionConfig } from "@/types/connection";
+import type { SearchCatalogSummary, SearchIndexMapping } from "@/types/search";
 import QueryTab from "./QueryTab";
 
 const invokeMock = vi.hoisted(() => vi.fn());
@@ -69,6 +70,64 @@ function makeSearchTab(): QueryTabType {
   };
 }
 
+const searchCatalog = {
+  identity: {
+    product: "elasticsearch",
+    clusterName: "elastic-dev",
+    version: { number: "8.12.2", distribution: "elasticsearch" },
+    capabilities: {
+      search: true,
+      aggregations: true,
+      aliases: true,
+      mappings: true,
+      legacyIndexTemplates: true,
+      composableIndexTemplates: true,
+      deleteByQuery: true,
+    },
+    productDelta: {
+      product: "elasticsearch",
+      supportsElasticLicenseApi: true,
+      supportsOpensearchPluginsApi: false,
+      defaultTemplateEndpoint: "composableIndexTemplate",
+    },
+  },
+  indexes: [
+    {
+      name: "logs-elastic-2026.05.24",
+      health: "green",
+      open: true,
+      aliases: ["logs-elastic"],
+    },
+  ],
+  aliases: [
+    {
+      name: "logs-elastic",
+      index: "logs-elastic-2026.05.24",
+      writeIndex: true,
+    },
+  ],
+  dataStreams: [],
+} as const satisfies SearchCatalogSummary;
+
+const searchMapping = {
+  index: "logs-elastic-2026.05.24",
+  fields: [
+    {
+      path: "status.keyword",
+      fieldType: "keyword",
+      searchable: true,
+      aggregatable: true,
+    },
+    {
+      path: "message",
+      fieldType: "text",
+      searchable: true,
+      aggregatable: false,
+    },
+  ],
+  raw: {},
+} as const satisfies SearchIndexMapping;
+
 function LiveQueryTab() {
   const tab = useWorkspaceStore(
     (state) =>
@@ -100,6 +159,12 @@ describe("QueryTab search route", () => {
       if (command === "list_history") {
         return Promise.resolve({ rows: [] });
       }
+      if (command === "list_search_catalog_summary") {
+        return Promise.resolve(searchCatalog);
+      }
+      if (command === "get_search_index_mapping") {
+        return Promise.resolve(searchMapping);
+      }
       if (command === "execute_search_query") {
         return Promise.resolve({
           tookMs: 3,
@@ -127,6 +192,12 @@ describe("QueryTab search route", () => {
     });
 
     render(<LiveQueryTab />);
+    expect(
+      screen.getByRole("textbox", { name: "Search Query Editor" }),
+    ).toHaveAttribute("data-paradigm", "search");
+    expect(
+      screen.queryByText(/Search query editor is planned/i),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Run query" }));
 
     await waitFor(() => {
@@ -158,12 +229,27 @@ describe("QueryTab search route", () => {
       "by_status",
     );
     expect(screen.queryByRole("grid")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("list_search_catalog_summary", {
+        connectionId: "search-1",
+      });
+      expect(invokeMock).toHaveBeenCalledWith("get_search_index_mapping", {
+        connectionId: "search-1",
+        index: "logs-elastic-2026.05.24",
+      });
+    });
   });
 
   it("routes Search loading and error states through the Search-native result surface", () => {
     invokeMock.mockImplementation((command: string) => {
       if (command === "list_history") {
         return Promise.resolve({ rows: [] });
+      }
+      if (command === "list_search_catalog_summary") {
+        return Promise.resolve(searchCatalog);
+      }
+      if (command === "get_search_index_mapping") {
+        return Promise.resolve(searchMapping);
       }
       throw new Error(`unexpected invoke: ${command}`);
     });

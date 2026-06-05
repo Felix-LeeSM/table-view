@@ -12,6 +12,7 @@ import { buildSqlCompletionContext } from "@lib/sql/sqlCompletionContext";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
 import { useRedisKeySuggestions } from "@hooks/useRedisKeySuggestions";
+import { useSearchAutocomplete } from "@hooks/useSearchAutocomplete";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
@@ -19,6 +20,7 @@ import { assertNever } from "@/lib/paradigm";
 import SqlQueryEditor from "./SqlQueryEditor";
 import MongoQueryEditor from "./MongoQueryEditor";
 import RedisCommandEditor from "./RedisCommandEditor";
+import SearchQueryEditor from "./SearchQueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
 import { SearchResultView } from "@components/search/SearchResultView";
 import { ExplainViewer } from "./ExplainViewer";
@@ -353,6 +355,14 @@ export default function QueryTab({ tab }: QueryTabProps) {
   });
   const redisCommandTarget =
     connection?.dbType === "valkey" ? "valkey" : "redis";
+  const searchCompletionTarget =
+    connection?.dbType === "opensearch" ? "opensearch" : "elasticsearch";
+  const searchExtensions = useSearchAutocomplete({
+    connectionId: tab.connectionId,
+    queryText: tab.sql,
+    enabled: tab.paradigm === "search",
+    target: searchCompletionTarget,
+  });
 
   // Resizable split state
   const containerRef = useRef<HTMLDivElement>(null);
@@ -434,15 +444,14 @@ export default function QueryTab({ tab }: QueryTabProps) {
               );
             case "search":
               return (
-                <div
-                  className="flex h-full w-full items-center justify-center overflow-hidden bg-background p-4 text-center text-sm text-muted-foreground"
-                  role="textbox"
-                  aria-label="Search Query Editor"
-                  aria-multiline="true"
-                  data-paradigm="search"
-                >
-                  Search query editor is planned but not yet available.
-                </div>
+                <SearchQueryEditor
+                  ref={editorRef}
+                  sql={tab.sql}
+                  onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
+                  onExecute={handleExecuteAndShowResults}
+                  onDryRun={handleDryRunAndShowResults}
+                  searchExtensions={searchExtensions}
+                />
               );
             default:
               return assertNever(tab.paradigm);
