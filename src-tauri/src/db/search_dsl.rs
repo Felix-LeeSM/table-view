@@ -68,6 +68,7 @@ fn matches_admin_target(target: &str) -> bool {
         "_template",
         "_index_template",
         "_nodes",
+        "_plugins",
     ]
     .contains(&target)
 }
@@ -77,6 +78,8 @@ fn validate_search_body(body: &Map<String, Value>) -> Result<(), AppError> {
         match key.as_str() {
             "query" => validate_query_clause(value)?,
             "aggs" | "aggregations" => validate_aggregations(value)?,
+            "sort" => validate_sort_clause(value)?,
+            "_source" => validate_source_filter(value)?,
             "from" | "size" => validate_u64_field(key, value)?,
             "track_total_hits" => validate_track_total_hits(value)?,
             other => {
@@ -326,6 +329,140 @@ fn validate_bool_clause(value: &Value) -> Result<(), AppError> {
     Ok(())
 }
 
+fn validate_sort_clause(value: &Value) -> Result<(), AppError> {
+    let items = value
+        .as_array()
+        .ok_or_else(|| AppError::Validation("Search DSL sort must be an array".into()))?;
+    if items.is_empty() {
+        return Err(AppError::Validation(
+            "Search DSL sort requires at least one field".into(),
+        ));
+    }
+    for item in items {
+        validate_sort_item(item)?;
+    }
+    Ok(())
+}
+
+fn validate_sort_item(value: &Value) -> Result<(), AppError> {
+    if let Some(field) = value.as_str() {
+        return validate_sort_field(field);
+    }
+    let object = value.as_object().ok_or_else(|| {
+        AppError::Validation("Search DSL sort entries must be field strings or objects".into())
+    })?;
+    let Some((field, spec)) = single_entry(object) else {
+        return Err(AppError::Validation(
+            "Search DSL sort objects require exactly one field".into(),
+        ));
+    };
+    validate_sort_field(field)?;
+    if let Some(direction) = spec.as_str() {
+        return validate_sort_direction(direction);
+    }
+    validate_sort_options(spec)
+}
+
+fn validate_sort_options(value: &Value) -> Result<(), AppError> {
+    let object = value.as_object().ok_or_else(|| {
+        AppError::Validation("Search DSL sort object values must be strings or objects".into())
+    })?;
+    if object.is_empty() {
+        return Err(AppError::Validation(
+            "Search DSL sort object requires at least one supported option".into(),
+        ));
+    }
+    for (key, value) in object {
+        match key.as_str() {
+            "order" => {
+                let direction = value.as_str().ok_or_else(|| {
+                    AppError::Validation("Search DSL sort order must be asc or desc".into())
+                })?;
+                validate_sort_direction(direction)?;
+            }
+            "missing" => {
+                let Some(missing) = value.as_str() else {
+                    return Err(AppError::Validation(
+                        "Search DSL sort missing must be _first or _last".into(),
+                    ));
+                };
+                if !matches!(missing, "_first" | "_last") {
+                    return Err(AppError::Unsupported(format!(
+                        "Search DSL sort missing value '{}' is not supported",
+                        missing
+                    )));
+                }
+            }
+            "unmapped_type" => validate_non_empty_string(value, "Search DSL sort unmapped_type")?,
+            other => {
+                return Err(AppError::Unsupported(format!(
+                    "Search DSL sort option '{}' is not supported",
+                    other
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_sort_field(field: &str) -> Result<(), AppError> {
+    validate_non_empty_text(field, "Search DSL sort field")?;
+    if field == "_score" {
+        return Ok(());
+    }
+    if field.starts_with('_') || field.contains('/') || field.contains('\\') {
+        return Err(AppError::Unsupported(format!(
+            "Search DSL sort field '{}' is not supported",
+            field
+        )));
+    }
+    Ok(())
+}
+
+fn validate_sort_direction(value: &str) -> Result<(), AppError> {
+    if matches!(value, "asc" | "desc") {
+        return Ok(());
+    }
+    Err(AppError::Unsupported(format!(
+        "Search DSL sort direction '{}' is not supported",
+        value
+    )))
+}
+
+fn validate_source_filter(value: &Value) -> Result<(), AppError> {
+    if value.as_bool().is_some() {
+        return Ok(());
+    }
+    if let Some(field) = value.as_str() {
+        return validate_non_empty_text(field, "Search DSL _source field");
+    }
+    if value.as_array().is_some() {
+        return validate_string_list(value, "Search DSL _source");
+    }
+    let object = value.as_object().ok_or_else(|| {
+        AppError::Validation(
+            "Search DSL _source must be a boolean, field string, field array, or object".into(),
+        )
+    })?;
+    if object.is_empty() {
+        return Err(AppError::Validation(
+            "Search DSL _source object requires includes or excludes".into(),
+        ));
+    }
+    for (key, value) in object {
+        match key.as_str() {
+            "includes" | "excludes" => validate_string_or_list(value, "Search DSL _source")?,
+            other => {
+                return Err(AppError::Unsupported(format!(
+                    "Search DSL _source option '{}' is not supported",
+                    other
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn validate_query_list(name: &str, value: &Value) -> Result<(), AppError> {
     if let Some(items) = value.as_array() {
         for item in items {
@@ -386,6 +523,52 @@ fn validate_string_field(config: &Map<String, Value>, kind: &str) -> Result<(), 
     Ok(())
 }
 
+fn validate_string_or_list(value: &Value, label: &str) -> Result<(), AppError> {
+    if let Some(field) = value.as_str() {
+        return validate_non_empty_text(field, label);
+    }
+    validate_string_list(value, label)
+}
+
+fn validate_string_list(value: &Value, label: &str) -> Result<(), AppError> {
+    let values = value
+        .as_array()
+        .ok_or_else(|| AppError::Validation(format!("{label} must be a string or string array")))?;
+    if values.is_empty() {
+        return Err(AppError::Validation(format!(
+            "{label} requires at least one field"
+        )));
+    }
+    for value in values {
+        validate_non_empty_string(value, label)?;
+    }
+    Ok(())
+}
+
+fn validate_non_empty_string(value: &Value, label: &str) -> Result<(), AppError> {
+    let field = value
+        .as_str()
+        .ok_or_else(|| AppError::Validation(format!("{label} must be a string")))?;
+    validate_non_empty_text(field, label)
+}
+
+fn validate_non_empty_text(value: &str, label: &str) -> Result<(), AppError> {
+    if value.trim().is_empty() {
+        return Err(AppError::Validation(format!(
+            "{label} requires a non-empty field"
+        )));
+    }
+    if value
+        .chars()
+        .any(|ch| ch.is_control() || ch.is_whitespace())
+    {
+        return Err(AppError::Validation(format!(
+            "{label} cannot contain whitespace or control characters"
+        )));
+    }
+    Ok(())
+}
+
 fn single_entry(map: &Map<String, Value>) -> Option<(&String, &Value)> {
     if map.len() == 1 {
         map.iter().next()
@@ -396,4 +579,111 @@ fn single_entry(map: &Map<String, Value>) -> Option<(&String, &Value)> {
 
 fn is_scalar(value: &Value) -> bool {
     matches!(value, Value::String(_) | Value::Number(_) | Value::Bool(_))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{json, Value};
+
+    fn request(body: Value) -> SearchQueryRequest {
+        SearchQueryRequest {
+            index: "logs-opensearch-2026.05.24".into(),
+            body,
+            from: None,
+            size: None,
+            track_total_hits: None,
+        }
+    }
+
+    #[test]
+    fn opensearch_compatible_bounded_search_body_accepts_shared_query_aggs_sort_and_source() {
+        // Reason: #504 locks the OpenSearch-compatible shared Search DSL subset before live dispatch (2026-06-05).
+        validate_search_dsl_request(&request(json!({
+            "query": {
+                "bool": {
+                    "filter": [
+                        { "term": { "status.keyword": "ok" } },
+                        { "range": { "@timestamp": { "gte": "2026-05-24T00:00:00Z" } } },
+                        { "exists": { "field": "message" } }
+                    ],
+                    "must": { "match": { "message": { "query": "live" } } },
+                    "should": [{ "terms": { "service.keyword": ["api", "worker"] } }],
+                    "minimum_should_match": 0
+                }
+            },
+            "aggs": {
+                "by_status": { "terms": { "field": "status.keyword", "size": 10 } },
+                "message_count": { "value_count": { "field": "message" } }
+            },
+            "sort": [
+                { "@timestamp": { "order": "desc", "missing": "_last", "unmapped_type": "date" } },
+                "_score"
+            ],
+            "_source": { "includes": ["message", "status"], "excludes": "secret" },
+            "from": 0,
+            "size": 25,
+            "track_total_hits": true
+        })))
+        .unwrap();
+    }
+
+    #[test]
+    fn opensearch_safety_policy_blocks_raw_admin_or_destructive_targets() {
+        // Reason: #504 keeps live OpenSearch search execution on index/alias targets, not admin paths (2026-06-05).
+        for target in [
+            "_cat",
+            "_plugins",
+            "logs-opensearch-2026.05.24/_bulk",
+            "logs-opensearch-2026.05.24/_delete_by_query",
+            "logs-opensearch-2026.05.24?pretty=true",
+            "logs-opensearch-2026.05.24%2f_search",
+        ] {
+            let mut request = request(json!({ "query": { "match_all": {} } }));
+            request.index = target.into();
+            assert!(
+                matches!(
+                    validate_search_dsl_request(&request),
+                    Err(AppError::Validation(message))
+                        if message.contains("raw/destructive paths")
+                            || message.contains("wildcard")
+                ),
+                "target should be rejected: {target}"
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_search_body_features_reject_before_http_dispatch() {
+        // Reason: #504 documents that admin/profile/plugin DSL extensions stay outside the bounded parser (2026-06-05).
+        for key in ["profile", "suggest", "knn", "script_fields", "pit"] {
+            let mut body = json!({ "query": { "match_all": {} } });
+            body.as_object_mut()
+                .unwrap()
+                .insert(key.into(), json!(true));
+            assert!(
+                matches!(
+                    validate_search_dsl_request(&request(body)),
+                    Err(AppError::Unsupported(message)) if message.contains(key)
+                ),
+                "body key should be rejected: {key}"
+            );
+        }
+    }
+
+    #[test]
+    fn bounded_sort_and_source_filters_reject_unsafe_shapes() {
+        // Reason: #504 adds safe sort/_source validation without opening script sort or broad source options (2026-06-05).
+        for body in [
+            json!({ "query": { "match_all": {} }, "sort": [{ "_script": { "order": "desc" } }] }),
+            json!({ "query": { "match_all": {} }, "sort": [{ "status.keyword": { "mode": "avg" } }] }),
+            json!({ "query": { "match_all": {} }, "_source": { "include": ["message"] } }),
+            json!({ "query": { "match_all": {} }, "_source": ["message", 42] }),
+        ] {
+            assert!(
+                validate_search_dsl_request(&request(body)).is_err(),
+                "unsafe body shape should be rejected"
+            );
+        }
+    }
 }

@@ -646,7 +646,7 @@ mod tests {
 
     #[test]
     fn fixture_search_rejects_ignored_dsl_features_clearly() {
-        for feature in ["sort", "_source", "fields", "highlight"] {
+        for feature in ["fields", "highlight"] {
             let result = execute_fixture_search(
                 &fixture(),
                 &request(json!({
