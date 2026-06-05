@@ -164,14 +164,6 @@ impl SearchEngineAdapter {
         ))
     }
 
-    fn live_opensearch_admin_deferred(&self, surface: &str) -> Option<AppError> {
-        (self.fixture.is_none() && self.product == SearchProductKind::OpenSearch).then(|| {
-            AppError::Unsupported(format!(
-                "OpenSearch live {surface} is deferred; query/catalog APIs are supported"
-            ))
-        })
-    }
-
     async fn live_connection(&self) -> Result<SearchHttpConnection, AppError> {
         self.live
             .lock()
@@ -370,9 +362,6 @@ impl SearchAdapter for SearchEngineAdapter {
             if let Some(fixture) = self.fixture.as_ref() {
                 let estimate = estimate_fixture_delete_by_query(fixture, request)?;
                 return Ok(build_delete_by_query_plan(request, Some(estimate)));
-            }
-            if let Some(error) = self.live_opensearch_admin_deferred("delete-by-query planning") {
-                return Err(error);
             }
             self.live_connection()
                 .await?

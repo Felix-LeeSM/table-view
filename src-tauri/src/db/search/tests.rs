@@ -5,6 +5,7 @@ use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, Duration};
 
+mod destructive;
 mod live_query;
 
 #[tokio::test]
@@ -595,36 +596,6 @@ async fn opensearch_live_catalog_reads_mappings_settings_and_template_variants()
         SearchTemplateEndpointKind::LegacyIndexTemplate
     );
     assert_eq!(templates[1].index_patterns, vec!["logs-opensearch-*"]);
-}
-
-#[tokio::test]
-async fn opensearch_live_query_remains_separate_from_destructive_plan() {
-    let routes = vec![route(
-        "/ ",
-        r#"{
-            "cluster_name": "open-dev",
-            "version": {
-                "number": "2.13.0",
-                "distribution": "opensearch"
-            },
-            "tagline": "The OpenSearch Project: https://opensearch.org/"
-        }"#,
-    )];
-    let (port, server) = spawn_search_http_server(routes).await;
-    let adapter = SearchEngineAdapter::new_opensearch();
-    let config = search_config_for(port, DatabaseType::Opensearch);
-    adapter.connect(&config).await.unwrap();
-    server.await.unwrap();
-
-    let mut delete_request = delete_by_query_request(true, false, None);
-    delete_request.index_pattern = "logs-opensearch-2026.05.24".into();
-    match adapter.plan_delete_by_query(&delete_request).await {
-        Err(AppError::Unsupported(message)) => {
-            assert!(message.contains("OpenSearch live delete-by-query planning is deferred"));
-            assert!(message.contains("query/catalog APIs are supported"));
-        }
-        other => panic!("Expected OpenSearch live delete-by-query deferral, got {other:?}"),
-    }
 }
 
 #[tokio::test]
