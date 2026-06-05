@@ -34,14 +34,15 @@ delete-by-query safety planning. Its wired Runtime Happy Path smoke proves the
 representative live connect/catalog/search/render/delete-plan path; static
 Elasticsearch/OpenSearch fixtures remain contract evidence only unless a live
 smoke or focused runtime test wires the path.
-OpenSearch now has focused live connection/catalog/query tests for URL/auth/TLS
+OpenSearch now has focused live connection/catalog/query tests, wired Runtime
+Happy Path smoke, and product-scoped catalog/mapping completion for URL/auth/TLS
 root probe, product/version/distribution detection, indexes, aliases, data
 streams, mappings, settings/analyzers, composable/legacy templates, field paths,
 bounded live `_search` dispatch, result rendering, sample documents, HTTP error
 surfacing, cancellation, and shared Search DSL safety validation before live
-dispatch. `search-dsl` full language-core parser ownership stays future; the
-current active safety surface is backend request validation plus bounded
-TypeScript editor assistance with product-scoped catalog/mapping completion.
+dispatch. `search-dsl` full language-core parser/completion ownership stays
+future; the current active safety surface is backend request validation plus
+bounded TypeScript editor assistance.
 
 `sql` is active for connection-supported SQL/RDBMS profiles only. MSSQL and
 Oracle carry planned `sql` profile metadata, but their capabilities are empty;
@@ -90,7 +91,7 @@ cannot add parser or completion vocabulary without an owner decision.
 | MongoDB Mongosh/MQL | Whitelisted `db...` collection/admin commands, JSON-like bodies, BSON literals, `find(filter, projection)`, cursor-chain `sort`/`skip`/`limit` dispatch, aggregate cursor-chain lowering, operator/stage/expression completion, cached collection and field-name suggestions, active-collection index-name suggestions for `dropIndex`, destructive collection/admin confirmations, and transaction-helper unsupported gates are supported. Routine desktop smoke proves seeded collection browse, row-edit MQL preview/execute, query-tab `find` projection/sort/limit, destructive `runCommand` confirmation, and cancel/no-mutation re-read. | Completion suggestions are editor assistance and stay aligned to the runtime whitelist. Smoke evidence is runtime evidence for the whitelisted paths above, while broader component/backend tests remain below-smoke focused evidence. Arbitrary JavaScript, shell helpers such as `use`/`show`, multiple statements, unsupported cursor helpers, cross-db shell navigation, server-version feature promotion gates, and native document-first result panels remain out of scope. |
 | Redis command | Redis connection/profile, backend KV primitives, key browser, value preview/edit UI, bounded command editor vocabulary/key suggestions, and static KV/stream fixture inventory are active. Backend primitives are typed IPC calls for database/key scan, typed value reads, guarded string set, delete confirmation, TTL expire/persist, and bounded stream reads. The backend command allowlist classifies read/write/TTL/stream/destructive effects and only allows single-key destructive `DEL`/TTL-removal `PERSIST` when the request carries an exact `confirmKey`. The value panel promotes bounded string/hash/list/set/zset edits and expire/persist/delete preview/confirm controls; partial or unsupported key types fail visibly. The Redis command editor suggests selected read/write/TTL/stream/destructive allowlist commands with arity hints/snippets and suggests current-DB keys filtered by command key type when scan cache is available. Focused tests cover dispatch through `executeKvCommand`, tabular projection, and non-blocking scan-cache fallback. Valkey reuses the KV protocol for connection/key scan/value preview, bounded command query dispatch, and a narrower command completion target for proven Valkey rows. | Redis command parser is not owned by language-core yet, and the current backend parser is an allowlist, not arbitrary Redis CLI support. Completion is TypeScript allowlist vocabulary plus current scan-cache key suggestions; it is not an unsupported command-family surface or full Redis autocomplete implementation. Unsupported command families reject with explicit messages. Key suggestions are hints only and can be stale if Redis/Valkey keyspace changes after scan. Full Redis CLI/admin parity, stream consumer UI, broader command coverage, cluster/pubsub/modules/consumer-group management, multi-key destructive commands, and Valkey mutation support are not claimed. |
 | Valkey `redis-command` target | Valkey has a KV runtime slice for connection, database/key scan, typed value preview, bounded Redis-compatible command query dispatch, and TypeScript command completion for proven local-runtime rows (`GET`, `HGETALL`, `XRANGE`, `TYPE`, `EXISTS`, `SET`, `EXPIRE`, `PERSIST`, `DEL`). Runtime Happy Path smoke covers connect/key scan/value preview, `GET`, `HGETALL`, `XRANGE`, bounded `SET`/`EXPIRE` DML summaries with readback/TTL verification, and destructive/unsupported command guards through the Valkey service and `e2e/fixtures/seed.valkey.json`. Focused local Valkey testcontainer evidence still owns exact-key `PERSIST`/`DEL` confirmation success and broader proven-row backend details below smoke. Completion key suggestions use the current DB scan cache and stay hidden for unpromoted command families. Static fixture inventory includes `e2e/fixtures/valkey.redis-compatibility.json`, which separates proven local runtime rows from candidate families and rejected Redis assumptions. | The matrix is not direct key mutation or full Redis compatibility evidence. Future support must prove Valkey identity with Valkey-specific server fields for broader compatibility claims and keep admin/server-control, broad destructive, cluster, pub/sub, modules/functions, scripting, and consumer-group commands rejected until separate workflow-specific safety/result-envelope decisions land. |
-| Search DSL | Fixture-backed Search identities and bounded fixture DSL exist for Elasticsearch/OpenSearch fixture result paths. Elasticsearch connection/auth/TLS root probe is active, detects product/version/distribution, live catalog reads indexes, aliases, data streams, mappings, settings/analyzers, templates, and field paths, bounded live `_search` dispatch validates `match_all`, `term`, `terms`, `match`, `bool` filter clauses, `range`, `exists`, `terms`/`value_count` aggregations, pagination, `track_total_hits`, bounded field sort, and bounded `_source` filters before HTTP dispatch, and delete-by-query safety planning estimates matching documents through a safe `_search` request before requiring acknowledged risk plus exact target confirmation for execution intent. OpenSearch connection/auth/TLS root probe is active, detects OpenSearch product/version/distribution, rejects Elasticsearch endpoints, surfaces auth/network failures, reads live indexes, aliases, data streams, mappings, settings/analyzers, composable/legacy templates, and field paths, dispatches bounded live `_search` requests through the same validator/result renderer with sample documents, HTTP error handling, and cancellation, and uses the same safe `_search` estimate + exact-target confirmation gate for delete-by-query safety planning. Bounded TypeScript editor completion uses product-scoped catalog/mapping context for Elasticsearch/OpenSearch index, alias, data stream, field, type, `sort`, and `_source` suggestions plus shared query/aggs/sort/source snippets. The response parser renders hits/source/fields/highlights/sort, shard/timeout metadata, aggregations, and explain/profile payloads returned by Elasticsearch/OpenSearch live query or fixture paths. Runtime Happy Path smoke now proves the representative live Elasticsearch connect/catalog/search/render/delete-plan workflow on Ubuntu. | Full language-core parser/completion ownership, actual live `_delete_by_query` execution, broader admin APIs, profile/explain request workflow, observability, Runtime Happy Path OpenSearch smoke, and full query-language support are deferred. Unsupported Search DSL body keys, unsupported aggregation kinds/options, raw/admin targets, unsupported delete-by-query body keys, script sort, broad source options, and destructive/admin APIs are rejected before live Search dispatch. Search fixture files mirror embedded adapter contracts only. |
+| Search DSL | Fixture-backed Search identities and bounded fixture DSL exist for Elasticsearch/OpenSearch fixture result paths. Elasticsearch connection/auth/TLS root probe is active, detects product/version/distribution, live catalog reads indexes, aliases, data streams, mappings, settings/analyzers, templates, and field paths, bounded live `_search` dispatch validates `match_all`, `term`, `terms`, `match`, `bool` filter clauses, `range`, `exists`, `terms`/`value_count` aggregations, pagination, `track_total_hits`, bounded field sort, and bounded `_source` filters before HTTP dispatch, and delete-by-query safety planning estimates matching documents through a safe `_search` request before requiring acknowledged risk plus exact target confirmation for execution intent. OpenSearch connection/auth/TLS root probe is active, detects OpenSearch product/version/distribution, rejects Elasticsearch endpoints, surfaces auth/network failures, reads live indexes, aliases, data streams, mappings, settings/analyzers, composable/legacy templates, and field paths, dispatches bounded live `_search` requests through the same validator/result renderer with sample documents, HTTP error handling, and cancellation, and uses the same safe `_search` estimate + exact-target confirmation gate for delete-by-query safety planning. Bounded TypeScript editor completion uses product-scoped catalog/mapping context for Elasticsearch/OpenSearch index, alias, data stream, field, type, `sort`, and `_source` suggestions plus shared query/aggs/sort/source snippets. The response parser renders hits/source/fields/highlights/sort, shard/timeout metadata, aggregations, and explain/profile payloads returned by Elasticsearch/OpenSearch live query or fixture paths. Runtime Happy Path smoke now proves representative live Elasticsearch/OpenSearch connect/catalog/search/render/delete-plan workflows on Ubuntu. | Full language-core parser/completion ownership, actual live `_delete_by_query` execution, broader admin APIs, profile/explain request workflow, observability, and full query-language support are deferred. Unsupported Search DSL body keys, unsupported aggregation kinds/options, raw/admin targets, unsupported delete-by-query body keys, script sort, broad source options, and destructive/admin APIs are rejected before live Search dispatch. Search fixture files mirror embedded adapter contracts only. |
 | MSSQL SQL | Planned profile metadata and a static SQL seed contract declare SQL Server as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no SQL Server connection UI, runtime query/catalog/edit path, T-SQL parser/completion claim, auth/TLS/encryption/instance contract, runtime fixture/live evidence, or desktop E2E smoke. |
 | Oracle SQL | Planned profile metadata and a static SQL seed contract declare Oracle as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no Oracle connection UI, runtime query/catalog/edit path, Oracle SQL/PL/SQL parser/completion claim, service/SID/wallet/TNS contract, runtime fixture/live evidence, or desktop E2E smoke. |
 
@@ -228,8 +229,8 @@ claims separate for the MySQL docs recheck gate.
 - Runtime: Elasticsearch and OpenSearch live connection test, catalog/index
   detail fetch, bounded `_search` dispatch, Search-native result rendering,
   delete-by-query safety planning, and query cancellation/error surfacing are
-  active. Runtime Happy Path smoke covers the representative Elasticsearch
-  connect/catalog/search/render/delete-plan path on Ubuntu.
+  active. Runtime Happy Path smoke covers representative Elasticsearch and
+  OpenSearch connect/catalog/search/render/delete-plan paths on Ubuntu.
 - Parser / safety: Search DSL handling is a backend request validator plus
   source-specific safety policy, not language-core parser ownership. The live
   validator allows only the documented query/filter/aggs subset and rejects
@@ -244,12 +245,12 @@ claims separate for the MySQL docs recheck gate.
   than autocomplete evidence.
 - Fixture / live evidence: `seed.search.elasticsearch.json` and
   `seed.search.opensearch.json` mirror embedded fixture contracts. The wired
-  Elasticsearch smoke is live runtime evidence for Elasticsearch only.
-  OpenSearch has focused live connection/catalog/query/destructive-plan evidence
-  for indexes, aliases, data streams, mappings, settings/analyzers, templates,
-  field paths, bounded `_search` dispatch/rendering, sample documents, error
-  handling, cancellation, and safe `_search` delete-by-query estimates; Runtime
-  Happy Path OpenSearch smoke remains future.
+  Elasticsearch/OpenSearch smoke specs are live runtime evidence for their
+  representative product paths. OpenSearch has focused live
+  connection/catalog/query/destructive-plan evidence for indexes, aliases, data
+  streams, mappings, settings/analyzers, templates, field paths, bounded
+  `_search` dispatch/rendering, sample documents, error handling, cancellation,
+  and safe `_search` delete-by-query estimates.
 - Remaining unsupported work: actual live `_delete_by_query` execution,
   profile/explain request workflow, broader admin APIs, and
   observability/error-surface smoke remain future gates.
@@ -372,13 +373,13 @@ are:
   claimed.
 - Search DSL has bounded live Elasticsearch/OpenSearch `_search` dispatch,
   backend request validation for the supported query/filter/aggs subset,
-  response parsing, wired Runtime Happy Path smoke for the representative live
-  Elasticsearch workflow, and Elasticsearch/OpenSearch fixture/live
+  response parsing, wired Runtime Happy Path smoke for representative live
+  Elasticsearch/OpenSearch workflows, and Elasticsearch/OpenSearch fixture/live
   delete-by-query safety plans with estimate + confirmation gates. Bounded
   TypeScript editor completion is active for product-scoped catalog/mapping
   suggestions, but actual live `_delete_by_query` execution, full language-core
-  parser/completion ownership, broader admin, observability, Runtime Happy Path
-  OpenSearch smoke, and product-delta gates remain deferred.
+  parser/completion ownership, broader admin, observability, and product-delta
+  gates remain deferred.
 - MSSQL and Oracle are planned SQL/RDBMS identities only. Declared profile
   metadata and static seed contracts do not imply active T-SQL, Oracle
   SQL/PL/SQL, connection, query, catalog, edit, parser/completion, runtime

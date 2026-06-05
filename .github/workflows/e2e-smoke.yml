@@ -114,6 +114,8 @@ jobs:
             spec: e2e/smoke/valkey.spec.ts
           - spec_key: elasticsearch
             spec: e2e/smoke/elasticsearch.spec.ts
+          - spec_key: opensearch
+            spec: e2e/smoke/opensearch.spec.ts
 
     services:
       postgres:
@@ -198,6 +200,19 @@ jobs:
           ES_JAVA_OPTS: -Xms512m -Xmx512m
         ports:
           - 19200:9200
+        options: >-
+          --health-cmd "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+      opensearch:
+        image: opensearchproject/opensearch:2.13.0
+        env:
+          discovery.type: single-node
+          DISABLE_SECURITY_PLUGIN: "true"
+          OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+        ports:
+          - 29200:9200
         options: >-
           --health-cmd "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s || exit 1"
           --health-interval 10s
@@ -290,6 +305,8 @@ jobs:
           E2E_VALKEY_DB: 2
           E2E_ELASTICSEARCH_HOST: localhost
           E2E_ELASTICSEARCH_PORT: 19200
+          E2E_OPENSEARCH_HOST: localhost
+          E2E_OPENSEARCH_PORT: 29200
           E2E_SKIP_BUILD: "1"
           E2E_SPEC: ${{ matrix.spec }}
           E2E_SPEC_KEY: ${{ matrix.spec_key }}

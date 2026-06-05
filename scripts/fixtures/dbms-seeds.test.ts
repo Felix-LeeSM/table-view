@@ -298,4 +298,25 @@ describe("DBMS-specific E2E seed fixtures", () => {
       );
     },
   );
+
+  it("opensearch fixture seed is wired into Runtime Happy Path smoke", () => {
+    const workflow = readFileSync(resolve(".github/workflows/e2e-smoke.yml"), {
+      encoding: "utf8",
+    });
+    const smokeScript = readFileSync(resolve("scripts/e2e-smoke-ci.sh"), {
+      encoding: "utf8",
+    });
+    const seedScript = readFileSync(resolve("e2e/fixtures/seed-smoke.ts"), {
+      encoding: "utf8",
+    });
+
+    expect(workflow).toContain("spec_key: opensearch");
+    expect(workflow).toContain("spec: e2e/smoke/opensearch.spec.ts");
+    expect(workflow).toContain("opensearchproject/opensearch:2.13.0");
+    expect(smokeScript).toContain(
+      'run_wdio "$BASE_DATA_DIR/opensearch" "e2e/smoke/opensearch.spec.ts"',
+    );
+    expect(seedScript).toContain('opensearch: ["opensearch"]');
+    expect(seedScript).toContain("seed.search.opensearch.json");
+  });
 });

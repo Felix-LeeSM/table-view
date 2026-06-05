@@ -14,7 +14,8 @@ export type DbType =
   | "sqlite"
   | "duckdb"
   | "redis"
-  | "elasticsearch";
+  | "elasticsearch"
+  | "opensearch";
 export type ConnectionEnvironment =
   | "local"
   | "testing"
@@ -155,6 +156,7 @@ function dbTypeLabel(dbType: DbType): string {
   if (dbType === "duckdb") return "DuckDB";
   if (dbType === "redis") return "Redis";
   if (dbType === "elasticsearch") return "Elasticsearch";
+  if (dbType === "opensearch") return "OpenSearch";
   return "MongoDB";
 }
 
@@ -406,6 +408,34 @@ export async function createElasticsearchConnection(
     await setInput("#conn-user", user);
   }
   const password = process.env.ELASTICSEARCH_PASSWORD ?? "";
+  if (password) {
+    await setInput("#conn-password", password);
+  }
+
+  await saveConnectionDialog(dialog);
+  await expectConnectionVisible(name);
+}
+
+export async function createOpenSearchConnection(name = "E2E OpenSearch") {
+  const dialog = await openNewConnectionDialog();
+  await selectDatabaseType("opensearch");
+
+  await setInput("#conn-name", name);
+  await setInput(
+    "#conn-host",
+    process.env.E2E_OPENSEARCH_HOST ??
+      process.env.OPENSEARCH_HOST ??
+      "localhost",
+  );
+  await setInput(
+    "#conn-port",
+    process.env.E2E_OPENSEARCH_PORT ?? process.env.OPENSEARCH_PORT ?? "29200",
+  );
+  const user = process.env.OPENSEARCH_USER ?? "";
+  if (user) {
+    await setInput("#conn-user", user);
+  }
+  const password = process.env.OPENSEARCH_PASSWORD ?? "";
   if (password) {
     await setInput("#conn-password", password);
   }
