@@ -79,6 +79,8 @@ fn validate_search_body(body: &Map<String, Value>) -> Result<(), AppError> {
             "aggs" | "aggregations" => validate_aggregations(value)?,
             "from" | "size" => validate_u64_field(key, value)?,
             "track_total_hits" => validate_track_total_hits(value)?,
+            "sort" => validate_sort(value)?,
+            "_source" => validate_source_filter(value)?,
             other => {
                 return Err(AppError::Unsupported(format!(
                     "Search DSL feature '{}' is not supported by the bounded Search DSL parser",
@@ -86,6 +88,121 @@ fn validate_search_body(body: &Map<String, Value>) -> Result<(), AppError> {
                 )));
             }
         }
+    }
+    Ok(())
+}
+
+fn validate_sort(value: &Value) -> Result<(), AppError> {
+    match value {
+        Value::String(field) => validate_field_path(field, "sort field"),
+        Value::Array(items) => {
+            if items.is_empty() {
+                return Err(AppError::Validation(
+                    "Search DSL sort requires at least one field".into(),
+                ));
+            }
+            for item in items {
+                validate_sort_item(item)?;
+            }
+            Ok(())
+        }
+        Value::Object(_) => validate_sort_item(value),
+        _ => Err(AppError::Validation(
+            "Search DSL sort must be a field, object, or array".into(),
+        )),
+    }
+}
+
+fn validate_sort_item(value: &Value) -> Result<(), AppError> {
+    match value {
+        Value::String(field) => validate_field_path(field, "sort field"),
+        Value::Object(object) => {
+            let Some((field, direction)) = single_entry(object) else {
+                return Err(AppError::Validation(
+                    "Search DSL sort object requires exactly one field".into(),
+                ));
+            };
+            validate_field_path(field, "sort field")?;
+            match direction {
+                Value::String(direction) => validate_sort_direction(direction),
+                Value::Object(options) => {
+                    let Some(order) = options.get("order") else {
+                        return Err(AppError::Validation(
+                            "Search DSL sort object requires order".into(),
+                        ));
+                    };
+                    if options.keys().any(|key| key != "order") {
+                        return Err(AppError::Unsupported(
+                            "Search DSL sort only supports the order option".into(),
+                        ));
+                    }
+                    order.as_str().map(validate_sort_direction).ok_or_else(|| {
+                        AppError::Validation("Search DSL sort order must be a string".into())
+                    })?
+                }
+                _ => Err(AppError::Validation(
+                    "Search DSL sort direction must be a string or object".into(),
+                )),
+            }
+        }
+        _ => Err(AppError::Validation(
+            "Search DSL sort item must be a field or object".into(),
+        )),
+    }
+}
+
+fn validate_sort_direction(direction: &str) -> Result<(), AppError> {
+    match direction {
+        "asc" | "desc" => Ok(()),
+        other => Err(AppError::Unsupported(format!(
+            "Search DSL sort direction '{}' is not supported",
+            other
+        ))),
+    }
+}
+
+fn validate_source_filter(value: &Value) -> Result<(), AppError> {
+    match value {
+        Value::Bool(_) => Ok(()),
+        Value::String(field) => validate_field_path(field, "_source field"),
+        Value::Array(fields) => {
+            if fields.is_empty() {
+                return Err(AppError::Validation(
+                    "Search DSL _source field list must not be empty".into(),
+                ));
+            }
+            for field in fields {
+                let Some(field) = field.as_str() else {
+                    return Err(AppError::Validation(
+                        "Search DSL _source fields must be strings".into(),
+                    ));
+                };
+                validate_field_path(field, "_source field")?;
+            }
+            Ok(())
+        }
+        _ => Err(AppError::Validation(
+            "Search DSL _source must be a boolean, field, or field list".into(),
+        )),
+    }
+}
+
+fn validate_field_path(field: &str, label: &str) -> Result<(), AppError> {
+    let field = field.trim();
+    if field.is_empty() {
+        return Err(AppError::Validation(format!(
+            "Search DSL {} requires a non-empty field",
+            label
+        )));
+    }
+    if field
+        .chars()
+        .any(|ch| ch.is_control() || ch.is_whitespace() || ch == '/' || ch == '\\')
+    {
+        return Err(AppError::Validation(format!(
+            "Search DSL {} contains unsupported characters",
+            label
+        )));
     }
     Ok(())
 }

@@ -646,7 +646,7 @@ mod tests {
 
     #[test]
     fn fixture_search_rejects_ignored_dsl_features_clearly() {
-        for feature in ["sort", "_source", "fields", "highlight"] {
+        for feature in ["fields", "highlight"] {
             let result = execute_fixture_search(
                 &fixture(),
                 &request(json!({
@@ -660,6 +660,22 @@ mod tests {
                 "feature {feature} should fail clearly, got {result:?}"
             );
         }
+    }
+
+    #[test]
+    fn fixture_search_accepts_bounded_sort_and_source_filter_metadata() {
+        let result = execute_fixture_search(
+            &fixture(),
+            &request(json!({
+                "query": { "match_all": {} },
+                "sort": [{ "@timestamp": "desc" }],
+                "_source": ["message", "status"]
+            })),
+        )
+        .unwrap();
+
+        assert_eq!(result.total.value, 2);
+        assert_eq!(result.hits.len(), 2);
     }
 
     #[test]

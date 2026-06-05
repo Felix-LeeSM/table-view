@@ -28,7 +28,9 @@ async fn elasticsearch_live_search_dispatches_request_and_parses_result_envelope
                 },
                 "from": 5,
                 "size": 10,
-                "track_total_hits": true
+                "track_total_hits": true,
+                "sort": [{ "@timestamp": "desc" }],
+                "_source": ["message", "status"]
             }"#,
             r#"{
                 "took": 12,
@@ -99,7 +101,9 @@ async fn elasticsearch_live_search_dispatches_request_and_parses_result_envelope
                         "aggs": {
                             "by_status": { "terms": { "field": "status.keyword" } },
                             "message_count": { "value_count": { "field": "message" } }
-                        }
+                        },
+                        "sort": [{ "@timestamp": "desc" }],
+                        "_source": ["message", "status"]
                     }),
                     from: Some(5),
                     size: Some(10),

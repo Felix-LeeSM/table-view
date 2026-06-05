@@ -39,6 +39,11 @@ export E2E_VALKEY_PORT="${E2E_VALKEY_PORT:-${VALKEY_PORT:-16379}}"
 export E2E_VALKEY_DB="${E2E_VALKEY_DB:-2}"
 export VALKEY_PASSWORD="${VALKEY_PASSWORD:-}"
 
+export E2E_ELASTICSEARCH_HOST="${E2E_ELASTICSEARCH_HOST:-${ELASTICSEARCH_HOST:-localhost}}"
+export E2E_ELASTICSEARCH_PORT="${E2E_ELASTICSEARCH_PORT:-${ELASTICSEARCH_PORT:-19200}}"
+export ELASTICSEARCH_USER="${ELASTICSEARCH_USER:-}"
+export ELASTICSEARCH_PASSWORD="${ELASTICSEARCH_PASSWORD:-}"
+
 REPORT_DIR="$ROOT_DIR/e2e/wdio-report"
 SPEC_TO_RUN="${E2E_SPEC:-}"
 if [[ -n "$SPEC_TO_RUN" ]]; then
@@ -92,4 +97,5 @@ else
   run_wdio "$BASE_DATA_DIR/mongodb" "e2e/smoke/mongodb.spec.ts"
   run_wdio "$BASE_DATA_DIR/redis" "e2e/smoke/redis.spec.ts"
   run_wdio "$BASE_DATA_DIR/valkey" "e2e/smoke/valkey.spec.ts"
+  run_wdio "$BASE_DATA_DIR/elasticsearch" "e2e/smoke/elasticsearch.spec.ts"
 fi
