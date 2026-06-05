@@ -217,6 +217,30 @@ claims separate for the MySQL docs recheck gate.
   remain out of scope even if a Valkey server accepts Redis-compatible command
   names.
 
+### Search DSL Support Breakdown
+
+- Runtime: Elasticsearch live connection test, catalog/index detail fetch,
+  bounded `_search` dispatch, Search-native result rendering, and
+  delete-by-query safety planning are active. Runtime Happy Path smoke covers
+  the representative connect/catalog/search/render/delete-plan path on Ubuntu.
+- Parser / safety: Search DSL handling is a backend request validator plus
+  source-specific safety policy, not language-core parser ownership. The live
+  validator allows only the documented query/filter/aggs subset and rejects
+  unsupported body keys, unsupported aggregations, raw/admin targets, and
+  unsupported delete-by-query request shapes before dispatch.
+- Completion / autocomplete: editor parser and completion ownership are
+  deferred. No shipped Search editor completion claim exists; backend request
+  validation is runtime safety evidence, not autocomplete evidence.
+- Fixture / live evidence: `seed.search.elasticsearch.json` and
+  `seed.search.opensearch.json` mirror embedded fixture contracts. The wired
+  Elasticsearch smoke is live runtime evidence for Elasticsearch only.
+  OpenSearch remains fixture-only until a separate live runtime/smoke path
+  lands.
+- Remaining unsupported work: actual live `_delete_by_query` execution,
+  OpenSearch live connection/catalog/query, profile/explain request workflow,
+  broader admin APIs, and observability/error-surface smoke remain future
+  gates.
+
 ## Result Boundary
 
 RDBMS query IPC is normalized into a `tabular` result envelope at
