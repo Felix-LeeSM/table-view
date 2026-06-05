@@ -86,6 +86,45 @@ async fn elasticsearch_network_adapter_detects_root_identity() {
 }
 
 #[tokio::test]
+async fn opensearch_network_adapter_detects_root_identity() {
+    let body = r#"{
+        "cluster_name": "open-dev",
+        "cluster_uuid": "open-uuid-1",
+        "version": {
+            "number": "2.13.0",
+            "distribution": "opensearch",
+            "lucene_version": "9.10.0"
+        },
+        "tagline": "The OpenSearch Project: https://opensearch.org/"
+    }"#;
+    let (port, server) = spawn_root_probe_server(200, body, Some("YWRtaW46c2VjcmV0")).await;
+    let adapter = SearchEngineAdapter::new_opensearch();
+    let mut config = search_config_for(port, DatabaseType::Opensearch);
+    config.user = "admin".into();
+    config.password = "secret".into();
+
+    let result = adapter.connect(&config).await;
+    if result.is_err() {
+        server.abort();
+    }
+    assert!(
+        result.is_ok(),
+        "connect should probe OpenSearch root: {result:?}"
+    );
+    server.await.unwrap();
+
+    let identity = adapter.cluster_identity().await.unwrap();
+    assert_eq!(identity.product, SearchProductKind::OpenSearch);
+    assert_eq!(identity.cluster_name, "open-dev");
+    assert_eq!(identity.cluster_uuid.as_deref(), Some("open-uuid-1"));
+    assert_eq!(identity.version.number, "2.13.0");
+    assert_eq!(identity.version.lucene.as_deref(), Some("9.10.0"));
+    assert_eq!(identity.version.distribution.as_deref(), Some("opensearch"));
+    assert!(!identity.capabilities.search);
+    assert!(identity.product_delta.supports_opensearch_plugins_api);
+}
+
+#[tokio::test]
 async fn elasticsearch_live_catalog_reads_indexes_aliases_and_streams() {
     let routes = vec![
         route(
@@ -347,11 +386,74 @@ async fn elasticsearch_test_connection_surfaces_network_errors() {
     }
 }
 
+#[tokio::test]
+async fn opensearch_test_connection_surfaces_auth_failures() {
+    let (port, server) =
+        spawn_root_probe_server(401, r#"{"error":"missing credentials"}"#, None).await;
+    let config = search_config_for(port, DatabaseType::Opensearch);
+
+    let result = SearchEngineAdapter::test(&config).await;
+    if result.is_err() {
+        server.abort();
+    }
+
+    match result {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("OpenSearch authentication failed"));
+            assert!(message.contains("401"));
+        }
+        other => panic!("Expected user-facing OpenSearch auth error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn opensearch_test_connection_surfaces_network_errors() {
+    let port = unused_tcp_port().await;
+    let config = search_config_for(port, DatabaseType::Opensearch);
+
+    match SearchEngineAdapter::test(&config).await {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("OpenSearch network error"));
+        }
+        other => panic!("Expected user-facing OpenSearch network error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn opensearch_connection_rejects_elasticsearch_endpoint() {
+    let body = r#"{
+        "cluster_name": "elastic-dev",
+        "version": {
+            "number": "8.12.2",
+            "distribution": "elasticsearch"
+        }
+    }"#;
+    let (port, server) = spawn_root_probe_server(200, body, None).await;
+    let config = search_config_for(port, DatabaseType::Opensearch);
+
+    let result = SearchEngineAdapter::test(&config).await;
+    if result.is_err() {
+        server.abort();
+    }
+
+    match result {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("Expected OpenSearch endpoint"));
+            assert!(message.contains("detected Elasticsearch"));
+        }
+        other => panic!("Expected OpenSearch product mismatch error, got {other:?}"),
+    }
+}
+
 fn search_config(port: u16) -> ConnectionConfig {
+    search_config_for(port, DatabaseType::Elasticsearch)
+}
+
+fn search_config_for(port: u16, db_type: DatabaseType) -> ConnectionConfig {
     ConnectionConfig {
         id: "search-1".into(),
         name: "Elastic".into(),
-        db_type: DatabaseType::Elasticsearch,
+        db_type,
         host: "127.0.0.1".into(),
         port,
         user: String::new(),

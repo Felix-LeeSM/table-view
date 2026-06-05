@@ -23,6 +23,7 @@ pub(crate) struct SearchHttpConnection {
     base_url: String,
     client: reqwest::Client,
     auth: SearchHttpAuth,
+    product: SearchProductKind,
     identity: SearchClusterIdentity,
 }
 
@@ -35,19 +36,34 @@ struct SearchHttpAuth {
 pub(crate) async fn open_elasticsearch_connection(
     config: &ConnectionConfig,
 ) -> Result<SearchHttpConnection, AppError> {
+    open_search_connection(config, SearchProductKind::Elasticsearch).await
+}
+
+pub(crate) async fn open_opensearch_connection(
+    config: &ConnectionConfig,
+) -> Result<SearchHttpConnection, AppError> {
+    open_search_connection(config, SearchProductKind::OpenSearch).await
+}
+
+async fn open_search_connection(
+    config: &ConnectionConfig,
+    product: SearchProductKind,
+) -> Result<SearchHttpConnection, AppError> {
+    let label = product.label();
     let timeout_secs = config.connection_timeout.unwrap_or(10).clamp(1, 300);
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(timeout_secs.into()))
         .build()
-        .map_err(|err| AppError::Connection(format!("Elasticsearch HTTP client error: {err}")))?;
+        .map_err(|err| AppError::Connection(format!("{label} HTTP client error: {err}")))?;
     let base_url = base_url(config);
     let auth = SearchHttpAuth::from_config(config);
-    let identity = probe_elasticsearch_root(&client, &base_url, &auth).await?;
+    let identity = probe_search_root(&client, &base_url, &auth, product).await?;
 
     Ok(SearchHttpConnection {
         base_url,
         client,
         auth,
+        product,
         identity,
     })
 }
@@ -58,7 +74,7 @@ impl SearchHttpConnection {
     }
 
     pub(crate) async fn ping(&self) -> Result<(), AppError> {
-        probe_elasticsearch_root(&self.client, &self.base_url, &self.auth)
+        probe_search_root(&self.client, &self.base_url, &self.auth, self.product)
             .await
             .map(|_| ())
     }
@@ -178,24 +194,26 @@ impl SearchHttpConnection {
             self.base_url.trim_end_matches('/'),
             path
         )));
-        let response = request
-            .send()
-            .await
-            .map_err(|err| AppError::Connection(format!("Elasticsearch network error: {err}")))?;
+        let response = request.send().await.map_err(|err| {
+            AppError::Connection(format!("{} network error: {err}", self.label()))
+        })?;
         let status = response.status();
         if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
             return Err(AppError::Connection(format!(
-                "Elasticsearch authentication failed ({status})"
+                "{} authentication failed ({status})",
+                self.label()
             )));
         }
         if !status.is_success() {
             return Err(AppError::Connection(format!(
-                "Elasticsearch catalog request {path} failed with HTTP {status}"
+                "{} catalog request {path} failed with HTTP {status}",
+                self.label()
             )));
         }
         response.json::<Value>().await.map_err(|err| {
             AppError::Connection(format!(
-                "Elasticsearch catalog request {path} returned invalid JSON: {err}"
+                "{} catalog request {path} returned invalid JSON: {err}",
+                self.label()
             ))
         })
     }
@@ -211,11 +229,12 @@ impl SearchHttpConnection {
                 .post(format!("{}{}", self.base_url.trim_end_matches('/'), path))
                 .json(body),
         );
-        let response = send_with_cancel(request, cancel).await?;
+        let response = send_with_cancel(request, cancel, self.label()).await?;
         let status = response.status();
         if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
             return Err(AppError::Connection(format!(
-                "Elasticsearch authentication failed ({status})"
+                "{} authentication failed ({status})",
+                self.label()
             )));
         }
         if !status.is_success() {
@@ -225,20 +244,27 @@ impl SearchHttpConnection {
                 .map(search_error_detail)
                 .unwrap_or_else(|err| format!("failed to read error body: {err}"));
             return Err(AppError::Connection(format!(
-                "Elasticsearch search request {path} failed with HTTP {status}: {detail}"
+                "{} search request {path} failed with HTTP {status}: {detail}",
+                self.label()
             )));
         }
         response.json::<Value>().await.map_err(|err| {
             AppError::Connection(format!(
-                "Elasticsearch search request {path} returned invalid JSON: {err}"
+                "{} search request {path} returned invalid JSON: {err}",
+                self.label()
             ))
         })
+    }
+
+    fn label(&self) -> &'static str {
+        self.product.label()
     }
 }
 
 async fn send_with_cancel(
     request: RequestBuilder,
     cancel: Option<&CancellationToken>,
+    label: &str,
 ) -> Result<Response, AppError> {
     let response = if let Some(token) = cancel {
         tokio::select! {
@@ -249,7 +275,7 @@ async fn send_with_cancel(
     } else {
         request.send().await
     };
-    response.map_err(|err| AppError::Connection(format!("Elasticsearch network error: {err}")))
+    response.map_err(|err| AppError::Connection(format!("{label} network error: {err}")))
 }
 
 impl SearchHttpAuth {
@@ -287,26 +313,28 @@ fn format_host(host: &str) -> String {
     }
 }
 
-async fn probe_elasticsearch_root(
+async fn probe_search_root(
     client: &reqwest::Client,
     base_url: &str,
     auth: &SearchHttpAuth,
+    expected_product: SearchProductKind,
 ) -> Result<SearchClusterIdentity, AppError> {
+    let label = expected_product.label();
     let request = auth.apply(client.get(format!("{}/", base_url.trim_end_matches('/'))));
     let response = request
         .send()
         .await
-        .map_err(|err| AppError::Connection(format!("Elasticsearch network error: {err}")))?;
+        .map_err(|err| AppError::Connection(format!("{label} network error: {err}")))?;
     let status = response.status();
 
     if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
         return Err(AppError::Connection(format!(
-            "Elasticsearch authentication failed ({status})"
+            "{label} authentication failed ({status})"
         )));
     }
     if !status.is_success() {
         return Err(AppError::Connection(format!(
-            "Elasticsearch root probe failed with HTTP {status}"
+            "{label} root probe failed with HTTP {status}"
         )));
     }
 
@@ -316,45 +344,77 @@ async fn probe_elasticsearch_root(
         .and_then(|value| value.to_str().ok())
         .map(str::to_string);
     let root = response.json::<Value>().await.map_err(|err| {
-        AppError::Connection(format!(
-            "Elasticsearch root probe returned invalid JSON: {err}"
-        ))
+        AppError::Connection(format!("{label} root probe returned invalid JSON: {err}"))
     })?;
 
-    identity_from_root(&root, product_header.as_deref())
+    identity_from_root(&root, product_header.as_deref(), expected_product)
 }
 
 fn identity_from_root(
     root: &Value,
     product_header: Option<&str>,
+    expected_product: SearchProductKind,
 ) -> Result<SearchClusterIdentity, AppError> {
-    if product_header.is_some_and(|value| value != "Elasticsearch") {
-        return Err(AppError::Connection(
-            "Expected Elasticsearch endpoint but detected a different product".into(),
-        ));
-    }
-
     let version = root.get("version").unwrap_or(&Value::Null);
-    let distribution = version
+    let raw_distribution = version
         .get("distribution")
         .and_then(Value::as_str)
-        .map(str::to_string)
-        .unwrap_or_else(|| "elasticsearch".to_string());
+        .map(str::to_string);
     let tagline = root.get("tagline").and_then(Value::as_str).unwrap_or("");
-    if distribution.eq_ignore_ascii_case("opensearch")
-        || tagline.to_ascii_lowercase().contains("opensearch")
-    {
-        return Err(AppError::Connection(
-            "Expected Elasticsearch endpoint but detected OpenSearch".into(),
-        ));
-    }
+    let has_opensearch_signal = raw_distribution
+        .as_deref()
+        .is_some_and(|value| value.eq_ignore_ascii_case("opensearch"))
+        || tagline.to_ascii_lowercase().contains("opensearch");
+    let has_elasticsearch_signal = product_header
+        .is_some_and(|value| value.eq_ignore_ascii_case("Elasticsearch"))
+        || raw_distribution
+            .as_deref()
+            .is_some_and(|value| value.eq_ignore_ascii_case("elasticsearch"));
+    let distribution = match expected_product {
+        SearchProductKind::Elasticsearch => {
+            if product_header.is_some_and(|value| !value.eq_ignore_ascii_case("Elasticsearch")) {
+                return Err(AppError::Connection(
+                    "Expected Elasticsearch endpoint but detected a different product".into(),
+                ));
+            }
+            if has_opensearch_signal {
+                return Err(AppError::Connection(
+                    "Expected Elasticsearch endpoint but detected OpenSearch".into(),
+                ));
+            }
+            raw_distribution.unwrap_or_else(|| "elasticsearch".to_string())
+        }
+        SearchProductKind::OpenSearch => {
+            if product_header.is_some_and(|value| !value.eq_ignore_ascii_case("Elasticsearch"))
+                && !has_opensearch_signal
+            {
+                return Err(AppError::Connection(
+                    "Expected OpenSearch endpoint but detected a different product".into(),
+                ));
+            }
+            if has_elasticsearch_signal {
+                return Err(AppError::Connection(
+                    "Expected OpenSearch endpoint but detected Elasticsearch".into(),
+                ));
+            }
+            if !has_opensearch_signal {
+                return Err(AppError::Connection(
+                    "Expected OpenSearch endpoint but product could not be verified".into(),
+                ));
+            }
+            raw_distribution.unwrap_or_else(|| "opensearch".to_string())
+        }
+    };
 
     Ok(SearchClusterIdentity {
-        product: SearchProductKind::Elasticsearch,
+        product: expected_product,
         cluster_name: root
             .get("cluster_name")
             .and_then(Value::as_str)
-            .unwrap_or("Elasticsearch cluster")
+            .unwrap_or(match expected_product {
+                SearchProductKind::Elasticsearch => "Elasticsearch cluster",
+                SearchProductKind::OpenSearch => "OpenSearch cluster",
+            })
             .to_string(),
         cluster_uuid: root
             .get("cluster_uuid")
@@ -376,7 +436,14 @@ fn identity_from_root(
                 .and_then(Value::as_str)
                 .map(str::to_string),
         },
-        capabilities: SearchClusterCapabilities {
+        capabilities: root_probe_capabilities(expected_product),
+        product_delta: SearchProductDelta::for_product(expected_product),
+    })
+}
+
+fn root_probe_capabilities(product: SearchProductKind) -> SearchClusterCapabilities {
+    match product {
+        SearchProductKind::Elasticsearch => SearchClusterCapabilities {
             search: true,
             aggregations: true,
             aliases: true,
@@ -385,8 +452,16 @@ fn identity_from_root(
             composable_index_templates: true,
             delete_by_query: false,
         },
-        product_delta: SearchProductDelta::for_product(SearchProductKind::Elasticsearch),
-    })
+        SearchProductKind::OpenSearch => SearchClusterCapabilities {
+            search: false,
+            aggregations: false,
+            aliases: false,
+            mappings: false,
+            legacy_index_templates: false,
+            composable_index_templates: false,
+            delete_by_query: false,
+        },
+    }
 }
 
 fn parse_cat_indices(payload: &Value) -> Result<Vec<SearchIndexInfo>, AppError> {

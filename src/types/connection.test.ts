@@ -384,6 +384,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
       "redis",
       "valkey",
       "elasticsearch",
+      "opensearch",
     ]);
   });
 
@@ -397,7 +398,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("redis")).toBe(true);
     expect(isSupportedDatabaseType("valkey")).toBe(true);
     expect(isSupportedDatabaseType("elasticsearch")).toBe(true);
-    expect(isSupportedDatabaseType("opensearch")).toBe(false);
+    expect(isSupportedDatabaseType("opensearch")).toBe(true);
     expect(isSupportedDatabaseType("mssql")).toBe(false);
     expect(isSupportedDatabaseType("oracle")).toBe(false);
   });

@@ -608,14 +608,17 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_test_connection_keeps_opensearch_fixture_only() {
+    async fn test_test_connection_routes_opensearch_to_live_search_adapter() {
         let _dir = setup_test_env();
 
         let mut conn = sample_connection("s1", "OpenSearch1");
-        conn.port = 9200;
+        conn.port = unused_tcp_port().await;
+        conn.host = "127.0.0.1".into();
         conn.db_type = DatabaseType::Opensearch;
         conn.password = String::new();
         conn.user = String::new();
+        conn.database = String::new();
+        conn.connection_timeout = Some(1);
 
         let req = TestConnectionRequest {
             config: ConnectionConfigPublic::from(&conn),
@@ -625,10 +628,13 @@ mod tests {
         let result = test_connection(req).await;
 
         match result {
-            Err(AppError::Unsupported(msg)) => {
-                assert!(msg.contains("OpenSearch live HTTP connection is not wired"));
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("OpenSearch network error"));
             }
-            other => panic!("Expected OpenSearch Unsupported, got: {:?}", other),
+            Err(AppError::Unsupported(msg)) => {
+                panic!("OpenSearch routing regressed — got Unsupported: {msg}");
+            }
+            other => panic!("Expected OpenSearch connection error, got: {:?}", other),
         }
 
         cleanup_test_env();

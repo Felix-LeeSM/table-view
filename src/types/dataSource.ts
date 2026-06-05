@@ -407,7 +407,11 @@ export const ELASTICSEARCH_CAPABILITIES = capabilities({
   },
 });
 
-export const SEARCH_CAPABILITIES = capabilities();
+export const OPENSEARCH_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+});
 
 function profile(
   id: DatabaseType,
@@ -534,7 +538,7 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "search",
     ["searchHits"],
     "search-default",
-    SEARCH_CAPABILITIES,
+    OPENSEARCH_CAPABILITIES,
   ),
 }) satisfies Readonly<Record<DatabaseType, DataSourceProfile>>;
 

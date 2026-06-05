@@ -276,6 +276,18 @@ const PASTE_CASES: PasteCase[] = [
       password: "secret",
     },
   },
+  {
+    scheme: "opensearch",
+    url: "opensearch://admin:secret@open.local:9200",
+    expected: {
+      dbType: "opensearch",
+      host: "open.local",
+      port: 9200,
+      user: "admin",
+      database: "",
+      password: "secret",
+    },
+  },
 ];
 
 describe("[AC-178-01] form-mode host paste detection", () => {
@@ -319,7 +331,9 @@ describe("[AC-178-01] form-mode host paste detection", () => {
       // partial text where the label permutes by paradigm.
       const isKvProtocol =
         c.expected.dbType === "redis" || c.expected.dbType === "valkey";
-      const isSearchProtocol = c.expected.dbType === "elasticsearch";
+      const isSearchProtocol =
+        c.expected.dbType === "elasticsearch" ||
+        c.expected.dbType === "opensearch";
       const userInput =
         c.expected.dbType === "mongodb"
           ? (screen.getByLabelText(/^User \(optional\)/) as HTMLInputElement)
@@ -584,15 +598,13 @@ describe("[AC-178-03] host:port blur split", () => {
 // 경로이므로 alert 없이 단순히 form 을 건드리지 않음). URL 모드의 Parse &
 // Continue 는 명시적 사용자 액션이라 거부 메시지를 노출 — 별도 그룹.
 //
-// MySQL/MariaDB/SQLite/Redis/Valkey/Elasticsearch 는 supported 이므로 본 silent-reject list 에서 제외.
-// OpenSearch 는 fixture-backed only 이므로 live connection paste 를 거부한다.
+// MySQL/MariaDB/SQLite/Redis/Valkey/Elasticsearch/OpenSearch 는 supported 이므로 본 silent-reject list 에서 제외.
 // ===========================================================================
 
 describe("[Sprint 281] unsupported DBMS paste is silent (no form change)", () => {
   const unsupportedPastes = [
     { scheme: "mssql", url: "mssql://sa:pw@mssql.local:1433/master" },
     { scheme: "oracle", url: "oracle://system:pw@oracle.local:1521/FREEPDB1" },
-    { scheme: "opensearch", url: "opensearch://open.local:9200" },
   ];
 
   for (const c of unsupportedPastes) {
