@@ -39,7 +39,7 @@ export function useSearchAutocomplete({
   }, [connectionId, target]);
 
   useEffect(() => {
-    if (!enabled || target !== "elasticsearch") {
+    if (!enabled) {
       setCatalog(null);
       return;
     }
@@ -64,12 +64,7 @@ export function useSearchAutocomplete({
   );
 
   useEffect(() => {
-    if (
-      !enabled ||
-      target !== "elasticsearch" ||
-      !activeIndex ||
-      mappings[activeIndex] !== undefined
-    ) {
+    if (!enabled || !activeIndex || mappings[activeIndex] !== undefined) {
       return;
     }
 
