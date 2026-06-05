@@ -97,12 +97,22 @@ run_helper() {
   cat "$CALL_LOG"
 }
 
-default_output="$(run_helper "$ROOT")"
-assert_contains "$default_output" "cargo check" "default"
-assert_contains "$default_output" "cargo nextest list --profile push --target-dir target" "default debug test lane"
-assert_contains "$default_output" "--test duckdb_file_analytics" "default duckdb test binary"
-assert_contains "$default_output" "cargo llvm-cov show-env --sh" "default coverage env"
-assert_contains "$default_output" "cargo nextest list --profile push --target-dir target/llvm-cov-target" "default coverage test lane"
+assert_warm_all_output() {
+  local output="$1"
+  local label="$2"
+
+  assert_contains "$output" "cargo check" "$label"
+  assert_contains "$output" "cargo nextest list --profile push --target-dir target" "$label debug test lane"
+  assert_contains "$output" "--test duckdb_file_analytics" "$label duckdb test binary"
+  assert_contains "$output" "cargo llvm-cov show-env --sh" "$label coverage env"
+  assert_contains "$output" "cargo nextest list --profile push --target-dir target/llvm-cov-target" "$label coverage test lane"
+}
+
+default_output="$(run_helper)"
+assert_warm_all_output "$default_output" "default no-arg"
+
+path_output="$(run_helper "$ROOT")"
+assert_warm_all_output "$path_output" "default repo path"
 
 debug_output="$(run_helper --debug-only "$ROOT")"
 assert_contains "$debug_output" "cargo check" "debug only"
