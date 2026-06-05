@@ -48,7 +48,7 @@
 - Elasticsearch/OpenSearch: embedded fixture-backed Search admin/result
   contract 가 있다. Elasticsearch 는 live HTTP root-probe connection test,
   live catalog, bounded live `_search` query dispatch, backend Search DSL
-  validator, and delete-by-query plan estimates 로 URL/auth/TLS,
+  validator, Runtime Happy Path smoke, and delete-by-query plan estimates 로 URL/auth/TLS,
   product/version detection, indexes, aliases, data streams,
   mappings/settings/analyzers/templates/field paths, query/filter/aggs
   preflight, hits/fields/highlights/sort/aggs response parsing, and
@@ -89,7 +89,7 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 | DuckDB | `e2e/fixtures/seed.duckdb.sql` | wired Runtime Happy Path seed for `.duckdb` open, catalog/table browse, raw SELECT result/history evidence, and read-only write rejection. Registered local CSV/Parquet/JSON/NDJSON source preview/query remains focused evidence outside this fixture smoke |
 | MongoDB | `e2e/fixtures/seed.mongodb.json` | document fixture used by current MongoDB smoke seed path |
 | Redis | `e2e/fixtures/seed.redis.json` | wired Runtime Happy Path seed for Redis DB 2 connect/scan/preview/GET plus guarded string write, TTL, and exact-key delete smoke. Broader stream consumer, cluster/pubsub/modules, admin, and Valkey parity remain future work |
-| Elasticsearch | `e2e/fixtures/seed.search.elasticsearch.json`, `src-tauri/src/db/search.rs`, `src-tauri/src/db/search_destructive.rs`, `src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_http.rs`, `src-tauri/src/db/search_live_destructive.rs`, `src-tauri/src/db/search_live_query.rs` | embedded Search fixture contract plus live HTTP connection/catalog/query support with bounded Search DSL request validation and live delete-by-query safety planning; actual live admin execution deferred |
+| Elasticsearch | `e2e/fixtures/seed.search.elasticsearch.json`, `e2e/smoke/elasticsearch.spec.ts`, `src-tauri/src/db/search.rs`, `src-tauri/src/db/search_destructive.rs`, `src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_http.rs`, `src-tauri/src/db/search_live_destructive.rs`, `src-tauri/src/db/search_live_query.rs` | embedded Search fixture contract plus wired Runtime Happy Path smoke for live HTTP connection/catalog/query support with bounded Search DSL request validation and live delete-by-query safety planning; actual live admin execution deferred |
 | OpenSearch | `e2e/fixtures/seed.search.opensearch.json`, `src-tauri/src/db/search.rs` | embedded Search fixture contract; no live HTTP support |
 | MSSQL | `e2e/fixtures/seed.mssql.sql` | planned static SQL seed contract only |
 | Oracle | `e2e/fixtures/seed.oracle.sql` | planned static SQL seed contract only |
@@ -120,7 +120,9 @@ URL/auth/TLS 기반 live HTTP root probe 를 지원하고, product/version/distr
 detection 과 auth/network error surfacing 을 제공한다. Elasticsearch live catalog
 는 sidebar 에서 index/alias/data-stream shell 을 보여주고, selected index tab 에서
 명시적으로 선택한 mappings/settings/analyzers/templates/field stats 를 lazy fetch
-한다. Elasticsearch live query 는 bounded `_search` dispatch 로 sample documents,
+한다. Elasticsearch Runtime Happy Path smoke now proves live service connect,
+catalog/index detail, bounded search rendering, and delete-by-query safety
+planning. Elasticsearch live query 는 bounded `_search` dispatch 로 sample documents,
 query/filter/aggs preflight, hits/source/fields/highlight/sort,
 shards/timeout/total relation/took, aggregations, explain/profile response
 payload 를 Search-native renderer 에 연결한다. Delete-by-query safety planning

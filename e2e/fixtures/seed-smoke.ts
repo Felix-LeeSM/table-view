@@ -54,6 +54,21 @@ const valkeyConfig = {
   database: Number(process.env.E2E_VALKEY_DB ?? 2),
 };
 
+const elasticsearchConfig = {
+  host:
+    process.env.E2E_ELASTICSEARCH_HOST ??
+    process.env.ELASTICSEARCH_HOST ??
+    "localhost",
+  port: Number(
+    process.env.E2E_ELASTICSEARCH_PORT ??
+      process.env.ELASTICSEARCH_PORT ??
+      19200,
+  ),
+  user: process.env.ELASTICSEARCH_USER ?? "",
+  password: process.env.ELASTICSEARCH_PASSWORD ?? "",
+  index: process.env.E2E_ELASTICSEARCH_INDEX ?? "table-view-elastic-2026.05.24",
+};
+
 type MongoSeedIndex = {
   name?: string;
   keys: Document;
@@ -86,6 +101,53 @@ type RedisSeedCommand =
 type RedisSeedFixture = {
   database: number;
   commands: RedisSeedCommand[];
+};
+
+type SearchSeedFixture = {
+  indexes: Array<{ name: string; aliases?: string[] }>;
+  aliases?: Array<{ name: string; index: string; writeIndex?: boolean }>;
+  mappings: Array<{ index: string; raw: unknown }>;
+  templates?: Array<{ name: string; raw: unknown }>;
+  searchResult: {
+    hits: Array<{ id: string; source: Record<string, unknown> }>;
+  };
+};
+
+type SeedTarget =
+  | "postgres"
+  | "mongodb"
+  | "mysql"
+  | "mariadb"
+  | "redis"
+  | "valkey"
+  | "elasticsearch";
+
+const ALL_SEED_TARGETS = [
+  "postgres",
+  "mongodb",
+  "mysql",
+  "mariadb",
+  "redis",
+  "valkey",
+  "elasticsearch",
+] as const satisfies readonly SeedTarget[];
+
+const SEED_TARGETS_BY_SPEC_KEY: Record<string, readonly SeedTarget[]> = {
+  postgres: ["postgres"],
+  "postgres-safe-mode": ["postgres"],
+  "postgres-explain": ["postgres"],
+  "postgres-extension-completion": ["postgres"],
+  "postgres-cancellation": ["postgres"],
+  mysql: ["mysql"],
+  mariadb: ["mariadb"],
+  mongodb: ["mongodb"],
+  "phase-28-slice-A": ["mongodb"],
+  redis: ["redis"],
+  valkey: ["valkey"],
+  elasticsearch: ["elasticsearch"],
+  "history-source-5": ["postgres", "mongodb"],
+  sqlite: [],
+  duckdb: [],
 };
 
 async function retry(label: string, fn: () => Promise<void>) {
@@ -308,18 +370,178 @@ async function seedValkey() {
   });
 }
 
+async function seedElasticsearch() {
+  const fixture = JSON.parse(
+    await readFile(
+      resolve("e2e/fixtures/seed.search.elasticsearch.json"),
+      "utf-8",
+    ),
+  ) as SearchSeedFixture;
+  const fixtureIndex = fixture.indexes[0]?.name;
+  if (!fixtureIndex) {
+    throw new Error("Elasticsearch seed fixture requires at least one index");
+  }
+  const index = elasticsearchConfig.index;
+
+  await retry("Elasticsearch", async () => {
+    await searchRequest("/");
+    for (const template of fixture.templates ?? []) {
+      await searchRequest(
+        `/_index_template/${encodeURIComponent(template.name)}`,
+        {
+          method: "DELETE",
+          allowNotFound: true,
+        },
+      );
+    }
+    for (const indexName of new Set([fixtureIndex, index])) {
+      await searchRequest(`/${encodeURIComponent(indexName)}`, {
+        method: "DELETE",
+        allowNotFound: true,
+      });
+    }
+
+    const mapping = fixture.mappings.find(
+      (item) => item.index === fixtureIndex,
+    );
+    await searchRequest(`/${encodeURIComponent(index)}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        mappings: mapping?.raw ?? { properties: {} },
+      }),
+    });
+
+    for (const template of fixture.templates ?? []) {
+      await searchRequest(
+        `/_index_template/${encodeURIComponent(template.name)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify(template.raw),
+        },
+      );
+    }
+
+    for (const alias of fixture.aliases ?? []) {
+      if (alias.index !== index) continue;
+      await searchRequest(
+        `/${encodeURIComponent(index)}/_alias/${encodeURIComponent(alias.name)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ is_write_index: alias.writeIndex ?? false }),
+        },
+      );
+    }
+
+    const bulkBody = fixture.searchResult.hits
+      .flatMap((hit) => [
+        JSON.stringify({ index: { _index: index, _id: hit.id } }),
+        JSON.stringify(hit.source),
+      ])
+      .join("\n");
+    const bulkResult = await searchRequest("/_bulk?refresh=true", {
+      method: "POST",
+      body: `${bulkBody}\n`,
+    });
+    if (isRecord(bulkResult) && bulkResult.errors === true) {
+      throw new Error(
+        `Elasticsearch bulk seed failed: ${JSON.stringify(bulkResult)}`,
+      );
+    }
+  });
+}
+
+async function searchRequest(
+  path: string,
+  options: {
+    method?: string;
+    body?: string;
+    allowNotFound?: boolean;
+  } = {},
+): Promise<unknown> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (elasticsearchConfig.user || elasticsearchConfig.password) {
+    headers.Authorization = `Basic ${Buffer.from(
+      `${elasticsearchConfig.user}:${elasticsearchConfig.password}`,
+    ).toString("base64")}`;
+  }
+  const response = await fetch(
+    `http://${elasticsearchConfig.host}:${elasticsearchConfig.port}${path}`,
+    {
+      method: options.method ?? "GET",
+      headers,
+      body: options.body,
+    },
+  );
+  if (options.allowNotFound && response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(
+      `Elasticsearch ${options.method ?? "GET"} ${path} failed with ${response.status}: ${await response.text()}`,
+    );
+  }
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+}
+
 function seedDocumentFilter(document: Document): Document {
   if (document._id !== undefined) return { _id: document._id };
   if (document.email !== undefined) return { email: document.email };
   throw new Error("MongoDB seed documents require _id or email");
 }
 
-await seedPostgres();
-await seedMongo();
-await seedMysql();
-await seedMariadb();
-await seedRedis();
-await seedValkey();
+async function seedTarget(target: SeedTarget) {
+  switch (target) {
+    case "postgres":
+      await seedPostgres();
+      return;
+    case "mongodb":
+      await seedMongo();
+      return;
+    case "mysql":
+      await seedMysql();
+      return;
+    case "mariadb":
+      await seedMariadb();
+      return;
+    case "redis":
+      await seedRedis();
+      return;
+    case "valkey":
+      await seedValkey();
+      return;
+    case "elasticsearch":
+      await seedElasticsearch();
+      return;
+  }
+}
+
+function seedTargetsForCurrentRun(): readonly SeedTarget[] {
+  const explicitSpecKey = process.env.E2E_SPEC_KEY?.trim();
+  if (explicitSpecKey) {
+    return SEED_TARGETS_BY_SPEC_KEY[explicitSpecKey] ?? ALL_SEED_TARGETS;
+  }
+  const explicitSpec = process.env.E2E_SPEC?.trim();
+  if (explicitSpec) {
+    const specKey = explicitSpec
+      .split("/")
+      .pop()
+      ?.replace(/\.spec\.ts$/, "");
+    return specKey
+      ? (SEED_TARGETS_BY_SPEC_KEY[specKey] ?? ALL_SEED_TARGETS)
+      : ALL_SEED_TARGETS;
+  }
+  return ALL_SEED_TARGETS;
+}
+
+const seedTargets = seedTargetsForCurrentRun();
+for (const target of seedTargets) {
+  await seedTarget(target);
+}
 console.log(
-  "[e2e:seed] Postgres, MongoDB, MySQL, MariaDB, Redis, and Valkey smoke fixtures are ready.",
+  `[e2e:seed] ${seedTargets.length > 0 ? seedTargets.join(", ") : "no external"} smoke fixtures are ready.`,
 );
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

@@ -13,7 +13,8 @@ export type DbType =
   | "mariadb"
   | "sqlite"
   | "duckdb"
-  | "redis";
+  | "redis"
+  | "elasticsearch";
 export type ConnectionEnvironment =
   | "local"
   | "testing"
@@ -153,6 +154,7 @@ function dbTypeLabel(dbType: DbType): string {
   if (dbType === "sqlite") return "SQLite";
   if (dbType === "duckdb") return "DuckDB";
   if (dbType === "redis") return "Redis";
+  if (dbType === "elasticsearch") return "Elasticsearch";
   return "MongoDB";
 }
 
@@ -375,6 +377,38 @@ export async function createRedisConnection(name = "E2E Redis") {
     await setInput("#conn-password", password);
   }
   await setInput("#conn-database", process.env.E2E_REDIS_DB ?? "2");
+
+  await saveConnectionDialog(dialog);
+  await expectConnectionVisible(name);
+}
+
+export async function createElasticsearchConnection(
+  name = "E2E Elasticsearch",
+) {
+  const dialog = await openNewConnectionDialog();
+  await selectDatabaseType("elasticsearch");
+
+  await setInput("#conn-name", name);
+  await setInput(
+    "#conn-host",
+    process.env.E2E_ELASTICSEARCH_HOST ??
+      process.env.ELASTICSEARCH_HOST ??
+      "localhost",
+  );
+  await setInput(
+    "#conn-port",
+    process.env.E2E_ELASTICSEARCH_PORT ??
+      process.env.ELASTICSEARCH_PORT ??
+      "19200",
+  );
+  const user = process.env.ELASTICSEARCH_USER ?? "";
+  if (user) {
+    await setInput("#conn-user", user);
+  }
+  const password = process.env.ELASTICSEARCH_PASSWORD ?? "";
+  if (password) {
+    await setInput("#conn-password", password);
+  }
 
   await saveConnectionDialog(dialog);
   await expectConnectionVisible(name);
