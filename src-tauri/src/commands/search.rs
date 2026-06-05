@@ -2,8 +2,9 @@ use crate::commands::connection::AppState;
 use crate::commands::{not_connected, register_cancel_token, release_cancel_token};
 use crate::error::AppError;
 use crate::models::{
-    SearchCatalogSummary, SearchFieldStatsEnvelope, SearchIndexMapping, SearchIndexSettings,
-    SearchIndexTemplateInfo, SearchQueryRequest, SearchResultEnvelope,
+    SearchCatalogSummary, SearchDeleteByQueryRequest, SearchDestructiveOperationPlan,
+    SearchFieldStatsEnvelope, SearchIndexMapping, SearchIndexSettings, SearchIndexTemplateInfo,
+    SearchQueryRequest, SearchResultEnvelope,
 };
 
 async fn list_search_catalog_summary_inner(
@@ -177,6 +178,27 @@ pub async fn execute_search_query(
     execute_search_query_inner(state.inner(), &connection_id, request, query_id.as_deref()).await
 }
 
+async fn plan_search_delete_by_query_inner(
+    state: &AppState,
+    connection_id: &str,
+    request: SearchDeleteByQueryRequest,
+) -> Result<SearchDestructiveOperationPlan, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active.as_search()?.plan_delete_by_query(&request).await
+}
+
+#[tauri::command]
+pub async fn plan_search_delete_by_query(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    request: SearchDeleteByQueryRequest,
+) -> Result<SearchDestructiveOperationPlan, AppError> {
+    plan_search_delete_by_query_inner(state.inner(), &connection_id, request).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,6 +253,34 @@ mod tests {
         assert_eq!(result.aggregations[0].name(), "by_status");
         let tokens = state.query_tokens.lock().await;
         assert!(!tokens.contains_key("q"));
+    }
+
+    #[tokio::test]
+    async fn plan_search_delete_by_query_routes_to_search_adapter() {
+        let state = search_state().await;
+
+        let plan = plan_search_delete_by_query_inner(
+            &state,
+            "search",
+            SearchDeleteByQueryRequest {
+                index_pattern: "logs-elastic-2026.05.24".into(),
+                body: serde_json::json!({
+                    "query": { "term": { "status.keyword": "ok" } }
+                }),
+                preview_only: true,
+                safety: crate::models::SearchDestructiveSafety {
+                    acknowledged_risk: false,
+                    allow_wildcard: false,
+                    expected_target: None,
+                },
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(plan.operation, "deleteByQuery");
+        assert_eq!(plan.estimated_document_count, Some(1));
+        assert!(plan.requires_confirmation);
     }
 
     #[tokio::test]

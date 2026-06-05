@@ -5,16 +5,17 @@ use tokio::sync::Mutex;
 
 use crate::error::{AppError, CancelError};
 use crate::models::{
-    validate_search_destructive_request, ConnectionConfig, DatabaseType, SearchAliasInfo,
-    SearchAnalyzerInfo, SearchClusterCapabilities, SearchClusterIdentity, SearchDataStreamInfo,
-    SearchDeleteByQueryRequest, SearchDestructiveOperationPlan, SearchFieldStatsEnvelope,
-    SearchFieldStatsInfo, SearchHitEnvelope, SearchIndexHealth, SearchIndexInfo,
-    SearchIndexMapping, SearchIndexSettings, SearchIndexTemplateInfo, SearchMappingField,
-    SearchProductDelta, SearchProductKind, SearchQueryRequest, SearchResultEnvelope,
-    SearchTemplateEndpointKind, SearchTotalHits, SearchTotalHitsRelation, SearchVersionInfo,
+    ConnectionConfig, DatabaseType, SearchAliasInfo, SearchAnalyzerInfo, SearchClusterCapabilities,
+    SearchClusterIdentity, SearchDataStreamInfo, SearchDeleteByQueryRequest,
+    SearchDestructiveOperationPlan, SearchFieldStatsEnvelope, SearchFieldStatsInfo,
+    SearchHitEnvelope, SearchIndexHealth, SearchIndexInfo, SearchIndexMapping, SearchIndexSettings,
+    SearchIndexTemplateInfo, SearchMappingField, SearchProductDelta, SearchProductKind,
+    SearchQueryRequest, SearchResultEnvelope, SearchTemplateEndpointKind, SearchTotalHits,
+    SearchTotalHitsRelation, SearchVersionInfo,
 };
 
-use super::search_executor::execute_fixture_search;
+use super::search_destructive::{build_delete_by_query_plan, validate_delete_by_query_request};
+use super::search_executor::{estimate_fixture_delete_by_query, execute_fixture_search};
 use super::search_http::{open_elasticsearch_connection, SearchHttpConnection};
 use super::traits::{DbAdapter, SearchAdapter};
 use super::types::BoxFuture;
@@ -354,27 +355,16 @@ impl SearchAdapter for SearchEngineAdapter {
         &'a self,
         request: &'a SearchDeleteByQueryRequest,
     ) -> BoxFuture<'a, Result<SearchDestructiveOperationPlan, AppError>> {
-        let validation = validate_search_destructive_request(request);
-        let target = request.index_pattern.clone();
-        let preview_only = request.preview_only;
         Box::pin(async move {
-            if self.fixture.is_none() {
-                return Err(AppError::Unsupported(format!(
-                    "{} live destructive Search planning is not wired yet",
-                    self.product.label()
-                )));
+            validate_delete_by_query_request(request)?;
+            if let Some(fixture) = self.fixture.as_ref() {
+                let estimate = estimate_fixture_delete_by_query(fixture, request)?;
+                return Ok(build_delete_by_query_plan(request, Some(estimate)));
             }
-            validation?;
-            Ok(SearchDestructiveOperationPlan {
-                operation: "deleteByQuery".into(),
-                target,
-                preview_only,
-                requires_confirmation: !preview_only,
-                warnings: vec![
-                    "Delete-by-query is destructive and must be confirmed before execution".into(),
-                ],
-                estimated_document_count: None,
-            })
+            self.live_connection()
+                .await?
+                .plan_delete_by_query(request)
+                .await
         })
     }
 }

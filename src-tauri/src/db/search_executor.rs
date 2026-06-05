@@ -3,11 +3,15 @@ use std::cmp::Ordering;
 use serde_json::Value;
 
 use crate::db::search::SearchCatalogFixture;
+use crate::db::search_destructive::{
+    delete_by_query_body_object, delete_by_query_target, target_pattern_matches,
+    validate_delete_by_query_request,
+};
 use crate::db::search_dsl::{search_body_object, validate_search_dsl_request};
 use crate::error::AppError;
 use crate::models::{
-    SearchAggregationEnvelope, SearchHitEnvelope, SearchQueryRequest, SearchResultEnvelope,
-    SearchTermsBucket, SearchTotalHits, SearchTotalHitsRelation,
+    SearchAggregationEnvelope, SearchDeleteByQueryRequest, SearchHitEnvelope, SearchQueryRequest,
+    SearchResultEnvelope, SearchTermsBucket, SearchTotalHits, SearchTotalHitsRelation,
 };
 
 pub(crate) fn execute_fixture_search(
@@ -41,6 +45,27 @@ pub(crate) fn execute_fixture_search(
     Ok(result)
 }
 
+pub(crate) fn estimate_fixture_delete_by_query(
+    fixture: &SearchCatalogFixture,
+    request: &SearchDeleteByQueryRequest,
+) -> Result<u64, AppError> {
+    validate_delete_by_query_request(request)?;
+    let target = delete_by_query_target(request);
+    let indices = fixture_target_indices(fixture, target)?;
+    let candidate_hits = fixture
+        .search_result
+        .hits
+        .iter()
+        .filter(|hit| indices.iter().any(|index| index == &hit.index))
+        .cloned()
+        .collect::<Vec<_>>();
+    Ok(filter_fixture_hits(
+        &candidate_hits,
+        delete_by_query_body_object(request)?.get("query"),
+    )?
+    .len() as u64)
+}
+
 fn validate_fixture_search_request(
     fixture: &SearchCatalogFixture,
     request: &SearchQueryRequest,
@@ -58,6 +83,30 @@ fn validate_fixture_search_request(
     }
 
     Ok(())
+}
+
+fn fixture_target_indices(
+    fixture: &SearchCatalogFixture,
+    target: &str,
+) -> Result<Vec<String>, AppError> {
+    let mut indices = Vec::new();
+    for index in &fixture.indexes {
+        if target_pattern_matches(target, &index.name) {
+            indices.push(index.name.clone());
+        }
+    }
+    for alias in &fixture.aliases {
+        if target_pattern_matches(target, &alias.name) && !indices.contains(&alias.index) {
+            indices.push(alias.index.clone());
+        }
+    }
+    if indices.is_empty() {
+        return Err(AppError::NotFound(format!(
+            "Search index or alias pattern '{}' not found",
+            target
+        )));
+    }
+    Ok(indices)
 }
 
 fn filter_fixture_hits(

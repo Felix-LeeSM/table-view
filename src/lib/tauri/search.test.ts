@@ -14,6 +14,7 @@ import {
   getSearchIndexSettings,
   listSearchCatalogSummary,
   listSearchIndexTemplates,
+  planSearchDeleteByQuery,
   sampleSearchDocuments,
 } from "./search";
 
@@ -119,6 +120,33 @@ describe("Search Tauri wrappers", () => {
       connectionId: "search-1",
       request,
       queryId: "q-search",
+    });
+  });
+
+  it("forwards delete-by-query safety plan requests", async () => {
+    const request = {
+      indexPattern: "logs-2026.05.24",
+      body: { query: { term: { "status.keyword": "error" } } },
+      previewOnly: true,
+      safety: {
+        acknowledgedRisk: false,
+        allowWildcard: false,
+      },
+    };
+    invokeMock.mockResolvedValueOnce({
+      operation: "deleteByQuery",
+      target: "logs-2026.05.24",
+      previewOnly: true,
+      requiresConfirmation: true,
+      warnings: [],
+      estimatedDocumentCount: 7,
+    });
+
+    await planSearchDeleteByQuery("search-1", request);
+
+    expect(invokeMock).toHaveBeenLastCalledWith("plan_search_delete_by_query", {
+      connectionId: "search-1",
+      request,
     });
   });
 });

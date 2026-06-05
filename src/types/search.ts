@@ -124,6 +124,28 @@ export interface SearchQueryRequest {
   trackTotalHits?: boolean;
 }
 
+export interface SearchDestructiveSafety {
+  acknowledgedRisk: boolean;
+  allowWildcard: boolean;
+  expectedTarget?: string;
+}
+
+export interface SearchDeleteByQueryRequest {
+  indexPattern: string;
+  body: unknown;
+  previewOnly: boolean;
+  safety: SearchDestructiveSafety;
+}
+
+export interface SearchDestructiveOperationPlan {
+  operation: "deleteByQuery";
+  target: string;
+  previewOnly: boolean;
+  requiresConfirmation: boolean;
+  warnings: string[];
+  estimatedDocumentCount?: number;
+}
+
 export interface SearchHitEnvelope {
   index: string;
   id: string;
