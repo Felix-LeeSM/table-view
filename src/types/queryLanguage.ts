@@ -80,7 +80,7 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
     fallbackPolicy: {
       kind: "none",
       reason:
-        "Elasticsearch dispatches JSON Search DSL request bodies directly; parser and completion ownership remain future work.",
+        "Elasticsearch validates bounded JSON Search DSL request bodies in the backend before dispatch; editor parser and completion ownership remain future work.",
     },
     safetyAnalyzer: "profile-safety-policy",
   },
