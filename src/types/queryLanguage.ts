@@ -76,11 +76,11 @@ export const QUERY_LANGUAGE_REGISTRY = Object.freeze({
     label: "Search DSL",
     lifecycle: "active",
     parserOwner: "future-language-core-contract",
-    completionOwner: "future-language-core-contract",
+    completionOwner: "typescript-runtime-adapter",
     fallbackPolicy: {
       kind: "none",
       reason:
-        "Elasticsearch validates bounded JSON Search DSL request bodies in the backend before dispatch; editor parser and completion ownership remain future work.",
+        "Elasticsearch validates bounded JSON Search DSL request bodies in the backend before dispatch and owns bounded TypeScript editor completion; full parser ownership and OpenSearch completion remain future work.",
     },
     safetyAnalyzer: "profile-safety-policy",
   },

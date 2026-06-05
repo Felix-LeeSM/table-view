@@ -380,6 +380,24 @@ describe("QueryEditor", () => {
     );
   });
 
+  it("uses JSON when paradigm=search with the Search DSL aria-label", () => {
+    render(
+      <QueryEditor
+        sql='{ "index": "logs-elastic", "body": { "query": { "match_all": {} } } }'
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="search"
+      />,
+    );
+
+    const container = screen.getByLabelText("Search Query Editor");
+    expect(container).toHaveAttribute("data-paradigm", "search");
+    const view = EditorView.findFromDOM(
+      container.querySelector(".cm-editor") as HTMLElement,
+    )!;
+    expect(activeLanguageName(view)).toBe("json");
+  });
+
   // Sprint 139 — paradigm-aware split. Flipping the paradigm now swaps
   // the underlying editor component (SqlQueryEditor ↔ MongoQueryEditor),
   // so the previous "same EditorView instance" contract no longer holds.
