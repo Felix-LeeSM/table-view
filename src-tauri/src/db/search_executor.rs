@@ -315,6 +315,10 @@ fn terms_aggregation(
     hits: &[SearchHitEnvelope],
 ) -> Result<SearchAggregationEnvelope, AppError> {
     let field = aggregation_field(config, "terms")?;
+    let size = config
+        .get("size")
+        .and_then(Value::as_u64)
+        .map(|value| value as usize);
     let mut counts = std::collections::BTreeMap::<String, u64>::new();
     for hit in hits {
         let key = source_field_value(&hit.source, field)
@@ -322,10 +326,13 @@ fn terms_aggregation(
             .unwrap_or("(missing)");
         *counts.entry(key.to_string()).or_default() += 1;
     }
-    let buckets = counts
+    let mut buckets = counts
         .into_iter()
         .map(|(key, doc_count)| SearchTermsBucket { key, doc_count })
         .collect::<Vec<_>>();
+    if let Some(size) = size {
+        buckets.truncate(size);
+    }
     Ok(SearchAggregationEnvelope::Terms {
         name: name.into(),
         buckets,
@@ -412,6 +419,29 @@ mod tests {
                 assert!(buckets
                     .iter()
                     .any(|bucket| bucket.key == "error" && bucket.doc_count == 1));
+            }
+            other => panic!("expected terms aggregation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fixture_search_terms_aggregation_honors_size() {
+        let result = execute_fixture_search(
+            &fixture(),
+            &request(json!({
+                "query": { "match_all": {} },
+                "aggs": {
+                    "by_status": {
+                        "terms": { "field": "status.keyword", "size": 1 }
+                    }
+                }
+            })),
+        )
+        .unwrap();
+
+        match &result.aggregations[0] {
+            SearchAggregationEnvelope::Terms { buckets, .. } => {
+                assert_eq!(buckets.len(), 1);
             }
             other => panic!("expected terms aggregation, got {other:?}"),
         }
