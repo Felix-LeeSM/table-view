@@ -382,6 +382,15 @@ describe("QueryTab search route", () => {
     expect(screen.getByLabelText("Search aggregations")).toHaveTextContent(
       "by_status",
     );
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("list_search_catalog_summary", {
+        connectionId: "search-1",
+      });
+      expect(invokeMock).toHaveBeenCalledWith("get_search_index_mapping", {
+        connectionId: "search-1",
+        index: "logs-opensearch-2026.05.24",
+      });
+    });
   });
 
   it("routes Search loading and error states through the Search-native result surface", () => {

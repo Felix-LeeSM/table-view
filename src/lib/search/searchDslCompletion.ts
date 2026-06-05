@@ -21,6 +21,7 @@ type SearchCompletionPosition =
   | "target-value"
   | "field-value"
   | "field-key"
+  | "sort-field-key"
   | "query-clause"
   | "aggregation-kind"
   | "body-key";
@@ -149,10 +150,7 @@ const SEARCH_BODY_SNIPPETS = [
 export function createSearchDslCompletionSource(
   options: SearchDslCompletionSourceOptions = {},
 ): CompletionSource {
-  const target = options.target ?? "elasticsearch";
   return (context) => {
-    if (target !== "elasticsearch") return null;
-
     const quoted = context.matchBefore(/"[A-Za-z0-9_@.$*-]*/);
     if (!quoted) return null;
     const prefix = quoted.text.slice(1);
@@ -204,6 +202,8 @@ function classifySearchCompletionPosition(
   const tail = beforeQuote.slice(-500);
   if (/"index"\s*:\s*$/.test(tail)) return "target-value";
   if (/"field"\s*:\s*$/.test(tail)) return "field-value";
+  if (/"_source"\s*:\s*\[[\s\S]*$/.test(tail)) return "field-value";
+  if (/"sort"\s*:\s*\[[\s\S]*\{\s*$/.test(tail)) return "sort-field-key";
   if (/"(?:term|terms|match|range)"\s*:\s*\{\s*$/.test(tail)) {
     return "field-key";
   }
@@ -221,13 +221,16 @@ function completionsForPosition(
   position: SearchCompletionPosition,
   options: SearchDslCompletionSourceOptions,
 ): Completion[] {
+  const target = options.target ?? "elasticsearch";
   switch (position) {
     case "target-value":
-      return targetCompletions(options.catalog);
+      return targetCompletions(options.catalog, target);
     case "field-value":
       return fieldCompletions(options.mapping, "value");
     case "field-key":
       return fieldCompletions(options.mapping, "key");
+    case "sort-field-key":
+      return fieldCompletions(options.mapping, "sort-key");
     case "query-clause":
       return SEARCH_QUERY_SNIPPETS.map(toSnippetCompletion);
     case "aggregation-kind":
@@ -239,15 +242,19 @@ function completionsForPosition(
 
 function targetCompletions(
   catalog?: SearchCatalogSummary | null,
+  target?: SearchProductKind,
 ): Completion[] {
   if (!catalog) return [];
+  const product = target ?? catalog.identity.product;
+  if (catalog.identity.product !== product) return [];
+  const label = productLabel(product);
   return [
     ...catalog.indexes.map((item) => ({
       label: item.name,
       apply: `${item.name}"`,
       type: "constant",
       detail: item.open ? "index" : "closed index",
-      info: `Elasticsearch index${item.aliases.length > 0 ? `; aliases: ${item.aliases.join(", ")}` : ""}`,
+      info: `${label} index${item.aliases.length > 0 ? `; aliases: ${item.aliases.join(", ")}` : ""}`,
       boost: 30,
     })),
     ...catalog.aliases.map((item) => ({
@@ -269,9 +276,13 @@ function targetCompletions(
   ];
 }
 
+function productLabel(product: SearchProductKind): string {
+  return product === "opensearch" ? "OpenSearch" : "Elasticsearch";
+}
+
 function fieldCompletions(
   mapping: SearchIndexMapping | null | undefined,
-  mode: "key" | "value",
+  mode: "key" | "sort-key" | "value",
 ): Completion[] {
   if (!mapping) return [];
   return mapping.fields.map((field) => fieldCompletion(field, mode));
@@ -279,7 +290,7 @@ function fieldCompletions(
 
 function fieldCompletion(
   field: SearchMappingField,
-  mode: "key" | "value",
+  mode: "key" | "sort-key" | "value",
 ): Completion {
   const info = [
     field.searchable ? "searchable" : "not searchable",
@@ -290,6 +301,15 @@ function fieldCompletion(
     .join("; ");
   if (mode === "key") {
     return snippetCompletion(`${field.path}": \${value}`, {
+      label: field.path,
+      type: "property",
+      detail: field.fieldType,
+      info,
+      boost: field.aggregatable ? 25 : 15,
+    });
+  }
+  if (mode === "sort-key") {
+    return snippetCompletion(`${field.path}": "\${direction}"`, {
       label: field.path,
       type: "property",
       detail: field.fieldType,

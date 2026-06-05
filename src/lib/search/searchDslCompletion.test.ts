@@ -84,14 +84,88 @@ const mapping = {
   raw: {},
 } as const satisfies SearchIndexMapping;
 
+const opensearchCatalog = {
+  identity: {
+    product: "opensearch",
+    clusterName: "open-dev",
+    version: { number: "2.13.0", distribution: "opensearch" },
+    capabilities: {
+      search: true,
+      aggregations: true,
+      aliases: true,
+      mappings: true,
+      legacyIndexTemplates: true,
+      composableIndexTemplates: true,
+      deleteByQuery: true,
+    },
+    productDelta: {
+      product: "opensearch",
+      supportsElasticLicenseApi: false,
+      supportsOpensearchPluginsApi: true,
+      defaultTemplateEndpoint: "composableIndexTemplate",
+    },
+  },
+  indexes: [
+    {
+      name: "logs-opensearch-2026.05.24",
+      health: "green",
+      open: true,
+      aliases: ["logs-opensearch"],
+    },
+  ],
+  aliases: [
+    {
+      name: "logs-opensearch",
+      index: "logs-opensearch-2026.05.24",
+      writeIndex: true,
+    },
+  ],
+  dataStreams: [
+    {
+      name: "logs-opensearch-default",
+      backingIndices: [".ds-logs-opensearch-default-2026.05.24-000001"],
+      health: "green",
+      hidden: false,
+    },
+  ],
+} as const satisfies SearchCatalogSummary;
+
+const opensearchMapping = {
+  index: "logs-opensearch-2026.05.24",
+  fields: [
+    {
+      path: "@timestamp",
+      fieldType: "date",
+      searchable: true,
+      aggregatable: true,
+    },
+    {
+      path: "trace.id",
+      fieldType: "keyword",
+      searchable: true,
+      aggregatable: true,
+    },
+    {
+      path: "message",
+      fieldType: "text",
+      searchable: true,
+      aggregatable: false,
+      analyzer: "standard",
+    },
+  ],
+  raw: {},
+} as const satisfies SearchIndexMapping;
+
 function runSource(
   doc: string,
   target: SearchProductKind = "elasticsearch",
+  catalogContext: SearchCatalogSummary = catalog,
+  mappingContext: SearchIndexMapping = mapping,
 ): CompletionResult | null {
   const state = EditorState.create({ doc });
   const source = createSearchDslCompletionSource({
-    catalog,
-    mapping,
+    catalog: catalogContext,
+    mapping: mappingContext,
     target,
   });
   const result = source(new CompletionContext(state, doc.length, true));
@@ -142,10 +216,108 @@ describe("search DSL completion", () => {
     expect(labels(runSource('{ "body": { "_s'))).toContain("_source");
   });
 
-  it("keeps OpenSearch completion unpromoted instead of inheriting Elasticsearch candidates", () => {
+  it("suggests OpenSearch indexes, aliases, data streams, fields, and field types from OpenSearch catalog context", () => {
+    expect(
+      labels(
+        runSource(
+          '{ "index": "logs',
+          "opensearch",
+          opensearchCatalog,
+          opensearchMapping,
+        ),
+      ),
+    ).toEqual([
+      "logs-opensearch-2026.05.24",
+      "logs-opensearch",
+      "logs-opensearch-default",
+    ]);
+
+    const result = runSource(
+      '{ "body": { "query": { "exists": { "field": "trace',
+      "opensearch",
+      opensearchCatalog,
+      opensearchMapping,
+    );
+    expect(result?.options[0]).toMatchObject({
+      label: "trace.id",
+      detail: "keyword",
+    });
+    expect(
+      labels(
+        runSource(
+          '{ "body": { "sort": [{ "tr',
+          "opensearch",
+          opensearchCatalog,
+          opensearchMapping,
+        ),
+      ),
+    ).toEqual(["trace.id"]);
+    expect(
+      labels(
+        runSource(
+          '{ "body": { "_source": ["mess',
+          "opensearch",
+          opensearchCatalog,
+          opensearchMapping,
+        ),
+      ),
+    ).toEqual(["message"]);
+  });
+
+  it("uses shared bounded query, aggregation, sort, and source snippets for OpenSearch", () => {
+    expect(
+      labels(
+        runSource(
+          '{ "body": { "query": { "ma',
+          "opensearch",
+          opensearchCatalog,
+          opensearchMapping,
+        ),
+      ),
+    ).toContain("match");
+    expect(
+      labels(
+        runSource(
+          '{ "body": { "aggs": { "by_trace": { "te',
+          "opensearch",
+          opensearchCatalog,
+          opensearchMapping,
+        ),
+      ),
+    ).toContain("terms");
+    expect(
+      labels(
+        runSource(
+          '{ "body": { "so',
+          "opensearch",
+          opensearchCatalog,
+          opensearchMapping,
+        ),
+      ),
+    ).toContain("sort");
+    expect(
+      labels(
+        runSource(
+          '{ "body": { "_s',
+          "opensearch",
+          opensearchCatalog,
+          opensearchMapping,
+        ),
+      ),
+    ).toContain("_source");
+  });
+
+  it("keeps Elasticsearch and OpenSearch catalog identities separated", () => {
     expect(labels(runSource('{ "index": "logs', "opensearch"))).toEqual([]);
     expect(
-      labels(runSource('{ "body": { "query": { "ma', "opensearch")),
+      labels(
+        runSource(
+          '{ "index": "logs',
+          "elasticsearch",
+          opensearchCatalog,
+          opensearchMapping,
+        ),
+      ),
     ).toEqual([]);
   });
 
