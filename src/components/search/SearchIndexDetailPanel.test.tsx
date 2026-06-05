@@ -69,6 +69,54 @@ const catalog: SearchCatalogSummary = {
   dataStreams: [],
 };
 
+const opensearchCatalog: SearchCatalogSummary = {
+  identity: {
+    product: "opensearch",
+    clusterName: "OpenSearch dev",
+    clusterUuid: "fixture-opensearch",
+    version: {
+      number: "2.13.0",
+      distribution: "opensearch",
+      lucene: "9.10.0",
+    },
+    capabilities: {
+      search: false,
+      aggregations: false,
+      aliases: true,
+      mappings: true,
+      legacyIndexTemplates: true,
+      composableIndexTemplates: true,
+      deleteByQuery: false,
+    },
+    productDelta: {
+      product: "opensearch",
+      supportsElasticLicenseApi: false,
+      supportsOpensearchPluginsApi: true,
+      defaultTemplateEndpoint: "composableIndexTemplate",
+    },
+  },
+  indexes: [
+    {
+      name: "logs-opensearch-2026.05.24",
+      health: "green",
+      open: true,
+      docsCount: 3,
+      storeSizeBytes: 8192,
+      aliases: ["logs-opensearch"],
+      primaryShards: 1,
+      replicaShards: 1,
+    },
+  ],
+  aliases: [
+    {
+      name: "logs-opensearch",
+      index: "logs-opensearch-2026.05.24",
+      writeIndex: true,
+    },
+  ],
+  dataStreams: [],
+};
+
 const mapping: SearchIndexMapping = {
   index: "logs-elastic-2026.05.24",
   fields: Array.from({ length: 60 }, (_, idx) => ({
@@ -108,6 +156,22 @@ const templates: SearchIndexTemplateInfo[] = [
     indexPatterns: ["metrics-*"],
     priority: 50,
     raw: { index_patterns: ["metrics-*"] },
+  },
+];
+
+const opensearchTemplates: SearchIndexTemplateInfo[] = [
+  {
+    name: "logs-opensearch-template",
+    endpoint: "composableIndexTemplate",
+    indexPatterns: ["logs-opensearch-*"],
+    priority: 90,
+    raw: { index_patterns: ["logs-opensearch-*"] },
+  },
+  {
+    name: "logs-opensearch-legacy",
+    endpoint: "legacyIndexTemplate",
+    indexPatterns: ["logs-opensearch-*"],
+    raw: { template: "logs-opensearch-*" },
   },
 ];
 
@@ -257,6 +321,39 @@ describe("SearchIndexDetailPanel", () => {
     expect(commandCount("list_search_index_templates")).toBe(1);
     expect(commandCount("sample_search_documents")).toBe(1);
     expect(commandCount("get_search_index_field_stats")).toBe(1);
+  });
+
+  it("keeps OpenSearch index details catalog-only while exposing mapping, templates, and field paths", async () => {
+    installInvokeMock({
+      list_search_catalog_summary: opensearchCatalog,
+      list_search_index_templates: opensearchTemplates,
+    });
+    render(
+      <SearchIndexDetailPanel
+        connectionId="open-1"
+        index="logs-opensearch-2026.05.24"
+      />,
+    );
+
+    expect(await screen.findByText(/OpenSearch dev/)).toBeInTheDocument();
+    expect(screen.getByText("2.13.0")).toBeInTheDocument();
+    expect(screen.getAllByText("opensearch").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("tab", { name: /samples/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: /mapping/i }));
+    expect(await screen.findByText("60 fields")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /templates/i }));
+    expect(
+      await screen.findByText("logs-opensearch-template"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("logs-opensearch-legacy")).toBeInTheDocument();
+    expect(screen.getByText("legacyIndexTemplate")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /field stats/i }));
+    expect(await screen.findByText("status")).toBeInTheDocument();
+
+    expect(commandCount("sample_search_documents")).toBe(0);
   });
 
   it("surfaces hidden/system and error states without fetching other detail tabs", async () => {

@@ -103,6 +103,66 @@ const catalog: SearchCatalogSummary = {
   ],
 };
 
+const opensearchCatalog: SearchCatalogSummary = {
+  identity: {
+    product: "opensearch",
+    clusterName: "OpenSearch dev",
+    clusterUuid: "fixture-opensearch",
+    version: {
+      number: "2.13.0",
+      distribution: "opensearch",
+      lucene: "9.10.0",
+    },
+    capabilities: {
+      search: false,
+      aggregations: false,
+      aliases: true,
+      mappings: true,
+      legacyIndexTemplates: true,
+      composableIndexTemplates: true,
+      deleteByQuery: false,
+    },
+    productDelta: {
+      product: "opensearch",
+      supportsElasticLicenseApi: false,
+      supportsOpensearchPluginsApi: true,
+      defaultTemplateEndpoint: "composableIndexTemplate",
+    },
+  },
+  indexes: [
+    {
+      name: "logs-opensearch-2026.05.24",
+      uuid: "open-idx-1",
+      health: "green",
+      open: true,
+      docsCount: 3,
+      storeSizeBytes: 8192,
+      aliases: ["logs-open-current"],
+      primaryShards: 1,
+      replicaShards: 1,
+    },
+  ],
+  aliases: [
+    {
+      name: "logs-open-current",
+      index: "logs-opensearch-2026.05.24",
+      writeIndex: true,
+    },
+  ],
+  dataStreams: [
+    {
+      name: "logs-opensearch-default",
+      backingIndices: [".ds-logs-opensearch-default-000001"],
+      health: "green",
+      docsCount: 3,
+      storeSizeBytes: 8192,
+      primaryShards: 1,
+      replicaShards: 1,
+      hidden: false,
+    },
+  ],
+};
+
 describe("SearchSidebar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -158,6 +218,51 @@ describe("SearchSidebar", () => {
     expect(commandCount("list_search_catalog_summary")).toBe(1);
     expect(commandCount("get_search_index_mapping")).toBe(0);
     expect(commandCount("get_search_index_settings")).toBe(0);
+    expect(commandCount("sample_search_documents")).toBe(0);
+  });
+
+  it("renders OpenSearch live catalog as the same search-native shell without deep metadata", async () => {
+    invokeMock.mockResolvedValueOnce(opensearchCatalog);
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "open-1",
+          name: "OpenSearch dev",
+          dbType: "opensearch",
+          host: "localhost",
+          port: 9200,
+          user: "",
+          hasPassword: false,
+          database: "",
+          groupId: null,
+          color: null,
+          environment: null,
+          paradigm: "search",
+        },
+      ],
+      activeStatuses: { "open-1": { type: "connected" } },
+      hasLoadedOnce: true,
+    });
+
+    render(<SearchSidebar connectionId="open-1" />);
+
+    expect(await screen.findByText(/OpenSearch dev/)).toBeInTheDocument();
+    expect(screen.getByText(/2\.13\.0 · opensearch/)).toBeInTheDocument();
+    const tree = screen.getByRole("tree", {
+      name: /opensearch search catalog/i,
+    });
+    expect(
+      within(tree).getByText("logs-opensearch-2026.05.24"),
+    ).toBeInTheDocument();
+    expect(within(tree).getByText("logs-open-current")).toBeInTheDocument();
+    expect(
+      within(tree).getByText("logs-opensearch-default"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("search-catalog-status")).toHaveTextContent(
+      "1 index · 1 alias · 1 data stream",
+    );
+    expect(commandCount("list_search_catalog_summary")).toBe(1);
+    expect(commandCount("get_search_index_mapping")).toBe(0);
     expect(commandCount("sample_search_documents")).toBe(0);
   });
 
