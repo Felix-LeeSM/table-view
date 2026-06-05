@@ -35,8 +35,8 @@ import { hasConnectionCapability } from "@/types/dataSource";
  * On failure (Document `Unsupported`, PG sub-pool open error) the popover
  * stays open so the error chip stays visible alongside the toast.
  *
- * Other paradigms (`search`, `kv`) and disconnected tabs render the
- * read-only chrome — `aria-disabled="true"`, not in keyboard tab order.
+ * Search and disconnected tabs render the read-only chrome —
+ * `aria-disabled="true"`, not in keyboard tab order.
  *
  * Resolution rules for the trigger label:
  *   - Connected RDB connection → `activeStatuses[id].activeDb`
@@ -62,7 +62,7 @@ function readOnlyTooltipCopy(args: {
   if (!args.hasActiveTab) {
     return "Open a connection to switch databases.";
   }
-  if (args.paradigm === "kv" || args.paradigm === "search") {
+  if (args.paradigm === "search") {
     return "Database switching isn't supported for this connection type.";
   }
   if (args.dbType === "sqlite") {

@@ -218,17 +218,27 @@ describe("DbSwitcher", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("stays read-only for kv paradigm even when connected", () => {
+  it("renders an active switcher for kv paradigm when connected", async () => {
     setStores({
       paradigm: "kv",
       connected: true,
       dbType: "redis",
       tab: makeQueryTab({ paradigm: "kv" }),
+      activeDb: "0",
     });
+    listDatabasesMock.mockResolvedValueOnce([{ name: "0" }, { name: "1" }]);
     render(<DbSwitcher />);
-    expect(
-      screen.getByRole("button", { name: /active database \(read-only\)/i }),
-    ).toBeInTheDocument();
+    const trigger = screen.getByRole("button", {
+      name: /active database switcher/i,
+    });
+    expect(trigger.textContent).toMatch(/0/);
+
+    fireEvent.click(trigger);
+
+    const listbox = await screen.findByRole("listbox", {
+      name: /available databases/i,
+    });
+    expect(within(listbox).getAllByRole("option")).toHaveLength(2);
   });
 
   it("stays read-only for search paradigm even when connected", () => {

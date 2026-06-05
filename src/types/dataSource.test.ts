@@ -131,14 +131,14 @@ describe("DataSourceProfile registry", () => {
       },
     }),
     redis: expectedCapabilities({
-      connection: { test: true },
+      connection: { test: true, switchDatabase: true },
       query: { query: true },
       catalog: { browse: true },
       edit: { editKeys: true },
       paradigmSpecific: { keyBrowser: true },
     }),
     valkey: expectedCapabilities({
-      connection: { test: true },
+      connection: { test: true, switchDatabase: true },
       query: { query: true },
       catalog: { browse: true },
       paradigmSpecific: { keyBrowser: true },
@@ -303,7 +303,7 @@ describe("DataSourceProfile registry", () => {
     });
     expect(redis.capabilities.paradigmSpecific.keyBrowser).toBe(true);
     expect(redis.resultKinds).toEqual(["keyValue", "streamRecords", "tabular"]);
-    expect(redis.capabilities.connection.switchDatabase).toBe(false);
+    expect(redis.capabilities.connection.switchDatabase).toBe(true);
     expect(redis.capabilities.edit.editKeys).toBe(true);
     expect(redis.capabilities.paradigmSpecific.streamConsumer).toBe(false);
   });
@@ -493,14 +493,14 @@ describe("DataSourceProfile registry", () => {
     }
   });
 
-  it("keeps switch-database capability enabled for RDBMS profiles and disabled for non-toolbar profiles", () => {
+  it("keeps switch-database capability enabled for toolbar database contexts", () => {
     expect(hasConnectionCapability("postgresql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mysql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mariadb", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);
-    expect(hasConnectionCapability("redis", "switchDatabase")).toBe(false);
-    expect(hasConnectionCapability("valkey", "switchDatabase")).toBe(false);
+    expect(hasConnectionCapability("redis", "switchDatabase")).toBe(true);
+    expect(hasConnectionCapability("valkey", "switchDatabase")).toBe(true);
   });
 
   it("keeps SQLite file picker and read-only capabilities explicit while missing profiles stay disabled", () => {

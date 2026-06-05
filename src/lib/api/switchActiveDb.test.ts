@@ -45,7 +45,7 @@ describe("switchActiveDb (Sprint 130 wrapper)", () => {
         "Unsupported operation: Search paradigm has no per-connection database concept",
       ),
     );
-    await expect(switchActiveDb("conn-redis", "anything")).rejects.toThrow(
+    await expect(switchActiveDb("conn-search", "anything")).rejects.toThrow(
       /Unsupported/,
     );
   });

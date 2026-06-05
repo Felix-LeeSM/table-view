@@ -182,13 +182,13 @@ const DEFERRED_FEATURES = Object.freeze({
     edit: ["edit.editRows", "edit.editKeys"],
   },
   redis: {
-    connection: ["connection.switchDatabase"],
+    connection: [],
     catalog: ["catalog.schema", "catalog.indexes", "catalog.relationships"],
     query: ["query.query", "query.cancel", "query.explain"],
     edit: ["edit.bulkWrite"],
   },
   valkey: {
-    connection: ["connection.switchDatabase"],
+    connection: [],
     catalog: ["catalog.schema", "catalog.indexes", "catalog.relationships"],
     query: ["query.cancel", "query.explain"],
     edit: ["edit.editKeys", "edit.bulkWrite"],

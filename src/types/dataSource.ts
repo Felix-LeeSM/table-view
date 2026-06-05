@@ -362,6 +362,7 @@ export const MONGODB_CAPABILITIES = capabilities({
 export const REDIS_CAPABILITIES = capabilities({
   connection: {
     test: true,
+    switchDatabase: true,
   },
   query: {
     query: true,
@@ -381,6 +382,7 @@ export const REDIS_CAPABILITIES = capabilities({
 export const VALKEY_CAPABILITIES = capabilities({
   connection: {
     test: true,
+    switchDatabase: true,
   },
   query: {
     query: true,

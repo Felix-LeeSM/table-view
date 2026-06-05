@@ -58,7 +58,12 @@ describe("KvSidebar", () => {
           { name: "1", index: 1, keyCount: 0 },
         ]);
       }
-      if (command === "current_kv_database") return Promise.resolve(0);
+      if (command === "current_kv_database") {
+        const id = (payload as { connectionId: string }).connectionId;
+        const status = useConnectionStore.getState().activeStatuses[id];
+        const raw = status?.type === "connected" ? status.activeDb : "0";
+        return Promise.resolve(Number.parseInt(raw ?? "0", 10) || 0);
+      }
       if (command === "switch_kv_database") {
         return Promise.resolve((payload as { database: number }).database);
       }
@@ -76,17 +81,14 @@ describe("KvSidebar", () => {
     render(<KvSidebar connectionId="redis-1" />);
 
     await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith("list_kv_databases", {
-        connectionId: "redis-1",
-      });
       expect(invokeMock).toHaveBeenCalledWith("current_kv_database", {
         connectionId: "redis-1",
       });
     });
     expect(scanRequests()).toHaveLength(0);
     expect(
-      screen.getByRole("combobox", { name: /redis database/i }),
-    ).toHaveTextContent("DB 0");
+      screen.queryByRole("combobox", { name: /redis database/i }),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("redis-scan-status")).toHaveTextContent(
       /scan paused/i,
     );
@@ -154,9 +156,6 @@ describe("KvSidebar", () => {
     });
     await renderAndScan("valkey-1");
 
-    expect(
-      await screen.findByRole("combobox", { name: /valkey database/i }),
-    ).toBeInTheDocument();
     const tree = await screen.findByRole("tree", { name: /valkey keys/i });
 
     fireEvent.click(
@@ -167,25 +166,21 @@ describe("KvSidebar", () => {
     expect(screen.queryByText("Mutation")).not.toBeInTheDocument();
   });
 
-  it("switches database through KV IPC without bypassing Safe Mode key scan", async () => {
-    render(<KvSidebar connectionId="redis-1" />);
-    const selector = await screen.findByRole("combobox", {
-      name: /redis database/i,
-    });
+  it("uses the toolbar active database for key scans", async () => {
+    const { rerender } = render(<KvSidebar connectionId="redis-1" />);
 
-    fireEvent.click(selector);
-    fireEvent.click(await screen.findByRole("option", { name: /DB 1/ }));
+    useConnectionStore.setState({
+      activeStatuses: { "redis-1": { type: "connected", activeDb: "1" } },
+    });
+    rerender(<KvSidebar connectionId="redis-1" />);
+
+    await clickScanButton();
 
     await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith("switch_kv_database", {
-        connectionId: "redis-1",
-        database: 1,
-      });
+      const requests = scanRequests();
+      expect(requests[requests.length - 1]).toMatchObject({ database: 1 });
     });
-    expect(scanRequests()).toHaveLength(0);
-    expect(screen.getByTestId("redis-scan-status")).toHaveTextContent(
-      /scan paused/i,
-    );
+    expect(commandCalls("switch_kv_database")).toHaveLength(0);
   });
 
   it("waits for catalog before the Safe Mode off entry scan", async () => {
@@ -498,6 +493,10 @@ function scanRequests() {
   return invokeMock.mock.calls
     .filter(([command]) => command === "scan_kv_keys")
     .map(([, payload]) => (payload as { request: unknown }).request);
+}
+
+function commandCalls(commandName: string) {
+  return invokeMock.mock.calls.filter(([command]) => command === commandName);
 }
 
 async function renderAndScan(connectionId = "redis-1") {
