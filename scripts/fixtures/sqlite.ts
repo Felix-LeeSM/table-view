@@ -4,10 +4,10 @@
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { tmpdir } from "node:os";
 import type { BaseSpec, Column, ResolvedSpec } from "./spec.js";
 import type { EntityRows } from "./generator.js";
 import { entityOrder } from "./spec.js";
+import { defaultFileFixtureDir } from "./paths.js";
 
 export interface SqliteFixturePath {
   directory: string;
@@ -22,9 +22,7 @@ export function sqliteEnvPath(): SqliteFixturePath {
 }
 
 function defaultFixtureDir(): string {
-  if (process.env.TABLE_VIEW_TEST_DATA_DIR)
-    return resolve(process.env.TABLE_VIEW_TEST_DATA_DIR, "fixtures", "sqlite");
-  return resolve(tmpdir(), "table-view-fixtures", "sqlite");
+  return defaultFileFixtureDir("sqlite");
 }
 
 function resolveDbPath(path: SqliteFixturePath, fileName: string): string {

@@ -62,5 +62,10 @@ if [ "$checked" -eq 0 ]; then
     exit 1
 fi
 
+if [ "$rc" -eq 0 ] && docker ps --format '{{.Names}}' | grep -q "^table_view_redis$"; then
+    echo "Seeding redis fixture..."
+    pnpm fixtures:load development --target redis --quiet
+fi
+
 [ "$rc" -eq 0 ] && echo "All fixture databases ready." || echo "ERROR: one or more failed to ready." >&2
 exit "$rc"

@@ -7,10 +7,10 @@ import duckdb, {
 } from "duckdb";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { tmpdir } from "node:os";
 import type { BaseSpec, Column, ResolvedSpec } from "./spec.js";
 import type { EntityRows } from "./generator.js";
 import { entityOrder } from "./spec.js";
+import { defaultFileFixtureDir } from "./paths.js";
 
 export interface DuckdbFixturePath {
   directory: string;
@@ -25,9 +25,7 @@ export function duckdbEnvPath(): DuckdbFixturePath {
 }
 
 function defaultFixtureDir(): string {
-  if (process.env.TABLE_VIEW_TEST_DATA_DIR)
-    return resolve(process.env.TABLE_VIEW_TEST_DATA_DIR, "fixtures", "duckdb");
-  return resolve(tmpdir(), "table-view-fixtures", "duckdb");
+  return defaultFileFixtureDir("duckdb");
 }
 
 function resolveDbPath(path: DuckdbFixturePath, fileName: string): string {

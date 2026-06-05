@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -24,13 +25,16 @@ afterEach(() => {
 });
 
 describe("sqlite fixture DDL", () => {
-  it("defaults fixture files to OS temp rather than app data", () => {
+  it("defaults fixture files to the primary worktree tmp directory", () => {
     delete process.env.TABLE_VIEW_TEST_DATA_DIR;
     delete process.env.SQLITE_FIXTURE_DIR;
 
     const path = sqliteEnvPath();
 
     expect(path.directory).toBe(
+      resolve(primaryWorktreeRootForTest(), "tmp", "fixtures", "sqlite"),
+    );
+    expect(path.directory).not.toBe(
       resolve(tmpdir(), "table-view-fixtures", "sqlite"),
     );
     expect(path.directory).not.toContain("Application Support");
@@ -80,4 +84,18 @@ describe("sqlite fixture DDL", () => {
 function restoreEnv(key: string, value: string | undefined): void {
   if (value === undefined) delete process.env[key];
   else process.env[key] = value;
+}
+
+function primaryWorktreeRootForTest(): string {
+  const output = execFileSync("git", ["worktree", "list", "--porcelain"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  return (
+    output
+      .split(/\r?\n/)
+      .find((line) => line.startsWith("worktree "))
+      ?.slice("worktree ".length)
+      .trim() ?? process.cwd()
+  );
 }

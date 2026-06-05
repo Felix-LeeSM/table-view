@@ -32,7 +32,14 @@
     "db:seed": "tsx scripts/fixtures/index.ts seed",
     "db:reset": "tsx scripts/fixtures/index.ts reset",
     "db:connections": "tsx scripts/fixtures/index.ts connections",
-    "db:generate": "tsx scripts/fixtures/index.ts generate"
+    "db:generate": "tsx scripts/fixtures/index.ts generate",
+    "fixtures:start": "docker compose up -d && ./scripts/db/wait.sh",
+    "fixtures:stop": "docker compose down -v",
+    "fixtures:load": "tsx scripts/fixtures/index.ts load",
+    "fixtures:rebuild": "tsx scripts/fixtures/index.ts rebuild",
+    "fixtures:preview": "tsx scripts/fixtures/index.ts preview",
+    "fixtures:register-connections": "tsx scripts/fixtures/index.ts register-connections",
+    "fixtures:clear-connections": "tsx scripts/fixtures/index.ts clear-connections"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",

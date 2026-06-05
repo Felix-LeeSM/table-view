@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Fixture CLI entry — `tsx scripts/fixtures/index.ts <subcommand> [args]`.
-// Subcommands: seed | reset | connections | generate
+// Preferred subcommands: load | rebuild | preview | register-connections | clear-connections.
+// Legacy subcommands remain: seed | reset | generate | connections.
 import { entityOrder, loadSpec } from "./spec.js";
 import { generateAll } from "./generator.js";
 import {
@@ -112,9 +113,10 @@ async function cmdSeed(
   profile: string,
   target: Target,
   isQuiet: boolean,
+  label = "fixtures:load",
 ): Promise<void> {
   const spec = loadSpec(profile);
-  console.log(`db:seed ${profile} (target=${target})`);
+  console.log(`${label} ${profile} (target=${target})`);
 
   const counts: Counts = {};
   const t0 = Date.now();
@@ -311,9 +313,10 @@ async function cmdReset(
   profile: string,
   target: Target,
   isQuiet: boolean,
+  label = "fixtures:rebuild",
 ): Promise<void> {
   const spec = loadSpec(profile);
-  console.log(`db:reset ${profile} (target=${target})`);
+  console.log(`${label} ${profile} (target=${target})`);
 
   const counts: Counts = {};
   const t0 = Date.now();
@@ -471,22 +474,26 @@ async function cmdReset(
   );
 }
 
-async function cmdConnections(action: string, profile: string): Promise<void> {
+async function cmdConnections(
+  action: string,
+  profile: string,
+  label: string,
+): Promise<void> {
   if (action === "upsert") {
     const spec = loadSpec(profile);
     const r = await upsertConnections(spec, { ensureMysql: true });
-    console.log(
-      `db:connections upsert ${profile} — added=${r.added}, updated=${r.updated}`,
-    );
+    console.log(`${label} ${profile} — added=${r.added}, updated=${r.updated}`);
   } else if (action === "clear") {
     const r = clearConnections();
-    console.log(
-      `db:connections clear — removed=${r.removed} fixture-* connection(s)`,
-    );
+    console.log(`${label} — removed=${r.removed} fixture-* connection(s)`);
   } else if (action === "") {
     console.error(
       [
         "Usage:",
+        "  pnpm fixtures:register-connections <profile>",
+        "  pnpm fixtures:clear-connections",
+        "",
+        "Legacy aliases:",
         "  pnpm db:connections upsert <profile>",
         "  pnpm db:connections clear",
         "",
@@ -495,9 +502,9 @@ async function cmdConnections(action: string, profile: string): Promise<void> {
         "  e2e          — 200-1500 rows, e2e fixture (dormant)",
         "",
         "Examples:",
-        "  pnpm db:connections upsert development",
-        "  pnpm db:connections upsert e2e",
-        "  pnpm db:connections clear",
+        "  pnpm fixtures:register-connections development",
+        "  pnpm fixtures:register-connections e2e",
+        "  pnpm fixtures:clear-connections",
       ].join("\n"),
     );
     process.exit(2);
@@ -508,10 +515,14 @@ async function cmdConnections(action: string, profile: string): Promise<void> {
   }
 }
 
-function cmdGenerate(profile: string, target: Target): void {
+function cmdGenerate(
+  profile: string,
+  target: Target,
+  label = "fixtures:preview",
+): void {
   const spec = loadSpec(profile);
   const rows = generateAll(spec);
-  console.log(`# db:generate ${profile} (target=${target})`);
+  console.log(`# ${label} ${profile} (target=${target})`);
   for (const entityName of entityOrder(spec.base)) {
     const entity = spec.base.entities[entityName];
     if (!entity) continue;
@@ -549,6 +560,18 @@ function formatEntity(
 function usage(): string {
   return [
     "Usage:",
+    "  pnpm fixtures:load <profile> [--target <db>] [--quiet]",
+    "      Fill empty fixture databases; skip already-populated targets.",
+    "  pnpm fixtures:rebuild <profile> [--target <db>] [--quiet]",
+    "      Drop/recreate fixture data, then load it again.",
+    "  pnpm fixtures:preview <profile> [--target <db>]",
+    "      Print generated sample data only; no database writes.",
+    "  pnpm fixtures:register-connections <profile>",
+    "      Add/update fixture connections in app storage.",
+    "  pnpm fixtures:clear-connections",
+    "      Remove fixture-* connections from app storage.",
+    "",
+    "Legacy aliases:",
     "  pnpm db:seed <profile> [--target <db>] [--quiet]",
     "  pnpm db:reset <profile> [--target <db>] [--quiet]",
     "  pnpm db:connections upsert <profile>",
@@ -565,17 +588,19 @@ async function main(): Promise<void> {
   const isQuiet = quiet(options);
 
   switch (subcommand) {
+    case "load":
     case "seed": {
       const profile = positional[0];
       if (!profile)
-        throw new Error(`'seed' requires a profile name.\n${usage()}`);
+        throw new Error(`'${subcommand}' requires a profile name.\n${usage()}`);
       await cmdSeed(profile, target, isQuiet);
       break;
     }
+    case "rebuild":
     case "reset": {
       const profile = positional[0];
       if (!profile)
-        throw new Error(`'reset' requires a profile name.\n${usage()}`);
+        throw new Error(`'${subcommand}' requires a profile name.\n${usage()}`);
       await cmdReset(profile, target, isQuiet);
       break;
     }
@@ -584,13 +609,29 @@ async function main(): Promise<void> {
       const profile = positional[1] ?? "";
       if (action === "upsert" && !profile)
         throw new Error(`'connections upsert' requires a profile name.`);
-      await cmdConnections(action, profile);
+      await cmdConnections(
+        action,
+        profile,
+        `db:connections${action ? ` ${action}` : ""}`,
+      );
       break;
     }
+    case "register-connections": {
+      const profile = positional[0] ?? "";
+      if (!profile)
+        throw new Error(`'register-connections' requires a profile name.`);
+      await cmdConnections("upsert", profile, "fixtures:register-connections");
+      break;
+    }
+    case "clear-connections": {
+      await cmdConnections("clear", "", "fixtures:clear-connections");
+      break;
+    }
+    case "preview":
     case "generate": {
       const profile = positional[0];
       if (!profile)
-        throw new Error(`'generate' requires a profile name.\n${usage()}`);
+        throw new Error(`'${subcommand}' requires a profile name.\n${usage()}`);
       cmdGenerate(profile, target);
       break;
     }
@@ -605,7 +646,7 @@ main().catch((err: unknown) => {
   console.error(`error: ${msg}`);
   if (err instanceof Error && err.stack) console.error(err.stack);
   console.error(
-    "Use 'pnpm db:reset <profile>' to recover from partial-state failures.",
+    "Use 'pnpm fixtures:rebuild <profile>' to recover from partial-state failures. Legacy alias: 'pnpm db:reset <profile>'.",
   );
   process.exit(1);
 });
