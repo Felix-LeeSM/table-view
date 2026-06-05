@@ -42,7 +42,11 @@ bounded live `_search` dispatch, result rendering, sample documents, HTTP error
 surfacing, cancellation, and shared Search DSL safety validation before live
 dispatch. `search-dsl` full language-core parser/completion ownership stays
 future; the current active safety surface is backend request validation plus
-bounded TypeScript editor assistance.
+bounded TypeScript editor assistance. OpenSearch support closure stays separate
+from Elasticsearch: shared validator/result-renderer evidence covers common
+bounded Search behavior, but OpenSearch-specific product detection,
+Elasticsearch endpoint rejection, composable/legacy templates, sample documents,
+and product-scoped completion must remain named.
 
 `sql` is active for connection-supported SQL/RDBMS profiles only. MSSQL and
 Oracle carry planned `sql` profile metadata, but their capabilities are empty;

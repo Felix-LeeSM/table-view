@@ -16,7 +16,7 @@
 경계, fixture/live evidence 가 같이 있는 범위만 의미한다.
 
 - Active connection UI/runtime 대상: PostgreSQL, MySQL, MariaDB, SQLite,
-  DuckDB, MongoDB, Redis, Valkey, Elasticsearch.
+  DuckDB, MongoDB, Redis, Valkey, Elasticsearch, OpenSearch.
 - RDBMS workbench: catalog/tree browse, tabular result rendering, raw query path,
   bounded DML/row-edit path, source-specific safety confirmation. PostgreSQL 이
   routine desktop smoke-backed 주 lane 이고 MySQL/MariaDB 는 runtime smoke
@@ -63,7 +63,9 @@
   mapping-aware Search DSL editor completion 을 지원한다.
   Elasticsearch/OpenSearch Runtime Happy Path smoke 는 live runtime evidence 이고
   Search fixture files 는 contract evidence 다. Actual live `_delete_by_query`
-  execution and actual Search admin execution 은 deferred 다.
+  execution and actual Search admin execution 은 deferred 다. Support closure 는
+  Elasticsearch 와 OpenSearch product-specific probe/catalog/completion deltas 를
+  분리해서 기록한다.
 - MSSQL/Oracle: declared planned RDBMS identities and static seed contracts only.
   connection UI/runtime/parser/completion support 는 아직 없다.
 
@@ -112,7 +114,7 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 포함한다. Profile 존재는 곧 runtime support claim 이 아니다. 현재 connection dialog
 와 runtime connection support 는 `capabilities.connection.test` 가 true 인
 PostgreSQL, MySQL, MariaDB, SQLite, DuckDB, MongoDB, Redis, Valkey,
-Elasticsearch 로 제한된다.
+Elasticsearch, OpenSearch 로 제한된다.
 Valkey 는 KV runtime slice 이며 `connection.test`, `query.query`,
 `catalog.browse`, `paradigmSpecific.keyBrowser` 가 true 다.
 `e2e/fixtures/seed.valkey.json` 는 wired Valkey Runtime Happy Path seed 이고,
