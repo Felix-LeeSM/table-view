@@ -96,6 +96,7 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
 
 function verifySearchConnectionPromotionBoundary(): void {
   const elasticsearch = getDataSourceProfile("elasticsearch");
+  const opensearch = getDataSourceProfile("opensearch");
 
   assert(
     isSupportedDatabaseType("elasticsearch"),
@@ -117,12 +118,23 @@ function verifySearchConnectionPromotionBoundary(): void {
     "elasticsearch: bounded live query/cancel should be exposed without explain",
   );
   assert(
-    !isSupportedDatabaseType("opensearch"),
-    "opensearch: fixture-backed search must not be advertised as connectable",
+    isSupportedDatabaseType("opensearch"),
+    "opensearch: live root-probe connection test should be advertised as connectable",
   );
   assert(
-    !hasConnectionCapability("opensearch", "test"),
-    "opensearch: fixture-backed search must not expose live test capability",
+    hasConnectionCapability("opensearch", "test"),
+    "opensearch: live root-probe connection test capability should be exposed",
+  );
+  assert(
+    !opensearch.capabilities.catalog.browse &&
+      !opensearch.capabilities.catalog.indexes,
+    "opensearch: root-probe slice must not expose catalog browse/index capability",
+  );
+  assert(
+    !opensearch.capabilities.query.query &&
+      !opensearch.capabilities.query.cancel &&
+      !opensearch.capabilities.query.explain,
+    "opensearch: root-probe slice must not expose query/cancel/explain capability",
   );
 }
 
