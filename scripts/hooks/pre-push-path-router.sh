@@ -337,6 +337,7 @@ run_hook_gates() {
 	run_step "lefthook-validate" lefthook validate
 	run_step_in "nextest-push-profile-config" src-tauri cargo nextest --no-pager show-config version --profile push
 	run_step "coverage-ratchet-tests" bash scripts/hooks/test-coverage-ratchet.sh
+	run_step "target-cache-tests" bash scripts/hooks/test-target-cache.sh
 	run_step "pre-push-router-tests" bash scripts/hooks/test-pre-push-path-router.sh
 }
 

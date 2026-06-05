@@ -3,7 +3,8 @@
 #
 # No automatic stale judgment, no separate cache directory, and no lock. Run it
 # explicitly when you want to warm a checkout or copy one checkout's Rust target
-# caches into another.
+# caches into another. Test binaries are the main payload: default warm-up must
+# keep both the debug nextest lane and the llvm-cov nextest lane hot.
 
 set -euo pipefail
 
@@ -25,21 +26,23 @@ usage() {
 target-cache.sh - manual Rust target helper
 
 Usage:
-  bash scripts/target-cache.sh warm-rust-debug [repo-root]
-  bash scripts/target-cache.sh warm-rust-coverage [repo-root]
+  bash scripts/target-cache.sh [repo-root]
+  bash scripts/target-cache.sh --debug-only [repo-root]
+  bash scripts/target-cache.sh --coverage-only [repo-root]
   bash scripts/target-cache.sh copy <source-repo-root> <target-repo-root>
   bash scripts/target-cache.sh copy-from <source-repo-root> [target-repo-root]
   bash scripts/target-cache.sh copy-to <target-repo-root> [source-repo-root]
 
 Behavior:
-  warm-rust-debug     compile cargo-check and push-profile test binaries
-  warm-rust-coverage  compile llvm-cov push-profile test binaries without running tests
+  warm-all            compile all routine Rust test warm-start caches (default)
+  --debug-only        compile cargo-check and push-profile test binaries
+  --coverage-only     compile llvm-cov push-profile test binaries without running tests
   copy                overlay Rust target caches from source repo into target repo
 
 Copy notes:
   - copy uses rsync --ignore-existing, so existing target files are not replaced.
   - top-level release, tmp, incremental, profraw, and profdata outputs are excluded.
-  - llvm-cov-target and DuckDB native build outputs are preserved.
+  - debug/coverage test deps, llvm-cov-target, and DuckDB native build outputs are preserved.
   - SQL/Mongo parser-core target caches are copied when present.
   - Generated WASM artifacts are tracked files and are not copied. Use pnpm
     build:sql-wasm and pnpm build:mongosh-wasm when those artifacts must change.
@@ -167,10 +170,35 @@ warm_rust_coverage() {
   echo "target-cache: llvm-cov warm-up complete" >&2
 }
 
+warm_all() {
+  local root
+  root="$(repo_root "${1:-$SCRIPT_ROOT}")"
+
+  echo "target-cache: warming all routine Rust target caches in $root" >&2
+  warm_rust_debug "$root"
+  warm_rust_coverage "$root"
+  echo "target-cache: all warm-ups complete" >&2
+}
+
 command="${1:-}"
 case "$command" in
+  "")
+    warm_all "$SCRIPT_ROOT"
+    ;;
   --help | -h | help)
     usage
+    ;;
+  warm-all | all)
+    shift
+    warm_all "${1:-$SCRIPT_ROOT}"
+    ;;
+  --debug-only | --debug)
+    shift
+    warm_rust_debug "${1:-$SCRIPT_ROOT}"
+    ;;
+  --coverage-only | --coverage)
+    shift
+    warm_rust_coverage "${1:-$SCRIPT_ROOT}"
     ;;
   warm-rust-debug)
     shift
@@ -207,8 +235,17 @@ case "$command" in
     fi
     copy_target "$(repo_root "${2:-$SCRIPT_ROOT}")" "$(repo_root "$1")"
     ;;
-  *)
+  -*)
+    echo "ERROR: unknown option: $command" >&2
     usage >&2
     exit 1
+    ;;
+  *)
+    if git -C "$command" rev-parse --show-toplevel >/dev/null 2>&1; then
+      warm_all "$command"
+    else
+      usage >&2
+      exit 1
+    fi
     ;;
 esac
