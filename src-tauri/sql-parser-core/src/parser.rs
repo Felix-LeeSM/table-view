@@ -301,6 +301,35 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Consume `ident` or `ident.ident` and return the dotted display
+    /// form. Used by legacy AST fields that store table names as strings.
+    fn parse_qualified_ident_string(&mut self, msg: &str) -> Result<String, ParseError> {
+        let first = self.expect_ident(msg)?;
+        if !matches!(self.peek().map(|t| &t.token), Some(Token::Dot)) {
+            return Ok(first);
+        }
+        self.advance();
+        let second = self.expect_ident("expected identifier after '.'")?;
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Dot)) {
+            let at = self.peek().map(|t| t.at);
+            return Err(syntax_err(at, "three-dot identifier qualifier unsupported"));
+        }
+        Ok(format!("{first}.{second}"))
+    }
+
+    fn parse_qualified_ident_string_list(&mut self, msg: &str) -> Result<Vec<String>, ParseError> {
+        let mut out: Vec<String> = Vec::new();
+        loop {
+            out.push(self.parse_qualified_ident_string(msg)?);
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        Ok(out)
+    }
+
     /// Consume an exact punctuation/keyword token. Like `expect_keyword`
     /// but the message is supplied per-call.
     fn expect_token(&mut self, expected: Token, msg: &str) -> Result<(), ParseError> {

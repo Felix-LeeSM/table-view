@@ -52,13 +52,13 @@ contract 도 profile registry 에서 읽고 ad-hoc `dbType` switch 로 분산하
 Capability 가 없으면 UI 는 hide/disable + fallback 을 보여준다. Runtime optimistic
 failure 를 기본 동작으로 만들지 않는다.
 
-MSSQL is factory-backed for lifecycle + bounded relational query execution:
-SQL Server connection/auth/encryption/instance and tabular result envelopes are
-promoted. RDB catalog/edit/admin, parser/Safe Mode, fixture/live smoke, and E2E
-evidence remain separate contracts. Oracle is factory-backed for service-name
-connection lifecycle only. Oracle query/catalog/edit, SID/TNS/wallet/TLS,
-Oracle SQL/PLSQL owner, RDB safety, fixture/live smoke, and E2E evidence remain
-separate contracts.
+MSSQL is factory-backed for lifecycle + bounded relational query execution, and
+its parser/Safe Mode boundary is promoted for the supported T-SQL slice. SQL
+Server catalog/edit/admin, fixture/live smoke, E2E evidence, and broader T-SQL
+semantic parity remain separate contracts. Oracle is factory-backed for
+service-name connection lifecycle only. Oracle query/catalog/edit, SID/TNS,
+wallet/TLS, Oracle SQL/PLSQL owner, RDB safety, fixture/live smoke, and E2E
+evidence remain separate contracts.
 
 Search identities (`elasticsearch`, `opensearch`) 는 fixture-backed/deferred profile
 이며 live HTTP connection/query claim 은 capability 가 켜질 때까지 하지 않는다.

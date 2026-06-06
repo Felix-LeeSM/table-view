@@ -19,7 +19,7 @@ TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 
 - **MongoDB**: 데이터베이스/컬렉션 탐색, 도큐먼트 그리드, find/aggregate/insert/update/delete/bulkWrite, 인덱스와 validator 관리, collection/server 진단 명령을 지원합니다. 임의 JavaScript를 실행하지 않고 허용된 `db....` 워크플로우만 파싱해 dispatch 합니다.
 - **Redis**: 연결/profile, backend KV primitive, key browser, value preview가 있습니다. value edit, TTL 변경, guarded string write, bounded stream UI는 후속입니다.
 - **Elasticsearch/OpenSearch**: 현재 fixture-backed Search adapter/result slice만 있습니다. Live HTTP 연결 UI와 catalog/query execution은 후속입니다.
-- **MSSQL**: SQL authentication 연결/버전 probe와 bounded SELECT/DML query runtime이 있습니다. catalog/edit/parser/Safe Mode, fixture smoke, desktop E2E parity는 후속입니다.
+- **MSSQL**: SQL authentication 연결/버전 probe, bounded SELECT/DML query runtime, bounded static parser/Safe Mode metadata가 있습니다. catalog/edit, runtime Safe Mode smoke, fixture smoke, desktop E2E parity, full T-SQL semantic parity는 후속입니다.
 - **Oracle**: connection UI와 서비스명 기반 runtime test/connect path가 있습니다. SID, TNS alias, wallet/TLS, catalog/query/edit/DDL은 후속입니다. 기본 dev/e2e fixture connection으로 추가되지 않습니다.
 
 세부 쿼리/자동완성 범위는 [`docs/product/query-language-support.md`](./docs/product/query-language-support.md)에 정리되어 있습니다.

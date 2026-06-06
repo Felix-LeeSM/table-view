@@ -165,13 +165,10 @@ fn ac_p8_delete_is_now_supported_statement() {
 
 #[test]
 fn ac_p8_create_unknown_type_is_syntax_error() {
-    // Sprint-394 — CREATE TABLE is supported, but `int` is not in
-    // the column-type allowlist (the sprint-394 grammar accepts
-    // INTEGER / BIGINT / etc.). The parser surfaces a SyntaxError
-    // on the inner type position. Use `EXPLAIN` to keep an
-    // UnsupportedStatement smoke-test alive for known-but-unsupported
-    // verbs.
-    let e = err("CREATE TABLE t (id int)");
+    // CREATE TABLE is supported, but broad vendor aliases remain outside
+    // the column-type allowlist. The parser surfaces a SyntaxError on
+    // the inner type position.
+    let e = err("CREATE TABLE t (id STRING)");
     assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
 }
 
@@ -1699,14 +1696,19 @@ fn ac_391_a13_alter_table_drop_column_missing_name_is_syntax_error() {
 
 #[test]
 fn ac_391_a14_alter_table_add_column_is_supported_post_394() {
-    // Sprint-394 — ADD COLUMN is now an accepted additive ALTER
-    // action. The sprint-391 test asserted `UnsupportedStatement` for
-    // the same input; the assertion is updated to reflect the widened
-    // grammar. A vendor-only type name (`int`) still fails because the
-    // type-name allowlist is INTEGER (see AC-394-T21), so the parser
-    // surfaces a SyntaxError on the inner column-type instead.
-    let e = err("ALTER TABLE users ADD COLUMN x int");
-    assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    let s = ok_alter("ALTER TABLE users ADD COLUMN x INT");
+    assert_eq!(s.table, "users");
+    assert!(matches!(
+        s.action,
+        AlterAction::AddColumn {
+            column: ColumnDefinition {
+                name,
+                data_type: ColumnType::Integer,
+                ..
+            },
+            if_not_exists: false,
+        } if name == "x"
+    ));
 }
 
 #[test]
@@ -4576,6 +4578,131 @@ fn ac_394_extra_create_table_table_ref_serializes_with_schema_and_table() {
     let json = serde_json::to_value(&r).expect("serialize");
     assert_eq!(json["table"]["schema"], "public");
     assert_eq!(json["table"]["table"], "users");
+}
+
+// =================================================================
+// Issue 512 — bounded MSSQL parser / Safe Mode grammar surface.
+// =================================================================
+
+#[test]
+fn ac_512_s01_select_top_with_bracket_identifiers() {
+    let s = ok_select("SELECT TOP (10) [id], [name] FROM [dbo].[users] WHERE [id] = 1");
+    assert!(matches!(
+        s.limit.as_ref().map(|limit| &limit.count),
+        Some(InsertValue::Literal {
+            value: SqlLiteral::Integer { value: 10 }
+        })
+    ));
+    assert_eq!(s.from[0].schema.as_deref(), Some("dbo"));
+    assert_eq!(s.from[0].table, "users");
+    assert!(s.where_clause.is_some());
+}
+
+#[test]
+fn ac_512_s02_select_top_rejects_percent_and_with_ties() {
+    for sql in [
+        "SELECT TOP (10) PERCENT [id] FROM [dbo].[users]",
+        "SELECT TOP (10) WITH TIES [id] FROM [dbo].[users]",
+    ] {
+        let e = err(sql);
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError, "sql={sql}");
+    }
+}
+
+#[test]
+fn ac_512_s02b_top_stays_contextual_identifier() {
+    let s = ok_select("SELECT top FROM users");
+    assert_eq!(
+        s.columns,
+        Columns::Named {
+            names: vec!["top".to_string()]
+        }
+    );
+    assert!(s.limit.is_none());
+}
+
+#[test]
+fn ac_512_s03_tsql_dml_with_schema_brackets_and_unicode_strings() {
+    let insert = ok_insert("INSERT INTO [dbo].[users] ([id], [name]) VALUES (1, N'Alice')");
+    assert_eq!(insert.table, "dbo.users");
+    assert_eq!(insert.columns, vec!["id".to_string(), "name".to_string()]);
+
+    let update = ok_update("UPDATE [dbo].[users] SET [name] = N'Alice' WHERE [id] = 1");
+    assert_eq!(update.table, "dbo.users");
+    assert!(update.where_clause.is_some());
+
+    let delete = ok_delete("DELETE FROM [dbo].[users] WHERE [id] = 1");
+    assert_eq!(delete.table, "dbo.users");
+    assert!(delete.where_clause.is_some());
+}
+
+#[test]
+fn ac_512_s04_tsql_destructive_ddl_with_schema_brackets() {
+    let drop = ok_drop("DROP TABLE [dbo].[users]");
+    assert_eq!(drop.object_type, DropObjectType::Table);
+    assert_eq!(drop.name, "dbo.users");
+
+    let truncate = ok_truncate("TRUNCATE TABLE [dbo].[users]");
+    assert_eq!(truncate.table, "dbo.users");
+
+    let alter = ok_alter("ALTER TABLE [dbo].[users] DROP COLUMN [email]");
+    assert_eq!(alter.table, "dbo.users");
+    assert!(matches!(
+        alter.action,
+        AlterAction::DropColumn {
+            column,
+            if_exists: false,
+            cascade: None,
+        } if column == "email"
+    ));
+}
+
+#[test]
+fn ac_512_s05_tsql_bounded_ddl_create_shapes() {
+    let table = ok_create_table(
+        "CREATE TABLE [dbo].[audit_log] ([id] INT, [name] NVARCHAR(255), [amount] DECIMAL(10, 2), [request_id] UNIQUEIDENTIFIER)",
+    );
+    assert_eq!(table.table.schema.as_deref(), Some("dbo"));
+    assert_eq!(table.table.table, "audit_log");
+    assert!(matches!(table.columns[0].data_type, ColumnType::Integer));
+    assert!(matches!(
+        table.columns[1].data_type,
+        ColumnType::Varchar { length: 255 }
+    ));
+    assert!(matches!(
+        table.columns[2].data_type,
+        ColumnType::Numeric {
+            precision: Some(10),
+            scale: Some(2)
+        }
+    ));
+    assert!(matches!(table.columns[3].data_type, ColumnType::Uuid));
+
+    let index = ok_create_index("CREATE INDEX [idx_audit_log_name] ON [dbo].[audit_log] ([name])");
+    assert_eq!(index.name, "idx_audit_log_name");
+    assert_eq!(index.table.schema.as_deref(), Some("dbo"));
+    assert_eq!(index.columns, vec!["name".to_string()]);
+}
+
+#[test]
+fn ac_512_s06_tsql_scripting_and_admin_verbs_are_known_unsupported() {
+    for sql in [
+        "EXEC dbo.refresh_users",
+        "EXECUTE dbo.refresh_users",
+        "DBCC CHECKDB ([app])",
+        "GO",
+        "USE [app]",
+        "BACKUP DATABASE [app] TO DISK = N'/tmp/app.bak'",
+        "RESTORE DATABASE [app] FROM DISK = N'/tmp/app.bak'",
+        "DENY SELECT ON users TO alice",
+    ] {
+        let e = err(sql);
+        assert_eq!(
+            e.error_kind,
+            ParseErrorKind::UnsupportedStatement,
+            "sql={sql}"
+        );
+    }
 }
 
 // =================================================================
