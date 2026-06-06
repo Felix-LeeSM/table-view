@@ -256,4 +256,31 @@ describe("adapter conformance matrix", () => {
       "edit.bulkWrite",
     ]);
   });
+
+  it("locks Oracle to lifecycle-only conformance", () => {
+    const oracle = ADAPTER_CONFORMANCE_MATRIX.oracle;
+
+    expect(oracle.level).toBe("runtime");
+    expect(oracle.areas.connection.checks).toEqual(["connection.test"]);
+    expect(oracle.areas.connection.deferred).toEqual([
+      "connection.switchDatabase",
+    ]);
+    expect(oracle.areas.connection.unsupported).toEqual([
+      "connection.readOnly",
+      "connection.filePicker",
+    ]);
+    expect(oracle.areas.catalog.checks).toEqual([]);
+    expect(oracle.areas.catalog.deferred).toEqual([
+      "catalog.browse",
+      "catalog.schema",
+    ]);
+    expect(oracle.areas.query.checks).toEqual([]);
+    expect(oracle.areas.query.deferred).toEqual([
+      "query.query",
+      "query.cancel",
+      "query.explain",
+    ]);
+    expect(oracle.areas.edit.checks).toEqual([]);
+    expect(oracle.areas.edit.deferred).toEqual(["edit.editRows"]);
+  });
 });

@@ -190,7 +190,7 @@ const DEFERRED_FEATURES = Object.freeze({
     ],
     edit: ["edit.editRows"],
   },
-  oracle: allRuntimeDeferred(),
+  oracle: oracleLifecycleDeferred(),
   mongodb: {
     connection: ["connection.switchDatabase"],
     catalog: ["catalog.constraints", "catalog.relationships"],
@@ -396,9 +396,9 @@ function noneDeferred(): DeferredByArea {
   };
 }
 
-function allRuntimeDeferred(): DeferredByArea {
+function oracleLifecycleDeferred(): DeferredByArea {
   return {
-    connection: ["connection.test", "connection.switchDatabase"],
+    connection: ["connection.switchDatabase"],
     catalog: ["catalog.browse", "catalog.schema"],
     query: ["query.query", "query.cancel", "query.explain"],
     edit: ["edit.editRows"],
