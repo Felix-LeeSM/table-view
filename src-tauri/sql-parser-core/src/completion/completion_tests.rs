@@ -612,6 +612,56 @@ fn sqlite_extension_inventory_does_not_enable_extension_completion_packs() {
 }
 
 #[test]
+fn oracle_reference_vocabulary_smoke() {
+    assert_builtin_completion_contains("oracle", "none", "CONNECT", "CONNECT BY");
+    assert_builtin_completion_contains("oracle", "none", "START", "START WITH");
+    assert_builtin_completion_contains("oracle", "none", "CRE", "CREATE SEQUENCE");
+    assert_builtin_completion_contains("oracle", "none", "CURR", "CURRVAL");
+    assert_builtin_completion_contains("oracle", "none", "CREATE", "CREATE PUBLIC SYNONYM");
+    assert_builtin_completion_contains("oracle", "none", "DBMS_OUTPUT", "DBMS_OUTPUT.PUT_LINE");
+    assert_builtin_completion_contains("oracle", "none", "DBMS_RANDOM", "DBMS_RANDOM.VALUE");
+    assert_builtin_completion_contains("oracle", "none", "NV", "NVL");
+    assert_builtin_completion_contains("oracle", "none", "LIST", "LISTAGG");
+
+    assert_builtin_completion_excludes("oracle", "none", "DECL", "DECLARE");
+    assert_builtin_completion_excludes("oracle", "none", "EXC", "EXCEPTION");
+    assert_builtin_completion_excludes("oracle", "none", "END L", "END LOOP");
+    assert_builtin_completion_excludes("mssql", "none", "CONNECT", "CONNECT BY");
+}
+
+#[test]
+fn oracle_bind_identifier_completion_replaces_the_colon_prefix() {
+    let result = complete_sql(empty_vocabulary_request("oracle", "none", "SELECT :ST"));
+    let item = result
+        .items
+        .iter()
+        .find(|item| item.label == ":START_DATE")
+        .expect("Oracle bind variable candidate");
+
+    assert_eq!(item.kind, "variable");
+    assert_eq!(item.apply.as_deref(), Some(":START_DATE"));
+    assert_eq!(
+        item.detail.as_deref(),
+        Some("Oracle bind variable placeholder")
+    );
+    assert_eq!(item.runtime_executable, Some(false));
+    assert_eq!(
+        result.replace_range.from,
+        CompletionCursorOffsets { utf16: 7, utf8: 7 }
+    );
+    assert_eq!(
+        result.replace_range.to,
+        CompletionCursorOffsets {
+            utf16: 10,
+            utf8: 10
+        }
+    );
+
+    let mssql_result = complete_sql(empty_vocabulary_request("mssql", "none", "SELECT :ST"));
+    assert!(!labels(&mssql_result).contains(&":START_DATE".to_string()));
+}
+
+#[test]
 fn unsupported_dialect_returns_empty_result_with_metadata() {
     let mut req = request("SELECT ", 7, 7);
     req.dialect = "mssql".to_string();

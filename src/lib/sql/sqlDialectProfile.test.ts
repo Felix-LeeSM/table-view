@@ -19,6 +19,8 @@ describe("sqlDialectProfile", () => {
     expect(sqlDialectIdForDatabaseType("mariadb")).toBe("mariadb");
     expect(sqlDialectIdForDatabaseType("sqlite")).toBe("sqlite");
     expect(sqlDialectIdForDatabaseType("duckdb")).toBe("duckdb");
+    expect(sqlDialectIdForDatabaseType("mssql")).toBe("mssql");
+    expect(sqlDialectIdForDatabaseType("oracle")).toBe("oracle");
     expect(sqlDialectIdForDatabaseType("mongodb")).toBeNull();
     expect(sqlDialectIdForDatabaseType(undefined)).toBeNull();
   });
@@ -30,6 +32,7 @@ describe("sqlDialectProfile", () => {
     expect(codeMirrorDialectForDatabaseType("sqlite")).toBe(SQLite);
     expect(codeMirrorDialectForDatabaseType("duckdb")).toBe(StandardSQL);
     expect(codeMirrorDialectForDatabaseType("mssql")).toBe(StandardSQL);
+    expect(codeMirrorDialectForDatabaseType("oracle")).toBe(StandardSQL);
     expect(codeMirrorDialectForDatabaseType(undefined)).toBe(StandardSQL);
   });
 
@@ -117,6 +120,58 @@ describe("sqlDialectProfile", () => {
       expect(profile.vocabulary.keywords).not.toContain("\\G");
       expect(profile.vocabulary.keywords).not.toContain(".tables");
     }
+  });
+
+  it("adds Oracle SQL autocomplete vocabulary without claiming PL/SQL authoring", () => {
+    const oracle = getSqlDialectProfileForDatabaseType("oracle");
+    const mssql = getSqlDialectProfileForDatabaseType("mssql");
+
+    expect(oracle).toMatchObject({
+      id: "oracle",
+      family: "oracle",
+      defaultShell: "none",
+      identifierQuote: '"',
+    });
+    expect(oracle?.vocabulary.keywords).toEqual(
+      expect.arrayContaining([
+        "CONNECT BY",
+        "START WITH",
+        "DUAL",
+        "CREATE SEQUENCE",
+        "NEXTVAL",
+        "CURRVAL",
+        "CREATE SYNONYM",
+        "CREATE PUBLIC SYNONYM",
+        "PACKAGE",
+        "DBMS_OUTPUT",
+      ]),
+    );
+    expect(oracle?.vocabulary.functions).toEqual(
+      expect.arrayContaining([
+        "NVL",
+        "DECODE",
+        "LISTAGG",
+        "REGEXP_LIKE",
+        "DBMS_OUTPUT.PUT_LINE",
+        "DBMS_RANDOM.VALUE",
+        "DBMS_LOB.SUBSTR",
+      ]),
+    );
+    expect(oracle?.vocabulary.operators).toEqual(
+      expect.arrayContaining([":BIND", ":START_DATE"]),
+    );
+    expect(oracle?.vocabulary.types).toEqual(
+      expect.arrayContaining(["NUMBER", "VARCHAR2", "CLOB"]),
+    );
+    expect(oracle?.vocabulary.keywords).not.toContain("DECLARE");
+    expect(oracle?.vocabulary.keywords).not.toContain("EXCEPTION");
+    expect(oracle?.vocabulary.keywords).not.toContain("END LOOP");
+    expect(mssql?.vocabulary).toEqual({
+      keywords: COMMON_SQL_KEYWORDS,
+      functions: COMMON_SQL_FUNCTIONS,
+      types: [],
+      operators: [],
+    });
   });
 
   it("preserves legacy keyword and function surfaces", () => {

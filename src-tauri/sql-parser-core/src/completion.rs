@@ -14,8 +14,8 @@ use aliases::{resolve_alias, scan_aliases, scan_cte_columns};
 use context::{completion_state, insert_columns_target, update_set_target};
 use token::{completion_token_at, CompletionToken};
 use vocabulary::{
-    builtin_functions, builtin_keyword_deltas, builtin_keywords, builtin_shell_commands,
-    postgresql_extension_pack,
+    builtin_bind_identifiers, builtin_functions, builtin_keyword_deltas, builtin_keywords,
+    builtin_shell_commands, postgresql_extension_pack,
 };
 
 pub use compact::complete_sql_compact;
@@ -194,15 +194,18 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
                     );
                 }
                 CompletionState::ColumnRef => {
+                    add_bind_identifiers(&mut items, &request, &token);
                     add_unqualified_columns(&mut items, &request, &token);
                 }
                 CompletionState::FunctionRef => {
+                    add_bind_identifiers(&mut items, &request, &token);
                     add_functions(&mut items, &request, &token);
                     if token.quote.is_none() {
                         add_extension_pack_items(&mut items, &request, &token.prefix);
                     }
                 }
                 CompletionState::OrderByExpr => {
+                    add_bind_identifiers(&mut items, &request, &token);
                     add_unqualified_columns(&mut items, &request, &token);
                     add_functions(&mut items, &request, &token);
                     if token.quote.is_none() {
@@ -210,6 +213,7 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
                     }
                 }
                 CompletionState::StatementStart | CompletionState::SelectList => {
+                    add_bind_identifiers(&mut items, &request, &token);
                     if token.quote.is_none() {
                         add_keywords(&mut items, &request, &token.prefix);
                     }
@@ -320,6 +324,32 @@ fn add_meta_commands(
                 apply: Some((*command).to_string()),
                 detail: Some(shell_detail(&request.shell)),
                 boost: Some(60),
+                runtime_executable: Some(false),
+            });
+        }
+    }
+}
+
+fn add_bind_identifiers(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    token: &CompletionToken,
+) {
+    if token.quote.is_some() || !token.prefix.starts_with(':') {
+        return;
+    }
+
+    for bind in builtin_bind_identifiers(&request.dialect) {
+        if matches_prefix(bind, &token.prefix) {
+            items.push(CompletionItem {
+                label: (*bind).to_string(),
+                kind: "variable".to_string(),
+                apply: Some((*bind).to_string()),
+                detail: Some(format!(
+                    "{} bind variable placeholder",
+                    dialect_label(&request.dialect)
+                )),
+                boost: Some(55),
                 runtime_executable: Some(false),
             });
         }
@@ -660,7 +690,10 @@ fn dedupe_items(items: &mut Vec<CompletionItem>) {
 }
 
 fn supports_sql_completion(dialect: &str) -> bool {
-    matches!(dialect, "postgresql" | "mysql" | "mariadb" | "sqlite")
+    matches!(
+        dialect,
+        "postgresql" | "mysql" | "mariadb" | "sqlite" | "oracle"
+    )
 }
 
 fn keyword_detail(dialect: &str) -> String {
@@ -681,6 +714,7 @@ fn dialect_label(dialect: &str) -> &'static str {
         "mysql" => "MySQL",
         "mariadb" => "MariaDB",
         "sqlite" => "SQLite",
+        "oracle" => "Oracle",
         _ => "SQL",
     }
 }

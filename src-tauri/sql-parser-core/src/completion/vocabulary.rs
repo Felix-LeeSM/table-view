@@ -3,6 +3,7 @@ pub(super) fn builtin_keywords(dialect: &str) -> &'static [&'static str] {
         "postgresql" => POSTGRESQL_KEYWORDS,
         "mysql" | "mariadb" => MYSQL_KEYWORDS,
         "sqlite" => SQLITE_KEYWORDS,
+        "oracle" => ORACLE_KEYWORDS,
         _ => COMMON_KEYWORDS,
     }
 }
@@ -68,7 +69,15 @@ pub(super) fn builtin_functions(dialect: &str) -> &'static [&'static str] {
         "postgresql" => POSTGRESQL_FUNCTIONS,
         "mysql" | "mariadb" => MYSQL_FUNCTIONS,
         "sqlite" => SQLITE_FUNCTIONS,
+        "oracle" => ORACLE_FUNCTIONS,
         _ => COMMON_FUNCTIONS,
+    }
+}
+
+pub(super) fn builtin_bind_identifiers(dialect: &str) -> &'static [&'static str] {
+    match dialect {
+        "oracle" => ORACLE_BIND_IDENTIFIERS,
+        _ => &[],
     }
 }
 
@@ -118,6 +127,9 @@ const MARIADB_KEYWORD_DELTAS: &[&str] = &["RETURNING"];
 const SQLITE_KEYWORDS: &[&str] = &["ABORT", "AUTOINCREMENT", "CONFLICT", "FAIL", "GLOB", "IIF", "IGNORE", "INDEXED BY", "INSERT OR IGNORE", "INSERT OR REPLACE", "PRAGMA", "RAISE", "REPLACE", "ROWID", "VACUUM", "WITHOUT ROWID"];
 
 #[rustfmt::skip]
+const ORACLE_KEYWORDS: &[&str] = &["CONNECT BY", "START WITH", "MINUS", "MERGE", "DUAL", "ROWNUM", "ROWID", "SYSDATE", "SYSTIMESTAMP", "FETCH FIRST", "RETURNING INTO", "CREATE SEQUENCE", "SEQUENCE", "NEXTVAL", "CURRVAL", "SYNONYM", "CREATE SYNONYM", "CREATE PUBLIC SYNONYM", "PACKAGE", "PACKAGE BODY", "DBMS_OUTPUT", "DBMS_RANDOM", "DBMS_LOB"];
+
+#[rustfmt::skip]
 const COMMON_FUNCTIONS: &[&str] = &["COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "NULLIF", "CAST", "CONCAT", "LENGTH", "UPPER", "LOWER", "TRIM", "SUBSTRING", "EXTRACT", "NOW", "CURRENT_TIMESTAMP"];
 
 #[rustfmt::skip]
@@ -128,6 +140,12 @@ const MYSQL_FUNCTIONS: &[&str] = &["ABS", "ACOS", "ADDDATE", "ADDTIME", "AES_DEC
 
 #[rustfmt::skip]
 const SQLITE_FUNCTIONS: &[&str] = &["DATE", "TIME", "DATETIME", "JULIANDAY", "STRFTIME", "IIF", "IFNULL", "JSON", "JSON_ARRAY", "JSON_EXTRACT", "JSON_GROUP_ARRAY", "JSON_GROUP_OBJECT", "JSON_OBJECT", "JSON_PATCH", "JSON_REMOVE", "JSON_REPLACE", "JSON_SET", "TOTAL", "TYPEOF"];
+
+#[rustfmt::skip]
+const ORACLE_FUNCTIONS: &[&str] = &["ABS", "ADD_MONTHS", "DECODE", "LISTAGG", "MONTHS_BETWEEN", "NVL", "NVL2", "REGEXP_LIKE", "REGEXP_REPLACE", "REGEXP_SUBSTR", "SYS_CONTEXT", "TO_CHAR", "TO_DATE", "TO_TIMESTAMP", "TRUNC", "DBMS_OUTPUT.PUT_LINE", "DBMS_RANDOM.VALUE", "DBMS_LOB.SUBSTR"];
+
+#[rustfmt::skip]
+const ORACLE_BIND_IDENTIFIERS: &[&str] = &[":BIND", ":ID", ":NAME", ":START_DATE", ":END_DATE", ":LIMIT"];
 
 #[rustfmt::skip]
 const PSQL_COMMANDS: &[&str] = &["\\a", "\\bind", "\\bind_named", "\\c", "\\C", "\\cd", "\\close_prepared", "\\conninfo", "\\connect", "\\copy", "\\copyright", "\\crosstabview", "\\d", "\\d+", "\\da", "\\dA", "\\dAc", "\\dAf", "\\dAo", "\\dAp", "\\db", "\\dc", "\\dconfig", "\\dC", "\\dd", "\\ddp", "\\dD", "\\des", "\\det", "\\deu", "\\dew", "\\df", "\\dF", "\\dFd", "\\dFp", "\\dFt", "\\dg", "\\di", "\\dl", "\\dL", "\\dm", "\\dn", "\\do", "\\dO", "\\dp", "\\dP", "\\drds", "\\dRp", "\\dRs", "\\ds", "\\dt", "\\dT", "\\du", "\\dv", "\\dx", "\\dy", "\\echo", "\\edit", "\\ef", "\\encoding", "\\errverbose", "\\ev", "\\f", "\\flush", "\\flushrequest", "\\g", "\\gdesc", "\\getenv", "\\getresults", "\\gexec", "\\gset", "\\gx", "\\h", "\\help", "\\H", "\\if", "\\elif", "\\else", "\\endif", "\\i", "\\include", "\\include_relative", "\\ir", "\\list", "\\lo_export", "\\lo_import", "\\lo_list", "\\lo_unlink", "\\o", "\\out", "\\parse", "\\password", "\\pipe", "\\print", "\\prompt", "\\pset", "\\q", "\\qecho", "\\quit", "\\r", "\\reset", "\\restrict", "\\s", "\\sendpipeline", "\\set", "\\setenv", "\\sf", "\\sf+", "\\startpipeline", "\\sv", "\\sv+", "\\syncpipeline", "\\t", "\\T", "\\timing", "\\unrestrict", "\\unset", "\\w", "\\warn", "\\watch", "\\write", "\\x", "\\z", "\\!", "\\?", "\\;"];
