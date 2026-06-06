@@ -118,7 +118,9 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 포함한다. Profile 존재는 곧 runtime support claim 이 아니다. 현재 connection dialog
 와 runtime connection support 는 `capabilities.connection.test` 가 true 인
 PostgreSQL, MySQL, MariaDB, SQLite, DuckDB, MongoDB, Redis, Valkey,
-Elasticsearch, OpenSearch 로 제한된다.
+Elasticsearch, OpenSearch, MSSQL 로 제한된다. MSSQL 의 active slice 는 SQL
+authentication connection test 와 SQL Server `SERVERPROPERTY` version probe 뿐이며,
+query/catalog/edit/parser/completion/runtime fixture smoke 는 follow-up 이다.
 Valkey 는 KV runtime slice 이며 `connection.test`, `query.query`,
 `catalog.browse`, `paradigmSpecific.keyBrowser` 가 true 다.
 `e2e/fixtures/seed.valkey.json` 는 wired Valkey Runtime Happy Path seed 이고,
@@ -129,7 +131,9 @@ command query rows 까지 support claim 을 넓힌다. `redis-command` 는 bound
 query target 이며, completion claim 은 proven local-runtime rows 에 제한된다. Full
 Redis compatibility/direct mutation claim 은 아니다.
 
-MSSQL 과 Oracle 은 별도의 capability-empty declared RDB identities 다.
+Oracle 은 별도의 capability-empty declared RDB identity 다. MSSQL 은 lifecycle-only
+connection support 로 승격됐지만, query/catalog/edit/parser/completion/runtime smoke
+claim 은 아직 없다.
 Elasticsearch/OpenSearch 는 Search identity 와 fixture-backed admin contract 를
 갖고 있다. Elasticsearch 와 OpenSearch 는 connection dialog 와 backend
 `test_connection` 에서 URL/auth/TLS 기반 live HTTP root probe 를 지원하고,
