@@ -44,6 +44,12 @@ ignore = [
   "RUSTSEC-2025-0100", # 추가 unic 군
   # ── 단발 unmaintained ────────────────────────────────────────────────
   "RUSTSEC-2025-0057", # fxhash (transitive, 다수 경로)
+  # ── Oracle driver: rustls-pemfile unmaintained ───────────────────────
+  # 경로: oracle-rs 0.1.7 → rustls-pemfile 2.2.0. #518 은 service-name
+  # lifecycle/test path 만 wire-up 하며 wallet/TLS/PEM 입력 경로는 노출하지
+  # 않는다. oracle-rs 가 rustls-pki-types PemObject API 로 이주하거나 대체
+  # pure-Rust Oracle driver 로 교체 가능해지면 즉시 제거. 검토일: 2026-06-06.
+  "RUSTSEC-2025-0134", # rustls-pemfile (transitive through oracle-rs)
   # ── MongoDB driver: hickory-dns CVE 2건 ──────────────────────────────
   # 경로: mongodb 3.6.0 → hickory-resolver 0.25.2 → hickory-proto 0.25.2.
   # mongodb 가 hickory-proto 를 ~0.25.2 로 핀해 cargo update 로 해소 불가.
