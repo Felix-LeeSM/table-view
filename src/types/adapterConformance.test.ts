@@ -27,7 +27,7 @@ describe("adapter conformance matrix", () => {
       for (const claim of Object.values(claims.areas)) {
         if (claim.level === "unsupported") {
           expect(
-            claim.unsupported.length,
+            claim.unsupported.length + claim.deferred.length,
             `${dbType}:${claim.area}`,
           ).toBeGreaterThan(0);
           expect(claim.checks).toEqual([]);

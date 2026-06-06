@@ -72,6 +72,8 @@ describe("buildSqlCompletionRequest", () => {
     ["mariadb", "mysql", "mysql-client"],
     ["sqlite", "sqlite", "sqlite-cli"],
     ["duckdb", "duckdb", "none"],
+    ["mssql", "mssql", "none"],
+    ["oracle", "oracle", "none"],
   ] as const)(
     "builds one WASM-ready request shape for %s",
     (dbType, family, shell) => {
@@ -104,6 +106,8 @@ describe("buildSqlCompletionRequest", () => {
     const mysql = requestFor("mysql");
     const mariadb = requestFor("mariadb");
     const sqlite = requestFor("sqlite");
+    const mssql = requestFor("mssql");
+    const oracle = requestFor("oracle");
 
     expect(pg.capabilities.returning).toBe(true);
     expect(pg.capabilities.ilike).toBe(true);
@@ -130,6 +134,25 @@ describe("buildSqlCompletionRequest", () => {
     expect(duckdb.vocabulary.keywords).not.toContain("ATTACH");
     expect(duckdb.vocabulary.keywords).not.toContain("DETACH");
     expect(duckdb.vocabulary.keywords).not.toContain("COPY");
+
+    expect(mssql.capabilities.schemas).toBe(true);
+    expect(mssql.shell).toBe("none");
+    expect(mssql.vocabulary.keywords).toContain("EXEC");
+    expect(mssql.vocabulary.keywords).toContain("CREATE PROCEDURE");
+    expect(mssql.vocabulary.functions).toContain("GETDATE");
+    expect(mssql.vocabulary.functions).toContain("TRY_CONVERT");
+    expect(mssql.vocabulary.keywords).not.toContain(":CONNECT");
+    expect(mssql.shellProfile.commands).toEqual([]);
+
+    expect(oracle.capabilities.schemas).toBe(true);
+    expect(oracle.shell).toBe("none");
+    expect(oracle.vocabulary.keywords).toContain("CONNECT BY");
+    expect(oracle.vocabulary.keywords).toContain("CREATE SEQUENCE");
+    expect(oracle.vocabulary.keywords).toContain("CREATE SYNONYM");
+    expect(oracle.vocabulary.functions).toContain("NVL");
+    expect(oracle.vocabulary.functions).toContain("DBMS_OUTPUT.PUT_LINE");
+    expect(oracle.vocabulary.operators).toContain(":BIND");
+    expect(oracle.vocabulary.keywords).not.toContain("DECLARE");
   });
 
   it("keeps MariaDB completion requests distinct without widening runtime evidence", () => {

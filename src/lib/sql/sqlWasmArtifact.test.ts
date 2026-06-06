@@ -246,6 +246,55 @@ describe("checked-in SQL WASM artifact", () => {
     });
   });
 
+  it("complete_sql exposes Oracle keyword, package, and bind vocabulary through real WASM", async () => {
+    await initSqlParserCore();
+
+    expect(oracleCompletionLabels("CONNECT")).toContain("CONNECT BY");
+    expect(oracleCompletionLabels("DBMS_OUTPUT")).toContain(
+      "DBMS_OUTPUT.PUT_LINE",
+    );
+
+    const bindResult = completeSqlFromWasm(
+      "SELECT :ST",
+      10,
+      10,
+      "oracle",
+      "none",
+      "",
+      "rev-oracle",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ) as {
+      items: Array<{
+        label: string;
+        kind: string;
+        apply?: string;
+        runtimeExecutable?: boolean;
+      }>;
+      replaceRange: {
+        from: { utf16: number; utf8: number };
+        to: { utf16: number; utf8: number };
+      };
+    };
+    const bind = bindResult.items.find((item) => item.label === ":START_DATE");
+
+    expect(bind).toMatchObject({
+      kind: "variable",
+      apply: ":START_DATE",
+      runtimeExecutable: false,
+    });
+    expect(bindResult.replaceRange).toEqual({
+      from: { utf16: 7, utf8: 7 },
+      to: { utf16: 10, utf8: 10 },
+    });
+    expect(oracleCompletionLabels("DECL")).not.toContain("DECLARE");
+  });
+
   it("complete_sql returns relation catalog candidates, not psql commands, after FROM through real WASM", async () => {
     await initSqlParserCore();
 
@@ -339,6 +388,26 @@ function mariaDbCompletionLabels(serverVersion: string): string[] {
     "mysql-client",
     serverVersion,
     "rev-mariadb",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+  ) as { items: Array<{ label: string }> };
+  return result.items.map((item) => item.label);
+}
+
+function oracleCompletionLabels(prefix: string): string[] {
+  const result = completeSqlFromWasm(
+    prefix,
+    prefix.length,
+    prefix.length,
+    "oracle",
+    "none",
+    "",
+    "rev-oracle",
     "",
     "",
     "",
