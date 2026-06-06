@@ -13,6 +13,7 @@
 use super::session::keep_alive_loop;
 use super::{make_adapter, AppState, SaveConnectionRequest, TestConnectionRequest};
 use crate::db::mongodb::MongoAdapter;
+use crate::db::mssql::MssqlAdapter;
 use crate::db::mysql::MysqlAdapter;
 use crate::db::postgres::PostgresAdapter;
 use crate::db::redis::RedisAdapter;
@@ -114,6 +115,9 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         DatabaseType::Duckdb => {
             DuckdbAdapter::test(&full).await?;
         }
+        DatabaseType::Mssql => {
+            MssqlAdapter::test(&full).await?;
+        }
         DatabaseType::Mongodb => {
             MongoAdapter::test(&full).await?;
         }
@@ -126,11 +130,10 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         DatabaseType::Elasticsearch | DatabaseType::Opensearch => {
             SearchEngineAdapter::test(&full).await?;
         }
-        other => {
-            return Err(AppError::Unsupported(format!(
-                "Database type {:?} is not supported yet",
-                other
-            )));
+        DatabaseType::Oracle => {
+            return Err(AppError::Unsupported(
+                "Database type Oracle is not supported yet".into(),
+            ));
         }
     }
     Ok("Connection successful".into())

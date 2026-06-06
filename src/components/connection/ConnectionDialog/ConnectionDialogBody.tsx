@@ -134,6 +134,15 @@ export default function ConnectionDialogBody({
               />
             );
           case "mssql":
+            return (
+              <PgFormFields
+                draft={form}
+                onChange={onChange}
+                userPlaceholder="sa"
+                databasePlaceholder="master"
+                {...sharedAuth}
+              />
+            );
           case "oracle":
             return (
               <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
