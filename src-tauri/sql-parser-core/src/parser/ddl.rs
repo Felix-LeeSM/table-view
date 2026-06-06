@@ -30,16 +30,7 @@ impl Parser<'_> {
         let if_exists = self.consume_if_exists()?;
 
         // name
-        let name_tok = self
-            .peek()
-            .ok_or_else(|| syntax_err(None, "expected object name"))?;
-        let name = match &name_tok.token {
-            Token::Ident(s) => s.clone(),
-            _ => {
-                return Err(syntax_err(Some(name_tok.at), "expected object ident"));
-            }
-        };
-        self.advance();
+        let name = self.parse_qualified_ident_string("expected object name")?;
 
         // optional CASCADE / RESTRICT
         let cascade = self.consume_cascade_or_restrict()?;
@@ -63,16 +54,7 @@ impl Parser<'_> {
         }
 
         // table name
-        let name_tok = self
-            .peek()
-            .ok_or_else(|| syntax_err(None, "expected table name"))?;
-        let table = match &name_tok.token {
-            Token::Ident(s) => s.clone(),
-            _ => {
-                return Err(syntax_err(Some(name_tok.at), "expected table ident"));
-            }
-        };
-        self.advance();
+        let table = self.parse_qualified_ident_string("expected table name")?;
 
         // optional RESTART/CONTINUE IDENTITY
         let restart_identity = match self.peek().map(|t| &t.token) {
@@ -109,16 +91,7 @@ impl Parser<'_> {
         self.expect_keyword(Token::Table, "expected TABLE")?;
 
         // table name
-        let name_tok = self
-            .peek()
-            .ok_or_else(|| syntax_err(None, "expected table name"))?;
-        let table = match &name_tok.token {
-            Token::Ident(s) => s.clone(),
-            _ => {
-                return Err(syntax_err(Some(name_tok.at), "expected table ident"));
-            }
-        };
-        self.advance();
+        let table = self.parse_qualified_ident_string("expected table name")?;
 
         // action dispatch — DROP / ADD / RENAME. Anything else (ALTER
         // COLUMN / OWNER TO / SET TABLESPACE / …) surfaces as a syntax

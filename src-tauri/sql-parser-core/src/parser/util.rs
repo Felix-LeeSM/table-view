@@ -71,6 +71,14 @@ pub(super) fn is_known_sql_verb(name: &str) -> bool {
             | "SET"
             | "COPY"
             | "COMMENT"
+            | "EXEC"
+            | "EXECUTE"
+            | "USE"
+            | "BACKUP"
+            | "RESTORE"
+            | "DBCC"
+            | "DENY"
+            | "GO"
     )
 }
 

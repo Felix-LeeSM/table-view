@@ -274,7 +274,7 @@ fn last_name(input: &str) -> Option<String> {
     input
         .split(|ch: char| !(is_ident_char(ch) || ch == '.' || ch == '`' || ch == '"'))
         .filter(|part| !part.is_empty())
-        .last()
+        .next_back()
         .and_then(|part| part.rsplit('.').next())
         .map(|part| part.trim_matches('`').trim_matches('"').to_string())
         .filter(|part| !part.is_empty())
