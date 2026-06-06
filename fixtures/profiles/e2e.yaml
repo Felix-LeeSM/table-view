@@ -61,7 +61,7 @@ connections:
       color: "#dc2626"
       environment: testing
       status: planned
-      disabledReason: "MSSQL is a known deferred DBMS identity; no runtime adapter is wired."
+      disabledReason: "MSSQL has a bounded query runtime, but default fixture connection/smoke is not wired."
   oracle:
     - id: fixture-e2e-oracle
       name: E2E (Oracle)

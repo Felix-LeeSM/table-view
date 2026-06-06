@@ -1,3 +1,5 @@
+mod runtime;
+
 use std::future::Future;
 use std::time::Duration;
 
@@ -184,10 +186,26 @@ impl RdbAdapter for MssqlAdapter {
 
     fn execute_sql<'a>(
         &'a self,
-        _sql: &'a str,
-        _cancel: Option<&'a CancellationToken>,
+        sql: &'a str,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<QueryResult, AppError>> {
-        unsupported()
+        Box::pin(async move { self.execute_query(sql, cancel).await })
+    }
+
+    fn execute_sql_batch<'a>(
+        &'a self,
+        statements: &'a [String],
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<QueryResult>, AppError>> {
+        Box::pin(async move { self.execute_query_batch(statements, cancel).await })
+    }
+
+    fn dry_run_sql_batch<'a>(
+        &'a self,
+        statements: &'a [String],
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<QueryResult>, AppError>> {
+        Box::pin(async move { self.dry_run_query_batch(statements, cancel).await })
     }
 
     fn query_table_data<'a>(
@@ -334,12 +352,16 @@ impl RdbAdapter for MssqlAdapter {
 fn unsupported<'a, T>() -> BoxFuture<'a, Result<T, AppError>> {
     Box::pin(async {
         Err(AppError::Unsupported(
-            "SQL Server support is connection-only".into(),
+            "SQL Server catalog/edit/admin support is not implemented in this bounded query slice"
+                .into(),
         ))
     })
 }
 
-fn mssql_connection_error(context: &'static str, err: impl std::fmt::Display) -> AppError {
+pub(super) fn mssql_connection_error(
+    context: &'static str,
+    err: impl std::fmt::Display,
+) -> AppError {
     AppError::Connection(format!("{context}: {err}"))
 }
 
@@ -365,6 +387,7 @@ where
 mod tests {
     use super::*;
     use crate::db::{DbAdapter, RdbAdapter};
+    use crate::models::{ColumnChange, ColumnDefinition, ConstraintDefinition};
 
     fn config() -> ConnectionConfig {
         ConnectionConfig {
@@ -439,9 +462,154 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn query_surface_stays_unsupported_until_runtime_issue_lands() {
+    async fn pre_cancelled_query_short_circuits_before_connection_lookup() {
         let adapter = MssqlAdapter::new();
-        let err = adapter.execute_sql("SELECT 1", None).await.unwrap_err();
-        assert!(matches!(err, AppError::Unsupported(_)));
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+
+        let err = adapter
+            .execute_sql("SELECT 1", Some(&cancel))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, AppError::Database(msg) if msg == "Query cancelled"));
+    }
+
+    #[tokio::test]
+    async fn catalog_and_edit_surfaces_stay_explicitly_unsupported() {
+        let adapter = MssqlAdapter::new();
+
+        assert_unsupported(adapter.list_namespaces().await);
+        assert_unsupported(adapter.list_tables("dbo").await);
+        assert_unsupported(adapter.get_columns("dbo", "users", None).await);
+        assert_unsupported(
+            adapter
+                .query_table_data("dbo", "users", 1, 25, None, None, None, None)
+                .await,
+        );
+
+        let column = ColumnDefinition {
+            name: "id".into(),
+            data_type: "int".into(),
+            nullable: false,
+            default_value: None,
+            comment: None,
+            is_identity: false,
+        };
+        let drop_table = DropTableRequest {
+            connection_id: "conn".into(),
+            schema: "dbo".into(),
+            table: "users".into(),
+            cascade: false,
+            preview_only: false,
+            expected_database: None,
+        };
+        let rename_table = RenameTableRequest {
+            connection_id: "conn".into(),
+            schema: "dbo".into(),
+            table: "users".into(),
+            new_name: "people".into(),
+            preview_only: false,
+            expected_database: None,
+        };
+        let alter_table = AlterTableRequest {
+            connection_id: "conn".into(),
+            schema: "dbo".into(),
+            table: "users".into(),
+            changes: vec![ColumnChange::Drop { name: "old".into() }],
+            preview_only: false,
+            expected_database: None,
+        };
+        let add_column = AddColumnRequest {
+            connection_id: "conn".into(),
+            schema: "dbo".into(),
+            table: "users".into(),
+            column: column.clone(),
+            check_expression: None,
+            preview_only: false,
+            expected_database: None,
+        };
+        let drop_column = DropColumnRequest {
+            connection_id: "conn".into(),
+            schema: "dbo".into(),
+            table: "users".into(),
+            column_name: "old".into(),
+            cascade: false,
+            preview_only: false,
+            expected_database: None,
+        };
+        let create_table = CreateTableRequest {
+            connection_id: "conn".into(),
+            schema: "dbo".into(),
+            name: "users".into(),
+            columns: vec![column],
+            primary_key: None,
+            preview_only: false,
+            table_comment: None,
+            expected_database: None,
+        };
+        let create_index = CreateIndexRequest {
+            connection_id: "conn".into(),
+            schema: "dbo".into(),
+            table: "users".into(),
+            index_name: "idx_users_id".into(),
+            columns: vec!["id".into()],
+            index_type: "btree".into(),
+            is_unique: false,
+            preview_only: false,
+            expected_database: None,
+        };
+        let drop_index = DropIndexRequest {
+            connection_id: "conn".into(),
+            schema: "dbo".into(),
+            index_name: "idx_users_id".into(),
+            table: "users".into(),
+            if_exists: false,
+            preview_only: false,
+            expected_database: None,
+        };
+        let add_constraint = AddConstraintRequest {
+            connection_id: "conn".into(),
+            schema: "dbo".into(),
+            table: "users".into(),
+            constraint_name: "pk_users".into(),
+            definition: ConstraintDefinition::PrimaryKey {
+                columns: vec!["id".into()],
+            },
+            preview_only: false,
+            expected_database: None,
+        };
+        let drop_constraint = DropConstraintRequest {
+            connection_id: "conn".into(),
+            schema: "dbo".into(),
+            table: "users".into(),
+            constraint_name: "pk_users".into(),
+            preview_only: false,
+            expected_database: None,
+        };
+
+        assert_unsupported(adapter.drop_table(&drop_table).await);
+        assert_unsupported(adapter.rename_table(&rename_table).await);
+        assert_unsupported(adapter.alter_table(&alter_table).await);
+        assert_unsupported(adapter.add_column(&add_column).await);
+        assert_unsupported(adapter.drop_column(&drop_column).await);
+        assert_unsupported(adapter.create_table(&create_table).await);
+        assert_unsupported(adapter.create_index(&create_index).await);
+        assert_unsupported(adapter.drop_index(&drop_index).await);
+        assert_unsupported(adapter.add_constraint(&add_constraint).await);
+        assert_unsupported(adapter.drop_constraint(&drop_constraint).await);
+        assert_unsupported(adapter.get_table_indexes("dbo", "users", None).await);
+        assert_unsupported(adapter.get_table_constraints("dbo", "users", None).await);
+        assert_unsupported(adapter.get_view_definition("dbo", "active_users").await);
+        assert_unsupported(adapter.get_view_columns("dbo", "active_users").await);
+        assert_unsupported(adapter.list_schema_columns("dbo").await);
+        assert_unsupported(adapter.get_function_source("dbo", "fn_users").await);
+        assert_unsupported(adapter.list_functions("dbo").await);
+    }
+
+    fn assert_unsupported<T>(result: Result<T, AppError>) {
+        assert!(
+            matches!(result, Err(AppError::Unsupported(message)) if message.contains("not implemented"))
+        );
     }
 }
