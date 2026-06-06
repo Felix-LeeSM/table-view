@@ -19,6 +19,8 @@ describe("sqlDialectProfile", () => {
     expect(sqlDialectIdForDatabaseType("mariadb")).toBe("mariadb");
     expect(sqlDialectIdForDatabaseType("sqlite")).toBe("sqlite");
     expect(sqlDialectIdForDatabaseType("duckdb")).toBe("duckdb");
+    expect(sqlDialectIdForDatabaseType("mssql")).toBe("mssql");
+    expect(sqlDialectIdForDatabaseType("oracle")).toBe("oracle");
     expect(sqlDialectIdForDatabaseType("mongodb")).toBeNull();
     expect(sqlDialectIdForDatabaseType(undefined)).toBeNull();
   });
@@ -30,6 +32,7 @@ describe("sqlDialectProfile", () => {
     expect(codeMirrorDialectForDatabaseType("sqlite")).toBe(SQLite);
     expect(codeMirrorDialectForDatabaseType("duckdb")).toBe(StandardSQL);
     expect(codeMirrorDialectForDatabaseType("mssql")).toBe(StandardSQL);
+    expect(codeMirrorDialectForDatabaseType("oracle")).toBe(StandardSQL);
     expect(codeMirrorDialectForDatabaseType(undefined)).toBe(StandardSQL);
   });
 
@@ -60,6 +63,69 @@ describe("sqlDialectProfile", () => {
     expect(duckdb?.vocabulary.keywords).not.toContain("DETACH");
     expect(duckdb?.vocabulary.keywords).not.toContain("COPY");
     expect(duckdb?.vocabulary.keywords).not.toContain("PRAGMA");
+  });
+
+  it("adds bounded MSSQL and Oracle SQL profile vocabulary", () => {
+    const mssql = getSqlDialectProfileForDatabaseType("mssql");
+    const oracle = getSqlDialectProfileForDatabaseType("oracle");
+
+    expect(mssql).toMatchObject({
+      id: "mssql",
+      family: "mssql",
+      defaultShell: "none",
+      identifierQuote: "[",
+    });
+    expect(mssql?.vocabulary.keywords).toEqual(
+      expect.arrayContaining([
+        "TOP",
+        "OUTPUT",
+        "MERGE",
+        "IDENTITY",
+        "NVARCHAR",
+        "UNIQUEIDENTIFIER",
+      ]),
+    );
+    expect(mssql?.vocabulary.functions).toEqual(
+      expect.arrayContaining([
+        "GETDATE",
+        "NEWID",
+        "OBJECT_ID",
+        "SCOPE_IDENTITY",
+      ]),
+    );
+
+    expect(oracle).toMatchObject({
+      id: "oracle",
+      family: "oracle",
+      defaultShell: "none",
+      identifierQuote: '"',
+    });
+    expect(oracle?.vocabulary.keywords).toEqual(
+      expect.arrayContaining([
+        "ROWNUM",
+        "MERGE",
+        "MINUS",
+        "CONNECT BY",
+        "START WITH",
+        "SEQUENCE",
+        "SYNONYM",
+        "PACKAGE",
+        "VARCHAR2",
+        "NUMBER",
+      ]),
+    );
+    expect(oracle?.vocabulary.functions).toEqual(
+      expect.arrayContaining([
+        "SYSDATE",
+        "SYSTIMESTAMP",
+        "NVL",
+        "TO_CHAR",
+        "TO_DATE",
+        "TO_NUMBER",
+      ]),
+    );
+    expect(mssql?.vocabulary.keywords).not.toContain("CONNECT BY");
+    expect(oracle?.vocabulary.keywords).not.toContain("UNIQUEIDENTIFIER");
   });
 
   it("shares the MySQL family while keeping MariaDB a distinct dialect id", () => {

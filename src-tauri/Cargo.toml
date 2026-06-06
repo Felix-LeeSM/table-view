@@ -37,7 +37,7 @@ mongodb = "3"
 bson = "2"
 futures-util = "0.3"
 tokio = { version = "1", features = ["full", "test-util"] }
-tokio-util = { version = "0.7", features = ["rt"] }
+tokio-util = { version = "0.7", features = ["rt", "compat"] }
 aes-gcm = "0.10"
 argon2 = "0.5"
 zeroize = { version = "1", features = ["derive"] }
@@ -57,6 +57,8 @@ regex = "1"
 # command support on the existing Tokio runtime and `rediss://` TLS.
 redis = { version = "0.32", features = ["tokio-rustls-comp"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tiberius = { version = "0.12.3", default-features = false, features = ["tds73", "native-tls", "tokio", "chrono", "bigdecimal"] }
+oracle-rs = "0.1.7"
 # Sprint 356 (2026-05-16) — Q22 keyring file-key migration.
 # Cross-platform abstraction lives in `storage::crypto::KeyringBackend`;
 # the in-memory backend used by tests means we never link against the

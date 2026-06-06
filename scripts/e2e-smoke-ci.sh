@@ -29,6 +29,18 @@ export MARIADB_USER="${MARIADB_USER:-testuser}"
 export MARIADB_PASSWORD="${MARIADB_PASSWORD:-testpass}"
 export MARIADB_DATABASE="${MARIADB_DATABASE:-table_view_test}"
 
+export E2E_MSSQL_HOST="${E2E_MSSQL_HOST:-${MSSQL_HOST:-localhost}}"
+export E2E_MSSQL_PORT="${E2E_MSSQL_PORT:-${MSSQL_PORT:-14333}}"
+export MSSQL_USER="${MSSQL_USER:-sa}"
+export MSSQL_PASSWORD="${MSSQL_PASSWORD:-Testpass123!}"
+export MSSQL_DATABASE="${MSSQL_DATABASE:-table_view_test}"
+
+export E2E_ORACLE_HOST="${E2E_ORACLE_HOST:-${ORACLE_HOST:-localhost}}"
+export E2E_ORACLE_PORT="${E2E_ORACLE_PORT:-${ORACLE_PORT:-1521}}"
+export ORACLE_USER="${ORACLE_USER:-testuser}"
+export ORACLE_PASSWORD="${ORACLE_PASSWORD:-testpass}"
+export ORACLE_SERVICE="${ORACLE_SERVICE:-XEPDB1}"
+
 export E2E_REDIS_HOST="${E2E_REDIS_HOST:-${REDIS_HOST:-localhost}}"
 export E2E_REDIS_PORT="${E2E_REDIS_PORT:-${REDIS_PORT:-6379}}"
 export E2E_REDIS_DB="${E2E_REDIS_DB:-2}"
@@ -61,7 +73,25 @@ find "$REPORT_DIR" -type f ! -name .gitkeep -delete
 
 pnpm tsx scripts/e2e-pre-smoke-release-gate.ts
 if [[ "${E2E_BUILD_ONLY:-0}" != "1" ]]; then
-  pnpm tsx e2e/fixtures/seed-smoke.ts
+  seed_rdbms_target() {
+    local target="$1"
+    pnpm db:seed e2e --target "$target" --quiet
+  }
+
+  SPEC_KEY="${E2E_SPEC_KEY:-}"
+  if [[ -z "$SPEC_KEY" && -n "$SPEC_TO_RUN" ]]; then
+    SPEC_KEY="$(basename "$SPEC_TO_RUN" .spec.ts)"
+  fi
+
+  if [[ -z "$SPEC_TO_RUN" ]]; then
+    seed_rdbms_target mssql
+    seed_rdbms_target oracle
+    pnpm tsx e2e/fixtures/seed-smoke.ts
+  elif [[ "$SPEC_KEY" = "mssql" || "$SPEC_KEY" = "oracle" ]]; then
+    seed_rdbms_target "$SPEC_KEY"
+  else
+    pnpm tsx e2e/fixtures/seed-smoke.ts
+  fi
 fi
 if [[ "${E2E_SKIP_BUILD:-0}" != "1" ]]; then
   pnpm tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
@@ -97,6 +127,8 @@ else
   run_wdio "$BASE_DATA_DIR/postgres-cancellation" "e2e/smoke/postgres-cancellation.spec.ts"
   run_wdio "$BASE_DATA_DIR/mysql" "e2e/smoke/mysql.spec.ts"
   run_wdio "$BASE_DATA_DIR/mariadb" "e2e/smoke/mariadb.spec.ts"
+  run_wdio "$BASE_DATA_DIR/mssql" "e2e/smoke/mssql.spec.ts"
+  run_wdio "$BASE_DATA_DIR/oracle" "e2e/smoke/oracle.spec.ts"
   run_wdio "$BASE_DATA_DIR/sqlite" "e2e/smoke/sqlite.spec.ts"
   run_wdio "$BASE_DATA_DIR/duckdb" "e2e/smoke/duckdb.spec.ts"
   run_wdio "$BASE_DATA_DIR/mongodb" "e2e/smoke/mongodb.spec.ts"

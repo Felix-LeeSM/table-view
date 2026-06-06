@@ -48,7 +48,7 @@ describe("databaseTypeToSqlDialect", () => {
     // Cast through unknown so the test survives future DatabaseType widening
     // without TypeScript errors. The runtime switch's `default` branch is
     // what we're exercising here.
-    const future = "oracle" as unknown as DatabaseType;
+    const future = "futuredb" as unknown as DatabaseType;
     expect(databaseTypeToSqlDialect(future)).toBe(StandardSQL);
   });
 

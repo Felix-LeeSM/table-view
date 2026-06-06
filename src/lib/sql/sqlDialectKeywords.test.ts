@@ -69,9 +69,27 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
     expect(getKeywordsForDialect("redis")).toEqual([]);
   });
 
-  it("MSSQL / Oracle start with common SQL keywords only", () => {
-    expect(getKeywordsForDialect("mssql")).toEqual(COMMON_SQL_KEYWORDS);
-    expect(getKeywordsForDialect("oracle")).toEqual(COMMON_SQL_KEYWORDS);
+  it("MSSQL and Oracle expose their SQL profile keyword deltas", () => {
+    const mssql = getKeywordsForDialect("mssql");
+    const oracle = getKeywordsForDialect("oracle");
+
+    expect(mssql).toEqual(expect.arrayContaining(["TOP", "OUTPUT", "MERGE"]));
+    expect(mssql).toEqual(
+      expect.arrayContaining(["IDENTITY", "NVARCHAR", "UNIQUEIDENTIFIER"]),
+    );
+    expect(oracle).toEqual(
+      expect.arrayContaining(["ROWNUM", "MERGE", "MINUS"]),
+    );
+    expect(oracle).toEqual(
+      expect.arrayContaining([
+        "CONNECT BY",
+        "START WITH",
+        "VARCHAR2",
+        "NUMBER",
+      ]),
+    );
+    expect(mssql).not.toContain("CONNECT BY");
+    expect(oracle).not.toContain("UNIQUEIDENTIFIER");
   });
 
   // Deleted connection (dbType undefined) falls back to the common ANSI set.
@@ -88,6 +106,8 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
       "mariadb",
       "sqlite",
       "duckdb",
+      "mssql",
+      "oracle",
     ] as const) {
       const kws = getKeywordsForDialect(dbType);
       for (const common of COMMON_SQL_KEYWORDS) {

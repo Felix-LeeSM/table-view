@@ -27,7 +27,7 @@ describe("adapter conformance matrix", () => {
       for (const claim of Object.values(claims.areas)) {
         if (claim.level === "unsupported") {
           expect(
-            claim.unsupported.length,
+            claim.unsupported.length + claim.deferred.length,
             `${dbType}:${claim.area}`,
           ).toBeGreaterThan(0);
           expect(claim.checks).toEqual([]);
@@ -255,5 +255,42 @@ describe("adapter conformance matrix", () => {
       "edit.editKeys",
       "edit.bulkWrite",
     ]);
+  });
+
+  it("locks MSSQL and Oracle to runtime RDB claims", () => {
+    const mssql = ADAPTER_CONFORMANCE_MATRIX.mssql;
+    expect(mssql.level).toBe("runtime");
+    expect(mssql.areas.connection.checks).toEqual([
+      "connection.test",
+      "connection.switchDatabase",
+    ]);
+    expect(mssql.areas.connection.deferred).toEqual([]);
+
+    const oracle = ADAPTER_CONFORMANCE_MATRIX.oracle;
+    expect(oracle.level).toBe("runtime");
+    expect(oracle.areas.connection.checks).toEqual(["connection.test"]);
+    expect(oracle.areas.connection.deferred).toEqual([
+      "connection.switchDatabase",
+    ]);
+
+    for (const entry of [mssql, oracle]) {
+      expect(entry.areas.catalog.checks).toEqual([
+        "catalog.browse",
+        "catalog.schema",
+        "catalog.indexes",
+        "catalog.constraints",
+        "catalog.relationships",
+      ]);
+      expect(entry.areas.catalog.deferred).toEqual([]);
+      expect(entry.areas.query.checks).toEqual([
+        "query.query",
+        "query.multiStatement",
+        "query.cancel",
+      ]);
+      expect(entry.areas.query.deferred).toEqual([]);
+      expect(entry.areas.query.unsupported).toContain("query.explain");
+      expect(entry.areas.edit.checks).toEqual(["edit.editRows"]);
+      expect(entry.areas.edit.deferred).toEqual([]);
+    }
   });
 });

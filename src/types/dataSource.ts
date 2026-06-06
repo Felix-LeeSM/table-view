@@ -329,6 +329,61 @@ export const DUCKDB_CAPABILITIES = capabilities({
   },
 });
 
+export const MSSQL_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+    switchDatabase: true,
+  },
+  query: {
+    query: true,
+    multiStatement: true,
+    cancel: true,
+  },
+  catalog: {
+    browse: true,
+    schema: true,
+    indexes: true,
+    constraints: true,
+    relationships: true,
+  },
+  edit: {
+    editRows: true,
+  },
+  ddl: {
+    createTable: true,
+    alterTable: true,
+    createIndex: true,
+    dropObject: true,
+  },
+});
+
+export const ORACLE_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+  query: {
+    query: true,
+    multiStatement: true,
+    cancel: true,
+  },
+  catalog: {
+    browse: true,
+    schema: true,
+    indexes: true,
+    constraints: true,
+    relationships: true,
+  },
+  edit: {
+    editRows: true,
+  },
+  ddl: {
+    createTable: true,
+    alterTable: true,
+    createIndex: true,
+    dropObject: true,
+  },
+});
+
 export const MONGODB_CAPABILITIES = capabilities({
   connection: {
     test: true,
@@ -496,7 +551,15 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     DUCKDB_CAPABILITIES,
     DUCKDB_FILE_CONNECTION,
   ),
-  mssql: profile("mssql", "server", ["sql"], "rdb", ["tabular"], "rdb-default"),
+  mssql: profile(
+    "mssql",
+    "server",
+    ["sql"],
+    "rdb",
+    ["tabular"],
+    "rdb-default",
+    MSSQL_CAPABILITIES,
+  ),
   oracle: profile(
     "oracle",
     "server",
@@ -504,6 +567,7 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "rdb",
     ["tabular"],
     "rdb-default",
+    ORACLE_CAPABILITIES,
   ),
   mongodb: profile(
     "mongodb",

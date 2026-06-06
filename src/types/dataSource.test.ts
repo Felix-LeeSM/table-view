@@ -115,8 +115,42 @@ describe("DataSourceProfile registry", () => {
       query: { query: true },
       catalog: { browse: true, schema: true },
     }),
-    mssql: createEmptyDataSourceCapabilities(),
-    oracle: createEmptyDataSourceCapabilities(),
+    mssql: expectedCapabilities({
+      connection: { test: true, switchDatabase: true },
+      query: { query: true, multiStatement: true, cancel: true },
+      catalog: {
+        browse: true,
+        schema: true,
+        indexes: true,
+        constraints: true,
+        relationships: true,
+      },
+      edit: { editRows: true },
+      ddl: {
+        createTable: true,
+        alterTable: true,
+        createIndex: true,
+        dropObject: true,
+      },
+    }),
+    oracle: expectedCapabilities({
+      connection: { test: true },
+      query: { query: true, multiStatement: true, cancel: true },
+      catalog: {
+        browse: true,
+        schema: true,
+        indexes: true,
+        constraints: true,
+        relationships: true,
+      },
+      edit: { editRows: true },
+      ddl: {
+        createTable: true,
+        alterTable: true,
+        createIndex: true,
+        dropObject: true,
+      },
+    }),
     mongodb: expectedCapabilities({
       connection: { test: true },
       query: { query: true, cancel: true, explain: true },
@@ -332,11 +366,21 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
-  it("keeps unsupported profiles structurally present but capability-empty", () => {
+  it("exposes MSSQL and Oracle as runtime RDB profiles", () => {
     for (const dbType of ["mssql", "oracle"] satisfies DatabaseType[]) {
-      expect(getDataSourceProfile(dbType).capabilities).toEqual(
-        createEmptyDataSourceCapabilities(),
-      );
+      const profile = getDataSourceProfile(dbType);
+
+      expect(profile.capabilities).toEqual(expectedCapabilitiesByType[dbType]);
+      expect(profile.capabilities.connection.test).toBe(true);
+      expect(profile.capabilities.query.query).toBe(true);
+      expect(profile.capabilities.catalog.browse).toBe(true);
+      expect(profile.capabilities.edit.editRows).toBe(true);
+      expect(profile.capabilities.ddl.createTable).toBe(true);
+      expect(profile.backendAdapter).toEqual({
+        id: dbType,
+        kind: "rdb",
+        capabilitySource: dbType,
+      });
     }
   });
 
@@ -347,6 +391,8 @@ describe("DataSourceProfile registry", () => {
       "mariadb",
       "sqlite",
       "duckdb",
+      "mssql",
+      "oracle",
       "mongodb",
       "redis",
       "valkey",
@@ -358,8 +404,8 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("duckdb")).toBe(true);
     expect(isConnectionSupportedDatabaseType("redis")).toBe(true);
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
-    expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
-    expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
+    expect(isConnectionSupportedDatabaseType("mssql")).toBe(true);
+    expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
     expect(isConnectionSupportedDatabaseType("elasticsearch")).toBe(true);
     expect(isConnectionSupportedDatabaseType("opensearch")).toBe(true);
   });
@@ -409,11 +455,15 @@ describe("DataSourceProfile registry", () => {
       "mariadb",
       "sqlite",
       "duckdb",
+      "mssql",
+      "oracle",
     ]);
     expect(SERVER_RDBMS_DATABASE_TYPES).toEqual([
       "postgresql",
       "mysql",
       "mariadb",
+      "mssql",
+      "oracle",
     ]);
     expect(FILE_RDBMS_DATABASE_TYPES).toEqual(["sqlite", "duckdb"]);
 
@@ -430,19 +480,6 @@ describe("DataSourceProfile registry", () => {
       expect(profile.capabilities.query.query).toBe(true);
       expect(profile.capabilities.catalog.browse).toBe(true);
       expect(profile.capabilities.catalog.schema).toBe(true);
-    }
-
-    for (const dbType of ["mssql", "oracle"] satisfies DatabaseType[]) {
-      const profile = getDataSourceProfile(dbType);
-
-      expect(profile.paradigm).toBe("rdb");
-      expect(profile.backendAdapter).toEqual({
-        id: "declared-rdb",
-        kind: "rdb",
-        capabilitySource: "declared-rdb",
-      });
-      expect(profile.capabilities).toEqual(createEmptyDataSourceCapabilities());
-      expect(isConnectionSupportedDatabaseType(dbType)).toBe(false);
     }
   });
 
@@ -497,6 +534,8 @@ describe("DataSourceProfile registry", () => {
     expect(hasConnectionCapability("postgresql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mysql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mariadb", "switchDatabase")).toBe(true);
+    expect(hasConnectionCapability("mssql", "switchDatabase")).toBe(true);
+    expect(hasConnectionCapability("oracle", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("redis", "switchDatabase")).toBe(true);

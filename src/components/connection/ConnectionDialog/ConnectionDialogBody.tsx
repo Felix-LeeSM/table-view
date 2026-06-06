@@ -134,9 +134,25 @@ export default function ConnectionDialogBody({
               />
             );
           case "mssql":
+            return (
+              <PgFormFields
+                draft={form}
+                onChange={onChange}
+                userPlaceholder="sa"
+                databasePlaceholder="master"
+                {...sharedAuth}
+              />
+            );
           case "oracle":
             return (
-              <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
+              <PgFormFields
+                draft={form}
+                onChange={onChange}
+                userPlaceholder="system"
+                databaseLabel="Service"
+                databasePlaceholder="XEPDB1"
+                {...sharedAuth}
+              />
             );
           case "elasticsearch":
           case "opensearch":
@@ -343,10 +359,7 @@ export default function ConnectionDialogBody({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {/* 새 connection 생성 시엔 백엔드 어댑터가 wire-up 된 DBMS
-                    만 노출. 편집 모드에서 기존 connection 의 dbType 이
-                    unsupported 라면 그 항목도 예외적으로 추가해 Select 가
-                    빈값으로 보이지 않게 한다. */}
+                {/* 새 connection 생성 시엔 connection test capability 가 있는 DBMS 만 노출. */}
                 {CONNECTION_DIALOG_DATABASE_TYPES.map((t) => (
                   <SelectItem key={t} value={t}>
                     {DATABASE_TYPE_LABELS[t]}

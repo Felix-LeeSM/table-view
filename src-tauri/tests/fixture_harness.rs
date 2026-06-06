@@ -30,7 +30,7 @@ fn fixture_harness_resolves_search_fixture_by_profile_family_and_paradigm() {
 fn fixture_harness_rejects_missing_fixture_with_actionable_diagnostics() {
     let harness = FixtureHarness::local();
     let error = match harness.request(FixtureRequest::by_profile(DatabaseType::Mssql)) {
-        Ok(_) => panic!("declared-only mssql should not have a local fixture yet"),
+        Ok(_) => panic!("mssql connection runtime should not imply a local fixture yet"),
         Err(error) => error,
     };
 

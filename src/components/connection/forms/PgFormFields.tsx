@@ -24,6 +24,9 @@ export interface PgFormFieldsProps {
   setClearPassword: (value: boolean) => void;
   inputClass: string;
   labelClass: string;
+  userPlaceholder?: string;
+  databaseLabel?: string;
+  databasePlaceholder?: string;
 }
 
 export default function PgFormFields({
@@ -37,6 +40,9 @@ export default function PgFormFields({
   setClearPassword,
   inputClass,
   labelClass,
+  userPlaceholder = "postgres",
+  databaseLabel = "Database",
+  databasePlaceholder = "postgres",
 }: PgFormFieldsProps) {
   return (
     <>
@@ -80,7 +86,7 @@ export default function PgFormFields({
           className={inputClass}
           value={draft.user}
           onChange={(e) => onChange({ user: e.target.value })}
-          placeholder="postgres"
+          placeholder={userPlaceholder}
         />
       </div>
 
@@ -135,14 +141,14 @@ export default function PgFormFields({
       {/* Database */}
       <div>
         <label htmlFor="conn-database" className={labelClass}>
-          Database
+          {databaseLabel}
         </label>
         <input
           id="conn-database"
           className={inputClass}
           value={draft.database}
           onChange={(e) => onChange({ database: e.target.value })}
-          placeholder="postgres"
+          placeholder={databasePlaceholder}
         />
       </div>
     </>

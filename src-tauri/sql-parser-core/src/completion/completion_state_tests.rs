@@ -112,7 +112,7 @@ fn explicit_completion_state_classifier_covers_initial_sql_states() {
     );
 
     let mut unsupported = request("SELECT ", 7, 7);
-    unsupported.dialect = "mssql".to_string();
+    unsupported.dialect = "futuredb".to_string();
     assert_eq!(
         complete_sql(unsupported).metadata.completion_state,
         CompletionState::Unsupported

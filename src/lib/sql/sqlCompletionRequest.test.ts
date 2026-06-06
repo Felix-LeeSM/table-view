@@ -72,6 +72,8 @@ describe("buildSqlCompletionRequest", () => {
     ["mariadb", "mysql", "mysql-client"],
     ["sqlite", "sqlite", "sqlite-cli"],
     ["duckdb", "duckdb", "none"],
+    ["mssql", "mssql", "none"],
+    ["oracle", "oracle", "none"],
   ] as const)(
     "builds one WASM-ready request shape for %s",
     (dbType, family, shell) => {
@@ -104,6 +106,8 @@ describe("buildSqlCompletionRequest", () => {
     const mysql = requestFor("mysql");
     const mariadb = requestFor("mariadb");
     const sqlite = requestFor("sqlite");
+    const mssql = requestFor("mssql");
+    const oracle = requestFor("oracle");
 
     expect(pg.capabilities.returning).toBe(true);
     expect(pg.capabilities.ilike).toBe(true);
@@ -130,6 +134,22 @@ describe("buildSqlCompletionRequest", () => {
     expect(duckdb.vocabulary.keywords).not.toContain("ATTACH");
     expect(duckdb.vocabulary.keywords).not.toContain("DETACH");
     expect(duckdb.vocabulary.keywords).not.toContain("COPY");
+
+    expect(mssql.vocabulary.keywords).toEqual(
+      expect.arrayContaining(["TOP", "OUTPUT", "NVARCHAR"]),
+    );
+    expect(mssql.vocabulary.functions).toEqual(
+      expect.arrayContaining(["GETDATE", "NEWID", "OBJECT_ID"]),
+    );
+    expect(mssql.shellProfile.commands).toEqual([]);
+
+    expect(oracle.vocabulary.keywords).toEqual(
+      expect.arrayContaining(["ROWNUM", "CONNECT BY", "VARCHAR2"]),
+    );
+    expect(oracle.vocabulary.functions).toEqual(
+      expect.arrayContaining(["SYSDATE", "NVL", "TO_CHAR"]),
+    );
+    expect(oracle.shellProfile.commands).toEqual([]);
   });
 
   it("keeps MariaDB completion requests distinct without widening runtime evidence", () => {

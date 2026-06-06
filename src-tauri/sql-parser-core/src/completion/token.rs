@@ -104,17 +104,25 @@ fn valid_cursor_utf8(text: &str, requested: usize) -> usize {
 }
 
 fn quoted_identifier_prefix(before: &str) -> Option<(usize, String, char)> {
-    let quote = '`';
-    if before.chars().filter(|ch| *ch == quote).count() % 2 == 0 {
+    quoted_identifier_prefix_for_pair(before, '`', '`')
+        .or_else(|| quoted_identifier_prefix_for_pair(before, '[', ']'))
+}
+
+fn quoted_identifier_prefix_for_pair(
+    before: &str,
+    open: char,
+    close: char,
+) -> Option<(usize, String, char)> {
+    if open == close && before.chars().filter(|ch| *ch == open).count() % 2 == 0 {
         return None;
     }
-    let quote_start = before.rfind(quote)?;
-    let prefix = &before[quote_start + quote.len_utf8()..];
+    let quote_start = before.rfind(open)?;
+    let prefix = &before[quote_start + open.len_utf8()..];
     if prefix
         .chars()
-        .all(|ch| ch != quote && ch != '.' && ch != '\n' && ch != '\r')
+        .all(|ch| ch != close && ch != '.' && ch != '\n' && ch != '\r')
     {
-        return Some((quote_start, prefix.to_string(), quote));
+        return Some((quote_start, prefix.to_string(), open));
     }
     None
 }
@@ -122,7 +130,7 @@ fn quoted_identifier_prefix(before: &str) -> Option<(usize, String, char)> {
 fn scan_qualifier_start(before_dot: &str) -> usize {
     let mut start = before_dot.len();
     for (idx, ch) in before_dot.char_indices().rev() {
-        if !(is_ident_char(ch) || ch == '.' || ch == '`') {
+        if !(is_ident_char(ch) || ch == '.' || ch == '`' || ch == '[' || ch == ']') {
             break;
         }
         start = idx;

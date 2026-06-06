@@ -70,6 +70,16 @@ ignore = [
   # 또는 rsa 0.10+ 채택 시 즉시 해소. Sprint 278 (sqlx mysql feature 활성화)
   # 이후 본 advisory 가 surfacing 되어 추가.
   "RUSTSEC-2023-0071",
+  # ── oracle-rs: rustls-pemfile unmaintained advisory ──────────────────
+  # 경로: oracle-rs 0.1.7 → rustls-pemfile 2.2.0. Oracle Rust driver 의
+  # transitive TLS PEM parser wrapper이며, RUSTSEC-2025-0134 는 취약 CVE 가
+  # 아니라 archived/unmaintained advisory. rustls-pemfile 2.x 는 내부적으로
+  # rustls-pki-types PEM parsing code 의 thin wrapper 이고 oracle-rs 가 직접
+  # rustls-pki-types PemObject API 로 이주해야 해소 가능. 사용자가 임의 Oracle
+  # host 에 접속하는 desktop path 에서 PEM file parsing surface 는 driver TLS
+  # config 내부로 제한된다. oracle-rs 후속 버전이 의존성을 제거/교체하면 즉시
+  # 해소. Sprint 552 (MSSQL/Oracle support) 에서 surfacing 되어 추가.
+  "RUSTSEC-2025-0134",
 ]
 
 [licenses]

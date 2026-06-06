@@ -23,9 +23,9 @@ export type DatabaseType =
  * tables / columns) 만 동작 — DDL / queries / streaming 은 Slice B~G
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
- * 미포함 어댑터 (MSSQL/Oracle) 는 profile identity 는 있지만 connection 생성
- * dialog 의 Select option 에 노출되지 않고, URL paste / Parse & Continue 로
- * 들어와도 거부된다.
+ * MSSQL/Oracle are connection-test-only in the first runtime slice: the
+ * dialog can create and test them, while catalog/query/edit remain gated by
+ * their profile capabilities.
  */
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",
@@ -33,6 +33,8 @@ export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "mariadb",
   "sqlite",
   "duckdb",
+  "mssql",
+  "oracle",
   "mongodb",
   "redis",
   "valkey",
@@ -44,8 +46,7 @@ export function isSupportedDatabaseType(t: DatabaseType): boolean {
   return SUPPORTED_DATABASE_TYPES.includes(t);
 }
 
-/** UI 라벨. SUPPORTED 와 별개로 모든 variant 에 대해 정의 — URL parser 가
- * 인식한 unsupported scheme 의 거부 메시지에서도 사용한다. */
+/** UI 라벨. SUPPORTED 와 별개로 모든 variant 에 대해 정의한다. */
 export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
   postgresql: "PostgreSQL",
   mysql: "MySQL",
@@ -165,7 +166,7 @@ export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
  * - `sqlite` / `duckdb`: file-based; the form swaps host/port/user/password
  *   for a file path field when the runtime is exposed.
  * - `mssql`: `sa` / `master` default.
- * - `oracle`: common local Oracle Free service default.
+ * - `oracle`: local fixture service default.
  * - `mongodb`: optional auth — empty user/db.
  * - `redis` / `valkey`: ACL optional, default DB index `"0"` (kept as
  *   string for ConnectionConfig parity).
@@ -186,7 +187,7 @@ export const DATABASE_DEFAULT_FIELDS: Record<
   sqlite: { port: 0, user: "", database: "" },
   duckdb: { port: 0, user: "", database: "" },
   mssql: { port: 1433, user: "sa", database: "master" },
-  oracle: { port: 1521, user: "system", database: "FREEPDB1" },
+  oracle: { port: 1521, user: "system", database: "XEPDB1" },
   mongodb: { port: 27017, user: "", database: "admin" },
   redis: { port: 6379, user: "", database: "0" },
   valkey: { port: 6379, user: "", database: "0" },

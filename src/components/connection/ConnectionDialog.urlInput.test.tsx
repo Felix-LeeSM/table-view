@@ -591,47 +591,42 @@ describe("[AC-178-03] host:port blur split", () => {
 // user's pasted text remains in the host field for them to fix.
 // ===========================================================================
 
-// ===========================================================================
-// Sprint 281 (2026-05-13) — unsupported DBMS scheme paste.
-// `SUPPORTED_DATABASE_TYPES` 에 없는 DBMS URL 을 host 필드에
-// paste 하면 form 은 변경되지 않는다 (AC-178-04 의 silent 룰 적용: best-effort
-// 경로이므로 alert 없이 단순히 form 을 건드리지 않음). URL 모드의 Parse &
-// Continue 는 명시적 사용자 액션이라 거부 메시지를 노출 — 별도 그룹.
-//
-// MySQL/MariaDB/SQLite/Redis/Valkey/Elasticsearch/OpenSearch 는 supported 이므로 본 silent-reject list 에서 제외.
-// ===========================================================================
-
-describe("[Sprint 281] unsupported DBMS paste is silent (no form change)", () => {
-  const unsupportedPastes = [
-    { scheme: "mssql", url: "mssql://sa:pw@mssql.local:1433/master" },
-    { scheme: "oracle", url: "oracle://system:pw@oracle.local:1521/FREEPDB1" },
+describe("MSSQL and Oracle URL paste follows connection support", () => {
+  const supportedPastes = [
+    {
+      scheme: "mssql",
+      url: "mssql://sa:pw@mssql.local:1433/master",
+      host: "mssql.local",
+      port: 1433,
+      user: "sa",
+      databaseLabel: "Database",
+      database: "master",
+    },
+    {
+      scheme: "oracle",
+      url: "oracle://system:pw@oracle.local:1521/XEPDB1",
+      host: "oracle.local",
+      port: 1521,
+      user: "system",
+      databaseLabel: "Service",
+      database: "XEPDB1",
+    },
   ];
 
-  for (const c of unsupportedPastes) {
-    it(`unsupported ${c.scheme} paste leaves form unchanged + no "detected" affordance`, async () => {
+  for (const c of supportedPastes) {
+    it(`${c.scheme} paste applies parsed fields and detected affordance`, async () => {
       renderDialog();
-      const hostBefore = (screen.getByLabelText("Host") as HTMLInputElement)
-        .value;
-      const portBefore = (screen.getByLabelText("Port") as HTMLInputElement)
-        .value;
       await act(async () => {
         pasteIntoHost(c.url);
       });
-      // dbType Select 는 여전히 PostgreSQL (기본). Host/Port 는 paste 의
-      // 기본 동작 영향만 받을 수 있어 affordance 부재로 reject 를 검증.
-      expect(
-        screen.queryByTestId("connection-url-detected"),
-      ).not.toBeInTheDocument();
-      // PG 폼은 그대로 mount (MySQL/Redis/SQLite 폼으로 전환되지 않음).
-      expect(screen.getByLabelText("Host")).toBeInTheDocument();
-      // Host/Port 입력은 우리 핸들러가 변경하지 않는다 (jsdom 의 paste
-      // 기본 동작이 input 에 텍스트를 자동 입력하지 않으므로 원래 값 유지).
-      expect((screen.getByLabelText("Host") as HTMLInputElement).value).toBe(
-        hostBefore,
+      expect(screen.getByTestId("connection-url-detected")).toHaveTextContent(
+        `Detected ${c.scheme} URL`,
       );
-      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
-        portBefore,
-      );
+      expect(screen.getByLabelText("Host")).toHaveValue(c.host);
+      expect(screen.getByLabelText("Port")).toHaveValue(c.port);
+      expect(screen.getByLabelText("User")).toHaveValue(c.user);
+      expect(screen.getByLabelText("Password")).toHaveValue("pw");
+      expect(screen.getByLabelText(c.databaseLabel)).toHaveValue(c.database);
     });
   }
 });

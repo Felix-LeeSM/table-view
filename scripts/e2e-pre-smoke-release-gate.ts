@@ -35,16 +35,6 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     const fixtureConnections = storage.connections.filter((connection) =>
       connection.id.startsWith("fixture-"),
     );
-    const dbTypes = fixtureConnections.map((connection) => connection.db_type);
-
-    assert(
-      !dbTypes.includes("mssql"),
-      `${profile}: active MSSQL fixture leaked`,
-    );
-    assert(
-      !dbTypes.includes("oracle"),
-      `${profile}: active Oracle fixture leaked`,
-    );
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "sqlite")
         .length === 1,
@@ -83,6 +73,23 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
       !sqlitePath.includes("Application Support") &&
         !duckdbPath.includes("Application Support"),
       `${profile}: file fixtures must not use Application Support defaults`,
+    );
+
+    assert(
+      spec.profileSpec.database.mssql,
+      `${profile}: MSSQL fixture database must be configured for full-support smoke`,
+    );
+    assert(
+      spec.profileSpec.database.oracle,
+      `${profile}: Oracle fixture database must be configured for full-support smoke`,
+    );
+    assert(
+      (spec.profileSpec.connections?.mssql?.length ?? 0) > 0,
+      `${profile}: MSSQL fixture connection inventory missing`,
+    );
+    assert(
+      (spec.profileSpec.connections?.oracle?.length ?? 0) > 0,
+      `${profile}: Oracle fixture connection inventory missing`,
     );
   } finally {
     if (previousDataDir === undefined) {
@@ -138,8 +145,41 @@ function verifySearchConnectionPromotionBoundary(): void {
   );
 }
 
+function verifyMssqlOracleSmokePromotionBoundary(): void {
+  for (const dbType of ["mssql", "oracle"] as const) {
+    const profile = getDataSourceProfile(dbType);
+    assert(
+      isSupportedDatabaseType(dbType),
+      `${dbType}: full-support smoke should be advertised as connectable`,
+    );
+    assert(
+      hasConnectionCapability(dbType, "test"),
+      `${dbType}: connection test capability should be exposed`,
+    );
+    assert(
+      profile.languages.includes("sql") &&
+        profile.catalogModel === "rdb" &&
+        profile.resultKinds.includes("tabular"),
+      `${dbType}: SQL/RDB/tabular contract drifted`,
+    );
+  }
+
+  for (const path of [
+    "e2e/smoke/mssql.spec.ts",
+    "e2e/smoke/oracle.spec.ts",
+    "e2e/fixtures/seed.mssql.sql",
+    "e2e/fixtures/seed.oracle.sql",
+  ]) {
+    assert(
+      existsSync(path),
+      `required MSSQL/Oracle smoke sidecar missing: ${path}`,
+    );
+  }
+}
+
 await verifyProfile("development");
 await verifyProfile("e2e");
 verifySearchConnectionPromotionBoundary();
+verifyMssqlOracleSmokePromotionBoundary();
 
 console.log("[e2e:pre-smoke] release gate fixture assertions passed.");

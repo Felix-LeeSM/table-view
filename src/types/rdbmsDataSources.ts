@@ -16,6 +16,8 @@ export const RUNTIME_RDBMS_DATABASE_TYPES = Object.freeze([
   "mariadb",
   "sqlite",
   "duckdb",
+  "mssql",
+  "oracle",
 ] as const satisfies readonly DatabaseType[]);
 
 export type RuntimeRdbmsDatabaseType =
@@ -25,6 +27,8 @@ export const SERVER_RDBMS_DATABASE_TYPES = Object.freeze([
   "postgresql",
   "mysql",
   "mariadb",
+  "mssql",
+  "oracle",
 ] as const satisfies readonly DatabaseType[]);
 
 export const FILE_RDBMS_DATABASE_TYPES = Object.freeze([

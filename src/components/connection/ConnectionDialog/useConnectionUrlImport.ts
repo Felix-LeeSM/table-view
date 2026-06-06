@@ -169,10 +169,8 @@ export function useConnectionUrlImport({
       // behaviour. No alert region added.
       return;
     }
-    // Sprint 276 — parser 가 unsupported DBMS scheme 을 인식한 경우. AC-178-04
-    // 의 silent 룰을 따라 form 을 건드리지 않고 paste 만 흘려보낸다 (사용자가
-    // 직접 host 에 텍스트가 들어가는 걸 보면 인식 자체가 안 됐다고 자연스레
-    // 깨닫는다). URL 모드 (Parse & Continue) 에서는 명시 거부.
+    // Recognised but not connection-supported DBMS schemes stay silent in
+    // form-mode paste; URL mode surfaces the explicit error above.
     if (
       parsed.dbType &&
       !dataSourceProfiles.isConnectionSupportedDatabaseType(parsed.dbType)

@@ -118,6 +118,8 @@ pub enum BackendAdapterId {
     MysqlFamily,
     Sqlite,
     Duckdb,
+    Mssql,
+    Oracle,
     Mongodb,
     Redis,
     Valkey,
@@ -132,6 +134,8 @@ pub enum BackendAdapterCapabilitySource {
     MysqlFamily,
     Sqlite,
     Duckdb,
+    Mssql,
+    Oracle,
     Mongodb,
     Redis,
     Valkey,
@@ -225,6 +229,8 @@ pub enum ServerVersionProbeId {
     PostgresVersionSettings,
     MysqlFamilyVersion,
     SqliteVersion,
+    MssqlServerProperty,
+    OracleVVersion,
     MongodbBuildInfo,
     SearchRoot,
     None,
@@ -289,7 +295,6 @@ const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
 ];
-const NO_BACKEND_CAPABILITIES: &[BackendAdapterCapability] = &[];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::DocumentCatalog,
@@ -350,12 +355,19 @@ const DUCKDB_FILE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract 
     capability_source: BackendAdapterCapabilitySource::Duckdb,
     capabilities: DUCKDB_RDB_CAPABILITIES,
 };
-const DECLARED_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+const MSSQL_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
-    state: BackendAdapterContractState::DeclaredOnly,
-    implementation: BackendAdapterId::DeclaredRdb,
-    capability_source: BackendAdapterCapabilitySource::DeclaredRdb,
-    capabilities: NO_BACKEND_CAPABILITIES,
+    state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::Mssql,
+    capability_source: BackendAdapterCapabilitySource::Mssql,
+    capabilities: RDB_CAPABILITIES,
+};
+const ORACLE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+    kind: BackendAdapterContractKind::Rdb,
+    state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::Oracle,
+    capability_source: BackendAdapterCapabilitySource::Oracle,
+    capabilities: RDB_CAPABILITIES,
 };
 const FACTORY_DOCUMENT_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Document,
@@ -486,12 +498,12 @@ const DUCKDB_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
 const MSSQL_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
     id: DataSourceDialectId::Mssql,
     family: DataSourceDialectFamily::Mssql,
-    version_probe: ServerVersionProbeId::None,
+    version_probe: ServerVersionProbeId::MssqlServerProperty,
 };
 const ORACLE_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
     id: DataSourceDialectId::Oracle,
     family: DataSourceDialectFamily::Oracle,
-    version_probe: ServerVersionProbeId::None,
+    version_probe: ServerVersionProbeId::OracleVVersion,
 };
 const MONGODB_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
     id: DataSourceDialectId::Mongodb,
@@ -562,11 +574,9 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             adapter_contract: DUCKDB_FILE_RDB_CONTRACT,
             file_connection: Some(DUCKDB_FILE_CONNECTION),
         },
-        DatabaseType::Mssql => {
-            rdb_profile(DatabaseType::Mssql, DECLARED_RDB_CONTRACT, MSSQL_DIALECT)
-        }
+        DatabaseType::Mssql => rdb_profile(DatabaseType::Mssql, MSSQL_RDB_CONTRACT, MSSQL_DIALECT),
         DatabaseType::Oracle => {
-            rdb_profile(DatabaseType::Oracle, DECLARED_RDB_CONTRACT, ORACLE_DIALECT)
+            rdb_profile(DatabaseType::Oracle, ORACLE_RDB_CONTRACT, ORACLE_DIALECT)
         }
         DatabaseType::Mongodb => DataSourceProfile {
             id: DatabaseType::Mongodb,
@@ -657,25 +667,4 @@ fn search_profile(id: DatabaseType, dialect: DataSourceDialectMetadata) -> DataS
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn redis_profile_declares_value_and_stream_result_support() {
-        let profile = DatabaseType::Redis.data_source_profile();
-
-        assert_eq!(profile.paradigm, Paradigm::Kv);
-        assert_eq!(
-            profile.result_kinds,
-            &[
-                ResultEnvelopeKind::KeyValue,
-                ResultEnvelopeKind::StreamRecords,
-                ResultEnvelopeKind::Tabular
-            ]
-        );
-        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
-        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueRead));
-        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueMutation));
-        assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    }
-}
+mod tests;

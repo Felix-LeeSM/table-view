@@ -5,6 +5,8 @@ export type BackendAdapterProfileId =
   | "mysql-family"
   | "sqlite"
   | "duckdb"
+  | "mssql"
+  | "oracle"
   | "mongodb"
   | "redis"
   | "valkey"
@@ -17,6 +19,8 @@ export type BackendAdapterCapabilitySource =
   | "mysql-family"
   | "sqlite"
   | "duckdb"
+  | "mssql"
+  | "oracle"
   | "mongodb"
   | "redis"
   | "valkey"
@@ -48,6 +52,8 @@ export type ServerVersionProbeId =
   | "postgres-version-settings"
   | "mysql-family-version"
   | "sqlite-version"
+  | "mssql-server-property"
+  | "oracle-v-version"
   | "mongodb-build-info"
   | "search-root"
   | "none";
@@ -75,6 +81,8 @@ const BACKEND_ADAPTER_PROFILES = Object.freeze({
   mysqlFamily: backendAdapterProfile("mysql-family", "rdb", "mysql-family"),
   sqlite: backendAdapterProfile("sqlite", "rdb", "sqlite"),
   duckdb: backendAdapterProfile("duckdb", "rdb", "duckdb"),
+  mssql: backendAdapterProfile("mssql", "rdb", "mssql"),
+  oracle: backendAdapterProfile("oracle", "rdb", "oracle"),
   mongodb: backendAdapterProfile("mongodb", "document", "mongodb"),
   redis: backendAdapterProfile("redis", "kv", "redis"),
   valkey: backendAdapterProfile("valkey", "kv", "valkey"),
@@ -109,8 +117,8 @@ export const DIALECT_METADATA = Object.freeze({
   mariadb: dialectMetadata("mariadb", "mysql", "mysql-family-version"),
   sqlite: dialectMetadata("sqlite", "sqlite", "sqlite-version"),
   duckdb: dialectMetadata("duckdb", "duckdb", "none"),
-  mssql: dialectMetadata("mssql", "mssql", "none"),
-  oracle: dialectMetadata("oracle", "oracle", "none"),
+  mssql: dialectMetadata("mssql", "mssql", "mssql-server-property"),
+  oracle: dialectMetadata("oracle", "oracle", "oracle-v-version"),
   mongodb: dialectMetadata("mongodb", "mongodb", "mongodb-build-info"),
   redis: dialectMetadata("redis", "redis", "none"),
   valkey: dialectMetadata("valkey", "valkey", "none"),
@@ -128,8 +136,8 @@ export const BACKEND_ADAPTER_BY_TYPE = Object.freeze({
   mariadb: BACKEND_ADAPTER_PROFILES.mysqlFamily,
   sqlite: BACKEND_ADAPTER_PROFILES.sqlite,
   duckdb: BACKEND_ADAPTER_PROFILES.duckdb,
-  mssql: BACKEND_ADAPTER_PROFILES.declaredRdb,
-  oracle: BACKEND_ADAPTER_PROFILES.declaredRdb,
+  mssql: BACKEND_ADAPTER_PROFILES.mssql,
+  oracle: BACKEND_ADAPTER_PROFILES.oracle,
   mongodb: BACKEND_ADAPTER_PROFILES.mongodb,
   redis: BACKEND_ADAPTER_PROFILES.redis,
   valkey: BACKEND_ADAPTER_PROFILES.valkey,

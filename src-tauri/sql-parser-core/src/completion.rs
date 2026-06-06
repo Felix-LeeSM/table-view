@@ -625,6 +625,9 @@ fn normalize_identifier_part(part: &str) -> String {
     if trimmed.len() >= 2 && trimmed.starts_with('`') && trimmed.ends_with('`') {
         return trimmed[1..trimmed.len() - 1].replace("``", "`");
     }
+    if trimmed.len() >= 2 && trimmed.starts_with('[') && trimmed.ends_with(']') {
+        return trimmed[1..trimmed.len() - 1].replace("]]", "]");
+    }
     trimmed.to_string()
 }
 
@@ -636,11 +639,11 @@ fn apply_identifier(identifier: &str, token: &CompletionToken) -> String {
 }
 
 fn quote_identifier(identifier: &str, quote: char) -> String {
-    let escaped = match quote {
-        '`' => identifier.replace('`', "``"),
-        _ => identifier.to_string(),
-    };
-    format!("{quote}{escaped}{quote}")
+    match quote {
+        '`' => format!("`{}`", identifier.replace('`', "``")),
+        '[' => format!("[{}]", identifier.replace(']', "]]")),
+        _ => format!("{quote}{identifier}{quote}"),
+    }
 }
 
 fn dedupe_items(items: &mut Vec<CompletionItem>) {
@@ -661,6 +664,7 @@ fn dedupe_items(items: &mut Vec<CompletionItem>) {
 
 fn supports_sql_completion(dialect: &str) -> bool {
     matches!(dialect, "postgresql" | "mysql" | "mariadb" | "sqlite")
+        || matches!(dialect, "mssql" | "oracle")
 }
 
 fn keyword_detail(dialect: &str) -> String {
@@ -681,6 +685,8 @@ fn dialect_label(dialect: &str) -> &'static str {
         "mysql" => "MySQL",
         "mariadb" => "MariaDB",
         "sqlite" => "SQLite",
+        "mssql" => "SQL Server",
+        "oracle" => "Oracle",
         _ => "SQL",
     }
 }

@@ -188,7 +188,7 @@ describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
     expect(result!.password).toBe("my#pw");
   });
 
-  it("recognizes mssql/sqlserver/sqlsrv URLs as unsupported typed drafts", () => {
+  it("recognizes mssql/sqlserver/sqlsrv URLs as typed drafts", () => {
     for (const scheme of ["mssql", "sqlserver", "sqlsrv"]) {
       const result = parseConnectionUrl(`${scheme}://sa:pw@host:1433/master`);
       expect(result).toMatchObject({
@@ -202,7 +202,7 @@ describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
     }
   });
 
-  it("recognizes oracle URLs as unsupported typed drafts", () => {
+  it("recognizes oracle URLs as typed drafts", () => {
     const result = parseConnectionUrl(
       "oracle://system:pw@localhost:1521/FREEPDB1",
     );
@@ -319,11 +319,11 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
     });
   });
 
-  it("Oracle defaults: port=1521, user=system, database=FREEPDB1", () => {
+  it("Oracle defaults: port=1521, user=system, database=XEPDB1", () => {
     expect(DATABASE_DEFAULT_FIELDS.oracle).toEqual({
       port: 1521,
       user: "system",
-      database: "FREEPDB1",
+      database: "XEPDB1",
     });
   });
 
@@ -380,6 +380,8 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
       "mariadb",
       "sqlite",
       "duckdb",
+      "mssql",
+      "oracle",
       "mongodb",
       "redis",
       "valkey",
@@ -399,13 +401,12 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("valkey")).toBe(true);
     expect(isSupportedDatabaseType("elasticsearch")).toBe(true);
     expect(isSupportedDatabaseType("opensearch")).toBe(true);
-    expect(isSupportedDatabaseType("mssql")).toBe(false);
-    expect(isSupportedDatabaseType("oracle")).toBe(false);
+    expect(isSupportedDatabaseType("mssql")).toBe(true);
+    expect(isSupportedDatabaseType("oracle")).toBe(true);
   });
 
   it("DATABASE_TYPE_LABELS covers every DatabaseType variant", () => {
-    // 모든 variant 에 라벨이 있어야 한다 — unsupported 어댑터의 거부
-    // 메시지에서도 사용되므로.
+    // 모든 variant 에 라벨이 있어야 한다.
     expect(DATABASE_TYPE_LABELS.postgresql).toBe("PostgreSQL");
     expect(DATABASE_TYPE_LABELS.mysql).toBe("MySQL");
     expect(DATABASE_TYPE_LABELS.mariadb).toBe("MariaDB");

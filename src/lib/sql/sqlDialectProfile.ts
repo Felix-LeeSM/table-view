@@ -163,6 +163,28 @@ const SQLITE_KEYWORDS: readonly string[] = [
 
 const DUCKDB_KEYWORDS: readonly string[] = ["DESCRIBE", "SUMMARIZE"];
 
+const MSSQL_KEYWORDS: readonly string[] = [
+  "TOP",
+  "OUTPUT",
+  "MERGE",
+  "IDENTITY",
+  "NVARCHAR",
+  "UNIQUEIDENTIFIER",
+];
+
+const ORACLE_KEYWORDS: readonly string[] = [
+  "ROWNUM",
+  "MERGE",
+  "MINUS",
+  "CONNECT BY",
+  "START WITH",
+  "SEQUENCE",
+  "SYNONYM",
+  "PACKAGE",
+  "VARCHAR2",
+  "NUMBER",
+];
+
 export const COMMON_SQL_FUNCTIONS: readonly string[] = [
   "COUNT",
   "SUM",
@@ -226,6 +248,22 @@ const DUCKDB_SQL_FUNCTIONS: readonly string[] = [
   "IFNULL",
   "LIST",
   "STRUCT_PACK",
+];
+
+const MSSQL_SQL_FUNCTIONS: readonly string[] = [
+  "GETDATE",
+  "NEWID",
+  "OBJECT_ID",
+  "SCOPE_IDENTITY",
+];
+
+const ORACLE_SQL_FUNCTIONS: readonly string[] = [
+  "SYSDATE",
+  "SYSTIMESTAMP",
+  "NVL",
+  "TO_CHAR",
+  "TO_DATE",
+  "TO_NUMBER",
 ];
 
 const COMMON_CAPABILITIES: SqlDialectCapabilities = {
@@ -326,7 +364,7 @@ export const SQL_DIALECT_PROFILES: Record<SqlDialectId, SqlDialectProfile> = {
     identifierQuote: "[",
     defaultShell: "none",
     capabilities: { ...COMMON_CAPABILITIES },
-    vocabulary: vocabulary([], []),
+    vocabulary: vocabulary(MSSQL_KEYWORDS, MSSQL_SQL_FUNCTIONS),
   },
   oracle: {
     id: "oracle",
@@ -335,7 +373,7 @@ export const SQL_DIALECT_PROFILES: Record<SqlDialectId, SqlDialectProfile> = {
     identifierQuote: '"',
     defaultShell: "none",
     capabilities: { ...COMMON_CAPABILITIES },
-    vocabulary: vocabulary([], []),
+    vocabulary: vocabulary(ORACLE_KEYWORDS, ORACLE_SQL_FUNCTIONS),
   },
   ansi: {
     id: "ansi",
