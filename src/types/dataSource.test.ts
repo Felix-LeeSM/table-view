@@ -117,6 +117,7 @@ describe("DataSourceProfile registry", () => {
     }),
     mssql: expectedCapabilities({
       connection: { test: true },
+      query: { query: true, multiStatement: true, cancel: true },
     }),
     oracle: expectedCapabilities({
       connection: { test: true },
@@ -336,7 +337,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
-  it("keeps MSSQL and Oracle connection-only", () => {
+  it("keeps MSSQL query-bounded and Oracle connection-only", () => {
     const mssql = getDataSourceProfile("mssql");
     expect(mssql.backendAdapter).toEqual({
       id: "mssql",
@@ -344,8 +345,10 @@ describe("DataSourceProfile registry", () => {
       capabilitySource: "mssql",
     });
     expect(mssql.capabilities.connection.test).toBe(true);
+    expect(mssql.capabilities.query.query).toBe(true);
+    expect(mssql.capabilities.query.multiStatement).toBe(true);
+    expect(mssql.capabilities.query.cancel).toBe(true);
     expect(mssql.capabilities.catalog.browse).toBe(false);
-    expect(mssql.capabilities.query.query).toBe(false);
     expect(mssql.capabilities.edit.editRows).toBe(false);
     expect(mssql.capabilities.ddl.createTable).toBe(false);
 
@@ -467,7 +470,10 @@ describe("DataSourceProfile registry", () => {
       capabilitySource: "mssql",
     });
     expect(mssql.capabilities.connection.test).toBe(true);
-    expect(mssql.capabilities.query.query).toBe(false);
+    expect(mssql.capabilities.query.query).toBe(true);
+    expect(mssql.capabilities.query.multiStatement).toBe(true);
+    expect(mssql.capabilities.query.cancel).toBe(true);
+    expect(mssql.capabilities.query.explain).toBe(false);
     expect(mssql.capabilities.catalog.browse).toBe(false);
 
     const oracle = getDataSourceProfile("oracle");

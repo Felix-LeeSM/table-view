@@ -296,6 +296,10 @@ const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
 ];
 const CONNECTION_ONLY_RDB_CAPABILITIES: &[BackendAdapterCapability] =
     &[BackendAdapterCapability::Lifecycle];
+const MSSQL_QUERY_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
+    BackendAdapterCapability::Lifecycle,
+    BackendAdapterCapability::RelationalQuery,
+];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::DocumentCatalog,
@@ -356,12 +360,12 @@ const DUCKDB_FILE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract 
     capability_source: BackendAdapterCapabilitySource::Duckdb,
     capabilities: DUCKDB_RDB_CAPABILITIES,
 };
-const MSSQL_CONNECTION_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+const MSSQL_QUERY_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
     state: BackendAdapterContractState::FactoryBacked,
     implementation: BackendAdapterId::Mssql,
     capability_source: BackendAdapterCapabilitySource::Mssql,
-    capabilities: CONNECTION_ONLY_RDB_CAPABILITIES,
+    capabilities: MSSQL_QUERY_RDB_CAPABILITIES,
 };
 const ORACLE_CONNECTION_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
@@ -575,11 +579,9 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             adapter_contract: DUCKDB_FILE_RDB_CONTRACT,
             file_connection: Some(DUCKDB_FILE_CONNECTION),
         },
-        DatabaseType::Mssql => rdb_profile(
-            DatabaseType::Mssql,
-            MSSQL_CONNECTION_RDB_CONTRACT,
-            MSSQL_DIALECT,
-        ),
+        DatabaseType::Mssql => {
+            rdb_profile(DatabaseType::Mssql, MSSQL_QUERY_RDB_CONTRACT, MSSQL_DIALECT)
+        }
         DatabaseType::Oracle => rdb_profile(
             DatabaseType::Oracle,
             ORACLE_CONNECTION_RDB_CONTRACT,

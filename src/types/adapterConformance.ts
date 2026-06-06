@@ -182,12 +182,7 @@ const DEFERRED_FEATURES = Object.freeze({
       "catalog.constraints",
       "catalog.relationships",
     ],
-    query: [
-      "query.query",
-      "query.multiStatement",
-      "query.cancel",
-      "query.explain",
-    ],
+    query: ["query.explain"],
     edit: ["edit.editRows"],
   },
   oracle: oracleLifecycleDeferred(),
