@@ -117,6 +117,7 @@ describe("DataSourceProfile registry", () => {
     }),
     mssql: expectedCapabilities({
       connection: { test: true },
+      query: { query: true, multiStatement: true, cancel: true },
     }),
     oracle: createEmptyDataSourceCapabilities(),
     mongodb: expectedCapabilities({
@@ -446,7 +447,10 @@ describe("DataSourceProfile registry", () => {
       capabilitySource: "mssql",
     });
     expect(mssql.capabilities.connection.test).toBe(true);
-    expect(mssql.capabilities.query.query).toBe(false);
+    expect(mssql.capabilities.query.query).toBe(true);
+    expect(mssql.capabilities.query.multiStatement).toBe(true);
+    expect(mssql.capabilities.query.cancel).toBe(true);
+    expect(mssql.capabilities.query.explain).toBe(false);
     expect(mssql.capabilities.catalog.browse).toBe(false);
 
     const oracle = getDataSourceProfile("oracle");

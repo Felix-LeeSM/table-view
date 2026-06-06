@@ -23,8 +23,8 @@ export type DatabaseType =
  * tables / columns) 만 동작 — DDL / queries / streaming 은 Slice B~G
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
- * MSSQL is connection-backed first. Query/catalog/edit capabilities stay
- * disabled until their parity issues land. Oracle remains hidden.
+ * MSSQL is connection-backed with query runtime support. Catalog/edit/parser
+ * widening stays split behind follow-up parity issues. Oracle remains hidden.
  */
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",
