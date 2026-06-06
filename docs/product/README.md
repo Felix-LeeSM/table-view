@@ -124,8 +124,9 @@ PostgreSQL, MySQL, MariaDB, SQLite, DuckDB, MongoDB, Redis, Valkey,
 Elasticsearch, OpenSearch, MSSQL 로 제한된다. MSSQL 의 active slice 는 SQL
 authentication connection test 와 SQL Server `SERVERPROPERTY` version probe 뿐이며,
 bounded editor completion 은 curated T-SQL vocabulary 와 bracket identifier quoting
-으로 제한된다. query/catalog/edit/parser/Safe Mode/runtime fixture smoke 는 follow-up
-이다.
+으로 제한된다. bounded static parser/Safe Mode metadata 는 editor/safety assistance
+로 active 이고, query/catalog/edit/runtime Safe Mode smoke/runtime fixture smoke 는
+follow-up 이다.
 Valkey 는 KV runtime slice 이며 `connection.test`, `query.query`,
 `catalog.browse`, `paradigmSpecific.keyBrowser` 가 true 다.
 `e2e/fixtures/seed.valkey.json` 는 wired Valkey Runtime Happy Path seed 이고,
@@ -137,8 +138,9 @@ query target 이며, completion claim 은 proven local-runtime rows 에 제한�
 Redis compatibility/direct mutation claim 은 아니다.
 
 Oracle 은 별도의 capability-empty declared RDB identity 다. MSSQL 은 lifecycle-only
-connection support 와 bounded editor completion 으로 승격됐지만,
-query/catalog/edit/parser/Safe Mode/runtime smoke claim 은 아직 없다.
+connection support, bounded editor completion, bounded static parser/Safe Mode
+metadata 로 승격됐지만, query/catalog/edit/runtime Safe Mode/runtime smoke claim 은
+아직 없다.
 Oracle 의 bounded static SQL editor autocomplete vocabulary 는 capability-empty
 runtime boundary 를 바꾸지 않는다.
 Elasticsearch/OpenSearch 는 Search identity 와 fixture-backed admin contract 를

@@ -263,8 +263,8 @@ full-support parity has shipped.
 H6 wider source 는 **planned/candidate contract 정합성 gate**다. MSSQL 은
 `DatabaseType`/profile identity 에 더해 SQL authentication connection test 와 SQL
 Server `SERVERPROPERTY` version probe, bounded T-SQL editor completion
-vocabulary 까지만 active 이고, Oracle 은 planned RDBMS identity 에 bounded static
-SQL editor autocomplete vocabulary 만 더한다.
+vocabulary, bounded static parser/Safe Mode metadata 까지만 active 이고, Oracle 은
+planned RDBMS identity 에 bounded static SQL editor autocomplete vocabulary 만 더한다.
 Cassandra/Scylla, DynamoDB, graph, vector, stream 은 아직 active
 `DatabaseType`/profile/runtime 이 없는 candidate 다. H6 closure 는 MSSQL
 connection probe 밖의 새 runtime support 를 출시하지 않으며, MSSQL/Oracle completion 은
@@ -368,9 +368,9 @@ Near-term follow-up groups:
 1. 새 partial workflow 를 추가하기 전에 눈에 보이는 미완성 workflow 를 먼저 닫는다.
 2. connect/browse/query 만 노출하는 runtime 을 하나 더 붙이는 것보다, 기존 runtime
    깊이를 우선한다.
-3. Runtime promotion freeze: Search live query/admin, MSSQL query/catalog/edit/parser
-   support, Oracle, 기타 새 DBMS lane 은 현재 지원 DBMS 하나가 query/workbench
-   parity lane 을 통과할 때까지 기다린다.
+3. Runtime promotion freeze: Search live query/admin, MSSQL query/catalog/edit
+   runtime support, Oracle runtime, 기타 새 DBMS lane 은 현재 지원 DBMS 하나가
+   query/workbench parity lane 을 통과할 때까지 기다린다.
 4. Query/workbench parity 범위는 SQL/MQL execution, parser/Safe Mode, completion,
    edit semantics, fixtures, e2e, support claim, dry-run 근처의 lightweight
    EXPLAIN/plan inspection 이다. Full admin surface 는 별도 선택 전까지 scope 밖이다.
