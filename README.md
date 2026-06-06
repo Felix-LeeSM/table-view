@@ -20,7 +20,7 @@ TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 
 - **Redis**: 연결/profile, backend KV primitive, key browser, value preview가 있습니다. value edit, TTL 변경, guarded string write, bounded stream UI는 후속입니다.
 - **Elasticsearch/OpenSearch**: 현재 fixture-backed Search adapter/result slice만 있습니다. Live HTTP 연결 UI와 catalog/query execution은 후속입니다.
 - **MSSQL**: SQL authentication 연결/버전 probe와 bounded SELECT/DML query runtime이 있습니다. catalog/edit/parser/Safe Mode, fixture smoke, desktop E2E parity는 후속입니다.
-- **Oracle**: 알려진 planned DBMS identity지만 현재 runtime adapter는 없습니다. 기본 dev/e2e fixture connection으로 추가되지 않습니다.
+- **Oracle**: 알려진 planned DBMS identity입니다. 기본 dev/e2e fixture connection으로 추가되지 않습니다.
 
 세부 쿼리/자동완성 범위는 [`docs/product/query-language-support.md`](./docs/product/query-language-support.md)에 정리되어 있습니다.
 

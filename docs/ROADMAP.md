@@ -297,8 +297,9 @@ ownership, fixture/live evidence, and safety risk. Candidate rows do not imply
 implementation order.
 
 H6 umbrella closure means planned/candidate support claims, contracts, and smoke
-routing are aligned. It does not mean MSSQL, Oracle, Cassandra/Scylla, DynamoDB,
-graph, vector, or stream runtime support has shipped.
+routing are aligned. It does not mean MSSQL query/workbench parity, Oracle
+runtime support, or Cassandra/Scylla, DynamoDB, graph, vector, or stream runtime
+support has shipped.
 
 ## H7 진행 기준
 
