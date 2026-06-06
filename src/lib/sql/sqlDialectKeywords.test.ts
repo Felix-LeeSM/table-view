@@ -69,8 +69,11 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
     expect(getKeywordsForDialect("redis")).toEqual([]);
   });
 
-  it("MSSQL starts with common SQL keywords only", () => {
-    expect(getKeywordsForDialect("mssql")).toEqual(COMMON_SQL_KEYWORDS);
+  it("MSSQL adds bounded T-SQL keywords", () => {
+    expect(getKeywordsForDialect("mssql")).toEqual(
+      expect.arrayContaining(["SELECT", "FROM", "TOP", "EXEC", "OUTPUT"]),
+    );
+    expect(getKeywordsForDialect("mssql")).not.toContain(":CONNECT");
   });
 
   it("Oracle extends common SQL keywords with scoped completion vocabulary", () => {
@@ -84,6 +87,7 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
     expect(kws).not.toContain("DECLARE");
     expect(kws).not.toContain("EXCEPTION");
     expect(kws).not.toContain("END LOOP");
+    expect(kws).not.toContain("TOP");
   });
 
   // Deleted connection (dbType undefined) falls back to the common ANSI set.

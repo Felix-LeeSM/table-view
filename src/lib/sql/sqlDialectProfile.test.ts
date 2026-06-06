@@ -46,6 +46,37 @@ describe("sqlDialectProfile", () => {
     expect(SQL_DIALECT_PROFILES.sqlite.capabilities.onConflict).toBe(true);
   });
 
+  it("adds bounded MSSQL T-SQL vocabulary without runtime promotion", () => {
+    const mssql = getSqlDialectProfileForDatabaseType("mssql");
+
+    expect(mssql).toMatchObject({
+      id: "mssql",
+      family: "mssql",
+      defaultShell: "none",
+      identifierQuote: "[",
+    });
+    expect(mssql?.vocabulary.keywords).toEqual(
+      expect.arrayContaining([
+        "TOP",
+        "EXEC",
+        "EXECUTE",
+        "CREATE PROCEDURE",
+        "OUTPUT",
+      ]),
+    );
+    expect(mssql?.vocabulary.functions).toEqual(
+      expect.arrayContaining([
+        "GETDATE",
+        "DATEADD",
+        "ISNULL",
+        "TRY_CONVERT",
+        "JSON_VALUE",
+      ]),
+    );
+    expect(mssql?.vocabulary.keywords).not.toContain(":CONNECT");
+    expect(mssql?.vocabulary.keywords).not.toContain("sqlcmd");
+  });
+
   it("keeps DuckDB as its own SQL dialect placeholder instead of aliasing SQLite", () => {
     const duckdb = getSqlDialectProfileForDatabaseType("duckdb");
 
@@ -166,12 +197,10 @@ describe("sqlDialectProfile", () => {
     expect(oracle?.vocabulary.keywords).not.toContain("DECLARE");
     expect(oracle?.vocabulary.keywords).not.toContain("EXCEPTION");
     expect(oracle?.vocabulary.keywords).not.toContain("END LOOP");
-    expect(mssql?.vocabulary).toEqual({
-      keywords: COMMON_SQL_KEYWORDS,
-      functions: COMMON_SQL_FUNCTIONS,
-      types: [],
-      operators: [],
-    });
+    expect(oracle?.vocabulary.keywords).not.toContain("TOP");
+    expect(mssql?.vocabulary.keywords).toContain("TOP");
+    expect(mssql?.vocabulary.functions).toContain("GETDATE");
+    expect(mssql?.vocabulary.operators).toEqual([]);
   });
 
   it("preserves legacy keyword and function surfaces", () => {

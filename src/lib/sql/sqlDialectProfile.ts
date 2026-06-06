@@ -190,6 +190,25 @@ const ORACLE_KEYWORDS: readonly string[] = [
   "DBMS_LOB",
 ];
 
+const MSSQL_KEYWORDS: readonly string[] = [
+  "TOP",
+  "OFFSET",
+  "FETCH NEXT",
+  "EXEC",
+  "EXECUTE",
+  "CREATE PROCEDURE",
+  "ALTER PROCEDURE",
+  "DROP PROCEDURE",
+  "MERGE",
+  "OUTPUT",
+  "IDENTITY",
+  "NVARCHAR",
+  "DATETIME2",
+  "UNIQUEIDENTIFIER",
+  "TRY_CONVERT",
+  "TRY_CAST",
+];
+
 export const COMMON_SQL_FUNCTIONS: readonly string[] = [
   "COUNT",
   "SUM",
@@ -273,6 +292,28 @@ const ORACLE_SQL_FUNCTIONS: readonly string[] = [
   "DBMS_OUTPUT.PUT_LINE",
   "DBMS_RANDOM.VALUE",
   "DBMS_LOB.SUBSTR",
+];
+
+const MSSQL_SQL_FUNCTIONS: readonly string[] = [
+  "GETDATE",
+  "GETUTCDATE",
+  "SYSDATETIME",
+  "SYSUTCDATETIME",
+  "DATEADD",
+  "DATEDIFF",
+  "DATEPART",
+  "ISNULL",
+  "IIF",
+  "TRY_CAST",
+  "TRY_CONVERT",
+  "NEWID",
+  "SUSER_SNAME",
+  "DB_NAME",
+  "OBJECT_ID",
+  "STRING_AGG",
+  "JSON_VALUE",
+  "JSON_QUERY",
+  "OPENJSON",
 ];
 
 const COMMON_CAPABILITIES: SqlDialectCapabilities = {
@@ -373,7 +414,7 @@ export const SQL_DIALECT_PROFILES: Record<SqlDialectId, SqlDialectProfile> = {
     identifierQuote: "[",
     defaultShell: "none",
     capabilities: { ...COMMON_CAPABILITIES },
-    vocabulary: vocabulary([], []),
+    vocabulary: vocabulary(MSSQL_KEYWORDS, MSSQL_SQL_FUNCTIONS),
   },
   oracle: {
     id: "oracle",

@@ -3,6 +3,7 @@ pub(super) fn builtin_keywords(dialect: &str) -> &'static [&'static str] {
         "postgresql" => POSTGRESQL_KEYWORDS,
         "mysql" | "mariadb" => MYSQL_KEYWORDS,
         "sqlite" => SQLITE_KEYWORDS,
+        "mssql" => MSSQL_KEYWORDS,
         "oracle" => ORACLE_KEYWORDS,
         _ => COMMON_KEYWORDS,
     }
@@ -69,6 +70,7 @@ pub(super) fn builtin_functions(dialect: &str) -> &'static [&'static str] {
         "postgresql" => POSTGRESQL_FUNCTIONS,
         "mysql" | "mariadb" => MYSQL_FUNCTIONS,
         "sqlite" => SQLITE_FUNCTIONS,
+        "mssql" => MSSQL_FUNCTIONS,
         "oracle" => ORACLE_FUNCTIONS,
         _ => COMMON_FUNCTIONS,
     }
@@ -130,6 +132,9 @@ const SQLITE_KEYWORDS: &[&str] = &["ABORT", "AUTOINCREMENT", "CONFLICT", "FAIL",
 const ORACLE_KEYWORDS: &[&str] = &["CONNECT BY", "START WITH", "MINUS", "MERGE", "DUAL", "ROWNUM", "ROWID", "SYSDATE", "SYSTIMESTAMP", "FETCH FIRST", "RETURNING INTO", "CREATE SEQUENCE", "SEQUENCE", "NEXTVAL", "CURRVAL", "SYNONYM", "CREATE SYNONYM", "CREATE PUBLIC SYNONYM", "PACKAGE", "PACKAGE BODY", "DBMS_OUTPUT", "DBMS_RANDOM", "DBMS_LOB"];
 
 #[rustfmt::skip]
+const MSSQL_KEYWORDS: &[&str] = &["APPLY", "CROSS APPLY", "OUTER APPLY", "TOP", "OFFSET", "FETCH NEXT", "EXEC", "EXECUTE", "CREATE PROCEDURE", "ALTER PROCEDURE", "DROP PROCEDURE", "MERGE", "OUTPUT", "IDENTITY", "NVARCHAR", "DATETIME2", "UNIQUEIDENTIFIER", "TRY_CONVERT", "TRY_CAST", "PIVOT", "UNPIVOT"];
+
+#[rustfmt::skip]
 const COMMON_FUNCTIONS: &[&str] = &["COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "NULLIF", "CAST", "CONCAT", "LENGTH", "UPPER", "LOWER", "TRIM", "SUBSTRING", "EXTRACT", "NOW", "CURRENT_TIMESTAMP"];
 
 #[rustfmt::skip]
@@ -146,6 +151,9 @@ const ORACLE_FUNCTIONS: &[&str] = &["ABS", "ADD_MONTHS", "DECODE", "LISTAGG", "M
 
 #[rustfmt::skip]
 const ORACLE_BIND_IDENTIFIERS: &[&str] = &[":BIND", ":ID", ":NAME", ":START_DATE", ":END_DATE", ":LIMIT"];
+
+#[rustfmt::skip]
+const MSSQL_FUNCTIONS: &[&str] = &["APP_NAME", "CHOOSE", "CURRENT_USER", "DATEADD", "DATEDIFF", "DATEFROMPARTS", "DATENAME", "DATEPART", "DB_NAME", "EOMONTH", "FORMAT", "GETDATE", "GETUTCDATE", "HOST_NAME", "IIF", "ISDATE", "ISNULL", "JSON_MODIFY", "JSON_QUERY", "JSON_VALUE", "NEWID", "OBJECT_ID", "OPENJSON", "SCOPE_IDENTITY", "SESSION_USER", "STRING_AGG", "SUSER_SNAME", "SYSDATETIME", "SYSUTCDATETIME", "TRY_CAST", "TRY_CONVERT"];
 
 #[rustfmt::skip]
 const PSQL_COMMANDS: &[&str] = &["\\a", "\\bind", "\\bind_named", "\\c", "\\C", "\\cd", "\\close_prepared", "\\conninfo", "\\connect", "\\copy", "\\copyright", "\\crosstabview", "\\d", "\\d+", "\\da", "\\dA", "\\dAc", "\\dAf", "\\dAo", "\\dAp", "\\db", "\\dc", "\\dconfig", "\\dC", "\\dd", "\\ddp", "\\dD", "\\des", "\\det", "\\deu", "\\dew", "\\df", "\\dF", "\\dFd", "\\dFp", "\\dFt", "\\dg", "\\di", "\\dl", "\\dL", "\\dm", "\\dn", "\\do", "\\dO", "\\dp", "\\dP", "\\drds", "\\dRp", "\\dRs", "\\ds", "\\dt", "\\dT", "\\du", "\\dv", "\\dx", "\\dy", "\\echo", "\\edit", "\\ef", "\\encoding", "\\errverbose", "\\ev", "\\f", "\\flush", "\\flushrequest", "\\g", "\\gdesc", "\\getenv", "\\getresults", "\\gexec", "\\gset", "\\gx", "\\h", "\\help", "\\H", "\\if", "\\elif", "\\else", "\\endif", "\\i", "\\include", "\\include_relative", "\\ir", "\\list", "\\lo_export", "\\lo_import", "\\lo_list", "\\lo_unlink", "\\o", "\\out", "\\parse", "\\password", "\\pipe", "\\print", "\\prompt", "\\pset", "\\q", "\\qecho", "\\quit", "\\r", "\\reset", "\\restrict", "\\s", "\\sendpipeline", "\\set", "\\setenv", "\\sf", "\\sf+", "\\startpipeline", "\\sv", "\\sv+", "\\syncpipeline", "\\t", "\\T", "\\timing", "\\unrestrict", "\\unset", "\\w", "\\warn", "\\watch", "\\write", "\\x", "\\z", "\\!", "\\?", "\\;"];

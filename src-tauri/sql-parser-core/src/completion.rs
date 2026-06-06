@@ -7,6 +7,8 @@ mod completion_state_tests;
 #[cfg(test)]
 mod completion_tests;
 mod context;
+#[cfg(test)]
+mod mssql_completion_tests;
 mod token;
 mod vocabulary;
 
@@ -655,6 +657,9 @@ fn normalize_identifier_part(part: &str) -> String {
     if trimmed.len() >= 2 && trimmed.starts_with('`') && trimmed.ends_with('`') {
         return trimmed[1..trimmed.len() - 1].replace("``", "`");
     }
+    if trimmed.len() >= 2 && trimmed.starts_with('[') && trimmed.ends_with(']') {
+        return trimmed[1..trimmed.len() - 1].replace("]]", "]");
+    }
     trimmed.to_string()
 }
 
@@ -666,11 +671,11 @@ fn apply_identifier(identifier: &str, token: &CompletionToken) -> String {
 }
 
 fn quote_identifier(identifier: &str, quote: char) -> String {
-    let escaped = match quote {
-        '`' => identifier.replace('`', "``"),
+    match quote {
+        '`' => format!("`{}`", identifier.replace('`', "``")),
+        '[' => format!("[{}]", identifier.replace(']', "]]")),
         _ => identifier.to_string(),
-    };
-    format!("{quote}{escaped}{quote}")
+    }
 }
 
 fn dedupe_items(items: &mut Vec<CompletionItem>) {
@@ -692,7 +697,7 @@ fn dedupe_items(items: &mut Vec<CompletionItem>) {
 fn supports_sql_completion(dialect: &str) -> bool {
     matches!(
         dialect,
-        "postgresql" | "mysql" | "mariadb" | "sqlite" | "oracle"
+        "postgresql" | "mysql" | "mariadb" | "sqlite" | "mssql" | "oracle"
     )
 }
 
@@ -714,6 +719,7 @@ fn dialect_label(dialect: &str) -> &'static str {
         "mysql" => "MySQL",
         "mariadb" => "MariaDB",
         "sqlite" => "SQLite",
+        "mssql" => "MSSQL",
         "oracle" => "Oracle",
         _ => "SQL",
     }

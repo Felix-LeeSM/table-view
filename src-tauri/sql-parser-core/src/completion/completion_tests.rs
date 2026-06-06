@@ -131,6 +131,12 @@ fn mysql_catalog_request(text: &str) -> SqlCompletionRequest {
             name: "AuditLog".to_string(),
             qualified_name: "audit.AuditLog".to_string(),
         },
+        SqlCompletionCatalogObject {
+            kind: "table".to_string(),
+            schema: "app".to_string(),
+            name: "Order Details!".to_string(),
+            qualified_name: "app.Order Details!".to_string(),
+        },
     ];
     req.catalog.columns = vec![
         column("app", "UserAccounts", "id"),
@@ -485,6 +491,19 @@ fn ac_446_mysql_backtick_context_uses_catalog_replace_ranges_and_quoting() {
 }
 
 #[test]
+fn mysql_closed_backtick_identifier_does_not_reopen_quoted_completion() {
+    let result = complete_sql(mysql_catalog_request("SELECT * FROM `UserAccounts`"));
+    assert!(!result.items.iter().any(|item| {
+        item.label == "UserAccounts" && item.apply.as_deref() == Some("`UserAccounts`")
+    }));
+
+    let non_ident_result = complete_sql(mysql_catalog_request("SELECT * FROM `Order Details!`"));
+    assert!(!non_ident_result.items.iter().any(|item| {
+        item.label == "Order Details!" && item.apply.as_deref() == Some("`Order Details!`")
+    }));
+}
+
+#[test]
 fn mariadb_returning_keyword_is_dialect_specific() {
     assert_builtin_completion_contains("mariadb", "mysql-client", "RET", "RETURNING");
     assert_builtin_completion_excludes("mysql", "mysql-client", "RET", "RETURNING");
@@ -664,11 +683,11 @@ fn oracle_bind_identifier_completion_replaces_the_colon_prefix() {
 #[test]
 fn unsupported_dialect_returns_empty_result_with_metadata() {
     let mut req = request("SELECT ", 7, 7);
-    req.dialect = "mssql".to_string();
+    req.dialect = "ansi".to_string();
 
     let result = complete_sql(req);
 
     assert!(result.items.is_empty());
     assert_eq!(result.metadata.engine, "wasm");
-    assert_eq!(result.metadata.dialect, "mssql");
+    assert_eq!(result.metadata.dialect, "ansi");
 }
