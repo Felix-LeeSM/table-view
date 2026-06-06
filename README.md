@@ -20,7 +20,7 @@ TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 
 - **Redis**: 연결/profile, backend KV primitive, key browser, value preview가 있습니다. value edit, TTL 변경, guarded string write, bounded stream UI는 후속입니다.
 - **Elasticsearch/OpenSearch**: 현재 fixture-backed Search adapter/result slice만 있습니다. Live HTTP 연결 UI와 catalog/query execution은 후속입니다.
 - **MSSQL**: SQL authentication 연결/버전 probe, bounded SELECT/DML query runtime, bounded static parser/Safe Mode metadata가 있습니다. catalog/edit, runtime Safe Mode smoke, fixture smoke, desktop E2E parity, full T-SQL semantic parity는 후속입니다.
-- **Oracle**: 알려진 planned DBMS identity입니다. 기본 dev/e2e fixture connection으로 추가되지 않습니다.
+- **Oracle**: connection UI와 서비스명 기반 runtime test/connect path가 있습니다. SID, TNS alias, wallet/TLS, catalog/query/edit/DDL은 후속입니다. 기본 dev/e2e fixture connection으로 추가되지 않습니다.
 
 세부 쿼리/자동완성 범위는 [`docs/product/query-language-support.md`](./docs/product/query-language-support.md)에 정리되어 있습니다.
 
@@ -102,8 +102,9 @@ pnpm db:up
 
 MSSQL 컨테이너는 수동 연결과 bounded query runtime/live test에 사용할 수 있지만
 기본 fixture connection이나 desktop E2E smoke로 승격되어 있지는 않습니다.
-Oracle은 planned DBMS identity와 seed contract 검증용 컨테이너이며, 현재 앱
-runtime adapter와 기본 fixture connection은 제공하지 않습니다.
+Oracle은 서비스명 기반 connection test/connect path만 앱에 연결되어 있으며,
+SID/TNS alias/wallet/TLS와 catalog/query/edit/DDL은 후속입니다. 두 DBMS 모두
+기본 fixture connection이나 desktop smoke evidence로 승격하지 않습니다.
 
 기본 접속 정보:
 

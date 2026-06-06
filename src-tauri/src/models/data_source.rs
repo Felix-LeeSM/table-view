@@ -119,6 +119,7 @@ pub enum BackendAdapterId {
     Sqlite,
     Duckdb,
     Mssql,
+    Oracle,
     Mongodb,
     Redis,
     Valkey,
@@ -134,6 +135,7 @@ pub enum BackendAdapterCapabilitySource {
     Sqlite,
     Duckdb,
     Mssql,
+    Oracle,
     Mongodb,
     Redis,
     Valkey,
@@ -292,11 +294,12 @@ const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
 ];
+const CONNECTION_ONLY_RDB_CAPABILITIES: &[BackendAdapterCapability] =
+    &[BackendAdapterCapability::Lifecycle];
 const MSSQL_QUERY_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalQuery,
 ];
-const NO_BACKEND_CAPABILITIES: &[BackendAdapterCapability] = &[];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::DocumentCatalog,
@@ -364,12 +367,12 @@ const MSSQL_QUERY_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract 
     capability_source: BackendAdapterCapabilitySource::Mssql,
     capabilities: MSSQL_QUERY_RDB_CAPABILITIES,
 };
-const DECLARED_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+const ORACLE_CONNECTION_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
-    state: BackendAdapterContractState::DeclaredOnly,
-    implementation: BackendAdapterId::DeclaredRdb,
-    capability_source: BackendAdapterCapabilitySource::DeclaredRdb,
-    capabilities: NO_BACKEND_CAPABILITIES,
+    state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::Oracle,
+    capability_source: BackendAdapterCapabilitySource::Oracle,
+    capabilities: CONNECTION_ONLY_RDB_CAPABILITIES,
 };
 const FACTORY_DOCUMENT_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Document,
@@ -579,9 +582,11 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
         DatabaseType::Mssql => {
             rdb_profile(DatabaseType::Mssql, MSSQL_QUERY_RDB_CONTRACT, MSSQL_DIALECT)
         }
-        DatabaseType::Oracle => {
-            rdb_profile(DatabaseType::Oracle, DECLARED_RDB_CONTRACT, ORACLE_DIALECT)
-        }
+        DatabaseType::Oracle => rdb_profile(
+            DatabaseType::Oracle,
+            ORACLE_CONNECTION_RDB_CONTRACT,
+            ORACLE_DIALECT,
+        ),
         DatabaseType::Mongodb => DataSourceProfile {
             id: DatabaseType::Mongodb,
             paradigm: Paradigm::Document,

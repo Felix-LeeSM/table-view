@@ -202,7 +202,7 @@ describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
     }
   });
 
-  it("recognizes oracle URLs as unsupported typed drafts", () => {
+  it("recognizes oracle URLs as service-name typed drafts", () => {
     const result = parseConnectionUrl(
       "oracle://system:pw@localhost:1521/FREEPDB1",
     );
@@ -381,6 +381,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
       "sqlite",
       "duckdb",
       "mssql",
+      "oracle",
       "mongodb",
       "redis",
       "valkey",
@@ -401,7 +402,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("elasticsearch")).toBe(true);
     expect(isSupportedDatabaseType("opensearch")).toBe(true);
     expect(isSupportedDatabaseType("mssql")).toBe(true);
-    expect(isSupportedDatabaseType("oracle")).toBe(false);
+    expect(isSupportedDatabaseType("oracle")).toBe(true);
   });
 
   it("DATABASE_TYPE_LABELS covers every DatabaseType variant", () => {

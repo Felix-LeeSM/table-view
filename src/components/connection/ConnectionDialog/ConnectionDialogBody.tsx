@@ -24,6 +24,7 @@ import { assertNever } from "@/lib/paradigm";
 import { Link, List } from "lucide-react";
 import PgFormFields from "../forms/PgFormFields";
 import MysqlFormFields from "../forms/MysqlFormFields";
+import OracleFormFields from "../forms/OracleFormFields";
 import SqliteFormFields from "../forms/SqliteFormFields";
 import MongoFormFields from "../forms/MongoFormFields";
 import RedisFormFields from "../forms/RedisFormFields";
@@ -145,7 +146,11 @@ export default function ConnectionDialogBody({
             );
           case "oracle":
             return (
-              <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
+              <OracleFormFields
+                draft={form}
+                onChange={onChange}
+                {...sharedAuth}
+              />
             );
           case "elasticsearch":
           case "opensearch":

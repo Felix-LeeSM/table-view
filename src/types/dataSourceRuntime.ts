@@ -6,6 +6,7 @@ export type BackendAdapterProfileId =
   | "sqlite"
   | "duckdb"
   | "mssql"
+  | "oracle"
   | "mongodb"
   | "redis"
   | "valkey"
@@ -19,6 +20,7 @@ export type BackendAdapterCapabilitySource =
   | "sqlite"
   | "duckdb"
   | "mssql"
+  | "oracle"
   | "mongodb"
   | "redis"
   | "valkey"
@@ -79,6 +81,7 @@ const BACKEND_ADAPTER_PROFILES = Object.freeze({
   sqlite: backendAdapterProfile("sqlite", "rdb", "sqlite"),
   duckdb: backendAdapterProfile("duckdb", "rdb", "duckdb"),
   mssql: backendAdapterProfile("mssql", "rdb", "mssql"),
+  oracle: backendAdapterProfile("oracle", "rdb", "oracle"),
   mongodb: backendAdapterProfile("mongodb", "document", "mongodb"),
   redis: backendAdapterProfile("redis", "kv", "redis"),
   valkey: backendAdapterProfile("valkey", "kv", "valkey"),
@@ -133,7 +136,7 @@ export const BACKEND_ADAPTER_BY_TYPE = Object.freeze({
   sqlite: BACKEND_ADAPTER_PROFILES.sqlite,
   duckdb: BACKEND_ADAPTER_PROFILES.duckdb,
   mssql: BACKEND_ADAPTER_PROFILES.mssql,
-  oracle: BACKEND_ADAPTER_PROFILES.declaredRdb,
+  oracle: BACKEND_ADAPTER_PROFILES.oracle,
   mongodb: BACKEND_ADAPTER_PROFILES.mongodb,
   redis: BACKEND_ADAPTER_PROFILES.redis,
   valkey: BACKEND_ADAPTER_PROFILES.valkey,

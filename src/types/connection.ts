@@ -24,7 +24,8 @@ export type DatabaseType =
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
  * MSSQL is connection-backed with query runtime support. Catalog/edit/parser
- * widening stays split behind follow-up parity issues. Oracle remains hidden.
+ * widening stays split behind follow-up parity issues. Oracle is
+ * connection-backed for lifecycle only.
  */
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",
@@ -33,6 +34,7 @@ export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "sqlite",
   "duckdb",
   "mssql",
+  "oracle",
   "mongodb",
   "redis",
   "valkey",

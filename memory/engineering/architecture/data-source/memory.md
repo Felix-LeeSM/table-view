@@ -1,7 +1,7 @@
 ---
 title: Data source architecture
 type: memory
-updated: 2026-05-30
+updated: 2026-06-07
 surface: src-tauri/src/db/**, src/lib/**, src/types/dataSource*, src/types/queryLanguage*
 task: data-source, architecture, adapter, capability
 trigger:
@@ -55,9 +55,10 @@ failure 를 기본 동작으로 만들지 않는다.
 MSSQL is factory-backed for lifecycle + bounded relational query execution, and
 its parser/Safe Mode boundary is promoted for the supported T-SQL slice. SQL
 Server catalog/edit/admin, fixture/live smoke, E2E evidence, and broader T-SQL
-semantic parity remain separate contracts. Oracle remains a planned RDBMS
-identity until its service/SID/wallet/TNS, Oracle SQL/PLSQL owner, RDB catalog,
-tabular result, RDB safety, and fixture/live evidence are promoted separately.
+semantic parity remain separate contracts. Oracle is factory-backed for
+service-name connection lifecycle only. Oracle query/catalog/edit, SID/TNS,
+wallet/TLS, Oracle SQL/PLSQL owner, RDB safety, fixture/live smoke, and E2E
+evidence remain separate contracts.
 
 Search identities (`elasticsearch`, `opensearch`) 는 fixture-backed/deferred profile
 이며 live HTTP connection/query claim 은 capability 가 켜질 때까지 하지 않는다.

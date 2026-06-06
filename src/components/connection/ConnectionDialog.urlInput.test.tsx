@@ -215,6 +215,18 @@ const PASTE_CASES: PasteCase[] = [
     },
   },
   {
+    scheme: "oracle",
+    url: "oracle://system:pw@oracle.local:1521/FREEPDB1",
+    expected: {
+      dbType: "oracle",
+      host: "oracle.local",
+      port: 1521,
+      user: "system",
+      database: "FREEPDB1",
+      password: "pw",
+    },
+  },
+  {
     scheme: "mongodb",
     url: "mongodb://mu:mp@mongo.local:27018/logs",
     expected: {
@@ -368,9 +380,11 @@ describe("[AC-178-01] form-mode host paste detection", () => {
           ? (screen.getByLabelText(
               `${c.expected.dbType === "valkey" ? "Valkey" : "Redis"} database index (0-15)`,
             ) as HTMLInputElement)
-          : (screen
-              .getAllByLabelText(/^Database( \(optional\))?$/)
-              .find((el) => el.tagName === "INPUT") as HTMLInputElement);
+          : c.expected.dbType === "oracle"
+            ? (screen.getByLabelText("Service name") as HTMLInputElement)
+            : (screen
+                .getAllByLabelText(/^Database( \(optional\))?$/)
+                .find((el) => el.tagName === "INPUT") as HTMLInputElement);
         expect(dbInput.value).toBe(c.expected.database ?? "");
       }
       if (isKvProtocol || isSearchProtocol) {
@@ -602,50 +616,6 @@ describe("[AC-178-03] host:port blur split", () => {
 // surfaces "Invalid URL"; the form-mode paste must stay silent so the
 // user's pasted text remains in the host field for them to fix.
 // ===========================================================================
-
-// ===========================================================================
-// Sprint 281 (2026-05-13) — unsupported DBMS scheme paste.
-// `SUPPORTED_DATABASE_TYPES` 에 없는 DBMS URL 을 host 필드에
-// paste 하면 form 은 변경되지 않는다 (AC-178-04 의 silent 룰 적용: best-effort
-// 경로이므로 alert 없이 단순히 form 을 건드리지 않음). URL 모드의 Parse &
-// Continue 는 명시적 사용자 액션이라 거부 메시지를 노출 — 별도 그룹.
-//
-// MySQL/MariaDB/SQLite/Redis/Valkey/Elasticsearch/OpenSearch/MSSQL 는 supported 이므로 본 silent-reject list 에서 제외.
-// ===========================================================================
-
-describe("[Sprint 281] unsupported DBMS paste is silent (no form change)", () => {
-  const unsupportedPastes = [
-    { scheme: "oracle", url: "oracle://system:pw@oracle.local:1521/FREEPDB1" },
-  ];
-
-  for (const c of unsupportedPastes) {
-    it(`unsupported ${c.scheme} paste leaves form unchanged + no "detected" affordance`, async () => {
-      renderDialog();
-      const hostBefore = (screen.getByLabelText("Host") as HTMLInputElement)
-        .value;
-      const portBefore = (screen.getByLabelText("Port") as HTMLInputElement)
-        .value;
-      await act(async () => {
-        pasteIntoHost(c.url);
-      });
-      // dbType Select 는 여전히 PostgreSQL (기본). Host/Port 는 paste 의
-      // 기본 동작 영향만 받을 수 있어 affordance 부재로 reject 를 검증.
-      expect(
-        screen.queryByTestId("connection-url-detected"),
-      ).not.toBeInTheDocument();
-      // PG 폼은 그대로 mount (MySQL/Redis/SQLite 폼으로 전환되지 않음).
-      expect(screen.getByLabelText("Host")).toBeInTheDocument();
-      // Host/Port 입력은 우리 핸들러가 변경하지 않는다 (jsdom 의 paste
-      // 기본 동작이 input 에 텍스트를 자동 입력하지 않으므로 원래 값 유지).
-      expect((screen.getByLabelText("Host") as HTMLInputElement).value).toBe(
-        hostBefore,
-      );
-      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
-        portBefore,
-      );
-    });
-  }
-});
 
 describe("[Sprint 447] URL import support follows data-source profiles", () => {
   it("uses profile support instead of the legacy supported-type constant", async () => {

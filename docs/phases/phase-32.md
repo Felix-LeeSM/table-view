@@ -17,7 +17,7 @@ activity/profiler dashboard.
 3. SQLite/DuckDB.
 4. MongoDB.
 5. Elasticsearch/OpenSearch live HTTP.
-6. MSSQL/Oracle enterprise RDBMS lane.
+6. MSSQL enterprise RDBMS lane / Oracle post-connection RDBMS lane.
 
 이 phase 문서에는 implementation sprint sequence 를 배정하지 않는다. Sprint
 contract 는 active lane 을 실행 대상으로 선택한 뒤에만 만든다.
@@ -73,5 +73,7 @@ PostgreSQL query/workbench parity 를 먼저 닫는다:
   aggregation/capability gate, transaction/deployment handling.
 - Search live HTTP: active runtime parity lane 이 충분히 정리된 뒤 real HTTP
   connection, catalog, query, safety, fixture, e2e 추가.
-- MSSQL/Oracle: Search live HTTP 뒤 enterprise RDBMS lane 으로 진행하되 driver,
-  license, dialect, CI fixture strategy 를 먼저 lock.
+- MSSQL/Oracle: Search live HTTP 뒤 enterprise RDBMS lane 으로 진행하되 MSSQL
+  driver/license 와 Oracle SID/TNS/wallet/TLS plus catalog/query/edit scope, CI
+  fixture strategy 를 먼저 lock. Oracle 의 현재 service-name connection-only
+  lifecycle 는 이 lane 의 catalog/query/edit claim 이 아니다.
