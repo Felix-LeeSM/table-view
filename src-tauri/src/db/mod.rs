@@ -17,6 +17,7 @@ pub mod fixtures;
 pub mod kv_trait;
 pub mod kv_types;
 pub mod mongodb;
+pub mod mssql;
 pub mod mysql;
 pub mod oracle;
 pub mod postgres;
@@ -35,6 +36,7 @@ pub mod types;
 
 pub use duckdb::DuckdbAdapter;
 pub use mongodb::MongoAdapter;
+pub use mssql::MssqlAdapter;
 pub use mysql::MysqlAdapter;
 pub use oracle::OracleAdapter;
 pub use postgres::PostgresAdapter;

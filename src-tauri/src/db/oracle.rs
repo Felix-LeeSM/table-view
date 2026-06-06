@@ -408,6 +408,7 @@ fn oracle_unsupported<'a, T: Send + 'a>() -> BoxFuture<'a, Result<T, AppError>> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{ColumnChange, ColumnDefinition, ConstraintDefinition};
     use oracle_rs::config::ServiceMethod;
 
     fn oracle_config() -> ConnectionConfig {
@@ -430,6 +431,13 @@ mod tests {
             replica_set: None,
             tls_enabled: None,
         }
+    }
+
+    fn assert_oracle_unsupported<T>(result: Result<T, AppError>) {
+        assert!(matches!(
+            result,
+            Err(AppError::Unsupported(message)) if message == ORACLE_UNSUPPORTED_RUNTIME
+        ));
     }
 
     #[test]
@@ -471,16 +479,9 @@ mod tests {
     #[tokio::test]
     async fn catalog_query_and_ddl_surfaces_remain_unsupported() {
         let adapter = OracleAdapter::new();
-        assert!(matches!(
-            adapter.list_namespaces().await,
-            Err(AppError::Unsupported(message)) if message == ORACLE_UNSUPPORTED_RUNTIME
-        ));
-        assert!(matches!(
-            adapter.execute_sql("SELECT 1 FROM DUAL", None).await,
-            Err(AppError::Unsupported(message)) if message == ORACLE_UNSUPPORTED_RUNTIME
-        ));
+        assert!(matches!(adapter.namespace_label(), NamespaceLabel::Schema));
 
-        let req = DropTableRequest {
+        let drop_table = DropTableRequest {
             connection_id: "oracle-1".into(),
             schema: "SYSTEM".into(),
             table: "T".into(),
@@ -488,9 +489,129 @@ mod tests {
             preview_only: true,
             expected_database: None,
         };
-        assert!(matches!(
-            adapter.drop_table(&req).await,
-            Err(AppError::Unsupported(message)) if message == ORACLE_UNSUPPORTED_RUNTIME
-        ));
+        let rename_table = RenameTableRequest {
+            connection_id: "oracle-1".into(),
+            schema: "SYSTEM".into(),
+            table: "T".into(),
+            new_name: "T2".into(),
+            preview_only: true,
+            expected_database: None,
+        };
+        let alter_table = AlterTableRequest {
+            connection_id: "oracle-1".into(),
+            schema: "SYSTEM".into(),
+            table: "T".into(),
+            changes: vec![ColumnChange::Drop { name: "C".into() }],
+            preview_only: true,
+            expected_database: None,
+        };
+        let column = ColumnDefinition {
+            name: "C".into(),
+            data_type: "NUMBER".into(),
+            nullable: true,
+            default_value: None,
+            comment: None,
+            is_identity: false,
+        };
+        let add_column = AddColumnRequest {
+            connection_id: "oracle-1".into(),
+            schema: "SYSTEM".into(),
+            table: "T".into(),
+            column: column.clone(),
+            check_expression: None,
+            preview_only: true,
+            expected_database: None,
+        };
+        let drop_column = DropColumnRequest {
+            connection_id: "oracle-1".into(),
+            schema: "SYSTEM".into(),
+            table: "T".into(),
+            column_name: "C".into(),
+            cascade: false,
+            preview_only: true,
+            expected_database: None,
+        };
+        let create_table = CreateTableRequest {
+            connection_id: "oracle-1".into(),
+            schema: "SYSTEM".into(),
+            name: "T".into(),
+            columns: vec![column],
+            primary_key: None,
+            preview_only: true,
+            table_comment: None,
+            expected_database: None,
+        };
+        let create_index = CreateIndexRequest {
+            connection_id: "oracle-1".into(),
+            schema: "SYSTEM".into(),
+            table: "T".into(),
+            index_name: "T_C_IDX".into(),
+            columns: vec!["C".into()],
+            index_type: "btree".into(),
+            is_unique: false,
+            preview_only: true,
+            expected_database: None,
+        };
+        let drop_index = DropIndexRequest {
+            connection_id: "oracle-1".into(),
+            schema: "SYSTEM".into(),
+            index_name: "T_C_IDX".into(),
+            table: "T".into(),
+            if_exists: false,
+            preview_only: true,
+            expected_database: None,
+        };
+        let add_constraint = AddConstraintRequest {
+            connection_id: "oracle-1".into(),
+            schema: "SYSTEM".into(),
+            table: "T".into(),
+            constraint_name: "T_C_UNIQ".into(),
+            definition: ConstraintDefinition::Unique {
+                columns: vec!["C".into()],
+            },
+            preview_only: true,
+            expected_database: None,
+        };
+        let drop_constraint = DropConstraintRequest {
+            connection_id: "oracle-1".into(),
+            schema: "SYSTEM".into(),
+            table: "T".into(),
+            constraint_name: "T_C_UNIQ".into(),
+            preview_only: true,
+            expected_database: None,
+        };
+
+        assert_oracle_unsupported(adapter.list_namespaces().await);
+        assert_oracle_unsupported(adapter.list_databases().await);
+        assert_oracle_unsupported(adapter.current_database().await);
+        assert_oracle_unsupported(adapter.list_tables("SYSTEM").await);
+        assert_oracle_unsupported(adapter.get_columns("SYSTEM", "T", None).await);
+        assert_oracle_unsupported(adapter.execute_sql("SELECT 1 FROM DUAL", None).await);
+        assert_oracle_unsupported(adapter.execute_sql_batch(&["SELECT 1".into()], None).await);
+        assert_oracle_unsupported(adapter.dry_run_sql_batch(&["SELECT 1".into()], None).await);
+        assert_oracle_unsupported(
+            adapter
+                .query_table_data("SYSTEM", "T", 1, 100, None, None, None, None)
+                .await,
+        );
+        assert_oracle_unsupported(adapter.drop_table(&drop_table).await);
+        assert_oracle_unsupported(adapter.rename_table(&rename_table).await);
+        assert_oracle_unsupported(adapter.alter_table(&alter_table).await);
+        assert_oracle_unsupported(adapter.add_column(&add_column).await);
+        assert_oracle_unsupported(adapter.drop_column(&drop_column).await);
+        assert_oracle_unsupported(adapter.create_table(&create_table).await);
+        assert_oracle_unsupported(adapter.create_index(&create_index).await);
+        assert_oracle_unsupported(adapter.drop_index(&drop_index).await);
+        assert_oracle_unsupported(adapter.add_constraint(&add_constraint).await);
+        assert_oracle_unsupported(adapter.drop_constraint(&drop_constraint).await);
+        assert_oracle_unsupported(adapter.get_table_indexes("SYSTEM", "T", None).await);
+        assert_oracle_unsupported(adapter.get_table_constraints("SYSTEM", "T", None).await);
+        assert_oracle_unsupported(adapter.list_views("SYSTEM").await);
+        assert_oracle_unsupported(adapter.list_functions("SYSTEM").await);
+        assert_oracle_unsupported(adapter.get_view_definition("SYSTEM", "V").await);
+        assert_oracle_unsupported(adapter.get_view_columns("SYSTEM", "V").await);
+        assert_oracle_unsupported(adapter.list_schema_columns("SYSTEM").await);
+        assert_oracle_unsupported(adapter.get_function_source("SYSTEM", "F").await);
+        assert_oracle_unsupported(adapter.list_triggers("SYSTEM", "T").await);
     }
 }

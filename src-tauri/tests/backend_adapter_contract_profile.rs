@@ -100,8 +100,20 @@ fn backend_profiles_encode_current_database_type_contracts() {
     let mssql = get_data_source_profile(&DatabaseType::Mssql);
     assert_eq!(
         mssql.adapter_contract.state,
-        BackendAdapterContractState::DeclaredOnly
+        BackendAdapterContractState::FactoryBacked
     );
+    assert_eq!(mssql.backend_adapter.id, BackendAdapterId::Mssql);
+    assert_eq!(
+        mssql.backend_adapter.capability_source,
+        BackendAdapterCapabilitySource::Mssql
+    );
+    assert_eq!(
+        mssql.dialect.version_probe,
+        ServerVersionProbeId::MssqlServerProperty
+    );
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
 
     let mongodb = get_data_source_profile(&DatabaseType::Mongodb);
     assert_eq!(mongodb.paradigm, Paradigm::Document);
@@ -302,11 +314,18 @@ fn rdbms_integration_gate_profiles_are_coherent() {
     );
     assert_eq!(
         database_type_labels(RUNTIME_RDBMS_DATABASE_TYPES),
-        vec!["postgresql", "mysql", "mariadb", "sqlite", "duckdb"]
+        vec![
+            "postgresql",
+            "mysql",
+            "mariadb",
+            "sqlite",
+            "duckdb",
+            "mssql"
+        ]
     );
     assert_eq!(
         database_type_labels(SERVER_RDBMS_DATABASE_TYPES),
-        vec!["postgresql", "mysql", "mariadb"]
+        vec!["postgresql", "mysql", "mariadb", "mssql"]
     );
     assert_eq!(
         database_type_labels(FILE_RDBMS_DATABASE_TYPES),
@@ -330,22 +349,26 @@ fn rdbms_integration_gate_profiles_are_coherent() {
             BackendAdapterContractState::FactoryBacked
         );
         assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
-        assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
-        assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+        if mem::discriminant(db_type) != mem::discriminant(&DatabaseType::Mssql)
+            && mem::discriminant(db_type) != mem::discriminant(&DatabaseType::Oracle)
+        {
+            assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+            assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+        }
     }
 
     let mssql = get_data_source_profile(&DatabaseType::Mssql);
     assert_eq!(mssql.paradigm, Paradigm::Rdb);
     assert_eq!(
         mssql.adapter_contract.state,
-        BackendAdapterContractState::DeclaredOnly
+        BackendAdapterContractState::FactoryBacked
     );
-    assert_eq!(mssql.backend_adapter.id, BackendAdapterId::DeclaredRdb);
+    assert_eq!(mssql.backend_adapter.id, BackendAdapterId::Mssql);
     assert_eq!(
         mssql.backend_adapter.capability_source,
-        BackendAdapterCapabilitySource::DeclaredRdb
+        BackendAdapterCapabilitySource::Mssql
     );
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));

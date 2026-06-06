@@ -118,6 +118,7 @@ pub enum BackendAdapterId {
     MysqlFamily,
     Sqlite,
     Duckdb,
+    Mssql,
     Oracle,
     Mongodb,
     Redis,
@@ -133,6 +134,7 @@ pub enum BackendAdapterCapabilitySource {
     MysqlFamily,
     Sqlite,
     Duckdb,
+    Mssql,
     Oracle,
     Mongodb,
     Redis,
@@ -227,6 +229,7 @@ pub enum ServerVersionProbeId {
     PostgresVersionSettings,
     MysqlFamilyVersion,
     SqliteVersion,
+    MssqlServerProperty,
     MongodbBuildInfo,
     SearchRoot,
     None,
@@ -291,9 +294,8 @@ const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
 ];
-const ORACLE_CONNECTION_CAPABILITIES: &[BackendAdapterCapability] =
+const CONNECTION_ONLY_RDB_CAPABILITIES: &[BackendAdapterCapability] =
     &[BackendAdapterCapability::Lifecycle];
-const NO_BACKEND_CAPABILITIES: &[BackendAdapterCapability] = &[];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::DocumentCatalog,
@@ -354,19 +356,19 @@ const DUCKDB_FILE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract 
     capability_source: BackendAdapterCapabilitySource::Duckdb,
     capabilities: DUCKDB_RDB_CAPABILITIES,
 };
+const MSSQL_CONNECTION_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+    kind: BackendAdapterContractKind::Rdb,
+    state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::Mssql,
+    capability_source: BackendAdapterCapabilitySource::Mssql,
+    capabilities: CONNECTION_ONLY_RDB_CAPABILITIES,
+};
 const ORACLE_CONNECTION_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
     state: BackendAdapterContractState::FactoryBacked,
     implementation: BackendAdapterId::Oracle,
     capability_source: BackendAdapterCapabilitySource::Oracle,
-    capabilities: ORACLE_CONNECTION_CAPABILITIES,
-};
-const DECLARED_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
-    kind: BackendAdapterContractKind::Rdb,
-    state: BackendAdapterContractState::DeclaredOnly,
-    implementation: BackendAdapterId::DeclaredRdb,
-    capability_source: BackendAdapterCapabilitySource::DeclaredRdb,
-    capabilities: NO_BACKEND_CAPABILITIES,
+    capabilities: CONNECTION_ONLY_RDB_CAPABILITIES,
 };
 const FACTORY_DOCUMENT_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Document,
@@ -497,7 +499,7 @@ const DUCKDB_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
 const MSSQL_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
     id: DataSourceDialectId::Mssql,
     family: DataSourceDialectFamily::Mssql,
-    version_probe: ServerVersionProbeId::None,
+    version_probe: ServerVersionProbeId::MssqlServerProperty,
 };
 const ORACLE_DIALECT: DataSourceDialectMetadata = DataSourceDialectMetadata {
     id: DataSourceDialectId::Oracle,
@@ -573,9 +575,11 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
             adapter_contract: DUCKDB_FILE_RDB_CONTRACT,
             file_connection: Some(DUCKDB_FILE_CONNECTION),
         },
-        DatabaseType::Mssql => {
-            rdb_profile(DatabaseType::Mssql, DECLARED_RDB_CONTRACT, MSSQL_DIALECT)
-        }
+        DatabaseType::Mssql => rdb_profile(
+            DatabaseType::Mssql,
+            MSSQL_CONNECTION_RDB_CONTRACT,
+            MSSQL_DIALECT,
+        ),
         DatabaseType::Oracle => rdb_profile(
             DatabaseType::Oracle,
             ORACLE_CONNECTION_RDB_CONTRACT,

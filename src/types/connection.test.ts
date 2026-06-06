@@ -380,6 +380,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
       "mariadb",
       "sqlite",
       "duckdb",
+      "mssql",
       "oracle",
       "mongodb",
       "redis",
@@ -400,7 +401,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("valkey")).toBe(true);
     expect(isSupportedDatabaseType("elasticsearch")).toBe(true);
     expect(isSupportedDatabaseType("opensearch")).toBe(true);
-    expect(isSupportedDatabaseType("mssql")).toBe(false);
+    expect(isSupportedDatabaseType("mssql")).toBe(true);
     expect(isSupportedDatabaseType("oracle")).toBe(true);
   });
 
