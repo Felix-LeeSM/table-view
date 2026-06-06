@@ -203,6 +203,18 @@ const PASTE_CASES: PasteCase[] = [
     },
   },
   {
+    scheme: "mssql",
+    url: "mssql://sa:pw@mssql.local:1433/master",
+    expected: {
+      dbType: "mssql",
+      host: "mssql.local",
+      port: 1433,
+      user: "sa",
+      database: "master",
+      password: "pw",
+    },
+  },
+  {
     scheme: "mongodb",
     url: "mongodb://mu:mp@mongo.local:27018/logs",
     expected: {
@@ -598,12 +610,11 @@ describe("[AC-178-03] host:port blur split", () => {
 // 경로이므로 alert 없이 단순히 form 을 건드리지 않음). URL 모드의 Parse &
 // Continue 는 명시적 사용자 액션이라 거부 메시지를 노출 — 별도 그룹.
 //
-// MySQL/MariaDB/SQLite/Redis/Valkey/Elasticsearch/OpenSearch 는 supported 이므로 본 silent-reject list 에서 제외.
+// MySQL/MariaDB/SQLite/Redis/Valkey/Elasticsearch/OpenSearch/MSSQL 는 supported 이므로 본 silent-reject list 에서 제외.
 // ===========================================================================
 
 describe("[Sprint 281] unsupported DBMS paste is silent (no form change)", () => {
   const unsupportedPastes = [
-    { scheme: "mssql", url: "mssql://sa:pw@mssql.local:1433/master" },
     { scheme: "oracle", url: "oracle://system:pw@oracle.local:1521/FREEPDB1" },
   ];
 
