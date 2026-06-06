@@ -1,13 +1,17 @@
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use table_view_lib::commands::connection::{test_connection, TestConnectionRequest};
-use table_view_lib::db::MssqlAdapter;
+use table_view_lib::db::{DbAdapter, MssqlAdapter, RdbAdapter};
 use table_view_lib::error::AppError;
-use table_view_lib::models::{ConnectionConfig, ConnectionConfigPublic, DatabaseType};
+use table_view_lib::models::{
+    ColumnCategory, ConnectionConfig, ConnectionConfigPublic, DatabaseType,
+};
 use testcontainers::core::{IntoContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
-use testcontainers::{GenericImage, ImageExt};
+use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use tokio::net::TcpListener;
+use tokio_util::sync::CancellationToken;
 
 #[path = "support/testcontainer_lifecycle.rs"]
 mod testcontainer_lifecycle;
@@ -70,6 +74,52 @@ async fn unused_tcp_port() -> u16 {
     port
 }
 
+async fn start_mssql_container() -> Option<(ContainerAsync<GenericImage>, u16)> {
+    testcontainer_lifecycle::ensure_sweep_once().await;
+    let pid = testcontainer_lifecycle::current_pid_label();
+    let container = match GenericImage::new(
+        "mcr.microsoft.com/mssql/server",
+        "2022-CU14-ubuntu-22.04",
+    )
+    .with_exposed_port(1433.tcp())
+    .with_wait_for(WaitFor::message_on_stdout(
+        "SQL Server is now ready for client connections",
+    ))
+    .with_wait_for(WaitFor::message_on_stdout("Recovery is complete"))
+    .with_env_var("ACCEPT_EULA", "Y")
+    .with_env_var("MSSQL_SA_PASSWORD", MSSQL_PASSWORD)
+    .with_env_var("MSSQL_PID", "Developer")
+    .with_label(testcontainer_lifecycle::OWNED_LABEL, "1")
+    .with_label(testcontainer_lifecycle::OWNER_PID_LABEL, &pid)
+    .start()
+    .await
+    {
+        Ok(container) => {
+            testcontainer_lifecycle::register_container_for_process_cleanup(
+                container.id().to_string(),
+            );
+            container
+        }
+        Err(error) => {
+            skip_or_fail_on_ci(format!(
+                "SQL Server testcontainer start failed ({error}). Docker daemon and amd64 SQL Server image support required."
+            ));
+            return None;
+        }
+    };
+    let port = match container.get_host_port_ipv4(1433.tcp()).await {
+        Ok(port) => port,
+        Err(error) => {
+            skip_or_fail_on_ci(format!(
+                "SQL Server container port mapping failed ({error})"
+            ));
+            return None;
+        }
+    };
+
+    Some((container, port))
+}
+
 #[tokio::test]
 async fn test_connection_routes_mssql_to_mssql_adapter() {
     let port = unused_tcp_port().await;
@@ -127,46 +177,8 @@ async fn mssql_login_uses_configured_connection_timeout() {
 
 #[tokio::test]
 async fn test_connection_succeeds_against_live_mssql_serverproperty_probe() {
-    testcontainer_lifecycle::ensure_sweep_once().await;
-    let pid = testcontainer_lifecycle::current_pid_label();
-    let container = match GenericImage::new(
-        "mcr.microsoft.com/mssql/server",
-        "2022-CU14-ubuntu-22.04",
-    )
-    .with_exposed_port(1433.tcp())
-    .with_wait_for(WaitFor::message_on_stdout(
-        "SQL Server is now ready for client connections",
-    ))
-    .with_wait_for(WaitFor::message_on_stdout("Recovery is complete"))
-    .with_env_var("ACCEPT_EULA", "Y")
-    .with_env_var("MSSQL_SA_PASSWORD", MSSQL_PASSWORD)
-    .with_env_var("MSSQL_PID", "Developer")
-    .with_label(testcontainer_lifecycle::OWNED_LABEL, "1")
-    .with_label(testcontainer_lifecycle::OWNER_PID_LABEL, &pid)
-    .start()
-    .await
-    {
-        Ok(container) => {
-            testcontainer_lifecycle::register_container_for_process_cleanup(
-                container.id().to_string(),
-            );
-            container
-        }
-        Err(error) => {
-            skip_or_fail_on_ci(format!(
-                "SQL Server testcontainer start failed ({error}). Docker daemon and amd64 SQL Server image support required."
-            ));
-            return;
-        }
-    };
-    let port = match container.get_host_port_ipv4(1433.tcp()).await {
-        Ok(port) => port,
-        Err(error) => {
-            skip_or_fail_on_ci(format!(
-                "SQL Server container port mapping failed ({error})"
-            ));
-            return;
-        }
+    let Some((_container, port)) = start_mssql_container().await else {
+        return;
     };
 
     let result = test_connection(TestConnectionRequest {
@@ -177,6 +189,124 @@ async fn test_connection_succeeds_against_live_mssql_serverproperty_probe() {
     .await;
 
     assert_eq!(result.unwrap(), "Connection successful");
+}
+
+#[tokio::test]
+async fn mssql_runtime_executes_select_dml_error_and_cancel_paths() {
+    let Some((_container, port)) = start_mssql_container().await else {
+        return;
+    };
+
+    let adapter = Arc::new(MssqlAdapter::new());
+    adapter
+        .connect(&mssql_config(port, MSSQL_PASSWORD, Some(15)))
+        .await
+        .expect("live SQL Server connection should succeed");
+
+    let selected = adapter
+        .execute_sql(
+            "SELECT CAST(42 AS INT) AS id, CAST(N'Ada' AS NVARCHAR(50)) AS name, CAST(1 AS BIT) AS active",
+            None,
+        )
+        .await
+        .expect("SELECT should return a tabular envelope");
+    assert_eq!(selected.total_count, 1);
+    assert_eq!(selected.columns.len(), 3);
+    assert_eq!(selected.columns[0].name, "id");
+    assert_eq!(selected.columns[0].data_type, "int");
+    assert_eq!(selected.columns[0].category, ColumnCategory::Int);
+    assert_eq!(selected.columns[1].name, "name");
+    assert_eq!(selected.columns[1].category, ColumnCategory::Text);
+    assert_eq!(selected.columns[2].name, "active");
+    assert_eq!(selected.columns[2].category, ColumnCategory::Bool);
+    assert_eq!(selected.rows[0][0], serde_json::json!(42));
+    assert_eq!(selected.rows[0][1], serde_json::json!("Ada"));
+    assert_eq!(selected.rows[0][2], serde_json::json!(true));
+
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let table = format!("dbo.tv_mssql_runtime_{}_{}", std::process::id(), suffix);
+    adapter
+        .execute_sql(
+            &format!(
+                "CREATE TABLE {table} (id INT NOT NULL PRIMARY KEY, name NVARCHAR(50) NOT NULL)"
+            ),
+            None,
+        )
+        .await
+        .expect("DDL should execute through the runtime path");
+
+    let batch = vec![
+        format!("INSERT INTO {table} (id, name) VALUES (1, N'Ada')"),
+        format!("UPDATE {table} SET name = N'Grace' WHERE id = 1"),
+    ];
+    let batch_results = adapter
+        .execute_sql_batch(&batch, None)
+        .await
+        .expect("DML batch should commit");
+    assert_eq!(batch_results.len(), 2);
+    assert_eq!(batch_results[0].total_count, 1);
+    assert_eq!(batch_results[1].total_count, 1);
+
+    let dry_run = vec![format!(
+        "INSERT INTO {table} (id, name) VALUES (2, N'DryRun')"
+    )];
+    let dry_run_results = adapter
+        .dry_run_sql_batch(&dry_run, None)
+        .await
+        .expect("DML dry-run batch should roll back");
+    assert_eq!(dry_run_results.len(), 1);
+    assert_eq!(dry_run_results[0].total_count, 1);
+
+    let verified = adapter
+        .execute_sql(&format!("SELECT id, name FROM {table} WHERE id = 1"), None)
+        .await
+        .expect("DML batch should be visible after commit");
+    assert_eq!(
+        verified.rows,
+        vec![vec![serde_json::json!(1), serde_json::json!("Grace")]]
+    );
+    let dry_run_check = adapter
+        .execute_sql(&format!("SELECT id FROM {table} WHERE id = 2"), None)
+        .await
+        .expect("dry-run verification query should succeed");
+    assert_eq!(dry_run_check.total_count, 0);
+
+    let error = adapter
+        .execute_sql("SELECT * FROM dbo.tv_mssql_runtime_missing_table", None)
+        .await
+        .expect_err("server errors should surface as AppError");
+    assert!(
+        matches!(error, AppError::Database(ref message) if message.contains("SQL Server SELECT failed")),
+        "unexpected server error: {error:?}"
+    );
+
+    let cancel = CancellationToken::new();
+    let child = cancel.clone();
+    let query_adapter = adapter.clone();
+    let handle = tokio::spawn(async move {
+        query_adapter
+            .execute_sql("WAITFOR DELAY '00:00:10'; SELECT 1 AS done", Some(&child))
+            .await
+    });
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    cancel.cancel();
+    let cancelled = tokio::time::timeout(Duration::from_secs(4), handle)
+        .await
+        .expect("cancelled query should return promptly")
+        .expect("query task should not panic")
+        .expect_err("query should return a cancellation error");
+    assert!(
+        matches!(cancelled, AppError::Database(ref message) if message == "Query cancelled"),
+        "unexpected cancellation error: {cancelled:?}"
+    );
+
+    let _ = adapter
+        .execute_sql(&format!("DROP TABLE {table}"), None)
+        .await;
+    adapter.disconnect().await.unwrap();
 }
 
 fn skip_or_fail_on_ci(reason: String) {
