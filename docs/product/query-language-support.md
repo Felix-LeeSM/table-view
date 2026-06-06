@@ -53,9 +53,14 @@ connection-test runtime evidence for SQL authentication and SQL Server version
 probe plus bounded T-SQL completion vocabulary/profile support in the SQL
 editor. That completion slice does not create runtime query, catalog, edit,
 parser/Safe Mode, runtime fixture, E2E smoke, or full T-SQL semantic support
-claims. Oracle carries planned `sql` profile metadata only; that metadata does
-not create Oracle SQL/PL/SQL runtime query, catalog, edit, parser, completion,
-or E2E smoke claims.
+claims.
+Oracle carries planned `sql` profile metadata.
+Oracle has bounded static SQL editor autocomplete vocabulary for selected
+keywords, functions, package symbols, sequences, synonyms, and bind
+placeholders; that vocabulary is editor assistance only and does not create
+Oracle connection UI, runtime adapter, query/catalog/edit, parser/Safe Mode,
+runtime fixture/live evidence, desktop E2E smoke, or full Oracle SQL/PL/SQL
+executable-semantics claims.
 
 `redis-command` is active because Redis and Valkey are connection-supported KV
 profiles. Redis has key browser/value panel support plus focused backend
@@ -101,7 +106,7 @@ cannot add parser or completion vocabulary without an owner decision.
 | Valkey `redis-command` target | Valkey has a KV runtime slice for connection, database/key scan, typed value preview, bounded Redis-compatible command query dispatch, and TypeScript command completion for proven local-runtime rows (`GET`, `HGETALL`, `XRANGE`, `TYPE`, `EXISTS`, `SET`, `EXPIRE`, `PERSIST`, `DEL`). Runtime Happy Path smoke covers connect/key scan/value preview, `GET`, `HGETALL`, `XRANGE`, bounded `SET`/`EXPIRE` DML summaries with readback/TTL verification, and destructive/unsupported command guards through the Valkey service and `e2e/fixtures/seed.valkey.json`. Focused local Valkey testcontainer evidence still owns exact-key `PERSIST`/`DEL` confirmation success and broader proven-row backend details below smoke. Completion key suggestions use the current DB scan cache and stay hidden for unpromoted command families. Static fixture inventory includes `e2e/fixtures/valkey.redis-compatibility.json`, which separates proven local runtime rows from candidate families and rejected Redis assumptions. | The matrix is not direct key mutation or full Redis compatibility evidence. Future support must prove Valkey identity with Valkey-specific server fields for broader compatibility claims and keep admin/server-control, broad destructive, cluster, pub/sub, modules/functions, scripting, and consumer-group commands rejected until separate workflow-specific safety/result-envelope decisions land. |
 | Search DSL | Fixture-backed Search identities and bounded fixture DSL exist for Elasticsearch/OpenSearch fixture result paths. Elasticsearch connection/auth/TLS root probe is active, detects product/version/distribution, live catalog reads indexes, aliases, data streams, mappings, settings/analyzers, templates, and field paths, bounded live `_search` dispatch validates `match_all`, `term`, `terms`, `match`, `bool` filter clauses, `range`, `exists`, `terms`/`value_count` aggregations, pagination, `track_total_hits`, bounded field sort, and bounded `_source` filters before HTTP dispatch, and delete-by-query safety planning estimates matching documents through a safe `_search` request before requiring acknowledged risk plus exact target confirmation for execution intent. OpenSearch connection/auth/TLS root probe is active, detects OpenSearch product/version/distribution, rejects Elasticsearch endpoints, surfaces auth/network failures, reads live indexes, aliases, data streams, mappings, settings/analyzers, composable/legacy templates, and field paths, dispatches bounded live `_search` requests through the same validator/result renderer with sample documents, HTTP error handling, and cancellation, and uses the same safe `_search` estimate + exact-target confirmation gate for delete-by-query safety planning. Bounded TypeScript editor completion uses product-scoped catalog/mapping context for Elasticsearch/OpenSearch index, alias, data stream, field, type, `sort`, and `_source` suggestions plus shared query/aggs/sort/source snippets. The response parser renders hits/source/fields/highlights/sort, shard/timeout metadata, aggregations, and explain/profile payloads returned by Elasticsearch/OpenSearch live query or fixture paths. Runtime Happy Path smoke now proves representative live Elasticsearch/OpenSearch connect/catalog/search/render/delete-plan workflows on Ubuntu. | Full language-core parser/completion ownership, actual live `_delete_by_query` execution, broader admin APIs, profile/explain request workflow, observability, and full query-language support are deferred. Unsupported Search DSL body keys, unsupported aggregation kinds/options, raw/admin targets, unsupported delete-by-query body keys, script sort, broad source options, and destructive/admin APIs are rejected before live Search dispatch. Search fixture files mirror embedded adapter contracts only. |
 | MSSQL SQL | SQL Server is an RDBMS identity with connection-only runtime support and bounded SQL editor completion. The active runtime slice is SQL authentication connection testing with TCP/TDS login and `SERVERPROPERTY('ProductVersion')` probe evidence. Completion covers a curated keyword/function slice plus bracket identifier quoting for editor suggestions only. | MSSQL has Lifecycle-only runtime capability. Runtime query/catalog/edit, T-SQL parser/Safe Mode, runtime fixture smoke, desktop E2E smoke, broader SQL Server instance/auth behavior, and full T-SQL semantic completion remain unsupported. Completion suggestions do not widen runtime SQL Server support. |
-| Oracle SQL | Planned profile metadata and a static SQL seed contract declare Oracle as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. | Capabilities are empty. There is no Oracle connection UI, runtime query/catalog/edit path, Oracle SQL/PL/SQL parser/completion claim, service/SID/wallet/TNS contract, runtime fixture/live evidence, or desktop E2E smoke. |
+| Oracle SQL | Planned profile metadata and a static SQL seed contract declare Oracle as a future RDBMS identity with `sql`, `rdb`, `tabular`, and `rdb-default` contract shape. Bounded static Oracle SQL editor autocomplete vocabulary covers selected keywords, functions, package symbols, sequences, synonyms, and bind placeholders. | Capabilities are empty. There is no Oracle connection UI, runtime adapter, runtime query/catalog/edit path, Oracle SQL/PL/SQL parser/Safe Mode claim, service/SID/wallet/TNS contract, runtime fixture/live evidence, desktop E2E smoke, or full PL/SQL executable semantics. |
 
 ### PostgreSQL SQL Support Breakdown
 
@@ -392,10 +397,11 @@ are:
   SQL Server version probe. It also has bounded T-SQL editor completion
   vocabulary. These do not imply active T-SQL query, catalog, edit,
   parser/Safe Mode, runtime fixture smoke, E2E smoke, or full T-SQL semantic
-  completion support. Oracle remains a planned SQL/RDBMS identity only; its
-  declared metadata and static seed contract do not imply Oracle SQL/PL/SQL
-  connection, query, catalog, edit, parser/completion, runtime fixture/live, or
-  E2E smoke support.
+  completion support. Oracle remains a planned SQL/RDBMS runtime identity with
+  bounded static SQL editor autocomplete vocabulary only; this does not imply
+  Oracle connection UI, runtime adapter, query, catalog, edit, parser/Safe Mode,
+  runtime fixture/live, desktop E2E smoke, or full Oracle SQL/PL/SQL executable
+  semantics.
 - Deferred language ids for CQL, PartiQL, Cypher, GQL, Gremlin, vector query,
   and stream commands do not create active profiles or support claims.
   Cassandra/Scylla, DynamoDB, graph, vector, and stream sources stay

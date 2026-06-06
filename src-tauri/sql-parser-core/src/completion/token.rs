@@ -38,6 +38,13 @@ pub(super) fn completion_token_at(text: &str, cursor: CompletionCursorOffsets) -
             }
         }
 
+        if from_utf8 > 0 && text[..from_utf8].ends_with(':') {
+            let colon_utf8 = from_utf8 - 1;
+            if !text[..colon_utf8].ends_with(':') {
+                from_utf8 = colon_utf8;
+            }
+        }
+
         prefix = text[from_utf8..cursor_utf8].to_string();
     }
 
@@ -87,6 +94,7 @@ fn is_operator_char(ch: char) -> bool {
             | '@'
             | '#'
             | '%'
+            | ':'
             | '^'
             | '&'
             | '|'

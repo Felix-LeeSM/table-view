@@ -4,6 +4,7 @@ pub(super) fn builtin_keywords(dialect: &str) -> &'static [&'static str] {
         "mysql" | "mariadb" => MYSQL_KEYWORDS,
         "sqlite" => SQLITE_KEYWORDS,
         "mssql" => MSSQL_KEYWORDS,
+        "oracle" => ORACLE_KEYWORDS,
         _ => COMMON_KEYWORDS,
     }
 }
@@ -70,7 +71,15 @@ pub(super) fn builtin_functions(dialect: &str) -> &'static [&'static str] {
         "mysql" | "mariadb" => MYSQL_FUNCTIONS,
         "sqlite" => SQLITE_FUNCTIONS,
         "mssql" => MSSQL_FUNCTIONS,
+        "oracle" => ORACLE_FUNCTIONS,
         _ => COMMON_FUNCTIONS,
+    }
+}
+
+pub(super) fn builtin_bind_identifiers(dialect: &str) -> &'static [&'static str] {
+    match dialect {
+        "oracle" => ORACLE_BIND_IDENTIFIERS,
+        _ => &[],
     }
 }
 
@@ -120,6 +129,9 @@ const MARIADB_KEYWORD_DELTAS: &[&str] = &["RETURNING"];
 const SQLITE_KEYWORDS: &[&str] = &["ABORT", "AUTOINCREMENT", "CONFLICT", "FAIL", "GLOB", "IIF", "IGNORE", "INDEXED BY", "INSERT OR IGNORE", "INSERT OR REPLACE", "PRAGMA", "RAISE", "REPLACE", "ROWID", "VACUUM", "WITHOUT ROWID"];
 
 #[rustfmt::skip]
+const ORACLE_KEYWORDS: &[&str] = &["CONNECT BY", "START WITH", "MINUS", "MERGE", "DUAL", "ROWNUM", "ROWID", "SYSDATE", "SYSTIMESTAMP", "FETCH FIRST", "RETURNING INTO", "CREATE SEQUENCE", "SEQUENCE", "NEXTVAL", "CURRVAL", "SYNONYM", "CREATE SYNONYM", "CREATE PUBLIC SYNONYM", "PACKAGE", "PACKAGE BODY", "DBMS_OUTPUT", "DBMS_RANDOM", "DBMS_LOB"];
+
+#[rustfmt::skip]
 const MSSQL_KEYWORDS: &[&str] = &["APPLY", "CROSS APPLY", "OUTER APPLY", "TOP", "OFFSET", "FETCH NEXT", "EXEC", "EXECUTE", "CREATE PROCEDURE", "ALTER PROCEDURE", "DROP PROCEDURE", "MERGE", "OUTPUT", "IDENTITY", "NVARCHAR", "DATETIME2", "UNIQUEIDENTIFIER", "TRY_CONVERT", "TRY_CAST", "PIVOT", "UNPIVOT"];
 
 #[rustfmt::skip]
@@ -133,6 +145,12 @@ const MYSQL_FUNCTIONS: &[&str] = &["ABS", "ACOS", "ADDDATE", "ADDTIME", "AES_DEC
 
 #[rustfmt::skip]
 const SQLITE_FUNCTIONS: &[&str] = &["DATE", "TIME", "DATETIME", "JULIANDAY", "STRFTIME", "IIF", "IFNULL", "JSON", "JSON_ARRAY", "JSON_EXTRACT", "JSON_GROUP_ARRAY", "JSON_GROUP_OBJECT", "JSON_OBJECT", "JSON_PATCH", "JSON_REMOVE", "JSON_REPLACE", "JSON_SET", "TOTAL", "TYPEOF"];
+
+#[rustfmt::skip]
+const ORACLE_FUNCTIONS: &[&str] = &["ABS", "ADD_MONTHS", "DECODE", "LISTAGG", "MONTHS_BETWEEN", "NVL", "NVL2", "REGEXP_LIKE", "REGEXP_REPLACE", "REGEXP_SUBSTR", "SYS_CONTEXT", "TO_CHAR", "TO_DATE", "TO_TIMESTAMP", "TRUNC", "DBMS_OUTPUT.PUT_LINE", "DBMS_RANDOM.VALUE", "DBMS_LOB.SUBSTR"];
+
+#[rustfmt::skip]
+const ORACLE_BIND_IDENTIFIERS: &[&str] = &[":BIND", ":ID", ":NAME", ":START_DATE", ":END_DATE", ":LIMIT"];
 
 #[rustfmt::skip]
 const MSSQL_FUNCTIONS: &[&str] = &["APP_NAME", "CHOOSE", "CURRENT_USER", "DATEADD", "DATEDIFF", "DATEFROMPARTS", "DATENAME", "DATEPART", "DB_NAME", "EOMONTH", "FORMAT", "GETDATE", "GETUTCDATE", "HOST_NAME", "IIF", "ISDATE", "ISNULL", "JSON_MODIFY", "JSON_QUERY", "JSON_VALUE", "NEWID", "OBJECT_ID", "OPENJSON", "SCOPE_IDENTITY", "SESSION_USER", "STRING_AGG", "SUSER_SNAME", "SYSDATETIME", "SYSUTCDATETIME", "TRY_CAST", "TRY_CONVERT"];

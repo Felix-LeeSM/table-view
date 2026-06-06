@@ -69,12 +69,25 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
     expect(getKeywordsForDialect("redis")).toEqual([]);
   });
 
-  it("MSSQL adds bounded T-SQL keywords while Oracle stays common-only", () => {
+  it("MSSQL adds bounded T-SQL keywords", () => {
     expect(getKeywordsForDialect("mssql")).toEqual(
       expect.arrayContaining(["SELECT", "FROM", "TOP", "EXEC", "OUTPUT"]),
     );
     expect(getKeywordsForDialect("mssql")).not.toContain(":CONNECT");
-    expect(getKeywordsForDialect("oracle")).toEqual(COMMON_SQL_KEYWORDS);
+  });
+
+  it("Oracle extends common SQL keywords with scoped completion vocabulary", () => {
+    const kws = getKeywordsForDialect("oracle");
+    expect(kws).toContain("SELECT");
+    expect(kws).toContain("CONNECT BY");
+    expect(kws).toContain("CREATE SEQUENCE");
+    expect(kws).toContain("NEXTVAL");
+    expect(kws).toContain("CREATE PUBLIC SYNONYM");
+    expect(kws).toContain("DBMS_OUTPUT");
+    expect(kws).not.toContain("DECLARE");
+    expect(kws).not.toContain("EXCEPTION");
+    expect(kws).not.toContain("END LOOP");
+    expect(kws).not.toContain("TOP");
   });
 
   // Deleted connection (dbType undefined) falls back to the common ANSI set.
