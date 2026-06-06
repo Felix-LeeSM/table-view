@@ -2161,5 +2161,19 @@ describe("sqlSafety.analyzeStatement", () => {
         expect(a.reasons).toEqual(expected.reasons);
       }
     });
+
+    it("[AC-512-X05] line-level GO inside mixed chunks stays bounded", () => {
+      for (const sql of [
+        "SELECT 1\nGO\nDROP TABLE [dbo].[users]",
+        "SELECT 1\nGO\nRESTORE DATABASE [app] FROM DISK = N'/tmp/app.bak'",
+        "SELECT 1\nGO 2\nDROP TABLE [dbo].[users]",
+      ]) {
+        const a = analyzeStatement(sql);
+        expect(a.kind).toBe("other");
+        expect(a.severity).toBe("warn");
+        expect(a.reasons).toEqual(["GO — T-SQL batch separator unsupported"]);
+        expect(isInfoStatement(a)).toBe(false);
+      }
+    });
   });
 });

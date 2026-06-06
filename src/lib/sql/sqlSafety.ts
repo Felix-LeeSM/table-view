@@ -338,6 +338,10 @@ function normalize(sql: string): string {
   return stripComments(sql).replace(WHITESPACE_RE, " ").trim();
 }
 
+function hasMssqlBatchSeparator(sql: string): boolean {
+  return /^[ \t]*GO(?:\s+\d+)?[ \t]*;?[ \t]*$/im.test(stripComments(sql));
+}
+
 function hasOuterWhere(stripped: string): boolean {
   return WORD_BOUNDARY_WHERE_RE.test(stripped);
 }
@@ -409,6 +413,14 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   }
 
   const upper = normalized.toUpperCase();
+
+  if (hasMssqlBatchSeparator(sql)) {
+    return {
+      kind: "other",
+      severity: "warn",
+      reasons: ["GO — T-SQL batch separator unsupported"],
+    };
+  }
 
   // Sprint 391 — DDL destructive (DROP / TRUNCATE / ALTER … DROP) is
   // classified through the AST first.
