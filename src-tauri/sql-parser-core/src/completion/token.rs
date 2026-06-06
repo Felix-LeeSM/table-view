@@ -113,15 +113,11 @@ fn quoted_identifier_prefix_for(
     open: char,
     close: char,
 ) -> Option<(usize, String, char)> {
-    let quote_start = before.rfind(open)?;
-    if open == close
-        && before[..quote_start]
-            .chars()
-            .next_back()
-            .is_some_and(is_ident_char)
-    {
-        return None;
-    }
+    let quote_start = if open == close {
+        unmatched_same_quote_start(before, open)?
+    } else {
+        before.rfind(open)?
+    };
     let prefix = &before[quote_start + open.len_utf8()..];
     if prefix
         .chars()
@@ -130,6 +126,21 @@ fn quoted_identifier_prefix_for(
         return Some((quote_start, prefix.to_string(), open));
     }
     None
+}
+
+fn unmatched_same_quote_start(before: &str, quote: char) -> Option<usize> {
+    let mut open_start = None;
+    for (idx, ch) in before.char_indices() {
+        if ch != quote {
+            continue;
+        }
+        open_start = if open_start.is_some() {
+            None
+        } else {
+            Some(idx)
+        };
+    }
+    open_start
 }
 
 fn scan_qualifier_start(before_dot: &str) -> usize {
@@ -191,6 +202,12 @@ mod tests {
             cursor_at_end("SELECT * FROM `UserAccounts`"),
         );
         assert_eq!(closed.quote, None);
+
+        let closed_non_ident = completion_token_at(
+            "SELECT * FROM `Order Details!`",
+            cursor_at_end("SELECT * FROM `Order Details!`"),
+        );
+        assert_eq!(closed_non_ident.quote, None);
     }
 
     #[test]

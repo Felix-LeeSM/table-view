@@ -131,6 +131,12 @@ fn mysql_catalog_request(text: &str) -> SqlCompletionRequest {
             name: "AuditLog".to_string(),
             qualified_name: "audit.AuditLog".to_string(),
         },
+        SqlCompletionCatalogObject {
+            kind: "table".to_string(),
+            schema: "app".to_string(),
+            name: "Order Details!".to_string(),
+            qualified_name: "app.Order Details!".to_string(),
+        },
     ];
     req.catalog.columns = vec![
         column("app", "UserAccounts", "id"),
@@ -489,6 +495,11 @@ fn mysql_closed_backtick_identifier_does_not_reopen_quoted_completion() {
     let result = complete_sql(mysql_catalog_request("SELECT * FROM `UserAccounts`"));
     assert!(!result.items.iter().any(|item| {
         item.label == "UserAccounts" && item.apply.as_deref() == Some("`UserAccounts`")
+    }));
+
+    let non_ident_result = complete_sql(mysql_catalog_request("SELECT * FROM `Order Details!`"));
+    assert!(!non_ident_result.items.iter().any(|item| {
+        item.label == "Order Details!" && item.apply.as_deref() == Some("`Order Details!`")
     }));
 }
 
