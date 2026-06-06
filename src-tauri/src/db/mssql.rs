@@ -1,6 +1,10 @@
+use std::future::Future;
+use std::time::Duration;
+
 use tiberius::{AuthMethod, Client, Config as TdsConfig, EncryptionLevel};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
+use tokio::time::timeout;
 use tokio_util::compat::{Compat, TokioAsyncWriteCompatExt};
 use tokio_util::sync::CancellationToken;
 
@@ -19,6 +23,9 @@ pub struct MssqlAdapter {
 }
 
 impl MssqlAdapter {
+    const DEFAULT_CONNECTION_TIMEOUT_SECS: u64 = 10;
+    const MAX_CONNECTION_TIMEOUT_SECS: u64 = 300;
+
     pub fn new() -> Self {
         Self {
             connected_config: Mutex::new(None),
@@ -26,15 +33,20 @@ impl MssqlAdapter {
     }
 
     pub async fn test(config: &ConnectionConfig) -> Result<(), AppError> {
+        let timeout = Self::connection_timeout(config);
         let mut client = Self::connect_client(config).await?;
-        let version_probe = client
-            .simple_query("SELECT CAST(SERVERPROPERTY('ProductVersion') AS NVARCHAR(128))")
-            .await
-            .map_err(|err| mssql_connection_error("SQL Server version probe failed", err))?;
-        version_probe
-            .into_results()
-            .await
-            .map_err(|err| mssql_connection_error("SQL Server version probe failed", err))?;
+        let version_probe = with_timeout(
+            "SQL Server version probe failed",
+            timeout,
+            client.simple_query("SELECT CAST(SERVERPROPERTY('ProductVersion') AS NVARCHAR(128))"),
+        )
+        .await?;
+        with_timeout(
+            "SQL Server version probe failed",
+            timeout,
+            version_probe.into_results(),
+        )
+        .await?;
         Ok(())
     }
 
@@ -50,14 +62,21 @@ impl MssqlAdapter {
         config: &ConnectionConfig,
     ) -> Result<Client<Compat<TcpStream>>, AppError> {
         let tds_config = Self::build_tds_config(config)?;
-        let tcp = TcpStream::connect(tds_config.get_addr())
-            .await
-            .map_err(|err| mssql_connection_error("SQL Server network connection failed", err))?;
+        let timeout = Self::connection_timeout(config);
+        let tcp = with_timeout(
+            "SQL Server network connection failed",
+            timeout,
+            TcpStream::connect(tds_config.get_addr()),
+        )
+        .await?;
         tcp.set_nodelay(true)
             .map_err(|err| mssql_connection_error("SQL Server TCP setup failed", err))?;
-        Client::connect(tds_config, tcp.compat_write())
-            .await
-            .map_err(|err| mssql_connection_error("SQL Server login failed", err))
+        with_timeout(
+            "SQL Server login failed",
+            timeout,
+            Client::connect(tds_config, tcp.compat_write()),
+        )
+        .await
     }
 
     fn build_tds_config(config: &ConnectionConfig) -> Result<TdsConfig, AppError> {
@@ -85,10 +104,20 @@ impl MssqlAdapter {
             tds_config.encryption(EncryptionLevel::Required);
             tds_config.trust_cert();
         } else {
-            tds_config.encryption(EncryptionLevel::Off);
+            tds_config.encryption(EncryptionLevel::NotSupported);
         }
 
         Ok(tds_config)
+    }
+
+    fn connection_timeout(config: &ConnectionConfig) -> Duration {
+        Duration::from_secs(
+            config
+                .connection_timeout
+                .map(u64::from)
+                .unwrap_or(Self::DEFAULT_CONNECTION_TIMEOUT_SECS)
+                .clamp(1, Self::MAX_CONNECTION_TIMEOUT_SECS),
+        )
     }
 }
 
@@ -314,6 +343,24 @@ fn mssql_connection_error(context: &'static str, err: impl std::fmt::Display) ->
     AppError::Connection(format!("{context}: {err}"))
 }
 
+async fn with_timeout<T, E>(
+    context: &'static str,
+    duration: Duration,
+    future: impl Future<Output = Result<T, E>>,
+) -> Result<T, AppError>
+where
+    E: std::fmt::Display,
+{
+    match timeout(duration, future).await {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(err)) => Err(mssql_connection_error(context, err)),
+        Err(_) => Err(AppError::Connection(format!(
+            "{context}: timed out after {}s",
+            duration.as_secs()
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -360,6 +407,35 @@ mod tests {
         })
         .unwrap_err();
         assert!(matches!(err, AppError::Validation(_)));
+    }
+
+    #[test]
+    fn connection_timeout_clamps_ui_value() {
+        assert_eq!(MssqlAdapter::connection_timeout(&config()).as_secs(), 10);
+        assert_eq!(
+            MssqlAdapter::connection_timeout(&ConnectionConfig {
+                connection_timeout: Some(0),
+                ..config()
+            })
+            .as_secs(),
+            1
+        );
+        assert_eq!(
+            MssqlAdapter::connection_timeout(&ConnectionConfig {
+                connection_timeout: Some(301),
+                ..config()
+            })
+            .as_secs(),
+            300
+        );
+        assert_eq!(
+            MssqlAdapter::connection_timeout(&ConnectionConfig {
+                connection_timeout: Some(42),
+                ..config()
+            })
+            .as_secs(),
+            42
+        );
     }
 
     #[tokio::test]
