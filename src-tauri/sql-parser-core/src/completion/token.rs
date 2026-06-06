@@ -114,6 +114,14 @@ fn quoted_identifier_prefix_for(
     close: char,
 ) -> Option<(usize, String, char)> {
     let quote_start = before.rfind(open)?;
+    if open == close
+        && before[..quote_start]
+            .chars()
+            .next_back()
+            .is_some_and(is_ident_char)
+    {
+        return None;
+    }
     let prefix = &before[quote_start + open.len_utf8()..];
     if prefix
         .chars()
@@ -159,4 +167,39 @@ fn is_command_prefix_at_line_start(text: &str, prefix_utf8: usize) -> bool {
 
 fn utf16_len(text: &str) -> usize {
     text.chars().map(char::len_utf16).sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cursor_at_end(text: &str) -> CompletionCursorOffsets {
+        CompletionCursorOffsets {
+            utf16: text.chars().map(char::len_utf16).sum(),
+            utf8: text.len(),
+        }
+    }
+
+    #[test]
+    fn backtick_identifier_prefix_requires_unclosed_quote() {
+        let open = completion_token_at("SELECT * FROM `User", cursor_at_end("SELECT * FROM `User"));
+        assert_eq!(open.prefix, "User");
+        assert_eq!(open.quote, Some('`'));
+
+        let closed = completion_token_at(
+            "SELECT * FROM `UserAccounts`",
+            cursor_at_end("SELECT * FROM `UserAccounts`"),
+        );
+        assert_eq!(closed.quote, None);
+    }
+
+    #[test]
+    fn bracket_identifier_prefix_allows_unclosed_mssql_quote() {
+        let token = completion_token_at(
+            "SELECT * FROM [Order",
+            cursor_at_end("SELECT * FROM [Order"),
+        );
+        assert_eq!(token.prefix, "Order");
+        assert_eq!(token.quote, Some('['));
+    }
 }

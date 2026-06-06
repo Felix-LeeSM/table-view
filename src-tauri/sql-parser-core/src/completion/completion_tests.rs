@@ -485,6 +485,14 @@ fn ac_446_mysql_backtick_context_uses_catalog_replace_ranges_and_quoting() {
 }
 
 #[test]
+fn mysql_closed_backtick_identifier_does_not_reopen_quoted_completion() {
+    let result = complete_sql(mysql_catalog_request("SELECT * FROM `UserAccounts`"));
+    assert!(!result.items.iter().any(|item| {
+        item.label == "UserAccounts" && item.apply.as_deref() == Some("`UserAccounts`")
+    }));
+}
+
+#[test]
 fn mariadb_returning_keyword_is_dialect_specific() {
     assert_builtin_completion_contains("mariadb", "mysql-client", "RET", "RETURNING");
     assert_builtin_completion_excludes("mysql", "mysql-client", "RET", "RETURNING");
