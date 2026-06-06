@@ -329,6 +329,12 @@ export const DUCKDB_CAPABILITIES = capabilities({
   },
 });
 
+export const MSSQL_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+});
+
 export const MONGODB_CAPABILITIES = capabilities({
   connection: {
     test: true,
@@ -496,7 +502,15 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     DUCKDB_CAPABILITIES,
     DUCKDB_FILE_CONNECTION,
   ),
-  mssql: profile("mssql", "server", ["sql"], "rdb", ["tabular"], "rdb-default"),
+  mssql: profile(
+    "mssql",
+    "server",
+    ["sql"],
+    "rdb",
+    ["tabular"],
+    "rdb-default",
+    MSSQL_CAPABILITIES,
+  ),
   oracle: profile(
     "oracle",
     "server",

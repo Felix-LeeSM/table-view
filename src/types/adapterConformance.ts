@@ -173,7 +173,23 @@ const DEFERRED_FEATURES = Object.freeze({
     query: ["query.multiStatement", "query.cancel", "query.explain"],
     edit: ["edit.editRows"],
   },
-  mssql: allRuntimeDeferred(),
+  mssql: {
+    connection: ["connection.switchDatabase"],
+    catalog: [
+      "catalog.browse",
+      "catalog.schema",
+      "catalog.indexes",
+      "catalog.constraints",
+      "catalog.relationships",
+    ],
+    query: [
+      "query.query",
+      "query.multiStatement",
+      "query.cancel",
+      "query.explain",
+    ],
+    edit: ["edit.editRows"],
+  },
   oracle: allRuntimeDeferred(),
   mongodb: {
     connection: ["connection.switchDatabase"],
