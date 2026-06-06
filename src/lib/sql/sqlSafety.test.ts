@@ -2072,4 +2072,94 @@ describe("sqlSafety.analyzeStatement", () => {
       }
     });
   });
+
+  describe("Issue 512 — MSSQL static Safe Mode boundary", () => {
+    it("[AC-512-X01] SELECT TOP stays read-only info", () => {
+      const a = analyzeStatement(
+        "SELECT TOP (10) [id], [name] FROM [dbo].[users]",
+      );
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(isInfoStatement(a)).toBe(true);
+    });
+
+    it("[AC-512-X02] bracketed DML preserves bounded/destructive tiers", () => {
+      const update = analyzeStatement(
+        "UPDATE [dbo].[users] SET [name] = N'Alice' WHERE [id] = 1",
+      );
+      expect(update.kind).toBe("dml-update");
+      expect(update.severity).toBe("warn");
+
+      const deleteAll = analyzeStatement("DELETE FROM [dbo].[users]");
+      expect(deleteAll.kind).toBe("dml-delete");
+      expect(deleteAll.severity).toBe("danger");
+      expect(isDangerous(deleteAll)).toBe(true);
+    });
+
+    it("[AC-512-X03] bracketed destructive DDL still requires confirmation", () => {
+      for (const sql of [
+        "DROP TABLE [dbo].[users]",
+        "TRUNCATE TABLE [dbo].[users]",
+        "ALTER TABLE [dbo].[users] DROP COLUMN [email]",
+      ]) {
+        const a = analyzeStatement(sql);
+        expect(a.severity).toBe("danger");
+        expect(isDangerous(a)).toBe(true);
+      }
+    });
+
+    it("[AC-512-X04] T-SQL scripting/admin boundaries do not fall through to info", () => {
+      const cases = [
+        {
+          sql: "EXEC dbo.refresh_users",
+          kind: "routine-call",
+          severity: "warn",
+          reasons: ["EXEC — stored routine execution"],
+        },
+        {
+          sql: "GO",
+          kind: "other",
+          severity: "warn",
+          reasons: ["GO — T-SQL batch separator unsupported"],
+        },
+        {
+          sql: "USE [app]",
+          kind: "config-write",
+          severity: "warn",
+          reasons: ["USE — database context switch unsupported"],
+        },
+        {
+          sql: "DBCC CHECKDB ([app])",
+          kind: "other",
+          severity: "warn",
+          reasons: ["DBCC — SQL Server admin command unsupported"],
+        },
+        {
+          sql: "DENY SELECT ON users TO alice",
+          kind: "permission-change",
+          severity: "warn",
+          reasons: ["DENY — 권한 변경"],
+        },
+        {
+          sql: "BACKUP DATABASE [app] TO DISK = N'/tmp/app.bak'",
+          kind: "data-movement",
+          severity: "warn",
+          reasons: ["BACKUP — SQL Server backup unsupported"],
+        },
+        {
+          sql: "RESTORE DATABASE [app] FROM DISK = N'/tmp/app.bak'",
+          kind: "data-movement",
+          severity: "danger",
+          reasons: ["RESTORE — SQL Server restore may overwrite database"],
+        },
+      ] as const;
+
+      for (const expected of cases) {
+        const a = analyzeStatement(expected.sql);
+        expect(a.kind).toBe(expected.kind);
+        expect(a.severity).toBe(expected.severity);
+        expect(a.reasons).toEqual(expected.reasons);
+      }
+    });
+  });
 });

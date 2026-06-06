@@ -80,6 +80,35 @@ describe("checked-in SQL WASM artifact", () => {
     expect(result.kind).toBe("select");
   });
 
+  it("[AC-512-W01] parseSql accepts SELECT TOP with bracket identifiers through real WASM", async () => {
+    const result = await parseSql("SELECT TOP (10) [id] FROM [dbo].[users]");
+
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.from[0]).toMatchObject({ schema: "dbo", table: "users" });
+    expect(result.limit).toEqual({
+      count: { kind: "literal", value: { kind: "integer", value: 10 } },
+      offset: null,
+    });
+  });
+
+  it("[AC-512-W02] parseSql rejects unsupported T-SQL admin verbs through real WASM", async () => {
+    const result = await parseSql("DBCC CHECKDB ([app])");
+
+    expect(result.kind).toBe("error");
+    if (result.kind !== "error") return;
+    expect(result.error_kind).toBe("unsupported-statement");
+  });
+
+  it("[AC-512-W03] TOP remains contextual through real WASM", async () => {
+    const result = await parseSql("SELECT top FROM users");
+
+    expect(result.kind).toBe("select");
+    if (result.kind !== "select") return;
+    expect(result.columns).toEqual({ kind: "named", names: ["top"] });
+    expect(result.limit).toBeNull();
+  });
+
   it("[AC-434-W01] parseSql accepts MySQL ON DUPLICATE KEY UPDATE through real WASM", async () => {
     const result = await parseSql(
       "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = VALUES(name), id = ?",

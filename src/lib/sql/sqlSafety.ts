@@ -430,7 +430,7 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   // table; SHOW / SET / COMMENT classify as info-tier metadata-like
   // reads/writes.
   if (
-    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|CALL|DO|UPDATE|DELETE|MERGE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT)\b/.test(
+    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|CALL|DO|UPDATE|DELETE|MERGE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT|EXEC|EXECUTE|USE|BACKUP|RESTORE|DBCC|DENY|GO)\b/.test(
       upper,
     )
   ) {
@@ -483,6 +483,62 @@ export function analyzeStatement(sql: string): StatementAnalysis {
       kind: "routine-call",
       severity: "warn",
       reasons: ["DO — procedural block execution"],
+    };
+  }
+
+  if (/^(EXEC|EXECUTE)\b/.test(upper)) {
+    return {
+      kind: "routine-call",
+      severity: "warn",
+      reasons: ["EXEC — stored routine execution"],
+    };
+  }
+
+  if (/^GO\b/.test(upper)) {
+    return {
+      kind: "other",
+      severity: "warn",
+      reasons: ["GO — T-SQL batch separator unsupported"],
+    };
+  }
+
+  if (/^USE\b/.test(upper)) {
+    return {
+      kind: "config-write",
+      severity: "warn",
+      reasons: ["USE — database context switch unsupported"],
+    };
+  }
+
+  if (/^DBCC\b/.test(upper)) {
+    return {
+      kind: "other",
+      severity: "warn",
+      reasons: ["DBCC — SQL Server admin command unsupported"],
+    };
+  }
+
+  if (/^DENY\b/.test(upper)) {
+    return {
+      kind: "permission-change",
+      severity: "warn",
+      reasons: ["DENY — 권한 변경"],
+    };
+  }
+
+  if (/^BACKUP\b/.test(upper)) {
+    return {
+      kind: "data-movement",
+      severity: "warn",
+      reasons: ["BACKUP — SQL Server backup unsupported"],
+    };
+  }
+
+  if (/^RESTORE\b/.test(upper)) {
+    return {
+      kind: "data-movement",
+      severity: "danger",
+      reasons: ["RESTORE — SQL Server restore may overwrite database"],
     };
   }
 

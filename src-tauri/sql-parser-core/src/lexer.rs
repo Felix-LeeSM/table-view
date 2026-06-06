@@ -450,6 +450,18 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
             continue;
         }
 
+        // SQL Server Unicode string literal prefix. The parser stores
+        // the decoded payload exactly like a normal single-quoted string.
+        if (c == b'N' || c == b'n') && bytes.get(i + 1).copied() == Some(b'\'') {
+            let (value, consumed) = lex_string(&bytes[i + 1..], start + 1)?;
+            tokens.push(Spanned {
+                token: Token::String(value),
+                at: start,
+            });
+            i += consumed + 1;
+            continue;
+        }
+
         // Integer or float literal. Sprint-392 adds float support so
         // `INSERT INTO t VALUES (3.14)` lexes cleanly. Integer literal
         // remains the path for plain digit runs (used by SELECT WHERE
@@ -528,6 +540,19 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 at: start,
             });
             i += 1;
+            continue;
+        }
+
+        // SQL Server bracket identifiers. `]]` escapes a literal `]`.
+        // They lower to ordinary identifiers so the existing parser
+        // paths can stay dialect-agnostic.
+        if c == b'[' {
+            let (value, consumed) = lex_bracket_identifier(&bytes[i..], start)?;
+            tokens.push(Spanned {
+                token: Token::Ident(value),
+                at: start,
+            });
+            i += consumed;
             continue;
         }
 
@@ -643,16 +668,16 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "check" => Token::Check,
                 "time" => Token::Time,
                 "zone" => Token::Zone,
-                "integer" => Token::KwInteger,
+                "integer" | "int" => Token::KwInteger,
                 "bigint" => Token::KwBigint,
-                "varchar" => Token::KwVarchar,
+                "varchar" | "nvarchar" => Token::KwVarchar,
                 "text" => Token::KwText,
                 "timestamp" => Token::KwTimestamp,
                 "date" => Token::KwDate,
                 "boolean" => Token::KwBoolean,
-                "numeric" => Token::KwNumeric,
+                "numeric" | "decimal" => Token::KwNumeric,
                 "serial" => Token::KwSerial,
-                "uuid" => Token::KwUuid,
+                "uuid" | "uniqueidentifier" => Token::KwUuid,
                 // sprint-395 misc grammar — only top-level verbs are
                 // promoted to keywords. STDIN/STDOUT must be keywords so
                 // the COPY source variant is unambiguous (a column named
@@ -712,6 +737,32 @@ fn lex_string(bytes: &[u8], start_offset: usize) -> Result<(String, usize), Pars
         i += 1;
     }
     Err(lex_err(start_offset, "unterminated string literal"))
+}
+
+fn lex_bracket_identifier(
+    bytes: &[u8],
+    start_offset: usize,
+) -> Result<(String, usize), ParseError> {
+    debug_assert_eq!(bytes.first().copied(), Some(b'['));
+    let mut out = String::new();
+    let mut i = 1usize;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if c == b']' {
+            if bytes.get(i + 1).copied() == Some(b']') {
+                out.push(']');
+                i += 2;
+                continue;
+            }
+            if out.is_empty() {
+                return Err(lex_err(start_offset, "empty bracket identifier"));
+            }
+            return Ok((out, i + 1));
+        }
+        out.push(c as char);
+        i += 1;
+    }
+    Err(lex_err(start_offset, "unterminated bracket identifier"))
 }
 
 fn lex_err(at: usize, msg: &str) -> ParseError {
@@ -802,6 +853,32 @@ mod tests {
         let err = lex("'never closed").unwrap_err();
         assert_eq!(err.error_kind, ParseErrorKind::LexError);
         assert!(err.message.contains("unterminated"));
+    }
+
+    #[test]
+    fn ac_512_l1_tsql_unicode_string_literal_prefix() {
+        assert_eq!(lex_ok("N'felix'"), vec![Token::String("felix".into())]);
+        assert_eq!(lex_ok("n'O''Brien'"), vec![Token::String("O'Brien".into())]);
+    }
+
+    #[test]
+    fn ac_512_l2_tsql_bracket_identifier() {
+        assert_eq!(lex_ok("[dbo]"), vec![Token::Ident("dbo".into())]);
+        assert_eq!(
+            lex_ok("[weird]]name]"),
+            vec![Token::Ident("weird]name".into())]
+        );
+    }
+
+    #[test]
+    fn ac_512_l3_tsql_bracket_identifier_errors_are_bounded() {
+        let unterminated = lex("[dbo").unwrap_err();
+        assert_eq!(unterminated.error_kind, ParseErrorKind::LexError);
+        assert!(unterminated.message.contains("unterminated"));
+
+        let empty = lex("[]").unwrap_err();
+        assert_eq!(empty.error_kind, ParseErrorKind::LexError);
+        assert!(empty.message.contains("empty bracket identifier"));
     }
 
     #[test]
