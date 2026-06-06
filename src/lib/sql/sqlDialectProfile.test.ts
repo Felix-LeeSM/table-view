@@ -19,6 +19,8 @@ describe("sqlDialectProfile", () => {
     expect(sqlDialectIdForDatabaseType("mariadb")).toBe("mariadb");
     expect(sqlDialectIdForDatabaseType("sqlite")).toBe("sqlite");
     expect(sqlDialectIdForDatabaseType("duckdb")).toBe("duckdb");
+    expect(sqlDialectIdForDatabaseType("mssql")).toBe("mssql");
+    expect(sqlDialectIdForDatabaseType("oracle")).toBe("oracle");
     expect(sqlDialectIdForDatabaseType("mongodb")).toBeNull();
     expect(sqlDialectIdForDatabaseType(undefined)).toBeNull();
   });
@@ -41,6 +43,41 @@ describe("sqlDialectProfile", () => {
     expect(SQL_DIALECT_PROFILES.mariadb.capabilities.returning).toBe(true);
     expect(SQL_DIALECT_PROFILES.mariadb.capabilities.ilike).toBe(false);
     expect(SQL_DIALECT_PROFILES.sqlite.capabilities.onConflict).toBe(true);
+  });
+
+  it("adds bounded MSSQL T-SQL vocabulary without promoting Oracle", () => {
+    const mssql = getSqlDialectProfileForDatabaseType("mssql");
+    const oracle = getSqlDialectProfileForDatabaseType("oracle");
+
+    expect(mssql).toMatchObject({
+      id: "mssql",
+      family: "mssql",
+      defaultShell: "none",
+      identifierQuote: "[",
+    });
+    expect(mssql?.vocabulary.keywords).toEqual(
+      expect.arrayContaining([
+        "TOP",
+        "EXEC",
+        "EXECUTE",
+        "CREATE PROCEDURE",
+        "OUTPUT",
+      ]),
+    );
+    expect(mssql?.vocabulary.functions).toEqual(
+      expect.arrayContaining([
+        "GETDATE",
+        "DATEADD",
+        "ISNULL",
+        "TRY_CONVERT",
+        "JSON_VALUE",
+      ]),
+    );
+    expect(mssql?.vocabulary.keywords).not.toContain(":CONNECT");
+    expect(mssql?.vocabulary.keywords).not.toContain("sqlcmd");
+
+    expect(oracle?.vocabulary.keywords).toEqual(COMMON_SQL_KEYWORDS);
+    expect(oracle?.vocabulary.functions).toEqual(COMMON_SQL_FUNCTIONS);
   });
 
   it("keeps DuckDB as its own SQL dialect placeholder instead of aliasing SQLite", () => {

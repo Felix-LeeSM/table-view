@@ -614,11 +614,11 @@ fn sqlite_extension_inventory_does_not_enable_extension_completion_packs() {
 #[test]
 fn unsupported_dialect_returns_empty_result_with_metadata() {
     let mut req = request("SELECT ", 7, 7);
-    req.dialect = "mssql".to_string();
+    req.dialect = "oracle".to_string();
 
     let result = complete_sql(req);
 
     assert!(result.items.is_empty());
     assert_eq!(result.metadata.engine, "wasm");
-    assert_eq!(result.metadata.dialect, "mssql");
+    assert_eq!(result.metadata.dialect, "oracle");
 }

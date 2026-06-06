@@ -69,8 +69,11 @@ describe("getKeywordsForDialect (Sprint 139)", () => {
     expect(getKeywordsForDialect("redis")).toEqual([]);
   });
 
-  it("MSSQL / Oracle start with common SQL keywords only", () => {
-    expect(getKeywordsForDialect("mssql")).toEqual(COMMON_SQL_KEYWORDS);
+  it("MSSQL adds bounded T-SQL keywords while Oracle stays common-only", () => {
+    expect(getKeywordsForDialect("mssql")).toEqual(
+      expect.arrayContaining(["SELECT", "FROM", "TOP", "EXEC", "OUTPUT"]),
+    );
+    expect(getKeywordsForDialect("mssql")).not.toContain(":CONNECT");
     expect(getKeywordsForDialect("oracle")).toEqual(COMMON_SQL_KEYWORDS);
   });
 
