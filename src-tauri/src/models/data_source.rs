@@ -118,6 +118,7 @@ pub enum BackendAdapterId {
     MysqlFamily,
     Sqlite,
     Duckdb,
+    Oracle,
     Mongodb,
     Redis,
     Valkey,
@@ -132,6 +133,7 @@ pub enum BackendAdapterCapabilitySource {
     MysqlFamily,
     Sqlite,
     Duckdb,
+    Oracle,
     Mongodb,
     Redis,
     Valkey,
@@ -289,6 +291,8 @@ const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
 ];
+const ORACLE_CONNECTION_CAPABILITIES: &[BackendAdapterCapability] =
+    &[BackendAdapterCapability::Lifecycle];
 const NO_BACKEND_CAPABILITIES: &[BackendAdapterCapability] = &[];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
@@ -349,6 +353,13 @@ const DUCKDB_FILE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract 
     implementation: BackendAdapterId::Duckdb,
     capability_source: BackendAdapterCapabilitySource::Duckdb,
     capabilities: DUCKDB_RDB_CAPABILITIES,
+};
+const ORACLE_CONNECTION_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+    kind: BackendAdapterContractKind::Rdb,
+    state: BackendAdapterContractState::FactoryBacked,
+    implementation: BackendAdapterId::Oracle,
+    capability_source: BackendAdapterCapabilitySource::Oracle,
+    capabilities: ORACLE_CONNECTION_CAPABILITIES,
 };
 const DECLARED_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
@@ -565,9 +576,11 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
         DatabaseType::Mssql => {
             rdb_profile(DatabaseType::Mssql, DECLARED_RDB_CONTRACT, MSSQL_DIALECT)
         }
-        DatabaseType::Oracle => {
-            rdb_profile(DatabaseType::Oracle, DECLARED_RDB_CONTRACT, ORACLE_DIALECT)
-        }
+        DatabaseType::Oracle => rdb_profile(
+            DatabaseType::Oracle,
+            ORACLE_CONNECTION_RDB_CONTRACT,
+            ORACLE_DIALECT,
+        ),
         DatabaseType::Mongodb => DataSourceProfile {
             id: DatabaseType::Mongodb,
             paradigm: Paradigm::Document,

@@ -23,9 +23,9 @@ export type DatabaseType =
  * tables / columns) 만 동작 — DDL / queries / streaming 은 Slice B~G
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
- * 미포함 어댑터 (MSSQL/Oracle) 는 profile identity 는 있지만 connection 생성
- * dialog 의 Select option 에 노출되지 않고, URL paste / Parse & Continue 로
- * 들어와도 거부된다.
+ * 미포함 어댑터 (MSSQL) 는 profile identity 는 있지만 connection 생성 dialog
+ * 의 Select option 에 노출되지 않고, URL paste / Parse & Continue 로 들어와도
+ * 거부된다. Oracle 은 issue #518 범위에서 connection test path 만 지원한다.
  */
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",
@@ -33,6 +33,7 @@ export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "mariadb",
   "sqlite",
   "duckdb",
+  "oracle",
   "mongodb",
   "redis",
   "valkey",

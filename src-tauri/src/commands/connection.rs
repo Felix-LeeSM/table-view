@@ -26,6 +26,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::db::mongodb::MongoAdapter;
 use crate::db::mysql::MysqlAdapter;
+use crate::db::oracle::OracleAdapter;
 use crate::db::postgres::PostgresAdapter;
 use crate::db::redis::RedisAdapter;
 use crate::db::search::SearchEngineAdapter;
@@ -61,8 +62,8 @@ pub use sqlite_file::create_sqlite_database_file;
 /// surfaces still return `AppError::Unsupported` until Slice B~G land.
 /// MariaDB shares the MySQL protocol adapter while preserving its distinct
 /// `DatabaseType` on the active adapter. SQLite and DuckDB have file-backed
-/// adapters; MSSQL / Oracle remain explicit unsupported variants until their
-/// adapter slices land.
+/// adapters. Oracle is lifecycle-only in issue #518: connect/test/ping are
+/// live, while catalog/query/edit/DDL stay unsupported.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
@@ -70,6 +71,7 @@ pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppE
         DatabaseType::Mariadb => Ok(ActiveAdapter::Rdb(Box::new(MysqlAdapter::new_mariadb()))),
         DatabaseType::Sqlite => Ok(ActiveAdapter::Rdb(Box::new(SqliteAdapter::new()))),
         DatabaseType::Duckdb => Ok(ActiveAdapter::Rdb(Box::new(DuckdbAdapter::new()))),
+        DatabaseType::Oracle => Ok(ActiveAdapter::Rdb(Box::new(OracleAdapter::new()))),
         DatabaseType::Mongodb => Ok(ActiveAdapter::Document(Box::new(MongoAdapter::new()))),
         DatabaseType::Redis => Ok(ActiveAdapter::Kv(Box::new(RedisAdapter::new()))),
         DatabaseType::Valkey => Ok(ActiveAdapter::Kv(Box::new(RedisAdapter::new_valkey()))),
@@ -327,11 +329,13 @@ mod tests {
     }
 
     #[test]
-    fn test_make_adapter_oracle_returns_unsupported() {
-        assert!(matches!(
-            make_adapter(&DatabaseType::Oracle),
-            Err(AppError::Unsupported(_))
-        ));
+    fn test_make_adapter_oracle_returns_lifecycle_only_rdb_variant() {
+        let adapter = make_adapter(&DatabaseType::Oracle).expect("oracle should succeed");
+        assert!(
+            matches!(adapter, ActiveAdapter::Rdb(_)),
+            "expected Rdb variant"
+        );
+        assert!(matches!(adapter.kind(), DatabaseType::Oracle));
     }
 
     #[test]

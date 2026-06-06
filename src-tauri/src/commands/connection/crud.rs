@@ -14,6 +14,7 @@ use super::session::keep_alive_loop;
 use super::{make_adapter, AppState, SaveConnectionRequest, TestConnectionRequest};
 use crate::db::mongodb::MongoAdapter;
 use crate::db::mysql::MysqlAdapter;
+use crate::db::oracle::OracleAdapter;
 use crate::db::postgres::PostgresAdapter;
 use crate::db::redis::RedisAdapter;
 use crate::db::search::SearchEngineAdapter;
@@ -113,6 +114,9 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         }
         DatabaseType::Duckdb => {
             DuckdbAdapter::test(&full).await?;
+        }
+        DatabaseType::Oracle => {
+            OracleAdapter::test(&full).await?;
         }
         DatabaseType::Mongodb => {
             MongoAdapter::test(&full).await?;

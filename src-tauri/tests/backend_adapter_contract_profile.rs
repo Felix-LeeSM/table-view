@@ -334,24 +334,37 @@ fn rdbms_integration_gate_profiles_are_coherent() {
         assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     }
 
-    for db_type in [DatabaseType::Mssql, DatabaseType::Oracle] {
-        let profile = get_data_source_profile(&db_type);
+    let mssql = get_data_source_profile(&DatabaseType::Mssql);
+    assert_eq!(mssql.paradigm, Paradigm::Rdb);
+    assert_eq!(
+        mssql.adapter_contract.state,
+        BackendAdapterContractState::DeclaredOnly
+    );
+    assert_eq!(mssql.backend_adapter.id, BackendAdapterId::DeclaredRdb);
+    assert_eq!(
+        mssql.backend_adapter.capability_source,
+        BackendAdapterCapabilitySource::DeclaredRdb
+    );
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
-        assert_eq!(profile.paradigm, Paradigm::Rdb);
-        assert_eq!(
-            profile.adapter_contract.state,
-            BackendAdapterContractState::DeclaredOnly
-        );
-        assert_eq!(profile.backend_adapter.id, BackendAdapterId::DeclaredRdb);
-        assert_eq!(
-            profile.backend_adapter.capability_source,
-            BackendAdapterCapabilitySource::DeclaredRdb
-        );
-        assert!(!profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
-        assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
-        assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-        assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
-    }
+    let oracle = get_data_source_profile(&DatabaseType::Oracle);
+    assert_eq!(oracle.paradigm, Paradigm::Rdb);
+    assert_eq!(
+        oracle.adapter_contract.state,
+        BackendAdapterContractState::FactoryBacked
+    );
+    assert_eq!(oracle.backend_adapter.id, BackendAdapterId::Oracle);
+    assert_eq!(
+        oracle.backend_adapter.capability_source,
+        BackendAdapterCapabilitySource::Oracle
+    );
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 }
 
 #[test]

@@ -231,6 +231,12 @@ function capabilities(
 
 export const UNSUPPORTED_CAPABILITIES = capabilities();
 
+export const ORACLE_CONNECTION_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+});
+
 export const POSTGRESQL_CAPABILITIES = capabilities({
   connection: {
     test: true,
@@ -504,6 +510,7 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "rdb",
     ["tabular"],
     "rdb-default",
+    ORACLE_CONNECTION_CAPABILITIES,
   ),
   mongodb: profile(
     "mongodb",

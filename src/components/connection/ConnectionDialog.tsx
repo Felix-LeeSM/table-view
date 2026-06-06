@@ -20,8 +20,8 @@
 // hatch — new dialogs should pick a preset.
 //
 // Sprint 138 (#4 — DBMS-aware connection form): the inner network/auth/db
-// row(s) are no longer rendered inline. `dbType` switches into one of five
-// sub-components (Pg/Mysql/Sqlite/Mongo/Redis) so the form shape and
+// row(s) are no longer rendered inline. `dbType` switches into DBMS-aware
+// sub-components (Pg/Mysql/Oracle/Sqlite/Mongo/Redis/Search) so the form shape and
 // defaults match each DBMS. The `assertNever` exhaustive check in the
 // switch statement guarantees a new `DatabaseType` variant breaks the
 // build instead of silently falling through to the PG layout.
@@ -211,7 +211,11 @@ export default function ConnectionDialog({
     // (`db.runCommand({...})`) target the admin DB context regardless of
     // any pre-bound default. RDB connections still require it.
     if (!isFileConnection && !isMongo && !isSearch && !trimmed.database) {
-      setError("Database is required");
+      setError(
+        trimmed.dbType === "oracle"
+          ? "Service name is required"
+          : "Database is required",
+      );
       return;
     }
 

@@ -1,7 +1,7 @@
 ---
 title: Data source architecture
 type: memory
-updated: 2026-05-30
+updated: 2026-06-07
 surface: src-tauri/src/db/**, src/lib/**, src/types/dataSource*, src/types/queryLanguage*
 task: data-source, architecture, adapter, capability
 trigger:
@@ -52,12 +52,12 @@ contract 도 profile registry 에서 읽고 ad-hoc `dbType` switch 로 분산하
 Capability 가 없으면 UI 는 hide/disable + fallback 을 보여준다. Runtime optimistic
 failure 를 기본 동작으로 만들지 않는다.
 
-Declared-only identities (`mssql`, `oracle`) 는 RDB profile 을 갖지만 capability-empty
-상태다. MSSQL future contract 는 SQL Server connection/auth/encryption/instance,
-T-SQL owner, RDB catalog, tabular result, RDB safety, fixture/live evidence 를
-분리해야 한다. Oracle future contract 는 service/SID/wallet/TNS, Oracle SQL/PLSQL
+Declared-only identity (`mssql`) 는 RDB profile 을 갖지만 capability-empty 상태다.
+MSSQL future contract 는 SQL Server connection/auth/encryption/instance, T-SQL
 owner, RDB catalog, tabular result, RDB safety, fixture/live evidence 를 분리해야
-한다. 둘 다 그 전까지 runtime support claim 이 아니다.
+한다. Oracle 은 service-name connection-only lifecycle 이며 catalog/query/edit,
+SID/TNS/wallet/TLS, Oracle SQL/PLSQL owner, fixture/live evidence 를 분리하기 전
+그 이상 runtime support claim 이 아니다.
 
 Search identities (`elasticsearch`, `opensearch`) 는 fixture-backed/deferred profile
 이며 live HTTP connection/query claim 은 capability 가 켜질 때까지 하지 않는다.
