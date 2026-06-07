@@ -50,12 +50,13 @@ and product-scoped completion must remain named.
 
 `sql` is active for connection-supported SQL/RDBMS profiles only. MSSQL now has
 connection-test runtime evidence for SQL authentication and SQL Server version
-probe plus a bounded SELECT/DML query runtime and bounded T-SQL completion
-vocabulary/profile support in the SQL editor. Bounded static T-SQL parser/Safe
-Mode metadata covers supported `SELECT`/DML/DDL slices plus rejected
-scripting/admin paths. These slices do not create catalog, row edit, runtime
-Safe Mode smoke, runtime fixture, E2E smoke, or full T-SQL
-semantic support claims.
+probe, bounded SELECT/DML query runtime, catalog/workbench metadata browse, and
+bounded T-SQL completion vocabulary/profile support in the SQL editor. Bounded
+static T-SQL parser/Safe Mode metadata covers supported `SELECT`/DML/DDL slices
+plus rejected scripting/admin paths. These slices do not create row edit,
+runtime Safe Mode smoke, runtime fixture, E2E smoke, TLS-required workflow,
+broader SQL Server instance/auth behavior, or full T-SQL semantic support
+claims.
 Oracle has connection-test runtime evidence for service-name connections plus
 bounded SELECT tabular result envelopes, transactional DML batch commit/dry-run,
 cancellation/error surfacing, and bounded static SQL editor autocomplete
