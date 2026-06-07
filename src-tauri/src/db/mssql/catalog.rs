@@ -1,9 +1,10 @@
 mod decode;
 mod queries;
+mod shape;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
-use tiberius::ToSql;
+use tiberius::{Row, ToSql};
 
 use crate::error::AppError;
 use crate::models::{
@@ -11,23 +12,27 @@ use crate::models::{
 };
 
 use self::decode::{
-    format_fk_reference, map_mssql_data_type, query_rows, query_rows_or_empty_on_metadata_denied,
-    row_bool, row_i64, row_optional_string, row_string, MssqlClient,
+    format_fk_reference, query_rows, query_rows_or_empty_on_metadata_denied, row_bool, row_i64,
+    row_optional_string, row_string, MssqlClient,
 };
 use self::queries::*;
+use self::shape::{
+    build_constraints, build_functions, build_indexes, build_object_columns, build_schema_columns,
+    build_tables, build_views, MssqlColumnCatalogRow, MssqlConstraintCatalogRow,
+    MssqlIndexCatalogRow, MssqlRoutineCatalogRow, MssqlRoutineParamCatalogRow,
+    MssqlSchemaColumnCatalogRow, MssqlTableCatalogRow, MssqlViewCatalogRow,
+};
 use super::MssqlAdapter;
 
 impl MssqlAdapter {
     pub async fn list_databases(&self) -> Result<Vec<SchemaInfo>, AppError> {
-        let config = self.connected_config().await?;
-        let mut client = Self::connect_client(&config).await?;
-        let rows = query_rows_or_empty_on_metadata_denied(
-            &mut client,
-            "SQL Server database catalog query failed",
-            USER_DATABASES_SQL,
-            &[],
-        )
-        .await?;
+        let rows = self
+            .query_catalog_rows(
+                "SQL Server database catalog query failed",
+                USER_DATABASES_SQL,
+                &[],
+            )
+            .await?;
         rows.into_iter()
             .map(|row| {
                 Ok(SchemaInfo {
@@ -54,15 +59,13 @@ impl MssqlAdapter {
     }
 
     pub async fn current_database_name(&self) -> Result<Option<String>, AppError> {
-        let config = self.connected_config().await?;
-        let mut client = Self::connect_client(&config).await?;
-        let rows = query_rows(
-            &mut client,
-            "SQL Server current database probe failed",
-            CURRENT_DATABASE_SQL,
-            &[],
-        )
-        .await?;
+        let rows = self
+            .query_catalog_rows_strict(
+                "SQL Server current database probe failed",
+                CURRENT_DATABASE_SQL,
+                &[],
+            )
+            .await?;
         Ok(rows
             .first()
             .map(|row| row_optional_string(row, 0, "current database"))
@@ -71,15 +74,13 @@ impl MssqlAdapter {
     }
 
     pub async fn list_schemas(&self) -> Result<Vec<SchemaInfo>, AppError> {
-        let config = self.connected_config().await?;
-        let mut client = Self::connect_client(&config).await?;
-        let rows = query_rows_or_empty_on_metadata_denied(
-            &mut client,
-            "SQL Server schema catalog query failed",
-            USER_SCHEMAS_SQL,
-            &[],
-        )
-        .await?;
+        let rows = self
+            .query_catalog_rows(
+                "SQL Server schema catalog query failed",
+                USER_SCHEMAS_SQL,
+                &[],
+            )
+            .await?;
         rows.into_iter()
             .map(|row| {
                 Ok(SchemaInfo {
@@ -90,25 +91,20 @@ impl MssqlAdapter {
     }
 
     pub async fn list_tables(&self, schema: &str) -> Result<Vec<TableInfo>, AppError> {
-        let config = self.connected_config().await?;
-        let mut client = Self::connect_client(&config).await?;
         let params: [&dyn ToSql; 1] = [&schema];
-        let rows = query_rows_or_empty_on_metadata_denied(
-            &mut client,
-            "SQL Server table catalog query failed",
-            TABLES_SQL,
-            &params,
-        )
-        .await?;
-        rows.into_iter()
+        let rows = self
+            .query_catalog_rows("SQL Server table catalog query failed", TABLES_SQL, &params)
+            .await?;
+        let catalog_rows = rows
+            .into_iter()
             .map(|row| {
-                Ok(TableInfo {
+                Ok(MssqlTableCatalogRow {
                     name: row_string(&row, 0, "table name")?,
-                    schema: schema.to_string(),
                     row_count: row_i64(&row, 1, "table row count")?,
                 })
             })
-            .collect()
+            .collect::<Result<Vec<_>, AppError>>()?;
+        Ok(build_tables(schema, catalog_rows))
     }
 
     pub async fn get_table_columns(
@@ -133,8 +129,7 @@ impl MssqlAdapter {
         object: &str,
         include_table_metadata: bool,
     ) -> Result<Vec<ColumnInfo>, AppError> {
-        let config = self.connected_config().await?;
-        let mut client = Self::connect_client(&config).await?;
+        let mut client = self.connected_client().await?;
         let params: [&dyn ToSql; 2] = [&schema, &object];
         let rows = query_rows_or_empty_on_metadata_denied(
             &mut client,
@@ -159,33 +154,32 @@ impl MssqlAdapter {
             HashMap::new()
         };
 
-        rows.into_iter()
+        let catalog_rows = rows
+            .into_iter()
             .map(|row| {
-                let name = row_string(&row, 1, "column name")?;
-                let data_type_base = row_string(&row, 3, "column data type")?;
-                let fk_reference = fk_map.get(&name).cloned();
-                Ok(ColumnInfo {
-                    name: name.clone(),
+                Ok(MssqlColumnCatalogRow {
+                    name: row_string(&row, 1, "column name")?,
                     data_type: row_string(&row, 2, "column type")?,
+                    data_type_base: row_string(&row, 3, "column data type")?,
                     nullable: row_bool(&row, 4, "column nullability")?,
                     default_value: row_optional_string(&row, 5, "column default")?,
-                    is_primary_key: pk_columns.contains(&name),
-                    is_foreign_key: fk_reference.is_some(),
-                    fk_reference,
                     comment: row_optional_string(&row, 6, "column comment")?,
-                    check_clauses: check_map.get(&name).cloned().unwrap_or_default(),
-                    category: map_mssql_data_type(&data_type_base),
                 })
             })
-            .collect()
+            .collect::<Result<Vec<_>, AppError>>()?;
+        Ok(build_object_columns(
+            catalog_rows,
+            &pk_columns,
+            &fk_map,
+            &check_map,
+        ))
     }
 
     pub async fn list_schema_columns(
         &self,
         schema: &str,
     ) -> Result<HashMap<String, Vec<ColumnInfo>>, AppError> {
-        let config = self.connected_config().await?;
-        let mut client = Self::connect_client(&config).await?;
+        let mut client = self.connected_client().await?;
         let params: [&dyn ToSql; 1] = [&schema];
         let rows = query_rows_or_empty_on_metadata_denied(
             &mut client,
@@ -197,30 +191,29 @@ impl MssqlAdapter {
         let pk_set = schema_pk_set(&mut client, schema).await?;
         let fk_map = schema_fk_map(&mut client, schema).await?;
         let check_map = schema_check_map(&mut client, schema).await?;
-        let mut result: HashMap<String, Vec<ColumnInfo>> = HashMap::new();
+        let catalog_rows = rows
+            .into_iter()
+            .map(|row| {
+                Ok(MssqlSchemaColumnCatalogRow {
+                    table_name: row_string(&row, 0, "object name")?,
+                    column: MssqlColumnCatalogRow {
+                        name: row_string(&row, 1, "column name")?,
+                        data_type: row_string(&row, 2, "column type")?,
+                        data_type_base: row_string(&row, 3, "column data type")?,
+                        nullable: row_bool(&row, 4, "column nullability")?,
+                        default_value: row_optional_string(&row, 5, "column default")?,
+                        comment: row_optional_string(&row, 6, "column comment")?,
+                    },
+                })
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
 
-        for row in rows {
-            let table_name = row_string(&row, 0, "object name")?;
-            let column_name = row_string(&row, 1, "column name")?;
-            let data_type_base = row_string(&row, 3, "column data type")?;
-            let key = (table_name.clone(), column_name.clone());
-            let fk_reference = fk_map.get(&key).cloned();
-            let check_clauses = check_map.get(&key).cloned().unwrap_or_default();
-            result.entry(table_name).or_default().push(ColumnInfo {
-                name: column_name.clone(),
-                data_type: row_string(&row, 2, "column type")?,
-                nullable: row_bool(&row, 4, "column nullability")?,
-                default_value: row_optional_string(&row, 5, "column default")?,
-                is_primary_key: pk_set.contains(&key),
-                is_foreign_key: fk_reference.is_some(),
-                fk_reference,
-                comment: row_optional_string(&row, 6, "column comment")?,
-                check_clauses,
-                category: map_mssql_data_type(&data_type_base),
-            });
-        }
-
-        Ok(result)
+        Ok(build_schema_columns(
+            catalog_rows,
+            &pk_set,
+            &fk_map,
+            &check_map,
+        ))
     }
 
     pub async fn get_table_indexes(
@@ -228,44 +221,29 @@ impl MssqlAdapter {
         schema: &str,
         table: &str,
     ) -> Result<Vec<IndexInfo>, AppError> {
-        let config = self.connected_config().await?;
-        let mut client = Self::connect_client(&config).await?;
         let params: [&dyn ToSql; 2] = [&schema, &table];
-        let rows = query_rows_or_empty_on_metadata_denied(
-            &mut client,
-            "SQL Server index catalog query failed",
-            INDEXES_SQL,
-            &params,
-        )
-        .await?;
-
-        let mut map: BTreeMap<String, (bool, bool, String, Vec<String>)> = BTreeMap::new();
-        for row in rows {
-            let name = row_string(&row, 0, "index name")?;
-            let column = row_string(&row, 1, "index column")?;
-            let index_type = row_string(&row, 2, "index type")?.to_ascii_lowercase();
-            let is_unique = row_bool(&row, 3, "index uniqueness")?;
-            let is_primary = row_bool(&row, 4, "index primary flag")?;
-            let entry = map
-                .entry(name)
-                .or_insert((is_unique, is_primary, index_type, Vec::new()));
-            if !entry.3.contains(&column) {
-                entry.3.push(column);
-            }
-        }
-
-        Ok(map
-            .into_iter()
-            .map(
-                |(name, (is_unique, is_primary, index_type, columns))| IndexInfo {
-                    name,
-                    columns,
-                    index_type,
-                    is_unique,
-                    is_primary,
-                },
+        let rows = self
+            .query_catalog_rows(
+                "SQL Server index catalog query failed",
+                INDEXES_SQL,
+                &params,
             )
-            .collect())
+            .await?;
+
+        let catalog_rows = rows
+            .into_iter()
+            .map(|row| {
+                Ok(MssqlIndexCatalogRow {
+                    name: row_string(&row, 0, "index name")?,
+                    column: row_string(&row, 1, "index column")?,
+                    index_type: row_string(&row, 2, "index type")?,
+                    is_unique: row_bool(&row, 3, "index uniqueness")?,
+                    is_primary: row_bool(&row, 4, "index primary flag")?,
+                })
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
+
+        Ok(build_indexes(catalog_rows))
     }
 
     pub async fn get_table_constraints(
@@ -273,94 +251,57 @@ impl MssqlAdapter {
         schema: &str,
         table: &str,
     ) -> Result<Vec<ConstraintInfo>, AppError> {
-        let config = self.connected_config().await?;
-        let mut client = Self::connect_client(&config).await?;
         let params: [&dyn ToSql; 2] = [&schema, &table];
-        let rows = query_rows_or_empty_on_metadata_denied(
-            &mut client,
-            "SQL Server constraint catalog query failed",
-            CONSTRAINTS_SQL,
-            &params,
-        )
-        .await?;
-
-        type ConstraintAccum = (String, Vec<String>, Option<String>, Vec<String>);
-        let mut map: BTreeMap<String, ConstraintAccum> = BTreeMap::new();
-        for row in rows {
-            let name = row_string(&row, 0, "constraint name")?;
-            let constraint_type = row_string(&row, 1, "constraint type")?;
-            let column = row_optional_string(&row, 2, "constraint column")?;
-            let reference_table = row_optional_string(&row, 3, "reference table")?;
-            let reference_column = row_optional_string(&row, 4, "reference column")?;
-            let entry = map.entry(name).or_insert((
-                constraint_type,
-                Vec::new(),
-                reference_table,
-                Vec::new(),
-            ));
-            if let Some(column) = column {
-                if !entry.1.contains(&column) {
-                    entry.1.push(column);
-                }
-            }
-            if let Some(reference_column) = reference_column {
-                if !entry.3.contains(&reference_column) {
-                    entry.3.push(reference_column);
-                }
-            }
-        }
-
-        Ok(map
-            .into_iter()
-            .map(
-                |(name, (constraint_type, columns, reference_table, ref_cols))| ConstraintInfo {
-                    name,
-                    constraint_type,
-                    columns,
-                    reference_table,
-                    reference_columns: if ref_cols.is_empty() {
-                        None
-                    } else {
-                        Some(ref_cols)
-                    },
-                },
+        let rows = self
+            .query_catalog_rows(
+                "SQL Server constraint catalog query failed",
+                CONSTRAINTS_SQL,
+                &params,
             )
-            .collect())
+            .await?;
+
+        let catalog_rows = rows
+            .into_iter()
+            .map(|row| {
+                Ok(MssqlConstraintCatalogRow {
+                    name: row_string(&row, 0, "constraint name")?,
+                    constraint_type: row_string(&row, 1, "constraint type")?,
+                    column: row_optional_string(&row, 2, "constraint column")?,
+                    reference_table: row_optional_string(&row, 3, "reference table")?,
+                    reference_column: row_optional_string(&row, 4, "reference column")?,
+                })
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
+
+        Ok(build_constraints(catalog_rows))
     }
 
     pub async fn list_views(&self, schema: &str) -> Result<Vec<ViewInfo>, AppError> {
-        let config = self.connected_config().await?;
-        let mut client = Self::connect_client(&config).await?;
         let params: [&dyn ToSql; 1] = [&schema];
-        let rows = query_rows_or_empty_on_metadata_denied(
-            &mut client,
-            "SQL Server view catalog query failed",
-            VIEWS_SQL,
-            &params,
-        )
-        .await?;
-        rows.into_iter()
+        let rows = self
+            .query_catalog_rows("SQL Server view catalog query failed", VIEWS_SQL, &params)
+            .await?;
+        let catalog_rows = rows
+            .into_iter()
             .map(|row| {
-                Ok(ViewInfo {
+                Ok(MssqlViewCatalogRow {
                     name: row_string(&row, 0, "view name")?,
-                    schema: schema.to_string(),
                     definition: row_optional_string(&row, 1, "view definition")?,
                 })
             })
-            .collect()
+            .collect::<Result<Vec<_>, AppError>>()?;
+        Ok(build_views(schema, catalog_rows))
     }
 
     pub async fn get_view_definition(&self, schema: &str, view: &str) -> Result<String, AppError> {
-        let config = self.connected_config().await?;
-        let mut client = Self::connect_client(&config).await?;
         let params: [&dyn ToSql; 2] = [&schema, &view];
-        let rows = query_rows_or_empty_on_metadata_denied(
-            &mut client,
-            "SQL Server view definition query failed",
-            VIEW_DEFINITION_SQL,
-            &params,
-        )
-        .await?;
+        let rows = self
+            .query_catalog_rows(
+                "SQL Server view definition query failed",
+                VIEW_DEFINITION_SQL,
+                &params,
+            )
+            .await?;
         match rows.first() {
             Some(row) => Ok(row_optional_string(row, 0, "view definition")?.unwrap_or_default()),
             None => Err(AppError::Connection(format!(
@@ -370,8 +311,7 @@ impl MssqlAdapter {
     }
 
     pub async fn list_functions(&self, schema: &str) -> Result<Vec<FunctionInfo>, AppError> {
-        let config = self.connected_config().await?;
-        let mut client = Self::connect_client(&config).await?;
+        let mut client = self.connected_client().await?;
         let params: [&dyn ToSql; 1] = [&schema];
         let rows = query_rows_or_empty_on_metadata_denied(
             &mut client,
@@ -387,32 +327,30 @@ impl MssqlAdapter {
             &params,
         )
         .await?;
-        let mut args: HashMap<String, Vec<String>> = HashMap::new();
-        for row in param_rows {
-            let routine_name = row_string(&row, 0, "routine name")?;
-            let parameter_name = row_string(&row, 1, "parameter name")?;
-            let data_type = row_string(&row, 2, "parameter type")?;
-            let is_output = row_bool(&row, 3, "parameter output flag")?;
-            let suffix = if is_output { " OUTPUT" } else { "" };
-            args.entry(routine_name)
-                .or_default()
-                .push(format!("{parameter_name} {data_type}{suffix}"));
-        }
-
-        rows.into_iter()
+        let params = param_rows
+            .into_iter()
             .map(|row| {
-                let name = row_string(&row, 1, "routine name")?;
-                Ok(FunctionInfo {
-                    name: name.clone(),
-                    schema: schema.to_string(),
-                    arguments: args.remove(&name).map(|parts| parts.join(", ")),
-                    return_type: row_optional_string(&row, 3, "routine return type")?,
-                    language: Some("T-SQL".into()),
-                    source: row_optional_string(&row, 4, "routine source")?,
-                    kind: row_string(&row, 2, "routine kind")?,
+                Ok(MssqlRoutineParamCatalogRow {
+                    routine_name: row_string(&row, 0, "routine name")?,
+                    parameter_name: row_string(&row, 1, "parameter name")?,
+                    data_type: row_string(&row, 2, "parameter type")?,
+                    is_output: row_bool(&row, 3, "parameter output flag")?,
                 })
             })
-            .collect()
+            .collect::<Result<Vec<_>, AppError>>()?;
+        let routines = rows
+            .into_iter()
+            .map(|row| {
+                Ok(MssqlRoutineCatalogRow {
+                    name: row_string(&row, 1, "routine name")?,
+                    kind: row_string(&row, 2, "routine kind")?,
+                    return_type: row_optional_string(&row, 3, "routine return type")?,
+                    source: row_optional_string(&row, 4, "routine source")?,
+                })
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
+
+        Ok(build_functions(schema, routines, params))
     }
 
     pub async fn get_function_source(
@@ -420,22 +358,45 @@ impl MssqlAdapter {
         schema: &str,
         function: &str,
     ) -> Result<String, AppError> {
-        let config = self.connected_config().await?;
-        let mut client = Self::connect_client(&config).await?;
         let params: [&dyn ToSql; 2] = [&schema, &function];
-        let rows = query_rows_or_empty_on_metadata_denied(
-            &mut client,
-            "SQL Server routine source query failed",
-            ROUTINE_SOURCE_SQL,
-            &params,
-        )
-        .await?;
+        let rows = self
+            .query_catalog_rows(
+                "SQL Server routine source query failed",
+                ROUTINE_SOURCE_SQL,
+                &params,
+            )
+            .await?;
         match rows.first() {
             Some(row) => Ok(row_optional_string(row, 0, "routine source")?.unwrap_or_default()),
             None => Err(AppError::Connection(format!(
                 "Routine {schema}.{function} not found"
             ))),
         }
+    }
+
+    async fn connected_client(&self) -> Result<MssqlClient, AppError> {
+        let config = self.connected_config().await?;
+        Self::connect_client(&config).await
+    }
+
+    async fn query_catalog_rows(
+        &self,
+        context: &'static str,
+        sql: &str,
+        params: &[&dyn ToSql],
+    ) -> Result<Vec<Row>, AppError> {
+        let mut client = self.connected_client().await?;
+        query_rows_or_empty_on_metadata_denied(&mut client, context, sql, params).await
+    }
+
+    async fn query_catalog_rows_strict(
+        &self,
+        context: &'static str,
+        sql: &str,
+        params: &[&dyn ToSql],
+    ) -> Result<Vec<Row>, AppError> {
+        let mut client = self.connected_client().await?;
+        query_rows(&mut client, context, sql, params).await
     }
 }
 

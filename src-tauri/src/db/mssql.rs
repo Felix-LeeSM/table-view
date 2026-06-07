@@ -202,16 +202,10 @@ impl RdbAdapter for MssqlAdapter {
         table: &'a str,
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
-        Box::pin(async move {
-            let work = MssqlAdapter::get_table_columns(self, namespace, table);
-            match cancel {
-                Some(token) => tokio::select! {
-                    result = work => result,
-                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
-                },
-                None => work.await,
-            }
-        })
+        cancellable_metadata(
+            MssqlAdapter::get_table_columns(self, namespace, table),
+            cancel,
+        )
     }
 
     fn execute_sql<'a>(
@@ -328,16 +322,10 @@ impl RdbAdapter for MssqlAdapter {
         table: &'a str,
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>> {
-        Box::pin(async move {
-            let work = MssqlAdapter::get_table_indexes(self, namespace, table);
-            match cancel {
-                Some(token) => tokio::select! {
-                    result = work => result,
-                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
-                },
-                None => work.await,
-            }
-        })
+        cancellable_metadata(
+            MssqlAdapter::get_table_indexes(self, namespace, table),
+            cancel,
+        )
     }
 
     fn get_table_constraints<'a>(
@@ -346,16 +334,10 @@ impl RdbAdapter for MssqlAdapter {
         table: &'a str,
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>> {
-        Box::pin(async move {
-            let work = MssqlAdapter::get_table_constraints(self, namespace, table);
-            match cancel {
-                Some(token) => tokio::select! {
-                    result = work => result,
-                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
-                },
-                None => work.await,
-            }
-        })
+        cancellable_metadata(
+            MssqlAdapter::get_table_constraints(self, namespace, table),
+            cancel,
+        )
     }
 
     fn list_views<'a>(
@@ -410,6 +392,24 @@ fn unsupported<'a, T>() -> BoxFuture<'a, Result<T, AppError>> {
             "SQL Server edit/table-data/admin support is not implemented in this metadata slice"
                 .into(),
         ))
+    })
+}
+
+fn cancellable_metadata<'a, T>(
+    work: impl Future<Output = Result<T, AppError>> + Send + 'a,
+    cancel: Option<&'a CancellationToken>,
+) -> BoxFuture<'a, Result<T, AppError>>
+where
+    T: Send + 'a,
+{
+    Box::pin(async move {
+        match cancel {
+            Some(token) => tokio::select! {
+                result = work => result,
+                _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+            },
+            None => work.await,
+        }
     })
 }
 

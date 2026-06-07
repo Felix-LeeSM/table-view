@@ -43,6 +43,24 @@ fn connection_config_validation_and_lifecycle_errors_are_local() {
     })
     .unwrap_err();
     assert!(matches!(err, AppError::Validation(_)));
+
+    let tds_config = MssqlAdapter::build_tds_config(&ConnectionConfig {
+        host: " sqlserver.local ".into(),
+        database: " ".into(),
+        tls_enabled: Some(false),
+        ..config()
+    })
+    .unwrap();
+    assert_eq!(tds_config.get_addr(), "sqlserver.local:1433");
+
+    let tds_config = MssqlAdapter::build_tds_config(&ConnectionConfig {
+        host: " sqlserver.local ".into(),
+        port: 1444,
+        tls_enabled: Some(true),
+        ..config()
+    })
+    .unwrap();
+    assert_eq!(tds_config.get_addr(), "sqlserver.local:1444");
 }
 
 #[test]
@@ -75,6 +93,81 @@ fn connection_timeout_clamps_ui_value() {
 }
 
 #[tokio::test]
+async fn timeout_helper_maps_success_error_and_elapsed_timeout() {
+    let ok = with_timeout(
+        "SQL Server synthetic ok",
+        std::time::Duration::from_millis(10),
+        async { Ok::<_, &'static str>(7) },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ok, 7);
+
+    let err = with_timeout(
+        "SQL Server synthetic error",
+        std::time::Duration::from_millis(10),
+        async { Err::<(), _>("driver failed") },
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(err, AppError::Connection(ref message) if message.contains("driver failed")),
+        "{err:?}"
+    );
+
+    let err = with_timeout(
+        "SQL Server synthetic timeout",
+        std::time::Duration::from_millis(1),
+        async {
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+            Ok::<_, &'static str>(())
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(err, AppError::Connection(ref message) if message.contains("timed out after 0s")),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn db_adapter_lifecycle_paths_are_local_without_sql_server() {
+    let adapter = MssqlAdapter::new();
+
+    assert_not_open(adapter.ping().await);
+    adapter.disconnect().await.unwrap();
+    assert_not_open(adapter.ping().await);
+
+    let err = adapter
+        .connect(&ConnectionConfig {
+            host: " ".into(),
+            ..config()
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(err, AppError::Validation(message) if message.contains("host")));
+
+    let err = MssqlAdapter::test(&ConnectionConfig {
+        user: " ".into(),
+        ..config()
+    })
+    .await
+    .unwrap_err();
+    assert!(matches!(err, AppError::Validation(message) if message.contains("user")));
+
+    let err = MssqlAdapter::test(&ConnectionConfig {
+        host: "127.0.0.1".into(),
+        port: 1,
+        connection_timeout: Some(1),
+        ..config()
+    })
+    .await
+    .unwrap_err();
+    assert!(matches!(err, AppError::Connection(message) if message.contains("network connection")));
+}
+
+#[tokio::test]
 async fn pre_cancelled_query_short_circuits_before_connection_lookup() {
     let adapter = MssqlAdapter::new();
     let cancel = CancellationToken::new();
@@ -86,6 +179,22 @@ async fn pre_cancelled_query_short_circuits_before_connection_lookup() {
         .unwrap_err();
 
     assert!(matches!(err, AppError::Database(msg) if msg == "Query cancelled"));
+}
+
+#[tokio::test]
+async fn cancellable_trait_wrappers_return_work_result_without_open_connection() {
+    let adapter = MssqlAdapter::new();
+    let cancel = CancellationToken::new();
+
+    assert_not_open(RdbAdapter::get_columns(&adapter, "dbo", "users", Some(&cancel)).await);
+    assert_not_open(RdbAdapter::get_table_indexes(&adapter, "dbo", "users", Some(&cancel)).await);
+    assert_not_open(
+        RdbAdapter::get_table_constraints(&adapter, "dbo", "users", Some(&cancel)).await,
+    );
+
+    let batch = vec!["UPDATE dbo.users SET name = 'Ada'".to_string()];
+    assert_not_open(RdbAdapter::execute_sql_batch(&adapter, &batch, Some(&cancel)).await);
+    assert_not_open(RdbAdapter::dry_run_sql_batch(&adapter, &batch, Some(&cancel)).await);
 }
 
 #[tokio::test]

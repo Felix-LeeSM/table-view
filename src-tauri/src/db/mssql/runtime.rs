@@ -442,6 +442,35 @@ fn mssql_query_error(context: &'static str, err: impl std::fmt::Display) -> AppE
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{ConnectionConfig, DatabaseType};
+
+    fn loopback_config() -> ConnectionConfig {
+        ConnectionConfig {
+            id: "conn".into(),
+            name: "mssql".into(),
+            db_type: DatabaseType::Mssql,
+            host: "127.0.0.1".into(),
+            port: 1,
+            user: "sa".into(),
+            password: "secret".into(),
+            database: "master".into(),
+            read_only: false,
+            group_id: None,
+            color: None,
+            connection_timeout: Some(1),
+            keep_alive_interval: None,
+            environment: None,
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: Some(false),
+        }
+    }
+
+    async fn connected_loopback_adapter() -> MssqlAdapter {
+        let adapter = MssqlAdapter::new();
+        *adapter.connected_config.lock().await = Some(loopback_config());
+        adapter
+    }
 
     #[test]
     fn mssql_query_type_classifies_tsql_select_and_dml() {
@@ -464,6 +493,18 @@ mod tests {
         assert!(matches!(
             mssql_query_type("CREATE TABLE dbo.t (id int)"),
             QueryType::Ddl
+        ));
+        assert!(matches!(
+            mssql_query_type("-- a\n/* b */ EXECUTE dbo.touch_user @id = 1"),
+            QueryType::Select
+        ));
+        assert!(matches!(
+            mssql_query_type("INSERT INTO dbo.users DEFAULT VALUES"),
+            QueryType::Dml { .. }
+        ));
+        assert!(matches!(
+            mssql_query_type("DELETE FROM dbo.users WHERE id = 1"),
+            QueryType::Dml { .. }
         ));
     }
 
@@ -506,6 +547,106 @@ mod tests {
         assert!(matches!(err, AppError::Database(msg) if msg == "Query cancelled"));
     }
 
+    #[tokio::test]
+    async fn connected_runtime_paths_reach_network_boundary() {
+        let adapter = connected_loopback_adapter().await;
+
+        for query in [
+            "SELECT 1",
+            "EXECUTE dbo.touch_user @id = 1",
+            "UPDATE dbo.users SET name = 'Ada'",
+            "CREATE TABLE dbo.t (id int)",
+        ] {
+            let err = adapter.execute_query(query, None).await.unwrap_err();
+            assert!(matches!(err, AppError::Connection(msg) if msg.contains("network connection")));
+        }
+
+        let cancel = CancellationToken::new();
+        let err = adapter
+            .execute_query("SELECT 1", Some(&cancel))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Connection(msg) if msg.contains("network connection")));
+
+        let batch = vec!["UPDATE dbo.users SET name = 'Ada'".to_string()];
+        let err = adapter.execute_query_batch(&batch, None).await.unwrap_err();
+        assert!(matches!(err, AppError::Connection(msg) if msg.contains("network connection")));
+        let err = adapter.dry_run_query_batch(&batch, None).await.unwrap_err();
+        assert!(matches!(err, AppError::Connection(msg) if msg.contains("network connection")));
+    }
+
+    #[tokio::test]
+    async fn batch_validation_reports_actual_statement_position() {
+        let adapter = MssqlAdapter::new();
+        let err = adapter
+            .execute_query_batch(
+                &[
+                    "UPDATE dbo.users SET name = 'Ada'".to_string(),
+                    " ; ".to_string(),
+                ],
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(msg) if msg == "Statement 2 of 2 is empty"));
+    }
+
+    #[tokio::test]
+    async fn valid_runtime_modes_fail_at_connection_boundary_without_network() {
+        let adapter = MssqlAdapter::new();
+
+        for query in [
+            "SELECT 1",
+            "EXEC dbo.touch_user @id = 1",
+            "UPDATE dbo.users SET name = 'Ada'",
+            "CREATE TABLE dbo.t (id int)",
+        ] {
+            let err = adapter.execute_query(query, None).await.unwrap_err();
+            assert!(matches!(err, AppError::Connection(msg) if msg.contains("not open")));
+        }
+
+        let batch = vec!["UPDATE dbo.users SET name = 'Ada'".to_string()];
+        let err = adapter.execute_query_batch(&batch, None).await.unwrap_err();
+        assert!(matches!(err, AppError::Connection(msg) if msg.contains("not open")));
+        let err = adapter.dry_run_query_batch(&batch, None).await.unwrap_err();
+        assert!(matches!(err, AppError::Connection(msg) if msg.contains("not open")));
+    }
+
+    #[tokio::test]
+    async fn cancellable_helper_covers_ready_and_cancelled_paths() {
+        let value = cancellable(async { Ok::<_, AppError>(42) }, None)
+            .await
+            .unwrap();
+        assert_eq!(value, 42);
+
+        let cancel = CancellationToken::new();
+        let value = cancellable(async { Ok::<_, AppError>(7) }, Some(&cancel))
+            .await
+            .unwrap();
+        assert_eq!(value, 7);
+
+        let err = cancellable(
+            async { Err::<(), _>(AppError::Database("driver failed".into())) },
+            Some(&cancel),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(err, AppError::Database(msg) if msg == "driver failed"));
+
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+        let err = cancellable(
+            async {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                Ok::<_, AppError>(())
+            },
+            Some(&cancel),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(err, AppError::Database(msg) if msg == "Query cancelled"));
+    }
+
     #[test]
     fn mssql_column_metadata_maps_to_tabular_envelope_hints() {
         let int_column = Column::new("id".into(), ColumnType::Int4);
@@ -535,6 +676,10 @@ mod tests {
     #[test]
     fn scalar_helpers_cover_json_and_type_edges() {
         assert_eq!(strip_trailing_terminator("SELECT 1;\n\t"), "SELECT 1");
+        assert_eq!(
+            strip_leading_comments("  -- a\n /* b */\nSELECT 1"),
+            "SELECT 1"
+        );
         assert_eq!(strip_leading_comments("-- only a comment"), "");
         assert_eq!(strip_leading_comments("/* unterminated"), "");
         assert_eq!(hex_encode(&[0x00, 0xaf, 0xff]), "00afff");
@@ -577,6 +722,7 @@ mod tests {
             (ColumnType::Datetimen, "datetime", ColumnCategory::Datetime),
             (ColumnType::Daten, "date", ColumnCategory::Datetime),
             (ColumnType::Timen, "time", ColumnCategory::Datetime),
+            (ColumnType::Datetime2, "datetime2", ColumnCategory::Datetime),
             (
                 ColumnType::DatetimeOffsetn,
                 "datetimeoffset",
@@ -586,6 +732,7 @@ mod tests {
             (ColumnType::Image, "image", ColumnCategory::Binary),
             (ColumnType::Xml, "xml", ColumnCategory::Object),
             (ColumnType::Udt, "udt", ColumnCategory::Object),
+            (ColumnType::SSVariant, "sql_variant", ColumnCategory::Object),
             (ColumnType::BigVarChar, "varchar", ColumnCategory::Text),
             (ColumnType::BigChar, "varchar", ColumnCategory::Text),
             (ColumnType::NChar, "nvarchar", ColumnCategory::Text),
