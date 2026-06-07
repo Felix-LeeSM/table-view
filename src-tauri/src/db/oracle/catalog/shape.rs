@@ -65,6 +65,26 @@ pub(super) struct OracleRoutineParamCatalogRow {
     pub(super) direction: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub(super) struct OracleSequenceCatalogRow {
+    pub(super) name: String,
+    pub(super) min_value: Option<String>,
+    pub(super) max_value: Option<String>,
+    pub(super) increment_by: Option<String>,
+    pub(super) cycle: bool,
+    pub(super) ordered: bool,
+    pub(super) cache_size: Option<String>,
+    pub(super) last_number: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct OracleSynonymCatalogRow {
+    pub(super) name: String,
+    pub(super) target_owner: Option<String>,
+    pub(super) target_name: Option<String>,
+    pub(super) db_link: Option<String>,
+}
+
 pub(super) fn build_tables(schema: &str, rows: Vec<OracleTableCatalogRow>) -> Vec<TableInfo> {
     rows.into_iter()
         .map(|row| TableInfo {
@@ -246,6 +266,76 @@ pub(super) fn build_functions(
             kind: row.kind,
         })
         .collect()
+}
+
+pub(super) fn build_sequences(
+    schema: &str,
+    rows: Vec<OracleSequenceCatalogRow>,
+) -> Vec<FunctionInfo> {
+    rows.into_iter()
+        .map(|row| {
+            let arguments = sequence_summary(&row);
+            FunctionInfo {
+                name: row.name,
+                schema: schema.to_string(),
+                arguments: Some(arguments),
+                return_type: row.last_number.map(|value| format!("next {value}")),
+                language: Some("Oracle sequence".into()),
+                source: None,
+                kind: "sequence".into(),
+            }
+        })
+        .collect()
+}
+
+pub(super) fn build_synonyms(
+    schema: &str,
+    rows: Vec<OracleSynonymCatalogRow>,
+) -> Vec<FunctionInfo> {
+    rows.into_iter()
+        .map(|row| {
+            let target = synonym_target(&row);
+            FunctionInfo {
+                name: row.name,
+                schema: schema.to_string(),
+                arguments: Some(target.clone()),
+                return_type: Some(target),
+                language: Some("Oracle synonym".into()),
+                source: None,
+                kind: "synonym".into(),
+            }
+        })
+        .collect()
+}
+
+fn sequence_summary(row: &OracleSequenceCatalogRow) -> String {
+    let mut parts = Vec::new();
+    if let Some(increment) = &row.increment_by {
+        parts.push(format!("increment {increment}"));
+    }
+    if let Some(cache_size) = &row.cache_size {
+        parts.push(format!("cache {cache_size}"));
+    }
+    parts.push(if row.cycle { "cycle" } else { "no cycle" }.to_string());
+    parts.push(if row.ordered { "order" } else { "no order" }.to_string());
+    if let (Some(min), Some(max)) = (&row.min_value, &row.max_value) {
+        parts.push(format!("range {min}..{max}"));
+    }
+    parts.join(", ")
+}
+
+fn synonym_target(row: &OracleSynonymCatalogRow) -> String {
+    let target = match (&row.target_owner, &row.target_name) {
+        (Some(owner), Some(name)) if !owner.is_empty() && !name.is_empty() => {
+            format!("{owner}.{name}")
+        }
+        (_, Some(name)) if !name.is_empty() => name.clone(),
+        _ => "unresolved target".to_string(),
+    };
+    match row.db_link.as_deref().filter(|link| !link.is_empty()) {
+        Some(link) => format!("{target}@{link}"),
+        None => target,
+    }
 }
 
 #[cfg(test)]
@@ -505,5 +595,99 @@ mod tests {
         assert_eq!(routines[1].return_type.as_deref(), Some("NUMBER"));
         assert_eq!(routines[2].kind, "package");
         assert!(routines[2].arguments.is_none());
+    }
+
+    #[test]
+    fn build_sequences_formats_read_only_metadata_rows() {
+        let sequences = build_sequences(
+            "HR",
+            vec![OracleSequenceCatalogRow {
+                name: "EMPLOYEE_SEQ".into(),
+                min_value: Some("1".into()),
+                max_value: Some("999999".into()),
+                increment_by: Some("1".into()),
+                cycle: false,
+                ordered: true,
+                cache_size: Some("20".into()),
+                last_number: Some("101".into()),
+            }],
+        );
+
+        assert_eq!(sequences[0].schema, "HR");
+        assert_eq!(sequences[0].kind, "sequence");
+        assert_eq!(sequences[0].language.as_deref(), Some("Oracle sequence"));
+        assert_eq!(sequences[0].return_type.as_deref(), Some("next 101"));
+        assert_eq!(
+            sequences[0].arguments.as_deref(),
+            Some("increment 1, cache 20, no cycle, order, range 1..999999")
+        );
+        assert!(sequences[0].source.is_none());
+    }
+
+    #[test]
+    fn build_synonyms_formats_target_metadata_rows() {
+        let synonyms = build_synonyms(
+            "HR",
+            vec![OracleSynonymCatalogRow {
+                name: "EMPLOYEES_PUBLIC".into(),
+                target_owner: Some("HR".into()),
+                target_name: Some("EMPLOYEES".into()),
+                db_link: Some("REMOTE_DB".into()),
+            }],
+        );
+
+        assert_eq!(synonyms[0].schema, "HR");
+        assert_eq!(synonyms[0].kind, "synonym");
+        assert_eq!(synonyms[0].language.as_deref(), Some("Oracle synonym"));
+        assert_eq!(
+            synonyms[0].arguments.as_deref(),
+            Some("HR.EMPLOYEES@REMOTE_DB")
+        );
+        assert_eq!(
+            synonyms[0].return_type.as_deref(),
+            Some("HR.EMPLOYEES@REMOTE_DB")
+        );
+        assert!(synonyms[0].source.is_none());
+    }
+
+    #[test]
+    fn build_sequence_and_synonym_metadata_handles_sparse_catalog_rows() {
+        let sequences = build_sequences(
+            "HR",
+            vec![OracleSequenceCatalogRow {
+                name: "EVENT_SEQ".into(),
+                min_value: None,
+                max_value: None,
+                increment_by: None,
+                cycle: true,
+                ordered: false,
+                cache_size: None,
+                last_number: None,
+            }],
+        );
+
+        assert_eq!(sequences[0].arguments.as_deref(), Some("cycle, no order"));
+        assert!(sequences[0].return_type.is_none());
+
+        let synonyms = build_synonyms(
+            "HR",
+            vec![
+                OracleSynonymCatalogRow {
+                    name: "EMPLOYEES_ALIAS".into(),
+                    target_owner: Some(String::new()),
+                    target_name: Some("EMPLOYEES".into()),
+                    db_link: None,
+                },
+                OracleSynonymCatalogRow {
+                    name: "BROKEN_ALIAS".into(),
+                    target_owner: None,
+                    target_name: None,
+                    db_link: Some(String::new()),
+                },
+            ],
+        );
+
+        assert_eq!(synonyms[0].arguments.as_deref(), Some("EMPLOYEES"));
+        assert_eq!(synonyms[1].arguments.as_deref(), Some("unresolved target"));
     }
 }

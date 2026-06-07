@@ -343,16 +343,22 @@ function CategorySection({
       )}
 
       {catExpanded && (
-        // Cap function/procedure lists at half the viewport so a schema
-        // with hundreds of routines doesn't push other categories out.
+        // Cap dense metadata lists so one schema doesn't push other
+        // categories out of the sidebar.
         <div
           className={
-            cat.key === "functions" || cat.key === "procedures"
+            cat.key === "functions" ||
+            cat.key === "procedures" ||
+            cat.key === "sequences" ||
+            cat.key === "synonyms"
               ? "max-h-[50vh] overflow-y-auto"
               : undefined
           }
           data-category-overflow={
-            cat.key === "functions" || cat.key === "procedures"
+            cat.key === "functions" ||
+            cat.key === "procedures" ||
+            cat.key === "sequences" ||
+            cat.key === "synonyms"
               ? "capped"
               : undefined
           }
@@ -405,7 +411,7 @@ interface PickCategoryArgs {
 interface PickCategoryResult {
   unfilteredItems: (TableInfo | ViewInfo | FunctionInfo)[];
   items: (TableInfo | ViewInfo | FunctionInfo)[];
-  itemKind: "table" | "view" | "function";
+  itemKind: "table" | "view" | "function" | "metadata";
 }
 
 function pickCategoryItems(
@@ -429,18 +435,29 @@ function pickCategoryItems(
     );
     return { unfilteredItems: fns, items: fns, itemKind: "function" };
   }
-  // procedures
-  const procs = functions.filter(
-    (f) => f.kind === "procedure" || f.kind === "package",
-  );
-  return { unfilteredItems: procs, items: procs, itemKind: "function" };
+  if (catKey === "procedures") {
+    const procs = functions.filter(
+      (f) => f.kind === "procedure" || f.kind === "package",
+    );
+    return { unfilteredItems: procs, items: procs, itemKind: "function" };
+  }
+  if (catKey === "sequences") {
+    const sequences = functions.filter((f) => f.kind === "sequence");
+    return {
+      unfilteredItems: sequences,
+      items: sequences,
+      itemKind: "metadata",
+    };
+  }
+  const synonyms = functions.filter((f) => f.kind === "synonym");
+  return { unfilteredItems: synonyms, items: synonyms, itemKind: "metadata" };
 }
 
 function buildItemRow(
   item: TableInfo | ViewInfo | FunctionInfo,
   schemaName: string,
   categoryKey: CategoryKey,
-  itemKind: "table" | "view" | "function",
+  itemKind: "table" | "view" | "function" | "metadata",
   selection: {
     selectedNodeId: string | null;
     activeSchema: string | null;
@@ -465,6 +482,12 @@ function buildItemRow(
             schema: schemaName,
             functionName: item.name,
           });
+  const metadataItemId = nodeIdToString({
+    type: "object",
+    schema: schemaName,
+    category: categoryKey,
+    objectName: item.name,
+  });
   return {
     kind: "item",
     key: `${categoryKey}-${item.name}`,
@@ -472,7 +495,9 @@ function buildItemRow(
     categoryKey,
     item,
     itemKind,
-    isSelected: selection.selectedNodeId === itemId,
+    isSelected:
+      selection.selectedNodeId ===
+      (itemKind === "metadata" ? metadataItemId : itemId),
     // 2026-05-11 — views share the table-tab shape (same schema/table
     // fields, just `objectKind: "view"`), so they participate in the
     // active-tab highlight identically. Functions open as query tabs

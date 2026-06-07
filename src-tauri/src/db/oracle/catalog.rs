@@ -18,9 +18,10 @@ use self::decode::{
 use self::queries::*;
 use self::shape::{
     build_constraints, build_functions, build_indexes, build_object_columns, build_schema_columns,
-    build_tables, build_views, OracleColumnCatalogRow, OracleConstraintCatalogRow,
-    OracleIndexCatalogRow, OracleRoutineCatalogRow, OracleRoutineParamCatalogRow,
-    OracleSchemaColumnCatalogRow, OracleTableCatalogRow, OracleViewCatalogRow,
+    build_sequences, build_synonyms, build_tables, build_views, OracleColumnCatalogRow,
+    OracleConstraintCatalogRow, OracleIndexCatalogRow, OracleRoutineCatalogRow,
+    OracleRoutineParamCatalogRow, OracleSchemaColumnCatalogRow, OracleSequenceCatalogRow,
+    OracleSynonymCatalogRow, OracleTableCatalogRow, OracleViewCatalogRow,
 };
 use super::{map_oracle_connection_error, OracleAdapter};
 
@@ -331,6 +332,20 @@ impl OracleAdapter {
                 &params,
             )
             .await?;
+            let sequence_rows = query_rows_or_empty_on_metadata_denied(
+                &connection,
+                "Oracle sequence catalog query failed",
+                SEQUENCES_SQL,
+                &params,
+            )
+            .await?;
+            let synonym_rows = query_rows_or_empty_on_metadata_denied(
+                &connection,
+                "Oracle synonym catalog query failed",
+                SYNONYMS_SQL,
+                &params,
+            )
+            .await?;
             let params = param_rows
                 .into_iter()
                 .map(|row| {
@@ -353,7 +368,38 @@ impl OracleAdapter {
                 })
                 .collect::<Result<Vec<_>, AppError>>()?;
 
-            Ok(build_functions(schema, routines, params))
+            let sequences = sequence_rows
+                .into_iter()
+                .map(|row| {
+                    Ok(OracleSequenceCatalogRow {
+                        name: row_string(&row, 0, "sequence name")?,
+                        min_value: row_optional_string(&row, 1, "sequence min value")?,
+                        max_value: row_optional_string(&row, 2, "sequence max value")?,
+                        increment_by: row_optional_string(&row, 3, "sequence increment")?,
+                        cycle: row_bool_yn(&row, 4, "sequence cycle flag")?,
+                        ordered: row_bool_yn(&row, 5, "sequence order flag")?,
+                        cache_size: row_optional_string(&row, 6, "sequence cache size")?,
+                        last_number: row_optional_string(&row, 7, "sequence last number")?,
+                    })
+                })
+                .collect::<Result<Vec<_>, AppError>>()?;
+            let synonyms = synonym_rows
+                .into_iter()
+                .map(|row| {
+                    Ok(OracleSynonymCatalogRow {
+                        name: row_string(&row, 0, "synonym name")?,
+                        target_owner: row_optional_string(&row, 1, "synonym target owner")?,
+                        target_name: row_optional_string(&row, 2, "synonym target name")?,
+                        db_link: row_optional_string(&row, 3, "synonym db link")?,
+                    })
+                })
+                .collect::<Result<Vec<_>, AppError>>()?;
+
+            let mut functions = build_functions(schema, routines, params);
+            functions.extend(build_sequences(schema, sequences));
+            functions.extend(build_synonyms(schema, synonyms));
+            functions.sort_by(|a, b| a.kind.cmp(&b.kind).then_with(|| a.name.cmp(&b.name)));
+            Ok(functions)
         }
         .await;
         close_catalog_connection(connection, result).await

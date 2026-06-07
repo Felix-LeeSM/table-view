@@ -318,7 +318,7 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     ).toBeInTheDocument();
   });
 
-  it("Oracle renders catalog metadata for tables, views, and packages (#520)", async () => {
+  it("Oracle renders catalog metadata for tables, views, packages, sequences, and synonyms (#520)", async () => {
     useConnectionStore.setState({
       connections: [makeConnection("ora1", "oracle")],
     });
@@ -350,6 +350,24 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
             source: "PACKAGE CATALOG_API AS END CATALOG_API;",
             kind: "package",
           },
+          {
+            name: "ORDER_SEQ",
+            schema: "APP",
+            arguments: "increment 1, cache 20, no cycle, no order",
+            returnType: "next 101",
+            language: "Oracle sequence",
+            source: null,
+            kind: "sequence",
+          },
+          {
+            name: "ACTIVE_USERS_ALIAS",
+            schema: "APP",
+            arguments: "APP.ACTIVE_ORACLE_USERS",
+            returnType: "APP.ACTIVE_ORACLE_USERS",
+            language: "Oracle synonym",
+            source: null,
+            kind: "synonym",
+          },
         ],
       },
     });
@@ -375,6 +393,28 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
       fireEvent.click(screen.getByLabelText("Procedures in APP"));
     });
     expect(screen.getByLabelText("CATALOG_API function")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Sequences in APP"));
+    });
+    const sequence = screen.getByLabelText("ORDER_SEQ sequence");
+    expect(sequence).toBeInTheDocument();
+    expect(sequence).toHaveTextContent("increment 1, cache 20");
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Synonyms in APP"));
+    });
+    const synonym = screen.getByLabelText("ACTIVE_USERS_ALIAS synonym");
+    expect(synonym).toBeInTheDocument();
+    expect(synonym).toHaveTextContent("APP.ACTIVE_ORACLE_USERS");
+
+    await act(async () => {
+      fireEvent.click(sequence);
+      fireEvent.click(synonym);
+    });
+    const workspace =
+      useWorkspaceStore.getState().workspaces.ora1?.[DEFAULT_DB];
+    expect(workspace?.tabs ?? []).toEqual([]);
   });
 
   // ─────────────────────────────────────────────────────────────────────

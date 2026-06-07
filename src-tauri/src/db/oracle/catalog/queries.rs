@@ -262,6 +262,28 @@ WHERE o.owner = :1
   AND o.object_type IN ('PROCEDURE', 'FUNCTION', 'PACKAGE')
 ORDER BY o.object_name";
 
+pub(super) const SEQUENCES_SQL: &str = "\
+SELECT sequence_name,
+       min_value,
+       max_value,
+       increment_by,
+       cycle_flag,
+       order_flag,
+       cache_size,
+       last_number
+FROM all_sequences
+WHERE sequence_owner = :1
+ORDER BY sequence_name";
+
+pub(super) const SYNONYMS_SQL: &str = "\
+SELECT synonym_name,
+       table_owner,
+       table_name,
+       db_link
+FROM all_synonyms
+WHERE owner = :1
+ORDER BY synonym_name";
+
 pub(super) const ROUTINE_PARAMS_SQL: &str = "\
 SELECT a.object_name AS routine_name,
        a.argument_name,
@@ -340,6 +362,16 @@ mod tests {
         assert!(ROUTINES_SQL.contains("PACKAGE"));
         assert!(ROUTINE_PARAMS_SQL.contains("all_arguments"));
         assert!(ROUTINE_SOURCE_SQL.contains("all_source"));
+    }
+
+    #[test]
+    fn sequence_and_synonym_queries_keep_read_only_metadata_scope() {
+        assert!(SEQUENCES_SQL.contains("all_sequences"));
+        assert!(SEQUENCES_SQL.contains("sequence_owner = :1"));
+        assert!(SEQUENCES_SQL.contains("last_number"));
+        assert!(SYNONYMS_SQL.contains("all_synonyms"));
+        assert!(SYNONYMS_SQL.contains("owner = :1"));
+        assert!(SYNONYMS_SQL.contains("db_link"));
     }
 
     #[test]

@@ -15,7 +15,7 @@ pub struct FunctionInfo {
     pub return_type: Option<String>,
     pub language: Option<String>,
     pub source: Option<String>,
-    pub kind: String, // "function", "procedure", "package", "aggregate", "window"
+    pub kind: String, // "function", "procedure", "package", "aggregate", "window", "sequence", "synonym"
 }
 
 /// Sprint 273 — request payload for `tauri.create_trigger`.

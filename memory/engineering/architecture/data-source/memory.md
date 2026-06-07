@@ -61,10 +61,11 @@ SQL Server admin/security/backup/jobs/users/roles, runtime Safe Mode/destructive
 preview evidence, fixture/live smoke, E2E evidence, TLS-required workflow, and
 broader T-SQL semantic parity remain separate contracts. Oracle is factory-backed for service-name
 connection lifecycle, bounded relational query, and catalog/workbench metadata browse for current
-service/database, schemas, tables/views, columns, indexes, constraints/FKs, and routines/packages
-through the shared RDB model. Oracle sequence/synonym workbench panels, table-data browse, row edit,
-structured DDL, runtime Safe Mode/destructive preview evidence, SID/TNS, wallet/TLS, fixture/live
-smoke, E2E evidence, and full PL/SQL executable semantics remain separate contracts.
+service/database, schemas, tables/views, columns, indexes, constraints/FKs, routines/packages, and
+read-only sequences/synonyms through the shared RDB model. Oracle table-data browse, row edit,
+structured DDL, sequence/synonym DDL/admin workflows, runtime Safe Mode/destructive preview
+evidence, SID/TNS, wallet/TLS, fixture/live smoke, E2E evidence, and full PL/SQL executable
+semantics remain separate contracts.
 
 Search identities (`elasticsearch`, `opensearch`) 는 fixture-backed/deferred profile
 이며 live HTTP connection/query claim 은 capability 가 켜질 때까지 하지 않는다.
