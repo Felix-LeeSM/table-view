@@ -116,8 +116,15 @@ describe("DataSourceProfile registry", () => {
       catalog: { browse: true, schema: true },
     }),
     mssql: expectedCapabilities({
-      connection: { test: true },
+      connection: { test: true, switchDatabase: true },
       query: { query: true, multiStatement: true, cancel: true },
+      catalog: {
+        browse: true,
+        schema: true,
+        indexes: true,
+        constraints: true,
+        relationships: true,
+      },
     }),
     oracle: expectedCapabilities({
       connection: { test: true },
@@ -338,7 +345,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
-  it("keeps MSSQL and Oracle query-bounded", () => {
+  it("keeps MSSQL metadata/query bounded and Oracle query-bounded", () => {
     const mssql = getDataSourceProfile("mssql");
     expect(mssql.backendAdapter).toEqual({
       id: "mssql",
@@ -346,10 +353,15 @@ describe("DataSourceProfile registry", () => {
       capabilitySource: "mssql",
     });
     expect(mssql.capabilities.connection.test).toBe(true);
+    expect(mssql.capabilities.connection.switchDatabase).toBe(true);
     expect(mssql.capabilities.query.query).toBe(true);
     expect(mssql.capabilities.query.multiStatement).toBe(true);
     expect(mssql.capabilities.query.cancel).toBe(true);
-    expect(mssql.capabilities.catalog.browse).toBe(false);
+    expect(mssql.capabilities.catalog.browse).toBe(true);
+    expect(mssql.capabilities.catalog.schema).toBe(true);
+    expect(mssql.capabilities.catalog.indexes).toBe(true);
+    expect(mssql.capabilities.catalog.constraints).toBe(true);
+    expect(mssql.capabilities.catalog.relationships).toBe(true);
     expect(mssql.capabilities.edit.editRows).toBe(false);
     expect(mssql.capabilities.ddl.createTable).toBe(false);
 
@@ -462,7 +474,7 @@ describe("DataSourceProfile registry", () => {
       expect(profile.backendAdapter.kind).toBe("rdb");
       expect(profile.capabilities.connection.test).toBe(true);
       expect(profile.capabilities.query.query).toBe(true);
-      if (dbType !== "mssql" && dbType !== "oracle") {
+      if (dbType !== "oracle") {
         expect(profile.capabilities.catalog.browse).toBe(true);
         expect(profile.capabilities.catalog.schema).toBe(true);
       }
@@ -479,7 +491,11 @@ describe("DataSourceProfile registry", () => {
     expect(mssql.capabilities.query.multiStatement).toBe(true);
     expect(mssql.capabilities.query.cancel).toBe(true);
     expect(mssql.capabilities.query.explain).toBe(false);
-    expect(mssql.capabilities.catalog.browse).toBe(false);
+    expect(mssql.capabilities.catalog.browse).toBe(true);
+    expect(mssql.capabilities.catalog.schema).toBe(true);
+    expect(mssql.capabilities.catalog.indexes).toBe(true);
+    expect(mssql.capabilities.catalog.constraints).toBe(true);
+    expect(mssql.capabilities.catalog.relationships).toBe(true);
 
     const oracle = getDataSourceProfile("oracle");
     expect(oracle.paradigm).toBe("rdb");
@@ -547,6 +563,7 @@ describe("DataSourceProfile registry", () => {
     expect(hasConnectionCapability("postgresql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mysql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mariadb", "switchDatabase")).toBe(true);
+    expect(hasConnectionCapability("mssql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("redis", "switchDatabase")).toBe(true);

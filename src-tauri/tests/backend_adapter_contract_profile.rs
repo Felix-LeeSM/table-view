@@ -112,7 +112,7 @@ fn backend_profiles_encode_current_database_type_contracts() {
         ServerVersionProbeId::MssqlServerProperty
     );
     assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
 
     let mongodb = get_data_source_profile(&DatabaseType::Mongodb);
@@ -350,9 +350,7 @@ fn rdbms_integration_gate_profiles_are_coherent() {
             BackendAdapterContractState::FactoryBacked
         );
         assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
-        if mem::discriminant(db_type) != mem::discriminant(&DatabaseType::Mssql)
-            && mem::discriminant(db_type) != mem::discriminant(&DatabaseType::Oracle)
-        {
+        if mem::discriminant(db_type) != mem::discriminant(&DatabaseType::Oracle) {
             assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
         }
         assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
@@ -370,7 +368,7 @@ fn rdbms_integration_gate_profiles_are_coherent() {
         BackendAdapterCapabilitySource::Mssql
     );
     assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
