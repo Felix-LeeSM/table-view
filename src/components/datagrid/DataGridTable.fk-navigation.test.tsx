@@ -102,6 +102,39 @@ describe("DataGridTable — FK navigation (sprint-89 #FK-1 AC-04)", () => {
     expect(onNavigateToFk).toHaveBeenCalledWith("public", "users", "id", "42");
   });
 
+  it("navigates SQL Server dbo FK references emitted by the MSSQL catalog", async () => {
+    const user = userEvent.setup();
+    const onNavigateToFk = vi.fn();
+    const mssqlData: TableData = {
+      ...FK_DATA,
+      columns: FK_DATA.columns.map((column) =>
+        column.name === "user_id"
+          ? { ...column, fk_reference: "dbo.users(id)" }
+          : column,
+      ),
+      executed_query: "SELECT * FROM dbo.orders",
+    };
+
+    render(
+      <DataGridTable
+        {...makeProps({
+          data: mssqlData,
+          schema: "dbo",
+          table: "orders",
+          onNavigateToFk,
+        })}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Open referenced row in dbo\.users/i,
+      }),
+    );
+
+    expect(onNavigateToFk).toHaveBeenCalledWith("dbo", "users", "id", "42");
+  });
+
   it("does not render the FK icon for NULL cells", () => {
     const onNavigateToFk = vi.fn();
 

@@ -64,6 +64,14 @@ describe("DataGridTable.parseFkReference (contract test, sprint-89)", () => {
     });
   });
 
+  it("parses SQL Server dbo foreign-key references", () => {
+    expect(parseFkReference("dbo.users(id)")).toEqual({
+      schema: "dbo",
+      table: "users",
+      column: "id",
+    });
+  });
+
   it("parses identifiers with hyphens and spaces", () => {
     // Greedy `.+` segments still split correctly because the trailing
     // `(...)` block forces the column to land in the third group, leaving

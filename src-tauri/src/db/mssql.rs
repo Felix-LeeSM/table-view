@@ -1,3 +1,4 @@
+mod catalog;
 mod runtime;
 
 use std::future::Future;
@@ -15,7 +16,7 @@ use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
     DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, FunctionInfo,
-    IndexInfo, QueryResult, RenameTableRequest, SchemaChangeResult, TableData,
+    IndexInfo, QueryResult, RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
 };
 
 use super::{BoxFuture, DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter};
@@ -165,23 +166,50 @@ impl RdbAdapter for MssqlAdapter {
     }
 
     fn list_namespaces<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
-        unsupported()
+        Box::pin(async move {
+            let schemas = MssqlAdapter::list_schemas(self).await?;
+            Ok(schemas.into_iter().map(NamespaceInfo::from).collect())
+        })
+    }
+
+    fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+        Box::pin(async move {
+            let dbs = MssqlAdapter::list_databases(self).await?;
+            Ok(dbs.into_iter().map(NamespaceInfo::from).collect())
+        })
+    }
+
+    fn switch_database<'a>(&'a self, db_name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { self.switch_active_database(db_name).await })
+    }
+
+    fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
+        Box::pin(async move { self.current_database_name().await })
     }
 
     fn list_tables<'a>(
         &'a self,
-        _namespace: &'a str,
-    ) -> BoxFuture<'a, Result<Vec<crate::models::TableInfo>, AppError>> {
-        unsupported()
+        namespace: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+        Box::pin(async move { MssqlAdapter::list_tables(self, namespace).await })
     }
 
     fn get_columns<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _cancel: Option<&'a CancellationToken>,
+        namespace: &'a str,
+        table: &'a str,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
-        unsupported()
+        Box::pin(async move {
+            let work = MssqlAdapter::get_table_columns(self, namespace, table);
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
     }
 
     fn execute_sql<'a>(
@@ -294,65 +322,90 @@ impl RdbAdapter for MssqlAdapter {
 
     fn get_table_indexes<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _cancel: Option<&'a CancellationToken>,
+        namespace: &'a str,
+        table: &'a str,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>> {
-        unsupported()
+        Box::pin(async move {
+            let work = MssqlAdapter::get_table_indexes(self, namespace, table);
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
     }
 
     fn get_table_constraints<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _cancel: Option<&'a CancellationToken>,
+        namespace: &'a str,
+        table: &'a str,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>> {
-        unsupported()
+        Box::pin(async move {
+            let work = MssqlAdapter::get_table_constraints(self, namespace, table);
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
+    }
+
+    fn list_views<'a>(
+        &'a self,
+        namespace: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<ViewInfo>, AppError>> {
+        Box::pin(async move { MssqlAdapter::list_views(self, namespace).await })
     }
 
     fn get_view_definition<'a>(
         &'a self,
-        _namespace: &'a str,
-        _view: &'a str,
+        namespace: &'a str,
+        view: &'a str,
     ) -> BoxFuture<'a, Result<String, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::get_view_definition(self, namespace, view).await })
     }
 
     fn get_view_columns<'a>(
         &'a self,
-        _namespace: &'a str,
-        _view: &'a str,
+        namespace: &'a str,
+        view: &'a str,
     ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::get_view_columns(self, namespace, view).await })
     }
 
     fn list_schema_columns<'a>(
         &'a self,
-        _namespace: &'a str,
+        namespace: &'a str,
     ) -> BoxFuture<'a, Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::list_schema_columns(self, namespace).await })
     }
 
     fn get_function_source<'a>(
         &'a self,
-        _namespace: &'a str,
-        _function: &'a str,
+        namespace: &'a str,
+        function: &'a str,
     ) -> BoxFuture<'a, Result<String, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::get_function_source(self, namespace, function).await })
     }
 
     fn list_functions<'a>(
         &'a self,
-        _namespace: &'a str,
+        namespace: &'a str,
     ) -> BoxFuture<'a, Result<Vec<FunctionInfo>, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::list_functions(self, namespace).await })
     }
 }
 
 fn unsupported<'a, T>() -> BoxFuture<'a, Result<T, AppError>> {
     Box::pin(async {
         Err(AppError::Unsupported(
-            "SQL Server catalog/edit/admin support is not implemented in this bounded query slice"
+            "SQL Server edit/table-data/admin support is not implemented in this metadata slice"
                 .into(),
         ))
     })
@@ -476,12 +529,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn catalog_and_edit_surfaces_stay_explicitly_unsupported() {
+    async fn catalog_surfaces_fail_locally_without_open_connection() {
         let adapter = MssqlAdapter::new();
 
-        assert_unsupported(adapter.list_namespaces().await);
-        assert_unsupported(adapter.list_tables("dbo").await);
-        assert_unsupported(adapter.get_columns("dbo", "users", None).await);
+        assert_not_open(RdbAdapter::list_namespaces(&adapter).await);
+        assert_not_open(RdbAdapter::list_databases(&adapter).await);
+        assert_not_open(RdbAdapter::switch_database(&adapter, "master").await);
+        assert_not_open(RdbAdapter::current_database(&adapter).await);
+        assert_not_open(RdbAdapter::list_tables(&adapter, "dbo").await);
+        assert_not_open(RdbAdapter::get_columns(&adapter, "dbo", "users", None).await);
+        assert_not_open(RdbAdapter::get_table_indexes(&adapter, "dbo", "users", None).await);
+        assert_not_open(RdbAdapter::get_table_constraints(&adapter, "dbo", "users", None).await);
+        assert_not_open(RdbAdapter::list_views(&adapter, "dbo").await);
+        assert_not_open(RdbAdapter::get_view_definition(&adapter, "dbo", "active_users").await);
+        assert_not_open(RdbAdapter::get_view_columns(&adapter, "dbo", "active_users").await);
+        assert_not_open(RdbAdapter::list_schema_columns(&adapter, "dbo").await);
+        assert_not_open(RdbAdapter::list_functions(&adapter, "dbo").await);
+        assert_not_open(RdbAdapter::get_function_source(&adapter, "dbo", "touch_user").await);
+
+        let err = RdbAdapter::switch_database(&adapter, " ")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(message) if message.contains("database name")));
+    }
+
+    #[tokio::test]
+    async fn table_data_and_edit_surfaces_stay_explicitly_unsupported() {
+        let adapter = MssqlAdapter::new();
+
         assert_unsupported(
             adapter
                 .query_table_data("dbo", "users", 1, 25, None, None, None, None)
@@ -598,18 +673,17 @@ mod tests {
         assert_unsupported(adapter.drop_index(&drop_index).await);
         assert_unsupported(adapter.add_constraint(&add_constraint).await);
         assert_unsupported(adapter.drop_constraint(&drop_constraint).await);
-        assert_unsupported(adapter.get_table_indexes("dbo", "users", None).await);
-        assert_unsupported(adapter.get_table_constraints("dbo", "users", None).await);
-        assert_unsupported(adapter.get_view_definition("dbo", "active_users").await);
-        assert_unsupported(adapter.get_view_columns("dbo", "active_users").await);
-        assert_unsupported(adapter.list_schema_columns("dbo").await);
-        assert_unsupported(adapter.get_function_source("dbo", "fn_users").await);
-        assert_unsupported(adapter.list_functions("dbo").await);
     }
 
     fn assert_unsupported<T>(result: Result<T, AppError>) {
         assert!(
             matches!(result, Err(AppError::Unsupported(message)) if message.contains("not implemented"))
+        );
+    }
+
+    fn assert_not_open<T>(result: Result<T, AppError>) {
+        assert!(
+            matches!(result, Err(AppError::Connection(message)) if message.contains("not open"))
         );
     }
 }

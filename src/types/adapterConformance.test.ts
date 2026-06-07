@@ -257,6 +257,33 @@ describe("adapter conformance matrix", () => {
     ]);
   });
 
+  it("locks MSSQL catalog/workbench metadata while keeping edit and explain deferred", () => {
+    const mssql = ADAPTER_CONFORMANCE_MATRIX.mssql;
+
+    expect(mssql.level).toBe("runtime");
+    expect(mssql.areas.connection.checks).toEqual([
+      "connection.test",
+      "connection.switchDatabase",
+    ]);
+    expect(mssql.areas.connection.deferred).toEqual([]);
+    expect(mssql.areas.catalog.checks).toEqual([
+      "catalog.browse",
+      "catalog.schema",
+      "catalog.indexes",
+      "catalog.constraints",
+      "catalog.relationships",
+    ]);
+    expect(mssql.areas.catalog.deferred).toEqual([]);
+    expect(mssql.areas.query.checks).toEqual([
+      "query.query",
+      "query.multiStatement",
+      "query.cancel",
+    ]);
+    expect(mssql.areas.query.deferred).toEqual(["query.explain"]);
+    expect(mssql.areas.edit.checks).toEqual([]);
+    expect(mssql.areas.edit.deferred).toEqual(["edit.editRows"]);
+  });
+
   it("locks Oracle to lifecycle-only conformance", () => {
     const oracle = ADAPTER_CONFORMANCE_MATRIX.oracle;
 

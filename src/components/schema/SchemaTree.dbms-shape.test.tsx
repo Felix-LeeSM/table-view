@@ -257,6 +257,67 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     );
   });
 
+  it("MSSQL renders with-schema catalog metadata for tables, views, and procedures (#511)", async () => {
+    useConnectionStore.setState({
+      connections: [makeConnection("ms1", "mssql")],
+    });
+    setSchemaStoreState({
+      schemas: { ms1: [{ name: "dbo" }] },
+      tables: {
+        "ms1:dbo": [
+          { name: "orders", schema: "dbo", row_count: 2 },
+          { name: "users", schema: "dbo", row_count: 1 },
+        ],
+      },
+      views: {
+        "ms1:dbo": [
+          {
+            name: "active_mssql_users",
+            schema: "dbo",
+            definition: "SELECT id, email FROM dbo.users WHERE active = 1",
+          },
+        ],
+      },
+      functions: {
+        "ms1:dbo": [
+          {
+            name: "mssql_catalog_ping",
+            schema: "dbo",
+            arguments: "@input_id int",
+            returnType: null,
+            language: "T-SQL",
+            source: "CREATE PROCEDURE dbo.mssql_catalog_ping AS SELECT 1",
+            kind: "procedure",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="ms1" />);
+    });
+
+    expect(screen.getByLabelText("dbo schema")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByLabelText("orders table")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Views in dbo"));
+    });
+    expect(
+      screen.getByLabelText("active_mssql_users view"),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Procedures in dbo"));
+    });
+    expect(
+      screen.getByLabelText("mssql_catalog_ping function"),
+    ).toBeInTheDocument();
+  });
+
   // ─────────────────────────────────────────────────────────────────────
   // AC-S135-03 — MySQL: 2-level (database → table), no schema row
   // ─────────────────────────────────────────────────────────────────────

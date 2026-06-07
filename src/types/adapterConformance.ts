@@ -174,14 +174,8 @@ const DEFERRED_FEATURES = Object.freeze({
     edit: ["edit.editRows"],
   },
   mssql: {
-    connection: ["connection.switchDatabase"],
-    catalog: [
-      "catalog.browse",
-      "catalog.schema",
-      "catalog.indexes",
-      "catalog.constraints",
-      "catalog.relationships",
-    ],
+    connection: [],
+    catalog: [],
     query: ["query.explain"],
     edit: ["edit.editRows"],
   },

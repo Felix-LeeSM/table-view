@@ -102,7 +102,10 @@ impl MssqlAdapter {
                 }
                 QueryType::Ddl => {
                     client
-                        .execute(query, &[])
+                        .simple_query(query)
+                        .await
+                        .map_err(|err| mssql_query_error("SQL Server statement failed", err))?
+                        .into_results()
                         .await
                         .map_err(|err| mssql_query_error("SQL Server statement failed", err))?;
                     Ok(QueryResult {
