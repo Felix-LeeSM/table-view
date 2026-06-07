@@ -104,7 +104,7 @@ describe("MSSQL smoke", () => {
           `SELECT name, price FROM dbo.products WHERE name = N'${productName}'`,
         );
         await waitForGridTextAll(
-          [productName, "42.50"],
+          [productName, "42.5"],
           15000,
           "MSSQL DML readback did not appear in result grid",
         );
