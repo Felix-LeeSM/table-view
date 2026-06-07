@@ -231,9 +231,14 @@ function capabilities(
 
 export const UNSUPPORTED_CAPABILITIES = capabilities();
 
-export const ORACLE_CONNECTION_CAPABILITIES = capabilities({
+export const ORACLE_QUERY_CAPABILITIES = capabilities({
   connection: {
     test: true,
+  },
+  query: {
+    query: true,
+    multiStatement: true,
+    cancel: true,
   },
 });
 
@@ -529,7 +534,7 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "rdb",
     ["tabular"],
     "rdb-default",
-    ORACLE_CONNECTION_CAPABILITIES,
+    ORACLE_QUERY_CAPABILITIES,
   ),
   mongodb: profile(
     "mongodb",
