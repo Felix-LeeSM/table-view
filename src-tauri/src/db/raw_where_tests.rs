@@ -12,6 +12,7 @@ fn accepts_plain_boolean_filter() {
 fn accepts_dialect_quoted_identifiers() {
     assert!(validate_raw_where_clause(RawWhereDialect::Postgres, r#""status" = 'active'"#).is_ok());
     assert!(validate_raw_where_clause(RawWhereDialect::Mysql, "`status` = 'active'").is_ok());
+    assert!(validate_raw_where_clause(RawWhereDialect::Mssql, "[status] = 'active'").is_ok());
 }
 
 #[test]

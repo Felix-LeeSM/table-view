@@ -125,6 +125,7 @@ describe("DataSourceProfile registry", () => {
         constraints: true,
         relationships: true,
       },
+      edit: { editRows: true },
     }),
     oracle: expectedCapabilities({
       connection: { test: true },
@@ -345,7 +346,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
-  it("keeps MSSQL metadata/query bounded and Oracle query-bounded", () => {
+  it("keeps MSSQL row-edit bounded and Oracle query-bounded", () => {
     const mssql = getDataSourceProfile("mssql");
     expect(mssql.backendAdapter).toEqual({
       id: "mssql",
@@ -362,7 +363,7 @@ describe("DataSourceProfile registry", () => {
     expect(mssql.capabilities.catalog.indexes).toBe(true);
     expect(mssql.capabilities.catalog.constraints).toBe(true);
     expect(mssql.capabilities.catalog.relationships).toBe(true);
-    expect(mssql.capabilities.edit.editRows).toBe(false);
+    expect(mssql.capabilities.edit.editRows).toBe(true);
     expect(mssql.capabilities.ddl.createTable).toBe(false);
 
     const oracle = getDataSourceProfile("oracle");
@@ -496,6 +497,7 @@ describe("DataSourceProfile registry", () => {
     expect(mssql.capabilities.catalog.indexes).toBe(true);
     expect(mssql.capabilities.catalog.constraints).toBe(true);
     expect(mssql.capabilities.catalog.relationships).toBe(true);
+    expect(mssql.capabilities.edit.editRows).toBe(true);
 
     const oracle = getDataSourceProfile("oracle");
     expect(oracle.paradigm).toBe("rdb");

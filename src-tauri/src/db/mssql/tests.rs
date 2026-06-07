@@ -179,6 +179,21 @@ async fn pre_cancelled_query_short_circuits_before_connection_lookup() {
         .unwrap_err();
 
     assert!(matches!(err, AppError::Database(msg) if msg == "Query cancelled"));
+
+    let err = RdbAdapter::query_table_data(
+        &adapter,
+        "dbo",
+        "users",
+        1,
+        25,
+        None,
+        None,
+        None,
+        Some(&cancel),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, AppError::Database(msg) if msg == "Operation cancelled"));
 }
 
 #[tokio::test]
@@ -195,6 +210,20 @@ async fn cancellable_trait_wrappers_return_work_result_without_open_connection()
     let batch = vec!["UPDATE dbo.users SET name = 'Ada'".to_string()];
     assert_not_open(RdbAdapter::execute_sql_batch(&adapter, &batch, Some(&cancel)).await);
     assert_not_open(RdbAdapter::dry_run_sql_batch(&adapter, &batch, Some(&cancel)).await);
+    assert_not_open(
+        RdbAdapter::query_table_data(
+            &adapter,
+            "dbo",
+            "users",
+            1,
+            25,
+            None,
+            None,
+            None,
+            Some(&cancel),
+        )
+        .await,
+    );
 }
 
 #[tokio::test]
@@ -223,13 +252,11 @@ async fn catalog_surfaces_fail_locally_without_open_connection() {
 }
 
 #[tokio::test]
-async fn table_data_and_edit_surfaces_stay_explicitly_unsupported() {
+async fn table_data_reaches_runtime_while_ddl_admin_surfaces_stay_unsupported() {
     let adapter = MssqlAdapter::new();
 
-    assert_unsupported(
-        adapter
-            .query_table_data("dbo", "users", 1, 25, None, None, None, None)
-            .await,
+    assert_not_open(
+        RdbAdapter::query_table_data(&adapter, "dbo", "users", 1, 25, None, None, None, None).await,
     );
 
     let column = ColumnDefinition {

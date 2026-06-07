@@ -5,7 +5,9 @@ use sqlparser::ast::{
     BinaryOperator, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, GroupByExpr, Query,
     Select, SetExpr, Statement, UnaryOperator,
 };
-use sqlparser::dialect::{Dialect, MySqlDialect, PostgreSqlDialect, Precedence, SQLiteDialect};
+use sqlparser::dialect::{
+    Dialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, Precedence, SQLiteDialect,
+};
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::{Parser, ParserError};
 use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
@@ -15,6 +17,7 @@ pub(crate) enum RawWhereDialect {
     Postgres,
     Mysql,
     Sqlite,
+    Mssql,
 }
 
 pub(crate) fn validate_raw_where_clause(
@@ -117,6 +120,7 @@ fn tokenize_sql(
         RawWhereDialect::Postgres => Tokenizer::new(&PostgreSqlDialect {}, sql).tokenize(),
         RawWhereDialect::Mysql => Tokenizer::new(&MySqlDialect {}, sql).tokenize(),
         RawWhereDialect::Sqlite => Tokenizer::new(&SQLiteDialect {}, sql).tokenize(),
+        RawWhereDialect::Mssql => Tokenizer::new(&MsSqlDialect {}, sql).tokenize(),
     }
 }
 
@@ -125,6 +129,7 @@ fn parse_sql(dialect: RawWhereDialect, sql: &str) -> Result<Vec<Statement>, Pars
         RawWhereDialect::Postgres => Parser::parse_sql(&PostgreSqlDialect {}, sql),
         RawWhereDialect::Mysql => Parser::parse_sql(&MySqlDialect {}, sql),
         RawWhereDialect::Sqlite => Parser::parse_sql(&TableViewSQLiteDialect {}, sql),
+        RawWhereDialect::Mssql => Parser::parse_sql(&MsSqlDialect {}, sql),
     }
 }
 

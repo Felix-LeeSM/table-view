@@ -36,6 +36,7 @@ function dialectFromDbType(dbType: string | undefined): SqlDialect | undefined {
   if (dbType === "postgresql") return "postgresql";
   if (dbType === "mysql" || dbType === "mariadb") return "mysql";
   if (dbType === "sqlite") return "sqlite";
+  if (dbType === "mssql") return "mssql";
   return undefined;
 }
 

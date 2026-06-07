@@ -1,12 +1,17 @@
+use std::collections::HashSet;
+
 use futures_util::TryStreamExt;
 use tiberius::{
     time::chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime},
-    Column, ColumnData, ColumnType, QueryItem, Row,
+    Column, ColumnData, ColumnType, QueryItem, Row, ToSql,
 };
 use tokio_util::sync::CancellationToken;
 
+use crate::db::raw_where::{validate_raw_where_clause, RawWhereDialect};
 use crate::error::AppError;
-use crate::models::{ColumnCategory, QueryColumn, QueryResult, QueryType};
+use crate::models::{
+    ColumnCategory, FilterCondition, FilterOperator, QueryColumn, QueryResult, QueryType, TableData,
+};
 
 use super::MssqlAdapter;
 
@@ -140,6 +145,130 @@ impl MssqlAdapter {
             .await
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub async fn query_table_data(
+        &self,
+        schema: &str,
+        table: &str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&str>,
+        filters: Option<&[FilterCondition]>,
+        raw_where: Option<&str>,
+        cancel_token: Option<&CancellationToken>,
+    ) -> Result<TableData, AppError> {
+        if cancel_token.is_some_and(CancellationToken::is_cancelled) {
+            return Err(table_query_cancelled());
+        }
+
+        let work = self.query_table_data_uncancelled(
+            schema, table, page, page_size, order_by, filters, raw_where,
+        );
+        match cancel_token {
+            Some(token) => tokio::select! {
+                result = work => result,
+                _ = token.cancelled() => Err(table_query_cancelled()),
+            },
+            None => work.await,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn query_table_data_uncancelled(
+        &self,
+        schema: &str,
+        table: &str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&str>,
+        filters: Option<&[FilterCondition]>,
+        raw_where: Option<&str>,
+    ) -> Result<TableData, AppError> {
+        let config = self.connected_config().await?;
+        let columns = self.get_table_columns(schema, table).await?;
+        let qualified = qualified_mssql_table(schema, table);
+        let page_size = page_size.max(1);
+        let offset = (page - 1).max(0) * page_size;
+
+        if columns.is_empty() {
+            return Ok(TableData {
+                columns,
+                rows: Vec::new(),
+                total_count: 0,
+                page,
+                page_size,
+                executed_query: format!(
+                    "SELECT * FROM {qualified} ORDER BY (SELECT NULL) OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY"
+                ),
+            });
+        }
+
+        let raw_where_trimmed = raw_where.map(str::trim).filter(|rw| !rw.is_empty());
+        if let Some(raw_where) = raw_where_trimmed {
+            validate_raw_where_clause(RawWhereDialect::Mssql, raw_where)?;
+        }
+
+        let (where_clause, param_values) = if let Some(raw_where) = raw_where_trimmed {
+            (format!(" WHERE {raw_where}"), Vec::<String>::new())
+        } else {
+            build_mssql_where_clause(&columns, filters)
+        };
+        let params: Vec<&dyn ToSql> = param_values
+            .iter()
+            .map(|value| value as &dyn ToSql)
+            .collect();
+
+        let count_sql = format!("SELECT COUNT_BIG(*) FROM {qualified}{where_clause}");
+        let mut client = Self::connect_client(&config).await?;
+        let count_rows = query_first_result(
+            &mut client,
+            "SQL Server table count failed",
+            &count_sql,
+            &params,
+        )
+        .await?;
+        let total_count = count_rows
+            .first()
+            .map(|row| {
+                row.try_get::<i64, _>(0).map_err(|err| {
+                    AppError::Database(format!("SQL Server table count decode failed: {err}"))
+                })
+            })
+            .transpose()?
+            .flatten()
+            .unwrap_or(0);
+
+        let select_list = columns
+            .iter()
+            .map(|column| quote_mssql_identifier(&column.name))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let order_clause = build_mssql_order_clause(&columns, order_by);
+        let executed_query = format!(
+            "SELECT {select_list} FROM {qualified}{where_clause}{order_clause} OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY"
+        );
+        let data_rows = query_first_result(
+            &mut client,
+            "SQL Server table data query failed",
+            &executed_query,
+            &params,
+        )
+        .await?;
+        let rows = data_rows
+            .into_iter()
+            .map(|row| mssql_row_to_json(&row))
+            .collect();
+
+        Ok(TableData {
+            columns,
+            rows,
+            total_count,
+            page,
+            page_size,
+            executed_query,
+        })
+    }
+
     async fn execute_transactional_batch(
         &self,
         statements: &[String],
@@ -205,6 +334,136 @@ impl MssqlAdapter {
 
         cancellable(work, cancel_token).await
     }
+}
+
+fn build_mssql_where_clause(
+    columns: &[crate::models::ColumnInfo],
+    filters: Option<&[FilterCondition]>,
+) -> (String, Vec<String>) {
+    let Some(filters) = filters else {
+        return (String::new(), Vec::new());
+    };
+    if filters.is_empty() {
+        return (String::new(), Vec::new());
+    }
+
+    let valid_columns: HashSet<&str> = columns.iter().map(|column| column.name.as_str()).collect();
+    let mut param_values = Vec::new();
+    let mut conditions = Vec::new();
+
+    for filter in filters {
+        if !valid_columns.contains(filter.column.as_str()) {
+            continue;
+        }
+
+        let column = quote_mssql_identifier(&filter.column);
+        match filter.operator {
+            FilterOperator::IsNull => conditions.push(format!("{column} IS NULL")),
+            FilterOperator::IsNotNull => conditions.push(format!("{column} IS NOT NULL")),
+            _ => {
+                let Some(value) = &filter.value else {
+                    continue;
+                };
+                let Some(operator) = mssql_filter_operator(&filter.operator) else {
+                    continue;
+                };
+                let placeholder = format!("@P{}", param_values.len() + 1);
+                conditions.push(format!("{column} {operator} {placeholder}"));
+                param_values.push(value.clone());
+            }
+        }
+    }
+
+    if conditions.is_empty() {
+        (String::new(), param_values)
+    } else {
+        (format!(" WHERE {}", conditions.join(" AND ")), param_values)
+    }
+}
+
+fn mssql_filter_operator(operator: &FilterOperator) -> Option<&'static str> {
+    match operator {
+        FilterOperator::Eq => Some("="),
+        FilterOperator::Neq => Some("<>"),
+        FilterOperator::Gt => Some(">"),
+        FilterOperator::Lt => Some("<"),
+        FilterOperator::Gte => Some(">="),
+        FilterOperator::Lte => Some("<="),
+        FilterOperator::Like => Some("LIKE"),
+        FilterOperator::IsNull | FilterOperator::IsNotNull => None,
+    }
+}
+
+fn build_mssql_order_clause(
+    columns: &[crate::models::ColumnInfo],
+    order_by: Option<&str>,
+) -> String {
+    let valid_columns: HashSet<&str> = columns.iter().map(|column| column.name.as_str()).collect();
+    let mut user_sort_columns = HashSet::new();
+    let mut order_parts = Vec::new();
+
+    if let Some(order_by) = order_by {
+        for part in order_by.split(',') {
+            let parts: Vec<&str> = part.split_whitespace().collect();
+            let (column, direction) = match parts.as_slice() {
+                [column, direction]
+                    if direction.eq_ignore_ascii_case("ASC")
+                        || direction.eq_ignore_ascii_case("DESC") =>
+                {
+                    (*column, direction.to_ascii_uppercase())
+                }
+                [column] => (*column, "ASC".to_string()),
+                _ => continue,
+            };
+            if valid_columns.contains(column) {
+                order_parts.push(format!("{} {}", quote_mssql_identifier(column), direction));
+                user_sort_columns.insert(column.to_string());
+            }
+        }
+    }
+
+    let pk_tiebreakers = columns
+        .iter()
+        .filter(|column| column.is_primary_key && !user_sort_columns.contains(&column.name))
+        .map(|column| format!("{} ASC", quote_mssql_identifier(&column.name)));
+    order_parts.extend(pk_tiebreakers);
+
+    if order_parts.is_empty() {
+        " ORDER BY (SELECT NULL)".to_string()
+    } else {
+        format!(" ORDER BY {}", order_parts.join(", "))
+    }
+}
+
+fn qualified_mssql_table(schema: &str, table: &str) -> String {
+    if schema.trim().is_empty() {
+        quote_mssql_identifier(table)
+    } else {
+        format!(
+            "{}.{}",
+            quote_mssql_identifier(schema),
+            quote_mssql_identifier(table)
+        )
+    }
+}
+
+fn quote_mssql_identifier(value: &str) -> String {
+    format!("[{}]", value.replace(']', "]]"))
+}
+
+async fn query_first_result(
+    client: &mut tiberius::Client<tokio_util::compat::Compat<tokio::net::TcpStream>>,
+    context: &'static str,
+    sql: &str,
+    params: &[&dyn ToSql],
+) -> Result<Vec<Row>, AppError> {
+    client
+        .query(sql, params)
+        .await
+        .map_err(|err| mssql_query_error(context, err))?
+        .into_first_result()
+        .await
+        .map_err(|err| mssql_query_error(context, err))
 }
 
 async fn cancellable<T>(
@@ -439,6 +698,10 @@ fn hex_encode(bytes: &[u8]) -> String {
 
 fn query_cancelled() -> AppError {
     AppError::Database("Query cancelled".into())
+}
+
+fn table_query_cancelled() -> AppError {
+    AppError::Database("Operation cancelled".into())
 }
 
 fn mssql_query_error(context: &'static str, err: impl std::fmt::Display) -> AppError {

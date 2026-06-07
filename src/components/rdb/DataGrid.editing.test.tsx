@@ -270,6 +270,81 @@ describe("DataGrid", () => {
     expect(nameCell.querySelector("input")).not.toBeInTheDocument();
   });
 
+  it("enables row editing controls for MSSQL tables with a primary key", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "SQL Server",
+          dbType: "mssql",
+          host: "localhost",
+          port: 1433,
+          user: "sa",
+          database: "MssqlApp",
+          readOnly: false,
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+    });
+
+    renderDataGrid({ database: "MssqlApp", schema: "dbo" });
+    await screen.findByText("3 rows");
+
+    expect(screen.getByLabelText("Add row")).toBeInTheDocument();
+
+    const cells = screen.getAllByRole("gridcell");
+    const nameCell = cells[1]!;
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    expect(nameCell.querySelector("input")).toBeInTheDocument();
+  });
+
+  it("does not enable row editing controls for MSSQL tables without primary keys", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "SQL Server",
+          dbType: "mssql",
+          host: "localhost",
+          port: 1433,
+          user: "sa",
+          database: "MssqlApp",
+          readOnly: false,
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+    });
+    mockQueryTableData.mockResolvedValueOnce({
+      ...MOCK_DATA,
+      columns: MOCK_DATA.columns.map((column) => ({
+        ...column,
+        is_primary_key: false,
+      })),
+    });
+
+    renderDataGrid({ database: "MssqlApp", schema: "dbo" });
+    await screen.findByText("3 rows");
+
+    expect(screen.queryByLabelText("Add row")).not.toBeInTheDocument();
+
+    const cells = screen.getAllByRole("gridcell");
+    const nameCell = cells[1]!;
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    expect(nameCell.querySelector("input")).not.toBeInTheDocument();
+  });
+
   // 36. Enter saves edit and shows pending indicator
   it("Enter saves edit and shows pending indicator", async () => {
     renderDataGrid();

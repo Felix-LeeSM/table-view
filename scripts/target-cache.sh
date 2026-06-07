@@ -19,6 +19,7 @@ PUSH_TESTS=(
   mysql_integration
   duckdb_file_analytics
   mariadb_ddl_preview
+  mssql_connection_routing
 )
 
 usage() {

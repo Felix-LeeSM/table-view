@@ -257,7 +257,7 @@ describe("adapter conformance matrix", () => {
     ]);
   });
 
-  it("locks MSSQL catalog/workbench metadata while keeping edit and explain deferred", () => {
+  it("locks MSSQL catalog/query/edit runtime claims while keeping explain deferred", () => {
     const mssql = ADAPTER_CONFORMANCE_MATRIX.mssql;
 
     expect(mssql.level).toBe("runtime");
@@ -280,8 +280,8 @@ describe("adapter conformance matrix", () => {
       "query.cancel",
     ]);
     expect(mssql.areas.query.deferred).toEqual(["query.explain"]);
-    expect(mssql.areas.edit.checks).toEqual([]);
-    expect(mssql.areas.edit.deferred).toEqual(["edit.editRows"]);
+    expect(mssql.areas.edit.checks).toEqual(["edit.editRows"]);
+    expect(mssql.areas.edit.deferred).toEqual([]);
   });
 
   it("locks Oracle to query-bounded conformance", () => {

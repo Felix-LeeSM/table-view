@@ -23,19 +23,21 @@ export type { CoerceResult, SqlDialect } from "@lib/sql/sqlLiteral";
 
 /**
  * Build a SQL WHERE clause that identifies a specific row.
- * Uses primary key columns when available; falls back to all columns.
+ * Uses primary key columns when available. PostgreSQL/MySQL/SQLite keep the
+ * legacy all-column fallback; MSSQL writes are blocked without a primary key.
  */
 function buildWhereClause(
   row: unknown[],
   columns: ColumnInfo[],
   pkCols: ColumnInfo[],
   dialect: SqlDialect,
-): string {
+): string | null {
   // Sprint 305 — pk / 비-pk 값이 Decimal 인 경우 `String(decimal)` → `[object
   // Object]` 가 되는 회귀 가드. BigInt 는 String() 으로 digit 보존되지만
   // Decimal 은 명시 분기 필요.
   const literal = (v: unknown): string => {
     if (v == null) return "NULL";
+    if (dialect === "mssql" && typeof v === "boolean") return v ? "1" : "0";
     if (typeof v === "string") return escapeSqlString(v);
     if (typeof v === "object" && "toString" in (v as object))
       return (v as { toString(): string }).toString();
@@ -49,10 +51,14 @@ function buildWhereClause(
       })
       .join(" AND ");
   }
+  if (dialect === "mssql") return null;
   return columns
     .map((c, i) => `${sqlIdentifier(c.name, dialect)} = ${literal(row[i])}`)
     .join(" AND ");
 }
+
+const MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE =
+  "MSSQL row edits require a primary key; all-column WHERE fallback is disabled.";
 
 /**
  * One entry in the optional `onCoerceError` callback, emitted when a pending
@@ -202,6 +208,37 @@ export function generateSqlWithKeys(
   const statements: GeneratedSqlStatement[] = [];
   const dialect = options.dialect ?? "postgresql";
   const qualifiedTable = qualifiedTableName(schema, table, dialect);
+  const requiresPrimaryKey = dialect === "mssql";
+
+  if (requiresPrimaryKey && pkCols.length === 0) {
+    pendingEdits.forEach((_, key) => {
+      const parsed = parseEditKey(key);
+      options.onCoerceError?.({
+        key,
+        rowIdx: parsed?.rowIdx ?? 0,
+        colIdx: parsed?.colIdx ?? 0,
+        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+      });
+    });
+    pendingDeletedRowKeys.forEach((key) => {
+      const rowIdx = parseInt(key.split("-")[2] ?? "0", 10);
+      options.onCoerceError?.({
+        key,
+        rowIdx: Number.isInteger(rowIdx) ? rowIdx : 0,
+        colIdx: 0,
+        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+      });
+    });
+    pendingNewRows.forEach((_, rowIdx) => {
+      options.onCoerceError?.({
+        key: `new-${rowIdx}-0`,
+        rowIdx,
+        colIdx: 0,
+        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+      });
+    });
+    return [];
+  }
 
   // Sprint 343 (2026-05-15) — UPDATE path now supports inline-tree
   // nested edits (`"rowIdx-colIdx:dot.path"`) alongside the flat
@@ -236,6 +273,15 @@ export function generateSqlWithKeys(
     const topLevel = entries.find((e) => e.path === null);
     const nested = entries.filter((e) => e.path !== null);
     const whereClause = buildWhereClause(row, data.columns, pkCols, dialect);
+    if (whereClause === null) {
+      options.onCoerceError?.({
+        key: entries[0]?.key ?? cellKey,
+        rowIdx,
+        colIdx,
+        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+      });
+      return;
+    }
     const columnName = sqlIdentifier(col.name, dialect);
 
     // Top-level cell edit takes precedence — it replaces the entire
@@ -243,7 +289,11 @@ export function generateSqlWithKeys(
     // would be redundant. We prefer the top-level path and skip the
     // nested entries; future work could surface a UI warning instead.
     if (topLevel && nested.length === 0) {
-      const coerced = coerceToSqlLiteral(topLevel.value, col.data_type);
+      const coerced = coerceToSqlLiteral(
+        topLevel.value,
+        col.data_type,
+        dialect,
+      );
       if (coerced.kind === "error") {
         options.onCoerceError?.({
           key: topLevel.key,
@@ -272,7 +322,11 @@ export function generateSqlWithKeys(
             "Nested edit shadowed by a top-level cell edit on the same cell — discard one of them.",
         });
       }
-      const coerced = coerceToSqlLiteral(topLevel.value, col.data_type);
+      const coerced = coerceToSqlLiteral(
+        topLevel.value,
+        col.data_type,
+        dialect,
+      );
       if (coerced.kind === "error") {
         options.onCoerceError?.({
           key: topLevel.key,
@@ -365,6 +419,15 @@ export function generateSqlWithKeys(
     if (!row) return;
 
     const whereClause = buildWhereClause(row, data.columns, pkCols, dialect);
+    if (whereClause === null) {
+      options.onCoerceError?.({
+        key: delKey,
+        rowIdx,
+        colIdx: 0,
+        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+      });
+      return;
+    }
     statements.push({
       sql: `DELETE FROM ${qualifiedTable} WHERE ${whereClause};`,
       key: delKey,
@@ -381,7 +444,7 @@ export function generateSqlWithKeys(
     let rowHasError = false;
     data.columns.forEach((col, colIdx) => {
       const normalized = normalizeNewRowCell(cells[colIdx]);
-      const coerced = coerceToSqlLiteral(normalized, col.data_type);
+      const coerced = coerceToSqlLiteral(normalized, col.data_type, dialect);
       if (coerced.kind === "error") {
         rowHasError = true;
         options.onCoerceError?.({
