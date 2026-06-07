@@ -24,8 +24,8 @@ export type DatabaseType =
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
  * MSSQL is connection-backed with query/catalog metadata runtime support.
- * Edit/parser widening stays split behind follow-up parity issues. Oracle is
- * connection-backed for lifecycle only.
+ * Oracle is connection-backed with bounded query runtime support.
+ * Catalog/edit/runtime-safety widening stays split behind follow-up parity issues.
  */
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",

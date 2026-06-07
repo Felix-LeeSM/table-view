@@ -1,8 +1,10 @@
-//! Oracle connection lifecycle adapter.
+//! Oracle connection lifecycle and bounded query adapter.
 //!
-//! Issue #518 intentionally wires only the lifecycle/test path. Catalog,
-//! query, edit, and DDL surfaces remain unsupported until their dedicated
-//! Oracle parity issues land.
+//! Issue #519 adds the first query runtime slice: SELECT execution and
+//! transactional DML batches. Catalog, edit, structured DDL, parser/Safe Mode,
+//! fixture/live/E2E, SID/TNS, wallet/TLS, and PL/SQL parity remain unsupported.
+
+mod runtime;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -26,11 +28,12 @@ const ORACLE_CONNECT_TIMEOUT_DEFAULT_SECS: u32 = 300;
 const ORACLE_CONNECT_TIMEOUT_MAX_SECS: u64 = 30;
 const ORACLE_TEST_CONNECT_TIMEOUT_SECS: u64 = 5;
 const ORACLE_UNSUPPORTED_RUNTIME: &str =
-    "Oracle catalog, query, edit, and DDL runtime is not supported yet";
+    "Oracle catalog, edit, and structured DDL runtime is not supported yet";
 
 #[derive(Default)]
 struct OracleConnectionState {
     connection: Option<OracleConnection>,
+    connected_config: Option<ConnectionConfig>,
     server_version: Option<String>,
     server_banner: Option<String>,
 }
@@ -70,6 +73,7 @@ impl OracleAdapter {
         let mut guard = self.state.lock().await;
         guard.server_version = non_empty(server_info.version);
         guard.server_banner = non_empty(server_info.banner);
+        guard.connected_config = Some(config.clone());
         guard.connection = Some(connection);
 
         info!("Connected to Oracle at {}:{}", config.host, config.port);
@@ -81,6 +85,7 @@ impl OracleAdapter {
             let mut guard = self.state.lock().await;
             guard.server_version = None;
             guard.server_banner = None;
+            guard.connected_config = None;
             guard.connection.take()
         };
 
@@ -102,6 +107,25 @@ impl OracleAdapter {
             .ok_or_else(|| AppError::Connection("Oracle connection is not open".into()))?;
 
         connection.ping().await.map_err(map_oracle_connection_error)
+    }
+
+    async fn connected_config(&self) -> Result<ConnectionConfig, AppError> {
+        self.state
+            .lock()
+            .await
+            .connected_config
+            .clone()
+            .ok_or_else(|| AppError::Connection("Oracle connection is not open".into()))
+    }
+
+    async fn current_service_name(&self) -> Option<String> {
+        self.state
+            .lock()
+            .await
+            .connected_config
+            .as_ref()
+            .map(|config| config.database.trim().to_string())
+            .filter(|service_name| !service_name.is_empty())
     }
 
     fn connect_config(
@@ -177,7 +201,7 @@ impl RdbAdapter for OracleAdapter {
     }
 
     fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { Ok(self.current_service_name().await) })
     }
 
     fn list_tables<'a>(
@@ -198,26 +222,26 @@ impl RdbAdapter for OracleAdapter {
 
     fn execute_sql<'a>(
         &'a self,
-        _sql: &'a str,
-        _cancel: Option<&'a CancellationToken>,
+        sql: &'a str,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { self.execute_query(sql, cancel).await })
     }
 
     fn execute_sql_batch<'a>(
         &'a self,
-        _statements: &'a [String],
-        _cancel: Option<&'a CancellationToken>,
+        statements: &'a [String],
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<RdbQueryResult>, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { self.execute_query_batch(statements, cancel).await })
     }
 
     fn dry_run_sql_batch<'a>(
         &'a self,
-        _statements: &'a [String],
-        _cancel: Option<&'a CancellationToken>,
+        statements: &'a [String],
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<RdbQueryResult>, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { self.dry_run_query_batch(statements, cancel).await })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -477,7 +501,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn catalog_query_and_ddl_surfaces_remain_unsupported() {
+    async fn current_database_returns_service_name_identity_when_connected() {
+        let adapter = OracleAdapter::new();
+        {
+            let mut guard = adapter.state.lock().await;
+            guard.connected_config = Some(oracle_config());
+        }
+
+        assert_eq!(
+            adapter.current_database().await.unwrap(),
+            Some("XEPDB1".into())
+        );
+    }
+
+    #[tokio::test]
+    async fn current_database_without_connection_returns_none_for_fail_closed_guard() {
+        let adapter = OracleAdapter::new();
+
+        assert_eq!(adapter.current_database().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn catalog_edit_and_structured_ddl_surfaces_remain_unsupported() {
         let adapter = OracleAdapter::new();
         assert!(matches!(adapter.namespace_label(), NamespaceLabel::Schema));
 
@@ -583,12 +628,8 @@ mod tests {
 
         assert_oracle_unsupported(adapter.list_namespaces().await);
         assert_oracle_unsupported(adapter.list_databases().await);
-        assert_oracle_unsupported(adapter.current_database().await);
         assert_oracle_unsupported(adapter.list_tables("SYSTEM").await);
         assert_oracle_unsupported(adapter.get_columns("SYSTEM", "T", None).await);
-        assert_oracle_unsupported(adapter.execute_sql("SELECT 1 FROM DUAL", None).await);
-        assert_oracle_unsupported(adapter.execute_sql_batch(&["SELECT 1".into()], None).await);
-        assert_oracle_unsupported(adapter.dry_run_sql_batch(&["SELECT 1".into()], None).await);
         assert_oracle_unsupported(
             adapter
                 .query_table_data("SYSTEM", "T", 1, 100, None, None, None, None)

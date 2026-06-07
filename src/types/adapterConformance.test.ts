@@ -284,7 +284,7 @@ describe("adapter conformance matrix", () => {
     expect(mssql.areas.edit.deferred).toEqual(["edit.editRows"]);
   });
 
-  it("locks Oracle to lifecycle-only conformance", () => {
+  it("locks Oracle to query-bounded conformance", () => {
     const oracle = ADAPTER_CONFORMANCE_MATRIX.oracle;
 
     expect(oracle.level).toBe("runtime");
@@ -301,12 +301,12 @@ describe("adapter conformance matrix", () => {
       "catalog.browse",
       "catalog.schema",
     ]);
-    expect(oracle.areas.query.checks).toEqual([]);
-    expect(oracle.areas.query.deferred).toEqual([
+    expect(oracle.areas.query.checks).toEqual([
       "query.query",
+      "query.multiStatement",
       "query.cancel",
-      "query.explain",
     ]);
+    expect(oracle.areas.query.deferred).toEqual(["query.explain"]);
     expect(oracle.areas.edit.checks).toEqual([]);
     expect(oracle.areas.edit.deferred).toEqual(["edit.editRows"]);
   });

@@ -63,9 +63,9 @@ pub use sqlite_file::create_sqlite_database_file;
 /// surfaces still return `AppError::Unsupported` until Slice B~G land.
 /// MariaDB shares the MySQL protocol adapter while preserving its distinct
 /// `DatabaseType` on the active adapter. SQLite and DuckDB have file-backed
-/// adapters. MSSQL is connection-backed with bounded relational query
-/// execution; Oracle is connection-backed for lifecycle only. Catalog/edit/admin
-/// remain gated until later parity issues land.
+/// adapters. MSSQL and Oracle are connection-backed with bounded relational
+/// query execution. Catalog/edit/admin remain gated until later parity issues
+/// land.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
@@ -330,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn test_make_adapter_oracle_returns_lifecycle_only_rdb_variant() {
+    fn test_make_adapter_oracle_returns_query_bounded_rdb_variant() {
         let adapter = make_adapter(&DatabaseType::Oracle).expect("oracle should succeed");
         assert!(
             matches!(adapter, ActiveAdapter::Rdb(_)),
