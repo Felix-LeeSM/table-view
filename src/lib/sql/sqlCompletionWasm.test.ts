@@ -79,6 +79,62 @@ function requestWithMysqlSchemas() {
   return buildSqlCompletionRequest("USE ap", 6, ctx);
 }
 
+function requestWithMssqlCatalog() {
+  const snapshot = emptySnapshot();
+  snapshot.databases = {
+    conn1: [{ name: "MssqlApp" }, { name: "ArchiveDb" }],
+  };
+  snapshot.schemas.conn1 = {
+    MssqlApp: [{ name: "dbo" }, { name: "sales" }],
+  };
+  snapshot.tables.conn1 = {
+    MssqlApp: {
+      sales: [{ schema: "sales", name: "Order Details", row_count: null }],
+    },
+  };
+  snapshot.functions.conn1 = {
+    MssqlApp: {
+      dbo: [
+        {
+          schema: "dbo",
+          name: "usp_RebuildLeaderboard",
+          arguments: "@season int",
+          returnType: null,
+          language: null,
+          source: null,
+          kind: "procedure",
+        },
+      ],
+    },
+  };
+  snapshot.tableColumnsCache.conn1 = {
+    MssqlApp: {
+      sales: {
+        "Order Details": [
+          {
+            name: "Ship Date",
+            data_type: "datetime2",
+            nullable: true,
+            default_value: null,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+      },
+    },
+  };
+  const ctx = buildSqlCompletionContext({
+    ...snapshot,
+    connectionId: "conn1",
+    database: "MssqlApp",
+    dbType: "mssql",
+    catalogRevision: "rev-mssql",
+  });
+  return buildSqlCompletionRequest("SELECT * FROM MssqlApp.sales.", 29, ctx);
+}
+
 function requestWithMariaDbVersion(serverVersion: string) {
   const ctx = buildSqlCompletionContext({
     ...emptySnapshot(),
@@ -130,6 +186,7 @@ describe("sqlCompletionWasm", () => {
       expect.any(String),
       expect.any(String),
       expect.any(String),
+      expect.any(String),
     );
   });
 
@@ -146,6 +203,7 @@ describe("sqlCompletionWasm", () => {
       "psql",
       "",
       "rev-ext",
+      expect.any(String),
       expect.any(String),
       expect.any(String),
       expect.any(String),
@@ -171,11 +229,31 @@ describe("sqlCompletionWasm", () => {
       "rev-mysql",
       expect.any(String),
       expect.any(String),
-      "app\narchive",
+      "",
+      "app\tapp\narchive\tapp",
       expect.any(String),
       expect.any(String),
       expect.any(String),
       expect.any(String),
+    );
+  });
+
+  it("serializes current MSSQL database-owned catalog across the WASM bridge", async () => {
+    completeSqlMock.mockReturnValue(null);
+
+    await completeSqlWithWasm(requestWithMssqlCatalog());
+
+    const call = completeSqlMock.mock.calls[0]!;
+    expect(call[9]).toBe("ArchiveDb\nMssqlApp");
+    expect(call[10]).toBe("dbo\tMssqlApp\nsales\tMssqlApp");
+    expect(call[11]).toContain(
+      "table\tsales\tOrder Details\tsales.Order Details\tMssqlApp",
+    );
+    expect(call[12]).toContain(
+      "sales\tOrder Details\tShip Date\tsales.Order Details\tMssqlApp",
+    );
+    expect(call[13]).toContain(
+      "dbo\tusp_RebuildLeaderboard\tdbo.usp_RebuildLeaderboard\t@season int\t\tMssqlApp",
     );
   });
 
@@ -199,6 +277,7 @@ describe("sqlCompletionWasm", () => {
       expect.any(String),
       expect.any(String),
       expect.any(String),
+      expect.any(String),
     );
   });
 
@@ -216,6 +295,7 @@ describe("sqlCompletionWasm", () => {
       "10.4.34-MariaDB",
       "rev-mariadb",
       expect.stringContaining("RETURNING"),
+      expect.any(String),
       expect.any(String),
       expect.any(String),
       expect.any(String),

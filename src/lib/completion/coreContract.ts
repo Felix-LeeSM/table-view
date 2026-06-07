@@ -4,6 +4,7 @@ export type SqlCompletionState =
   | "StatementStart"
   | "SelectList"
   | "RelationName"
+  | "DatabaseName"
   | "ColumnRef"
   | "FunctionRef"
   | "InsertColumns"
@@ -14,6 +15,7 @@ export type SqlCompletionState =
 
 export type CompletionItemKind =
   | "keyword"
+  | "database"
   | "schema"
   | "table"
   | "view"

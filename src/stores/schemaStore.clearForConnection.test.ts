@@ -2,7 +2,7 @@
 //
 // 사유: Q23 self-window schemaCache invalidate — DDL 후 사이드바가 100ms 안에
 // `foo` 를 표시하려면 `clearForConnection(connId)` 가 그 conn 의 **모든** 캐시
-// 슬롯(schemas / tables / views / functions / postgresExtensions /
+// 슬롯(databases / schemas / tables / views / functions / postgresExtensions /
 // tableColumnsCache / tableIndexesCache / tableConstraintsCache / triggers)을
 // 한 번에 비워 wide drop 을 보장해야 한다. Sprint 130/263 의 기존 행동을
 // sprint-360 의 contract 어휘 (AC-360-01 / AC-360-05) 로 다시 고정한다.
@@ -25,6 +25,10 @@ beforeEach(() => {
 });
 
 const SEEDED_CACHE = {
+  databases: {
+    conn1: [{ name: "db1" }],
+    conn2: [{ name: "db1" }],
+  },
   schemas: {
     conn1: { db1: [{ name: "public" }] },
     conn2: { db1: [{ name: "public" }] },
@@ -118,6 +122,7 @@ const SEEDED_CACHE = {
 describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
   beforeEach(() => {
     useSchemaStore.setState({
+      databases: {},
       schemas: {},
       tables: {},
       views: {},
@@ -140,6 +145,7 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
     useSchemaStore.getState().clearForConnection("conn1");
 
     const state = useSchemaStore.getState();
+    expect(state.databases.conn1).toBeUndefined();
     expect(state.schemas.conn1).toBeUndefined();
     expect(state.tables.conn1).toBeUndefined();
     expect(state.views.conn1).toBeUndefined();
@@ -160,6 +166,7 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
     useSchemaStore.getState().clearForConnection("conn1");
 
     const state = useSchemaStore.getState();
+    expect(state.databases.conn2).toEqual([{ name: "db1" }]);
     expect(state.schemas.conn2?.db1).toHaveLength(1);
     expect(state.tables.conn2?.db1?.public).toHaveLength(1);
     expect(state.postgresExtensions.conn2?.db1).toEqual([]);

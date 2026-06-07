@@ -29,7 +29,7 @@ const emptySnapshot = (): SqlCompletionCatalogStoreSnapshot => ({
 });
 
 function completionContext(
-  dbType: "postgresql" | "mysql" | "sqlite" = "postgresql",
+  dbType: "postgresql" | "mysql" | "sqlite" | "mssql" = "postgresql",
 ) {
   return buildSqlCompletionContext({
     ...emptySnapshot(),
@@ -156,6 +156,39 @@ describe("createSqlHybridCompletionSource", () => {
     const validFor = result?.validFor as RegExp;
     expect(validFor.test("`User")).toBe(true);
     expect(validFor.test("`UserAccounts`")).toBe(true);
+  });
+
+  it("keeps MSSQL bracket catalog completions valid while typing quoted identifiers", async () => {
+    const wasmResult: CoreCompletionResult = {
+      items: [
+        { label: "Order Details", kind: "table", apply: "[Order Details]" },
+      ],
+      replaceRange: {
+        from: { utf16: 14, utf8: 14 },
+        to: { utf16: 20, utf8: 20 },
+      },
+      incomplete: false,
+      metadata: {
+        engine: "wasm",
+        dialect: "mssql",
+        shell: "none",
+        catalogRevision: "rev-1",
+      },
+    };
+    const source = createSqlHybridCompletionSource({
+      dialect: StandardSQL,
+      getNamespace: () => TEST_SCHEMA,
+      getCompletionContext: () => completionContext("mssql"),
+      completeWithPreloadedWasm: vi.fn().mockReturnValue(wasmResult),
+      completeWithWasm: vi.fn(),
+    });
+
+    const result = await source(codeMirrorContext("SELECT * FROM [Order"));
+
+    expect(result?.validFor).toBeInstanceOf(RegExp);
+    const validFor = result?.validFor as RegExp;
+    expect(validFor.test("[Order")).toBe(true);
+    expect(validFor.test("[Order Details]")).toBe(true);
   });
 
   it("returns an empty completion result when WASM has no candidates", async () => {

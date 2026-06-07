@@ -8,6 +8,7 @@ pub enum CompletionState {
     StatementStart,
     SelectList,
     RelationName,
+    DatabaseName,
     ColumnRef,
     FunctionRef,
     InsertColumns,
@@ -32,6 +33,9 @@ pub(super) fn completion_state(
     }
     if is_order_by_context(&request.text, request.cursor, token) {
         return CompletionState::OrderByExpr;
+    }
+    if is_database_completion_context(&request.text, request.cursor) {
+        return CompletionState::DatabaseName;
     }
     if is_relation_completion_context(&request.text, request.cursor) {
         return CompletionState::RelationName;
@@ -86,8 +90,23 @@ fn is_relation_completion_context(text: &str, cursor: CompletionCursorOffsets) -
 
     matches!(
         keyword.to_ascii_uppercase().as_str(),
-        "FROM" | "JOIN" | "UPDATE" | "INTO" | "USE"
+        "FROM" | "JOIN" | "UPDATE" | "INTO"
     )
+}
+
+fn is_database_completion_context(text: &str, cursor: CompletionCursorOffsets) -> bool {
+    let raw_before = before_cursor(text, cursor);
+    let before = raw_before.trim_end();
+    let before_database_token = if raw_before.len() == before.len() {
+        trim_identifier_path_suffix(before).trim_end()
+    } else {
+        before
+    };
+    let Some(keyword) = trailing_word(before_database_token) else {
+        return false;
+    };
+
+    keyword.eq_ignore_ascii_case("USE")
 }
 
 pub(super) fn insert_columns_target(text: &str, cursor: CompletionCursorOffsets) -> Option<String> {
@@ -168,9 +187,9 @@ fn is_function_ref_context(request: &SqlCompletionRequest, token: &CompletionTok
     }
 
     if let Some(qualifier) = &token.qualifier {
-        let qualifier = qualifier.trim_matches('`');
+        let qualifier = normalize_identifier_path(qualifier);
         return request.catalog.functions.iter().any(|function| {
-            function.schema.eq_ignore_ascii_case(qualifier)
+            function_matches_qualifier(function, &qualifier)
                 && matches_prefix(&function.name, &token.prefix)
         });
     }
@@ -216,7 +235,7 @@ fn trim_identifier_path_suffix(input: &str) -> &str {
         let Some((idx, ch)) = input[..end].char_indices().next_back() else {
             break;
         };
-        if is_ident_char(ch) || ch == '.' || ch == '`' {
+        if is_ident_char(ch) || ch == '.' || ch == '`' || ch == '[' || ch == ']' {
             end = idx;
         } else {
             break;
@@ -243,13 +262,53 @@ fn last_identifier_path(input: &str) -> Option<String> {
         let Some((idx, ch)) = input[..start].char_indices().next_back() else {
             break;
         };
-        if !(is_ident_char(ch) || ch == '.' || ch == '`' || ch == '"') {
+        if !(is_ident_char(ch) || ch == '.' || ch == '`' || ch == '"' || ch == '[' || ch == ']') {
             break;
         }
         start = idx;
     }
 
     (start < end).then(|| input[start..end].trim_matches('"').to_string())
+}
+
+fn function_matches_qualifier(
+    function: &super::SqlCompletionCatalogFunction,
+    qualifier: &str,
+) -> bool {
+    let parts: Vec<&str> = qualifier
+        .split('.')
+        .filter(|part| !part.is_empty())
+        .collect();
+    match parts.as_slice() {
+        [schema] => function.schema.eq_ignore_ascii_case(schema),
+        [database, schema] => {
+            function.database.eq_ignore_ascii_case(database)
+                && function.schema.eq_ignore_ascii_case(schema)
+        }
+        _ => false,
+    }
+}
+
+fn normalize_identifier_path(identifier: &str) -> String {
+    identifier
+        .split('.')
+        .map(normalize_identifier_part)
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+fn normalize_identifier_part(part: &str) -> String {
+    let trimmed = part.trim();
+    if trimmed.len() >= 2 && trimmed.starts_with('`') && trimmed.ends_with('`') {
+        return trimmed[1..trimmed.len() - 1].replace("``", "`");
+    }
+    if trimmed.len() >= 2 && trimmed.starts_with('[') && trimmed.ends_with(']') {
+        return trimmed[1..trimmed.len() - 1].replace("]]", "]");
+    }
+    if trimmed.len() >= 2 && trimmed.starts_with('"') && trimmed.ends_with('"') {
+        return trimmed[1..trimmed.len() - 1].replace("\"\"", "\"");
+    }
+    trimmed.to_string()
 }
 
 fn matches_prefix(candidate: &str, prefix: &str) -> bool {

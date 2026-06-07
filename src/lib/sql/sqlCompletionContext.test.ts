@@ -140,6 +140,7 @@ describe("buildSqlCompletionContext", () => {
     expect(ctx.catalog.objects).toEqual([
       {
         kind: "table",
+        database: "app",
         schema: "auth",
         name: "sessions",
         qualifiedName: "auth.sessions",
@@ -147,6 +148,7 @@ describe("buildSqlCompletionContext", () => {
       },
       {
         kind: "view",
+        database: "app",
         schema: "public",
         name: "active_users",
         qualifiedName: "public.active_users",
@@ -154,6 +156,7 @@ describe("buildSqlCompletionContext", () => {
       },
       {
         kind: "table",
+        database: "app",
         schema: "public",
         name: "users",
         qualifiedName: "public.users",
@@ -167,6 +170,7 @@ describe("buildSqlCompletionContext", () => {
     ]);
     expect(ctx.catalog.functions).toEqual([
       {
+        database: "app",
         schema: "public",
         name: "normalize_email",
         qualifiedName: "public.normalize_email",
@@ -203,7 +207,9 @@ describe("buildSqlCompletionContext", () => {
     expect(ctx.dialect).toBe("mysql");
     expect(ctx.family).toBe("mysql");
     expect(ctx.shell).toBe("mysql-client");
-    expect(ctx.catalog.schemas).toEqual([{ name: "analytics" }]);
+    expect(ctx.catalog.schemas).toEqual([
+      { database: "db1", name: "analytics" },
+    ]);
     expect(ctx.defaultSchema).toBe("analytics");
     expect(ctx.cacheState).toMatchObject({
       schemasLoaded: false,
@@ -264,7 +270,7 @@ describe("buildSqlCompletionContext", () => {
       dbType: "mysql",
     });
 
-    expect(ctx.catalog.schemas).toEqual([{ name: "app" }]);
+    expect(ctx.catalog.schemas).toEqual([{ database: "app", name: "app" }]);
     expect(ctx.catalog.objects.map((object) => object.qualifiedName)).toEqual([
       "app.UserAccounts",
     ]);
@@ -274,6 +280,85 @@ describe("buildSqlCompletionContext", () => {
     expect(ctx.catalog.functions.map((fn) => fn.qualifiedName)).toEqual([
       "app.normalize_email",
     ]);
+  });
+
+  it("threads cached MSSQL databases and catalog owners into the WASM-ready context", () => {
+    const snapshot = emptySnapshot();
+    snapshot.databases = {
+      conn1: [{ name: "MssqlApp" }, { name: "ArchiveDb" }],
+    };
+    snapshot.schemas.conn1 = {
+      MssqlApp: [schema("dbo"), schema("sales")],
+    };
+    snapshot.tables.conn1 = {
+      MssqlApp: {
+        sales: [table("sales", "Order Details")],
+      },
+    };
+    snapshot.views.conn1 = {
+      MssqlApp: {
+        dbo: [view("dbo", "SalesSummary")],
+      },
+    };
+    snapshot.functions.conn1 = {
+      MssqlApp: {
+        dbo: [fnInfo("dbo", "usp_RebuildLeaderboard", "procedure")],
+      },
+    };
+    snapshot.tableColumnsCache.conn1 = {
+      MssqlApp: {
+        sales: {
+          "Order Details": [column("Ship Date", "datetime2")],
+        },
+      },
+    };
+
+    const ctx = buildSqlCompletionContext({
+      ...snapshot,
+      connectionId: "conn1",
+      database: "MssqlApp",
+      dbType: "mssql",
+    });
+
+    expect(ctx.catalog.databases).toEqual([
+      { name: "ArchiveDb" },
+      { name: "MssqlApp" },
+    ]);
+    expect(ctx.catalog.schemas).toEqual([
+      { database: "MssqlApp", name: "dbo" },
+      { database: "MssqlApp", name: "sales" },
+    ]);
+    expect(ctx.catalog.objects).toEqual([
+      expect.objectContaining({
+        kind: "view",
+        database: "MssqlApp",
+        schema: "dbo",
+        name: "SalesSummary",
+      }),
+      expect.objectContaining({
+        kind: "table",
+        database: "MssqlApp",
+        schema: "sales",
+        name: "Order Details",
+      }),
+    ]);
+    expect(ctx.catalog.columns).toEqual([
+      expect.objectContaining({
+        database: "MssqlApp",
+        schema: "sales",
+        table: "Order Details",
+        name: "Ship Date",
+      }),
+    ]);
+    expect(ctx.catalog.functions).toEqual([
+      expect.objectContaining({
+        database: "MssqlApp",
+        schema: "dbo",
+        name: "usp_RebuildLeaderboard",
+        kind: "procedure",
+      }),
+    ]);
+    expect(ctx.cacheState.databasesLoaded).toBe(true);
   });
 
   it("changes the default revision when same-count catalog content changes", () => {
@@ -296,7 +381,7 @@ describe("buildSqlCompletionContext", () => {
     const ordersCtx = buildWithTable("orders");
 
     expect(usersCtx.catalog.revision).not.toBe(ordersCtx.catalog.revision);
-    expect(usersCtx.catalog.revision).toMatch(/^conn1:db1:1:1:0:0:/);
+    expect(usersCtx.catalog.revision).toMatch(/^conn1:db1:0:1:1:0:0:/);
   });
 
   it("threads installed PostgreSQL extensions into the WASM-ready catalog", () => {

@@ -174,6 +174,7 @@ function isShellMetaCommandContext(request: SqlCompletionRequest): boolean {
 
 function codeMirrorTypeForKind(kind: CompletionItem["kind"]): string {
   switch (kind) {
+    case "database":
     case "schema":
       return "namespace";
     case "table":
@@ -196,8 +197,12 @@ function coreValidFor(result: CoreCompletionResult): RegExp {
   const hasQuotedIdentifier = result.items.some(
     (item) => typeof item.apply === "string" && item.apply.startsWith("`"),
   );
+  const hasBracketIdentifier = result.items.some(
+    (item) => typeof item.apply === "string" && item.apply.startsWith("["),
+  );
   if (hasMetaCommand) return /^[\w$.\\]*$/;
   if (hasQuotedIdentifier) return /^`?[\w$]*`?$/;
+  if (hasBracketIdentifier) return /^\[?[\w$ ]*\]?$/;
   return hasOperator ? /^[\w$+\-*/<>=~!@#%^&|`?]*$/ : /^[\w$]*$/;
 }
 

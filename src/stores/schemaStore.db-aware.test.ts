@@ -35,6 +35,7 @@ beforeEach(() => {
 describe("schemaStore — db-aware caching (Sprint 263)", () => {
   beforeEach(() => {
     useSchemaStore.setState({
+      databases: {},
       schemas: {},
       tables: {},
       views: {},

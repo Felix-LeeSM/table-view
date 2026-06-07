@@ -3,6 +3,9 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 import { useSchemaStore } from "./schemaStore";
 beforeEach(() => {
   setupTauriMock({
+    listDatabases: vi.fn(() =>
+      Promise.resolve([{ name: "app" }, { name: "archive" }]),
+    ),
     listSchemas: vi.fn(() =>
       Promise.resolve([{ name: "public" }, { name: "test_schema" }]),
     ),
@@ -193,6 +196,7 @@ beforeEach(() => {
 describe("schemaStore", () => {
   beforeEach(() => {
     useSchemaStore.setState({
+      databases: {},
       schemas: {},
       tables: {},
       views: {},
@@ -207,6 +211,32 @@ describe("schemaStore", () => {
       error: null,
     });
     vi.clearAllMocks();
+  });
+
+  it("loads database inventory with a connection-scoped cache", async () => {
+    const { listDatabases } = await import("@lib/tauri");
+
+    const first = await useSchemaStore.getState().loadDatabases("conn1");
+    const second = await useSchemaStore.getState().loadDatabases("conn1");
+
+    expect(first).toEqual([{ name: "app" }, { name: "archive" }]);
+    expect(second).toEqual(first);
+    expect(useSchemaStore.getState().databases.conn1).toEqual(first);
+    expect(listDatabases).toHaveBeenCalledWith("conn1");
+    expect(listDatabases).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps background database inventory failures non-throwing", async () => {
+    const { listDatabases } = await import("@lib/tauri");
+    (listDatabases as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("metadata denied"),
+    );
+
+    const result = await useSchemaStore.getState().loadDatabases("conn1");
+
+    expect(result).toEqual([]);
+    expect(useSchemaStore.getState().databases.conn1).toBeUndefined();
+    expect(useSchemaStore.getState().error).toBeNull();
   });
 
   it("loads schemas from backend", async () => {
