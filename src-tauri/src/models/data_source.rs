@@ -294,9 +294,11 @@ const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
 ];
-const CONNECTION_ONLY_RDB_CAPABILITIES: &[BackendAdapterCapability] =
-    &[BackendAdapterCapability::Lifecycle];
 const MSSQL_QUERY_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
+    BackendAdapterCapability::Lifecycle,
+    BackendAdapterCapability::RelationalQuery,
+];
+const ORACLE_QUERY_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalQuery,
 ];
@@ -367,12 +369,12 @@ const MSSQL_QUERY_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract 
     capability_source: BackendAdapterCapabilitySource::Mssql,
     capabilities: MSSQL_QUERY_RDB_CAPABILITIES,
 };
-const ORACLE_CONNECTION_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+const ORACLE_QUERY_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
     state: BackendAdapterContractState::FactoryBacked,
     implementation: BackendAdapterId::Oracle,
     capability_source: BackendAdapterCapabilitySource::Oracle,
-    capabilities: CONNECTION_ONLY_RDB_CAPABILITIES,
+    capabilities: ORACLE_QUERY_RDB_CAPABILITIES,
 };
 const FACTORY_DOCUMENT_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Document,
@@ -584,7 +586,7 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
         }
         DatabaseType::Oracle => rdb_profile(
             DatabaseType::Oracle,
-            ORACLE_CONNECTION_RDB_CONTRACT,
+            ORACLE_QUERY_RDB_CONTRACT,
             ORACLE_DIALECT,
         ),
         DatabaseType::Mongodb => DataSourceProfile {
