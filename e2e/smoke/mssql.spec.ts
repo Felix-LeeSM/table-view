@@ -88,19 +88,17 @@ describe("MSSQL smoke", () => {
     });
 
     await step(
-      "DML insert renders statement evidence and readback",
+      "info INSERT renders statement evidence and readback",
       async () => {
         await runSqlInNewTab(
           `INSERT INTO dbo.products (name, price) VALUES (N'${productName}', 42.50)`,
         );
-        await waitForReviewSql(["Review SQL Changes", "INSERT", productName]);
-        await clickDialogAction("Execute");
-        await waitForDialogToClose("Review SQL Changes");
         await waitForWorkspaceTextAll(
           ["Statement 1 DML", "row affected"],
           15000,
           "MSSQL DML statement evidence did not render",
         );
+        await expectNoVisibleDialogText("Review SQL Changes");
 
         await runSqlInNewTab(
           `SELECT name, price FROM dbo.products WHERE name = N'${productName}'`,
