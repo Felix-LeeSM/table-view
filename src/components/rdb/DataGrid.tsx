@@ -77,15 +77,18 @@ export default function DataGrid({
       appliedFilters: filters.appliedFilters,
       appliedRawSql: filters.appliedRawSql,
     });
-  const sqliteRequiresPrimaryKey =
-    rowEditConnection?.dbType === "sqlite" &&
+  const rowEditRequiresPrimaryKey =
+    rowEditConnection?.dbType === "sqlite" ||
+    rowEditConnection?.dbType === "mssql";
+  const tableWithoutRequiredPrimaryKey =
+    rowEditRequiresPrimaryKey &&
     data !== null &&
     !data.columns.some((column) => column.is_primary_key);
   const canEditRows =
     rowEditConnection !== undefined &&
     getDataSourceProfile(rowEditConnection.dbType).capabilities.edit.editRows &&
     !(rowEditConnection.dbType === "sqlite" && rowEditConnection.readOnly) &&
-    !sqliteRequiresPrimaryKey;
+    !tableWithoutRequiredPrimaryKey;
 
   const columnOrder = useRdbColumnOrder({
     connectionId,

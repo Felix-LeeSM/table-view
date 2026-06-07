@@ -52,13 +52,14 @@ contract 도 profile registry 에서 읽고 ad-hoc `dbType` switch 로 분산하
 Capability 가 없으면 UI 는 hide/disable + fallback 을 보여준다. Runtime optimistic
 failure 를 기본 동작으로 만들지 않는다.
 
-MSSQL is factory-backed for lifecycle, bounded relational query execution, and
-catalog/workbench metadata browse for databases/schemas/tables/views/procedures,
-columns, indexes, constraints, and FKs. Its parser/Safe Mode boundary is promoted
-for the supported T-SQL slice. SQL Server row edit/admin, runtime Safe
-Mode/destructive preview evidence, fixture/live smoke, E2E evidence, TLS-required
-workflow, and broader T-SQL semantic parity remain separate contracts. Oracle is
-factory-backed for service-name connection lifecycle only. Oracle
+MSSQL is factory-backed for lifecycle, bounded relational query execution,
+primary-key-scoped row edit, and catalog/workbench metadata browse for
+databases/schemas/tables/views/procedures, columns, indexes, constraints, and
+FKs. Its parser/Safe Mode boundary is promoted for the supported T-SQL slice.
+SQL Server admin, runtime Safe Mode/destructive preview evidence, fixture/live
+smoke, E2E evidence, TLS-required workflow, and broader T-SQL semantic parity
+remain separate contracts. Oracle is factory-backed for service-name connection
+lifecycle only. Oracle
 query/catalog/edit, SID/TNS, wallet/TLS, Oracle SQL/PLSQL owner, RDB safety,
 fixture/live smoke, and E2E evidence remain separate contracts.
 

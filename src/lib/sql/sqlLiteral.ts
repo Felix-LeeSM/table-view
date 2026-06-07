@@ -18,7 +18,7 @@ export type SqlTypeFamily =
   | "textual"
   | "unknown";
 
-export type SqlDialect = "postgresql" | "mysql" | "sqlite";
+export type SqlDialect = "postgresql" | "mysql" | "sqlite" | "mssql";
 
 /**
  * Textual data types that preserve `''` as an empty string literal (ADR 0009).
@@ -38,13 +38,17 @@ function isTextualFamily(family: SqlTypeFamily): boolean {
  * - Textual family explicitly listed (ADR 0009) so unknown types fall to
  *   `"unknown"` and keep the legacy escape path (safer default).
  */
-export function classifySqlType(dataType: string): SqlTypeFamily {
+export function classifySqlType(
+  dataType: string,
+  dialect?: SqlDialect,
+): SqlTypeFamily {
   const lower = dataType.toLowerCase();
   if (lower.includes("timestamp") || lower.includes("datetime")) {
     return "timestamp";
   }
   if (lower === "date") return "date";
   if (lower.includes("time")) return "time";
+  if (dialect === "mssql" && lower === "bit") return "boolean";
   if (lower === "bool" || lower.includes("boolean")) return "boolean";
   if (lower.includes("uuid")) return "uuid";
   if (
@@ -104,9 +108,14 @@ function quoteMysqlIdentifier(value: string): string {
   return `\`${value.replace(/`/g, "``")}\``;
 }
 
+function quoteMssqlIdentifier(value: string): string {
+  return `[${value.replace(/]/g, "]]")}]`;
+}
+
 export function sqlIdentifier(value: string, dialect: SqlDialect): string {
   if (dialect === "mysql") return quoteMysqlIdentifier(value);
   if (dialect === "sqlite") return quoteDoubleSqlIdentifier(value);
+  if (dialect === "mssql") return quoteMssqlIdentifier(value);
   return value;
 }
 
@@ -115,7 +124,7 @@ export function qualifiedTableName(
   table: string,
   dialect: SqlDialect,
 ): string {
-  if (dialect !== "mysql" && dialect !== "sqlite") {
+  if (dialect === "postgresql") {
     return schema ? `${schema}.${table}` : table;
   }
   return schema
@@ -166,9 +175,10 @@ export const NUMERIC_RE = /^-?(?:\d+\.?\d*|\.\d+)$/;
 export function coerceToSqlLiteral(
   value: string | null,
   dataType: string,
+  dialect?: SqlDialect,
 ): CoerceResult {
   if (value === null) return { kind: "sql", sql: "NULL" };
-  const family = classifySqlType(dataType);
+  const family = classifySqlType(dataType, dialect);
 
   // Empty-string branch: preserved for textual families, collapsed to NULL for
   // the rest. The unknown family follows the textual rule (safer: preserves
@@ -192,9 +202,11 @@ export function coerceToSqlLiteral(
     case "boolean": {
       const lower = value.toLowerCase();
       if (lower === "true" || lower === "t" || lower === "1") {
+        if (dialect === "mssql") return { kind: "sql", sql: "1" };
         return { kind: "sql", sql: "TRUE" };
       }
       if (lower === "false" || lower === "f" || lower === "0") {
+        if (dialect === "mssql") return { kind: "sql", sql: "0" };
         return { kind: "sql", sql: "FALSE" };
       }
       return { kind: "error", message: `Expected boolean, got "${value}"` };

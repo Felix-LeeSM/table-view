@@ -128,6 +128,125 @@ describe("generateSql — UPDATE tri-state (null vs empty string vs text)", () =
   });
 });
 
+describe("generateSql — MSSQL row edit SQL", () => {
+  const MSSQL_DATA: TableData = {
+    columns: [
+      {
+        name: "user id",
+        data_type: "nvarchar(64)",
+        nullable: false,
+        default_value: null,
+        is_primary_key: true,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+      {
+        name: "select",
+        data_type: "nvarchar(255)",
+        nullable: true,
+        default_value: null,
+        is_primary_key: false,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+      {
+        name: "is active",
+        data_type: "bit",
+        nullable: false,
+        default_value: null,
+        is_primary_key: false,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+    ],
+    rows: [["O'Brien", "old", true]],
+    total_count: 1,
+    page: 1,
+    page_size: 100,
+    executed_query: "SELECT * FROM [sales].[order detail]",
+  };
+
+  it("emits bracket-escaped key-projected T-SQL and bit literals", () => {
+    const statements = generateSql(
+      MSSQL_DATA,
+      "sales",
+      "order detail",
+      new Map<string, string | null>([
+        ["0-1", "new"],
+        ["0-2", "false"],
+      ]),
+      new Set(),
+      [],
+      { dialect: "mssql" },
+    );
+
+    expect(statements).toEqual([
+      "UPDATE [sales].[order detail] SET [select] = 'new' WHERE [user id] = 'O''Brien';",
+      "UPDATE [sales].[order detail] SET [is active] = 0 WHERE [user id] = 'O''Brien';",
+    ]);
+  });
+
+  it("escapes closing brackets in MSSQL identifiers", () => {
+    const [idColumn, selectColumn] = MSSQL_DATA.columns;
+    const data: TableData = {
+      ...MSSQL_DATA,
+      columns: [
+        { ...idColumn!, name: "user]id", data_type: "int" },
+        { ...selectColumn!, name: "select]" },
+      ],
+      rows: [[7, "old"]],
+    };
+
+    const statements = generateSql(
+      data,
+      "sales]east",
+      "order]detail",
+      new Map<string, string | null>([["0-1", "new"]]),
+      new Set(),
+      [],
+      { dialect: "mssql" },
+    );
+
+    expect(statements).toEqual([
+      "UPDATE [sales]]east].[order]]detail] SET [select]]] = 'new' WHERE [user]]id] = 7;",
+    ]);
+  });
+
+  it("blocks MSSQL writes without primary-key projection", () => {
+    const errors: CoerceError[] = [];
+    const dataWithoutPrimaryKey: TableData = {
+      ...MSSQL_DATA,
+      columns: MSSQL_DATA.columns.map((column) => ({
+        ...column,
+        is_primary_key: false,
+      })),
+    };
+
+    const statements = generateSql(
+      dataWithoutPrimaryKey,
+      "sales",
+      "order detail",
+      new Map<string, string | null>([["0-1", "new"]]),
+      new Set(["row-1-0"]),
+      [["new-id", "new", "true"]],
+      { dialect: "mssql", onCoerceError: (error) => errors.push(error) },
+    );
+
+    expect(statements).toEqual([]);
+    expect(errors.map((error) => error.key)).toEqual([
+      "0-1",
+      "row-1-0",
+      "new-0-0",
+    ]);
+    expect(errors.every((error) => error.message.includes("primary key"))).toBe(
+      true,
+    );
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Sprint 343 (2026-05-15) — inline JSON tree edits: jsonb + Postgres ARRAY.
 // Locks the path-key parser + per-cell dispatch so the inline tree (Mongo's

@@ -234,16 +234,21 @@ impl RdbAdapter for MssqlAdapter {
 
     fn query_table_data<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _page: i32,
-        _page_size: i32,
-        _order_by: Option<&'a str>,
-        _filters: Option<&'a [FilterCondition]>,
-        _raw_where: Option<&'a str>,
-        _cancel: Option<&'a CancellationToken>,
+        namespace: &'a str,
+        table: &'a str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&'a str>,
+        filters: Option<&'a [FilterCondition]>,
+        raw_where: Option<&'a str>,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<TableData, AppError>> {
-        unsupported()
+        Box::pin(async move {
+            self.query_table_data(
+                namespace, table, page, page_size, order_by, filters, raw_where, cancel,
+            )
+            .await
+        })
     }
 
     fn drop_table<'a>(
@@ -389,7 +394,7 @@ impl RdbAdapter for MssqlAdapter {
 fn unsupported<'a, T>() -> BoxFuture<'a, Result<T, AppError>> {
     Box::pin(async {
         Err(AppError::Unsupported(
-            "SQL Server edit/table-data/admin support is not implemented in this metadata slice"
+            "SQL Server structured DDL/admin support is not implemented in this metadata slice"
                 .into(),
         ))
     })

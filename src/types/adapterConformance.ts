@@ -177,7 +177,7 @@ const DEFERRED_FEATURES = Object.freeze({
     connection: [],
     catalog: [],
     query: ["query.explain"],
-    edit: ["edit.editRows"],
+    edit: [],
   },
   oracle: oracleQueryDeferred(),
   mongodb: {

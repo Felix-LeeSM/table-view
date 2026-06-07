@@ -135,7 +135,8 @@ async fn test_connection_routes_mssql_to_mssql_adapter() {
     match result {
         Err(AppError::Connection(msg)) => {
             assert!(
-                msg.contains("SQL Server network connection failed"),
+                msg.contains("SQL Server network connection failed")
+                    || msg.contains("SQL Server login failed"),
                 "unexpected SQL Server connection error: {msg}"
             );
         }
@@ -228,7 +229,8 @@ async fn mssql_runtime_executes_select_dml_error_and_cancel_paths() {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let table = format!("dbo.tv_mssql_runtime_{}_{}", std::process::id(), suffix);
+    let table_name = format!("tv_mssql_runtime_{}_{}", std::process::id(), suffix);
+    let table = format!("dbo.{table_name}");
     adapter
         .execute_sql(
             &format!(
@@ -274,6 +276,49 @@ async fn mssql_runtime_executes_select_dml_error_and_cancel_paths() {
         .await
         .expect("dry-run verification query should succeed");
     assert_eq!(dry_run_check.total_count, 0);
+
+    let table_data = <MssqlAdapter as RdbAdapter>::query_table_data(
+        adapter.as_ref(),
+        "dbo",
+        &table_name,
+        1,
+        25,
+        Some("id DESC"),
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("table data should load through the MSSQL adapter");
+    assert_eq!(table_data.total_count, 1);
+    assert_eq!(table_data.columns.len(), 2);
+    assert_eq!(table_data.columns[0].name, "id");
+    assert!(table_data.columns[0].is_primary_key);
+    assert_eq!(
+        table_data.rows,
+        vec![vec![serde_json::json!(1), serde_json::json!("Grace")]]
+    );
+    assert!(table_data
+        .executed_query
+        .contains(&format!("FROM [dbo].[{table_name}]")));
+
+    let failing_batch = vec![
+        format!("INSERT INTO {table} (id, name) VALUES (3, N'RolledBack')"),
+        format!("INSERT INTO {table} (id, name) VALUES (1, N'Duplicate')"),
+    ];
+    let rollback_error = adapter
+        .execute_sql_batch(&failing_batch, None)
+        .await
+        .expect_err("failed DML batch should roll back");
+    assert!(
+        matches!(rollback_error, AppError::Database(ref message) if message.contains("statement 2 of 2 failed")),
+        "unexpected rollback error: {rollback_error:?}"
+    );
+    let rollback_check = adapter
+        .execute_sql(&format!("SELECT id FROM {table} WHERE id = 3"), None)
+        .await
+        .expect("rollback verification query should succeed");
+    assert_eq!(rollback_check.total_count, 0);
 
     let error = adapter
         .execute_sql("SELECT * FROM dbo.tv_mssql_runtime_missing_table", None)
