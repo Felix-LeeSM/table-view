@@ -149,6 +149,14 @@ function normalizeOracleSql(sql: string): string {
   return stripSqlComments(sql).replace(/\s+/g, " ").trim().toUpperCase();
 }
 
+function isSupportedOracleCreate(normalized: string): boolean {
+  return [
+    /^CREATE\s+(?:GLOBAL\s+TEMPORARY\s+)?TABLE\b/,
+    /^CREATE\s+(?:UNIQUE\s+|BITMAP\s+)?INDEX\b/,
+    /^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\b/,
+  ].some((pattern) => pattern.test(normalized));
+}
+
 function supportedSlice(kind: StatementKind): OracleSafetySlice | null {
   if (kind === "select" || kind === "info" || kind === "config-read") {
     return "select";
@@ -192,6 +200,19 @@ export function analyzeOracleStatement(sql: string): OracleStatementAnalysis {
   }
 
   const analysis = analyzeStatement(sql);
+  if (analysis.kind === "ddl-create" && !isSupportedOracleCreate(normalized)) {
+    const reason = "Oracle CREATE statement is outside the bounded DDL slice";
+    return {
+      ...analysis,
+      dialect: "oracle",
+      support: "unsupported",
+      slice: "ddl",
+      severity: "danger",
+      reasons: [reason],
+      boundaryReason: reason,
+    };
+  }
+
   const slice = supportedSlice(analysis.kind);
   if (slice) {
     return {

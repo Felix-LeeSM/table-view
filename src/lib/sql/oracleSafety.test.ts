@@ -98,6 +98,31 @@ describe("oracleSafety", () => {
     });
   });
 
+  it("blocks Oracle CREATE variants outside the bounded DDL slice", () => {
+    for (const sql of [
+      "CREATE SEQUENCE account_seq START WITH 1",
+      "CREATE SYNONYM account_alias FOR accounts",
+      "CREATE MATERIALIZED VIEW account_mv AS SELECT * FROM accounts",
+    ]) {
+      const analysis = analyzeOracleStatement(sql);
+
+      expect(analysis).toMatchObject({
+        support: "unsupported",
+        slice: "ddl",
+        kind: "ddl-create",
+        severity: "danger",
+        boundaryReason:
+          "Oracle CREATE statement is outside the bounded DDL slice",
+      });
+      expect(
+        decideOracleSafeModeAction("off", "development", analysis),
+      ).toEqual({
+        action: "block",
+        reason: "Oracle CREATE statement is outside the bounded DDL slice",
+      });
+    }
+  });
+
   it("marks PL/SQL package and block paths unsupported", () => {
     const packageAnalysis = analyzeOracleStatement(
       "CREATE OR REPLACE PACKAGE app_pkg AS END app_pkg;",
