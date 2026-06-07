@@ -1076,6 +1076,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn execute_query_oracle_expected_service_name_match_dispatches() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Oracle,
+            ..StubRdbAdapter::default()
+        };
+        s.current_database_fn = Some(Box::new(|| Ok(Some("XEPDB1".into()))));
+        s.execute_sql_fn = Some(Box::new(|sql: &str| {
+            Ok(RdbQueryResult {
+                columns: vec![QueryColumn {
+                    name: "oracle".into(),
+                    data_type: "text".into(),
+                    category: ColumnCategory::Text,
+                }],
+                rows: vec![vec![serde_json::Value::String(sql.to_string())]],
+                total_count: 1,
+                execution_time_ms: 0,
+                query_type: QueryType::Select,
+            })
+        }));
+        let state = state_with("oracle", ActiveAdapter::Rdb(Box::new(s))).await;
+
+        let result =
+            execute_query_inner(&state, "oracle", "SELECT 1 FROM DUAL", "q1", Some("XEPDB1"))
+                .await
+                .unwrap();
+
+        assert_eq!(
+            result.rows[0][0],
+            serde_json::Value::String("SELECT 1 FROM DUAL".into())
+        );
+    }
+
+    #[tokio::test]
     async fn execute_query_expected_db_none_skips_check_backwards_compat() {
         // current_database_fn 이 호출되면 안 됨 — None 인 경우 fast-path 유지.
         let mut s = StubRdbAdapter::default();
@@ -1293,6 +1326,42 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(r.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn execute_query_batch_oracle_expected_service_name_match_dispatches() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Oracle,
+            ..StubRdbAdapter::default()
+        };
+        s.current_database_fn = Some(Box::new(|| Ok(Some("XEPDB1".into()))));
+        s.execute_sql_batch_fn = Some(Box::new(|stmts: &[String]| {
+            Ok(stmts
+                .iter()
+                .map(|sql| RdbQueryResult {
+                    columns: Vec::new(),
+                    rows: vec![vec![serde_json::Value::String(sql.clone())]],
+                    total_count: 1,
+                    execution_time_ms: 0,
+                    query_type: QueryType::Dml { rows_affected: 1 },
+                })
+                .collect())
+        }));
+        let state = state_with("oracle", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts = vec![
+            "INSERT INTO users(id) VALUES (1)".to_string(),
+            "UPDATE users SET id = 2 WHERE id = 1".to_string(),
+        ];
+
+        let result = execute_query_batch_inner(&state, "oracle", &stmts, "qb", Some("XEPDB1"))
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(
+            result[0].rows[0][0],
+            serde_json::Value::String(stmts[0].clone())
+        );
     }
 
     #[tokio::test]
@@ -1611,6 +1680,36 @@ mod tests {
                 .await
                 .is_ok()
         );
+    }
+
+    #[tokio::test]
+    async fn execute_query_dry_run_oracle_expected_service_name_match_dispatches() {
+        let mut s = StubRdbAdapter {
+            kind_value: DatabaseType::Oracle,
+            ..StubRdbAdapter::default()
+        };
+        s.current_database_fn = Some(Box::new(|| Ok(Some("XEPDB1".into()))));
+        s.dry_run_sql_batch_fn = Some(Box::new(|stmts: &[String]| {
+            Ok(stmts
+                .iter()
+                .map(|_| RdbQueryResult {
+                    columns: Vec::new(),
+                    rows: Vec::new(),
+                    total_count: 1,
+                    execution_time_ms: 0,
+                    query_type: QueryType::Dml { rows_affected: 1 },
+                })
+                .collect())
+        }));
+        let state = state_with("oracle", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts = vec!["DELETE FROM users WHERE id = 1".to_string()];
+
+        let result = execute_query_dry_run_inner(&state, "oracle", &stmts, "qd", Some("XEPDB1"))
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].total_count, 1);
     }
 
     // ── query_table_data — dispatch contract ─────────────────────────────

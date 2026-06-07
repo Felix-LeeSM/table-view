@@ -118,6 +118,16 @@ impl OracleAdapter {
             .ok_or_else(|| AppError::Connection("Oracle connection is not open".into()))
     }
 
+    async fn current_service_name(&self) -> Option<String> {
+        self.state
+            .lock()
+            .await
+            .connected_config
+            .as_ref()
+            .map(|config| config.database.trim().to_string())
+            .filter(|service_name| !service_name.is_empty())
+    }
+
     fn connect_config(
         config: &ConnectionConfig,
         timeout_secs: u64,
@@ -191,7 +201,7 @@ impl RdbAdapter for OracleAdapter {
     }
 
     fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { Ok(self.current_service_name().await) })
     }
 
     fn list_tables<'a>(
@@ -491,6 +501,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn current_database_returns_service_name_identity_when_connected() {
+        let adapter = OracleAdapter::new();
+        {
+            let mut guard = adapter.state.lock().await;
+            guard.connected_config = Some(oracle_config());
+        }
+
+        assert_eq!(
+            adapter.current_database().await.unwrap(),
+            Some("XEPDB1".into())
+        );
+    }
+
+    #[tokio::test]
+    async fn current_database_without_connection_returns_none_for_fail_closed_guard() {
+        let adapter = OracleAdapter::new();
+
+        assert_eq!(adapter.current_database().await.unwrap(), None);
+    }
+
+    #[tokio::test]
     async fn catalog_edit_and_structured_ddl_surfaces_remain_unsupported() {
         let adapter = OracleAdapter::new();
         assert!(matches!(adapter.namespace_label(), NamespaceLabel::Schema));
@@ -597,7 +628,6 @@ mod tests {
 
         assert_oracle_unsupported(adapter.list_namespaces().await);
         assert_oracle_unsupported(adapter.list_databases().await);
-        assert_oracle_unsupported(adapter.current_database().await);
         assert_oracle_unsupported(adapter.list_tables("SYSTEM").await);
         assert_oracle_unsupported(adapter.get_columns("SYSTEM", "T", None).await);
         assert_oracle_unsupported(

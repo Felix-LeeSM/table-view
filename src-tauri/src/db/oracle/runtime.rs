@@ -197,6 +197,8 @@ fn normalize_select_result(
     result: OracleQueryResult,
     execution_time_ms: u64,
 ) -> Result<QueryResult, AppError> {
+    ensure_no_select_continuation(&result)?;
+
     let columns: Vec<QueryColumn> = result.columns.iter().map(oracle_query_column).collect();
     let rows = result
         .rows
@@ -211,6 +213,16 @@ fn normalize_select_result(
         execution_time_ms,
         query_type: QueryType::Select,
     })
+}
+
+fn ensure_no_select_continuation(result: &OracleQueryResult) -> Result<(), AppError> {
+    if result.has_more_rows || result.cursor_id != 0 {
+        return Err(AppError::Unsupported(
+            "Oracle SELECT returned a partial cursor; cursor continuation is not supported yet"
+                .into(),
+        ));
+    }
+    Ok(())
 }
 
 fn normalize_dml_result(rows_affected: u64, execution_time_ms: u64) -> QueryResult {
@@ -596,6 +608,40 @@ mod tests {
                 serde_json::json!("2026-06-07 01:02:03.000456"),
             ]]
         );
+    }
+
+    #[test]
+    fn select_result_normalization_rejects_more_rows_cursor() {
+        let result = OracleQueryResult {
+            columns: vec![OracleColumnInfo::new("ID", OracleType::Number)],
+            rows: vec![Row::new(vec![Value::Integer(1)])],
+            rows_affected: 0,
+            has_more_rows: true,
+            cursor_id: 7,
+        };
+
+        assert!(matches!(
+            normalize_select_result(result, 7),
+            Err(AppError::Unsupported(message))
+                if message.contains("partial cursor")
+                    && message.contains("not supported yet")
+        ));
+    }
+
+    #[test]
+    fn select_result_normalization_rejects_nonzero_cursor_id() {
+        let result = OracleQueryResult {
+            columns: vec![OracleColumnInfo::new("ID", OracleType::Number)],
+            rows: vec![Row::new(vec![Value::Integer(1)])],
+            rows_affected: 0,
+            has_more_rows: false,
+            cursor_id: 7,
+        };
+
+        assert!(matches!(
+            normalize_select_result(result, 7),
+            Err(AppError::Unsupported(message)) if message.contains("partial cursor")
+        ));
     }
 
     #[test]
