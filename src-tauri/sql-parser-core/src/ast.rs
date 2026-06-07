@@ -733,6 +733,9 @@ pub struct ColumnDefinition {
 /// `text`, …). Vendor-specific synonyms (`INT4`, `STRING`, `LONGTEXT`)
 /// are NOT lexed as type tokens — they parse as identifiers, and the
 /// parser surfaces a `SyntaxError`.
+///
+/// Oracle scalar DDL variants are parser/Safe Mode evidence only; they do
+/// not imply Oracle runtime DDL support.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum ColumnType {
@@ -760,6 +763,19 @@ pub enum ColumnType {
         precision: Option<i64>,
         scale: Option<i64>,
     },
+    /// Oracle `NUMBER[(precision[, scale])]`.
+    Number {
+        precision: Option<i64>,
+        scale: Option<i64>,
+    },
+    /// Oracle `VARCHAR2(<length>)`.
+    Varchar2 {
+        length: i64,
+    },
+    /// Oracle large text object.
+    Clob,
+    /// Oracle binary large object.
+    Blob,
     /// Sprint-486 — known PostgreSQL extension-backed type names. The
     /// parser stores the written name and simple modifiers but does not
     /// validate that the backing extension is installed.
