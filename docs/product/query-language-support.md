@@ -407,13 +407,13 @@ are:
   table data browse, primary-key-projected row edit, bounded structured
   table/index/constraint DDL, and catalog/workbench metadata
   browse for databases/schemas/tables/views/procedures/functions/columns/indexes/constraints/FKs.
-  Completion uses that
+  Runtime Happy Path smoke covers representative connect/catalog browse/SELECT/DML/row-edit/Safe
+  Mode confirmation paths, and completion uses that
   live cached catalog for database/schema/table/view/procedure/column
   suggestions where metadata is loaded, plus curated T-SQL vocabulary and
-  bracket identifier quoting. These do not imply runtime Safe Mode/destructive
-  preview, runtime fixture smoke, E2E smoke, TLS-required
-  workflow, SQLCMD/admin/security/backup/jobs/users/roles/full T-SQL semantics,
-  or runtime support for every suggested object. Oracle has a bounded runtime slice for
+  bracket identifier quoting. These do not imply TLS-required workflow,
+  SQLCMD/admin/security/backup/jobs/users/roles/full T-SQL semantics, or runtime
+  support for every suggested object. Oracle has a bounded runtime slice for
   service-name connection, SELECT tabular envelopes, transactional DML batches,
   cancellation, and error surfacing plus bounded static SQL editor autocomplete
   vocabulary and bounded static parser/Safe Mode metadata; this does not imply
