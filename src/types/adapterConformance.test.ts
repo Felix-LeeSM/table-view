@@ -53,9 +53,13 @@ describe("adapter conformance matrix", () => {
       catalog: "catalog",
       query: "query",
       edit: "edit",
+      ddl: "ddl",
     } as const satisfies Readonly<
       Record<
-        Extract<ConformanceArea, "connection" | "catalog" | "query" | "edit">,
+        Extract<
+          ConformanceArea,
+          "connection" | "catalog" | "query" | "edit" | "ddl"
+        >,
         keyof DataSourceCapabilities
       >
     >;
@@ -257,7 +261,7 @@ describe("adapter conformance matrix", () => {
     ]);
   });
 
-  it("locks MSSQL catalog/query/edit runtime claims while keeping explain deferred", () => {
+  it("locks MSSQL catalog/query/edit/DDL runtime claims while keeping explain deferred", () => {
     const mssql = ADAPTER_CONFORMANCE_MATRIX.mssql;
 
     expect(mssql.level).toBe("runtime");
@@ -282,6 +286,13 @@ describe("adapter conformance matrix", () => {
     expect(mssql.areas.query.deferred).toEqual(["query.explain"]);
     expect(mssql.areas.edit.checks).toEqual(["edit.editRows"]);
     expect(mssql.areas.edit.deferred).toEqual([]);
+    expect(mssql.areas.ddl.checks).toEqual([
+      "ddl.createTable",
+      "ddl.alterTable",
+      "ddl.createIndex",
+      "ddl.dropObject",
+    ]);
+    expect(mssql.areas.ddl.deferred).toEqual([]);
   });
 
   it("locks Oracle to query-bounded conformance", () => {

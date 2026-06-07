@@ -252,7 +252,7 @@ async fn catalog_surfaces_fail_locally_without_open_connection() {
 }
 
 #[tokio::test]
-async fn table_data_reaches_runtime_while_ddl_admin_surfaces_stay_unsupported() {
+async fn table_data_and_structured_ddl_execute_paths_require_open_connection() {
     let adapter = MssqlAdapter::new();
 
     assert_not_open(
@@ -359,22 +359,16 @@ async fn table_data_reaches_runtime_while_ddl_admin_surfaces_stay_unsupported() 
         expected_database: None,
     };
 
-    assert_unsupported(adapter.drop_table(&drop_table).await);
-    assert_unsupported(adapter.rename_table(&rename_table).await);
-    assert_unsupported(adapter.alter_table(&alter_table).await);
-    assert_unsupported(adapter.add_column(&add_column).await);
-    assert_unsupported(adapter.drop_column(&drop_column).await);
-    assert_unsupported(adapter.create_table(&create_table).await);
-    assert_unsupported(adapter.create_index(&create_index).await);
-    assert_unsupported(adapter.drop_index(&drop_index).await);
-    assert_unsupported(adapter.add_constraint(&add_constraint).await);
-    assert_unsupported(adapter.drop_constraint(&drop_constraint).await);
-}
-
-fn assert_unsupported<T>(result: Result<T, AppError>) {
-    assert!(
-        matches!(result, Err(AppError::Unsupported(message)) if message.contains("not implemented"))
-    );
+    assert_not_open(adapter.drop_table(&drop_table).await);
+    assert_not_open(adapter.rename_table(&rename_table).await);
+    assert_not_open(adapter.alter_table(&alter_table).await);
+    assert_not_open(adapter.add_column(&add_column).await);
+    assert_not_open(adapter.drop_column(&drop_column).await);
+    assert_not_open(adapter.create_table(&create_table).await);
+    assert_not_open(adapter.create_index(&create_index).await);
+    assert_not_open(adapter.drop_index(&drop_index).await);
+    assert_not_open(adapter.add_constraint(&add_constraint).await);
+    assert_not_open(adapter.drop_constraint(&drop_constraint).await);
 }
 
 fn assert_not_open<T>(result: Result<T, AppError>) {

@@ -360,6 +360,12 @@ export const MSSQL_CAPABILITIES = capabilities({
   edit: {
     editRows: true,
   },
+  ddl: {
+    createTable: true,
+    alterTable: true,
+    createIndex: true,
+    dropObject: true,
+  },
 });
 
 export const MONGODB_CAPABILITIES = capabilities({

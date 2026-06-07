@@ -114,6 +114,7 @@ fn backend_profiles_encode_current_database_type_contracts() {
     assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let mongodb = get_data_source_profile(&DatabaseType::Mongodb);
     assert_eq!(mongodb.paradigm, Paradigm::Document);
@@ -370,7 +371,7 @@ fn rdbms_integration_gate_profiles_are_coherent() {
     assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let oracle = get_data_source_profile(&DatabaseType::Oracle);
     assert_eq!(oracle.paradigm, Paradigm::Rdb);
