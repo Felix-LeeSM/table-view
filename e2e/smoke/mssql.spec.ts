@@ -94,9 +94,9 @@ describe("MSSQL smoke", () => {
           `INSERT INTO dbo.products (name, price) VALUES (N'${productName}', 42.50)`,
         );
         await waitForWorkspaceTextAll(
-          ["Statement 1 DML", "row affected"],
+          ["DML", "1 row affected"],
           15000,
-          "MSSQL DML statement evidence did not render",
+          "MSSQL DML result evidence did not render",
         );
         await expectNoVisibleDialogText("Review SQL Changes");
 
