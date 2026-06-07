@@ -300,20 +300,6 @@ fn mssql_cell_to_json(row: &Row, idx: usize) -> serde_json::Value {
     };
 
     match cell {
-        ColumnData::U8(Some(value)) => serde_json::Value::Number((*value).into()),
-        ColumnData::I16(Some(value)) => serde_json::Value::Number((*value).into()),
-        ColumnData::I32(Some(value)) => serde_json::Value::Number((*value).into()),
-        ColumnData::I64(Some(value)) => serde_json::Value::Number((*value).into()),
-        ColumnData::F32(Some(value)) => json_number(*value as f64),
-        ColumnData::F64(Some(value)) => json_number(*value),
-        ColumnData::Bit(Some(value)) => serde_json::Value::Bool(*value),
-        ColumnData::String(Some(value)) => serde_json::Value::String(value.to_string()),
-        ColumnData::Guid(Some(value)) => serde_json::Value::String(value.to_string()),
-        ColumnData::Binary(Some(value)) => {
-            serde_json::Value::String(format!("0x{}", hex_encode(value.as_ref())))
-        }
-        ColumnData::Numeric(Some(value)) => serde_json::Value::String(value.to_string()),
-        ColumnData::Xml(Some(value)) => serde_json::Value::String(value.as_ref().to_string()),
         ColumnData::DateTime(Some(_)) | ColumnData::SmallDateTime(Some(_)) => row
             .try_get::<NaiveDateTime, _>(idx)
             .ok()
@@ -344,6 +330,26 @@ fn mssql_cell_to_json(row: &Row, idx: usize) -> serde_json::Value {
             .flatten()
             .map(|value| serde_json::Value::String(value.to_rfc3339()))
             .unwrap_or_else(|| serde_json::Value::String(format!("{cell:?}"))),
+        _ => mssql_scalar_cell_to_json(cell),
+    }
+}
+
+fn mssql_scalar_cell_to_json(cell: &ColumnData<'_>) -> serde_json::Value {
+    match cell {
+        ColumnData::U8(Some(value)) => serde_json::Value::Number((*value).into()),
+        ColumnData::I16(Some(value)) => serde_json::Value::Number((*value).into()),
+        ColumnData::I32(Some(value)) => serde_json::Value::Number((*value).into()),
+        ColumnData::I64(Some(value)) => serde_json::Value::Number((*value).into()),
+        ColumnData::F32(Some(value)) => json_number(*value as f64),
+        ColumnData::F64(Some(value)) => json_number(*value),
+        ColumnData::Bit(Some(value)) => serde_json::Value::Bool(*value),
+        ColumnData::String(Some(value)) => serde_json::Value::String(value.to_string()),
+        ColumnData::Guid(Some(value)) => serde_json::Value::String(value.to_string()),
+        ColumnData::Binary(Some(value)) => {
+            serde_json::Value::String(format!("0x{}", hex_encode(value.as_ref())))
+        }
+        ColumnData::Numeric(Some(value)) => serde_json::Value::String(value.to_string()),
+        ColumnData::Xml(Some(value)) => serde_json::Value::String(value.as_ref().to_string()),
         _ => serde_json::Value::Null,
     }
 }
@@ -443,6 +449,8 @@ fn mssql_query_error(context: &'static str, err: impl std::fmt::Display) -> AppE
 mod tests {
     use super::*;
     use crate::models::{ConnectionConfig, DatabaseType};
+    use std::borrow::Cow;
+    use tiberius::{numeric::Numeric, xml::XmlData, Uuid};
 
     fn loopback_config() -> ConnectionConfig {
         ConnectionConfig {
@@ -506,6 +514,18 @@ mod tests {
             mssql_query_type("DELETE FROM dbo.users WHERE id = 1"),
             QueryType::Dml { .. }
         ));
+        assert!(matches!(
+            mssql_query_type("\n\t/* a */\n-- b\nexec dbo.touch_user"),
+            QueryType::Select
+        ));
+        assert!(matches!(
+            mssql_query_type("-- comment only"),
+            QueryType::Ddl
+        ));
+        assert!(matches!(
+            mssql_query_type("/* unterminated"),
+            QueryType::Ddl
+        ));
     }
 
     #[tokio::test]
@@ -542,6 +562,27 @@ mod tests {
         cancel.cancel();
         let err = adapter
             .execute_query_batch(&["SELECT 1".to_string()], Some(&cancel))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Database(msg) if msg == "Query cancelled"));
+
+        let err = adapter
+            .execute_query("SELECT 1", Some(&cancel))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Database(msg) if msg == "Query cancelled"));
+
+        let err = adapter
+            .dry_run_query_batch(&[" ; ".to_string()], None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(msg) if msg == "Statement 1 of 1 is empty"));
+
+        let err = adapter
+            .dry_run_query_batch(
+                &["UPDATE dbo.users SET name = 'Ada'".to_string()],
+                Some(&cancel),
+            )
             .await
             .unwrap_err();
         assert!(matches!(err, AppError::Database(msg) if msg == "Query cancelled"));
@@ -676,13 +717,17 @@ mod tests {
     #[test]
     fn scalar_helpers_cover_json_and_type_edges() {
         assert_eq!(strip_trailing_terminator("SELECT 1;\n\t"), "SELECT 1");
+        assert_eq!(strip_trailing_terminator("SELECT 1;;;"), "SELECT 1");
+        assert_eq!(strip_trailing_terminator("   ;;; \n"), "");
         assert_eq!(
             strip_leading_comments("  -- a\n /* b */\nSELECT 1"),
             "SELECT 1"
         );
         assert_eq!(strip_leading_comments("-- only a comment"), "");
         assert_eq!(strip_leading_comments("/* unterminated"), "");
+        assert_eq!(strip_leading_comments("/* closed */"), "");
         assert_eq!(hex_encode(&[0x00, 0xaf, 0xff]), "00afff");
+        assert_eq!(hex_encode(&[]), "");
         assert_eq!(json_number(4.5), serde_json::json!(4.5));
         assert_eq!(json_number(f64::NAN), serde_json::Value::Null);
 
@@ -704,21 +749,92 @@ mod tests {
     }
 
     #[test]
+    fn mssql_scalar_cells_convert_to_datagrid_json_values() {
+        let guid = Uuid::from_u128(0x12345678123456781234567812345678);
+
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::U8(Some(7))),
+            serde_json::json!(7)
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::I16(Some(-2))),
+            serde_json::json!(-2)
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::I32(Some(42))),
+            serde_json::json!(42)
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::I64(Some(9_000_000_000))),
+            serde_json::json!(9_000_000_000_i64)
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::F32(Some(3.5))),
+            serde_json::json!(3.5)
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::F64(Some(8.25))),
+            serde_json::json!(8.25)
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::Bit(Some(true))),
+            serde_json::Value::Bool(true)
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::String(Some(Cow::Borrowed("Ada")))),
+            serde_json::json!("Ada")
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::Guid(Some(guid))),
+            serde_json::json!(guid.to_string())
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::Binary(Some(Cow::Owned(vec![0x0a, 0xff])))),
+            serde_json::json!("0x0aff")
+        );
+
+        let numeric = Numeric::new_with_scale(12_345, 2);
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::Numeric(Some(numeric))),
+            serde_json::json!(numeric.to_string())
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::Xml(Some(Cow::Owned(XmlData::new("<x />"))))),
+            serde_json::json!("<x />")
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::F64(Some(f64::NAN))),
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::String(None)),
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            mssql_scalar_cell_to_json(&ColumnData::DateTime(None)),
+            serde_json::Value::Null
+        );
+    }
+
+    #[test]
     fn mssql_column_metadata_covers_driver_type_families() {
         for (column_type, data_type, category) in [
             (ColumnType::Bit, "bit", ColumnCategory::Bool),
             (ColumnType::Bitn, "bit", ColumnCategory::Bool),
             (ColumnType::Int1, "tinyint", ColumnCategory::Int),
             (ColumnType::Int2, "smallint", ColumnCategory::Int),
+            (ColumnType::Int4, "int", ColumnCategory::Int),
             (ColumnType::Int8, "bigint", ColumnCategory::Int),
             (ColumnType::Intn, "int", ColumnCategory::Int),
             (ColumnType::Float4, "real", ColumnCategory::Float),
             (ColumnType::Float8, "float", ColumnCategory::Float),
             (ColumnType::Floatn, "float", ColumnCategory::Float),
             (ColumnType::Money, "money", ColumnCategory::Float),
+            (ColumnType::Money4, "money", ColumnCategory::Float),
             (ColumnType::Decimaln, "decimal", ColumnCategory::Float),
             (ColumnType::Numericn, "numeric", ColumnCategory::Float),
             (ColumnType::Datetime4, "datetime", ColumnCategory::Datetime),
+            (ColumnType::Datetime, "datetime", ColumnCategory::Datetime),
             (ColumnType::Datetimen, "datetime", ColumnCategory::Datetime),
             (ColumnType::Daten, "date", ColumnCategory::Datetime),
             (ColumnType::Timen, "time", ColumnCategory::Datetime),
@@ -728,6 +844,7 @@ mod tests {
                 "datetimeoffset",
                 ColumnCategory::Datetime,
             ),
+            (ColumnType::BigVarBin, "varbinary", ColumnCategory::Binary),
             (ColumnType::BigBinary, "varbinary", ColumnCategory::Binary),
             (ColumnType::Image, "image", ColumnCategory::Binary),
             (ColumnType::Xml, "xml", ColumnCategory::Object),
@@ -735,8 +852,11 @@ mod tests {
             (ColumnType::SSVariant, "sql_variant", ColumnCategory::Object),
             (ColumnType::BigVarChar, "varchar", ColumnCategory::Text),
             (ColumnType::BigChar, "varchar", ColumnCategory::Text),
+            (ColumnType::NVarchar, "nvarchar", ColumnCategory::Text),
             (ColumnType::NChar, "nvarchar", ColumnCategory::Text),
+            (ColumnType::Text, "text", ColumnCategory::Text),
             (ColumnType::NText, "ntext", ColumnCategory::Text),
+            (ColumnType::Null, "null", ColumnCategory::Unknown),
         ] {
             assert_eq!(mssql_column_type_name(column_type), data_type);
             assert_eq!(mssql_column_category(column_type), category);

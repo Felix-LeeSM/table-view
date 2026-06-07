@@ -403,6 +403,13 @@ mod tests {
                 is_unique: true,
                 is_primary: true,
             },
+            MssqlIndexCatalogRow {
+                name: "pk_users".into(),
+                column: "tenant_id".into(),
+                index_type: "CLUSTERED".into(),
+                is_unique: true,
+                is_primary: true,
+            },
         ]);
 
         assert_eq!(indexes[0].name, "idx_users_email");
@@ -411,6 +418,7 @@ mod tests {
         assert!(indexes[0].is_unique);
         assert!(!indexes[0].is_primary);
         assert_eq!(indexes[1].name, "pk_users");
+        assert_eq!(indexes[1].columns, vec!["id", "tenant_id"]);
         assert_eq!(indexes[1].index_type, "clustered");
         assert!(indexes[1].is_primary);
     }
@@ -433,9 +441,23 @@ mod tests {
                 reference_column: Some("tenant_id".into()),
             },
             MssqlConstraintCatalogRow {
+                name: "fk_orders_users".into(),
+                constraint_type: "FOREIGN KEY".into(),
+                column: Some("tenant_id".into()),
+                reference_table: Some("dbo.users".into()),
+                reference_column: Some("tenant_id".into()),
+            },
+            MssqlConstraintCatalogRow {
                 name: "ck_orders_total".into(),
                 constraint_type: "CHECK".into(),
                 column: Some("total".into()),
+                reference_table: None,
+                reference_column: None,
+            },
+            MssqlConstraintCatalogRow {
+                name: "uq_orders_external_id".into(),
+                constraint_type: "UNIQUE".into(),
+                column: None,
                 reference_table: None,
                 reference_column: None,
             },
@@ -450,6 +472,9 @@ mod tests {
             constraints[1].reference_columns.as_ref().expect("ref cols"),
             &vec!["id".to_string(), "tenant_id".to_string()]
         );
+        assert_eq!(constraints[2].name, "uq_orders_external_id");
+        assert!(constraints[2].columns.is_empty());
+        assert_eq!(constraints[2].reference_columns, None);
     }
 
     #[test]
