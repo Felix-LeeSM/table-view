@@ -16,6 +16,7 @@ export type ConformanceArea =
   | "query"
   | "result"
   | "edit"
+  | "ddl"
   | "safety";
 
 export type ConformanceLevel =
@@ -68,6 +69,7 @@ const CONFORMANCE_AREAS = Object.freeze([
   "query",
   "result",
   "edit",
+  "ddl",
   "safety",
 ] as const satisfies readonly ConformanceArea[]);
 
@@ -122,6 +124,10 @@ export const CONFORMANCE_CHECKS = Object.freeze([
   check("edit.editDocuments", "edit", "Document-edit claim is enabled."),
   check("edit.editKeys", "edit", "Key-edit claim is enabled."),
   check("edit.bulkWrite", "edit", "Bulk-write claim is enabled."),
+  check("ddl.createTable", "ddl", "Create-table DDL claim is enabled."),
+  check("ddl.alterTable", "ddl", "Alter-table DDL claim is enabled."),
+  check("ddl.createIndex", "ddl", "Create-index DDL claim is enabled."),
+  check("ddl.dropObject", "ddl", "Drop-object DDL claim is enabled."),
   check("safety.policy", "safety", "Safety policy is declared."),
 ] as const satisfies readonly ConformanceCheck[]);
 
@@ -135,6 +141,7 @@ const AREA_CAPABILITY_GROUP = Object.freeze({
   catalog: "catalog",
   query: "query",
   edit: "edit",
+  ddl: "ddl",
 } as const satisfies Readonly<
   Record<AreaCapabilityGroup, keyof DataSourceCapabilities>
 >);
@@ -146,12 +153,14 @@ const DEFERRED_FEATURES = Object.freeze({
     catalog: ["catalog.constraints"],
     query: [],
     edit: [],
+    ddl: [],
   },
   mariadb: {
     connection: [],
     catalog: ["catalog.constraints"],
     query: [],
     edit: [],
+    ddl: [],
   },
   sqlite: {
     connection: [],
@@ -162,6 +171,7 @@ const DEFERRED_FEATURES = Object.freeze({
     ],
     query: ["query.explain"],
     edit: [],
+    ddl: [],
   },
   duckdb: {
     connection: [],
@@ -172,12 +182,14 @@ const DEFERRED_FEATURES = Object.freeze({
     ],
     query: ["query.multiStatement", "query.cancel", "query.explain"],
     edit: ["edit.editRows"],
+    ddl: [],
   },
   mssql: {
     connection: [],
     catalog: [],
     query: ["query.explain"],
     edit: [],
+    ddl: [],
   },
   oracle: oracleQueryDeferred(),
   mongodb: {
@@ -185,30 +197,35 @@ const DEFERRED_FEATURES = Object.freeze({
     catalog: ["catalog.constraints", "catalog.relationships"],
     query: ["query.multiStatement"],
     edit: ["edit.editRows", "edit.editKeys"],
+    ddl: [],
   },
   redis: {
     connection: [],
     catalog: ["catalog.schema", "catalog.indexes", "catalog.relationships"],
     query: ["query.query", "query.cancel", "query.explain"],
     edit: ["edit.bulkWrite"],
+    ddl: [],
   },
   valkey: {
     connection: [],
     catalog: ["catalog.schema", "catalog.indexes", "catalog.relationships"],
     query: ["query.cancel", "query.explain"],
     edit: ["edit.editKeys", "edit.bulkWrite"],
+    ddl: [],
   },
   elasticsearch: {
     connection: ["connection.switchDatabase"],
     catalog: ["catalog.schema"],
     query: ["query.explain"],
     edit: ["edit.editDocuments", "edit.bulkWrite"],
+    ddl: [],
   },
   opensearch: {
     connection: ["connection.switchDatabase"],
     catalog: ["catalog.browse", "catalog.schema", "catalog.indexes"],
     query: ["query.query", "query.explain"],
     edit: ["edit.editDocuments", "edit.bulkWrite"],
+    ddl: [],
   },
 } as const satisfies Readonly<Record<DatabaseType, DeferredByArea>>);
 
@@ -269,6 +286,7 @@ function buildConformanceEntry(
       query: runtimeClaim(profile, capabilities, "query"),
       result: declaredClaim("result", ["result.envelope"]),
       edit: runtimeClaim(profile, capabilities, "edit"),
+      ddl: runtimeClaim(profile, capabilities, "ddl"),
       safety: declaredClaim("safety", ["safety.policy"]),
     },
   });
@@ -382,6 +400,7 @@ function noneDeferred(): DeferredByArea {
     catalog: [],
     query: [],
     edit: [],
+    ddl: [],
   };
 }
 
@@ -391,5 +410,11 @@ function oracleQueryDeferred(): DeferredByArea {
     catalog: ["catalog.browse", "catalog.schema"],
     query: ["query.explain"],
     edit: ["edit.editRows"],
+    ddl: [
+      "ddl.createTable",
+      "ddl.alterTable",
+      "ddl.createIndex",
+      "ddl.dropObject",
+    ],
   };
 }

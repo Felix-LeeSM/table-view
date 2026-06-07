@@ -1,4 +1,7 @@
 mod catalog;
+mod ddl;
+#[cfg(test)]
+mod ddl_tests;
 mod runtime;
 #[cfg(test)]
 mod tests;
@@ -253,72 +256,72 @@ impl RdbAdapter for MssqlAdapter {
 
     fn drop_table<'a>(
         &'a self,
-        _req: &'a DropTableRequest,
+        req: &'a DropTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::drop_table(self, req).await })
     }
 
     fn rename_table<'a>(
         &'a self,
-        _req: &'a RenameTableRequest,
+        req: &'a RenameTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::rename_table(self, req).await })
     }
 
     fn alter_table<'a>(
         &'a self,
-        _req: &'a AlterTableRequest,
+        req: &'a AlterTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::alter_table(self, req).await })
     }
 
     fn add_column<'a>(
         &'a self,
-        _req: &'a AddColumnRequest,
+        req: &'a AddColumnRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::add_column(self, req).await })
     }
 
     fn drop_column<'a>(
         &'a self,
-        _req: &'a DropColumnRequest,
+        req: &'a DropColumnRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::drop_column(self, req).await })
     }
 
     fn create_table<'a>(
         &'a self,
-        _req: &'a CreateTableRequest,
+        req: &'a CreateTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::create_table(self, req).await })
     }
 
     fn create_index<'a>(
         &'a self,
-        _req: &'a CreateIndexRequest,
+        req: &'a CreateIndexRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::create_index(self, req).await })
     }
 
     fn drop_index<'a>(
         &'a self,
-        _req: &'a DropIndexRequest,
+        req: &'a DropIndexRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::drop_index(self, req).await })
     }
 
     fn add_constraint<'a>(
         &'a self,
-        _req: &'a AddConstraintRequest,
+        req: &'a AddConstraintRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::add_constraint(self, req).await })
     }
 
     fn drop_constraint<'a>(
         &'a self,
-        _req: &'a DropConstraintRequest,
+        req: &'a DropConstraintRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        unsupported()
+        Box::pin(async move { MssqlAdapter::drop_constraint(self, req).await })
     }
 
     fn get_table_indexes<'a>(
@@ -389,15 +392,6 @@ impl RdbAdapter for MssqlAdapter {
     ) -> BoxFuture<'a, Result<Vec<FunctionInfo>, AppError>> {
         Box::pin(async move { MssqlAdapter::list_functions(self, namespace).await })
     }
-}
-
-fn unsupported<'a, T>() -> BoxFuture<'a, Result<T, AppError>> {
-    Box::pin(async {
-        Err(AppError::Unsupported(
-            "SQL Server structured DDL/admin support is not implemented in this metadata slice"
-                .into(),
-        ))
-    })
 }
 
 fn cancellable_metadata<'a, T>(
