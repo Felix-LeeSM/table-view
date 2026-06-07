@@ -231,6 +231,12 @@ function capabilities(
 
 export const UNSUPPORTED_CAPABILITIES = capabilities();
 
+export const ORACLE_CONNECTION_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+});
+
 export const POSTGRESQL_CAPABILITIES = capabilities({
   connection: {
     test: true,
@@ -326,6 +332,17 @@ export const DUCKDB_CAPABILITIES = capabilities({
   catalog: {
     browse: true,
     schema: true,
+  },
+});
+
+export const MSSQL_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+  query: {
+    query: true,
+    multiStatement: true,
+    cancel: true,
   },
 });
 
@@ -496,7 +513,15 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     DUCKDB_CAPABILITIES,
     DUCKDB_FILE_CONNECTION,
   ),
-  mssql: profile("mssql", "server", ["sql"], "rdb", ["tabular"], "rdb-default"),
+  mssql: profile(
+    "mssql",
+    "server",
+    ["sql"],
+    "rdb",
+    ["tabular"],
+    "rdb-default",
+    MSSQL_CAPABILITIES,
+  ),
   oracle: profile(
     "oracle",
     "server",
@@ -504,6 +529,7 @@ export const DATA_SOURCE_PROFILES = Object.freeze({
     "rdb",
     ["tabular"],
     "rdb-default",
+    ORACLE_CONNECTION_CAPABILITIES,
   ),
   mongodb: profile(
     "mongodb",

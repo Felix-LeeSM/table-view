@@ -338,6 +338,10 @@ function normalize(sql: string): string {
   return stripComments(sql).replace(WHITESPACE_RE, " ").trim();
 }
 
+function hasMssqlBatchSeparator(sql: string): boolean {
+  return /^[ \t]*GO(?:\s+\d+)?[ \t]*;?[ \t]*$/im.test(stripComments(sql));
+}
+
 function hasOuterWhere(stripped: string): boolean {
   return WORD_BOUNDARY_WHERE_RE.test(stripped);
 }
@@ -410,6 +414,14 @@ export function analyzeStatement(sql: string): StatementAnalysis {
 
   const upper = normalized.toUpperCase();
 
+  if (hasMssqlBatchSeparator(sql)) {
+    return {
+      kind: "other",
+      severity: "warn",
+      reasons: ["GO — T-SQL batch separator unsupported"],
+    };
+  }
+
   // Sprint 391 — DDL destructive (DROP / TRUNCATE / ALTER … DROP) is
   // classified through the AST first.
   // Sprint 392 — extended to the DML write triad (INSERT / UPDATE /
@@ -430,7 +442,7 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   // table; SHOW / SET / COMMENT classify as info-tier metadata-like
   // reads/writes.
   if (
-    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|CALL|DO|UPDATE|DELETE|MERGE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT)\b/.test(
+    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|CALL|DO|UPDATE|DELETE|MERGE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT|EXEC|EXECUTE|USE|BACKUP|RESTORE|DBCC|DENY|GO)\b/.test(
       upper,
     )
   ) {
@@ -483,6 +495,62 @@ export function analyzeStatement(sql: string): StatementAnalysis {
       kind: "routine-call",
       severity: "warn",
       reasons: ["DO — procedural block execution"],
+    };
+  }
+
+  if (/^(EXEC|EXECUTE)\b/.test(upper)) {
+    return {
+      kind: "routine-call",
+      severity: "warn",
+      reasons: ["EXEC — stored routine execution"],
+    };
+  }
+
+  if (/^GO\b/.test(upper)) {
+    return {
+      kind: "other",
+      severity: "warn",
+      reasons: ["GO — T-SQL batch separator unsupported"],
+    };
+  }
+
+  if (/^USE\b/.test(upper)) {
+    return {
+      kind: "config-write",
+      severity: "warn",
+      reasons: ["USE — database context switch unsupported"],
+    };
+  }
+
+  if (/^DBCC\b/.test(upper)) {
+    return {
+      kind: "other",
+      severity: "warn",
+      reasons: ["DBCC — SQL Server admin command unsupported"],
+    };
+  }
+
+  if (/^DENY\b/.test(upper)) {
+    return {
+      kind: "permission-change",
+      severity: "warn",
+      reasons: ["DENY — 권한 변경"],
+    };
+  }
+
+  if (/^BACKUP\b/.test(upper)) {
+    return {
+      kind: "data-movement",
+      severity: "warn",
+      reasons: ["BACKUP — SQL Server backup unsupported"],
+    };
+  }
+
+  if (/^RESTORE\b/.test(upper)) {
+    return {
+      kind: "data-movement",
+      severity: "danger",
+      reasons: ["RESTORE — SQL Server restore may overwrite database"],
     };
   }
 

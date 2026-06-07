@@ -108,6 +108,10 @@ describe("ConnectionDialog", () => {
     expect(screen.getByRole("option", { name: "MySQL" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "MariaDB" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Microsoft SQL Server" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Oracle" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "MongoDB" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Redis" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Valkey" })).toBeInTheDocument();
@@ -117,31 +121,23 @@ describe("ConnectionDialog", () => {
     expect(
       screen.getByRole("option", { name: "OpenSearch" }),
     ).toBeInTheDocument();
-
-    // Unsupported — 안 보임.
-    expect(
-      screen.queryByRole("option", { name: "Oracle" }),
-    ).not.toBeInTheDocument();
   });
 
-  // 편집 모드에서 unsupported DBMS connection 의 dbType 도 그대로 표시되도록
-  // 예외적으로 자기 자신만 추가 — Select 가 빈값으로 보이지 않도록.
-  it("Sprint 276: edit mode preserves an unsupported dbType in the dropdown", async () => {
+  // 편집 모드에서 현재 connection 의 dbType 은 그대로 표시되도록 예외적으로
+  // 자기 자신만 추가 — Select 가 빈값으로 보이지 않도록.
+  it("Sprint 276: edit mode preserves the current dbType in the dropdown", async () => {
     const user = userEvent.setup();
     renderDialog({
       connection: makeConnection({ dbType: "mssql", port: 1433 }),
     });
 
     await user.click(screen.getByLabelText("Database Type"));
-    // 편집 중인 connection 의 dbType 은 노출 (사용자가 빈 select 를 보지
-    // 않도록). 다른 unsupported 어댑터는 여전히 숨김.
+    // 편집 중인 connection 의 dbType 은 노출. 다른 unsupported 어댑터는 숨김.
     expect(
       screen.getByRole("option", { name: "Microsoft SQL Server" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("option", { name: "Oracle" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Oracle" })).toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -231,6 +227,39 @@ describe("ConnectionDialog", () => {
     });
 
     expect(screen.getByRole("alert")).toHaveTextContent("Database is required");
+    expect(mockAddConnection).not.toHaveBeenCalled();
+  });
+
+  it("shows error when Oracle service name is empty on save", async () => {
+    renderDialog();
+    await act(async () => {
+      fireEvent.click(screen.getByText("URL"));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Connection URL"), {
+        target: { value: "oracle://system:pw@oracle.local:1521/FREEPDB1" },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Parse & Continue"));
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Name"), {
+        target: { value: "Oracle DB" },
+      });
+      fireEvent.change(screen.getByLabelText("Service name"), {
+        target: { value: "" },
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Save"));
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Service name is required",
+    );
     expect(mockAddConnection).not.toHaveBeenCalled();
   });
 
@@ -482,37 +511,51 @@ describe("ConnectionDialog", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  // URL parser 가 인식한 DBMS scheme 이지만 백엔드 어댑터가 아직 wire-up
-  // 되지 않은 경우 Parse & Continue 는 명시적 거부 메시지를 노출한다.
-  it.each([
-    ["mssql", "mssql://sa:pw@mssql.local:1433/master", "Microsoft SQL Server"],
-    ["oracle", "oracle://system:pw@oracle.local:1521/FREEPDB1", "Oracle"],
-  ])(
-    "rejects unsupported %s URL with explanatory error",
-    async (_scheme, url, label) => {
-      renderDialog();
-      await act(async () => {
-        fireEvent.click(screen.getByText("URL"));
+  it("accepts mssql URLs and switches to the SQL Server form", async () => {
+    renderDialog();
+    await act(async () => {
+      fireEvent.click(screen.getByText("URL"));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Connection URL"), {
+        target: { value: "mssql://sa:pw@mssql.local:1433/master" },
       });
-      const urlInput = screen.getByLabelText(
-        "Connection URL",
-      ) as HTMLInputElement;
-      await act(async () => {
-        fireEvent.change(urlInput, { target: { value: url } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Parse & Continue"));
+    });
+
+    expect(screen.getByLabelText("Database Type")).toHaveTextContent(
+      "Microsoft SQL Server",
+    );
+    expect(screen.getByLabelText("Host")).toHaveValue("mssql.local");
+    expect(screen.getByLabelText("Port")).toHaveValue(1433);
+    expect(screen.getByLabelText("User")).toHaveValue("sa");
+    expect(screen.getByLabelText("Database")).toHaveValue("master");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("accepts oracle URLs and switches to the service-name form", async () => {
+    renderDialog();
+    await act(async () => {
+      fireEvent.click(screen.getByText("URL"));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Connection URL"), {
+        target: { value: "oracle://system:pw@oracle.local:1521/FREEPDB1" },
       });
-      await act(async () => {
-        fireEvent.click(screen.getByText("Parse & Continue"));
-      });
-      const alert = screen.getByRole("alert");
-      expect(alert).toHaveTextContent(`${label} is not yet supported`);
-      // 메시지에 현재 supported 라벨이 포함되어 있어 사용자가 다음 액션을
-      // 즉시 알 수 있어야 한다.
-      expect(alert).toHaveTextContent("PostgreSQL");
-      expect(alert).toHaveTextContent("MongoDB");
-      // URL 모드 → form 모드 전환은 일어나지 않아야 한다 (URL 입력 유지).
-      expect(screen.getByLabelText("Connection URL")).toBeInTheDocument();
-    },
-  );
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Parse & Continue"));
+    });
+
+    expect(screen.getByLabelText("Database Type")).toHaveTextContent("Oracle");
+    expect(screen.getByLabelText("Host")).toHaveValue("oracle.local");
+    expect(screen.getByLabelText("Port")).toHaveValue(1521);
+    expect(screen.getByLabelText("User")).toHaveValue("system");
+    expect(screen.getByLabelText("Service name")).toHaveValue("FREEPDB1");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 
   it("uses database name as connection name when name is empty", async () => {
     renderDialog();

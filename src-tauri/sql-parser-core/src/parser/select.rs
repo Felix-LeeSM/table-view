@@ -82,6 +82,7 @@ impl Parser<'_> {
     /// for nested SELECTs in CTE bodies, FROM subqueries, and
     /// scalar / IN / EXISTS subqueries.
     fn parse_select_body(&mut self) -> Result<SelectStatement, ParseError> {
+        let top_limit = self.parse_optional_top_clause()?;
         let columns = self.parse_columns()?;
 
         let from = if matches!(self.peek().map(|t| &t.token), Some(Token::From)) {
@@ -144,6 +145,14 @@ impl Parser<'_> {
             }
             None
         };
+        let limit = match (top_limit, limit) {
+            (Some(_), Some(_)) => {
+                let at = self.peek().map(|t| t.at);
+                return Err(syntax_err(at, "TOP and LIMIT cannot be combined"));
+            }
+            (Some(top), None) => Some(top),
+            (None, limit) => limit,
+        };
 
         Ok(SelectStatement {
             columns,
@@ -155,6 +164,58 @@ impl Parser<'_> {
             limit,
             set_operation: Vec::new(),
         })
+    }
+
+    /// SQL Server `TOP (<count>)` / `TOP <count>` maps to the existing
+    /// limit AST. Percent and tie-preserving forms stay out of scope.
+    fn parse_optional_top_clause(&mut self) -> Result<Option<LimitClause>, ParseError> {
+        if !self.peek_ident_kw("top") {
+            return Ok(None);
+        }
+        let count_start = self.tokens.get(self.cursor + 1).map(|t| &t.token);
+        if !matches!(
+            count_start,
+            Some(
+                Token::LParen
+                    | Token::Integer(_)
+                    | Token::PlaceholderPositional(_)
+                    | Token::PlaceholderAnonymous
+                    | Token::PlaceholderNamed(_)
+            )
+        ) {
+            return Ok(None);
+        }
+        let top_at = self.peek().map(|t| t.at);
+        self.advance();
+
+        let parenthesized = matches!(self.peek().map(|t| &t.token), Some(Token::LParen));
+        if parenthesized {
+            self.advance();
+        }
+        let count = self.parse_insert_value()?;
+        match &count {
+            InsertValue::Literal {
+                value: SqlLiteral::Integer { .. },
+            }
+            | InsertValue::Placeholder { .. } => {}
+            _ => {
+                return Err(syntax_err(
+                    top_at,
+                    "TOP requires an integer literal or placeholder",
+                ));
+            }
+        }
+        if parenthesized {
+            self.expect_token(Token::RParen, "expected ')' after TOP count")?;
+        }
+        if self.peek_ident_kw("percent") || self.peek_ident_kw("with") {
+            let at = self.peek().map(|t| t.at);
+            return Err(syntax_err(at, "TOP PERCENT / WITH TIES unsupported"));
+        }
+        Ok(Some(LimitClause {
+            count,
+            offset: None,
+        }))
     }
 
     /// `<from-item> ( ( "," | join-keyword ) <from-item> )*`. Returns at

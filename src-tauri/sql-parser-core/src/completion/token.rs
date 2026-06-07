@@ -38,6 +38,13 @@ pub(super) fn completion_token_at(text: &str, cursor: CompletionCursorOffsets) -
             }
         }
 
+        if from_utf8 > 0 && text[..from_utf8].ends_with(':') {
+            let colon_utf8 = from_utf8 - 1;
+            if !text[..colon_utf8].ends_with(':') {
+                from_utf8 = colon_utf8;
+            }
+        }
+
         prefix = text[from_utf8..cursor_utf8].to_string();
     }
 
@@ -87,6 +94,7 @@ fn is_operator_char(ch: char) -> bool {
             | '@'
             | '#'
             | '%'
+            | ':'
             | '^'
             | '&'
             | '|'
@@ -104,28 +112,66 @@ fn valid_cursor_utf8(text: &str, requested: usize) -> usize {
 }
 
 fn quoted_identifier_prefix(before: &str) -> Option<(usize, String, char)> {
-    let quote = '`';
-    if before.chars().filter(|ch| *ch == quote).count() % 2 == 0 {
-        return None;
-    }
-    let quote_start = before.rfind(quote)?;
-    let prefix = &before[quote_start + quote.len_utf8()..];
+    quoted_identifier_prefix_for(before, '`', '`')
+        .or_else(|| quoted_identifier_prefix_for(before, '[', ']'))
+}
+
+fn quoted_identifier_prefix_for(
+    before: &str,
+    open: char,
+    close: char,
+) -> Option<(usize, String, char)> {
+    let quote_start = if open == close {
+        unmatched_same_quote_start(before, open)?
+    } else {
+        before.rfind(open)?
+    };
+    let prefix = &before[quote_start + open.len_utf8()..];
     if prefix
         .chars()
-        .all(|ch| ch != quote && ch != '.' && ch != '\n' && ch != '\r')
+        .all(|ch| ch != open && ch != close && ch != '.' && ch != '\n' && ch != '\r')
     {
-        return Some((quote_start, prefix.to_string(), quote));
+        return Some((quote_start, prefix.to_string(), open));
     }
     None
 }
 
-fn scan_qualifier_start(before_dot: &str) -> usize {
-    let mut start = before_dot.len();
-    for (idx, ch) in before_dot.char_indices().rev() {
-        if !(is_ident_char(ch) || ch == '.' || ch == '`') {
-            break;
+fn unmatched_same_quote_start(before: &str, quote: char) -> Option<usize> {
+    let mut open_start = None;
+    for (idx, ch) in before.char_indices() {
+        if ch != quote {
+            continue;
         }
-        start = idx;
+        open_start = if open_start.is_some() {
+            None
+        } else {
+            Some(idx)
+        };
+    }
+    open_start
+}
+
+fn scan_qualifier_start(before_dot: &str) -> usize {
+    let mut cursor = before_dot.len();
+    let mut start = cursor;
+    while cursor > 0 {
+        let Some((idx, ch)) = before_dot[..cursor].char_indices().next_back() else {
+            break;
+        };
+        if ch == ']' {
+            let Some(open_idx) = before_dot[..idx].rfind('[') else {
+                break;
+            };
+            start = open_idx;
+            cursor = open_idx;
+            continue;
+        }
+        if is_ident_char(ch) || matches!(ch, '.' | '`') {
+            start = idx;
+            cursor = idx;
+            continue;
+        }
+        break;
     }
     start
 }
@@ -140,4 +186,45 @@ fn is_command_prefix_at_line_start(text: &str, prefix_utf8: usize) -> bool {
 
 fn utf16_len(text: &str) -> usize {
     text.chars().map(char::len_utf16).sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cursor_at_end(text: &str) -> CompletionCursorOffsets {
+        CompletionCursorOffsets {
+            utf16: text.chars().map(char::len_utf16).sum(),
+            utf8: text.len(),
+        }
+    }
+
+    #[test]
+    fn backtick_identifier_prefix_requires_unclosed_quote() {
+        let open = completion_token_at("SELECT * FROM `User", cursor_at_end("SELECT * FROM `User"));
+        assert_eq!(open.prefix, "User");
+        assert_eq!(open.quote, Some('`'));
+
+        let closed = completion_token_at(
+            "SELECT * FROM `UserAccounts`",
+            cursor_at_end("SELECT * FROM `UserAccounts`"),
+        );
+        assert_eq!(closed.quote, None);
+
+        let closed_non_ident = completion_token_at(
+            "SELECT * FROM `Order Details!`",
+            cursor_at_end("SELECT * FROM `Order Details!`"),
+        );
+        assert_eq!(closed_non_ident.quote, None);
+    }
+
+    #[test]
+    fn bracket_identifier_prefix_allows_unclosed_mssql_quote() {
+        let token = completion_token_at(
+            "SELECT * FROM [Order",
+            cursor_at_end("SELECT * FROM [Order"),
+        );
+        assert_eq!(token.prefix, "Order");
+        assert_eq!(token.quote, Some('['));
+    }
 }

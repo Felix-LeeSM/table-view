@@ -13,7 +13,7 @@ impl Parser<'_> {
         self.expect_keyword(Token::Into, "expected INTO")?;
 
         // table name
-        let table = self.expect_ident("expected table name")?;
+        let table = self.parse_qualified_ident_string("expected table name")?;
 
         // optional `(col, col, …)`
         let columns = if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
@@ -86,7 +86,7 @@ impl Parser<'_> {
     /// `UPDATE <table> SET <col> = <value>[, …] [FROM …] [WHERE …]
     ///  [RETURNING …]`. Assumes `UPDATE` has been consumed.
     pub(super) fn parse_update(&mut self) -> Result<UpdateStatement, ParseError> {
-        let table = self.expect_ident("expected table name")?;
+        let table = self.parse_qualified_ident_string("expected table name")?;
 
         self.expect_keyword(Token::Set, "expected SET")?;
 
@@ -95,7 +95,7 @@ impl Parser<'_> {
         // optional FROM
         let from = if matches!(self.peek().map(|t| &t.token), Some(Token::From)) {
             self.advance();
-            self.parse_ident_list("expected table name")?
+            self.parse_qualified_ident_string_list("expected table name")?
         } else {
             Vec::new()
         };
@@ -119,12 +119,12 @@ impl Parser<'_> {
     /// `DELETE` has been consumed.
     pub(super) fn parse_delete(&mut self) -> Result<DeleteStatement, ParseError> {
         self.expect_keyword(Token::From, "expected FROM")?;
-        let table = self.expect_ident("expected table name")?;
+        let table = self.parse_qualified_ident_string("expected table name")?;
 
         // optional USING
         let using = if matches!(self.peek().map(|t| &t.token), Some(Token::Using)) {
             self.advance();
-            self.parse_ident_list("expected table name")?
+            self.parse_qualified_ident_string_list("expected table name")?
         } else {
             Vec::new()
         };

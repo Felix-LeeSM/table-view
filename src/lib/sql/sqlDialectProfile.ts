@@ -163,6 +163,52 @@ const SQLITE_KEYWORDS: readonly string[] = [
 
 const DUCKDB_KEYWORDS: readonly string[] = ["DESCRIBE", "SUMMARIZE"];
 
+const ORACLE_KEYWORDS: readonly string[] = [
+  "CONNECT BY",
+  "START WITH",
+  "MINUS",
+  "MERGE",
+  "DUAL",
+  "ROWNUM",
+  "ROWID",
+  "SYSDATE",
+  "SYSTIMESTAMP",
+  "FETCH FIRST",
+  "OFFSET",
+  "RETURNING INTO",
+  "CREATE SEQUENCE",
+  "SEQUENCE",
+  "NEXTVAL",
+  "CURRVAL",
+  "SYNONYM",
+  "CREATE SYNONYM",
+  "CREATE PUBLIC SYNONYM",
+  "PACKAGE",
+  "PACKAGE BODY",
+  "DBMS_OUTPUT",
+  "DBMS_RANDOM",
+  "DBMS_LOB",
+];
+
+const MSSQL_KEYWORDS: readonly string[] = [
+  "TOP",
+  "OFFSET",
+  "FETCH NEXT",
+  "EXEC",
+  "EXECUTE",
+  "CREATE PROCEDURE",
+  "ALTER PROCEDURE",
+  "DROP PROCEDURE",
+  "MERGE",
+  "OUTPUT",
+  "IDENTITY",
+  "NVARCHAR",
+  "DATETIME2",
+  "UNIQUEIDENTIFIER",
+  "TRY_CONVERT",
+  "TRY_CAST",
+];
+
 export const COMMON_SQL_FUNCTIONS: readonly string[] = [
   "COUNT",
   "SUM",
@@ -226,6 +272,48 @@ const DUCKDB_SQL_FUNCTIONS: readonly string[] = [
   "IFNULL",
   "LIST",
   "STRUCT_PACK",
+];
+
+const ORACLE_SQL_FUNCTIONS: readonly string[] = [
+  "NVL",
+  "NVL2",
+  "DECODE",
+  "TO_CHAR",
+  "TO_DATE",
+  "TO_TIMESTAMP",
+  "TRUNC",
+  "ADD_MONTHS",
+  "MONTHS_BETWEEN",
+  "LISTAGG",
+  "REGEXP_LIKE",
+  "REGEXP_REPLACE",
+  "REGEXP_SUBSTR",
+  "SYS_CONTEXT",
+  "DBMS_OUTPUT.PUT_LINE",
+  "DBMS_RANDOM.VALUE",
+  "DBMS_LOB.SUBSTR",
+];
+
+const MSSQL_SQL_FUNCTIONS: readonly string[] = [
+  "GETDATE",
+  "GETUTCDATE",
+  "SYSDATETIME",
+  "SYSUTCDATETIME",
+  "DATEADD",
+  "DATEDIFF",
+  "DATEPART",
+  "ISNULL",
+  "IIF",
+  "TRY_CAST",
+  "TRY_CONVERT",
+  "NEWID",
+  "SUSER_SNAME",
+  "DB_NAME",
+  "OBJECT_ID",
+  "STRING_AGG",
+  "JSON_VALUE",
+  "JSON_QUERY",
+  "OPENJSON",
 ];
 
 const COMMON_CAPABILITIES: SqlDialectCapabilities = {
@@ -326,7 +414,7 @@ export const SQL_DIALECT_PROFILES: Record<SqlDialectId, SqlDialectProfile> = {
     identifierQuote: "[",
     defaultShell: "none",
     capabilities: { ...COMMON_CAPABILITIES },
-    vocabulary: vocabulary([], []),
+    vocabulary: vocabulary(MSSQL_KEYWORDS, MSSQL_SQL_FUNCTIONS),
   },
   oracle: {
     id: "oracle",
@@ -335,7 +423,11 @@ export const SQL_DIALECT_PROFILES: Record<SqlDialectId, SqlDialectProfile> = {
     identifierQuote: '"',
     defaultShell: "none",
     capabilities: { ...COMMON_CAPABILITIES },
-    vocabulary: vocabulary([], []),
+    vocabulary: {
+      ...vocabulary(ORACLE_KEYWORDS, ORACLE_SQL_FUNCTIONS),
+      types: ["NUMBER", "VARCHAR2", "NVARCHAR2", "CLOB", "BLOB", "DATE"],
+      operators: [":BIND", ":ID", ":NAME", ":START_DATE", ":END_DATE"],
+    },
   },
   ansi: {
     id: "ansi",

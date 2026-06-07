@@ -1,19 +1,6 @@
-/**
- * Sprint 138 (#4 — DBMS-aware connection form): PostgreSQL-specific form
- * fields. The previous monolithic `ConnectionDialog` rendered host / port /
- * user / password / database / Mongo block all in one column regardless of
- * `dbType`, which (a) leaked the `user="postgres"` default into every other
- * DBMS and (b) showed irrelevant host/port for SQLite. This file owns the
- * PG-only field shape.
- *
- * Note: shared concerns (Name, Group, Color, Environment, Advanced timeout
- * settings, password handling) stay in `ConnectionDialog` — those are
- * paradigm-agnostic. This component only owns the network/auth/database
- * row that varies by DBMS.
- */
 import type { ConnectionDraft } from "@/types/connection";
 
-export interface PgFormFieldsProps {
+export interface OracleFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
   passwordInput: string;
@@ -24,11 +11,9 @@ export interface PgFormFieldsProps {
   setClearPassword: (value: boolean) => void;
   inputClass: string;
   labelClass: string;
-  userPlaceholder?: string;
-  databasePlaceholder?: string;
 }
 
-export default function PgFormFields({
+export default function OracleFormFields({
   draft,
   onChange,
   passwordInput,
@@ -39,12 +24,9 @@ export default function PgFormFields({
   setClearPassword,
   inputClass,
   labelClass,
-  userPlaceholder = "postgres",
-  databasePlaceholder = "postgres",
-}: PgFormFieldsProps) {
+}: OracleFormFieldsProps) {
   return (
     <>
-      {/* Host & Port */}
       <div className="flex gap-3">
         <div className="flex-1">
           <label htmlFor="conn-host" className={labelClass}>
@@ -74,7 +56,6 @@ export default function PgFormFields({
         </div>
       </div>
 
-      {/* User */}
       <div>
         <label htmlFor="conn-user" className={labelClass}>
           User
@@ -84,11 +65,10 @@ export default function PgFormFields({
           className={inputClass}
           value={draft.user}
           onChange={(e) => onChange({ user: e.target.value })}
-          placeholder={userPlaceholder}
+          placeholder="system"
         />
       </div>
 
-      {/* Password */}
       <div>
         <div className="flex items-center justify-between">
           <label htmlFor="conn-password" className={labelClass}>
@@ -136,17 +116,16 @@ export default function PgFormFields({
         )}
       </div>
 
-      {/* Database */}
       <div>
         <label htmlFor="conn-database" className={labelClass}>
-          Database
+          Service name
         </label>
         <input
           id="conn-database"
           className={inputClass}
           value={draft.database}
           onChange={(e) => onChange({ database: e.target.value })}
-          placeholder={databasePlaceholder}
+          placeholder="FREEPDB1"
         />
       </div>
     </>

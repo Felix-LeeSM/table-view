@@ -13,8 +13,9 @@ RDBMS matrix before SchemaGraph/ERD work starts.
 - Runtime-backed RDBMS profiles must expose `rdb` paradigm, SQL language, RDB
   catalog model, tabular result envelopes, RDB safety policy, and RDB backend
   contract/capabilities.
-- MSSQL and Oracle remain declared-only RDBMS profiles with no runtime
-  connection support.
+- MSSQL now has SQL authentication connection plus bounded query runtime
+  support. Oracle now has service-name connection lifecycle support. Neither
+  source claims catalog/edit/parser/Safe Mode or runtime smoke parity.
 - DuckDB participates in the legacy result renderer compatibility test through
   the shared runtime RDBMS matrix.
 - DuckDB file analytics UI exposure is profile/capability-derived from
