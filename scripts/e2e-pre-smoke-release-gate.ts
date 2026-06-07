@@ -38,12 +38,13 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     const dbTypes = fixtureConnections.map((connection) => connection.db_type);
 
     assert(
-      !dbTypes.includes("mssql"),
-      `${profile}: active MSSQL fixture leaked`,
-    );
-    assert(
       !dbTypes.includes("oracle"),
       `${profile}: active Oracle fixture leaked`,
+    );
+    assert(
+      fixtureConnections.filter((connection) => connection.db_type === "mssql")
+        .length === 1,
+      `${profile}: expected exactly one active MSSQL fixture connection`,
     );
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "sqlite")
@@ -62,6 +63,9 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     const duckdb = fixtureConnections.find(
       (connection) => connection.db_type === "duckdb",
     );
+    const mssql = fixtureConnections.find(
+      (connection) => connection.db_type === "mssql",
+    );
     const sqlitePath = resolve(
       dataDir,
       "fixtures",
@@ -77,6 +81,10 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
 
     assert(sqlite?.database === sqlitePath, `${profile}: SQLite path drifted`);
     assert(duckdb?.database === duckdbPath, `${profile}: DuckDB path drifted`);
+    assert(
+      mssql?.database === spec.profileSpec.database.mssql,
+      `${profile}: MSSQL database drifted`,
+    );
     assert(existsSync(sqlitePath), `${profile}: SQLite fixture file missing`);
     assert(existsSync(duckdbPath), `${profile}: DuckDB fixture file missing`);
     assert(

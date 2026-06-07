@@ -4,6 +4,7 @@ import { MongoClient, type Document } from "mongodb";
 import { createConnection } from "mysql2/promise";
 import { Client as PgClient } from "pg";
 import Redis from "ioredis";
+import sql from "mssql";
 
 const pgConfig = {
   host: process.env.E2E_PG_HOST ?? process.env.PGHOST ?? "localhost",
@@ -38,6 +39,17 @@ const mariadbConfig = {
   user: process.env.MARIADB_USER ?? "testuser",
   password: process.env.MARIADB_PASSWORD ?? "testpass",
   database: process.env.MARIADB_DATABASE ?? "table_view_test",
+};
+
+const mssqlConfig = {
+  host: process.env.E2E_MSSQL_HOST ?? process.env.MSSQL_HOST ?? "localhost",
+  port: Number(process.env.E2E_MSSQL_PORT ?? process.env.MSSQL_PORT ?? 14333),
+  user: process.env.MSSQL_USER ?? "sa",
+  password: process.env.MSSQL_PASSWORD ?? "Testpass123!",
+  database:
+    process.env.E2E_MSSQL_DATABASE ??
+    process.env.MSSQL_DATABASE ??
+    "table_view_test",
 };
 
 const redisConfig = {
@@ -141,6 +153,7 @@ type SeedTarget =
   | "mongodb"
   | "mysql"
   | "mariadb"
+  | "mssql"
   | "redis"
   | "valkey"
   | "elasticsearch"
@@ -151,6 +164,7 @@ const ALL_SEED_TARGETS = [
   "mongodb",
   "mysql",
   "mariadb",
+  "mssql",
   "redis",
   "valkey",
   "elasticsearch",
@@ -165,6 +179,7 @@ const SEED_TARGETS_BY_SPEC_KEY: Record<string, readonly SeedTarget[]> = {
   "postgres-cancellation": ["postgres"],
   mysql: ["mysql"],
   mariadb: ["mariadb"],
+  mssql: ["mssql"],
   mongodb: ["mongodb"],
   "phase-28-slice-A": ["mongodb"],
   redis: ["redis"],
@@ -266,6 +281,65 @@ async function seedMariadb() {
       await connection.end();
     }
   });
+}
+
+async function seedMssql() {
+  const seedSql = await readFile(
+    resolve("e2e/fixtures/seed.mssql.sql"),
+    "utf-8",
+  );
+  await retry("MSSQL", async () => {
+    await ensureMssqlDatabase();
+    const pool = await mssqlPool(mssqlConfig.database);
+    try {
+      for (const statement of splitSqlServerBatches(seedSql)) {
+        await pool.request().query(statement);
+      }
+    } finally {
+      await pool.close();
+    }
+  });
+}
+
+async function ensureMssqlDatabase() {
+  const pool = await mssqlPool("master");
+  try {
+    await pool
+      .request()
+      .input("name", sql.NVarChar, mssqlConfig.database)
+      .query(
+        `IF DB_ID(@name) IS NULL EXEC('CREATE DATABASE ${quoteMssqlIdentifier(
+          mssqlConfig.database,
+        )}')`,
+      );
+  } finally {
+    await pool.close();
+  }
+}
+
+async function mssqlPool(database: string) {
+  return await sql.connect({
+    server: mssqlConfig.host,
+    port: mssqlConfig.port,
+    user: mssqlConfig.user,
+    password: mssqlConfig.password,
+    database,
+    options: {
+      encrypt: false,
+      trustServerCertificate: true,
+    },
+  });
+}
+
+function splitSqlServerBatches(seedSql: string): string[] {
+  return seedSql
+    .split(/^\s*GO\s*$/gim)
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.length > 0);
+}
+
+function quoteMssqlIdentifier(identifier: string): string {
+  return `[${identifier.replace(/]/g, "]]")}]`;
 }
 
 async function seedRedis() {
@@ -548,6 +622,9 @@ async function seedTarget(target: SeedTarget) {
       return;
     case "mariadb":
       await seedMariadb();
+      return;
+    case "mssql":
+      await seedMssql();
       return;
     case "redis":
       await seedRedis();

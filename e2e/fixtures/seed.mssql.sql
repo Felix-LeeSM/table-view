@@ -48,3 +48,16 @@ IF NOT EXISTS (SELECT 1 FROM dbo.orders WHERE user_id = 1 AND total = 99.99)
 IF NOT EXISTS (SELECT 1 FROM dbo.products WHERE name = N'Widget' AND price = 19.99)
   INSERT INTO dbo.products (name, price) VALUES (N'Widget', 19.99);
 GO
+
+CREATE OR ALTER VIEW dbo.active_mssql_users AS
+  SELECT id, name, email
+  FROM dbo.users
+  WHERE email IS NOT NULL;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.mssql_catalog_ping AS
+BEGIN
+  SET NOCOUNT ON;
+  SELECT CAST(1 AS INT) AS ok;
+END;
+GO

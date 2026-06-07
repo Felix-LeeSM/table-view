@@ -11,6 +11,7 @@ export type DbType =
   | "mongodb"
   | "mysql"
   | "mariadb"
+  | "mssql"
   | "sqlite"
   | "duckdb"
   | "redis"
@@ -152,6 +153,7 @@ function dbTypeLabel(dbType: DbType): string {
   if (dbType === "postgresql") return "PostgreSQL";
   if (dbType === "mysql") return "MySQL";
   if (dbType === "mariadb") return "MariaDB";
+  if (dbType === "mssql") return "Microsoft SQL Server";
   if (dbType === "sqlite") return "SQLite";
   if (dbType === "duckdb") return "DuckDB";
   if (dbType === "redis") return "Redis";
@@ -288,6 +290,38 @@ export async function createMariaDbConnection(
   await setInput(
     "#conn-database",
     process.env.MARIADB_DATABASE ?? "table_view_test",
+  );
+
+  await saveConnectionDialog(dialog);
+  await expectConnectionVisible(name);
+}
+
+export async function createMssqlConnection(
+  name = "E2E MSSQL",
+  environment?: ConnectionEnvironment,
+) {
+  const dialog = await openNewConnectionDialog();
+  await selectDatabaseType("mssql");
+
+  await setInput("#conn-name", name);
+  if (environment) {
+    await selectConnectionEnvironment(environment);
+  }
+  await setInput("#conn-host", process.env.E2E_MSSQL_HOST ?? "localhost");
+  await setInput(
+    "#conn-port",
+    process.env.E2E_MSSQL_PORT ?? process.env.MSSQL_PORT ?? "14333",
+  );
+  await setInput("#conn-user", process.env.MSSQL_USER ?? "sa");
+  await setInput(
+    "#conn-password",
+    process.env.MSSQL_PASSWORD ?? "Testpass123!",
+  );
+  await setInput(
+    "#conn-database",
+    process.env.E2E_MSSQL_DATABASE ??
+      process.env.MSSQL_DATABASE ??
+      "table_view_test",
   );
 
   await saveConnectionDialog(dialog);
