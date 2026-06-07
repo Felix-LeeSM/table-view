@@ -13,6 +13,7 @@ interface SqlCompletionWasmModule {
     catalogRevision: string,
     keywords: string,
     vocabularyFunctions: string,
+    databases: string,
     schemas: string,
     objects: string,
     columns: string,
@@ -71,12 +72,19 @@ function callCompleteSql(
     request.catalog.revision,
     request.vocabulary.keywords.join("\n"),
     request.vocabulary.functions.join("\n"),
-    request.catalog.schemas.map((schema) => schema.name).join("\n"),
+    request.catalog.databases.map((database) => database.name).join("\n"),
+    request.catalog.schemas
+      .map((schema) => [schema.name, schema.database].join("\t"))
+      .join("\n"),
     request.catalog.objects
       .map((object) =>
-        [object.kind, object.schema, object.name, object.qualifiedName].join(
-          "\t",
-        ),
+        [
+          object.kind,
+          object.schema,
+          object.name,
+          object.qualifiedName,
+          object.database,
+        ].join("\t"),
       )
       .join("\n"),
     request.catalog.columns
@@ -86,6 +94,7 @@ function callCompleteSql(
           column.table,
           column.name,
           column.qualifiedTableName,
+          column.database,
         ].join("\t"),
       )
       .join("\n"),
@@ -97,6 +106,7 @@ function callCompleteSql(
           fn.qualifiedName,
           fn.arguments ?? "",
           fn.returnType ?? "",
+          fn.database,
         ].join("\t"),
       )
       .join("\n"),

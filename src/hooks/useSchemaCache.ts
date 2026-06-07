@@ -62,6 +62,7 @@ export function useSchemaCache(
     options.clearFileAnalyticsSourcesOnRefresh === true;
   const schemas =
     useSchemaStore((s) => s.schemas[connectionId]?.[db]) ?? EMPTY_SCHEMAS;
+  const loadDatabases = useSchemaStore((s) => s.loadDatabases);
   const loadSchemas = useSchemaStore((s) => s.loadSchemas);
   const loadTables = useSchemaStore((s) => s.loadTables);
   const loadViews = useSchemaStore((s) => s.loadViews);
@@ -108,6 +109,7 @@ export function useSchemaCache(
     if (autoLoadedRef.current.has(key)) return;
     autoLoadedRef.current.add(key);
     setLoadingSchemas(true);
+    void loadDatabases(connectionId);
     loadSchemas(connectionId, db)
       .then(() => {
         const state = useSchemaStore.getState();
@@ -150,6 +152,7 @@ export function useSchemaCache(
     db,
     autoLoadAuxiliaryCatalog,
     schemasSlot,
+    loadDatabases,
     loadSchemas,
     loadTables,
     loadViews,

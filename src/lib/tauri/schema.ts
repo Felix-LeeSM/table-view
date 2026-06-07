@@ -11,6 +11,7 @@ import type {
   TriggerInfo,
   ViewInfo,
 } from "@/types/schema";
+import type { DatabaseInfo } from "@/types/document";
 
 /**
  * Sprint 271a (2026-05-13) — every wrapper accepts an optional
@@ -23,6 +24,12 @@ import type {
  */
 
 // Schema exploration
+export async function listDatabases(
+  connectionId: string,
+): Promise<DatabaseInfo[]> {
+  return invoke<DatabaseInfo[]>("list_databases", { connectionId });
+}
+
 export async function listSchemas(
   connectionId: string,
   expectedDatabase?: string,

@@ -1,8 +1,8 @@
 use super::{
     complete_sql, CompletionCursorOffsets, SqlCompletionCatalogColumn,
-    SqlCompletionCatalogExtension, SqlCompletionCatalogFunction, SqlCompletionCatalogObject,
-    SqlCompletionCatalogSchema, SqlCompletionCatalogSnapshot, SqlCompletionCoreResult,
-    SqlCompletionRequest, SqlCompletionVocabulary,
+    SqlCompletionCatalogDatabase, SqlCompletionCatalogExtension, SqlCompletionCatalogFunction,
+    SqlCompletionCatalogObject, SqlCompletionCatalogSchema, SqlCompletionCatalogSnapshot,
+    SqlCompletionCoreResult, SqlCompletionRequest, SqlCompletionVocabulary,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -16,6 +16,7 @@ pub fn complete_sql_compact(
     catalog_revision: &str,
     keywords: &str,
     vocabulary_functions: &str,
+    databases: &str,
     schemas: &str,
     objects: &str,
     columns: &str,
@@ -37,6 +38,7 @@ pub fn complete_sql_compact(
         },
         catalog: SqlCompletionCatalogSnapshot {
             revision: catalog_revision.to_string(),
+            databases: parse_databases(databases),
             schemas: parse_schemas(schemas),
             objects: parse_objects(objects),
             columns: parse_columns(columns),
@@ -58,7 +60,21 @@ fn parse_schemas(input: &str) -> Vec<SqlCompletionCatalogSchema> {
     input
         .lines()
         .filter(|line| !line.is_empty())
-        .map(|line| SqlCompletionCatalogSchema {
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            Some(SqlCompletionCatalogSchema {
+                name: fields.next()?.to_string(),
+                database: fields.next().unwrap_or_default().to_string(),
+            })
+        })
+        .collect()
+}
+
+fn parse_databases(input: &str) -> Vec<SqlCompletionCatalogDatabase> {
+    input
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(|line| SqlCompletionCatalogDatabase {
             name: line.to_string(),
         })
         .collect()
@@ -74,6 +90,7 @@ fn parse_objects(input: &str) -> Vec<SqlCompletionCatalogObject> {
                 schema: fields.next()?.to_string(),
                 name: fields.next()?.to_string(),
                 qualified_name: fields.next()?.to_string(),
+                database: fields.next().unwrap_or_default().to_string(),
             })
         })
         .collect()
@@ -89,6 +106,7 @@ fn parse_columns(input: &str) -> Vec<SqlCompletionCatalogColumn> {
                 table: fields.next()?.to_string(),
                 name: fields.next()?.to_string(),
                 qualified_table_name: fields.next()?.to_string(),
+                database: fields.next().unwrap_or_default().to_string(),
             })
         })
         .collect()
@@ -105,6 +123,7 @@ fn parse_functions(input: &str) -> Vec<SqlCompletionCatalogFunction> {
                 qualified_name: fields.next()?.to_string(),
                 arguments: empty_to_none(fields.next()?),
                 return_type: empty_to_none(fields.next()?),
+                database: fields.next().unwrap_or_default().to_string(),
             })
         })
         .collect()

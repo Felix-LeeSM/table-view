@@ -20,23 +20,28 @@ fn request(text: &str, cursor_utf16: usize, cursor_utf8: usize) -> SqlCompletion
         },
         catalog: SqlCompletionCatalogSnapshot {
             revision: "rev-1".to_string(),
+            databases: vec![],
             schemas: vec![
                 SqlCompletionCatalogSchema {
+                    database: String::new(),
                     name: "public".to_string(),
                 },
                 SqlCompletionCatalogSchema {
+                    database: String::new(),
                     name: "analytics".to_string(),
                 },
             ],
             objects: vec![
                 SqlCompletionCatalogObject {
                     kind: "table".to_string(),
+                    database: String::new(),
                     schema: "public".to_string(),
                     name: "users".to_string(),
                     qualified_name: "public.users".to_string(),
                 },
                 SqlCompletionCatalogObject {
                     kind: "view".to_string(),
+                    database: String::new(),
                     schema: "analytics".to_string(),
                     name: "active_users".to_string(),
                     qualified_name: "analytics.active_users".to_string(),
@@ -49,6 +54,7 @@ fn request(text: &str, cursor_utf16: usize, cursor_utf8: usize) -> SqlCompletion
                 column("analytics", "active_users", "last_seen_at"),
             ],
             functions: vec![SqlCompletionCatalogFunction {
+                database: String::new(),
                 schema: "public".to_string(),
                 name: "slugify".to_string(),
                 qualified_name: "public.slugify".to_string(),
@@ -106,33 +112,39 @@ fn mysql_catalog_request(text: &str) -> SqlCompletionRequest {
     let mut req = empty_vocabulary_request("mysql", "mysql-client", text);
     req.catalog.schemas = vec![
         SqlCompletionCatalogSchema {
+            database: String::new(),
             name: "app".to_string(),
         },
         SqlCompletionCatalogSchema {
+            database: String::new(),
             name: "audit".to_string(),
         },
     ];
     req.catalog.objects = vec![
         SqlCompletionCatalogObject {
             kind: "table".to_string(),
+            database: String::new(),
             schema: "app".to_string(),
             name: "UserAccounts".to_string(),
             qualified_name: "app.UserAccounts".to_string(),
         },
         SqlCompletionCatalogObject {
             kind: "view".to_string(),
+            database: String::new(),
             schema: "app".to_string(),
             name: "UserSummary".to_string(),
             qualified_name: "app.UserSummary".to_string(),
         },
         SqlCompletionCatalogObject {
             kind: "table".to_string(),
+            database: String::new(),
             schema: "audit".to_string(),
             name: "AuditLog".to_string(),
             qualified_name: "audit.AuditLog".to_string(),
         },
         SqlCompletionCatalogObject {
             kind: "table".to_string(),
+            database: String::new(),
             schema: "app".to_string(),
             name: "Order Details!".to_string(),
             qualified_name: "app.Order Details!".to_string(),
@@ -144,6 +156,7 @@ fn mysql_catalog_request(text: &str) -> SqlCompletionRequest {
         column("audit", "AuditLog", "id"),
     ];
     req.catalog.functions = vec![SqlCompletionCatalogFunction {
+        database: String::new(),
         schema: "app".to_string(),
         name: "normalize_email".to_string(),
         qualified_name: "app.normalize_email".to_string(),
@@ -155,6 +168,7 @@ fn mysql_catalog_request(text: &str) -> SqlCompletionRequest {
 
 fn column(schema: &str, table: &str, name: &str) -> SqlCompletionCatalogColumn {
     SqlCompletionCatalogColumn {
+        database: String::new(),
         schema: schema.to_string(),
         table: table.to_string(),
         name: name.to_string(),
@@ -589,10 +603,12 @@ fn sqlite_returns_keywords_and_dot_shell_commands() {
 fn sqlite_catalog_context_suggests_tables_columns_and_qualified_columns() {
     let mut req = empty_vocabulary_request("sqlite", "sqlite-cli", "SELECT * FROM us");
     req.catalog.schemas = vec![SqlCompletionCatalogSchema {
+        database: String::new(),
         name: "main".to_string(),
     }];
     req.catalog.objects = vec![SqlCompletionCatalogObject {
         kind: "table".to_string(),
+        database: String::new(),
         schema: "main".to_string(),
         name: "users".to_string(),
         qualified_name: "main.users".to_string(),

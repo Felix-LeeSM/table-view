@@ -123,6 +123,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     },
   );
   const schemas = useSchemaStore((s) => s.schemas);
+  const databases = useSchemaStore((s) => s.databases);
   const tables = useSchemaStore((s) => s.tables);
   const views = useSchemaStore((s) => s.views);
   const functions = useSchemaStore((s) => s.functions);
@@ -154,6 +155,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     if (tab.paradigm !== "rdb") return undefined;
     return buildSqlCompletionContext({
       schemas,
+      databases,
       tables,
       views,
       functions,
@@ -166,6 +168,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     });
   }, [
     schemas,
+    databases,
     tables,
     views,
     functions,

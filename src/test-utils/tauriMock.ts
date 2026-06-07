@@ -63,6 +63,7 @@ const TAURI_FUNCTIONS = [
   "insertDocument",
   "insertManyDocuments",
   "listConnections",
+  "listDatabases",
   "listFunctions",
   "listGroups",
   "listMongoCollections",

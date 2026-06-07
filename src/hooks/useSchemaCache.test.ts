@@ -26,6 +26,7 @@ vi.mock("@/lib/runtime/toast", () => ({
 }));
 beforeEach(() => {
   setupTauriMock({
+    listDatabases: vi.fn(() => Promise.resolve([{ name: "db1" }])),
     listSchemas: vi.fn(() => Promise.resolve([{ name: "public" }])),
     listTables: vi.fn(() => Promise.resolve([])),
     listViews: vi.fn(() => Promise.resolve([])),
@@ -46,6 +47,7 @@ beforeEach(() => {
 
 beforeEach(() => {
   useSchemaStore.setState({
+    databases: {},
     schemas: {},
     tables: {},
     views: {},
@@ -65,6 +67,11 @@ describe("useSchemaCache", () => {
     });
     // After mount the store should be hydrated with the public schema and
     // its tables (loadTables + prefetchSchemaColumns are auto-fired).
+    await waitFor(() => {
+      expect(useSchemaStore.getState().databases.conn1).toEqual([
+        { name: "db1" },
+      ]);
+    });
     const state = useSchemaStore.getState();
     expect(state.schemas.conn1?.db1).toEqual([{ name: "public" }]);
     expect(state.tables.conn1?.db1?.public).toEqual([]);

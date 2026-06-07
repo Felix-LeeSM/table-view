@@ -29,6 +29,7 @@ describe("schemaStore table metadata caches", () => {
       getTableConstraints: vi.fn(() => Promise.resolve(CONSTRAINTS)),
     });
     useSchemaStore.setState({
+      databases: {},
       schemas: {},
       tables: {},
       views: {},

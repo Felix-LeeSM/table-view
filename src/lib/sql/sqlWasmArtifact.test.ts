@@ -244,6 +244,7 @@ describe("checked-in SQL WASM artifact", () => {
       "",
       "",
       "",
+      "",
     ) as {
       items: Array<{
         label: string;
@@ -277,6 +278,7 @@ describe("checked-in SQL WASM artifact", () => {
       "none",
       "",
       "rev-oracle",
+      "",
       "",
       "",
       "",
@@ -321,6 +323,7 @@ describe("checked-in SQL WASM artifact", () => {
       "psql",
       "",
       "rev-catalog",
+      "",
       "",
       "",
       "public\nanalytics",
@@ -383,6 +386,7 @@ describe("checked-in SQL WASM artifact", () => {
       "",
       "",
       "",
+      "",
     ) as {
       items: Array<{
         label: string;
@@ -410,6 +414,7 @@ function mariaDbCompletionLabels(serverVersion: string): string[] {
     "",
     "",
     "",
+    "",
   ) as { items: Array<{ label: string }> };
   return result.items.map((item) => item.label);
 }
@@ -423,6 +428,7 @@ function oracleCompletionLabels(prefix: string): string[] {
     "none",
     "",
     "rev-oracle",
+    "",
     "",
     "",
     "",

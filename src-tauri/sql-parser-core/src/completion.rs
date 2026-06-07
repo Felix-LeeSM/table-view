@@ -49,6 +49,7 @@ pub struct SqlCompletionVocabulary {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SqlCompletionCatalogSnapshot {
     pub revision: String,
+    pub databases: Vec<SqlCompletionCatalogDatabase>,
     pub schemas: Vec<SqlCompletionCatalogSchema>,
     pub objects: Vec<SqlCompletionCatalogObject>,
     pub columns: Vec<SqlCompletionCatalogColumn>,
@@ -57,13 +58,20 @@ pub struct SqlCompletionCatalogSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct SqlCompletionCatalogDatabase {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct SqlCompletionCatalogSchema {
+    pub database: String,
     pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SqlCompletionCatalogObject {
     pub kind: String,
+    pub database: String,
     pub schema: String,
     pub name: String,
     pub qualified_name: String,
@@ -71,6 +79,7 @@ pub struct SqlCompletionCatalogObject {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SqlCompletionCatalogColumn {
+    pub database: String,
     pub schema: String,
     pub table: String,
     pub name: String,
@@ -79,6 +88,7 @@ pub struct SqlCompletionCatalogColumn {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SqlCompletionCatalogFunction {
+    pub database: String,
     pub schema: String,
     pub name: String,
     pub qualified_name: String,
@@ -148,6 +158,7 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
             let normalized_qualifier = normalize_identifier_path(qualifier);
             match state {
                 CompletionState::RelationName => {
+                    add_qualified_schemas(&mut items, &request, &normalized_qualifier, &token);
                     add_qualified_catalog_objects(
                         &mut items,
                         &request,
@@ -158,8 +169,11 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
                 CompletionState::FunctionRef => {
                     add_qualified_functions(&mut items, &request, &normalized_qualifier, &token);
                 }
-                CompletionState::ShellMeta | CompletionState::Unsupported => {}
+                CompletionState::DatabaseName
+                | CompletionState::ShellMeta
+                | CompletionState::Unsupported => {}
                 _ => {
+                    add_qualified_schemas(&mut items, &request, &normalized_qualifier, &token);
                     add_qualified_catalog_objects(
                         &mut items,
                         &request,
@@ -178,6 +192,12 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
                 CompletionState::RelationName => {
                     add_catalog_schemas(&mut items, &request, &token);
                     add_catalog_objects(&mut items, &request, &token);
+                }
+                CompletionState::DatabaseName => {
+                    add_catalog_databases(&mut items, &request, &token);
+                    if request.catalog.databases.is_empty() {
+                        add_catalog_schemas(&mut items, &request, &token);
+                    }
                 }
                 CompletionState::InsertColumns => {
                     add_target_columns(
@@ -377,6 +397,47 @@ fn add_catalog_schemas(
     }
 }
 
+fn add_catalog_databases(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    token: &CompletionToken,
+) {
+    for database in &request.catalog.databases {
+        if matches_prefix(&database.name, &token.prefix) {
+            items.push(CompletionItem {
+                label: database.name.clone(),
+                kind: "database".to_string(),
+                apply: Some(apply_identifier(&database.name, token)),
+                detail: Some("catalog database".to_string()),
+                boost: Some(47),
+                runtime_executable: None,
+            });
+        }
+    }
+}
+
+fn add_qualified_schemas(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    qualifier: &str,
+    token: &CompletionToken,
+) {
+    for schema in &request.catalog.schemas {
+        if schema_matches_qualifier(schema, qualifier)
+            && matches_prefix(&schema.name, &token.prefix)
+        {
+            items.push(CompletionItem {
+                label: schema.name.clone(),
+                kind: "schema".to_string(),
+                apply: Some(apply_identifier(&schema.name, token)),
+                detail: Some(schema.database.clone()),
+                boost: Some(43),
+                runtime_executable: None,
+            });
+        }
+    }
+}
+
 fn add_catalog_objects(
     items: &mut Vec<CompletionItem>,
     request: &SqlCompletionRequest,
@@ -419,7 +480,8 @@ fn add_qualified_catalog_objects(
         if object.kind != "table" && object.kind != "view" {
             continue;
         }
-        if same_identifier(&object.schema, qualifier) && matches_prefix(&object.name, &token.prefix)
+        if catalog_object_matches_qualifier(object, qualifier)
+            && matches_prefix(&object.name, &token.prefix)
         {
             items.push(CompletionItem {
                 label: object.name.clone(),
@@ -460,9 +522,7 @@ fn add_target_columns(
         if !matches_prefix(&column.name, &token.prefix) {
             continue;
         }
-        if same_identifier(&column.table, &normalized_target)
-            || same_identifier(&column.qualified_table_name, &normalized_target)
-        {
+        if catalog_column_matches_qualifier(column, &normalized_target) {
             items.push(column_item(column, apply_identifier(&column.name, token)));
         }
     }
@@ -499,9 +559,7 @@ fn add_qualified_columns(
         if !matches_prefix(&column.name, &token.prefix) {
             continue;
         }
-        if same_identifier(&column.table, resolved)
-            || same_identifier(&column.qualified_table_name, resolved)
-        {
+        if catalog_column_matches_qualifier(column, resolved) {
             items.push(column_item(column, apply_identifier(&column.name, token)));
         }
     }
@@ -569,7 +627,7 @@ fn add_qualified_functions(
     token: &CompletionToken,
 ) {
     for function in &request.catalog.functions {
-        if same_identifier(&function.schema, qualifier)
+        if catalog_function_matches_qualifier(function, qualifier)
             && matches_prefix(&function.name, &token.prefix)
         {
             items.push(catalog_function_item(
@@ -642,6 +700,63 @@ fn matches_prefix(candidate: &str, prefix: &str) -> bool {
 
 fn same_identifier(left: &str, right: &str) -> bool {
     normalize_identifier_path(left).eq_ignore_ascii_case(&normalize_identifier_path(right))
+}
+
+fn schema_matches_qualifier(schema: &SqlCompletionCatalogSchema, qualifier: &str) -> bool {
+    let parts = identifier_path_parts(qualifier);
+    matches!(parts.as_slice(), [database] if schema.database.eq_ignore_ascii_case(database))
+}
+
+fn catalog_object_matches_qualifier(object: &SqlCompletionCatalogObject, qualifier: &str) -> bool {
+    let parts = identifier_path_parts(qualifier);
+    match parts.as_slice() {
+        [schema] => object.schema.eq_ignore_ascii_case(schema),
+        [database, schema] => {
+            object.database.eq_ignore_ascii_case(database)
+                && object.schema.eq_ignore_ascii_case(schema)
+        }
+        _ => false,
+    }
+}
+
+fn catalog_column_matches_qualifier(column: &SqlCompletionCatalogColumn, qualifier: &str) -> bool {
+    if same_identifier(&column.table, qualifier)
+        || same_identifier(&column.qualified_table_name, qualifier)
+    {
+        return true;
+    }
+
+    let parts = identifier_path_parts(qualifier);
+    matches!(
+        parts.as_slice(),
+        [database, schema, table]
+            if column.database.eq_ignore_ascii_case(database)
+                && column.schema.eq_ignore_ascii_case(schema)
+                && column.table.eq_ignore_ascii_case(table)
+    )
+}
+
+fn catalog_function_matches_qualifier(
+    function: &SqlCompletionCatalogFunction,
+    qualifier: &str,
+) -> bool {
+    let parts = identifier_path_parts(qualifier);
+    match parts.as_slice() {
+        [schema] => function.schema.eq_ignore_ascii_case(schema),
+        [database, schema] => {
+            function.database.eq_ignore_ascii_case(database)
+                && function.schema.eq_ignore_ascii_case(schema)
+        }
+        _ => false,
+    }
+}
+
+fn identifier_path_parts(identifier: &str) -> Vec<String> {
+    normalize_identifier_path(identifier)
+        .split('.')
+        .filter(|part| !part.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 fn normalize_identifier_path(identifier: &str) -> String {

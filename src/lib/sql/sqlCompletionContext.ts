@@ -1,4 +1,5 @@
 import type { DatabaseType } from "@/types/connection";
+import type { DatabaseInfo } from "@/types/document";
 import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import type {
   ColumnInfo,
@@ -23,6 +24,7 @@ type BySchema<V> = Record<string, V>;
 type ByTable<V> = Record<string, V>;
 
 export interface SqlCompletionCatalogStoreSnapshot {
+  databases?: Record<string, DatabaseInfo[]>;
   schemas: ByConn<SchemaInfo[]>;
   tables: ByConn<BySchema<TableInfo[]>>;
   views: ByConn<BySchema<ViewInfo[]>>;
@@ -44,11 +46,17 @@ export interface BuildSqlCompletionContextInput extends SqlCompletionCatalogStor
 }
 
 export interface SqlCompletionCatalogSchema {
+  database: string;
+  name: string;
+}
+
+export interface SqlCompletionCatalogDatabase {
   name: string;
 }
 
 export interface SqlCompletionCatalogObject {
   kind: "table" | "view";
+  database: string;
   schema: string;
   name: string;
   qualifiedName: string;
@@ -56,6 +64,7 @@ export interface SqlCompletionCatalogObject {
 }
 
 export interface SqlCompletionCatalogColumn {
+  database: string;
   schema: string;
   table: string;
   name: string;
@@ -68,6 +77,7 @@ export interface SqlCompletionCatalogColumn {
 }
 
 export interface SqlCompletionCatalogFunction {
+  database: string;
   schema: string;
   name: string;
   qualifiedName: string;
@@ -86,6 +96,7 @@ export interface SqlCompletionCatalogExtension {
 
 export interface SqlCompletionCatalogSnapshot {
   revision: string;
+  databases: readonly SqlCompletionCatalogDatabase[];
   schemas: readonly SqlCompletionCatalogSchema[];
   objects: readonly SqlCompletionCatalogObject[];
   columns: readonly SqlCompletionCatalogColumn[];
@@ -94,6 +105,7 @@ export interface SqlCompletionCatalogSnapshot {
 }
 
 export interface SqlCompletionCacheState {
+  databasesLoaded: boolean;
   schemasLoaded: boolean;
   objectsLoaded: boolean;
   tablesLoaded: boolean;
@@ -142,6 +154,7 @@ export function buildSqlCompletionContext(
     getSqlDialectProfileForDatabaseType(input.dbType) ??
     getSqlDialectProfile("ansi");
   const byConnDb = selectDb(input, input.connectionId, input.database);
+  const databases = mergeDatabases(byConnDb.databases.map((db) => db.name));
   const explicitSchemas = byConnDb.schemas.map((s) => s.name);
   const fileAnalyticsSources =
     profile.id === "duckdb"
@@ -150,21 +163,23 @@ export function buildSqlCompletionContext(
   const fileAnalyticsObjects = flattenFileAnalyticsObjects(
     fileAnalyticsSources,
     inferFileAnalyticsSchema(profile.id),
+    input.database,
   );
   const fileAnalyticsColumns = flattenFileAnalyticsColumns(
     fileAnalyticsSources,
     inferFileAnalyticsSchema(profile.id),
+    input.database,
   );
   const objects = [
-    ...flattenTables(byConnDb.tables),
-    ...flattenViews(byConnDb.views),
+    ...flattenTables(byConnDb.tables, input.database),
+    ...flattenViews(byConnDb.views, input.database),
     ...fileAnalyticsObjects,
   ].sort(compareCatalogObject);
   const columns = [
-    ...flattenColumns(byConnDb.tableColumnsCache),
+    ...flattenColumns(byConnDb.tableColumnsCache, input.database),
     ...fileAnalyticsColumns,
   ].sort(compareCatalogColumn);
-  const functions = flattenFunctions(byConnDb.functions).sort(
+  const functions = flattenFunctions(byConnDb.functions, input.database).sort(
     compareCatalogFunction,
   );
   const supportsExtensionInventory = profile.id === "postgresql";
@@ -187,6 +202,7 @@ export function buildSqlCompletionContext(
     deriveCatalogRevision(
       input.connectionId,
       input.database,
+      databases,
       schemas,
       objects,
       columns,
@@ -206,13 +222,15 @@ export function buildSqlCompletionContext(
     searchPath: input.searchPath ?? inferSearchPath(profile.id, schemas),
     catalog: {
       revision,
-      schemas: schemas.map((name) => ({ name })),
+      databases: databases.map((name) => ({ name })),
+      schemas: schemas.map((name) => ({ database: input.database, name })),
       objects,
       columns,
       functions,
       extensions,
     },
     cacheState: {
+      databasesLoaded: byConnDb.databasesLoaded,
       schemasLoaded: byConnDb.schemasLoaded,
       objectsLoaded:
         byConnDb.tablesLoaded ||
@@ -232,12 +250,14 @@ function selectDb(
   connectionId: string,
   database: string,
 ): {
+  databases: DatabaseInfo[];
   schemas: SchemaInfo[];
   tables: BySchema<TableInfo[]>;
   views: BySchema<ViewInfo[]>;
   functions: BySchema<FunctionInfo[]>;
   tableColumnsCache: BySchema<ByTable<ColumnInfo[]>>;
   postgresExtensions: PostgresExtensionInfo[];
+  databasesLoaded: boolean;
   schemasLoaded: boolean;
   tablesLoaded: boolean;
   viewsLoaded: boolean;
@@ -245,6 +265,7 @@ function selectDb(
   columnsLoaded: boolean;
   extensionsLoaded: boolean;
 } {
+  const databases = snapshot.databases?.[connectionId];
   const schemas = snapshot.schemas[connectionId]?.[database];
   const tables = snapshot.tables[connectionId]?.[database];
   const views = snapshot.views[connectionId]?.[database];
@@ -255,12 +276,14 @@ function selectDb(
     snapshot.postgresExtensions?.[connectionId]?.[database];
 
   return {
+    databases: databases ?? [],
     schemas: schemas ?? [],
     tables: tables ?? {},
     views: views ?? {},
     functions: functions ?? {},
     tableColumnsCache: tableColumnsCache ?? {},
     postgresExtensions: postgresExtensions ?? [],
+    databasesLoaded: databases !== undefined,
     schemasLoaded: schemas !== undefined,
     tablesLoaded: tables !== undefined,
     viewsLoaded: views !== undefined,
@@ -272,12 +295,14 @@ function selectDb(
 
 function flattenTables(
   tables: BySchema<TableInfo[]>,
+  database: string,
 ): SqlCompletionCatalogObject[] {
   return Object.entries(tables).flatMap(([schemaName, tableList]) =>
     tableList.map((table) => {
       const schema = table.schema || schemaName;
       return {
         kind: "table" as const,
+        database,
         schema,
         name: table.name,
         qualifiedName: qualify(schema, table.name),
@@ -289,12 +314,14 @@ function flattenTables(
 
 function flattenViews(
   views: BySchema<ViewInfo[]>,
+  database: string,
 ): SqlCompletionCatalogObject[] {
   return Object.entries(views).flatMap(([schemaName, viewList]) =>
     viewList.map((view) => {
       const schema = view.schema || schemaName;
       return {
         kind: "view" as const,
+        database,
         schema,
         name: view.name,
         qualifiedName: qualify(schema, view.name),
@@ -306,6 +333,7 @@ function flattenViews(
 
 function flattenColumns(
   tableColumnsCache: BySchema<ByTable<ColumnInfo[]>>,
+  database: string,
 ): SqlCompletionCatalogColumn[] {
   const columns: SqlCompletionCatalogColumn[] = [];
   for (const [schema, tables] of Object.entries(tableColumnsCache)) {
@@ -313,6 +341,7 @@ function flattenColumns(
       const qualifiedTableName = qualify(schema, table);
       for (const column of columnList) {
         columns.push({
+          database,
           schema,
           table,
           name: column.name,
@@ -332,10 +361,12 @@ function flattenColumns(
 function flattenFileAnalyticsObjects(
   sources: readonly FileAnalyticsSourceMetadata[],
   schema: string | null,
+  database: string,
 ): SqlCompletionCatalogObject[] {
   if (!schema) return [];
   return sources.map((metadata) => ({
     kind: "table",
+    database,
     schema,
     name: metadata.source.alias,
     qualifiedName: qualify(schema, metadata.source.alias),
@@ -346,11 +377,13 @@ function flattenFileAnalyticsObjects(
 function flattenFileAnalyticsColumns(
   sources: readonly FileAnalyticsSourceMetadata[],
   schema: string | null,
+  database: string,
 ): SqlCompletionCatalogColumn[] {
   if (!schema) return [];
   return sources.flatMap((metadata) => {
     const qualifiedTableName = qualify(schema, metadata.source.alias);
     return metadata.columns.map((column) => ({
+      database,
       schema,
       table: metadata.source.alias,
       name: column.name,
@@ -366,11 +399,13 @@ function flattenFileAnalyticsColumns(
 
 function flattenFunctions(
   functions: BySchema<FunctionInfo[]>,
+  database: string,
 ): SqlCompletionCatalogFunction[] {
   return Object.entries(functions).flatMap(([schemaName, functionList]) =>
     functionList.map((fn) => {
       const schema = fn.schema || schemaName;
       return {
+        database,
         schema,
         name: fn.name,
         qualifiedName: qualify(schema, fn.name),
@@ -395,6 +430,16 @@ function flattenExtensions(
 }
 
 function mergeSchemas(...groups: readonly (readonly string[])[]): string[] {
+  const names = new Set<string>();
+  for (const group of groups) {
+    for (const name of group) {
+      if (name) names.add(name);
+    }
+  }
+  return Array.from(names).sort((a, b) => a.localeCompare(b));
+}
+
+function mergeDatabases(...groups: readonly (readonly string[])[]): string[] {
   const names = new Set<string>();
   for (const group of groups) {
     for (const name of group) {
@@ -433,6 +478,7 @@ function inferSearchPath(
 function deriveCatalogRevision(
   connectionId: string,
   database: string,
+  databases: readonly string[],
   schemas: readonly string[],
   objects: readonly SqlCompletionCatalogObject[],
   columns: readonly SqlCompletionCatalogColumn[],
@@ -440,18 +486,20 @@ function deriveCatalogRevision(
   extensions: readonly SqlCompletionCatalogExtension[],
 ): string {
   const parts = [
+    ...databases.map((db) => `d:${db}`),
     ...schemas.map((schema) => `s:${schema}`),
     ...objects.map(
-      (object) => `o:${object.kind}:${object.qualifiedName}:${object.rowCount}`,
+      (object) =>
+        `o:${object.kind}:${object.database}:${object.qualifiedName}:${object.rowCount}`,
     ),
     ...columns.map(
       (column) =>
-        `c:${column.qualifiedName}:${column.dataType}:${column.nullable}:` +
+        `c:${column.database}:${column.qualifiedName}:${column.dataType}:${column.nullable}:` +
         `${column.isPrimaryKey}:${column.isForeignKey}`,
     ),
     ...functions.map(
       (fn) =>
-        `f:${fn.kind}:${fn.qualifiedName}:${fn.arguments ?? ""}:` +
+        `f:${fn.kind}:${fn.database}:${fn.qualifiedName}:${fn.arguments ?? ""}:` +
         `${fn.returnType ?? ""}:${fn.language ?? ""}`,
     ),
     ...extensions.map(
@@ -463,6 +511,7 @@ function deriveCatalogRevision(
   return [
     connectionId,
     database,
+    databases.length,
     schemas.length,
     objects.length,
     columns.length,
@@ -491,6 +540,7 @@ function compareCatalogObject(
   right: SqlCompletionCatalogObject,
 ): number {
   return (
+    left.database.localeCompare(right.database) ||
     left.schema.localeCompare(right.schema) ||
     left.name.localeCompare(right.name) ||
     left.kind.localeCompare(right.kind)
@@ -502,6 +552,7 @@ function compareCatalogColumn(
   right: SqlCompletionCatalogColumn,
 ): number {
   return (
+    left.database.localeCompare(right.database) ||
     left.schema.localeCompare(right.schema) ||
     left.table.localeCompare(right.table) ||
     left.name.localeCompare(right.name)
@@ -513,6 +564,7 @@ function compareCatalogFunction(
   right: SqlCompletionCatalogFunction,
 ): number {
   return (
+    left.database.localeCompare(right.database) ||
     left.schema.localeCompare(right.schema) ||
     left.name.localeCompare(right.name) ||
     left.kind.localeCompare(right.kind)

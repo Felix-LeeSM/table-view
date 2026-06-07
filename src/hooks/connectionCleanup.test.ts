@@ -52,6 +52,7 @@ function seedTableWorkspace(connectionId: string, database: string): void {
 
 function resetStores(): void {
   useSchemaStore.setState({
+    databases: {},
     schemas: {},
     tables: {},
     views: {},
@@ -83,6 +84,7 @@ describe("connection cleanup orchestrator", () => {
 
   it("[RISK-040] clears caches, workspace tabs, and pending edits for one connection only", () => {
     useSchemaStore.setState({
+      databases: { conn1: [{ name: "dbA" }], conn2: [{ name: "dbA" }] },
       schemas: { conn1: { dbA: [] }, conn2: { dbA: [] } },
       tables: { conn1: { dbA: { public: [] } }, conn2: { dbA: {} } },
       views: { conn1: { dbA: { public: [] } }, conn2: { dbA: {} } },
@@ -132,6 +134,8 @@ describe("connection cleanup orchestrator", () => {
 
     cleanupConnectionFrontendState("conn1");
 
+    expect(useSchemaStore.getState().databases.conn1).toBeUndefined();
+    expect(useSchemaStore.getState().databases.conn2).toBeDefined();
     expect(useSchemaStore.getState().schemas.conn1).toBeUndefined();
     expect(useSchemaStore.getState().schemas.conn2).toBeDefined();
     expect(useDocumentCatalogStore.getState().databases.conn1).toBeUndefined();

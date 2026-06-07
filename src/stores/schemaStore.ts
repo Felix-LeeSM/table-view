@@ -11,6 +11,7 @@ import type {
   ViewInfo,
 } from "@/types/schema";
 import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
+import type { DatabaseInfo } from "@/types/document";
 import * as tauri from "@lib/tauri";
 import {
   deleteConn,
@@ -70,6 +71,7 @@ export function registerSchemaDbMismatchRecoveryHandler(
 }
 
 interface SchemaState {
+  databases: Record<string, DatabaseInfo[]>;
   schemas: ByConn<SchemaInfo[]>;
   tables: ByConn<BySchema<TableInfo[]>>;
   views: ByConn<BySchema<ViewInfo[]>>;
@@ -89,6 +91,7 @@ interface SchemaState {
   loading: boolean;
   error: string | null;
 
+  loadDatabases: (connId: string) => Promise<DatabaseInfo[]>;
   loadSchemas: (connId: string, db: string) => Promise<void>;
   loadTables: (connId: string, db: string, schema: string) => Promise<void>;
   recordTablesReloaded: (
@@ -211,6 +214,7 @@ function handleDbMismatch(connId: string, err: unknown): void {
 // ---------------------------------------------------------------------------
 
 export const useSchemaStore = create<SchemaState>((set, get) => ({
+  databases: {},
   schemas: {},
   tables: {},
   views: {},
@@ -223,6 +227,24 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   triggers: {},
   loading: false,
   error: null,
+
+  loadDatabases: async (connId) => {
+    const cached = get().databases[connId];
+    if (cached) return cached;
+    try {
+      const databases = await tauri.listDatabases(connId);
+      set((state) => ({
+        databases: {
+          ...state.databases,
+          [connId]: databases,
+        },
+      }));
+      return databases;
+    } catch (e) {
+      handleDbMismatch(connId, e);
+      return [];
+    }
+  },
 
   loadSchemas: async (connId, db) => {
     set({ loading: true, error: null });
@@ -547,6 +569,11 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
 
   clearForConnection: (connId) => {
     set((state) => ({
+      databases: (() => {
+        const next = { ...state.databases };
+        delete next[connId];
+        return next;
+      })(),
       schemas: deleteConn(state.schemas, connId),
       tables: deleteConn(state.tables, connId),
       views: deleteConn(state.views, connId),

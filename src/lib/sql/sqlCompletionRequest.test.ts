@@ -91,6 +91,7 @@ describe("buildSqlCompletionRequest", () => {
       expect(req.catalog.objects).toEqual([
         {
           kind: "table",
+          database: "app",
           schema: "main",
           name: "users",
           qualifiedName: "main.users",
@@ -247,6 +248,7 @@ describe("buildSqlCompletionRequest", () => {
 
     expect(req.catalog.objects).toContainEqual({
       kind: "table",
+      database: "app",
       schema: "main",
       name: "sales_csv",
       qualifiedName: "main.sales_csv",
@@ -255,6 +257,7 @@ describe("buildSqlCompletionRequest", () => {
     expect(req.catalog.columns).toEqual(
       expect.arrayContaining([
         {
+          database: "app",
           schema: "main",
           table: "sales_csv",
           name: "order_id",
@@ -266,6 +269,7 @@ describe("buildSqlCompletionRequest", () => {
           isForeignKey: false,
         },
         {
+          database: "app",
           schema: "main",
           table: "sales_csv",
           name: "amount",

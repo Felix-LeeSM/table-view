@@ -42,9 +42,9 @@ pub use ast::{
 pub use completion::{
     complete_sql, complete_sql_compact, CompletionCursorOffsets, CompletionItem,
     CompletionReplaceRange, CompletionResultMetadata, SqlCompletionCatalogColumn,
-    SqlCompletionCatalogExtension, SqlCompletionCatalogFunction, SqlCompletionCatalogObject,
-    SqlCompletionCatalogSchema, SqlCompletionCatalogSnapshot, SqlCompletionCoreResult,
-    SqlCompletionRequest, SqlCompletionVocabulary,
+    SqlCompletionCatalogDatabase, SqlCompletionCatalogExtension, SqlCompletionCatalogFunction,
+    SqlCompletionCatalogObject, SqlCompletionCatalogSchema, SqlCompletionCatalogSnapshot,
+    SqlCompletionCoreResult, SqlCompletionRequest, SqlCompletionVocabulary,
 };
 pub use parser::parse;
 
@@ -94,6 +94,7 @@ mod wasm_bridge {
         catalog_revision: &str,
         keywords: &str,
         vocabulary_functions: &str,
+        databases: &str,
         schemas: &str,
         objects: &str,
         columns: &str,
@@ -110,6 +111,7 @@ mod wasm_bridge {
             catalog_revision,
             keywords,
             vocabulary_functions,
+            databases,
             schemas,
             objects,
             columns,

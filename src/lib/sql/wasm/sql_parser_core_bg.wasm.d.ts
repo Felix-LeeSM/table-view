@@ -28,6 +28,8 @@ export const complete_sql: (
   x: number,
   y: number,
   z: number,
+  a1: number,
+  b1: number,
 ) => number;
 export const parse_sql: (a: number, b: number) => number;
 export const __wbindgen_export: (a: number, b: number) => number;

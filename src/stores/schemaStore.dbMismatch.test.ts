@@ -76,6 +76,7 @@ async function flushMicrotasks(): Promise<void> {
 describe("schemaStore — DbMismatch silent sync (Sprint 271a)", () => {
   beforeEach(() => {
     useSchemaStore.setState({
+      databases: {},
       schemas: {},
       tables: {},
       views: {},

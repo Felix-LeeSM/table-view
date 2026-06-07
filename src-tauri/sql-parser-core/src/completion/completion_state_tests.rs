@@ -16,11 +16,14 @@ fn request(text: &str, cursor_utf16: usize, cursor_utf8: usize) -> SqlCompletion
         },
         catalog: SqlCompletionCatalogSnapshot {
             revision: "rev-state".to_string(),
+            databases: vec![],
             schemas: vec![SqlCompletionCatalogSchema {
+                database: String::new(),
                 name: "public".to_string(),
             }],
             objects: vec![SqlCompletionCatalogObject {
                 kind: "table".to_string(),
+                database: String::new(),
                 schema: "public".to_string(),
                 name: "users".to_string(),
                 qualified_name: "public.users".to_string(),
@@ -32,6 +35,7 @@ fn request(text: &str, cursor_utf16: usize, cursor_utf8: usize) -> SqlCompletion
                 column("analytics", "active_users", "last_seen_at"),
             ],
             functions: vec![SqlCompletionCatalogFunction {
+                database: String::new(),
                 schema: "public".to_string(),
                 name: "slugify".to_string(),
                 qualified_name: "public.slugify".to_string(),
@@ -45,6 +49,7 @@ fn request(text: &str, cursor_utf16: usize, cursor_utf8: usize) -> SqlCompletion
 
 fn column(schema: &str, table: &str, name: &str) -> SqlCompletionCatalogColumn {
     SqlCompletionCatalogColumn {
+        database: String::new(),
         schema: schema.to_string(),
         table: table.to_string(),
         name: name.to_string(),
@@ -73,6 +78,12 @@ fn explicit_completion_state_classifier_covers_initial_sql_states() {
             .metadata
             .completion_state,
         CompletionState::RelationName
+    );
+    assert_eq!(
+        complete_sql(request("USE ", 4, 4))
+            .metadata
+            .completion_state,
+        CompletionState::DatabaseName
     );
     assert_eq!(
         complete_sql(request("SELECT u. FROM users u", 9, 9))
