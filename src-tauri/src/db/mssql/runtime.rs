@@ -557,4 +557,42 @@ mod tests {
             ColumnCategory::Unknown
         );
     }
+
+    #[test]
+    fn mssql_column_metadata_covers_driver_type_families() {
+        for (column_type, data_type, category) in [
+            (ColumnType::Bit, "bit", ColumnCategory::Bool),
+            (ColumnType::Bitn, "bit", ColumnCategory::Bool),
+            (ColumnType::Int1, "tinyint", ColumnCategory::Int),
+            (ColumnType::Int2, "smallint", ColumnCategory::Int),
+            (ColumnType::Int8, "bigint", ColumnCategory::Int),
+            (ColumnType::Intn, "int", ColumnCategory::Int),
+            (ColumnType::Float4, "real", ColumnCategory::Float),
+            (ColumnType::Float8, "float", ColumnCategory::Float),
+            (ColumnType::Floatn, "float", ColumnCategory::Float),
+            (ColumnType::Money, "money", ColumnCategory::Float),
+            (ColumnType::Decimaln, "decimal", ColumnCategory::Float),
+            (ColumnType::Numericn, "numeric", ColumnCategory::Float),
+            (ColumnType::Datetime4, "datetime", ColumnCategory::Datetime),
+            (ColumnType::Datetimen, "datetime", ColumnCategory::Datetime),
+            (ColumnType::Daten, "date", ColumnCategory::Datetime),
+            (ColumnType::Timen, "time", ColumnCategory::Datetime),
+            (
+                ColumnType::DatetimeOffsetn,
+                "datetimeoffset",
+                ColumnCategory::Datetime,
+            ),
+            (ColumnType::BigBinary, "varbinary", ColumnCategory::Binary),
+            (ColumnType::Image, "image", ColumnCategory::Binary),
+            (ColumnType::Xml, "xml", ColumnCategory::Object),
+            (ColumnType::Udt, "udt", ColumnCategory::Object),
+            (ColumnType::BigVarChar, "varchar", ColumnCategory::Text),
+            (ColumnType::BigChar, "varchar", ColumnCategory::Text),
+            (ColumnType::NChar, "nvarchar", ColumnCategory::Text),
+            (ColumnType::NText, "ntext", ColumnCategory::Text),
+        ] {
+            assert_eq!(mssql_column_type_name(column_type), data_type);
+            assert_eq!(mssql_column_category(column_type), category);
+        }
+    }
 }
