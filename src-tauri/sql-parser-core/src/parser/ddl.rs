@@ -438,11 +438,14 @@ impl Parser<'_> {
 
     /// Parse a column type token sequence. The lexer keyword allowlist
     /// (`INTEGER`, `BIGINT`, `VARCHAR`, `TEXT`, `TIMESTAMP`, `DATE`,
-    /// `BOOLEAN`, `NUMERIC`, `SERIAL`, `UUID`) is the source of truth;
-    /// any other token in type position parses to `SyntaxError` (AC-
-    /// 394-T21). `VARCHAR(n)` requires a parenthesized integer; `NUMERIC`
-    /// accepts zero, one, or two integer arguments; `TIMESTAMP WITH TIME
-    /// ZONE` is recognized as a three-token sequence.
+    /// `BOOLEAN`, `NUMERIC`, `SERIAL`, `UUID`) is the source of truth
+    /// for shared SQL types; a narrow Oracle static-safety DDL type slice
+    /// (`NUMBER`, `VARCHAR2`, `CLOB`, `BLOB`) is accepted in identifier
+    /// position. Any other token in type position parses to `SyntaxError`
+    /// (AC-394-T21). `VARCHAR(n)` / `VARCHAR2(n)` require a parenthesized
+    /// integer; `NUMERIC` / `NUMBER` accept zero, one, or two integer
+    /// arguments; `TIMESTAMP WITH TIME ZONE` is recognized as a three-token
+    /// sequence.
     fn parse_column_type(&mut self) -> Result<ColumnType, ParseError> {
         let tok = self
             .peek()
@@ -513,52 +516,31 @@ impl Parser<'_> {
             Token::KwNumeric => {
                 self.advance();
                 // `NUMERIC` — bare, `NUMERIC(p)`, or `NUMERIC(p, s)`.
-                if !matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
-                    return Ok(ColumnType::Numeric {
-                        precision: None,
-                        scale: None,
-                    });
-                }
-                self.advance();
-                let p_tok = self
-                    .peek()
-                    .ok_or_else(|| syntax_err(None, "expected precision integer"))?
-                    .clone();
-                let precision = match p_tok.token {
-                    Token::Integer(v) => v,
-                    _ => {
-                        return Err(syntax_err(
-                            Some(p_tok.at),
-                            "NUMERIC precision must be an integer literal",
-                        ));
-                    }
-                };
-                self.advance();
-                let scale = if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
-                    self.advance();
-                    let s_tok = self
-                        .peek()
-                        .ok_or_else(|| syntax_err(None, "expected scale integer"))?
-                        .clone();
-                    let s = match s_tok.token {
-                        Token::Integer(v) => v,
-                        _ => {
-                            return Err(syntax_err(
-                                Some(s_tok.at),
-                                "NUMERIC scale must be an integer literal",
-                            ));
-                        }
-                    };
-                    self.advance();
-                    Some(s)
-                } else {
-                    None
-                };
-                self.expect_token(Token::RParen, "expected ')'")?;
+                let (precision, scale) = self.parse_precision_scale("NUMERIC")?;
                 Ok(ColumnType::Numeric {
-                    precision: Some(precision),
+                    precision,
                     scale,
                 })
+            }
+            Token::Ident(name) if name.eq_ignore_ascii_case("number") => {
+                self.advance();
+                let (precision, scale) = self.parse_precision_scale("NUMBER")?;
+                Ok(ColumnType::Number { precision, scale })
+            }
+            Token::Ident(name) if name.eq_ignore_ascii_case("varchar2") => {
+                self.advance();
+                self.expect_token(Token::LParen, "VARCHAR2 requires '(<length>)'")?;
+                let length = self.parse_type_length("VARCHAR2")?;
+                self.expect_token(Token::RParen, "expected ')'")?;
+                Ok(ColumnType::Varchar2 { length })
+            }
+            Token::Ident(name) if name.eq_ignore_ascii_case("clob") => {
+                self.advance();
+                Ok(ColumnType::Clob)
+            }
+            Token::Ident(name) if name.eq_ignore_ascii_case("blob") => {
+                self.advance();
+                Ok(ColumnType::Blob)
             }
             Token::Ident(name) if is_known_postgres_extension_type(&name) => {
                 self.advance();
@@ -569,10 +551,69 @@ impl Parser<'_> {
             // INT4 / STRING / DATETIME — out of scope (AC-394-T21).
             Token::Ident(_) => Err(syntax_err(
                 Some(tok.at),
-                "unsupported column type — allowlist is INTEGER/BIGINT/VARCHAR/TEXT/TIMESTAMP/DATE/BOOLEAN/NUMERIC/SERIAL/UUID plus known PostgreSQL extension types",
+                "unsupported column type — allowlist is INTEGER/BIGINT/VARCHAR/TEXT/TIMESTAMP/DATE/BOOLEAN/NUMERIC/SERIAL/UUID, bounded Oracle NUMBER/VARCHAR2/CLOB/BLOB, plus known PostgreSQL extension types",
             )),
             _ => Err(syntax_err(Some(tok.at), "expected column type")),
         }
+    }
+
+    fn parse_type_length(&mut self, type_name: &str) -> Result<i64, ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected length integer"))?
+            .clone();
+        let length = match tok.token {
+            Token::Integer(v) => v,
+            _ => {
+                return Err(syntax_err(
+                    Some(tok.at),
+                    &format!("{type_name} length must be an integer literal"),
+                ));
+            }
+        };
+        self.advance();
+        Ok(length)
+    }
+
+    fn parse_precision_scale(
+        &mut self,
+        type_name: &str,
+    ) -> Result<(Option<i64>, Option<i64>), ParseError> {
+        if !matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+            return Ok((None, None));
+        }
+        self.advance();
+        let precision = self.parse_precision_scale_integer(type_name, "precision")?;
+        let scale = if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+            self.advance();
+            Some(self.parse_precision_scale_integer(type_name, "scale")?)
+        } else {
+            None
+        };
+        self.expect_token(Token::RParen, "expected ')'")?;
+        Ok((Some(precision), scale))
+    }
+
+    fn parse_precision_scale_integer(
+        &mut self,
+        type_name: &str,
+        label: &str,
+    ) -> Result<i64, ParseError> {
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, &format!("expected {label} integer")))?
+            .clone();
+        let value = match tok.token {
+            Token::Integer(v) => v,
+            _ => {
+                return Err(syntax_err(
+                    Some(tok.at),
+                    &format!("{type_name} {label} must be an integer literal"),
+                ));
+            }
+        };
+        self.advance();
+        Ok(value)
     }
 
     fn parse_extension_type_modifiers(&mut self) -> Result<Vec<ExtensionTypeModifier>, ParseError> {

@@ -184,6 +184,21 @@ describe("checked-in SQL WASM artifact", () => {
     ]);
   });
 
+  it("parseSql accepts bounded Oracle scalar DDL types through real WASM", async () => {
+    const result = await parseSql(
+      "CREATE TABLE accounts (id NUMBER(10), name VARCHAR2(80), body CLOB, payload BLOB)",
+    );
+
+    expect(result.kind).toBe("create-table");
+    if (result.kind !== "create-table") return;
+    expect(result.columns.map((column) => column.data_type)).toEqual([
+      { kind: "number", precision: 10, scale: null },
+      { kind: "varchar2", length: 80 },
+      { kind: "clob" },
+      { kind: "blob" },
+    ]);
+  });
+
   it.each([
     ["function call", "CALL refresh_user_stats(NOW())"],
     ["arithmetic", "CALL refresh_user_stats(1 + 2)"],

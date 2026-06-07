@@ -3748,6 +3748,61 @@ fn ac_394_t07_create_table_numeric_bare() {
 }
 
 #[test]
+fn oracle_static_safety_create_table_number_variants_parse() {
+    let s =
+        ok_create_table("CREATE TABLE accounts (id NUMBER(10), amount NUMBER(12, 2), raw NUMBER)");
+
+    assert!(matches!(
+        s.columns[0].data_type,
+        ColumnType::Number {
+            precision: Some(10),
+            scale: None,
+        }
+    ));
+    assert!(matches!(
+        s.columns[1].data_type,
+        ColumnType::Number {
+            precision: Some(12),
+            scale: Some(2),
+        }
+    ));
+    assert!(matches!(
+        s.columns[2].data_type,
+        ColumnType::Number {
+            precision: None,
+            scale: None,
+        }
+    ));
+}
+
+#[test]
+fn oracle_static_safety_create_table_varchar2_and_lobs_parse() {
+    let s = ok_create_table("CREATE TABLE docs (name VARCHAR2(80), body CLOB, payload BLOB)");
+
+    assert!(matches!(
+        s.columns[0].data_type,
+        ColumnType::Varchar2 { length: 80 }
+    ));
+    assert!(matches!(s.columns[1].data_type, ColumnType::Clob));
+    assert!(matches!(s.columns[2].data_type, ColumnType::Blob));
+}
+
+#[test]
+fn oracle_static_safety_plsql_package_and_admin_paths_reject() {
+    for sql in [
+        "CREATE OR REPLACE PACKAGE app_pkg AS END app_pkg",
+        "CREATE PACKAGE BODY app_pkg AS END app_pkg",
+        "ALTER SYSTEM SET processes = 300",
+    ] {
+        let e = err(sql);
+        assert!(matches!(
+            e.error_kind,
+            ParseErrorKind::SyntaxError | ParseErrorKind::UnsupportedStatement
+        ));
+    }
+}
+
+#[test]
 fn ac_394_t08_create_table_timestamp_bare() {
     let s = ok_create_table("CREATE TABLE t (a TIMESTAMP)");
     assert!(matches!(

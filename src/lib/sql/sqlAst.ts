@@ -407,6 +407,14 @@ export type SqlColumnType =
       scale: number | null;
     }
   | {
+      kind: "number";
+      precision: number | null;
+      scale: number | null;
+    }
+  | { kind: "varchar2"; length: number }
+  | { kind: "clob" }
+  | { kind: "blob" }
+  | {
       kind: "extension";
       name: string;
       modifiers: SqlExtensionTypeModifier[];
