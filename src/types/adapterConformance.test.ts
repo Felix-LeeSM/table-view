@@ -295,7 +295,7 @@ describe("adapter conformance matrix", () => {
     expect(mssql.areas.ddl.deferred).toEqual([]);
   });
 
-  it("locks Oracle to query-bounded conformance", () => {
+  it("locks Oracle to catalog-query-bounded conformance", () => {
     const oracle = ADAPTER_CONFORMANCE_MATRIX.oracle;
 
     expect(oracle.level).toBe("runtime");
@@ -307,11 +307,14 @@ describe("adapter conformance matrix", () => {
       "connection.readOnly",
       "connection.filePicker",
     ]);
-    expect(oracle.areas.catalog.checks).toEqual([]);
-    expect(oracle.areas.catalog.deferred).toEqual([
+    expect(oracle.areas.catalog.checks).toEqual([
       "catalog.browse",
       "catalog.schema",
+      "catalog.indexes",
+      "catalog.constraints",
+      "catalog.relationships",
     ]);
+    expect(oracle.areas.catalog.deferred).toEqual([]);
     expect(oracle.areas.query.checks).toEqual([
       "query.query",
       "query.multiStatement",

@@ -430,7 +430,9 @@ function pickCategoryItems(
     return { unfilteredItems: fns, items: fns, itemKind: "function" };
   }
   // procedures
-  const procs = functions.filter((f) => f.kind === "procedure");
+  const procs = functions.filter(
+    (f) => f.kind === "procedure" || f.kind === "package",
+  );
   return { unfilteredItems: procs, items: procs, itemKind: "function" };
 }
 

@@ -458,7 +458,7 @@ export interface FunctionInfo {
   returnType: string | null;
   language: string | null;
   source: string | null;
-  kind: string; // "function" | "procedure" | "aggregate" | "window"
+  kind: string; // "function" | "procedure" | "package" | "aggregate" | "window"
 }
 
 /**

@@ -135,6 +135,39 @@ describe("DataGridTable — FK navigation (sprint-89 #FK-1 AC-04)", () => {
     expect(onNavigateToFk).toHaveBeenCalledWith("dbo", "users", "id", "42");
   });
 
+  it("navigates Oracle schema-qualified FK references emitted by the catalog", async () => {
+    const user = userEvent.setup();
+    const onNavigateToFk = vi.fn();
+    const oracleData: TableData = {
+      ...FK_DATA,
+      columns: FK_DATA.columns.map((column) =>
+        column.name === "user_id"
+          ? { ...column, fk_reference: "APP.USERS(ID)" }
+          : column,
+      ),
+      executed_query: "SELECT * FROM APP.ORDERS",
+    };
+
+    render(
+      <DataGridTable
+        {...makeProps({
+          data: oracleData,
+          schema: "APP",
+          table: "ORDERS",
+          onNavigateToFk,
+        })}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Open referenced row in APP\.USERS/i,
+      }),
+    );
+
+    expect(onNavigateToFk).toHaveBeenCalledWith("APP", "USERS", "ID", "42");
+  });
+
   it("does not render the FK icon for NULL cells", () => {
     const onNavigateToFk = vi.fn();
 

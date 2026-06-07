@@ -1,12 +1,17 @@
-//! Oracle connection lifecycle and bounded query adapter.
+//! Oracle connection lifecycle, bounded query adapter, and catalog metadata browse.
 //!
-//! Issue #519 adds the first query runtime slice: SELECT execution and
-//! transactional DML batches. Catalog, edit, structured DDL, parser/Safe Mode,
-//! fixture/live/E2E, SID/TNS, wallet/TLS, and PL/SQL parity remain unsupported.
+//! Oracle supports service-name connection, bounded SELECT/DML query runtime,
+//! and live catalog/workbench metadata. Table-data browse, edit, structured DDL,
+//! runtime Safe Mode, fixture/live/E2E, SID/TNS, wallet/TLS, and full PL/SQL
+//! parity remain unsupported.
 
+mod catalog;
 mod runtime;
+#[cfg(test)]
+mod tests;
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::time::Duration;
 
 use oracle_rs::{Config as OracleConfig, Connection as OracleConnection};
@@ -28,7 +33,7 @@ const ORACLE_CONNECT_TIMEOUT_DEFAULT_SECS: u32 = 300;
 const ORACLE_CONNECT_TIMEOUT_MAX_SECS: u64 = 30;
 const ORACLE_TEST_CONNECT_TIMEOUT_SECS: u64 = 5;
 const ORACLE_UNSUPPORTED_RUNTIME: &str =
-    "Oracle catalog, edit, and structured DDL runtime is not supported yet";
+    "Oracle table data, edit, and structured DDL runtime is not supported yet";
 
 #[derive(Default)]
 struct OracleConnectionState {
@@ -193,11 +198,17 @@ impl RdbAdapter for OracleAdapter {
     }
 
     fn list_namespaces<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move {
+            let schemas = OracleAdapter::list_schemas(self).await?;
+            Ok(schemas.into_iter().map(NamespaceInfo::from).collect())
+        })
     }
 
     fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move {
+            let dbs = OracleAdapter::list_databases(self).await?;
+            Ok(dbs.into_iter().map(NamespaceInfo::from).collect())
+        })
     }
 
     fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
@@ -206,18 +217,21 @@ impl RdbAdapter for OracleAdapter {
 
     fn list_tables<'a>(
         &'a self,
-        _namespace: &'a str,
+        namespace: &'a str,
     ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::list_tables(self, namespace).await })
     }
 
     fn get_columns<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _cancel: Option<&'a CancellationToken>,
+        namespace: &'a str,
+        table: &'a str,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
-        oracle_unsupported()
+        cancellable_metadata(
+            OracleAdapter::get_table_columns(self, namespace, table),
+            cancel,
+        )
     }
 
     fn execute_sql<'a>(
@@ -331,65 +345,71 @@ impl RdbAdapter for OracleAdapter {
 
     fn get_table_indexes<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _cancel: Option<&'a CancellationToken>,
+        namespace: &'a str,
+        table: &'a str,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>> {
-        oracle_unsupported()
+        cancellable_metadata(
+            OracleAdapter::get_table_indexes(self, namespace, table),
+            cancel,
+        )
     }
 
     fn get_table_constraints<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _cancel: Option<&'a CancellationToken>,
+        namespace: &'a str,
+        table: &'a str,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>> {
-        oracle_unsupported()
+        cancellable_metadata(
+            OracleAdapter::get_table_constraints(self, namespace, table),
+            cancel,
+        )
     }
 
     fn list_views<'a>(
         &'a self,
-        _namespace: &'a str,
+        namespace: &'a str,
     ) -> BoxFuture<'a, Result<Vec<ViewInfo>, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::list_views(self, namespace).await })
     }
 
     fn list_functions<'a>(
         &'a self,
-        _namespace: &'a str,
+        namespace: &'a str,
     ) -> BoxFuture<'a, Result<Vec<FunctionInfo>, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::list_functions(self, namespace).await })
     }
 
     fn get_view_definition<'a>(
         &'a self,
-        _namespace: &'a str,
-        _view: &'a str,
+        namespace: &'a str,
+        view: &'a str,
     ) -> BoxFuture<'a, Result<String, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::get_view_definition(self, namespace, view).await })
     }
 
     fn get_view_columns<'a>(
         &'a self,
-        _namespace: &'a str,
-        _view: &'a str,
+        namespace: &'a str,
+        view: &'a str,
     ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::get_view_columns(self, namespace, view).await })
     }
 
     fn list_schema_columns<'a>(
         &'a self,
-        _namespace: &'a str,
+        namespace: &'a str,
     ) -> BoxFuture<'a, Result<HashMap<String, Vec<ColumnInfo>>, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::list_schema_columns(self, namespace).await })
     }
 
     fn get_function_source<'a>(
         &'a self,
-        _namespace: &'a str,
-        _function: &'a str,
+        namespace: &'a str,
+        function: &'a str,
     ) -> BoxFuture<'a, Result<String, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::get_function_source(self, namespace, function).await })
     }
 
     fn list_triggers<'a>(
@@ -397,8 +417,26 @@ impl RdbAdapter for OracleAdapter {
         _namespace: &'a str,
         _table: &'a str,
     ) -> BoxFuture<'a, Result<Vec<TriggerInfo>, AppError>> {
-        oracle_unsupported()
+        Box::pin(async { Ok(Vec::new()) })
     }
+}
+
+fn cancellable_metadata<'a, T>(
+    work: impl Future<Output = Result<T, AppError>> + Send + 'a,
+    cancel: Option<&'a CancellationToken>,
+) -> BoxFuture<'a, Result<T, AppError>>
+where
+    T: Send + 'a,
+{
+    Box::pin(async move {
+        match cancel {
+            Some(token) => tokio::select! {
+                result = work => result,
+                _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+            },
+            None => work.await,
+        }
+    })
 }
 
 fn connection_timeout_secs(config: &ConnectionConfig) -> u64 {
@@ -427,232 +465,4 @@ fn oracle_unsupported<'a, T: Send + 'a>() -> BoxFuture<'a, Result<T, AppError>> 
             ORACLE_UNSUPPORTED_RUNTIME.to_string(),
         ))
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::models::{ColumnChange, ColumnDefinition, ConstraintDefinition};
-    use oracle_rs::config::ServiceMethod;
-
-    fn oracle_config() -> ConnectionConfig {
-        ConnectionConfig {
-            id: "oracle-1".into(),
-            name: "Oracle".into(),
-            db_type: DatabaseType::Oracle,
-            host: " localhost ".into(),
-            port: 1521,
-            user: " testuser ".into(),
-            password: "testpass".into(),
-            database: " XEPDB1 ".into(),
-            read_only: false,
-            group_id: None,
-            color: None,
-            connection_timeout: Some(120),
-            keep_alive_interval: None,
-            environment: None,
-            auth_source: None,
-            replica_set: None,
-            tls_enabled: None,
-        }
-    }
-
-    fn assert_oracle_unsupported<T>(result: Result<T, AppError>) {
-        assert!(matches!(
-            result,
-            Err(AppError::Unsupported(message)) if message == ORACLE_UNSUPPORTED_RUNTIME
-        ));
-    }
-
-    #[test]
-    fn connect_config_uses_service_name_without_sid_wallet_or_tls() {
-        let config = OracleAdapter::connect_config(&oracle_config(), 30).unwrap();
-
-        assert_eq!(config.host, "localhost");
-        assert_eq!(config.port, 1521);
-        assert_eq!(config.username, "testuser");
-        assert_eq!(config.connect_timeout, Duration::from_secs(30));
-        assert!(!config.is_tls_enabled());
-        assert!(config.tls_config.is_none());
-        assert!(matches!(
-            config.service,
-            ServiceMethod::ServiceName(ref service) if service == "XEPDB1"
-        ));
-    }
-
-    #[test]
-    fn connect_config_rejects_empty_service_name() {
-        let mut config = oracle_config();
-        config.database = " ".into();
-
-        assert!(matches!(
-            OracleAdapter::connect_config(&config, 5),
-            Err(AppError::Validation(message)) if message.contains("service name")
-        ));
-    }
-
-    #[test]
-    fn configured_timeout_is_clamped_for_runtime_connect() {
-        assert_eq!(connection_timeout_secs(&oracle_config()), 30);
-
-        let mut config = oracle_config();
-        config.connection_timeout = Some(2);
-        assert_eq!(connection_timeout_secs(&config), 2);
-    }
-
-    #[tokio::test]
-    async fn current_database_returns_service_name_identity_when_connected() {
-        let adapter = OracleAdapter::new();
-        {
-            let mut guard = adapter.state.lock().await;
-            guard.connected_config = Some(oracle_config());
-        }
-
-        assert_eq!(
-            adapter.current_database().await.unwrap(),
-            Some("XEPDB1".into())
-        );
-    }
-
-    #[tokio::test]
-    async fn current_database_without_connection_returns_none_for_fail_closed_guard() {
-        let adapter = OracleAdapter::new();
-
-        assert_eq!(adapter.current_database().await.unwrap(), None);
-    }
-
-    #[tokio::test]
-    async fn catalog_edit_and_structured_ddl_surfaces_remain_unsupported() {
-        let adapter = OracleAdapter::new();
-        assert!(matches!(adapter.namespace_label(), NamespaceLabel::Schema));
-
-        let drop_table = DropTableRequest {
-            connection_id: "oracle-1".into(),
-            schema: "SYSTEM".into(),
-            table: "T".into(),
-            cascade: false,
-            preview_only: true,
-            expected_database: None,
-        };
-        let rename_table = RenameTableRequest {
-            connection_id: "oracle-1".into(),
-            schema: "SYSTEM".into(),
-            table: "T".into(),
-            new_name: "T2".into(),
-            preview_only: true,
-            expected_database: None,
-        };
-        let alter_table = AlterTableRequest {
-            connection_id: "oracle-1".into(),
-            schema: "SYSTEM".into(),
-            table: "T".into(),
-            changes: vec![ColumnChange::Drop { name: "C".into() }],
-            preview_only: true,
-            expected_database: None,
-        };
-        let column = ColumnDefinition {
-            name: "C".into(),
-            data_type: "NUMBER".into(),
-            nullable: true,
-            default_value: None,
-            comment: None,
-            is_identity: false,
-        };
-        let add_column = AddColumnRequest {
-            connection_id: "oracle-1".into(),
-            schema: "SYSTEM".into(),
-            table: "T".into(),
-            column: column.clone(),
-            check_expression: None,
-            preview_only: true,
-            expected_database: None,
-        };
-        let drop_column = DropColumnRequest {
-            connection_id: "oracle-1".into(),
-            schema: "SYSTEM".into(),
-            table: "T".into(),
-            column_name: "C".into(),
-            cascade: false,
-            preview_only: true,
-            expected_database: None,
-        };
-        let create_table = CreateTableRequest {
-            connection_id: "oracle-1".into(),
-            schema: "SYSTEM".into(),
-            name: "T".into(),
-            columns: vec![column],
-            primary_key: None,
-            preview_only: true,
-            table_comment: None,
-            expected_database: None,
-        };
-        let create_index = CreateIndexRequest {
-            connection_id: "oracle-1".into(),
-            schema: "SYSTEM".into(),
-            table: "T".into(),
-            index_name: "T_C_IDX".into(),
-            columns: vec!["C".into()],
-            index_type: "btree".into(),
-            is_unique: false,
-            preview_only: true,
-            expected_database: None,
-        };
-        let drop_index = DropIndexRequest {
-            connection_id: "oracle-1".into(),
-            schema: "SYSTEM".into(),
-            index_name: "T_C_IDX".into(),
-            table: "T".into(),
-            if_exists: false,
-            preview_only: true,
-            expected_database: None,
-        };
-        let add_constraint = AddConstraintRequest {
-            connection_id: "oracle-1".into(),
-            schema: "SYSTEM".into(),
-            table: "T".into(),
-            constraint_name: "T_C_UNIQ".into(),
-            definition: ConstraintDefinition::Unique {
-                columns: vec!["C".into()],
-            },
-            preview_only: true,
-            expected_database: None,
-        };
-        let drop_constraint = DropConstraintRequest {
-            connection_id: "oracle-1".into(),
-            schema: "SYSTEM".into(),
-            table: "T".into(),
-            constraint_name: "T_C_UNIQ".into(),
-            preview_only: true,
-            expected_database: None,
-        };
-
-        assert_oracle_unsupported(adapter.list_namespaces().await);
-        assert_oracle_unsupported(adapter.list_databases().await);
-        assert_oracle_unsupported(adapter.list_tables("SYSTEM").await);
-        assert_oracle_unsupported(adapter.get_columns("SYSTEM", "T", None).await);
-        assert_oracle_unsupported(
-            adapter
-                .query_table_data("SYSTEM", "T", 1, 100, None, None, None, None)
-                .await,
-        );
-        assert_oracle_unsupported(adapter.drop_table(&drop_table).await);
-        assert_oracle_unsupported(adapter.rename_table(&rename_table).await);
-        assert_oracle_unsupported(adapter.alter_table(&alter_table).await);
-        assert_oracle_unsupported(adapter.add_column(&add_column).await);
-        assert_oracle_unsupported(adapter.drop_column(&drop_column).await);
-        assert_oracle_unsupported(adapter.create_table(&create_table).await);
-        assert_oracle_unsupported(adapter.create_index(&create_index).await);
-        assert_oracle_unsupported(adapter.drop_index(&drop_index).await);
-        assert_oracle_unsupported(adapter.add_constraint(&add_constraint).await);
-        assert_oracle_unsupported(adapter.drop_constraint(&drop_constraint).await);
-        assert_oracle_unsupported(adapter.get_table_indexes("SYSTEM", "T", None).await);
-        assert_oracle_unsupported(adapter.get_table_constraints("SYSTEM", "T", None).await);
-        assert_oracle_unsupported(adapter.list_views("SYSTEM").await);
-        assert_oracle_unsupported(adapter.list_functions("SYSTEM").await);
-        assert_oracle_unsupported(adapter.get_view_definition("SYSTEM", "V").await);
-        assert_oracle_unsupported(adapter.get_view_columns("SYSTEM", "V").await);
-        assert_oracle_unsupported(adapter.list_schema_columns("SYSTEM").await);
-        assert_oracle_unsupported(adapter.get_function_source("SYSTEM", "F").await);
-        assert_oracle_unsupported(adapter.list_triggers("SYSTEM", "T").await);
-    }
 }

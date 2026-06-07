@@ -286,7 +286,9 @@ export function getVisibleRows({
                     f.kind === "window",
                 )
               : isProcedureCat
-                ? schemaFunctions.filter((f) => f.kind === "procedure")
+                ? schemaFunctions.filter(
+                    (f) => f.kind === "procedure" || f.kind === "package",
+                  )
                 : [];
       const searchValue = isTableCat ? (tableSearch[schema.name] ?? "") : "";
       const searchLower = searchValue.toLowerCase();

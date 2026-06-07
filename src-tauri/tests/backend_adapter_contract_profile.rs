@@ -351,9 +351,7 @@ fn rdbms_integration_gate_profiles_are_coherent() {
             BackendAdapterContractState::FactoryBacked
         );
         assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
-        if mem::discriminant(db_type) != mem::discriminant(&DatabaseType::Oracle) {
-            assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
-        }
+        assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
         assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     }
 
@@ -385,7 +383,7 @@ fn rdbms_integration_gate_profiles_are_coherent() {
         BackendAdapterCapabilitySource::Oracle
     );
     assert!(oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
-    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 }

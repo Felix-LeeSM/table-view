@@ -318,6 +318,65 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     ).toBeInTheDocument();
   });
 
+  it("Oracle renders catalog metadata for tables, views, and packages (#520)", async () => {
+    useConnectionStore.setState({
+      connections: [makeConnection("ora1", "oracle")],
+    });
+    setSchemaStoreState({
+      schemas: { ora1: [{ name: "APP" }] },
+      tables: {
+        "ora1:APP": [
+          { name: "ORDERS", schema: "APP", row_count: null },
+          { name: "USERS", schema: "APP", row_count: null },
+        ],
+      },
+      views: {
+        "ora1:APP": [
+          {
+            name: "ACTIVE_ORACLE_USERS",
+            schema: "APP",
+            definition: "SELECT ID, EMAIL FROM APP.USERS WHERE ACTIVE = 1",
+          },
+        ],
+      },
+      functions: {
+        "ora1:APP": [
+          {
+            name: "CATALOG_API",
+            schema: "APP",
+            arguments: "",
+            returnType: null,
+            language: "PL/SQL",
+            source: "PACKAGE CATALOG_API AS END CATALOG_API;",
+            kind: "package",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="ora1" />);
+    });
+
+    expect(screen.getByLabelText("APP schema")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByLabelText("ORDERS table")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Views in APP"));
+    });
+    expect(
+      screen.getByLabelText("ACTIVE_ORACLE_USERS view"),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Procedures in APP"));
+    });
+    expect(screen.getByLabelText("CATALOG_API function")).toBeInTheDocument();
+  });
+
   // ─────────────────────────────────────────────────────────────────────
   // AC-S135-03 — MySQL: 2-level (database → table), no schema row
   // ─────────────────────────────────────────────────────────────────────
