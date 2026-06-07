@@ -297,3 +297,62 @@ WHERE s.name = @P1
   AND o.name = @P2
   AND o.type IN (N'P', N'FN', N'IF', N'TF', N'FS', N'FT')
   AND o.is_ms_shipped = 0";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn schema_catalog_queries_keep_user_object_filters() {
+        for sql in [
+            TABLES_SQL,
+            VIEWS_SQL,
+            SCHEMA_COLUMNS_SQL,
+            ROUTINES_SQL,
+            ROUTINE_PARAMS_SQL,
+        ] {
+            assert!(sql.contains("s.name = @P1"));
+            assert!(sql.contains("is_ms_shipped = 0"));
+            assert!(sql.contains("ORDER BY"));
+        }
+    }
+
+    #[test]
+    fn object_catalog_queries_keep_schema_and_object_parameters() {
+        for sql in [
+            VIEW_DEFINITION_SQL,
+            OBJECT_COLUMNS_SQL,
+            TABLE_PRIMARY_KEYS_SQL,
+            TABLE_FOREIGN_KEYS_SQL,
+            TABLE_CHECKS_SQL,
+            INDEXES_SQL,
+            CONSTRAINTS_SQL,
+            ROUTINE_SOURCE_SQL,
+        ] {
+            assert!(sql.contains("@P1"));
+            assert!(sql.contains("@P2"));
+        }
+    }
+
+    #[test]
+    fn relationship_queries_keep_workbench_metadata_shape() {
+        assert!(TABLE_FOREIGN_KEYS_SQL.contains("parent_column"));
+        assert!(TABLE_FOREIGN_KEYS_SQL.contains("reference_schema"));
+        assert!(TABLE_FOREIGN_KEYS_SQL.contains("reference_table"));
+        assert!(TABLE_FOREIGN_KEYS_SQL.contains("reference_column"));
+        assert!(SCHEMA_FOREIGN_KEYS_SQL.contains("parent_table"));
+        assert!(SCHEMA_FOREIGN_KEYS_SQL.contains("reference_column"));
+        assert!(CONSTRAINTS_SQL.contains("constraint_name"));
+        assert!(CONSTRAINTS_SQL.contains("constraint_type"));
+        assert!(INDEXES_SQL.contains("index_name"));
+        assert!(INDEXES_SQL.contains("key_ordinal"));
+    }
+
+    #[test]
+    fn database_and_current_catalog_queries_keep_sql_server_contract() {
+        assert!(USER_SCHEMAS_SQL.contains("INFORMATION_SCHEMA"));
+        assert!(USER_DATABASES_SQL.contains("state_desc = N'ONLINE'"));
+        assert!(USER_DATABASES_SQL.contains("HAS_DBACCESS(d.name) = 1"));
+        assert_eq!(CURRENT_DATABASE_SQL, "SELECT DB_NAME()");
+    }
+}

@@ -118,6 +118,34 @@ mod tests {
     }
 
     #[test]
+    fn map_mssql_data_type_covers_sql_server_aliases() {
+        for data_type in [" TINYINT ", "smallint"] {
+            assert_eq!(map_mssql_data_type(data_type), ColumnCategory::Int);
+        }
+        for data_type in ["numeric", "money", "smallmoney", "float", "real"] {
+            assert_eq!(map_mssql_data_type(data_type), ColumnCategory::Float);
+        }
+        for data_type in [
+            "date",
+            "time",
+            "datetime",
+            "datetimeoffset",
+            "smalldatetime",
+        ] {
+            assert_eq!(map_mssql_data_type(data_type), ColumnCategory::Datetime);
+        }
+        for data_type in ["binary", "image", "timestamp", "rowversion"] {
+            assert_eq!(map_mssql_data_type(data_type), ColumnCategory::Binary);
+        }
+        for data_type in ["sql_variant", "hierarchyid", "geography", "geometry"] {
+            assert_eq!(map_mssql_data_type(data_type), ColumnCategory::Object);
+        }
+        for data_type in ["char", "varchar", "nchar", "text", "ntext", "sysname"] {
+            assert_eq!(map_mssql_data_type(data_type), ColumnCategory::Text);
+        }
+    }
+
+    #[test]
     fn format_fk_reference_matches_datagrid_contract() {
         assert_eq!(format_fk_reference("dbo", "users", "id"), "dbo.users(id)");
     }
@@ -129,6 +157,9 @@ mod tests {
         ));
         assert!(is_metadata_permission_error(
             "The user does not have permission to perform this action. VIEW DEFINITION required."
+        ));
+        assert!(is_metadata_permission_error(
+            "The user is not authorized to read metadata."
         ));
         assert!(!is_metadata_permission_error(
             "SQL Server login failed: timed out after 1s"
