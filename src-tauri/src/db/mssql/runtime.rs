@@ -978,6 +978,69 @@ mod tests {
     }
 
     #[test]
+    fn table_data_sql_helpers_quote_filters_order_and_identifiers() {
+        let columns = vec![
+            column_info("id", true),
+            column_info("name", false),
+            column_info("deleted_at", false),
+            column_info("tenant_id", true),
+        ];
+        let filters = vec![
+            FilterCondition {
+                column: "name".into(),
+                operator: FilterOperator::Like,
+                value: Some("A%".into()),
+            },
+            FilterCondition {
+                column: "missing".into(),
+                operator: FilterOperator::Eq,
+                value: Some("ignored".into()),
+            },
+            FilterCondition {
+                column: "deleted_at".into(),
+                operator: FilterOperator::IsNull,
+                value: None,
+            },
+            FilterCondition {
+                column: "tenant_id".into(),
+                operator: FilterOperator::Eq,
+                value: None,
+            },
+        ];
+
+        let (where_clause, params) = build_mssql_where_clause(&columns, Some(&filters));
+
+        assert_eq!(
+            where_clause,
+            " WHERE [name] LIKE @P1 AND [deleted_at] IS NULL"
+        );
+        assert_eq!(params, vec!["A%".to_string()]);
+        assert_eq!(
+            build_mssql_order_clause(&columns, Some("name DESC, missing ASC, id BAD, tenant_id")),
+            " ORDER BY [name] DESC, [tenant_id] ASC, [id] ASC"
+        );
+        assert_eq!(qualified_mssql_table("", "odd]table"), "[odd]]table]");
+        assert_eq!(qualified_mssql_table("dbo", "users"), "[dbo].[users]");
+    }
+
+    #[test]
+    fn mssql_raw_where_validator_preserves_filter_only_boundary() {
+        validate_raw_where_clause(RawWhereDialect::Mssql, "[name] LIKE N'A%' AND [id] >= 1")
+            .expect("bounded MSSQL raw WHERE should parse");
+
+        for clause in [
+            "[id] = 1; DROP TABLE [dbo].[users]",
+            "[id] = 1 UNION SELECT [password] FROM [dbo].[users]",
+            "DROP TABLE [dbo].[users]",
+        ] {
+            assert!(
+                validate_raw_where_clause(RawWhereDialect::Mssql, clause).is_err(),
+                "{clause:?} should stay outside raw WHERE support"
+            );
+        }
+    }
+
+    #[test]
     fn scalar_helpers_cover_json_and_type_edges() {
         assert_eq!(strip_trailing_terminator("SELECT 1;\n\t"), "SELECT 1");
         assert_eq!(strip_trailing_terminator("SELECT 1;;;"), "SELECT 1");
@@ -1123,6 +1186,21 @@ mod tests {
         ] {
             assert_eq!(mssql_column_type_name(column_type), data_type);
             assert_eq!(mssql_column_category(column_type), category);
+        }
+    }
+
+    fn column_info(name: &str, is_primary_key: bool) -> crate::models::ColumnInfo {
+        crate::models::ColumnInfo {
+            name: name.into(),
+            data_type: "nvarchar".into(),
+            nullable: true,
+            default_value: None,
+            is_primary_key,
+            is_foreign_key: false,
+            fk_reference: None,
+            comment: None,
+            check_clauses: Vec::new(),
+            category: ColumnCategory::Text,
         }
     }
 }
