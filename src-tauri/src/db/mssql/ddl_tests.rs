@@ -1,7 +1,8 @@
 use crate::error::AppError;
 use crate::models::{
-    AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition, ConstraintDefinition,
-    CreateIndexRequest, CreateTableRequest, DropConstraintRequest,
+    AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
+    ConstraintDefinition, CreateIndexRequest, CreateTableRequest, DropColumnRequest,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
 };
 
 use super::MssqlAdapter;
@@ -214,6 +215,151 @@ async fn alter_table_preview_emits_tsql_statement_chain() {
     assert_eq!(
         sql,
         "ALTER TABLE [dbo].[users] ADD [nickname] NVARCHAR(100); ALTER TABLE [dbo].[users] ALTER COLUMN [email] NVARCHAR(255) NOT NULL; ALTER TABLE [dbo].[users] DROP COLUMN [legacy]"
+    );
+}
+
+#[tokio::test]
+async fn remaining_table_column_and_index_preview_paths_emit_tsql() {
+    let adapter = MssqlAdapter::new();
+    let add_column = AddColumnRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        table: "users".into(),
+        column: ColumnDefinition {
+            default_value: Some("1".into()),
+            ..column("active", "BIT")
+        },
+        check_expression: Some("[active] IN (0, 1)".into()),
+        preview_only: true,
+        expected_database: None,
+    };
+    assert_eq!(
+        adapter.add_column(&add_column).await.unwrap().sql,
+        "ALTER TABLE [dbo].[users] ADD [active] BIT NOT NULL DEFAULT 1 CHECK ([active] IN (0, 1))"
+    );
+
+    let drop_column = DropColumnRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        table: "users".into(),
+        column_name: "legacy".into(),
+        cascade: false,
+        preview_only: true,
+        expected_database: None,
+    };
+    assert_eq!(
+        adapter.drop_column(&drop_column).await.unwrap().sql,
+        "ALTER TABLE [dbo].[users] DROP COLUMN [legacy]"
+    );
+
+    let rename_table = RenameTableRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        table: "users".into(),
+        new_name: "people".into(),
+        preview_only: true,
+        expected_database: None,
+    };
+    assert_eq!(
+        adapter.rename_table(&rename_table).await.unwrap().sql,
+        "EXEC sp_rename N'dbo.users', N'people'"
+    );
+
+    let drop_index = DropIndexRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        index_name: "idx_users_email".into(),
+        table: "users".into(),
+        if_exists: true,
+        preview_only: true,
+        expected_database: None,
+    };
+    assert_eq!(
+        adapter.drop_index(&drop_index).await.unwrap().sql,
+        "DROP INDEX IF EXISTS [idx_users_email] ON [dbo].[users]"
+    );
+
+    let drop_table = DropTableRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        table: "users".into(),
+        cascade: false,
+        preview_only: true,
+        expected_database: None,
+    };
+    assert_eq!(
+        adapter.drop_table(&drop_table).await.unwrap().sql,
+        "DROP TABLE [dbo].[users]"
+    );
+}
+
+#[tokio::test]
+async fn structured_ddl_rejects_unsupported_mssql_boundaries() {
+    let adapter = MssqlAdapter::new();
+    let drop_table = DropTableRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        table: "users".into(),
+        cascade: true,
+        preview_only: true,
+        expected_database: None,
+    };
+    assert!(matches!(
+        adapter.drop_table(&drop_table).await,
+        Err(AppError::Unsupported(message)) if message.contains("DROP TABLE CASCADE")
+    ));
+
+    let drop_column = DropColumnRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        table: "users".into(),
+        column_name: "legacy".into(),
+        cascade: true,
+        preview_only: true,
+        expected_database: None,
+    };
+    assert!(matches!(
+        adapter.drop_column(&drop_column).await,
+        Err(AppError::Unsupported(message)) if message.contains("DROP COLUMN CASCADE")
+    ));
+
+    let alter_table = AlterTableRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        table: "users".into(),
+        changes: vec![ColumnChange::Modify {
+            name: "email".into(),
+            new_data_type: Some("NVARCHAR(255)".into()),
+            new_nullable: None,
+            new_default_value: None,
+            using_expression: Some("LOWER(email)".into()),
+        }],
+        preview_only: true,
+        expected_database: None,
+    };
+    assert!(matches!(
+        adapter.alter_table(&alter_table).await,
+        Err(AppError::Unsupported(message)) if message.contains("USING expressions")
+    ));
+
+    let invalid_fk_action = AddConstraintRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        table: "orders".into(),
+        constraint_name: "fk_orders_user".into(),
+        definition: ConstraintDefinition::ForeignKey {
+            columns: vec!["user_id".into()],
+            reference_table: "users".into(),
+            reference_columns: vec!["id".into()],
+            on_delete: Some("RESTRICT".into()),
+            on_update: None,
+        },
+        preview_only: true,
+        expected_database: None,
+    };
+    assert_validation(
+        adapter.add_constraint(&invalid_fk_action).await,
+        "referential action",
     );
 }
 
