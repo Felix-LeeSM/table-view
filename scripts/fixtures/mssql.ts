@@ -220,9 +220,9 @@ function mapType(col: Column): string {
     case "sku":
     case "phone":
     case "address":
-      return col.max_length ? `NVARCHAR(${col.max_length})` : "NVARCHAR(255)";
+      return nvarcharWithLimit(col.max_length, 255);
     case "text":
-      return col.max_length ? `NVARCHAR(${col.max_length})` : "NVARCHAR(MAX)";
+      return nvarcharWithLimit(col.max_length, "MAX");
     case "decimal":
       return "DECIMAL(12, 2)";
     case "int":
@@ -242,6 +242,14 @@ function mapType(col: Column): string {
     default:
       return "NVARCHAR(MAX)";
   }
+}
+
+function nvarcharWithLimit(
+  maxLength: number | undefined,
+  fallback: number | "MAX",
+): string {
+  if (maxLength === undefined) return `NVARCHAR(${fallback})`;
+  return maxLength <= 4000 ? `NVARCHAR(${maxLength})` : "NVARCHAR(MAX)";
 }
 
 async function insertEntity(

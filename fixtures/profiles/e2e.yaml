@@ -60,8 +60,6 @@ connections:
       name: E2E (MSSQL)
       color: "#dc2626"
       environment: testing
-      status: planned
-      disabledReason: "MSSQL has a bounded query runtime, but default fixture connection/smoke is not wired."
   oracle:
     - id: fixture-e2e-oracle
       name: E2E (Oracle)

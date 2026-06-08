@@ -102,6 +102,8 @@ jobs:
             spec: e2e/smoke/mysql.spec.ts
           - spec_key: mariadb
             spec: e2e/smoke/mariadb.spec.ts
+          - spec_key: mssql
+            spec: e2e/smoke/mssql.spec.ts
           - spec_key: sqlite
             spec: e2e/smoke/sqlite.spec.ts
           - spec_key: duckdb
@@ -286,6 +288,28 @@ jobs:
           docker logs table-view-opensearch || true
           exit 1
 
+      - name: Start MSSQL service
+        if: matrix.spec_key == 'mssql'
+        run: |
+          docker run -d \
+            --name table-view-mssql \
+            --publish 14333:1433 \
+            --env "ACCEPT_EULA=Y" \
+            --env "MSSQL_SA_PASSWORD=Testpass123!" \
+            mcr.microsoft.com/mssql/server:2022-latest
+
+          for attempt in {1..40}; do
+            if docker exec table-view-mssql /opt/mssql-tools18/bin/sqlcmd \
+              -S localhost -U sa -P 'Testpass123!' -C -Q 'SELECT 1'; then
+              exit 0
+            fi
+            echo "MSSQL is not ready yet (attempt ${attempt}/40)."
+            sleep 5
+          done
+
+          docker logs table-view-mssql || true
+          exit 1
+
       - name: Run E2E smoke
         env:
           E2E_PG_HOST: localhost
@@ -309,6 +333,11 @@ jobs:
           MARIADB_USER: testuser
           MARIADB_PASSWORD: testpass
           MARIADB_DATABASE: table_view_test
+          E2E_MSSQL_HOST: localhost
+          E2E_MSSQL_PORT: 14333
+          MSSQL_USER: sa
+          MSSQL_PASSWORD: Testpass123!
+          MSSQL_DATABASE: table_view_test
           E2E_REDIS_HOST: localhost
           E2E_REDIS_PORT: 6379
           E2E_REDIS_DB: 2
@@ -328,6 +357,10 @@ jobs:
       - name: Stop OpenSearch service
         if: always() && matrix.spec_key == 'opensearch'
         run: docker rm --force table-view-opensearch || true
+
+      - name: Stop MSSQL service
+        if: always() && matrix.spec_key == 'mssql'
+        run: docker rm --force table-view-mssql || true
 
       - name: Upload E2E artifacts
         if: always()
