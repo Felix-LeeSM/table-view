@@ -266,7 +266,8 @@ full-support parity has shipped.
 
 ## H6 진행 기준
 
-H6 wider source 는 **planned/candidate contract 정합성 gate**다. MSSQL 은
+H6 wider source 는 **shipped MSSQL/Oracle enterprise slices + planned/candidate
+contract 정합성 gate**다. MSSQL 은
 `DatabaseType`/profile identity 에 더해 SQL authentication connection test, SQL
 Server `SERVERPROPERTY` version probe, bounded SELECT/DML query runtime/result
 envelope, primary-key-scoped row edit, bounded structured table/index/constraint
@@ -310,11 +311,13 @@ readiness: clear user workflow first, then adapter-family fit, language/core
 ownership, fixture/live evidence, and safety risk. Candidate rows do not imply
 implementation order.
 
-H6 umbrella closure means planned/candidate support claims, contracts, and smoke
-routing are aligned. It does not mean MSSQL TLS/admin/full T-SQL semantic
-support, Oracle catalog/edit/structured DDL/runtime Safe Mode smoke/SID/TNS/
-wallet/TLS/fixture/live/E2E support, or Cassandra/Scylla, DynamoDB, graph,
-vector, or stream runtime support has shipped.
+H6 umbrella closure means shipped MSSQL/Oracle slices plus planned/candidate
+support claims, contracts, and smoke routing are aligned. Oracle
+catalog/workbench metadata remains shipped metadata support. It does not mean
+MSSQL TLS/admin/full T-SQL semantic support, Oracle table-data browse, row edit,
+structured DDL, sequence/synonym DDL/admin workflow, runtime Safe Mode smoke,
+SID/TNS/wallet/TLS/fixture/live/E2E support, or Cassandra/Scylla, DynamoDB,
+graph, vector, or stream runtime support has shipped.
 
 ## H7 진행 기준
 
@@ -387,7 +390,8 @@ Near-term follow-up groups:
 2. connect/browse/query 만 노출하는 runtime 을 하나 더 붙이는 것보다, 기존 runtime
    깊이를 우선한다.
 3. Runtime promotion freeze: Search admin execution, remaining MSSQL TLS/admin/full
-   semantic support, Oracle, 기타 새 DBMS lane 은 현재 지원 DBMS 하나가
+   semantic support, remaining Oracle table-data/edit/structured DDL/admin/TLS/
+   fixture/live/E2E widening, 기타 새 DBMS lane 은 현재 지원 DBMS 하나가
    query/workbench parity lane 을 통과할 때까지 기다린다.
 4. Query/workbench parity 범위는 SQL/MQL execution, parser/Safe Mode, completion,
    edit semantics, fixtures, e2e, support claim, dry-run 근처의 lightweight
@@ -431,7 +435,7 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 | MariaDB | MySQL adapter reuse 를 단순하게 유지할 수 있나? | Dialect flag 로 reuse. Evidence 있을 때만 split. |
 | SQLite DBMS | Unsupported `ALTER TABLE` 을 disable 할지 auto-rebuild 할지? | ADR 이 rebuild 를 선택하기 전까지 disable + tooltip. |
 | DuckDB | File analytics 를 RDBMS 로 볼지 separate file-sql paradigm 으로 볼지? | Evidence 가 split 을 요구하기 전까지 RDBMS + `file` connection kind. |
-| Redis/Search | Redis full UI/editor parity 와 Search live query/admin 을 언제 승격할 수 있나? | Active one-DBMS parity lane 이후만. 그 뒤 Search live query/admin 이 MSSQL/Oracle 보다 먼저 온다. |
+| Redis/Search | Redis full UI/editor parity 와 Search live query/admin 을 언제 승격할 수 있나? | Active one-DBMS parity lane 이후만. 그 뒤 Search live query/admin 과 remaining MSSQL/Oracle widening 은 evidence/smoke 비용 기준으로 다시 고른다. |
 | 더 넓은 paradigm | Cassandra/DynamoDB/graph/vector/stream 중 무엇을 먼저 승격하나? | H6 기본값은 candidate-only. Workflow value, contract readiness, fixture/live evidence, safety risk 가 분명해질 때까지 승격 금지. |
 | App state | State-management migration 은 언제 재개하나? | DB support 작업이 storage/schema surface 와 충돌하지 않을 때. |
 | Security | Users/roles/auth mechanism UI 는 언제 추가하나? | RDBMS/DuckDB/non-RDBMS source order 가 명확해진 뒤. |
@@ -453,7 +457,7 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 6. RDBMS ERD / `SchemaGraph`.
 7. Redis/Valkey parity hardening.
 8. Search admin HTTP promotion and OpenSearch smoke expansion.
-9. MSSQL + Oracle enterprise RDBMS lane.
+9. Remaining MSSQL + Oracle enterprise RDBMS widening.
 
 이 순서를 바꾸면 이 파일을 업데이트한다. 현재 제품 상태가 달라지는 변경이면
 `docs/product/README.md` 도 함께 업데이트한다.
