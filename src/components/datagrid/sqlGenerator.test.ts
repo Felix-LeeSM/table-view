@@ -321,12 +321,86 @@ describe("generateSql — Oracle row edit SQL", () => {
     ]);
   });
 
+  it("uses type-aware Oracle DATE/TIMESTAMP literals for primary-key WHERE clauses", () => {
+    const datePkData: TableData = {
+      ...ORACLE_DATA,
+      columns: [
+        { ...ORACLE_DATA.columns[0]!, name: "CREATED_ON", data_type: "DATE" },
+        { ...ORACLE_DATA.columns[1]! },
+      ],
+      rows: [["2026-06-08", "old"]],
+    };
+    const timestampPkData: TableData = {
+      ...ORACLE_DATA,
+      columns: [
+        {
+          ...ORACLE_DATA.columns[0]!,
+          name: "CREATED_AT",
+          data_type: "TIMESTAMP(6)",
+        },
+        { ...ORACLE_DATA.columns[1]! },
+      ],
+      rows: [["2026-06-08T10:30:00Z", "old"]],
+    };
+
+    expect(
+      generateSql(
+        datePkData,
+        "APP",
+        "ORDER DETAIL",
+        new Map<string, string | null>([["0-1", "new"]]),
+        new Set(["row-1-0"]),
+        [],
+        { dialect: "oracle" },
+      ),
+    ).toEqual([
+      `UPDATE "APP"."ORDER DETAIL" SET "SELECT" = 'new' WHERE "CREATED_ON" = DATE '2026-06-08';`,
+      `DELETE FROM "APP"."ORDER DETAIL" WHERE "CREATED_ON" = DATE '2026-06-08';`,
+    ]);
+
+    expect(
+      generateSql(
+        timestampPkData,
+        "APP",
+        "ORDER DETAIL",
+        new Map<string, string | null>([["0-1", "new"]]),
+        new Set(["row-1-0"]),
+        [],
+        { dialect: "oracle" },
+      ),
+    ).toEqual([
+      `UPDATE "APP"."ORDER DETAIL" SET "SELECT" = 'new' WHERE "CREATED_AT" = TIMESTAMP '2026-06-08 10:30:00';`,
+      `DELETE FROM "APP"."ORDER DETAIL" WHERE "CREATED_AT" = TIMESTAMP '2026-06-08 10:30:00';`,
+    ]);
+  });
+
+  it("emits NULL explicitly for empty Oracle textual values", () => {
+    const statements = generateSql(
+      ORACLE_DATA,
+      "APP",
+      "ORDER DETAIL",
+      new Map<string, string | null>([
+        ["0-1", ""],
+        ["0-3", null],
+      ]),
+      new Set(),
+      [["N1", "", "12.5", null]],
+      { dialect: "oracle" },
+    );
+
+    expect(statements).toEqual([
+      `UPDATE "APP"."ORDER DETAIL" SET "SELECT" = NULL WHERE "USER ID" = 'O''Brien';`,
+      `UPDATE "APP"."ORDER DETAIL" SET "CREATED_AT" = NULL WHERE "USER ID" = 'O''Brien';`,
+      `INSERT INTO "APP"."ORDER DETAIL" ("USER ID", "SELECT", "AMOUNT", "CREATED_AT") VALUES ('N1', NULL, 12.5, NULL);`,
+    ]);
+  });
+
   it("escapes embedded double quotes in Oracle identifiers", () => {
     const [idColumn, selectColumn] = ORACLE_DATA.columns;
     const data: TableData = {
       ...ORACLE_DATA,
       columns: [
-        { ...idColumn!, name: 'USER"ID' },
+        { ...idColumn!, name: 'USER"ID', data_type: "NUMBER" },
         { ...selectColumn!, name: 'SELECT"VALUE' },
       ],
       rows: [[7, "old"]],
@@ -1464,6 +1538,25 @@ describe("coerceToSqlLiteral — tri-state (null, '', value)", () => {
     });
     expect(coerceToSqlLiteral("", "json")).toEqual({ kind: "sql", sql: "''" });
     expect(coerceToSqlLiteral("", "jsonb")).toEqual({ kind: "sql", sql: "''" });
+  });
+
+  it("'' + Oracle textual/unknown types → SQL NULL explicitly", () => {
+    expect(coerceToSqlLiteral("", "VARCHAR2", "oracle")).toEqual({
+      kind: "sql",
+      sql: "NULL",
+    });
+    expect(coerceToSqlLiteral("", "CLOB", "oracle")).toEqual({
+      kind: "sql",
+      sql: "NULL",
+    });
+    expect(coerceToSqlLiteral("", "mystery_type", "oracle")).toEqual({
+      kind: "sql",
+      sql: "NULL",
+    });
+    expect(coerceToSqlLiteral(null, "VARCHAR2", "oracle")).toEqual({
+      kind: "sql",
+      sql: "NULL",
+    });
   });
 
   it("'' + non-textual types → SQL NULL (empty picker = explicit clear)", () => {

@@ -22,7 +22,8 @@ export type SqlDialect = "postgresql" | "mysql" | "sqlite" | "mssql" | "oracle";
 
 /**
  * Textual data types that preserve `''` as an empty string literal (ADR 0009).
- * Anything outside this set coerces empty string to `NULL` on commit.
+ * Anything outside this set coerces empty string to `NULL` on commit. Oracle is
+ * the exception: the server treats `''` as NULL, so emit `NULL` explicitly.
  */
 function isTextualFamily(family: SqlTypeFamily): boolean {
   return family === "textual";
@@ -177,7 +178,7 @@ export const NUMERIC_RE = /^-?(?:\d+\.?\d*|\.\d+)$/;
  *
  * Tri-state rule (ADR 0009):
  * - `null` -> `NULL` regardless of type.
- * - `""` + textual family -> `''` (preserved).
+ * - `""` + textual family -> `''` (preserved), except Oracle -> `NULL`.
  * - `""` + non-textual family -> `NULL` (empty picker = explicit clear).
  *
  * Valid input examples per family:
@@ -201,9 +202,10 @@ export function coerceToSqlLiteral(
   const family = classifySqlType(dataType, dialect);
 
   // Empty-string branch: preserved for textual families, collapsed to NULL for
-  // the rest. The unknown family follows the textual rule (safer: preserves
-  // prior empty-string commits rather than silently swapping to NULL).
+  // the rest. Oracle collapses every empty string to NULL at execution time, so
+  // generated SQL makes that clear instead of emitting a misleading `''`.
   if (value === "") {
+    if (dialect === "oracle") return { kind: "sql", sql: "NULL" };
     if (isTextualFamily(family) || family === "unknown") {
       return { kind: "sql", sql: "''" };
     }
