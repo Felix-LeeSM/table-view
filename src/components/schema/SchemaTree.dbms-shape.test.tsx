@@ -318,6 +318,105 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     ).toBeInTheDocument();
   });
 
+  it("Oracle renders catalog metadata for tables, views, packages, sequences, and synonyms (#520)", async () => {
+    useConnectionStore.setState({
+      connections: [makeConnection("ora1", "oracle")],
+    });
+    setSchemaStoreState({
+      schemas: { ora1: [{ name: "APP" }] },
+      tables: {
+        "ora1:APP": [
+          { name: "ORDERS", schema: "APP", row_count: null },
+          { name: "USERS", schema: "APP", row_count: null },
+        ],
+      },
+      views: {
+        "ora1:APP": [
+          {
+            name: "ACTIVE_ORACLE_USERS",
+            schema: "APP",
+            definition: "SELECT ID, EMAIL FROM APP.USERS WHERE ACTIVE = 1",
+          },
+        ],
+      },
+      functions: {
+        "ora1:APP": [
+          {
+            name: "CATALOG_API",
+            schema: "APP",
+            arguments: "",
+            returnType: null,
+            language: "PL/SQL",
+            source: "PACKAGE CATALOG_API AS END CATALOG_API;",
+            kind: "package",
+          },
+          {
+            name: "ORDER_SEQ",
+            schema: "APP",
+            arguments: "increment 1, cache 20, no cycle, no order",
+            returnType: "next 101",
+            language: "Oracle sequence",
+            source: null,
+            kind: "sequence",
+          },
+          {
+            name: "ACTIVE_USERS_ALIAS",
+            schema: "APP",
+            arguments: "APP.ACTIVE_ORACLE_USERS",
+            returnType: "APP.ACTIVE_ORACLE_USERS",
+            language: "Oracle synonym",
+            source: null,
+            kind: "synonym",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="ora1" />);
+    });
+
+    expect(screen.getByLabelText("APP schema")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByLabelText("ORDERS table")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Views in APP"));
+    });
+    expect(
+      screen.getByLabelText("ACTIVE_ORACLE_USERS view"),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Procedures in APP"));
+    });
+    expect(screen.getByLabelText("CATALOG_API function")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Sequences in APP"));
+    });
+    const sequence = screen.getByLabelText("ORDER_SEQ sequence");
+    expect(sequence).toBeInTheDocument();
+    expect(sequence).toHaveTextContent("increment 1, cache 20");
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Synonyms in APP"));
+    });
+    const synonym = screen.getByLabelText("ACTIVE_USERS_ALIAS synonym");
+    expect(synonym).toBeInTheDocument();
+    expect(synonym).toHaveTextContent("APP.ACTIVE_ORACLE_USERS");
+
+    await act(async () => {
+      fireEvent.click(sequence);
+      fireEvent.click(synonym);
+    });
+    const workspace =
+      useWorkspaceStore.getState().workspaces.ora1?.[DEFAULT_DB];
+    expect(workspace?.tabs ?? []).toEqual([]);
+  });
+
   it("MSSQL eagerly loads views and procedures for initially expanded schemas (#517 smoke)", async () => {
     useConnectionStore.setState({
       connections: [makeConnection("ms1", "mssql")],

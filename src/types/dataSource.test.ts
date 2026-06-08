@@ -136,6 +136,13 @@ describe("DataSourceProfile registry", () => {
     oracle: expectedCapabilities({
       connection: { test: true },
       query: { query: true, multiStatement: true, cancel: true },
+      catalog: {
+        browse: true,
+        schema: true,
+        indexes: true,
+        constraints: true,
+        relationships: true,
+      },
     }),
     mongodb: expectedCapabilities({
       connection: { test: true },
@@ -352,7 +359,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
-  it("keeps MSSQL row-edit and structured DDL bounded while Oracle stays query-bounded", () => {
+  it("keeps MSSQL row-edit and structured DDL bounded while Oracle stays catalog-query bounded", () => {
     const mssql = getDataSourceProfile("mssql");
     expect(mssql.backendAdapter).toEqual({
       id: "mssql",
@@ -385,7 +392,11 @@ describe("DataSourceProfile registry", () => {
     expect(oracle.capabilities.query.query).toBe(true);
     expect(oracle.capabilities.query.multiStatement).toBe(true);
     expect(oracle.capabilities.query.cancel).toBe(true);
-    expect(oracle.capabilities.catalog.browse).toBe(false);
+    expect(oracle.capabilities.catalog.browse).toBe(true);
+    expect(oracle.capabilities.catalog.schema).toBe(true);
+    expect(oracle.capabilities.catalog.indexes).toBe(true);
+    expect(oracle.capabilities.catalog.constraints).toBe(true);
+    expect(oracle.capabilities.catalog.relationships).toBe(true);
     expect(oracle.capabilities.edit.editRows).toBe(false);
     expect(oracle.capabilities.ddl.createTable).toBe(false);
   });
@@ -484,10 +495,8 @@ describe("DataSourceProfile registry", () => {
       expect(profile.backendAdapter.kind).toBe("rdb");
       expect(profile.capabilities.connection.test).toBe(true);
       expect(profile.capabilities.query.query).toBe(true);
-      if (dbType !== "oracle") {
-        expect(profile.capabilities.catalog.browse).toBe(true);
-        expect(profile.capabilities.catalog.schema).toBe(true);
-      }
+      expect(profile.capabilities.catalog.browse).toBe(true);
+      expect(profile.capabilities.catalog.schema).toBe(true);
     }
 
     const mssql = getDataSourceProfile("mssql");
@@ -519,7 +528,13 @@ describe("DataSourceProfile registry", () => {
     expect(oracle.capabilities.query.query).toBe(true);
     expect(oracle.capabilities.query.multiStatement).toBe(true);
     expect(oracle.capabilities.query.cancel).toBe(true);
-    expect(oracle.capabilities.catalog.browse).toBe(false);
+    expect(oracle.capabilities.catalog.browse).toBe(true);
+    expect(oracle.capabilities.catalog.schema).toBe(true);
+    expect(oracle.capabilities.catalog.indexes).toBe(true);
+    expect(oracle.capabilities.catalog.constraints).toBe(true);
+    expect(oracle.capabilities.catalog.relationships).toBe(true);
+    expect(oracle.capabilities.edit.editRows).toBe(false);
+    expect(oracle.capabilities.ddl.createTable).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
   });
 

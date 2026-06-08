@@ -19,6 +19,8 @@ import {
   FileText,
   Rows3,
   Database,
+  ListOrdered,
+  Link2,
 } from "lucide-react";
 import {
   ContextMenu,
@@ -35,6 +37,7 @@ import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import type { ExportInclude } from "@/hooks/useMigrationExport";
 import { cn } from "@lib/utils";
 import {
+  nodeIdToString,
   rowCountLabel,
   rowCountText,
   type CategoryKey,
@@ -331,11 +334,31 @@ export function renderItemRow(
   const isTableItem = row.itemKind === "table";
   const isView = row.itemKind === "view";
   const isFunc = row.itemKind === "function";
+  const isMetadata = row.itemKind === "metadata";
+  const isSequence = isMetadata && row.categoryKey === "sequences";
+  const itemLabel = isView
+    ? "view"
+    : isFunc
+      ? "function"
+      : isSequence
+        ? "sequence"
+        : isMetadata
+          ? "synonym"
+          : "table";
 
   const handleClick = () => {
     if (isView) ctx.handleViewClick(item.name, row.schemaName);
     else if (isFunc) ctx.handleFunctionClick(item.name, row.schemaName);
-    else ctx.handleTableClick(item.name, row.schemaName);
+    else if (isMetadata) {
+      ctx.setSelectedNodeId(
+        nodeIdToString({
+          type: "object",
+          schema: row.schemaName,
+          category: row.categoryKey,
+          objectName: item.name,
+        }),
+      );
+    } else ctx.handleTableClick(item.name, row.schemaName);
   };
 
   // Double-click promotes the preview tab to persistent. Only meaningful
@@ -361,7 +384,46 @@ export function renderItemRow(
   // on table/view clicks, which prevented a stale highlight from
   // surviving tab switches. Functions open as query tabs (no active-tab
   // match possible) so they stay on the click-driven `isSelected` path.
-  const isHighlighted = isFunc ? row.isSelected : row.isActive;
+  const isHighlighted = isFunc || isMetadata ? row.isSelected : row.isActive;
+  const icon = isView ? (
+    <Eye size={12} className="shrink-0 text-muted-foreground" />
+  ) : isFunc ? (
+    <Code2 size={12} className="shrink-0 text-muted-foreground" />
+  ) : isSequence ? (
+    <ListOrdered size={12} className="shrink-0 text-muted-foreground" />
+  ) : isMetadata ? (
+    <Link2 size={12} className="shrink-0 text-muted-foreground" />
+  ) : (
+    <Table2 size={12} className="shrink-0 text-muted-foreground" />
+  );
+
+  if (isMetadata) {
+    return (
+      <button
+        type="button"
+        className={cn(
+          "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 hover:bg-muted",
+          indentClass,
+          isHighlighted
+            ? "bg-primary/10 text-primary font-semibold"
+            : "text-foreground",
+        )}
+        aria-label={`${item.name} ${itemLabel}`}
+        onClick={handleClick}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") handleClick();
+        }}
+      >
+        {icon}
+        <span className="truncate text-xs">{item.name}</span>
+        {"arguments" in item && (item as FunctionInfo).arguments && (
+          <span className="ml-auto truncate text-3xs text-muted-foreground">
+            {(item as FunctionInfo).arguments}
+          </span>
+        )}
+      </button>
+    );
+  }
 
   return (
     <ContextMenu key={row.key}>
@@ -375,9 +437,7 @@ export function renderItemRow(
               ? "bg-primary/10 text-primary font-semibold"
               : "text-foreground",
           )}
-          aria-label={`${item.name} ${
-            isView ? "view" : isFunc ? "function" : "table"
-          }`}
+          aria-label={`${item.name} ${itemLabel}`}
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           onKeyDown={(e) => {
@@ -388,13 +448,7 @@ export function renderItemRow(
             }
           }}
         >
-          {isView ? (
-            <Eye size={12} className="shrink-0 text-muted-foreground" />
-          ) : isFunc ? (
-            <Code2 size={12} className="shrink-0 text-muted-foreground" />
-          ) : (
-            <Table2 size={12} className="shrink-0 text-muted-foreground" />
-          )}
+          {icon}
           <span className="truncate text-xs">{item.name}</span>
           {isTableItem && "row_count" in item && (
             <span
