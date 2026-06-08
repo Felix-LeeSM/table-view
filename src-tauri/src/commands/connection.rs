@@ -330,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn test_make_adapter_oracle_returns_catalog_query_bounded_rdb_variant() {
+    fn test_make_adapter_oracle_returns_query_catalog_edit_bounded_rdb_variant() {
         let adapter = make_adapter(&DatabaseType::Oracle).expect("oracle should succeed");
         assert!(
             matches!(adapter, ActiveAdapter::Rdb(_)),

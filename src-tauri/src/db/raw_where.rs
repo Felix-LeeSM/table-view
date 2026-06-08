@@ -6,7 +6,8 @@ use sqlparser::ast::{
     Select, SetExpr, Statement, UnaryOperator,
 };
 use sqlparser::dialect::{
-    Dialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, Precedence, SQLiteDialect,
+    Dialect, MsSqlDialect, MySqlDialect, OracleDialect, PostgreSqlDialect, Precedence,
+    SQLiteDialect,
 };
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::{Parser, ParserError};
@@ -18,6 +19,7 @@ pub(crate) enum RawWhereDialect {
     Mysql,
     Sqlite,
     Mssql,
+    Oracle,
 }
 
 pub(crate) fn validate_raw_where_clause(
@@ -36,7 +38,7 @@ pub(crate) fn validate_raw_where_clause(
     }
     reject_dangerous_prefix(raw_where)?;
 
-    let wrapped = format!("SELECT 1 FROM __tv_raw_where_probe WHERE {raw_where}");
+    let wrapped = format!("SELECT 1 FROM tv_raw_where_probe WHERE {raw_where}");
     let statements = parse_sql(dialect, &wrapped).map_err(|error| {
         AppError::Validation(format!(
             "Raw WHERE clause must be a single boolean expression: {error}"
@@ -121,6 +123,7 @@ fn tokenize_sql(
         RawWhereDialect::Mysql => Tokenizer::new(&MySqlDialect {}, sql).tokenize(),
         RawWhereDialect::Sqlite => Tokenizer::new(&SQLiteDialect {}, sql).tokenize(),
         RawWhereDialect::Mssql => Tokenizer::new(&MsSqlDialect {}, sql).tokenize(),
+        RawWhereDialect::Oracle => Tokenizer::new(&OracleDialect {}, sql).tokenize(),
     }
 }
 
@@ -130,6 +133,7 @@ fn parse_sql(dialect: RawWhereDialect, sql: &str) -> Result<Vec<Statement>, Pars
         RawWhereDialect::Mysql => Parser::parse_sql(&MySqlDialect {}, sql),
         RawWhereDialect::Sqlite => Parser::parse_sql(&TableViewSQLiteDialect {}, sql),
         RawWhereDialect::Mssql => Parser::parse_sql(&MsSqlDialect {}, sql),
+        RawWhereDialect::Oracle => Parser::parse_sql(&OracleDialect {}, sql),
     }
 }
 

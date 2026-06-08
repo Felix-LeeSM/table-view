@@ -24,7 +24,8 @@ export type { CoerceResult, SqlDialect } from "@lib/sql/sqlLiteral";
 /**
  * Build a SQL WHERE clause that identifies a specific row.
  * Uses primary key columns when available. PostgreSQL/MySQL/SQLite keep the
- * legacy all-column fallback; MSSQL writes are blocked without a primary key.
+ * legacy all-column fallback; MSSQL/Oracle writes are blocked without a primary
+ * key.
  */
 function buildWhereClause(
   row: unknown[],
@@ -51,14 +52,21 @@ function buildWhereClause(
       })
       .join(" AND ");
   }
-  if (dialect === "mssql") return null;
+  if (dialect === "mssql" || dialect === "oracle") return null;
   return columns
     .map((c, i) => `${sqlIdentifier(c.name, dialect)} = ${literal(row[i])}`)
     .join(" AND ");
 }
 
-const MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE =
-  "MSSQL row edits require a primary key; all-column WHERE fallback is disabled.";
+function primaryKeyRequiredMessage(dialect: SqlDialect): string {
+  return `${dialectLabel(dialect)} row edits require a primary key; all-column WHERE fallback is disabled.`;
+}
+
+function dialectLabel(dialect: SqlDialect): string {
+  if (dialect === "mssql") return "MSSQL";
+  if (dialect === "oracle") return "Oracle";
+  return "SQL";
+}
 
 /**
  * One entry in the optional `onCoerceError` callback, emitted when a pending
@@ -208,7 +216,8 @@ export function generateSqlWithKeys(
   const statements: GeneratedSqlStatement[] = [];
   const dialect = options.dialect ?? "postgresql";
   const qualifiedTable = qualifiedTableName(schema, table, dialect);
-  const requiresPrimaryKey = dialect === "mssql";
+  const requiresPrimaryKey = dialect === "mssql" || dialect === "oracle";
+  const primaryKeyMessage = primaryKeyRequiredMessage(dialect);
 
   if (requiresPrimaryKey && pkCols.length === 0) {
     pendingEdits.forEach((_, key) => {
@@ -217,7 +226,7 @@ export function generateSqlWithKeys(
         key,
         rowIdx: parsed?.rowIdx ?? 0,
         colIdx: parsed?.colIdx ?? 0,
-        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+        message: primaryKeyMessage,
       });
     });
     pendingDeletedRowKeys.forEach((key) => {
@@ -226,7 +235,7 @@ export function generateSqlWithKeys(
         key,
         rowIdx: Number.isInteger(rowIdx) ? rowIdx : 0,
         colIdx: 0,
-        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+        message: primaryKeyMessage,
       });
     });
     pendingNewRows.forEach((_, rowIdx) => {
@@ -234,7 +243,7 @@ export function generateSqlWithKeys(
         key: `new-${rowIdx}-0`,
         rowIdx,
         colIdx: 0,
-        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+        message: primaryKeyMessage,
       });
     });
     return [];
@@ -278,7 +287,7 @@ export function generateSqlWithKeys(
         key: entries[0]?.key ?? cellKey,
         rowIdx,
         colIdx,
-        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+        message: primaryKeyMessage,
       });
       return;
     }
@@ -424,7 +433,7 @@ export function generateSqlWithKeys(
         key: delKey,
         rowIdx,
         colIdx: 0,
-        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+        message: primaryKeyMessage,
       });
       return;
     }

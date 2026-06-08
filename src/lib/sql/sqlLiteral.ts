@@ -18,7 +18,7 @@ export type SqlTypeFamily =
   | "textual"
   | "unknown";
 
-export type SqlDialect = "postgresql" | "mysql" | "sqlite" | "mssql";
+export type SqlDialect = "postgresql" | "mysql" | "sqlite" | "mssql" | "oracle";
 
 /**
  * Textual data types that preserve `''` as an empty string literal (ADR 0009).
@@ -52,6 +52,15 @@ export function classifySqlType(
   if (lower === "bool" || lower.includes("boolean")) return "boolean";
   if (lower.includes("uuid")) return "uuid";
   if (
+    dialect === "oracle" &&
+    (lower === "number" ||
+      /^number\(\s*\d+\s*,\s*0\s*\)$/.test(lower) ||
+      lower === "binary_integer" ||
+      lower === "pls_integer")
+  ) {
+    return "integer";
+  }
+  if (
     lower.includes("int") ||
     lower === "serial" ||
     lower === "bigserial" ||
@@ -64,7 +73,8 @@ export function classifySqlType(
     lower.includes("decimal") ||
     lower.includes("float") ||
     lower.includes("double") ||
-    lower.includes("real")
+    lower.includes("real") ||
+    (dialect === "oracle" && lower.startsWith("number("))
   ) {
     return "numeric";
   }
@@ -80,7 +90,16 @@ export function classifySqlType(
     lower === "citext" ||
     lower === "string" ||
     lower === "json" ||
-    lower === "jsonb"
+    lower === "jsonb" ||
+    (dialect === "oracle" &&
+      (lower === "varchar2" ||
+        lower === "nvarchar2" ||
+        lower === "nchar" ||
+        lower === "clob" ||
+        lower === "nclob" ||
+        lower === "long" ||
+        lower === "rowid" ||
+        lower === "urowid"))
   ) {
     return "textual";
   }
@@ -116,6 +135,7 @@ export function sqlIdentifier(value: string, dialect: SqlDialect): string {
   if (dialect === "mysql") return quoteMysqlIdentifier(value);
   if (dialect === "sqlite") return quoteDoubleSqlIdentifier(value);
   if (dialect === "mssql") return quoteMssqlIdentifier(value);
+  if (dialect === "oracle") return quoteDoubleSqlIdentifier(value);
   return value;
 }
 
@@ -213,6 +233,9 @@ export function coerceToSqlLiteral(
     }
     case "date": {
       if (ISO_DATE_RE.test(value)) {
+        if (dialect === "oracle") {
+          return { kind: "sql", sql: `DATE ${escapeSqlString(value)}` };
+        }
         return { kind: "sql", sql: escapeSqlString(value) };
       }
       return {
@@ -222,6 +245,15 @@ export function coerceToSqlLiteral(
     }
     case "timestamp": {
       if (ISO_DATETIME_RE.test(value)) {
+        if (dialect === "oracle") {
+          const normalized = value
+            .replace("T", " ")
+            .replace(/Z|[+-]\d{2}:?\d{2}$/, "");
+          return {
+            kind: "sql",
+            sql: `TIMESTAMP ${escapeSqlString(normalized)}`,
+          };
+        }
         return { kind: "sql", sql: escapeSqlString(value) };
       }
       return {

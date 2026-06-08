@@ -1,12 +1,13 @@
 //! Oracle connection lifecycle, bounded query adapter, and catalog metadata browse.
 //!
 //! Oracle supports service-name connection, bounded SELECT/DML query runtime,
-//! and live catalog/workbench metadata. Table-data browse, edit, structured DDL,
-//! runtime Safe Mode, fixture/live/E2E, SID/TNS, wallet/TLS, and full PL/SQL
-//! parity remain unsupported.
+//! live catalog/workbench metadata, and primary-key-scoped table row edits.
+//! Structured DDL, runtime Safe Mode, fixture/live/E2E, SID/TNS, wallet/TLS,
+//! and full PL/SQL parity remain unsupported.
 
 mod catalog;
 mod runtime;
+mod table_data;
 #[cfg(test)]
 mod tests;
 
@@ -32,8 +33,7 @@ use super::{BoxFuture, DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, Rdb
 const ORACLE_CONNECT_TIMEOUT_DEFAULT_SECS: u32 = 300;
 const ORACLE_CONNECT_TIMEOUT_MAX_SECS: u64 = 30;
 const ORACLE_TEST_CONNECT_TIMEOUT_SECS: u64 = 5;
-const ORACLE_UNSUPPORTED_RUNTIME: &str =
-    "Oracle table data, edit, and structured DDL runtime is not supported yet";
+const ORACLE_UNSUPPORTED_RUNTIME: &str = "Oracle structured DDL runtime is not supported yet";
 
 #[derive(Default)]
 struct OracleConnectionState {
@@ -261,16 +261,21 @@ impl RdbAdapter for OracleAdapter {
     #[allow(clippy::too_many_arguments)]
     fn query_table_data<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _page: i32,
-        _page_size: i32,
-        _order_by: Option<&'a str>,
-        _filters: Option<&'a [crate::models::FilterCondition]>,
-        _raw_where: Option<&'a str>,
-        _cancel: Option<&'a CancellationToken>,
+        namespace: &'a str,
+        table: &'a str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&'a str>,
+        filters: Option<&'a [crate::models::FilterCondition]>,
+        raw_where: Option<&'a str>,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<TableData, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move {
+            OracleAdapter::query_table_data(
+                self, namespace, table, page, page_size, order_by, filters, raw_where, cancel,
+            )
+            .await
+        })
     }
 
     fn drop_table<'a>(

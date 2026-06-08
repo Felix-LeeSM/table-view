@@ -375,7 +375,7 @@ fn oracle_column_category(column: &OracleColumnInfo) -> ColumnCategory {
     }
 }
 
-fn oracle_value_to_json(value: &oracle_rs::Value) -> serde_json::Value {
+pub(super) fn oracle_value_to_json(value: &oracle_rs::Value) -> serde_json::Value {
     match value {
         oracle_rs::Value::Null => serde_json::Value::Null,
         oracle_rs::Value::String(value) => serde_json::Value::String(value.clone()),

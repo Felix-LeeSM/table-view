@@ -247,6 +247,139 @@ describe("generateSql — MSSQL row edit SQL", () => {
   });
 });
 
+describe("generateSql — Oracle row edit SQL", () => {
+  const ORACLE_DATA: TableData = {
+    columns: [
+      {
+        name: "USER ID",
+        data_type: "VARCHAR2",
+        nullable: false,
+        default_value: null,
+        is_primary_key: true,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+      {
+        name: "SELECT",
+        data_type: "VARCHAR2",
+        nullable: true,
+        default_value: null,
+        is_primary_key: false,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+      {
+        name: "AMOUNT",
+        data_type: "NUMBER(10,2)",
+        nullable: true,
+        default_value: null,
+        is_primary_key: false,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+      {
+        name: "CREATED_AT",
+        data_type: "DATE",
+        nullable: true,
+        default_value: null,
+        is_primary_key: false,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+    ],
+    rows: [["O'Brien", "old", 1.25, "2026-06-01"]],
+    total_count: 1,
+    page: 1,
+    page_size: 100,
+    executed_query:
+      'SELECT "USER ID", "SELECT", "AMOUNT", "CREATED_AT" FROM "APP"."ORDER DETAIL"',
+  };
+
+  it("emits double-quoted key-projected Oracle SQL and Oracle date literals", () => {
+    const statements = generateSql(
+      ORACLE_DATA,
+      "APP",
+      "ORDER DETAIL",
+      new Map<string, string | null>([
+        ["0-1", "new"],
+        ["0-2", "12.5"],
+        ["0-3", "2026-06-08"],
+      ]),
+      new Set(),
+      [],
+      { dialect: "oracle" },
+    );
+
+    expect(statements).toEqual([
+      `UPDATE "APP"."ORDER DETAIL" SET "SELECT" = 'new' WHERE "USER ID" = 'O''Brien';`,
+      `UPDATE "APP"."ORDER DETAIL" SET "AMOUNT" = 12.5 WHERE "USER ID" = 'O''Brien';`,
+      `UPDATE "APP"."ORDER DETAIL" SET "CREATED_AT" = DATE '2026-06-08' WHERE "USER ID" = 'O''Brien';`,
+    ]);
+  });
+
+  it("escapes embedded double quotes in Oracle identifiers", () => {
+    const [idColumn, selectColumn] = ORACLE_DATA.columns;
+    const data: TableData = {
+      ...ORACLE_DATA,
+      columns: [
+        { ...idColumn!, name: 'USER"ID' },
+        { ...selectColumn!, name: 'SELECT"VALUE' },
+      ],
+      rows: [[7, "old"]],
+    };
+
+    const statements = generateSql(
+      data,
+      'APP"SCHEMA',
+      'ORDER"DETAIL',
+      new Map<string, string | null>([["0-1", "new"]]),
+      new Set(),
+      [],
+      { dialect: "oracle" },
+    );
+
+    expect(statements).toEqual([
+      `UPDATE "APP""SCHEMA"."ORDER""DETAIL" SET "SELECT""VALUE" = 'new' WHERE "USER""ID" = 7;`,
+    ]);
+  });
+
+  it("blocks Oracle writes without primary-key projection", () => {
+    const errors: CoerceError[] = [];
+    const dataWithoutPrimaryKey: TableData = {
+      ...ORACLE_DATA,
+      columns: ORACLE_DATA.columns.map((column) => ({
+        ...column,
+        is_primary_key: false,
+      })),
+    };
+
+    const statements = generateSql(
+      dataWithoutPrimaryKey,
+      "APP",
+      "ORDER DETAIL",
+      new Map<string, string | null>([["0-1", "new"]]),
+      new Set(["row-1-0"]),
+      [["new-id", "new", "12.5", "2026-06-08"]],
+      { dialect: "oracle", onCoerceError: (error) => errors.push(error) },
+    );
+
+    expect(statements).toEqual([]);
+    expect(errors.map((error) => error.key)).toEqual([
+      "0-1",
+      "row-1-0",
+      "new-0-0",
+    ]);
+    expect(errors.every((error) => error.message.includes("primary key"))).toBe(
+      true,
+    );
+    expect(errors[0]?.message).toContain("Oracle row edits require");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Sprint 343 (2026-05-15) — inline JSON tree edits: jsonb + Postgres ARRAY.
 // Locks the path-key parser + per-cell dispatch so the inline tree (Mongo's
