@@ -13,6 +13,7 @@ fn accepts_dialect_quoted_identifiers() {
     assert!(validate_raw_where_clause(RawWhereDialect::Postgres, r#""status" = 'active'"#).is_ok());
     assert!(validate_raw_where_clause(RawWhereDialect::Mysql, "`status` = 'active'").is_ok());
     assert!(validate_raw_where_clause(RawWhereDialect::Mssql, "[status] = 'active'").is_ok());
+    assert!(validate_raw_where_clause(RawWhereDialect::Oracle, r#""STATUS" = 'active'"#).is_ok());
 }
 
 #[test]
@@ -35,6 +36,68 @@ fn accepts_dialect_specific_binary_predicates() {
     assert!(validate_raw_where_clause(RawWhereDialect::Sqlite, "name NOT REGEXP '^A'").is_ok());
     assert!(validate_raw_where_clause(RawWhereDialect::Sqlite, "name MATCH 'alpha'").is_ok());
     assert!(validate_raw_where_clause(RawWhereDialect::Sqlite, "name NOT MATCH 'alpha'").is_ok());
+}
+
+#[test]
+fn accepts_oracle_predicate_shapes_used_by_table_browse() {
+    for clause in [
+        r#""AGE" BETWEEN 18 AND 65"#,
+        r#""ID" IN (1, 2, 3)"#,
+        r#"NOT ("STATUS" IS NULL OR "STATUS" IS NOT NULL)"#,
+        r#"LOWER("NAME") = 'ada'"#,
+        r#"CAST("AGE" AS NUMBER) >= 21"#,
+        r#"CASE WHEN "AGE" > 18 THEN "AGE" ELSE 0 END > 0"#,
+    ] {
+        assert!(
+            validate_raw_where_clause(RawWhereDialect::Oracle, clause).is_ok(),
+            "{clause}"
+        );
+    }
+}
+
+#[test]
+fn rejects_oracle_raw_where_query_tails_and_subqueries() {
+    for clause in [
+        r#""ACTIVE" = 1 ORDER BY "ID""#,
+        r#""ACTIVE" = 1 GROUP BY "ACTIVE""#,
+        r#"EXISTS (SELECT 1 FROM DUAL)"#,
+        r#""ID" IN (SELECT "ID" FROM "ADMINS")"#,
+    ] {
+        assert!(
+            validate_raw_where_clause(RawWhereDialect::Oracle, clause).is_err(),
+            "{clause}"
+        );
+    }
+}
+
+#[test]
+fn accepts_nested_value_expressions_without_query_clauses() {
+    for clause in [
+        "(age + 1) > 18",
+        "name IS NOT TRUE",
+        "name IS NOT DISTINCT FROM alias",
+        "COALESCE(name, 'unknown') = 'Ada'",
+        "CASE WHEN age > 18 THEN age ELSE 0 END > 0",
+    ] {
+        assert!(
+            validate_raw_where_clause(RawWhereDialect::Postgres, clause).is_ok(),
+            "{clause}"
+        );
+    }
+}
+
+#[test]
+fn rejects_value_expressions_with_embedded_subqueries() {
+    for clause in [
+        "id = ANY (SELECT id FROM admins)",
+        "id = ALL (SELECT id FROM admins)",
+        "CASE WHEN EXISTS (SELECT 1) THEN 1 ELSE 0 END = 1",
+    ] {
+        assert!(
+            validate_raw_where_clause(RawWhereDialect::Postgres, clause).is_err(),
+            "{clause}"
+        );
+    }
 }
 
 #[test]

@@ -143,6 +143,7 @@ describe("DataSourceProfile registry", () => {
         constraints: true,
         relationships: true,
       },
+      edit: { editRows: true },
     }),
     mongodb: expectedCapabilities({
       connection: { test: true },
@@ -359,7 +360,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
-  it("keeps MSSQL row-edit and structured DDL bounded while Oracle stays catalog-query bounded", () => {
+  it("keeps MSSQL structured DDL bounded while Oracle stays query/catalog/edit bounded", () => {
     const mssql = getDataSourceProfile("mssql");
     expect(mssql.backendAdapter).toEqual({
       id: "mssql",
@@ -397,7 +398,7 @@ describe("DataSourceProfile registry", () => {
     expect(oracle.capabilities.catalog.indexes).toBe(true);
     expect(oracle.capabilities.catalog.constraints).toBe(true);
     expect(oracle.capabilities.catalog.relationships).toBe(true);
-    expect(oracle.capabilities.edit.editRows).toBe(false);
+    expect(oracle.capabilities.edit.editRows).toBe(true);
     expect(oracle.capabilities.ddl.createTable).toBe(false);
   });
 
@@ -533,7 +534,7 @@ describe("DataSourceProfile registry", () => {
     expect(oracle.capabilities.catalog.indexes).toBe(true);
     expect(oracle.capabilities.catalog.constraints).toBe(true);
     expect(oracle.capabilities.catalog.relationships).toBe(true);
-    expect(oracle.capabilities.edit.editRows).toBe(false);
+    expect(oracle.capabilities.edit.editRows).toBe(true);
     expect(oracle.capabilities.ddl.createTable).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
   });

@@ -118,7 +118,7 @@ async fn catalog_surfaces_require_open_connection() {
 }
 
 #[tokio::test]
-async fn table_data_edit_and_structured_ddl_surfaces_remain_unsupported() {
+async fn table_data_requires_open_connection_and_structured_ddl_remains_unsupported() {
     let adapter = OracleAdapter::new();
     let drop_table = DropTableRequest {
         connection_id: "oracle-1".into(),
@@ -220,7 +220,7 @@ async fn table_data_edit_and_structured_ddl_surfaces_remain_unsupported() {
         expected_database: None,
     };
 
-    assert_oracle_unsupported(
+    assert_oracle_not_open(
         adapter
             .query_table_data("SYSTEM", "T", 1, 100, None, None, None, None)
             .await,

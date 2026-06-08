@@ -79,7 +79,8 @@ export default function DataGrid({
     });
   const rowEditRequiresPrimaryKey =
     rowEditConnection?.dbType === "sqlite" ||
-    rowEditConnection?.dbType === "mssql";
+    rowEditConnection?.dbType === "mssql" ||
+    rowEditConnection?.dbType === "oracle";
   const tableWithoutRequiredPrimaryKey =
     rowEditRequiresPrimaryKey &&
     data !== null &&

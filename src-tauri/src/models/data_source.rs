@@ -300,7 +300,7 @@ const MSSQL_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalQuery,
     BackendAdapterCapability::RelationalSchemaMutation,
 ];
-const ORACLE_CATALOG_QUERY_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
+const ORACLE_QUERY_CATALOG_EDIT_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
@@ -372,12 +372,12 @@ const MSSQL_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     capability_source: BackendAdapterCapabilitySource::Mssql,
     capabilities: MSSQL_RDB_CAPABILITIES,
 };
-const ORACLE_CATALOG_QUERY_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
+const ORACLE_QUERY_CATALOG_EDIT_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
     state: BackendAdapterContractState::FactoryBacked,
     implementation: BackendAdapterId::Oracle,
     capability_source: BackendAdapterCapabilitySource::Oracle,
-    capabilities: ORACLE_CATALOG_QUERY_RDB_CAPABILITIES,
+    capabilities: ORACLE_QUERY_CATALOG_EDIT_RDB_CAPABILITIES,
 };
 const FACTORY_DOCUMENT_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Document,
@@ -587,7 +587,7 @@ pub fn get_data_source_profile(db_type: &DatabaseType) -> DataSourceProfile {
         DatabaseType::Mssql => rdb_profile(DatabaseType::Mssql, MSSQL_RDB_CONTRACT, MSSQL_DIALECT),
         DatabaseType::Oracle => rdb_profile(
             DatabaseType::Oracle,
-            ORACLE_CATALOG_QUERY_RDB_CONTRACT,
+            ORACLE_QUERY_CATALOG_EDIT_RDB_CONTRACT,
             ORACLE_DIALECT,
         ),
         DatabaseType::Mongodb => DataSourceProfile {

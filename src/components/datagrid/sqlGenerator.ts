@@ -21,17 +21,38 @@ export { coerceToSqlLiteral };
 export { isArrayColumn, isJsonbColumn, isStructuralJsonColumn };
 export type { CoerceResult, SqlDialect } from "@lib/sql/sqlLiteral";
 
+type WhereClauseResult =
+  | { kind: "sql"; sql: string }
+  | { kind: "error"; message: string };
+
+function rowValueToCoerceInput(
+  value: unknown,
+  dataType: string,
+): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value;
+  if (value instanceof Date) {
+    const iso = value.toISOString();
+    return dataType.toLowerCase().trim() === "date" ? iso.slice(0, 10) : iso;
+  }
+  if (typeof value === "object" && "toString" in (value as object)) {
+    return (value as { toString(): string }).toString();
+  }
+  return String(value);
+}
+
 /**
  * Build a SQL WHERE clause that identifies a specific row.
  * Uses primary key columns when available. PostgreSQL/MySQL/SQLite keep the
- * legacy all-column fallback; MSSQL writes are blocked without a primary key.
+ * legacy all-column fallback; MSSQL/Oracle writes are blocked without a primary
+ * key.
  */
 function buildWhereClause(
   row: unknown[],
   columns: ColumnInfo[],
   pkCols: ColumnInfo[],
   dialect: SqlDialect,
-): string | null {
+): WhereClauseResult | null {
   // Sprint 305 — pk / 비-pk 값이 Decimal 인 경우 `String(decimal)` → `[object
   // Object]` 가 되는 회귀 가드. BigInt 는 String() 으로 digit 보존되지만
   // Decimal 은 명시 분기 필요.
@@ -44,21 +65,42 @@ function buildWhereClause(
     return String(v);
   };
   if (pkCols.length > 0) {
-    return pkCols
-      .map((pk) => {
-        const pkIdx = columns.indexOf(pk);
-        return `${sqlIdentifier(pk.name, dialect)} = ${literal(row[pkIdx])}`;
-      })
-      .join(" AND ");
+    const clauses: string[] = [];
+    for (const pk of pkCols) {
+      const pkIdx = columns.indexOf(pk);
+      const coerced = coerceToSqlLiteral(
+        rowValueToCoerceInput(row[pkIdx], pk.data_type),
+        pk.data_type,
+        dialect,
+      );
+      if (coerced.kind === "error") {
+        return {
+          kind: "error",
+          message: `Primary key "${pk.name}" ${coerced.message}`,
+        };
+      }
+      clauses.push(`${sqlIdentifier(pk.name, dialect)} = ${coerced.sql}`);
+    }
+    return { kind: "sql", sql: clauses.join(" AND ") };
   }
-  if (dialect === "mssql") return null;
-  return columns
-    .map((c, i) => `${sqlIdentifier(c.name, dialect)} = ${literal(row[i])}`)
-    .join(" AND ");
+  if (dialect === "mssql" || dialect === "oracle") return null;
+  return {
+    kind: "sql",
+    sql: columns
+      .map((c, i) => `${sqlIdentifier(c.name, dialect)} = ${literal(row[i])}`)
+      .join(" AND "),
+  };
 }
 
-const MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE =
-  "MSSQL row edits require a primary key; all-column WHERE fallback is disabled.";
+function primaryKeyRequiredMessage(dialect: SqlDialect): string {
+  return `${dialectLabel(dialect)} row edits require a primary key; all-column WHERE fallback is disabled.`;
+}
+
+function dialectLabel(dialect: SqlDialect): string {
+  if (dialect === "mssql") return "MSSQL";
+  if (dialect === "oracle") return "Oracle";
+  return "SQL";
+}
 
 /**
  * One entry in the optional `onCoerceError` callback, emitted when a pending
@@ -208,7 +250,8 @@ export function generateSqlWithKeys(
   const statements: GeneratedSqlStatement[] = [];
   const dialect = options.dialect ?? "postgresql";
   const qualifiedTable = qualifiedTableName(schema, table, dialect);
-  const requiresPrimaryKey = dialect === "mssql";
+  const requiresPrimaryKey = dialect === "mssql" || dialect === "oracle";
+  const primaryKeyMessage = primaryKeyRequiredMessage(dialect);
 
   if (requiresPrimaryKey && pkCols.length === 0) {
     pendingEdits.forEach((_, key) => {
@@ -217,7 +260,7 @@ export function generateSqlWithKeys(
         key,
         rowIdx: parsed?.rowIdx ?? 0,
         colIdx: parsed?.colIdx ?? 0,
-        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+        message: primaryKeyMessage,
       });
     });
     pendingDeletedRowKeys.forEach((key) => {
@@ -226,7 +269,7 @@ export function generateSqlWithKeys(
         key,
         rowIdx: Number.isInteger(rowIdx) ? rowIdx : 0,
         colIdx: 0,
-        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+        message: primaryKeyMessage,
       });
     });
     pendingNewRows.forEach((_, rowIdx) => {
@@ -234,7 +277,7 @@ export function generateSqlWithKeys(
         key: `new-${rowIdx}-0`,
         rowIdx,
         colIdx: 0,
-        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+        message: primaryKeyMessage,
       });
     });
     return [];
@@ -278,7 +321,16 @@ export function generateSqlWithKeys(
         key: entries[0]?.key ?? cellKey,
         rowIdx,
         colIdx,
-        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+        message: primaryKeyMessage,
+      });
+      return;
+    }
+    if (whereClause.kind === "error") {
+      options.onCoerceError?.({
+        key: entries[0]?.key ?? cellKey,
+        rowIdx,
+        colIdx,
+        message: whereClause.message,
       });
       return;
     }
@@ -304,7 +356,7 @@ export function generateSqlWithKeys(
         return;
       }
       statements.push({
-        sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${coerced.sql} WHERE ${whereClause};`,
+        sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${coerced.sql} WHERE ${whereClause.sql};`,
         key: topLevel.key,
       });
       return;
@@ -337,7 +389,7 @@ export function generateSqlWithKeys(
         return;
       }
       statements.push({
-        sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${coerced.sql} WHERE ${whereClause};`,
+        sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${coerced.sql} WHERE ${whereClause.sql};`,
         key: topLevel.key,
       });
       return;
@@ -359,7 +411,7 @@ export function generateSqlWithKeys(
         return;
       }
       statements.push({
-        sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${emitted.expr} WHERE ${whereClause};`,
+        sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${emitted.expr} WHERE ${whereClause.sql};`,
         key: nested[0]!.key,
       });
       return;
@@ -395,7 +447,7 @@ export function generateSqlWithKeys(
         return;
       }
       statements.push({
-        sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${emitted.expr} WHERE ${whereClause};`,
+        sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${emitted.expr} WHERE ${whereClause.sql};`,
         key: nested[0]!.key,
       });
       return;
@@ -424,12 +476,21 @@ export function generateSqlWithKeys(
         key: delKey,
         rowIdx,
         colIdx: 0,
-        message: MSSQL_PRIMARY_KEY_REQUIRED_MESSAGE,
+        message: primaryKeyMessage,
+      });
+      return;
+    }
+    if (whereClause.kind === "error") {
+      options.onCoerceError?.({
+        key: delKey,
+        rowIdx,
+        colIdx: 0,
+        message: whereClause.message,
       });
       return;
     }
     statements.push({
-      sql: `DELETE FROM ${qualifiedTable} WHERE ${whereClause};`,
+      sql: `DELETE FROM ${qualifiedTable} WHERE ${whereClause.sql};`,
       key: delKey,
     });
   });

@@ -181,7 +181,7 @@ const DEFERRED_FEATURES = Object.freeze({
       "catalog.relationships",
     ],
     query: ["query.multiStatement", "query.cancel", "query.explain"],
-    edit: ["edit.editRows"],
+    edit: [],
     ddl: [],
   },
   mssql: {
@@ -409,7 +409,7 @@ function oracleCatalogQueryDeferred(): DeferredByArea {
     connection: ["connection.switchDatabase"],
     catalog: [],
     query: ["query.explain"],
-    edit: ["edit.editRows"],
+    edit: [],
     ddl: [
       "ddl.createTable",
       "ddl.alterTable",

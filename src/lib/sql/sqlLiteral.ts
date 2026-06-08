@@ -18,11 +18,12 @@ export type SqlTypeFamily =
   | "textual"
   | "unknown";
 
-export type SqlDialect = "postgresql" | "mysql" | "sqlite" | "mssql";
+export type SqlDialect = "postgresql" | "mysql" | "sqlite" | "mssql" | "oracle";
 
 /**
  * Textual data types that preserve `''` as an empty string literal (ADR 0009).
- * Anything outside this set coerces empty string to `NULL` on commit.
+ * Anything outside this set coerces empty string to `NULL` on commit. Oracle is
+ * the exception: the server treats `''` as NULL, so emit `NULL` explicitly.
  */
 function isTextualFamily(family: SqlTypeFamily): boolean {
   return family === "textual";
@@ -52,6 +53,15 @@ export function classifySqlType(
   if (lower === "bool" || lower.includes("boolean")) return "boolean";
   if (lower.includes("uuid")) return "uuid";
   if (
+    dialect === "oracle" &&
+    (lower === "number" ||
+      /^number\(\s*\d+\s*,\s*0\s*\)$/.test(lower) ||
+      lower === "binary_integer" ||
+      lower === "pls_integer")
+  ) {
+    return "integer";
+  }
+  if (
     lower.includes("int") ||
     lower === "serial" ||
     lower === "bigserial" ||
@@ -64,7 +74,8 @@ export function classifySqlType(
     lower.includes("decimal") ||
     lower.includes("float") ||
     lower.includes("double") ||
-    lower.includes("real")
+    lower.includes("real") ||
+    (dialect === "oracle" && lower.startsWith("number("))
   ) {
     return "numeric";
   }
@@ -80,7 +91,16 @@ export function classifySqlType(
     lower === "citext" ||
     lower === "string" ||
     lower === "json" ||
-    lower === "jsonb"
+    lower === "jsonb" ||
+    (dialect === "oracle" &&
+      (lower === "varchar2" ||
+        lower === "nvarchar2" ||
+        lower === "nchar" ||
+        lower === "clob" ||
+        lower === "nclob" ||
+        lower === "long" ||
+        lower === "rowid" ||
+        lower === "urowid"))
   ) {
     return "textual";
   }
@@ -116,6 +136,7 @@ export function sqlIdentifier(value: string, dialect: SqlDialect): string {
   if (dialect === "mysql") return quoteMysqlIdentifier(value);
   if (dialect === "sqlite") return quoteDoubleSqlIdentifier(value);
   if (dialect === "mssql") return quoteMssqlIdentifier(value);
+  if (dialect === "oracle") return quoteDoubleSqlIdentifier(value);
   return value;
 }
 
@@ -133,10 +154,13 @@ export function qualifiedTableName(
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ORACLE_DATE_TIME_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}$/;
 // Accepts `YYYY-MM-DDTHH:MM[:SS[.fff]][Z|+-HH:MM]`; the `T` may also be a
-// space to match SQL-style inputs the user might copy in from psql.
+// space to match SQL-style inputs the user might copy in from psql. Oracle's
+// runtime returns timestamp-with-time-zone values as `... +HH:MM`, so allow one
+// space before the offset.
 const ISO_DATETIME_RE =
-  /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/;
+  /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:\s?(?:Z|[+-]\d{2}:?\d{2}))?$/;
 const TIME_RE = /^\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -150,6 +174,32 @@ const INTEGER_RE = /^-?\d+$/;
 // some contexts; keep the accept surface tight for the first pass.
 export const NUMERIC_RE = /^-?(?:\d+\.?\d*|\.\d+)$/;
 
+function oracleDateTimeLiteral(value: string): string {
+  return value.replace("T", " ");
+}
+
+function isOracleTimestampWithTimeZone(dataType: string): boolean {
+  const normalized = dataType.toLowerCase().replace(/\s+/g, " ");
+  return (
+    normalized.includes("timestamp") &&
+    normalized.includes("with time zone") &&
+    !normalized.includes("local time zone")
+  );
+}
+
+function normalizeOracleTimestampTz(value: string): string {
+  return oracleDateTimeLiteral(value)
+    .replace(/\s*Z$/i, " +00:00")
+    .replace(/([+-]\d{2})(\d{2})$/, "$1:$2")
+    .replace(/\s*([+-]\d{2}:\d{2})$/, " $1");
+}
+
+function oracleTimestampTzFormat(value: string): string {
+  return /\.\d+(?:\s?(?:Z|[+-]\d{2}:?\d{2}))$/i.test(value)
+    ? "YYYY-MM-DD HH24:MI:SS.FF TZH:TZM"
+    : "YYYY-MM-DD HH24:MI:SS TZH:TZM";
+}
+
 /**
  * Coerce a user-entered edit value to a SQL literal, given the column's
  * declared data type. Pure function: no I/O, no state, so it can be tested
@@ -157,7 +207,7 @@ export const NUMERIC_RE = /^-?(?:\d+\.?\d*|\.\d+)$/;
  *
  * Tri-state rule (ADR 0009):
  * - `null` -> `NULL` regardless of type.
- * - `""` + textual family -> `''` (preserved).
+ * - `""` + textual family -> `''` (preserved), except Oracle -> `NULL`.
  * - `""` + non-textual family -> `NULL` (empty picker = explicit clear).
  *
  * Valid input examples per family:
@@ -181,9 +231,10 @@ export function coerceToSqlLiteral(
   const family = classifySqlType(dataType, dialect);
 
   // Empty-string branch: preserved for textual families, collapsed to NULL for
-  // the rest. The unknown family follows the textual rule (safer: preserves
-  // prior empty-string commits rather than silently swapping to NULL).
+  // the rest. Oracle collapses every empty string to NULL at execution time, so
+  // generated SQL makes that clear instead of emitting a misleading `''`.
   if (value === "") {
+    if (dialect === "oracle") return { kind: "sql", sql: "NULL" };
     if (isTextualFamily(family) || family === "unknown") {
       return { kind: "sql", sql: "''" };
     }
@@ -213,7 +264,16 @@ export function coerceToSqlLiteral(
     }
     case "date": {
       if (ISO_DATE_RE.test(value)) {
+        if (dialect === "oracle") {
+          return { kind: "sql", sql: `DATE ${escapeSqlString(value)}` };
+        }
         return { kind: "sql", sql: escapeSqlString(value) };
+      }
+      if (dialect === "oracle" && ORACLE_DATE_TIME_RE.test(value)) {
+        return {
+          kind: "sql",
+          sql: `TO_DATE(${escapeSqlString(oracleDateTimeLiteral(value))}, 'YYYY-MM-DD HH24:MI:SS')`,
+        };
       }
       return {
         kind: "error",
@@ -222,6 +282,22 @@ export function coerceToSqlLiteral(
     }
     case "timestamp": {
       if (ISO_DATETIME_RE.test(value)) {
+        if (dialect === "oracle") {
+          if (isOracleTimestampWithTimeZone(dataType)) {
+            const normalized = normalizeOracleTimestampTz(value);
+            return {
+              kind: "sql",
+              sql: `TO_TIMESTAMP_TZ(${escapeSqlString(normalized)}, '${oracleTimestampTzFormat(value)}')`,
+            };
+          }
+          const normalized = value
+            .replace("T", " ")
+            .replace(/\s?(?:Z|[+-]\d{2}:?\d{2})$/, "");
+          return {
+            kind: "sql",
+            sql: `TIMESTAMP ${escapeSqlString(normalized)}`,
+          };
+        }
         return { kind: "sql", sql: escapeSqlString(value) };
       }
       return {
