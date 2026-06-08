@@ -72,7 +72,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
 
   const actions = useSchemaTreeActions({
     connectionId,
-    autoLoadAuxiliaryCatalog: treeShape === "no-schema",
+    autoLoadAuxiliaryCatalog: treeShape === "no-schema" || dbType === "mssql",
     autoLoadFileAnalyticsSources: dbType === "duckdb",
     clearFileAnalyticsSourcesOnRefresh: dbType === "duckdb",
   });

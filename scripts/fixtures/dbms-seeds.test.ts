@@ -109,6 +109,18 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(sql).toMatch(/CHECK\s*\(amount >= 0\)/i);
   });
 
+  it("mssql seed carries Runtime Happy Path catalog probes", () => {
+    const sql = readFileSync(
+      resolve("e2e/fixtures", "seed.mssql.sql"),
+      "utf-8",
+    );
+
+    expect(sql).toContain("active_mssql_users");
+    expect(sql).toContain("mssql_catalog_ping");
+    expect(sql).toMatch(/CREATE OR ALTER VIEW dbo\.active_mssql_users/i);
+    expect(sql).toMatch(/CREATE OR ALTER PROCEDURE dbo\.mssql_catalog_ping/i);
+  });
+
   it("mongodb has a dedicated idempotent document seed", () => {
     const fixture = readJson<MongoSeedFixture>("seed.mongodb.json");
     const collectionNames = fixture.collections.map(({ name }) => name);
@@ -318,5 +330,26 @@ describe("DBMS-specific E2E seed fixtures", () => {
     );
     expect(seedScript).toContain('opensearch: ["opensearch"]');
     expect(seedScript).toContain("seed.search.opensearch.json");
+  });
+
+  it("mssql fixture seed is wired into Runtime Happy Path smoke", () => {
+    const workflow = readFileSync(resolve(".github/workflows/e2e-smoke.yml"), {
+      encoding: "utf8",
+    });
+    const smokeScript = readFileSync(resolve("scripts/e2e-smoke-ci.sh"), {
+      encoding: "utf8",
+    });
+    const seedScript = readFileSync(resolve("e2e/fixtures/seed-smoke.ts"), {
+      encoding: "utf8",
+    });
+
+    expect(workflow).toContain("spec_key: mssql");
+    expect(workflow).toContain("spec: e2e/smoke/mssql.spec.ts");
+    expect(workflow).toContain("mcr.microsoft.com/mssql/server:2022-latest");
+    expect(smokeScript).toContain(
+      'run_wdio "$BASE_DATA_DIR/mssql" "e2e/smoke/mssql.spec.ts"',
+    );
+    expect(seedScript).toContain('mssql: ["mssql"]');
+    expect(seedScript).toContain("seed.mssql.sql");
   });
 });

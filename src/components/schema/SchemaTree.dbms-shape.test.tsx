@@ -417,6 +417,24 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     expect(workspace?.tabs ?? []).toEqual([]);
   });
 
+  it("MSSQL eagerly loads views and procedures for initially expanded schemas (#517 smoke)", async () => {
+    useConnectionStore.setState({
+      connections: [makeConnection("ms1", "mssql")],
+    });
+    setSchemaStoreState({
+      schemas: { ms1: [{ name: "dbo" }] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="ms1" />);
+    });
+
+    await waitFor(() => {
+      expect(mockLoadViews).toHaveBeenCalledWith("ms1", DEFAULT_DB, "dbo");
+      expect(mockLoadFunctions).toHaveBeenCalledWith("ms1", DEFAULT_DB, "dbo");
+    });
+  });
+
   // ─────────────────────────────────────────────────────────────────────
   // AC-S135-03 — MySQL: 2-level (database → table), no schema row
   // ─────────────────────────────────────────────────────────────────────

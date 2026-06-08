@@ -59,8 +59,6 @@ connections:
       name: Dev (MSSQL)
       color: "#dc2626"
       environment: development
-      status: planned
-      disabledReason: "MSSQL has a bounded query runtime, but default fixture connection/smoke is not wired."
   oracle:
     - id: fixture-dev-oracle
       name: Dev (Oracle)

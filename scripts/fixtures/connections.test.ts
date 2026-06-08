@@ -174,7 +174,7 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
     expect(existsSync(duckdb?.database ?? "")).toBe(true);
   });
 
-  it("does not surface declared-only MSSQL or Oracle as default fixture connections", async () => {
+  it("surfaces MSSQL fixture connections while keeping Oracle planned-only", async () => {
     await upsertConnections(loadSpec("e2e"));
 
     const data = JSON.parse(
@@ -186,7 +186,12 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
       }[];
     };
 
-    expect(data.connections.map((c) => c.db_type)).not.toContain("mssql");
+    const mssql = data.connections.find((c) => c.id === "fixture-e2e-mssql");
+    expect(mssql).toEqual(
+      expect.objectContaining({
+        db_type: "mssql",
+      }),
+    );
     expect(data.connections.map((c) => c.db_type)).not.toContain("oracle");
   });
 
