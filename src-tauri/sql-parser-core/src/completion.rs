@@ -9,6 +9,8 @@ mod completion_tests;
 mod context;
 #[cfg(test)]
 mod mssql_completion_tests;
+#[cfg(test)]
+mod oracle_completion_tests;
 mod token;
 mod vocabulary;
 
@@ -94,6 +96,8 @@ pub struct SqlCompletionCatalogFunction {
     pub qualified_name: String,
     pub arguments: Option<String>,
     pub return_type: Option<String>,
+    pub kind: String,
+    pub language: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -165,6 +169,12 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
                         &normalized_qualifier,
                         &token,
                     );
+                    add_qualified_catalog_synonyms(
+                        &mut items,
+                        &request,
+                        &normalized_qualifier,
+                        &token,
+                    );
                 }
                 CompletionState::FunctionRef => {
                     add_qualified_functions(&mut items, &request, &normalized_qualifier, &token);
@@ -182,6 +192,12 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
                     );
                     add_qualified_columns(&mut items, &request, &normalized_qualifier, &token);
                     add_qualified_functions(&mut items, &request, &normalized_qualifier, &token);
+                    add_oracle_sequence_members(
+                        &mut items,
+                        &request,
+                        &normalized_qualifier,
+                        &token,
+                    );
                 }
             }
         } else {
@@ -192,6 +208,7 @@ pub fn complete_sql(request: SqlCompletionRequest) -> SqlCompletionCoreResult {
                 CompletionState::RelationName => {
                     add_catalog_schemas(&mut items, &request, &token);
                     add_catalog_objects(&mut items, &request, &token);
+                    add_catalog_synonyms(&mut items, &request, &token);
                 }
                 CompletionState::DatabaseName => {
                     add_catalog_databases(&mut items, &request, &token);
@@ -495,6 +512,47 @@ fn add_qualified_catalog_objects(
     }
 }
 
+fn add_catalog_synonyms(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    token: &CompletionToken,
+) {
+    for function in &request.catalog.functions {
+        if !catalog_function_kind_is(function, "synonym") {
+            continue;
+        }
+        if matches_prefix(&function.name, &token.prefix) {
+            items.push(catalog_function_item(
+                function,
+                apply_identifier(&function.name, token),
+                37,
+            ));
+        }
+    }
+}
+
+fn add_qualified_catalog_synonyms(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    qualifier: &str,
+    token: &CompletionToken,
+) {
+    for function in &request.catalog.functions {
+        if !catalog_function_kind_is(function, "synonym") {
+            continue;
+        }
+        if catalog_function_matches_qualifier(function, qualifier)
+            && matches_prefix(&function.name, &token.prefix)
+        {
+            items.push(catalog_function_item(
+                function,
+                apply_identifier(&function.name, token),
+                36,
+            ));
+        }
+    }
+}
+
 fn add_unqualified_columns(
     items: &mut Vec<CompletionItem>,
     request: &SqlCompletionRequest,
@@ -651,11 +709,42 @@ fn catalog_function_item(
     }
     CompletionItem {
         label: function.name.clone(),
-        kind: "function".to_string(),
+        kind: completion_kind_for_catalog_function(function),
         apply: Some(apply),
         detail: Some(detail),
         boost: Some(boost),
         runtime_executable: None,
+    }
+}
+
+fn add_oracle_sequence_members(
+    items: &mut Vec<CompletionItem>,
+    request: &SqlCompletionRequest,
+    qualifier: &str,
+    token: &CompletionToken,
+) {
+    if request.dialect != "oracle" {
+        return;
+    }
+    let sequence_exists = request.catalog.functions.iter().any(|function| {
+        catalog_function_kind_is(function, "sequence")
+            && catalog_function_matches_identity(function, qualifier)
+    });
+    if !sequence_exists {
+        return;
+    }
+
+    for member in ["NEXTVAL", "CURRVAL"] {
+        if matches_prefix(member, &token.prefix) {
+            items.push(CompletionItem {
+                label: member.to_string(),
+                kind: "keyword".to_string(),
+                apply: Some(member.to_string()),
+                detail: Some("Oracle sequence member".to_string()),
+                boost: Some(34),
+                runtime_executable: None,
+            });
+        }
     }
 }
 
@@ -751,6 +840,37 @@ fn catalog_function_matches_qualifier(
     }
 }
 
+fn catalog_function_matches_identity(
+    function: &SqlCompletionCatalogFunction,
+    qualifier: &str,
+) -> bool {
+    if same_identifier(&function.name, qualifier)
+        || same_identifier(&function.qualified_name, qualifier)
+    {
+        return true;
+    }
+
+    let parts = identifier_path_parts(qualifier);
+    matches!(
+        parts.as_slice(),
+        [database, schema, name]
+            if function.database.eq_ignore_ascii_case(database)
+                && function.schema.eq_ignore_ascii_case(schema)
+                && function.name.eq_ignore_ascii_case(name)
+    )
+}
+
+fn catalog_function_kind_is(function: &SqlCompletionCatalogFunction, expected: &str) -> bool {
+    function.kind.eq_ignore_ascii_case(expected)
+}
+
+fn completion_kind_for_catalog_function(function: &SqlCompletionCatalogFunction) -> String {
+    match function.kind.to_ascii_lowercase().as_str() {
+        "package" | "sequence" | "synonym" => function.kind.to_ascii_lowercase(),
+        _ => "function".to_string(),
+    }
+}
+
 fn identifier_path_parts(identifier: &str) -> Vec<String> {
     normalize_identifier_path(identifier)
         .split('.')
@@ -775,6 +895,9 @@ fn normalize_identifier_part(part: &str) -> String {
     if trimmed.len() >= 2 && trimmed.starts_with('[') && trimmed.ends_with(']') {
         return trimmed[1..trimmed.len() - 1].replace("]]", "]");
     }
+    if trimmed.len() >= 2 && trimmed.starts_with('"') && trimmed.ends_with('"') {
+        return trimmed[1..trimmed.len() - 1].replace("\"\"", "\"");
+    }
     trimmed.to_string()
 }
 
@@ -789,6 +912,7 @@ fn quote_identifier(identifier: &str, quote: char) -> String {
     match quote {
         '`' => format!("`{}`", identifier.replace('`', "``")),
         '[' => format!("[{}]", identifier.replace(']', "]]")),
+        '"' => format!("\"{}\"", identifier.replace('"', "\"\"")),
         _ => identifier.to_string(),
     }
 }

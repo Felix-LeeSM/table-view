@@ -124,6 +124,8 @@ fn parse_functions(input: &str) -> Vec<SqlCompletionCatalogFunction> {
                 arguments: empty_to_none(fields.next()?),
                 return_type: empty_to_none(fields.next()?),
                 database: fields.next().unwrap_or_default().to_string(),
+                kind: fields.next().unwrap_or("function").to_string(),
+                language: empty_to_none(fields.next().unwrap_or_default()),
             })
         })
         .collect()

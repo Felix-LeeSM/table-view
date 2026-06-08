@@ -60,6 +60,8 @@ fn request(text: &str, cursor_utf16: usize, cursor_utf8: usize) -> SqlCompletion
                 qualified_name: "public.slugify".to_string(),
                 arguments: Some("text".to_string()),
                 return_type: Some("text".to_string()),
+                kind: "function".to_string(),
+                language: None,
             }],
             extensions: vec![],
         },
@@ -162,6 +164,8 @@ fn mysql_catalog_request(text: &str) -> SqlCompletionRequest {
         qualified_name: "app.normalize_email".to_string(),
         arguments: Some("varchar".to_string()),
         return_type: Some("varchar".to_string()),
+        kind: "function".to_string(),
+        language: None,
     }];
     req
 }

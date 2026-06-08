@@ -41,6 +41,8 @@ fn request(text: &str, cursor_utf16: usize, cursor_utf8: usize) -> SqlCompletion
                 qualified_name: "public.slugify".to_string(),
                 arguments: Some("text".to_string()),
                 return_type: Some("text".to_string()),
+                kind: "function".to_string(),
+                language: None,
             }],
             extensions: vec![],
         },

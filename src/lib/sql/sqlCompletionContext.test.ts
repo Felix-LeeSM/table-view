@@ -361,6 +361,87 @@ describe("buildSqlCompletionContext", () => {
     expect(ctx.cacheState.databasesLoaded).toBe(true);
   });
 
+  it("threads Oracle package sequence and synonym metadata into the WASM-ready context", () => {
+    const snapshot = emptySnapshot();
+    snapshot.schemas.conn1 = {
+      FREEPDB1: [schema("APP")],
+    };
+    snapshot.tables.conn1 = {
+      FREEPDB1: {
+        APP: [table("APP", "ORDERS")],
+      },
+    };
+    snapshot.views.conn1 = {
+      FREEPDB1: {
+        APP: [view("APP", "ACTIVE_ORACLE_USERS")],
+      },
+    };
+    snapshot.functions.conn1 = {
+      FREEPDB1: {
+        APP: [
+          fnInfo("APP", "CATALOG_API", "package"),
+          fnInfo("APP", "ORDER_SEQ", "sequence"),
+          fnInfo("APP", "ACTIVE_USERS_ALIAS", "synonym"),
+        ],
+      },
+    };
+    snapshot.tableColumnsCache.conn1 = {
+      FREEPDB1: {
+        APP: {
+          ORDERS: [column("ORDER_ID", "NUMBER", { is_primary_key: true })],
+        },
+      },
+    };
+
+    const ctx = buildSqlCompletionContext({
+      ...snapshot,
+      connectionId: "conn1",
+      database: "FREEPDB1",
+      dbType: "oracle",
+      serverVersion: "23ai",
+    });
+
+    expect(ctx).toMatchObject({
+      dialect: "oracle",
+      family: "oracle",
+      shell: "none",
+      serverVersion: "23ai",
+      cacheState: {
+        schemasLoaded: true,
+        objectsLoaded: true,
+        columnsLoaded: true,
+        functionsLoaded: true,
+      },
+    });
+    expect(ctx.catalog.objects).toEqual([
+      expect.objectContaining({
+        kind: "view",
+        database: "FREEPDB1",
+        schema: "APP",
+        name: "ACTIVE_ORACLE_USERS",
+      }),
+      expect.objectContaining({
+        kind: "table",
+        database: "FREEPDB1",
+        schema: "APP",
+        name: "ORDERS",
+      }),
+    ]);
+    expect(ctx.catalog.columns).toEqual([
+      expect.objectContaining({
+        database: "FREEPDB1",
+        schema: "APP",
+        table: "ORDERS",
+        name: "ORDER_ID",
+      }),
+    ]);
+    expect(ctx.catalog.functions.map((fn) => [fn.name, fn.kind])).toEqual([
+      ["ACTIVE_USERS_ALIAS", "synonym"],
+      ["CATALOG_API", "package"],
+      ["ORDER_SEQ", "sequence"],
+    ]);
+  });
+
   it("changes the default revision when same-count catalog content changes", () => {
     const buildWithTable = (name: string) => {
       const snapshot = emptySnapshot();

@@ -61,6 +61,8 @@ fn request(text: &str) -> SqlCompletionRequest {
                 qualified_name: "dbo.usp_RebuildLeaderboard".to_string(),
                 arguments: Some("@season int".to_string()),
                 return_type: None,
+                kind: "procedure".to_string(),
+                language: None,
             }],
             extensions: vec![],
         },
