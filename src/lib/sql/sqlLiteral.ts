@@ -154,10 +154,13 @@ export function qualifiedTableName(
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ORACLE_DATE_TIME_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}$/;
 // Accepts `YYYY-MM-DDTHH:MM[:SS[.fff]][Z|+-HH:MM]`; the `T` may also be a
-// space to match SQL-style inputs the user might copy in from psql.
+// space to match SQL-style inputs the user might copy in from psql. Oracle's
+// runtime returns timestamp-with-time-zone values as `... +HH:MM`, so allow one
+// space before the offset.
 const ISO_DATETIME_RE =
-  /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/;
+  /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:\s?(?:Z|[+-]\d{2}:?\d{2}))?$/;
 const TIME_RE = /^\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -170,6 +173,32 @@ const INTEGER_RE = /^-?\d+$/;
 // TablePlus-style cell editor user types, and PostgreSQL accepts it only in
 // some contexts; keep the accept surface tight for the first pass.
 export const NUMERIC_RE = /^-?(?:\d+\.?\d*|\.\d+)$/;
+
+function oracleDateTimeLiteral(value: string): string {
+  return value.replace("T", " ");
+}
+
+function isOracleTimestampWithTimeZone(dataType: string): boolean {
+  const normalized = dataType.toLowerCase().replace(/\s+/g, " ");
+  return (
+    normalized.includes("timestamp") &&
+    normalized.includes("with time zone") &&
+    !normalized.includes("local time zone")
+  );
+}
+
+function normalizeOracleTimestampTz(value: string): string {
+  return oracleDateTimeLiteral(value)
+    .replace(/\s*Z$/i, " +00:00")
+    .replace(/([+-]\d{2})(\d{2})$/, "$1:$2")
+    .replace(/\s*([+-]\d{2}:\d{2})$/, " $1");
+}
+
+function oracleTimestampTzFormat(value: string): string {
+  return /\.\d+(?:\s?(?:Z|[+-]\d{2}:?\d{2}))$/i.test(value)
+    ? "YYYY-MM-DD HH24:MI:SS.FF TZH:TZM"
+    : "YYYY-MM-DD HH24:MI:SS TZH:TZM";
+}
 
 /**
  * Coerce a user-entered edit value to a SQL literal, given the column's
@@ -240,6 +269,12 @@ export function coerceToSqlLiteral(
         }
         return { kind: "sql", sql: escapeSqlString(value) };
       }
+      if (dialect === "oracle" && ORACLE_DATE_TIME_RE.test(value)) {
+        return {
+          kind: "sql",
+          sql: `TO_DATE(${escapeSqlString(oracleDateTimeLiteral(value))}, 'YYYY-MM-DD HH24:MI:SS')`,
+        };
+      }
       return {
         kind: "error",
         message: `Expected date (YYYY-MM-DD), got "${value}"`,
@@ -248,9 +283,16 @@ export function coerceToSqlLiteral(
     case "timestamp": {
       if (ISO_DATETIME_RE.test(value)) {
         if (dialect === "oracle") {
+          if (isOracleTimestampWithTimeZone(dataType)) {
+            const normalized = normalizeOracleTimestampTz(value);
+            return {
+              kind: "sql",
+              sql: `TO_TIMESTAMP_TZ(${escapeSqlString(normalized)}, '${oracleTimestampTzFormat(value)}')`,
+            };
+          }
           const normalized = value
             .replace("T", " ")
-            .replace(/Z|[+-]\d{2}:?\d{2}$/, "");
+            .replace(/\s?(?:Z|[+-]\d{2}:?\d{2})$/, "");
           return {
             kind: "sql",
             sql: `TIMESTAMP ${escapeSqlString(normalized)}`,

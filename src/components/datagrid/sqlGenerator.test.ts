@@ -321,14 +321,14 @@ describe("generateSql — Oracle row edit SQL", () => {
     ]);
   });
 
-  it("uses type-aware Oracle DATE/TIMESTAMP literals for primary-key WHERE clauses", () => {
+  it("uses backend-shaped Oracle DATE/TIMESTAMP literals for primary-key WHERE clauses", () => {
     const datePkData: TableData = {
       ...ORACLE_DATA,
       columns: [
         { ...ORACLE_DATA.columns[0]!, name: "CREATED_ON", data_type: "DATE" },
         { ...ORACLE_DATA.columns[1]! },
       ],
-      rows: [["2026-06-08", "old"]],
+      rows: [["2026-06-08 12:34:56", "old"]],
     };
     const timestampPkData: TableData = {
       ...ORACLE_DATA,
@@ -342,6 +342,18 @@ describe("generateSql — Oracle row edit SQL", () => {
       ],
       rows: [["2026-06-08T10:30:00Z", "old"]],
     };
+    const timestampTzPkData: TableData = {
+      ...ORACLE_DATA,
+      columns: [
+        {
+          ...ORACLE_DATA.columns[0]!,
+          name: "CREATED_AT",
+          data_type: "TIMESTAMP WITH TIME ZONE",
+        },
+        { ...ORACLE_DATA.columns[1]! },
+      ],
+      rows: [["2026-06-08 10:30:00.123456 +09:00", "old"]],
+    };
 
     expect(
       generateSql(
@@ -354,8 +366,8 @@ describe("generateSql — Oracle row edit SQL", () => {
         { dialect: "oracle" },
       ),
     ).toEqual([
-      `UPDATE "APP"."ORDER DETAIL" SET "SELECT" = 'new' WHERE "CREATED_ON" = DATE '2026-06-08';`,
-      `DELETE FROM "APP"."ORDER DETAIL" WHERE "CREATED_ON" = DATE '2026-06-08';`,
+      `UPDATE "APP"."ORDER DETAIL" SET "SELECT" = 'new' WHERE "CREATED_ON" = TO_DATE('2026-06-08 12:34:56', 'YYYY-MM-DD HH24:MI:SS');`,
+      `DELETE FROM "APP"."ORDER DETAIL" WHERE "CREATED_ON" = TO_DATE('2026-06-08 12:34:56', 'YYYY-MM-DD HH24:MI:SS');`,
     ]);
 
     expect(
@@ -371,6 +383,21 @@ describe("generateSql — Oracle row edit SQL", () => {
     ).toEqual([
       `UPDATE "APP"."ORDER DETAIL" SET "SELECT" = 'new' WHERE "CREATED_AT" = TIMESTAMP '2026-06-08 10:30:00';`,
       `DELETE FROM "APP"."ORDER DETAIL" WHERE "CREATED_AT" = TIMESTAMP '2026-06-08 10:30:00';`,
+    ]);
+
+    expect(
+      generateSql(
+        timestampTzPkData,
+        "APP",
+        "ORDER DETAIL",
+        new Map<string, string | null>([["0-1", "new"]]),
+        new Set(["row-1-0"]),
+        [],
+        { dialect: "oracle" },
+      ),
+    ).toEqual([
+      `UPDATE "APP"."ORDER DETAIL" SET "SELECT" = 'new' WHERE "CREATED_AT" = TO_TIMESTAMP_TZ('2026-06-08 10:30:00.123456 +09:00', 'YYYY-MM-DD HH24:MI:SS.FF TZH:TZM');`,
+      `DELETE FROM "APP"."ORDER DETAIL" WHERE "CREATED_AT" = TO_TIMESTAMP_TZ('2026-06-08 10:30:00.123456 +09:00', 'YYYY-MM-DD HH24:MI:SS.FF TZH:TZM');`,
     ]);
   });
 
@@ -1812,6 +1839,15 @@ describe("coerceToSqlLiteral — date family", () => {
     });
   });
 
+  it("Oracle DATE accepts backend YYYY-MM-DD HH:MM:SS values", () => {
+    expect(coerceToSqlLiteral("2026-06-08 12:34:56", "DATE", "oracle")).toEqual(
+      {
+        kind: "sql",
+        sql: "TO_DATE('2026-06-08 12:34:56', 'YYYY-MM-DD HH24:MI:SS')",
+      },
+    );
+  });
+
   it('"yesterday" + date → error', () => {
     const result = coerceToSqlLiteral("yesterday", "date");
     expect(result.kind).toBe("error");
@@ -1847,6 +1883,19 @@ describe("coerceToSqlLiteral — timestamp family", () => {
     expect(coerceToSqlLiteral("2026-04-24T10:00:00Z", "timestamptz")).toEqual({
       kind: "sql",
       sql: "'2026-04-24T10:00:00Z'",
+    });
+  });
+
+  it("Oracle TIMESTAMP WITH TIME ZONE accepts backend space-offset values", () => {
+    expect(
+      coerceToSqlLiteral(
+        "2026-06-08 10:30:00.123456 +09:00",
+        "TIMESTAMP WITH TIME ZONE",
+        "oracle",
+      ),
+    ).toEqual({
+      kind: "sql",
+      sql: "TO_TIMESTAMP_TZ('2026-06-08 10:30:00.123456 +09:00', 'YYYY-MM-DD HH24:MI:SS.FF TZH:TZM')",
     });
   });
 
