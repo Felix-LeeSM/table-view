@@ -24,13 +24,6 @@ fn oracle_config() -> ConnectionConfig {
     }
 }
 
-fn assert_oracle_unsupported<T>(result: Result<T, AppError>) {
-    assert!(matches!(
-        result,
-        Err(AppError::Unsupported(message)) if message == ORACLE_UNSUPPORTED_RUNTIME
-    ));
-}
-
 fn assert_oracle_not_open<T>(result: Result<T, AppError>) {
     assert!(matches!(
         result,
@@ -96,6 +89,20 @@ async fn current_database_without_connection_returns_none_for_fail_closed_guard(
 }
 
 #[tokio::test]
+async fn raw_ddl_admin_execution_fails_closed_without_connection() {
+    let adapter = OracleAdapter::new();
+    let err = adapter
+        .execute_query("ALTER SESSION SET CURRENT_SCHEMA = HR", None)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        AppError::Unsupported(message) if message.contains("raw DDL/admin")
+    ));
+}
+
+#[tokio::test]
 async fn catalog_surfaces_require_open_connection() {
     let adapter = OracleAdapter::new();
     assert!(matches!(adapter.namespace_label(), NamespaceLabel::Schema));
@@ -118,14 +125,14 @@ async fn catalog_surfaces_require_open_connection() {
 }
 
 #[tokio::test]
-async fn table_data_requires_open_connection_and_structured_ddl_remains_unsupported() {
+async fn table_data_and_structured_ddl_execute_paths_require_open_connection() {
     let adapter = OracleAdapter::new();
     let drop_table = DropTableRequest {
         connection_id: "oracle-1".into(),
         schema: "SYSTEM".into(),
         table: "T".into(),
         cascade: false,
-        preview_only: true,
+        preview_only: false,
         expected_database: None,
     };
     let rename_table = RenameTableRequest {
@@ -133,7 +140,7 @@ async fn table_data_requires_open_connection_and_structured_ddl_remains_unsuppor
         schema: "SYSTEM".into(),
         table: "T".into(),
         new_name: "T2".into(),
-        preview_only: true,
+        preview_only: false,
         expected_database: None,
     };
     let alter_table = AlterTableRequest {
@@ -141,7 +148,7 @@ async fn table_data_requires_open_connection_and_structured_ddl_remains_unsuppor
         schema: "SYSTEM".into(),
         table: "T".into(),
         changes: vec![ColumnChange::Drop { name: "C".into() }],
-        preview_only: true,
+        preview_only: false,
         expected_database: None,
     };
     let column = ColumnDefinition {
@@ -158,7 +165,7 @@ async fn table_data_requires_open_connection_and_structured_ddl_remains_unsuppor
         table: "T".into(),
         column_name: "C".into(),
         cascade: false,
-        preview_only: true,
+        preview_only: false,
         expected_database: None,
     };
     let add_column_req = AddColumnRequest {
@@ -167,7 +174,7 @@ async fn table_data_requires_open_connection_and_structured_ddl_remains_unsuppor
         table: "T".into(),
         column: column.clone(),
         check_expression: None,
-        preview_only: true,
+        preview_only: false,
         expected_database: None,
     };
     let create_table = CreateTableRequest {
@@ -176,7 +183,7 @@ async fn table_data_requires_open_connection_and_structured_ddl_remains_unsuppor
         name: "T".into(),
         columns: vec![column],
         primary_key: None,
-        preview_only: true,
+        preview_only: false,
         table_comment: None,
         expected_database: None,
     };
@@ -188,7 +195,7 @@ async fn table_data_requires_open_connection_and_structured_ddl_remains_unsuppor
         columns: vec!["C".into()],
         index_type: "btree".into(),
         is_unique: false,
-        preview_only: true,
+        preview_only: false,
         expected_database: None,
     };
     let drop_index = DropIndexRequest {
@@ -197,7 +204,7 @@ async fn table_data_requires_open_connection_and_structured_ddl_remains_unsuppor
         index_name: "T_C_IDX".into(),
         table: "T".into(),
         if_exists: false,
-        preview_only: true,
+        preview_only: false,
         expected_database: None,
     };
     let add_constraint = AddConstraintRequest {
@@ -208,7 +215,7 @@ async fn table_data_requires_open_connection_and_structured_ddl_remains_unsuppor
         definition: ConstraintDefinition::Unique {
             columns: vec!["C".into()],
         },
-        preview_only: true,
+        preview_only: false,
         expected_database: None,
     };
     let drop_constraint = DropConstraintRequest {
@@ -216,7 +223,7 @@ async fn table_data_requires_open_connection_and_structured_ddl_remains_unsuppor
         schema: "SYSTEM".into(),
         table: "T".into(),
         constraint_name: "T_C_UNIQ".into(),
-        preview_only: true,
+        preview_only: false,
         expected_database: None,
     };
 
@@ -225,14 +232,14 @@ async fn table_data_requires_open_connection_and_structured_ddl_remains_unsuppor
             .query_table_data("SYSTEM", "T", 1, 100, None, None, None, None)
             .await,
     );
-    assert_oracle_unsupported(adapter.drop_table(&drop_table).await);
-    assert_oracle_unsupported(adapter.rename_table(&rename_table).await);
-    assert_oracle_unsupported(adapter.alter_table(&alter_table).await);
-    assert_oracle_unsupported(adapter.add_column(&add_column_req).await);
-    assert_oracle_unsupported(adapter.drop_column(&drop_column).await);
-    assert_oracle_unsupported(adapter.create_table(&create_table).await);
-    assert_oracle_unsupported(adapter.create_index(&create_index).await);
-    assert_oracle_unsupported(adapter.drop_index(&drop_index).await);
-    assert_oracle_unsupported(adapter.add_constraint(&add_constraint).await);
-    assert_oracle_unsupported(adapter.drop_constraint(&drop_constraint).await);
+    assert_oracle_not_open(adapter.drop_table(&drop_table).await);
+    assert_oracle_not_open(adapter.rename_table(&rename_table).await);
+    assert_oracle_not_open(adapter.alter_table(&alter_table).await);
+    assert_oracle_not_open(adapter.add_column(&add_column_req).await);
+    assert_oracle_not_open(adapter.drop_column(&drop_column).await);
+    assert_oracle_not_open(adapter.create_table(&create_table).await);
+    assert_oracle_not_open(adapter.create_index(&create_index).await);
+    assert_oracle_not_open(adapter.drop_index(&drop_index).await);
+    assert_oracle_not_open(adapter.add_constraint(&add_constraint).await);
+    assert_oracle_not_open(adapter.drop_constraint(&drop_constraint).await);
 }

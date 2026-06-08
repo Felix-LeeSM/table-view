@@ -31,6 +31,12 @@ impl OracleAdapter {
         }
 
         let query_type = oracle_query_type(query);
+        if matches!(query_type, QueryType::Ddl) {
+            return Err(AppError::Unsupported(
+                "Oracle raw DDL/admin execution is unsupported; use Structure DDL for bounded table/index/constraint changes".into(),
+            ));
+        }
+
         let config = self.connected_config().await?;
         let timeout_secs = connection_timeout_secs(&config);
         let start = std::time::Instant::now();
@@ -64,9 +70,9 @@ impl OracleAdapter {
                         }
                     }
                 }
-                QueryType::Ddl => Err(AppError::Unsupported(
-                    "Oracle query runtime currently supports SELECT and DML statements only".into(),
-                )),
+                QueryType::Ddl => {
+                    unreachable!("Oracle DDL is rejected before opening a connection")
+                }
             };
 
             let close_result = connection
@@ -491,6 +497,14 @@ mod tests {
         ));
         assert!(matches!(
             oracle_query_type("BEGIN NULL; END;"),
+            QueryType::Ddl
+        ));
+        assert!(matches!(
+            oracle_query_type("GRANT DBA TO app_user"),
+            QueryType::Ddl
+        ));
+        assert!(matches!(
+            oracle_query_type("ALTER SESSION SET CURRENT_SCHEMA = HR"),
             QueryType::Ddl
         ));
     }

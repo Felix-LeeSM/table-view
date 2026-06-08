@@ -385,7 +385,7 @@ fn rdbms_integration_gate_profiles_are_coherent() {
     assert!(oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 }
 
 #[test]
