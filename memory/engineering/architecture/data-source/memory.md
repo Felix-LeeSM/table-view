@@ -62,9 +62,13 @@ confirmation, and grid-edit preview/commit flows for the supported T-SQL slice.
 SQL Server admin/security/backup/jobs/users/roles, TLS-required workflow,
 broader auth/encryption, instance discovery, SQLCMD workflow, and full T-SQL
 semantic parity remain separate contracts. Oracle is factory-backed for
-service-name connection lifecycle only. Oracle query/catalog/edit, SID/TNS,
-wallet/TLS, Oracle SQL/PLSQL owner, RDB safety, fixture/live smoke, and E2E
-evidence remain separate contracts.
+service-name connection lifecycle, bounded relational query, and
+catalog/workbench metadata browse for current service/database, schemas,
+tables/views, columns, indexes, constraints/FKs, routines/packages, and
+read-only sequences/synonyms through the shared RDB model. Oracle table-data
+browse, row edit, structured DDL, sequence/synonym DDL/admin workflows, runtime
+Safe Mode/destructive preview evidence, SID/TNS, wallet/TLS, fixture/live smoke,
+E2E evidence, and full PL/SQL executable semantics remain separate contracts.
 
 Search identities (`elasticsearch`, `opensearch`) 는 fixture-backed/deferred profile
 이며 live HTTP connection/query claim 은 capability 가 켜질 때까지 하지 않는다.

@@ -4,6 +4,8 @@ import {
   Eye,
   Code2,
   Terminal,
+  ListOrdered,
+  Link2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -77,6 +79,18 @@ export const CATEGORIES = [
     Icon: Terminal,
     emptyLabel: "No procedures",
   },
+  {
+    key: "sequences",
+    label: "Sequences",
+    Icon: ListOrdered,
+    emptyLabel: "No sequences",
+  },
+  {
+    key: "synonyms",
+    label: "Synonyms",
+    Icon: Link2,
+    emptyLabel: "No synonyms",
+  },
 ] as const satisfies ReadonlyArray<{
   key: string;
   label: string;
@@ -93,7 +107,13 @@ export type NodeId =
   | { type: "category"; schema: string; category: CategoryKey }
   | { type: "table"; schema: string; table: string }
   | { type: "view"; schema: string; view: string }
-  | { type: "function"; schema: string; functionName: string };
+  | { type: "function"; schema: string; functionName: string }
+  | {
+      type: "object";
+      schema: string;
+      category: CategoryKey;
+      objectName: string;
+    };
 
 export function nodeIdToString(id: NodeId): string {
   switch (id.type) {
@@ -107,6 +127,8 @@ export function nodeIdToString(id: NodeId): string {
       return `view:${id.schema}:${id.view}`;
     case "function":
       return `function:${id.schema}:${id.functionName}`;
+    case "object":
+      return `object:${id.schema}:${id.category}:${id.objectName}`;
   }
 }
 
@@ -181,7 +203,7 @@ export type VisibleRow =
       schemaName: string;
       categoryKey: CategoryKey;
       item: TableInfo | ViewInfo | FunctionInfo;
-      itemKind: "table" | "view" | "function";
+      itemKind: "table" | "view" | "function" | "metadata";
       isSelected: boolean;
       isActive: boolean;
     };
@@ -272,6 +294,8 @@ export function getVisibleRows({
       const isViewCat = cat.key === "views";
       const isFunctionCat = cat.key === "functions";
       const isProcedureCat = cat.key === "procedures";
+      const isSequenceCat = cat.key === "sequences";
+      const isSynonymCat = cat.key === "synonyms";
 
       const unfilteredItems: (TableInfo | ViewInfo | FunctionInfo)[] =
         isTableCat
@@ -286,8 +310,14 @@ export function getVisibleRows({
                     f.kind === "window",
                 )
               : isProcedureCat
-                ? schemaFunctions.filter((f) => f.kind === "procedure")
-                : [];
+                ? schemaFunctions.filter(
+                    (f) => f.kind === "procedure" || f.kind === "package",
+                  )
+                : isSequenceCat
+                  ? schemaFunctions.filter((f) => f.kind === "sequence")
+                  : isSynonymCat
+                    ? schemaFunctions.filter((f) => f.kind === "synonym")
+                    : [];
       const searchValue = isTableCat ? (tableSearch[schema.name] ?? "") : "";
       const searchLower = searchValue.toLowerCase();
       const items: (TableInfo | ViewInfo | FunctionInfo)[] = isTableCat
@@ -331,11 +361,13 @@ export function getVisibleRows({
       }
 
       for (const item of items) {
-        const itemKind: "table" | "view" | "function" = isTableCat
+        const itemKind: "table" | "view" | "function" | "metadata" = isTableCat
           ? "table"
           : isViewCat
             ? "view"
-            : "function";
+            : isFunctionCat || isProcedureCat
+              ? "function"
+              : "metadata";
         const itemId =
           itemKind === "table"
             ? nodeIdToString({
@@ -354,6 +386,12 @@ export function getVisibleRows({
                   schema: schema.name,
                   functionName: item.name,
                 });
+        const metadataItemId = nodeIdToString({
+          type: "object",
+          schema: schema.name,
+          category: cat.key,
+          objectName: item.name,
+        });
         rows.push({
           kind: "item",
           key: `${cat.key}:${schema.name}:${item.name}`,
@@ -361,7 +399,9 @@ export function getVisibleRows({
           categoryKey: cat.key,
           item,
           itemKind,
-          isSelected: selectedNodeId === itemId,
+          isSelected:
+            selectedNodeId ===
+            (itemKind === "metadata" ? metadataItemId : itemId),
           // 2026-05-11 — views open as table-type tabs (same `schema`/
           // `table` shape, just `objectKind: "view"`), so the view row
           // should also light up when its tab is active. Functions open
