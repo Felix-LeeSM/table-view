@@ -312,6 +312,147 @@ describe("checked-in SQL WASM artifact", () => {
     expect(oracleCompletionLabels("DECL")).not.toContain("DECLARE");
   });
 
+  it("complete_sql returns Oracle catalog-aware candidates through real WASM", async () => {
+    await initSqlParserCore();
+
+    const schemaResult = oracleCatalogCompletion("SELECT * FROM FREEPDB1.");
+    expect(schemaResult.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "APP",
+          kind: "schema",
+          detail: "FREEPDB1",
+        }),
+      ]),
+    );
+
+    const tableResult = oracleCatalogCompletion("SELECT * FROM APP.ORD");
+    expect(tableResult.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "ORDERS",
+          kind: "table",
+          detail: "APP",
+        }),
+      ]),
+    );
+
+    const viewResult = oracleCatalogCompletion("SELECT * FROM APP.ACTIVE");
+    expect(viewResult.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "ACTIVE_ORACLE_USERS",
+          kind: "view",
+          detail: "APP",
+        }),
+      ]),
+    );
+
+    const columnResult = oracleCatalogCompletion("SELECT APP.ORDERS.ORD");
+    expect(columnResult.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "ORDER_ID",
+          kind: "column",
+          detail: "APP.ORDERS",
+        }),
+      ]),
+    );
+
+    const packageResult = oracleCatalogCompletion("SELECT CATALOG");
+    expect(packageResult.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "CATALOG_API",
+          kind: "package",
+          detail: "APP.CATALOG_API",
+        }),
+      ]),
+    );
+
+    const sequenceResult = oracleCatalogCompletion("SELECT ORDER_");
+    expect(sequenceResult.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "ORDER_SEQ",
+          kind: "sequence",
+          detail: "APP.ORDER_SEQ -> next 101",
+        }),
+      ]),
+    );
+
+    const synonymResult = oracleCatalogCompletion("SELECT * FROM ACTIVE_");
+    expect(synonymResult.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "ACTIVE_USERS_ALIAS",
+          kind: "synonym",
+          detail: "APP.ACTIVE_USERS_ALIAS -> APP.ACTIVE_ORACLE_USERS",
+        }),
+      ]),
+    );
+  });
+
+  it("complete_sql returns Oracle NEXTVAL/CURRVAL only for catalog sequences through real WASM", async () => {
+    await initSqlParserCore();
+
+    const sequenceMembers = oracleCatalogCompletion("SELECT APP.ORDER_SEQ.");
+    expect(sequenceMembers.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "NEXTVAL",
+          kind: "keyword",
+          detail: "Oracle sequence member",
+        }),
+        expect.objectContaining({
+          label: "CURRVAL",
+          kind: "keyword",
+          detail: "Oracle sequence member",
+        }),
+      ]),
+    );
+
+    const tableMembers = oracleCatalogCompletion("SELECT APP.ORDERS.");
+    expect(tableMembers.items.map((item) => item.label)).not.toContain(
+      "NEXTVAL",
+    );
+    expect(tableMembers.items.map((item) => item.label)).not.toContain(
+      "CURRVAL",
+    );
+  });
+
+  it("complete_sql returns no Oracle catalog candidates for an empty catalog through real WASM", async () => {
+    await initSqlParserCore();
+
+    expect(
+      oracleCatalogCompletion("SELECT * FROM APP.", {
+        catalogDatabases: "",
+        catalogSchemas: "",
+        catalogObjects: "",
+        catalogColumns: "",
+        catalogFunctions: "",
+      }).items,
+    ).toEqual([]);
+    expect(
+      oracleCatalogCompletion("SELECT APP.ORDERS.", {
+        catalogDatabases: "",
+        catalogSchemas: "",
+        catalogObjects: "",
+        catalogColumns: "",
+        catalogFunctions: "",
+      }).items,
+    ).toEqual([]);
+    expect(
+      oracleCatalogCompletion("SELECT APP.ORDER_SEQ.", {
+        catalogDatabases: "",
+        catalogSchemas: "",
+        catalogObjects: "",
+        catalogColumns: "",
+        catalogFunctions: "",
+      }).items.map((item) => item.label),
+    ).not.toEqual(expect.arrayContaining(["NEXTVAL", "CURRVAL"]));
+  });
+
   it("complete_sql returns relation catalog candidates, not psql commands, after FROM through real WASM", async () => {
     await initSqlParserCore();
 
@@ -438,4 +579,54 @@ function oracleCompletionLabels(prefix: string): string[] {
     "",
   ) as { items: Array<{ label: string }> };
   return result.items.map((item) => item.label);
+}
+
+function oracleCatalogCompletion(
+  text: string,
+  catalog: {
+    catalogDatabases?: string;
+    catalogSchemas?: string;
+    catalogObjects?: string;
+    catalogColumns?: string;
+    catalogFunctions?: string;
+  } = {},
+): {
+  items: Array<{
+    label: string;
+    kind: string;
+    detail?: string;
+  }>;
+} {
+  return completeSqlFromWasm(
+    text,
+    text.length,
+    text.length,
+    "oracle",
+    "none",
+    "23ai",
+    "rev-oracle-catalog",
+    "",
+    "",
+    catalog.catalogDatabases ?? "FREEPDB1",
+    catalog.catalogSchemas ?? "APP\tFREEPDB1",
+    catalog.catalogObjects ??
+      [
+        "table\tAPP\tORDERS\tAPP.ORDERS\tFREEPDB1",
+        "view\tAPP\tACTIVE_ORACLE_USERS\tAPP.ACTIVE_ORACLE_USERS\tFREEPDB1",
+      ].join("\n"),
+    catalog.catalogColumns ?? "APP\tORDERS\tORDER_ID\tAPP.ORDERS\tFREEPDB1",
+    catalog.catalogFunctions ??
+      [
+        "APP\tCATALOG_API\tAPP.CATALOG_API\t\t\tFREEPDB1\tpackage\tPL/SQL",
+        "APP\tORDER_SEQ\tAPP.ORDER_SEQ\tincrement 1, cache 20\tnext 101\tFREEPDB1\tsequence\tOracle sequence",
+        "APP\tACTIVE_USERS_ALIAS\tAPP.ACTIVE_USERS_ALIAS\tAPP.ACTIVE_ORACLE_USERS\tAPP.ACTIVE_ORACLE_USERS\tFREEPDB1\tsynonym\tOracle synonym",
+      ].join("\n"),
+    "",
+  ) as {
+    items: Array<{
+      label: string;
+      kind: string;
+      detail?: string;
+    }>;
+  };
 }
