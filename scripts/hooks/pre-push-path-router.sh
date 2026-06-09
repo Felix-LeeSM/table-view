@@ -11,7 +11,7 @@ ZERO_OID="0000000000000000000000000000000000000000"
 DRY_RUN="${PRE_PUSH_PATH_ROUTER_DRY_RUN:-0}"
 HEARTBEAT_SECONDS="${PRE_PUSH_PATH_ROUTER_HEARTBEAT_SECONDS:-15}"
 LOG_TAIL_LINES="${PRE_PUSH_PATH_ROUTER_LOG_TAIL_LINES:-80}"
-PARALLEL_GATES="${PRE_PUSH_PATH_ROUTER_PARALLEL_GATES:-0}"
+PARALLEL_GATES="${PRE_PUSH_PATH_ROUTER_PARALLEL_GATES:-1}"
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
@@ -343,6 +343,7 @@ run_hook_gates() {
 }
 
 run_ci_workflow_gates() {
+	run_step "ci-workflow-cache" bash scripts/hooks/test-ci-workflow-cache.sh
 	run_step "e2e-smoke-workflow-cache" bash scripts/hooks/test-e2e-smoke-workflow.sh
 }
 
@@ -444,12 +445,14 @@ while read -r path; do
 		needs_memory=1
 		continue
 	fi
+	if is_ci_workflow_path "$path"; then
+		docs_only=0
+		needs_ci_workflow=1
+		continue
+	fi
 	if is_workflow_path "$path"; then
 		docs_only=0
 		needs_full=1
-	fi
-	if is_ci_workflow_path "$path"; then
-		needs_ci_workflow=1
 	fi
 	if is_frontend_path "$path"; then
 		needs_frontend=1

@@ -171,9 +171,17 @@ assert_not_contains "$rust_output" "RUN ts-test:" "rust-only"
 
 mixed_output="$(run_case mixed normal src/App.tsx src-tauri/src/lib.rs)"
 assert_contains "$mixed_output" "route: frontend=1 rust=1" "mixed"
-assert_contains "$mixed_output" "RUN sequential: frontend then rust" "mixed"
+assert_contains "$mixed_output" "RUN parallel: frontend+rust" "mixed"
 assert_contains "$mixed_output" "RUN ts-test:" "mixed"
 assert_contains "$mixed_output" "RUN rust-test-and-coverage:" "mixed"
+
+mixed_sequential_output="$(
+	PRE_PUSH_PATH_ROUTER_PARALLEL_GATES=0 run_case mixed-sequential normal src/App.tsx src-tauri/src/lib.rs
+)"
+assert_contains "$mixed_sequential_output" "route: frontend=1 rust=1" "mixed sequential"
+assert_contains "$mixed_sequential_output" "RUN sequential: frontend then rust" "mixed sequential"
+assert_contains "$mixed_sequential_output" "RUN ts-test:" "mixed sequential"
+assert_contains "$mixed_sequential_output" "RUN rust-test-and-coverage:" "mixed sequential"
 
 mixed_parallel_output="$(
 	PRE_PUSH_PATH_ROUTER_PARALLEL_GATES=1 run_case mixed-parallel normal src/App.tsx src-tauri/src/lib.rs
@@ -231,10 +239,16 @@ assert_not_contains "$ratchet_script_output" "RUN ts-test:" "ratchet script"
 assert_not_contains "$ratchet_script_output" "RUN rust-test-and-coverage:" "ratchet script"
 
 ci_workflow_output="$(run_case ci-workflow normal .github/workflows/e2e-smoke.yml)"
-assert_contains "$ci_workflow_output" "route: full" "ci workflow"
+assert_contains "$ci_workflow_output" "route: frontend=0 rust=0" "ci workflow"
+assert_contains "$ci_workflow_output" "RUN ci-workflow-cache:" "ci workflow"
 assert_contains "$ci_workflow_output" "RUN e2e-smoke-workflow-cache:" "ci workflow"
-assert_contains "$ci_workflow_output" "RUN ts-test:" "ci workflow"
-assert_contains "$ci_workflow_output" "RUN rust-test-and-coverage:" "ci workflow"
+assert_not_contains "$ci_workflow_output" "RUN ts-test:" "ci workflow"
+assert_not_contains "$ci_workflow_output" "RUN rust-test-and-coverage:" "ci workflow"
+
+github_meta_output="$(run_case github-meta normal .github/dependabot.yml)"
+assert_contains "$github_meta_output" "route: full" "github meta"
+assert_contains "$github_meta_output" "RUN ts-test:" "github meta"
+assert_contains "$github_meta_output" "RUN rust-test-and-coverage:" "github meta"
 
 claude_agent_output="$(run_case claude-agent normal .claude/settings.json)"
 assert_contains "$claude_agent_output" "route: frontend=0 rust=0 hook=0 memory=0 agent=1" "claude agent"
