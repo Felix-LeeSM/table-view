@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import {
   applyTheme,
@@ -12,6 +11,7 @@ import {
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import { logger } from "@lib/logger";
+import { getSetting, persistSettingValue } from "@lib/tauri/settings";
 
 interface ThemeStoreState {
   themeId: ThemeId;
@@ -52,12 +52,7 @@ const initial = readStoredState();
  * its previous value (strategy line 1282 — "LS 는 마지막 성공값 유지").
  */
 async function persistThemeSetting(value: ThemeState): Promise<void> {
-  await invoke("persist_setting", {
-    req: {
-      key: "theme",
-      valueJson: JSON.stringify(value),
-    },
-  });
+  await persistSettingValue("theme", value);
 }
 
 export const useThemeStore = create<ThemeStoreState>((set, get) => ({
@@ -220,7 +215,7 @@ void attachZustandIpcBridge<ThemeStoreState>(useThemeStore, {
  * can delegate without having to know the parse / store internals.
  */
 export async function applyThemeSettingFromBackend(): Promise<void> {
-  const raw = await invoke<string | null>("get_setting", { key: "theme" });
+  const raw = await getSetting("theme");
   if (raw === null) return;
   const parsed = parseThemeSettingValue(raw);
   if (parsed === null) return;

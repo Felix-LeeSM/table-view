@@ -1,8 +1,8 @@
-import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import type { SafeMode } from "@/lib/safeMode";
+import { getSetting, persistSettingValue } from "@lib/tauri/settings";
 
 // `SafeMode` type lives in `src/lib/safeMode.ts` so the pure decision
 // matrix can reference it without dragging a store dep into the lib
@@ -48,12 +48,7 @@ const NEXT_MODE: Record<SafeMode, SafeMode> = {
  * safeMode has no nested structure.
  */
 async function persistSafeModeSetting(mode: SafeMode): Promise<void> {
-  await invoke("persist_setting", {
-    req: {
-      key: "safe_mode",
-      valueJson: JSON.stringify(mode),
-    },
-  });
+  await persistSettingValue("safe_mode", mode);
 }
 
 export const useSafeModeStore = create<SafeModeState>()((set, get) => ({
@@ -97,7 +92,7 @@ void attachZustandIpcBridge<SafeModeState>(useSafeModeStore, {
  * can delegate without having to know the parse / store internals.
  */
 export async function applySafeModeSettingFromBackend(): Promise<void> {
-  const raw = await invoke<string | null>("get_setting", { key: "safe_mode" });
+  const raw = await getSetting("safe_mode");
   if (raw === null) return;
   const parsed = parseSafeModeSettingValue(raw);
   if (parsed === null) return;

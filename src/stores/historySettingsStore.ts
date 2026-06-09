@@ -24,9 +24,9 @@
  * receiver 가 sync 함).
  */
 
-import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { logger } from "@lib/logger";
+import { getSetting, persistSettingValue } from "@lib/tauri/settings";
 
 /**
  * "forever" 보존을 0 로 인코딩. `boot_vacuum_old_history` 가 retention
@@ -53,12 +53,6 @@ export interface HistorySettingsState {
 const DEFAULT_QUERY_HISTORY_ENABLED = true;
 const DEFAULT_QUERY_HISTORY_RETENTION_DAYS: HistoryRetentionDays = 30;
 
-async function persistSetting(key: string, value: unknown): Promise<void> {
-  await invoke("persist_setting", {
-    req: { key, valueJson: JSON.stringify(value) },
-  });
-}
-
 export const useHistorySettingsStore = create<HistorySettingsState>()(
   (set) => ({
     queryHistoryEnabled: DEFAULT_QUERY_HISTORY_ENABLED,
@@ -69,7 +63,7 @@ export const useHistorySettingsStore = create<HistorySettingsState>()(
       // snapshot reconcile 이 처리.
       set({ queryHistoryEnabled: enabled });
       try {
-        await persistSetting("query_history_enabled", enabled);
+        await persistSettingValue("query_history_enabled", enabled);
       } catch (e) {
         logger.warn(
           "[historySettingsStore] setQueryHistoryEnabled persist_setting failed (UI already applied):",
@@ -81,7 +75,7 @@ export const useHistorySettingsStore = create<HistorySettingsState>()(
     setQueryHistoryRetentionDays: async (days) => {
       set({ queryHistoryRetentionDays: days });
       try {
-        await persistSetting("query_history_retention_days", days);
+        await persistSettingValue("query_history_retention_days", days);
       } catch (e) {
         logger.warn(
           "[historySettingsStore] setQueryHistoryRetentionDays persist_setting failed (UI already applied):",
@@ -113,9 +107,7 @@ export async function applyHistorySettingsFromBackend(
 
 async function refetchQueryHistoryEnabled(): Promise<void> {
   try {
-    const raw = await invoke<string | null>("get_setting", {
-      key: "query_history_enabled",
-    });
+    const raw = await getSetting("query_history_enabled");
     if (raw === null) return;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "boolean") return;
@@ -130,9 +122,7 @@ async function refetchQueryHistoryEnabled(): Promise<void> {
 
 async function refetchQueryHistoryRetentionDays(): Promise<void> {
   try {
-    const raw = await invoke<string | null>("get_setting", {
-      key: "query_history_retention_days",
-    });
+    const raw = await getSetting("query_history_retention_days");
     if (raw === null) return;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "number") return;

@@ -44,6 +44,13 @@ import { useSafeModeStore } from "./safeModeStore";
 
 const invokeMock = vi.mocked(invoke);
 
+async function flushSettingReceiver(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
@@ -104,9 +111,8 @@ describe("AC-368-03 cross-window state-changed setting receiver", () => {
       settingPayload("theme", "launcher"),
     );
 
-    // Allow the microtask queue to flush — handler is async via .then().
-    await Promise.resolve();
-    await Promise.resolve();
+    // Allow the async receiver chain to flush.
+    await flushSettingReceiver();
 
     const getCalls = invokeMock.mock.calls.filter(
       (c) => c[0] === "get_setting",
@@ -124,8 +130,7 @@ describe("AC-368-03 cross-window state-changed setting receiver", () => {
       "workspace-conn-1",
       settingPayload("theme", "launcher"),
     );
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushSettingReceiver();
 
     const state = useThemeStore.getState();
     expect(state.themeId).toBe("linear");
@@ -141,8 +146,7 @@ describe("AC-368-03 cross-window state-changed setting receiver", () => {
       "workspace-conn-1",
       settingPayload("theme", "launcher"),
     );
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushSettingReceiver();
 
     const themeLsWrites = localStorageMock.setItem.mock.calls.filter(
       (c) => c[0] === THEME_STORAGE_KEY,
@@ -159,8 +163,7 @@ describe("AC-368-03 cross-window state-changed setting receiver", () => {
       "workspace-conn-1",
       settingPayload("theme", "workspace-conn-1"),
     );
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushSettingReceiver();
 
     const getCalls = invokeMock.mock.calls.filter(
       (c) => c[0] === "get_setting",
@@ -175,8 +178,7 @@ describe("AC-368-03 cross-window state-changed setting receiver", () => {
       "workspace-conn-1",
       settingPayload("safe_mode", "launcher"),
     );
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushSettingReceiver();
 
     const getCalls = invokeMock.mock.calls.filter(
       (c) => c[0] === "get_setting",
@@ -199,8 +201,7 @@ describe("AC-368-03 cross-window state-changed setting receiver", () => {
       "workspace-conn-1",
       settingPayload("theme", "launcher"),
     );
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushSettingReceiver();
 
     expect(useThemeStore.getState().themeId).toBe(before);
   });

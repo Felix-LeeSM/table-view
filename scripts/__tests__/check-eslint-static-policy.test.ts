@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_LINES_ALLOWLIST,
+  RAW_TAURI_INVOKE_INVENTORY,
+  findRawTauriInvokeBoundaryViolations,
   findUnexpectedIgnoredFiles,
   isAllowedGeneratedLintIgnore,
   summarizeLintMessages,
@@ -51,5 +53,69 @@ describe("check-eslint-static-policy", () => {
     expect(summary.maxLineWarningPaths).toEqual(["src/A.ts"]);
     expect(summary.errorCount).toBe(1);
     expect(summary.unexpectedWarningRules).toEqual(["no-warning-comments"]);
+  });
+
+  it("keeps raw store invoke inventory explicit", () => {
+    expect(RAW_TAURI_INVOKE_INVENTORY).toEqual([
+      {
+        path: "src/stores/favoritesStore.ts",
+        commands: ["list_favorites", "persist_favorites"],
+        owner: "favorites persistence store",
+        wrapperTarget: "src/lib/tauri/favorites.ts",
+        risk: "medium",
+        action:
+          "follow-up: move favorites persistence IPC behind a typed wrapper",
+      },
+      {
+        path: "src/stores/mruStore.ts",
+        commands: ["clear_mru", "persist_mru"],
+        owner: "MRU persistence store",
+        wrapperTarget: "src/lib/tauri/mru.ts",
+        risk: "low",
+        action: "follow-up: move MRU persistence IPC behind a typed wrapper",
+      },
+    ]);
+  });
+
+  it("rejects untriaged raw Tauri invoke imports in store modules", () => {
+    const failures = findRawTauriInvokeBoundaryViolations(
+      new Map([
+        [
+          "src/stores/themeStore.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("persist_setting");\n',
+        ],
+        [
+          "src/stores/favoritesStore.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("list_favorites");\nvoid invoke("persist_favorites");\n',
+        ],
+        [
+          "src/stores/mruStore.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("persist_mru");\nvoid invoke("clear_mru");\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      "src/stores/themeStore.ts: raw @tauri-apps/api/core import is outside src/lib/tauri/** and missing from RAW_TAURI_INVOKE_INVENTORY.",
+    );
+  });
+
+  it("rejects new commands in inventoried raw store modules", () => {
+    const failures = findRawTauriInvokeBoundaryViolations(
+      new Map([
+        [
+          "src/stores/favoritesStore.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("list_favorites");\nvoid invoke("persist_favorites");\nvoid invoke("delete_favorites");\n',
+        ],
+        [
+          "src/stores/mruStore.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("persist_mru");\nvoid invoke("clear_mru");\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      "src/stores/favoritesStore.ts: untriaged raw invoke command(s): delete_favorites.",
+    );
   });
 });
