@@ -10,6 +10,9 @@ decision logs.
   verification gaps and quality follow-ups.
 - [`repository-topology-inventory.md`](repository-topology-inventory.md) —
   Refactor 01 repository root ownership and lifecycle inventory.
+- [`source-root-migration-constraints.md`](source-root-migration-constraints.md) —
+  Refactor 02/03 source-root movement, compatibility export, test, fixture, and
+  committed-generated-input constraints.
 - [`pr-review.md`](pr-review.md) — reviewer output contract and red/green
   threshold.
 - [`release/homebrew-cask.md`](release/homebrew-cask.md) — Homebrew cask and release notes.
