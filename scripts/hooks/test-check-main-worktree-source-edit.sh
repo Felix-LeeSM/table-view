@@ -90,6 +90,42 @@ run_case() {
 	fi
 }
 
+run_case_stderr_contains() {
+	local name="$1"
+	local expected_exit="$2"
+	local expected_stderr="$3"
+	local mode="$4"
+	shift 4
+
+	local actual_stderr actual_exit
+	case "$mode" in
+		main-path)
+			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
+			actual_exit=$?
+			;;
+		main-command)
+			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$1" 2>&1 >/dev/null)"
+			actual_exit=$?
+			;;
+		linked-path)
+			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$LINKED_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
+			actual_exit=$?
+			;;
+		*)
+			echo "FAIL: unknown mode: $mode" >&2
+			exit 1
+			;;
+	esac
+
+	if [ "$actual_exit" != "$expected_exit" ]; then
+		record_fail "$name expected exit $expected_exit, got $actual_exit; stderr=$actual_stderr"
+	elif ! grep -Fq "$expected_stderr" <<<"$actual_stderr"; then
+		record_fail "$name expected stderr to contain '$expected_stderr'; stderr=$actual_stderr"
+	else
+		record_pass "$name"
+	fi
+}
+
 run_codex_hook_case() {
 	local name="$1"
 	local tool_name="$2"
@@ -163,6 +199,12 @@ run_case "main: AGENTS allowed" 0 main-path "AGENTS.md"
 run_case "main: markdown note blocked" 1 main-path "notes/review.md"
 run_case "main: agent skills blocked" 1 main-path ".agents/skills/tdd/SKILL.md"
 run_case "main: Tauri asset blocked" 1 main-path "src-tauri/icons/icon.png"
+
+run_case_stderr_contains "main: docs edit reports docs class" 1 "class: docs" main-path "docs/PLAN.md"
+run_case_stderr_contains "main: fixture tooling reports fixture class" 1 "class: fixture" main-path "scripts/fixtures/dbms-seeds.test.ts"
+run_case_stderr_contains "main: agent skill reports agent class" 1 "class: agent" main-path ".agents/skills/tdd/SKILL.md"
+run_case_stderr_contains "main: GitHub policy reports workflow class" 1 "class: workflow" main-path ".github/dependabot.yml"
+run_case_stderr_contains "main: committed generated WASM reports generated class" 1 "class: committed-generated-input" main-path "src/lib/sql/wasm/sql_parser_core_bg.wasm"
 
 run_case "main command: redirection to src blocked" 1 main-command "cat > src/App.tsx <<'EOF'"
 run_case "main command: redirection traversal to src blocked" 1 main-command "cat > docs/../src/App.tsx <<'EOF'"

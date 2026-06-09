@@ -165,6 +165,12 @@ assert_contains "$frontend_output" "RUN ts-lint:" "frontend-only"
 assert_contains "$frontend_output" "RUN ts-test:" "frontend-only"
 assert_not_contains "$frontend_output" "rust-test-and-coverage" "frontend-only"
 
+fixture_tooling_output="$(run_case fixture-tooling normal scripts/fixtures/dbms-seeds.test.ts)"
+assert_contains "$fixture_tooling_output" "route: frontend=1 rust=0" "fixture tooling"
+assert_contains "$fixture_tooling_output" "fixture=1" "fixture tooling"
+assert_contains "$fixture_tooling_output" "RUN ts-test:" "fixture tooling"
+assert_not_contains "$fixture_tooling_output" "RUN rust-test-and-coverage:" "fixture tooling"
+
 rust_output="$(run_case rust-only normal src-tauri/src/lib.rs)"
 assert_contains "$rust_output" "route: frontend=0 rust=1" "rust-only"
 assert_contains "$rust_output" "RUN tauri-check:" "rust-only"
@@ -267,8 +273,15 @@ committed_generated_output="$(
 		src-tauri/icons/generated-cache-fence-check.png
 )"
 assert_contains "$committed_generated_output" "route: frontend=1 rust=1" "committed generated inputs"
+assert_contains "$committed_generated_output" "committed_generated=1" "committed generated inputs"
 assert_contains "$committed_generated_output" "RUN ts-test:" "committed generated inputs"
 assert_contains "$committed_generated_output" "RUN rust-test-and-coverage:" "committed generated inputs"
+
+committed_generated_wasm_output="$(run_case committed-generated-wasm normal src/lib/sql/wasm/sql_parser_core_bg.wasm)"
+assert_contains "$committed_generated_wasm_output" "route: frontend=1 rust=0" "committed generated wasm"
+assert_contains "$committed_generated_wasm_output" "committed_generated=1" "committed generated wasm"
+assert_contains "$committed_generated_wasm_output" "RUN ts-test:" "committed generated wasm"
+assert_not_contains "$committed_generated_wasm_output" "RUN rust-test-and-coverage:" "committed generated wasm"
 
 nextest_config_output="$(run_case nextest-config normal src-tauri/.config/nextest.toml)"
 assert_contains "$nextest_config_output" "route: frontend=0 rust=0 hook=1 memory=0 agent=0" "nextest config"
@@ -284,6 +297,7 @@ assert_not_contains "$ratchet_script_output" "RUN rust-test-and-coverage:" "ratc
 
 ci_workflow_output="$(run_case ci-workflow normal .github/workflows/e2e-smoke.yml)"
 assert_contains "$ci_workflow_output" "route: frontend=0 rust=0" "ci workflow"
+assert_contains "$ci_workflow_output" "ci_workflow=1" "ci workflow"
 assert_contains "$ci_workflow_output" "RUN ci-workflow-cache:" "ci workflow"
 assert_contains "$ci_workflow_output" "RUN e2e-smoke-workflow-cache:" "ci workflow"
 assert_not_contains "$ci_workflow_output" "RUN ts-test:" "ci workflow"
@@ -321,6 +335,11 @@ unknown_output="$(run_case unknown normal .prettierrc)"
 assert_contains "$unknown_output" "route: full" "unknown"
 assert_contains "$unknown_output" "RUN ts-test:" "unknown"
 assert_contains "$unknown_output" "RUN rust-test-and-coverage:" "unknown"
+
+mixed_unknown_source_output="$(run_case mixed-unknown-source normal src/App.tsx .prettierrc)"
+assert_contains "$mixed_unknown_source_output" "route: full" "mixed unknown source"
+assert_contains "$mixed_unknown_source_output" "RUN ts-test:" "mixed unknown source"
+assert_contains "$mixed_unknown_source_output" "RUN rust-test-and-coverage:" "mixed unknown source"
 
 new_branch_output="$(run_case new-branch zero src/App.tsx)"
 assert_contains "$new_branch_output" "route: frontend=1 rust=0" "new branch"
