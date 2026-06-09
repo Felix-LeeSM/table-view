@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-type MetricName = "lines" | "functions" | "branches" | "regions";
+type MetricName = "statements" | "lines" | "functions" | "branches" | "regions";
 type Metrics = Partial<Record<MetricName, number>>;
 
 type RatchetEntry = {
@@ -78,6 +78,7 @@ function extractVitestThresholds(): Metrics {
   }
   const block = match[1];
   return {
+    statements: extractNumber(block, "statements"),
     lines: extractNumber(block, "lines"),
     functions: extractNumber(block, "functions"),
     branches: extractNumber(block, "branches"),

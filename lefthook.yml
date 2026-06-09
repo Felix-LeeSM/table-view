@@ -52,6 +52,8 @@ pre-commit:
       # `--lib` 범위 밖. 자연 하락 (regions 71.19→70.99, 0.20pp). 임계
       # regions 71→70 으로 조정 (cushion 0.99pp). 단조 패턴 — sprint-281
       # functions, sprint-288 mysql 자연 하락과 정확히 같은 정당화.
+      # Issue #580 ratchet (2026-06-09): Tier 1 measured lines 74.35 /
+      # functions 71.40 / regions 74.13. New gates keep at least 1pp cushion.
       glob: "*.rs"
       run: |
         bash scripts/hooks/check-worktree-bootstrap.sh
@@ -63,9 +65,9 @@ pre-commit:
           exit 1
         fi
         cd src-tauri && cargo llvm-cov --lib --summary-only \
-          --fail-under-lines 70 \
-          --fail-under-functions 69 \
-          --fail-under-regions 70
+          --fail-under-lines 73 \
+          --fail-under-functions 70 \
+          --fail-under-regions 73
     rust-pg-test:
       # Sprint 237 P5+ (2026-05-08) — staged 가 PG adapter 본체를 건드릴
       # 때만 testcontainers 기반 PG 통합 (~30s cold, ~16s cached) 을 트리거.

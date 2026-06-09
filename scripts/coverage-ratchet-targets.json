@@ -5,26 +5,27 @@
       "id": "frontend.vitest.global",
       "source": "vite.config.ts",
       "metrics": {
-        "lines": 70,
-        "functions": 70,
-        "branches": 70
+        "statements": 85,
+        "lines": 87,
+        "functions": 87,
+        "branches": 78
       }
     },
     {
       "id": "rust.pre_commit.tier1",
       "source": "lefthook.yml",
       "metrics": {
-        "lines": 70,
-        "functions": 69,
-        "regions": 70
+        "lines": 73,
+        "functions": 70,
+        "regions": 73
       }
     },
     {
       "id": "rust.pre_push.integration",
       "source": "scripts/hooks/pre-push-path-router.sh",
       "metrics": {
-        "lines": 79,
-        "functions": 74,
+        "lines": 80,
+        "functions": 75,
         "regions": 80
       }
     }

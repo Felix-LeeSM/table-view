@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke check for the CI workflow cache contract.
+# Smoke check for the CI workflow cache and coverage contract.
 
 set -euo pipefail
 
@@ -37,6 +37,8 @@ assert_contains "$vite_cache_block" "path: node_modules/.vite" "vite cache"
 assert_contains "$vite_cache_block" "key: vite-\${{ runner.os }}-\${{ hashFiles(" "vite cache key"
 assert_contains "$vite_cache_block" "restore-keys: |" "vite cache restore"
 assert_contains "$vite_cache_block" "vite-\${{ runner.os }}-" "vite cache restore"
+assert_contains "$frontend_block" "run: pnpm exec tsx scripts/check-coverage-ratchet.ts" "frontend coverage ratchet"
+assert_contains "$frontend_block" "run: pnpm test -- --run --coverage --coverage.reporter=text-summary" "frontend coverage gate"
 assert_contains "$rust_block" "workspaces: src-tauri -> target" "rust cache"
 assert_contains "$rust_block" "cache-bin: false" "rust cache"
 assert_contains "$rust_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "rust cache"
@@ -44,4 +46,4 @@ assert_contains "$integration_block" "workspaces: src-tauri -> target" "integrat
 assert_contains "$integration_block" "cache-bin: false" "integration rust cache"
 assert_contains "$integration_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "integration rust cache"
 
-echo "PASS: CI workflow cache check"
+echo "PASS: CI workflow cache and coverage check"

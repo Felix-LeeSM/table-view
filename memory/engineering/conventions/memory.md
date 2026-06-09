@@ -35,8 +35,9 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 - React: Vitest + React Testing Library. 파일은 컴포넌트 옆 `*.test.tsx` 또는 `__tests__/`. Zustand 스토어는 순수 함수처럼.
 - E2E: WebdriverIO + tauri-driver 로 핵심 플로우(연결 생성, 쿼리 실행, 결과 확인). 시나리오 설계 원칙은 [e2e-scenarios](e2e-scenarios/memory.md) 필독.
 - 시나리오 원칙: 비-E2E 는 [testing-scenarios](testing-scenarios/memory.md), E2E 는 [e2e-scenarios](e2e-scenarios/memory.md). 같은 P-시리즈로 일관.
-- Frontend coverage gate: `vite.config.ts` 기준 전체 라인 70% / 함수 70% /
-  브랜치 70%. 신규·수정 파일도 이 gate 를 낮추는 방향으로 들어가지 않는다.
+- Coverage gate: frontend `vite.config.ts` 기준 statements 85% / 라인 87% /
+  함수 87% / 브랜치 78%, Rust는 `docs/quality/coverage-ratchet.md` target을
+  따른다. 신규·수정 파일도 이 gate 를 낮추는 방향으로 들어가지 않는다.
 - 시나리오 체크: happy path, 빈/누락 입력, 에러 복구, 동시성(빠른 더블 클릭 등), 상태 전이. 상세: `.claude/rules/test-scenarios.md`.
 - 변경 후 필수 검증: `pnpm vitest run`, `pnpm tsc --noEmit`, `pnpm lint`.
 
@@ -67,6 +68,7 @@ Sprint 189–198 의 모든 refactor / feature 커밋은 본 표준의 규칙을
 타입: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
 
 예:
+
 - `feat(connection): add connection test button`
 - `fix(query): handle empty result set`
 - `refactor(db): extract common adapter logic`
