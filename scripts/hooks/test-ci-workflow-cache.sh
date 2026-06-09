@@ -4,7 +4,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WORKFLOW="$ROOT/.github/workflows/ci.yml"
+WORKFLOW="${CI_WORKFLOW_PATH:-$ROOT/.github/workflows/ci.yml}"
+workflow_text="$(cat "$WORKFLOW")"
 
 assert_contains() {
 	local text="$1"
@@ -25,8 +26,8 @@ assert_order() {
 	local first_line
 	local second_line
 
-	first_line="$(grep -Fn -- "$first" <<<"$text" | head -n 1 | cut -d: -f1)"
-	second_line="$(grep -Fn -- "$second" <<<"$text" | head -n 1 | cut -d: -f1)"
+	first_line="$(grep -Fn -- "$first" <<<"$text" | head -n 1 | cut -d: -f1 || true)"
+	second_line="$(grep -Fn -- "$second" <<<"$text" | head -n 1 | cut -d: -f1 || true)"
 
 	if [ -z "$first_line" ] || [ -z "$second_line" ] || [ "$first_line" -ge "$second_line" ]; then
 		echo "FAIL: $label: expected '$first' before '$second'" >&2
@@ -34,10 +35,24 @@ assert_order() {
 	fi
 }
 
-frontend_block="$(sed -n '/^  frontend:/,/^  rust:/p' "$WORKFLOW" | sed '$d')"
-vite_cache_block="$(sed -n '/- name: Cache Vite transform output/,/- name: Install dependencies/p' "$WORKFLOW" | sed '$d')"
-rust_block="$(sed -n '/^  rust:/,/^  integration-tests:/p' "$WORKFLOW" | sed '$d')"
-integration_block="$(sed -n '/^  integration-tests:/,/^  # Runtime E2E smoke/p' "$WORKFLOW" | sed '$d')"
+extract_step_block() {
+	local text="$1"
+	local step_name="$2"
+
+	awk -v step_name="$step_name" '
+		$0 == "      - name: " step_name { in_block = 1; print; next }
+		in_block && $0 ~ /^      - name: / { exit }
+		in_block { print }
+	' <<<"$text"
+}
+
+frontend_block="$(sed -n '/^  frontend:/,/^  rust:/p' <<<"$workflow_text" | sed '$d')"
+vite_cache_block="$(sed -n '/- name: Cache Vite transform output/,/- name: Install dependencies/p' <<<"$workflow_text" | sed '$d')"
+rust_block="$(sed -n '/^  rust:/,/^  integration-tests:/p' <<<"$workflow_text" | sed '$d')"
+integration_block="$(sed -n '/^  integration-tests:/,/^  # Runtime E2E smoke/p' <<<"$workflow_text" | sed '$d')"
+integration_disk_telemetry_step="$(extract_step_block "$integration_block" "Show disk usage before integration build")"
+integration_disk_cleanup_step="$(extract_step_block "$integration_block" "Free disk headroom before integration build")"
+integration_run_step="$(extract_step_block "$integration_block" "Run integration tests")"
 
 if [ -z "$frontend_block" ]; then
 	echo "FAIL: frontend job is missing from $WORKFLOW" >&2
@@ -65,5 +80,18 @@ assert_contains "$rust_block" "save-if: \${{ github.ref == 'refs/heads/main' }}"
 assert_contains "$integration_block" "workspaces: src-tauri -> target" "integration rust cache"
 assert_contains "$integration_block" "cache-bin: false" "integration rust cache"
 assert_contains "$integration_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "integration rust cache"
+assert_order "$integration_block" "- name: Cache Rust artifacts" "- name: Show disk usage before integration build" "integration disk telemetry after cache"
+assert_order "$integration_block" "- name: Show disk usage before integration build" "- name: Free disk headroom before integration build" "integration disk cleanup after telemetry"
+assert_order "$integration_block" "- name: Free disk headroom before integration build" "- name: Run integration tests" "integration disk cleanup before cargo tests"
+assert_order "$integration_block" "- name: Free disk headroom before integration build" "run: cargo test --manifest-path src-tauri/Cargo.toml" "integration disk cleanup before cargo command"
+assert_contains "$integration_disk_telemetry_step" "df -h /" "integration disk telemetry step"
+assert_contains "$integration_disk_telemetry_step" "du -sh src-tauri/target" "integration disk telemetry step"
+assert_contains "$integration_disk_telemetry_step" "docker system df" "integration disk telemetry step"
+assert_contains "$integration_disk_cleanup_step" "sudo apt-get clean" "integration disk cleanup step"
+assert_contains "$integration_disk_cleanup_step" "docker system prune -af" "integration disk cleanup step"
+assert_contains "$integration_disk_cleanup_step" "/usr/local/lib/android" "integration disk cleanup step"
+assert_contains "$integration_disk_cleanup_step" "/usr/share/dotnet" "integration disk cleanup step"
+assert_contains "$integration_disk_cleanup_step" "/opt/ghc" "integration disk cleanup step"
+assert_contains "$integration_run_step" "run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration" "integration cargo command"
 
 echo "PASS: CI workflow cache and coverage check"
