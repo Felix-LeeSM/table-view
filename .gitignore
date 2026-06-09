@@ -1,18 +1,19 @@
-# Rust
-target/
+# Rust build/cache roots. Keep root-anchored so source directories named
+# "target" are not hidden.
+/target/
+/src-tauri/target/
+/src-tauri/sql-parser-core/target/
+/src-tauri/mongosh-parser-core/target/
 **/*.rs.bk
 *.pdb
 
 # Node
-node_modules/
-dist/
-.vite/
-
-# Tauri
-src-tauri/target/
+/node_modules/
+/dist/
+/.vite/
 
 # E2E cache mount (CI: actions/cache restores into here; local dev: ignore)
-cargo-target/
+/cargo-target/
 
 # Environment
 .env
@@ -37,25 +38,25 @@ Thumbs.db
 # Tailwind v4's `@tailwindcss/vite` source-scanner (which respects .gitignore)
 # doesn't walk into them and resolve sibling `<img src="...">` paths against
 # stale worktree roots.
-.claude/worktrees/
+/.claude/worktrees/
 # Multi-agent / multi-brain worktrees (Claude / Codex / Cursor 공통, platform-neutral).
 # `scripts/worktree-spawn.sh` 가 생성. sprint-387 lock.
-worktrees/
+/worktrees/
 
 # Test
-coverage/
+/coverage/
 # Anchor `wdio-report/` to the repo root so the e2e bind-mount target
 # (`e2e/wdio-report/`) can preserve its `.gitkeep` (sprint-169 Sprint 4).
 /wdio-report/
-e2e/wdio-report/*
-!e2e/wdio-report/.gitkeep
-test-results/
+/e2e/wdio-report/*
+!/e2e/wdio-report/.gitkeep
+/test-results/
 
 # Build
 *.tsbuildinfo
 
-# tmo
-tmp/
+# tmp
+/tmp/
 
 # Local-only evaluation/plan drafts (commit per-sprint specs instead)
 docs/ui-evaluation.md

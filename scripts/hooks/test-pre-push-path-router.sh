@@ -65,7 +65,11 @@ commit_paths() {
 
 	for path in "$@"; do
 		mkdir -p "$(dirname "$repo/$path")"
-		printf '%s\n' "$path" >>"$repo/$path"
+		if [ "$path" = ".gitignore" ]; then
+			printf '# generated fence fixture\n' >>"$repo/$path"
+		else
+			printf '%s\n' "$path" >>"$repo/$path"
+		fi
 		git -C "$repo" add "$path"
 	done
 	git -C "$repo" commit --quiet -m "test: change paths"
@@ -198,6 +202,7 @@ assert_contains "$hook_output" "RUN lefthook-validate:" "hook"
 assert_contains "$hook_output" "RUN nextest-push-profile-config:" "hook"
 assert_contains "$hook_output" "RUN pre-push-router-tests:" "hook"
 assert_contains "$hook_output" "RUN target-cache-tests:" "hook"
+assert_contains "$hook_output" "RUN generated-fence-tests:" "hook"
 assert_not_contains "$hook_output" "RUN ts-typecheck:" "hook"
 assert_not_contains "$hook_output" "RUN rust-test-and-coverage:" "hook"
 
@@ -225,6 +230,45 @@ assert_contains "$target_cache_output" "RUN hook-shell-syntax:" "target cache"
 assert_contains "$target_cache_output" "RUN target-cache-tests:" "target cache"
 assert_not_contains "$target_cache_output" "RUN ts-test:" "target cache"
 assert_not_contains "$target_cache_output" "RUN rust-test-and-coverage:" "target cache"
+
+gitignore_output="$(run_case gitignore-fence normal .gitignore)"
+assert_contains "$gitignore_output" "route: frontend=0 rust=0 hook=1 memory=0 agent=0" "gitignore fence"
+assert_contains "$gitignore_output" "RUN generated-fence-tests:" "gitignore fence"
+assert_not_contains "$gitignore_output" "RUN ts-test:" "gitignore fence"
+assert_not_contains "$gitignore_output" "RUN rust-test-and-coverage:" "gitignore fence"
+
+generated_output="$(
+	run_case generated-cache-output normal \
+		node_modules/.cache/package.ts \
+		dist/assets/app.ts \
+		.vite/deps/chunk.ts \
+		cargo-target/debug/build.rs \
+		target/debug/build.rs \
+		src-tauri/target/debug/build.rs \
+		src-tauri/sql-parser-core/target/debug/build.rs \
+		src-tauri/mongosh-parser-core/target/debug/build.rs \
+		coverage/summary.json \
+		test-results/results.json \
+		wdio-report/index.html \
+		e2e/wdio-report/run/index.html \
+		tmp/scratch/App.tsx \
+		worktrees/agent/src/App.tsx \
+		.claude/worktrees/agent/src-tauri/src/lib.rs
+)"
+assert_contains "$generated_output" "route: frontend=0 rust=0 hook=0 memory=0 agent=0 generated=1" "generated/cache output"
+assert_not_contains "$generated_output" "RUN ts-test:" "generated/cache output"
+assert_not_contains "$generated_output" "RUN rust-test-and-coverage:" "generated/cache output"
+
+committed_generated_output="$(
+	run_case committed-generated normal \
+		src/lib/sql/wasm/sql_parser_core.js \
+		src/lib/mongo/wasm/mongosh_parser_core.d.ts \
+		src-tauri/gen/schemas/generated-cache-fence-check.json \
+		src-tauri/icons/generated-cache-fence-check.png
+)"
+assert_contains "$committed_generated_output" "route: frontend=1 rust=1" "committed generated inputs"
+assert_contains "$committed_generated_output" "RUN ts-test:" "committed generated inputs"
+assert_contains "$committed_generated_output" "RUN rust-test-and-coverage:" "committed generated inputs"
 
 nextest_config_output="$(run_case nextest-config normal src-tauri/.config/nextest.toml)"
 assert_contains "$nextest_config_output" "route: frontend=0 rust=0 hook=1 memory=0 agent=0" "nextest config"
