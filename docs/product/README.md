@@ -183,11 +183,11 @@ MSSQL 은 connection plus bounded query runtime support, primary-key-scoped row 
 bounded structured table/index/constraint DDL, bounded editor completion,
 catalog/workbench metadata browse, bounded static parser/Safe Mode metadata,
 representative runtime smoke 로 승격됐지만, TLS/admin/full-T-SQL claim 은 아직 없다. Oracle 은
-service-name connection, bounded query runtime, table-data browse,
-primary-key-scoped row edit, catalog/workbench metadata, bounded static editor
-completion, bounded structured table/index/constraint DDL, and bounded static
-parser/Safe Mode 로 승격됐지만 sequence/synonym DDL/admin workflow,
-runtime smoke/live/E2E claim 은 아직 없다.
+#526 scope 의 representative Runtime Happy Path smoke/live evidence 로
+service-name connect, catalog browse, bounded SELECT, DML preview/readback,
+primary-key-scoped row edit, destructive confirmation 까지 승격됐다. SID/TNS
+alias, wallet/TLS, raw DDL/admin, sequence/synonym DDL/admin, full PL/SQL,
+unproven lazy view definition claim 은 아직 없다.
 Elasticsearch/OpenSearch 는 Search identity 와 fixture-backed admin contract 를
 갖고 있다. Elasticsearch 와 OpenSearch 는 connection dialog 와 backend
 `test_connection` 에서 URL/auth/TLS 기반 live HTTP root probe 를 지원하고,
