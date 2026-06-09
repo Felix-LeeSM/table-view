@@ -12,6 +12,7 @@ export type DbType =
   | "mysql"
   | "mariadb"
   | "mssql"
+  | "oracle"
   | "sqlite"
   | "duckdb"
   | "redis"
@@ -154,6 +155,7 @@ function dbTypeLabel(dbType: DbType): string {
   if (dbType === "mysql") return "MySQL";
   if (dbType === "mariadb") return "MariaDB";
   if (dbType === "mssql") return "Microsoft SQL Server";
+  if (dbType === "oracle") return "Oracle";
   if (dbType === "sqlite") return "SQLite";
   if (dbType === "duckdb") return "DuckDB";
   if (dbType === "redis") return "Redis";
@@ -322,6 +324,33 @@ export async function createMssqlConnection(
     process.env.E2E_MSSQL_DATABASE ??
       process.env.MSSQL_DATABASE ??
       "table_view_test",
+  );
+
+  await saveConnectionDialog(dialog);
+  await expectConnectionVisible(name);
+}
+
+export async function createOracleConnection(
+  name = "E2E Oracle",
+  environment?: ConnectionEnvironment,
+) {
+  const dialog = await openNewConnectionDialog();
+  await selectDatabaseType("oracle");
+
+  await setInput("#conn-name", name);
+  if (environment) {
+    await selectConnectionEnvironment(environment);
+  }
+  await setInput("#conn-host", process.env.E2E_ORACLE_HOST ?? "localhost");
+  await setInput(
+    "#conn-port",
+    process.env.E2E_ORACLE_PORT ?? process.env.ORACLE_PORT ?? "1521",
+  );
+  await setInput("#conn-user", process.env.ORACLE_USER ?? "testuser");
+  await setInput("#conn-password", process.env.ORACLE_PASSWORD ?? "testpass");
+  await setInput(
+    "#conn-database",
+    process.env.E2E_ORACLE_SERVICE ?? process.env.ORACLE_SERVICE ?? "XEPDB1",
   );
 
   await saveConnectionDialog(dialog);

@@ -42,6 +42,18 @@ EXCEPTION
 END;
 /
 
+CREATE OR REPLACE VIEW active_oracle_users AS
+  SELECT id, name, email
+  FROM users
+  WHERE email IS NOT NULL;
+/
+
+CREATE OR REPLACE FUNCTION oracle_catalog_ping RETURN NUMBER AS
+BEGIN
+  RETURN 1;
+END;
+/
+
 MERGE INTO users u
 USING (SELECT 'Alice' AS name, 'alice@example.com' AS email FROM dual) s
 ON (u.email = s.email)

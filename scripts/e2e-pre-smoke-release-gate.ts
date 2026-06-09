@@ -35,16 +35,15 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     const fixtureConnections = storage.connections.filter((connection) =>
       connection.id.startsWith("fixture-"),
     );
-    const dbTypes = fixtureConnections.map((connection) => connection.db_type);
-
-    assert(
-      !dbTypes.includes("oracle"),
-      `${profile}: active Oracle fixture leaked`,
-    );
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "mssql")
         .length === 1,
       `${profile}: expected exactly one active MSSQL fixture connection`,
+    );
+    assert(
+      fixtureConnections.filter((connection) => connection.db_type === "oracle")
+        .length === 1,
+      `${profile}: expected exactly one active Oracle fixture connection`,
     );
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "sqlite")
@@ -66,6 +65,9 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     const mssql = fixtureConnections.find(
       (connection) => connection.db_type === "mssql",
     );
+    const oracle = fixtureConnections.find(
+      (connection) => connection.db_type === "oracle",
+    );
     const sqlitePath = resolve(
       dataDir,
       "fixtures",
@@ -84,6 +86,13 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     assert(
       mssql?.database === spec.profileSpec.database.mssql,
       `${profile}: MSSQL database drifted`,
+    );
+    assert(
+      oracle?.database ===
+        (process.env.ORACLE_SERVICE ??
+          process.env.E2E_ORACLE_SERVICE ??
+          "XEPDB1"),
+      `${profile}: Oracle service drifted`,
     );
     assert(existsSync(sqlitePath), `${profile}: SQLite fixture file missing`);
     assert(existsSync(duckdbPath), `${profile}: DuckDB fixture file missing`);
