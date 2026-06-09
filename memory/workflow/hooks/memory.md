@@ -25,6 +25,10 @@ exit code로 피드백하므로, 세부 판정은 hook script와 테스트가 so
   step이어야 한다. 현재 dispatcher는 `scripts/hooks/post-tool-use.sh`다.
 - pass/fail 패턴과 formatter 범위는 `scripts/hooks/*`, `lefthook.yml`, hook tests에
   둔다. memory에는 복제하지 않는다.
+- Repo path taxonomy 는 `scripts/hooks/path-classifier.sh` 가 source of truth다.
+  `pre-push-path-router.sh` 와 `check-main-worktree-source-edit.sh` 는 같은 classifier를
+  source 해서 route/guard class drift를 막고, test는 classifier-visible cases를
+  같이 고정한다.
 
 ## 읽을 때
 

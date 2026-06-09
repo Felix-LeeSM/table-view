@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ROOT="${CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT:-$DEFAULT_ROOT}"
 ROOT="$(cd "$ROOT" && pwd)"
+source "$SCRIPT_DIR/path-classifier.sh"
 
 COMMAND=""
 PATH_ARGS=()
@@ -158,34 +159,12 @@ relative_path() {
 	printf '%s\n' "$raw"
 }
 
-is_primary_allowed_path() {
-	local rel="$1"
-
-	case "$rel" in
-		AGENTS.md | memory/*)
-			return 0
-			;;
-	esac
-
-	return 1
-}
-
-is_linked_worktree_target_path() {
-	local rel="$1"
-
-	case "$rel" in
-		worktrees | worktrees/*)
-			return 0
-			;;
-	esac
-
-	return 1
-}
-
 deny_path() {
 	local rel="$1"
+	local path_class
+	path_class="$(path_class_for_message "$rel")"
 	cat >&2 <<EOF
-BLOCKED: non-orchestration edit in primary worktree: $rel
+BLOCKED: non-orchestration edit in primary worktree: $rel (class: $path_class)
 Primary worktree is orchestration-only. Make repo edits from a linked worktree instead.
 Create one with: bash scripts/worktree-spawn.sh <branch-name>
 EOF
@@ -200,7 +179,7 @@ check_path() {
 		return 0
 	fi
 
-	if is_primary_allowed_path "$rel"; then
+	if is_primary_orchestration_path "$rel"; then
 		return 0
 	fi
 
