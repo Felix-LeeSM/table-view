@@ -12,7 +12,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint .",
+    "lint": "tsx scripts/check-eslint-static-policy.ts",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" package.json .prettierrc \"src-tauri/**/*.json\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" package.json .prettierrc \"src-tauri/**/*.json\"",
     "format:docs": "prettier --write README.md CLAUDE.md \"docs/**/*.md\" \".claude/**/*.md\"",

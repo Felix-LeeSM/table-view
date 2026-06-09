@@ -3,7 +3,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import { readFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 // Flags Tailwind arbitrary pixel values on size-class prefixes — the
 // reason they exist is almost always a missing design token. Prefixes
@@ -13,6 +13,83 @@ import { resolve } from "node:path";
 // user-facing rule is "no raw pixels".
 const ARBITRARY_PX =
   /\b(?:text|w|h|max-w|max-h|min-w|min-h|p[xytblrse]?|m[xytblrse]?|gap|top|bottom|left|right|inset)-\[-?\d+(?:\.\d+)?px\]/;
+
+const GENERATED_WASM_ESLINT_IGNORES = [
+  "src/lib/sql/wasm/**",
+  "src/lib/mongo/wasm/**",
+];
+
+const FEATURE_BOUNDARY_ALLOWED_PREFIXES = [
+  "@/components/ui/",
+  "@components/ui/",
+  "@/lib/",
+  "@lib/",
+  "@/types/",
+  "@/test-utils",
+  "@/test-utils/",
+];
+
+const FEATURE_BOUNDARY_LEGACY_ALIASES = [
+  { prefixes: ["@/components/", "@components/"], target: "legacy component" },
+  { prefixes: ["@/hooks/", "@hooks/"], target: "legacy hook" },
+  { prefixes: ["@/stores/", "@stores/"], target: "store" },
+  { prefixes: ["@/pages/"], target: "page" },
+  { prefixes: ["@/router/"], target: "router" },
+  { prefixes: ["@/App", "@/AppRouter"], target: "app shell" },
+];
+
+const FEATURE_BOUNDARY_LEGACY_ROOTS = [
+  {
+    path: "src/components",
+    allowed: ["src/components/ui"],
+    target: "legacy component",
+  },
+  { path: "src/hooks", allowed: [], target: "legacy hook" },
+  { path: "src/stores", allowed: [], target: "store" },
+  { path: "src/pages", allowed: [], target: "page" },
+  { path: "src/router", allowed: [], target: "router" },
+];
+
+function normalizePath(path) {
+  return path.replace(/\\/g, "/");
+}
+
+function startsWithPath(path, prefix) {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
+function startsWithSpecifier(source, prefix) {
+  if (!prefix.endsWith("/")) return source === prefix;
+  return source === prefix.slice(0, -1) || source.startsWith(prefix);
+}
+
+function classifyFeatureLegacyImport(source, filename, cwd) {
+  if (typeof source !== "string") return null;
+  if (
+    FEATURE_BOUNDARY_ALLOWED_PREFIXES.some((prefix) =>
+      startsWithSpecifier(source, prefix),
+    )
+  ) {
+    return null;
+  }
+  for (const { prefixes, target } of FEATURE_BOUNDARY_LEGACY_ALIASES) {
+    if (prefixes.some((prefix) => startsWithSpecifier(source, prefix))) {
+      return target;
+    }
+  }
+  if (!source.startsWith(".") || filename.startsWith("<")) return null;
+
+  const resolved = normalizePath(resolve(dirname(filename), source));
+  for (const root of FEATURE_BOUNDARY_LEGACY_ROOTS) {
+    const rootPath = normalizePath(resolve(cwd, root.path));
+    if (!startsWithPath(resolved, rootPath)) continue;
+    const allowed = root.allowed.some((allowedPath) =>
+      startsWithPath(resolved, normalizePath(resolve(cwd, allowedPath))),
+    );
+    if (!allowed) return root.target;
+  }
+  return null;
+}
 
 // ADR 0031 (2026-05-15) — `var(--xxx)` 참조 토큰이 themes.css / index.css
 // 에 정의되어 있는지 검사. 본 사건 (`var(--primary)` raw 변수 invalid CSS
@@ -177,6 +254,52 @@ const tvLocal = {
         };
       },
     },
+    "no-feature-legacy-imports": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Disallow new src/features modules from importing legacy app roots during staged frontend migration.",
+        },
+        schema: [],
+        messages: {
+          legacy:
+            "src/features/** must not import {{target}} boundary '{{source}}'. Keep feature code feature-local, or depend on @lib, @/types, or @components/ui.",
+        },
+      },
+      create(context) {
+        function check(source, node) {
+          const filename = context.filename ?? context.getFilename?.() ?? "";
+          const target = classifyFeatureLegacyImport(
+            source,
+            filename,
+            context.cwd,
+          );
+          if (!target) return;
+          context.report({
+            node,
+            messageId: "legacy",
+            data: { target, source },
+          });
+        }
+
+        return {
+          ImportDeclaration(node) {
+            check(node.source?.value, node.source);
+          },
+          ExportAllDeclaration(node) {
+            check(node.source?.value, node.source);
+          },
+          ExportNamedDeclaration(node) {
+            check(node.source?.value, node.source);
+          },
+          ImportExpression(node) {
+            if (node.source?.type !== "Literal") return;
+            check(node.source.value, node.source);
+          },
+        };
+      },
+    },
   },
 };
 
@@ -192,10 +315,10 @@ export default tseslint.config(
       ".claude/**",
       ".codex/**",
       "worktrees/**",
-      // Sprint 385 — wasm-pack 이 생성하는 JS glue + d.ts. `any` 와
-      // tslint disable 헤더를 포함해 eslint 가 자연스럽게 막는다. 본
-      // 디렉토리는 build artifact 이므로 lint 대상에서 제외.
-      "src/lib/sql/wasm/**",
+      // wasm-pack generated JS glue + d.ts. The allowlist is mirrored by
+      // scripts/check-eslint-static-policy.ts so generated ignores do not hide
+      // source max-lines debt.
+      ...GENERATED_WASM_ESLINT_IGNORES,
     ],
   },
   {
@@ -241,6 +364,12 @@ export default tseslint.config(
     ],
     rules: {
       "tv-local/no-direct-zustand-setstate": "error",
+    },
+  },
+  {
+    files: ["src/features/**/*.{ts,tsx}"],
+    rules: {
+      "tv-local/no-feature-legacy-imports": "error",
     },
   },
   {
