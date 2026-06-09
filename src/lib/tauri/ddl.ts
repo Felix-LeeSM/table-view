@@ -278,7 +278,7 @@ export async function countNullRows(
     schema,
     table,
     column,
-    expectedDatabase,
+    expectedDatabase: expectedDatabase ?? null,
   });
 }
 
