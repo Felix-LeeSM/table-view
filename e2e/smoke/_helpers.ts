@@ -1,4 +1,5 @@
 import { $, $$, browser, expect } from "@wdio/globals";
+import { formatGridWaitDiagnostic } from "./grid-wait-diagnostic";
 
 export { editGridCellInRow } from "./grid-edit";
 
@@ -638,8 +639,7 @@ export async function waitForGridText(
   timeoutMsg: string,
 ) {
   await switchToWorkspaceWindow();
-  const grid = await $('[role="grid"]');
-  await grid.waitForDisplayed({ timeout });
+  const grid = await waitForGridDisplayed(timeout, timeoutMsg);
   await browser.waitUntil(
     async () => {
       const text = (
@@ -661,8 +661,7 @@ export async function waitForGridTextAll(
   timeoutMsg: string,
 ) {
   await switchToWorkspaceWindow();
-  const grid = await $('[role="grid"]');
-  await grid.waitForDisplayed({ timeout });
+  const grid = await waitForGridDisplayed(timeout, timeoutMsg);
   await browser.waitUntil(
     async () => {
       const text = (
@@ -676,6 +675,42 @@ export async function waitForGridTextAll(
     },
   );
   return grid;
+}
+
+async function waitForGridDisplayed(timeout: number, timeoutMsg: string) {
+  const grid = await $('[role="grid"]');
+  try {
+    await grid.waitForDisplayed({ timeout });
+  } catch (e) {
+    const error = new Error(`${timeoutMsg}: ${await gridWaitDiagnostic()}`);
+    (error as Error & { cause?: unknown }).cause = e;
+    throw error;
+  }
+  return grid;
+}
+
+async function gridWaitDiagnostic() {
+  const state = await browser.execute(() => {
+    const visibleText = (selector: string) =>
+      Array.from(document.querySelectorAll<HTMLElement>(selector))
+        .filter((element) => {
+          const style = window.getComputedStyle(element);
+          return (
+            element.getClientRects().length > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden"
+          );
+        })
+        .map((element) => (element.textContent ?? "").trim())
+        .filter(Boolean);
+    const alerts = visibleText('[role="alert"]');
+    const body = (document.body.textContent ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 800);
+    return { visibleAlerts: alerts, bodyText: body };
+  });
+  return formatGridWaitDiagnostic(state);
 }
 
 export async function waitForWorkspaceTextAll(

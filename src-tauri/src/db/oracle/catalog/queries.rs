@@ -31,17 +31,14 @@ WHERE owner = :1
 ORDER BY table_name";
 
 pub(super) const VIEWS_SQL: &str = "\
-SELECT view_name,
-       NULL AS definition
+SELECT view_name
 FROM all_views
 WHERE owner = :1
 ORDER BY view_name";
 
 pub(super) const VIEW_DEFINITION_SQL: &str = "\
-SELECT text
-FROM all_views
-WHERE owner = :1
-  AND view_name = :2";
+SELECT TO_CHAR(DBMS_METADATA.GET_DDL('VIEW', :2, :1)) AS definition
+FROM dual";
 
 pub(super) const OBJECT_COLUMNS_SQL: &str = "\
 SELECT c.column_name,

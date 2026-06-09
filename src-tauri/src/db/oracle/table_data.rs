@@ -8,6 +8,7 @@ use crate::db::raw_where::{validate_raw_where_clause, RawWhereDialect};
 use crate::error::AppError;
 use crate::models::{ColumnInfo, FilterCondition, FilterOperator, TableData};
 
+use super::catalog::table_pk_columns;
 use super::runtime::{oracle_column_category, oracle_type_name, oracle_value_to_json};
 use super::{connection_timeout_secs, OracleAdapter};
 
@@ -94,7 +95,8 @@ impl OracleAdapter {
             )
             .await?;
             let table_columns = if columns.is_empty() {
-                query_result_columns_to_table_columns(&data_result.columns)
+                let pk_columns = table_pk_columns(&connection, schema, table).await?;
+                query_result_columns_to_table_columns(&data_result.columns, &pk_columns)
             } else {
                 columns
             };
@@ -376,7 +378,10 @@ async fn query_oracle_rows_with_columns(
     Ok(OracleRowsWithColumns { columns, rows })
 }
 
-fn query_result_columns_to_table_columns(columns: &[OracleColumnInfo]) -> Vec<ColumnInfo> {
+fn query_result_columns_to_table_columns(
+    columns: &[OracleColumnInfo],
+    pk_columns: &HashSet<String>,
+) -> Vec<ColumnInfo> {
     columns
         .iter()
         .map(|column| ColumnInfo {
@@ -384,7 +389,7 @@ fn query_result_columns_to_table_columns(columns: &[OracleColumnInfo]) -> Vec<Co
             data_type: oracle_type_name(column),
             nullable: column.nullable,
             default_value: None,
-            is_primary_key: false,
+            is_primary_key: pk_columns.contains(&column.name),
             is_foreign_key: false,
             fk_reference: None,
             comment: None,
@@ -717,23 +722,25 @@ mod tests {
     }
 
     #[test]
-    fn query_result_columns_fill_table_columns_when_catalog_metadata_is_empty() {
+    fn query_result_columns_preserve_pk_metadata_when_catalog_metadata_is_empty() {
         let mut id = OracleColumnInfo::new("ID", oracle_rs::OracleType::Number);
         id.precision = 10;
         id.scale = 0;
         id.nullable = false;
         let name = OracleColumnInfo::new("NAME", oracle_rs::OracleType::Varchar);
+        let pk_columns = HashSet::from(["ID".to_string()]);
 
-        let columns = query_result_columns_to_table_columns(&[id, name]);
+        let columns = query_result_columns_to_table_columns(&[id, name], &pk_columns);
 
         assert_eq!(columns.len(), 2);
         assert_eq!(columns[0].name, "ID");
         assert_eq!(columns[0].data_type, "number(10,0)");
         assert!(!columns[0].nullable);
         assert_eq!(columns[0].category, ColumnCategory::Int);
+        assert!(columns[0].is_primary_key);
         assert_eq!(columns[1].name, "NAME");
         assert_eq!(columns[1].category, ColumnCategory::Text);
-        assert!(!columns[0].is_primary_key);
+        assert!(!columns[1].is_primary_key);
     }
 
     #[tokio::test]

@@ -291,7 +291,7 @@ impl OracleAdapter {
             .map(|row| {
                 Ok(OracleViewCatalogRow {
                     name: row_string(&row, 0, "view name")?,
-                    definition: row_optional_string(&row, 1, "view definition")?,
+                    definition: None,
                 })
             })
             .collect::<Result<Vec<_>, AppError>>()?;
@@ -475,7 +475,7 @@ async fn close_catalog_connection<T>(
     }
 }
 
-async fn table_pk_columns(
+pub(super) async fn table_pk_columns(
     connection: &OracleConnection,
     schema: &str,
     table: &str,
@@ -676,10 +676,23 @@ mod tests {
 
     #[test]
     fn view_list_query_does_not_decode_long_definition_column() {
+        let sql = VIEWS_SQL.to_ascii_lowercase();
+
         assert!(
-            !VIEWS_SQL.to_ascii_lowercase().contains("text"),
+            !sql.contains("text") && !sql.contains("definition"),
             "Oracle view browse must not read ALL_VIEWS.TEXT LONG values"
         );
+    }
+
+    #[test]
+    fn view_definition_query_does_not_decode_all_views_text_long() {
+        let sql = VIEW_DEFINITION_SQL.to_ascii_lowercase();
+
+        assert!(
+            !sql.contains("all_views") && !sql.contains("text"),
+            "Oracle lazy view definition must not read ALL_VIEWS.TEXT LONG values"
+        );
+        assert!(sql.contains("dbms_metadata.get_ddl"));
     }
 
     #[test]
