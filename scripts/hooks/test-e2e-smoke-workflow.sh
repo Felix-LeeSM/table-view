@@ -5,6 +5,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORKFLOW="$ROOT/.github/workflows/e2e-smoke.yml"
+SMOKE_SCRIPT="$ROOT/scripts/e2e-smoke-ci.sh"
 
 assert_contains() {
 	local text="$1"
@@ -17,7 +18,20 @@ assert_contains() {
 	fi
 }
 
+assert_not_contains() {
+	local text="$1"
+	local needle="$2"
+	local label="$3"
+
+	if grep -Fq "$needle" <<<"$text"; then
+		echo "FAIL: $label: unexpected '$needle'" >&2
+		exit 1
+	fi
+}
+
 prepare_block="$(sed -n '/^  e2e-smoke-prepare:/,/^  e2e-smoke:/p' "$WORKFLOW" | sed '$d')"
+smoke_block="$(sed -n '/^  e2e-smoke:/,/^  e2e-smoke-required:/p' "$WORKFLOW" | sed '$d')"
+smoke_script="$(cat "$SMOKE_SCRIPT")"
 cache_line="$(awk '/uses: Swatinem\/rust-cache@v2/ { print NR; exit }' <<<"$prepare_block")"
 build_line="$(awk '/- name: Build E2E smoke binary/ { print NR; exit }' <<<"$prepare_block")"
 
@@ -42,5 +56,8 @@ assert_contains "$prepare_block" "workspaces: src-tauri -> target" "prepare rust
 assert_contains "$prepare_block" "shared-key: e2e-smoke-linux" "prepare rust cache"
 assert_contains "$prepare_block" "cache-on-failure: true" "prepare rust cache"
 assert_contains "$prepare_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "prepare rust cache"
+assert_not_contains "$smoke_block" "spec_key: oracle" "oracle smoke promotion boundary"
+assert_not_contains "$smoke_block" "e2e/smoke/oracle.spec.ts" "oracle smoke promotion boundary"
+assert_not_contains "$smoke_script" "e2e/smoke/oracle.spec.ts" "oracle smoke promotion boundary"
 
 echo "PASS: e2e-smoke workflow cache check"
