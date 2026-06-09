@@ -265,6 +265,18 @@ jobs:
         if: steps.cache-tauri-driver.outputs.cache-hit != 'true'
         run: cargo install tauri-driver --version ${{ env.TAURI_DRIVER_VERSION }} --locked
 
+      - name: Verify tauri-driver version
+        run: |
+          actual="$(tauri-driver --version)"
+          echo "$actual"
+          case "$actual" in
+            *"${TAURI_DRIVER_VERSION}"*) ;;
+            *)
+              echo "ERROR: tauri-driver version drift: expected ${TAURI_DRIVER_VERSION}, got ${actual}" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Start OpenSearch service
         if: matrix.spec_key == 'opensearch'
         run: |

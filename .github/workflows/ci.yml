@@ -43,6 +43,7 @@ jobs:
         with:
           node-version: 22.14.0
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Cache Vite transform output
         uses: actions/cache@v4
@@ -52,9 +53,9 @@ jobs:
           # 변경되어 cache miss 가 거의 100% 였음 (audit m6, 2026-05-05).
           # restore-keys 로 부분 일치도 허용 → 전혀 다른 src 변경에서도
           # cache reuse 가능.
-          key: vite-${{ hashFiles('vite.config.ts', 'tsconfig.json', 'package.json', 'pnpm-lock.yaml') }}
+          key: vite-${{ runner.os }}-${{ hashFiles('vite.config.ts', 'tsconfig.json', 'package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
-            vite-
+            vite-${{ runner.os }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
