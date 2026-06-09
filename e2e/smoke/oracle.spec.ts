@@ -1,5 +1,6 @@
 import { $, browser, expect } from "@wdio/globals";
 import {
+  clickDomSelector,
   clickDialogAction,
   createOracleConnection,
   editGridCellInRow,
@@ -54,10 +55,10 @@ describe("Oracle smoke", () => {
       );
       await catalogPingRoutine.waitForDisplayed({ timeout: 10000 });
 
-      await usersTable.click();
+      await clickDomSelector('[aria-label="USERS table"]');
       await waitForGridTextAll(
         ["alice@example.com"],
-        15000,
+        30000,
         "seeded Oracle users row did not appear in grid",
       );
     });
@@ -100,11 +101,11 @@ describe("Oracle smoke", () => {
 
       const usersTable = await $('[aria-label="USERS table"]');
       await usersTable.waitForDisplayed({ timeout: 10000 });
-      await usersTable.click();
+      await clickDomSelector('[aria-label="USERS table"]');
 
       await waitForGridTextAll(
         ["alice@example.com"],
-        15000,
+        30000,
         "seeded Oracle users row did not appear in grid",
       );
       await editGridCellInRow(

@@ -123,7 +123,7 @@ async function waitForDomSelector(selector: string, timeout = 10000) {
   });
 }
 
-async function clickDomSelector(selector: string) {
+export async function clickDomSelector(selector: string) {
   await waitForDomSelector(selector);
   await browser.execute((sel) => {
     const element = document.querySelector<HTMLElement>(sel);
@@ -510,8 +510,39 @@ export async function createOpenSearchConnection(name = "E2E OpenSearch") {
 async function setInput(selector: string, value: string) {
   const input = await $(selector);
   await input.waitForDisplayed({ timeout: 5000 });
-  await input.clearValue();
-  await input.setValue(value);
+  await browser.execute(
+    (sel, nextValue) => {
+      const element = document.querySelector<HTMLInputElement>(sel);
+      if (!element) throw new Error(`${sel} input did not appear`);
+      element.focus();
+
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      if (!setter) throw new Error("HTMLInputElement value setter missing");
+
+      setter.call(element, nextValue);
+      element.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+      element.blur();
+    },
+    selector,
+    value,
+  );
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (sel, expected) =>
+          document.querySelector<HTMLInputElement>(sel)?.value === expected,
+        selector,
+        value,
+      ),
+    {
+      timeout: 5000,
+      timeoutMsg: `${selector} did not receive expected value`,
+    },
+  );
 }
 
 async function saveConnectionDialog(dialog: WebdriverIO.Element) {
