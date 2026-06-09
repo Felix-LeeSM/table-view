@@ -258,21 +258,33 @@ jobs:
         id: cache-tauri-driver
         uses: actions/cache@v4
         with:
-          path: ~/.cargo/bin/tauri-driver
+          path: |
+            ~/.cargo/bin/tauri-driver
+            ~/.cargo/bin/tauri-driver.version
           key: tauri-driver-${{ runner.os }}-v${{ env.TAURI_DRIVER_VERSION }}
 
-      - name: Install tauri-driver
-        if: steps.cache-tauri-driver.outputs.cache-hit != 'true'
-        run: cargo install tauri-driver --version ${{ env.TAURI_DRIVER_VERSION }} --locked
-
-      - name: Verify tauri-driver version
+      - name: Ensure tauri-driver cache contract
         run: |
-          actual="$(tauri-driver --version)"
-          echo "$actual"
-          case "$actual" in
-            *"${TAURI_DRIVER_VERSION}"*) ;;
+          marker="${HOME}/.cargo/bin/tauri-driver.version"
+          needs_install=0
+
+          if [ ! -x "${HOME}/.cargo/bin/tauri-driver" ]; then
+            needs_install=1
+          elif [ ! -f "$marker" ] || [ "$(cat "$marker")" != "${TAURI_DRIVER_VERSION}" ]; then
+            needs_install=1
+          fi
+
+          if [ "$needs_install" -eq 1 ]; then
+            cargo install tauri-driver --version "${TAURI_DRIVER_VERSION}" --locked --force
+            printf '%s\n' "${TAURI_DRIVER_VERSION}" > "$marker"
+          fi
+
+          tauri-driver --help >/dev/null
+          cached_version="$(cat "$marker")"
+          case "$cached_version" in
+            "${TAURI_DRIVER_VERSION}") ;;
             *)
-              echo "ERROR: tauri-driver version drift: expected ${TAURI_DRIVER_VERSION}, got ${actual}" >&2
+              echo "ERROR: tauri-driver cache drift: expected ${TAURI_DRIVER_VERSION}, got ${cached_version}" >&2
               exit 1
               ;;
           esac
