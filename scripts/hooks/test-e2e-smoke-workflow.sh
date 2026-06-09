@@ -100,6 +100,8 @@ smoke_script="$(cat "$SMOKE_SCRIPT")"
 sqlite_spec="$(cat "$ROOT/e2e/smoke/sqlite.spec.ts")"
 duckdb_spec="$(cat "$ROOT/e2e/smoke/duckdb.spec.ts")"
 cache_line="$(awk '/uses: Swatinem\/rust-cache@v2/ { print NR; exit }' <<<"$prepare_block")"
+telemetry_line="$(awk '/- name: Show disk usage before E2E build/ { print NR; exit }' <<<"$prepare_block")"
+cleanup_line="$(awk '/- name: Free disk headroom before E2E build/ { print NR; exit }' <<<"$prepare_block")"
 build_line="$(awk '/- name: Build E2E smoke binary/ { print NR; exit }' <<<"$prepare_block")"
 
 if [ -z "$prepare_block" ]; then
@@ -118,11 +120,34 @@ if [ "$cache_line" -ge "$build_line" ]; then
 	echo "FAIL: Rust target cache restore must run before Build E2E smoke binary" >&2
 	exit 1
 fi
+if [ -z "$telemetry_line" ]; then
+	echo "FAIL: e2e-smoke-prepare must print disk usage before building the Tauri smoke binary" >&2
+	exit 1
+fi
+if [ -z "$cleanup_line" ]; then
+	echo "FAIL: e2e-smoke-prepare must free disk headroom before building the Tauri smoke binary" >&2
+	exit 1
+fi
+if [ "$telemetry_line" -le "$cache_line" ] || [ "$telemetry_line" -ge "$build_line" ]; then
+	echo "FAIL: disk usage telemetry must run after Rust cache restore and before Build E2E smoke binary" >&2
+	exit 1
+fi
+if [ "$cleanup_line" -le "$telemetry_line" ] || [ "$cleanup_line" -ge "$build_line" ]; then
+	echo "FAIL: disk headroom cleanup must run after disk telemetry and before Build E2E smoke binary" >&2
+	exit 1
+fi
 
 assert_contains "$prepare_block" "workspaces: src-tauri -> target" "prepare rust cache"
 assert_contains "$prepare_block" "shared-key: e2e-smoke-linux" "prepare rust cache"
 assert_contains "$prepare_block" "cache-on-failure: true" "prepare rust cache"
 assert_contains "$prepare_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "prepare rust cache"
+assert_contains "$prepare_block" "df -h /" "prepare disk telemetry"
+assert_contains "$prepare_block" "du -sh src-tauri/target" "prepare disk telemetry"
+assert_contains "$prepare_block" "sudo apt-get clean" "prepare disk cleanup"
+assert_contains "$prepare_block" "docker system prune -af" "prepare disk cleanup"
+assert_contains "$prepare_block" "/usr/local/lib/android" "prepare disk cleanup"
+assert_contains "$prepare_block" "/usr/share/dotnet" "prepare disk cleanup"
+assert_contains "$prepare_block" "/opt/ghc" "prepare disk cleanup"
 assert_contains "$smoke_block" "key: tauri-driver-\${{ runner.os }}-v\${{ env.TAURI_DRIVER_VERSION }}" "tauri-driver cache"
 assert_contains "$smoke_block" "~/.cargo/bin/tauri-driver.version" "tauri-driver cache"
 assert_contains "$smoke_block" "Ensure tauri-driver cache contract" "tauri-driver cache"
