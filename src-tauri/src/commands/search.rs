@@ -209,21 +209,26 @@ mod tests {
         ConnectionConfig, DatabaseType, SearchAliasInfo, SearchClusterCapabilities,
         SearchClusterIdentity, SearchDataStreamInfo, SearchFieldStatsEnvelope, SearchIndexHealth,
         SearchIndexInfo, SearchIndexSettings, SearchProductDelta, SearchProductKind,
-        SearchTemplateEndpointKind, SearchVersionInfo,
+        SearchTemplateEndpointKind, SearchTotalHits, SearchTotalHitsRelation, SearchVersionInfo,
     };
     use serde_json::json;
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc,
+        Arc, Mutex,
     };
 
-    async fn search_state() -> AppState {
+    async fn state_with_search_adapter(adapter: impl SearchAdapter + 'static) -> AppState {
         let state = AppState::new();
-        state.active_connections.lock().await.insert(
-            "search".into(),
-            ActiveAdapter::Search(Box::new(SearchEngineAdapter::fixture_elasticsearch())),
-        );
         state
+            .active_connections
+            .lock()
+            .await
+            .insert("search".into(), ActiveAdapter::Search(Box::new(adapter)));
+        state
+    }
+
+    async fn search_state() -> AppState {
+        state_with_search_adapter(SearchEngineAdapter::fixture_elasticsearch()).await
     }
 
     fn search_request() -> SearchQueryRequest {
@@ -344,6 +349,107 @@ mod tests {
             execute_search_query_inner(&state, "missing", search_request(), None).await,
             Err(AppError::NotFound(message)) if message.contains("missing")
         ));
+    }
+
+    #[tokio::test]
+    async fn catalog_commands_reject_unknown_connection() {
+        let state = AppState::new();
+        let request = SearchDeleteByQueryRequest {
+            index_pattern: "logs-*".into(),
+            body: json!({ "query": { "match_all": {} } }),
+            preview_only: true,
+            safety: crate::models::SearchDestructiveSafety {
+                acknowledged_risk: false,
+                allow_wildcard: false,
+                expected_target: None,
+            },
+        };
+
+        let errors = vec![
+            list_search_catalog_summary_inner(&state, "missing")
+                .await
+                .unwrap_err(),
+            get_search_index_mapping_inner(&state, "missing", "logs")
+                .await
+                .unwrap_err(),
+            get_search_index_settings_inner(&state, "missing", "logs")
+                .await
+                .unwrap_err(),
+            list_search_index_templates_inner(&state, "missing")
+                .await
+                .unwrap_err(),
+            sample_search_documents_inner(&state, "missing", "logs", None)
+                .await
+                .unwrap_err(),
+            get_search_index_field_stats_inner(&state, "missing", "logs")
+                .await
+                .unwrap_err(),
+            plan_search_delete_by_query_inner(&state, "missing", request)
+                .await
+                .unwrap_err(),
+        ];
+
+        for error in errors {
+            assert!(matches!(
+                error,
+                AppError::NotFound(message) if message.contains("missing")
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn catalog_commands_surface_adapter_unsupported_instead_of_empty_success() {
+        let state = state_with_search_adapter(crate::db::testing::StubSearchAdapter {
+            kind_value: DatabaseType::Elasticsearch,
+        })
+        .await;
+
+        assert!(matches!(
+            list_search_catalog_summary_inner(&state, "search").await,
+            Err(AppError::Unsupported(message))
+                if message.contains("cluster identity")
+        ));
+        assert!(matches!(
+            get_search_index_mapping_inner(&state, "search", "logs").await,
+            Err(AppError::Unsupported(message)) if message.contains("mappings")
+        ));
+        assert!(matches!(
+            get_search_index_settings_inner(&state, "search", "logs").await,
+            Err(AppError::Unsupported(message)) if message.contains("settings")
+        ));
+        assert!(matches!(
+            list_search_index_templates_inner(&state, "search").await,
+            Err(AppError::Unsupported(message)) if message.contains("templates")
+        ));
+        assert!(matches!(
+            sample_search_documents_inner(&state, "search", "logs", None).await,
+            Err(AppError::Unsupported(message)) if message.contains("sample documents")
+        ));
+        assert!(matches!(
+            get_search_index_field_stats_inner(&state, "search", "logs").await,
+            Err(AppError::Unsupported(message)) if message.contains("field stats")
+        ));
+    }
+
+    #[tokio::test]
+    async fn sample_search_documents_defaults_and_clamps_limit() {
+        let limits = Arc::new(Mutex::new(Vec::new()));
+        let state = state_with_search_adapter(LimitRecordingSearchAdapter {
+            limits: Arc::clone(&limits),
+        })
+        .await;
+
+        sample_search_documents_inner(&state, "search", "logs", None)
+            .await
+            .unwrap();
+        sample_search_documents_inner(&state, "search", "logs", Some(0))
+            .await
+            .unwrap();
+        sample_search_documents_inner(&state, "search", "logs", Some(500))
+            .await
+            .unwrap();
+
+        assert_eq!(*limits.lock().unwrap(), vec![5, 1, 50]);
     }
 
     struct SummaryOnlySearchAdapter {
@@ -489,6 +595,58 @@ mod tests {
         ) -> BoxFuture<'a, Result<SearchResultEnvelope, AppError>> {
             self.deep_fetches.fetch_add(1, Ordering::SeqCst);
             Box::pin(async { Err(AppError::Unsupported("deep fetch".into())) })
+        }
+    }
+
+    struct LimitRecordingSearchAdapter {
+        limits: Arc<Mutex<Vec<u64>>>,
+    }
+
+    impl DbAdapter for LimitRecordingSearchAdapter {
+        fn kind(&self) -> DatabaseType {
+            DatabaseType::Elasticsearch
+        }
+
+        fn connect<'a>(
+            &'a self,
+            _config: &'a ConnectionConfig,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    impl SearchAdapter for LimitRecordingSearchAdapter {
+        fn sample_documents<'a>(
+            &'a self,
+            _index: &'a str,
+            limit: u64,
+        ) -> BoxFuture<'a, Result<SearchResultEnvelope, AppError>> {
+            self.limits.lock().unwrap().push(limit);
+            Box::pin(async { Ok(empty_search_result()) })
+        }
+    }
+
+    fn empty_search_result() -> SearchResultEnvelope {
+        SearchResultEnvelope {
+            took_ms: 0,
+            timed_out: false,
+            total: SearchTotalHits {
+                value: 0,
+                relation: SearchTotalHitsRelation::Eq,
+            },
+            hits: Vec::new(),
+            aggregations: Vec::new(),
+            shards: None,
+            explain: None,
+            profile: None,
         }
     }
 }
