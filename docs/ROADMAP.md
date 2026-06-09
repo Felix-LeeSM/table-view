@@ -317,12 +317,14 @@ implementation order.
 
 H6 umbrella closure means shipped MSSQL/Oracle slices plus planned/candidate
 support claims, contracts, and smoke routing are aligned. Oracle
-catalog/workbench metadata remains shipped metadata support, and bounded
-structured table/index/constraint DDL is a focused support slice. It does not
-mean MSSQL TLS/admin/full T-SQL semantic support, Oracle raw DDL/admin
-execution, sequence/synonym DDL/admin workflow, runtime Safe Mode smoke,
-SID/TNS/wallet/TLS/fixture/live/E2E support, or Cassandra/Scylla, DynamoDB,
-graph, vector, or stream runtime support has shipped.
+catalog/workbench metadata remains shipped metadata support, bounded structured
+table/index/constraint DDL is a focused support slice, and Oracle smoke is
+representative Runtime Happy Path evidence after #526. It does not mean MSSQL
+TLS/admin/full T-SQL semantic support, Oracle raw DDL/admin execution,
+sequence/synonym DDL/admin workflow, runtime Safe Mode smoke beyond that
+representative Runtime Happy Path lane, SID/TNS/wallet/TLS support, full PL/SQL,
+or Cassandra/Scylla, DynamoDB, graph, vector, or stream runtime support has
+shipped.
 
 ## H7 진행 기준
 
@@ -335,7 +337,7 @@ owner 와 runtime cost 가 명확하며, failure triage 경로가 있을 때만 
 |---|---|---|
 | PR/main CI gates | `.github/workflows/ci.yml`, `.github/workflows/e2e-smoke.yml` | Remote blocking checks are Frontend Checks, Rust Unit And Storage Tests, Integration Tests (Docker), and Runtime Happy Path. Theme contrast is advisory. Link-check, full a11y, perf, and cross-platform runtime smoke are not routine blocking gates. |
 | Local hook gates | `.githooks/*`, `lefthook.yml`, `scripts/hooks/pre-push-path-router.sh`, `memory/workflow/git-policy/memory.md` | Pre-push always checks signed commits and TDD-cycle, then routes outgoing paths: docs-only skips TS/Rust; hook/tooling-only paths run hook self-checks; frontend/Rust paths run their stacks; workflow or unknown paths run full checks. Hook bypass, unsigned commits, pull/reset recovery hazards, and force-push remain forbidden by policy/hook. |
-| Runtime E2E smoke | `scripts/e2e-smoke-ci.sh`, `wdio.smoke.conf.ts`, `e2e/smoke/postgres.spec.ts`, `e2e/smoke/postgres-safe-mode.spec.ts`, `e2e/smoke/postgres-explain.spec.ts`, `e2e/smoke/postgres-extension-completion.spec.ts`, `e2e/smoke/postgres-cancellation.spec.ts`, `e2e/smoke/mysql.spec.ts`, `e2e/smoke/mariadb.spec.ts`, `e2e/smoke/mssql.spec.ts`, `e2e/smoke/sqlite.spec.ts`, `e2e/smoke/duckdb.spec.ts`, `e2e/smoke/mongodb.spec.ts`, `e2e/smoke/redis.spec.ts`, `e2e/smoke/valkey.spec.ts`, `e2e/smoke/elasticsearch.spec.ts`, `e2e/smoke/opensearch.spec.ts` | GitHub Runtime Happy Path builds the app on Ubuntu and executes the wired PostgreSQL, MySQL, MariaDB, MSSQL, SQLite, DuckDB, MongoDB, Redis, Valkey, Elasticsearch, and OpenSearch smoke specs only. Other specs under `e2e/smoke/**` are not automatically part of the remote runtime gate unless the smoke script wires them. |
+| Runtime E2E smoke | `scripts/e2e-smoke-ci.sh`, `wdio.smoke.conf.ts`, `e2e/smoke/postgres.spec.ts`, `e2e/smoke/postgres-safe-mode.spec.ts`, `e2e/smoke/postgres-explain.spec.ts`, `e2e/smoke/postgres-extension-completion.spec.ts`, `e2e/smoke/postgres-cancellation.spec.ts`, `e2e/smoke/mysql.spec.ts`, `e2e/smoke/mariadb.spec.ts`, `e2e/smoke/mssql.spec.ts`, `e2e/smoke/oracle.spec.ts`, `e2e/smoke/sqlite.spec.ts`, `e2e/smoke/duckdb.spec.ts`, `e2e/smoke/mongodb.spec.ts`, `e2e/smoke/redis.spec.ts`, `e2e/smoke/valkey.spec.ts`, `e2e/smoke/elasticsearch.spec.ts`, `e2e/smoke/opensearch.spec.ts` | GitHub Runtime Happy Path builds the app on Ubuntu and executes the wired PostgreSQL, MySQL, MariaDB, MSSQL, Oracle, SQLite, DuckDB, MongoDB, Redis, Valkey, Elasticsearch, and OpenSearch smoke specs. Oracle smoke is representative Runtime Happy Path evidence after #526, not SID/TNS/wallet/TLS, raw DDL/admin, sequence/synonym DDL/admin, or full PL/SQL support. Other specs under `e2e/smoke/**` are not automatically part of the remote runtime gate unless the smoke script wires them. |
 | Security/destructive policy | `docs/product/query-language-support.md`, `docs/product/known-limitations.md`, `.agents/skills/grill-with-memory/SKILL.md` | Current destructive protections are source-specific preview/confirm/Safe Mode/typed confirmation paths. There is no universal admin/security dashboard, role/user/permission UI, credential rotation UI, or global audit-log claim. Security-impacting decisions follow the grill-with-memory threat-model handoff before option selection. |
 | Credential/privacy boundary | `memory/engineering/architecture/state-management/memory.md`, `docs/product/README.md`, `docs/product/known-limitations.md` | Table View remains local-first. Connection export omits passwords, imported connections require password re-entry, and local file analytics public payloads redact absolute paths. Broader credential/key lifecycle smoke is future work. |
 | A11y/perf/link-check/platform smoke | `docs/contributor-guide/testing-and-quality.md`, `.github/workflows/ci.yml` | Existing component/unit checks and advisory theme contrast do not equal routine screen-reader, FPS/latency, link-check, macOS runtime, or Windows runtime gates. Promote only when a lane needs a concrete owner and budget. |
