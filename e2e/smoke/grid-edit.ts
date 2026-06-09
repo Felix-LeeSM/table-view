@@ -1,6 +1,7 @@
 import { $, browser } from "@wdio/globals";
 
 import { switchToWorkspaceWindow } from "./_helpers";
+import { normalizeGridEditorLabel } from "./grid-edit-label";
 
 export async function editGridCellInRow(
   rowNeedle: string,
@@ -29,8 +30,13 @@ export async function editGridCellInRow(
   }
 
   await targetCell.scrollIntoView();
-  await openGridCellEditor(targetCell, rowNeedle, ariaColIndex, editorLabel);
-  await setGridEditorValue(editorLabel, nextValue);
+  const resolvedEditorLabel = await openGridCellEditor(
+    targetCell,
+    rowNeedle,
+    ariaColIndex,
+    editorLabel,
+  );
+  await setGridEditorValue(resolvedEditorLabel, nextValue);
 
   const commit = await $('[aria-label="Commit changes"]');
   await commit.waitForDisplayed({ timeout: 10000 });
@@ -41,7 +47,7 @@ async function openGridCellEditor(
   rowNeedle: string,
   ariaColIndex: number,
   editorLabel: string,
-): Promise<WebdriverIO.Element> {
+): Promise<string> {
   await targetCell.doubleClick();
   await browser.pause(100);
   let editor = await findDisplayedEditor(editorLabel);
@@ -103,23 +109,41 @@ async function setGridEditorValue(editorLabel: string, nextValue: string) {
 async function findDisplayedEditor(
   editorLabel: string,
   timeout = 500,
-): Promise<WebdriverIO.Element | null> {
+): Promise<string | null> {
+  const normalizedLabel = normalizeGridEditorLabel(editorLabel);
+  let resolvedLabel: string | null = null;
   try {
     await browser.waitUntil(
-      async () =>
-        await browser.execute((label) => {
-          const element = Array.from(
-            document.querySelectorAll<HTMLElement>("[aria-label]"),
-          ).find((candidate) => candidate.getAttribute("aria-label") === label);
-          if (!element) return false;
+      async () => {
+        resolvedLabel = await browser.execute(
+          (label, normalized) => {
+            const element = Array.from(
+              document.querySelectorAll<HTMLElement>("[aria-label]"),
+            ).find((candidate) => {
+              const actualLabel = candidate.getAttribute("aria-label");
+              if (
+                actualLabel !== label &&
+                actualLabel?.toLowerCase() !== normalized
+              ) {
+                return false;
+              }
 
-          const style = window.getComputedStyle(element);
-          return (
-            element.getClientRects().length > 0 &&
-            style.display !== "none" &&
-            style.visibility !== "hidden"
-          );
-        }, editorLabel),
+              const style = window.getComputedStyle(candidate);
+              return (
+                candidate.getClientRects().length > 0 &&
+                style.display !== "none" &&
+                style.visibility !== "hidden"
+              );
+            });
+            if (!element) return null;
+
+            return element.getAttribute("aria-label");
+          },
+          editorLabel,
+          normalizedLabel,
+        );
+        return resolvedLabel !== null;
+      },
       {
         timeout,
         interval: 100,
@@ -130,8 +154,7 @@ async function findDisplayedEditor(
     return null;
   }
 
-  const editor = await $(`[aria-label="${editorLabel}"]`);
-  return (await editor.isExisting()) ? editor : null;
+  return resolvedLabel;
 }
 
 async function dispatchGridCellDoubleClick(
