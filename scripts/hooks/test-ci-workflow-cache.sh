@@ -25,8 +25,8 @@ assert_order() {
 	local first_line
 	local second_line
 
-	first_line="$(grep -Fn -- "$first" <<<"$text" | head -n 1 | cut -d: -f1)"
-	second_line="$(grep -Fn -- "$second" <<<"$text" | head -n 1 | cut -d: -f1)"
+	first_line="$(grep -Fn -- "$first" <<<"$text" | head -n 1 | cut -d: -f1 || true)"
+	second_line="$(grep -Fn -- "$second" <<<"$text" | head -n 1 | cut -d: -f1 || true)"
 
 	if [ -z "$first_line" ] || [ -z "$second_line" ] || [ "$first_line" -ge "$second_line" ]; then
 		echo "FAIL: $label: expected '$first' before '$second'" >&2
@@ -65,5 +65,16 @@ assert_contains "$rust_block" "save-if: \${{ github.ref == 'refs/heads/main' }}"
 assert_contains "$integration_block" "workspaces: src-tauri -> target" "integration rust cache"
 assert_contains "$integration_block" "cache-bin: false" "integration rust cache"
 assert_contains "$integration_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "integration rust cache"
+assert_order "$integration_block" "- name: Cache Rust artifacts" "- name: Show disk usage before integration build" "integration disk telemetry after cache"
+assert_order "$integration_block" "- name: Show disk usage before integration build" "- name: Free disk headroom before integration build" "integration disk cleanup after telemetry"
+assert_order "$integration_block" "- name: Free disk headroom before integration build" "- name: Run integration tests" "integration disk cleanup before cargo tests"
+assert_contains "$integration_block" "df -h /" "integration disk telemetry"
+assert_contains "$integration_block" "du -sh src-tauri/target" "integration disk telemetry"
+assert_contains "$integration_block" "docker system df" "integration disk telemetry"
+assert_contains "$integration_block" "sudo apt-get clean" "integration disk cleanup"
+assert_contains "$integration_block" "docker system prune -af" "integration disk cleanup"
+assert_contains "$integration_block" "/usr/local/lib/android" "integration disk cleanup"
+assert_contains "$integration_block" "/usr/share/dotnet" "integration disk cleanup"
+assert_contains "$integration_block" "/opt/ghc" "integration disk cleanup"
 
 echo "PASS: CI workflow cache and coverage check"
