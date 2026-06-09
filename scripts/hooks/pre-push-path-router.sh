@@ -3,7 +3,8 @@
 #
 # The hook reads Git's pre-push refs from stdin, derives the outgoing changed
 # paths, and runs only the checks that match those paths. Signed-commit and TDD
-# cycle gates always run.
+# cycle gates always run. Root-local generated/cache/tmp/worktree paths are
+# explicit non-source surfaces and do not trigger frontend/Rust gates.
 
 set -euo pipefail
 
@@ -156,7 +157,7 @@ is_docs_path() {
 
 is_hook_path() {
 	case "$1" in
-	lefthook.yml | .githooks/* | scripts/hooks/* | scripts/setup.sh | scripts/target-cache.sh | scripts/worktree-spawn.sh | scripts/worktree-cleanup.sh | scripts/worktree-bootstrap-deps.sh | scripts/check-coverage-ratchet.ts | scripts/coverage-ratchet-targets.json | src-tauri/.config/nextest.toml)
+	.gitignore | lefthook.yml | .githooks/* | scripts/hooks/* | scripts/setup.sh | scripts/target-cache.sh | scripts/worktree-spawn.sh | scripts/worktree-cleanup.sh | scripts/worktree-bootstrap-deps.sh | scripts/check-coverage-ratchet.ts | scripts/coverage-ratchet-targets.json | src-tauri/.config/nextest.toml)
 		return 0
 		;;
 	*)
@@ -190,6 +191,21 @@ is_agent_path() {
 is_memory_path() {
 	case "$1" in
 	memory/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+is_local_generated_path() {
+	case "$1" in
+	node_modules/* | dist/* | .vite/* | cargo-target/* | target/* | \
+	src-tauri/target/* | src-tauri/sql-parser-core/target/* | \
+	src-tauri/mongosh-parser-core/target/* | coverage/* | \
+	test-results/* | wdio-report/* | e2e/wdio-report/* | tmp/* | \
+	worktrees/* | .claude/worktrees/*)
 		return 0
 		;;
 	*)
@@ -339,6 +355,7 @@ run_hook_gates() {
 	run_step_in "nextest-push-profile-config" src-tauri cargo nextest --no-pager show-config version --profile push
 	run_step "coverage-ratchet-tests" bash scripts/hooks/test-coverage-ratchet.sh
 	run_step "target-cache-tests" bash scripts/hooks/test-target-cache.sh
+	run_step "generated-fence-tests" bash scripts/hooks/test-generated-fences.sh
 	run_step "pre-push-router-tests" bash scripts/hooks/test-pre-push-path-router.sh
 }
 
@@ -421,6 +438,7 @@ needs_hook=0
 needs_memory=0
 needs_agent=0
 needs_ci_workflow=0
+needs_generated=0
 needs_full=0
 
 while read -r path; do
@@ -435,14 +453,19 @@ while read -r path; do
 		needs_hook=1
 		continue
 	fi
-	if is_agent_path "$path"; then
-		docs_only=0
-		needs_agent=1
-		continue
-	fi
 	if is_memory_path "$path"; then
 		docs_only=0
 		needs_memory=1
+		continue
+	fi
+	if is_local_generated_path "$path"; then
+		docs_only=0
+		needs_generated=1
+		continue
+	fi
+	if is_agent_path "$path"; then
+		docs_only=0
+		needs_agent=1
 		continue
 	fi
 	if is_ci_workflow_path "$path"; then
@@ -482,7 +505,7 @@ else
 		needs_rust=1
 		echo "[pre-push-route] route: full (workflow or unknown path)"
 	else
-		echo "[pre-push-route] route: frontend=$needs_frontend rust=$needs_rust hook=$needs_hook memory=$needs_memory agent=$needs_agent"
+		echo "[pre-push-route] route: frontend=$needs_frontend rust=$needs_rust hook=$needs_hook memory=$needs_memory agent=$needs_agent generated=$needs_generated"
 	fi
 
 	if [ "$needs_hook" = "1" ]; then

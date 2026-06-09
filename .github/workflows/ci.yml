@@ -188,6 +188,20 @@ jobs:
           cache-bin: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
+      - name: Show disk usage before integration build
+        run: |
+          df -h /
+          du -sh src-tauri/target 2>/dev/null || true
+          docker system df || true
+
+      - name: Free disk headroom before integration build
+        run: |
+          sudo apt-get clean
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          docker system prune -af || true
+          df -h /
+          docker system df || true
+
       - name: Run integration tests
         env:
           PGHOST: localhost
