@@ -1,5 +1,5 @@
 import { ESLint } from "eslint";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,6 +34,44 @@ const GENERATED_LINT_IGNORE_PREFIXES = [
   "src/lib/mongo/wasm/",
 ] as const;
 
+type RawTauriInvokeInventoryEntry = {
+  readonly path: string;
+  readonly commands: readonly string[];
+  readonly owner: string;
+  readonly wrapperTarget: string;
+  readonly risk: "low" | "medium" | "high";
+  readonly action: string;
+};
+
+export const RAW_TAURI_INVOKE_INVENTORY = [
+  {
+    path: "src/stores/favoritesStore.ts",
+    commands: ["list_favorites", "persist_favorites"],
+    owner: "favorites persistence store",
+    wrapperTarget: "src/lib/tauri/favorites.ts",
+    risk: "medium",
+    action: "follow-up: move favorites persistence IPC behind a typed wrapper",
+  },
+  {
+    path: "src/stores/mruStore.ts",
+    commands: ["clear_mru", "persist_mru"],
+    owner: "MRU persistence store",
+    wrapperTarget: "src/lib/tauri/mru.ts",
+    risk: "low",
+    action: "follow-up: move MRU persistence IPC behind a typed wrapper",
+  },
+] as const satisfies readonly RawTauriInvokeInventoryEntry[];
+
+const SETTINGS_TAURI_WRAPPER_PATH = "src/lib/tauri/settings.ts";
+const MOVED_SETTINGS_INVOKE_COMMANDS = [
+  "get_setting",
+  "persist_setting",
+  "reset_setting",
+] as const;
+const MOVED_SETTINGS_INVOKE_COMMAND_SET: ReadonlySet<string> = new Set(
+  MOVED_SETTINGS_INVOKE_COMMANDS,
+);
+
 type LintMessageLike = {
   ruleId: string | null;
   severity: number;
@@ -64,6 +102,107 @@ export function findUnexpectedIgnoredFiles(repoPaths: string[]): string[] {
     .map((path) => normalizeRepoPath(path))
     .filter((path) => !isAllowedGeneratedLintIgnore(path))
     .sort();
+}
+
+function isProductionSourceModule(repoPath: string): boolean {
+  const path = normalizeRepoPath(repoPath);
+  return (
+    path.startsWith("src/") &&
+    !path.includes("/__tests__/") &&
+    !path.endsWith(".test.ts") &&
+    !path.endsWith(".test.tsx") &&
+    !path.endsWith(".spec.ts") &&
+    !path.endsWith(".spec.tsx")
+  );
+}
+
+function isStoreProductionModule(repoPath: string): boolean {
+  const path = normalizeRepoPath(repoPath);
+  return path.startsWith("src/stores/") && isProductionSourceModule(path);
+}
+
+function importsRawTauriInvoke(source: string): boolean {
+  return /from\s+["']@tauri-apps\/api\/core["']/.test(source);
+}
+
+function collectRawInvokeCommands(source: string): string[] {
+  return [...source.matchAll(/\binvoke(?:<[^>]+>)?\(\s*["']([^"']+)["']/g)]
+    .map((match) => match[1]!)
+    .sort();
+}
+
+export function findRawTauriInvokeBoundaryViolations(
+  fileSources: ReadonlyMap<string, string>,
+): string[] {
+  const inventoryByPath = new Map(
+    RAW_TAURI_INVOKE_INVENTORY.map((entry) => [entry.path, entry]),
+  );
+  const filesWithRawInvoke = new Set<string>();
+  const failures: string[] = [];
+
+  for (const [filePath, source] of [...fileSources.entries()].sort()) {
+    const repoPath = normalizeRepoPath(filePath);
+    if (!importsRawTauriInvoke(source)) continue;
+
+    const commands = collectRawInvokeCommands(source);
+    if (
+      isProductionSourceModule(repoPath) &&
+      repoPath !== SETTINGS_TAURI_WRAPPER_PATH
+    ) {
+      const movedSettingsCommands = [
+        ...new Set(
+          commands.filter((command) =>
+            MOVED_SETTINGS_INVOKE_COMMAND_SET.has(command),
+          ),
+        ),
+      ];
+      if (movedSettingsCommands.length > 0) {
+        failures.push(
+          `${repoPath}: raw moved settings invoke command(s) must use ${SETTINGS_TAURI_WRAPPER_PATH}: ${movedSettingsCommands.join(", ")}.`,
+        );
+      }
+    }
+
+    if (!isStoreProductionModule(repoPath)) continue;
+
+    filesWithRawInvoke.add(repoPath);
+    const inventory = inventoryByPath.get(repoPath);
+
+    if (inventory === undefined) {
+      failures.push(
+        `${repoPath}: raw @tauri-apps/api/core import is outside src/lib/tauri/** and missing from RAW_TAURI_INVOKE_INVENTORY.`,
+      );
+      continue;
+    }
+
+    const allowedCommands = new Set(inventory.commands);
+    const unexpectedCommands = commands.filter(
+      (command) => !allowedCommands.has(command),
+    );
+    const missingCommands = inventory.commands.filter(
+      (command) => !commands.includes(command),
+    );
+    if (unexpectedCommands.length > 0) {
+      failures.push(
+        `${repoPath}: untriaged raw invoke command(s): ${unexpectedCommands.join(", ")}.`,
+      );
+    }
+    if (missingCommands.length > 0) {
+      failures.push(
+        `${repoPath}: stale RAW_TAURI_INVOKE_INVENTORY command(s): ${missingCommands.join(", ")}.`,
+      );
+    }
+  }
+
+  for (const entry of RAW_TAURI_INVOKE_INVENTORY) {
+    if (!filesWithRawInvoke.has(entry.path)) {
+      failures.push(
+        `${entry.path}: stale RAW_TAURI_INVOKE_INVENTORY entry; remove it after migrating to ${entry.wrapperTarget}.`,
+      );
+    }
+  }
+
+  return failures;
 }
 
 export function summarizeLintMessages(results: LintResultLike[]) {
@@ -115,6 +254,15 @@ function collectTypeScriptFiles(cwd: string): string[] {
     if (existsSync(dir)) walk(dir);
   }
   return files.sort();
+}
+
+function readFileSources(cwd: string, repoPaths: string[]) {
+  return new Map(
+    repoPaths.map((repoPath) => [
+      repoPath,
+      readFileSync(resolve(cwd, repoPath), "utf8"),
+    ]),
+  );
 }
 
 async function findIgnoredCandidates(
@@ -202,6 +350,7 @@ async function main() {
 
   const summary = summarizeLintMessages(results);
   const sourceFiles = collectTypeScriptFiles(cwd);
+  const sourceFileContents = readFileSources(cwd, sourceFiles);
   const ignored = await findIgnoredCandidates(eslint, sourceFiles);
   const unexpectedIgnored = findUnexpectedIgnoredFiles(ignored);
   const failures = [
@@ -221,6 +370,7 @@ async function main() {
             .join("\n")}`,
         ]
       : []),
+    ...findRawTauriInvokeBoundaryViolations(sourceFileContents),
     ...(await validateFeatureBoundaryRule(eslint, cwd)),
   ];
 

@@ -1,5 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
 import { DEFAULT_THEME_ID, isThemeId, type ThemeId } from "./themeCatalog";
+import { getSetting } from "./tauri/settings";
 
 export type ThemeMode = "system" | "light" | "dark";
 
@@ -109,7 +109,7 @@ export function bootTheme(): void {
 export async function reconcileThemeFromBackend(): Promise<void> {
   let raw: string | null;
   try {
-    raw = await invoke<string | null>("get_setting", { key: "theme" });
+    raw = await getSetting("theme");
   } catch {
     return;
   }

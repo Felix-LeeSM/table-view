@@ -49,3 +49,7 @@ export async function persistSettingValue(
 export async function resetSetting(key: string): Promise<void> {
   await invoke("reset_setting", { key });
 }
+
+export async function getSetting(key: string): Promise<string | null> {
+  return invoke<string | null>("get_setting", { key });
+}
