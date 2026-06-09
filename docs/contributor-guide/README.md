@@ -8,6 +8,8 @@ decision logs.
 
 - [`testing-and-quality.md`](testing-and-quality.md) — developer-facing
   verification gaps and quality follow-ups.
+- [`repository-topology-inventory.md`](repository-topology-inventory.md) —
+  Refactor 01 repository root ownership and lifecycle inventory.
 - [`pr-review.md`](pr-review.md) — reviewer output contract and red/green
   threshold.
 - [`release/homebrew-cask.md`](release/homebrew-cask.md) — Homebrew cask and release notes.
