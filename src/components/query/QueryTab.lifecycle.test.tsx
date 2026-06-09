@@ -196,6 +196,128 @@ describe("QueryTab — lifecycle", () => {
     );
   });
 
+  it("passes Oracle catalog metadata into the live completion context", () => {
+    useConnectionStore.setState({
+      connections: [
+        makeConn({
+          dbType: "oracle",
+          database: "FREEPDB1",
+        }),
+      ],
+    });
+    useSchemaStore.setState({
+      schemas: { conn1: { FREEPDB1: [{ name: "APP" }] } },
+      tables: {
+        conn1: {
+          FREEPDB1: {
+            APP: [{ schema: "APP", name: "ORDERS", row_count: null }],
+          },
+        },
+      },
+      views: {
+        conn1: {
+          FREEPDB1: {
+            APP: [
+              {
+                schema: "APP",
+                name: "ACTIVE_ORACLE_USERS",
+                definition: null,
+              },
+            ],
+          },
+        },
+      },
+      functions: {
+        conn1: {
+          FREEPDB1: {
+            APP: [
+              {
+                schema: "APP",
+                name: "CATALOG_API",
+                arguments: null,
+                returnType: null,
+                language: "PL/SQL",
+                source: null,
+                kind: "package",
+              },
+              {
+                schema: "APP",
+                name: "ORDER_SEQ",
+                arguments: "increment 1, cache 20",
+                returnType: "next 101",
+                language: "Oracle sequence",
+                source: null,
+                kind: "sequence",
+              },
+              {
+                schema: "APP",
+                name: "ACTIVE_USERS_ALIAS",
+                arguments: "APP.ACTIVE_ORACLE_USERS",
+                returnType: "APP.ACTIVE_ORACLE_USERS",
+                language: "Oracle synonym",
+                source: null,
+                kind: "synonym",
+              },
+            ],
+          },
+        },
+      },
+      postgresExtensions: {},
+      tableColumnsCache: {
+        conn1: {
+          FREEPDB1: {
+            APP: {
+              ORDERS: [
+                {
+                  name: "ORDER_ID",
+                  data_type: "NUMBER",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+        },
+      },
+      fileAnalyticsSources: {},
+    });
+
+    render(<QueryTab tab={makeQueryTab({ database: "FREEPDB1" })} />);
+
+    expect(mockEditorProps.lastCompletionContext?.dialect).toBe("oracle");
+    expect(
+      mockEditorProps.lastCompletionContext?.catalog.objects,
+    ).toContainEqual(
+      expect.objectContaining({
+        kind: "table",
+        schema: "APP",
+        name: "ORDERS",
+      }),
+    );
+    expect(
+      mockEditorProps.lastCompletionContext?.catalog.columns,
+    ).toContainEqual(
+      expect.objectContaining({
+        table: "ORDERS",
+        name: "ORDER_ID",
+      }),
+    );
+    expect(
+      mockEditorProps.lastCompletionContext?.catalog.functions.map((fn) => [
+        fn.name,
+        fn.kind,
+      ]),
+    ).toEqual([
+      ["ACTIVE_USERS_ALIAS", "synonym"],
+      ["CATALOG_API", "package"],
+      ["ORDER_SEQ", "sequence"],
+    ]);
+  });
+
   it("renders editor and result grid in idle state", () => {
     const tab = makeQueryTab();
     render(<QueryTab tab={tab} />);

@@ -175,6 +175,7 @@ fn oracle_catalog_error(context: &'static str, err: impl std::fmt::Display) -> A
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oracle_rs::types::{OracleDate, OracleNumber, OracleTimestamp};
 
     #[test]
     fn map_oracle_data_type_classifies_datagrid_categories() {
@@ -189,6 +190,32 @@ mod tests {
         assert_eq!(map_oracle_data_type("json"), ColumnCategory::Object);
         assert_eq!(map_oracle_data_type("varchar2"), ColumnCategory::Text);
         assert_eq!(map_oracle_data_type("mystery"), ColumnCategory::Unknown);
+    }
+
+    #[test]
+    fn map_oracle_data_type_covers_catalog_aliases() {
+        let cases = [
+            ("INTEGER", ColumnCategory::Int),
+            ("PLS_INTEGER", ColumnCategory::Int),
+            ("FLOAT", ColumnCategory::Float),
+            ("DECIMAL", ColumnCategory::Float),
+            ("TIMESTAMP WITH LOCAL TIME ZONE", ColumnCategory::Datetime),
+            ("LONG RAW", ColumnCategory::Binary),
+            ("BFILE", ColumnCategory::Binary),
+            ("XMLTYPE", ColumnCategory::Object),
+            ("SDO_GEOMETRY", ColumnCategory::Object),
+            ("NCHAR", ColumnCategory::Text),
+            ("NVARCHAR2", ColumnCategory::Text),
+            ("NCLOB", ColumnCategory::Text),
+            ("ROWID", ColumnCategory::Text),
+            ("UROWID", ColumnCategory::Text),
+            ("INTERVAL YEAR TO MONTH", ColumnCategory::Text),
+            ("INTERVAL DAY TO SECOND", ColumnCategory::Text),
+        ];
+
+        for (data_type, expected) in cases {
+            assert_eq!(map_oracle_data_type(data_type), expected, "{data_type}");
+        }
     }
 
     #[test]
@@ -213,6 +240,21 @@ mod tests {
     }
 
     #[test]
+    fn oracle_catalog_error_keeps_context_and_oracle_code() {
+        let error = oracle_catalog_error(
+            "Oracle synonym catalog query failed",
+            oracle_rs::Error::oracle(942, "table or view does not exist"),
+        );
+
+        assert!(matches!(
+            error,
+            AppError::Database(message)
+                if message.contains("Oracle synonym catalog query failed")
+                    && message.contains("ORA-00942")
+        ));
+    }
+
+    #[test]
     fn row_decoders_handle_common_oracle_values() {
         let row = Row::new(vec![
             Value::String("APP".into()),
@@ -225,6 +267,81 @@ mod tests {
         assert_eq!(row_i64(&row, 1, "row count").unwrap(), Some(42));
         assert!(row_bool_yn(&row, 2, "nullable").unwrap());
         assert_eq!(row_optional_string(&row, 3, "comment").unwrap(), None);
+    }
+
+    #[test]
+    fn row_decoders_convert_oracle_scalar_variants() {
+        let row = Row::new(vec![
+            Value::Number(OracleNumber::new("42")),
+            Value::Float(12.5),
+            Value::Date(OracleDate::new(2026, 6, 8, 9, 10, 11)),
+            Value::Timestamp(OracleTimestamp::new(2026, 6, 8, 9, 10, 11, 1200)),
+            Value::Boolean(false),
+            Value::Bytes(vec![1, 2]),
+        ]);
+
+        assert_eq!(
+            row_optional_string(&row, 0, "number").unwrap().as_deref(),
+            Some("42")
+        );
+        assert_eq!(
+            row_optional_string(&row, 1, "float").unwrap().as_deref(),
+            Some("12.5")
+        );
+        assert_eq!(
+            row_optional_string(&row, 2, "date").unwrap().as_deref(),
+            Some("2026-06-08 09:10:11")
+        );
+        assert_eq!(
+            row_optional_string(&row, 3, "timestamp")
+                .unwrap()
+                .as_deref(),
+            Some("2026-06-08 09:10:11.001200")
+        );
+        assert_eq!(
+            row_optional_string(&row, 4, "flag").unwrap().as_deref(),
+            Some("N")
+        );
+        assert_eq!(
+            row_optional_string(&row, 5, "raw").unwrap().as_deref(),
+            Some("<2 bytes>")
+        );
+    }
+
+    #[test]
+    fn row_i64_decodes_numeric_shapes_and_reports_bad_values() {
+        let row = Row::new(vec![
+            Value::Number(OracleNumber::new("7")),
+            Value::Float(8.9),
+            Value::String("9".into()),
+            Value::String("bad".into()),
+            Value::Boolean(true),
+        ]);
+
+        assert_eq!(row_i64(&row, 0, "number").unwrap(), Some(7));
+        assert_eq!(row_i64(&row, 1, "float").unwrap(), Some(8));
+        assert_eq!(row_i64(&row, 2, "string").unwrap(), Some(9));
+        assert!(matches!(
+            row_i64(&row, 3, "string"),
+            Err(AppError::Database(message)) if message.contains("decode failed")
+        ));
+        assert!(matches!(
+            row_i64(&row, 4, "boolean"),
+            Err(AppError::Database(message)) if message.contains("expected numeric value")
+        ));
+    }
+
+    #[test]
+    fn row_bool_yn_accepts_truthy_catalog_spellings_only() {
+        for truthy in ["Y", "YES", "TRUE", "1", " y "] {
+            let row = Row::new(vec![Value::String(truthy.into())]);
+            assert!(row_bool_yn(&row, 0, "flag").unwrap(), "{truthy}");
+        }
+
+        for falsy in ["N", "FALSE", "0", ""] {
+            let row = Row::new(vec![Value::String(falsy.into())]);
+            assert!(!row_bool_yn(&row, 0, "flag").unwrap(), "{falsy}");
+        }
     }
 
     #[test]

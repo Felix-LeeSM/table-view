@@ -107,6 +107,8 @@ function callCompleteSql(
           fn.arguments ?? "",
           fn.returnType ?? "",
           fn.database,
+          fn.kind,
+          fn.language ?? "",
         ].join("\t"),
       )
       .join("\n"),

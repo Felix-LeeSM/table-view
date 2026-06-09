@@ -469,6 +469,9 @@ fn oracle_query_error(context: &'static str, err: impl std::fmt::Display) -> App
 }
 
 #[cfg(test)]
+mod coverage_tests;
+
+#[cfg(test)]
 mod tests {
     use std::future::pending;
     use std::time::Duration;
