@@ -569,6 +569,11 @@ mod tests {
                     kind: "package".into(),
                     return_type: None,
                 },
+                OracleRoutineCatalogRow {
+                    name: "DEFAULT_ARG_ROUTINE".into(),
+                    kind: "procedure".into(),
+                    return_type: None,
+                },
             ],
             vec![
                 OracleRoutineParamCatalogRow {
@@ -583,6 +588,12 @@ mod tests {
                     data_type: "VARCHAR2(20)".into(),
                     direction: Some("OUT".into()),
                 },
+                OracleRoutineParamCatalogRow {
+                    routine_name: "DEFAULT_ARG_ROUTINE".into(),
+                    parameter_name: None,
+                    data_type: "DATE".into(),
+                    direction: None,
+                },
             ],
         );
 
@@ -595,6 +606,7 @@ mod tests {
         assert_eq!(routines[1].return_type.as_deref(), Some("NUMBER"));
         assert_eq!(routines[2].kind, "package");
         assert!(routines[2].arguments.is_none());
+        assert_eq!(routines[3].arguments.as_deref(), Some("arg DATE"));
     }
 
     #[test]

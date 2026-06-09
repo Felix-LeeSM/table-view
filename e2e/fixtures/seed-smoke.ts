@@ -5,6 +5,7 @@ import { createConnection } from "mysql2/promise";
 import { Client as PgClient } from "pg";
 import Redis from "ioredis";
 import sql from "mssql";
+import oracledb from "oracledb";
 
 const pgConfig = {
   host: process.env.E2E_PG_HOST ?? process.env.PGHOST ?? "localhost",
@@ -50,6 +51,15 @@ const mssqlConfig = {
     process.env.E2E_MSSQL_DATABASE ??
     process.env.MSSQL_DATABASE ??
     "table_view_test",
+};
+
+const oracleConfig = {
+  host: process.env.E2E_ORACLE_HOST ?? process.env.ORACLE_HOST ?? "localhost",
+  port: Number(process.env.E2E_ORACLE_PORT ?? process.env.ORACLE_PORT ?? 1521),
+  user: process.env.ORACLE_USER ?? "testuser",
+  password: process.env.ORACLE_PASSWORD ?? "testpass",
+  serviceName:
+    process.env.E2E_ORACLE_SERVICE ?? process.env.ORACLE_SERVICE ?? "XEPDB1",
 };
 
 const redisConfig = {
@@ -154,6 +164,7 @@ type SeedTarget =
   | "mysql"
   | "mariadb"
   | "mssql"
+  | "oracle"
   | "redis"
   | "valkey"
   | "elasticsearch"
@@ -165,6 +176,7 @@ const ALL_SEED_TARGETS = [
   "mysql",
   "mariadb",
   "mssql",
+  "oracle",
   "redis",
   "valkey",
   "elasticsearch",
@@ -180,6 +192,7 @@ const SEED_TARGETS_BY_SPEC_KEY: Record<string, readonly SeedTarget[]> = {
   mysql: ["mysql"],
   mariadb: ["mariadb"],
   mssql: ["mssql"],
+  oracle: ["oracle"],
   mongodb: ["mongodb"],
   "phase-28-slice-A": ["mongodb"],
   redis: ["redis"],
@@ -340,6 +353,74 @@ function splitSqlServerBatches(seedSql: string): string[] {
 
 function quoteMssqlIdentifier(identifier: string): string {
   return `[${identifier.replace(/]/g, "]]")}]`;
+}
+
+async function seedOracle() {
+  const seedSql = await readFile(
+    resolve("e2e/fixtures/seed.oracle.sql"),
+    "utf-8",
+  );
+  await retry("Oracle", async () => {
+    const connection = await oracledb.getConnection({
+      user: oracleConfig.user,
+      password: oracleConfig.password,
+      connectString: `${oracleConfig.host}:${oracleConfig.port}/${oracleConfig.serviceName}`,
+    });
+    try {
+      for (const statement of splitOracleStatements(seedSql)) {
+        await connection.execute(statement);
+      }
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      await connection.close();
+    }
+  });
+}
+
+function splitOracleStatements(seedSql: string): string[] {
+  const statements: string[] = [];
+  let buffer: string[] = [];
+  let inBlock = false;
+
+  for (const line of seedSql.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("--") || trimmed.length === 0) continue;
+    if (trimmed === "/" && buffer.length === 0) continue;
+
+    if (
+      /^(BEGIN|DECLARE|CREATE\s+OR\s+REPLACE\s+(?:PROCEDURE|FUNCTION|PACKAGE|TRIGGER|TYPE))/i.test(
+        trimmed,
+      )
+    ) {
+      inBlock = true;
+    }
+
+    if (inBlock) {
+      if (trimmed === "/") {
+        const statement = buffer.join("\n").trim();
+        if (statement) statements.push(statement);
+        buffer = [];
+        inBlock = false;
+      } else {
+        buffer.push(line);
+      }
+      continue;
+    }
+
+    buffer.push(line);
+    if (trimmed.endsWith(";")) {
+      const statement = buffer.join("\n").trim().replace(/;$/, "").trim();
+      if (statement) statements.push(statement);
+      buffer = [];
+    }
+  }
+
+  const trailing = buffer.join("\n").trim();
+  if (trailing) statements.push(trailing.replace(/;$/, "").trim());
+  return statements;
 }
 
 async function seedRedis() {
@@ -625,6 +706,9 @@ async function seedTarget(target: SeedTarget) {
       return;
     case "mssql":
       await seedMssql();
+      return;
+    case "oracle":
+      await seedOracle();
       return;
     case "redis":
       await seedRedis();

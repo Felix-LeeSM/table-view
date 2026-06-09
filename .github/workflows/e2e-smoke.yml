@@ -104,6 +104,8 @@ jobs:
             spec: e2e/smoke/mariadb.spec.ts
           - spec_key: mssql
             spec: e2e/smoke/mssql.spec.ts
+          - spec_key: oracle
+            spec: e2e/smoke/oracle.spec.ts
           - spec_key: sqlite
             spec: e2e/smoke/sqlite.spec.ts
           - spec_key: duckdb
@@ -310,6 +312,29 @@ jobs:
           docker logs table-view-mssql || true
           exit 1
 
+      - name: Start Oracle service
+        if: matrix.spec_key == 'oracle'
+        timeout-minutes: 12
+        run: |
+          docker run -d \
+            --name table-view-oracle \
+            --publish 1521:1521 \
+            --env "ORACLE_PASSWORD=testpass" \
+            --env "APP_USER=testuser" \
+            --env "APP_USER_PASSWORD=testpass" \
+            gvenzl/oracle-xe:21
+
+          for attempt in {1..60}; do
+            if docker exec table-view-oracle bash -lc "echo 'SELECT 1 FROM DUAL;' | sqlplus -s testuser/testpass@localhost/XEPDB1 | grep -q '1'"; then
+              exit 0
+            fi
+            echo "Oracle is not ready yet (attempt ${attempt}/60)."
+            sleep 5
+          done
+
+          docker logs table-view-oracle || true
+          exit 1
+
       - name: Run E2E smoke
         env:
           E2E_PG_HOST: localhost
@@ -338,6 +363,11 @@ jobs:
           MSSQL_USER: sa
           MSSQL_PASSWORD: Testpass123!
           MSSQL_DATABASE: table_view_test
+          E2E_ORACLE_HOST: localhost
+          E2E_ORACLE_PORT: 1521
+          ORACLE_USER: testuser
+          ORACLE_PASSWORD: testpass
+          E2E_ORACLE_SERVICE: XEPDB1
           E2E_REDIS_HOST: localhost
           E2E_REDIS_PORT: 6379
           E2E_REDIS_DB: 2
@@ -361,6 +391,10 @@ jobs:
       - name: Stop MSSQL service
         if: always() && matrix.spec_key == 'mssql'
         run: docker rm --force table-view-mssql || true
+
+      - name: Stop Oracle service
+        if: always() && matrix.spec_key == 'oracle'
+        run: docker rm --force table-view-oracle || true
 
       - name: Upload E2E artifacts
         if: always()

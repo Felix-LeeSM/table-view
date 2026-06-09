@@ -116,9 +116,10 @@ describe("spec — loadSpec validation", () => {
     ]);
   });
 
-  it("makes MSSQL active while keeping Oracle as a planned fixture identity", () => {
+  it("makes MSSQL and Oracle active fixture identities", () => {
     const spec = loadSpec("e2e");
     const mssql = spec.profileSpec.connections?.mssql?.[0];
+    const oracle = spec.profileSpec.connections?.oracle?.[0];
 
     expect(mssql).toEqual(
       expect.objectContaining({
@@ -126,12 +127,12 @@ describe("spec — loadSpec validation", () => {
       }),
     );
     expect(mssql).not.toHaveProperty("status");
-    expect(spec.profileSpec.connections?.oracle).toEqual([
+    expect(oracle).toEqual(
       expect.objectContaining({
         id: "fixture-e2e-oracle",
-        status: "planned",
       }),
-    ]);
+    );
+    expect(oracle).not.toHaveProperty("status");
   });
 
   it("fails fast on an unknown profile name", () => {

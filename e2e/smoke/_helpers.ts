@@ -1,4 +1,5 @@
 import { $, $$, browser, expect } from "@wdio/globals";
+import { formatGridWaitDiagnostic } from "./grid-wait-diagnostic";
 
 export { editGridCellInRow } from "./grid-edit";
 
@@ -12,6 +13,7 @@ export type DbType =
   | "mysql"
   | "mariadb"
   | "mssql"
+  | "oracle"
   | "sqlite"
   | "duckdb"
   | "redis"
@@ -122,7 +124,7 @@ async function waitForDomSelector(selector: string, timeout = 10000) {
   });
 }
 
-async function clickDomSelector(selector: string) {
+export async function clickDomSelector(selector: string) {
   await waitForDomSelector(selector);
   await browser.execute((sel) => {
     const element = document.querySelector<HTMLElement>(sel);
@@ -154,6 +156,7 @@ function dbTypeLabel(dbType: DbType): string {
   if (dbType === "mysql") return "MySQL";
   if (dbType === "mariadb") return "MariaDB";
   if (dbType === "mssql") return "Microsoft SQL Server";
+  if (dbType === "oracle") return "Oracle";
   if (dbType === "sqlite") return "SQLite";
   if (dbType === "duckdb") return "DuckDB";
   if (dbType === "redis") return "Redis";
@@ -328,6 +331,33 @@ export async function createMssqlConnection(
   await expectConnectionVisible(name);
 }
 
+export async function createOracleConnection(
+  name = "E2E Oracle",
+  environment?: ConnectionEnvironment,
+) {
+  const dialog = await openNewConnectionDialog();
+  await selectDatabaseType("oracle");
+
+  await setInput("#conn-name", name);
+  if (environment) {
+    await selectConnectionEnvironment(environment);
+  }
+  await setInput("#conn-host", process.env.E2E_ORACLE_HOST ?? "localhost");
+  await setInput(
+    "#conn-port",
+    process.env.E2E_ORACLE_PORT ?? process.env.ORACLE_PORT ?? "1521",
+  );
+  await setInput("#conn-user", process.env.ORACLE_USER ?? "testuser");
+  await setInput("#conn-password", process.env.ORACLE_PASSWORD ?? "testpass");
+  await setInput(
+    "#conn-database",
+    process.env.E2E_ORACLE_SERVICE ?? process.env.ORACLE_SERVICE ?? "XEPDB1",
+  );
+
+  await saveConnectionDialog(dialog);
+  await expectConnectionVisible(name);
+}
+
 export async function createSqliteConnection(
   name: string,
   databasePath: string,
@@ -481,8 +511,39 @@ export async function createOpenSearchConnection(name = "E2E OpenSearch") {
 async function setInput(selector: string, value: string) {
   const input = await $(selector);
   await input.waitForDisplayed({ timeout: 5000 });
-  await input.clearValue();
-  await input.setValue(value);
+  await browser.execute(
+    (sel, nextValue) => {
+      const element = document.querySelector<HTMLInputElement>(sel);
+      if (!element) throw new Error(`${sel} input did not appear`);
+      element.focus();
+
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      if (!setter) throw new Error("HTMLInputElement value setter missing");
+
+      setter.call(element, nextValue);
+      element.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+      element.blur();
+    },
+    selector,
+    value,
+  );
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (sel, expected) =>
+          document.querySelector<HTMLInputElement>(sel)?.value === expected,
+        selector,
+        value,
+      ),
+    {
+      timeout: 5000,
+      timeoutMsg: `${selector} did not receive expected value`,
+    },
+  );
 }
 
 async function saveConnectionDialog(dialog: WebdriverIO.Element) {
@@ -578,8 +639,7 @@ export async function waitForGridText(
   timeoutMsg: string,
 ) {
   await switchToWorkspaceWindow();
-  const grid = await $('[role="grid"]');
-  await grid.waitForDisplayed({ timeout });
+  const grid = await waitForGridDisplayed(timeout, timeoutMsg);
   await browser.waitUntil(
     async () => {
       const text = (
@@ -601,8 +661,7 @@ export async function waitForGridTextAll(
   timeoutMsg: string,
 ) {
   await switchToWorkspaceWindow();
-  const grid = await $('[role="grid"]');
-  await grid.waitForDisplayed({ timeout });
+  const grid = await waitForGridDisplayed(timeout, timeoutMsg);
   await browser.waitUntil(
     async () => {
       const text = (
@@ -616,6 +675,42 @@ export async function waitForGridTextAll(
     },
   );
   return grid;
+}
+
+async function waitForGridDisplayed(timeout: number, timeoutMsg: string) {
+  const grid = await $('[role="grid"]');
+  try {
+    await grid.waitForDisplayed({ timeout });
+  } catch (e) {
+    const error = new Error(`${timeoutMsg}: ${await gridWaitDiagnostic()}`);
+    (error as Error & { cause?: unknown }).cause = e;
+    throw error;
+  }
+  return grid;
+}
+
+async function gridWaitDiagnostic() {
+  const state = await browser.execute(() => {
+    const visibleText = (selector: string) =>
+      Array.from(document.querySelectorAll<HTMLElement>(selector))
+        .filter((element) => {
+          const style = window.getComputedStyle(element);
+          return (
+            element.getClientRects().length > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden"
+          );
+        })
+        .map((element) => (element.textContent ?? "").trim())
+        .filter(Boolean);
+    const alerts = visibleText('[role="alert"]');
+    const body = (document.body.textContent ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 800);
+    return { visibleAlerts: alerts, bodyText: body };
+  });
+  return formatGridWaitDiagnostic(state);
 }
 
 export async function waitForWorkspaceTextAll(

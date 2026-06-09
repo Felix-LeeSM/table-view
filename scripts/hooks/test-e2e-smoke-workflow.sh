@@ -56,8 +56,10 @@ assert_contains "$prepare_block" "workspaces: src-tauri -> target" "prepare rust
 assert_contains "$prepare_block" "shared-key: e2e-smoke-linux" "prepare rust cache"
 assert_contains "$prepare_block" "cache-on-failure: true" "prepare rust cache"
 assert_contains "$prepare_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "prepare rust cache"
-assert_not_contains "$smoke_block" "spec_key: oracle" "oracle smoke promotion boundary"
-assert_not_contains "$smoke_block" "e2e/smoke/oracle.spec.ts" "oracle smoke promotion boundary"
-assert_not_contains "$smoke_script" "e2e/smoke/oracle.spec.ts" "oracle smoke promotion boundary"
+assert_contains "$smoke_block" "spec_key: oracle" "oracle smoke promotion"
+assert_contains "$smoke_block" "e2e/smoke/oracle.spec.ts" "oracle smoke promotion"
+assert_contains "$smoke_block" "Start Oracle service" "oracle smoke promotion"
+assert_contains "$smoke_block" "timeout-minutes: 12" "oracle smoke timeout"
+assert_contains "$smoke_script" "e2e/smoke/oracle.spec.ts" "oracle smoke promotion"
 
 echo "PASS: e2e-smoke workflow cache check"

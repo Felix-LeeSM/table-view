@@ -1,6 +1,7 @@
 use super::*;
 use crate::models::{ColumnChange, ColumnDefinition, ConstraintDefinition};
 use oracle_rs::config::ServiceMethod;
+use tokio_util::sync::CancellationToken;
 
 fn oracle_config() -> ConnectionConfig {
     ConnectionConfig {
@@ -59,12 +60,66 @@ fn connect_config_rejects_empty_service_name() {
 }
 
 #[test]
+fn connect_config_rejects_empty_required_fields() {
+    let mut config = oracle_config();
+    config.host = " ".into();
+    assert!(matches!(
+        OracleAdapter::connect_config(&config, 5),
+        Err(AppError::Validation(message)) if message.contains("host")
+    ));
+
+    config = oracle_config();
+    config.user = " ".into();
+    assert!(matches!(
+        OracleAdapter::connect_config(&config, 5),
+        Err(AppError::Validation(message)) if message.contains("user")
+    ));
+}
+
+#[test]
 fn configured_timeout_is_clamped_for_runtime_connect() {
     assert_eq!(connection_timeout_secs(&oracle_config()), 30);
 
     let mut config = oracle_config();
     config.connection_timeout = Some(2);
     assert_eq!(connection_timeout_secs(&config), 2);
+
+    config.connection_timeout = Some(120);
+    assert_eq!(connection_timeout_secs(&config), 30);
+
+    config.connection_timeout = None;
+    assert_eq!(connection_timeout_secs(&config), 30);
+}
+
+#[test]
+fn oracle_connection_helpers_keep_error_and_empty_string_contracts() {
+    assert_eq!(non_empty("  XEPDB1  ".into()).as_deref(), Some("XEPDB1"));
+    assert_eq!(non_empty("   ".into()), None);
+
+    let error = map_oracle_connection_error(oracle_rs::Error::oracle(12514, "listener failed"));
+    assert!(matches!(
+        error,
+        AppError::Connection(message)
+            if message.contains("ORA-12514") && message.contains("listener failed")
+    ));
+}
+
+#[tokio::test]
+async fn test_and_connect_reject_invalid_config_before_network_open() {
+    let mut config = oracle_config();
+    config.host = " ".into();
+    assert!(matches!(
+        OracleAdapter::test(&config).await,
+        Err(AppError::Validation(message)) if message.contains("host")
+    ));
+
+    config = oracle_config();
+    config.user = " ".into();
+    let adapter = OracleAdapter::new();
+    assert!(matches!(
+        <OracleAdapter as DbAdapter>::connect(&adapter, &config).await,
+        Err(AppError::Validation(message)) if message.contains("user")
+    ));
 }
 
 #[tokio::test]
@@ -86,6 +141,36 @@ async fn current_database_without_connection_returns_none_for_fail_closed_guard(
     let adapter = OracleAdapter::new();
 
     assert_eq!(adapter.current_database().await.unwrap(), None);
+}
+
+#[tokio::test]
+async fn db_adapter_lifecycle_fails_closed_without_connection() {
+    let adapter = OracleAdapter::new();
+
+    assert!(matches!(adapter.kind(), DatabaseType::Oracle));
+    assert_eq!(
+        <OracleAdapter as RdbAdapter>::current_database(&adapter)
+            .await
+            .unwrap(),
+        None
+    );
+    assert_oracle_not_open(<OracleAdapter as DbAdapter>::ping(&adapter).await);
+    assert!(<OracleAdapter as DbAdapter>::disconnect(&adapter)
+        .await
+        .is_ok());
+}
+
+#[tokio::test]
+async fn cancellable_metadata_obeys_cancel_token_before_work_completes() {
+    let token = CancellationToken::new();
+    token.cancel();
+
+    let result =
+        cancellable_metadata(std::future::pending::<Result<(), AppError>>(), Some(&token)).await;
+    assert!(matches!(
+        result,
+        Err(AppError::Database(message)) if message.contains("cancelled")
+    ));
 }
 
 #[tokio::test]
@@ -121,6 +206,71 @@ async fn catalog_surfaces_require_open_connection() {
     assert_oracle_not_open(adapter.get_function_source("SYSTEM", "F").await);
 
     let triggers = adapter.list_triggers("SYSTEM", "T").await.unwrap();
+    assert!(triggers.is_empty());
+}
+
+#[tokio::test]
+async fn rdb_trait_catalog_surfaces_require_open_connection() {
+    let adapter = OracleAdapter::new();
+    let statements = vec!["SELECT 1 FROM DUAL".to_string()];
+
+    fn assert_trait_not_open<T>(label: &str, result: Result<T, AppError>) {
+        assert!(
+            matches!(
+                result,
+                Err(AppError::Connection(message)) if message.contains("not open")
+            ),
+            "{label} did not fail closed as Oracle connection not open"
+        );
+    }
+
+    assert_trait_not_open("list_databases", RdbAdapter::list_databases(&adapter).await);
+    assert_trait_not_open(
+        "list_tables",
+        RdbAdapter::list_tables(&adapter, "SYSTEM").await,
+    );
+    assert_trait_not_open(
+        "execute_sql",
+        RdbAdapter::execute_sql(&adapter, "SELECT 1 FROM DUAL", None).await,
+    );
+    assert!(RdbAdapter::execute_sql_batch(&adapter, &statements, None)
+        .await
+        .is_err());
+    assert!(RdbAdapter::dry_run_sql_batch(&adapter, &statements, None)
+        .await
+        .is_err());
+    assert_trait_not_open(
+        "query_table_data",
+        RdbAdapter::query_table_data(&adapter, "SYSTEM", "T", 1, 10, None, None, None, None).await,
+    );
+    assert_trait_not_open(
+        "list_views",
+        RdbAdapter::list_views(&adapter, "SYSTEM").await,
+    );
+    assert_trait_not_open(
+        "list_functions",
+        RdbAdapter::list_functions(&adapter, "SYSTEM").await,
+    );
+    assert_trait_not_open(
+        "get_view_definition",
+        RdbAdapter::get_view_definition(&adapter, "SYSTEM", "V").await,
+    );
+    assert_trait_not_open(
+        "get_view_columns",
+        RdbAdapter::get_view_columns(&adapter, "SYSTEM", "V").await,
+    );
+    assert_trait_not_open(
+        "list_schema_columns",
+        RdbAdapter::list_schema_columns(&adapter, "SYSTEM").await,
+    );
+    assert_trait_not_open(
+        "get_function_source",
+        RdbAdapter::get_function_source(&adapter, "SYSTEM", "F").await,
+    );
+
+    let triggers = RdbAdapter::list_triggers(&adapter, "SYSTEM", "T")
+        .await
+        .unwrap();
     assert!(triggers.is_empty());
 }
 
