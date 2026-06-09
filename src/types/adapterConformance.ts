@@ -410,11 +410,6 @@ function oracleCatalogQueryDeferred(): DeferredByArea {
     catalog: [],
     query: ["query.explain"],
     edit: [],
-    ddl: [
-      "ddl.createTable",
-      "ddl.alterTable",
-      "ddl.createIndex",
-      "ddl.dropObject",
-    ],
+    ddl: [],
   };
 }

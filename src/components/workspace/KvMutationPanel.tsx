@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@components/ui/button";
 import {
   deleteKvKey,
@@ -45,32 +45,50 @@ const EMPTY_MUTATION_FORM: MutationForm = {
   persistKey: "",
 };
 
+function mutationFormForValue(value: KvValueEnvelope): MutationForm {
+  return {
+    ...EMPTY_MUTATION_FORM,
+    text: value.value.type === "string" ? (value.value.text ?? "") : "",
+  };
+}
+
 export function KvMutationPanel({
   value,
   connectionId,
   database,
   onMutationSuccess,
 }: KvMutationPanelProps) {
-  const [form, setForm] = useState<MutationForm>(EMPTY_MUTATION_FORM);
+  const [form, setForm] = useState<MutationForm>(() =>
+    mutationFormForValue(value),
+  );
   const [pending, setPending] = useState<PendingMutation | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const formDirtyRef = useRef(false);
+  const valueIdentityRef = useRef({
+    key: value.key,
+    type: value.value.type,
+  });
   const unsupported = unsupportedMutationMessage(value);
   const fieldClass =
     "rounded border border-border bg-background px-2 py-1 text-3xs outline-none";
 
   useEffect(() => {
-    setForm({
-      ...EMPTY_MUTATION_FORM,
-      text: value.value.type === "string" ? (value.value.text ?? "") : "",
-    });
+    const previous = valueIdentityRef.current;
+    const identityChanged =
+      previous.key !== value.key || previous.type !== value.value.type;
+    valueIdentityRef.current = { key: value.key, type: value.value.type };
+    if (!identityChanged && formDirtyRef.current) return;
+    formDirtyRef.current = false;
+    setForm(mutationFormForValue(value));
     setPending(null);
     setMutationError(null);
-  }, [value.key, value.value]);
+  }, [value]);
 
   const bind =
     (field: MutationField) =>
     (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      formDirtyRef.current = true;
       setForm((current) => ({ ...current, [field]: event.target.value }));
       setPending(null);
     };
@@ -200,6 +218,7 @@ export function KvMutationPanel({
           });
       }
       setPending(null);
+      formDirtyRef.current = false;
       await onMutationSuccess(value.key);
     } catch (err) {
       setMutationError(err instanceof Error ? err.message : String(err));

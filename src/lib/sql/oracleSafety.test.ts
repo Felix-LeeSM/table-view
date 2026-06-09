@@ -178,6 +178,19 @@ describe("oracleSafety", () => {
       severity: "danger",
     });
 
+    for (const sql of [
+      "ALTER SESSION SET CURRENT_SCHEMA = HR",
+      "ALTER USER app ACCOUNT LOCK",
+      "CREATE TABLESPACE app_data DATAFILE 'app.dbf' SIZE 10M",
+      "PURGE DBA_RECYCLEBIN",
+    ]) {
+      expect(analyzeOracleStatement(sql)).toMatchObject({
+        support: "unsupported",
+        slice: "admin",
+        severity: "danger",
+      });
+    }
+
     expect(analyzeOracleStatement("GRANT DBA TO app")).toMatchObject({
       support: "unsupported",
       slice: "admin",

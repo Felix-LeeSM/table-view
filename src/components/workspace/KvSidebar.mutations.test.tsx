@@ -11,6 +11,7 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import type { ConnectionConfig } from "@/types/connection";
 import type { KvValueEnvelope } from "@/types/kv";
+import { KvMutationPanel } from "./KvMutationPanel";
 
 const invokeMock = vi.fn();
 
@@ -68,6 +69,52 @@ describe("KvSidebar mutations", () => {
       });
     });
     expect(await screen.findByDisplayValue("Grace Hopper")).toBeInTheDocument();
+  });
+
+  it("keeps a dirty string draft when a same-key value refresh arrives before preview", async () => {
+    mockRedisRuntime(stringValueEnvelope("Ada"));
+
+    const onMutationSuccess = vi.fn(() => Promise.resolve());
+    const { rerender } = render(
+      <KvMutationPanel
+        value={stringValueEnvelope("Ada")}
+        connectionId="redis-1"
+        database={0}
+        onMutationSuccess={onMutationSuccess}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("String value"), {
+      target: { value: "Grace Hopper" },
+    });
+    rerender(
+      <KvMutationPanel
+        value={stringValueEnvelope("Ada")}
+        connectionId="redis-1"
+        database={0}
+        onMutationSuccess={onMutationSuccess}
+      />,
+    );
+
+    expect(screen.getByDisplayValue("Grace Hopper")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: /preview string set/i }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /confirm string set/i }),
+    );
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("set_kv_string_value", {
+        connectionId: "redis-1",
+        request: {
+          database: 0,
+          key: "user:1",
+          value: "Grace Hopper",
+          safety: "allowOverwrite",
+        },
+      });
+    });
   });
 
   it.each([

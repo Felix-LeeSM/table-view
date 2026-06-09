@@ -144,6 +144,12 @@ describe("DataSourceProfile registry", () => {
         relationships: true,
       },
       edit: { editRows: true },
+      ddl: {
+        createTable: true,
+        alterTable: true,
+        createIndex: true,
+        dropObject: true,
+      },
     }),
     mongodb: expectedCapabilities({
       connection: { test: true },
@@ -360,7 +366,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
-  it("keeps MSSQL structured DDL bounded while Oracle stays query/catalog/edit bounded", () => {
+  it("keeps MSSQL and Oracle structured DDL bounded to table/index/constraint changes", () => {
     const mssql = getDataSourceProfile("mssql");
     expect(mssql.backendAdapter).toEqual({
       id: "mssql",
@@ -399,7 +405,10 @@ describe("DataSourceProfile registry", () => {
     expect(oracle.capabilities.catalog.constraints).toBe(true);
     expect(oracle.capabilities.catalog.relationships).toBe(true);
     expect(oracle.capabilities.edit.editRows).toBe(true);
-    expect(oracle.capabilities.ddl.createTable).toBe(false);
+    expect(oracle.capabilities.ddl.createTable).toBe(true);
+    expect(oracle.capabilities.ddl.alterTable).toBe(true);
+    expect(oracle.capabilities.ddl.createIndex).toBe(true);
+    expect(oracle.capabilities.ddl.dropObject).toBe(true);
   });
 
   it("derives connection-dialog supported DBMS options from the profile test capability", () => {
@@ -535,7 +544,10 @@ describe("DataSourceProfile registry", () => {
     expect(oracle.capabilities.catalog.constraints).toBe(true);
     expect(oracle.capabilities.catalog.relationships).toBe(true);
     expect(oracle.capabilities.edit.editRows).toBe(true);
-    expect(oracle.capabilities.ddl.createTable).toBe(false);
+    expect(oracle.capabilities.ddl.createTable).toBe(true);
+    expect(oracle.capabilities.ddl.alterTable).toBe(true);
+    expect(oracle.capabilities.ddl.createIndex).toBe(true);
+    expect(oracle.capabilities.ddl.dropObject).toBe(true);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
   });
 

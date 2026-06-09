@@ -1,11 +1,15 @@
 //! Oracle connection lifecycle, bounded query adapter, and catalog metadata browse.
 //!
 //! Oracle supports service-name connection, bounded SELECT/DML query runtime,
-//! live catalog/workbench metadata, and primary-key-scoped table row edits.
-//! Structured DDL, runtime Safe Mode, fixture/live/E2E, SID/TNS, wallet/TLS,
-//! and full PL/SQL parity remain unsupported.
+//! live catalog/workbench metadata, primary-key-scoped row edits, and bounded
+//! structured table/index/constraint DDL. Runtime Safe Mode smoke,
+//! fixture/live/E2E, SID/TNS, wallet/TLS, sequence/synonym DDL/admin workflows,
+//! packages, and full PL/SQL parity remain unsupported.
 
 mod catalog;
+mod ddl;
+#[cfg(test)]
+mod ddl_tests;
 mod runtime;
 mod table_data;
 #[cfg(test)]
@@ -33,7 +37,6 @@ use super::{BoxFuture, DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, Rdb
 const ORACLE_CONNECT_TIMEOUT_DEFAULT_SECS: u32 = 300;
 const ORACLE_CONNECT_TIMEOUT_MAX_SECS: u64 = 30;
 const ORACLE_TEST_CONNECT_TIMEOUT_SECS: u64 = 5;
-const ORACLE_UNSUPPORTED_RUNTIME: &str = "Oracle structured DDL runtime is not supported yet";
 
 #[derive(Default)]
 struct OracleConnectionState {
@@ -280,72 +283,72 @@ impl RdbAdapter for OracleAdapter {
 
     fn drop_table<'a>(
         &'a self,
-        _req: &'a DropTableRequest,
+        req: &'a DropTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::drop_table(self, req).await })
     }
 
     fn rename_table<'a>(
         &'a self,
-        _req: &'a RenameTableRequest,
+        req: &'a RenameTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::rename_table(self, req).await })
     }
 
     fn alter_table<'a>(
         &'a self,
-        _req: &'a AlterTableRequest,
+        req: &'a AlterTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::alter_table(self, req).await })
     }
 
     fn add_column<'a>(
         &'a self,
-        _req: &'a AddColumnRequest,
+        req: &'a AddColumnRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::add_column(self, req).await })
     }
 
     fn drop_column<'a>(
         &'a self,
-        _req: &'a DropColumnRequest,
+        req: &'a DropColumnRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::drop_column(self, req).await })
     }
 
     fn create_table<'a>(
         &'a self,
-        _req: &'a CreateTableRequest,
+        req: &'a CreateTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::create_table(self, req).await })
     }
 
     fn create_index<'a>(
         &'a self,
-        _req: &'a CreateIndexRequest,
+        req: &'a CreateIndexRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::create_index(self, req).await })
     }
 
     fn drop_index<'a>(
         &'a self,
-        _req: &'a DropIndexRequest,
+        req: &'a DropIndexRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::drop_index(self, req).await })
     }
 
     fn add_constraint<'a>(
         &'a self,
-        _req: &'a AddConstraintRequest,
+        req: &'a AddConstraintRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::add_constraint(self, req).await })
     }
 
     fn drop_constraint<'a>(
         &'a self,
-        _req: &'a DropConstraintRequest,
+        req: &'a DropConstraintRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        oracle_unsupported()
+        Box::pin(async move { OracleAdapter::drop_constraint(self, req).await })
     }
 
     fn get_table_indexes<'a>(
@@ -462,12 +465,4 @@ fn non_empty(value: String) -> Option<String> {
     } else {
         Some(trimmed.to_string())
     }
-}
-
-fn oracle_unsupported<'a, T: Send + 'a>() -> BoxFuture<'a, Result<T, AppError>> {
-    Box::pin(async {
-        Err(AppError::Unsupported(
-            ORACLE_UNSUPPORTED_RUNTIME.to_string(),
-        ))
-    })
 }
