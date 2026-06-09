@@ -1,30 +1,45 @@
 ---
-title: Repository Topology Inventory
+title: Repository Topology SOT
 type: refactor-evidence
-issue: 728
-updated: 2026-06-09
+issue: 732
+updated: 2026-06-10
 ---
 
-# Repository Topology Inventory
+# Repository Topology SOT
 
-This is the Refactor 01 inventory baseline for issue #728. It records current
-ownership and lifecycle only. It does not move directories, delete local data, or
-change hook routing.
+This is the Refactor 01 final directory topology SOT for issue #732. It
+publishes the durable ownership, lifecycle, cleanup, hook-routing, and migration
+constraints produced by issues #728 through #731.
 
-Generated, cache, tmp, and worktree roots are not source roots. The later
-generated-fencing child owns fencing changes; #728 only records inventory. The
-final docs child owns durable SOT publication after Refactor 01 child PRs land.
+It does not move directories, delete local data, change runtime behavior, or
+widen product support claims. Product-visible limitations stay in product docs;
+future sequencing stays in `docs/ROADMAP.md`.
 
-## Execution Gate
+## Refactor 01 Final SOT
 
-Live GitHub state checked on 2026-06-09:
+Live GitHub state checked on 2026-06-10:
 
-- #728 is open in milestone `09.10 - Refactor 01 - Directory Topology`.
-- The generated-fencing, source-root, hook-routing, and final-docs children are
-  separate open issues and stay out of this inventory PR.
-- Milestones 31, 32, and 36 are closed. Milestone 30 has zero open issues
-  but is still administratively open, so this inventory does not change milestone 30
-  state or claim milestone closure.
+- #728 closed through PR #794 and created the topology inventory.
+- #729 closed through PR #797 and fenced generated/cache/tmp/worktree paths.
+- #730 closed through PR #798 and published source-root migration constraints.
+- #731 closed through PR #801 and aligned hook path taxonomy, source-edit guard,
+  and pre-push routing.
+- #732 owns this final docs publication only. Parent #572 closure is separate
+  GitHub administration after this PR merges.
+
+Durable SOT routing:
+
+- This file owns root ownership, lifecycle, git-tracking, cleanup, and
+  contributor-facing topology summary.
+- [`source-root-migration-constraints.md`](source-root-migration-constraints.md)
+  owns later Refactor 02/03 source movement constraints and compatibility export
+  requirements.
+- `scripts/hooks/path-classifier.sh`, `pre-push-path-router.sh`, and
+  `check-main-worktree-source-edit.sh` own executable path classification.
+- `memory/workflow/hooks/memory.md` owns the hook taxonomy contract only, not the
+  classifier table.
+- `memory/runbook/worktree/memory.md` owns linked-worktree lifecycle and primary
+  checkout guard behavior.
 
 ## Before Tree Snippet
 
@@ -86,6 +101,47 @@ local-generated-cache-tmp/
     e2e/wdio-report/
   scratch and local state: tmp/, worktrees/, .claude/worktrees/, .env*
 ```
+
+## Final Lifecycle Rules
+
+- Tracked source roots include `src/`, `public/`, `src-tauri/src/`,
+  `src-tauri/tests/`, parser crates, scripts, hook source, CI workflows, docs,
+  and memory.
+- Committed generated inputs include `src/lib/*/wasm/`, `src-tauri/gen/`, and
+  `src-tauri/icons/`. They stay source-visible and must not be hidden by
+  generated/cache/tmp/worktree fences.
+- Root-local `node_modules/`, `target/`, `src-tauri/target/`, `cargo-target/`,
+  `dist/`, `.vite/`, `coverage/`, `test-results/`, `wdio-report/`, `tmp/`, and
+  `worktrees/` are local generated/cache/tmp/worktree surfaces. They are not
+  planning, docs, lint, or test source roots unless a script explicitly names a
+  file inside them.
+- `worktrees/` and `.claude/worktrees/` contain active local state. Clean them
+  only through the worktree cleanup runbook; dirty worktrees are preserved and
+  reported.
+- Primary checkout is orchestration-only. Source, docs, scripts, app config,
+  manifests, agent source, and CI files are changed in linked worktrees, while
+  primary may create linked worktree targets and update allowed agent contracts.
+- Unknown or mixed source paths route conservatively through full gates. Docs,
+  hook/tooling, generated/cache, memory, CI, frontend, and Rust routes follow the
+  executable classifier and hook tests, not copied markdown tables.
+
+## Migration Constraints
+
+Later source movement PRs must use
+[`source-root-migration-constraints.md`](source-root-migration-constraints.md).
+The short form:
+
+- Refactor 02 owns frontend source moves. Refactor 03 owns backend adapter/module
+  moves. Do not mix those moves with generated/cache fencing or hook taxonomy
+  changes.
+- Preserve existing public TypeScript and Rust import/module reachability with
+  compatibility exports until consumers are migrated or a cleanup issue removes
+  them with evidence.
+- Tests, fixtures, and committed generated inputs move only with the behavior or
+  generator contract they prove.
+- Each migration PR lists moved roots, compatibility exports, old/new path
+  search evidence, selected checks, and an explicit statement that #729 fence
+  behavior was not weakened.
 
 ## Ownership Inventory
 

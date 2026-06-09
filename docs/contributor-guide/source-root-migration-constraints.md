@@ -20,7 +20,7 @@ roots, compatibility exports, and committed generated inputs.
 
 ## Inputs
 
-- #728 repository topology inventory:
+- Refactor 01 final repository topology and lifecycle SOT:
   [`repository-topology-inventory.md`](repository-topology-inventory.md).
 - #729 generated/cache/tmp/worktree fencing is a prerequisite when a later move
   relies on root-local cache/tmp/worktree paths staying outside source routing.
