@@ -9,7 +9,8 @@ decision logs.
 - [`testing-and-quality.md`](testing-and-quality.md) — developer-facing
   verification gaps and quality follow-ups.
 - [`repository-topology-inventory.md`](repository-topology-inventory.md) —
-  Refactor 01 repository root ownership and lifecycle inventory.
+  Refactor 01 final repository root ownership, lifecycle, cleanup, hook-routing,
+  and migration SOT.
 - [`source-root-migration-constraints.md`](source-root-migration-constraints.md) —
   Refactor 02/03 source-root movement, compatibility export, test, fixture, and
   committed-generated-input constraints.
