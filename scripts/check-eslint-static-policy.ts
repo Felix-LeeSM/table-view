@@ -62,6 +62,78 @@ export const RAW_TAURI_INVOKE_INVENTORY = [
   },
 ] as const satisfies readonly RawTauriInvokeInventoryEntry[];
 
+export type FrontendCompatClassification =
+  | "permanent-wire-compatibility"
+  | "migration-only"
+  | "removable-debt";
+
+type FrontendCompatInventoryEntry = {
+  readonly path: string;
+  readonly branch: string;
+  readonly classification: FrontendCompatClassification;
+  readonly owner: string;
+  readonly horizon: string;
+  readonly testEvidence: readonly string[];
+  readonly followUp: string;
+};
+
+export const FRONTEND_COMPAT_INVENTORY_DOC =
+  "docs/archives/audits/refactor-02-frontend-compat-inventory-2026-06-10.md";
+
+const FRONTEND_COMPAT_SCOPE_ROOTS = [
+  "src/components/",
+  "src/lib/",
+  "src/stores/",
+  "src/types/",
+] as const;
+
+const FRONTEND_COMPAT_CLASSIFICATIONS: ReadonlySet<FrontendCompatClassification> =
+  new Set(["permanent-wire-compatibility", "migration-only", "removable-debt"]);
+
+const FRONTEND_COMPAT_MARKER_PATTERN =
+  /legacy|deprecated|back-compat|backward compat|backward compatibility|backward-compat|backwards compatibility|backwards-compatible|compat wrapper|compat surface|compatibility[- ]mirror|compatibility projection/i;
+
+function cleanMarkdownTableCell(cell: string): string {
+  return cell.trim().replace(/^`|`$/g, "").trim();
+}
+
+export function parseFrontendCompatInventoryMarkdown(
+  source: string,
+): FrontendCompatInventoryEntry[] {
+  const entries: FrontendCompatInventoryEntry[] = [];
+  for (const line of source.split(/\r?\n/)) {
+    if (!line.startsWith("| `src/")) continue;
+    const cells = line
+      .split("|")
+      .slice(1, -1)
+      .map((cell) => cleanMarkdownTableCell(cell));
+    if (cells.length < 7) continue;
+    const [path, branch, classification, owner, horizon, tests, followUp] =
+      cells;
+    entries.push({
+      path,
+      branch,
+      classification: classification as FrontendCompatClassification,
+      owner,
+      horizon,
+      testEvidence: tests
+        .split(/<br>|,/)
+        .map((test) => cleanMarkdownTableCell(test))
+        .filter(Boolean),
+      followUp,
+    });
+  }
+  return entries;
+}
+
+function readFrontendCompatInventory(cwd = process.cwd()) {
+  return parseFrontendCompatInventoryMarkdown(
+    readFileSync(resolve(cwd, FRONTEND_COMPAT_INVENTORY_DOC), "utf8"),
+  );
+}
+
+export const FRONTEND_COMPAT_INVENTORY = readFrontendCompatInventory();
+
 const SETTINGS_TAURI_WRAPPER_PATH = "src/lib/tauri/settings.ts";
 const MOVED_SETTINGS_INVOKE_COMMANDS = [
   "get_setting",
@@ -200,6 +272,92 @@ export function findRawTauriInvokeBoundaryViolations(
         `${entry.path}: stale RAW_TAURI_INVOKE_INVENTORY entry; remove it after migrating to ${entry.wrapperTarget}.`,
       );
     }
+  }
+
+  return failures;
+}
+
+function isFrontendCompatScopeModule(repoPath: string): boolean {
+  const path = normalizeRepoPath(repoPath);
+  return (
+    isProductionSourceModule(path) &&
+    !isAllowedGeneratedLintIgnore(path) &&
+    FRONTEND_COMPAT_SCOPE_ROOTS.some((root) => path.startsWith(root))
+  );
+}
+
+function hasFrontendCompatMarker(source: string): boolean {
+  return FRONTEND_COMPAT_MARKER_PATTERN.test(source);
+}
+
+export function findFrontendCompatInventoryViolations(
+  fileSources: ReadonlyMap<string, string>,
+  inventory: readonly FrontendCompatInventoryEntry[] = FRONTEND_COMPAT_INVENTORY,
+): string[] {
+  const failures: string[] = [];
+  const seenInventoryPaths = new Set<string>();
+  const markerPaths = new Set<string>();
+
+  for (const entry of inventory) {
+    const path = normalizeRepoPath(entry.path);
+    if (seenInventoryPaths.has(path)) {
+      failures.push(
+        `${path}: duplicate frontend compatibility inventory entry.`,
+      );
+    }
+    seenInventoryPaths.add(path);
+
+    if (!FRONTEND_COMPAT_CLASSIFICATIONS.has(entry.classification)) {
+      failures.push(`${path}: invalid compatibility classification.`);
+    }
+    if (
+      entry.branch.length === 0 ||
+      entry.owner.length === 0 ||
+      entry.horizon.length === 0 ||
+      entry.followUp.length === 0 ||
+      entry.testEvidence.length === 0
+    ) {
+      failures.push(
+        `${path}: incomplete frontend compatibility inventory row.`,
+      );
+    }
+    if (entry.followUp.match(/#\d+/) === null) {
+      failures.push(
+        `${path}: frontend compatibility row lacks follow-up issue evidence.`,
+      );
+    }
+    if (!isFrontendCompatScopeModule(path)) {
+      failures.push(
+        `${path}: frontend compatibility inventory path is outside #734 scope.`,
+      );
+    }
+  }
+
+  for (const [filePath, source] of [...fileSources.entries()].sort()) {
+    const repoPath = normalizeRepoPath(filePath);
+    if (!isFrontendCompatScopeModule(repoPath)) continue;
+    if (!hasFrontendCompatMarker(source)) continue;
+    markerPaths.add(repoPath);
+    if (!seenInventoryPaths.has(repoPath)) {
+      failures.push(
+        `${repoPath}: frontend compatibility marker is missing from ${FRONTEND_COMPAT_INVENTORY_DOC}.`,
+      );
+    }
+  }
+
+  for (const path of seenInventoryPaths) {
+    const source = fileSources.get(path);
+    if (source === undefined || !hasFrontendCompatMarker(source)) {
+      failures.push(
+        `${path}: stale frontend compatibility inventory entry; remove it from ${FRONTEND_COMPAT_INVENTORY_DOC}.`,
+      );
+    }
+  }
+
+  if (markerPaths.size === 0) {
+    failures.push(
+      "frontend compatibility marker scan returned no production paths.",
+    );
   }
 
   return failures;
@@ -371,6 +529,7 @@ async function main() {
         ]
       : []),
     ...findRawTauriInvokeBoundaryViolations(sourceFileContents),
+    ...findFrontendCompatInventoryViolations(sourceFileContents),
     ...(await validateFeatureBoundaryRule(eslint, cwd)),
   ];
 

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  FRONTEND_COMPAT_INVENTORY,
   MAX_LINES_ALLOWLIST,
   RAW_TAURI_INVOKE_INVENTORY,
+  findFrontendCompatInventoryViolations,
   findRawTauriInvokeBoundaryViolations,
   findUnexpectedIgnoredFiles,
   isAllowedGeneratedLintIgnore,
+  parseFrontendCompatInventoryMarkdown,
   summarizeLintMessages,
 } from "../check-eslint-static-policy";
 
@@ -142,6 +145,94 @@ describe("check-eslint-static-policy", () => {
     );
 
     expect(failures).toEqual([]);
+  });
+
+  it("loads the frontend compatibility inventory from the audit document", () => {
+    expect(FRONTEND_COMPAT_INVENTORY.length).toBeGreaterThan(50);
+    expect(FRONTEND_COMPAT_INVENTORY).toContainEqual(
+      expect.objectContaining({
+        path: "src/stores/workspaceStore/types.ts",
+        classification: "migration-only",
+        followUp: expect.stringContaining("#764"),
+      }),
+    );
+    expect(FRONTEND_COMPAT_INVENTORY).toContainEqual(
+      expect.objectContaining({
+        path: "src/lib/runtime/migration/legacyColumnPrefsDrop.ts",
+        classification: "removable-debt",
+        followUp: expect.stringContaining("#758"),
+      }),
+    );
+  });
+
+  it("parses compact frontend compatibility table rows", () => {
+    expect(
+      parseFrontendCompatInventoryMarkdown(`
+| Path | Branch | Classification | Owner | Horizon | Tests | Follow-up |
+|---|---|---|---|---|---|---|
+| \`src/types/connection.ts\` | legacy URL alias | permanent-wire-compatibility | connection | preserve | \`src/types/connection.test.ts\` | #735 |
+`),
+    ).toEqual([
+      {
+        path: "src/types/connection.ts",
+        branch: "legacy URL alias",
+        classification: "permanent-wire-compatibility",
+        owner: "connection",
+        horizon: "preserve",
+        testEvidence: ["src/types/connection.test.ts"],
+        followUp: "#735",
+      },
+    ]);
+  });
+
+  it("rejects untriaged frontend compatibility markers", () => {
+    const failures = findFrontendCompatInventoryViolations(
+      new Map([
+        [
+          "src/types/connection.ts",
+          "// legacy URL scheme kept for compatibility\n",
+        ],
+        ["src/lib/newCompat.ts", "// legacy persisted value still supported\n"],
+      ]),
+      [
+        {
+          path: "src/types/connection.ts",
+          branch: "legacy URL scheme",
+          classification: "permanent-wire-compatibility",
+          owner: "connection",
+          horizon: "preserve",
+          testEvidence: ["src/types/connection.test.ts"],
+          followUp: "#735",
+        },
+      ],
+    );
+
+    expect(failures).toContain(
+      "src/lib/newCompat.ts: frontend compatibility marker is missing from docs/archives/audits/refactor-02-frontend-compat-inventory-2026-06-10.md.",
+    );
+  });
+
+  it("rejects stale frontend compatibility inventory rows", () => {
+    const failures = findFrontendCompatInventoryViolations(
+      new Map([
+        ["src/types/connection.ts", "export const database = 'postgres';\n"],
+      ]),
+      [
+        {
+          path: "src/types/connection.ts",
+          branch: "legacy URL scheme",
+          classification: "permanent-wire-compatibility",
+          owner: "connection",
+          horizon: "preserve",
+          testEvidence: ["src/types/connection.test.ts"],
+          followUp: "#735",
+        },
+      ],
+    );
+
+    expect(failures).toContain(
+      "src/types/connection.ts: stale frontend compatibility inventory entry; remove it from docs/archives/audits/refactor-02-frontend-compat-inventory-2026-06-10.md.",
+    );
   });
 
   it("does not block unrelated raw invoke commands in UI-adjacent modules", () => {
