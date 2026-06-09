@@ -65,6 +65,34 @@ jobs:
           shared-key: e2e-smoke-linux
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
+      - name: Show disk usage before E2E build
+        run: |
+          echo "::group::Filesystem usage"
+          df -h /
+          df -h "$GITHUB_WORKSPACE" || true
+          echo "::endgroup::"
+          echo "::group::Build cache usage"
+          du -sh src-tauri/target 2>/dev/null || true
+          du -sh node_modules 2>/dev/null || true
+          du -sh ~/.cargo 2>/dev/null || true
+          echo "::endgroup::"
+
+      - name: Free disk headroom before E2E build
+        run: |
+          sudo apt-get clean
+          docker system prune -af || true
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc
+          echo "::group::Filesystem usage after cleanup"
+          df -h /
+          df -h "$GITHUB_WORKSPACE" || true
+          echo "::endgroup::"
+          echo "::group::Build cache usage after cleanup"
+          du -sh src-tauri/target 2>/dev/null || true
+          echo "::endgroup::"
+
       - name: Build E2E smoke binary
         env:
           E2E_BUILD_ONLY: "1"
