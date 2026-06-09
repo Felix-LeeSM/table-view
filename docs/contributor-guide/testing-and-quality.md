@@ -28,6 +28,21 @@ is archived at
 | Link checker | Add an internal-doc link checker after archive routing settles. |
 | Dependency security | Track `hickory-proto` advisory exposure through `mongodb 3.6.0` and `rustls-pemfile` exposure through `oracle-rs 0.1.7`; remove deny ignores when upstream dependency updates make it possible. |
 
+## Static Lint Gate
+
+`pnpm lint` runs `scripts/check-eslint-static-policy.ts`. The wrapper runs the
+full ESLint config and then enforces the Refactor 00 static policy from
+`docs/archives/audits/refactor-00-static-hardening-2026-06-09.md`:
+
+| Gate | Current policy | Triage owner |
+|---|---|---|
+| `max-lines` | Existing 22 warnings are an exact allowlist. New entries and stale entries fail. | The PR touching the file removes new debt or shrinks the allowlist. |
+| Hidden TS/TSX lint candidates | Only generated wasm artifacts under `src/lib/sql/wasm/**` and `src/lib/mongo/wasm/**` may be ignored. | The PR adding a broad ignore must either narrow it or document generated-artifact ownership. |
+| `src/features/**` imports | Future feature modules may use feature-local code, `@lib`, `@/types`, and `@components/ui`; imports from legacy components, hooks, stores, pages, router, or app shell fail. | The first frontend migration PR owns any reusable extraction before importing legacy code. |
+
+Coverage thresholds stay with #579/#580, E2E breadth with #581, and CI cache or
+parallelism with #582. Static lint changes should not edit those gates.
+
 ## H1 Data Source Smoke Matrix
 
 This matrix records the current data-source architecture smoke boundary. It is
