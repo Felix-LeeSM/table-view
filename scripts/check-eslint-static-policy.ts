@@ -62,6 +62,16 @@ export const RAW_TAURI_INVOKE_INVENTORY = [
   },
 ] as const satisfies readonly RawTauriInvokeInventoryEntry[];
 
+const SETTINGS_TAURI_WRAPPER_PATH = "src/lib/tauri/settings.ts";
+const MOVED_SETTINGS_INVOKE_COMMANDS = [
+  "get_setting",
+  "persist_setting",
+  "reset_setting",
+] as const;
+const MOVED_SETTINGS_INVOKE_COMMAND_SET: ReadonlySet<string> = new Set(
+  MOVED_SETTINGS_INVOKE_COMMANDS,
+);
+
 type LintMessageLike = {
   ruleId: string | null;
   severity: number;
@@ -94,14 +104,21 @@ export function findUnexpectedIgnoredFiles(repoPaths: string[]): string[] {
     .sort();
 }
 
-function isStoreProductionModule(repoPath: string): boolean {
+function isProductionSourceModule(repoPath: string): boolean {
   const path = normalizeRepoPath(repoPath);
   return (
-    path.startsWith("src/stores/") &&
+    path.startsWith("src/") &&
     !path.includes("/__tests__/") &&
     !path.endsWith(".test.ts") &&
-    !path.endsWith(".test.tsx")
+    !path.endsWith(".test.tsx") &&
+    !path.endsWith(".spec.ts") &&
+    !path.endsWith(".spec.tsx")
   );
+}
+
+function isStoreProductionModule(repoPath: string): boolean {
+  const path = normalizeRepoPath(repoPath);
+  return path.startsWith("src/stores/") && isProductionSourceModule(path);
 }
 
 function importsRawTauriInvoke(source: string): boolean {
@@ -123,13 +140,33 @@ export function findRawTauriInvokeBoundaryViolations(
   const filesWithRawInvoke = new Set<string>();
   const failures: string[] = [];
 
-  for (const [repoPath, source] of [...fileSources.entries()].sort()) {
-    if (!isStoreProductionModule(repoPath)) continue;
+  for (const [filePath, source] of [...fileSources.entries()].sort()) {
+    const repoPath = normalizeRepoPath(filePath);
     if (!importsRawTauriInvoke(source)) continue;
+
+    const commands = collectRawInvokeCommands(source);
+    if (
+      isProductionSourceModule(repoPath) &&
+      repoPath !== SETTINGS_TAURI_WRAPPER_PATH
+    ) {
+      const movedSettingsCommands = [
+        ...new Set(
+          commands.filter((command) =>
+            MOVED_SETTINGS_INVOKE_COMMAND_SET.has(command),
+          ),
+        ),
+      ];
+      if (movedSettingsCommands.length > 0) {
+        failures.push(
+          `${repoPath}: raw moved settings invoke command(s) must use ${SETTINGS_TAURI_WRAPPER_PATH}: ${movedSettingsCommands.join(", ")}.`,
+        );
+      }
+    }
+
+    if (!isStoreProductionModule(repoPath)) continue;
 
     filesWithRawInvoke.add(repoPath);
     const inventory = inventoryByPath.get(repoPath);
-    const commands = collectRawInvokeCommands(source);
 
     if (inventory === undefined) {
       failures.push(

@@ -100,6 +100,71 @@ describe("check-eslint-static-policy", () => {
     );
   });
 
+  it("rejects moved settings raw invokes in UI-adjacent modules", () => {
+    const failures = findRawTauriInvokeBoundaryViolations(
+      new Map([
+        [
+          "src/lib/themeBoot.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nawait invoke<string | null>("get_setting", { key: "theme" });\n',
+        ],
+        [
+          "src/stores/favoritesStore.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("list_favorites");\nvoid invoke("persist_favorites");\n',
+        ],
+        [
+          "src/stores/mruStore.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("persist_mru");\nvoid invoke("clear_mru");\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      "src/lib/themeBoot.ts: raw moved settings invoke command(s) must use src/lib/tauri/settings.ts: get_setting.",
+    );
+  });
+
+  it("allows moved settings raw invokes in the typed settings wrapper", () => {
+    const failures = findRawTauriInvokeBoundaryViolations(
+      new Map([
+        [
+          "src/lib/tauri/settings.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("get_setting");\nvoid invoke("persist_setting");\nvoid invoke("reset_setting");\n',
+        ],
+        [
+          "src/stores/favoritesStore.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("list_favorites");\nvoid invoke("persist_favorites");\n',
+        ],
+        [
+          "src/stores/mruStore.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("persist_mru");\nvoid invoke("clear_mru");\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toEqual([]);
+  });
+
+  it("does not block unrelated raw invoke commands in UI-adjacent modules", () => {
+    const failures = findRawTauriInvokeBoundaryViolations(
+      new Map([
+        [
+          "src/lib/themeBoot.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("show_window");\n',
+        ],
+        [
+          "src/stores/favoritesStore.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("list_favorites");\nvoid invoke("persist_favorites");\n',
+        ],
+        [
+          "src/stores/mruStore.ts",
+          'import { invoke } from "@tauri-apps/api/core";\nvoid invoke("persist_mru");\nvoid invoke("clear_mru");\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toEqual([]);
+  });
+
   it("rejects new commands in inventoried raw store modules", () => {
     const failures = findRawTauriInvokeBoundaryViolations(
       new Map([
