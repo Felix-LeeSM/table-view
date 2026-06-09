@@ -675,6 +675,14 @@ mod tests {
     }
 
     #[test]
+    fn view_list_query_does_not_decode_long_definition_column() {
+        assert!(
+            !VIEWS_SQL.to_ascii_lowercase().contains("text"),
+            "Oracle view browse must not read ALL_VIEWS.TEXT LONG values"
+        );
+    }
+
+    #[test]
     fn routine_source_target_routes_package_members_to_package_body() {
         assert_eq!(
             routine_source_target("CATALOG_API"),

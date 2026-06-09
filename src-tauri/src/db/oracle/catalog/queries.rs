@@ -32,7 +32,7 @@ ORDER BY table_name";
 
 pub(super) const VIEWS_SQL: &str = "\
 SELECT view_name,
-       text
+       NULL AS definition
 FROM all_views
 WHERE owner = :1
 ORDER BY view_name";

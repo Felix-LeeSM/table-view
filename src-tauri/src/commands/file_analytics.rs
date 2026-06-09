@@ -170,3 +170,158 @@ pub async fn duckdb_execute_file_analytics_query(
 ) -> Result<FileAnalyticsQueryResponse, AppError> {
     execute_file_analytics_query_inner(state.inner(), &connection_id, &source_id, &sql).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::{ActiveAdapter, DbAdapter, DuckdbAdapter, OracleAdapter};
+    use crate::models::ConnectionConfig;
+    use std::fs;
+
+    fn duckdb_config(path: &str) -> ConnectionConfig {
+        ConnectionConfig {
+            id: "duckdb".into(),
+            name: "DuckDB".into(),
+            db_type: DatabaseType::Duckdb,
+            host: String::new(),
+            port: 0,
+            user: String::new(),
+            password: String::new(),
+            database: path.into(),
+            read_only: false,
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+            environment: None,
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: None,
+        }
+    }
+
+    fn assert_validation(result: Result<impl Sized, AppError>) {
+        assert!(matches!(
+            result,
+            Err(AppError::Validation(message)) if message.contains("Connection ID")
+        ));
+    }
+
+    fn assert_not_connected(result: Result<impl Sized, AppError>) {
+        assert!(matches!(
+            result,
+            Err(AppError::NotFound(message)) if message.contains("missing")
+        ));
+    }
+
+    fn assert_duckdb_required(result: Result<impl Sized, AppError>) {
+        assert!(matches!(
+            result,
+            Err(AppError::Unsupported(message))
+                if message.contains("DuckDB file analytics requires a DuckDB connection")
+        ));
+    }
+
+    #[tokio::test]
+    async fn file_analytics_commands_reject_empty_connection_id_before_lookup() {
+        let state = AppState::default();
+
+        assert_validation(register_file_analytics_source_inner(&state, " ", "/tmp/data.csv").await);
+        assert_validation(preview_file_analytics_source_inner(&state, " ", "src", Some(1)).await);
+        assert_validation(list_file_analytics_source_metadata_inner(&state, " ").await);
+        assert_validation(clear_file_analytics_sources_inner(&state, " ").await);
+        assert_validation(
+            execute_file_analytics_query_inner(&state, " ", "src", "SELECT * FROM src").await,
+        );
+    }
+
+    #[tokio::test]
+    async fn file_analytics_commands_fail_closed_when_connection_is_missing() {
+        let state = AppState::default();
+
+        assert_not_connected(
+            register_file_analytics_source_inner(&state, "missing", "/tmp/data.csv").await,
+        );
+        assert_not_connected(
+            preview_file_analytics_source_inner(&state, "missing", "src", Some(1)).await,
+        );
+        assert_not_connected(list_file_analytics_source_metadata_inner(&state, "missing").await);
+        assert_not_connected(clear_file_analytics_sources_inner(&state, "missing").await);
+        assert_not_connected(
+            execute_file_analytics_query_inner(&state, "missing", "src", "SELECT * FROM src").await,
+        );
+    }
+
+    #[tokio::test]
+    async fn file_analytics_commands_require_duckdb_active_connection() {
+        let state = AppState::default();
+        state.active_connections.lock().await.insert(
+            "oracle".into(),
+            ActiveAdapter::Rdb(Box::new(OracleAdapter::new())),
+        );
+
+        assert_duckdb_required(
+            register_file_analytics_source_inner(&state, "oracle", "/tmp/data.csv").await,
+        );
+        assert_duckdb_required(
+            preview_file_analytics_source_inner(&state, "oracle", "src", Some(1)).await,
+        );
+        assert_duckdb_required(list_file_analytics_source_metadata_inner(&state, "oracle").await);
+        assert_duckdb_required(clear_file_analytics_sources_inner(&state, "oracle").await);
+        assert_duckdb_required(
+            execute_file_analytics_query_inner(&state, "oracle", "src", "SELECT * FROM src").await,
+        );
+    }
+
+    #[tokio::test]
+    async fn file_analytics_commands_dispatch_to_duckdb_adapter() {
+        let state = AppState::default();
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("fixture.duckdb");
+        duckdb::Connection::open(&db_path).unwrap();
+        let adapter = DuckdbAdapter::new();
+        adapter
+            .connect(&duckdb_config(db_path.to_str().unwrap()))
+            .await
+            .unwrap();
+        state
+            .active_connections
+            .lock()
+            .await
+            .insert("duckdb".into(), ActiveAdapter::Rdb(Box::new(adapter)));
+        let csv_path = dir.path().join("users.csv");
+        fs::write(&csv_path, "id,name\n1,Ada\n2,Grace\n").unwrap();
+
+        let source =
+            register_file_analytics_source_inner(&state, "duckdb", csv_path.to_str().unwrap())
+                .await
+                .unwrap();
+        let preview = preview_file_analytics_source_inner(&state, "duckdb", &source.id, Some(1))
+            .await
+            .unwrap();
+        assert_eq!(preview.result.rows.len(), 1);
+
+        let metadata = list_file_analytics_source_metadata_inner(&state, "duckdb")
+            .await
+            .unwrap();
+        assert_eq!(metadata.len(), 1);
+
+        let response = execute_file_analytics_query_inner(
+            &state,
+            "duckdb",
+            &source.id,
+            &format!("SELECT COUNT(*) AS total FROM \"{}\"", source.alias),
+        )
+        .await
+        .unwrap();
+        assert_eq!(response.result.rows[0][0], serde_json::json!(2));
+
+        clear_file_analytics_sources_inner(&state, "duckdb")
+            .await
+            .unwrap();
+        assert!(list_file_analytics_source_metadata_inner(&state, "duckdb")
+            .await
+            .unwrap()
+            .is_empty());
+    }
+}
