@@ -11,8 +11,25 @@ assert_contains() {
 	local needle="$2"
 	local label="$3"
 
-	if ! grep -Fq "$needle" <<<"$text"; then
+	if ! grep -Fq -- "$needle" <<<"$text"; then
 		echo "FAIL: $label: missing '$needle'" >&2
+		exit 1
+	fi
+}
+
+assert_order() {
+	local text="$1"
+	local first="$2"
+	local second="$3"
+	local label="$4"
+	local first_line
+	local second_line
+
+	first_line="$(grep -Fn -- "$first" <<<"$text" | head -n 1 | cut -d: -f1)"
+	second_line="$(grep -Fn -- "$second" <<<"$text" | head -n 1 | cut -d: -f1)"
+
+	if [ -z "$first_line" ] || [ -z "$second_line" ] || [ "$first_line" -ge "$second_line" ]; then
+		echo "FAIL: $label: expected '$first' before '$second'" >&2
 		exit 1
 	fi
 }
@@ -37,7 +54,10 @@ assert_contains "$vite_cache_block" "path: node_modules/.vite" "vite cache"
 assert_contains "$vite_cache_block" "key: vite-\${{ runner.os }}-\${{ hashFiles(" "vite cache key"
 assert_contains "$vite_cache_block" "restore-keys: |" "vite cache restore"
 assert_contains "$vite_cache_block" "vite-\${{ runner.os }}-" "vite cache restore"
+assert_contains "$frontend_block" "run: git fetch --no-tags --prune --depth=1 origin refs/heads/main:refs/remotes/origin/main" "frontend coverage ratchet base fetch"
+assert_contains "$frontend_block" "COVERAGE_RATCHET_REQUIRE_MAIN: \"1\"" "frontend coverage ratchet require main"
 assert_contains "$frontend_block" "run: pnpm exec tsx scripts/check-coverage-ratchet.ts" "frontend coverage ratchet"
+assert_order "$frontend_block" "- name: Fetch coverage ratchet base" "- name: Coverage ratchet" "frontend coverage ratchet base fetch order"
 assert_contains "$frontend_block" "run: pnpm test -- --run --coverage --coverage.reporter=text-summary" "frontend coverage gate"
 assert_contains "$rust_block" "workspaces: src-tauri -> target" "rust cache"
 assert_contains "$rust_block" "cache-bin: false" "rust cache"

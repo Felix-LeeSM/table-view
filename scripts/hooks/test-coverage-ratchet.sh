@@ -243,6 +243,22 @@ run_checker() {
 
 repo="$TMP_DIR/repo"
 init_repo "$repo"
+git -C "$repo" update-ref -d refs/remotes/origin/main
+
+set +e
+output="$(COVERAGE_RATCHET_REQUIRE_MAIN=1 run_checker "$repo" 2>&1)"
+status=$?
+set -e
+
+if [ "$status" -eq 0 ]; then
+	echo "FAIL: required main ref unexpectedly passed" >&2
+	echo "$output" >&2
+	exit 1
+fi
+
+assert_contains "$output" "origin/main:scripts/coverage-ratchet-targets.json is unavailable" "required main ref"
+
+git -C "$repo" update-ref refs/remotes/origin/main "$(git -C "$repo" rev-parse HEAD)"
 write_deleted_target "$repo"
 
 set +e

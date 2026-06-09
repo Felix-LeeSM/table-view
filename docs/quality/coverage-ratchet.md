@@ -64,8 +64,10 @@ target requires an explicit policy change rather than silent omission.
 path-sensitive frontend/Rust gates. The check is fast and runs for docs-only
 changes too, because threshold drift is independent of touched application code.
 
-GitHub CI runs the ratchet in Frontend Checks, then runs frontend tests with
-coverage enabled so `vite.config.ts` thresholds are enforced remotely. Rust
+GitHub CI fetches `refs/heads/main:refs/remotes/origin/main`, runs the ratchet
+with `COVERAGE_RATCHET_REQUIRE_MAIN=1` in Frontend Checks, then runs frontend
+tests with coverage enabled so `vite.config.ts` thresholds are enforced
+remotely. Missing `origin/main` is a hard CI failure, not bootstrap mode. Rust
 coverage cutoff enforcement remains the local pre-push gate because the push
 profile includes the heavier testcontainer integration lane.
 
