@@ -25,7 +25,7 @@ const WRITABLE_CONNECTION = "E2E DuckDB";
 const READ_ONLY_CONNECTION = "E2E DuckDB Read Only";
 
 describe("DuckDB file workflow smoke", () => {
-  it("covers .duckdb open, catalog browse, SELECT result/history, and read-only write rejection", async () => {
+  it("covers .duckdb open, catalog browse, SELECT/DML, history, and read-only write rejection", async () => {
     const dataDir = testDataDir();
     const duckdbPath = resolve(
       dataDir,
@@ -33,6 +33,8 @@ describe("DuckDB file workflow smoke", () => {
       "duckdb",
       "table_view_e2e.duckdb",
     );
+    const smokeProductId = 900000 + Math.floor(Date.now() % 100000);
+    const smokeProductName = `DuckDB Smoke Product ${Date.now()}`;
 
     await step("prepare deterministic DuckDB fixture file", async () => {
       await prepareDuckdbFixture(duckdbPath);
@@ -82,6 +84,30 @@ describe("DuckDB file workflow smoke", () => {
     await step("verify query history records the DuckDB SELECT", async () => {
       await waitForTabHistoryStatuses(["success"]);
       await waitForGlobalHistoryEvidence(["SELECT email AS duckdb_email"]);
+    });
+
+    await step("execute writable DML and verify readback", async () => {
+      await typeQuery(
+        `INSERT INTO core.products (id, name, price) VALUES (${smokeProductId}, '${smokeProductName}', 31.25)`,
+      );
+      await runQuery();
+
+      await waitForWorkspaceTextAll(
+        ["DML", "1 row affected"],
+        15000,
+        "DuckDB DML result evidence did not render",
+      );
+
+      await typeQuery(
+        `SELECT name AS duckdb_product_name, price FROM core.products WHERE id = ${smokeProductId}`,
+      );
+      await runQuery();
+
+      await waitForGridTextAll(
+        ["duckdb_product_name", smokeProductName, "31.25"],
+        15000,
+        "DuckDB DML readback did not appear in result grid",
+      );
     });
 
     await step("read-only connection rejects writes", async () => {
