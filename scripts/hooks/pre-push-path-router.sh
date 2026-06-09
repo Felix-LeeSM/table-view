@@ -16,6 +16,8 @@ PARALLEL_GATES="${PRE_PUSH_PATH_ROUTER_PARALLEL_GATES:-1}"
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/path-classifier.sh"
 
 REFS_FILE="$(mktemp "${TMPDIR:-/tmp}/pre-push-refs.XXXXXX")"
 COMMITS_FILE="$(mktemp "${TMPDIR:-/tmp}/pre-push-commits.XXXXXX")"
@@ -142,118 +144,6 @@ collect_paths() {
 			;;
 		esac
 	done | sort -u >"$PATHS_FILE"
-}
-
-is_docs_path() {
-	case "$1" in
-	docs/* | README.md | CHANGELOG.md | CLAUDE.md | AGENTS.md | *.md)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
-is_hook_path() {
-	case "$1" in
-	.gitignore | lefthook.yml | .githooks/* | scripts/hooks/* | scripts/setup.sh | scripts/target-cache.sh | scripts/worktree-spawn.sh | scripts/worktree-cleanup.sh | scripts/worktree-bootstrap-deps.sh | scripts/check-coverage-ratchet.ts | scripts/coverage-ratchet-targets.json | src-tauri/.config/nextest.toml)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
-is_workflow_path() {
-	case "$1" in
-	.github/*)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
-is_agent_path() {
-	case "$1" in
-	.claude/* | .codex/* | .agents/*)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
-is_memory_path() {
-	case "$1" in
-	memory/*)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
-is_local_generated_path() {
-	case "$1" in
-	node_modules/* | dist/* | .vite/* | cargo-target/* | target/* | \
-	src-tauri/target/* | src-tauri/sql-parser-core/target/* | \
-	src-tauri/mongosh-parser-core/target/* | coverage/* | \
-	test-results/* | wdio-report/* | e2e/wdio-report/* | tmp/* | \
-	worktrees/* | .claude/worktrees/*)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
-is_ci_workflow_path() {
-	case "$1" in
-	.github/workflows/*)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
-is_frontend_path() {
-	case "$1" in
-	src/* | src/**/* | e2e/* | e2e/**/* | tests/* | tests/**/* | public/* | public/**/* | index.html)
-		return 0
-		;;
-	*.ts | *.tsx | *.js | *.jsx | *.mjs | *.cjs | *.css)
-		return 0
-		;;
-	package.json | pnpm-lock.yaml | package-lock.json | yarn.lock)
-		return 0
-		;;
-	tsconfig.json | tsconfig.*.json | vite.config.* | vitest.config.* | eslint.config.* | wdio*.ts | tailwind.config.* | postcss.config.*)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
-is_rust_path() {
-	case "$1" in
-	src-tauri/* | src-tauri/**/* | Cargo.toml | Cargo.lock | **/Cargo.toml | **/Cargo.lock | **/deny.toml | *.rs)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
 }
 
 run_step() {
@@ -439,6 +329,8 @@ needs_memory=0
 needs_agent=0
 needs_ci_workflow=0
 needs_generated=0
+needs_fixture=0
+needs_committed_generated=0
 needs_full=0
 
 while read -r path; do
@@ -463,6 +355,14 @@ while read -r path; do
 		needs_generated=1
 		continue
 	fi
+	if is_fixture_tooling_path "$path"; then
+		docs_only=0
+		needs_fixture=1
+	fi
+	if is_committed_generated_input_path "$path"; then
+		docs_only=0
+		needs_committed_generated=1
+	fi
 	if is_agent_path "$path"; then
 		docs_only=0
 		needs_agent=1
@@ -483,7 +383,7 @@ while read -r path; do
 	if is_rust_path "$path"; then
 		needs_rust=1
 	fi
-	if ! is_docs_path "$path" && ! is_hook_path "$path" && ! is_agent_path "$path" && ! is_memory_path "$path" && ! is_workflow_path "$path" && ! is_frontend_path "$path" && ! is_rust_path "$path"; then
+	if ! is_docs_path "$path" && ! is_hook_path "$path" && ! is_agent_path "$path" && ! is_memory_path "$path" && ! is_workflow_path "$path" && ! is_fixture_tooling_path "$path" && ! is_committed_generated_input_path "$path" && ! is_frontend_path "$path" && ! is_rust_path "$path"; then
 		needs_full=1
 	fi
 done <"$PATHS_FILE"
@@ -505,7 +405,7 @@ else
 		needs_rust=1
 		echo "[pre-push-route] route: full (workflow or unknown path)"
 	else
-		echo "[pre-push-route] route: frontend=$needs_frontend rust=$needs_rust hook=$needs_hook memory=$needs_memory agent=$needs_agent generated=$needs_generated"
+		echo "[pre-push-route] route: frontend=$needs_frontend rust=$needs_rust hook=$needs_hook memory=$needs_memory agent=$needs_agent generated=$needs_generated ci_workflow=$needs_ci_workflow fixture=$needs_fixture committed_generated=$needs_committed_generated"
 	fi
 
 	if [ "$needs_hook" = "1" ]; then
