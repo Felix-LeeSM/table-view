@@ -179,9 +179,15 @@ function codeMirrorTypeForKind(kind: CompletionItem["kind"]): string {
       return "namespace";
     case "table":
     case "view":
+    case "synonym":
       return "type";
     case "column":
       return "property";
+    case "package":
+      return "namespace";
+    case "sequence":
+    case "variable":
+      return "variable";
     case "meta-command":
       return "keyword";
     default:
@@ -200,9 +206,13 @@ function coreValidFor(result: CoreCompletionResult): RegExp {
   const hasBracketIdentifier = result.items.some(
     (item) => typeof item.apply === "string" && item.apply.startsWith("["),
   );
+  const hasDoubleQuotedIdentifier = result.items.some(
+    (item) => typeof item.apply === "string" && item.apply.startsWith('"'),
+  );
   if (hasMetaCommand) return /^[\w$.\\]*$/;
   if (hasQuotedIdentifier) return /^`?[\w$]*`?$/;
   if (hasBracketIdentifier) return /^\[?[\w$ ]*\]?$/;
+  if (hasDoubleQuotedIdentifier) return /^"?[\w$ ]*"?$/;
   return hasOperator ? /^[\w$+\-*/<>=~!@#%^&|`?]*$/ : /^[\w$]*$/;
 }
 

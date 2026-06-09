@@ -135,6 +135,68 @@ function requestWithMssqlCatalog() {
   return buildSqlCompletionRequest("SELECT * FROM MssqlApp.sales.", 29, ctx);
 }
 
+function requestWithOracleCatalog() {
+  const snapshot = emptySnapshot();
+  snapshot.schemas.conn1 = {
+    FREEPDB1: [{ name: "APP" }],
+  };
+  snapshot.tables.conn1 = {
+    FREEPDB1: {
+      APP: [{ schema: "APP", name: "ORDERS", row_count: null }],
+    },
+  };
+  snapshot.functions.conn1 = {
+    FREEPDB1: {
+      APP: [
+        {
+          schema: "APP",
+          name: "ORDER_SEQ",
+          arguments: "increment 1, cache 20",
+          returnType: "next 101",
+          language: "Oracle sequence",
+          source: null,
+          kind: "sequence",
+        },
+        {
+          schema: "APP",
+          name: "ACTIVE_USERS_ALIAS",
+          arguments: "APP.ACTIVE_ORACLE_USERS",
+          returnType: "APP.ACTIVE_ORACLE_USERS",
+          language: "Oracle synonym",
+          source: null,
+          kind: "synonym",
+        },
+      ],
+    },
+  };
+  snapshot.tableColumnsCache.conn1 = {
+    FREEPDB1: {
+      APP: {
+        ORDERS: [
+          {
+            name: "ORDER_ID",
+            data_type: "NUMBER",
+            nullable: false,
+            default_value: null,
+            is_primary_key: true,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+      },
+    },
+  };
+  const ctx = buildSqlCompletionContext({
+    ...snapshot,
+    connectionId: "conn1",
+    database: "FREEPDB1",
+    dbType: "oracle",
+    catalogRevision: "rev-oracle-catalog",
+  });
+  return buildSqlCompletionRequest("SELECT APP.ORDER_SEQ.", 21, ctx);
+}
+
 function requestWithMariaDbVersion(serverVersion: string) {
   const ctx = buildSqlCompletionContext({
     ...emptySnapshot(),
@@ -254,6 +316,23 @@ describe("sqlCompletionWasm", () => {
     );
     expect(call[13]).toContain(
       "dbo\tusp_RebuildLeaderboard\tdbo.usp_RebuildLeaderboard\t@season int\t\tMssqlApp",
+    );
+  });
+
+  it("serializes Oracle catalog metadata kinds across the WASM bridge", async () => {
+    completeSqlMock.mockReturnValue(null);
+
+    await completeSqlWithWasm(requestWithOracleCatalog());
+
+    const call = completeSqlMock.mock.calls[0]!;
+    expect(call[10]).toBe("APP\tFREEPDB1");
+    expect(call[11]).toContain("table\tAPP\tORDERS\tAPP.ORDERS\tFREEPDB1");
+    expect(call[12]).toContain("APP\tORDERS\tORDER_ID\tAPP.ORDERS\tFREEPDB1");
+    expect(call[13]).toContain(
+      "APP\tORDER_SEQ\tAPP.ORDER_SEQ\tincrement 1, cache 20\tnext 101\tFREEPDB1\tsequence\tOracle sequence",
+    );
+    expect(call[13]).toContain(
+      "APP\tACTIVE_USERS_ALIAS\tAPP.ACTIVE_USERS_ALIAS\tAPP.ACTIVE_ORACLE_USERS\tAPP.ACTIVE_ORACLE_USERS\tFREEPDB1\tsynonym\tOracle synonym",
     );
   });
 

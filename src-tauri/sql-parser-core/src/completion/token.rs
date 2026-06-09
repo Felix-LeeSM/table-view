@@ -114,6 +114,7 @@ fn valid_cursor_utf8(text: &str, requested: usize) -> usize {
 fn quoted_identifier_prefix(before: &str) -> Option<(usize, String, char)> {
     quoted_identifier_prefix_for(before, '`', '`')
         .or_else(|| quoted_identifier_prefix_for(before, '[', ']'))
+        .or_else(|| quoted_identifier_prefix_for(before, '"', '"'))
 }
 
 fn quoted_identifier_prefix_for(
@@ -166,7 +167,15 @@ fn scan_qualifier_start(before_dot: &str) -> usize {
             cursor = open_idx;
             continue;
         }
-        if is_ident_char(ch) || matches!(ch, '.' | '`') {
+        if ch == '"' || ch == '`' {
+            let Some(open_idx) = before_dot[..idx].rfind(ch) else {
+                break;
+            };
+            start = open_idx;
+            cursor = open_idx;
+            continue;
+        }
+        if is_ident_char(ch) || ch == '.' {
             start = idx;
             cursor = idx;
             continue;
@@ -226,5 +235,15 @@ mod tests {
         );
         assert_eq!(token.prefix, "Order");
         assert_eq!(token.quote, Some('['));
+    }
+
+    #[test]
+    fn double_quote_identifier_prefix_allows_unclosed_oracle_quote() {
+        let token = completion_token_at(
+            "SELECT * FROM \"Order",
+            cursor_at_end("SELECT * FROM \"Order"),
+        );
+        assert_eq!(token.prefix, "Order");
+        assert_eq!(token.quote, Some('"'));
     }
 }
