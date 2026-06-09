@@ -49,6 +49,7 @@ impl OracleAdapter {
                         .query(query, &[])
                         .await
                         .map_err(|err| oracle_query_error("Oracle SELECT failed", err))?;
+                    let result = fetch_remaining_select_rows(&connection, result).await?;
                     normalize_select_result(result, start.elapsed().as_millis() as u64)
                 }
                 QueryType::Dml { .. } => {
@@ -203,7 +204,7 @@ fn normalize_select_result(
     result: OracleQueryResult,
     execution_time_ms: u64,
 ) -> Result<QueryResult, AppError> {
-    ensure_no_select_continuation(&result)?;
+    ensure_select_fully_fetched(&result)?;
 
     let columns: Vec<QueryColumn> = result.columns.iter().map(oracle_query_column).collect();
     let rows = result
@@ -221,11 +222,35 @@ fn normalize_select_result(
     })
 }
 
-fn ensure_no_select_continuation(result: &OracleQueryResult) -> Result<(), AppError> {
-    if result.has_more_rows || result.cursor_id != 0 {
+async fn fetch_remaining_select_rows(
+    connection: &oracle_rs::Connection,
+    mut result: OracleQueryResult,
+) -> Result<OracleQueryResult, AppError> {
+    let columns = result.columns.clone();
+
+    while result.has_more_rows {
+        if result.cursor_id == 0 {
+            return Err(AppError::Unsupported(
+                "Oracle SELECT returned a partial cursor without a cursor id".into(),
+            ));
+        }
+
+        let mut next = connection
+            .fetch_more(result.cursor_id, &columns, 100)
+            .await
+            .map_err(|err| oracle_query_error("Oracle SELECT fetch failed", err))?;
+        result.rows.append(&mut next.rows);
+        result.has_more_rows = next.has_more_rows;
+        result.cursor_id = next.cursor_id;
+    }
+
+    Ok(result)
+}
+
+fn ensure_select_fully_fetched(result: &OracleQueryResult) -> Result<(), AppError> {
+    if result.has_more_rows {
         return Err(AppError::Unsupported(
-            "Oracle SELECT returned a partial cursor; cursor continuation is not supported yet"
-                .into(),
+            "Oracle SELECT still has unfetched rows after cursor fetch".into(),
         ));
     }
     Ok(())
@@ -640,13 +665,12 @@ mod tests {
         assert!(matches!(
             normalize_select_result(result, 7),
             Err(AppError::Unsupported(message))
-                if message.contains("partial cursor")
-                    && message.contains("not supported yet")
+                if message.contains("unfetched rows")
         ));
     }
 
     #[test]
-    fn select_result_normalization_rejects_nonzero_cursor_id() {
+    fn select_result_normalization_allows_complete_cursor_id() {
         let result = OracleQueryResult {
             columns: vec![OracleColumnInfo::new("ID", OracleType::Number)],
             rows: vec![Row::new(vec![Value::Integer(1)])],
@@ -655,10 +679,10 @@ mod tests {
             cursor_id: 7,
         };
 
-        assert!(matches!(
-            normalize_select_result(result, 7),
-            Err(AppError::Unsupported(message)) if message.contains("partial cursor")
-        ));
+        let normalized = normalize_select_result(result, 7).unwrap();
+
+        assert_eq!(normalized.total_count, 1);
+        assert_eq!(normalized.rows, vec![vec![serde_json::json!(1)]]);
     }
 
     #[test]
