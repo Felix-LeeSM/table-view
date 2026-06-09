@@ -313,7 +313,7 @@ fn oracle_query_column(column: &OracleColumnInfo) -> QueryColumn {
     }
 }
 
-fn oracle_type_name(column: &OracleColumnInfo) -> String {
+pub(super) fn oracle_type_name(column: &OracleColumnInfo) -> String {
     let base = match column.oracle_type {
         OracleType::Varchar => "varchar2",
         OracleType::Number => "number",
@@ -349,7 +349,7 @@ fn oracle_type_name(column: &OracleColumnInfo) -> String {
     }
 }
 
-fn oracle_column_category(column: &OracleColumnInfo) -> ColumnCategory {
+pub(super) fn oracle_column_category(column: &OracleColumnInfo) -> ColumnCategory {
     match column.oracle_type {
         OracleType::Number | OracleType::BinaryInteger => {
             if column.scale == 0 {

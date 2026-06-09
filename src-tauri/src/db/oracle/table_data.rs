@@ -1,14 +1,14 @@
 use std::collections::HashSet;
 
-use oracle_rs::{Connection as OracleConnection, Row, Value};
+use oracle_rs::{ColumnInfo as OracleColumnInfo, Connection as OracleConnection, Row, Value};
 use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
 
 use crate::db::raw_where::{validate_raw_where_clause, RawWhereDialect};
 use crate::error::AppError;
-use crate::models::{FilterCondition, FilterOperator, TableData};
+use crate::models::{ColumnInfo, FilterCondition, FilterOperator, TableData};
 
-use super::runtime::oracle_value_to_json;
+use super::runtime::{oracle_column_category, oracle_type_name, oracle_value_to_json};
 use super::{connection_timeout_secs, OracleAdapter};
 
 impl OracleAdapter {
@@ -66,12 +66,6 @@ impl OracleAdapter {
             &columns, schema, table, page, page_size, order_by, filters, raw_where,
         )?;
 
-        if columns.is_empty() {
-            return Err(AppError::Database(format!(
-                "Oracle table column metadata did not resolve for {schema}.{table}"
-            )));
-        }
-
         let config = self.connected_config().await?;
         let timeout_secs = connection_timeout_secs(&config);
         let params = oracle_bind_values(&plan.params);
@@ -92,20 +86,31 @@ impl OracleAdapter {
                 .flatten()
                 .unwrap_or(0);
 
-            let data_rows = query_oracle_rows(
+            let data_result = query_oracle_rows_with_columns(
                 &connection,
                 "Oracle table data query failed",
                 &plan.executed_query,
                 &params,
             )
             .await?;
-            let rows = data_rows
+            let table_columns = if columns.is_empty() {
+                query_result_columns_to_table_columns(&data_result.columns)
+            } else {
+                columns
+            };
+            if table_columns.is_empty() {
+                return Err(AppError::Database(format!(
+                    "Oracle table column metadata did not resolve for {schema}.{table}"
+                )));
+            }
+            let rows = data_result
+                .rows
                 .iter()
                 .map(|row| row.values().iter().map(oracle_value_to_json).collect())
                 .collect();
 
             Ok(TableData {
-                columns,
+                columns: table_columns,
                 rows,
                 total_count,
                 page,
@@ -148,6 +153,11 @@ impl OracleAdapter {
 
         Ok(Vec::new())
     }
+}
+
+struct OracleRowsWithColumns {
+    columns: Vec<OracleColumnInfo>,
+    rows: Vec<Row>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -332,6 +342,17 @@ async fn query_oracle_rows(
     sql: &str,
     params: &[Value],
 ) -> Result<Vec<Row>, AppError> {
+    query_oracle_rows_with_columns(connection, context, sql, params)
+        .await
+        .map(|result| result.rows)
+}
+
+async fn query_oracle_rows_with_columns(
+    connection: &OracleConnection,
+    context: &'static str,
+    sql: &str,
+    params: &[Value],
+) -> Result<OracleRowsWithColumns, AppError> {
     let mut result = connection
         .query(sql, params)
         .await
@@ -352,7 +373,25 @@ async fn query_oracle_rows(
         rows.extend(result.rows);
     }
 
-    Ok(rows)
+    Ok(OracleRowsWithColumns { columns, rows })
+}
+
+fn query_result_columns_to_table_columns(columns: &[OracleColumnInfo]) -> Vec<ColumnInfo> {
+    columns
+        .iter()
+        .map(|column| ColumnInfo {
+            name: column.name.clone(),
+            data_type: oracle_type_name(column),
+            nullable: column.nullable,
+            default_value: None,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: None,
+            comment: None,
+            check_clauses: Vec::new(),
+            category: oracle_column_category(column),
+        })
+        .collect()
 }
 
 fn oracle_value_to_i64(
@@ -675,6 +714,26 @@ mod tests {
             oracle_table_error("context", "failure"),
             AppError::Database(message) if message == "context: failure"
         ));
+    }
+
+    #[test]
+    fn query_result_columns_fill_table_columns_when_catalog_metadata_is_empty() {
+        let mut id = OracleColumnInfo::new("ID", oracle_rs::OracleType::Number);
+        id.precision = 10;
+        id.scale = 0;
+        id.nullable = false;
+        let name = OracleColumnInfo::new("NAME", oracle_rs::OracleType::Varchar);
+
+        let columns = query_result_columns_to_table_columns(&[id, name]);
+
+        assert_eq!(columns.len(), 2);
+        assert_eq!(columns[0].name, "ID");
+        assert_eq!(columns[0].data_type, "number(10,0)");
+        assert!(!columns[0].nullable);
+        assert_eq!(columns[0].category, ColumnCategory::Int);
+        assert_eq!(columns[1].name, "NAME");
+        assert_eq!(columns[1].category, ColumnCategory::Text);
+        assert!(!columns[0].is_primary_key);
     }
 
     #[tokio::test]
