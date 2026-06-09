@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use oracle_rs::{Connection as OracleConnection, Row, Value};
+use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
 
 use crate::db::raw_where::{validate_raw_where_clause, RawWhereDialect};
@@ -28,7 +29,14 @@ impl OracleAdapter {
         }
 
         let work = self.query_table_data_uncancelled(
-            schema, table, page, page_size, order_by, filters, raw_where,
+            schema,
+            table,
+            page,
+            page_size,
+            order_by,
+            filters,
+            raw_where,
+            cancel_token,
         );
         match cancel_token {
             Some(token) => tokio::select! {
@@ -49,21 +57,19 @@ impl OracleAdapter {
         order_by: Option<&str>,
         filters: Option<&[FilterCondition]>,
         raw_where: Option<&str>,
+        cancel_token: Option<&CancellationToken>,
     ) -> Result<TableData, AppError> {
-        let columns = self.get_table_columns(schema, table).await?;
+        let columns = self
+            .get_table_columns_for_table_query(schema, table, cancel_token)
+            .await?;
         let plan = build_oracle_table_query_plan(
             &columns, schema, table, page, page_size, order_by, filters, raw_where,
         )?;
 
         if columns.is_empty() {
-            return Ok(TableData {
-                columns,
-                rows: Vec::new(),
-                total_count: 0,
-                page,
-                page_size: plan.page_size,
-                executed_query: plan.executed_query,
-            });
+            return Err(AppError::Database(format!(
+                "Oracle table column metadata did not resolve for {schema}.{table}"
+            )));
         }
 
         let config = self.connected_config().await?;
@@ -118,6 +124,29 @@ impl OracleAdapter {
             (Ok(_), Err(error)) => Err(error),
             (Err(error), _) => Err(error),
         }
+    }
+
+    async fn get_table_columns_for_table_query(
+        &self,
+        schema: &str,
+        table: &str,
+        cancel_token: Option<&CancellationToken>,
+    ) -> Result<Vec<crate::models::ColumnInfo>, AppError> {
+        const ATTEMPTS: usize = 12;
+        for attempt in 0..ATTEMPTS {
+            if cancel_token.is_some_and(CancellationToken::is_cancelled) {
+                return Err(table_query_cancelled());
+            }
+
+            let columns = self.get_table_columns(schema, table).await?;
+            if !columns.is_empty() || attempt + 1 == ATTEMPTS {
+                return Ok(columns);
+            }
+
+            sleep(Duration::from_millis(250)).await;
+        }
+
+        Ok(Vec::new())
     }
 }
 
