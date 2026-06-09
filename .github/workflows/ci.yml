@@ -60,6 +60,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Fetch coverage ratchet base
+        run: git fetch --no-tags --prune --depth=1 origin refs/heads/main:refs/remotes/origin/main
+
+      - name: Coverage ratchet
+        env:
+          COVERAGE_RATCHET_REQUIRE_MAIN: "1"
+        run: pnpm exec tsx scripts/check-coverage-ratchet.ts
+
       - name: WASM size budget
         run: pnpm wasm:size
 
@@ -67,7 +75,7 @@ jobs:
         run: pnpm lint
 
       - name: Test
-        run: pnpm test
+        run: pnpm test -- --run --coverage --coverage.reporter=text-summary
 
       # ADR 0031 의 contrast gate 는 advisory 로 강등 (2026-05-17, sprint-384).
       # 72 themes × syntax 12 토큰 = 864 pair 중 다수가 WCAG AA 4.5:1 미달.

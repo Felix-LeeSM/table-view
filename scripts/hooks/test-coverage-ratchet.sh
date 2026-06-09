@@ -33,9 +33,10 @@ export default {
   test: {
     coverage: {
       thresholds: {
-        lines: 70,
-        functions: 70,
-        branches: 70,
+        statements: 85,
+        lines: 87,
+        functions: 87,
+        branches: 78,
       },
     },
   },
@@ -47,16 +48,16 @@ pre-commit:
     rust-coverage:
       run: |
         cargo llvm-cov --lib --summary-only \
-          --fail-under-lines 70 \
-          --fail-under-functions 69 \
-          --fail-under-regions 70
+          --fail-under-lines 73 \
+          --fail-under-functions 70 \
+          --fail-under-regions 73
       glob: "*.rs"
 EOF
 	cat >"$repo/scripts/hooks/pre-push-path-router.sh" <<'EOF'
 run_rust_coverage() {
   cargo llvm-cov nextest --profile push --lib \
-    --fail-under-lines 79 \
-    --fail-under-functions 74 \
+    --fail-under-lines 80 \
+    --fail-under-functions 75 \
     --fail-under-regions 80
 }
 EOF
@@ -74,26 +75,27 @@ write_full_targets() {
       "id": "frontend.vitest.global",
       "source": "vite.config.ts",
       "metrics": {
-        "lines": 70,
-        "functions": 70,
-        "branches": 70
+        "statements": 85,
+        "lines": 87,
+        "functions": 87,
+        "branches": 78
       }
     },
     {
       "id": "rust.pre_commit.tier1",
       "source": "lefthook.yml",
       "metrics": {
-        "lines": 70,
-        "functions": 69,
-        "regions": 70
+        "lines": 73,
+        "functions": 70,
+        "regions": 73
       }
     },
     {
       "id": "rust.pre_push.integration",
       "source": "scripts/hooks/pre-push-path-router.sh",
       "metrics": {
-        "lines": 79,
-        "functions": 74,
+        "lines": 80,
+        "functions": 75,
         "regions": 80
       }
     }
@@ -113,18 +115,99 @@ write_deleted_target() {
       "id": "frontend.vitest.global",
       "source": "vite.config.ts",
       "metrics": {
-        "lines": 70,
-        "functions": 70,
-        "branches": 70
+        "statements": 85,
+        "lines": 87,
+        "functions": 87,
+        "branches": 78
       }
     },
     {
       "id": "rust.pre_commit.tier1",
       "source": "lefthook.yml",
       "metrics": {
-        "lines": 70,
-        "functions": 69,
-        "regions": 70
+        "lines": 73,
+        "functions": 70,
+        "regions": 73
+      }
+    }
+  ]
+}
+EOF
+}
+
+write_lowered_target() {
+	local repo="$1"
+
+	cat >"$repo/scripts/coverage-ratchet-targets.json" <<'EOF'
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "frontend.vitest.global",
+      "source": "vite.config.ts",
+      "metrics": {
+        "statements": 84,
+        "lines": 87,
+        "functions": 87,
+        "branches": 78
+      }
+    },
+    {
+      "id": "rust.pre_commit.tier1",
+      "source": "lefthook.yml",
+      "metrics": {
+        "lines": 73,
+        "functions": 70,
+        "regions": 73
+      }
+    },
+    {
+      "id": "rust.pre_push.integration",
+      "source": "scripts/hooks/pre-push-path-router.sh",
+      "metrics": {
+        "lines": 80,
+        "functions": 75,
+        "regions": 80
+      }
+    }
+  ]
+}
+EOF
+}
+
+write_actual_mismatch_target() {
+	local repo="$1"
+
+	cat >"$repo/scripts/coverage-ratchet-targets.json" <<'EOF'
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "frontend.vitest.global",
+      "source": "vite.config.ts",
+      "metrics": {
+        "statements": 85,
+        "lines": 87,
+        "functions": 87,
+        "branches": 78
+      }
+    },
+    {
+      "id": "rust.pre_commit.tier1",
+      "source": "lefthook.yml",
+      "metrics": {
+        "lines": 73,
+        "functions": 70,
+        "regions": 73
+      }
+    },
+    {
+      "id": "rust.pre_push.integration",
+      "source": "scripts/hooks/pre-push-path-router.sh",
+      "metrics": {
+        "lines": 80,
+        "functions": 75,
+        "regions": 81
       }
     }
   ]
@@ -160,6 +243,22 @@ run_checker() {
 
 repo="$TMP_DIR/repo"
 init_repo "$repo"
+git -C "$repo" update-ref -d refs/remotes/origin/main
+
+set +e
+output="$(COVERAGE_RATCHET_REQUIRE_MAIN=1 run_checker "$repo" 2>&1)"
+status=$?
+set -e
+
+if [ "$status" -eq 0 ]; then
+	echo "FAIL: required main ref unexpectedly passed" >&2
+	echo "$output" >&2
+	exit 1
+fi
+
+assert_contains "$output" "origin/main:scripts/coverage-ratchet-targets.json is unavailable" "required main ref"
+
+git -C "$repo" update-ref refs/remotes/origin/main "$(git -C "$repo" rev-parse HEAD)"
 write_deleted_target "$repo"
 
 set +e
@@ -174,6 +273,36 @@ if [ "$status" -eq 0 ]; then
 fi
 
 assert_contains "$output" "rust.pre_push.integration target is missing" "deleted target"
+
+write_lowered_target "$repo"
+
+set +e
+output="$(run_checker "$repo" 2>&1)"
+status=$?
+set -e
+
+if [ "$status" -eq 0 ]; then
+	echo "FAIL: lowered target unexpectedly passed" >&2
+	echo "$output" >&2
+	exit 1
+fi
+
+assert_contains "$output" "frontend.vitest.global.statements target=84 is below origin/main=85" "lowered target"
+
+write_actual_mismatch_target "$repo"
+
+set +e
+output="$(run_checker "$repo" 2>&1)"
+status=$?
+set -e
+
+if [ "$status" -eq 0 ]; then
+	echo "FAIL: actual mismatch unexpectedly passed" >&2
+	echo "$output" >&2
+	exit 1
+fi
+
+assert_contains "$output" "rust.pre_push.integration.regions target=81 actual=80" "actual mismatch"
 
 write_full_targets "$repo"
 output="$(run_checker "$repo")"

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-type MetricName = "lines" | "functions" | "branches" | "regions";
+type MetricName = "statements" | "lines" | "functions" | "branches" | "regions";
 type Metrics = Partial<Record<MetricName, number>>;
 
 type RatchetEntry = {
@@ -25,6 +25,7 @@ const targetsPath =
   process.env.COVERAGE_RATCHET_TARGETS_PATH ??
   "scripts/coverage-ratchet-targets.json";
 const mainRef = process.env.COVERAGE_RATCHET_MAIN_REF ?? "origin/main";
+const requireMainRef = process.env.COVERAGE_RATCHET_REQUIRE_MAIN === "1";
 
 function readText(relativePath: string): string {
   return readFileSync(path.join(repoRoot, relativePath), "utf8");
@@ -39,16 +40,24 @@ function readTargetsFromText(text: string): RatchetTargets {
 }
 
 function readMainTargets(): RatchetTargets | null {
+  let text: string;
   try {
-    const text = execFileSync("git", ["show", `${mainRef}:${targetsPath}`], {
+    text = execFileSync("git", ["show", `${mainRef}:${targetsPath}`], {
       cwd: repoRoot,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     });
-    return readTargetsFromText(text);
   } catch {
+    if (requireMainRef) {
+      console.error("Coverage ratchet failed:");
+      console.error(
+        `- ${mainRef}:${targetsPath} is unavailable; fetch ${mainRef} before running the ratchet`,
+      );
+      process.exit(1);
+    }
     return null;
   }
+  return readTargetsFromText(text);
 }
 
 function entriesById(targets: RatchetTargets, label: string) {
@@ -78,6 +87,7 @@ function extractVitestThresholds(): Metrics {
   }
   const block = match[1];
   return {
+    statements: extractNumber(block, "statements"),
     lines: extractNumber(block, "lines"),
     functions: extractNumber(block, "functions"),
     branches: extractNumber(block, "branches"),

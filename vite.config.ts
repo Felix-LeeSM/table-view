@@ -52,14 +52,14 @@ export default defineConfig(async () => ({
         : ["text", ["lcov", { projectDirectory: "src" }]],
       include: ["src/**/*.{ts,tsx}"],
       thresholds: {
-        // 2026-05-07 — pre-push gate 도입과 함께 일괄 70% 상향. 부족분은
-        // 신규 테스트 추가로 메운다 (사용자 결정). 이전 기준 68/64/60 은
-        // Sprint 9 직후의 "현실적 floor" 였으나, 코드베이스가 충분히
-        // 자라 70 일괄 적용이 가능한 시점.
-        // perFile 임계값은 0% 파일이 커버된 후 도입.
-        lines: 70,
-        functions: 70,
-        branches: 70,
+        // 2026-06-09 — #580 coverage ratchet. Current measured global
+        // coverage: statements 86.14, branches 78.78, functions 88.18,
+        // lines 88.70. Thresholds stay below the measured baseline with
+        // cushion; per-file thresholds wait until legacy 0% files are covered.
+        statements: 85,
+        lines: 87,
+        functions: 87,
+        branches: 78,
       },
     },
   },
