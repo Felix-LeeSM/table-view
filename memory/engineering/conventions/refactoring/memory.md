@@ -1,7 +1,7 @@
 ---
 title: 리팩토링 코드 작성 기준
 type: memory
-updated: 2026-05-28
+updated: 2026-06-11
 ---
 
 # 리팩토링 코드 작성 기준
@@ -44,6 +44,21 @@ contract / findings / handoff 는 `docs/sprints/sprint-189` ~ `sprint-198`
 
 Phase 2 ESLint 룰 도입 시점: 현재 legacy debt 를 store action 또는
 `src/lib/runtime/**` use-case 로 낮춘 뒤.
+
+## Frontend domain strangler
+
+- Domain-first frontend migration order: connection -> completion -> query ->
+  catalog/schema -> result-grid/datagrid -> workspace.
+- Public feature API 기본값은 `src/features/<domain>/index.ts` 다.
+  Cross-feature production import 는 public feature API 또는 명시된 shared
+  contract layer 만 통한다.
+- Final boundary enforcement 는 prerequisite domains 이동 뒤에만 적용한다. 적용 뒤
+  새 code 는 compatibility barrel/legacy feature root 를 import 하지 않는다.
+- Compatibility row 는 `migration-only`, `permanent-wire-compatibility`,
+  `removable-debt` 로 분류한다. `migration-only` 는 same-milestone removal 또는
+  owner issue evidence 가 필요하다.
+- Refactor 02 는 behavior-preserving source movement 다. Product docs/support
+  claim 은 behavior 가 바뀐 PR 에서만 바꾼다.
 
 ## 관련 방
 

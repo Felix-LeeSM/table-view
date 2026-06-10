@@ -1,7 +1,7 @@
 ---
 title: React / TypeScript 컨벤션 (전체)
 type: convention
-updated: 2026-05-18
+updated: 2026-06-11
 surface: src/**/*.ts, src/**/*.tsx
 task: react-impl, refactor, frontend
 trigger:
@@ -62,12 +62,16 @@ function handleResult(result: unknown) {
 
 ## 파일 구성
 
-- 컴포넌트: `src/components/`
-- 훅: `src/hooks/`
-- 스토어: `src/stores/`
-- 타입: `src/types/`
-- 유틸: `src/lib/`
-- 페이지: `src/pages/`
+- Frontend consumer imports 는 domain-first: `src/features/<domain>/index.ts`
+  public API 를 우선한다.
+- 새로 추출하는 feature 내부 구현과 domain-local hook/type/test 는
+  `src/features/<domain>/**` 에 둔다.
+- 전역 store, shared runtime/IPC wrapper, shared type 은 각각 `src/stores/**`,
+  `src/lib/**`, `src/types/**` 에 남길 수 있지만 feature consumer 는 가능한 public
+  API facade 를 통해 사용한다.
+- Generic UI primitive 는 `src/components/ui/**`, result-grid/datagrid public
+  boundary 는 `src/components/datagrid/index.ts` 를 쓴다.
+- `src/pages/**`, app/router/layout shell 은 workspace public API 를 거쳐 소비한다.
 
 ## 성능
 
@@ -86,9 +90,11 @@ function handleResult(result: unknown) {
 ## 테스트
 
 - Vitest + React Testing Library
-- 파일: `*.test.tsx` 또는 `__tests__/`
+- 파일: domain-local `*.test.tsx` 또는 `__tests__/`. 새 feature test 는 기본적으로
+  `src/features/<domain>/**` 안에 둔다.
 - 사용자 관점 (역할 / 텍스트로 쿼리)
 - 구현 세부 (상태 / ref) 단언 지양
+- Cross-runtime, fixture, smoke, script 정책 테스트는 runner-owned root 에 남긴다.
 
 ## 직접 DOM 조작 금지
 

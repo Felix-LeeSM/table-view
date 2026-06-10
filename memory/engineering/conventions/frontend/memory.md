@@ -1,7 +1,7 @@
 ---
 title: Frontend guidance
 type: convention
-updated: 2026-05-28
+updated: 2026-06-11
 surface: src/**/*.ts, src/**/*.tsx, src/**/*.css
 task: frontend, ui, react-impl
 trigger:
@@ -45,6 +45,22 @@ backend contract 를 통해서만 다룬다.
 
 - Tauri IPC 는 domain wrapper (`src/lib/tauri/**`, 필요 시 `src/lib/api/**`) 로
   감싼다. component 가 raw `invoke()` 를 직접 소유하지 않는다.
+- Frontend import boundary 는 domain-first 다. 새 consumer 는 file-kind root
+  (`src/components/**`, `src/hooks/**`, `src/stores/**`, `src/pages/**`) 내부 구현을
+  직접 당겨 쓰지 않고 `src/features/<domain>/index.ts` public API 를 통한다.
+- Current feature domains: `connection`, `completion`, `query`, `catalog`,
+  `workspace`. Result-grid/datagrid 는 현재 `src/components/datagrid/index.ts`
+  public boundary 를 통해 소비한다.
+- Refactor 02 migration order 는 `connection` -> `completion` -> `query` ->
+  `catalog/schema` -> `result-grid/datagrid` -> `workspace` 였다. 이 순서는 향후
+  회귀 분석과 compatibility evidence 를 읽을 때 기준 순서다.
+- Cross-feature production import 는 상대 feature 내부 path 가 아니라
+  `@features/<domain>` 또는 `src/features/<domain>/index.ts` 로 간다. 명시된
+  shared contract SOT 가 있을 때만 shared contract layer 로 승격하고, 없으면
+  feature public API 를 확장한다.
+- `src/features/**` production code 는 feature-local code, `@lib`, `@/types`,
+  `@components/ui`, 그리고 허용된 public facade 만 의존한다. 다른 feature 내부나
+  legacy app shell/root 를 직접 import 하지 않는다.
 - Request-shaped command 를 우선한다. DDL/destructive wrapper 는
   `previewOnly` + `expectedDatabase` 를 보존하고 `SchemaChangeResult { sql }`
   preview 와 commit path 를 같은 request shape 로 묶는다.
@@ -80,6 +96,13 @@ backend contract 를 통해서만 다룬다.
 - UI 변경은 `npm run lint`, `npx tsc --noEmit`, 관련 Vitest 를 통과시킨다.
 - 접근성은 role/text 쿼리로 검증한다. `data-testid` 는 역할/텍스트가 없을 때만.
 - 시각 회귀 위험이 있으면 Playwright/browser screenshot 으로 실제 viewport 확인.
+- Frontend tests 는 증명하는 domain 근처에 둔다:
+  `src/features/<domain>/**/*.test.{ts,tsx}` 가 기본이다. Cross-runtime,
+  fixture, smoke, script 정책 테스트는 runner 소유 root 에 남긴다.
+- Compatibility row 는 `migration-only`, `permanent-wire-compatibility`,
+  `removable-debt` 중 하나로 분류한다. `migration-only` compatibility export/import
+  는 같은 milestone 안에서 제거하거나 owner issue 를 남긴다. Refactor 02 이후 새
+  compatibility path 는 removal evidence 없이 추가하지 않는다.
 
 ## 관련
 

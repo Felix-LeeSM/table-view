@@ -2,7 +2,7 @@
 title: Source Root Migration Constraints
 type: refactor-contract
 issue: 730
-updated: 2026-06-10
+updated: 2026-06-11
 ---
 
 # Source Root Migration Constraints
@@ -10,6 +10,12 @@ updated: 2026-06-10
 This is the Refactor 01 source-root migration contract for issue #730. It
 defines constraints that later Refactor 02 and Refactor 03 PRs must obey before
 moving frontend or backend code.
+
+Refactor 02 is no longer read from this document as an active implementation
+plan. Its durable frontend import-boundary, public API, compatibility, and test
+placement rules live in `memory/engineering/conventions/frontend/memory.md`,
+`memory/engineering/conventions/react/memory.md`, and
+`memory/engineering/conventions/refactoring/memory.md`.
 
 This document is constraints-only. It does not move source roots, rename import
 paths, change hook routing, change ignore rules, or migrate frontend/backend
@@ -25,7 +31,9 @@ roots, compatibility exports, and committed generated inputs.
 - #729 generated/cache/tmp/worktree fencing is a prerequisite when a later move
   relies on root-local cache/tmp/worktree paths staying outside source routing.
   This document does not duplicate #729 ignore or hook-router rules.
-- Refactor 02 is the later domain-first frontend migration.
+- Refactor 02 was the domain-first frontend migration. Its final SOT is the
+  frontend/react/refactoring memory listed above; this document remains the
+  Refactor 01 phase contract.
 - Refactor 03 is the later backend adapter module migration.
 
 ## Execution Gate
@@ -67,6 +75,11 @@ state the compatibility export plan before moving files.
 Source-root migration PRs must make moved modules reachable through stable
 compatibility exports until all consumers are updated in the same PR or a
 follow-up cleanup issue is opened.
+
+For post-Refactor 02 frontend work, this is not permission to add new consumer
+imports from compatibility barrels or legacy feature roots. New consumer imports
+must use the feature public API unless a fresh issue records compatibility owner,
+horizon, and removal/preservation evidence.
 
 Frontend constraints:
 
