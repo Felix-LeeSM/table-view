@@ -9,6 +9,7 @@ import {
   RAW_TAURI_INVOKE_INVENTORY,
   findCompletionFeatureBoundaryViolations,
   findConnectionFeatureBoundaryViolations,
+  findFeatureImportBoundaryViolations,
   findFrontendCompatInventoryViolations,
   findRawTauriInvokeBoundaryViolations,
   findUnexpectedIgnoredFiles,
@@ -680,5 +681,44 @@ describe("check-eslint-static-policy", () => {
     expect(failures).toContain(
       "src/stores/mruStore.ts: raw @tauri-apps/api/core import is outside src/lib/tauri/** and missing from RAW_TAURI_INVOKE_INVENTORY.",
     );
+  });
+
+  it("rejects direct imports of other feature internals", () => {
+    const failures = findFeatureImportBoundaryViolations(
+      new Map([
+        [
+          "src/features/completion/sql/sqlCompletionRequest.ts",
+          'import { parseMongoshExpression } from "@features/query/mongo/mongoshParser";\n',
+        ],
+        [
+          "src/features/connection/store.ts",
+          'import { WorkspacePage } from "@/features/workspace/index";\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      "src/features/completion/sql/sqlCompletionRequest.ts: import query feature internals through src/features/query/index.ts, not @features/query/mongo/mongoshParser.",
+    );
+    expect(failures).not.toContain(
+      "src/features/connection/store.ts: import workspace feature internals through src/features/workspace/index.ts, not @/features/workspace/index.",
+    );
+  });
+
+  it("allows public feature APIs and same-feature internals", () => {
+    const failures = findFeatureImportBoundaryViolations(
+      new Map([
+        [
+          "src/features/completion/sql/sqlCompletionRequest.ts",
+          'import { MONGOSH_METHOD_WHITELIST } from "@features/query";\n',
+        ],
+        [
+          "src/features/connection/components/ConnectionDialog.tsx",
+          'import { useConnectionStore } from "../store";\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toEqual([]);
   });
 });
