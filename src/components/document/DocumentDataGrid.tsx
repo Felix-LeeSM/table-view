@@ -13,14 +13,17 @@ import { safeStringifyCell } from "@lib/jsonCell";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { useHiddenColumns } from "@/hooks/useHiddenColumns";
 import { useDocumentSchemaAccumulator } from "@/hooks/useDocumentSchemaAccumulator";
-import { useColumnResize } from "@components/datagrid/DataGridTable/useColumnResize";
-import HeaderRow from "@components/datagrid/DataGridTable/HeaderRow";
 import { getDefaultRem, type ColumnCategory } from "@/lib/columnCategory";
 import type { ColumnInfo, SortInfo } from "@/types/schema";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
-import { editKey, cellToEditValue } from "@components/datagrid/dataGridEditFsm";
-import { useDocumentDataGridEdit } from "@components/datagrid/useDocumentDataGridEdit";
+import {
+  DataGridHeaderRow as HeaderRow,
+  cellToEditValue,
+  editKey,
+  useColumnResize,
+  useDocumentDataGridEdit,
+} from "@components/datagrid";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import ProjectionDialog from "@components/document/ProjectionDialog";
 import AddDocumentModal from "@components/document/AddDocumentModal";
@@ -34,7 +37,7 @@ import DocumentGridRows, {
   type ExpandedNestedCell,
 } from "./DocumentDataGrid/cellRenderers/DocumentGridRows";
 
-interface DocumentDataGridProps {
+export interface DocumentDataGridProps {
   connectionId: string;
   database: string;
   collection: string;

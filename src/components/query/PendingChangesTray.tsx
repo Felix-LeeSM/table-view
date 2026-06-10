@@ -1,9 +1,6 @@
 import { X } from "lucide-react";
 import type { QueryResult } from "@/types/query";
-import {
-  cellToEditString,
-  editKey,
-} from "@components/datagrid/dataGridEditFsm";
+import { cellToEditString, editKey } from "@components/datagrid";
 import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 
 export interface PendingChangesTrayProps {

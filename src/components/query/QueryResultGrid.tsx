@@ -16,7 +16,7 @@ import type {
 } from "@/types/query";
 import { safeStringifyCell } from "@lib/jsonCell";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
-import { useColumnResize } from "@components/datagrid/DataGridTable/useColumnResize";
+import { CellDetailDialog, useColumnResize } from "@components/datagrid";
 import { getDefaultRem } from "@/lib/columnCategory";
 import {
   analyzeResultEditability,
@@ -24,7 +24,6 @@ import {
 } from "@lib/sql/queryAnalyzer";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import CellDetailDialog from "@components/datagrid/CellDetailDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { ExportButton } from "@components/shared/ExportButton";
 import type { ExportContext, ExportFormat } from "@/lib/tauri";
@@ -34,7 +33,7 @@ import EditableQueryResultGrid from "./EditableQueryResultGrid";
 import ScalarOrListPanel from "./ScalarOrListPanel";
 import WriteSummaryPanel from "./WriteSummaryPanel";
 
-interface QueryResultGridProps {
+export interface QueryResultGridProps {
   queryState: QueryState;
   /** Connection used to look up PK metadata and run edit statements. */
   connectionId?: string;
