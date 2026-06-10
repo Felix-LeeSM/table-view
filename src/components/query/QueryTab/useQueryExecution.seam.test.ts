@@ -72,3 +72,47 @@ describe("useQueryExecution Mongo seam", () => {
     expect(seamSource).not.toContain("executeSearchQuery");
   });
 });
+
+describe("useQueryExecution KV/Search seams", () => {
+  it("routes KV and Search dispatch through local seam modules", () => {
+    const hookSource = readLocalSource("./useQueryExecution.ts");
+
+    expect(hookSource).toContain('from "./kvQueryExecution"');
+    expect(hookSource).toContain('from "./searchQueryExecution"');
+    for (const forbiddenImport of [
+      "@lib/redis/redisDatabase",
+      "@lib/sql/sqlSafety",
+      "@/types/search",
+    ]) {
+      expect(hookSource).not.toContain(`from "${forbiddenImport}"`);
+    }
+    expect(hookSource).not.toMatch(/\bexecuteSearchQuery\b/);
+    expect(hookSource).not.toMatch(/\bparseSearchDslRequest\b/);
+  });
+
+  it("keeps KV command dispatch out of RDB/Mongo/Search seams", () => {
+    const seamSource = readLocalSource("./kvQueryExecution.ts");
+
+    expect(seamSource).toContain("executeKvQuery");
+    expect(seamSource).toContain("executeKvCommand");
+    expect(seamSource).toContain("parseRedisDatabaseIndex");
+    expect(seamSource).toContain("kvCommandConfirmationKey");
+    expect(seamSource).not.toContain("executeSearchQuery");
+    expect(seamSource).not.toContain("executeRdbQuery");
+    expect(seamSource).not.toContain("executeMongoQuery");
+    expect(seamSource).not.toContain("recordHistory");
+  });
+
+  it("keeps Search result routing out of RDB/Mongo/KV seams", () => {
+    const seamSource = readLocalSource("./searchQueryExecution.ts");
+
+    expect(seamSource).toContain("executeSearchDslQuery");
+    expect(seamSource).toContain("parseSearchDslRequest");
+    expect(seamSource).toContain("executeSearchQuery");
+    expect(seamSource).toContain("completeSearchQuery");
+    expect(seamSource).not.toContain("executeKvCommand");
+    expect(seamSource).not.toContain("executeRdbQuery");
+    expect(seamSource).not.toContain("executeMongoQuery");
+    expect(seamSource).not.toContain("recordHistory");
+  });
+});
