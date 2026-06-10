@@ -246,6 +246,7 @@ run_hook_gates() {
 	run_step "coverage-ratchet-tests" bash scripts/hooks/test-coverage-ratchet.sh
 	run_step "target-cache-tests" bash scripts/hooks/test-target-cache.sh
 	run_step "generated-fence-tests" bash scripts/hooks/test-generated-fences.sh
+	run_step "pr-body-contract-tests" bash scripts/hooks/test-check-pr-body.sh
 	run_step "pre-push-router-tests" bash scripts/hooks/test-pre-push-path-router.sh
 }
 

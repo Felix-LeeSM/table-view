@@ -24,6 +24,26 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  pr-body:
+    name: PR Body Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.14.0
+
+      - name: Test PR body checker
+        run: bash scripts/hooks/test-check-pr-body.sh
+
+      - name: Validate PR body
+        run: node scripts/hooks/check-pr-body.mjs
+
   frontend:
     name: Frontend Checks
     runs-on: ubuntu-latest

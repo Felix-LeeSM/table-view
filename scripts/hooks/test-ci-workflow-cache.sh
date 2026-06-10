@@ -50,10 +50,15 @@ frontend_block="$(sed -n '/^  frontend:/,/^  rust:/p' <<<"$workflow_text" | sed 
 vite_cache_block="$(sed -n '/- name: Cache Vite transform output/,/- name: Install dependencies/p' <<<"$workflow_text" | sed '$d')"
 rust_block="$(sed -n '/^  rust:/,/^  integration-tests:/p' <<<"$workflow_text" | sed '$d')"
 integration_block="$(sed -n '/^  integration-tests:/,/^  # Runtime E2E smoke/p' <<<"$workflow_text" | sed '$d')"
+pr_body_block="$(sed -n '/^  pr-body:/,/^  frontend:/p' <<<"$workflow_text" | sed '$d')"
 integration_disk_telemetry_step="$(extract_step_block "$integration_block" "Show disk usage before integration build")"
 integration_disk_cleanup_step="$(extract_step_block "$integration_block" "Free disk headroom before integration build")"
 integration_run_step="$(extract_step_block "$integration_block" "Run integration tests")"
 
+if [ -z "$pr_body_block" ]; then
+	echo "FAIL: PR body job is missing from $WORKFLOW" >&2
+	exit 1
+fi
 if [ -z "$frontend_block" ]; then
 	echo "FAIL: frontend job is missing from $WORKFLOW" >&2
 	exit 1
@@ -63,6 +68,11 @@ if [ -z "$vite_cache_block" ]; then
 	exit 1
 fi
 
+assert_contains "$pr_body_block" "name: PR Body Contract" "PR body job"
+assert_contains "$pr_body_block" "node-version: 22.14.0" "PR body job"
+assert_contains "$pr_body_block" "run: bash scripts/hooks/test-check-pr-body.sh" "PR body job"
+assert_contains "$pr_body_block" "run: node scripts/hooks/check-pr-body.mjs" "PR body job"
+assert_order "$pr_body_block" "- name: Test PR body checker" "- name: Validate PR body" "PR body job order"
 assert_contains "$frontend_block" "cache: pnpm" "frontend pnpm cache"
 assert_contains "$frontend_block" "cache-dependency-path: pnpm-lock.yaml" "frontend pnpm cache"
 assert_contains "$vite_cache_block" "path: node_modules/.vite" "vite cache"
