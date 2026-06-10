@@ -553,6 +553,68 @@ describe("buildSqlCompletionContext", () => {
     expect(ctx.catalog.extensions).toEqual([]);
   });
 
+  it("keeps backend completion metadata fetch state explicit for empty results", () => {
+    const missing = buildSqlCompletionContext({
+      ...emptySnapshot(),
+      connectionId: "conn1",
+      database: "app",
+      dbType: "postgresql",
+    });
+    expect(missing.catalog).toMatchObject({
+      databases: [],
+      schemas: [],
+      objects: [],
+      columns: [],
+      functions: [],
+      extensions: [],
+    });
+    expect(missing.cacheState).toEqual({
+      databasesLoaded: false,
+      schemasLoaded: false,
+      objectsLoaded: false,
+      tablesLoaded: false,
+      viewsLoaded: false,
+      columnsLoaded: false,
+      functionsLoaded: false,
+      extensionsLoaded: false,
+    });
+
+    const loadedEmpty = emptySnapshot();
+    loadedEmpty.databases = { conn1: [] };
+    loadedEmpty.schemas.conn1 = { app: [] };
+    loadedEmpty.tables.conn1 = { app: {} };
+    loadedEmpty.views.conn1 = { app: {} };
+    loadedEmpty.functions.conn1 = { app: {} };
+    loadedEmpty.tableColumnsCache.conn1 = { app: {} };
+    loadedEmpty.postgresExtensions = { conn1: { app: [] } };
+
+    const loaded = buildSqlCompletionContext({
+      ...loadedEmpty,
+      connectionId: "conn1",
+      database: "app",
+      dbType: "postgresql",
+    });
+
+    expect(loaded.catalog).toMatchObject({
+      databases: [],
+      schemas: [],
+      objects: [],
+      columns: [],
+      functions: [],
+      extensions: [],
+    });
+    expect(loaded.cacheState).toEqual({
+      databasesLoaded: true,
+      schemasLoaded: true,
+      objectsLoaded: true,
+      tablesLoaded: true,
+      viewsLoaded: true,
+      columnsLoaded: true,
+      functionsLoaded: true,
+      extensionsLoaded: true,
+    });
+  });
+
   it("keeps MariaDB distinct while reusing the MySQL completion family", () => {
     const ctx = buildSqlCompletionContext({
       ...emptySnapshot(),
