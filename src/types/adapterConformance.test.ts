@@ -6,6 +6,12 @@ import {
   type ConformanceArea,
   getAdapterConformanceMatrix,
 } from "./adapterConformance";
+import {
+  ADAPTER_CONTRACT_TEST_DATABASE_TYPES,
+  ADAPTER_CONTRACT_TEST_MATRIX,
+  type AdapterContractTestArea,
+  type AdapterContractTestJudgement,
+} from "./adapterContractTestMatrix";
 import { type DataSourceCapabilities } from "./dataSource";
 import { getVersionAwareDataSourceCapabilities } from "./dataSourceVersionCapabilities";
 
@@ -347,5 +353,99 @@ describe("adapter conformance matrix", () => {
       "ddl.dropObject",
     ]);
     expect(oracle.areas.ddl.deferred).toEqual([]);
+  });
+});
+
+describe("adapter contract test matrix", () => {
+  const allDatabaseTypes = Object.keys(DATABASE_TYPE_LABELS) as DatabaseType[];
+
+  it("maps #745 contract areas to their child issue owners", () => {
+    const areaOwners = ADAPTER_CONTRACT_TEST_MATRIX.map((row) => [
+      row.area,
+      row.childIssue,
+    ]);
+
+    expect(areaOwners).toEqual([
+      ["query", 765],
+      ["result", 765],
+      ["catalog", 766],
+      ["explain", 766],
+      ["completion", 767],
+      ["safety", 768],
+    ]);
+    expect(new Set(areaOwners.map(([area]) => area)).size).toBe(
+      areaOwners.length,
+    );
+    for (const [, childIssue] of areaOwners) {
+      expect([765, 766, 767, 768]).toContain(childIssue);
+    }
+  });
+
+  it("keeps common judgement separate from DBMS delta templates", () => {
+    const ids = new Set<string>();
+    const allowedJudgements = new Set([
+      "common",
+      "dbms-delta",
+      "unsupported-delta",
+      "deferred",
+    ] satisfies AdapterContractTestJudgement[]);
+
+    for (const row of ADAPTER_CONTRACT_TEST_MATRIX) {
+      expect(row.common.length, row.area).toBeGreaterThan(0);
+      expect(row.deltaTemplates.length, row.area).toBeGreaterThan(0);
+
+      for (const common of row.common) {
+        expect(allowedJudgements.has(common.judgement), common.id).toBe(true);
+        expect(common.judgement, common.id).toBe("common");
+        expect(common.id.startsWith(`${row.area}.`), common.id).toBe(true);
+        expect(common.assertion, common.id).not.toEqual("");
+        expect(ids.has(common.id), common.id).toBe(false);
+        ids.add(common.id);
+      }
+
+      for (const delta of row.deltaTemplates) {
+        expect(allowedJudgements.has(delta.judgement), delta.id).toBe(true);
+        expect(delta.judgement, delta.id).not.toBe("common");
+        expect(delta.id.startsWith(`${row.area}.`), delta.id).toBe(true);
+        expect(delta.axes.length, delta.id).toBeGreaterThan(0);
+        expect(delta.dbTypes.length, delta.id).toBeGreaterThan(0);
+        expect(delta.assertion, delta.id).not.toEqual("");
+        expect(delta.evidenceRule, delta.id).not.toEqual("");
+        expect(ids.has(delta.id), delta.id).toBe(false);
+        ids.add(delta.id);
+      }
+    }
+  });
+
+  it("requires every current DatabaseType to have a delta template in each contract area", () => {
+    expect([...ADAPTER_CONTRACT_TEST_DATABASE_TYPES].sort()).toEqual(
+      [...allDatabaseTypes].sort(),
+    );
+
+    for (const row of ADAPTER_CONTRACT_TEST_MATRIX) {
+      const covered = new Set(
+        row.deltaTemplates.flatMap((template) => template.dbTypes),
+      );
+
+      expect([...covered].sort(), row.area).toEqual(
+        [...allDatabaseTypes].sort(),
+      );
+    }
+  });
+
+  it("keeps the matrix limited to #745 scaffolding areas, not child harness execution", () => {
+    const areas = ADAPTER_CONTRACT_TEST_MATRIX.map((row) => row.area);
+
+    expect(areas).toEqual([
+      "query",
+      "result",
+      "catalog",
+      "explain",
+      "completion",
+      "safety",
+    ] satisfies AdapterContractTestArea[]);
+    expect(areas).not.toContain("connection");
+    expect(areas).not.toContain("edit");
+    expect(areas).not.toContain("ddl");
   });
 });
