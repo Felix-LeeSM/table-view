@@ -3,14 +3,14 @@ import type {
   ConnectionConfig,
   ConnectionDraft,
   DatabaseType,
-} from "@/types/connection";
+} from "../../model";
 import {
   createEmptyDraft,
   draftFromConnection,
   DATABASE_DEFAULTS,
   DATABASE_DEFAULT_FIELDS,
   paradigmOf,
-} from "@/types/connection";
+} from "../../model";
 
 /**
  * Sprint 213 (post-209 P6) — draft form state machine extracted from

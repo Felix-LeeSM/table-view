@@ -7,7 +7,7 @@ import QuickOpen from "./components/shared/QuickOpen";
 import ShortcutCheatsheet from "./components/shared/ShortcutCheatsheet";
 import QueryLog from "./components/query/QueryLog";
 import { Toaster } from "./components/ui/toaster";
-import { useConnectionStore } from "./stores/connectionStore";
+import { useConnectionStore } from "@features/connection";
 import { useFavoritesStore } from "./stores/favoritesStore";
 import { useMruStore } from "./stores/mruStore";
 import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";

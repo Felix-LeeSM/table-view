@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  CONNECTION_FEATURE_PUBLIC_API_PATH,
+  CONNECTION_FEATURE_PUBLIC_API_EXPORTS,
   FRONTEND_COMPAT_INVENTORY,
   MAX_LINES_ALLOWLIST,
   RAW_TAURI_INVOKE_INVENTORY,
+  findConnectionFeatureBoundaryViolations,
   findFrontendCompatInventoryViolations,
   findRawTauriInvokeBoundaryViolations,
   findUnexpectedIgnoredFiles,
@@ -10,6 +13,33 @@ import {
   parseFrontendCompatInventoryMarkdown,
   summarizeLintMessages,
 } from "../check-eslint-static-policy";
+
+function connectionPublicApiFixture(extraLines: readonly string[] = []) {
+  return [
+    "export { default as ConnectionDialog, sanitizeMessage } from './components/ConnectionDialog';",
+    "export { default as ConnectionList } from './components/ConnectionList';",
+    "export { default as ConnectionGroup } from './components/ConnectionGroup';",
+    "export { default as ConnectionItem } from './components/ConnectionItem';",
+    "export { default as GroupDialog } from './components/GroupDialog';",
+    "export { default as ImportExportDialog } from './components/ImportExportDialog';",
+    "export { default as RecentConnections, relativeTime } from './components/RecentConnections';",
+    "export { DbLifecycleDialog } from './components/DbLifecycleDialog';",
+    "export { KeyringFallbackToast } from './components/KeyringFallbackToast';",
+    "export { ServerActivityPanel } from './components/ServerActivityPanel';",
+    "export { ServerInfoPanel } from './components/ServerInfoPanel';",
+    "export { useConnectionMutations } from '@lib/runtime/connection/useConnectionMutations';",
+    "export { useConnectionStore, SYNCED_KEYS } from './store';",
+    "export type { ConnectionState } from './store';",
+    "export { connectToDatabase, createSqliteDatabaseFile, deleteConnection, deleteGroup, disconnectFromDatabase, exportConnections, exportConnectionsEncrypted, importConnections, importConnectionsEncrypted, listConnections, listGroups, moveConnectionToGroup, saveConnection, saveGroup, testConnection } from './api';",
+    "export type { EncryptedExportResult, ImportRenamedEntry, ImportResult } from './api';",
+    "export { CONNECTION_COLOR_PALETTE, getConnectionColor } from './color';",
+    "export { DUCKDB_FILE_CONNECTION, SQLITE_FILE_CONNECTION } from './fileConnection';",
+    "export type { FileConnectionContract, FileConnectionInputContract, FileConnectionInputKind, FileConnectionInputStatus, FileConnectionPermissionScope, FileConnectionPrivacyPolicyId } from './fileConnection';",
+    "export { DATABASE_DEFAULTS, DATABASE_DEFAULT_FIELDS, DATABASE_TYPE_LABELS, ENVIRONMENT_META, ENVIRONMENT_OPTIONS, SUPPORTED_DATABASE_TYPES, createEmptyDraft, draftFromConnection, isSupportedDatabaseType, paradigmOf, parseConnectionUrl, parseFileConnectionPath, parseSqliteFilePath } from './model';",
+    "export type { ConnectionConfig, ConnectionDefaultFields, ConnectionDraft, ConnectionGroup as ConnectionGroupModel, ConnectionStatus, DatabaseType, EnvironmentTag, FileConnectionDatabaseType, Paradigm } from './model';",
+    ...extraLines,
+  ].join("\n");
+}
 
 describe("check-eslint-static-policy", () => {
   it("keeps the measured max-lines allowlist explicit", () => {
@@ -78,6 +108,150 @@ describe("check-eslint-static-policy", () => {
         action: "follow-up: move MRU persistence IPC behind a typed wrapper",
       },
     ]);
+  });
+
+  it("locks the connection feature public API surface", () => {
+    expect(CONNECTION_FEATURE_PUBLIC_API_EXPORTS).toEqual([
+      "ConnectionDialog",
+      "sanitizeMessage",
+      "ConnectionList",
+      "ConnectionGroup",
+      "ConnectionItem",
+      "GroupDialog",
+      "ImportExportDialog",
+      "RecentConnections",
+      "relativeTime",
+      "DbLifecycleDialog",
+      "KeyringFallbackToast",
+      "ServerActivityPanel",
+      "ServerInfoPanel",
+      "useConnectionMutations",
+      "useConnectionStore",
+      "SYNCED_KEYS",
+      "ConnectionState",
+      "connectToDatabase",
+      "createSqliteDatabaseFile",
+      "deleteConnection",
+      "deleteGroup",
+      "disconnectFromDatabase",
+      "exportConnections",
+      "exportConnectionsEncrypted",
+      "importConnections",
+      "importConnectionsEncrypted",
+      "listConnections",
+      "listGroups",
+      "moveConnectionToGroup",
+      "saveConnection",
+      "saveGroup",
+      "testConnection",
+      "EncryptedExportResult",
+      "ImportRenamedEntry",
+      "ImportResult",
+      "getConnectionColor",
+      "CONNECTION_COLOR_PALETTE",
+      "FileConnectionPermissionScope",
+      "FileConnectionPrivacyPolicyId",
+      "FileConnectionInputKind",
+      "FileConnectionInputStatus",
+      "FileConnectionInputContract",
+      "FileConnectionContract",
+      "SQLITE_FILE_CONNECTION",
+      "DUCKDB_FILE_CONNECTION",
+      "DATABASE_DEFAULTS",
+      "DATABASE_DEFAULT_FIELDS",
+      "DATABASE_TYPE_LABELS",
+      "ENVIRONMENT_META",
+      "ENVIRONMENT_OPTIONS",
+      "SUPPORTED_DATABASE_TYPES",
+      "createEmptyDraft",
+      "draftFromConnection",
+      "isSupportedDatabaseType",
+      "paradigmOf",
+      "parseConnectionUrl",
+      "parseFileConnectionPath",
+      "parseSqliteFilePath",
+      "ConnectionConfig",
+      "ConnectionDefaultFields",
+      "ConnectionDraft",
+      "ConnectionGroupModel",
+      "ConnectionStatus",
+      "DatabaseType",
+      "EnvironmentTag",
+      "FileConnectionDatabaseType",
+      "Paradigm",
+    ]);
+  });
+
+  it("rejects app-shell imports from legacy connection UI/model/api paths", () => {
+    const failures = findConnectionFeatureBoundaryViolations(
+      new Map([
+        [
+          "src/features/connection/index.ts",
+          "export { default as ConnectionDialog } from './components/ConnectionDialog';\n",
+        ],
+        [
+          "src/pages/HomePage.tsx",
+          'import ConnectionDialog from "@components/connection/ConnectionDialog";\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      "src/pages/HomePage.tsx: import connection UI/model/api through src/features/connection/index.ts, not @components/connection/ConnectionDialog.",
+    );
+  });
+
+  it("accepts migrated app-shell connection imports and compatibility wrappers", () => {
+    const failures = findConnectionFeatureBoundaryViolations(
+      new Map([
+        [CONNECTION_FEATURE_PUBLIC_API_PATH, connectionPublicApiFixture()],
+        [
+          "src/pages/HomePage.tsx",
+          'import { ConnectionDialog } from "@features/connection";\n',
+        ],
+        [
+          "src/components/connection/ConnectionDialog.tsx",
+          'export { default } from "@features/connection";\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toEqual([]);
+  });
+
+  it("rejects unexpected connection feature public API exports", () => {
+    const failures = findConnectionFeatureBoundaryViolations(
+      new Map([
+        [
+          CONNECTION_FEATURE_PUBLIC_API_PATH,
+          connectionPublicApiFixture([
+            "export { internalConnectionFixture } from './testSupport';",
+          ]),
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      `${CONNECTION_FEATURE_PUBLIC_API_PATH}: unexpected public export internalConnectionFixture.`,
+    );
+  });
+
+  it("requires the connection group model type to use the public ConnectionGroupModel alias", () => {
+    const failures = findConnectionFeatureBoundaryViolations(
+      new Map([
+        [
+          CONNECTION_FEATURE_PUBLIC_API_PATH,
+          connectionPublicApiFixture().replace(
+            "ConnectionGroup as ConnectionGroupModel",
+            "ConnectionGroup",
+          ),
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      `${CONNECTION_FEATURE_PUBLIC_API_PATH}: missing public export ConnectionGroupModel.`,
+    );
   });
 
   it("rejects untriaged raw Tauri invoke imports in store modules", () => {

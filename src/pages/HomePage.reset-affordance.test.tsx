@@ -55,25 +55,20 @@ vi.mock("@components/theme/ThemePicker", () => ({
   default: () => <div data-testid="theme-picker-mock" />,
 }));
 
-vi.mock("@components/connection/ConnectionList", () => ({
-  default: () => <div data-testid="connection-list" />,
-}));
+vi.mock("@features/connection", async () => {
+  const connectionStore = await vi.importActual<
+    typeof import("@stores/connectionStore")
+  >("@stores/connectionStore");
 
-vi.mock("@components/connection/ConnectionDialog", () => ({
-  default: () => <div data-testid="connection-dialog" />,
-}));
-
-vi.mock("@components/connection/ImportExportDialog", () => ({
-  default: () => <div data-testid="import-export-dialog" />,
-}));
-
-vi.mock("@components/connection/GroupDialog", () => ({
-  default: () => <div data-testid="group-dialog" />,
-}));
-
-vi.mock("@components/connection/RecentConnections", () => ({
-  default: () => <div data-testid="recent-connections-mock" />,
-}));
+  return {
+    ...connectionStore,
+    ConnectionList: () => <div data-testid="connection-list" />,
+    ConnectionDialog: () => <div data-testid="connection-dialog" />,
+    ImportExportDialog: () => <div data-testid="import-export-dialog" />,
+    GroupDialog: () => <div data-testid="group-dialog" />,
+    RecentConnections: () => <div data-testid="recent-connections-mock" />,
+  };
+});
 
 vi.mock("@lib/window-controls", () => ({
   showWindow: vi.fn(() => Promise.resolve()),

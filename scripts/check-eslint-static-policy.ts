@@ -2,12 +2,18 @@ import { ESLint } from "eslint";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { findConnectionFeatureBoundaryViolations as findConnectionFeatureBoundaryViolationsImpl } from "./static-policy/connection-feature";
+
+export {
+  CONNECTION_FEATURE_PUBLIC_API_EXPORTS,
+  CONNECTION_FEATURE_PUBLIC_API_PATH,
+} from "./static-policy/connection-feature";
 
 export const MAX_LINES_ALLOWLIST = [
   "e2e/smoke/_helpers.ts",
-  "src/components/connection/ConnectionDialog.test.tsx",
-  "src/components/connection/ConnectionGroup.test.tsx",
-  "src/components/connection/ConnectionItem.test.tsx",
+  "src/features/connection/components/ConnectionDialog.test.tsx",
+  "src/features/connection/components/ConnectionGroup.test.tsx",
+  "src/features/connection/components/ConnectionItem.test.tsx",
   "src/components/datagrid/sqlGenerator.test.ts",
   "src/components/datagrid/useDataGridEdit.mixed-batch.test.ts",
   "src/components/document/DocumentTreePanel.test.tsx",
@@ -82,6 +88,7 @@ export const FRONTEND_COMPAT_INVENTORY_DOC =
 
 const FRONTEND_COMPAT_SCOPE_ROOTS = [
   "src/components/",
+  "src/features/",
   "src/lib/",
   "src/stores/",
   "src/types/",
@@ -177,6 +184,15 @@ export function normalizeRepoPath(path: string, cwd = process.cwd()): string {
     ? normalized.slice(root.length + 1)
     : normalized;
   return repoPath.replace(/^\.\//, "");
+}
+
+export function findConnectionFeatureBoundaryViolations(
+  fileSources: ReadonlyMap<string, string>,
+): string[] {
+  return findConnectionFeatureBoundaryViolationsImpl(
+    fileSources,
+    normalizeRepoPath,
+  );
 }
 
 export function isAllowedGeneratedLintIgnore(repoPath: string): boolean {
@@ -359,7 +375,7 @@ export function findFrontendCompatInventoryViolations(
     }
     if (!isFrontendCompatScopeModule(path)) {
       failures.push(
-        `${path}: frontend compatibility inventory path is outside #734 scope.`,
+        `${path}: frontend compatibility inventory path is outside frontend compatibility scope.`,
       );
     }
   }
@@ -560,6 +576,7 @@ async function main() {
         ]
       : []),
     ...findRawTauriInvokeBoundaryViolations(sourceFileContents),
+    ...findConnectionFeatureBoundaryViolations(sourceFileContents),
     ...findFrontendCompatInventoryViolations(sourceFileContents),
     ...(await validateFeatureBoundaryRule(eslint, cwd)),
   ];

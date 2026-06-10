@@ -368,6 +368,7 @@ export default tseslint.config(
   },
   {
     files: ["src/features/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}", "**/__tests__/**"],
     rules: {
       "tv-local/no-feature-legacy-imports": "error",
     },

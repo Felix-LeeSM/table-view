@@ -4,16 +4,20 @@ Issue: #734
 Parent: #573
 Feeds: #742 local frontend SOT, #758 final compatibility ledger
 
-Scope: production files under `src/components/**`, `src/lib/**`,
-`src/stores/**`, and `src/types/**`. Tests are evidence only.
+Scope: production compatibility markers under `src/components/**`,
+`src/features/**`, `src/lib/**`, `src/stores/**`, and `src/types/**`.
+Tests are evidence only.
 
-No source behavior changed in this inventory. No #735+ migration started.
+#734 produced the initial inventory without source behavior changes. #735 moves
+connection-owned inventory rows to `src/features/connection/**` after the
+connection feature boundary lands. This document tracks those row paths only;
+#742 remains the final local frontend SOT follow-up.
 
 ## Verification commands
 
 ```bash
-rg -n "legacy|fallback|compat|backward|deprecated" src/components src/lib src/stores src/types --glob '*.{ts,tsx}'
-rg -n "legacy|deprecated|back-compat|backward compat|backward compatibility|backward-compat|backwards compatibility|backwards-compatible|compat wrapper|compat surface|compatibility[- ]mirror|compatibility projection" src/components src/lib src/stores src/types --glob '*.{ts,tsx}' --glob '!**/*.test.ts' --glob '!**/*.test.tsx' --glob '!**/*.spec.ts' --glob '!**/__tests__/**' --glob '!src/lib/*/wasm/*.d.ts'
+rg -n "legacy|fallback|compat|backward|deprecated" src/components src/features src/lib src/stores src/types --glob '*.{ts,tsx}'
+rg -n "legacy|deprecated|back-compat|backward compat|backward compatibility|backward-compat|backwards compatibility|backwards-compatible|compat wrapper|compat surface|compatibility[- ]mirror|compatibility projection" src/components src/features src/lib src/stores src/types --glob '*.{ts,tsx}' --glob '!**/*.test.ts' --glob '!**/*.test.tsx' --glob '!**/*.spec.ts' --glob '!**/__tests__/**' --glob '!src/lib/*/wasm/*.d.ts'
 pnpm exec tsx scripts/check-eslint-static-policy.ts
 ```
 
@@ -26,7 +30,7 @@ preserve old persisted/wire/caller behavior are included in the table.
 
 | Path | Branch | Classification | Owner | Horizon | Tests | Follow-up |
 |---|---|---|---|---|---|---|
-| `src/types/connection.ts` | legacy URL-scheme alias support | permanent-wire-compatibility | connection profile contract | Preserve while URL import/paste accepts historical aliases. | `src/types/connection.test.ts` | #735 preserves connection API, #758 final ledger |
+| `src/features/connection/model.ts` | legacy URL-scheme alias support | permanent-wire-compatibility | connection profile contract | Preserve while URL import/paste accepts historical aliases. | `src/types/connection.test.ts` | #735 preserves connection API, #758 final ledger |
 | `src/types/queryLanguage.ts` | TypeScript language fallback metadata mirrors WASM-owned languages | permanent-wire-compatibility | query-language metadata contract | Preserve as loader/runtime fallback while Rust/WASM owns source of truth. | `src/types/queryLanguage.docs.test.ts`<br>`src/types/dataSource.test.ts` | #736 completion boundary, #742 frontend SOT |
 | `src/types/query.ts` | legacy QueryResult compatibility projection from typed envelopes | permanent-wire-compatibility | query result envelope boundary | Preserve until native result envelopes replace QueryResult at the renderer boundary. | `src/types/query.resultEnvelope.test.ts` | #737 and #764 query cleanup, #758 ledger |
 | `src/types/search.ts` | legacy/composable Search template endpoint union | permanent-wire-compatibility | Search catalog contract | Preserve because Elasticsearch/OpenSearch expose both template families. | `src/components/search/SearchIndexDetailPanel.test.tsx`<br>`src/lib/search/searchDslCompletion.test.ts` | #758 records preservation |
@@ -58,9 +62,9 @@ preserve old persisted/wire/caller behavior are included in the table.
 | `src/lib/tauri/meta_sentinel.ts` | legacy import and column-pref sentinels | permanent-wire-compatibility | storage metadata wrapper | Preserve while local metadata rows can contain legacy sentinel keys. | `src/lib/tauri/legacyImport.test.ts`<br>`src/lib/runtime/migration/legacyColumnPrefsDrop.test.ts` | #758 storage compatibility |
 | `src/lib/tauri/numericWrap.ts` | legacy data_type numeric metadata normalization | permanent-wire-compatibility | document metadata wrapper | Preserve while backend/test fixtures may emit legacy snake_case. | `src/lib/tauri/numericWrap.test.ts` | #758 preservation |
 | `src/lib/window-label.ts` | legacy single workspace window label | migration-only | window router | Remove after workspace shell/window feature migration confirms no legacy label producers remain. | `src/lib/window-label.test.ts` | #740 workspace migration |
-| `src/components/connection/ConnectionDialog/useConnectionDraftForm.ts` | legacy URL/default-port draft behavior | permanent-wire-compatibility | connection dialog draft form | Preserve through connection migration because it protects imported/manual connection drafts. | `src/components/connection/ConnectionDialog.urlInput.test.tsx` | #735 preserves behavior |
-| `src/components/connection/ConnectionGroup.tsx` | legacy color-null group accent fallback | permanent-wire-compatibility | connection group list | Preserve while existing group rows can have `color=null`. | `src/components/connection/ConnectionGroup.test.tsx` | #735 preserves connection UI behavior, #758 preservation |
-| `src/components/connection/ImportExportDialog.tsx` | backward-compatible connection import envelope behavior | permanent-wire-compatibility | connection import/export UI | Preserve for exported/imported connection envelopes. | `src/components/connection/ImportExportDialog.ac149.test.tsx` | #735 migration, #758 preservation |
+| `src/features/connection/components/ConnectionDialog/useConnectionDraftForm.ts` | legacy URL/default-port draft behavior | permanent-wire-compatibility | connection dialog draft form | Preserve through connection migration because it protects imported/manual connection drafts. | `src/features/connection/components/ConnectionDialog.urlInput.test.tsx` | #735 preserves behavior |
+| `src/features/connection/components/ConnectionGroup.tsx` | legacy color-null group accent fallback | permanent-wire-compatibility | connection group list | Preserve while existing group rows can have `color=null`. | `src/features/connection/components/ConnectionGroup.test.tsx` | #735 preserves connection UI behavior, #758 preservation |
+| `src/features/connection/components/ImportExportDialog.tsx` | backward-compatible connection import envelope behavior | permanent-wire-compatibility | connection import/export UI | Preserve for exported/imported connection envelopes. | `src/features/connection/components/ImportExportDialog.ac149.test.tsx` | #735 migration, #758 preservation |
 | `src/components/structure/SqlPreviewDialog.tsx` | optional footer label for legacy callers | migration-only | structure preview dialog | Remove optional caller compatibility after schema mutation dialogs move behind feature API. | `src/components/schema/SchemaTree.actions.test.tsx` | #738 catalog/schema migration |
 | `src/components/structure/ColumnsEditor.tsx` | legacy caller coordinates/vocabulary props | migration-only | columns editor | Remove after schema structure editor callers route through catalog/schema feature API. | `src/components/structure/ColumnsEditor.test.tsx` | #738 catalog/schema migration |
 | `src/components/query/QueryTab.tsx` | legacy queryMode/history panel compatibility | migration-only | query tab container | Remove after query feature cleanup and public API enforcement. | `src/components/query/QueryTab.lifecycle.test.tsx`<br>`src/stores/workspaceStore.queryMode.test.ts` | #737 and #764 query cleanup |
@@ -73,7 +77,7 @@ preserve old persisted/wire/caller behavior are included in the table.
 | `src/components/workspace/DbSwitcher.tsx` | legacy table-tab schema fallback | migration-only | workspace database switcher | Remove after workspace feature migration resolves database identity through typed state. | `src/components/workspace/DbSwitcher.test.tsx` | #740 workspace migration |
 | `src/components/layout/MainArea.tsx` | legacy schema/table aliasing for persisted tabs | migration-only | workspace main area | Remove after workspace tab model migration updates persisted tab readers. | `src/components/layout/MainArea.test.tsx` | #740 workspace migration |
 | `src/components/layout/useTabDrag.ts` | legacy WebKit/jsdom dataTransfer fallback | permanent-wire-compatibility | tab drag interaction | Preserve browser/runtime compatibility unless drag implementation changes. | `src/components/layout/TabBar.test.tsx` | #740 workspace interaction boundary |
-| `src/components/ui/dialog.tsx` | legacy dialog slot/header compatibility | migration-only | dialog primitive | Remove only after migrated dialogs stop depending on old slot arrangement. | `src/components/connection/ConnectionDialog.test.tsx` | #735 and #738 migrate callers, #742 UI API |
+| `src/components/ui/dialog.tsx` | legacy dialog slot/header compatibility | migration-only | dialog primitive | Remove only after migrated dialogs stop depending on old slot arrangement. | `src/features/connection/components/ConnectionDialog.test.tsx` | #735 and #738 migrate callers, #742 UI API |
 | `src/components/ui/ExecuteButton.tsx` | legacy regression-test id override | removable-debt | execute button primitive | Remove when tests stop requiring the legacy test id hook. | `src/components/workspace/ConfirmDestructiveDialog.test.tsx` | #742 and #758 decide cleanup |
 | `src/components/workspace/ConfirmDestructiveDialog.tsx` | legacy plain Confirm affordance default | migration-only | destructive confirmation dialog | Remove after all call sites pass explicit command labels through feature APIs. | `src/components/query/QueryTab.warn-dialog.test.tsx` | #737 and #740 migration |
 | `src/components/schema/AddColumnDialog.tsx` | workspace database optional prop for back-compat | migration-only | schema add-column dialog | Remove after catalog/schema feature migration updates callers. | `src/components/schema/CreateTableDialog.test.tsx` | #738 catalog/schema migration |
@@ -97,14 +101,16 @@ preserve old persisted/wire/caller behavior are included in the table.
 No new GitHub issues are required from this inventory. Migration-only rows are
 covered by existing same-milestone Refactor 02 child issues (#735 through #742
 and #761 through #764). Permanent wire compatibility and removable-debt rows can
-feed the downstream compatibility ledger #758. #734 does not remove behavior and
-does not start any #735+ movement.
+feed the downstream compatibility ledger #758. #734 does not remove behavior.
+#735 updates connection row paths after the connection feature boundary lands;
+#742 remains the final local frontend SOT follow-up.
 
 ## Static guard
 
 `scripts/check-eslint-static-policy.ts` parses the table above and fails when:
 
-- A production hard-compat marker under #734 scope is missing from this table.
+- A production hard-compat marker under this inventory scope is missing from
+  this table.
 - A table row is stale, outside scope, lacks owner/horizon/test evidence, or lacks
   a follow-up issue reference.
 - A `migration-only` row lacks a same-milestone Refactor 02 follow-up issue
