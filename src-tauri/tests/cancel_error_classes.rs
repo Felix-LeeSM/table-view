@@ -79,6 +79,24 @@ fn app_error_cancel_preserves_message_payload() {
 }
 
 #[test]
+fn app_error_db_mismatch_serialises_as_typed_envelope_with_message() {
+    let value = serde_json::to_value(AppError::DbMismatch {
+        expected: "db1".into(),
+        actual: "db2".into(),
+    })
+    .unwrap();
+
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "type": "DbMismatch",
+            "message": "Database mismatch: expected 'db1', backend pool has 'db2'",
+            "payload": { "expected": "db1", "actual": "db2" },
+        })
+    );
+}
+
+#[test]
 fn classify_permission_denied_strings() {
     // PG `pg_cancel_backend` 가 `false` 반환할 때 우리는 explicit
     // "Permission" 메시지로 raise — classify 가 변경 없이 통과.

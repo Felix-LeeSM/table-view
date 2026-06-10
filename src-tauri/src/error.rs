@@ -101,6 +101,28 @@ impl serde::Serialize for AppError {
                 }
                 .serialize(serializer)
             }
+            AppError::DbMismatch { expected, actual } => {
+                #[derive(Serialize)]
+                struct DbMismatchPayload<'a> {
+                    expected: &'a str,
+                    actual: &'a str,
+                }
+
+                #[derive(Serialize)]
+                struct DbMismatchEnvelope<'a> {
+                    #[serde(rename = "type")]
+                    kind: &'static str,
+                    message: String,
+                    payload: DbMismatchPayload<'a>,
+                }
+
+                DbMismatchEnvelope {
+                    kind: "DbMismatch",
+                    message: self.to_string(),
+                    payload: DbMismatchPayload { expected, actual },
+                }
+                .serialize(serializer)
+            }
             _ => serializer.serialize_str(self.to_string().as_str()),
         }
     }
@@ -149,10 +171,26 @@ mod tests {
     }
 
     #[test]
-    fn error_serialize_to_string() {
+    fn generic_error_serializes_to_legacy_string() {
         let err = AppError::Connection("timeout".into());
         let json = serde_json::to_string(&err).unwrap();
         assert_eq!(json, "\"Connection error: timeout\"");
+    }
+
+    #[test]
+    fn db_mismatch_serializes_to_typed_envelope_with_message() {
+        let err = AppError::DbMismatch {
+            expected: "db1".into(),
+            actual: "db2".into(),
+        };
+        let json = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["type"], "DbMismatch");
+        assert_eq!(
+            json["message"],
+            "Database mismatch: expected 'db1', backend pool has 'db2'"
+        );
+        assert_eq!(json["payload"]["expected"], "db1");
+        assert_eq!(json["payload"]["actual"], "db2");
     }
 
     #[test]

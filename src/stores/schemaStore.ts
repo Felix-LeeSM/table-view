@@ -13,6 +13,7 @@ import type {
 import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import type { DatabaseInfo } from "@/types/document";
 import * as tauri from "@lib/tauri";
+import { getTauriErrorMessage } from "@lib/tauri/error";
 import {
   deleteConn,
   deleteConnDb,
@@ -256,7 +257,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       }));
     } catch (e) {
       handleDbMismatch(connId, e);
-      set({ error: String(e), loading: false });
+      set({ error: getTauriErrorMessage(e), loading: false });
     }
   },
 
@@ -270,7 +271,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       }));
     } catch (e) {
       handleDbMismatch(connId, e);
-      set({ error: String(e), loading: false });
+      set({ error: getTauriErrorMessage(e), loading: false });
     }
   },
 
@@ -363,7 +364,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       }));
     } catch (e) {
       handleDbMismatch(connId, e);
-      set({ error: String(e) });
+      set({ error: getTauriErrorMessage(e) });
     }
   },
 
@@ -381,7 +382,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       }));
     } catch (e) {
       handleDbMismatch(connId, e);
-      set({ error: String(e) });
+      set({ error: getTauriErrorMessage(e) });
     }
   },
 
@@ -401,7 +402,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       return extensions;
     } catch (e) {
       handleDbMismatch(connId, e);
-      set({ error: String(e) });
+      set({ error: getTauriErrorMessage(e) });
       throw e;
     }
   },
@@ -417,7 +418,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       }));
       return sources;
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: getTauriErrorMessage(e) });
       throw e;
     }
   },

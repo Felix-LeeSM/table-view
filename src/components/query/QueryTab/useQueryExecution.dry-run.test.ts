@@ -328,17 +328,18 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
 
   // Sprint 271b (2026-05-13) — DbMismatch end-to-end.
   //
-  // 작성 이유: mocked IPC throws Sprint 266 wire format → useQueryExecution
-  // 의 catch 가 parseDbMismatch 로 감지 → syncMismatchedActiveDb 가
+  // 작성 이유: mocked IPC throws #744 typed DbMismatch envelope →
+  // useQueryExecution 의 catch 가 normalizer 로 감지 →
+  // syncMismatchedActiveDb 가
   // verifyActiveDb 의 새 db 를 받아 toast.warning 발사 (user-initiated
   // dry-run 은 Sprint 269 Retry toast 재사용; background introspection 만
   // silent).
   it("routes DbMismatch through syncMismatchedActiveDb + Retry toast", async () => {
-    executeQueryDryRunMock.mockRejectedValueOnce(
-      new Error(
-        "Database mismatch: expected 'db1', backend pool has 'otherDb'",
-      ),
-    );
+    executeQueryDryRunMock.mockRejectedValueOnce({
+      type: "DbMismatch",
+      message: "Database mismatch: expected 'db1', backend pool has 'otherDb'",
+      payload: { expected: "db1", actual: "otherDb" },
+    });
     verifyActiveDbMock.mockResolvedValueOnce("otherDb");
     // Omit `database` so the tab lives in the default workspace slot
     // (`conn1` / `db1`) — `getTestWorkspace()` reads that slot.

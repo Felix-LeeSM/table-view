@@ -2,9 +2,9 @@ import { useCallback, useRef, useState } from "react";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
-import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
 import { toast } from "@lib/runtime/toast";
+import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
 
 /**
  * Shared DDL preview/execute lifecycle for the Structure-surface editors
@@ -117,15 +117,15 @@ export function useDdlPreviewExecution({
 
   // Sprint 271c (2026-05-13) — DbMismatch recovery. DDL dispatches are
   // user-initiated (dialog Apply / editor Execute), so on a mismatch the
-  // backend's Sprint 266 wire format reaches this catch path. Route
-  // through Sprint 267's `syncMismatchedActiveDb` to align the
+  // backend's typed DbMismatch envelope reaches this catch path. Route
+  // through `syncMismatchedActiveDb` to align the
   // frontend's `activeDb` with the backend pool, and raise the Sprint
   // 269 passive Retry toast so the user re-issues the action against
   // the synced db (DDL Apply has no auto-retry — re-clicking the dialog
   // button is the natural retry surface).
   const surfaceDbMismatchIfMatched = useCallback(
-    (message: string): boolean => {
-      const info = parseDbMismatch(message);
+    (err: unknown): boolean => {
+      const info = getDbMismatchInfo(err);
       if (!info) return false;
       void syncMismatchedActiveDb(connectionId, (actual) => {
         toast.warning(
@@ -162,12 +162,9 @@ export function useDdlPreviewExecution({
         source: "ddl-structure",
       });
     } catch (e) {
-      // Use `err.message` (not `String(e)`) so the Sprint 266 wire
-      // format ("Database mismatch: …") sits at column 0 of the
-      // matched string — `parseDbMismatch` anchors with `^…$`.
-      const message = e instanceof Error ? e.message : String(e);
+      const message = getTauriErrorMessage(e);
       setPreviewError(message);
-      surfaceDbMismatchIfMatched(message);
+      surfaceDbMismatchIfMatched(e);
       recordHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
@@ -195,12 +192,11 @@ export function useDdlPreviewExecution({
         setPreviewSql(result.sql);
         pendingExecuteRef.current = prepareCommit();
       } catch (e) {
-        // Use `err.message` (not `String(e)`) — see `runCommit` catch.
-        const message = e instanceof Error ? e.message : String(e);
+        const message = getTauriErrorMessage(e);
         setPreviewError(message);
         setPreviewSql("");
         pendingExecuteRef.current = null;
-        surfaceDbMismatchIfMatched(message);
+        surfaceDbMismatchIfMatched(e);
       }
       setPreviewLoading(false);
     },

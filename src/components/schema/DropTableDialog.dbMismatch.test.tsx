@@ -4,14 +4,13 @@
 // 작성 이유: backend Sprint 266 가드가 `tauri.dropTableRequest` 를
 // `AppError::DbMismatch` 로 reject 할 때, dialog 의 ddl preview catch
 // path 가
-//   (1) Sprint 266 wire format 을 `parseDbMismatch` 로 감지하고
+//   (1) typed DbMismatch envelope 를 normalizer 로 감지하고
 //   (2) `syncMismatchedActiveDb` 로 verifyActiveDb + setActiveDb 를
 //       호출하며
 //   (3) Sprint 269 passive `toast.warning` 으로 사용자에게 재시도를
 //       안내하는지 확인. user-initiated DDL 은 silent 가 아닌 toast 노출.
-// IPC 는 Sprint 266 wire format ("Database mismatch: expected 'X',
-// backend pool has 'Y'") 으로 mock 한다. verifyActiveDb 만 직접 mock
-// 하고 나머지 sync 경로는 production code 가 실제 실행 — toast +
+// IPC 는 #744 typed envelope 로 mock 한다. verifyActiveDb 만 직접 mock
+// 하고 나머지 sync 경로는 production code 가 실제 실행 - toast +
 // connectionStore.setActiveDb side-effect 로 end-to-end 단언.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -66,6 +65,11 @@ import { useSchemaStore } from "@stores/schemaStore";
 
 const DB_MISMATCH_ERROR =
   "Database mismatch: expected 'db-1', backend pool has 'db-2'";
+const TYPED_DB_MISMATCH_ERROR = {
+  type: "DbMismatch",
+  message: DB_MISMATCH_ERROR,
+  payload: { expected: "db-1", actual: "db-2" },
+};
 
 function setDevConnection() {
   useConnectionStore.setState({
@@ -97,7 +101,7 @@ describe("DropTableDialog — DbMismatch (Sprint 271c)", () => {
   });
 
   it("preview-fetch rejects with DbMismatch → routes through sync helper + raises Retry toast", async () => {
-    mockDropTableRequest.mockRejectedValueOnce(new Error(DB_MISMATCH_ERROR));
+    mockDropTableRequest.mockRejectedValueOnce(TYPED_DB_MISMATCH_ERROR);
 
     render(
       <DropTableDialog
@@ -126,7 +130,7 @@ describe("DropTableDialog — DbMismatch (Sprint 271c)", () => {
       expect(messages.some((m) => m.includes(DB_MISMATCH_ERROR))).toBe(true);
     });
 
-    // Sync helper invoked verifyActiveDb (parseDbMismatch matched →
+    // Sync helper invoked verifyActiveDb (normalizer matched →
     // routed through syncMismatchedActiveDb).
     await waitFor(() => {
       expect(verifyActiveDbMock).toHaveBeenCalledWith("conn-1");
