@@ -46,6 +46,19 @@ extract_step_block() {
 	' <<<"$text"
 }
 
+extract_trigger_block() {
+	local text="$1"
+	local trigger_name="$2"
+
+	awk -v trigger_name="$trigger_name" '
+		$0 == "  " trigger_name ":" { in_block = 1; print; next }
+		in_block && $0 ~ /^[^[:space:]]/ { exit }
+		in_block && $0 ~ /^  [[:alnum:]_-]+:/ { exit }
+		in_block { print }
+	' <<<"$text"
+}
+
+pull_request_trigger_block="$(extract_trigger_block "$workflow_text" "pull_request")"
 frontend_block="$(sed -n '/^  frontend:/,/^  rust:/p' <<<"$workflow_text" | sed '$d')"
 vite_cache_block="$(sed -n '/- name: Cache Vite transform output/,/- name: Install dependencies/p' <<<"$workflow_text" | sed '$d')"
 rust_block="$(sed -n '/^  rust:/,/^  integration-tests:/p' <<<"$workflow_text" | sed '$d')"
@@ -57,6 +70,10 @@ integration_run_step="$(extract_step_block "$integration_block" "Run integration
 
 if [ -z "$pr_body_block" ]; then
 	echo "FAIL: PR body job is missing from $WORKFLOW" >&2
+	exit 1
+fi
+if [ -z "$pull_request_trigger_block" ]; then
+	echo "FAIL: pull_request trigger is missing from $WORKFLOW" >&2
 	exit 1
 fi
 if [ -z "$frontend_block" ]; then
@@ -73,6 +90,7 @@ assert_contains "$pr_body_block" "node-version: 22.14.0" "PR body job"
 assert_contains "$pr_body_block" "run: bash scripts/hooks/test-check-pr-body.sh" "PR body job"
 assert_contains "$pr_body_block" "run: node scripts/hooks/check-pr-body.mjs" "PR body job"
 assert_order "$pr_body_block" "- name: Test PR body checker" "- name: Validate PR body" "PR body job order"
+assert_contains "$pull_request_trigger_block" "types: [opened, edited, reopened, synchronize]" "pull_request trigger events"
 assert_contains "$frontend_block" "cache: pnpm" "frontend pnpm cache"
 assert_contains "$frontend_block" "cache-dependency-path: pnpm-lock.yaml" "frontend pnpm cache"
 assert_contains "$vite_cache_block" "path: node_modules/.vite" "vite cache"
