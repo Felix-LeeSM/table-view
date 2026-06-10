@@ -47,6 +47,23 @@ describe("adapter conformance matrix", () => {
     }
   });
 
+  it("keeps profile presence separate from runtime support claims", () => {
+    for (const dbType of allDatabaseTypes) {
+      const conformance = ADAPTER_CONFORMANCE_MATRIX[dbType];
+      const connectionTest =
+        getVersionAwareDataSourceCapabilities(dbType).connection.test;
+
+      expect(conformance.areas.profile.level).toBe("declared");
+      expect(conformance.areas.profile.checks).toEqual([
+        "profile.registry",
+        "profile.identity",
+        "profile.backendAdapter",
+        "profile.dialect",
+      ]);
+      expect(conformance.level).toBe(connectionTest ? "runtime" : "declared");
+    }
+  });
+
   it("maps every version-aware capability flag to a conformance decision", () => {
     const capabilityAreas = {
       connection: "connection",

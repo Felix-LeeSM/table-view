@@ -1,0 +1,303 @@
+{
+  "reportVersion": 1,
+  "contract": "TS DATA_SOURCE_PROFILES and Rust DataSourceProfile strict comparable profile fields must match. TS capabilities and Rust adapter_contract are runtime/support posture inputs, not strict parity fields.",
+  "runtimeClaimBoundary": {
+    "profilePresenceIsRuntimeSupportClaim": false,
+    "runtimeSupportGate": "TS capabilities.connection.test plus adapter conformance claims; Rust adapter_contract remains backend runtime posture evidence.",
+    "excludedFromStrictParity": ["ts.capabilities", "rust.adapter_contract"]
+  },
+  "profiles": {
+    "duckdb": {
+      "id": "duckdb",
+      "paradigm": "rdb",
+      "connectionKind": "file",
+      "languages": ["sql"],
+      "catalogModel": "rdb",
+      "resultKinds": ["tabular"],
+      "safetyPolicy": "rdb-default",
+      "backendAdapter": {
+        "id": "duckdb",
+        "kind": "rdb",
+        "capabilitySource": "duckdb"
+      },
+      "dialect": {
+        "id": "duckdb",
+        "family": "duckdb",
+        "versionProbe": "none"
+      },
+      "fileConnection": {
+        "pathField": "database",
+        "readOnlyField": "readOnly",
+        "permissionScope": "local-file",
+        "privacyPolicy": "local-first",
+        "supportedInputs": [
+          {
+            "id": "csv",
+            "kind": "analytics",
+            "extensions": [".csv"],
+            "status": "supported"
+          },
+          {
+            "id": "duckdb-database",
+            "kind": "database",
+            "extensions": [".duckdb"],
+            "status": "supported"
+          },
+          {
+            "id": "json",
+            "kind": "analytics",
+            "extensions": [".json"],
+            "status": "supported"
+          },
+          {
+            "id": "ndjson",
+            "kind": "analytics",
+            "extensions": [".ndjson"],
+            "status": "supported"
+          },
+          {
+            "id": "parquet",
+            "kind": "analytics",
+            "extensions": [".parquet"],
+            "status": "supported"
+          }
+        ],
+        "deferredInputs": []
+      }
+    },
+    "elasticsearch": {
+      "id": "elasticsearch",
+      "paradigm": "search",
+      "connectionKind": "server",
+      "languages": ["search-dsl"],
+      "catalogModel": "search",
+      "resultKinds": ["searchHits"],
+      "safetyPolicy": "search-default",
+      "backendAdapter": {
+        "id": "search-engine",
+        "kind": "search",
+        "capabilitySource": "search-engine"
+      },
+      "dialect": {
+        "id": "elasticsearch",
+        "family": "elasticsearch",
+        "versionProbe": "search-root"
+      },
+      "fileConnection": null
+    },
+    "mariadb": {
+      "id": "mariadb",
+      "paradigm": "rdb",
+      "connectionKind": "server",
+      "languages": ["sql"],
+      "catalogModel": "rdb",
+      "resultKinds": ["tabular"],
+      "safetyPolicy": "rdb-default",
+      "backendAdapter": {
+        "id": "mysql-family",
+        "kind": "rdb",
+        "capabilitySource": "mysql-family"
+      },
+      "dialect": {
+        "id": "mariadb",
+        "family": "mysql",
+        "versionProbe": "mysql-family-version"
+      },
+      "fileConnection": null
+    },
+    "mongodb": {
+      "id": "mongodb",
+      "paradigm": "document",
+      "connectionKind": "server",
+      "languages": ["mongosh"],
+      "catalogModel": "document",
+      "resultKinds": ["document", "tabular"],
+      "safetyPolicy": "document-default",
+      "backendAdapter": {
+        "id": "mongodb",
+        "kind": "document",
+        "capabilitySource": "mongodb"
+      },
+      "dialect": {
+        "id": "mongodb",
+        "family": "mongodb",
+        "versionProbe": "mongodb-build-info"
+      },
+      "fileConnection": null
+    },
+    "mssql": {
+      "id": "mssql",
+      "paradigm": "rdb",
+      "connectionKind": "server",
+      "languages": ["sql"],
+      "catalogModel": "rdb",
+      "resultKinds": ["tabular"],
+      "safetyPolicy": "rdb-default",
+      "backendAdapter": {
+        "id": "mssql",
+        "kind": "rdb",
+        "capabilitySource": "mssql"
+      },
+      "dialect": {
+        "id": "mssql",
+        "family": "mssql",
+        "versionProbe": "mssql-server-property"
+      },
+      "fileConnection": null
+    },
+    "mysql": {
+      "id": "mysql",
+      "paradigm": "rdb",
+      "connectionKind": "server",
+      "languages": ["sql"],
+      "catalogModel": "rdb",
+      "resultKinds": ["tabular"],
+      "safetyPolicy": "rdb-default",
+      "backendAdapter": {
+        "id": "mysql-family",
+        "kind": "rdb",
+        "capabilitySource": "mysql-family"
+      },
+      "dialect": {
+        "id": "mysql",
+        "family": "mysql",
+        "versionProbe": "mysql-family-version"
+      },
+      "fileConnection": null
+    },
+    "opensearch": {
+      "id": "opensearch",
+      "paradigm": "search",
+      "connectionKind": "server",
+      "languages": ["search-dsl"],
+      "catalogModel": "search",
+      "resultKinds": ["searchHits"],
+      "safetyPolicy": "search-default",
+      "backendAdapter": {
+        "id": "search-engine",
+        "kind": "search",
+        "capabilitySource": "search-engine"
+      },
+      "dialect": {
+        "id": "opensearch",
+        "family": "opensearch",
+        "versionProbe": "search-root"
+      },
+      "fileConnection": null
+    },
+    "oracle": {
+      "id": "oracle",
+      "paradigm": "rdb",
+      "connectionKind": "server",
+      "languages": ["sql"],
+      "catalogModel": "rdb",
+      "resultKinds": ["tabular"],
+      "safetyPolicy": "rdb-default",
+      "backendAdapter": {
+        "id": "oracle",
+        "kind": "rdb",
+        "capabilitySource": "oracle"
+      },
+      "dialect": {
+        "id": "oracle",
+        "family": "oracle",
+        "versionProbe": "none"
+      },
+      "fileConnection": null
+    },
+    "postgresql": {
+      "id": "postgresql",
+      "paradigm": "rdb",
+      "connectionKind": "server",
+      "languages": ["sql"],
+      "catalogModel": "rdb",
+      "resultKinds": ["tabular"],
+      "safetyPolicy": "rdb-default",
+      "backendAdapter": {
+        "id": "postgresql",
+        "kind": "rdb",
+        "capabilitySource": "postgresql"
+      },
+      "dialect": {
+        "id": "postgresql",
+        "family": "postgres",
+        "versionProbe": "postgres-version-settings"
+      },
+      "fileConnection": null
+    },
+    "redis": {
+      "id": "redis",
+      "paradigm": "kv",
+      "connectionKind": "server",
+      "languages": ["redis-command"],
+      "catalogModel": "kv",
+      "resultKinds": ["keyValue", "streamRecords", "tabular"],
+      "safetyPolicy": "kv-default",
+      "backendAdapter": {
+        "id": "redis",
+        "kind": "kv",
+        "capabilitySource": "redis"
+      },
+      "dialect": {
+        "id": "redis",
+        "family": "redis",
+        "versionProbe": "none"
+      },
+      "fileConnection": null
+    },
+    "sqlite": {
+      "id": "sqlite",
+      "paradigm": "rdb",
+      "connectionKind": "file",
+      "languages": ["sql"],
+      "catalogModel": "rdb",
+      "resultKinds": ["tabular"],
+      "safetyPolicy": "rdb-default",
+      "backendAdapter": {
+        "id": "sqlite",
+        "kind": "rdb",
+        "capabilitySource": "sqlite"
+      },
+      "dialect": {
+        "id": "sqlite",
+        "family": "sqlite",
+        "versionProbe": "sqlite-version"
+      },
+      "fileConnection": {
+        "pathField": "database",
+        "readOnlyField": "readOnly",
+        "permissionScope": "local-file",
+        "privacyPolicy": "local-first",
+        "supportedInputs": [
+          {
+            "id": "sqlite-database",
+            "kind": "database",
+            "extensions": [".db", ".sqlite", ".sqlite3"],
+            "status": "supported"
+          }
+        ],
+        "deferredInputs": []
+      }
+    },
+    "valkey": {
+      "id": "valkey",
+      "paradigm": "kv",
+      "connectionKind": "server",
+      "languages": ["redis-command"],
+      "catalogModel": "kv",
+      "resultKinds": ["keyValue", "streamRecords", "tabular"],
+      "safetyPolicy": "kv-default",
+      "backendAdapter": {
+        "id": "valkey",
+        "kind": "kv",
+        "capabilitySource": "valkey"
+      },
+      "dialect": {
+        "id": "valkey",
+        "family": "valkey",
+        "versionProbe": "none"
+      },
+      "fileConnection": null
+    }
+  }
+}
