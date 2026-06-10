@@ -8,6 +8,7 @@ import {
 } from "./static-policy/completion-feature";
 import { findCatalogFeatureBoundaryViolations as findCatalogFeatureBoundaryViolationsImpl } from "./static-policy/catalog-feature";
 import { findConnectionFeatureBoundaryViolations as findConnectionFeatureBoundaryViolationsImpl } from "./static-policy/connection-feature";
+import { findFeatureImportBoundaryViolations as findFeatureImportBoundaryViolationsImpl } from "./static-policy/feature-import-boundary";
 
 export {
   CATALOG_FEATURE_PUBLIC_API_EXPORTS,
@@ -21,6 +22,7 @@ export {
   CONNECTION_FEATURE_PUBLIC_API_EXPORTS,
   CONNECTION_FEATURE_PUBLIC_API_PATH,
 } from "./static-policy/connection-feature";
+export { FEATURE_IMPORT_BOUNDARY_SCOPE } from "./static-policy/feature-import-boundary";
 
 export const MAX_LINES_ALLOWLIST = [
   "e2e/smoke/_helpers.ts",
@@ -204,6 +206,15 @@ export function findCompletionFeatureBoundaryViolations(
   fileSources: ReadonlyMap<string, string>,
 ): string[] {
   return findCompletionFeatureBoundaryViolationsImpl(
+    fileSources,
+    normalizeRepoPath,
+  );
+}
+
+export function findFeatureImportBoundaryViolations(
+  fileSources: ReadonlyMap<string, string>,
+): string[] {
+  return findFeatureImportBoundaryViolationsImpl(
     fileSources,
     normalizeRepoPath,
   );
@@ -606,6 +617,7 @@ async function main() {
     ...findCatalogFeatureBoundaryViolations(sourceFileContents),
     ...findCompletionFeatureBoundaryViolations(completionPolicyContents),
     ...findConnectionFeatureBoundaryViolations(sourceFileContents),
+    ...findFeatureImportBoundaryViolations(sourceFileContents),
     ...findFrontendCompatInventoryViolations(sourceFileContents),
     ...(await validateFeatureBoundaryRule(eslint, cwd)),
   ];
