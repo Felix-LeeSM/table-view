@@ -1,5 +1,5 @@
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
-import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
+import { ConfirmDestructiveDialog } from "@features/workspace";
 import { SqlPreviewDialog } from "./SqlPreviewDialog";
 
 interface RdbDataGridDialogsProps {

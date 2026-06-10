@@ -44,7 +44,7 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 import tauriConf from "../../src-tauri/tauri.conf.json";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import HomePage from "@/pages/HomePage";
-import WorkspacePage from "@/pages/WorkspacePage";
+import { WorkspacePage } from "@features/workspace";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import * as windowControls from "@lib/window-controls";

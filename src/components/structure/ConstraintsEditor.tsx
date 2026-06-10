@@ -26,7 +26,7 @@ import SqlPreviewDialog from "./SqlPreviewDialog";
 import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
-import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
+import { ConfirmDestructiveDialog } from "@features/workspace";
 import {
   StructureShell,
   StructureActionBar,

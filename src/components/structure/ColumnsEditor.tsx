@@ -8,7 +8,7 @@ import SqlPreviewDialog from "./SqlPreviewDialog";
 import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
-import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
+import { ConfirmDestructiveDialog } from "@features/workspace";
 import { AddColumnDialog, DropColumnDialog } from "@features/catalog";
 import {
   StructureShell,

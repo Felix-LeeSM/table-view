@@ -2,18 +2,17 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import LauncherPage from "./pages/LauncherPage";
-import WorkspacePage from "./pages/WorkspacePage";
 import QuickOpen from "./components/shared/QuickOpen";
 import ShortcutCheatsheet from "./components/shared/ShortcutCheatsheet";
 import QueryLog from "./components/query/QueryLog";
 import { Toaster } from "./components/ui/toaster";
 import { useConnectionStore } from "@features/connection";
+import { WorkspaceApp, WorkspacePage } from "@features/workspace";
 import { useFavoritesStore } from "./stores/favoritesStore";
 import { useMruStore } from "./stores/mruStore";
 import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
 import { markBootMilestone } from "@lib/perf/bootInstrumentation";
 import { logger } from "@lib/logger";
-import App from "./App";
 
 /**
  * Bridge the macOS native menu click (`File > New Connection`, Cmd+N) into
@@ -51,8 +50,8 @@ function useMenuNewConnectionBridge() {
  *   - anything else (including `null` when the Tauri seam isn't available)
  *     → defensive fallback to `LauncherPage` with a single `console.warn`.
  *
- * `App` is mounted under the workspace branch so all keyboard-shortcut
- * wiring / portal mounts that live there keep working untouched.
+ * `WorkspaceApp` is mounted under the workspace branch so keyboard-shortcut
+ * wiring and portal mounts stay inside the workspace feature boundary.
  */
 export default function AppRouter() {
   const label = getCurrentWindowLabel();
@@ -160,14 +159,11 @@ function LauncherShell() {
 }
 
 /**
- * Workspace chrome: keep mounting the existing `App` so all of the
- * keyboard shortcut wiring / portal mounts that currently live in `App.tsx`
- * keep working. `App.tsx` no longer routes between Home and Workspace at
- * the top level (that responsibility now lives here); it always renders
- * `WorkspacePage`.
+ * Workspace chrome: shortcut wiring, portals, and page composition live
+ * behind the workspace feature public API.
  */
 function WorkspaceShell() {
-  return <App />;
+  return <WorkspaceApp />;
 }
 
 // Re-export the workspace mount so unit tests that previously imported the

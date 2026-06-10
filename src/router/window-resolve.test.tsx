@@ -72,12 +72,9 @@ vi.mock("@/pages/LauncherPage", () => ({
   default: () => <div data-testid="launcher-page" />,
 }));
 
-vi.mock("@/pages/WorkspacePage", () => ({
-  default: () => <div data-testid="workspace-page" />,
-}));
-
-vi.mock("@/App", () => ({
-  default: () => <div data-testid="workspace-page" />,
+vi.mock("@features/workspace", () => ({
+  WorkspaceApp: () => <div data-testid="workspace-page" />,
+  WorkspacePage: () => <div data-testid="workspace-page" />,
 }));
 
 import { getCurrentWindowLabel } from "@lib/window-label";

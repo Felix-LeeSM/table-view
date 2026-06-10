@@ -26,7 +26,7 @@ import SearchQueryEditor from "./SearchQueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
 import { SearchResultView } from "@components/search/SearchResultView";
 import { ExplainViewer } from "./ExplainViewer";
-import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
+import { ConfirmDestructiveDialog } from "@features/workspace";
 import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import QueryTabToolbar from "./QueryTab/Toolbar";

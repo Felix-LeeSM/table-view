@@ -31,7 +31,7 @@ import {
   ContextMenu,
   type ContextMenuItem,
 } from "@components/shared/ContextMenu";
-import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
+import { ConfirmDestructiveDialog } from "@features/workspace";
 import ExecuteButton from "@components/ui/ExecuteButton";
 import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { useConnectionStore } from "@stores/connectionStore";
