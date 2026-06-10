@@ -13,6 +13,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { useFavoritesStore, SYNCED_KEYS } from "./favoritesStore";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const invokeMock = vi.mocked(invoke);
 
@@ -169,6 +171,15 @@ describe("favoritesStore", () => {
   // -- Persistence (Sprint 370 — SQLite via persist_favorites IPC) --
 
   describe("persistence (sprint-370 SQLite SOT)", () => {
+    it("keeps store IPC behind the typed Tauri wrapper", () => {
+      const src = readFileSync(
+        resolve(__dirname, "favoritesStore.ts"),
+        "utf-8",
+      );
+
+      expect(src).not.toContain("@tauri-apps/api/core");
+    });
+
     it("ships every mutate to persist_favorites IPC", async () => {
       useFavoritesStore.getState().addFavorite("Q1", "SELECT 1", null);
       await Promise.resolve();

@@ -1,8 +1,12 @@
-import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import { logger } from "@lib/logger";
+import {
+  listFavorites,
+  persistFavorites as persistFavoritesRemote,
+  type PersistFavoritePayload,
+} from "@lib/tauri/favorites";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,16 +42,6 @@ export type FavoriteScope = "all" | "global" | "connection";
 // W2", not "stricter consistency than W2 had". A future sprint may add
 // per-action rollback once event/state-changed lands for favorites.
 
-interface PersistFavoritePayload {
-  id: string;
-  name: string;
-  sql: string;
-  connectionId: string | null;
-  sortOrder: number;
-  createdAt: number;
-  updatedAt: number;
-}
-
 function toPersistPayload(
   favorites: FavoriteQuery[],
 ): PersistFavoritePayload[] {
@@ -66,12 +60,12 @@ function persistFavorites(favorites: FavoriteQuery[]): void {
   // Fire-and-forget — see module doc for why we keep this pattern. We log
   // failures so dev console shows the SQLite write error, but the store
   // mutate has already happened by the time we're here.
-  void invoke("persist_favorites", {
-    favorites: toPersistPayload(favorites),
-  }).catch((e: unknown) => {
-    const message = e instanceof Error ? e.message : String(e ?? "");
-    logger.warn(`[favoritesStore] persist_favorites failed: ${message}`);
-  });
+  void persistFavoritesRemote(toPersistPayload(favorites)).catch(
+    (e: unknown) => {
+      const message = e instanceof Error ? e.message : String(e ?? "");
+      logger.warn(`[favoritesStore] persist_favorites failed: ${message}`);
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -123,15 +117,6 @@ let favoriteCounter = 0;
  */
 export function __resetFavoriteCounterForTests(): void {
   favoriteCounter = 0;
-}
-
-interface FavoriteRow {
-  id: string;
-  name: string;
-  sql: string;
-  connectionId: string | null;
-  createdAt: number;
-  updatedAt: number;
 }
 
 export const useFavoritesStore = create<FavoritesState>((set, get) => ({
@@ -187,7 +172,7 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
 
   loadPersistedFavorites: async () => {
     try {
-      const rows = await invoke<FavoriteRow[]>("list_favorites");
+      const rows = await listFavorites();
       const favorites: FavoriteQuery[] = Array.isArray(rows)
         ? rows.map((r) => ({
             id: r.id,

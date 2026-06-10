@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 // 작성 2026-05-16 (Phase 4 W2→W3 sprint-370)
 //
@@ -28,6 +30,12 @@ beforeEach(() => {
 });
 
 describe("mruStore", () => {
+  it("keeps store IPC behind the typed Tauri wrapper", () => {
+    const src = readFileSync(resolve(__dirname, "mruStore.ts"), "utf-8");
+
+    expect(src).not.toContain("@tauri-apps/api/core");
+  });
+
   it("starts with lastUsedConnectionId === null", () => {
     expect(useMruStore.getState().lastUsedConnectionId).toBeNull();
   });
