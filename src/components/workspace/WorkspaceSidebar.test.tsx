@@ -17,14 +17,11 @@ vi.mock("@tauri-apps/api/core", () => ({
 // doesn't pull in network / virtualization machinery. The wrappers
 // (RdbSidebar, DocumentSidebar) defer to these directly so it's the
 // right level to mock.
-vi.mock("@components/schema/SchemaTree", () => ({
-  default: ({ connectionId }: { connectionId: string }) => (
+vi.mock("@features/catalog", () => ({
+  SchemaTree: ({ connectionId }: { connectionId: string }) => (
     <div data-testid="schema-tree">{connectionId}</div>
   ),
-}));
-
-vi.mock("@components/schema/DocumentDatabaseTree", () => ({
-  default: ({ connectionId }: { connectionId: string }) => (
+  DocumentDatabaseTree: ({ connectionId }: { connectionId: string }) => (
     <div data-testid="document-database-tree">{connectionId}</div>
   ),
 }));

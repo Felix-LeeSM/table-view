@@ -73,28 +73,22 @@ beforeEach(() => {
 
 // The heavy paradigm trees aren't needed for swap-order assertions — the
 // sidebar's pre-hydrate branch returns before pickSidebar runs.
-vi.mock("@components/schema/SchemaTree", () => ({
-  default: ({ connectionId }: { connectionId: string }) => (
+vi.mock("@features/catalog", () => ({
+  SchemaTree: ({ connectionId }: { connectionId: string }) => (
     <div data-testid="schema-tree">{connectionId}</div>
   ),
-}));
-
-vi.mock("@components/schema/DocumentDatabaseTree", () => ({
-  default: ({ connectionId }: { connectionId: string }) => (
+  DocumentDatabaseTree: ({ connectionId }: { connectionId: string }) => (
     <div data-testid="document-database-tree">{connectionId}</div>
   ),
+  StructurePanel: () => <div data-testid="mock-structure" />,
+  ViewStructurePanel: () => <div data-testid="mock-view-structure" />,
+  SchemaErdPanel: () => <div data-testid="mock-erd" />,
 }));
 
 // MainArea's grids/panels are heavy and irrelevant to the no-active-tab
 // fallback we're asserting against here.
 vi.mock("@components/rdb/DataGrid", () => ({
   default: () => <div data-testid="mock-datagrid" />,
-}));
-vi.mock("@components/schema/StructurePanel", () => ({
-  default: () => <div data-testid="mock-structure" />,
-}));
-vi.mock("@components/schema/ViewStructurePanel", () => ({
-  default: () => <div data-testid="mock-view-structure" />,
 }));
 vi.mock("@components/query/QueryTab", () => ({
   default: () => <div data-testid="mock-querytab" />,

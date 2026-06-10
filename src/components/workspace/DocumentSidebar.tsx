@@ -1,4 +1,4 @@
-import DocumentDatabaseTree from "@components/schema/DocumentDatabaseTree";
+import { DocumentDatabaseTree } from "@features/catalog";
 
 export interface DocumentSidebarProps {
   /** Connection whose database/collection tree should be displayed. */
