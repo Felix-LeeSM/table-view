@@ -26,7 +26,7 @@ import {
 } from "./__tests__/queryTabTestHelpers";
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
-import type { SqlCompletionContext } from "@lib/sql/sqlCompletionContext";
+import type { SqlCompletionContext } from "@features/completion";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
 beforeEach(() => {

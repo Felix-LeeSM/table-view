@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   REDIS_COMMAND_COMPLETIONS,
   REDIS_UNSUPPORTED_COMMAND_FAMILIES,
-} from "../../src/lib/redis/redisCommandCompletion";
+} from "../../src/features/completion";
 
 const DBMS_SEED_FILES = [
   ["postgresql", "seed.sql"],

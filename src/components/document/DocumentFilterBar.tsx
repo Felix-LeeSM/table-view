@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
-import { useMongoAutocomplete } from "@/hooks/useMongoAutocomplete";
+import { useMongoAutocomplete } from "@features/completion";
 import {
   buildMqlFilter,
   stringifyMqlFilter,

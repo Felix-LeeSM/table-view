@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CompletionResult } from "@/lib/completion/coreContract";
 import {
   buildSqlCompletionContext,
+  buildSqlCompletionRequest,
   type SqlCompletionCatalogStoreSnapshot,
-} from "./sqlCompletionContext";
-import { buildSqlCompletionRequest } from "./sqlCompletionRequest";
+} from "@features/completion";
 import {
   __resetSqlCompletionWasmModuleForTests,
   completeSqlWithPreloadedWasm,

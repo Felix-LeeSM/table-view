@@ -21,7 +21,7 @@ import type { Extension } from "@codemirror/state";
 import type {
   RedisCommandCompletionTarget,
   RedisKeySuggestion,
-} from "@lib/redis/redisCommandCompletion";
+} from "@features/completion";
 import QueryTab from "./QueryTab";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";

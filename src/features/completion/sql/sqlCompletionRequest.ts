@@ -16,7 +16,7 @@ import {
   type SqlDialectVocabulary,
   type SqlShellId,
   type SqlShellProfile,
-} from "./sqlDialectProfile";
+} from "@lib/sql/sqlDialectProfile";
 import type {
   SqlCompletionCacheState,
   SqlCompletionCatalogSnapshot,

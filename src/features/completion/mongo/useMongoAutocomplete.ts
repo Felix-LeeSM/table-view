@@ -4,11 +4,11 @@ import type { Extension } from "@codemirror/state";
 import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
-} from "@/lib/completion/mongo";
+} from "./mongo";
 import {
   createMongoshDbSource,
   createMongoAdminCommandSource,
-} from "@/lib/mongo/mongoAutocomplete";
+} from "./mongoAutocomplete";
 
 export interface UseMongoAutocompleteOptions {
   /** Active collection in the current query tab. */

@@ -20,8 +20,10 @@ import {
   indentOnInput,
 } from "@codemirror/language";
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
-import { createSqlHybridCompletionSource } from "@lib/sql/sqlHybridCompletionSource";
-import type { SqlCompletionContext } from "@lib/sql/sqlCompletionContext";
+import {
+  createSqlHybridCompletionSource,
+  type SqlCompletionContext,
+} from "@features/completion";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 import { syncEditorDocument } from "./editorDocumentSync";

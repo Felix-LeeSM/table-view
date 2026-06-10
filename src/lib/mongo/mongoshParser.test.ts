@@ -12,7 +12,7 @@ import {
   type ParsedMongoshCall,
   type ParsedMongoshError,
 } from "./mongoshParser";
-import { MONGOSH_DB_METHODS } from "./mongoAutocomplete";
+import { MONGOSH_DB_METHODS } from "./mongoShellCompletionVocabulary";
 
 function expectSuccess(
   result: ParsedMongoshCall | ParsedMongoshError,

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  COMPLETION_FEATURE_PUBLIC_API_EXPORTS,
+  COMPLETION_FEATURE_PUBLIC_API_PATH,
   CONNECTION_FEATURE_PUBLIC_API_PATH,
   CONNECTION_FEATURE_PUBLIC_API_EXPORTS,
   FRONTEND_COMPAT_INVENTORY,
   MAX_LINES_ALLOWLIST,
   RAW_TAURI_INVOKE_INVENTORY,
+  findCompletionFeatureBoundaryViolations,
   findConnectionFeatureBoundaryViolations,
   findFrontendCompatInventoryViolations,
   findRawTauriInvokeBoundaryViolations,
@@ -37,6 +40,27 @@ function connectionPublicApiFixture(extraLines: readonly string[] = []) {
     "export type { FileConnectionContract, FileConnectionInputContract, FileConnectionInputKind, FileConnectionInputStatus, FileConnectionPermissionScope, FileConnectionPrivacyPolicyId } from './fileConnection';",
     "export { DATABASE_DEFAULTS, DATABASE_DEFAULT_FIELDS, DATABASE_TYPE_LABELS, ENVIRONMENT_META, ENVIRONMENT_OPTIONS, SUPPORTED_DATABASE_TYPES, createEmptyDraft, draftFromConnection, isSupportedDatabaseType, paradigmOf, parseConnectionUrl, parseFileConnectionPath, parseSqliteFilePath } from './model';",
     "export type { ConnectionConfig, ConnectionDefaultFields, ConnectionDraft, ConnectionGroup as ConnectionGroupModel, ConnectionStatus, DatabaseType, EnvironmentTag, FileConnectionDatabaseType, Paradigm } from './model';",
+    ...extraLines,
+  ].join("\n");
+}
+
+function completionPublicApiFixture(extraLines: readonly string[] = []) {
+  return [
+    "export { buildSqlCompletionContext } from './sql/sqlCompletionContext';",
+    "export { buildSqlCompletionRequest } from './sql/sqlCompletionRequest';",
+    "export { buildSqlCompletionRequestFromCodeMirror } from './sql/sqlCodeMirrorCompletionAdapter';",
+    "export { createSqlHybridCompletionSource, SQL_COMPLETION_LEGACY_COMPATIBILITY_OWNER_ISSUE } from './sql/sqlHybridCompletionSource';",
+    "export type { SqlCompletionCatalogStoreSnapshot, BuildSqlCompletionContextInput, SqlCompletionCatalogSchema, SqlCompletionCatalogDatabase, SqlCompletionCatalogObject, SqlCompletionCatalogColumn, SqlCompletionCatalogFunction, SqlCompletionCatalogExtension, SqlCompletionCatalogSnapshot, SqlCompletionCacheState, SqlCompletionContext } from './sql/sqlCompletionContext';",
+    "export type { SqlCompletionRequest } from './sql/sqlCompletionRequest';",
+    "export type { SqlHybridCompletionSourceOptions } from './sql/sqlHybridCompletionSource';",
+    "export { useMongoAutocomplete } from './mongo/useMongoAutocomplete';",
+    "export { createDbMethodCompletionSource, dbMethodCandidates } from './mongo/mongo';",
+    "export { createMongoAdminCommandSource, createMongoCompletionSource, createMongoOperatorHighlight, createMongoshDbSource, classifyMongoCompletionPosition, getMongoAdminCommandCompletions, getMongoCompletionVocabulary, getMongoshCollectionMethodCompletions, getMongoshDbLevelMethodCompletions, MONGO_ACCUMULATORS, MONGO_ADMIN_COMMANDS, MONGO_AGGREGATE_STAGES, MONGO_ALL_OPERATORS, MONGO_EXPRESSION_OPERATORS, MONGO_PROJECTION_OPERATORS, MONGO_QUERY_OPERATORS, MONGO_TYPE_TAGS, MONGO_UPDATE_OPERATORS, MONGOSH_DB_LEVEL_METHODS, MONGOSH_DB_METHODS } from './mongo/mongoAutocomplete';",
+    "export type { UseMongoAutocompleteOptions } from './mongo/useMongoAutocomplete';",
+    "export type { MongoCompletionCursor, MongoCompletionResult, MongoDbMethodSource, MongoMethodCandidate } from './mongo/mongo';",
+    "export type { MongoCompletionOptions, MongoCompletionPositionKind, MongoQueryMode, MongoshDbSourceOptions } from './mongo/mongoAutocomplete';",
+    "export { createRedisCommandCompletionSource, REDIS_COMMAND_COMPLETIONS, REDIS_UNSUPPORTED_COMMAND_FAMILIES, VALKEY_COMMAND_COMPLETIONS } from './redis/redisCommandCompletion';",
+    "export type { RedisCommandCompletionEffect, RedisCommandCompletionName, RedisCommandCompletionSourceOptions, RedisCommandCompletionSpec, RedisCommandCompletionTarget, RedisKeySuggestion, RedisUnsupportedCommandFamily } from './redis/redisCommandCompletion';",
     ...extraLines,
   ].join("\n");
 }
@@ -180,6 +204,187 @@ describe("check-eslint-static-policy", () => {
       "FileConnectionDatabaseType",
       "Paradigm",
     ]);
+  });
+
+  it("locks the completion feature public API surface", () => {
+    expect(COMPLETION_FEATURE_PUBLIC_API_EXPORTS).toEqual([
+      "buildSqlCompletionContext",
+      "buildSqlCompletionRequest",
+      "buildSqlCompletionRequestFromCodeMirror",
+      "createSqlHybridCompletionSource",
+      "SQL_COMPLETION_LEGACY_COMPATIBILITY_OWNER_ISSUE",
+      "SqlCompletionCatalogStoreSnapshot",
+      "BuildSqlCompletionContextInput",
+      "SqlCompletionCatalogSchema",
+      "SqlCompletionCatalogDatabase",
+      "SqlCompletionCatalogObject",
+      "SqlCompletionCatalogColumn",
+      "SqlCompletionCatalogFunction",
+      "SqlCompletionCatalogExtension",
+      "SqlCompletionCatalogSnapshot",
+      "SqlCompletionCacheState",
+      "SqlCompletionContext",
+      "SqlCompletionRequest",
+      "SqlHybridCompletionSourceOptions",
+      "useMongoAutocomplete",
+      "createDbMethodCompletionSource",
+      "createMongoAdminCommandSource",
+      "createMongoCompletionSource",
+      "createMongoOperatorHighlight",
+      "createMongoshDbSource",
+      "classifyMongoCompletionPosition",
+      "dbMethodCandidates",
+      "getMongoAdminCommandCompletions",
+      "getMongoCompletionVocabulary",
+      "getMongoshCollectionMethodCompletions",
+      "getMongoshDbLevelMethodCompletions",
+      "MONGO_ACCUMULATORS",
+      "MONGO_ADMIN_COMMANDS",
+      "MONGO_AGGREGATE_STAGES",
+      "MONGO_ALL_OPERATORS",
+      "MONGO_EXPRESSION_OPERATORS",
+      "MONGO_PROJECTION_OPERATORS",
+      "MONGO_QUERY_OPERATORS",
+      "MONGO_TYPE_TAGS",
+      "MONGO_UPDATE_OPERATORS",
+      "MONGOSH_DB_LEVEL_METHODS",
+      "MONGOSH_DB_METHODS",
+      "UseMongoAutocompleteOptions",
+      "MongoCompletionCursor",
+      "MongoCompletionOptions",
+      "MongoCompletionPositionKind",
+      "MongoCompletionResult",
+      "MongoDbMethodSource",
+      "MongoMethodCandidate",
+      "MongoQueryMode",
+      "MongoshDbSourceOptions",
+      "createRedisCommandCompletionSource",
+      "REDIS_COMMAND_COMPLETIONS",
+      "REDIS_UNSUPPORTED_COMMAND_FAMILIES",
+      "VALKEY_COMMAND_COMPLETIONS",
+      "RedisCommandCompletionEffect",
+      "RedisCommandCompletionName",
+      "RedisCommandCompletionSourceOptions",
+      "RedisCommandCompletionSpec",
+      "RedisCommandCompletionTarget",
+      "RedisKeySuggestion",
+      "RedisUnsupportedCommandFamily",
+    ]);
+  });
+
+  it("rejects completion adapter imports from migrated legacy paths", () => {
+    const failures = findCompletionFeatureBoundaryViolations(
+      new Map([
+        [COMPLETION_FEATURE_PUBLIC_API_PATH, completionPublicApiFixture()],
+        [
+          "src/components/query/SqlQueryEditor.tsx",
+          'import { createSqlHybridCompletionSource } from "@lib/sql/sqlHybridCompletionSource";\n',
+        ],
+        [
+          "src/components/document/AddDocumentModal.tsx",
+          'import { useMongoAutocomplete } from "@/hooks/useMongoAutocomplete";\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      "src/components/query/SqlQueryEditor.tsx: import completion request/context/UI adapters through src/features/completion/index.ts, not @lib/sql/sqlHybridCompletionSource.",
+    );
+    expect(failures).toContain(
+      "src/components/document/AddDocumentModal.tsx: import completion request/context/UI adapters through src/features/completion/index.ts, not @/hooks/useMongoAutocomplete.",
+    );
+  });
+
+  it("rejects moved completion compatibility paths", () => {
+    const failures = findCompletionFeatureBoundaryViolations(
+      new Map([
+        [COMPLETION_FEATURE_PUBLIC_API_PATH, completionPublicApiFixture()],
+        [
+          "src/lib/redis/redisCommandCompletion.ts",
+          "export function createRedisCommandCompletionSource() {}\n",
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      "src/lib/redis/redisCommandCompletion.ts: moved completion module must not remain as a compatibility path; import src/features/completion/index.ts.",
+    );
+  });
+
+  it("accepts migrated completion feature imports", () => {
+    const failures = findCompletionFeatureBoundaryViolations(
+      new Map([
+        [COMPLETION_FEATURE_PUBLIC_API_PATH, completionPublicApiFixture()],
+        [
+          "src/components/query/SqlQueryEditor.tsx",
+          'import { createSqlHybridCompletionSource } from "@features/completion";\n',
+        ],
+        [
+          "src/components/query/QueryTab.tsx",
+          'import { buildSqlCompletionContext, useMongoAutocomplete } from "@features/completion";\n',
+        ],
+        [
+          "src/components/query/RedisCommandEditor.tsx",
+          'import { createRedisCommandCompletionSource } from "@features/completion";\n',
+        ],
+        [
+          "src/components/document/DocumentFilterBar.tsx",
+          'import { useMongoAutocomplete } from "@features/completion";\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toEqual([]);
+  });
+
+  it("rejects unexpected completion feature public API exports", () => {
+    const failures = findCompletionFeatureBoundaryViolations(
+      new Map([
+        [
+          COMPLETION_FEATURE_PUBLIC_API_PATH,
+          completionPublicApiFixture([
+            "export { internalCompletionFixture } from './testSupport';",
+          ]),
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      `${COMPLETION_FEATURE_PUBLIC_API_PATH}: unexpected public export internalCompletionFixture.`,
+    );
+  });
+
+  it("rejects completion feature default public exports", () => {
+    const failures = findCompletionFeatureBoundaryViolations(
+      new Map([
+        [
+          COMPLETION_FEATURE_PUBLIC_API_PATH,
+          completionPublicApiFixture([
+            "export default function internalCompletionFixture() {}",
+          ]),
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      `${COMPLETION_FEATURE_PUBLIC_API_PATH}: default public export is not allowed; enumerate named exports.`,
+    );
+  });
+
+  it("rejects stale moved completion references in docs", () => {
+    const failures = findCompletionFeatureBoundaryViolations(
+      new Map([
+        [COMPLETION_FEATURE_PUBLIC_API_PATH, completionPublicApiFixture()],
+        [
+          "docs/ROADMAP.md",
+          "Evidence: `src/lib/sql/sqlCompletionContext.test.ts`.",
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      "docs/ROADMAP.md: stale moved completion reference src/lib/sql/sqlCompletionContext.test.ts; use src/features/completion/sql/sqlCompletionContext.test.ts.",
+    );
   });
 
   it("rejects app-shell imports from legacy connection UI/model/api paths", () => {
