@@ -102,6 +102,15 @@ fixture strategy 가 잠기기 전 active `DatabaseType`/profile/runtime 으로 
 
 ## Adapter Families
 
+Backend adapter modules use a progressive topology. `src-tauri/src/db/contracts`
+is the canonical trait/DTO contract import path, `src-tauri/src/db/capabilities`
+is the backend capability/profile import path, and
+`src-tauri/src/db/adapters/<dbms>` is the canonical concrete adapter home.
+Legacy `db::<dbms>`, `db::traits`, and `db::types` paths stay as shims/re-exports
+until call sites migrate. Move one DBMS per PR; prefer file-backed/local-testable
+adapters before server-backed adapters; do not widen runtime support or product
+capability claims during topology moves.
+
 - `RdbAdapter`: SQL, table browse, DDL, row edit, ERD.
 - `DocumentAdapter`: collection browse, document query/edit, index/validator.
 - `KvAdapter`: Redis backend primitives support connection/list DB, bounded key
