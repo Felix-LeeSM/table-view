@@ -1,7 +1,7 @@
 ---
 title: God file 시퀀스 (700줄 임계)
 type: convention
-updated: 2026-05-29
+updated: 2026-06-11
 task: refactor, god-file, comment-cleanup, decomposition
 surface: '**/*.ts, **/*.tsx, **/*.rs'
 trigger:
@@ -56,6 +56,11 @@ trigger:
 ## 작업 단위
 
 - 디렉토리 tree (예: `datagrid/`, `stores/`, `hooks/+lib/`) — 한 라운드 ≒ 한 commit.
+- Frontend domain code 를 추출할 때 새 consumer import 는
+  `src/features/<domain>/index.ts` public API 로 정렬한다. 다른 feature 내부 path 나
+  migration-only compatibility export 를 새 의존성으로 만들지 않는다.
+- Feature-local tests 는 이동한 domain 근처에 두고, runner-owned integration/smoke
+  tests 는 기존 root 에 둔다.
 - 테스트 파일 건드리지 않음 (별 룰 — test-documentation: Reason/Date/Purpose 보존).
 - WIP 영역 (uncommitted untracked) 건너뜀.
 
