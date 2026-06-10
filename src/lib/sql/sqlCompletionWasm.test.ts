@@ -3,6 +3,7 @@ import type { CompletionResult } from "@/lib/completion/coreContract";
 import {
   buildSqlCompletionContext,
   buildSqlCompletionRequest,
+  type SqlCompletionRequest,
   type SqlCompletionCatalogStoreSnapshot,
 } from "@features/completion";
 import {
@@ -209,6 +210,65 @@ function requestWithMariaDbVersion(serverVersion: string) {
   return buildSqlCompletionRequest("RET", 3, ctx);
 }
 
+function rustCompactArgsFor(request: SqlCompletionRequest): unknown[] {
+  return [
+    request.text,
+    request.cursor.utf16,
+    request.cursor.utf8,
+    request.dialect,
+    request.shell,
+    request.serverVersion ?? "",
+    request.catalog.revision,
+    request.vocabulary.keywords.join("\n"),
+    request.vocabulary.functions.join("\n"),
+    request.catalog.databases.map((database) => database.name).join("\n"),
+    request.catalog.schemas
+      .map((schema) => [schema.name, schema.database].join("\t"))
+      .join("\n"),
+    request.catalog.objects
+      .map((object) =>
+        [
+          object.kind,
+          object.schema,
+          object.name,
+          object.qualifiedName,
+          object.database,
+        ].join("\t"),
+      )
+      .join("\n"),
+    request.catalog.columns
+      .map((column) =>
+        [
+          column.schema,
+          column.table,
+          column.name,
+          column.qualifiedTableName,
+          column.database,
+        ].join("\t"),
+      )
+      .join("\n"),
+    request.catalog.functions
+      .map((fn) =>
+        [
+          fn.schema,
+          fn.name,
+          fn.qualifiedName,
+          fn.arguments ?? "",
+          fn.returnType ?? "",
+          fn.database,
+          fn.kind,
+          fn.language ?? "",
+        ].join("\t"),
+      )
+      .join("\n"),
+    request.catalog.extensions
+      .map((extension) =>
+        [extension.schema, extension.name, extension.version].join("\t"),
+      )
+      .join("\n"),
+  ];
+}
+
 describe("sqlCompletionWasm", () => {
   beforeEach(() => {
     __resetSqlCompletionWasmModuleForTests();
@@ -250,6 +310,39 @@ describe("sqlCompletionWasm", () => {
       expect.any(String),
       expect.any(String),
     );
+  });
+
+  it("keeps the TS request wrapper compatible with Rust complete_sql compact ABI", async () => {
+    completeSqlMock.mockReturnValue(null);
+    const req = requestWithMssqlCatalog();
+
+    await completeSqlWithWasm(req);
+
+    const expectedArgs = rustCompactArgsFor(req);
+    expect(expectedArgs).toHaveLength(15);
+    expect(expectedArgs.slice(0, 7)).toEqual([
+      "SELECT * FROM MssqlApp.sales.",
+      29,
+      29,
+      "mssql",
+      "none",
+      "",
+      "rev-mssql",
+    ]);
+    expect(expectedArgs[8]).not.toContain("usp_RebuildLeaderboard");
+    expect(expectedArgs[9]).toBe("ArchiveDb\nMssqlApp");
+    expect(expectedArgs[10]).toBe("dbo\tMssqlApp\nsales\tMssqlApp");
+    expect(expectedArgs[11]).toContain(
+      "table\tsales\tOrder Details\tsales.Order Details\tMssqlApp",
+    );
+    expect(expectedArgs[12]).toContain(
+      "sales\tOrder Details\tShip Date\tsales.Order Details\tMssqlApp",
+    );
+    expect(expectedArgs[13]).toContain(
+      "dbo\tusp_RebuildLeaderboard\tdbo.usp_RebuildLeaderboard\t@season int\t\tMssqlApp\tprocedure\t",
+    );
+    expect(expectedArgs[14]).toBe("");
+    expect(completeSqlMock).toHaveBeenCalledWith(...expectedArgs);
   });
 
   it("serializes installed extension inventory across the WASM bridge", async () => {

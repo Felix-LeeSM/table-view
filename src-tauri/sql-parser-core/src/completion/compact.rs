@@ -152,3 +152,139 @@ fn empty_to_none(value: &str) -> Option<String> {
         Some(value.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::completion::CompletionState;
+
+    #[test]
+    fn compact_bridge_preserves_completion_metadata_contract() {
+        let result = complete_sql_compact(
+            "SELECT * FROM MssqlApp.sales.Or",
+            30,
+            30,
+            "mssql",
+            "none",
+            "16.0.1000.6",
+            "completion-contract-rev",
+            "SELECT\nFROM\nWHERE",
+            "GETDATE\nTRY_CONVERT",
+            "ArchiveDb\nMssqlApp",
+            "dbo\tMssqlApp\nsales\tMssqlApp",
+            "table\tsales\tOrder Details\tsales.Order Details\tMssqlApp",
+            "sales\tOrder Details\tShip Date\tsales.Order Details\tMssqlApp",
+            "dbo\tusp_RebuildLeaderboard\tdbo.usp_RebuildLeaderboard\t@season int\t\tMssqlApp\tprocedure\t",
+            "public\tpgcrypto\t1.3",
+        );
+
+        let table = result
+            .items
+            .iter()
+            .find(|item| item.label == "Order Details")
+            .expect("MSSQL table candidate from compact catalog metadata");
+
+        assert_eq!(table.kind, "table");
+        assert_eq!(table.apply.as_deref(), Some("Order Details"));
+        assert_eq!(result.metadata.engine, "wasm");
+        assert_eq!(result.metadata.dialect, "mssql");
+        assert_eq!(result.metadata.shell, "none");
+        assert_eq!(result.metadata.catalog_revision, "completion-contract-rev");
+        assert_eq!(
+            result.metadata.completion_state,
+            CompletionState::RelationName
+        );
+
+        let json = serde_json::to_value(&result).expect("serialize completion result");
+        assert_eq!(json["metadata"]["engine"], "wasm");
+        assert_eq!(json["metadata"]["dialect"], "mssql");
+        assert_eq!(json["metadata"]["shell"], "none");
+        assert_eq!(
+            json["metadata"]["catalogRevision"],
+            "completion-contract-rev"
+        );
+        assert_eq!(json["metadata"]["completionState"], "RelationName");
+    }
+
+    #[test]
+    fn compact_parsers_keep_dbms_delta_metadata_lossless() {
+        assert_eq!(
+            parse_databases("ArchiveDb\nMssqlApp"),
+            vec![
+                SqlCompletionCatalogDatabase {
+                    name: "ArchiveDb".to_string()
+                },
+                SqlCompletionCatalogDatabase {
+                    name: "MssqlApp".to_string()
+                },
+            ]
+        );
+        assert_eq!(
+            parse_schemas("dbo\tMssqlApp\nAPP\tFREEPDB1"),
+            vec![
+                SqlCompletionCatalogSchema {
+                    database: "MssqlApp".to_string(),
+                    name: "dbo".to_string(),
+                },
+                SqlCompletionCatalogSchema {
+                    database: "FREEPDB1".to_string(),
+                    name: "APP".to_string(),
+                },
+            ]
+        );
+        assert_eq!(
+            parse_objects(
+                "table\tsales\tOrder Details\tsales.Order Details\tMssqlApp\nview\tAPP\tACTIVE_ORACLE_USERS\tAPP.ACTIVE_ORACLE_USERS\tFREEPDB1",
+            ),
+            vec![
+                SqlCompletionCatalogObject {
+                    kind: "table".to_string(),
+                    database: "MssqlApp".to_string(),
+                    schema: "sales".to_string(),
+                    name: "Order Details".to_string(),
+                    qualified_name: "sales.Order Details".to_string(),
+                },
+                SqlCompletionCatalogObject {
+                    kind: "view".to_string(),
+                    database: "FREEPDB1".to_string(),
+                    schema: "APP".to_string(),
+                    name: "ACTIVE_ORACLE_USERS".to_string(),
+                    qualified_name: "APP.ACTIVE_ORACLE_USERS".to_string(),
+                },
+            ]
+        );
+        assert_eq!(
+            parse_columns("sales\tOrder Details\tShip Date\tsales.Order Details\tMssqlApp"),
+            vec![SqlCompletionCatalogColumn {
+                database: "MssqlApp".to_string(),
+                schema: "sales".to_string(),
+                table: "Order Details".to_string(),
+                name: "Ship Date".to_string(),
+                qualified_table_name: "sales.Order Details".to_string(),
+            }]
+        );
+        assert_eq!(
+            parse_functions(
+                "APP\tORDER_SEQ\tAPP.ORDER_SEQ\tincrement 1, cache 20\tnext 101\tFREEPDB1\tsequence\tOracle sequence",
+            ),
+            vec![SqlCompletionCatalogFunction {
+                database: "FREEPDB1".to_string(),
+                schema: "APP".to_string(),
+                name: "ORDER_SEQ".to_string(),
+                qualified_name: "APP.ORDER_SEQ".to_string(),
+                arguments: Some("increment 1, cache 20".to_string()),
+                return_type: Some("next 101".to_string()),
+                kind: "sequence".to_string(),
+                language: Some("Oracle sequence".to_string()),
+            }]
+        );
+        assert_eq!(
+            parse_extensions("public\tpgcrypto\t1.3"),
+            vec![SqlCompletionCatalogExtension {
+                schema: "public".to_string(),
+                name: "pgcrypto".to_string(),
+                version: "1.3".to_string(),
+            }]
+        );
+    }
+}
