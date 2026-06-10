@@ -15,7 +15,7 @@ import type { SqlCompletionRequest } from "./sqlCompletionRequest";
 import {
   completeSqlWithPreloadedWasm,
   completeSqlWithWasm,
-} from "./sqlCompletionWasm";
+} from "@lib/sql/sqlCompletionWasm";
 
 type CompleteSqlSync = (
   request: SqlCompletionRequest,

@@ -12,7 +12,7 @@ import {
 } from "@codemirror/language";
 import { acceptCompletion } from "@codemirror/autocomplete";
 import FormDialog from "@components/ui/dialog/FormDialog";
-import { useMongoAutocomplete } from "@/hooks/useMongoAutocomplete";
+import { useMongoAutocomplete } from "@features/completion";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 

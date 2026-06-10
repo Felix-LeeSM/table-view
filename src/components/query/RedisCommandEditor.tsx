@@ -20,7 +20,7 @@ import {
   createRedisCommandCompletionSource,
   type RedisCommandCompletionTarget,
   type RedisKeySuggestion,
-} from "@lib/redis/redisCommandCompletion";
+} from "@features/completion";
 import { syncEditorDocument } from "./editorDocumentSync";
 
 export interface RedisCommandEditorProps {

@@ -8,9 +8,11 @@ import {
 import { useConnectionStore } from "@stores/connectionStore";
 import { databaseTypeToSqlDialect } from "@lib/sql/sqlDialect";
 import { getDataSourceProfile } from "@/types/dataSource";
-import { buildSqlCompletionContext } from "@lib/sql/sqlCompletionContext";
+import {
+  buildSqlCompletionContext,
+  useMongoAutocomplete,
+} from "@features/completion";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
-import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
 import { useRedisKeySuggestions } from "@hooks/useRedisKeySuggestions";
 import { useSearchAutocomplete } from "@hooks/useSearchAutocomplete";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";

@@ -2,8 +2,13 @@ import { ESLint } from "eslint";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { findCompletionFeatureBoundaryViolations as findCompletionFeatureBoundaryViolationsImpl } from "./static-policy/completion-feature";
 import { findConnectionFeatureBoundaryViolations as findConnectionFeatureBoundaryViolationsImpl } from "./static-policy/connection-feature";
 
+export {
+  COMPLETION_FEATURE_PUBLIC_API_EXPORTS,
+  COMPLETION_FEATURE_PUBLIC_API_PATH,
+} from "./static-policy/completion-feature";
 export {
   CONNECTION_FEATURE_PUBLIC_API_EXPORTS,
   CONNECTION_FEATURE_PUBLIC_API_PATH,
@@ -190,6 +195,15 @@ export function findConnectionFeatureBoundaryViolations(
   fileSources: ReadonlyMap<string, string>,
 ): string[] {
   return findConnectionFeatureBoundaryViolationsImpl(
+    fileSources,
+    normalizeRepoPath,
+  );
+}
+
+export function findCompletionFeatureBoundaryViolations(
+  fileSources: ReadonlyMap<string, string>,
+): string[] {
+  return findCompletionFeatureBoundaryViolationsImpl(
     fileSources,
     normalizeRepoPath,
   );
@@ -576,6 +590,7 @@ async function main() {
         ]
       : []),
     ...findRawTauriInvokeBoundaryViolations(sourceFileContents),
+    ...findCompletionFeatureBoundaryViolations(sourceFileContents),
     ...findConnectionFeatureBoundaryViolations(sourceFileContents),
     ...findFrontendCompatInventoryViolations(sourceFileContents),
     ...(await validateFeatureBoundaryRule(eslint, cwd)),

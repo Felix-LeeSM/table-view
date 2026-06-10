@@ -16,7 +16,7 @@ import {
   type SqlDialectFamily,
   type SqlDialectId,
   type SqlShellId,
-} from "./sqlDialectProfile";
+} from "@lib/sql/sqlDialectProfile";
 
 type ByDb<V> = Record<string, V>;
 type ByConn<V> = Record<string, ByDb<V>>;

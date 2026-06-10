@@ -10,7 +10,7 @@ import { CompletionPairingError } from "./shared";
 import * as pg from "./pg";
 import * as mysql from "./mysql";
 import * as sqlite from "./sqlite";
-import * as mongo from "./mongo";
+import * as mongo from "@features/completion";
 
 export { CompletionPairingError };
 

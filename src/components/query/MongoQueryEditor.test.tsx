@@ -16,8 +16,8 @@ import MongoQueryEditor from "./MongoQueryEditor";
 import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
-} from "@lib/mongo/mongoAutocomplete";
-import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
+  useMongoAutocomplete,
+} from "@features/completion";
 
 /** Extract all keymap bindings from the editor state. */
 function getKeymapBindings(view: EditorView): KeyBinding[] {

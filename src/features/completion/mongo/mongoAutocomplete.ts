@@ -16,17 +16,17 @@ import {
 import {
   classifyMongoCompletionPosition,
   type MongoCompletionPositionKind,
-} from "./mongoCompletionPosition";
-import { getMongoCompletionVocabulary } from "./mongoCompletionVocabulary";
+} from "@lib/mongo/mongoCompletionPosition";
+import { getMongoCompletionVocabulary } from "@lib/mongo/mongoCompletionVocabulary";
 import {
   getMongoAdminCommandCompletions,
   getMongoshCollectionMethodCompletions,
   getMongoshDbLevelMethodCompletions,
-} from "./mongoShellCompletionVocabulary";
-import { MONGO_OPERATOR_META } from "./mongoOperatorMeta";
+} from "@lib/mongo/mongoShellCompletionVocabulary";
+import { MONGO_OPERATOR_META } from "@lib/mongo/mongoOperatorMeta";
 
-export { classifyMongoCompletionPosition } from "./mongoCompletionPosition";
-export type { MongoCompletionPositionKind } from "./mongoCompletionPosition";
+export { classifyMongoCompletionPosition } from "@lib/mongo/mongoCompletionPosition";
+export type { MongoCompletionPositionKind } from "@lib/mongo/mongoCompletionPosition";
 export {
   MONGO_ACCUMULATORS,
   MONGO_AGGREGATE_STAGES,
@@ -37,7 +37,7 @@ export {
   MONGO_TYPE_TAGS,
   MONGO_UPDATE_OPERATORS,
   getMongoCompletionVocabulary,
-} from "./mongoCompletionVocabulary";
+} from "@lib/mongo/mongoCompletionVocabulary";
 export {
   getMongoAdminCommandCompletions,
   getMongoshCollectionMethodCompletions,
@@ -45,7 +45,7 @@ export {
   MONGO_ADMIN_COMMANDS,
   MONGOSH_DB_LEVEL_METHODS,
   MONGOSH_DB_METHODS,
-} from "./mongoShellCompletionVocabulary";
+} from "@lib/mongo/mongoShellCompletionVocabulary";
 
 export type MongoQueryMode = "find" | "aggregate";
 

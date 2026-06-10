@@ -1,4 +1,4 @@
-import { MONGO_ALL_OPERATORS } from "@lib/mongo/mongoAutocomplete";
+import { MONGO_ALL_OPERATORS } from "./mongoCompletionVocabulary";
 
 export type MongoTokenKind =
   | "string"

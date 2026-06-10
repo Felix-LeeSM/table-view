@@ -3,12 +3,12 @@
 // `mongoAutocomplete.ts`. `dbMethodCandidates` +
 // `createDbMethodCompletionSource` surface the `db.<method>` candidate set.
 
-import { prefixMatch } from "./shared";
+import { prefixMatch } from "@lib/completion/shared";
 import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
   MONGOSH_DB_METHODS,
-} from "@lib/mongo/mongoAutocomplete";
+} from "./mongoAutocomplete";
 
 export { createMongoCompletionSource, createMongoOperatorHighlight };
 

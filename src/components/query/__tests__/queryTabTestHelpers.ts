@@ -24,11 +24,11 @@ import type { QueryResult } from "@/types/query";
 import { useToastStore } from "@stores/toastStore";
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
-import type { SqlCompletionContext } from "@lib/sql/sqlCompletionContext";
 import type {
   RedisCommandCompletionTarget,
   RedisKeySuggestion,
-} from "@lib/redis/redisCommandCompletion";
+  SqlCompletionContext,
+} from "@features/completion";
 
 // ---------------------------------------------------------------------------
 // Fixture constants

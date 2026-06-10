@@ -21,7 +21,7 @@ import {
   classifyMongoCompletionPosition,
   type MongoQueryMode,
 } from "./mongoAutocomplete";
-import { MONGOSH_METHOD_WHITELIST } from "./mongoshParser";
+import { MONGOSH_METHOD_WHITELIST } from "@lib/mongo/mongoshParser";
 
 /**
  * Build an EditorState with the JSON language loaded and invoke the source
