@@ -4,16 +4,20 @@ Issue: #734
 Parent: #573
 Feeds: #742 local frontend SOT, #758 final compatibility ledger
 
-Scope: production files under `src/components/**`, `src/lib/**`,
-`src/stores/**`, and `src/types/**`. Tests are evidence only.
+Scope: production compatibility markers under `src/components/**`,
+`src/features/**`, `src/lib/**`, `src/stores/**`, and `src/types/**`.
+Tests are evidence only.
 
-No source behavior changed in this inventory. No #735+ migration started.
+#734 produced the initial inventory without source behavior changes. #735 moves
+connection-owned inventory rows to `src/features/connection/**` after the
+connection feature boundary lands. This document tracks those row paths only;
+#742 remains the final local frontend SOT follow-up.
 
 ## Verification commands
 
 ```bash
-rg -n "legacy|fallback|compat|backward|deprecated" src/components src/lib src/stores src/types --glob '*.{ts,tsx}'
-rg -n "legacy|deprecated|back-compat|backward compat|backward compatibility|backward-compat|backwards compatibility|backwards-compatible|compat wrapper|compat surface|compatibility[- ]mirror|compatibility projection" src/components src/lib src/stores src/types --glob '*.{ts,tsx}' --glob '!**/*.test.ts' --glob '!**/*.test.tsx' --glob '!**/*.spec.ts' --glob '!**/__tests__/**' --glob '!src/lib/*/wasm/*.d.ts'
+rg -n "legacy|fallback|compat|backward|deprecated" src/components src/features src/lib src/stores src/types --glob '*.{ts,tsx}'
+rg -n "legacy|deprecated|back-compat|backward compat|backward compatibility|backward-compat|backwards compatibility|backwards-compatible|compat wrapper|compat surface|compatibility[- ]mirror|compatibility projection" src/components src/features src/lib src/stores src/types --glob '*.{ts,tsx}' --glob '!**/*.test.ts' --glob '!**/*.test.tsx' --glob '!**/*.spec.ts' --glob '!**/__tests__/**' --glob '!src/lib/*/wasm/*.d.ts'
 pnpm exec tsx scripts/check-eslint-static-policy.ts
 ```
 
@@ -97,14 +101,16 @@ preserve old persisted/wire/caller behavior are included in the table.
 No new GitHub issues are required from this inventory. Migration-only rows are
 covered by existing same-milestone Refactor 02 child issues (#735 through #742
 and #761 through #764). Permanent wire compatibility and removable-debt rows can
-feed the downstream compatibility ledger #758. #734 does not remove behavior and
-does not start any #735+ movement.
+feed the downstream compatibility ledger #758. #734 does not remove behavior.
+#735 updates connection row paths after the connection feature boundary lands;
+#742 remains the final local frontend SOT follow-up.
 
 ## Static guard
 
 `scripts/check-eslint-static-policy.ts` parses the table above and fails when:
 
-- A production hard-compat marker under #734 scope is missing from this table.
+- A production hard-compat marker under this inventory scope is missing from
+  this table.
 - A table row is stale, outside scope, lacks owner/horizon/test evidence, or lacks
   a follow-up issue reference.
 - A `migration-only` row lacks a same-milestone Refactor 02 follow-up issue

@@ -40,8 +40,19 @@ export type {
   ImportRenamedEntry,
   ImportResult,
 } from "./api";
-export * from "./color";
-export * from "./fileConnection";
+export { CONNECTION_COLOR_PALETTE, getConnectionColor } from "./color";
+export {
+  DUCKDB_FILE_CONNECTION,
+  SQLITE_FILE_CONNECTION,
+} from "./fileConnection";
+export type {
+  FileConnectionContract,
+  FileConnectionInputContract,
+  FileConnectionInputKind,
+  FileConnectionInputStatus,
+  FileConnectionPermissionScope,
+  FileConnectionPrivacyPolicyId,
+} from "./fileConnection";
 export {
   DATABASE_DEFAULTS,
   DATABASE_DEFAULT_FIELDS,

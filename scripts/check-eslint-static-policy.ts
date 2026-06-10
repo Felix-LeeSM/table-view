@@ -2,6 +2,12 @@ import { ESLint } from "eslint";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { findConnectionFeatureBoundaryViolations as findConnectionFeatureBoundaryViolationsImpl } from "./static-policy/connection-feature";
+
+export {
+  CONNECTION_FEATURE_PUBLIC_API_EXPORTS,
+  CONNECTION_FEATURE_PUBLIC_API_PATH,
+} from "./static-policy/connection-feature";
 
 export const MAX_LINES_ALLOWLIST = [
   "e2e/smoke/_helpers.ts",
@@ -151,55 +157,6 @@ function readFrontendCompatInventory(cwd = process.cwd()) {
 
 export const FRONTEND_COMPAT_INVENTORY = readFrontendCompatInventory();
 
-export const CONNECTION_FEATURE_PUBLIC_API_PATH =
-  "src/features/connection/index.ts";
-
-export const CONNECTION_FEATURE_PUBLIC_API_EXPORTS = [
-  "ConnectionDialog",
-  "ConnectionList",
-  "GroupDialog",
-  "ImportExportDialog",
-  "RecentConnections",
-  "useConnectionStore",
-  "ConnectionConfig",
-  "ConnectionDraft",
-  "ConnectionGroup",
-  "ConnectionStatus",
-  "DatabaseType",
-  "DATABASE_TYPE_LABELS",
-  "DATABASE_DEFAULTS",
-  "DATABASE_DEFAULT_FIELDS",
-  "createEmptyDraft",
-  "draftFromConnection",
-  "parseConnectionUrl",
-  "listConnections",
-  "saveConnection",
-  "testConnection",
-  "exportConnectionsEncrypted",
-] as const;
-
-const CONNECTION_FEATURE_MIGRATED_CONSUMERS: ReadonlySet<string> = new Set([
-  "src/App.tsx",
-  "src/AppRouter.tsx",
-  "src/main.tsx",
-  "src/pages/HomePage.tsx",
-]);
-
-const CONNECTION_FEATURE_LEGACY_SPECIFIER_PREFIXES = [
-  "@/components/connection",
-  "@components/connection",
-  "@/stores/connectionStore",
-  "@stores/connectionStore",
-  "@/types/connection",
-  "@/types/fileConnection",
-  "@/lib/tauri/connection",
-  "@lib/tauri/connection",
-  "@/lib/connectionColor",
-  "@lib/connectionColor",
-  "@/hooks/useConnectionMutations",
-  "@hooks/useConnectionMutations",
-] as const;
-
 const SETTINGS_TAURI_WRAPPER_PATH = "src/lib/tauri/settings.ts";
 const MOVED_SETTINGS_INVOKE_COMMANDS = [
   "get_setting",
@@ -227,6 +184,15 @@ export function normalizeRepoPath(path: string, cwd = process.cwd()): string {
     ? normalized.slice(root.length + 1)
     : normalized;
   return repoPath.replace(/^\.\//, "");
+}
+
+export function findConnectionFeatureBoundaryViolations(
+  fileSources: ReadonlyMap<string, string>,
+): string[] {
+  return findConnectionFeatureBoundaryViolationsImpl(
+    fileSources,
+    normalizeRepoPath,
+  );
 }
 
 export function isAllowedGeneratedLintIgnore(repoPath: string): boolean {
@@ -358,63 +324,6 @@ function hasFrontendCompatMarker(source: string): boolean {
 
 function collectIssueRefs(text: string): string[] {
   return text.match(/#\d+/g) ?? [];
-}
-
-function collectImportSpecifiers(source: string): string[] {
-  const specifiers: string[] = [];
-  for (const match of source.matchAll(
-    /\b(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/g,
-  )) {
-    specifiers.push(match[1]!);
-  }
-  for (const match of source.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)) {
-    specifiers.push(match[1]!);
-  }
-  return specifiers;
-}
-
-function startsWithImportSpecifier(source: string, prefix: string): boolean {
-  return source === prefix || source.startsWith(`${prefix}/`);
-}
-
-function isLegacyConnectionSpecifier(specifier: string): boolean {
-  return CONNECTION_FEATURE_LEGACY_SPECIFIER_PREFIXES.some((prefix) =>
-    startsWithImportSpecifier(specifier, prefix),
-  );
-}
-
-export function findConnectionFeatureBoundaryViolations(
-  fileSources: ReadonlyMap<string, string>,
-): string[] {
-  const failures: string[] = [];
-  const publicApiSource = fileSources.get(CONNECTION_FEATURE_PUBLIC_API_PATH);
-  if (publicApiSource === undefined) {
-    failures.push(
-      `${CONNECTION_FEATURE_PUBLIC_API_PATH}: missing connection feature public API.`,
-    );
-  } else {
-    for (const exportName of CONNECTION_FEATURE_PUBLIC_API_EXPORTS) {
-      if (!publicApiSource.includes(exportName)) {
-        failures.push(
-          `${CONNECTION_FEATURE_PUBLIC_API_PATH}: missing public export ${exportName}.`,
-        );
-      }
-    }
-  }
-
-  for (const [filePath, source] of [...fileSources.entries()].sort()) {
-    const repoPath = normalizeRepoPath(filePath);
-    if (!CONNECTION_FEATURE_MIGRATED_CONSUMERS.has(repoPath)) continue;
-
-    for (const specifier of collectImportSpecifiers(source)) {
-      if (!isLegacyConnectionSpecifier(specifier)) continue;
-      failures.push(
-        `${repoPath}: import connection UI/model/api through ${CONNECTION_FEATURE_PUBLIC_API_PATH}, not ${specifier}.`,
-      );
-    }
-  }
-
-  return failures;
 }
 
 export function findFrontendCompatInventoryViolations(
