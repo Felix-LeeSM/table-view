@@ -1,8 +1,8 @@
-import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import { logger } from "@lib/logger";
+import { clearMru, persistMru, type PersistMruPayload } from "@lib/tauri/mru";
 
 /**
  * MRU entry. `lastUsed` is a `Date.now()` epoch ms so the launcher's
@@ -33,11 +33,6 @@ export interface MruEntry {
 
 const MAX_ENTRIES = 5;
 
-interface PersistMruPayload {
-  connectionId: string;
-  lastUsed: number;
-}
-
 function toPersistPayload(entries: MruEntry[]): PersistMruPayload[] {
   return entries.map((e) => ({
     connectionId: e.connectionId,
@@ -50,12 +45,10 @@ function persistMruList(entries: MruEntry[]): void {
   // the legacy LS path: store mutates synchronously, IPC failures only
   // surface in the dev log so the next persist (or next boot's
   // mismatch metric) heals SQLite truth.
-  void invoke("persist_mru", { entries: toPersistPayload(entries) }).catch(
-    (e: unknown) => {
-      const message = e instanceof Error ? e.message : String(e ?? "");
-      logger.warn(`[mruStore] persist_mru failed: ${message}`);
-    },
-  );
+  void persistMru(toPersistPayload(entries)).catch((e: unknown) => {
+    const message = e instanceof Error ? e.message : String(e ?? "");
+    logger.warn(`[mruStore] persist_mru failed: ${message}`);
+  });
 }
 
 /**
@@ -67,7 +60,7 @@ function persistMruList(entries: MruEntry[]): void {
  * is healed by the next mutate or boot reconcile.
  */
 function clearMruRemote(): void {
-  void invoke("clear_mru").catch((e: unknown) => {
+  void clearMru().catch((e: unknown) => {
     const message = e instanceof Error ? e.message : String(e ?? "");
     logger.warn(`[mruStore] clear_mru failed: ${message}`);
   });

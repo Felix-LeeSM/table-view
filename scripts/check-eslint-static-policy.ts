@@ -57,24 +57,8 @@ type RawTauriInvokeInventoryEntry = {
   readonly action: string;
 };
 
-export const RAW_TAURI_INVOKE_INVENTORY = [
-  {
-    path: "src/stores/favoritesStore.ts",
-    commands: ["list_favorites", "persist_favorites"],
-    owner: "favorites persistence store",
-    wrapperTarget: "src/lib/tauri/favorites.ts",
-    risk: "medium",
-    action: "follow-up: move favorites persistence IPC behind a typed wrapper",
-  },
-  {
-    path: "src/stores/mruStore.ts",
-    commands: ["clear_mru", "persist_mru"],
-    owner: "MRU persistence store",
-    wrapperTarget: "src/lib/tauri/mru.ts",
-    risk: "low",
-    action: "follow-up: move MRU persistence IPC behind a typed wrapper",
-  },
-] as const satisfies readonly RawTauriInvokeInventoryEntry[];
+export const RAW_TAURI_INVOKE_INVENTORY =
+  [] as const satisfies readonly RawTauriInvokeInventoryEntry[];
 
 export type FrontendCompatClassification =
   | "permanent-wire-compatibility"
