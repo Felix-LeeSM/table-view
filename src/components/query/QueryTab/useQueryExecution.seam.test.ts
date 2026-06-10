@@ -33,3 +33,42 @@ describe("useQueryExecution RDB seam", () => {
     expect(seamSource).not.toContain("executeSearchQuery");
   });
 });
+
+describe("useQueryExecution Mongo seam", () => {
+  it("routes Mongo parser and runCommand dispatch through the local seam module", () => {
+    const hookSource = readLocalSource("./useQueryExecution.ts");
+
+    expect(hookSource).toContain('from "./mongoQueryExecution"');
+    for (const forbiddenImport of [
+      "@lib/mongo/mongoshParser",
+      "@lib/mongo/mongoSafety",
+      "@lib/mongo/runCommandParser",
+    ]) {
+      expect(hookSource).not.toContain(`from "${forbiddenImport}"`);
+    }
+    for (const forbiddenWrapper of [
+      "findDocuments",
+      "aggregateDocuments",
+      "findOneDocument",
+      "countDocuments",
+      "estimatedDocumentCount",
+      "distinctDocuments",
+      "runMongoCommand",
+    ]) {
+      expect(hookSource).not.toMatch(new RegExp(`\\b${forbiddenWrapper}\\b`));
+    }
+  });
+
+  it("keeps Mongo query dispatch out of RDB/KV/Search seams", () => {
+    const seamSource = readLocalSource("./mongoQueryExecution.ts");
+    const documentResultsSource = readLocalSource("./mongoDocumentResults.ts");
+
+    expect(seamSource).toContain("executeMongoQuery");
+    expect(seamSource).toContain("parseMongoshExpression");
+    expect(seamSource).toContain("runMongoCommand");
+    expect(documentResultsSource).toContain("createDocumentResultEnvelope");
+    expect(seamSource).not.toContain("executeRdbQuery");
+    expect(seamSource).not.toContain("executeKvCommand");
+    expect(seamSource).not.toContain("executeSearchQuery");
+  });
+});
