@@ -90,19 +90,11 @@ vi.mock("@/pages/LauncherPage", () => ({
   default: () => <div data-testid="launcher-page" />,
 }));
 
-// WorkspacePage transitively renders Sidebar + MainArea. Stub the whole page
-// so the workspace branch is identifiable by a single stable selector.
-vi.mock("@/pages/WorkspacePage", () => ({
-  default: () => <div data-testid="workspace-page" />,
-}));
-
-// AppRouter's workspace branch mounts `App.tsx`, which transitively pulls in
-// the global keyboard handlers + portals. We don't need any of that for the
-// label-routing assertion — stub the module so the workspace branch is
-// observable via a single stable selector that matches the WorkspacePage
-// stub above.
-vi.mock("@/App", () => ({
-  default: () => <div data-testid="workspace-page" />,
+// AppRouter's workspace branch imports the workspace feature boundary. Stub
+// it so routing assertions observe a single stable workspace selector.
+vi.mock("@features/workspace", () => ({
+  WorkspaceApp: () => <div data-testid="workspace-page" />,
+  WorkspacePage: () => <div data-testid="workspace-page" />,
 }));
 
 import { getCurrentWindowLabel } from "@lib/window-label";

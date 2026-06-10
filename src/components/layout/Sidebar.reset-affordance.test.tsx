@@ -61,7 +61,7 @@ vi.mock("@components/theme/ThemePicker", () => ({
   default: () => <div data-testid="theme-picker-mock" />,
 }));
 
-vi.mock("@components/workspace/WorkspaceSidebar", () => ({
+vi.mock("./WorkspaceSidebar", () => ({
   default: ({ selectedId }: { selectedId: string | null }) => (
     <div data-testid="schema-panel">{selectedId ?? "none"}</div>
   ),

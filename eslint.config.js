@@ -372,6 +372,7 @@ export default tseslint.config(
       "**/*.test.{ts,tsx}",
       "**/__tests__/**",
       "src/features/catalog/index.ts",
+      "src/features/workspace/index.ts",
     ],
     rules: {
       "tv-local/no-feature-legacy-imports": "error",

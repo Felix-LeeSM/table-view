@@ -11,7 +11,7 @@ import {
 } from "@components/ui/dialog";
 import * as tauri from "@lib/tauri";
 import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
-import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
+import { ConfirmDestructiveDialog } from "@features/workspace";
 import SqlSyntax from "@components/shared/SqlSyntax";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { DropTriggerRequest } from "@/types/schema";

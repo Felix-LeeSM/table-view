@@ -17,7 +17,7 @@ import {
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import HomePage from "@/pages/HomePage";
-import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
+import { WorkspaceToolbar } from "@features/workspace";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import * as windowControls from "@lib/window-controls";
