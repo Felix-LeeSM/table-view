@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getMongoshCompletionVocabulary,
   type MongoshCompletionVocabulary,
-} from "./mongoshAst";
+} from "./mongoshAst/index";
 import {
   getMongoCompletionVocabulary,
   MONGO_ACCUMULATORS,
@@ -19,7 +19,7 @@ import {
   MONGOSH_DB_LEVEL_METHODS,
   MONGOSH_DB_METHODS,
 } from "./mongoShellCompletionVocabulary";
-import { MONGOSH_METHOD_WHITELIST } from "./mongoshParser";
+import { MONGOSH_METHOD_WHITELIST } from "./mongoshMethods";
 
 function loadedRustVocabulary(): MongoshCompletionVocabulary {
   const vocabulary = getMongoshCompletionVocabulary();

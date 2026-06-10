@@ -1,5 +1,5 @@
-import { getMongoshCompletionVocabulary } from "./mongoshAst";
-import { MONGOSH_METHOD_WHITELIST } from "./mongoshParser";
+import { getMongoshCompletionVocabulary } from "./mongoshAst/index";
+import { MONGOSH_METHOD_WHITELIST } from "./mongoshMethods";
 
 export interface MongoshMethodCompletion {
   label: string;

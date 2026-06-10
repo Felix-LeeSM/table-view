@@ -59,6 +59,27 @@ describe("useQueryExecution Mongo seam", () => {
     }
   });
 
+  it("keeps Mongo write IPC adapters behind the query feature public API", () => {
+    const hookSource = readLocalSource("./useQueryExecution.ts");
+
+    expect(hookSource).toContain('from "@features/query"');
+    for (const forbiddenWrapper of [
+      "insertDocument",
+      "insertManyDocuments",
+      "updateDocument",
+      "updateMany",
+      "deleteDocument",
+      "deleteMany",
+      "bulkWriteDocuments",
+      "createMongoIndex",
+      "dropMongoIndex",
+      "runWriteHelper",
+      "runMongoIndexHelper",
+    ]) {
+      expect(hookSource).not.toMatch(new RegExp(`\\b${forbiddenWrapper}\\b`));
+    }
+  });
+
   it("keeps Mongo query dispatch out of RDB/KV/Search seams", () => {
     const seamSource = readLocalSource("./mongoQueryExecution.ts");
     const documentResultsSource = readLocalSource("./mongoDocumentResults.ts");

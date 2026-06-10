@@ -1,10 +1,10 @@
 import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
-import type { ParsedMongoshCall } from "@lib/mongo/mongoshParser";
+import { idOnlyFilter } from "@lib/mongo/documentIdentity";
+import type { ParsedMongoshCall } from "@features/query";
 import type { BulkWriteOp } from "@/types/documentMutate";
 import {
   buildCreateMongoIndexRequest,
   extractDollarSet,
-  idOnlyFilter,
   isRecord,
   parseReplaceOneOptions,
 } from "./queryHelpers";

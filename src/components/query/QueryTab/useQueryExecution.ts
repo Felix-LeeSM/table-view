@@ -6,26 +6,13 @@ import {
   recordHistoryEntry,
   type DocumentRecordHistoryQueryMode,
 } from "@lib/runtime/history/recordHistoryEntry";
-import {
-  cancelQuery,
-  insertDocument,
-  insertManyDocuments,
-  updateDocument,
-  updateMany,
-  deleteDocument,
-  deleteMany,
-  bulkWriteDocuments,
-  createMongoIndex,
-  dropMongoIndex,
-  type CreateMongoIndexRequest,
-} from "@lib/tauri";
+import { cancelQuery } from "@lib/tauri";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/runtime/toast";
 import { getDataSourceProfile } from "@/types/dataSource";
 import { DATABASE_TYPE_LABELS } from "@/types/connection";
 import type { QueryTab } from "@stores/workspaceStore";
-import type { BulkWriteOp, BulkWriteResult } from "@/types/documentMutate";
-import { type WriteSummaryData } from "@/types/query";
+import { createMongoWriteDispatchers } from "@features/query";
 import {
   executeKvCommandNow,
   executeKvQuery,
@@ -33,7 +20,6 @@ import {
 } from "./kvQueryExecution";
 import { executeMongoAggregate } from "./mongoDocumentResults";
 import { executeMongoQuery } from "./mongoQueryExecution";
-import { idOnlyFilter } from "./queryHelpers";
 import {
   executeRdbDryRun,
   executeRdbQuery,
@@ -46,68 +32,20 @@ import { executeSearchDslQuery } from "./searchQueryExecution";
 
 import { logger } from "@lib/logger";
 
-/**
- * `QueryTab` query-execution hook covering four `handleExecute` branches
- * (cancel-running / document find+aggregate / SQL single / SQL multi),
- * the Mongo aggregate danger gate, and history book-keeping.
- *
- * Invariants:
- * - The raw-query DB-change detection (`dispatchDbMutationHint`) fires
- *   fire-and-forget after every `await executeQuery`; verify failures
- *   never tear down the result panel.
- * - The Mongo aggregate 3-tier gate (block / confirm / off) runs before
- *   the running-state transition, so `block`/`confirm` decisions never
- *   strand the tab in `running`.
- * - The lifecycle actions (`completeQuery`, `failQuery`,
- *   `completeMultiStatementQuery`) match `queryId` against the currently
- *   running query and ignore stale responses.
- * - Multi-statement: the last success populates the grid; the
- *   per-statement breakdown lives alongside; history is `error` if any
- *   statement failed (partial failure ⇒ destructive marker).
- * - The handler's `exhaustive-deps` is intentionally suppressed — the
- *   keyboard layer holds a ref to it and a per-store-change identity
- *   churn would stale that ref.
- */
-
 export interface UseQueryExecutionArgs {
   tab: QueryTab;
 }
 
 export interface QueryExecution {
   handleExecute: () => Promise<void>;
-  /**
-   * Sprint 248 (ADR 0022 Phase 4) — explicit dry-run dispatch. Wraps the
-   * SQL in a transaction that is unconditionally rolled back via
-   * `executeQueryDryRun`, so the user can preview destructive results
-   * without committing. Mongo paradigm short-circuits to a `toast.info`
-   * disclaimer (the IPC supports rdb only). Empty SQL / running tab are
-   * no-ops; Safe Mode dialogs do NOT trigger because nothing commits.
-   * History is intentionally not recorded for dry-runs.
-   */
   handleDryRun: () => Promise<void>;
-  /**
-   * Sprint 312 (Phase 28 Slice A6, 2026-05-14) — STOP-tier confirm payload.
-   * Aggregate variant carries `pipeline` (A5 invariant retained); write
-   * variant carries `previewLines` (already-formatted mongosh) + an
-   * internal `runner` closure the confirm callback invokes verbatim. The
-   * discriminator keeps the JSX dialog mount paradigm-agnostic.
-   */
   pendingMongoConfirm: {
     pipeline: Record<string, unknown>[];
     reason: string;
-    /** Sprint 312 — populated only for write STOP cases (drop-equivalent). */
     previewLines?: string[];
   } | null;
   confirmMongoDangerous: () => Promise<void>;
   cancelMongoDangerous: () => void;
-  /**
-   * Sprint 231 — raw RDB warn-tier confirm payload. Mirrors
-   * `pendingMongoConfirm` (`pipeline` ↔ `statements`). One dialog covers
-   * the whole batch (per-statement individual approval is forbidden by
-   * AC-231-02): single-statement path stuffs `[sql]`, multi-statement
-   * path stuffs the full ordered list. `reason` is the FIRST dangerous
-   * statement's analyzer reason (matrix decided by `decideSafeModeAction`).
-   */
   pendingRdbConfirm: {
     statements: string[];
     reason: string;
@@ -122,39 +60,13 @@ export interface QueryExecution {
   } | null;
   confirmKvDangerous: () => Promise<void>;
   cancelKvDangerous: () => void;
-  /**
-   * Sprint 255 — raw RDB WARN-tier preview payload. ADR 0023 grill Q3-(b)
-   * "모든 환경 + 모든 write 표면" 의 핵심 보호. STOP-tier ConfirmDestructiveDialog
-   * 와 별개로, `severity: "safe"` 인 non-INFO statement (INSERT / UPDATE WHERE
-   * / DELETE WHERE / CREATE / ALTER additive) 직전에 SqlPreviewDialog 를
-   * mount 하기 위한 pending state. INFO (SELECT / WITH …SELECT /
-   * EXPLAIN / SHOW / DESCRIBE) 는 휴리스틱 (`isInfoStatement`) 로 식별 후 dialog
-   * skip → 직접 IPC. STOP (`severity: "danger"`) 는 기존
-   * `pendingRdbConfirm` 으로 routing — 두 dialog 동시 mount 금지 (STOP > WARN
-   * 우선).
-   */
   pendingRdbWarn: {
     statements: string[];
   } | null;
   confirmRdbWarn: () => Promise<void>;
   cancelRdbWarn: () => void;
-  /**
-   * Sprint 255 — raw Mongo aggregate WARN-tier preview payload. Mirrors
-   * `pendingRdbWarn` for the document paradigm. INFO (find / read-only
-   * aggregate pipeline) 은 `isInfoMongoOperation` 로 dialog skip; STOP
-   * ($out / $merge) 은 기존 `pendingMongoConfirm`. `severity: "safe"` 이지만
-   * non-INFO 인 aggregate (현재 분류상 거의 없음 — 보존을 위한 발판이며
-   * Sprint 254 의 3-tier split 후 확장 예정) 만 본 dialog 발동.
-   */
-  /**
-   * Sprint 312 — WARN-tier preview payload. Aggregate variant carries
-   * `pipeline`; write variant carries `previewLines` so MqlPreviewModal
-   * renders the formatted mongosh expression instead of JSON-stringified
-   * pipeline.
-   */
   pendingMongoWarn: {
     pipeline: Record<string, unknown>[];
-    /** Sprint 312 — populated only for write WARN cases. */
     previewLines?: string[];
   } | null;
   confirmMongoWarn: () => Promise<void>;
@@ -164,10 +76,6 @@ export interface QueryExecution {
 export function useQueryExecution({
   tab,
 }: UseQueryExecutionArgs): QueryExecution {
-  // The query tab's workspace coordinate. For Mongo tabs `tab.database`
-  // is the user-selected db; for RDB it carries the active sub-pool. We
-  // resolve once per tab change so the lifecycle wrappers don't recompute
-  // each call.
   const workspaceDb = useMemo(
     () => tab.database ?? resolveActiveDb(tab.connectionId),
     [tab.database, tab.connectionId],
@@ -272,31 +180,8 @@ export function useQueryExecution({
     },
     [completeQueryDryRunAction, wsConnId, workspaceDb],
   );
-  // History recording is the caller's responsibility (the tabStore no
-  // longer reaches across stores). We rebuild the payload here so the
-  // 8 call sites can pass only the variable fields below.
-  //
-  // Sprint 311 (Phase 28 Slice A5, 2026-05-14) — `queryMode` now accepts
-  // an override so document-paradigm dispatch can record the **parsed
-  // method name** instead of the persisted `tab.queryMode`.
-  // RDB call sites continue
-  // to pass nothing and fall back to `tab.queryMode` (`"sql"`).
-  // Backwards-compat: any filter/search consumer that previously matched
-  // `queryMode === "aggregate"` keeps working unchanged because aggregate
-  // entries still carry `"aggregate"` — only the source of truth flipped
-  // from the toggle state to the parser output.
-  // Sprint 360 Phase 2 (Q23) — self-window schemaCache invalidate. When a
-  // raw RDB dispatch finishes with `queryType === "ddl"` we wipe the
-  // connection's entire schema cache (`schemas` / `tables` / `views` /
-  // `functions` / `tableColumnsCache` / `triggers`) so the sidebar's
-  // `useSchemaCache` re-fetches against the post-DDL backend. Cross-window
-  // broadcast (sprint-365) layers on top of this same store action.
+
   const clearSchemaForConnection = useSchemaStore((s) => s.clearForConnection);
-  // sprint-373 (2026-05-17) — `addHistoryEntry` (in-memory) retired.
-  // `recordHistoryEntry` 가 (1) `query_history_enabled` 검사 + (2) wire
-  // shape normalise + (3) `addOptimisticEntry` 호출을 한 번에 처리한다.
-  // tab paradigm 이 `"kv"` / `"search"` 면 여기서 skip
-  // (해당 paradigm 의 backend wire 가 미정).
   const recordHistory = useCallback(
     (payload: {
       sql: string;
@@ -345,14 +230,7 @@ export function useQueryExecution({
     ],
   );
 
-  // Safe Mode danger gate (strict / warn / off). Wraps the paradigm-agnostic
-  // `decideSafeModeAction` matrix so the Mongo aggregate path AND the raw
-  // RDB single / multi-statement paths share one decision policy.
-  // While a warn-tier dialog is open, `pendingMongoConfirm` /
-  // `pendingRdbConfirm` retains the exact pipeline / statements + reason
-  // so the re-dispatch on confirm runs the same input the user typed.
   const { decide: decideSafeMode } = useSafeModeGate(tab.connectionId, {
-    // Fail closed until workspace snapshot hydrates connection metadata.
     missingConnectionEnvironment: "production",
   });
   const [pendingMongoConfirm, setPendingMongoConfirm] = useState<{
@@ -360,31 +238,13 @@ export function useQueryExecution({
     reason: string;
     previewLines?: string[];
   } | null>(null);
-  // Sprint 312 (Phase 28 Slice A6, 2026-05-14) — write-path STOP/WARN
-  // dispatch closure stored in a ref (not in setState) because the
-  // re-runner captures the parsed write op + parsed filter / update
-  // payload verbatim. Stashing it next to `pendingMongoConfirm` keeps
-  // AC-311-09 stale-editor isolation (the closure is whatever the parser
-  // produced at prompt time; editor mutations between prompt and confirm
-  // click cannot leak into the IPC dispatch).
   const pendingWriteRunnerRef = useRef<(() => Promise<void>) | null>(null);
-  // Sprint 231 — raw RDB warn-tier pending state. Mirrors
-  // `pendingMongoConfirm`. `null` until a dangerous statement is detected
-  // under `mode === "warn"` on a production connection.
   const [pendingRdbConfirm, setPendingRdbConfirm] = useState<{
     statements: string[];
     reason: string;
   } | null>(null);
   const [pendingKvConfirm, setPendingKvConfirm] =
     useState<PendingKvConfirmation | null>(null);
-  // Sprint 255 — raw RDB / Mongo WARN-tier pending state. `null` until a
-  // non-INFO safe statement (INSERT / UPDATE WHERE / CREATE / ALTER additive
-  // for RDB; non-read-only aggregate for Mongo) is detected. Distinct from
-  // the STOP-tier `pendingRdbConfirm` / `pendingMongoConfirm` so the JSX
-  // can mount SqlPreviewDialog (RDB) / MqlPreviewModal (Mongo) without
-  // colliding with ConfirmDestructiveDialog. STOP > WARN priority is
-  // enforced inside `handleExecute`: if any statement is danger, only
-  // `pendingRdbConfirm` is set (WARN state untouched).
   const [pendingRdbWarn, setPendingRdbWarn] = useState<{
     statements: string[];
   } | null>(null);
@@ -639,372 +499,16 @@ export function useQueryExecution({
     pendingWriteRunnerRef.current = null;
   }, []);
 
-  // ── Sprint 312 (Phase 28 Slice A6, 2026-05-14) — write helpers ────────
-  //
-  // Each runner mirrors the read-path helper structure (running-state
-  // → IPC → adapt response → completeQuery + record history) but builds
-  // a `WriteSummaryData` payload from the IPC result so the result panel
-  // routes to `WriteSummaryPanel`.
-  //
-  // D-16 (autonomous decision, 2026-05-14): `updateOne` / `deleteOne` on
-  // a non-`_id` filter are translated to `bulkWriteDocuments` with a
-  // single-op `updateOne` / `deleteOne` sub-op. The user's mongosh text
-  // in the editor + history still reads `updateOne(...)` — only the
-  // wire transport changes. Rationale: avoids a 2-IPC round-trip
-  // (`findOne` → `_id` → `updateDocument`) which would be non-atomic
-  // and slower, and reuses A2's `bulk_write` IPC that already accepts
-  // arbitrary filters. `{ _id: ... }`-only filters go through the
-  // existing `updateDocument` / `deleteDocument` IPC directly (faster
-  // single-doc path, no bulk wrapping).
-
-  /**
-   * Adapt a writer's result + history bookkeeping into the shared shape.
-   * Returns a curried function the runner invokes inside its try/catch.
-   */
-  const runWriteHelper = useCallback(
-    async (
-      queryMode: DocumentRecordHistoryQueryMode,
-      rawSql: string,
-      writer: () => Promise<WriteSummaryData>,
-    ) => {
-      const queryId = `${tab.id}-${Date.now()}`;
-      const startTime = Date.now();
-      updateQueryState(tab.id, { status: "running", queryId });
-      try {
-        const summary = await writer();
-        const queryResult: import("@/types/query").QueryResult = {
-          columns: [],
-          rows: [],
-          totalCount: 0,
-          executionTimeMs: Date.now() - startTime,
-          queryType: "select",
-          resultKind: "writeSummary",
-          writeSummary: summary,
-        };
-        completeQuery(tab.id, queryId, queryResult);
-        recordHistory({
-          sql: rawSql,
-          executedAt: Date.now(),
-          duration: Date.now() - startTime,
-          status: "success",
-          queryMode,
-        });
-      } catch (err) {
-        failQuery(
-          tab.id,
-          queryId,
-          err instanceof Error ? err.message : String(err),
-        );
-        recordHistory({
-          sql: rawSql,
-          executedAt: Date.now(),
-          duration: Date.now() - startTime,
-          status: "error",
-          queryMode,
-        });
-      }
-    },
+  const mongoWriteDispatchers = useMemo(
+    () =>
+      createMongoWriteDispatchers({
+        tabId: tab.id,
+        updateQueryState,
+        completeQuery,
+        failQuery,
+        recordHistory,
+      }),
     [tab.id, updateQueryState, completeQuery, failQuery, recordHistory],
-  );
-
-  const runInsertOne = useCallback(
-    async (
-      connectionId: string,
-      database: string,
-      collection: string,
-      doc: Record<string, unknown>,
-      rawSql: string,
-    ) => {
-      await runWriteHelper("insertOne", rawSql, async () => {
-        const id = await insertDocument(
-          connectionId,
-          database,
-          collection,
-          doc,
-        );
-        return { kind: "insert", insertedIds: [id] };
-      });
-    },
-    [runWriteHelper],
-  );
-
-  const runInsertMany = useCallback(
-    async (
-      connectionId: string,
-      database: string,
-      collection: string,
-      docs: Record<string, unknown>[],
-      rawSql: string,
-    ) => {
-      await runWriteHelper("insertMany", rawSql, async () => {
-        const ids = await insertManyDocuments(
-          connectionId,
-          database,
-          collection,
-          docs,
-        );
-        return { kind: "insert", insertedIds: ids };
-      });
-    },
-    [runWriteHelper],
-  );
-
-  const runDeleteMany = useCallback(
-    async (
-      connectionId: string,
-      database: string,
-      collection: string,
-      filter: Record<string, unknown>,
-      rawSql: string,
-    ) => {
-      await runWriteHelper("deleteMany", rawSql, async () => {
-        const deletedCount = await deleteMany(
-          connectionId,
-          database,
-          collection,
-          filter,
-          true,
-        );
-        return { kind: "delete", deletedCount };
-      });
-    },
-    [runWriteHelper],
-  );
-
-  const runUpdateMany = useCallback(
-    async (
-      connectionId: string,
-      database: string,
-      collection: string,
-      filter: Record<string, unknown>,
-      patch: Record<string, unknown>,
-      rawSql: string,
-    ) => {
-      await runWriteHelper("updateMany", rawSql, async () => {
-        const modifiedCount = await updateMany(
-          connectionId,
-          database,
-          collection,
-          filter,
-          patch,
-          true,
-        );
-        // The IPC currently surfaces only `modifiedCount`; we expose it
-        // as both matched and modified counts (the lower-bound estimate)
-        // until A2 widens the wire shape. See A2 spec for the upgrade.
-        return {
-          kind: "update",
-          matchedCount: modifiedCount,
-          modifiedCount,
-        };
-      });
-    },
-    [runWriteHelper],
-  );
-
-  const runDeleteOne = useCallback(
-    async (
-      connectionId: string,
-      database: string,
-      collection: string,
-      filter: Record<string, unknown>,
-      rawSql: string,
-    ) => {
-      await runWriteHelper("deleteOne", rawSql, async () => {
-        const idFilter = idOnlyFilter(filter);
-        if (idFilter !== null) {
-          // Fast path — single-IPC `delete_document` with the parsed `_id`.
-          await deleteDocument(connectionId, database, collection, idFilter);
-          return { kind: "delete", deletedCount: 1 };
-        }
-        // D-16 fallback — translate to bulkWrite single-op for arbitrary
-        // filters so the user's mongosh text stays unchanged.
-        const result = await bulkWriteDocuments(
-          connectionId,
-          database,
-          collection,
-          [{ op: "deleteOne", filter }],
-          true,
-        );
-        return { kind: "delete", deletedCount: result.deleted_count };
-      });
-    },
-    [runWriteHelper],
-  );
-
-  const runUpdateOne = useCallback(
-    async (
-      connectionId: string,
-      database: string,
-      collection: string,
-      filter: Record<string, unknown>,
-      patch: Record<string, unknown>,
-      rawSql: string,
-    ) => {
-      await runWriteHelper("updateOne", rawSql, async () => {
-        const idFilter = idOnlyFilter(filter);
-        if (idFilter !== null) {
-          await updateDocument(
-            connectionId,
-            database,
-            collection,
-            idFilter,
-            patch,
-          );
-          // `update_document` IPC returns `void`; one-doc update path
-          // never matches more than one document so matched/modified == 1.
-          return { kind: "update", matchedCount: 1, modifiedCount: 1 };
-        }
-        // D-16 fallback — translate to bulkWrite single-op updateOne.
-        const result = await bulkWriteDocuments(
-          connectionId,
-          database,
-          collection,
-          [{ op: "updateOne", filter, update: { $set: patch } }],
-          true,
-        );
-        return {
-          kind: "update",
-          matchedCount: result.matched_count,
-          modifiedCount: result.modified_count,
-        };
-      });
-    },
-    [runWriteHelper],
-  );
-
-  const runBulkWrite = useCallback(
-    async (
-      connectionId: string,
-      database: string,
-      collection: string,
-      ops: readonly BulkWriteOp[],
-      rawSql: string,
-    ) => {
-      await runWriteHelper("bulkWrite", rawSql, async () => {
-        const result: BulkWriteResult = await bulkWriteDocuments(
-          connectionId,
-          database,
-          collection,
-          ops as BulkWriteOp[],
-          true,
-        );
-        return { kind: "bulkWrite", result };
-      });
-    },
-    [runWriteHelper],
-  );
-
-  const runReplaceOne = useCallback(
-    async (
-      connectionId: string,
-      database: string,
-      collection: string,
-      op: Extract<BulkWriteOp, { op: "replaceOne" }>,
-      rawSql: string,
-    ) => {
-      await runWriteHelper("replaceOne", rawSql, async () => {
-        const result: BulkWriteResult = await bulkWriteDocuments(
-          connectionId,
-          database,
-          collection,
-          [op],
-          true,
-        );
-        return { kind: "bulkWrite", result };
-      });
-    },
-    [runWriteHelper],
-  );
-
-  const runMongoIndexHelper = useCallback(
-    async (
-      queryMode: "createIndex" | "dropIndex",
-      rawSql: string,
-      writer: () => Promise<string>,
-    ) => {
-      const queryId = `${tab.id}-${Date.now()}`;
-      const startTime = Date.now();
-      updateQueryState(tab.id, { status: "running", queryId });
-      try {
-        const indexName = await writer();
-        const queryResult: import("@/types/query").QueryResult = {
-          columns: [
-            { name: "operation", dataType: "string", category: "text" },
-            { name: "index", dataType: "string", category: "text" },
-          ],
-          rows: [[queryMode, indexName]],
-          totalCount: 1,
-          executionTimeMs: Date.now() - startTime,
-          queryType: "ddl",
-        };
-        completeQuery(tab.id, queryId, queryResult);
-        recordHistory({
-          sql: rawSql,
-          executedAt: Date.now(),
-          duration: Date.now() - startTime,
-          status: "success",
-          queryMode,
-        });
-      } catch (err) {
-        failQuery(
-          tab.id,
-          queryId,
-          err instanceof Error ? err.message : String(err),
-        );
-        recordHistory({
-          sql: rawSql,
-          executedAt: Date.now(),
-          duration: Date.now() - startTime,
-          status: "error",
-          queryMode,
-        });
-      }
-    },
-    [tab.id, updateQueryState, completeQuery, failQuery, recordHistory],
-  );
-
-  const runCreateIndex = useCallback(
-    async (
-      connectionId: string,
-      database: string,
-      collection: string,
-      request: CreateMongoIndexRequest,
-      rawSql: string,
-    ) => {
-      await runMongoIndexHelper("createIndex", rawSql, async () => {
-        const result = await createMongoIndex(
-          connectionId,
-          database,
-          collection,
-          request,
-        );
-        return result.name;
-      });
-    },
-    [runMongoIndexHelper],
-  );
-
-  const runDropIndex = useCallback(
-    async (
-      connectionId: string,
-      database: string,
-      collection: string,
-      indexName: string,
-      rawSql: string,
-    ) => {
-      await runMongoIndexHelper("dropIndex", rawSql, async () => {
-        await dropMongoIndex(
-          connectionId,
-          database,
-          collection,
-          indexName,
-          true,
-        );
-        return indexName;
-      });
-    },
-    [runMongoIndexHelper],
   );
 
   const handleExecute = useCallback(async () => {
@@ -1067,16 +571,7 @@ export function useQueryExecution({
         setPendingMongoWarn,
         pendingWriteRunnerRef,
         runMongoAggregate: runMongoAggregateNow,
-        runInsertOne,
-        runInsertMany,
-        runDeleteMany,
-        runUpdateMany,
-        runDeleteOne,
-        runUpdateOne,
-        runReplaceOne,
-        runBulkWrite,
-        runCreateIndex,
-        runDropIndex,
+        ...mongoWriteDispatchers,
       });
       return;
     }
@@ -1093,7 +588,7 @@ export function useQueryExecution({
       runRdbSingle: runRdbSingleNow,
       runRdbBatch: runRdbBatchNow,
     });
-    // Excluding store actions from deps is deliberate — see hook header.
+    // Store-action deps are excluded because keyboard execution keeps a stable ref.
     //
     // Sprint 311 (Phase 28 Slice A5) — `tab.queryMode` is intentionally
     // ABSENT from the deps. The document branch no longer reads it
@@ -1122,33 +617,12 @@ export function useQueryExecution({
     updateQueryState,
     runKvCommandNow,
     runMongoAggregateNow,
-    runInsertOne,
-    runInsertMany,
-    runDeleteMany,
-    runUpdateMany,
-    runDeleteOne,
-    runUpdateOne,
-    runReplaceOne,
-    runBulkWrite,
-    runCreateIndex,
-    runDropIndex,
+    mongoWriteDispatchers,
     runRdbSingleNow,
     runRdbBatchNow,
   ]);
 
-  // Sprint 248 (ADR 0022 Phase 4) — explicit dry-run dispatch. Bypasses
-  // the Safe Mode destructive-confirm dialog (no commit happens) and
-  // routes the same `executeQueryDryRun` IPC the confirm dialog's
-  // `<DryRunPreview>` uses. Mongo paradigm is unsupported (the IPC is
-  // rdb-only); we surface a toast disclaimer + return without invoking
-  // the IPC. History is intentionally not recorded — dry-runs are
-  // ephemeral previews. The `queryId` is prefixed with `"dry:"` so the
-  // backend cancel-token registry (and any future filtering by id) can
-  // distinguish dry-run cancels from real-query cancels.
   const handleDryRun = useCallback(async () => {
-    // Mongo paradigm — disclaimer + return. The IPC throws Unsupported
-    // for document connections; surface the message before the round
-    // trip so users get instant feedback.
     if (tab.paradigm === "document") {
       toast.info("Dry-run is not supported for MongoDB.");
       return;
@@ -1162,7 +636,7 @@ export function useQueryExecution({
       completeQueryDryRun,
       failQuery,
     });
-    // Excluding store actions from deps is deliberate — see hook header.
+    // Store-action deps are excluded because keyboard execution keeps a stable ref.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     tab,

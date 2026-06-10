@@ -1,4 +1,4 @@
-import { runMongoCommand, type CreateMongoIndexRequest } from "@lib/tauri";
+import { runMongoCommand } from "@lib/tauri";
 import {
   analyzeMongoPipeline,
   analyzeMongoRunCommand,
@@ -7,12 +7,13 @@ import type { SafeModeGate } from "@hooks/useSafeModeGate";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { DocumentRecordHistoryQueryMode } from "@lib/runtime/history/recordHistoryEntry";
 import type { FindBody } from "@/types/document";
-import type { BulkWriteOp } from "@/types/documentMutate";
 import { type QueryResult, type QueryState } from "@/types/query";
 import {
   parseMongoshExpression,
+  type MongoWriteDispatchers,
+  type MongoWriteRunnerRef,
   type ParsedMongoshCall,
-} from "@lib/mongo/mongoshParser";
+} from "@features/query";
 import {
   classifyMongoStatement,
   extractAdminCommandBody,
@@ -52,12 +53,6 @@ export interface MongoPendingWarn {
   previewLines?: string[];
 }
 
-export type MongoWriteRunner = () => Promise<void>;
-
-export interface MongoWriteRunnerRef {
-  current: MongoWriteRunner | null;
-}
-
 export type MongoTabContext = Pick<
   QueryTab,
   "id" | "connectionId" | "database" | "collection" | "paradigm" | "sql"
@@ -75,81 +70,6 @@ interface MongoGateActions {
   setPendingMongoConfirm: (pending: MongoPendingConfirm) => void;
   setPendingMongoWarn: (pending: MongoPendingWarn) => void;
   pendingWriteRunnerRef: MongoWriteRunnerRef;
-}
-
-interface MongoWriteDispatchers {
-  runInsertOne: (
-    connectionId: string,
-    database: string,
-    collection: string,
-    doc: Record<string, unknown>,
-    rawSql: string,
-  ) => Promise<void>;
-  runInsertMany: (
-    connectionId: string,
-    database: string,
-    collection: string,
-    docs: Record<string, unknown>[],
-    rawSql: string,
-  ) => Promise<void>;
-  runDeleteMany: (
-    connectionId: string,
-    database: string,
-    collection: string,
-    filter: Record<string, unknown>,
-    rawSql: string,
-  ) => Promise<void>;
-  runUpdateMany: (
-    connectionId: string,
-    database: string,
-    collection: string,
-    filter: Record<string, unknown>,
-    patch: Record<string, unknown>,
-    rawSql: string,
-  ) => Promise<void>;
-  runDeleteOne: (
-    connectionId: string,
-    database: string,
-    collection: string,
-    filter: Record<string, unknown>,
-    rawSql: string,
-  ) => Promise<void>;
-  runUpdateOne: (
-    connectionId: string,
-    database: string,
-    collection: string,
-    filter: Record<string, unknown>,
-    patch: Record<string, unknown>,
-    rawSql: string,
-  ) => Promise<void>;
-  runReplaceOne: (
-    connectionId: string,
-    database: string,
-    collection: string,
-    op: Extract<BulkWriteOp, { op: "replaceOne" }>,
-    rawSql: string,
-  ) => Promise<void>;
-  runBulkWrite: (
-    connectionId: string,
-    database: string,
-    collection: string,
-    ops: readonly BulkWriteOp[],
-    rawSql: string,
-  ) => Promise<void>;
-  runCreateIndex: (
-    connectionId: string,
-    database: string,
-    collection: string,
-    request: CreateMongoIndexRequest,
-    rawSql: string,
-  ) => Promise<void>;
-  runDropIndex: (
-    connectionId: string,
-    database: string,
-    collection: string,
-    indexName: string,
-    rawSql: string,
-  ) => Promise<void>;
 }
 
 export interface ExecuteMongoAggregateRequest extends MongoLifecycleActions {

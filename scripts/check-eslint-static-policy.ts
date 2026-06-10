@@ -28,7 +28,6 @@ export const MAX_LINES_ALLOWLIST = [
   "src/components/document/DocumentTreePanel.tsx",
   "src/components/layout/MainArea.test.tsx",
   "src/components/layout/TabBar.test.tsx",
-  "src/components/query/QueryTab/useQueryExecution.ts",
   "src/components/rdb/DataGrid.editing.test.tsx",
   "src/components/schema/CreateTableDialog.test.tsx",
   "src/components/schema/CreateTableDialog.tsx",

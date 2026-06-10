@@ -11,7 +11,7 @@ import {
   parseMongoshExpression,
   type ParsedMongoshCall,
   type ParsedMongoshError,
-} from "./mongoshParser";
+} from "@features/query";
 import { MONGOSH_DB_METHODS } from "./mongoShellCompletionVocabulary";
 
 function expectSuccess(

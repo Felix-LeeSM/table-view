@@ -1,40 +1,16 @@
-// Phase 28 parser-dispatch compatibility facade.
-//
-// Sprint 401 moved the actual mongosh syntax parser to
-// `src-tauri/mongosh-parser-core/` and exposes it through
-// `parseMongoshStatement`. This module keeps the older A1 dispatch API
-// (`parseMongoshExpression`) as a thin policy adapter: method whitelist,
-// cursor-chain validity, and legacy error taxonomy live here; tokenizing and
-// recursive parsing live only in the WASM-backed parser.
-
 import {
   parseMongoshStatement,
   type MongoshCollectionCommand,
   type MongoshParseError,
-} from "./mongoshAst";
+} from "@lib/mongo/mongoshAst/index";
+import {
+  MONGOSH_METHOD_WHITELIST,
+  isMongoshMethod,
+  type MongoshMethod,
+} from "@lib/mongo/mongoshMethods";
 
-export const MONGOSH_METHOD_WHITELIST = [
-  "find",
-  "findOne",
-  "aggregate",
-  "countDocuments",
-  "estimatedDocumentCount",
-  "distinct",
-  "insertOne",
-  "insertMany",
-  "updateOne",
-  "updateMany",
-  "replaceOne",
-  "deleteOne",
-  "deleteMany",
-  "createIndex",
-  "dropIndex",
-  "bulkWrite",
-] as const;
-
-export type MongoshMethod = (typeof MONGOSH_METHOD_WHITELIST)[number];
-
-const MONGOSH_METHODS: ReadonlySet<string> = new Set(MONGOSH_METHOD_WHITELIST);
+export { MONGOSH_METHOD_WHITELIST };
+export type { MongoshMethod };
 
 const CURSOR_METHODS: ReadonlySet<MongoshMethod> = new Set([
   "find",
@@ -124,10 +100,6 @@ function looksLikeTransactionHelper(input: string): boolean {
   return /\b(startSession|startTransaction|withTransaction|commitTransaction|abortTransaction)\s*\(/.test(
     input,
   );
-}
-
-function isMongoshMethod(name: string): name is MongoshMethod {
-  return MONGOSH_METHODS.has(name);
 }
 
 function findInvalidCursorChain(
