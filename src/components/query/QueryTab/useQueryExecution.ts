@@ -7,8 +7,6 @@ import {
   type DocumentRecordHistoryQueryMode,
 } from "@lib/runtime/history/recordHistoryEntry";
 import {
-  executeQuery,
-  executeQueryDryRun,
   cancelQuery,
   findDocuments,
   aggregateDocuments,
@@ -30,19 +28,13 @@ import {
   executeSearchQuery,
   type CreateMongoIndexRequest,
 } from "@lib/tauri";
-import { parseDbMismatch } from "@lib/api/dbMismatch";
-import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
-import { splitSqlStatements } from "@lib/sql/sqlUtils";
-import { stripSqlComments } from "@lib/sql/stripSqlComments";
 import { parseRedisDatabaseIndex } from "@lib/redis/redisDatabase";
-import { findMysqlScriptingBoundaryViolation } from "@lib/sql/mysqlScriptingBoundary";
 import {
   analyzeMongoPipeline,
   analyzeMongoOperation,
   analyzeMongoRunCommand,
 } from "@lib/mongo/mongoSafety";
-import { analyzeStatement, type StatementAnalysis } from "@lib/sql/sqlSafety";
-import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
+import type { StatementAnalysis } from "@lib/sql/sqlSafety";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/runtime/toast";
 import { getDataSourceProfile } from "@/types/dataSource";
@@ -69,7 +61,6 @@ import {
 import {
   readDocumentContext,
   isRecord,
-  dispatchDbMutationHint,
   idOnlyFilter,
   extractDollarSet,
   buildCreateMongoIndexRequest,
@@ -78,6 +69,14 @@ import {
   applyAggregateCursorChain,
 } from "./queryHelpers";
 import { kvCommandConfirmationKey } from "./kvCommandConfirmation";
+import {
+  executeRdbDryRun,
+  executeRdbQuery,
+  executeRdbSingleStatement,
+  executeRdbStatementBatch,
+  type RdbBatchRunner,
+  type RdbSingleRunner,
+} from "./rdbQueryExecution";
 
 import { logger } from "@lib/logger";
 
@@ -416,18 +415,6 @@ function numberField(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
-}
-
-function isQueryCancellationMessage(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("query cancelled") ||
-    normalized.includes("query canceled") ||
-    normalized.includes("operation cancelled") ||
-    normalized.includes("operation canceled") ||
-    normalized.includes("canceling statement due to user request") ||
-    normalized.includes("cancelling statement due to user request")
-  );
 }
 
 export function useQueryExecution({
@@ -801,12 +788,8 @@ export function useQueryExecution({
   // `runRdbBatchNow` on tab-mutation re-render), so the user clicking
   // Retry after a re-render would dispatch through the *previous* render's
   // function. Refs decouple closure identity from `useCallback` deps.
-  const runRdbSingleRef = useRef<((stmt: string) => Promise<void>) | null>(
-    null,
-  );
-  const runRdbBatchRef = useRef<
-    ((statements: string[], joinedSql: string) => Promise<void>) | null
-  >(null);
+  const runRdbSingleRef = useRef<RdbSingleRunner | null>(null);
+  const runRdbBatchRef = useRef<RdbBatchRunner | null>(null);
 
   // Sprint 269 — Retry closure helper. Looks up the live tab via
   // `useWorkspaceStore.getState()` (tabs live nested at
@@ -836,95 +819,22 @@ export function useQueryExecution({
   // without inline duplication.
   const runRdbSingleNow = useCallback(
     async (stmt: string) => {
-      const queryId = `${tab.id}-${Date.now()}`;
-      const startTime = Date.now();
-      updateQueryState(tab.id, { status: "running", queryId });
-      try {
-        // Sprint 266 — opt-in db-mismatch guard. `workspaceDb` is the
-        // (resolved) active db for this tab; passing it lets the backend
-        // refuse the query if the connection pool has been swapped to a
-        // different db between user click and dispatch.
-        const result = await executeQuery(
-          tab.connectionId,
-          stmt,
-          queryId,
-          workspaceDb ?? undefined,
-        );
-        completeQuery(tab.id, queryId, result);
-        // Sprint 360 Phase 2 (Q23) — self-window schemaCache invalidate
-        // on DDL completion. The backend tags every CREATE / ALTER / DROP
-        // statement as `queryType: "ddl"`, so a single boolean check
-        // covers the sidebar refresh trigger without hand-rolling the
-        // statement classifier here. Wide drop only — the sidebar's
-        // `useSchemaCache` mount-effect refetches `loadSchemas` +
-        // `loadTables` for the connection.
-        if (result.queryType === "ddl") {
-          clearSchemaForConnection(tab.connectionId);
-        }
-        recordHistory({
-          sql: stmt,
-          executedAt: Date.now(),
-          duration: Date.now() - startTime,
-          status: "success",
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        const wasCancelled = isQueryCancellationMessage(message);
-        if (wasCancelled) {
-          cancelRunningQuery(tab.id, queryId, "Query cancelled");
-        } else {
-          failQuery(tab.id, queryId, message);
-        }
-        recordHistory({
-          sql: stmt,
-          executedAt: Date.now(),
-          duration: Date.now() - startTime,
-          status: wasCancelled ? "cancelled" : "error",
-        });
-        // Sprint 267 — Sprint 266 의 가드가 backend 의 active db 변동을
-        // 알려준 것. 즉시 verify + sync 하여 다음 user click 이 올바른
-        // expectedDatabase 로 dispatch 되도록.
-        //
-        // Sprint 269 — push the Retry-bearing toast from the catch site
-        // (rather than from inside `syncMismatchedActiveDb`) so the closure
-        // captures `stmt` lexically. The Retry closure re-invokes the live
-        // `runRdbSingleNow` via `runRdbSingleRef.current` only when the tab
-        // still exists and is NOT currently running.
-        if (!wasCancelled && parseDbMismatch(message)) {
-          const capturedTabId = tab.id;
-          const capturedConnectionId = tab.connectionId;
-          const capturedStmt = stmt;
-          void syncMismatchedActiveDb(capturedConnectionId, (actual) => {
-            toast.warning(
-              `Active DB synced to '${actual}'. Re-run the query if needed.`,
-              {
-                action: {
-                  label: "Retry",
-                  onClick: () => {
-                    const live = findLiveIdleTab(
-                      capturedTabId,
-                      capturedConnectionId,
-                    );
-                    if (!live) return;
-                    const fn = runRdbSingleRef.current;
-                    if (!fn) return;
-                    void fn(capturedStmt);
-                  },
-                },
-              },
-            );
-          });
-        }
-      }
-      // Run DB-change detection regardless of query success — `\c x` can
-      // surface as a PG syntax error yet still flip the active pool on
-      // the backend, so the optimistic update + verify is still useful.
-      dispatchDbMutationHint(tab.connectionId, tab.paradigm, stmt);
+      await executeRdbSingleStatement({
+        tab,
+        stmt,
+        workspaceDb,
+        updateQueryState,
+        completeQuery,
+        failQuery,
+        cancelRunningQuery,
+        clearSchemaForConnection,
+        recordHistory,
+        findLiveIdleTab,
+        runRdbSingleRef,
+      });
     },
     [
-      tab.id,
-      tab.connectionId,
-      tab.paradigm,
+      tab,
       workspaceDb,
       updateQueryState,
       completeQuery,
@@ -945,142 +855,22 @@ export function useQueryExecution({
   // path executes the exact same batch the user typed.
   const runRdbBatchNow = useCallback(
     async (statements: string[], joinedSql: string) => {
-      const queryId = `${tab.id}-${Date.now()}`;
-      const startTime = Date.now();
-      updateQueryState(tab.id, { status: "running", queryId });
-
-      let lastResult: import("@/types/query").QueryResult | null = null;
-      const statementResults: import("@/types/query").QueryStatementResult[] =
-        [];
-      // Sprint 269 — only push ONE Retry toast per batch even if multiple
-      // statements trip the mismatch guard. The first observed mismatch
-      // fires the verify + sync; subsequent statement-level mismatches
-      // skip the toast push (sync is idempotent so the store update is
-      // still safe to repeat, but a second toast would clutter the queue).
-      let mismatchToastPushed = false;
-
-      for (let i = 0; i < statements.length; i++) {
-        const stmt = statements[i]!;
-        const stmtStart = Date.now();
-        try {
-          const result = await executeQuery(
-            tab.connectionId,
-            stmt,
-            queryId,
-            workspaceDb ?? undefined,
-          );
-          lastResult = result;
-          statementResults.push({
-            sql: stmt,
-            status: "success",
-            result,
-            durationMs: Date.now() - stmtStart,
-          });
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          const wasCancelled = isQueryCancellationMessage(message);
-          if (wasCancelled) {
-            cancelRunningQuery(tab.id, queryId, "Query cancelled");
-            recordHistory({
-              sql: joinedSql,
-              executedAt: Date.now(),
-              duration: Date.now() - startTime,
-              status: "cancelled",
-            });
-            return;
-          }
-          statementResults.push({
-            sql: stmt,
-            status: "error",
-            error: message,
-            durationMs: Date.now() - stmtStart,
-          });
-          // Sprint 267 — mismatch sync (per statement-level catch).
-          // 같은 mismatch 가 batch 안에서 반복되어도 setActiveDb 는 동일
-          // 결과 idempotent — overhead 만 약간 더 큰 round-trip 수준.
-          //
-          // Sprint 269 — push the Retry-bearing toast (once per batch) from
-          // the catch site so the closure captures `(statements, joinedSql)`
-          // lexically. Retry re-invokes the live `runRdbBatchNow` via the
-          // ref iff the tab still exists and is NOT currently running.
-          if (parseDbMismatch(message) && !mismatchToastPushed) {
-            mismatchToastPushed = true;
-            const capturedTabId = tab.id;
-            const capturedConnectionId = tab.connectionId;
-            const capturedStatements = statements;
-            const capturedJoinedSql = joinedSql;
-            void syncMismatchedActiveDb(capturedConnectionId, (actual) => {
-              toast.warning(
-                `Active DB synced to '${actual}'. Re-run the query if needed.`,
-                {
-                  action: {
-                    label: "Retry",
-                    onClick: () => {
-                      const live = findLiveIdleTab(
-                        capturedTabId,
-                        capturedConnectionId,
-                      );
-                      if (!live) return;
-                      const fn = runRdbBatchRef.current;
-                      if (!fn) return;
-                      void fn(capturedStatements, capturedJoinedSql);
-                    },
-                  },
-                },
-              );
-            });
-          } else if (parseDbMismatch(message)) {
-            // Subsequent statements hitting the same mismatch: still run
-            // verify+sync (idempotent) but suppress an extra toast.
-            void syncMismatchedActiveDb(tab.connectionId, () => {
-              /* no toast on repeat — keep queue uncluttered */
-            });
-          }
-        }
-      }
-
-      const successCount = statementResults.filter(
-        (s) => s.status === "success",
-      ).length;
-      const allFailed = successCount === 0;
-      // Sprint 360 Phase 2 (Q23) — self-window schemaCache invalidate. A
-      // batch may mix DDL with DML / SELECT; if ANY successful statement
-      // is DDL, the schema shape may have changed and we drop the
-      // connection cache so the sidebar refetches. Cache drop is
-      // idempotent for non-DDL batches because the guard skips the call.
-      const batchHasDdl = statementResults.some(
-        (s) => s.status === "success" && s.result?.queryType === "ddl",
-      );
-      if (batchHasDdl) {
-        clearSchemaForConnection(tab.connectionId);
-      }
-
-      const joinedErrors = statementResults
-        .map((s, idx) => `Statement ${idx + 1}: ${s.error ?? ""}`)
-        .join("\n");
-      completeMultiStatementQuery(tab.id, queryId, {
-        statementResults,
-        lastResult,
-        allFailed,
-        joinedErrorMessage: joinedErrors,
+      await executeRdbStatementBatch({
+        tab,
+        statements,
+        joinedSql,
+        workspaceDb,
+        updateQueryState,
+        cancelRunningQuery,
+        completeMultiStatementQuery,
+        clearSchemaForConnection,
+        recordHistory,
+        findLiveIdleTab,
+        runRdbBatchRef,
       });
-
-      recordHistory({
-        sql: joinedSql,
-        executedAt: Date.now(),
-        duration: Date.now() - startTime,
-        // Partial failure still flags the entry as `error` so users can
-        // spot it in the history list without opening the tab.
-        status: successCount === statements.length ? "success" : "error",
-      });
-      // The lexer takes the last DB-mutation match in the full script, so
-      // a script ending in `...; \c admin` flips active_db once.
-      dispatchDbMutationHint(tab.connectionId, tab.paradigm, joinedSql);
     },
     [
-      tab.id,
-      tab.connectionId,
-      tab.paradigm,
+      tab,
       workspaceDb,
       updateQueryState,
       completeMultiStatementQuery,
@@ -2663,149 +2453,18 @@ export function useQueryExecution({
       return;
     }
 
-    const rawStatements = splitSqlStatements(sql);
-    const scriptingViolation = findMysqlScriptingBoundaryViolation(
-      rawStatements,
+    await executeRdbQuery({
+      tab,
+      sql,
       dbType,
-    );
-    if (scriptingViolation) {
-      updateQueryState(tab.id, {
-        status: "error",
-        error: scriptingViolation.message,
-      });
-      recordHistory({
-        sql,
-        executedAt: Date.now(),
-        duration: 0,
-        status: "error",
-      });
-      return;
-    }
-
-    const statements = rawStatements.filter((stmt) => {
-      // Strip SQL comments and whitespace to detect statements that are
-      // effectively empty (e.g. "-- comment only" or "/* block */").
-      return stripSqlComments(stmt).trim().length > 0;
+      decideSafeMode,
+      updateQueryState,
+      recordHistory,
+      setPendingRdbConfirm,
+      setPendingRdbWarn,
+      runRdbSingle: runRdbSingleNow,
+      runRdbBatch: runRdbBatchNow,
     });
-    if (statements.length === 0) return;
-
-    // Sprint 231 — Safe Mode gate for raw RDB query path. Single pass
-    // analyzes every statement; the matrix decision priority is
-    // `block > confirm > allow`, and we record the first dangerous
-    // statement's reason so the dialog / error message stays concise.
-    // The gate runs BEFORE `updateQueryState({ status: "running" })`, so
-    // a block / confirm decision never strands the tab in `running`.
-    //
-    // Sprint 255 (ADR 0023 grill Q3-(b)) — extended to track WARN tier
-    // via `isInfoStatement`. Final priority across the batch is
-    // `STOP (block / confirm) > WARN (non-INFO safe) > INFO (read-only)`.
-    // STOP routes to `pendingRdbConfirm` (existing ConfirmDestructiveDialog);
-    // WARN routes to the new `pendingRdbWarn` (SqlPreviewDialog mount);
-    // INFO falls through to direct IPC. STOP and WARN are mutually
-    // exclusive — STOP wins, WARN state stays null.
-    let worstAction: "allow" | "confirm" | "block" = "allow";
-    let worstReason = "";
-    let hasWarn = false;
-    // Sprint 254 — bounded UPDATE/DELETE WHERE candidates for dry-run
-    // row-count escalation. We collect them during the classifier pass so
-    // we can probe each (in order) only if no STOP statement exists.
-    const escalationCandidates: { stmt: string; reason: string }[] = [];
-    for (const stmt of statements) {
-      const analysis = analyzeStatement(stmt);
-      const decision = decideSafeMode(analysis);
-      if (decision.action === "block") {
-        worstAction = "block";
-        worstReason = decision.reason;
-        break;
-      }
-      if (decision.action === "confirm" && worstAction === "allow") {
-        worstAction = "confirm";
-        worstReason = decision.reason;
-      }
-      // Sprint 254 — `severity: "warn"` 직접 비교로 단순화. INFO (`severity:
-      // "info"`) 는 dialog skip; WARN (`severity: "warn"`) 은 dialog mount;
-      // STOP (`severity: "danger"`) 이 gate 통과 (e.g. DROP TABLE on dev +
-      // warn — env-gated unguarded under ADR 0022) 한 경우는 worst 아래
-      // 분기 (`if (worstAction === "confirm")`) 가 아닌 본 분기에서 WARN
-      // 으로 끌어올리지 않는다 — 즉 destructive-on-dev-warn unguarded 의
-      // direct IPC 발동 invariant 보존.
-      if (decision.action === "allow" && analysis.severity === "warn") {
-        hasWarn = true;
-        // Sprint 403 — bounded UPDATE/DELETE 만 escalation 대상.
-        // INSERT 는 info-tier 이라 이 WARN branch 에 들어오지 않는다.
-        if (analysis.kind === "dml-update" || analysis.kind === "dml-delete") {
-          escalationCandidates.push({
-            stmt,
-            reason:
-              analysis.kind === "dml-update"
-                ? "UPDATE affects 100+ rows (dry-run threshold)"
-                : "DELETE affects 100+ rows (dry-run threshold)",
-          });
-        }
-      }
-    }
-    if (worstAction === "block") {
-      // History on block: status=error, duration=0. We do NOT call
-      // `dispatchDbMutationHint` because no SQL hit the backend.
-      updateQueryState(tab.id, { status: "error", error: worstReason });
-      recordHistory({
-        sql,
-        executedAt: Date.now(),
-        duration: 0,
-        status: "error",
-      });
-      return;
-    }
-    if (worstAction === "confirm") {
-      // STOP wins over WARN — set only the destructive-confirm state.
-      // One dialog per batch. The user types the reason verbatim once
-      // and the batch runs as a unit (per-statement individual approval
-      // is forbidden by AC-231-02).
-      setPendingRdbConfirm({ statements, reason: worstReason });
-      return;
-    }
-    // Sprint 254 — WARN-tier bounded UPDATE/DELETE escalation. Probe each
-    // candidate via dry-run; if any reports rowCount >= 100, escalate the
-    // whole batch to STOP (`pendingRdbConfirm`). Timeout / IPC unsupported
-    // → STOP fallback (conservative). Probes run sequentially because
-    // each shares the connection's transaction surface.
-    if (hasWarn && escalationCandidates.length > 0) {
-      for (const candidate of escalationCandidates) {
-        const escalated = await escalateWarnIfLargeImpact(
-          tab.connectionId,
-          candidate.stmt,
-          "warn",
-        );
-        if (escalated === "danger") {
-          setPendingRdbConfirm({ statements, reason: candidate.reason });
-          return;
-        }
-      }
-    }
-    // Sprint 255 — WARN tier: every statement gate-allowed and at least
-    // one is a non-INFO write. Mount SqlPreviewDialog for the whole batch
-    // (single-line INFO statements are joined into the preview alongside
-    // the WARN ones so the user reviews exactly what executes).
-    if (hasWarn) {
-      setPendingRdbWarn({ statements });
-      return;
-    }
-
-    if (statements.length === 1) {
-      // Helper handles the running-state transition + book-keeping +
-      // DB-mutation hint dispatch. The single-statement branch passes
-      // `sql` (not `statements[0]`) for byte-equivalent history copy
-      // when the original input contained a trailing semicolon — the
-      // analyzer normalizes statements but history records the user's
-      // exact buffer.
-      await runRdbSingleNow(sql);
-      return;
-    }
-
-    // Multi-statement: dispatch the same helper used by `confirmRdbDangerous`.
-    // `joinedSql` mirrors the user's exact buffer for history (Sprint
-    // 100 multi-statement history invariant).
-    await runRdbBatchNow(statements, sql);
     // Excluding store actions from deps is deliberate — see hook header.
     //
     // Sprint 311 (Phase 28 Slice A5) — `tab.queryMode` is intentionally
@@ -2855,99 +2514,24 @@ export function useQueryExecution({
       return;
     }
 
-    // Empty / running guards mirror `handleExecute`. Running takes
-    // priority because firing a second dry-run while a query is in
-    // flight would race the queryState transition.
-    if (tab.queryState.status === "running") return;
-    const sql = tab.sql.trim();
-    if (!sql) return;
-
-    const rawStatements = splitSqlStatements(sql);
-    const scriptingViolation = findMysqlScriptingBoundaryViolation(
-      rawStatements,
+    await executeRdbDryRun({
+      tab,
       dbType,
-    );
-    if (scriptingViolation) {
-      updateQueryState(tab.id, {
-        status: "error",
-        error: scriptingViolation.message,
-      });
-      return;
-    }
-
-    const statements = rawStatements.filter((stmt) => {
-      // Mirror the comment-strip-then-non-empty filter used by
-      // `handleExecute` so dry-run treats `-- comment` only as empty.
-      return stripSqlComments(stmt).trim().length > 0;
+      workspaceDb,
+      updateQueryState,
+      completeQueryDryRun,
+      failQuery,
     });
-    if (statements.length === 0) return;
-
-    const queryId = `dry:${tab.id}-${Date.now()}`;
-    updateQueryState(tab.id, { status: "running", queryId });
-    try {
-      // Sprint 271b — forward the resolved workspace db as the
-      // `expectedDatabase` guard. The dry-run preview MUST run on the
-      // same db the eventual commit will hit; the backend rejects a
-      // swapped pool before the preview rolls back against the wrong db.
-      const results = await executeQueryDryRun(
-        tab.connectionId,
-        statements,
-        queryId,
-        workspaceDb ?? undefined,
-      );
-      // Backend always returns one QueryResult per statement, in input
-      // order. Single-statement → no statements breakdown; multi → adapt
-      // each into the QueryStatementResult shape so the result grid's
-      // multi-statement Tabs view can reuse its existing rendering.
-      if (results.length <= 1) {
-        const lastResult: import("@/types/query").QueryResult =
-          results[0] ??
-          ({
-            columns: [],
-            rows: [],
-            totalCount: 0,
-            executionTimeMs: 0,
-            queryType: "ddl",
-          } satisfies import("@/types/query").QueryResult);
-        completeQueryDryRun(tab.id, queryId, lastResult);
-        return;
-      }
-      const statementResults: import("@/types/query").QueryStatementResult[] =
-        results.map((res, idx) => ({
-          sql: statements[idx] ?? "",
-          status: "success" as const,
-          result: res,
-          durationMs: res.executionTimeMs,
-        }));
-      const lastResult = results[results.length - 1]!;
-      completeQueryDryRun(tab.id, queryId, lastResult, statementResults);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      failQuery(tab.id, queryId, message);
-      // Sprint 271b — when the backend rejects with DbMismatch, sync the
-      // frontend stores so the next click dispatches against the correct
-      // db. Dry-run is user-initiated (toolbar button / Cmd+Shift+Enter)
-      // so we surface the Sprint 269 Retry toast just like
-      // `runRdbSingleNow`. Background introspection paths stay silent.
-      if (parseDbMismatch(message)) {
-        const capturedConnectionId = tab.connectionId;
-        void syncMismatchedActiveDb(capturedConnectionId, (actual) => {
-          toast.warning(
-            `Active DB synced to '${actual}'. Re-run the dry-run if needed.`,
-          );
-        });
-      }
-    }
     // Excluding store actions from deps is deliberate — see hook header.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    tab.id,
-    tab.sql,
-    tab.queryState.status,
-    tab.connectionId,
+    tab,
     tab.paradigm,
     workspaceDb,
     dbType,
+    updateQueryState,
+    completeQueryDryRun,
+    failQuery,
   ]);
 
   return {
