@@ -54,7 +54,7 @@ preserve old persisted/wire/caller behavior are included in the table.
 | `src/lib/tauri/cancel.ts` | legacy cooperative cancelQuery payload | permanent-wire-compatibility | query cancellation Tauri wrapper | Preserve while backend cancellation command shape is unchanged. | `src/lib/tauri/cancel.test.ts` | #737 query characterization |
 | `src/lib/tauri/ddl.ts` | DDL compat wrappers | migration-only | schema mutation Tauri wrapper | Remove positional/compat wrappers after catalog/schema and result-grid migrations update callers. | `src/lib/tauri/ddl.test.ts` | #738 and #739 domain migrations |
 | `src/lib/tauri/document.ts` | legacy validator envelope and positional document API args | permanent-wire-compatibility | document Tauri wrapper | Preserve for older backend/test-stub response envelopes until a backend contract issue replaces it. | `src/lib/tauri/document.test.ts`<br>`src/components/document/__tests__/ValidatorPanel.sprint352.test.tsx` | #758 preservation unless backend contract child replaces it |
-| `src/lib/tauri/legacyImport.ts` | legacy local-storage import IPC wrapper | migration-only | storage import runtime | Keep until legacy import lifecycle is reconciled in compatibility ledger. | `src/lib/tauri/legacyImport.test.ts` | #758 decides preservation/removal |
+| `src/lib/tauri/legacyImport.ts` | legacy local-storage import IPC wrapper | permanent-wire-compatibility | storage import runtime | Preserve as upgrade/import wire compatibility until lifecycle is reconciled. | `src/lib/tauri/legacyImport.test.ts` | #758 decides preservation/removal |
 | `src/lib/tauri/meta_sentinel.ts` | legacy import and column-pref sentinels | permanent-wire-compatibility | storage metadata wrapper | Preserve while local metadata rows can contain legacy sentinel keys. | `src/lib/tauri/legacyImport.test.ts`<br>`src/lib/runtime/migration/legacyColumnPrefsDrop.test.ts` | #758 storage compatibility |
 | `src/lib/tauri/numericWrap.ts` | legacy data_type numeric metadata normalization | permanent-wire-compatibility | document metadata wrapper | Preserve while backend/test fixtures may emit legacy snake_case. | `src/lib/tauri/numericWrap.test.ts` | #758 preservation |
 | `src/lib/window-label.ts` | legacy single workspace window label | migration-only | window router | Remove after workspace shell/window feature migration confirms no legacy label producers remain. | `src/lib/window-label.test.ts` | #740 workspace migration |
@@ -96,8 +96,9 @@ preserve old persisted/wire/caller behavior are included in the table.
 
 No new GitHub issues are required from this inventory. Migration-only rows are
 covered by existing same-milestone Refactor 02 child issues (#735 through #742
-and #761 through #764) or by the downstream compatibility ledger #758. #734 does
-not remove behavior and does not start any #735+ movement.
+and #761 through #764). Permanent wire compatibility and removable-debt rows can
+feed the downstream compatibility ledger #758. #734 does not remove behavior and
+does not start any #735+ movement.
 
 ## Static guard
 
@@ -106,5 +107,7 @@ not remove behavior and does not start any #735+ movement.
 - A production hard-compat marker under #734 scope is missing from this table.
 - A table row is stale, outside scope, lacks owner/horizon/test evidence, or lacks
   a follow-up issue reference.
+- A `migration-only` row lacks a same-milestone Refactor 02 follow-up issue
+  reference (#735 through #742 or #761 through #764).
 - A classification is not one of `permanent-wire-compatibility`,
   `migration-only`, or `removable-debt`.

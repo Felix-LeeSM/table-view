@@ -87,6 +87,22 @@ const FRONTEND_COMPAT_SCOPE_ROOTS = [
   "src/types/",
 ] as const;
 
+const FRONTEND_COMPAT_REFACTOR_02_FOLLOW_UP_ISSUES: ReadonlySet<string> =
+  new Set([
+    "#735",
+    "#736",
+    "#737",
+    "#738",
+    "#739",
+    "#740",
+    "#741",
+    "#742",
+    "#761",
+    "#762",
+    "#763",
+    "#764",
+  ]);
+
 const FRONTEND_COMPAT_CLASSIFICATIONS: ReadonlySet<FrontendCompatClassification> =
   new Set(["permanent-wire-compatibility", "migration-only", "removable-debt"]);
 
@@ -290,6 +306,10 @@ function hasFrontendCompatMarker(source: string): boolean {
   return FRONTEND_COMPAT_MARKER_PATTERN.test(source);
 }
 
+function collectIssueRefs(text: string): string[] {
+  return text.match(/#\d+/g) ?? [];
+}
+
 export function findFrontendCompatInventoryViolations(
   fileSources: ReadonlyMap<string, string>,
   inventory: readonly FrontendCompatInventoryEntry[] = FRONTEND_COMPAT_INVENTORY,
@@ -321,9 +341,20 @@ export function findFrontendCompatInventoryViolations(
         `${path}: incomplete frontend compatibility inventory row.`,
       );
     }
-    if (entry.followUp.match(/#\d+/) === null) {
+    const followUpIssues = collectIssueRefs(entry.followUp);
+    if (followUpIssues.length === 0) {
       failures.push(
         `${path}: frontend compatibility row lacks follow-up issue evidence.`,
+      );
+    }
+    if (
+      entry.classification === "migration-only" &&
+      !followUpIssues.some((issue) =>
+        FRONTEND_COMPAT_REFACTOR_02_FOLLOW_UP_ISSUES.has(issue),
+      )
+    ) {
+      failures.push(
+        `${path}: migration-only compatibility row lacks same-milestone Refactor 02 follow-up issue evidence.`,
       );
     }
     if (!isFrontendCompatScopeModule(path)) {

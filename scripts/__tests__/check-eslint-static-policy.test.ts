@@ -163,6 +163,13 @@ describe("check-eslint-static-policy", () => {
         followUp: expect.stringContaining("#758"),
       }),
     );
+    expect(FRONTEND_COMPAT_INVENTORY).toContainEqual(
+      expect.objectContaining({
+        path: "src/lib/tauri/legacyImport.ts",
+        classification: "permanent-wire-compatibility",
+        followUp: expect.stringContaining("#758"),
+      }),
+    );
   });
 
   it("parses compact frontend compatibility table rows", () => {
@@ -232,6 +239,32 @@ describe("check-eslint-static-policy", () => {
 
     expect(failures).toContain(
       "src/types/connection.ts: stale frontend compatibility inventory entry; remove it from docs/archives/audits/refactor-02-frontend-compat-inventory-2026-06-10.md.",
+    );
+  });
+
+  it("requires migration-only frontend compatibility rows to cite same-milestone Refactor 02 issues", () => {
+    const failures = findFrontendCompatInventoryViolations(
+      new Map([
+        [
+          "src/lib/tauri/legacyImport.ts",
+          "// legacy local-storage import IPC wrapper\n",
+        ],
+      ]),
+      [
+        {
+          path: "src/lib/tauri/legacyImport.ts",
+          branch: "legacy local-storage import IPC wrapper",
+          classification: "migration-only",
+          owner: "storage import runtime",
+          horizon: "Keep until compatibility ledger.",
+          testEvidence: ["src/lib/tauri/legacyImport.test.ts"],
+          followUp: "#758 decides preservation/removal",
+        },
+      ],
+    );
+
+    expect(failures).toContain(
+      "src/lib/tauri/legacyImport.ts: migration-only compatibility row lacks same-milestone Refactor 02 follow-up issue evidence.",
     );
   });
 
