@@ -1,18 +1,13 @@
 // Sprint 382 (2026-05-17) — AST-backed statement classifier.
 //
-// 작성 이유: sprint-381 의 정규식 기반 (`ADMIN_COMMAND_RE`,
-// `COLLECTION_COMMAND_RE`, JSON-quoter 한 패스) 분류를 typed AST
-// (`./mongoshAst.ts`) 위에서 통합한다. 호출부 (`useQueryExecution.ts`,
-// `Toolbar.tsx`) 가 의존하는 export signature 는 변하지 않으며, AST 로
-// promote 한 덕에 (1) 라인 코멘트가 statement 어디에 있든 strip 되고,
-// (2) nested object body 가 안전하게 추출되며, (3) `;` 로 구분된 두 번째
-// statement 가 명시적으로 거부된다.
+// 작성 이유: sprint-381 의 정규식 기반 분류를 typed AST
+// (`./mongoshAst/index`) 위에서 통합한다. 호출부 (`useQueryExecution.ts`,
+// `Toolbar.tsx`) 가 의존하는 export signature 는 변하지 않는다.
 //
-// `analyzeMongoRunCommand` (mongoSafety.ts) 와 `parseMongoshExpression`
-// (mongoshParser.ts, Phase 28 method-whitelist parser) 는 본 sprint 가
-// 만지지 않는다 — 본 모듈은 statement classifier 의 책임만 promote.
+// 본 모듈은 statement classifier 책임만 갖고, expression parser 는
+// `@features/query` public API 뒤에 둔다.
 
-import { parseMongoshStatement } from "./mongoshAst";
+import { parseMongoshStatement } from "./mongoshAst/index";
 
 /**
  * Statement kind for the MongoDB query tab Run gate.

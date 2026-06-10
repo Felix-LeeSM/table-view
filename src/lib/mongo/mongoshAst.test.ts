@@ -12,7 +12,7 @@ import {
   type MongoshAdminCommand,
   type MongoshCollectionCommand,
   type MongoshParseError,
-} from "./mongoshAst";
+} from "./mongoshAst/index";
 
 function expectAdmin(
   result: MongoshStatementResult,
@@ -532,7 +532,7 @@ describe("parseMongoshStatement — WASM facade (AC-401-W1..W3)", () => {
   // initMongoshWasm via test-setup.ts. Re-asserting here documents the
   // public surface explicitly and locks the boot signature.
   it("AC-401-W1 — initMongoshWasm resolves without throwing (re-callable, idempotent)", async () => {
-    const { initMongoshWasm } = await import("./mongoshAst");
+    const { initMongoshWasm } = await import("./mongoshAst/index");
     // After the global beforeAll bootstrap, subsequent calls are a no-op
     // (memoized) and must still resolve.
     await expect(initMongoshWasm()).resolves.toBeUndefined();

@@ -9,9 +9,8 @@ import { toast } from "@lib/runtime/toast";
 import type { Paradigm } from "@/types/connection";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";
-import { documentIdFromRow, type DocumentId } from "@/types/documentMutate";
 import type { CreateMongoIndexRequest, MongoIndexDirection } from "@lib/tauri";
-import type { CursorChainStep } from "@lib/mongo/mongoshParser";
+import type { CursorChainStep } from "@features/query";
 
 /**
  * `QueryTab` module-top helpers:
@@ -344,24 +343,6 @@ export function parseReplaceOneOptions(
     };
   }
   return { ok: true, upsert };
-}
-
-/**
- * Sprint 312 (Phase 28 Slice A6, 2026-05-14) — extract a `_id`-only
- * filter (`{ _id: <value> }` with exactly one key) into a typed
- * `DocumentId`. Returns `null` when the filter is missing `_id`, has
- * additional keys, or when the `_id` value isn't promotable to a
- * `DocumentId` variant. The single-doc `updateDocument` / `deleteDocument`
- * IPCs only accept a `DocumentId`, so the dispatch table uses this to
- * choose between the fast single-IPC path and the D-16 bulkWrite
- * fallback for arbitrary filters.
- */
-export function idOnlyFilter(
-  filter: Record<string, unknown>,
-): DocumentId | null {
-  const keys = Object.keys(filter);
-  if (keys.length !== 1 || keys[0] !== "_id") return null;
-  return documentIdFromRow(filter);
 }
 
 /**

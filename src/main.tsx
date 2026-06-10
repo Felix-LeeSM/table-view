@@ -156,7 +156,7 @@ async function boot() {
   // 직후 background 에서 WASM 모듈을 로드해서, 사용자가 mongosh 입력을
   // 시작할 때쯤이면 sync surface 가 이미 ready. 실패해도 facade 가
   // synthetic "parser initializing" 에러를 반환하므로 boot 은 계속.
-  void import("@lib/mongo/mongoshAst")
+  void import("@features/query")
     .then((m) => m.initMongoshWasm())
     .catch((e) => {
       logger.warn(

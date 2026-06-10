@@ -21,7 +21,7 @@ vi.mock("@/lib/tauri", async () => {
 // `initMongoshWasm(bytes)` overload 로 Node `fs.readFileSync` 결과를 직접
 // 전달해 `initSync` 코드패스를 탄다.
 beforeAll(async () => {
-  const { initMongoshWasm } = await import("@lib/mongo/mongoshAst");
+  const { initMongoshWasm } = await import("@features/query");
   const { readFileSync } = await import("node:fs");
   const { fileURLToPath } = await import("node:url");
   const { resolve, dirname } = await import("node:path");
