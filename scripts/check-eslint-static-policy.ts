@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 
 export const MAX_LINES_ALLOWLIST = [
   "e2e/smoke/_helpers.ts",
-  "src/components/connection/ConnectionDialog.test.tsx",
-  "src/components/connection/ConnectionGroup.test.tsx",
-  "src/components/connection/ConnectionItem.test.tsx",
+  "src/features/connection/components/ConnectionDialog.test.tsx",
+  "src/features/connection/components/ConnectionGroup.test.tsx",
+  "src/features/connection/components/ConnectionItem.test.tsx",
   "src/components/datagrid/sqlGenerator.test.ts",
   "src/components/datagrid/useDataGridEdit.mixed-batch.test.ts",
   "src/components/document/DocumentTreePanel.test.tsx",
@@ -82,6 +82,7 @@ export const FRONTEND_COMPAT_INVENTORY_DOC =
 
 const FRONTEND_COMPAT_SCOPE_ROOTS = [
   "src/components/",
+  "src/features/",
   "src/lib/",
   "src/stores/",
   "src/types/",
@@ -149,6 +150,55 @@ function readFrontendCompatInventory(cwd = process.cwd()) {
 }
 
 export const FRONTEND_COMPAT_INVENTORY = readFrontendCompatInventory();
+
+export const CONNECTION_FEATURE_PUBLIC_API_PATH =
+  "src/features/connection/index.ts";
+
+export const CONNECTION_FEATURE_PUBLIC_API_EXPORTS = [
+  "ConnectionDialog",
+  "ConnectionList",
+  "GroupDialog",
+  "ImportExportDialog",
+  "RecentConnections",
+  "useConnectionStore",
+  "ConnectionConfig",
+  "ConnectionDraft",
+  "ConnectionGroup",
+  "ConnectionStatus",
+  "DatabaseType",
+  "DATABASE_TYPE_LABELS",
+  "DATABASE_DEFAULTS",
+  "DATABASE_DEFAULT_FIELDS",
+  "createEmptyDraft",
+  "draftFromConnection",
+  "parseConnectionUrl",
+  "listConnections",
+  "saveConnection",
+  "testConnection",
+  "exportConnectionsEncrypted",
+] as const;
+
+const CONNECTION_FEATURE_MIGRATED_CONSUMERS: ReadonlySet<string> = new Set([
+  "src/App.tsx",
+  "src/AppRouter.tsx",
+  "src/main.tsx",
+  "src/pages/HomePage.tsx",
+]);
+
+const CONNECTION_FEATURE_LEGACY_SPECIFIER_PREFIXES = [
+  "@/components/connection",
+  "@components/connection",
+  "@/stores/connectionStore",
+  "@stores/connectionStore",
+  "@/types/connection",
+  "@/types/fileConnection",
+  "@/lib/tauri/connection",
+  "@lib/tauri/connection",
+  "@/lib/connectionColor",
+  "@lib/connectionColor",
+  "@/hooks/useConnectionMutations",
+  "@hooks/useConnectionMutations",
+] as const;
 
 const SETTINGS_TAURI_WRAPPER_PATH = "src/lib/tauri/settings.ts";
 const MOVED_SETTINGS_INVOKE_COMMANDS = [
@@ -310,6 +360,63 @@ function collectIssueRefs(text: string): string[] {
   return text.match(/#\d+/g) ?? [];
 }
 
+function collectImportSpecifiers(source: string): string[] {
+  const specifiers: string[] = [];
+  for (const match of source.matchAll(
+    /\b(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/g,
+  )) {
+    specifiers.push(match[1]!);
+  }
+  for (const match of source.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)) {
+    specifiers.push(match[1]!);
+  }
+  return specifiers;
+}
+
+function startsWithImportSpecifier(source: string, prefix: string): boolean {
+  return source === prefix || source.startsWith(`${prefix}/`);
+}
+
+function isLegacyConnectionSpecifier(specifier: string): boolean {
+  return CONNECTION_FEATURE_LEGACY_SPECIFIER_PREFIXES.some((prefix) =>
+    startsWithImportSpecifier(specifier, prefix),
+  );
+}
+
+export function findConnectionFeatureBoundaryViolations(
+  fileSources: ReadonlyMap<string, string>,
+): string[] {
+  const failures: string[] = [];
+  const publicApiSource = fileSources.get(CONNECTION_FEATURE_PUBLIC_API_PATH);
+  if (publicApiSource === undefined) {
+    failures.push(
+      `${CONNECTION_FEATURE_PUBLIC_API_PATH}: missing connection feature public API.`,
+    );
+  } else {
+    for (const exportName of CONNECTION_FEATURE_PUBLIC_API_EXPORTS) {
+      if (!publicApiSource.includes(exportName)) {
+        failures.push(
+          `${CONNECTION_FEATURE_PUBLIC_API_PATH}: missing public export ${exportName}.`,
+        );
+      }
+    }
+  }
+
+  for (const [filePath, source] of [...fileSources.entries()].sort()) {
+    const repoPath = normalizeRepoPath(filePath);
+    if (!CONNECTION_FEATURE_MIGRATED_CONSUMERS.has(repoPath)) continue;
+
+    for (const specifier of collectImportSpecifiers(source)) {
+      if (!isLegacyConnectionSpecifier(specifier)) continue;
+      failures.push(
+        `${repoPath}: import connection UI/model/api through ${CONNECTION_FEATURE_PUBLIC_API_PATH}, not ${specifier}.`,
+      );
+    }
+  }
+
+  return failures;
+}
+
 export function findFrontendCompatInventoryViolations(
   fileSources: ReadonlyMap<string, string>,
   inventory: readonly FrontendCompatInventoryEntry[] = FRONTEND_COMPAT_INVENTORY,
@@ -359,7 +466,7 @@ export function findFrontendCompatInventoryViolations(
     }
     if (!isFrontendCompatScopeModule(path)) {
       failures.push(
-        `${path}: frontend compatibility inventory path is outside #734 scope.`,
+        `${path}: frontend compatibility inventory path is outside frontend compatibility scope.`,
       );
     }
   }
@@ -560,6 +667,7 @@ async function main() {
         ]
       : []),
     ...findRawTauriInvokeBoundaryViolations(sourceFileContents),
+    ...findConnectionFeatureBoundaryViolations(sourceFileContents),
     ...findFrontendCompatInventoryViolations(sourceFileContents),
     ...(await validateFeatureBoundaryRule(eslint, cwd)),
   ];

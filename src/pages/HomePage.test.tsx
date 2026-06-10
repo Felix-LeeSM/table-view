@@ -46,58 +46,56 @@ vi.mock("@components/theme/ThemePicker", () => ({
   default: () => <div data-testid="theme-picker-mock" />,
 }));
 
-// Mock ConnectionList so we control onSelect / onActivate without rendering
-// the full connection grid + drag/drop pipeline.
-vi.mock("@components/connection/ConnectionList", () => ({
-  default: ({
-    selectedId,
-    onSelect,
-    onActivate,
-  }: {
-    selectedId: string | null;
-    onSelect?: (id: string) => void;
-    onActivate?: (id: string) => void;
-  }) => (
-    <div data-testid="connection-list" data-selected={selectedId ?? ""}>
-      <button data-testid="list-pick-c1" onClick={() => onSelect?.("c1")}>
-        pick c1
-      </button>
-      <button data-testid="list-activate-c1" onClick={() => onActivate?.("c1")}>
-        activate c1
-      </button>
-    </div>
-  ),
-}));
+// Mock the connection feature public API so HomePage tests exercise the same
+// import boundary as production without rendering the full grid/dialogs.
+vi.mock("@features/connection", async () => {
+  const connectionStore = await vi.importActual<
+    typeof import("@stores/connectionStore")
+  >("@stores/connectionStore");
 
-vi.mock("@components/connection/ConnectionDialog", () => ({
-  default: ({ onClose }: { onClose: () => void }) => (
-    <div data-testid="connection-dialog">
-      <button onClick={onClose}>Close</button>
-    </div>
-  ),
-}));
-
-vi.mock("@components/connection/ImportExportDialog", () => ({
-  default: ({ onClose }: { onClose: () => void }) => (
-    <div data-testid="import-export-dialog">
-      <button onClick={onClose}>Close IE</button>
-    </div>
-  ),
-}));
-
-vi.mock("@components/connection/GroupDialog", () => ({
-  default: ({ onClose }: { onClose: () => void }) => (
-    <div data-testid="group-dialog">
-      <button onClick={onClose}>Close Group</button>
-    </div>
-  ),
-}));
-
-// Sprint 296 — RecentConnections 본체는 별도 vitest 파일에서 다룸. 여기서는
-// collapse wrapper 의 위치/책임만 검증하므로 가벼운 stub 으로 대체.
-vi.mock("@components/connection/RecentConnections", () => ({
-  default: () => <div data-testid="recent-connections-mock" />,
-}));
+  return {
+    ...connectionStore,
+    ConnectionList: ({
+      selectedId,
+      onSelect,
+      onActivate,
+    }: {
+      selectedId: string | null;
+      onSelect?: (id: string) => void;
+      onActivate?: (id: string) => void;
+    }) => (
+      <div data-testid="connection-list" data-selected={selectedId ?? ""}>
+        <button data-testid="list-pick-c1" onClick={() => onSelect?.("c1")}>
+          pick c1
+        </button>
+        <button
+          data-testid="list-activate-c1"
+          onClick={() => onActivate?.("c1")}
+        >
+          activate c1
+        </button>
+      </div>
+    ),
+    ConnectionDialog: ({ onClose }: { onClose: () => void }) => (
+      <div data-testid="connection-dialog">
+        <button onClick={onClose}>Close</button>
+      </div>
+    ),
+    ImportExportDialog: ({ onClose }: { onClose: () => void }) => (
+      <div data-testid="import-export-dialog">
+        <button onClick={onClose}>Close IE</button>
+      </div>
+    ),
+    GroupDialog: ({ onClose }: { onClose: () => void }) => (
+      <div data-testid="group-dialog">
+        <button onClick={onClose}>Close Group</button>
+      </div>
+    ),
+    // Sprint 296 — RecentConnections 본체는 별도 vitest 파일에서 다룸.
+    // 여기서는 collapse wrapper 의 위치/책임만 검증한다.
+    RecentConnections: () => <div data-testid="recent-connections-mock" />,
+  };
+});
 
 function makeConnection(id: string): ConnectionConfig {
   return {

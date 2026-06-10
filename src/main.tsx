@@ -111,7 +111,7 @@ async function boot() {
   // still runs before any caller observes the store. The runtime
   // `hydrateConnectionSession` entrypoint is a plain function — safe to call
   // here outside the React tree.
-  await import("@stores/connectionStore");
+  await import("@features/connection");
   markBootMilestone("connectionStore:imported");
   const { hydrateConnectionSession } =
     await import("@lib/runtime/connection/hydrateConnectionSession");

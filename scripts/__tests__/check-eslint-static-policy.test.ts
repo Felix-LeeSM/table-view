@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  CONNECTION_FEATURE_PUBLIC_API_EXPORTS,
   FRONTEND_COMPAT_INVENTORY,
   MAX_LINES_ALLOWLIST,
   RAW_TAURI_INVOKE_INVENTORY,
+  findConnectionFeatureBoundaryViolations,
   findFrontendCompatInventoryViolations,
   findRawTauriInvokeBoundaryViolations,
   findUnexpectedIgnoredFiles,
@@ -78,6 +80,81 @@ describe("check-eslint-static-policy", () => {
         action: "follow-up: move MRU persistence IPC behind a typed wrapper",
       },
     ]);
+  });
+
+  it("locks the connection feature public API surface", () => {
+    expect(CONNECTION_FEATURE_PUBLIC_API_EXPORTS).toEqual([
+      "ConnectionDialog",
+      "ConnectionList",
+      "GroupDialog",
+      "ImportExportDialog",
+      "RecentConnections",
+      "useConnectionStore",
+      "ConnectionConfig",
+      "ConnectionDraft",
+      "ConnectionGroup",
+      "ConnectionStatus",
+      "DatabaseType",
+      "DATABASE_TYPE_LABELS",
+      "DATABASE_DEFAULTS",
+      "DATABASE_DEFAULT_FIELDS",
+      "createEmptyDraft",
+      "draftFromConnection",
+      "parseConnectionUrl",
+      "listConnections",
+      "saveConnection",
+      "testConnection",
+      "exportConnectionsEncrypted",
+    ]);
+  });
+
+  it("rejects app-shell imports from legacy connection UI/model/api paths", () => {
+    const failures = findConnectionFeatureBoundaryViolations(
+      new Map([
+        [
+          "src/features/connection/index.ts",
+          "export { default as ConnectionDialog } from './components/ConnectionDialog';\n",
+        ],
+        [
+          "src/pages/HomePage.tsx",
+          'import ConnectionDialog from "@components/connection/ConnectionDialog";\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      "src/pages/HomePage.tsx: import connection UI/model/api through src/features/connection/index.ts, not @components/connection/ConnectionDialog.",
+    );
+  });
+
+  it("accepts migrated app-shell connection imports and compatibility wrappers", () => {
+    const publicApiSource = [
+      "export { default as ConnectionDialog } from './components/ConnectionDialog';",
+      "export { default as ConnectionList } from './components/ConnectionList';",
+      "export { default as GroupDialog } from './components/GroupDialog';",
+      "export { default as ImportExportDialog } from './components/ImportExportDialog';",
+      "export { default as RecentConnections } from './components/RecentConnections';",
+      "export { useConnectionStore } from './store';",
+      "export type { ConnectionConfig, ConnectionDraft, ConnectionGroup, ConnectionStatus, DatabaseType } from './model';",
+      "export { DATABASE_TYPE_LABELS, DATABASE_DEFAULTS, DATABASE_DEFAULT_FIELDS, createEmptyDraft, draftFromConnection, parseConnectionUrl } from './model';",
+      "export { listConnections, saveConnection, testConnection, exportConnectionsEncrypted } from './api';",
+    ].join("\n");
+
+    const failures = findConnectionFeatureBoundaryViolations(
+      new Map([
+        ["src/features/connection/index.ts", publicApiSource],
+        [
+          "src/pages/HomePage.tsx",
+          'import { ConnectionDialog } from "@features/connection";\n',
+        ],
+        [
+          "src/components/connection/ConnectionDialog.tsx",
+          'export { default } from "@features/connection";\n',
+        ],
+      ]),
+    );
+
+    expect(failures).toEqual([]);
   });
 
   it("rejects untriaged raw Tauri invoke imports in store modules", () => {

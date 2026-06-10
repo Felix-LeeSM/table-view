@@ -10,7 +10,6 @@ import {
   Plus,
   Sun,
 } from "lucide-react";
-import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useThemeStore } from "@stores/themeStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
@@ -23,11 +22,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@components/ui/popover";
-import ConnectionDialog from "@components/connection/ConnectionDialog";
-import ConnectionList from "@components/connection/ConnectionList";
-import GroupDialog from "@components/connection/GroupDialog";
-import ImportExportDialog from "@components/connection/ImportExportDialog";
-import RecentConnections from "@components/connection/RecentConnections";
+import {
+  ConnectionDialog,
+  ConnectionList,
+  GroupDialog,
+  ImportExportDialog,
+  RecentConnections,
+  useConnectionStore,
+} from "@features/connection";
 import ThemePicker from "@components/theme/ThemePicker";
 import { resetSetting } from "@lib/tauri/settings";
 import { useMruStore } from "@stores/mruStore";

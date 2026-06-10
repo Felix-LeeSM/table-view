@@ -73,37 +73,41 @@ vi.mock("@components/layout/MainArea", () => ({
   default: () => <div data-testid="main-area-stub" />,
 }));
 
-// HomePage's ConnectionList is mocked so we control onActivate without the
-// full connection-grid machinery.
-vi.mock("@components/connection/ConnectionList", () => ({
-  default: ({
-    onSelect,
-    onActivate,
-  }: {
-    selectedId: string | null;
-    onSelect?: (id: string) => void;
-    onActivate?: (id: string) => void;
-  }) => (
-    <div data-testid="connection-list">
-      <button data-testid="list-pick-c1" onClick={() => onSelect?.("c1")}>
-        pick c1
-      </button>
-      <button data-testid="list-activate-c1" onClick={() => onActivate?.("c1")}>
-        activate c1
-      </button>
-    </div>
-  ),
-}));
+// HomePage's connection feature API is mocked so we control onActivate without
+// the full connection-grid machinery.
+vi.mock("@features/connection", async () => {
+  const connectionStore = await vi.importActual<
+    typeof import("@stores/connectionStore")
+  >("@stores/connectionStore");
 
-vi.mock("@components/connection/ConnectionDialog", () => ({
-  default: () => <div data-testid="connection-dialog-stub" />,
-}));
-vi.mock("@components/connection/ImportExportDialog", () => ({
-  default: () => <div data-testid="import-export-dialog-stub" />,
-}));
-vi.mock("@components/connection/GroupDialog", () => ({
-  default: () => <div data-testid="group-dialog-stub" />,
-}));
+  return {
+    ...connectionStore,
+    ConnectionList: ({
+      onSelect,
+      onActivate,
+    }: {
+      selectedId: string | null;
+      onSelect?: (id: string) => void;
+      onActivate?: (id: string) => void;
+    }) => (
+      <div data-testid="connection-list">
+        <button data-testid="list-pick-c1" onClick={() => onSelect?.("c1")}>
+          pick c1
+        </button>
+        <button
+          data-testid="list-activate-c1"
+          onClick={() => onActivate?.("c1")}
+        >
+          activate c1
+        </button>
+      </div>
+    ),
+    ConnectionDialog: () => <div data-testid="connection-dialog-stub" />,
+    ImportExportDialog: () => <div data-testid="import-export-dialog-stub" />,
+    GroupDialog: () => <div data-testid="group-dialog-stub" />,
+    RecentConnections: () => <div data-testid="recent-connections-stub" />,
+  };
+});
 vi.mock("@components/theme/ThemePicker", () => ({
   default: () => <div data-testid="theme-picker-stub" />,
 }));

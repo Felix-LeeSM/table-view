@@ -1,9 +1,9 @@
-import type { ConnectionDraft, DatabaseType } from "@/types/connection";
+import type { ConnectionDraft, DatabaseType } from "../../model";
 import {
   DATABASE_TYPE_LABELS,
   ENVIRONMENT_META,
   ENVIRONMENT_OPTIONS,
-} from "@/types/connection";
+} from "../../model";
 import {
   getConnectionSupportedDatabaseTypes,
   hasConnectionCapability,

@@ -1,10 +1,10 @@
 import { useState } from "react";
-import type { ConnectionDraft, DatabaseType } from "@/types/connection";
+import type { ConnectionDraft, DatabaseType } from "../../model";
 import {
   DATABASE_TYPE_LABELS,
   parseFileConnectionPath,
   parseConnectionUrl,
-} from "@/types/connection";
+} from "../../model";
 import * as dataSourceProfiles from "@/types/dataSource";
 
 // Sprint 276 — URL parser 가 인식한 scheme 의 DBMS 가 아직 wire-up 되지
