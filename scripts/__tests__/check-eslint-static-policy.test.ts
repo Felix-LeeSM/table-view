@@ -354,6 +354,39 @@ describe("check-eslint-static-policy", () => {
     );
   });
 
+  it("rejects completion feature default public exports", () => {
+    const failures = findCompletionFeatureBoundaryViolations(
+      new Map([
+        [
+          COMPLETION_FEATURE_PUBLIC_API_PATH,
+          completionPublicApiFixture([
+            "export default function internalCompletionFixture() {}",
+          ]),
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      `${COMPLETION_FEATURE_PUBLIC_API_PATH}: default public export is not allowed; enumerate named exports.`,
+    );
+  });
+
+  it("rejects stale moved completion references in docs", () => {
+    const failures = findCompletionFeatureBoundaryViolations(
+      new Map([
+        [COMPLETION_FEATURE_PUBLIC_API_PATH, completionPublicApiFixture()],
+        [
+          "docs/ROADMAP.md",
+          "Evidence: `src/lib/sql/sqlCompletionContext.test.ts`.",
+        ],
+      ]),
+    );
+
+    expect(failures).toContain(
+      "docs/ROADMAP.md: stale moved completion reference src/lib/sql/sqlCompletionContext.test.ts; use src/features/completion/sql/sqlCompletionContext.test.ts.",
+    );
+  });
+
   it("rejects app-shell imports from legacy connection UI/model/api paths", () => {
     const failures = findConnectionFeatureBoundaryViolations(
       new Map([

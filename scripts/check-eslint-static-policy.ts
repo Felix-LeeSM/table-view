@@ -2,7 +2,10 @@ import { ESLint } from "eslint";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { findCompletionFeatureBoundaryViolations as findCompletionFeatureBoundaryViolationsImpl } from "./static-policy/completion-feature";
+import {
+  COMPLETION_FEATURE_REFERENCE_DOC_PATHS,
+  findCompletionFeatureBoundaryViolations as findCompletionFeatureBoundaryViolationsImpl,
+} from "./static-policy/completion-feature";
 import { findConnectionFeatureBoundaryViolations as findConnectionFeatureBoundaryViolationsImpl } from "./static-policy/connection-feature";
 
 export {
@@ -570,6 +573,16 @@ async function main() {
   const summary = summarizeLintMessages(results);
   const sourceFiles = collectTypeScriptFiles(cwd);
   const sourceFileContents = readFileSources(cwd, sourceFiles);
+  const completionReferenceDocContents = readFileSources(
+    cwd,
+    COMPLETION_FEATURE_REFERENCE_DOC_PATHS.filter((repoPath) =>
+      existsSync(resolve(cwd, repoPath)),
+    ),
+  );
+  const completionPolicyContents = new Map([
+    ...sourceFileContents,
+    ...completionReferenceDocContents,
+  ]);
   const ignored = await findIgnoredCandidates(eslint, sourceFiles);
   const unexpectedIgnored = findUnexpectedIgnoredFiles(ignored);
   const failures = [
@@ -590,7 +603,7 @@ async function main() {
         ]
       : []),
     ...findRawTauriInvokeBoundaryViolations(sourceFileContents),
-    ...findCompletionFeatureBoundaryViolations(sourceFileContents),
+    ...findCompletionFeatureBoundaryViolations(completionPolicyContents),
     ...findConnectionFeatureBoundaryViolations(sourceFileContents),
     ...findFrontendCompatInventoryViolations(sourceFileContents),
     ...(await validateFeatureBoundaryRule(eslint, cwd)),

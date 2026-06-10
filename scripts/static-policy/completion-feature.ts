@@ -1,6 +1,12 @@
 export const COMPLETION_FEATURE_PUBLIC_API_PATH =
   "src/features/completion/index.ts";
 
+export const COMPLETION_FEATURE_REFERENCE_DOC_PATHS = [
+  "docs/ROADMAP.md",
+  "docs/contributor-guide/testing-and-quality.md",
+  "docs/archives/audits/refactor-02-frontend-compat-inventory-2026-06-10.md",
+] as const;
+
 export const COMPLETION_FEATURE_PUBLIC_API_EXPORTS = [
   "buildSqlCompletionContext",
   "buildSqlCompletionRequest",
@@ -102,6 +108,74 @@ const COMPLETION_FEATURE_REMOVED_COMPAT_PATHS = [
   "src/lib/mongo/mongoAutocomplete.ts",
   "src/lib/redis/redisCommandCompletion.ts",
 ] as const;
+
+const COMPLETION_FEATURE_STALE_REFERENCE_REPLACEMENTS = new Map([
+  [
+    "src/hooks/useMongoAutocomplete.test.ts",
+    "src/features/completion/mongo/useMongoAutocomplete.test.ts",
+  ],
+  [
+    "src/hooks/useMongoAutocomplete.ts",
+    "src/features/completion/mongo/useMongoAutocomplete.ts",
+  ],
+  [
+    "src/lib/completion/mongo.test.ts",
+    "src/features/completion/mongo/mongo.test.ts",
+  ],
+  ["src/lib/completion/mongo.ts", "src/features/completion/mongo/mongo.ts"],
+  [
+    "src/lib/mongo/mongoAutocomplete.test.ts",
+    "src/features/completion/mongo/mongoAutocomplete.test.ts",
+  ],
+  [
+    "src/lib/mongo/mongoAutocomplete.ts",
+    "src/features/completion/mongo/mongoAutocomplete.ts",
+  ],
+  [
+    "src/lib/redis/redisCommandCompletion.test.ts",
+    "src/features/completion/redis/redisCommandCompletion.test.ts",
+  ],
+  [
+    "src/lib/redis/redisCommandCompletion.ts",
+    "src/features/completion/redis/redisCommandCompletion.ts",
+  ],
+  [
+    "src/lib/sql/sqlCodeMirrorCompletionAdapter.test.ts",
+    "src/features/completion/sql/sqlCodeMirrorCompletionAdapter.test.ts",
+  ],
+  [
+    "src/lib/sql/sqlCodeMirrorCompletionAdapter.ts",
+    "src/features/completion/sql/sqlCodeMirrorCompletionAdapter.ts",
+  ],
+  [
+    "src/lib/sql/sqlCompletionContext.test.ts",
+    "src/features/completion/sql/sqlCompletionContext.test.ts",
+  ],
+  [
+    "src/lib/sql/sqlCompletionContext.ts",
+    "src/features/completion/sql/sqlCompletionContext.ts",
+  ],
+  [
+    "src/lib/sql/sqlCompletionRequest.test.ts",
+    "src/features/completion/sql/sqlCompletionRequest.test.ts",
+  ],
+  [
+    "src/lib/sql/sqlCompletionRequest.ts",
+    "src/features/completion/sql/sqlCompletionRequest.ts",
+  ],
+  [
+    "src/lib/sql/sqlHybridCompletionSource.test.ts",
+    "src/features/completion/sql/sqlHybridCompletionSource.test.ts",
+  ],
+  [
+    "src/lib/sql/sqlHybridCompletionSource.ts",
+    "src/features/completion/sql/sqlHybridCompletionSource.ts",
+  ],
+] as const);
+
+const COMPLETION_FEATURE_REFERENCE_DOC_PATH_SET: ReadonlySet<string> = new Set(
+  COMPLETION_FEATURE_REFERENCE_DOC_PATHS,
+);
 
 type PublicExportKind = "type" | "value";
 
@@ -219,6 +293,12 @@ function findCompletionPublicApiExportViolations(source: string): string[] {
     );
   }
 
+  if (/\bexport\s+default\b/.test(source)) {
+    failures.push(
+      `${COMPLETION_FEATURE_PUBLIC_API_PATH}: default public export is not allowed; enumerate named exports.`,
+    );
+  }
+
   for (const exportName of COMPLETION_FEATURE_PUBLIC_API_EXPORTS) {
     if (!exportNames.has(exportName)) {
       failures.push(
@@ -231,6 +311,30 @@ function findCompletionPublicApiExportViolations(source: string): string[] {
     if (!allowedExports.has(exportName)) {
       failures.push(
         `${COMPLETION_FEATURE_PUBLIC_API_PATH}: unexpected public export ${exportName}.`,
+      );
+    }
+  }
+
+  return failures;
+}
+
+function findCompletionStaleDocumentationViolations(
+  fileSources: ReadonlyMap<string, string>,
+  normalizeRepoPath: NormalizeRepoPath,
+): string[] {
+  const failures: string[] = [];
+
+  for (const [filePath, source] of [...fileSources.entries()].sort()) {
+    const repoPath = normalizeRepoPath(filePath);
+    if (!COMPLETION_FEATURE_REFERENCE_DOC_PATH_SET.has(repoPath)) continue;
+
+    for (const [
+      stalePath,
+      replacementPath,
+    ] of COMPLETION_FEATURE_STALE_REFERENCE_REPLACEMENTS) {
+      if (!source.includes(stalePath)) continue;
+      failures.push(
+        `${repoPath}: stale moved completion reference ${stalePath}; use ${replacementPath}.`,
       );
     }
   }
@@ -251,6 +355,12 @@ export function findCompletionFeatureBoundaryViolations(
   } else {
     failures.push(...findCompletionPublicApiExportViolations(publicApiSource));
   }
+  failures.push(
+    ...findCompletionStaleDocumentationViolations(
+      fileSources,
+      normalizeRepoPath,
+    ),
+  );
 
   for (const compatPath of COMPLETION_FEATURE_REMOVED_COMPAT_PATHS) {
     if (fileSources.has(compatPath)) {
