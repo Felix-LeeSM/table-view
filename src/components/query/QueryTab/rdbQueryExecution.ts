@@ -1,6 +1,6 @@
 import { executeQuery, executeQueryDryRun } from "@lib/tauri";
-import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
+import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { stripSqlComments } from "@lib/sql/stripSqlComments";
 import { findMysqlScriptingBoundaryViolation } from "@lib/sql/mysqlScriptingBoundary";
@@ -181,7 +181,8 @@ export async function executeRdbSingleStatement({
       status: "success",
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = getTauriErrorMessage(err);
+    const dbMismatch = getDbMismatchInfo(err);
     const wasCancelled = isQueryCancellationMessage(message);
     if (wasCancelled) {
       cancelRunningQuery(tab.id, queryId, "Query cancelled");
@@ -194,7 +195,7 @@ export async function executeRdbSingleStatement({
       duration: Date.now() - startTime,
       status: wasCancelled ? "cancelled" : "error",
     });
-    if (!wasCancelled && parseDbMismatch(message)) {
+    if (!wasCancelled && dbMismatch) {
       const capturedTabId = tab.id;
       const capturedConnectionId = tab.connectionId;
       const capturedStmt = stmt;
@@ -262,7 +263,8 @@ export async function executeRdbStatementBatch({
         durationMs: Date.now() - stmtStart,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = getTauriErrorMessage(err);
+      const dbMismatch = getDbMismatchInfo(err);
       const wasCancelled = isQueryCancellationMessage(message);
       if (wasCancelled) {
         cancelRunningQuery(tab.id, queryId, "Query cancelled");
@@ -280,7 +282,7 @@ export async function executeRdbStatementBatch({
         error: message,
         durationMs: Date.now() - stmtStart,
       });
-      if (parseDbMismatch(message) && !mismatchToastPushed) {
+      if (dbMismatch && !mismatchToastPushed) {
         mismatchToastPushed = true;
         const capturedTabId = tab.id;
         const capturedConnectionId = tab.connectionId;
@@ -306,7 +308,7 @@ export async function executeRdbStatementBatch({
             },
           );
         });
-      } else if (parseDbMismatch(message)) {
+      } else if (dbMismatch) {
         void syncMismatchedActiveDb(tab.connectionId, () => {
           /* no toast on repeat - keep queue uncluttered */
         });
@@ -502,9 +504,9 @@ export async function executeRdbDryRun({
     const lastResult = results[results.length - 1]!;
     completeQueryDryRun(tab.id, queryId, lastResult, statementResults);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = getTauriErrorMessage(err);
     failQuery(tab.id, queryId, message);
-    if (parseDbMismatch(message)) {
+    if (getDbMismatchInfo(err)) {
       const capturedConnectionId = tab.connectionId;
       void syncMismatchedActiveDb(capturedConnectionId, (actual) => {
         toast.warning(

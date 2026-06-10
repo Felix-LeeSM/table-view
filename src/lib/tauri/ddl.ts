@@ -35,8 +35,8 @@ import type {
 // camelCase↔snake_case auto-conversion handles the rename to
 // `expected_database`). Existing call sites that omit the field stay
 // byte-equivalent; new call sites populate it from the workspace
-// `(connId, db)` coordinate. Mismatch surfaces as
-// `AppError::DbMismatch` (Sprint 266 wire format).
+// `(connId, db)` coordinate. Mismatch surfaces as a typed
+// `AppError::DbMismatch` envelope with stable legacy message text.
 
 /**
  * Sprint 235 — request-shaped DROP TABLE wrapper. Returns the SQL the

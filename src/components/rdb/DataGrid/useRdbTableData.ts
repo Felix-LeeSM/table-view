@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FilterCondition, SortInfo, TableData } from "@/types/schema";
 import { cancelQuery, queryTableData } from "@lib/tauri";
-import { parseDbMismatch } from "@lib/api/dbMismatch";
+import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
 import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { toast } from "@lib/runtime/toast";
@@ -89,8 +89,9 @@ export function useRdbTableData({
         });
       }
     } catch (e) {
+      const message = getTauriErrorMessage(e);
       if (fetchId === fetchIdRef.current) {
-        setError(String(e));
+        setError(message);
         recordHistoryEntry({
           sql: previewSql,
           executedAt: startedAt,
@@ -101,12 +102,11 @@ export function useRdbTableData({
           queryMode: "sql",
           database,
           source: "sidebar-prefetch",
-          errorMessage: e instanceof Error ? e.message : String(e),
+          errorMessage: message,
         });
       }
 
-      const message = e instanceof Error ? e.message : String(e);
-      if (parseDbMismatch(message)) {
+      if (getDbMismatchInfo(e)) {
         void syncMismatchedActiveDb(connectionId, (actual) => {
           toast.warning(
             `Active DB synced to '${actual}'. Re-open the table to refresh.`,

@@ -1,5 +1,5 @@
 import { verifyActiveDb } from "@lib/api/verifyActiveDb";
-import { parseDbMismatch } from "@lib/api/dbMismatch";
+import { getDbMismatchInfo } from "@lib/tauri/error";
 import { useConnectionStore } from "@stores/connectionStore";
 import {
   registerSchemaDbMismatchRecoveryHandler,
@@ -45,8 +45,7 @@ export function registerSchemaStoreDbMismatchRecovery(): void {
   if (schemaStoreRecoveryRegistered) return;
   schemaStoreRecoveryRegistered = true;
   registerSchemaDbMismatchRecoveryHandler((connectionId, err) => {
-    const message = err instanceof Error ? err.message : String(err);
-    if (parseDbMismatch(message)) {
+    if (getDbMismatchInfo(err)) {
       void syncMismatchedActiveDb(connectionId);
     }
   });

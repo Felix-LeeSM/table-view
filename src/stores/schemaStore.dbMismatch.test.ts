@@ -2,11 +2,11 @@
 //
 // 작성 이유: backend Sprint 266 가드가 schemaStore 의 read 호출을
 // `AppError::DbMismatch` 로 reject 할 때, 프론트엔드가
-//   (1) parseDbMismatch 로 감지하고
+//   (1) typed/legacy DbMismatch normalizer 로 감지하고
 //   (2) syncMismatchedActiveDb 로 verify+setActiveDb 를 호출하며
 //   (3) toast 는 띄우지 않는다 (background introspection 은 silent — 271a
 //       Out-of-Scope per contract).
-// 을 한꺼번에 단언. IPC 는 Sprint 266 wire format 으로 mock 한다.
+// 을 한꺼번에 단언. 대표 case 는 #744 typed envelope 로 mock 한다.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
@@ -35,6 +35,11 @@ vi.mock("@lib/api/verifyActiveDb", () => ({
 
 const DB_MISMATCH_ERROR =
   "Database mismatch: expected 'dbA', backend pool has 'dbB'";
+const TYPED_DB_MISMATCH_ERROR = {
+  type: "DbMismatch",
+  message: DB_MISMATCH_ERROR,
+  payload: { expected: "dbA", actual: "dbB" },
+};
 beforeEach(() => {
   setupTauriMock({
     listSchemas: vi.fn(() => Promise.reject(new Error(DB_MISMATCH_ERROR))),
@@ -99,6 +104,11 @@ describe("schemaStore — DbMismatch silent sync (Sprint 271a)", () => {
   });
 
   it("loadSchemas mismatch surfaces error AND syncs activeDb silently", async () => {
+    const { listSchemas } = await import("@lib/tauri");
+    (listSchemas as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      TYPED_DB_MISMATCH_ERROR,
+    );
+
     await useSchemaStore.getState().loadSchemas("conn1", "dbA");
 
     expect(useSchemaStore.getState().error).toContain(

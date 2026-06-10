@@ -17,7 +17,7 @@ import type { DatabaseInfo } from "@/types/document";
  * Sprint 271a (2026-05-13) — every wrapper accepts an optional
  * `expectedDatabase`. When provided, the backend probes the adapter's
  * active db inside the same `active_connections.lock()` acquisition that
- * wraps the dispatch and rejects with `AppError::DbMismatch` BEFORE
+ * wraps the dispatch and rejects with typed `AppError::DbMismatch` BEFORE
  * invoking the underlying trait. Pre-existing call sites that omit the
  * argument hit the byte-equivalent pre-Sprint-271 path. Mirrors the
  * Sprint 266 `executeQuery` wrapper shape (`expectedDatabase ?? null`).

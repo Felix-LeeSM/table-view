@@ -65,7 +65,9 @@ backend contract 를 통해서만 다룬다.
   `previewOnly` + `expectedDatabase` 를 보존하고 `SchemaChangeResult { sql }`
   preview 와 commit path 를 같은 request shape 로 묶는다.
 - DB mismatch 는 `expectedDatabase` 를 workspace `(connId, db)` 에서 thread 해
-  backend `AppError::DbMismatch` 로 감지한다. 문자열 비교로 자체 판정하지 않는다.
+  backend typed `AppError::DbMismatch` envelope 로 감지한다. Frontend 분기는
+  `src/lib/tauri/error.ts` normalizer 를 통하고, legacy Display string 파싱은
+  boundary fallback 으로만 둔다.
 - Query/table result 는 wrapper 에서 numeric post-processing 을 끝낸 뒤 UI 로
   넘긴다. cell-domain stringify 는 `safeStringifyCell` 을 사용한다.
 - Frontend canonical IPC/store-facing types use camelCase. Legacy snake_case

@@ -1,7 +1,7 @@
 ---
 title: Architecture
 type: memory
-updated: 2026-05-28
+updated: 2026-06-11
 ---
 
 # 시스템 구조
@@ -82,6 +82,13 @@ table-view/
 2. Wrapper → `invoke("command_name", args)` typed request/response
 3. Rust command → `ActiveAdapter` paradigm gate → adapter/storage/state method
 4. `Result<T, AppError>` 반환 → wrapper/runtime post-processing → store/UI 반영
+
+IPC error contract: `AppError::Cancel` and `AppError::DbMismatch` serialize as
+typed envelopes. `DbMismatch` includes stable legacy `message` text plus
+`payload.expected` / `payload.actual`; other `AppError` variants keep legacy
+string serialization until their own contract migration. Frontend error
+branches use `src/lib/tauri/error.ts` normalizer; legacy string parsing remains
+boundary compatibility only.
 
 `src/lib/runtime/**` 는 pure `lib` 예외 구역이다. boot/event/history/recovery 처럼
 React 밖에서 여러 store action 과 Tauri boundary 를 묶는 orchestration 만 둔다.

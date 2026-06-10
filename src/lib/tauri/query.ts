@@ -12,12 +12,12 @@ import { wrapNumericCells } from "./numericWrap";
 
 // Sprint 271b — `expectedDatabase` is an opt-in db-mismatch guard. When
 // provided the backend verifies the adapter's active db matches before
-// dispatch; mismatch surfaces as `AppError::DbMismatch` (rendered as
-// `"Database mismatch: expected 'X', backend pool has 'Y'"`). DataGrid
-// row-fetches forward the workspace `(connId, db)` so a swapped pool
-// can no longer paint stale rows from the wrong database between user
-// click and dispatch. Omitting the argument preserves the pre-271
-// fast-path.
+// dispatch; mismatch surfaces as a typed `AppError::DbMismatch` envelope
+// whose `message` preserves `"Database mismatch: expected 'X', backend
+// pool has 'Y'"`. DataGrid row-fetches forward the workspace `(connId, db)`
+// so a swapped pool can no longer paint stale rows from the wrong database
+// between user click and dispatch. Omitting the argument preserves the
+// pre-271 fast-path.
 export async function queryTableData(
   connectionId: string,
   table: string,
@@ -47,9 +47,9 @@ export async function queryTableData(
 //
 // Sprint 266 — `expectedDatabase` is an opt-in db-mismatch guard. When
 // provided the backend verifies the adapter's active db matches before
-// dispatch; mismatch surfaces as `AppError::DbMismatch` (rendered as
-// `"Database mismatch: expected 'X', backend pool has 'Y'"`). Omitting
-// it preserves the pre-Sprint-266 fast-path.
+// dispatch; mismatch surfaces as a typed `AppError::DbMismatch` envelope
+// whose `message` preserves `"Database mismatch: expected 'X', backend
+// pool has 'Y'"`. Omitting it preserves the pre-Sprint-266 fast-path.
 export async function executeQuery(
   connectionId: string,
   sql: string,
