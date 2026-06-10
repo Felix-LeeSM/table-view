@@ -138,6 +138,7 @@ function prepareRdbStatements(
 function isQueryCancellationMessage(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
+    normalized.startsWith("cancel:") ||
     normalized.includes("query cancelled") ||
     normalized.includes("query canceled") ||
     normalized.includes("operation cancelled") ||
