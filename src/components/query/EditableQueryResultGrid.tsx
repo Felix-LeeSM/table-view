@@ -11,7 +11,13 @@ import { Button } from "@components/ui/button";
 import { safeStringifyCell } from "@lib/jsonCell";
 import type { QueryResult } from "@/types/query";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
-import { useColumnResize } from "@components/datagrid/DataGridTable/useColumnResize";
+import {
+  CellDetailDialog,
+  cellToEditString,
+  editKey,
+  getInputTypeForColumn,
+  useColumnResize,
+} from "@components/datagrid";
 import { getDefaultRem } from "@/lib/columnCategory";
 import {
   Dialog,
@@ -25,14 +31,8 @@ import {
   ContextMenu,
   type ContextMenuItem,
 } from "@components/shared/ContextMenu";
-import CellDetailDialog from "@components/datagrid/CellDetailDialog";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import ExecuteButton from "@components/ui/ExecuteButton";
-import {
-  cellToEditString,
-  editKey,
-  getInputTypeForColumn,
-} from "@components/datagrid/dataGridEditFsm";
 import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { useConnectionStore } from "@stores/connectionStore";
 import PendingChangesTray from "./PendingChangesTray";

@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  cellToEditString,
-  editKey,
-} from "@components/datagrid/dataGridEditFsm";
+import { cellToEditString, editKey } from "@components/datagrid";
 import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { executeQueryBatch } from "@lib/tauri";
 import { analyzeStatement } from "@lib/sql/sqlSafety";

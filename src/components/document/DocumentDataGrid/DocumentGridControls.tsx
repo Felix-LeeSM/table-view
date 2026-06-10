@@ -1,10 +1,9 @@
 import { Loader2, Filter } from "lucide-react";
 import { ExportButton } from "@components/shared/ExportButton";
-import DataGridToolbar from "@components/datagrid/DataGridToolbar";
 import DocumentFilterBar from "@components/document/DocumentFilterBar";
 import { Button } from "@components/ui/button";
 import { DOCUMENT_LABELS } from "@/lib/strings/document";
-import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
+import { DataGridToolbar, type DataGridEditState } from "@components/datagrid";
 import type { SafeModeGate } from "@hooks/useSafeModeGate";
 import type { SortInfo, TableData } from "@/types/schema";
 import DocumentBulkOps from "./DocumentBulkOps";
