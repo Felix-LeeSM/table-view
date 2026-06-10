@@ -1,6 +1,12 @@
+mod common;
+
+use common::query_result_contracts::{
+    assert_rdb_ddl_envelope, assert_rdb_dml_envelope, assert_rdb_runtime_database_error,
+    assert_rdb_select_envelope,
+};
 use table_view_lib::db::{DbAdapter, DuckdbAdapter, RdbAdapter};
 use table_view_lib::error::AppError;
-use table_view_lib::models::{ConnectionConfig, DatabaseType, QueryType};
+use table_view_lib::models::{ConnectionConfig, DatabaseType};
 use tempfile::TempDir;
 
 fn duckdb_config(path: &str, read_only: bool) -> ConnectionConfig {
@@ -145,28 +151,47 @@ async fn duckdb_contract_browses_views_and_view_columns() {
 async fn duckdb_contract_execute_query_returns_shared_tabular_envelope() {
     let (_dir, adapter) = connected_fixture(false).await;
 
-    let result = adapter
-        .execute_sql("SELECT id, email FROM app.active_users ORDER BY id", None)
-        .await
-        .unwrap();
-
-    assert!(matches!(result.query_type, QueryType::Select));
-    assert_eq!(
-        result
-            .columns
-            .iter()
-            .map(|column| column.name.as_str())
-            .collect::<Vec<_>>(),
-        vec!["id", "email"]
-    );
-    assert_eq!(result.total_count, 1);
-    assert_eq!(
-        result.rows,
+    assert_rdb_select_envelope(
+        &adapter,
+        "SELECT id, email FROM app.active_users ORDER BY id",
+        &["id", "email"],
         vec![vec![
             serde_json::json!(1),
             serde_json::json!("ada@example.test"),
-        ]]
-    );
+        ]],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn duckdb_contract_execute_query_returns_shared_dml_envelope() {
+    let (_dir, adapter) = connected_fixture(false).await;
+
+    assert_rdb_dml_envelope(
+        &adapter,
+        "UPDATE app.users SET active = false WHERE id = 1",
+        1,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn duckdb_contract_execute_query_returns_shared_ddl_envelope() {
+    let (_dir, adapter) = connected_fixture(false).await;
+
+    assert_rdb_ddl_envelope(&adapter, "CREATE TABLE app.contract_created (id INTEGER)").await;
+}
+
+#[tokio::test]
+async fn duckdb_contract_execute_query_returns_runtime_database_error() {
+    let (_dir, adapter) = connected_fixture(false).await;
+
+    assert_rdb_runtime_database_error(
+        &adapter,
+        "SELECT * FROM app.missing_contract_table",
+        "missing_contract_table",
+    )
+    .await;
 }
 
 #[tokio::test]

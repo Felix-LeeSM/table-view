@@ -1,3 +1,9 @@
+mod common;
+
+use common::query_result_contracts::{
+    assert_rdb_dml_envelope, assert_rdb_runtime_database_error, assert_rdb_select_envelope,
+    assert_rdb_unsupported_query,
+};
 use serial_test::serial;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use table_view_lib::db::{DbAdapter, RdbAdapter, SqliteAdapter};
@@ -6,7 +12,7 @@ use table_view_lib::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
     ConnectionConfig, ConstraintDefinition, CreateIndexRequest, CreateTablePlanRequest,
     CreateTableRequest, DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
-    DropTableRequest, QueryType, RenameTableRequest, SchemaChangeResult,
+    DropTableRequest, RenameTableRequest, SchemaChangeResult,
 };
 use table_view_lib::storage::local as app_sqlite_state;
 use tempfile::TempDir;
@@ -192,28 +198,47 @@ async fn sqlite_contract_browses_table_indexes() {
 async fn sqlite_contract_execute_query_returns_tabular_result_envelope() {
     let (_dir, adapter) = connected_fixture().await;
 
-    let result = adapter
-        .execute_sql("SELECT id, email FROM active_users ORDER BY id", None)
-        .await
-        .unwrap();
-
-    assert!(matches!(result.query_type, QueryType::Select));
-    assert_eq!(
-        result
-            .columns
-            .iter()
-            .map(|column| column.name.as_str())
-            .collect::<Vec<_>>(),
-        vec!["id", "email"]
-    );
-    assert_eq!(result.total_count, 1);
-    assert_eq!(
-        result.rows,
+    assert_rdb_select_envelope(
+        &adapter,
+        "SELECT id, email FROM active_users ORDER BY id",
+        &["id", "email"],
         vec![vec![
             serde_json::json!(1),
             serde_json::json!("ada@example.test"),
-        ]]
-    );
+        ]],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn sqlite_contract_execute_query_returns_shared_dml_envelope() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    assert_rdb_dml_envelope(&adapter, "UPDATE users SET active = 0 WHERE id = 1", 1).await;
+}
+
+#[tokio::test]
+async fn sqlite_contract_execute_query_rejects_ddl_as_current_delta() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    assert_rdb_unsupported_query(
+        &adapter,
+        "CREATE TABLE contract_created (id INTEGER)",
+        "SQLite DDL is not supported",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn sqlite_contract_execute_query_returns_runtime_database_error() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    assert_rdb_runtime_database_error(
+        &adapter,
+        "SELECT * FROM missing_contract_table",
+        "missing_contract_table",
+    )
+    .await;
 }
 
 fn assert_sqlite_ddl_unsupported(result: Result<SchemaChangeResult, AppError>, feature: &str) {
