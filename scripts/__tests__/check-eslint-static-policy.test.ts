@@ -464,20 +464,31 @@ describe("check-eslint-static-policy", () => {
     );
   });
 
-  it("rejects untriaged dynamic raw Tauri invoke imports in store modules", () => {
-    const failures = findRawTauriInvokeBoundaryViolations(
-      new Map([
-        [
-          "src/stores/themeStore.ts",
-          'const { invoke } = await import("@tauri-apps/api/core");\nvoid invoke("persist_setting");\n',
-        ],
-      ]),
-    );
+  it.each([
+    [
+      "call expression",
+      'const { invoke } = await import("@tauri-apps/api/core");\nvoid invoke("persist_setting");\n',
+    ],
+    [
+      "call expression with whitespace",
+      'const { invoke } = await import ("@tauri-apps/api/core");\nvoid invoke("persist_setting");\n',
+    ],
+    [
+      "template literal specifier",
+      'const { invoke } = await import(`@tauri-apps/api/core`);\nvoid invoke("persist_setting");\n',
+    ],
+  ])(
+    "rejects untriaged dynamic raw Tauri invoke imports: %s",
+    (_name, source) => {
+      const failures = findRawTauriInvokeBoundaryViolations(
+        new Map([["src/stores/themeStore.ts", source]]),
+      );
 
-    expect(failures).toContain(
-      "src/stores/themeStore.ts: raw @tauri-apps/api/core import is outside src/lib/tauri/** and missing from RAW_TAURI_INVOKE_INVENTORY.",
-    );
-  });
+      expect(failures).toContain(
+        "src/stores/themeStore.ts: raw @tauri-apps/api/core import is outside src/lib/tauri/** and missing from RAW_TAURI_INVOKE_INVENTORY.",
+      );
+    },
+  );
 
   it("rejects moved settings raw invokes in UI-adjacent modules", () => {
     const failures = findRawTauriInvokeBoundaryViolations(

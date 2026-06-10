@@ -227,7 +227,7 @@ function isStoreProductionModule(repoPath: string): boolean {
 }
 
 const RAW_TAURI_CORE_IMPORT_PATTERN =
-  /(?:from\s+["']@tauri-apps\/api\/core["']|import\(\s*["']@tauri-apps\/api\/core["']\s*\))/;
+  /(?:from\s+["']@tauri-apps\/api\/core["']|import\s*\(\s*(["'`])@tauri-apps\/api\/core\1\s*\))/;
 
 function importsRawTauriInvoke(source: string): boolean {
   return RAW_TAURI_CORE_IMPORT_PATTERN.test(source);
