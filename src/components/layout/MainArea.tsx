@@ -17,9 +17,11 @@ import {
   MongoStructurePanel,
   type MongoStructureSubTab,
 } from "@components/document/MongoStructurePanel";
-import SchemaErdPanel from "@components/schema/SchemaErdPanel";
-import StructurePanel from "@components/schema/StructurePanel";
-import ViewStructurePanel from "@components/schema/ViewStructurePanel";
+import {
+  SchemaErdPanel,
+  StructurePanel,
+  ViewStructurePanel,
+} from "@features/catalog";
 import QueryTab from "@components/query/QueryTab";
 import GlobalQueryLogPanel from "@components/query/GlobalQueryLogPanel";
 import { Button } from "@components/ui/button";

@@ -6,8 +6,13 @@ import {
   COMPLETION_FEATURE_REFERENCE_DOC_PATHS,
   findCompletionFeatureBoundaryViolations as findCompletionFeatureBoundaryViolationsImpl,
 } from "./static-policy/completion-feature";
+import { findCatalogFeatureBoundaryViolations as findCatalogFeatureBoundaryViolationsImpl } from "./static-policy/catalog-feature";
 import { findConnectionFeatureBoundaryViolations as findConnectionFeatureBoundaryViolationsImpl } from "./static-policy/connection-feature";
 
+export {
+  CATALOG_FEATURE_PUBLIC_API_EXPORTS,
+  CATALOG_FEATURE_PUBLIC_API_PATH,
+} from "./static-policy/catalog-feature";
 export {
   COMPLETION_FEATURE_PUBLIC_API_EXPORTS,
   COMPLETION_FEATURE_PUBLIC_API_PATH,
@@ -181,6 +186,15 @@ export function findConnectionFeatureBoundaryViolations(
   fileSources: ReadonlyMap<string, string>,
 ): string[] {
   return findConnectionFeatureBoundaryViolationsImpl(
+    fileSources,
+    normalizeRepoPath,
+  );
+}
+
+export function findCatalogFeatureBoundaryViolations(
+  fileSources: ReadonlyMap<string, string>,
+): string[] {
+  return findCatalogFeatureBoundaryViolationsImpl(
     fileSources,
     normalizeRepoPath,
   );
@@ -589,6 +603,7 @@ async function main() {
         ]
       : []),
     ...findRawTauriInvokeBoundaryViolations(sourceFileContents),
+    ...findCatalogFeatureBoundaryViolations(sourceFileContents),
     ...findCompletionFeatureBoundaryViolations(completionPolicyContents),
     ...findConnectionFeatureBoundaryViolations(sourceFileContents),
     ...findFrontendCompatInventoryViolations(sourceFileContents),

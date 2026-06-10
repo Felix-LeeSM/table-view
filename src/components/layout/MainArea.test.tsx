@@ -49,8 +49,8 @@ vi.mock("@components/rdb/DataGrid", () => ({
   default: MockDataGrid,
 }));
 
-vi.mock("@components/schema/StructurePanel", () => ({
-  default: ({
+vi.mock("@features/catalog", () => ({
+  StructurePanel: ({
     connectionId,
     table,
     schema,
@@ -66,10 +66,7 @@ vi.mock("@components/schema/StructurePanel", () => ({
       data-schema={schema}
     />
   ),
-}));
-
-vi.mock("@components/schema/ViewStructurePanel", () => ({
-  default: ({
+  ViewStructurePanel: ({
     connectionId,
     view,
     schema,
@@ -85,10 +82,7 @@ vi.mock("@components/schema/ViewStructurePanel", () => ({
       data-schema={schema}
     />
   ),
-}));
-
-vi.mock("@components/schema/SchemaErdPanel", () => ({
-  default: ({
+  SchemaErdPanel: ({
     connectionId,
     database,
   }: {

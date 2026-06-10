@@ -9,8 +9,7 @@ import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
-import AddColumnDialog from "@components/schema/AddColumnDialog";
-import DropColumnDialog from "@components/schema/DropColumnDialog";
+import { AddColumnDialog, DropColumnDialog } from "@features/catalog";
 import {
   StructureShell,
   StructureActionBar,

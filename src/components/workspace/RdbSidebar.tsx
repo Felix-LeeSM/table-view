@@ -1,4 +1,4 @@
-import SchemaTree from "@components/schema/SchemaTree";
+import { SchemaTree } from "@features/catalog";
 
 export interface RdbSidebarProps {
   /** Connection whose schema tree should be displayed. */
