@@ -17,12 +17,8 @@ import {
   bulkWriteDocuments,
   createMongoIndex,
   dropMongoIndex,
-  executeKvCommand,
-  executeSearchQuery,
   type CreateMongoIndexRequest,
 } from "@lib/tauri";
-import { parseRedisDatabaseIndex } from "@lib/redis/redisDatabase";
-import type { StatementAnalysis } from "@lib/sql/sqlSafety";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/runtime/toast";
 import { getDataSourceProfile } from "@/types/dataSource";
@@ -30,11 +26,14 @@ import { DATABASE_TYPE_LABELS } from "@/types/connection";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { BulkWriteOp, BulkWriteResult } from "@/types/documentMutate";
 import { type WriteSummaryData } from "@/types/query";
-import type { SearchQueryRequest } from "@/types/search";
+import {
+  executeKvCommandNow,
+  executeKvQuery,
+  type PendingKvConfirmation,
+} from "./kvQueryExecution";
 import { executeMongoAggregate } from "./mongoDocumentResults";
 import { executeMongoQuery } from "./mongoQueryExecution";
-import { idOnlyFilter, isRecord } from "./queryHelpers";
-import { kvCommandConfirmationKey } from "./kvCommandConfirmation";
+import { idOnlyFilter } from "./queryHelpers";
 import {
   executeRdbDryRun,
   executeRdbQuery,
@@ -43,6 +42,7 @@ import {
   type RdbBatchRunner,
   type RdbSingleRunner,
 } from "./rdbQueryExecution";
+import { executeSearchDslQuery } from "./searchQueryExecution";
 
 import { logger } from "@lib/logger";
 
@@ -117,6 +117,7 @@ export interface QueryExecution {
   pendingKvConfirm: {
     command: string;
     database: number | undefined;
+    confirmKey?: string;
     reason: string;
   } | null;
   confirmKvDangerous: () => Promise<void>;
@@ -158,52 +159,6 @@ export interface QueryExecution {
   } | null;
   confirmMongoWarn: () => Promise<void>;
   cancelMongoWarn: () => void;
-}
-
-function parseSearchDslRequest(sql: string): SearchQueryRequest {
-  const parsed: unknown = JSON.parse(sql);
-  if (!isRecord(parsed)) {
-    throw new Error("Search DSL request must be a JSON object.");
-  }
-  const index = parsed.index;
-  const body = parsed.body;
-  if (typeof index !== "string" || index.trim().length === 0) {
-    throw new Error("Search DSL request requires a string index.");
-  }
-  if (!isRecord(body)) {
-    throw new Error("Search DSL request requires an object body.");
-  }
-  return {
-    index,
-    body,
-    from: numberField(parsed.from),
-    size: numberField(parsed.size),
-    trackTotalHits:
-      typeof parsed.trackTotalHits === "boolean"
-        ? parsed.trackTotalHits
-        : undefined,
-  };
-}
-
-function analyzeKvCommandSafety(command: string): StatementAnalysis {
-  const verb = command
-    .trim()
-    .match(/^([A-Za-z]+)/)?.[1]
-    ?.toUpperCase();
-  if (verb === "KEYS") {
-    return {
-      kind: "other",
-      severity: "danger",
-      reasons: ["Redis KEYS scans the full keyspace"],
-    };
-  }
-  return { kind: "other", severity: "info", reasons: [] };
-}
-
-function numberField(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
 }
 
 export function useQueryExecution({
@@ -420,12 +375,8 @@ export function useQueryExecution({
     statements: string[];
     reason: string;
   } | null>(null);
-  const [pendingKvConfirm, setPendingKvConfirm] = useState<{
-    command: string;
-    database: number | undefined;
-    confirmKey?: string;
-    reason: string;
-  } | null>(null);
+  const [pendingKvConfirm, setPendingKvConfirm] =
+    useState<PendingKvConfirmation | null>(null);
   // Sprint 255 — raw RDB / Mongo WARN-tier pending state. `null` until a
   // non-INFO safe statement (INSERT / UPDATE WHERE / CREATE / ALTER additive
   // for RDB; non-read-only aggregate for Mongo) is detected. Distinct from
@@ -448,24 +399,17 @@ export function useQueryExecution({
       database: number | undefined,
       confirmKey?: string,
     ) => {
-      const queryId = `${tab.id}-${Date.now()}`;
-      updateQueryState(tab.id, { status: "running", queryId });
-      try {
-        const result = await executeKvCommand(
-          tab.connectionId,
-          { command, database, ...(confirmKey ? { confirmKey } : {}) },
-          queryId,
-        );
-        completeQuery(tab.id, queryId, result);
-      } catch (err) {
-        failQuery(
-          tab.id,
-          queryId,
-          err instanceof Error ? err.message : String(err),
-        );
-      }
+      await executeKvCommandNow({
+        tab,
+        command,
+        database,
+        confirmKey,
+        updateQueryState,
+        completeQuery,
+        failQuery,
+      });
     },
-    [tab.id, tab.connectionId, updateQueryState, completeQuery, failQuery],
+    [tab, updateQueryState, completeQuery, failQuery],
   );
 
   const confirmKvDangerous = useCallback(async () => {
@@ -1084,72 +1028,29 @@ export function useQueryExecution({
     }
 
     if (tab.paradigm === "kv") {
-      if (!canExecuteQuery) {
-        updateQueryState(tab.id, {
-          status: "error",
-          error: `${queryProductLabel} command query is not supported yet.`,
-        });
-        return;
-      }
-
-      let database: number | undefined;
-      try {
-        database = parseRedisDatabaseIndex(workspaceDb);
-      } catch (err) {
-        updateQueryState(tab.id, {
-          status: "error",
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return;
-      }
-
-      const decision = decideSafeMode(analyzeKvCommandSafety(sql));
-      const confirmKey = kvCommandConfirmationKey(sql);
-      if (decision.action === "confirm") {
-        setPendingKvConfirm({
-          command: sql,
-          database,
-          confirmKey,
-          reason: decision.reason,
-        });
-        return;
-      }
-      if (decision.action === "block") {
-        updateQueryState(tab.id, { status: "error", error: decision.reason });
-        return;
-      }
-      await runKvCommandNow(sql, database, confirmKey);
+      await executeKvQuery({
+        tab,
+        sql,
+        workspaceDb,
+        canExecuteQuery,
+        queryProductLabel,
+        decideSafeMode,
+        updateQueryState,
+        completeQuery,
+        failQuery,
+        setPendingKvConfirm,
+      });
       return;
     }
 
     if (tab.paradigm === "search") {
-      let request: SearchQueryRequest;
-      try {
-        request = parseSearchDslRequest(sql);
-      } catch (err) {
-        updateQueryState(tab.id, {
-          status: "error",
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return;
-      }
-
-      const queryId = `${tab.id}-${Date.now()}`;
-      updateQueryState(tab.id, { status: "running", queryId });
-      try {
-        const result = await executeSearchQuery(
-          tab.connectionId,
-          request,
-          queryId,
-        );
-        completeSearchQuery(tab.id, queryId, result);
-      } catch (err) {
-        failQuery(
-          tab.id,
-          queryId,
-          err instanceof Error ? err.message : String(err),
-        );
-      }
+      await executeSearchDslQuery({
+        tab,
+        sql,
+        updateQueryState,
+        completeSearchQuery,
+        failQuery,
+      });
       return;
     }
 
