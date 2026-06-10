@@ -14,6 +14,8 @@
 //! Docker daemon이 없는 환경에서는 testcontainers가 즉시 실패하고 helper
 //! 가 `None` 을 반환해 기존 통합 테스트의 silent-skip 시맨틱을 보존한다.
 
+pub mod query_result_contracts;
+
 use std::sync::Arc;
 use std::time::Duration;
 
