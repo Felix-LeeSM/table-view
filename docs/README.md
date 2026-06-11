@@ -16,6 +16,7 @@ updated: 2026-05-28
 | 사용법 / 사용자 워크플로우 | future `user-guide/` | 사람용 user guide 로 유지 |
 | 제품 범위 / 지원 현황 | `product/README.md`, `product/known-limitations.md`, `product/query-language-support.md` | 현재 상태는 `product/` |
 | 미래 목표 / 순서 후보 | `ROADMAP.md`, `PLAN.md` | `ROADMAP.md` 가 SOT, `PLAN.md` 는 호환 인덱스 |
+| GitHub milestone / issue 실행 상태 | GitHub milestones/issues, `ROADMAP.md` 요약 | 실행 bucket 은 GitHub, 순서/경계 요약은 `ROADMAP.md` |
 | 구조 / 설계 규칙 | `memory/engineering/architecture/**` | agent 가 적용해야 하는 active engineering SOT |
 | 개발 / 검증 / 기여 | `contributor-guide/`, `memory/engineering/**` | 사람용 절차는 docs, 코딩 규칙은 memory |
 | 스프린트 산출물 | `sprints/` | 그대로 유지 |
@@ -26,7 +27,8 @@ updated: 2026-05-28
 - `user-guide/` - 사용자가 제품을 쓰는 법. 필요할 때 신설.
 - `product/` - 현재 제품 상태, 사용자 관점 기능, 지원 범위, known limitations.
 - `ROADMAP.md` - 미래 목표, 승격 후보, sequencing 기준.
-- `PLAN.md` - 기존 링크 호환용 roadmap/product 인덱스.
+- `PLAN.md` - 기존 링크 호환용 roadmap/product 인덱스. backlog 나 product
+  claim ledger 를 두지 않는다.
 - `contributor-guide/` - 개발자가 변경을 넣을 때 읽는 사람용 절차.
 - `sprints/` - sprint contract, evidence, handoff.
 - `archives/` - 더 이상 active SOT 가 아닌 기록.

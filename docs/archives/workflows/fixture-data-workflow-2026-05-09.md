@@ -1,7 +1,8 @@
 # Fixture Data Workflow — 2026-05-09 Handoff
 
 > **Archive status**: planning handoff preserved for sprint-237 context. Not an
-> active roadmap item unless re-linked from `docs/PLAN.md`.
+> active roadmap item unless re-linked from `docs/ROADMAP.md` or a live GitHub
+> issue.
 
 Date: 2026-05-09 (revised after grill review)
 

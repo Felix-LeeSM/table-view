@@ -2,7 +2,7 @@
 
 > **Archive status (2026-05-22)**: superseded legacy RDBMS split sketch. Current
 > DBMS adapter planning lives in Phase 17-20 and active ordering lives in
-> `../../../PLAN.md`.
+> `../../../ROADMAP.md`.
 >
 > This replaces the older MySQL+SQLite sketch. The target is not an MVP subset:
 > every PostgreSQL-supported feature must be extended feature-by-feature across

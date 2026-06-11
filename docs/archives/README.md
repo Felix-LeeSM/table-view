@@ -3,6 +3,8 @@
 Inactive docs live here. Future goals stay in `docs/ROADMAP.md`, current product
 state and limitations in `docs/product/`, developer-facing follow-ups in
 `docs/contributor-guide/`, active phase specs in `docs/phases/`.
+Live execution state for current refactor buckets stays in GitHub milestones and
+issues, with `docs/ROADMAP.md` carrying only the durable routing summary.
 
 ## Categories
 
@@ -16,7 +18,7 @@ state and limitations in `docs/product/`, developer-facing follow-ups in
 | `incidents/` | historical lesson/incident archive |
 | `phases/completed/` | completed phase specs |
 | `phases/retired/` | obsolete phase sketches kept for history |
-| `plans/` | completed roadmap and sequence indexes |
+| `plans/` | completed roadmap, sequence indexes, and dated plan snapshots; not active backlog |
 | `product-snapshots/` | dated product capability/comparison snapshots |
 | `risks/` | retired risk registers and resolved risk archive |
 | `roadmaps/` | retired memory roadmap snapshots |
