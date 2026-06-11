@@ -32,18 +32,19 @@ use crate::models::{
 
 use super::{ensure_expected_db, not_connected, register_cancel_token, release_cancel_token};
 
+#[macro_use]
+mod contract;
+
 async fn list_schemas_inner(
     state: &AppState,
     connection_id: &str,
     expected_database: Option<&str>,
 ) -> Result<Vec<SchemaInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    let namespaces = adapter.list_namespaces().await?;
+    let namespaces =
+        with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+            adapter.list_namespaces()
+        })
+        .await?;
     // NamespaceInfo and SchemaInfo share the same `{ name }` wire shape, so
     // mapping here preserves the payload exactly.
     Ok(namespaces
@@ -68,13 +69,10 @@ async fn list_tables_inner(
     schema: &str,
     expected_database: Option<&str>,
 ) -> Result<Vec<TableInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    adapter.list_tables(schema).await
+    with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+        adapter.list_tables(schema)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -105,19 +103,10 @@ async fn get_table_columns_inner(
     let cancel_handle = register_cancel_token(state, query_id).await;
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
-            .ok_or_else(|| not_connected(connection_id))?;
-        let adapter = active.as_rdb()?;
-        match ensure_expected_db(adapter, expected_database).await {
-            Ok(()) => {
-                adapter
-                    .get_columns(schema, table, cancel_handle.as_ref().map(|(_, tok)| tok))
-                    .await
-            }
-            Err(e) => Err(e),
-        }
+        with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+            adapter.get_columns(schema, table, cancel_handle.as_ref().map(|(_, tok)| tok))
+        })
+        .await
     };
 
     release_cancel_token(state, &cancel_handle).await;
@@ -153,13 +142,10 @@ async fn list_schema_columns_inner(
     schema: &str,
     expected_database: Option<&str>,
 ) -> Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    adapter.list_schema_columns(schema).await
+    with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+        adapter.list_schema_columns(schema)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -190,19 +176,10 @@ async fn get_table_indexes_inner(
     let cancel_handle = register_cancel_token(state, query_id).await;
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
-            .ok_or_else(|| not_connected(connection_id))?;
-        let adapter = active.as_rdb()?;
-        match ensure_expected_db(adapter, expected_database).await {
-            Ok(()) => {
-                adapter
-                    .get_table_indexes(schema, table, cancel_handle.as_ref().map(|(_, tok)| tok))
-                    .await
-            }
-            Err(e) => Err(e),
-        }
+        with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+            adapter.get_table_indexes(schema, table, cancel_handle.as_ref().map(|(_, tok)| tok))
+        })
+        .await
     };
 
     release_cancel_token(state, &cancel_handle).await;
@@ -242,23 +219,10 @@ async fn get_table_constraints_inner(
     let cancel_handle = register_cancel_token(state, query_id).await;
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
-            .ok_or_else(|| not_connected(connection_id))?;
-        let adapter = active.as_rdb()?;
-        match ensure_expected_db(adapter, expected_database).await {
-            Ok(()) => {
-                adapter
-                    .get_table_constraints(
-                        schema,
-                        table,
-                        cancel_handle.as_ref().map(|(_, tok)| tok),
-                    )
-                    .await
-            }
-            Err(e) => Err(e),
-        }
+        with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+            adapter.get_table_constraints(schema, table, cancel_handle.as_ref().map(|(_, tok)| tok))
+        })
+        .await
     };
 
     release_cancel_token(state, &cancel_handle).await;
@@ -293,13 +257,10 @@ async fn list_views_inner(
     schema: &str,
     expected_database: Option<&str>,
 ) -> Result<Vec<ViewInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    adapter.list_views(schema).await
+    with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+        adapter.list_views(schema)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -325,13 +286,10 @@ async fn list_functions_inner(
     schema: &str,
     expected_database: Option<&str>,
 ) -> Result<Vec<FunctionInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    adapter.list_functions(schema).await
+    with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+        adapter.list_functions(schema)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -358,13 +316,10 @@ async fn get_view_definition_inner(
     view_name: &str,
     expected_database: Option<&str>,
 ) -> Result<String, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    adapter.get_view_definition(schema, view_name).await
+    with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+        adapter.get_view_definition(schema, view_name)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -393,13 +348,10 @@ async fn get_view_columns_inner(
     view_name: &str,
     expected_database: Option<&str>,
 ) -> Result<Vec<ColumnInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    adapter.get_view_columns(schema, view_name).await
+    with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+        adapter.get_view_columns(schema, view_name)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -428,13 +380,10 @@ async fn get_function_source_inner(
     function_name: &str,
     expected_database: Option<&str>,
 ) -> Result<String, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    adapter.get_function_source(schema, function_name).await
+    with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+        adapter.get_function_source(schema, function_name)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -463,13 +412,10 @@ async fn list_triggers_inner(
     table: &str,
     expected_database: Option<&str>,
 ) -> Result<Vec<TriggerInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    adapter.list_triggers(schema, table).await
+    with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+        adapter.list_triggers(schema, table)
+    })
+    .await
 }
 
 /// Sprint 272 — list triggers attached to `(schema, table)`. PG impl
@@ -506,15 +452,10 @@ async fn get_trigger_source_inner(
     trigger_name: &str,
     expected_database: Option<&str>,
 ) -> Result<String, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    adapter
-        .get_trigger_source(schema, table, trigger_name)
-        .await
+    with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+        adapter.get_trigger_source(schema, table, trigger_name)
+    })
+    .await
 }
 
 /// Sprint 272 — `pg_get_triggerdef(t.oid)` for one trigger. Non-PG
@@ -546,13 +487,10 @@ async fn list_postgres_types_inner(
     connection_id: &str,
     expected_database: Option<&str>,
 ) -> Result<Vec<PostgresTypeInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    adapter.list_types().await
+    with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+        adapter.list_types()
+    })
+    .await
 }
 
 async fn list_postgres_extensions_inner(
@@ -560,13 +498,10 @@ async fn list_postgres_extensions_inner(
     connection_id: &str,
     expected_database: Option<&str>,
 ) -> Result<Vec<PostgresExtensionInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    adapter.list_extensions().await
+    with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+        adapter.list_extensions()
+    })
+    .await
 }
 
 /// Sprint 230 — list every Postgres-style data type visible to the
