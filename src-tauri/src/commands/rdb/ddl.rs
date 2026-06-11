@@ -1,9 +1,7 @@
 //! RDB schema-mutating commands (DDL).
 //!
-//! Every handler resolves the connection via
-//! `state.active_connections.lock().await`, then dispatches through
-//! `ActiveAdapter::as_rdb()?` so that non-RDB connections fail cleanly with
-//! `AppError::Unsupported` before any concrete method is invoked.
+//! Command handlers keep the public Tauri surface thin and delegate the shared
+//! connection lookup / RDB guard / expected-database probe to `dispatch`.
 //!
 //! Sprint 237 P5 (2026-05-08) — handler bodies hoisted into
 //! `_inner(&AppState, &Request)` shape so unit tests can drive prod code
@@ -28,19 +26,18 @@ use crate::models::{
     RenameTableRequest, SchemaChangeResult,
 };
 
-use super::{ensure_expected_db, not_connected};
+mod dispatch;
+
+use dispatch::{run_database_change, run_schema_change, DatabaseCommand};
+
+#[cfg(test)]
+use super::not_connected;
 
 async fn drop_table_inner(
     state: &AppState,
     request: &DropTableRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.drop_table(request).await
+    run_schema_change(state, request).await
 }
 
 /// Sprint 235 — request-shaped DROP TABLE handler. Mirrors `create_table`
@@ -60,13 +57,7 @@ async fn rename_table_inner(
     state: &AppState,
     request: &RenameTableRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.rename_table(request).await
+    run_schema_change(state, request).await
 }
 
 /// Sprint 235 — request-shaped RENAME TABLE handler. Same shape as
@@ -83,13 +74,7 @@ async fn alter_table_inner(
     state: &AppState,
     request: &AlterTableRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.alter_table(request).await
+    run_schema_change(state, request).await
 }
 
 #[tauri::command]
@@ -104,13 +89,7 @@ async fn add_column_inner(
     state: &AppState,
     request: &AddColumnRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.add_column(request).await
+    run_schema_change(state, request).await
 }
 
 /// Sprint 236 — request-shaped ADD COLUMN handler. Mirrors
@@ -128,13 +107,7 @@ async fn drop_column_inner(
     state: &AppState,
     request: &DropColumnRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.drop_column(request).await
+    run_schema_change(state, request).await
 }
 
 /// Sprint 236 — request-shaped DROP COLUMN handler. Same shape as
@@ -151,13 +124,7 @@ async fn create_table_inner(
     state: &AppState,
     request: &CreateTableRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.create_table(request).await
+    run_schema_change(state, request).await
 }
 
 #[tauri::command]
@@ -172,13 +139,7 @@ async fn create_table_plan_inner(
     state: &AppState,
     request: &CreateTablePlanRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.create_table_plan(request).await
+    run_schema_change(state, request).await
 }
 
 /// Sprint 240 — unified `CREATE TABLE + indexes + constraints` handler.
@@ -196,13 +157,7 @@ async fn create_index_inner(
     state: &AppState,
     request: &CreateIndexRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.create_index(request).await
+    run_schema_change(state, request).await
 }
 
 #[tauri::command]
@@ -217,13 +172,7 @@ async fn drop_index_inner(
     state: &AppState,
     request: &DropIndexRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.drop_index(request).await
+    run_schema_change(state, request).await
 }
 
 #[tauri::command]
@@ -238,13 +187,7 @@ async fn add_constraint_inner(
     state: &AppState,
     request: &AddConstraintRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.add_constraint(request).await
+    run_schema_change(state, request).await
 }
 
 #[tauri::command]
@@ -259,13 +202,7 @@ async fn drop_constraint_inner(
     state: &AppState,
     request: &DropConstraintRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.drop_constraint(request).await
+    run_schema_change(state, request).await
 }
 
 #[tauri::command]
@@ -280,13 +217,7 @@ async fn create_trigger_inner(
     state: &AppState,
     request: &CreateTriggerRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.create_trigger(request).await
+    run_schema_change(state, request).await
 }
 
 /// Sprint 273 — `CREATE TRIGGER` handler. Mirrors `create_table` /
@@ -308,13 +239,7 @@ async fn drop_trigger_inner(
     state: &AppState,
     request: &DropTriggerRequest,
 ) -> Result<SchemaChangeResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&request.connection_id)
-        .ok_or_else(|| not_connected(&request.connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
-    adapter.drop_trigger(request).await
+    run_schema_change(state, request).await
 }
 
 /// Sprint 274 — `DROP TRIGGER` handler. Mirrors `create_trigger` /
@@ -337,11 +262,7 @@ async fn create_rdb_database_inner(
     connection_id: &str,
     name: &str,
 ) -> Result<(), AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    active.as_rdb()?.create_database(name).await
+    run_database_change(state, connection_id, name, DatabaseCommand::Create).await
 }
 
 /// Sprint 335 (Slice M live wire) — `CREATE DATABASE "<name>"`. PG only
@@ -360,11 +281,7 @@ async fn drop_rdb_database_inner(
     connection_id: &str,
     name: &str,
 ) -> Result<(), AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
-        .ok_or_else(|| not_connected(connection_id))?;
-    active.as_rdb()?.drop_database(name).await
+    run_database_change(state, connection_id, name, DatabaseCommand::Drop).await
 }
 
 /// Sprint 335 (Slice M live wire) — `DROP DATABASE "<name>"`. PG only;
