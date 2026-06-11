@@ -68,7 +68,7 @@ function completionPublicApiFixture(extraLines: readonly string[] = []) {
 
 describe("check-eslint-static-policy", () => {
   it("keeps the measured max-lines allowlist explicit", () => {
-    expect(MAX_LINES_ALLOWLIST).toHaveLength(21);
+    expect(MAX_LINES_ALLOWLIST).toHaveLength(20);
     expect(MAX_LINES_ALLOWLIST).not.toContain(
       "src/components/query/QueryTab/useQueryExecution.ts",
     );
