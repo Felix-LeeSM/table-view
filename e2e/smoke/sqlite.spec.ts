@@ -171,7 +171,10 @@ function prepareSqliteFixture(path: string) {
   rmSync(`${path}-wal`, { force: true });
   rmSync(`${path}-shm`, { force: true });
 
-  const sql = readFileSync(resolve("e2e/fixtures/seed.sqlite.sql"), "utf-8");
+  const sql = readFileSync(
+    resolve("e2e/fixtures/sqlite/query/seed.sql"),
+    "utf-8",
+  );
   const db = new Database(path);
   try {
     db.exec(sql);

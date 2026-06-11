@@ -7,11 +7,11 @@ import {
 } from "../../src/features/completion";
 
 const DBMS_SEED_FILES = [
-  ["postgresql", "seed.sql"],
+  ["postgresql", "postgresql/query/seed.sql"],
   ["mysql", "mysql/query/seed.sql"],
-  ["mariadb", "seed.mariadb.sql"],
-  ["sqlite", "seed.sqlite.sql"],
-  ["duckdb", "seed.duckdb.sql"],
+  ["mariadb", "mariadb/query/seed.sql"],
+  ["sqlite", "sqlite/query/seed.sql"],
+  ["duckdb", "duckdb/query/seed.sql"],
   ["mssql", "seed.mssql.sql"],
   ["oracle", "seed.oracle.sql"],
 ] as const;
@@ -95,7 +95,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
 
   it("mariadb seed carries live catalog/workbench metadata probes", () => {
     const sql = readFileSync(
-      resolve("e2e/fixtures", "seed.mariadb.sql"),
+      resolve("e2e/fixtures", "mariadb/query/seed.sql"),
       "utf-8",
     );
 
@@ -379,6 +379,29 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(seedScript).toContain("mysql/query/seed.sql");
     expect(seedScript).not.toContain("seed.mysql.sql");
   });
+
+  it.each([
+    ["postgresql", "postgresql/query/seed.sql"],
+    ["mariadb", "mariadb/query/seed.sql"],
+    ["sqlite", "sqlite/query/seed.sql"],
+    ["duckdb", "duckdb/query/seed.sql"],
+  ] as const)(
+    "%s fixture seed is wired from DBMS/function query topology",
+    (_dbms, file) => {
+      const seedScript = readFileSync(resolve("e2e/fixtures/seed-smoke.ts"), {
+        encoding: "utf8",
+      });
+      const sqliteSmoke = readFileSync(resolve("e2e/smoke/sqlite.spec.ts"), {
+        encoding: "utf8",
+      });
+      const duckdbSmoke = readFileSync(resolve("e2e/smoke/duckdb.spec.ts"), {
+        encoding: "utf8",
+      });
+      const consumers = [seedScript, sqliteSmoke, duckdbSmoke].join("\n");
+
+      expect(consumers).toContain(file);
+    },
+  );
 
   it("oracle fixture seed is wired into Runtime Happy Path smoke", () => {
     const workflow = readFileSync(resolve(".github/workflows/e2e-smoke.yml"), {
