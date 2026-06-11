@@ -165,7 +165,8 @@ Required language contract:
 - completion owner and fallback policy
 - cursor offset policy
 - safety analyzer
-- supported / unsupported syntax documented in `docs/query-language-support.md`
+- supported / unsupported syntax documented in
+  `docs/product/query-language-support.md`
 
 Hot-path parser/completion should follow ADR 0045: Rust/WASM language core where
 practical, with TypeScript adapters at UI boundaries.

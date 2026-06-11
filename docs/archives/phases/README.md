@@ -1,7 +1,7 @@
 # Phase Archive
 
 Completed/closed and retired/superseded phase index. Current execution order
-lives in `../../PLAN.md`.
+lives in `../../ROADMAP.md`; `../../PLAN.md` is only a compatibility index.
 
 Last updated: 2026-05-22
 
@@ -40,5 +40,5 @@ Last updated: 2026-05-22
 
 ## Deferred / Planned
 
-Deferred/planned phases stay in `../../PLAN.md` so active ordering remains one
-place.
+Deferred/planned phase specs stay in `../../phases/` only when active. Future
+ordering lives in `../../ROADMAP.md`.

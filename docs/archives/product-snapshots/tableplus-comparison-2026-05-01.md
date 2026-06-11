@@ -1,7 +1,7 @@
 # Table View ↔ TablePlus 기능 비교 (2026-05-01 snapshot)
 
 > **Archive status**: retired product comparison. Current execution order lives
-> in `docs/PLAN.md`.
+> in `docs/ROADMAP.md`; current product support scope lives in `docs/product/`.
 
 > **기준일**: 2026-05-01
 > **TablePlus 문서 출처**: `docs/table_plus/` (2026-04-06 fetch, 63 docs)
