@@ -77,6 +77,7 @@ SOT와 regression guard가 함께 소유한다.
 |---|---|
 | Profile/capability foundation | `src/types/dataSource.ts`, `src/types/dataSource.test.ts`, `src-tauri/tests/backend_adapter_contract_profile.rs` |
 | Adapter contract normalization | `src/types/adapterConformance.ts`, `src-tauri/src/models/data_source.rs`, `src-tauri/src/db/active.rs` |
+| Backend contract test ownership | `src/types/adapterContractTestMatrix.ts`, #765/#766/#767/#768 |
 | Query language ownership | `src/types/queryLanguage.ts`, `docs/product/query-language-support.md`, `memory/engineering/architecture/query-language/memory.md` |
 | Result envelope boundary | `src/types/query.ts`, `src/types/query.resultEnvelope.test.ts`, `src/lib/tauri/query.ts` |
 | Product/support claim boundary | `docs/product/README.md`, `docs/product/known-limitations.md`, `memory/engineering/architecture/data-source/memory.md` |
