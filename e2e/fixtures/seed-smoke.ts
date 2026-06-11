@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import { MongoClient, type Document } from "mongodb";
 import { createConnection } from "mysql2/promise";
 import { Client as PgClient } from "pg";
 import Redis from "ioredis";
 import sql from "mssql";
 import oracledb from "oracledb";
+import { readE2eSeedFixture } from "../../scripts/fixtures/e2e-seed-paths.js";
 
 const pgConfig = {
   host: process.env.E2E_PG_HOST ?? process.env.PGHOST ?? "localhost",
@@ -150,7 +150,7 @@ type SearchSeedFixture = {
 
 type SearchSeedRuntime = {
   label: string;
-  fixturePath: string;
+  fixtureKey: "elasticsearch" | "opensearch";
   host: string;
   port: number;
   user: string;
@@ -221,7 +221,7 @@ async function retry(label: string, fn: () => Promise<void>) {
 }
 
 async function seedPostgres() {
-  const sql = await readFile("e2e/fixtures/postgresql/query/seed.sql", "utf-8");
+  const sql = await readE2eSeedFixture("postgresql");
   await retry("Postgres", async () => {
     const client = new PgClient(pgConfig);
     await client.connect();
@@ -235,7 +235,7 @@ async function seedPostgres() {
 
 async function seedMongo() {
   const fixture = JSON.parse(
-    await readFile("e2e/fixtures/mongodb/document/seed.json", "utf-8"),
+    await readE2eSeedFixture("mongodb"),
   ) as MongoSeedFixture;
   const uri = `mongodb://${encodeURIComponent(mongoConfig.user)}:${encodeURIComponent(
     mongoConfig.password,
@@ -267,7 +267,7 @@ async function seedMongo() {
 }
 
 async function seedMysql() {
-  const sql = await readFile("e2e/fixtures/mysql/query/seed.sql", "utf-8");
+  const sql = await readE2eSeedFixture("mysql");
   await retry("MySQL", async () => {
     const connection = await createConnection({
       ...mysqlConfig,
@@ -282,7 +282,7 @@ async function seedMysql() {
 }
 
 async function seedMariadb() {
-  const sql = await readFile("e2e/fixtures/mariadb/query/seed.sql", "utf-8");
+  const sql = await readE2eSeedFixture("mariadb");
   await retry("MariaDB", async () => {
     const connection = await createConnection({
       ...mariadbConfig,
@@ -297,10 +297,7 @@ async function seedMariadb() {
 }
 
 async function seedMssql() {
-  const seedSql = await readFile(
-    resolve("e2e/fixtures/seed.mssql.sql"),
-    "utf-8",
-  );
+  const seedSql = await readFile("e2e/fixtures/seed.mssql.sql", "utf-8");
   await retry("MSSQL", async () => {
     await ensureMssqlDatabase();
     const pool = await mssqlPool(mssqlConfig.database);
@@ -356,10 +353,7 @@ function quoteMssqlIdentifier(identifier: string): string {
 }
 
 async function seedOracle() {
-  const seedSql = await readFile(
-    resolve("e2e/fixtures/seed.oracle.sql"),
-    "utf-8",
-  );
+  const seedSql = await readFile("e2e/fixtures/seed.oracle.sql", "utf-8");
   await retry("Oracle", async () => {
     const connection = await oracledb.getConnection({
       user: oracleConfig.user,
@@ -425,7 +419,7 @@ function splitOracleStatements(seedSql: string): string[] {
 
 async function seedRedis() {
   const fixture = JSON.parse(
-    await readFile("e2e/fixtures/redis/kv/seed.json", "utf-8"),
+    await readE2eSeedFixture("redis"),
   ) as RedisSeedFixture;
 
   await retry("Redis", async () => {
@@ -489,7 +483,7 @@ async function seedRedis() {
 
 async function seedValkey() {
   const fixture = JSON.parse(
-    await readFile("e2e/fixtures/valkey/kv/seed.json", "utf-8"),
+    await readE2eSeedFixture("valkey"),
   ) as RedisSeedFixture;
 
   await retry("Valkey", async () => {
@@ -553,7 +547,7 @@ async function seedValkey() {
 
 async function seedSearch(runtime: SearchSeedRuntime) {
   const fixture = JSON.parse(
-    await readFile(resolve(runtime.fixturePath), "utf-8"),
+    await readE2eSeedFixture(runtime.fixtureKey),
   ) as SearchSeedFixture;
   const fixtureIndex = fixture.indexes[0]?.name;
   if (!fixtureIndex) {
@@ -636,7 +630,7 @@ async function seedSearch(runtime: SearchSeedRuntime) {
 async function seedElasticsearch() {
   await seedSearch({
     label: "Elasticsearch",
-    fixturePath: "e2e/fixtures/elasticsearch/search/seed.json",
+    fixtureKey: "elasticsearch",
     ...elasticsearchConfig,
   });
 }
@@ -644,7 +638,7 @@ async function seedElasticsearch() {
 async function seedOpenSearch() {
   await seedSearch({
     label: "OpenSearch",
-    fixturePath: "e2e/fixtures/opensearch/search/seed.json",
+    fixtureKey: "opensearch",
     ...opensearchConfig,
   });
 }
