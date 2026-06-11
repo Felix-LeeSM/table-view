@@ -68,7 +68,13 @@ function completionPublicApiFixture(extraLines: readonly string[] = []) {
 
 describe("check-eslint-static-policy", () => {
   it("keeps the measured max-lines allowlist explicit", () => {
-    expect(MAX_LINES_ALLOWLIST).toHaveLength(19);
+    expect(MAX_LINES_ALLOWLIST).toHaveLength(18);
+    expect(MAX_LINES_ALLOWLIST).not.toContain(
+      "src/components/datagrid/sqlGenerator.test.ts",
+    );
+    expect(MAX_LINES_ALLOWLIST).not.toContain(
+      "src/components/schema/CreateTableDialog.test.tsx",
+    );
     expect(MAX_LINES_ALLOWLIST).not.toContain(
       "src/components/query/QueryTab/useQueryExecution.ts",
     );
