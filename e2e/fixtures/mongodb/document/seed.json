@@ -1,5 +1,14 @@
 {
   "schemaVersion": 1,
+  "proofTier": "runtime-happy-path-seed",
+  "capabilityLabels": [
+    "document.collection",
+    "document.indexes",
+    "document.seeded-query",
+    "document.seeded-edit",
+    "document.smoke-routing"
+  ],
+  "supportClaimImpact": "MongoDB seed is wired only to current Runtime Happy Path document workflows and does not widen support to arbitrary JavaScript, shell helpers, cross-db navigation, or full document-first parity.",
   "database": "table_view_test",
   "idempotencyContract": "Idempotency contract: create indexes idempotently and replace documents by stable _id or unique key.",
   "collections": [

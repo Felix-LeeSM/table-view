@@ -1,13 +1,22 @@
 {
   "schemaVersion": 1,
-  "product": "elasticsearch",
+  "product": "opensearch",
+  "proofTier": "fixture-backed-runtime-smoke-seed",
+  "capabilityLabels": [
+    "search.catalog-fixture",
+    "search.mapping-fixture",
+    "search.query-result",
+    "search.delete-plan",
+    "search.smoke-routing"
+  ],
+  "supportClaimImpact": "Search seed is fixture-backed and wired to Runtime Happy Path smoke; it does not widen support to actual live admin execution, observability, profile/explain, raw targets, or delete-by-query execution.",
   "idempotencyContract": "Idempotency contract: embedded fixture state is deterministic and never opens a network connection.",
   "identity": {
-    "clusterName": "Elasticsearch fixture",
-    "clusterUuid": "fixture-elasticsearch",
+    "clusterName": "OpenSearch fixture",
+    "clusterUuid": "fixture-opensearch",
     "version": {
-      "number": "8.12.2",
-      "distribution": "elasticsearch",
+      "number": "2.13.0",
+      "distribution": "opensearch",
       "lucene": "9.9.2",
       "buildFlavor": "default"
     },
@@ -23,27 +32,27 @@
   },
   "indexes": [
     {
-      "name": "logs-elastic-2026.05.24",
+      "name": "logs-opensearch-2026.05.24",
       "uuid": "idx-fixture-001",
       "health": "green",
       "open": true,
       "docsCount": 2,
       "storeSizeBytes": 4096,
-      "aliases": ["logs-elastic"],
+      "aliases": ["logs-opensearch"],
       "primaryShards": 1,
       "replicaShards": 1
     }
   ],
   "aliases": [
     {
-      "name": "logs-elastic",
-      "index": "logs-elastic-2026.05.24",
+      "name": "logs-opensearch",
+      "index": "logs-opensearch-2026.05.24",
       "writeIndex": true
     }
   ],
   "mappings": [
     {
-      "index": "logs-elastic-2026.05.24",
+      "index": "logs-opensearch-2026.05.24",
       "fields": [
         {
           "path": "@timestamp",
@@ -79,12 +88,12 @@
   ],
   "templates": [
     {
-      "name": "logs-elastic-template",
+      "name": "logs-opensearch-template",
       "endpoint": "composableIndexTemplate",
-      "indexPatterns": ["logs-elastic-*"],
+      "indexPatterns": ["logs-opensearch-*"],
       "priority": 100,
       "raw": {
-        "index_patterns": ["logs-elastic-*"],
+        "index_patterns": ["logs-opensearch-*"],
         "template": { "settings": { "number_of_shards": 1 } }
       }
     }
@@ -95,7 +104,7 @@
     "total": { "value": 1, "relation": "eq" },
     "hits": [
       {
-        "index": "logs-elastic-2026.05.24",
+        "index": "logs-opensearch-2026.05.24",
         "id": "doc-1",
         "score": 1,
         "source": {
@@ -106,7 +115,7 @@
         "sort": []
       },
       {
-        "index": "logs-elastic-2026.05.24",
+        "index": "logs-opensearch-2026.05.24",
         "id": "doc-2",
         "score": 0.8,
         "source": {

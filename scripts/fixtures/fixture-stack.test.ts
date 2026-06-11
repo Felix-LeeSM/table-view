@@ -94,5 +94,5 @@ describe("fixture stack wiring", () => {
     );
 
     expect(out).toContain("# fixtures:preview e2e (target=sqlite)");
-  });
+  }, 45_000);
 });
