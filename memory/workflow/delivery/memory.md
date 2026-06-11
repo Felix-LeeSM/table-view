@@ -1,7 +1,7 @@
 ---
-title: Delivery — commit → merge 전체 자율
+title: Delivery — commit → push → PR → review → merge 전체 자율
 type: workflow-rule
-updated: 2026-06-01
+updated: 2026-06-12
 task: delivery, commit, push, pr, review, merge
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료

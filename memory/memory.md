@@ -1,7 +1,7 @@
 ---
 title: Table View — 팔레스 입구
 type: index
-updated: 2026-05-27
+updated: 2026-06-12
 ---
 
 # 팔레스 입구
@@ -32,7 +32,7 @@ updated: 2026-05-27
   - [engineering/conventions/e2e-scenarios](./engineering/conventions/e2e-scenarios/memory.md) — E2E 시나리오 설계
   - [engineering/conventions/rust](./engineering/conventions/rust/memory.md) — Rust 컨벤션 전체 (`.claude/rules/rust-conventions.md` source)
   - [engineering/conventions/react](./engineering/conventions/react/memory.md) — React/TS 컨벤션 전체 (`.claude/rules/react-conventions.md` source)
-- [workflow](./workflow/memory.md) — User-Claude 협업 phase 행동 계약 (bug-fix / implementation / delivery / review / git-policy)
+- [workflow](./workflow/memory.md) — 사용자-agent 협업 phase 행동 계약 (bug-fix / implementation / delivery / review / git-policy)
   - [workflow/git-policy](./workflow/git-policy/memory.md) — hook 회피 금지 (`.claude/rules/git-policy.md` source)
 - [product](./product/memory.md) — 제품/UX 머지 기준 (영속 상태 reset 등)
 - [runbook](./runbook/memory.md) — 절차 (multi-agent worktree 등)

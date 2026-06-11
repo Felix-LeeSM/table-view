@@ -1,7 +1,7 @@
 ---
-title: Git 정책 — hook 회피 절대 금지 + 능동 enforcement
+title: Git 정책
 type: workflow-rule
-updated: 2026-05-28
+updated: 2026-06-12
 task: commit, push, hook, lefthook, push-reject, pr-close, race-trace
 trigger:
   signal: git commit / git push / hook 실패 / push reject / PR close 시

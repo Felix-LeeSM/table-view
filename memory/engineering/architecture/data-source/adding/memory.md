@@ -1,7 +1,7 @@
 ---
-title: Adding a data source
+title: Adding A Data Source
 type: checklist
-updated: 2026-05-27
+updated: 2026-06-12
 surface: src-tauri/src/db/**, src/types/dataSource*, src/types/queryLanguage*, tests/fixtures/**
 task: data-source, support-claim, adapter, fixture
 trigger:

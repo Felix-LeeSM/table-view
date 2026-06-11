@@ -1,7 +1,7 @@
 ---
-title: Data source architecture
+title: Data Source Architecture
 type: memory
-updated: 2026-06-11
+updated: 2026-06-12
 surface: src-tauri/src/db/**, src/lib/**, src/types/dataSource*, src/types/queryLanguage*
 task: data-source, architecture, adapter, capability
 trigger:

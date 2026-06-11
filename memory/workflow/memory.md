@@ -1,12 +1,12 @@
 ---
 title: Workflow
 type: index
-updated: 2026-05-30
+updated: 2026-06-12
 ---
 
 # Workflow
 
-User-Claude 협업 phase 별 행동 계약. 코드 룰은 [engineering/conventions](../engineering/conventions/memory.md) 참조.
+사용자-agent 협업 phase 별 행동 계약. 코드 룰은 [engineering/conventions](../engineering/conventions/memory.md) 참조.
 
 ## 원칙
 

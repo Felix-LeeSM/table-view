@@ -1,7 +1,7 @@
 ---
-title: State management architecture
+title: State Management Architecture
 type: memory
-updated: 2026-05-27
+updated: 2026-06-12
 surface: src/stores/**, src/hooks/useCurrentWindowConnectionId.ts, src-tauri/src/storage/**, src-tauri/src/events.rs
 task: state-management, persistence, cross-window, local-storage, sqlite
 trigger:

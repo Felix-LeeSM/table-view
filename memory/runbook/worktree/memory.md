@@ -1,7 +1,7 @@
 ---
-title: Multi-agent worktree runbook
+title: Multi-agent worktree
 type: runbook
-updated: 2026-06-01
+updated: 2026-06-12
 task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 ---
 

@@ -1,7 +1,7 @@
 ---
-title: Query language architecture
+title: Query Language Architecture
 type: memory
-updated: 2026-05-28
+updated: 2026-06-12
 surface: src/types/queryLanguage.ts, src/lib/sql/**, src/lib/mongo/**, src-tauri/*-parser-core/**
 task: query-language, parser, completion, safe-mode
 trigger:

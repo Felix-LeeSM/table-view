@@ -1,7 +1,7 @@
 ---
-title: TDD evidence for code-profile sprints
+title: TDD Evidence
 type: workflow-rule
-updated: 2026-05-23
+updated: 2026-06-12
 task: tdd, delivery, pre-push, sprint
 trigger:
   signal: code-profile sprint, RED commit, TDD-cycle hook
