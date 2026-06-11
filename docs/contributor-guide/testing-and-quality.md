@@ -7,6 +7,33 @@ sequencing lives in [`docs/ROADMAP.md`](../ROADMAP.md). The retired risk registe
 is archived at
 [`docs/archives/risks/active-risk-register-2026-05-27.md`](../archives/risks/active-risk-register-2026-05-27.md).
 
+## Fixture And Test Topology SOT
+
+Fixture/test topology is a support-claim control, not a product support
+expansion. The durable rule owner is
+`memory/engineering/conventions/testing-scenarios/fixtures/memory.md`; the
+current evidence inventory is
+[`docs/contributor-guide/fixture-test-topology-inventory.md`](fixture-test-topology-inventory.md);
+the product-facing support boundary stays in `docs/product/**`.
+
+| Surface | Owner | Rule |
+|---|---|---|
+| DBMS-first E2E seeds | `e2e/fixtures/<dbms>/<function>/...` | Runtime seed topology is DBMS-first, then capability/function. Existing active functions are `query`, `document`, `kv`, and `search`; future `completion`, `catalog`, `explain`, `errors`, `edit`, `safety`, or `metadata` roots need a consuming test and promotion decision. |
+| Smoke promotion decisions | `e2e/fixtures/smoke-routing-decisions.json` | Every fixture/root records `unit-only`, `integration-backed`, `dormant E2E`, or `blocking E2E` with cost/risk/support-claim impact before it can be cited in smoke evidence. |
+| Shared contract fixtures | `tests/fixtures/**` | Shared TS/Rust/parser/support-boundary fixtures are contract evidence only. Unsupported-boundary fixtures are negative evidence and do not widen runtime support. |
+| Backend adapter fixture harness | `src-tauri/src/db/fixtures.rs`, `src-tauri/tests/fixture_harness.rs` | Adapter fixtures are requested by profile/family/paradigm/capability. Missing fixture diagnostics are failures, not silent skips. Current embedded harness coverage is Search-only. |
+| Generator/profile specs | `fixtures/**`, `scripts/fixtures/*.test.ts` | Generator/profile specs validate fixture tooling and local setup. Profile existence is not runtime support. |
+| Test placement | `src/**`, `src-tauri/tests`, `e2e/smoke`, `scripts/fixtures` | Frontend unit/component tests stay near their feature/domain; Rust integration stays under `src-tauri/tests`; routine desktop smoke stays under script-wired `e2e/smoke`; fixture tooling tests stay under `scripts/fixtures`. |
+
+Promotion gate: fixture path + consuming contract/integration/E2E test +
+product docs or known-limitation review + smoke-routing decision. Fixture
+existence alone is never runtime evidence.
+
+Refactor 04 closure evidence is #750 -> #833, #751 -> #835, #752 -> #836,
+#753 -> #843, #754 -> #838, #769 -> #837, #770 -> #839, #771 -> #842,
+#772 -> #840, and #773 -> #841. Parent #575 is closure-ready only after #755
+lands and live GitHub still shows no open child issues beyond the parent.
+
 ## Backend And Integration Coverage
 
 | Area | Follow-up |

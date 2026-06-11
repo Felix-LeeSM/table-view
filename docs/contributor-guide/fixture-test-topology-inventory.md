@@ -2,7 +2,8 @@
 title: Fixture And Test Topology Inventory
 type: refactor-evidence
 issue: 750
-updated: 2026-06-11
+closure_issue: 755
+updated: 2026-06-12
 ---
 
 # Fixture And Test Topology Inventory
@@ -11,13 +12,19 @@ Issue #750 captures the current fixture and test topology before later Refactor
 04 work moves, shims, or deletes anything. This inventory does not move
 fixtures, change runtime behavior, or widen product support claims.
 
-Live GitHub state checked on 2026-06-11:
+Issue #755 keeps this page as the contributor-facing topology SOT after the
+Refactor 04 fixture/test child issues landed. Durable workflow rules live in
+`memory/engineering/conventions/testing-scenarios/fixtures/memory.md`; product
+support claims still live in `docs/product/README.md`,
+`docs/product/query-language-support.md`, and
+`docs/product/known-limitations.md`.
 
-- #750 is open in milestone `09.40 - Refactor 04 - Fixtures And Test Topology`.
-- Branch `codex/issue-750-fixture-topology-inventory` had no open PR and no
-  configured upstream at inventory time.
-- The only open repository PR found during this pass was #832 on unrelated
-  branch `codex/issue-747-postgres-ddl-emitters`.
+Live GitHub state checked on 2026-06-12:
+
+- #750/#751/#752/#753/#754/#769/#770/#771/#772/#773 are closed as completed.
+- #755 and parent #575 are the only open issues in milestone
+  `09.40 - Refactor 04 - Fixtures And Test Topology`.
+- The open repository PR list was empty before the #755 docs branch was created.
 
 ## Command Evidence
 
@@ -25,15 +32,15 @@ Required inventory commands:
 
 | Command | Result |
 |---|---|
-| `rg --files fixtures tests/fixtures e2e/fixtures` | 20 tracked fixture-root paths. |
-| `rg -n "FixtureHarness\|dbms-seeds\|seed\\." src-tauri tests scripts e2e` | 195 matches; includes expected tracked fixture/test hits plus local cache noise under `src-tauri/target/**`. Cache hits are excluded from topology decisions by the repository topology SOT. |
-| `pnpm exec vitest run scripts/fixtures/*.test.ts` | PASS: 10 files, 65 tests. |
+| `rg --files fixtures tests/fixtures e2e/fixtures` | 23 tracked fixture-root paths. |
+| `rg -n "FixtureHarness\|dbms-seeds\|seed\\." src-tauri tests scripts e2e --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | 84 tracked-source matches; cache and dependency hits are excluded from topology decisions by the repository topology SOT. |
+| `pnpm exec vitest run scripts/fixtures/*.test.ts tests/fixtures/*.test.ts` | PASS: 13 files, 98 tests. |
 
 Supporting checks:
 
 | Command | Result |
 |---|---|
-| `git ls-files fixtures tests/fixtures e2e/fixtures` | Same 20 tracked fixture-root paths. |
+| `git ls-files fixtures tests/fixtures e2e/fixtures` | Same 23 tracked fixture-root paths. |
 | `git check-ignore -v fixtures tests/fixtures e2e/fixtures tests/fixtures/data-source-profile-parity.report.json` | No ignored tracked fixture roots reported. |
 | `rg -n "data-source-profile-parity\\.report\|PROFILE_PARITY_REPORT\|profile parity report\|reportVersion" . --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | Report fixture is consumed by TS and Rust parity tests; no writer was found in the repo. |
 | `rg -n "writeFile\|writeFileSync\|fixture.*report\|report\\.json" scripts src src-tauri tests package.json --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | Fixture CLI writes runtime/app-storage state, not tracked fixture-root inventory files. |
@@ -42,7 +49,7 @@ Supporting checks:
 
 | Classification | Current paths | Evidence |
 |---|---:|---|
-| consumed | 20 tracked fixture-root paths plus `src-tauri/src/db/fixtures.rs` harness source | Every tracked fixture-root path is read by a fixture CLI, loader test, smoke seed path, smoke spec, parity test, or product support matrix test. |
+| consumed | 23 tracked fixture-root paths plus `src-tauri/src/db/fixtures.rs` harness source | Every tracked fixture-root path is read by a fixture CLI, loader test, smoke seed path, smoke spec, parity test, support-boundary test, or product support matrix test. |
 | dormant | 1 tracked fixture-root path | `fixtures/profiles/e2e.yaml` is explicitly documented as a compiled but currently dormant static contract. It is still loaded by fixture tests and pre-smoke gate checks. |
 | generated | none in tracked fixture roots | No tracked fixture-root writer found. Generator/runtime outputs are DB rows, local SQLite/DuckDB files, or app-storage connection state outside these roots. |
 | removal candidate | none | No unreferenced tracked fixture-root path found in this pass. Later #751/#752 work can reclassify only with fresh reference and smoke evidence. |
@@ -57,7 +64,10 @@ Supporting checks:
 | `tests/fixtures/data-source-profile-parity.report.json` | all `DatabaseType` profiles | authored static JSON report | `src/types/dataSourceProfileParity.test.ts`, `src-tauri/tests/data_source_profile_parity.rs` | TS/Rust strict profile parity contract; profile presence is not runtime support | none; product rows depend on profile/runtime evidence, not this report alone | none | consumed; keep |
 | `tests/fixtures/fk_reference_samples.json` | RDB FK reference parser/serializer sample | authored static JSON fixture | `tests/fixtures/fk_reference_samples.test.ts`, `src-tauri/tests/fixture_loading.rs`, `src/components/datagrid/DataGridTable.parseFkReference.test.ts`, `src-tauri/src/db/postgres/schema.rs` tests | shared parser/serializer fixture; not product/runtime evidence | none | none | consumed; keep |
 | `tests/fixtures/fk_reference_samples.test.ts` | RDB FK reference loader test | authored Vitest loader test colocated with fixture | `pnpm exec vitest run tests/fixtures/fk_reference_samples.test.ts` when selected by frontend tests | fixture loader evidence | none | none | consumed; keep as test source |
+| `tests/fixtures/unsupported_boundary_contracts.json` | unsupported/partial-support support-boundary rows | authored static JSON fixture | `tests/fixtures/unsupported_boundary_contracts.test.ts` | negative support-boundary evidence only; not runtime support | known-limitations/query-language boundary rows | none | consumed; keep |
+| `tests/fixtures/unsupported_boundary_contracts.test.ts` | unsupported-boundary loader/contract test | authored Vitest contract test colocated with fixture | `pnpm exec vitest run tests/fixtures/unsupported_boundary_contracts.test.ts` | support-boundary guard | none | none | consumed; keep as test source |
 | `e2e/fixtures/seed-smoke.ts` | PostgreSQL, MongoDB, MySQL, MariaDB, MSSQL, Oracle, Redis, Valkey, Elasticsearch, OpenSearch | authored smoke seed orchestrator | `scripts/e2e-smoke-ci.sh`, `scripts/fixtures/dbms-seeds.test.ts` | Runtime Happy Path seed routing for external-service smoke targets | `docs/product/README.md` Current Support Snapshot and Fixture Coverage Snapshot rows for the routed DBMSs | invoked before `scripts/e2e-smoke-ci.sh` runs wired specs; maps SQLite/DuckDB to no external seed | consumed; keep |
+| `e2e/fixtures/smoke-routing-decisions.json` | all tracked fixture-root promotion decisions | authored machine-readable routing table | `scripts/e2e-smoke-routing-decisions.ts`, `scripts/e2e-smoke-ci.sh`, `scripts/fixtures/dbms-seeds.test.ts` | smoke promotion SOT; records unit/integration/dormant/blocking tier with cost/risk | supports product docs by preventing fixture-only claim widening | pre-smoke guard runs before script-wired smoke specs | consumed; keep |
 | `e2e/fixtures/postgresql/query/seed.sql` | PostgreSQL | authored idempotent SQL seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed | PostgreSQL row; Fixture Coverage Snapshot PostgreSQL row | `postgres`, `postgres-safe-mode`, `postgres-explain`, `postgres-extension-completion`, `postgres-cancellation` specs via seed target `postgres` | consumed; keep |
 | `e2e/fixtures/mysql/query/seed.sql` | MySQL | authored idempotent SQL seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed | MySQL row; Fixture Coverage Snapshot MySQL row | `mysql` spec via seed target `mysql` | consumed; keep |
 | `e2e/fixtures/mariadb/query/seed.sql` | MariaDB | authored idempotent SQL seed with catalog/workbench probes | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed plus catalog probe contract | MariaDB row; Fixture Coverage Snapshot MariaDB row | `mariadb` spec via seed target `mariadb` | consumed; keep |
@@ -86,6 +96,25 @@ Supporting checks:
 - `src-tauri/src/db/fixtures.rs` currently registers embedded Search fixtures
   for Elasticsearch and OpenSearch only. Missing RDBMS fixture diagnostics are
   intentional and tested.
+
+## Refactor 04 Closure Evidence
+
+Parent #575 can close only after #755 lands and live GitHub still shows no open
+child issues beyond the parent. Do not infer closure from this table without a
+fresh issue/milestone check.
+
+| Issue | Merged PR | SOT impact |
+|---|---|---|
+| #750 inventory baseline | #833 | Captured tracked fixture roots and large scenario-test risks. |
+| #751 first fixture slice | #835 | Moved representative MySQL seed into DBMS/function topology. |
+| #752 first test suite split | #836 | Split SQL safety contracts into fixture-backed suites. |
+| #753 smoke routing | #843 | Added `e2e/fixtures/smoke-routing-decisions.json` and routing checks. |
+| #754 unsupported boundaries | #838 | Added negative support-boundary fixture contracts. |
+| #769 SQL fixtures | #837 | Moved SQL static seeds into DBMS/function topology. |
+| #770 Document/KV/Search fixtures | #839 | Moved JSON seeds with capability/proof labels. |
+| #771 loader shim | #842 | Added moved-seed compatibility guard and stale-path failure. |
+| #772 SQL core tests | #840 | Split SQL generator contracts below smoke. |
+| #773 UI/DDL tests | #841 | Split CreateTable and DDL scenario suites below smoke. |
 
 ## Issue #753 Smoke Promotion Decision Table
 
