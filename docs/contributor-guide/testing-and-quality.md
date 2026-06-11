@@ -14,6 +14,8 @@ expansion. The durable rule owner is
 `memory/engineering/conventions/testing-scenarios/fixtures/memory.md`; the
 current evidence inventory is
 [`docs/contributor-guide/fixture-test-topology-inventory.md`](fixture-test-topology-inventory.md);
+the Refactor 05 support-claim audit ledger is
+[`docs/archives/audits/refactor-05-support-claims-ledger-2026-06-12.md`](../archives/audits/refactor-05-support-claims-ledger-2026-06-12.md);
 the product-facing support boundary stays in `docs/product/**`.
 
 | Surface | Owner | Rule |
