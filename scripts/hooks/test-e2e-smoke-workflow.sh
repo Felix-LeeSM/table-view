@@ -95,7 +95,7 @@ assert_matrix_contract() {
 }
 
 prepare_block="$(sed -n '/^  e2e-smoke-prepare:/,/^  e2e-smoke:/p' "$WORKFLOW" | sed '$d')"
-smoke_block="$(sed -n '/^  e2e-smoke:/,/^  e2e-smoke-required:/p' "$WORKFLOW" | sed '$d')"
+smoke_block="$(sed -n '/^  e2e-smoke:/,/^  e2e-smoke-file-backed:/p' "$WORKFLOW" | sed '$d')"
 file_backed_block="$(sed -n '/^  e2e-smoke-file-backed:/,/^  e2e-smoke-required:/p' "$WORKFLOW" | sed '$d')"
 required_block="$(sed -n '/^  e2e-smoke-required:/,$p' "$WORKFLOW")"
 smoke_script="$(cat "$SMOKE_SCRIPT")"
@@ -170,8 +170,8 @@ assert_contains "$file_backed_block" "E2E_SPEC_KEY: \${{ matrix.spec_key }}" "sq
 assert_not_contains "$file_backed_block" "services:" "sqlite file-backed smoke"
 assert_contains "$required_block" "e2e-smoke-file-backed" "sqlite file-backed smoke required gate"
 assert_contains "$required_block" "needs.e2e-smoke-file-backed.result" "sqlite file-backed smoke required gate"
-assert_contains "$smoke_block" "spec_key: sqlite" "sqlite smoke promotion"
-assert_contains "$smoke_block" "e2e/smoke/sqlite.spec.ts" "sqlite smoke promotion"
+assert_not_contains "$smoke_block" "spec_key: sqlite" "sqlite service-backed smoke"
+assert_not_contains "$smoke_block" "e2e/smoke/sqlite.spec.ts" "sqlite service-backed smoke"
 assert_contains "$smoke_block" "spec_key: duckdb" "duckdb smoke promotion"
 assert_contains "$smoke_block" "e2e/smoke/duckdb.spec.ts" "duckdb smoke promotion"
 assert_contains "$smoke_script" 'run_wdio "$BASE_DATA_DIR/sqlite" "e2e/smoke/sqlite.spec.ts"' "sqlite script wiring"
