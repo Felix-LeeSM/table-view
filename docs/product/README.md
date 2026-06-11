@@ -135,6 +135,9 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 있을 때만 product evidence 로 승격된다. Fixture/test topology SOT 는
 `docs/contributor-guide/fixture-test-topology-inventory.md` 와
 `memory/engineering/conventions/testing-scenarios/fixtures/memory.md` 가 소유한다.
+Refactor 05 support-claim audit 는
+`docs/archives/audits/refactor-05-support-claims-ledger-2026-06-12.md` 에서 product
+claim, docs row/path, evidence paths, proof tier, action 을 고정한다.
 
 | Source | Fixture asset | Current meaning |
 |---|---|---|
