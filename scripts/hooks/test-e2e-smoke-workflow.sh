@@ -43,7 +43,7 @@ write_workflow_matrix() {
 			print key " " $2
 			key = ""
 		}
-	' "$WORKFLOW" >"$TMP_DIR/workflow-matrix.txt"
+	' "$WORKFLOW" | sort >"$TMP_DIR/workflow-matrix.txt"
 }
 
 write_script_matrix() {
@@ -59,7 +59,7 @@ write_script_matrix() {
 
 			print key " " spec
 		}
-	' "$SMOKE_SCRIPT" >"$TMP_DIR/script-matrix.txt"
+		' "$SMOKE_SCRIPT" | sort >"$TMP_DIR/script-matrix.txt"
 }
 
 assert_matrix_contract() {
@@ -95,7 +95,9 @@ assert_matrix_contract() {
 }
 
 prepare_block="$(sed -n '/^  e2e-smoke-prepare:/,/^  e2e-smoke:/p' "$WORKFLOW" | sed '$d')"
-smoke_block="$(sed -n '/^  e2e-smoke:/,/^  e2e-smoke-required:/p' "$WORKFLOW" | sed '$d')"
+smoke_block="$(sed -n '/^  e2e-smoke:/,/^  e2e-smoke-file-backed:/p' "$WORKFLOW" | sed '$d')"
+file_backed_block="$(sed -n '/^  e2e-smoke-file-backed:/,/^  e2e-smoke-required:/p' "$WORKFLOW" | sed '$d')"
+required_block="$(sed -n '/^  e2e-smoke-required:/,$p' "$WORKFLOW")"
 smoke_script="$(cat "$SMOKE_SCRIPT")"
 sqlite_spec="$(cat "$ROOT/e2e/smoke/sqlite.spec.ts")"
 duckdb_spec="$(cat "$ROOT/e2e/smoke/duckdb.spec.ts")"
@@ -110,6 +112,10 @@ if [ -z "$prepare_block" ]; then
 fi
 if [ -z "$cache_line" ]; then
 	echo "FAIL: e2e-smoke-prepare must restore Rust target cache before building the Tauri smoke binary" >&2
+	exit 1
+fi
+if [ -z "$file_backed_block" ]; then
+	echo "FAIL: e2e-smoke-file-backed job is missing from $WORKFLOW" >&2
 	exit 1
 fi
 if [ -z "$build_line" ]; then
@@ -157,8 +163,15 @@ assert_contains "$smoke_block" "tauri-driver --help >/dev/null" "tauri-driver ca
 assert_not_contains "$smoke_block" "tauri-driver --version)" "tauri-driver cache"
 assert_contains "$smoke_block" "TAURI_DRIVER_VERSION" "tauri-driver cache"
 assert_matrix_contract
-assert_contains "$smoke_block" "spec_key: sqlite" "sqlite smoke promotion"
-assert_contains "$smoke_block" "e2e/smoke/sqlite.spec.ts" "sqlite smoke promotion"
+assert_contains "$file_backed_block" "spec_key: sqlite" "sqlite file-backed smoke"
+assert_contains "$file_backed_block" "e2e/smoke/sqlite.spec.ts" "sqlite file-backed smoke"
+assert_contains "$file_backed_block" "E2E_SPEC: \${{ matrix.spec }}" "sqlite file-backed smoke"
+assert_contains "$file_backed_block" "E2E_SPEC_KEY: \${{ matrix.spec_key }}" "sqlite file-backed smoke"
+assert_not_contains "$file_backed_block" "services:" "sqlite file-backed smoke"
+assert_contains "$required_block" "e2e-smoke-file-backed" "sqlite file-backed smoke required gate"
+assert_contains "$required_block" "needs.e2e-smoke-file-backed.result" "sqlite file-backed smoke required gate"
+assert_not_contains "$smoke_block" "spec_key: sqlite" "sqlite service-backed smoke"
+assert_not_contains "$smoke_block" "e2e/smoke/sqlite.spec.ts" "sqlite service-backed smoke"
 assert_contains "$smoke_block" "spec_key: duckdb" "duckdb smoke promotion"
 assert_contains "$smoke_block" "e2e/smoke/duckdb.spec.ts" "duckdb smoke promotion"
 assert_contains "$smoke_script" 'run_wdio "$BASE_DATA_DIR/sqlite" "e2e/smoke/sqlite.spec.ts"' "sqlite script wiring"

@@ -134,8 +134,6 @@ jobs:
             spec: e2e/smoke/mssql.spec.ts
           - spec_key: oracle
             spec: e2e/smoke/oracle.spec.ts
-          - spec_key: sqlite
-            spec: e2e/smoke/sqlite.spec.ts
           - spec_key: duckdb
             spec: e2e/smoke/duckdb.spec.ts
           - spec_key: mongodb
@@ -456,9 +454,119 @@ jobs:
           path: e2e/wdio-report
           if-no-files-found: ignore
 
+  e2e-smoke-file-backed:
+    name: Runtime Happy Path (${{ matrix.spec_key }}, ${{ matrix.spec }})
+    needs: e2e-smoke-prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - spec_key: sqlite
+            spec: e2e/smoke/sqlite.spec.ts
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            webkit2gtk-driver \
+            xvfb
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Restore tauri binary
+        uses: actions/download-artifact@v5
+        with:
+          name: e2e-smoke-tauri-binary
+          path: src-tauri/target/debug
+
+      - name: Make tauri binary executable
+        run: chmod +x src-tauri/target/debug/table-view
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+
+      - name: Cache tauri-driver binary
+        id: cache-tauri-driver
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/tauri-driver
+            ~/.cargo/bin/tauri-driver.version
+          key: tauri-driver-${{ runner.os }}-v${{ env.TAURI_DRIVER_VERSION }}
+
+      - name: Ensure tauri-driver cache contract
+        run: |
+          marker="${HOME}/.cargo/bin/tauri-driver.version"
+          needs_install=0
+
+          if [ ! -x "${HOME}/.cargo/bin/tauri-driver" ]; then
+            needs_install=1
+          elif [ ! -f "$marker" ] || [ "$(cat "$marker")" != "${TAURI_DRIVER_VERSION}" ]; then
+            needs_install=1
+          fi
+
+          if [ "$needs_install" -eq 1 ]; then
+            cargo install tauri-driver --version "${TAURI_DRIVER_VERSION}" --locked --force
+            printf '%s\n' "${TAURI_DRIVER_VERSION}" > "$marker"
+          fi
+
+          tauri-driver --help >/dev/null
+          cached_version="$(cat "$marker")"
+          case "$cached_version" in
+            "${TAURI_DRIVER_VERSION}") ;;
+            *)
+              echo "ERROR: tauri-driver cache drift: expected ${TAURI_DRIVER_VERSION}, got ${cached_version}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Run E2E smoke
+        env:
+          E2E_SKIP_BUILD: "1"
+          E2E_SPEC: ${{ matrix.spec }}
+          E2E_SPEC_KEY: ${{ matrix.spec_key }}
+          E2E_REPORT_DIR: e2e/wdio-report/${{ matrix.spec_key }}
+        run: bash scripts/e2e-smoke-ci.sh
+
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-artifacts-${{ matrix.spec_key }}
+          path: e2e/wdio-report
+          if-no-files-found: ignore
+
   e2e-smoke-required:
     name: Runtime Happy Path
-    needs: e2e-smoke
+    needs:
+      - e2e-smoke
+      - e2e-smoke-file-backed
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
@@ -468,6 +576,10 @@ jobs:
         run: |
           if [ "${{ needs.e2e-smoke.result }}" != "success" ]; then
             echo "Runtime matrix result: ${{ needs.e2e-smoke.result }}"
+            exit 1
+          fi
+          if [ "${{ needs.e2e-smoke-file-backed.result }}" != "success" ]; then
+            echo "File-backed runtime result: ${{ needs.e2e-smoke-file-backed.result }}"
             exit 1
           fi
           echo "Runtime matrix passed."
