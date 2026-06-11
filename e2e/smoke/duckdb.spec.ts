@@ -143,7 +143,10 @@ async function prepareDuckdbFixture(path: string) {
   rmSync(path, { force: true });
   rmSync(`${path}.wal`, { force: true });
 
-  const sql = readFileSync(resolve("e2e/fixtures/seed.duckdb.sql"), "utf-8");
+  const sql = readFileSync(
+    resolve("e2e/fixtures/duckdb/query/seed.sql"),
+    "utf-8",
+  );
   const database = new duckdb.Database(path);
   const connection = database.connect();
 

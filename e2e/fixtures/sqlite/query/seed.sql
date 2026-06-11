@@ -1,7 +1,8 @@
 -- Canonical SQLite E2E seed.
 --
 -- Idempotency contract: re-running this file against an already-seeded
--- database file MUST exit 0. Execute with `sqlite3 <db-file> < seed.sqlite.sql`.
+-- database file MUST exit 0. Execute with
+-- `sqlite3 <db-file> < e2e/fixtures/sqlite/query/seed.sql`.
 --
 -- SQLite has no server database switch; this fixture models the single file
 -- connection with the `main` namespace and keeps FK enforcement explicit.

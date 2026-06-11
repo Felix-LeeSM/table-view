@@ -221,7 +221,7 @@ async function retry(label: string, fn: () => Promise<void>) {
 }
 
 async function seedPostgres() {
-  const sql = await readFile(resolve("e2e/fixtures/seed.sql"), "utf-8");
+  const sql = await readFile("e2e/fixtures/postgresql/query/seed.sql", "utf-8");
   await retry("Postgres", async () => {
     const client = new PgClient(pgConfig);
     await client.connect();
@@ -282,7 +282,7 @@ async function seedMysql() {
 }
 
 async function seedMariadb() {
-  const sql = await readFile(resolve("e2e/fixtures/seed.mariadb.sql"), "utf-8");
+  const sql = await readFile("e2e/fixtures/mariadb/query/seed.sql", "utf-8");
   await retry("MariaDB", async () => {
     const connection = await createConnection({
       ...mariadbConfig,

@@ -1,7 +1,8 @@
 -- Canonical DuckDB E2E seed.
 --
 -- Idempotency contract: re-running this file against an already-seeded
--- database MUST exit 0. Execute with `duckdb <db-file> < seed.duckdb.sql`.
+-- database MUST exit 0. Execute with
+-- `duckdb <db-file> < e2e/fixtures/duckdb/query/seed.sql`.
 --
 -- DuckDB uses PG-compatible SQL. The baseline tables live in named schemas
 -- to mirror PostgreSQL's fixture shape (core, catalog, sales, support).
