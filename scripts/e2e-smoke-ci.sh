@@ -71,6 +71,7 @@ fi
 mkdir -p "$REPORT_DIR"
 find "$REPORT_DIR" -type f ! -name .gitkeep -delete
 
+pnpm tsx scripts/e2e-smoke-routing-decisions.ts
 pnpm tsx scripts/e2e-pre-smoke-release-gate.ts
 if [[ "${E2E_BUILD_ONLY:-0}" != "1" ]]; then
   pnpm tsx e2e/fixtures/seed-smoke.ts
