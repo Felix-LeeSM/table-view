@@ -11,8 +11,9 @@ Redis/Valkey, Elasticsearch/OpenSearch 이후 Cassandra, DynamoDB, graph DB,
 vector DB 같은 다른 paradigm 을 추가할 때 매번 UI/store/query path 를 새로
 갈아엎지 않기 위한 확장 계약을 정의한다.
 
-본 문서는 product roadmap 이 아니라 architecture SOT 다. Roadmap 순서는
-`docs/ROADMAP.md`, active 실행 순서는 `docs/PLAN.md` 가 가진다.
+본 문서는 product roadmap 이 아니라 architecture SOT 다. Roadmap / active 실행
+순서는 `docs/ROADMAP.md` 와 live GitHub milestone/issue state 가 가진다.
+`docs/PLAN.md` 는 roadmap/product 인덱스다.
 
 ## Core Decision
 
