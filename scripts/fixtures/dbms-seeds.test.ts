@@ -8,7 +8,7 @@ import {
 
 const DBMS_SEED_FILES = [
   ["postgresql", "seed.sql"],
-  ["mysql", "seed.mysql.sql"],
+  ["mysql", "mysql/query/seed.sql"],
   ["mariadb", "seed.mariadb.sql"],
   ["sqlite", "seed.sqlite.sql"],
   ["duckdb", "seed.duckdb.sql"],
@@ -362,6 +362,22 @@ describe("DBMS-specific E2E seed fixtures", () => {
     );
     expect(seedScript).toContain('mssql: ["mssql"]');
     expect(seedScript).toContain("seed.mssql.sql");
+  });
+
+  it("mysql fixture seed is wired from DBMS/function query topology", () => {
+    const smokeScript = readFileSync(resolve("scripts/e2e-smoke-ci.sh"), {
+      encoding: "utf8",
+    });
+    const seedScript = readFileSync(resolve("e2e/fixtures/seed-smoke.ts"), {
+      encoding: "utf8",
+    });
+
+    expect(smokeScript).toContain(
+      'run_wdio "$BASE_DATA_DIR/mysql" "e2e/smoke/mysql.spec.ts"',
+    );
+    expect(seedScript).toContain('mysql: ["mysql"]');
+    expect(seedScript).toContain("mysql/query/seed.sql");
+    expect(seedScript).not.toContain("seed.mysql.sql");
   });
 
   it("oracle fixture seed is wired into Runtime Happy Path smoke", () => {
