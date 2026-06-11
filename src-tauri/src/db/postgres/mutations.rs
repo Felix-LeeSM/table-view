@@ -10,13 +10,21 @@ use tracing::info;
 
 use crate::error::AppError;
 use crate::models::{
-    AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ConstraintDefinition,
-    CreateIndexRequest, CreateTableRequest, CreateTriggerRequest, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, DropTriggerRequest,
-    RenameTableRequest, SchemaChangeResult,
+    AddColumnRequest, AddConstraintRequest, AlterTableRequest, CreateIndexRequest,
+    CreateTableRequest, CreateTriggerRequest, DropColumnRequest, DropConstraintRequest,
+    DropIndexRequest, DropTableRequest, DropTriggerRequest, RenameTableRequest, SchemaChangeResult,
 };
 
 use super::PostgresAdapter;
+
+mod ddl;
+mod triggers;
+use ddl::{
+    build_add_column_sql, build_add_constraint_sql, build_alter_table_sql, build_create_index_sql,
+    build_create_table_plan, build_drop_column_sql, build_drop_constraint_sql,
+    build_drop_index_sql, build_drop_table_sql, build_rename_table_sql,
+};
+use triggers::{build_create_trigger_sql, build_drop_trigger_sql};
 
 /// PG `NAMEDATALEN` default — identifiers longer than 63 bytes are
 /// truncated by the server. Sprint 235 surfaces the 63-byte boundary as
@@ -80,246 +88,6 @@ pub(super) fn qualified_table(schema: &str, table: &str) -> String {
     format!("{}.{}", quote_identifier(schema), quote_identifier(table))
 }
 
-/// Sprint 273 — PG canonical timing whitelist for `CREATE TRIGGER`.
-/// Case-sensitive uppercase; caller (frontend dialog) sends canonical
-/// strings — mismatches are rejected via `AppError::Validation`.
-const TRIGGER_TIMINGS: &[&str] = &["BEFORE", "AFTER", "INSTEAD OF"];
-
-/// Sprint 273 — PG canonical orientation whitelist.
-const TRIGGER_ORIENTATIONS: &[&str] = &["ROW", "STATEMENT"];
-
-/// Sprint 273 — canonical event order. The SQL emitter sorts the
-/// caller's `events` input against this order before joining with ` OR `
-/// so the emitted SQL is deterministic regardless of payload order.
-/// TRUNCATE is intentionally absent — master spec § 7 hides TRUNCATE
-/// from the CREATE dialog and rejects it as an invalid event here.
-const TRIGGER_EVENT_CANONICAL_ORDER: &[&str] = &["INSERT", "UPDATE", "DELETE"];
-
-/// Sprint 273 — `CREATE TRIGGER` SQL emitter (pure helper, no pool
-/// access so it is unit-testable from `#[cfg(test)]` fixtures without a
-/// running PG).
-///
-/// Emission shape:
-///
-///   `CREATE TRIGGER "<name>" {BEFORE|AFTER|INSTEAD OF} <events> ON
-///    "<schema>"."<table>" FOR EACH {ROW|STATEMENT} [WHEN (<expr>)]
-///    EXECUTE FUNCTION "<fn_schema>"."<fn_name>"(<args>)`
-///
-/// Validation order (each returns `AppError::Validation` on failure):
-///   1. `trigger_name`, `schema`, `table`, `function_schema`,
-///      `function_name` pass `validate_identifier`.
-///   2. `timing` ∈ `TRIGGER_TIMINGS`.
-///   3. `orientation` ∈ `TRIGGER_ORIENTATIONS`.
-///   4. `events` non-empty and every element ∈
-///      `TRIGGER_EVENT_CANONICAL_ORDER`.
-///   5. `INSTEAD OF + STATEMENT` rejected.
-///   6. `INSTEAD OF + multi-event` rejected (PG itself does not accept
-///      `INSTEAD OF INSERT OR UPDATE`, but we surface the error
-///      pre-dispatch so the dialog can render it inline).
-///
-/// `function_arguments`: every `'` in the free-text input is doubled
-/// (`'` → `''`) before being interpolated into `(args)`. Closes Sprint
-/// 272 findings § P3 — without this, an argument literal `O'Brien`
-/// would unbalance the quoting and either fail PG parse or, in the
-/// worst case, allow injection through trailing fragments. Identifier
-/// validation rejects embedded `"` / NUL / whitespace upstream, so
-/// `function_arguments` is the only free-text input we have to
-/// re-escape.
-///
-/// `when_expression`: parenthesised verbatim (`WHEN (<expr>)`); empty /
-/// whitespace-only string is treated as "no clause" and omitted. PG
-/// surfaces any verbatim parse error.
-fn build_create_trigger_sql(req: &CreateTriggerRequest) -> Result<String, AppError> {
-    validate_identifier(&req.trigger_name, "Trigger name")?;
-    validate_identifier(&req.schema, "Schema name")?;
-    validate_identifier(&req.table, "Table name")?;
-    validate_identifier(&req.function_schema, "Function schema")?;
-    validate_identifier(&req.function_name, "Function name")?;
-
-    if !TRIGGER_TIMINGS.contains(&req.timing.as_str()) {
-        return Err(AppError::Validation(format!(
-            "Invalid trigger timing: {} (expected one of BEFORE / AFTER / INSTEAD OF)",
-            req.timing
-        )));
-    }
-
-    if !TRIGGER_ORIENTATIONS.contains(&req.orientation.as_str()) {
-        return Err(AppError::Validation(format!(
-            "Invalid trigger orientation: {} (expected ROW or STATEMENT)",
-            req.orientation
-        )));
-    }
-
-    if req.events.is_empty() {
-        return Err(AppError::Validation(
-            "Trigger must declare at least one event (INSERT / UPDATE / DELETE)".into(),
-        ));
-    }
-
-    for event in &req.events {
-        if !TRIGGER_EVENT_CANONICAL_ORDER.contains(&event.as_str()) {
-            return Err(AppError::Validation(format!(
-                "Invalid trigger event: {} (expected INSERT / UPDATE / DELETE)",
-                event
-            )));
-        }
-    }
-
-    // INSTEAD OF cannot combine with STATEMENT — PG itself rejects
-    // `INSTEAD OF ... FOR EACH STATEMENT` because INSTEAD OF triggers
-    // fire per-row on a view. Reject pre-dispatch so the dialog can
-    // render the failure inline (the modal's STATEMENT radio is also
-    // disabled when timing == INSTEAD OF as a defense-in-depth UX
-    // hint).
-    if req.timing == "INSTEAD OF" && req.orientation == "STATEMENT" {
-        return Err(AppError::Validation(
-            "INSTEAD OF triggers must use FOR EACH ROW (PG does not accept STATEMENT here)".into(),
-        ));
-    }
-
-    // INSTEAD OF cannot combine with multi-event — PG rejects
-    // `INSTEAD OF INSERT OR UPDATE` because INSTEAD OF fires per-row
-    // against a specific operation. Reject pre-dispatch for the same
-    // dialog inline-feedback reason.
-    if req.timing == "INSTEAD OF" && req.events.len() > 1 {
-        return Err(AppError::Validation(
-            "INSTEAD OF triggers must declare exactly one event (not multi-event)".into(),
-        ));
-    }
-
-    // Canonical event order: walk the canonical list in order and
-    // append any event the caller declared. Set-style dedupe is implicit
-    // — duplicates in the input are emitted at most once. Output order
-    // is byte-stable regardless of payload order (fixture iv in the
-    // contract Test Requirements).
-    let mut ordered_events: Vec<&str> = Vec::with_capacity(req.events.len());
-    for canonical in TRIGGER_EVENT_CANONICAL_ORDER {
-        if req.events.iter().any(|e| e == canonical) {
-            ordered_events.push(canonical);
-        }
-    }
-    let events_clause = ordered_events.join(" OR ");
-
-    // Sprint 272 findings § P3 — single-quote re-escape on
-    // `function_arguments`. Identifier validation already rejected
-    // embedded `"` / NUL for the schema/name pair, so the only free-text
-    // tail that could unbalance the quoting is the argument list.
-    let args_clause = match req.function_arguments.as_deref() {
-        None => String::new(),
-        Some(s) => s.replace('\'', "''"),
-    };
-
-    let when_clause = match req.when_expression.as_deref() {
-        None => String::new(),
-        Some(expr) => {
-            let trimmed = expr.trim();
-            if trimmed.is_empty() {
-                String::new()
-            } else {
-                // Free-text passthrough — PG surfaces parse errors
-                // verbatim. Parenthesised so the WHEN clause is a
-                // well-formed boolean sub-expression regardless of the
-                // caller's wrapping.
-                format!(" WHEN ({})", trimmed)
-            }
-        }
-    };
-
-    let qualified_target = qualified_table(&req.schema, &req.table);
-    let qualified_function = format!(
-        "{}.{}",
-        quote_identifier(&req.function_schema),
-        quote_identifier(&req.function_name)
-    );
-
-    let sql = format!(
-        "CREATE TRIGGER {} {} {} ON {} FOR EACH {}{} EXECUTE FUNCTION {}({})",
-        quote_identifier(&req.trigger_name),
-        req.timing,
-        events_clause,
-        qualified_target,
-        req.orientation,
-        when_clause,
-        qualified_function,
-        args_clause,
-    );
-    Ok(sql)
-}
-
-/// Sprint 274 — `DROP TRIGGER` SQL emitter (pure helper, no pool access
-/// so it is unit-testable from `#[cfg(test)]` fixtures without a running
-/// PG).
-///
-/// Emission shape:
-///
-///   `DROP TRIGGER "<name>" ON "<schema>"."<table>"` (+ trailing
-///   ` CASCADE` when `req.cascade == true`).
-///
-/// Validation order (each returns `AppError::Validation` on failure):
-///   1. `trigger_name` passes `validate_identifier`.
-///   2. `schema` passes `validate_identifier`.
-///   3. `table` passes `validate_identifier`.
-///
-/// No `IF EXISTS` keyword — let PG surface its native `trigger "X" for
-/// relation "Y" does not exist` error verbatim (mirrors Sprint 235
-/// `drop_table` policy).
-fn build_drop_trigger_sql(req: &DropTriggerRequest) -> Result<String, AppError> {
-    validate_identifier(&req.trigger_name, "Trigger name")?;
-    validate_identifier(&req.schema, "Schema name")?;
-    validate_identifier(&req.table, "Table name")?;
-
-    let qualified_target = qualified_table(&req.schema, &req.table);
-    let sql = if req.cascade {
-        format!(
-            "DROP TRIGGER {} ON {} CASCADE",
-            quote_identifier(&req.trigger_name),
-            qualified_target,
-        )
-    } else {
-        format!(
-            "DROP TRIGGER {} ON {}",
-            quote_identifier(&req.trigger_name),
-            qualified_target,
-        )
-    };
-    Ok(sql)
-}
-
-/// Sprint 229 — closed whitelist of PG canonical referential actions
-/// for FK ON DELETE / ON UPDATE clauses (case-sensitive uppercase).
-const REFERENTIAL_ACTIONS: &[&str] = &[
-    "NO ACTION",
-    "RESTRICT",
-    "CASCADE",
-    "SET NULL",
-    "SET DEFAULT",
-];
-
-/// Format a referential action clause (`" ON DELETE CASCADE"` etc.)
-/// when the action is `Some`. Validates against the closed whitelist
-/// `{NO ACTION | RESTRICT | CASCADE | SET NULL | SET DEFAULT}` —
-/// case-sensitive uppercase, PG canonical form. Returns the empty
-/// string when `None` so the calling SQL emitter can append
-/// unconditionally without trailing whitespace when both clauses are
-/// omitted (Sprint 226+227+228 byte-equivalence).
-fn format_referential_action_clause(
-    action: Option<&str>,
-    keyword: &str,
-) -> Result<String, AppError> {
-    match action {
-        None => Ok(String::new()),
-        Some(value) => {
-            if !REFERENTIAL_ACTIONS.contains(&value) {
-                return Err(AppError::Validation(format!(
-                    "Invalid {} action: {}",
-                    keyword, value
-                )));
-            }
-            Ok(format!(" {} {}", keyword, value))
-        }
-    }
-}
-
 impl PostgresAdapter {
     /// Drop a table permanently — Sprint 235 request-shaped variant.
     ///
@@ -343,15 +111,7 @@ impl PostgresAdapter {
     /// flips the error type for "drop a non-existent table" from
     /// `AppError::NotFound` to `AppError::Database`.
     pub async fn drop_table(&self, req: &DropTableRequest) -> Result<SchemaChangeResult, AppError> {
-        validate_identifier(&req.schema, "Schema name")?;
-        validate_identifier(&req.table, "Table name")?;
-
-        let qualified = qualified_table(&req.schema, &req.table);
-        let sql = if req.cascade {
-            format!("DROP TABLE {} CASCADE", qualified)
-        } else {
-            format!("DROP TABLE {}", qualified)
-        };
+        let sql = build_drop_table_sql(req)?;
 
         if req.preview_only {
             return Ok(SchemaChangeResult { sql });
@@ -400,13 +160,7 @@ impl PostgresAdapter {
         &self,
         req: &RenameTableRequest,
     ) -> Result<SchemaChangeResult, AppError> {
-        validate_identifier(&req.schema, "Schema name")?;
-        validate_identifier(&req.table, "Table name")?;
-        validate_identifier(&req.new_name, "New table name")?;
-
-        let qualified_old = qualified_table(&req.schema, &req.table);
-        let quoted_new = quote_identifier(req.new_name.trim());
-        let sql = format!("ALTER TABLE {} RENAME TO {}", qualified_old, quoted_new);
+        let sql = build_rename_table_sql(req)?;
 
         if req.preview_only {
             return Ok(SchemaChangeResult { sql });
@@ -461,46 +215,7 @@ impl PostgresAdapter {
     /// a `BEGIN/COMMIT` transaction (mirrors `rename_table` /
     /// `drop_table` / `create_table`).
     pub async fn add_column(&self, req: &AddColumnRequest) -> Result<SchemaChangeResult, AppError> {
-        validate_identifier(&req.schema, "Schema name")?;
-        validate_identifier(&req.table, "Table name")?;
-        validate_identifier(&req.column.name, "Column name")?;
-        if req.column.data_type.trim().is_empty() {
-            return Err(AppError::Validation(format!(
-                "Column '{}' must have a non-empty data type",
-                req.column.name
-            )));
-        }
-
-        let qualified = qualified_table(&req.schema, &req.table);
-        let mut col_def = format!(
-            "{} {}",
-            quote_identifier(&req.column.name),
-            req.column.data_type.trim()
-        );
-        // Sprint 242 — IDENTITY mirrors the `create_table` branch:
-        // forced NOT NULL, default_value silently dropped (the
-        // sequence is the default).
-        if req.column.is_identity {
-            col_def.push_str(" GENERATED BY DEFAULT AS IDENTITY NOT NULL");
-        } else {
-            if !req.column.nullable {
-                col_def.push_str(" NOT NULL");
-            }
-            if let Some(default) = &req.column.default_value {
-                let trimmed = default.trim();
-                if !trimmed.is_empty() {
-                    col_def.push_str(&format!(" DEFAULT {}", trimmed));
-                }
-            }
-        }
-        if let Some(expr) = &req.check_expression {
-            let trimmed = expr.trim();
-            if !trimmed.is_empty() {
-                col_def.push_str(&format!(" CHECK ({})", trimmed));
-            }
-        }
-
-        let sql = format!("ALTER TABLE {} ADD COLUMN {}", qualified, col_def);
+        let sql = build_add_column_sql(req)?;
 
         if req.preview_only {
             return Ok(SchemaChangeResult { sql });
@@ -547,20 +262,7 @@ impl PostgresAdapter {
         &self,
         req: &DropColumnRequest,
     ) -> Result<SchemaChangeResult, AppError> {
-        validate_identifier(&req.schema, "Schema name")?;
-        validate_identifier(&req.table, "Table name")?;
-        validate_identifier(&req.column_name, "Column name")?;
-
-        let qualified = qualified_table(&req.schema, &req.table);
-        let quoted_col = quote_identifier(&req.column_name);
-        let sql = if req.cascade {
-            format!(
-                "ALTER TABLE {} DROP COLUMN {} CASCADE",
-                qualified, quoted_col
-            )
-        } else {
-            format!("ALTER TABLE {} DROP COLUMN {}", qualified, quoted_col)
-        };
+        let sql = build_drop_column_sql(req)?;
 
         if req.preview_only {
             return Ok(SchemaChangeResult { sql });
@@ -610,139 +312,10 @@ impl PostgresAdapter {
         &self,
         req: &CreateTableRequest,
     ) -> Result<SchemaChangeResult, AppError> {
-        validate_identifier(&req.schema, "Schema name")?;
-        validate_identifier(&req.name, "Table name")?;
-
-        if req.columns.is_empty() {
-            return Err(AppError::Validation(
-                "Table must have at least one column".into(),
-            ));
-        }
-
-        for col in &req.columns {
-            validate_identifier(&col.name, "Column name")?;
-            if col.data_type.trim().is_empty() {
-                return Err(AppError::Validation(format!(
-                    "Column '{}' must have a non-empty data type",
-                    col.name
-                )));
-            }
-        }
-
-        // PK columns must be drawn from the declared column list.
-        // Defending here mirrors the frontend pre-validation so a stale
-        // PK reference (e.g. user removed a column row after marking it
-        // PK) still gets rejected even if the modal were bypassed.
-        if let Some(pk_cols) = &req.primary_key {
-            for pk in pk_cols {
-                validate_identifier(pk, "Primary key column name")?;
-                if !req.columns.iter().any(|c| c.name == *pk) {
-                    return Err(AppError::Validation(format!(
-                        "Primary key column '{}' is not declared in the column list",
-                        pk
-                    )));
-                }
-            }
-        }
-
-        let qualified = qualified_table(&req.schema, &req.name);
-
-        let mut col_defs: Vec<String> = Vec::with_capacity(req.columns.len() + 1);
-        for col in &req.columns {
-            let mut def = format!("{} {}", quote_identifier(&col.name), col.data_type.trim());
-            // Sprint 242 — IDENTITY columns are SQL-standard NOT NULL
-            // (the spec requires it; PG enforces it). The IDENTITY
-            // sequence acts as the column default, so a caller-supplied
-            // `default_value` is silently dropped — emitting both would
-            // be a syntax error.
-            if col.is_identity {
-                def.push_str(" GENERATED BY DEFAULT AS IDENTITY NOT NULL");
-            } else {
-                if !col.nullable {
-                    def.push_str(" NOT NULL");
-                }
-                if let Some(default) = &col.default_value {
-                    let trimmed = default.trim();
-                    if !trimmed.is_empty() {
-                        def.push_str(&format!(" DEFAULT {}", trimmed));
-                    }
-                }
-            }
-            col_defs.push(def);
-        }
-
-        if let Some(pk_cols) = &req.primary_key {
-            if !pk_cols.is_empty() {
-                let quoted: Vec<String> = pk_cols.iter().map(|c| quote_identifier(c)).collect();
-                col_defs.push(format!("PRIMARY KEY ({})", quoted.join(", ")));
-            }
-        }
-
-        let create_sql = format!("CREATE TABLE {} ({})", qualified, col_defs.join(", "));
-
-        // Sprint 227 — emit `COMMENT ON COLUMN` per column whose
-        // post-trim comment is non-empty. Single-quote escape doubles
-        // any internal `'` (`O'Brien` → `'O''Brien'`). Empty /
-        // whitespace-only comments emit no statement (column-comment
-        // SQL is *additive* — 0-comment forms must remain
-        // byte-equivalent to the Sprint 226 fixture).
-        //
-        // Atomic policy = C: the comment statements are appended to the
-        // CREATE TABLE statement in column-declaration order and
-        // executed inside the same transaction, so a CREATE TABLE
-        // failure rolls back the comments and a comment failure rolls
-        // back the table. The full multi-statement payload returned
-        // from `preview_only` mirrors the executed batch byte-for-byte.
-        let mut comment_stmts: Vec<String> = Vec::new();
-        // Sprint 234 — table-level COMMENT ON TABLE statement, emitted
-        // FIRST so the chain order is `table comment → column comments`
-        // (Sprint 226-233 caller invariant: `table_comment = None` keeps
-        // the SQL byte-equivalent because no statement is appended).
-        // Single-quote escape mirrors the per-column comment rule below.
-        if let Some(raw) = &req.table_comment {
-            let trimmed = raw.trim();
-            if !trimmed.is_empty() {
-                let escaped = trimmed.replace('\'', "''");
-                comment_stmts.push(format!("COMMENT ON TABLE {} IS '{}'", qualified, escaped));
-            }
-        }
-        for col in &req.columns {
-            if let Some(raw) = &col.comment {
-                let trimmed = raw.trim();
-                if trimmed.is_empty() {
-                    continue;
-                }
-                let escaped = trimmed.replace('\'', "''");
-                comment_stmts.push(format!(
-                    "COMMENT ON COLUMN {}.{} IS '{}'",
-                    qualified,
-                    quote_identifier(&col.name),
-                    escaped
-                ));
-            }
-        }
-
-        let sql = if comment_stmts.is_empty() {
-            create_sql.clone()
-        } else {
-            // Each statement separated by `; ` (one space after the
-            // semicolon mirrors the multi-statement convention used by
-            // `alter_table`'s comma-joined parts) and a trailing `;`
-            // after the final comment so the executed batch is a
-            // syntactically clean script. The CREATE TABLE itself
-            // remains unterminated when no comments exist (Sprint 226
-            // byte-equivalence requires no trailing `;`).
-            let mut s = create_sql.clone();
-            for stmt in &comment_stmts {
-                s.push_str("; ");
-                s.push_str(stmt);
-            }
-            s.push(';');
-            s
-        };
+        let plan = build_create_table_plan(req)?;
 
         if req.preview_only {
-            return Ok(SchemaChangeResult { sql });
+            return Ok(SchemaChangeResult { sql: plan.sql });
         }
 
         let pool = self.active_pool().await?;
@@ -759,7 +332,7 @@ impl PostgresAdapter {
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
 
-        if let Err(e) = sqlx::query(&create_sql).execute(&mut *tx).await {
+        if let Err(e) = sqlx::query(&plan.create_sql).execute(&mut *tx).await {
             // Best-effort rollback. The original DB error is the
             // user-facing failure; rollback errors are discarded so
             // the message stays clean.
@@ -767,7 +340,7 @@ impl PostgresAdapter {
             return Err(AppError::Database(e.to_string()));
         }
 
-        for stmt in &comment_stmts {
+        for stmt in &plan.comment_stmts {
             if let Err(e) = sqlx::query(stmt).execute(&mut *tx).await {
                 let _ = tx.rollback().await;
                 return Err(AppError::Database(e.to_string()));
@@ -779,7 +352,7 @@ impl PostgresAdapter {
             .map_err(|e| AppError::Database(format!("commit failed: {}", e)))?;
 
         info!("Created table {}.{}", req.schema, req.name);
-        Ok(SchemaChangeResult { sql })
+        Ok(SchemaChangeResult { sql: plan.sql })
     }
 
     /// ALTER TABLE: add, modify, or drop columns in batch.
@@ -788,105 +361,7 @@ impl PostgresAdapter {
         &self,
         req: &AlterTableRequest,
     ) -> Result<SchemaChangeResult, AppError> {
-        validate_identifier(&req.schema, "Schema name")?;
-        validate_identifier(&req.table, "Table name")?;
-
-        if req.changes.is_empty() {
-            return Err(AppError::Validation(
-                "At least one column change is required".into(),
-            ));
-        }
-
-        // Validate all column names in changes
-        for change in &req.changes {
-            match change {
-                ColumnChange::Add { name, .. } => validate_identifier(name, "Column name")?,
-                ColumnChange::Modify {
-                    name,
-                    new_data_type,
-                    using_expression,
-                    ..
-                } => {
-                    validate_identifier(name, "Column name")?;
-                    // Sprint 237 — defensive: USING without a type change
-                    // is semantically meaningless (PG ties `USING <expr>`
-                    // to the TYPE clause). Reject up front so the user
-                    // sees a deterministic message instead of silently
-                    // dropping the expression.
-                    if new_data_type.is_none() && using_expression.is_some() {
-                        return Err(AppError::Validation(
-                            "USING expression requires a new data type".into(),
-                        ));
-                    }
-                }
-                ColumnChange::Drop { name } => validate_identifier(name, "Column name")?,
-            }
-        }
-
-        let qualified = qualified_table(&req.schema, &req.table);
-
-        let mut parts: Vec<String> = Vec::new();
-
-        for change in &req.changes {
-            match change {
-                ColumnChange::Add {
-                    name,
-                    data_type,
-                    nullable,
-                    default_value,
-                } => {
-                    let mut sql = format!("ADD COLUMN {} {}", quote_identifier(name), data_type);
-                    if !nullable {
-                        sql.push_str(" NOT NULL");
-                    }
-                    if let Some(default) = default_value {
-                        sql.push_str(&format!(" DEFAULT {}", default));
-                    }
-                    parts.push(sql);
-                }
-                ColumnChange::Modify {
-                    name,
-                    new_data_type,
-                    new_nullable,
-                    new_default_value,
-                    using_expression,
-                } => {
-                    let quoted_name = quote_identifier(name);
-                    if let Some(dt) = new_data_type {
-                        // Sprint 237 — append USING <expr> to the TYPE
-                        // clause when the caller supplied an explicit
-                        // cast expression. `using_expression = None`
-                        // emits the pre-Sprint-237 SQL byte-for-byte
-                        // (regression guard test pins this).
-                        match using_expression {
-                            Some(expr) => parts.push(format!(
-                                "ALTER COLUMN {} TYPE {} USING {}",
-                                quoted_name, dt, expr
-                            )),
-                            None => parts.push(format!("ALTER COLUMN {} TYPE {}", quoted_name, dt)),
-                        }
-                    }
-                    if let Some(nullable) = new_nullable {
-                        if *nullable {
-                            parts.push(format!("ALTER COLUMN {} DROP NOT NULL", quoted_name));
-                        } else {
-                            parts.push(format!("ALTER COLUMN {} SET NOT NULL", quoted_name));
-                        }
-                    }
-                    if let Some(default) = new_default_value {
-                        parts.push(format!(
-                            "ALTER COLUMN {} SET DEFAULT {}",
-                            quoted_name, default
-                        ));
-                    }
-                }
-                ColumnChange::Drop { name } => {
-                    parts.push(format!("DROP COLUMN {}", quote_identifier(name)));
-                }
-            }
-        }
-
-        let sql = format!("ALTER TABLE {} {}", qualified, parts.join(", "));
+        let sql = build_alter_table_sql(req)?;
 
         if req.preview_only {
             return Ok(SchemaChangeResult { sql });
@@ -910,42 +385,7 @@ impl PostgresAdapter {
         &self,
         req: &CreateIndexRequest,
     ) -> Result<SchemaChangeResult, AppError> {
-        validate_identifier(&req.schema, "Schema name")?;
-        validate_identifier(&req.table, "Table name")?;
-        validate_identifier(&req.index_name, "Index name")?;
-
-        if req.columns.is_empty() {
-            return Err(AppError::Validation(
-                "At least one column is required for an index".into(),
-            ));
-        }
-
-        for col in &req.columns {
-            validate_identifier(col, "Index column name")?;
-        }
-
-        // Validate index type
-        let valid_index_types = ["btree", "hash", "gist", "gin", "brin"];
-        let index_type_lower = req.index_type.to_lowercase();
-        if !valid_index_types.contains(&index_type_lower.as_str()) {
-            return Err(AppError::Validation(format!(
-                "Index type must be one of: {}",
-                valid_index_types.join(", ")
-            )));
-        }
-
-        let qualified = qualified_table(&req.schema, &req.table);
-        let columns: Vec<String> = req.columns.iter().map(|c| quote_identifier(c)).collect();
-
-        let unique = if req.is_unique { "UNIQUE " } else { "" };
-        let sql = format!(
-            "CREATE {}INDEX {} ON {} USING {} ({})",
-            unique,
-            quote_identifier(&req.index_name),
-            qualified,
-            index_type_lower,
-            columns.join(", ")
-        );
+        let sql = build_create_index_sql(req)?;
 
         if req.preview_only {
             return Ok(SchemaChangeResult { sql });
@@ -968,16 +408,7 @@ impl PostgresAdapter {
     /// Drop an index.
     /// If `preview_only` is true, returns the generated SQL without executing.
     pub async fn drop_index(&self, req: &DropIndexRequest) -> Result<SchemaChangeResult, AppError> {
-        validate_identifier(&req.schema, "Schema name")?;
-        validate_identifier(&req.index_name, "Index name")?;
-
-        let if_exists = if req.if_exists { "IF EXISTS " } else { "" };
-        let sql = format!(
-            "DROP INDEX {}.{}{}",
-            quote_identifier(&req.schema),
-            if_exists,
-            quote_identifier(&req.index_name)
-        );
+        let sql = build_drop_index_sql(req)?;
 
         if req.preview_only {
             return Ok(SchemaChangeResult { sql });
@@ -1001,99 +432,7 @@ impl PostgresAdapter {
         &self,
         req: &AddConstraintRequest,
     ) -> Result<SchemaChangeResult, AppError> {
-        validate_identifier(&req.schema, "Schema name")?;
-        validate_identifier(&req.table, "Table name")?;
-        validate_identifier(&req.constraint_name, "Constraint name")?;
-
-        let qualified = qualified_table(&req.schema, &req.table);
-        let constraint_name = quote_identifier(&req.constraint_name);
-
-        let constraint_sql = match &req.definition {
-            ConstraintDefinition::PrimaryKey { columns } => {
-                if columns.is_empty() {
-                    return Err(AppError::Validation(
-                        "Primary key requires at least one column".into(),
-                    ));
-                }
-                for col in columns {
-                    validate_identifier(col, "Primary key column name")?;
-                }
-                let cols: Vec<String> = columns.iter().map(|c| quote_identifier(c)).collect();
-                format!("PRIMARY KEY ({})", cols.join(", "))
-            }
-            ConstraintDefinition::ForeignKey {
-                columns,
-                reference_table,
-                reference_columns,
-                on_delete,
-                on_update,
-            } => {
-                if columns.is_empty() {
-                    return Err(AppError::Validation(
-                        "Foreign key requires at least one column".into(),
-                    ));
-                }
-                for col in columns {
-                    validate_identifier(col, "Foreign key column name")?;
-                }
-                validate_identifier(reference_table, "Foreign key reference table name")?;
-                for col in reference_columns {
-                    validate_identifier(col, "Foreign key reference column name")?;
-                }
-                let cols: Vec<String> = columns.iter().map(|c| quote_identifier(c)).collect();
-                let ref_cols: Vec<String> = reference_columns
-                    .iter()
-                    .map(|c| quote_identifier(c))
-                    .collect();
-                // Sprint 229 — append optional ON DELETE / ON UPDATE
-                // clauses when the field is `Some(action)` AND the
-                // action matches the closed PG-canonical whitelist
-                // `{NO ACTION, RESTRICT, CASCADE, SET NULL, SET DEFAULT}`
-                // (case-sensitive uppercase). Anything else →
-                // `AppError::Validation`. When `None`, the clause is
-                // omitted (Sprint 226+227+228 byte-equivalence — the
-                // pre-existing `add_constraint_preview_foreign_key`
-                // fixture's emitted SQL stays unchanged because both
-                // fields default to `None`).
-                let on_delete_clause =
-                    format_referential_action_clause(on_delete.as_deref(), "ON DELETE")?;
-                let on_update_clause =
-                    format_referential_action_clause(on_update.as_deref(), "ON UPDATE")?;
-                format!(
-                    "FOREIGN KEY ({}) REFERENCES {} ({}){}{}",
-                    cols.join(", "),
-                    quote_identifier(reference_table),
-                    ref_cols.join(", "),
-                    on_delete_clause,
-                    on_update_clause,
-                )
-            }
-            ConstraintDefinition::Unique { columns } => {
-                if columns.is_empty() {
-                    return Err(AppError::Validation(
-                        "Unique constraint requires at least one column".into(),
-                    ));
-                }
-                for col in columns {
-                    validate_identifier(col, "Unique constraint column name")?;
-                }
-                let cols: Vec<String> = columns.iter().map(|c| quote_identifier(c)).collect();
-                format!("UNIQUE ({})", cols.join(", "))
-            }
-            ConstraintDefinition::Check { expression } => {
-                if expression.trim().is_empty() {
-                    return Err(AppError::Validation(
-                        "Check constraint expression must not be empty".into(),
-                    ));
-                }
-                format!("CHECK ({})", expression)
-            }
-        };
-
-        let sql = format!(
-            "ALTER TABLE {} ADD CONSTRAINT {} {}",
-            qualified, constraint_name, constraint_sql
-        );
+        let sql = build_add_constraint_sql(req)?;
 
         if req.preview_only {
             return Ok(SchemaChangeResult { sql });
@@ -1119,16 +458,7 @@ impl PostgresAdapter {
         &self,
         req: &DropConstraintRequest,
     ) -> Result<SchemaChangeResult, AppError> {
-        validate_identifier(&req.schema, "Schema name")?;
-        validate_identifier(&req.table, "Table name")?;
-        validate_identifier(&req.constraint_name, "Constraint name")?;
-
-        let qualified = qualified_table(&req.schema, &req.table);
-        let sql = format!(
-            "ALTER TABLE {} DROP CONSTRAINT {}",
-            qualified,
-            quote_identifier(&req.constraint_name)
-        );
+        let sql = build_drop_constraint_sql(req)?;
 
         if req.preview_only {
             return Ok(SchemaChangeResult { sql });
