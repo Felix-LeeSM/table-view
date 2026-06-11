@@ -1,7 +1,7 @@
 ---
-title: Rust 컨벤션 (전체)
+title: Rust 컨벤션
 type: convention
-updated: 2026-05-28
+updated: 2026-06-12
 surface: src-tauri/**/*.rs
 task: rust-impl, refactor
 trigger:

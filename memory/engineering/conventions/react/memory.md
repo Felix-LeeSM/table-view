@@ -1,7 +1,7 @@
 ---
-title: React / TypeScript 컨벤션 (전체)
+title: React / TypeScript 컨벤션
 type: convention
-updated: 2026-06-11
+updated: 2026-06-12
 surface: src/**/*.ts, src/**/*.tsx
 task: react-impl, refactor, frontend
 trigger:

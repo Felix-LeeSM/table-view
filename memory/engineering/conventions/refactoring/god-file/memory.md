@@ -1,7 +1,7 @@
 ---
-title: God file 시퀀스 (700줄 임계)
+title: God file 시퀀스
 type: convention
-updated: 2026-06-11
+updated: 2026-06-12
 task: refactor, god-file, comment-cleanup, decomposition
 surface: '**/*.ts, **/*.tsx, **/*.rs'
 trigger:

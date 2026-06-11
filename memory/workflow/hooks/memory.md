@@ -1,8 +1,8 @@
 ---
-name: Hook taxonomy — git hooks vs agent hooks
+title: Hook taxonomy — git hooks vs agent hooks
 description: Git/verification hook은 read-only gate이고, agent hook은 명시된 formatter/linter 보조를 허용한다.
 type: workflow-rule
-updated: 2026-05-28
+updated: 2026-06-12
 task: hook-design, lefthook, pre-push, pre-commit, verification-gate
 trigger:
   signal: hook script 작성 / lefthook step 추가 / hook 실패 분석 시

@@ -1,7 +1,7 @@
 ---
-title: Backend guidance
+title: Backend Guidance
 type: convention
-updated: 2026-05-20
+updated: 2026-06-12
 surface: src-tauri/**/*.rs
 task: backend, rust-impl, tauri
 trigger:
