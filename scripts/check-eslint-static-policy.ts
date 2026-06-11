@@ -43,7 +43,6 @@ export const MAX_LINES_ALLOWLIST = [
   "src/hooks/useSqlAutocomplete.test.ts",
   "src/lib/mongo/mongoshParser.test.ts",
   "src/lib/sql/sqlAst.test.ts",
-  "src/lib/sql/sqlSafety.test.ts",
   "src/stores/connectionStore.test.ts",
   "src/stores/schemaStore.test.ts",
 ] as const;
