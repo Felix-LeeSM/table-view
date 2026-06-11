@@ -154,6 +154,7 @@ assert_contains "$prepare_block" "docker system prune -af" "prepare disk cleanup
 assert_contains "$prepare_block" "/usr/local/lib/android" "prepare disk cleanup"
 assert_contains "$prepare_block" "/usr/share/dotnet" "prepare disk cleanup"
 assert_contains "$prepare_block" "/opt/ghc" "prepare disk cleanup"
+assert_contains "$smoke_script" "pnpm tsx scripts/e2e-smoke-routing-decisions.ts" "fixture smoke routing decisions"
 assert_contains "$smoke_block" "key: tauri-driver-\${{ runner.os }}-v\${{ env.TAURI_DRIVER_VERSION }}" "tauri-driver cache"
 assert_contains "$smoke_block" "~/.cargo/bin/tauri-driver.version" "tauri-driver cache"
 assert_contains "$smoke_block" "Ensure tauri-driver cache contract" "tauri-driver cache"

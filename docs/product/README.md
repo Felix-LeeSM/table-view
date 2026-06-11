@@ -136,11 +136,11 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 
 | Source | Fixture asset | Current meaning |
 |---|---|---|
-| PostgreSQL | `e2e/fixtures/seed.sql` | GitHub Runtime Happy Path 의 active RDBMS smoke seed |
-| MySQL | `e2e/fixtures/seed.mysql.sql` | wired Runtime Happy Path seed for the connect/browse/query/edit/cancel baseline |
-| MariaDB | `e2e/fixtures/seed.mariadb.sql` | wired Runtime Happy Path seed for the MariaDB connect/browse/query/edit/cancel baseline plus catalog/workbench probe objects |
-| SQLite | `e2e/fixtures/seed.sqlite.sql` | wired Runtime Happy Path seed for deterministic file create/open, table browse, read query, writable DML, row edit, read-only write rejection, and internal app-state DB rejection |
-| DuckDB | `e2e/fixtures/seed.duckdb.sql` | wired Runtime Happy Path seed for `.duckdb` open, catalog/table browse, raw SELECT result/history evidence, and read-only write rejection. Registered local CSV/Parquet/JSON/NDJSON source preview/query remains focused evidence outside this fixture smoke |
+| PostgreSQL | `e2e/fixtures/postgresql/query/seed.sql` | GitHub Runtime Happy Path 의 active RDBMS smoke seed |
+| MySQL | `e2e/fixtures/mysql/query/seed.sql` | wired Runtime Happy Path seed for the connect/browse/query/edit/cancel baseline |
+| MariaDB | `e2e/fixtures/mariadb/query/seed.sql` | wired Runtime Happy Path seed for the MariaDB connect/browse/query/edit/cancel baseline plus catalog/workbench probe objects |
+| SQLite | `e2e/fixtures/sqlite/query/seed.sql` | wired Runtime Happy Path seed for deterministic file create/open, table browse, read query, writable DML, row edit, read-only write rejection, and internal app-state DB rejection |
+| DuckDB | `e2e/fixtures/duckdb/query/seed.sql` | wired Runtime Happy Path seed for `.duckdb` open, catalog/table browse, raw SELECT result/history evidence, and read-only write rejection. Registered local CSV/Parquet/JSON/NDJSON source preview/query remains focused evidence outside this fixture smoke |
 | MongoDB | `e2e/fixtures/mongodb/document/seed.json` | document fixture used by current MongoDB smoke seed path |
 | Redis | `e2e/fixtures/redis/kv/seed.json` | wired Runtime Happy Path seed for Redis DB 2 connect/scan/preview/GET plus guarded string write, TTL, and exact-key delete smoke. Broader stream consumer, cluster/pubsub/modules, admin, and Valkey parity remain future work |
 | Elasticsearch | `e2e/fixtures/elasticsearch/search/seed.json`, `e2e/smoke/elasticsearch.spec.ts`, `src-tauri/src/db/search.rs`, `src-tauri/src/db/search_destructive.rs`, `src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_http.rs`, `src-tauri/src/db/search_live_destructive.rs`, `src-tauri/src/db/search_live_query.rs` | embedded Search fixture contract plus wired Runtime Happy Path smoke for live HTTP connection/catalog/query support with bounded Search DSL request validation and live delete-by-query safety planning; actual live admin execution deferred |
