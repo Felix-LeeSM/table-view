@@ -267,7 +267,7 @@ async function seedMongo() {
 }
 
 async function seedMysql() {
-  const sql = await readFile(resolve("e2e/fixtures/seed.mysql.sql"), "utf-8");
+  const sql = await readFile("e2e/fixtures/mysql/query/seed.sql", "utf-8");
   await retry("MySQL", async () => {
     const connection = await createConnection({
       ...mysqlConfig,

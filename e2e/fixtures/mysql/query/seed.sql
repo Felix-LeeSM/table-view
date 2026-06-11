@@ -2,7 +2,8 @@
 --
 -- Idempotency contract: re-running this file against an already-seeded
 -- database MUST exit 0. Pipe with `mysql --abort-source-on-error -u ...
--- db < seed.mysql.sql`; the MySQL equivalent of psql's `-v ON_ERROR_STOP=1`.
+-- db < e2e/fixtures/mysql/query/seed.sql`; the MySQL equivalent of psql's
+-- `-v ON_ERROR_STOP=1`.
 -- The seed must remain re-runnable so e2e containers (Phase 17) can boot
 -- against a warm volume without recreating the DB on every run.
 --
