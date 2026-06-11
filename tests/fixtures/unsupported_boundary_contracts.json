@@ -20,11 +20,11 @@
       ],
       "fixtureEvidence": [
         {
-          "path": "e2e/fixtures/seed.search.elasticsearch.json",
+          "path": "e2e/fixtures/elasticsearch/search/seed.json",
           "kind": "search-seed"
         },
         {
-          "path": "e2e/fixtures/seed.search.opensearch.json",
+          "path": "e2e/fixtures/opensearch/search/seed.json",
           "kind": "search-seed"
         }
       ],
@@ -110,7 +110,7 @@
       ],
       "fixtureEvidence": [
         {
-          "path": "e2e/fixtures/seed.redis.json",
+          "path": "e2e/fixtures/redis/kv/seed.json",
           "kind": "runtime-happy-path-seed"
         }
       ],
@@ -142,7 +142,7 @@
       ],
       "fixtureEvidence": [
         {
-          "path": "e2e/fixtures/seed.mongodb.json",
+          "path": "e2e/fixtures/mongodb/document/seed.json",
           "kind": "document-seed"
         }
       ],

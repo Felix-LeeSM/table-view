@@ -1,5 +1,15 @@
 {
   "schemaVersion": 1,
+  "proofTier": "runtime-happy-path-seed",
+  "capabilityLabels": [
+    "kv.database",
+    "kv.key-scan",
+    "kv.string-preview",
+    "kv.command-dispatch",
+    "kv.ttl",
+    "kv.exact-key-delete-guard"
+  ],
+  "supportClaimImpact": "Redis seed is wired only to current Runtime Happy Path KV workflow and does not widen support to full CLI/admin/cluster/pubsub/modules or stream consumer workflows.",
   "database": 2,
   "idempotencyContract": "Idempotency contract: select isolated fixture DB 2, clear it, then recreate stable keys.",
   "commands": [
