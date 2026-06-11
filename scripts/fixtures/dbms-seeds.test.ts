@@ -16,7 +16,24 @@ const DBMS_SEED_FILES = [
   ["oracle", "seed.oracle.sql"],
 ] as const;
 
+const NON_SQL_SEED_FILES = {
+  mongodb: "mongodb/document/seed.json",
+  redis: "redis/kv/seed.json",
+  valkey: "valkey/kv/seed.json",
+  elasticsearch: "elasticsearch/search/seed.json",
+  opensearch: "opensearch/search/seed.json",
+} as const;
+
+type SeedMetadata = {
+  proofTier: string;
+  capabilityLabels: string[];
+  supportClaimImpact: string;
+};
+
 type MongoSeedFixture = {
+  proofTier: string;
+  capabilityLabels: string[];
+  supportClaimImpact: string;
   idempotencyContract: string;
   collections: Array<{
     name: string;
@@ -26,6 +43,9 @@ type MongoSeedFixture = {
 };
 
 type RedisSeedFixture = {
+  proofTier: string;
+  capabilityLabels: string[];
+  supportClaimImpact: string;
   idempotencyContract: string;
   database: number;
   commands: Array<{ command: string; key?: string }>;
@@ -69,6 +89,9 @@ type ValkeyRedisCompatibilityFixture = {
 
 type SearchSeedFixture = {
   product: string;
+  proofTier: string;
+  capabilityLabels: string[];
+  supportClaimImpact: string;
   idempotencyContract: string;
   indexes: Array<{ name: string; aliases: string[] }>;
   aliases: Array<{ name: string; index: string }>;
@@ -82,6 +105,48 @@ function readJson<T>(file: string): T {
 }
 
 describe("DBMS-specific E2E seed fixtures", () => {
+  it.each([
+    [
+      "mongodb",
+      NON_SQL_SEED_FILES.mongodb,
+      "runtime-happy-path-seed",
+      ["document.collection", "document.indexes", "document.seeded-query"],
+    ],
+    [
+      "redis",
+      NON_SQL_SEED_FILES.redis,
+      "runtime-happy-path-seed",
+      ["kv.database", "kv.key-scan", "kv.command-dispatch"],
+    ],
+    [
+      "valkey",
+      NON_SQL_SEED_FILES.valkey,
+      "runtime-happy-path-seed",
+      ["kv.database", "kv.key-scan", "kv.command-dispatch"],
+    ],
+    [
+      "elasticsearch",
+      NON_SQL_SEED_FILES.elasticsearch,
+      "fixture-backed-runtime-smoke-seed",
+      ["search.catalog-fixture", "search.query-result", "search.delete-plan"],
+    ],
+    [
+      "opensearch",
+      NON_SQL_SEED_FILES.opensearch,
+      "fixture-backed-runtime-smoke-seed",
+      ["search.catalog-fixture", "search.query-result", "search.delete-plan"],
+    ],
+  ] as const)(
+    "%s JSON seed lives in topology and records proof labels",
+    (_dbms, file, proofTier, labels) => {
+      const fixture = readJson<SeedMetadata>(file);
+
+      expect(fixture.proofTier).toBe(proofTier);
+      expect(fixture.capabilityLabels).toEqual(expect.arrayContaining(labels));
+      expect(fixture.supportClaimImpact).toContain("does not widen");
+    },
+  );
+
   it.each(DBMS_SEED_FILES)(
     "%s has a dedicated idempotent SQL seed",
     (_dbms, file) => {
@@ -133,9 +198,18 @@ describe("DBMS-specific E2E seed fixtures", () => {
   });
 
   it("mongodb has a dedicated idempotent document seed", () => {
-    const fixture = readJson<MongoSeedFixture>("seed.mongodb.json");
+    const fixture = readJson<MongoSeedFixture>(NON_SQL_SEED_FILES.mongodb);
     const collectionNames = fixture.collections.map(({ name }) => name);
 
+    expect(fixture.proofTier).toBe("runtime-happy-path-seed");
+    expect(fixture.capabilityLabels).toEqual(
+      expect.arrayContaining([
+        "document.collection",
+        "document.indexes",
+        "document.seeded-query",
+      ]),
+    );
+    expect(fixture.supportClaimImpact).toContain("does not widen");
     expect(fixture.idempotencyContract).toContain("Idempotency contract");
     expect(collectionNames).toEqual(
       expect.arrayContaining(["smoke_users", "users", "orders", "products"]),
@@ -157,10 +231,19 @@ describe("DBMS-specific E2E seed fixtures", () => {
   });
 
   it("redis has a dedicated idempotent KV seed", () => {
-    const fixture = readJson<RedisSeedFixture>("seed.redis.json");
+    const fixture = readJson<RedisSeedFixture>(NON_SQL_SEED_FILES.redis);
     const commandNames = fixture.commands.map(({ command }) => command);
     const payload = JSON.stringify(fixture);
 
+    expect(fixture.proofTier).toBe("runtime-happy-path-seed");
+    expect(fixture.capabilityLabels).toEqual(
+      expect.arrayContaining([
+        "kv.database",
+        "kv.key-scan",
+        "kv.command-dispatch",
+      ]),
+    );
+    expect(fixture.supportClaimImpact).toContain("does not widen");
     expect(fixture.idempotencyContract).toContain("Idempotency contract");
     expect(fixture.database).toBe(2);
     expect(commandNames).toEqual(
@@ -172,7 +255,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
   });
 
   it("valkey has a dedicated Runtime Happy Path smoke seed", () => {
-    const fixture = readJson<ValkeySeedFixture>("seed.valkey.json");
+    const fixture = readJson<ValkeySeedFixture>(NON_SQL_SEED_FILES.valkey);
     const commandNames = fixture.commands.map(({ command }) => command);
     const payload = JSON.stringify(fixture);
     const streamSeed = fixture.commands.find(
@@ -180,6 +263,15 @@ describe("DBMS-specific E2E seed fixtures", () => {
         command.command === "XADD",
     );
 
+    expect(fixture.proofTier).toBe("runtime-happy-path-seed");
+    expect(fixture.capabilityLabels).toEqual(
+      expect.arrayContaining([
+        "kv.database",
+        "kv.key-scan",
+        "kv.command-dispatch",
+      ]),
+    );
+    expect(fixture.supportClaimImpact).toContain("does not widen");
     expect(fixture.product).toBe("valkey");
     expect(fixture.supportLevel).toBe("runtime-smoke-seed");
     expect(fixture.compatibilityTarget).toBe("redis-command");
@@ -213,7 +305,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
   });
 
   it("valkey Redis compatibility matrix covers the bounded command slice and rejects Redis assumptions", () => {
-    const seed = readJson<ValkeySeedFixture>("seed.valkey.json");
+    const seed = readJson<ValkeySeedFixture>(NON_SQL_SEED_FILES.valkey);
     const fixture = readJson<ValkeyRedisCompatibilityFixture>(
       "valkey.redis-compatibility.json",
     );
@@ -288,14 +380,26 @@ describe("DBMS-specific E2E seed fixtures", () => {
   });
 
   it.each([
-    ["elasticsearch", "seed.search.elasticsearch.json", "logs-elastic"],
-    ["opensearch", "seed.search.opensearch.json", "logs-opensearch"],
+    ["elasticsearch", NON_SQL_SEED_FILES.elasticsearch, "logs-elastic"],
+    ["opensearch", NON_SQL_SEED_FILES.opensearch, "logs-opensearch"],
   ] as const)(
     "%s has a dedicated fixture-backed search seed",
     (product, file, alias) => {
       const fixture = readJson<SearchSeedFixture>(file);
 
       expect(fixture.product).toBe(product);
+      expect(fixture.proofTier).toBe("fixture-backed-runtime-smoke-seed");
+      expect(fixture.capabilityLabels).toEqual(
+        expect.arrayContaining([
+          "search.catalog-fixture",
+          "search.query-result",
+          "search.delete-plan",
+        ]),
+      );
+      expect(fixture.supportClaimImpact).toContain("does not widen");
+      expect(fixture.supportClaimImpact).toContain(
+        "actual live admin execution",
+      );
       expect(fixture.idempotencyContract).toContain("Idempotency contract");
       expect(fixture.indexes).toEqual([
         expect.objectContaining({
@@ -340,7 +444,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
       'run_wdio "$BASE_DATA_DIR/opensearch" "e2e/smoke/opensearch.spec.ts"',
     );
     expect(seedScript).toContain('opensearch: ["opensearch"]');
-    expect(seedScript).toContain("seed.search.opensearch.json");
+    expect(seedScript).toContain(NON_SQL_SEED_FILES.opensearch);
   });
 
   it("mssql fixture seed is wired into Runtime Happy Path smoke", () => {

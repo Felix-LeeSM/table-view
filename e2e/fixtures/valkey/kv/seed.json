@@ -1,5 +1,16 @@
 {
   "schemaVersion": 1,
+  "proofTier": "runtime-happy-path-seed",
+  "capabilityLabels": [
+    "kv.database",
+    "kv.key-scan",
+    "kv.string-preview",
+    "kv.command-dispatch",
+    "kv.ttl",
+    "kv.destructive-guard",
+    "kv.redis-compatibility-boundary"
+  ],
+  "supportClaimImpact": "Valkey seed is wired only to current Runtime Happy Path KV workflow and does not widen support to direct mutation controls, full Redis compatibility, or broader command families.",
   "product": "valkey",
   "supportLevel": "runtime-smoke-seed",
   "compatibilityTarget": "redis-command",

@@ -1,0 +1,174 @@
+{
+  "$schema": "unsupported-boundary-contracts@1",
+  "issue": 754,
+  "description": "Fixture-backed unsupported and partial-support boundary rows. These rows are negative evidence only; they do not add runtime support.",
+  "rows": [
+    {
+      "id": "search-live-http-deferred-admin-boundaries",
+      "minimumRow": "Search live HTTP non-claim",
+      "products": ["elasticsearch", "opensearch"],
+      "claimBoundary": "Live Search support stays bounded to connect/catalog/_search/render/delete-plan slices. Fixture and live evidence do not promote broader admin, observability, profile/explain, raw target, or actual delete-by-query execution.",
+      "docs": [
+        {
+          "path": "docs/product/known-limitations.md",
+          "mustContain": "Search fixture files are contract evidence and do not promote unwired Search paths to live runtime support."
+        },
+        {
+          "path": "docs/product/known-limitations.md",
+          "mustContain": "broader admin APIs, observability"
+        }
+      ],
+      "fixtureEvidence": [
+        {
+          "path": "e2e/fixtures/elasticsearch/search/seed.json",
+          "kind": "search-seed"
+        },
+        {
+          "path": "e2e/fixtures/opensearch/search/seed.json",
+          "kind": "search-seed"
+        }
+      ],
+      "sourceGates": [
+        {
+          "path": "src-tauri/src/db/search_dsl.rs",
+          "mustContain": [
+            "RAW_PATH_TARGET_ERROR",
+            "unsupported_search_body_features_reject_before_http_dispatch",
+            "raw/destructive paths"
+          ]
+        }
+      ],
+      "consumedBy": ["tests/fixtures/unsupported_boundary_contracts.test.ts"]
+    },
+    {
+      "id": "mssql-oracle-profile-identity-static-fixture-nonclaim",
+      "minimumRow": "MSSQL/Oracle declared-only identities",
+      "products": ["mssql", "oracle"],
+      "claimBoundary": "Profile identity and static fixture inventory are not enough to widen SQL Server or Oracle beyond the documented runtime slices.",
+      "docs": [
+        {
+          "path": "docs/product/known-limitations.md",
+          "mustContain": "fixture file alone is not live runtime evidence."
+        },
+        {
+          "path": "docs/product/known-limitations.md",
+          "mustContain": "TLS-required workflow"
+        },
+        {
+          "path": "docs/product/known-limitations.md",
+          "mustContain": "SID, TNS alias, wallet/TLS"
+        }
+      ],
+      "fixtureEvidence": [
+        {
+          "path": "tests/fixtures/data-source-profile-parity.report.json",
+          "kind": "profile-parity"
+        }
+      ],
+      "consumedBy": ["tests/fixtures/unsupported_boundary_contracts.test.ts"]
+    },
+    {
+      "id": "valkey-direct-mutation-full-redis-nonclaim",
+      "minimumRow": "Valkey direct mutation/full Redis compatibility non-claim",
+      "products": ["valkey"],
+      "claimBoundary": "Valkey completion and runtime evidence stay limited to proven rows; direct key mutation controls and full Redis compatibility stay deferred.",
+      "docs": [
+        {
+          "path": "docs/product/known-limitations.md",
+          "mustContain": "Direct key mutation controls, full Redis compatibility, CLI/admin parity, cluster/pubsub/modules, and consumer-group flows remain out of scope."
+        }
+      ],
+      "fixtureEvidence": [
+        {
+          "path": "e2e/fixtures/valkey.redis-compatibility.json",
+          "kind": "compatibility-matrix"
+        }
+      ],
+      "valkeyCompletionExclusions": [
+        "KEYS",
+        "HSET",
+        "LRANGE",
+        "SMEMBERS",
+        "ZRANGE",
+        "XADD",
+        "FLUSHDB",
+        "CLUSTER",
+        "MODULE"
+      ],
+      "consumedBy": ["tests/fixtures/unsupported_boundary_contracts.test.ts"]
+    },
+    {
+      "id": "redis-cli-admin-cluster-pubsub-modules-nonclaim",
+      "minimumRow": "Redis full CLI/admin/cluster/pubsub/modules non-claim",
+      "products": ["redis"],
+      "claimBoundary": "Redis command editor remains a bounded allowlist. Full CLI parsing, admin, cluster, pubsub, modules, scripting, and consumer-group workflows stay unsupported.",
+      "docs": [
+        {
+          "path": "docs/product/README.md",
+          "mustContain": "Full CLI/admin parity, stream consumer UI, cluster/pubsub/modules/consumer-group management"
+        }
+      ],
+      "fixtureEvidence": [
+        {
+          "path": "e2e/fixtures/redis/kv/seed.json",
+          "kind": "runtime-happy-path-seed"
+        }
+      ],
+      "redisUnsupportedCommands": [
+        "ACL",
+        "CLIENT",
+        "CONFIG",
+        "FLUSHDB",
+        "CLUSTER",
+        "PUBSUB",
+        "PUBLISH",
+        "MODULE",
+        "EVAL",
+        "SCRIPT",
+        "XGROUP"
+      ],
+      "consumedBy": ["tests/fixtures/unsupported_boundary_contracts.test.ts"]
+    },
+    {
+      "id": "mongo-shell-admin-native-document-first-nonclaim",
+      "minimumRow": "Mongo arbitrary JavaScript/shell/admin/native document-first non-claim",
+      "products": ["mongodb"],
+      "claimBoundary": "Mongo support stays on whitelisted document workflows. Arbitrary JavaScript, shell helpers, cursor callbacks, cross-db navigation, server-version promotion, native document-first panels, and full-support parity stay out of scope.",
+      "docs": [
+        {
+          "path": "docs/product/known-limitations.md",
+          "mustContain": "Arbitrary JavaScript shell execution, shell helpers, unsupported cursor helpers, multiple statements, cross-db shell navigation, server-version feature promotion gates, native document-first result panels, and full-support parity remain out of scope."
+        }
+      ],
+      "fixtureEvidence": [
+        {
+          "path": "e2e/fixtures/mongodb/document/seed.json",
+          "kind": "document-seed"
+        }
+      ],
+      "mongoParserCases": [
+        {
+          "input": "var x = 1; db.users.find(x)",
+          "errorKind": "unsupported-syntax"
+        },
+        {
+          "input": "use admin",
+          "errorKind": "unsupported-syntax"
+        },
+        {
+          "input": "show dbs",
+          "errorKind": "unsupported-syntax"
+        },
+        {
+          "input": "db.users.find({}).forEach(d => print(d))",
+          "errorKind": "unsupported-syntax"
+        },
+        {
+          "input": "db.users.deleteAll({})",
+          "errorKind": "unsupported-method"
+        }
+      ],
+      "consumedBy": ["tests/fixtures/unsupported_boundary_contracts.test.ts"]
+    }
+  ]
+}
