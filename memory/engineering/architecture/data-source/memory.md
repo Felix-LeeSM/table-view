@@ -1,7 +1,7 @@
 ---
 title: Data source architecture
 type: memory
-updated: 2026-06-07
+updated: 2026-06-11
 surface: src-tauri/src/db/**, src/lib/**, src/types/dataSource*, src/types/queryLanguage*
 task: data-source, architecture, adapter, capability
 trigger:
@@ -46,6 +46,37 @@ Rust `adapter_contract` 는 runtime/support posture 이며 strict parity field �
 `DatabaseType` 은 identity 다. Workbench 선택과 UI affordance 는
 `DataParadigm` + capability 를 본다. Backend adapter, dialect, file connection
 contract 도 profile registry 에서 읽고 ad-hoc `dbType` switch 로 분산하지 않는다.
+
+## Backend Contract Boundary
+
+`src-tauri/src/db/contracts` 는 backend trait/DTO contract import path 다.
+`src-tauri/src/db/capabilities` 는 backend capability/profile import path 다.
+`src-tauri/src/db/adapters/<dbms>` 는 concrete adapter home 이다. Legacy
+`db::<dbms>`, `db::traits`, `db::types` 는 migration 중 shim/re-export 로만 둔다.
+
+Command layer 는 DBMS behavior 를 소유하지 않는다: request validate →
+`AppState` active connection resolve → `ActiveAdapter::as_*()?` paradigm gate →
+adapter/storage call → `AppError` 반환만 한다.
+
+Adapter trait DTO 는 backend public contract 다. Tauri/store-facing DTO 는
+user-facing IPC contract 이며 `camelCase`, compatible default, alias, documented
+normalizer 로만 확장한다. Error boundary 는 `AppError` 다. `Cancel` /
+`DbMismatch` 는 typed envelope, 다른 variant 는 legacy string compatibility 를
+유지한다. Frontend 분기는 `src/lib/tauri/error.ts` normalizer 를 통하고, 테스트는
+문자열만 맞추지 말고 variant/envelope 를 단언한다.
+
+Strict TS/Rust profile parity owner 는
+`tests/fixtures/data-source-profile-parity.report.json`,
+`src/types/dataSourceProfileParity.test.ts`,
+`src-tauri/tests/data_source_profile_parity.rs` 다. TS `capabilities` 와 Rust
+`adapter_contract` 는 runtime/support posture 라서 strict parity 대상이 아니고
+`src/types/adapterConformance.ts` 와 Rust profile contract tests 가 소유한다.
+
+Contract/delta test ownership 은 `src/types/adapterContractTestMatrix.ts` 가 고정한다.
+Query/result 는 #765, catalog/explain 은 #766, completion metadata 는 #767,
+safety/capability unsupported delta 는 #768 이 owner 다. Common expectation 은
+DBMS delta 가 아니며, delta 는 DBMS/version/dialect/paradigm/capability/evidence
+축과 fixture/live/support-claim boundary 를 명시해야 한다.
 
 ## Layer Rules
 
