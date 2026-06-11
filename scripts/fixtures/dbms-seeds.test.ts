@@ -5,23 +5,24 @@ import {
   REDIS_COMMAND_COMPLETIONS,
   REDIS_UNSUPPORTED_COMMAND_FAMILIES,
 } from "../../src/features/completion";
+import { E2E_SEED_FIXTURE_PATHS } from "./e2e-seed-paths.js";
 
 const DBMS_SEED_FILES = [
-  ["postgresql", "postgresql/query/seed.sql"],
-  ["mysql", "mysql/query/seed.sql"],
-  ["mariadb", "mariadb/query/seed.sql"],
-  ["sqlite", "sqlite/query/seed.sql"],
-  ["duckdb", "duckdb/query/seed.sql"],
-  ["mssql", "seed.mssql.sql"],
-  ["oracle", "seed.oracle.sql"],
+  ["postgresql", E2E_SEED_FIXTURE_PATHS.postgresql.canonical],
+  ["mysql", E2E_SEED_FIXTURE_PATHS.mysql.canonical],
+  ["mariadb", E2E_SEED_FIXTURE_PATHS.mariadb.canonical],
+  ["sqlite", E2E_SEED_FIXTURE_PATHS.sqlite.canonical],
+  ["duckdb", E2E_SEED_FIXTURE_PATHS.duckdb.canonical],
+  ["mssql", "e2e/fixtures/seed.mssql.sql"],
+  ["oracle", "e2e/fixtures/seed.oracle.sql"],
 ] as const;
 
 const NON_SQL_SEED_FILES = {
-  mongodb: "mongodb/document/seed.json",
-  redis: "redis/kv/seed.json",
-  valkey: "valkey/kv/seed.json",
-  elasticsearch: "elasticsearch/search/seed.json",
-  opensearch: "opensearch/search/seed.json",
+  mongodb: E2E_SEED_FIXTURE_PATHS.mongodb.canonical,
+  redis: E2E_SEED_FIXTURE_PATHS.redis.canonical,
+  valkey: E2E_SEED_FIXTURE_PATHS.valkey.canonical,
+  elasticsearch: E2E_SEED_FIXTURE_PATHS.elasticsearch.canonical,
+  opensearch: E2E_SEED_FIXTURE_PATHS.opensearch.canonical,
 } as const;
 
 type SeedMetadata = {
@@ -101,7 +102,10 @@ type SearchSeedFixture = {
 };
 
 function readJson<T>(file: string): T {
-  return JSON.parse(readFileSync(resolve("e2e/fixtures", file), "utf-8")) as T;
+  const path = file.startsWith("e2e/fixtures/")
+    ? file
+    : resolve("e2e/fixtures", file);
+  return JSON.parse(readFileSync(resolve(path), "utf-8")) as T;
 }
 
 describe("DBMS-specific E2E seed fixtures", () => {
@@ -150,7 +154,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
   it.each(DBMS_SEED_FILES)(
     "%s has a dedicated idempotent SQL seed",
     (_dbms, file) => {
-      const sql = readFileSync(resolve("e2e/fixtures", file), "utf-8");
+      const sql = readFileSync(resolve(file), "utf-8");
       expect(sql).toContain("Idempotency contract");
       expect(sql).toMatch(/\busers\b/i);
       expect(sql).toMatch(/\borders\b/i);
@@ -444,7 +448,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
       'run_wdio "$BASE_DATA_DIR/opensearch" "e2e/smoke/opensearch.spec.ts"',
     );
     expect(seedScript).toContain('opensearch: ["opensearch"]');
-    expect(seedScript).toContain(NON_SQL_SEED_FILES.opensearch);
+    expect(seedScript).toContain('fixtureKey: "opensearch"');
   });
 
   it("mssql fixture seed is wired into Runtime Happy Path smoke", () => {
@@ -480,18 +484,18 @@ describe("DBMS-specific E2E seed fixtures", () => {
       'run_wdio "$BASE_DATA_DIR/mysql" "e2e/smoke/mysql.spec.ts"',
     );
     expect(seedScript).toContain('mysql: ["mysql"]');
-    expect(seedScript).toContain("mysql/query/seed.sql");
+    expect(seedScript).toContain('readE2eSeedFixture("mysql")');
     expect(seedScript).not.toContain("seed.mysql.sql");
   });
 
   it.each([
-    ["postgresql", "postgresql/query/seed.sql"],
-    ["mariadb", "mariadb/query/seed.sql"],
-    ["sqlite", "sqlite/query/seed.sql"],
-    ["duckdb", "duckdb/query/seed.sql"],
+    ["postgresql", E2E_SEED_FIXTURE_PATHS.postgresql.canonical],
+    ["mariadb", E2E_SEED_FIXTURE_PATHS.mariadb.canonical],
+    ["sqlite", E2E_SEED_FIXTURE_PATHS.sqlite.canonical],
+    ["duckdb", E2E_SEED_FIXTURE_PATHS.duckdb.canonical],
   ] as const)(
     "%s fixture seed is wired from DBMS/function query topology",
-    (_dbms, file) => {
+    (dbms, file) => {
       const seedScript = readFileSync(resolve("e2e/fixtures/seed-smoke.ts"), {
         encoding: "utf8",
       });
@@ -503,7 +507,11 @@ describe("DBMS-specific E2E seed fixtures", () => {
       });
       const consumers = [seedScript, sqliteSmoke, duckdbSmoke].join("\n");
 
-      expect(consumers).toContain(file);
+      if (dbms === "sqlite" || dbms === "duckdb") {
+        expect(consumers).toContain(file);
+      } else {
+        expect(seedScript).toContain(`readE2eSeedFixture("${dbms}")`);
+      }
     },
   );
 
