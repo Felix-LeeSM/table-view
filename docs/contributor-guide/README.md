@@ -11,6 +11,8 @@ decision logs.
 - [`repository-topology-inventory.md`](repository-topology-inventory.md) —
   Refactor 01 final repository root ownership, lifecycle, cleanup, hook-routing,
   and migration SOT.
+- [`fixture-test-topology-inventory.md`](fixture-test-topology-inventory.md) —
+  Refactor 04 fixture/test topology baseline and evidence classification.
 - [`source-root-migration-constraints.md`](source-root-migration-constraints.md) —
   Refactor 02/03 source-root movement, compatibility export, test, fixture, and
   committed-generated-input constraints.
