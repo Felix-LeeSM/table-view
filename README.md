@@ -241,6 +241,9 @@ pnpm tauri build --debug
 ```
 
 macOS debug 앱 번들은 `src-tauri/target/debug/bundle/macos/Table View.app`에 생성됩니다. 배포용 패키징 상태와 남은 계획은 [`docs/PLAN.md`](./docs/PLAN.md), [`docs/ROADMAP.md`](./docs/ROADMAP.md), [`docs/product/known-limitations.md`](./docs/product/known-limitations.md)를 기준으로 확인합니다.
+릴리스 노트의 지원 범위 요약과 fixture/smoke coverage는
+[`docs/contributor-guide/release/release-notes-support-matrix.md`](./docs/contributor-guide/release/release-notes-support-matrix.md)를
+기준으로 작성합니다.
 
 ## 🍺 Homebrew 배포 (Homebrew)
 
