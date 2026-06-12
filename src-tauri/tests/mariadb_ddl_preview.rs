@@ -67,7 +67,7 @@ async fn mariadb_adapter_uses_mysql_family_bounded_ddl_preview() {
         .unwrap();
     assert_eq!(
         index.sql,
-        "CREATE UNIQUE INDEX `uq_orders_code` ON `shop`.`orders` USING BTREE (`code`)"
+        "CREATE UNIQUE INDEX `uq_orders_code` USING BTREE ON `shop`.`orders` (`code`)"
     );
 
     let fk = adapter

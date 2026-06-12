@@ -3136,7 +3136,67 @@ async fn test_mysql_create_index_preview_with_unique_btree() {
     };
     let result = adapter.create_index(&req).await.expect("preview");
     assert!(result.sql.contains("CREATE UNIQUE INDEX"));
-    assert!(result.sql.contains("USING BTREE"));
+    assert_eq!(
+        result.sql,
+        "CREATE UNIQUE INDEX `idx_t_a` USING BTREE ON `test`.`t` (`a`, `b`)"
+    );
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_create_index_executes_unique_btree() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_create_idx_{ts}");
+    let index = format!("idx_{table}_code");
+
+    adapter
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT PRIMARY KEY, code VARCHAR(64))"),
+            None,
+        )
+        .await
+        .expect("CREATE TABLE");
+
+    let req = CreateIndexRequest {
+        connection_id: "c".into(),
+        schema: MYSQL_SCHEMA.into(),
+        table: table.clone(),
+        index_name: index.clone(),
+        columns: vec!["code".into()],
+        index_type: "btree".into(),
+        is_unique: true,
+        preview_only: false,
+        expected_database: None,
+    };
+    let result = adapter.create_index(&req).await.expect("CREATE INDEX");
+    assert_eq!(
+        result.sql,
+        format!("CREATE UNIQUE INDEX `{index}` USING BTREE ON `test`.`{table}` (`code`)")
+    );
+
+    let indexes = adapter
+        .get_table_indexes(&table, MYSQL_SCHEMA)
+        .await
+        .expect("get_table_indexes");
+    let created = indexes
+        .iter()
+        .find(|candidate| candidate.name == index)
+        .expect("created index missing");
+    assert!(created.is_unique);
+    assert_eq!(created.columns, vec!["code".to_string()]);
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
 }
 
 #[tokio::test]

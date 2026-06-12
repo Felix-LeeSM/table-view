@@ -40,7 +40,7 @@ export async function runMysqlFamilyStructureDdlSmoke({
           "`user_id` BIGINT",
           "CREATE INDEX",
           `\`${ddlIndexName}\``,
-          "USING BTREE",
+          "USING BTREE ON",
           "ALTER TABLE",
           `\`${ddlFkName}\``,
           "FOREIGN KEY (`user_id`)",
@@ -304,9 +304,49 @@ async function setNthInputByAria(label: string, index: number, value: string) {
       timeoutMsg: `${label} input #${index} did not appear`,
     },
   );
-  const input = (await $$(ariaSelector(label)))[index];
-  await input.waitForDisplayed({ timeout: 10000 });
-  await input.setValue(value);
+  await browser.execute(
+    (ariaLabel, nth, nextValue) => {
+      const input = Array.from(
+        document.querySelectorAll<HTMLInputElement>("input[aria-label]"),
+      ).filter(
+        (candidate) => candidate.getAttribute("aria-label") === ariaLabel,
+      )[nth];
+      if (!input) throw new Error(`${ariaLabel} input #${nth} did not appear`);
+
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      if (!setter) throw new Error("HTMLInputElement value setter missing");
+
+      input.focus();
+      setter.call(input, nextValue);
+      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      input.blur();
+    },
+    label,
+    index,
+    value,
+  );
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (ariaLabel, nth, expected) =>
+          Array.from(
+            document.querySelectorAll<HTMLInputElement>("input[aria-label]"),
+          ).filter(
+            (candidate) => candidate.getAttribute("aria-label") === ariaLabel,
+          )[nth]?.value === expected,
+        label,
+        index,
+        value,
+      ),
+    {
+      timeout: 5000,
+      timeoutMsg: `${label} input #${index} did not update`,
+    },
+  );
 }
 
 async function selectOrSetByAria(label: string, value: string) {

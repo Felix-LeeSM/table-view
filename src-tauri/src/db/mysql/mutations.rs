@@ -115,8 +115,9 @@ fn format_referential_action_clause(
     }
 }
 
-/// MySQL `CREATE INDEX … USING <type>` 의 type whitelist. InnoDB 는
-/// BTREE 만 효과적이지만 HASH 도 syntax 적으로 받는다 (MEMORY engine 용).
+/// MySQL `CREATE INDEX name USING <type> ON table (...)` 의 type whitelist.
+/// InnoDB 는 BTREE 만 효과적이지만 HASH 도 syntax 적으로 받는다 (MEMORY
+/// engine 용).
 const MYSQL_INDEX_TYPES: &[&str] = &["btree", "hash"];
 
 /// 단일 statement 실행 + transaction wrap. PG 의 `BEGIN/COMMIT` 패턴 답습.
@@ -512,11 +513,11 @@ impl MysqlAdapter {
 
         let unique = if req.is_unique { "UNIQUE " } else { "" };
         let sql = format!(
-            "CREATE {}INDEX {} ON {} USING {} ({})",
+            "CREATE {}INDEX {} USING {} ON {} ({})",
             unique,
             quote_ident(&req.index_name),
-            qualified,
             index_type_lower.to_uppercase(),
+            qualified,
             columns.join(", ")
         );
 
@@ -991,7 +992,7 @@ mod tests {
         let r = a.create_index(&req).await.unwrap();
         assert_eq!(
             r.sql,
-            "CREATE UNIQUE INDEX `idx_users_email` ON `app`.`users` USING BTREE (`email`)"
+            "CREATE UNIQUE INDEX `idx_users_email` USING BTREE ON `app`.`users` (`email`)"
         );
     }
 
