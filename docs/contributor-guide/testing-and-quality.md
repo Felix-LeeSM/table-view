@@ -33,8 +33,8 @@ existence alone is never runtime evidence.
 
 Refactor 04 closure evidence is #750 -> #833, #751 -> #835, #752 -> #836,
 #753 -> #843, #754 -> #838, #769 -> #837, #770 -> #839, #771 -> #842,
-#772 -> #840, and #773 -> #841. Parent #575 is closure-ready only after #755
-lands and live GitHub still shows no open child issues beyond the parent.
+#772 -> #840, and #773 -> #841. Parent #575 and milestone #40 closed after #755
+landed and live GitHub showed no open Refactor 04 child issues.
 
 ## Backend And Integration Coverage
 

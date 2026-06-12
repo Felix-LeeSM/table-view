@@ -17,15 +17,17 @@ future sequencing stays in `docs/ROADMAP.md`.
 
 ## Refactor 01 Final SOT
 
-Live GitHub state checked on 2026-06-10:
+Current GitHub closure state checked on 2026-06-12:
 
 - #728 closed through PR #794 and created the topology inventory.
 - #729 closed through PR #797 and fenced generated/cache/tmp/worktree paths.
 - #730 closed through PR #798 and published source-root migration constraints.
 - #731 closed through PR #801 and aligned hook path taxonomy, source-edit guard,
   and pre-push routing.
-- #732 owns this final docs publication only. Parent #572 closure is separate
-  GitHub administration after this PR merges.
+- #732 is closed.
+- Parent #572 is closed.
+- Milestone `09.10 - Refactor 01 - Directory Topology` is closed with 0 open and
+  6 closed issues.
 
 Durable SOT routing:
 
