@@ -11,6 +11,16 @@ task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 병렬 작업할 때 worktree 로 인스턴스 격리. 각 worktree 는 독립 디렉토리 +
 독립 branch + 독립 git hook → 충돌 없이 동시 실행.
 
+## 소유권 / SOT
+
+- 본 파일은 worktree 사용 시점, 격리 의미, lifecycle guardrail 을 소유한다.
+- 정확한 CLI 옵션과 side effect 는 `scripts/worktree-spawn.sh`,
+  `scripts/worktree-cleanup.sh`, `scripts/worktree-bootstrap-deps.sh`,
+  `scripts/target-cache.sh` 의 `--help` 와 구현이 소유한다.
+- commit / push / PR / merge 행동 계약은 [delivery](../../workflow/delivery/memory.md)
+  가 소유한다. hook 우회 금지와 push reject 회복 정책은
+  [git-policy](../../workflow/git-policy/memory.md) 가 소유한다.
+
 ## 사용 시점
 
 - 여러 sprint 를 병렬 진행 (각 sprint = 1 worktree)
@@ -21,6 +31,8 @@ task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
   을 동시에 돌리고 싶을 때
 
 ## 명령
+
+정확한 옵션과 최신 동작은 각 script 의 `--help` 를 확인한다.
 
 ```bash
 # 새 worktree + branch
@@ -56,36 +68,18 @@ bash scripts/worktree-cleanup.sh --prune
 
 ## 의존성 warm-start
 
-기본 spawn 은 현재 worktree 의 `node_modules/` 와 pruned
-`src-tauri/target/` 을 새 worktree 로 복사하고, 새 worktree 기준으로
+기본 spawn 은 `scripts/worktree-bootstrap-deps.sh` 를 호출해 새 worktree 의
+의존성을 보정한다. 복사는 빠른 시작용이고, 새 worktree lockfile 기준
 `pnpm install --frozen-lockfile` 와 `cargo fetch --manifest-path
-src-tauri/Cargo.toml` 를 실행한다. 복사는 빠른 시작용이고, install/fetch 가
-branch 별 lockfile 차이를 보정한다. `--no-deps` 를 주면 의존성 복사/보정을
-생략한다.
+src-tauri/Cargo.toml` 가 최종 보정이다.
 
-`src-tauri/target/` 기본 복사는 `llvm-cov-target/` 과 DuckDB native build
-outputs 를 보존하고 `release/`, `tmp/`, `*/incremental/`, coverage raw/profile
-만 제외한다. 목적은 pre-push 의 `cargo-llvm-cov` 와 DuckDB/Rust 의존성 산출물을
-재사용하되 volatile coverage output 과 최종 산출물은 피하는 것. 전체 target 이
-필요하면 `--full-target` 을 쓴다.
+`src-tauri/target/` warm-start 의 목적은 pre-push Rust/coverage 산출물 재사용이다.
+기본은 volatile output 을 제외한 pruned copy 이며, 전체 복사는 `--full-target`
+으로 명시한다. 정확한 제외 목록은 bootstrap script 가 소유한다.
 
-Rust hook cache 의 기준은 이 target warm-start 다. `sccache` 는 2026-06-01
-로컬 실측에서 coverage gate Rust hit 0%, fresh target Rust hit 0% 로 나와
-setup/hook 경로에서 제외한다.
-
-수동 보충이 필요하면 primary 또는 이미 warm 된 checkout 에서
-`bash scripts/target-cache.sh .` 또는
-`bash scripts/target-cache.sh warm-all .` 로 routine Rust target cache 를 전부
-데운 뒤 `bash scripts/target-cache.sh copy-to <worktree> .` 로 target cache 를
-옮긴다. 기본 동작은 `cargo check` lane, debug nextest test binary lane,
-`llvm-cov-target` coverage lane 을 함께 데운다. 세부 lane 만 필요하면
-`--debug-only` 또는 `--coverage-only` 를 직접 실행한다. 이 helper 는 stale
-판단 / lock / 자동 spawn 소비를 하지 않는다. 기존 target 을 overlay 하며 debug
-target, `llvm-cov-target`, parser-core target cache 를 가져가되 tracked generated
-WASM artifact 는 worktree 를 dirty 하게 만들 수 있어 제외한다.
-target cache 의 주목적은 test warm-start 다. helper 변경 시 debug nextest test
-binary lane 과 `llvm-cov-target` coverage test lane 이 빠지면 안 되며,
-`scripts/hooks/test-target-cache.sh` 가 이 계약을 고정한다.
+수동 target cache 보충은 `scripts/target-cache.sh` 로만 한다. 이 helper 는 stale
+판단 / lock / 자동 spawn 소비를 하지 않는다. routine cache lane 계약은
+`scripts/hooks/test-target-cache.sh` 가 고정한다.
 
 ## 책임
 
