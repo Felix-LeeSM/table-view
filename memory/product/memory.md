@@ -1,13 +1,22 @@
 ---
 title: Product 머지 기준
 type: product-rule
-updated: 2026-05-27
+updated: 2026-06-12
 task: ux-review, persistence-reset, merge-gate
 ---
 
 # Product 머지 기준
 
-현재 제품 동작에 직접 영향을 주는 UX 의무. PR 머지 전 체크한다. 코드 convention (Rust/TS) 과 직교.
+현재 제품 동작에 직접 영향을 주는 UX merge gate. PR 머지 전 체크한다. 코드 convention
+(Rust/TS) 과 직교.
+
+## Ownership / SOT
+
+- 이 파일은 반복 적용되는 product merge rule 만 소유한다.
+- 현재 제품 상태와 support claim 은 [docs/product](../../docs/product/README.md)
+  가 소유한다.
+- 미래 목표와 sequencing 은 [docs/ROADMAP.md](../../docs/ROADMAP.md) 가 소유한다.
+- 과거 UX audit 는 historical evidence 로만 본다. active rule 로 복제하지 않는다.
 
 ## 1. 영속 상태는 reset-to-default UI 필수
 
@@ -39,5 +48,5 @@ State-management reset gate 는
 - [engineering/conventions](../engineering/conventions/memory.md) — TS/React 코드 룰
 - [workflow/delivery](../workflow/delivery/memory.md) — 머지 직전 checkpoint
 - [docs/product](../../docs/product/README.md) — 현재 제품 상태
-- `docs/product/README.md` — 현재 제품 상태
-- `docs/archives/audits/ux-laws-mapping-2026-04-30.md` — historical UX audit snapshot
+- [docs/ROADMAP.md](../../docs/ROADMAP.md) — 미래 목표 / sequencing
+- [docs/archives/audits/ux-laws-mapping-2026-04-30.md](../../docs/archives/audits/ux-laws-mapping-2026-04-30.md) — historical UX audit snapshot
