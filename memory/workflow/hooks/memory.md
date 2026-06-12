@@ -40,6 +40,9 @@ exit code로 피드백하므로, 세부 판정은 hook script와 테스트가 so
 ## 관련
 
 - `scripts/hooks/README.md`
+- `.claude/settings.json`
+- `.codex/hooks.json`
+- `.codex/hooks/*.sh`
 - `lefthook.yml`
 - [git-policy](../git-policy/memory.md) — hook 회피 금지
 - [review](../review/memory.md) — hook/CI는 자동 검증 layer

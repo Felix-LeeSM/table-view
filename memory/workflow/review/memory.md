@@ -41,6 +41,7 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
 ## 관련
 
 - `.agents/skills/pr-review/SKILL.md` — review 방법론
+- `.claude/agents/pr-reviewer.md` / `.codex/agents/pr-reviewer.md` — runtime wrappers
 - [delivery](../delivery/memory.md) — commit → push → PR → review → merge pipeline
 - [documentation](../documentation/memory.md) — PR body와 documentation impact gate
 - `scripts/review/run-checks.sh` — sprint Required Checks runner
