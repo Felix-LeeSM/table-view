@@ -84,9 +84,30 @@
     background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 3px;
     font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11.5px;
   }
+  .archive-banner {
+    margin: 0 0 20px;
+    padding: 12px 14px;
+    border: 1px solid var(--warn);
+    border-left: 4px solid var(--warn);
+    border-radius: 8px;
+    background: rgba(251,191,36,0.12);
+    color: var(--fg);
+    font-size: 13px;
+  }
+  .archive-banner strong { color: var(--warn); }
+  .archive-banner a { color: var(--accent); }
 </style>
 </head>
 <body>
+
+<div class="archive-banner">
+  <strong>Archived exploration.</strong>
+  Historical comparison only; not current source of truth. Current syntax palette decision:
+  <a href="../archives/decisions/0031-syntax-palette-manual-and-token-integrity/memory.md">ADR 0031</a>.
+  Current product/support boundaries:
+  <a href="../product/README.md">product README</a> and
+  <a href="../product/known-limitations.md">known limitations</a>.
+</div>
 
 <h1>V20 — Syntax palette source-of-truth</h1>
 <p class="subtitle">ADR 0023 (Sprint 257, <code>generate-syntax-palette.ts</code>) vs 새 시방서의 1728 수동 값</p>

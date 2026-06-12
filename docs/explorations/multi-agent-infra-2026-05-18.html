@@ -302,9 +302,30 @@
       color: var(--muted);
       margin-right: 6px;
     }
+    .archive-banner {
+      margin: 0 0 20px;
+      padding: 12px 14px;
+      border: 1px solid var(--warn);
+      border-left: 4px solid var(--warn);
+      border-radius: 8px;
+      background: #fff7ed;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .archive-banner strong { color: var(--warn); }
+    .archive-banner a { color: var(--accent); }
   </style>
 </head>
 <body>
+
+<div class="archive-banner">
+  <strong>Archived exploration.</strong>
+  Historical agent-infra sketch only; not current workflow source of truth. Current entry/rules:
+  <a href="../../AGENTS.md">AGENTS.md</a>,
+  <a href="../../memory/workflow/memory.md">memory/workflow/memory.md</a>,
+  <a href="../../.codex/agents/delivery.md">.codex/agents/delivery.md</a>, and
+  <a href="../../.claude/agents/delivery.md">.claude/agents/delivery.md</a>.
+</div>
 
 <h1>Multi-agent 인프라 — Claude / Codex / Cursor 동일 source</h1>
 <p class="lede">
