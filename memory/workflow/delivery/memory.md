@@ -85,8 +85,8 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 ## 관련
 
 - `.claude/rules/git-policy.md` — `--no-verify` / `LEFTHOOK=0` 금지 + hook 강제
-- `.claude/agents/delivery.md` — 본 룰 enforce agent
-- `.claude/agents/pr-reviewer.md` — T4 review spawn 대상
+- `.claude/agents/delivery.md` / `.codex/agents/delivery.md` — delivery wrappers
+- `.claude/agents/pr-reviewer.md` / `.codex/agents/pr-reviewer.md` — T4 review wrappers
 - [review](../review/memory.md) — T4 review 행동 계약
 - `.agents/skills/pr-review/SKILL.md` — T4 review 방법론
 - [documentation](../documentation/memory.md) — 문서화 impact + evidence portability
