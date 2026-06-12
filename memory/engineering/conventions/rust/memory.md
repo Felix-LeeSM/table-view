@@ -62,8 +62,8 @@ fn get_user(id: u64) -> Result<User, AppError> {
 - 명명: `test_<동작>_<조건>_<기대결과>`
 - 모든 공개 함수에 테스트 필수
 - 커버리지: Rust local target 은 sprint/contract 에 명시한다. Parser/adapter/command
-  처럼 위험한 surface 는 기존 high-coverage 선례를 참고하되, 전역 frontend gate
-  70/70/70 과 혼동하지 않는다.
+  처럼 위험한 surface 는 기존 high-coverage 선례를 참고한다. Frontend/Rust shared
+  coverage floor 는 `docs/quality/coverage-ratchet.md` 와 hook/CI config 가 소유한다.
 
 ## 보안
 

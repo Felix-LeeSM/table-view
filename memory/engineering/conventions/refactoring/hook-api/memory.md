@@ -1,7 +1,7 @@
 ---
 title: C. Hook API shape
 type: memory
-updated: 2026-05-02
+updated: 2026-06-12
 ---
 
 # C. Hook API shape
@@ -21,12 +21,9 @@ return shape / deps / sub-grouping 룰.
   보장. deps 배열 정확.
 - **금지**: `// eslint-disable-next-line react-hooks/exhaustive-deps` 신규
   도입 0.
-- **기존 violations 정리** (smell §6 4 사이트):
-  - DataGridTable:552 → Sprint 193
-  - SchemaTree:519 → Sprint 191
-  - DataGrid:116 → Sprint 193
-  - DocumentDatabaseTree:230 → 별도 결정 (이번 plan 밖일 수 있음 — sprint
-    closure 시점에 재평가)
+- 기존 suppressions 는 active rule 이 아니라 touched-scope debt 다. 현재 위치는
+  lint/`rg "eslint-disable-next-line react-hooks/exhaustive-deps"` 로 확인하고,
+  건드리는 scope 에서 제거하거나 load-bearing rationale 을 남긴다.
 
 ## C-3. 최신 참조 패턴 — 단순 ref
 

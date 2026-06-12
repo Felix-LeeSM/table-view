@@ -1,7 +1,7 @@
 ---
 title: 비-E2E 테스트 시나리오 설계 원칙 (Rust unit/integration · React component · Zustand store · Hook · Async)
 type: memory
-updated: 2026-05-28
+updated: 2026-06-12
 ---
 
 # 비-E2E 테스트 시나리오 설계 원칙
@@ -95,8 +95,10 @@ describe('ConnectionActivation', () => {
 - 단위: 같은 파일 하단 `#[cfg(test)] mod tests {}`. 통합: `src-tauri/tests/`.
 - 분기 매트릭스는 table-driven: `for (input, expected) in &[...] { ... }`.
 - `mockall` for trait, `#[tokio::test]` for async, `assert_matches!` for `Result::Err`.
-- 커버리지: frontend 전역 gate 는 `vite.config.ts` 의 70/70/70. Rust local
-  target 은 sprint/contract 에 adapter/parser/command 위험도 기준으로 명시한다.
+- 커버리지: frontend 전역 gate 는 `vite.config.ts` 와
+  `docs/quality/coverage-ratchet.md` 의 statements 85 / lines 87 / functions 87 /
+  branches 78. Rust local target 은 sprint/contract 에 adapter/parser/command
+  위험도 기준으로 명시한다.
 
 ### React component (vitest + RTL)
 - `userEvent` > `fireEvent` — 실제 키보드/포커스 시퀀스를 시뮬레이션.

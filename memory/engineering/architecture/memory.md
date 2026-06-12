@@ -1,7 +1,7 @@
 ---
 title: Architecture
 type: memory
-updated: 2026-06-11
+updated: 2026-06-12
 ---
 
 # 시스템 구조
@@ -19,7 +19,7 @@ updated: 2026-06-11
 | State Management  | Zustand                                                   |
 | Styling           | Tailwind CSS 4 (다크 모드 지원 필수)                      |
 | Backend           | Rust (Tauri commands)                                     |
-| DB Drivers        | sqlx (PostgreSQL / MySQL / MariaDB / SQLite), DuckDB, mongodb, redis; fixture-backed Search adapter has no live HTTP driver |
+| DB Drivers        | sqlx (PostgreSQL / MySQL / MariaDB / SQLite), DuckDB, mongodb, redis/valkey, live HTTP Search adapters for Elasticsearch/OpenSearch |
 | App Storage       | SQLite via sqlx                                           |
 | Build Tool        | Vite 6 (frontend), Cargo (backend)                        |
 | Testing           | Vitest (frontend), cargo test (backend), WebdriverIO + tauri-driver (e2e) |
@@ -59,8 +59,8 @@ table-view/
 - `commands/` — IPC 핸들러 (connection, query, schema)
 - `db/` — `ActiveAdapter` + common `DbAdapter` lifecycle + paradigm traits
   (`RdbAdapter`, `DocumentAdapter`, `KvAdapter`, `SearchAdapter`) + 사용자 DB
-  구현체 (PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, Redis) +
-  fixture-backed Search adapter (Elasticsearch/OpenSearch identities only; no live HTTP)
+  구현체 (PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, Redis/Valkey,
+  Elasticsearch/OpenSearch)
 - `storage/` — 연결 설정 파일 I/O + 암호화 (AES-256-GCM, OsRng)
 - `models/` — 공용 구조체 (ConnectionConfig, ConnectionGroup, DatabaseType 등)
 - `error.rs` — `AppError` (thiserror) + `Result<T, AppError>`
@@ -98,7 +98,7 @@ React 밖에서 여러 store action 과 Tauri boundary 를 묶는 orchestration 
 - [data-source](data-source/memory.md) — source profile, capability, adapter, result envelope architecture
 - [query-language](query-language/memory.md) — parser/completion/Safe Mode ownership
 - [state-management](state-management/memory.md) — persistence, workspace identity, cross-window sync
-- [paradigms](paradigms/memory.md) — Phase 7(ES) · Phase 8(Redis) UI slot 비교 + 일급 개념 대조 + 결정 이력
+- [paradigms](paradigms/memory.md) — RDB / Document / Search / KV UI heuristic; support state SOT 아님
 - [docs/ROADMAP.md](../../../docs/ROADMAP.md) — 미래 목표와 승격 후보
 - [conventions](../conventions/memory.md) — Rust/TS 코딩 규칙, 테스트, 커밋
 - [docs/archives/decisions](../../../docs/archives/decisions/memory.md) — historical ADR archive
