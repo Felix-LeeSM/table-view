@@ -298,9 +298,10 @@ candidate-only 상태다.
   sqlite-cli command execution, and nested JSON edits remain future promotion
   gates.
 - Routine runtime smoke currently proves the GitHub Runtime Happy Path for
-  PostgreSQL, MySQL, MariaDB, SQLite, DuckDB `.duckdb`, MongoDB, Redis, and
-  Valkey. Other smoke specs or source inventories do not widen product support
-  until the CI script and support docs promote them.
+  PostgreSQL, MySQL, MariaDB, MSSQL, Oracle, SQLite, DuckDB `.duckdb`, MongoDB,
+  Redis, Valkey, Elasticsearch, and OpenSearch. Other smoke specs or source
+  inventories do not widen product support until the CI script and support docs
+  promote them.
 - Destructive/security behavior is source-specific. RDB DDL preview/confirm,
   RDB Safe Mode confirmations, MongoDB safety confirmations, Redis typed
   confirmation keys, and fixture/live Search destructive plan estimates exist, but
