@@ -108,6 +108,7 @@ else
   run_wdio "$BASE_DATA_DIR/postgres-explain" "e2e/smoke/postgres-explain.spec.ts"
   run_wdio "$BASE_DATA_DIR/postgres-extension-completion" "e2e/smoke/postgres-extension-completion.spec.ts"
   run_wdio "$BASE_DATA_DIR/postgres-cancellation" "e2e/smoke/postgres-cancellation.spec.ts"
+  run_wdio "$BASE_DATA_DIR/postgres-structure-ddl" "e2e/smoke/postgres-structure-ddl.spec.ts"
   run_wdio "$BASE_DATA_DIR/mysql" "e2e/smoke/mysql.spec.ts"
   run_wdio "$BASE_DATA_DIR/mariadb" "e2e/smoke/mariadb.spec.ts"
   run_wdio "$BASE_DATA_DIR/mssql" "e2e/smoke/mssql.spec.ts"

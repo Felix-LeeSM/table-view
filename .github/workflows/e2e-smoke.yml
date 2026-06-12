@@ -126,6 +126,8 @@ jobs:
             spec: e2e/smoke/postgres-extension-completion.spec.ts
           - spec_key: postgres-cancellation
             spec: e2e/smoke/postgres-cancellation.spec.ts
+          - spec_key: postgres-structure-ddl
+            spec: e2e/smoke/postgres-structure-ddl.spec.ts
           - spec_key: mysql
             spec: e2e/smoke/mysql.spec.ts
           - spec_key: mariadb
