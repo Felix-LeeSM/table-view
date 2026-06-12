@@ -14,6 +14,7 @@
 --     `orders` and `products` (no unique column besides the SERIAL id).
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;
 
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,

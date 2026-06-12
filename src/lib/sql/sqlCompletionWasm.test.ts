@@ -52,6 +52,12 @@ function requestWithExtension() {
           version: "1.3",
           comment: null,
         },
+        {
+          schema: "public",
+          name: "fuzzystrmatch",
+          version: "1.2",
+          comment: null,
+        },
       ],
     },
   };
@@ -365,7 +371,7 @@ describe("sqlCompletionWasm", () => {
       expect.any(String),
       expect.any(String),
       expect.any(String),
-      "public\tpgcrypto\t1.3",
+      "public\tfuzzystrmatch\t1.2\npublic\tpgcrypto\t1.3",
     );
   });
 

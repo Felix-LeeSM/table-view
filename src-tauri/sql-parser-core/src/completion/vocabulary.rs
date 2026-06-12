@@ -225,6 +225,17 @@ const PG_TRGM_CANDIDATES: &[ExtensionCompletionCandidate] = &[
     ExtensionCompletionCandidate { label: "%>", kind: "operator", detail: "operator", boost: 22 },
 ];
 
+#[rustfmt::skip]
+const FUZZYSTRMATCH_CANDIDATES: &[ExtensionCompletionCandidate] = &[
+    ExtensionCompletionCandidate { label: "LEVENSHTEIN", kind: "function", detail: "function", boost: 25 },
+    ExtensionCompletionCandidate { label: "LEVENSHTEIN_LESS_EQUAL", kind: "function", detail: "function", boost: 25 },
+    ExtensionCompletionCandidate { label: "SOUNDEX", kind: "function", detail: "function", boost: 24 },
+    ExtensionCompletionCandidate { label: "DIFFERENCE", kind: "function", detail: "function", boost: 24 },
+    ExtensionCompletionCandidate { label: "METAPHONE", kind: "function", detail: "function", boost: 24 },
+    ExtensionCompletionCandidate { label: "DMETAPHONE", kind: "function", detail: "function", boost: 24 },
+    ExtensionCompletionCandidate { label: "DMETAPHONE_ALT", kind: "function", detail: "function", boost: 24 },
+];
+
 const POSTGRESQL_EXTENSION_PACKS: &[ExtensionCompletionPack] = &[
     ExtensionCompletionPack {
         extension: "pgcrypto",
@@ -253,5 +264,9 @@ const POSTGRESQL_EXTENSION_PACKS: &[ExtensionCompletionPack] = &[
     ExtensionCompletionPack {
         extension: "pg_trgm",
         candidates: PG_TRGM_CANDIDATES,
+    },
+    ExtensionCompletionPack {
+        extension: "fuzzystrmatch",
+        candidates: FUZZYSTRMATCH_CANDIDATES,
     },
 ];
