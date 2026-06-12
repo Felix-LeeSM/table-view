@@ -405,6 +405,61 @@ fn ac_488_extension_packs_are_keyed_by_detected_extension_name() {
 }
 
 #[test]
+fn ac_869_fuzzystrmatch_pack_is_not_suggested_without_installed_extension_inventory() {
+    let result = complete_sql(empty_vocabulary_request(
+        "postgresql",
+        "psql",
+        "LEVENSHTEIN",
+    ));
+
+    assert!(!labels(&result).contains(&"LEVENSHTEIN".to_string()));
+}
+
+#[test]
+fn ac_869_detected_fuzzystrmatch_extension_enables_curated_function_pack() {
+    let mut req = empty_vocabulary_request("postgresql", "psql", "SELECT ");
+    req.catalog.extensions = vec![extension("fuzzystrmatch")];
+
+    let result = complete_sql(req);
+    let result_labels = labels(&result);
+
+    for label in [
+        "LEVENSHTEIN",
+        "LEVENSHTEIN_LESS_EQUAL",
+        "SOUNDEX",
+        "DIFFERENCE",
+        "METAPHONE",
+        "DMETAPHONE",
+        "DMETAPHONE_ALT",
+    ] {
+        assert!(
+            result_labels.contains(&label.to_string()),
+            "fuzzystrmatch completion did not contain {label}; got {result_labels:?}"
+        );
+    }
+    let item = result
+        .items
+        .iter()
+        .find(|item| item.label == "LEVENSHTEIN")
+        .expect("fuzzystrmatch function candidate");
+    assert_eq!(item.kind, "function");
+    assert_eq!(
+        item.detail.as_deref(),
+        Some("PostgreSQL extension fuzzystrmatch function")
+    );
+}
+
+#[test]
+fn ac_869_unknown_installed_extension_stays_detected_but_unpacked() {
+    let mut req = empty_vocabulary_request("postgresql", "psql", "LEVENSHTEIN");
+    req.catalog.extensions = vec![extension("plpgsql")];
+
+    let result = complete_sql(req);
+
+    assert!(!labels(&result).contains(&"LEVENSHTEIN".to_string()));
+}
+
+#[test]
 fn ac_488_operator_pack_candidates_replace_typed_operator_prefixes() {
     let mut vector_req = empty_vocabulary_request("postgresql", "psql", "SELECT embedding <");
     vector_req.catalog.extensions = vec![extension("pgvector")];

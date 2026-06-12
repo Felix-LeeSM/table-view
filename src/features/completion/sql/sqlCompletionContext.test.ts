@@ -469,7 +469,11 @@ describe("buildSqlCompletionContext", () => {
     const snapshot = emptySnapshot();
     snapshot.postgresExtensions = {
       conn1: {
-        app: [pgExtension("pgcrypto"), pgExtension("uuid-ossp", "extensions")],
+        app: [
+          pgExtension("pgcrypto"),
+          pgExtension("fuzzystrmatch"),
+          pgExtension("uuid-ossp", "extensions"),
+        ],
       },
     };
 
@@ -481,6 +485,12 @@ describe("buildSqlCompletionContext", () => {
     });
 
     expect(ctx.catalog.extensions).toEqual([
+      {
+        schema: "public",
+        name: "fuzzystrmatch",
+        version: "1.0",
+        comment: null,
+      },
       {
         schema: "public",
         name: "pgcrypto",

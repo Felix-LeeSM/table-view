@@ -79,14 +79,14 @@ describe("PostgreSQL installed-extension completion smoke", () => {
       async () => {
         await openNewQueryTab();
         await typeQuery(
-          "SELECT extname FROM pg_extension WHERE extname IN ('pgcrypto', 'plpgsql', 'uuid-ossp') ORDER BY extname",
+          "SELECT extname FROM pg_extension WHERE extname IN ('fuzzystrmatch', 'pgcrypto', 'plpgsql', 'uuid-ossp') ORDER BY extname",
         );
         await runQuery();
 
         const grid = await waitForGridTextAll(
-          ["pgcrypto", "plpgsql"],
+          ["fuzzystrmatch", "pgcrypto", "plpgsql"],
           15000,
-          "installed PostgreSQL extension inventory did not include pgcrypto and plpgsql",
+          "installed PostgreSQL extension inventory did not include fuzzystrmatch, pgcrypto, and plpgsql",
         );
         const text = String((await grid.getProperty("textContent")) ?? "");
         expect(text.toLowerCase()).not.toContain("uuid-ossp");
@@ -99,6 +99,15 @@ describe("PostgreSQL installed-extension completion smoke", () => {
         await openNewQueryTab();
         await typeQuery("SELECT GEN_RANDOM");
         await waitForCompletionLabel("GEN_RANDOM_UUID");
+      },
+    );
+
+    await step(
+      "surface fuzzystrmatch curated candidates when installed",
+      async () => {
+        await openNewQueryTab();
+        await typeQuery("SELECT LEVENSHT");
+        await waitForCompletionLabel("LEVENSHTEIN");
       },
     );
 
