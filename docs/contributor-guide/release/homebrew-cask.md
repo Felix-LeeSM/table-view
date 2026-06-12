@@ -46,5 +46,7 @@ brew install --cask table-view
 - 릴리스 노트의 support claim은
   [`release-notes-support-matrix.md`](release-notes-support-matrix.md)를 기준으로
   작성하고, product docs와 known limitations 링크를 함께 둡니다.
+- 버전/tag와 artifact 검증은
+  [`versioning-and-artifacts.md`](versioning-and-artifacts.md)를 기준으로 확인합니다.
 - `HOMEBREW_TAP_REPO`가 비어 있거나, tap 저장소 접근 권한이 없으면 워크플로가 실패합니다.
 - 릴리스 `.dmg`의 파일명이 정책이 바뀌면 script 탐색 패턴을 함께 수정해야 합니다.

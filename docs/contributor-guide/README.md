@@ -20,6 +20,9 @@ decision logs.
   threshold.
 - [`release/release-notes-support-matrix.md`](release/release-notes-support-matrix.md) —
   release-note support summary, support matrix, and fixture/smoke coverage.
+- [`release/versioning-and-artifacts.md`](release/versioning-and-artifacts.md) —
+  version/tag decision, artifact expectations, post-release verification, and
+  rollback notes.
 - [`release/homebrew-cask.md`](release/homebrew-cask.md) — Homebrew cask automation.
 - [`memory/engineering/architecture/data-source/adding/memory.md`](../../memory/engineering/architecture/data-source/adding/memory.md) — checklist for adding or promoting a data source.
 
