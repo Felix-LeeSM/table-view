@@ -5,9 +5,10 @@ use table_view_lib::db::postgres::PostgresAdapter;
 use table_view_lib::db::{DbAdapter, RdbAdapter};
 use table_view_lib::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
-    ConstraintDefinition, CreateIndexRequest, CreateTableRequest, CreateTriggerRequest,
-    DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
-    DropTriggerRequest, FilterCondition, FilterOperator, RenameTableRequest,
+    ConstraintDefinition, CreateIndexRequest, CreateTablePlanIndex, CreateTablePlanRequest,
+    CreateTableRequest, CreateTriggerRequest, DatabaseType, DropColumnRequest,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, DropTriggerRequest, FilterCondition,
+    FilterOperator, RenameTableRequest,
 };
 
 /// Helper: create a unique test table name to avoid collisions across tests.
@@ -102,6 +103,98 @@ async fn test_create_table_and_list() {
         .await
         .expect("Failed to drop table");
 
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_create_table_plan_executes_table_and_index_then_schema_reads_see_both() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let table_name = unique_table_name("structure_plan");
+    let index_name = format!("idx_{table_name}_label");
+
+    let preview_req = CreateTablePlanRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        name: table_name.clone(),
+        columns: vec![
+            ColumnDefinition {
+                name: "id".into(),
+                data_type: "integer".into(),
+                nullable: false,
+                default_value: None,
+                comment: None,
+                is_identity: false,
+            },
+            ColumnDefinition {
+                name: "label".into(),
+                data_type: "text".into(),
+                nullable: true,
+                default_value: None,
+                comment: None,
+                is_identity: false,
+            },
+        ],
+        primary_key: Some(vec!["id".into()]),
+        table_comment: None,
+        indexes: vec![CreateTablePlanIndex {
+            index_name: index_name.clone(),
+            columns: vec!["label".into()],
+            index_type: "btree".into(),
+            is_unique: false,
+        }],
+        constraints: vec![],
+        preview_only: true,
+        expected_database: None,
+    };
+
+    let preview = adapter
+        .create_table_plan(&preview_req)
+        .await
+        .expect("preview create table plan");
+    assert!(preview.sql.contains("CREATE TABLE"));
+    assert!(preview.sql.contains("CREATE INDEX"));
+
+    let before = adapter
+        .list_tables("public")
+        .await
+        .expect("list tables before execute");
+    assert!(
+        before.iter().all(|t| t.name != table_name),
+        "preview-only create_table_plan must not create the table"
+    );
+
+    let mut commit_req = preview_req.clone();
+    commit_req.preview_only = false;
+    adapter
+        .create_table_plan(&commit_req)
+        .await
+        .expect("execute create table plan");
+
+    let tables = adapter
+        .list_tables("public")
+        .await
+        .expect("list tables after execute");
+    assert!(
+        tables.iter().any(|t| t.name == table_name),
+        "schema refresh/list_tables must see the created table"
+    );
+
+    let indexes = adapter
+        .get_table_indexes(&table_name, "public")
+        .await
+        .expect("get table indexes after execute");
+    assert!(
+        indexes.iter().any(|i| i.name == index_name),
+        "schema refresh/get_table_indexes must see the created index"
+    );
+
+    adapter
+        .execute(&format!("DROP TABLE IF EXISTS \"{table_name}\""))
+        .await
+        .ok();
     adapter.disconnect_pool().await.unwrap();
 }
 

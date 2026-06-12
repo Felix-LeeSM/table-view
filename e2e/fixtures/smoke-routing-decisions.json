@@ -130,23 +130,25 @@
         "e2e/smoke/postgres-safe-mode.spec.ts",
         "e2e/smoke/postgres-explain.spec.ts",
         "e2e/smoke/postgres-extension-completion.spec.ts",
-        "e2e/smoke/postgres-cancellation.spec.ts"
+        "e2e/smoke/postgres-cancellation.spec.ts",
+        "e2e/smoke/postgres-structure-ddl.spec.ts"
       ],
       "specKeys": [
         "postgres",
         "postgres-safe-mode",
         "postgres-explain",
         "postgres-extension-completion",
-        "postgres-cancellation"
+        "postgres-cancellation",
+        "postgres-structure-ddl"
       ],
       "seedTargets": ["postgres"],
       "tier": "blocking E2E",
       "wiredInSmokeScript": true,
-      "runtimeCost": "Existing service-backed matrix route; no new spec or service cost in issue #753. Job timeout remains 40 minutes.",
+      "runtimeCost": "Existing service-backed matrix route plus the scoped PostgreSQL Structure DDL smoke from issue #868. Job timeout remains 40 minutes.",
       "flakeRisk": "Existing Postgres runtime risk; isolated app data directory per spec and idempotent seed reduce cross-spec state bleed.",
       "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
       "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-<spec_key>.",
-      "supportClaimImpact": "Runtime Happy Path evidence for the documented PostgreSQL slices only.",
+      "supportClaimImpact": "Runtime Happy Path evidence for the documented PostgreSQL slices only, including bounded table-plus-index Structure DDL.",
       "action": "keep blocking E2E"
     },
     {

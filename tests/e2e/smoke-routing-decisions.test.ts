@@ -48,6 +48,6 @@ describe("smoke-routing-decisions.json", () => {
     expect(result.errors).toEqual([]);
     expect(result.blockingDecisionMatrix).toEqual(collectSmokeScriptMatrix());
     expect(result.blockingDecisionMatrix).toEqual(collectWorkflowMatrix());
-    expect(result.blockingDecisionMatrix).toHaveLength(16);
+    expect(result.blockingDecisionMatrix).toHaveLength(17);
   });
 });
