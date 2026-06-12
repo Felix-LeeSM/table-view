@@ -135,9 +135,9 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 있을 때만 product evidence 로 승격된다. Fixture/test topology SOT 는
 `docs/contributor-guide/fixture-test-topology-inventory.md` 와
 `memory/engineering/conventions/testing-scenarios/fixtures/memory.md` 가 소유한다.
-Refactor 05 support-claim audit 는
-`docs/archives/audits/refactor-05-support-claims-ledger-2026-06-12.md` 에서 product
-claim, docs row/path, evidence paths, proof tier, action 을 고정한다.
+`docs/archives/audits/refactor-05-support-claims-ledger-2026-06-12.md` 는
+2026-06-12 support-claim audit snapshot 이다. 현재 product support SOT 는 이
+page, `known-limitations.md`, `query-language-support.md`, and testing matrix 다.
 
 | Source | Fixture asset | Current meaning |
 |---|---|---|
@@ -145,7 +145,7 @@ claim, docs row/path, evidence paths, proof tier, action 을 고정한다.
 | MySQL | `e2e/fixtures/mysql/query/seed.sql` | wired Runtime Happy Path seed for the connect/browse/query/edit/cancel baseline |
 | MariaDB | `e2e/fixtures/mariadb/query/seed.sql` | wired Runtime Happy Path seed for the MariaDB connect/browse/query/edit/cancel baseline plus catalog/workbench probe objects |
 | SQLite | `e2e/fixtures/sqlite/query/seed.sql` | wired Runtime Happy Path seed for deterministic file create/open, table browse, read query, writable DML, row edit, read-only write rejection, and internal app-state DB rejection |
-| DuckDB | `e2e/fixtures/duckdb/query/seed.sql` | wired Runtime Happy Path seed for `.duckdb` open, catalog/table browse, raw SELECT result/history evidence, and read-only write rejection. Registered local CSV/Parquet/JSON/NDJSON source preview/query remains focused evidence outside this fixture smoke |
+| DuckDB | `e2e/fixtures/duckdb/query/seed.sql` | wired Runtime Happy Path seed for `.duckdb` open, catalog/table browse, raw SELECT result/history evidence, writable DML readback, and read-only write rejection. Registered local CSV/Parquet/JSON/NDJSON source preview/query remains focused evidence outside this fixture smoke |
 | MongoDB | `e2e/fixtures/mongodb/document/seed.json` | document fixture used by current MongoDB smoke seed path |
 | Redis | `e2e/fixtures/redis/kv/seed.json` | wired Runtime Happy Path seed for Redis DB 2 connect/scan/preview/GET plus guarded string write, TTL, and exact-key delete smoke. Broader stream consumer, cluster/pubsub/modules, admin, and Valkey parity remain future work |
 | Elasticsearch | `e2e/fixtures/elasticsearch/search/seed.json`, `e2e/smoke/elasticsearch.spec.ts`, `src-tauri/src/db/search.rs`, `src-tauri/src/db/search_destructive.rs`, `src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_http.rs`, `src-tauri/src/db/search_live_destructive.rs`, `src-tauri/src/db/search_live_query.rs` | embedded Search fixture contract plus wired Runtime Happy Path smoke for live HTTP connection/catalog/query support with bounded Search DSL request validation and live delete-by-query safety planning; actual live admin execution deferred |
@@ -188,7 +188,7 @@ MSSQL 은 connection plus bounded query runtime support, primary-key-scoped row 
 bounded structured table/index/constraint DDL, bounded editor completion,
 catalog/workbench metadata browse, bounded static parser/Safe Mode metadata,
 representative runtime smoke 로 승격됐지만, TLS/admin/full-T-SQL claim 은 아직 없다. Oracle 은
-#526 scope 의 representative Runtime Happy Path smoke/live evidence 로
+representative Runtime Happy Path smoke/live evidence 로
 service-name connect, catalog browse, bounded SELECT, DML preview/readback,
 primary-key-scoped row edit, destructive confirmation 까지 승격됐다. SID/TNS
 alias, wallet/TLS, raw DDL/admin, sequence/synonym DDL/admin, full PL/SQL,
