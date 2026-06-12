@@ -72,6 +72,19 @@ TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 
 
 이 프로젝트를 로컬에서 빌드하고 기여하려는 개발자를 위한 안내입니다.
 
+Contributor/agent routing:
+
+- Agent는 [`AGENTS.md`](./AGENTS.md)를 먼저 읽고 작업 type별 workflow memory와
+  surface rule로 내려갑니다. Claude Code 전용 wrapper는 [`CLAUDE.md`](./CLAUDE.md)
+  입니다.
+- Contributor-facing 절차와 검증 기대치는
+  [`docs/contributor-guide/README.md`](./docs/contributor-guide/README.md)와
+  [`docs/contributor-guide/testing-and-quality.md`](./docs/contributor-guide/testing-and-quality.md)를
+  기준으로 봅니다.
+- 현재 제품 상태는 [`docs/product/README.md`](./docs/product/README.md), 지원
+  경계는 [`docs/product/known-limitations.md`](./docs/product/known-limitations.md),
+  미래 순서는 [`docs/ROADMAP.md`](./docs/ROADMAP.md)가 소유합니다.
+
 ### 1. 준비물
 
 - [mise](https://mise.jdx.dev/) 또는 asdf — `.tool-versions` 기반 런타임 관리
