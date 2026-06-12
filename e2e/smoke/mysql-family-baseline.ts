@@ -373,14 +373,14 @@ export function defineMysqlFamilySmoke({
         },
       );
 
-      await runMysqlFamilyStructureDdlSmoke({ dbLabel, database });
-
       await step("verify query history source labels", async () => {
         await waitForGlobalHistoryEvidence({
           sourceBadges: ["sidebar-prefetch", "grid-edit"],
           rawFragments: [`SELECT 7 AS ${retryAlias}`],
         });
       });
+
+      await runMysqlFamilyStructureDdlSmoke({ dbLabel, database });
     });
   });
 }
