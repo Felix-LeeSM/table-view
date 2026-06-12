@@ -309,4 +309,38 @@ describe("StructurePanel Triggers tab (Sprint 272)", () => {
       screen.queryByRole("button", { name: `Drop trigger ${fixture.name}` }),
     ).not.toBeInTheDocument();
   });
+
+  it("[AC-870] MariaDB trigger tab is read-only: metadata renders but structured create/drop controls stay hidden", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-1",
+          name: "mariadb",
+          dbType: "mariadb",
+          host: "localhost",
+          port: 3306,
+          database: "app",
+          username: "u",
+          password: null,
+          environment: "development",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ],
+    });
+
+    await act(async () => {
+      renderPanel({ initialSubTab: "triggers" });
+    });
+
+    const fixture = MOCK_TRIGGERS[0]!;
+    expect(
+      screen.getByTestId(`trigger-source-${fixture.name}`),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Create trigger" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: `Drop trigger ${fixture.name}` }),
+    ).not.toBeInTheDocument();
+  });
 });

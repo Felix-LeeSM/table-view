@@ -13,6 +13,7 @@ import {
   waitForLauncher,
   waitForWorkspaceTextAll,
 } from "./_helpers";
+import { runMysqlFamilyStructureDdlSmoke } from "./mysql-family-structure-ddl";
 import { waitForTabHistoryStatuses } from "./query-history-helpers";
 
 interface MysqlFamilySmokeOptions {
@@ -378,6 +379,8 @@ export function defineMysqlFamilySmoke({
           rawFragments: [`SELECT 7 AS ${retryAlias}`],
         });
       });
+
+      await runMysqlFamilyStructureDdlSmoke({ dbLabel, database });
     });
   });
 }

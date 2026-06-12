@@ -159,11 +159,11 @@
       "seedTargets": ["mysql"],
       "tier": "blocking E2E",
       "wiredInSmokeScript": true,
-      "runtimeCost": "Existing service-backed matrix route; no new spec or service cost in issue #753. Job timeout remains 40 minutes.",
+      "runtimeCost": "Existing service-backed matrix route plus the scoped MySQL Structure table/index/FK DDL smoke from issue #870. No new spec or service cost beyond issue #753. Job timeout remains 40 minutes.",
       "flakeRisk": "Existing MySQL container startup/runtime risk; idempotent seed restores smoke-mutated rows.",
       "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
       "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-mysql.",
-      "supportClaimImpact": "Runtime Happy Path evidence for bounded MySQL query/edit/cancel/history slices.",
+      "supportClaimImpact": "Runtime Happy Path evidence for bounded MySQL query/edit/cancel/history slices plus bounded Structure table/index/FK DDL preview/execute/catalog-readback.",
       "action": "keep blocking E2E"
     },
     {
@@ -174,11 +174,11 @@
       "seedTargets": ["mariadb"],
       "tier": "blocking E2E",
       "wiredInSmokeScript": true,
-      "runtimeCost": "Existing service-backed matrix route; no new spec or service cost in issue #753. Job timeout remains 40 minutes.",
+      "runtimeCost": "Existing service-backed matrix route plus the scoped MariaDB Structure table/index/FK DDL smoke from issue #870. No new spec or service cost beyond issue #753. Job timeout remains 40 minutes.",
       "flakeRisk": "Existing MariaDB container startup/runtime risk; idempotent seed restores smoke-mutated rows.",
       "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
       "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-mariadb.",
-      "supportClaimImpact": "Runtime Happy Path evidence for MariaDB baseline slices, not full vendor parity.",
+      "supportClaimImpact": "Runtime Happy Path evidence for MariaDB baseline slices plus bounded Structure table/index/FK DDL preview/execute/catalog-readback under MariaDB identity, not full vendor parity.",
       "action": "keep blocking E2E"
     },
     {
