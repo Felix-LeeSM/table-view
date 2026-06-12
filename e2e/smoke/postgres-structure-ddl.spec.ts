@@ -42,7 +42,7 @@ describe("PostgreSQL structure DDL smoke", () => {
       await setNthInputByAria("Column name", 1, "label");
       await setNthInputByAria("Column data type", 1, "text");
 
-      await clickVisibleButtonText("Indexes");
+      await activateVisibleTab("Indexes");
       await clickAria("Add index");
       await setInputByAria("Index name", indexName);
       await clickAria("Index column: label");
@@ -70,8 +70,8 @@ describe("PostgreSQL structure DDL smoke", () => {
     });
 
     await step("Structure indexes tab shows the new index", async () => {
-      await clickAria("Structure");
-      await clickVisibleButtonText("Indexes");
+      await activateVisibleTab("Structure");
+      await activateVisibleTab("Indexes");
       await waitForVisibleText(indexName, 20000);
     });
 
@@ -224,34 +224,6 @@ async function clickAria(label: string) {
   }, label);
 }
 
-async function clickVisibleButtonText(text: string) {
-  await browser.waitUntil(
-    async () => (await findVisibleButtonText(text)) !== null,
-    {
-      timeout: 10000,
-      timeoutMsg: `${text} button did not appear`,
-    },
-  );
-  await browser.execute((needle) => {
-    const isVisible = (element: HTMLElement) => {
-      const style = window.getComputedStyle(element);
-      return (
-        element.getClientRects().length > 0 &&
-        style.display !== "none" &&
-        style.visibility !== "hidden"
-      );
-    };
-    const button = Array.from(
-      document.querySelectorAll<HTMLElement>("button"),
-    ).find(
-      (candidate) =>
-        isVisible(candidate) && candidate.textContent?.trim() === needle,
-    );
-    if (!button) throw new Error(`${needle} button did not appear`);
-    button.click();
-  }, text);
-}
-
 async function clickEnabledButtonText(text: string) {
   await browser.waitUntil(
     async () =>
@@ -298,6 +270,87 @@ async function clickEnabledButtonText(text: string) {
     if (!button) throw new Error(`${needle} enabled button did not appear`);
     button.click();
   }, text);
+}
+
+async function activateVisibleTab(label: string) {
+  await switchToWorkspaceWindow();
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((expectedLabel) => {
+        return Array.from(
+          document.querySelectorAll<HTMLElement>('[role="tab"]'),
+        ).some(
+          (candidate) =>
+            candidate.offsetParent !== null &&
+            candidate.textContent?.trim() === expectedLabel,
+        );
+      }, label),
+    {
+      timeout: 10000,
+      timeoutMsg: `${label} tab did not appear in the workspace`,
+    },
+  );
+
+  await browser.execute((expectedLabel) => {
+    const tab = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="tab"]'),
+    ).find(
+      (candidate) =>
+        candidate.offsetParent !== null &&
+        candidate.textContent?.trim() === expectedLabel,
+    );
+    if (!tab) throw new Error(`${expectedLabel} tab did not appear`);
+
+    tab.focus();
+
+    const pointerInit = {
+      bubbles: true,
+      cancelable: true,
+      pointerType: "mouse",
+      button: 0,
+    };
+    if (typeof PointerEvent === "function") {
+      tab.dispatchEvent(
+        new PointerEvent("pointerdown", { ...pointerInit, buttons: 1 }),
+      );
+      tab.dispatchEvent(new PointerEvent("pointerup", pointerInit));
+    }
+
+    tab.dispatchEvent(
+      new MouseEvent("mousedown", {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: 1,
+      }),
+    );
+    tab.dispatchEvent(
+      new MouseEvent("mouseup", {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+      }),
+    );
+    tab.click();
+  }, label);
+
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((expectedLabel) => {
+        const tab = Array.from(
+          document.querySelectorAll<HTMLElement>('[role="tab"]'),
+        ).find(
+          (candidate) =>
+            candidate.offsetParent !== null &&
+            candidate.textContent?.trim() === expectedLabel,
+        );
+        return tab?.getAttribute("aria-selected") === "true";
+      }, label),
+    {
+      timeout: 10000,
+      timeoutMsg: `${label} tab did not become active in the workspace`,
+    },
+  );
 }
 
 async function waitForDdlPreview(snippets: string[]) {
@@ -364,24 +417,4 @@ async function waitUntilTextGone(text: string, timeout: number) {
       }, text),
     { timeout, timeoutMsg: `${text} dialog did not close` },
   );
-}
-
-async function findVisibleButtonText(text: string): Promise<string | null> {
-  return await browser.execute((needle) => {
-    const isVisible = (element: HTMLElement) => {
-      const style = window.getComputedStyle(element);
-      return (
-        element.getClientRects().length > 0 &&
-        style.display !== "none" &&
-        style.visibility !== "hidden"
-      );
-    };
-    const found = Array.from(
-      document.querySelectorAll<HTMLElement>("button"),
-    ).find(
-      (candidate) =>
-        isVisible(candidate) && candidate.textContent?.trim() === needle,
-    );
-    return found?.textContent ?? null;
-  }, text);
 }
