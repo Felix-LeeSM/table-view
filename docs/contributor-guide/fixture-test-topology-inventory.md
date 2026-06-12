@@ -19,12 +19,14 @@ support claims still live in `docs/product/README.md`,
 `docs/product/query-language-support.md`, and
 `docs/product/known-limitations.md`.
 
-Live GitHub state checked on 2026-06-12:
+Current GitHub closure state checked on 2026-06-12:
 
-- #750/#751/#752/#753/#754/#769/#770/#771/#772/#773 are closed as completed.
-- #755 and parent #575 are the only open issues in milestone
-  `09.40 - Refactor 04 - Fixtures And Test Topology`.
-- The open repository PR list was empty before the #755 docs branch was created.
+- #750/#751/#752/#753/#754/#755/#769/#770/#771/#772/#773 are closed as completed.
+- Parent #575 is closed.
+- Milestone `09.40 - Refactor 04 - Fixtures And Test Topology` is closed with
+  0 open and 13 closed issues.
+- The open repository PR observation before the #755 docs branch was historical
+  delivery context, not a current repository-state claim.
 
 ## Command Evidence
 
@@ -99,9 +101,9 @@ Supporting checks:
 
 ## Refactor 04 Closure Evidence
 
-Parent #575 can close only after #755 lands and live GitHub still shows no open
-child issues beyond the parent. Do not infer closure from this table without a
-fresh issue/milestone check.
+Parent #575 closed after #755 landed and live GitHub showed no open child issues
+in milestone `09.40 - Refactor 04 - Fixtures And Test Topology`. Do not infer
+future closure state from this table without a fresh issue/milestone check.
 
 | Issue | Merged PR | SOT impact |
 |---|---|---|
