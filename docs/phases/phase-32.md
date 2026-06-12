@@ -1,5 +1,11 @@
 # Phase 32: Query/Workbench Parity Ladder
 
+> **상태: historical strategy snapshot.** 현재 제품 지원 범위는
+> `docs/product/README.md` 와 `docs/product/known-limitations.md`, 검증/quality
+> gap 은 `docs/contributor-guide/testing-and-quality.md`, 미래 lane routing 은
+> `docs/ROADMAP.md` 와 open issue 가 소유한다. 이 문서는 active sprint sequence 나
+> current support claim 의 SOT 가 아니다.
+
 ## 목표
 
 추가 DBMS runtime 을 승격하기 전에, 현재 지원 DBMS surface 를 하나씩
@@ -10,7 +16,7 @@ scope 밖이다: role/user/permission UI, extension management UI, schema
 diff/migration preview, DB-level backup/restore/import/export, deep
 activity/profiler dashboard.
 
-## 고정 순서
+## Historical lane order snapshot
 
 1. PostgreSQL.
 2. MySQL/MariaDB.
@@ -20,7 +26,8 @@ activity/profiler dashboard.
 6. MSSQL enterprise RDBMS lane / Oracle post-connection RDBMS lane.
 
 이 phase 문서에는 implementation sprint sequence 를 배정하지 않는다. Sprint
-contract 는 active lane 을 실행 대상으로 선택한 뒤에만 만든다.
+contract 는 `docs/ROADMAP.md` 와 live issue state 에서 active lane 을 실행 대상으로
+선택한 뒤에만 만든다.
 
 ## Lane 별 gate
 
@@ -63,7 +70,10 @@ PostgreSQL query/workbench parity 를 먼저 닫는다:
 - quality: constraint/index live schema graph wiring, visual smoke, e2e smoke,
   result-envelope migration plan.
 
-## 후속 lane
+## 후속 lane (historical)
+
+아래 목록은 planning context 다. 현재 shipped/deferred 경계는 product docs 와
+ROADMAP 의 H2/H5/H6 rows 를 우선한다.
 
 - MySQL/MariaDB: semantic widening, MariaDB engine evidence, dialect delta,
   explain format, routine/trigger read workflow.
@@ -71,9 +81,9 @@ PostgreSQL query/workbench parity 를 먼저 닫는다:
   detection, `EXPLAIN QUERY PLAN` / DuckDB `EXPLAIN` coverage.
 - MongoDB: document-native result workbench, whitelisted read/write explain,
   aggregation/capability gate, transaction/deployment handling.
-- Search live HTTP: active runtime parity lane 이 충분히 정리된 뒤 real HTTP
-  connection, catalog, query, safety, fixture, e2e 추가.
-- MSSQL/Oracle: Search live HTTP 뒤 enterprise RDBMS lane 으로 진행하되 MSSQL
-  driver/license 와 Oracle SID/TNS/wallet/TLS plus catalog/query/edit scope, CI
-  fixture strategy 를 먼저 lock. Oracle 의 현재 service-name connection-only
-  lifecycle 는 이 lane 의 catalog/query/edit claim 이 아니다.
+- Search: current product docs now separate shipped Elasticsearch/OpenSearch live
+  connection/catalog/query/destructive-plan slices from deferred admin,
+  observability, profile/explain, and broader smoke work.
+- MSSQL/Oracle: current product docs now separate shipped bounded runtime/catalog/
+  edit/DDL/parser/completion slices from deferred MSSQL TLS/SQLCMD/admin/security/
+  full T-SQL work and deferred Oracle SID/TNS/wallet/TLS/raw-admin/full-PL/SQL work.

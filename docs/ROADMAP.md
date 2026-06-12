@@ -372,10 +372,10 @@ Product support-claim wording stays in #759.
 |---|---|---|
 | Data-source architecture | 새 DBMS/support surface 는 profile, capability, adapter, language, catalog, result envelope, safety contract 를 통해 들어온다. | `memory/engineering/architecture/data-source/memory.md`, `memory/engineering/architecture/data-source/adding/memory.md`, ADR 0046 |
 | RDBMS runtime | 불확실한 paradigm 을 넓히기 전에 PostgreSQL, MySQL, MariaDB, SQLite, DuckDB/file analytics support 를 강하게 만든다. | `docs/product/README.md`, historical phase notes in `docs/archives/phases/retired/phase-18.md` and `docs/archives/phases/retired/phase-19.md` |
-| Non-RDBMS runtime | Redis 와 MongoDB 는 runtime slice 가 있다. Valkey 는 connection/key scan/value preview, bounded command query runtime slice, proven-row completion, Runtime Happy Path smoke 가 있다. Elasticsearch 는 live connection/catalog/query/destructive-plan + fixture-backed admin slice 가 있고, OpenSearch 는 live connection/catalog/query/destructive-plan + bounded Search DSL autocomplete 와 fixture-backed Search contract 다. Cassandra/Scylla, DynamoDB, graph, vector, stream 은 gated candidate 다. 새 runtime promotion 은 active one-DBMS parity lane 뒤로 둔다. | `memory/engineering/architecture/data-source/memory.md`, `docs/phases/phase-28.md` |
+| Non-RDBMS runtime | Redis 와 MongoDB 는 runtime slice 가 있다. Valkey 는 connection/key scan/value preview, bounded command query runtime slice, proven-row completion, Runtime Happy Path smoke 가 있다. Elasticsearch 는 live connection/catalog/query/destructive-plan + fixture-backed admin slice 가 있고, OpenSearch 는 live connection/catalog/query/destructive-plan + bounded Search DSL autocomplete 와 fixture-backed Search contract 다. Cassandra/Scylla, DynamoDB, graph, vector, stream 은 gated candidate 다. 새 runtime promotion 은 active one-DBMS parity lane 뒤로 둔다. | `memory/engineering/architecture/data-source/memory.md`, `docs/product/README.md`, `docs/product/known-limitations.md` |
 | Language core | 가능한 범위에서 Rust/WASM 이 hot-path parse/completion vocabulary, context routing, capability gate 를 소유한다. | `memory/engineering/architecture/query-language/memory.md`, ADR 0045, `docs/product/query-language-support.md`, `docs/archives/phases/completed/phase-31.md` |
-| Query editor | Query surface 는 legacy `queryMode` 가 아니라 `queryLanguage` 와 workbench paradigm 으로 고른다. | `memory/engineering/architecture/data-source/memory.md`, `docs/phases/phase-28.md` Slice A |
-| Data editing | Preview/commit/discard, bulk operation, paradigm 별 edit semantics. | completed Phases 22-23, Phase 28 |
+| Query editor | Query surface 는 legacy `queryMode` 가 아니라 `queryLanguage` 와 workbench paradigm 으로 고른다. | `memory/engineering/architecture/data-source/memory.md`, ADR 0045, `docs/product/query-language-support.md` |
+| Data editing | Preview/commit/discard, bulk operation, paradigm 별 edit semantics. | `docs/product/README.md`, `docs/product/known-limitations.md` |
 | Schema / DDL | RDB DDL parity 는 대부분 닫혔고, ERD/schema graph 가 다음 reusable intelligence layer 다. | completed Phases 24-27, `memory/engineering/architecture/data-source/memory.md` |
 | Operations | Core parity 이후 Explain/activity/stats/server info/profiler surface 를 다룬다. | `docs/product/known-limitations.md`, `docs/contributor-guide/testing-and-quality.md` |
 | Security | Credential/key handling, role/user management, auth mechanism expansion, destructive action policy. | `.agents/skills/grill-with-memory/SKILL.md`, `docs/contributor-guide/testing-and-quality.md` |
@@ -469,7 +469,8 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 
 ## 승격 후보
 
-다음 작업을 고를 때 이 목록과 `docs/phases/phase-32.md` 부터 본다. Active lane 이
+다음 작업을 고를 때는 이 목록, 현재 product docs, live issue state 를 먼저 본다.
+`docs/phases/phase-32.md` 는 historical context 로만 사용한다. Active lane 이
 선택되기 전까지 sprint sequence 를 새로 만들지 않는다.
 
 다음 승격 후보 순서:

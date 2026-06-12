@@ -1,14 +1,21 @@
 # Phase 28: MongoDB Full Support
 
-> **상태: 계획 / current candidate (2026-05-22 re-baseline).** 2026-05-14
-> grill 결정은 유지하되, Sprint 420–430 의 language completion architecture
-> 와 ADR 0045 이후 기준으로 Slice A 를 재정렬했다. 본 Phase 의 grill 결정
-> dict 는
+> **상태: historical planning inventory (2026-05-22 re-baseline).** 이 문서는
+> MongoDB full-support 방향과 slice label 을 보존하는 context 이며, 현재 제품
+> 지원 범위나 active sprint queue 의 SOT 가 아니다. 현재 MongoDB support claim 은
+> `docs/product/README.md` 와 `docs/product/known-limitations.md`, 검증 범위는
+> `docs/contributor-guide/testing-and-quality.md`, 미래 work routing 은
+> `docs/ROADMAP.md` 와 open issue 가 소유한다. 2026-05-14 grill 결정은 유지하되,
+> Sprint 420–430 의 language completion architecture 와 ADR 0045 이후 기준으로
+> Slice A 를 재정렬했다. 본 Phase 의 grill 결정 dict 는
 > [`docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md`](../../docs/archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md)
 > 에 동결. RDB+Mongo paradigm 통합 후속 묶음 (U1–U5) 은 별도 phase 후보 —
 > [`docs/archives/roadmaps/memory-roadmap/unified-followups/memory.md`](../../docs/archives/roadmaps/memory-roadmap/unified-followups/memory.md).
 
-## 2026-05-22 Re-baseline
+## Historical 2026-05-22 Re-baseline
+
+아래 항목은 당시 planning baseline 이다. 구현 여부나 현재 support claim 을 판단할
+때는 product/contributor docs 와 live issue state 를 먼저 본다.
 
 - Rust/WASM completion SOT 는 이미 있다:
   `src-tauri/mongosh-parser-core/src/completion.rs`.
@@ -102,7 +109,10 @@ MongoDB 연결에서도 끊김 없이 반복할 수 있는가" — 단, paradigm
 - **U1–U5 RDB+Mongo 통합 후속** — 별도 phase. `unified-followups`
   메모리.
 
-## Slice 분해 (안)
+## Slice 분해 (historical)
+
+이 표는 active sprint sequence 가 아니다. 새 작업은 `docs/ROADMAP.md` 의
+승격 게이트와 open issue 로 다시 scope 를 잡는다.
 
 13 slice. 각 slice 가 1 sprint 단위.
 
