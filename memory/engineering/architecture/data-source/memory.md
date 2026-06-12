@@ -42,6 +42,8 @@ TS/Rust strict profile parity 는 `tests/fixtures/data-source-profile-parity.rep
 을 SOT 로 두고 `src/types/dataSourceProfileParity.test.ts` 와
 `src-tauri/tests/data_source_profile_parity.rs` 가 검증한다. TS `capabilities` 와
 Rust `adapter_contract` 는 runtime/support posture 이며 strict parity field 가 아니다.
+Runtime/support posture 는 `src/types/adapterConformance.ts`, Rust profile contract
+tests, and `docs/contributor-guide/testing-and-quality.md` evidence rows 가 소유한다.
 
 `DatabaseType` 은 identity 다. Workbench 선택과 UI affordance 는
 `DataParadigm` + capability 를 본다. Backend adapter, dialect, file connection
@@ -65,13 +67,6 @@ normalizer 로만 확장한다. Error boundary 는 `AppError` 다. `Cancel` /
 유지한다. Frontend 분기는 `src/lib/tauri/error.ts` normalizer 를 통하고, 테스트는
 문자열만 맞추지 말고 variant/envelope 를 단언한다.
 
-Strict TS/Rust profile parity owner 는
-`tests/fixtures/data-source-profile-parity.report.json`,
-`src/types/dataSourceProfileParity.test.ts`,
-`src-tauri/tests/data_source_profile_parity.rs` 다. TS `capabilities` 와 Rust
-`adapter_contract` 는 runtime/support posture 라서 strict parity 대상이 아니고
-`src/types/adapterConformance.ts` 와 Rust profile contract tests 가 소유한다.
-
 Contract/delta test ownership 은 `src/types/adapterContractTestMatrix.ts` 가 고정한다.
 Query/result 는 #765, catalog/explain 은 #766, completion metadata 는 #767,
 safety/capability unsupported delta 는 #768 이 owner 다. Common expectation 은
@@ -88,28 +83,34 @@ DBMS delta 가 아니며, delta 는 DBMS/version/dialect/paradigm/capability/evi
 Capability 가 없으면 UI 는 hide/disable + fallback 을 보여준다. Runtime optimistic
 failure 를 기본 동작으로 만들지 않는다.
 
-MSSQL is factory-backed for lifecycle, bounded relational query execution,
-primary-key-scoped row edit, bounded structured table/index/constraint DDL, and
-catalog/workbench metadata browse for
-databases/schemas/tables/views/procedures, columns, indexes, constraints, and
-FKs. Runtime Happy Path/Safe Mode smoke now covers representative connection,
-catalog browse, bounded query, DML preview/execute/readback, destructive
-confirmation, and grid-edit preview/commit flows for the supported T-SQL slice.
-SQL Server admin/security/backup/jobs/users/roles, TLS-required workflow,
-broader auth/encryption, instance discovery, SQLCMD workflow, and full T-SQL
-semantic parity remain separate contracts. Oracle is factory-backed for
-service-name connection lifecycle, bounded relational query, and
-catalog/workbench metadata browse for current service/database, schemas,
-tables/views, columns, indexes, constraints/FKs, routines/packages, and
-read-only sequences/synonyms through the shared RDB model. Oracle table-data
-browse, row edit, structured DDL, sequence/synonym DDL/admin workflows, runtime
-Safe Mode/destructive preview evidence, SID/TNS, wallet/TLS, fixture/live smoke,
-E2E evidence, and full PL/SQL executable semantics remain separate contracts.
+Current posture summary lives here only as architecture boundary; product wording
+and evidence detail live in product/contributor docs.
 
-Search identities (`elasticsearch`, `opensearch`) 는 fixture-backed/deferred profile
-이며 live HTTP connection/query claim 은 capability 가 켜질 때까지 하지 않는다.
-Valkey 는 planned KV family candidate 이지만 아직 active `DatabaseType`/profile 이
-아니며 Redis compatibility evidence 없이 support claim 을 하지 않는다.
+MSSQL is active for lifecycle, bounded query/result, primary-key row edit,
+bounded structured table/index/constraint DDL, catalog/workbench metadata,
+representative Runtime Happy Path smoke, live cached catalog-aware completion,
+and bounded static parser/Safe Mode metadata. SQL Server TLS-required workflow,
+SQLCMD/admin/security/backup/jobs/users/roles, broader auth/encryption, instance
+discovery, and full T-SQL semantic parity remain separate contracts.
+
+Oracle is active for service-name lifecycle, bounded query/result/table browse,
+primary-key row edit, bounded structured DDL, catalog/workbench metadata
+including read-only sequences/synonyms, representative smoke, catalog-aware
+completion, and bounded static parser/Safe Mode metadata. Raw DDL/admin,
+sequence/synonym DDL/admin, SID/TNS/wallet/TLS, and full PL/SQL executable
+semantics remain separate contracts.
+
+Redis and Valkey are active KV profiles with bounded connection/key browse/value
+preview and command-query slices. Redis has direct key mutation controls for the
+supported panel paths; Valkey keeps direct key mutation controls and full Redis
+compatibility unclaimed until Valkey-specific evidence promotes them.
+
+Elasticsearch/OpenSearch are active Search profiles for live HTTP connection,
+catalog/index detail, bounded live `_search`, backend Search DSL validation,
+Runtime Happy Path smoke, and delete-by-query safety planning. Embedded fixtures
+remain contract evidence; actual live `_delete_by_query` and broader admin APIs
+remain deferred.
+
 Cassandra/Scylla, DynamoDB, graph, vector, stream 은 workflow value, profile target,
 connection kind, language owner, catalog model, result envelope, safety policy,
 fixture strategy 가 잠기기 전 active `DatabaseType`/profile/runtime 으로 추가하지
@@ -144,16 +145,16 @@ capability claims during topology moves.
 
 - `RdbAdapter`: SQL, table browse, DDL, row edit, ERD.
 - `DocumentAdapter`: collection browse, document query/edit, index/validator.
-- `KvAdapter`: Redis backend primitives support connection/list DB, bounded key
-  scan, typed value read, guarded string set, delete confirmation, TTL
-  expire/persist, and bounded stream read. Product UI claim is key browser/value
-  preview only; full value editor, TTL/write/stream UI, command query editor,
-  cluster/pubsub/modules/consumer-group flows, and Valkey need follow-up
-  evidence.
-- `SearchAdapter`: Elasticsearch/OpenSearch fixture-backed identity, catalog,
-  mapping/template, search result, and destructive plan contracts exist. Network
-  adapters return unsupported until live HTTP has explicit connection/auth/TLS,
-  catalog/search execution, admin, observability, and product-delta contracts.
+- `KvAdapter`: Redis/Valkey backend primitives support connection/list DB,
+  bounded key scan, typed value read, guarded write/delete/TTL paths, bounded
+  stream read, and selected command query dispatch. Full CLI/admin parity,
+  cluster/pubsub/modules, consumer-group management, broad destructive commands,
+  and full Redis compatibility need follow-up evidence.
+- `SearchAdapter`: Elasticsearch/OpenSearch support live HTTP connection,
+  catalog/index detail, bounded `_search`, Search result envelopes, and
+  destructive-plan contracts. Fixture harness remains contract evidence. Actual
+  delete-by-query execution, broader admin APIs, observability/profile/explain
+  workflows, and product-specific widening need separate promotion gates.
 - `WideColumnAdapter`, `CloudDocumentAdapter`, `GraphAdapter`, `VectorAdapter`,
   `StreamAdapter`: future contracts only.
 

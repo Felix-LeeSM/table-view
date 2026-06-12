@@ -25,12 +25,17 @@ claim 하지 않는다.
 - `sql` 과 `mongosh` hot path parser/completion/safety 는 Rust/WASM language core 가
   SOT 다.
 - TypeScript fallback mirror 는 compatibility/loading fallback 이며 SOT 가 아니다.
-- `redis-command` 는 Redis connection/profile/key-browser slice 가 live 라서
-  registry lifecycle 은 active 이지만, command query parser/completion 은 future
-  language-core contract 이고 fallback policy 는 `not-implemented` 다.
-- `search-dsl` 은 Search profiles 가 fixture-backed/deferred 상태라 registry
-  lifecycle 도 deferred 다. Live HTTP 와 query execution 이 landing 되기 전까지
-  runtime/support claim 을 하지 않는다.
+- `redis-command` 는 Redis/Valkey bounded command query slice 가 active 다.
+  Backend allowlist parser/dispatch 는 `src-tauri/src/db/redis/command_parser.rs`
+  와 `src-tauri/src/db/redis/command.rs` 가 소유한다. TypeScript completion 은
+  proven command rows + current-keyspace editor assistance 다. Full Redis CLI
+  parsing / language-core completion ownership 은 future contract 다.
+- `search-dsl` 은 Elasticsearch/OpenSearch bounded live query 와 destructive-plan
+  safety slice 가 active 다. Backend validator/dispatch 는
+  `src-tauri/src/db/search_dsl.rs` 와 `src-tauri/src/db/search_live_query.rs` 가
+  소유한다. TypeScript completion 은 catalog/mapping-context editor assistance 다.
+  Full language-core parser/completion ownership and broad admin DSL support 는
+  future contract 다.
 - Deferred ids (`cql`, `partiql`, `cypher`, `gql`, `gremlin`, `vector-query`,
   `stream-command`) 는 future owner placeholder 를 가진다. Active profile 이
   silently parser/completion vocabulary 를 도입하면 안 된다.
