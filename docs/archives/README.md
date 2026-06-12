@@ -6,6 +6,17 @@ state and limitations in `docs/product/`, developer-facing follow-ups in
 Live execution state for current refactor buckets stays in GitHub milestones and
 issues, with `docs/ROADMAP.md` carrying only the durable routing summary.
 
+## Audit Rules
+
+- Treat every file under this directory as historical unless a current SOT links
+  it as evidence.
+- Event-time words such as `active`, `planned`, `current`, and backticked repo
+  paths are snapshot context. They do not override `docs/ROADMAP.md`,
+  `docs/product/**`, `docs/contributor-guide/**`, or live GitHub milestones and
+  issues.
+- New future work must be routed to `docs/ROADMAP.md` or an open GitHub issue,
+  not appended to archive snapshots.
+
 ## Categories
 
 | Directory | Content |

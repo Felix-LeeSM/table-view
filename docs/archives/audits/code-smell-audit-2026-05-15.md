@@ -5,8 +5,10 @@
 > 2026-05-06) 의 후속이지만 그 문서를 대체하거나 sprint 계약을 대체하지
 > 않는다. 다음 작업 단위를 고를 때 참고하는 backlog.
 
-> **Status**: archived/inactive (2026-05-22). Active tracking is RISK-038 in
-> `docs/RISKS.md`.
+> **Status**: archived/inactive (2026-05-22). Former active tracking was
+> RISK-038 in `docs/RISKS.md`. Current refactor promotion routing lives in
+> `docs/ROADMAP.md`, and developer-facing quality follow-ups live in
+> `docs/contributor-guide/testing-and-quality.md`.
 
 ## Inspection Method
 

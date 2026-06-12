@@ -1,9 +1,21 @@
-# Table View — Active Plan
+# Table View — Archived Active Plan Snapshot
 
-Archived snapshot of the former `docs/PLAN.md`. Current plan entry is
-[`docs/PLAN.md`](../../PLAN.md), current product state is
-[`docs/product/README.md`](../../product/README.md), and future goals live in
-[`docs/ROADMAP.md`](../../ROADMAP.md).
+Archived snapshot of the former `docs/PLAN.md`. Content below preserves
+2026-05-27 planning context and can mention paths or statuses that have since
+moved. Do not use the snapshot tables as current SOT routing.
+
+## Current Routing
+
+| Need | Current SOT |
+|---|---|
+| Product state / support scope | [`docs/product/README.md`](../../product/README.md) |
+| Product-visible limitations | [`docs/product/known-limitations.md`](../../product/known-limitations.md) |
+| Query-language support boundary | [`docs/product/query-language-support.md`](../../product/query-language-support.md) |
+| Future goals / promotion order | [`docs/ROADMAP.md`](../../ROADMAP.md) |
+| Developer-facing verification gaps | [`docs/contributor-guide/testing-and-quality.md`](../../contributor-guide/testing-and-quality.md) |
+| Data-source architecture rules | [`memory/engineering/architecture/data-source/memory.md`](../../../memory/engineering/architecture/data-source/memory.md) |
+| Adding-data-source checklist | [`memory/engineering/architecture/data-source/adding/memory.md`](../../../memory/engineering/architecture/data-source/adding/memory.md) |
+| Historical risks | [`docs/archives/risks/active-risk-register-2026-05-27.md`](../risks/active-risk-register-2026-05-27.md) |
 
 ## Purpose
 
@@ -12,12 +24,15 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 판단 기준: "TablePlus 사용자가 Table View로 전환했을 때 핵심 워크플로우
 (연결 -> 탐색 -> 조회 -> 편집 -> 쿼리)가 끊기지 않아야 한다."
 
-## Current Snapshot
+## Historical Snapshot
 
 2026-05-25 기준 current plan 은 완료 이력을 실행 계획에서 분리한다.
 Implementation sprint 번호는 실행 직전 또는 사용자가 sprint sequencing 을 명시
 요청할 때 새 번호를 배정한다. Active phase 문서의 과거 sprint 번호는 history 가
 아니면 쓰지 않는다.
+
+아래 SOT 표는 snapshot 원문이다. 현재 라우팅은 위 `Current Routing` 표와
+`../../PLAN.md` 인덱스를 따른다.
 
 | 영역 | SOT |
 |---|---|
