@@ -38,5 +38,10 @@ brew install --cask table-view
 
 ## 운영상 주의
 
+- GitHub Release를 `Publish`하기 전에는
+  [`../testing-and-quality.md`](../testing-and-quality.md)의 Pre-Release
+  Verification Gate가 같은 release SHA에서 통과해야 합니다. Draft bundle과
+  checksum은 packaging evidence일 뿐, CI/Runtime Happy Path나 live support claim
+  evidence를 대체하지 않습니다.
 - `HOMEBREW_TAP_REPO`가 비어 있거나, tap 저장소 접근 권한이 없으면 워크플로가 실패합니다.
 - 릴리스 `.dmg`의 파일명이 정책이 바뀌면 script 탐색 패턴을 함께 수정해야 합니다.

@@ -263,6 +263,55 @@ This matrix is the H7 gate-alignment record. It separates the current automated
 gate surface from future ops/security/a11y/perf work so docs do not imply
 routine coverage that is not wired into CI or hooks.
 
+### Pre-Release Verification Gate
+
+Use this gate before pushing a `v*.*.*` release tag, manually dispatching the
+release workflow, or publishing a draft GitHub Release. The gate is tied to one
+exact commit SHA; if the SHA changes, rerun the gate.
+
+Required local evidence:
+
+- Source state: record the intended release SHA and confirm the release worktree
+  has no unrelated source changes with `git status --short --branch`.
+- Hook path: normal signed commit and pre-push path-routed gates must pass. Hook
+  bypass flags remain forbidden by git policy.
+- Frontend/build lane: `pnpm wasm:size`, `pnpm lint`,
+  `pnpm test -- --run --coverage --coverage.reporter=text-summary`, and
+  `pnpm build`.
+- Rust lane: `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
+  `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib`, and
+  `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`.
+- Docker integration lane: with required services available,
+  `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
+- Documentation lane: docs changed for the release must pass Prettier and local
+  link/target review for the touched docs.
+
+Required remote evidence on the exact release SHA:
+
+- CI passes: PR Body Contract where applicable, Frontend Checks, Rust Unit And
+  Storage Tests, and Integration Tests (Docker).
+- Runtime Happy Path passes: Prepare E2E runtime artifacts plus the wired
+  PostgreSQL, MySQL, MariaDB, MSSQL, Oracle, SQLite, DuckDB, MongoDB, Redis,
+  Valkey, Elasticsearch, and OpenSearch matrix checks.
+- `main` push checks pass on the merge commit before a release tag is pushed.
+- Release workflow output is packaging evidence only. Draft bundle creation and
+  checksum upload do not replace CI or Runtime Happy Path evidence.
+
+Deferred or non-blocking checks must stay explicit:
+
+- Theme contrast is advisory today.
+- Link checking, full a11y, perf budgets, dependency-security CI, Rust llvm-cov
+  cutoffs, macOS/Windows desktop runtime smoke, and per-spec database fixture
+  reset are not routine release blockers unless a release issue explicitly
+  promotes one of them.
+- Non-routine E2E specs remain scenario inventory or manual regression evidence
+  until a workflow/script invokes them.
+- No support claim can ship on fixture-only evidence. Fixture files, profile
+  rows, generator tests, and compatibility inventories become live runtime
+  evidence only when the matching workflow/script/test path is wired and green.
+  Exceptions require a visible issue or release note entry; they must not be
+  hidden as a flaky pass.
+
 | Claim / journey | Current evidence | Current gap / routing |
 |---|---|---|
 | PR/main CI gate surface | `.github/workflows/ci.yml`, `.github/workflows/e2e-smoke.yml` | Blocking remote checks are Frontend Checks, Rust Unit And Storage Tests, Integration Tests (Docker), and Runtime Happy Path. Frontend Checks run the coverage ratchet and Vitest coverage thresholds. Theme contrast is advisory. Link checking, full a11y, perf, dependency-security CI, Rust llvm-cov cutoffs, and macOS/Windows runtime smoke are not routine blocking checks. |
