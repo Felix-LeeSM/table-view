@@ -37,7 +37,7 @@ Last updated: 2026-06-12
 | Completed phase list | `docs/archives/phases/README.md` |
 | Resolved risk table/log | `docs/archives/risks/resolved-risks.md` |
 | Active routing / ordering | `docs/ROADMAP.md` plus live GitHub milestones/issues; `docs/PLAN.md` is index-only |
-| UX law action plan | preserved as retired reference; sprint-176-180 artifacts + `docs/ux-laws-mapping.md` remain current |
+| UX law action plan | preserved as retired reference; source mapping is archived at `docs/archives/audits/ux-laws-mapping-2026-04-30.md`; current UI/a11y/perf follow-ups live in product/contributor/roadmap SOT |
 | Legacy Phase 5-9 sketches | preserved under `docs/archives/phases/retired/`; indexed in `docs/archives/phases/README.md` |
 | Archived 2026-04-10 test improvement snapshot | preserved under `docs/archives/test-plans/`; superseded by later sprint evidence |
 | 2026-05-19 refactor backlog draft | preserved under `docs/archives/backlogs/refactor-audit-2026-05-19/`; active refactor routing now lives in `docs/ROADMAP.md` plus live GitHub milestones/issues |
