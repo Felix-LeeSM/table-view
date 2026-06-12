@@ -286,6 +286,25 @@
       margin-bottom: 5px;
     }
 
+    .archive-banner {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border: 1px solid var(--amber);
+      border-left: 4px solid var(--amber);
+      border-radius: 8px;
+      background: #fff8ec;
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    .archive-banner strong {
+      color: var(--amber);
+    }
+
+    .archive-banner a {
+      color: var(--blue);
+    }
+
     .decision {
       display: grid;
       grid-template-columns: 160px 1fr;
@@ -341,6 +360,15 @@
         <span class="pill">orchestrator + worktree agents</span>
         <span class="pill">review - reflect - merge</span>
         <span class="pill">documentation impact gate</span>
+      </div>
+      <div class="archive-banner">
+        <strong>Archived exploration.</strong>
+        Historical workflow-hardening draft only; not current source of truth. Current workflow gates:
+        <a href="../../memory/workflow/documentation/memory.md">documentation</a>,
+        <a href="../../memory/workflow/delivery/memory.md">delivery</a>,
+        <a href="../../memory/workflow/review/memory.md">review</a>,
+        <a href="../../memory/workflow/git-policy/memory.md">git-policy</a>, and
+        <a href="../../AGENTS.md">AGENTS.md</a>.
       </div>
     </div>
   </header>

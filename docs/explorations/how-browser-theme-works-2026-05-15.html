@@ -93,9 +93,30 @@
   .spec.low { background: rgba(74,222,128,0.15); border-color: var(--good); color: var(--good); }
   .winner { color: var(--good); font-weight: 700; }
   .loser { color: var(--muted); text-decoration: line-through; }
+  .archive-banner {
+    margin: 0 0 20px;
+    padding: 12px 14px;
+    border: 1px solid var(--warn);
+    border-left: 4px solid var(--warn);
+    border-radius: 8px;
+    background: rgba(251,191,36,0.12);
+    color: var(--fg);
+    font-size: 13px;
+  }
+  .archive-banner strong { color: var(--warn); }
+  .archive-banner a { color: var(--accent); }
 </style>
 </head>
 <body>
+
+<div class="archive-banner">
+  <strong>Archived exploration.</strong>
+  Historical theme-cascade demo only; not current source of truth. Current theme/Syntax SOT:
+  <a href="../archives/decisions/0031-syntax-palette-manual-and-token-integrity/memory.md">ADR 0031</a>,
+  <a href="../archives/decisions/0038-theme-safemode-sqlite-sot-ls-fouc-cache/memory.md">ADR 0038</a>,
+  <a href="../../src/themes.css">src/themes.css</a>, and
+  <a href="../../src/lib/themeBoot.ts">src/lib/themeBoot.ts</a>.
+</div>
 
 <h1>Browser 에서 theme 이 작동하는 원리</h1>
 <p class="subtitle">CSS variable + selector specificity + data-attribute = 본 프로젝트 theme 시스템</p>
