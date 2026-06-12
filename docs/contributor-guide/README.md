@@ -18,7 +18,9 @@ decision logs.
   committed-generated-input constraints.
 - [`pr-review.md`](pr-review.md) — reviewer output contract and red/green
   threshold.
-- [`release/homebrew-cask.md`](release/homebrew-cask.md) — Homebrew cask and release notes.
+- [`release/release-notes-support-matrix.md`](release/release-notes-support-matrix.md) —
+  release-note support summary, support matrix, and fixture/smoke coverage.
+- [`release/homebrew-cask.md`](release/homebrew-cask.md) — Homebrew cask automation.
 - [`memory/engineering/architecture/data-source/adding/memory.md`](../../memory/engineering/architecture/data-source/adding/memory.md) — checklist for adding or promoting a data source.
 
 ## Boundary
