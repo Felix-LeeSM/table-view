@@ -61,6 +61,8 @@ generator: scripts/regenerate-indexes.sh
 
 작업 의도 키워드 → 관련 룰/방. 자동 생성 — 직접 편집 금지. 메모리 frontmatter 의 \`task:\` 필드를 input 으로 한다.
 
+본 인덱스는 routing-only cross-link 다. 규칙 / 결정 / 문서 SOT 가 아니며 owner 는 링크 대상 memory/docs/skill 이다.
+
 수동 추가 또는 task 필드 누락된 룰은 본 인덱스에 빠질 수 있음 — \`.agents/skills/remember/SKILL.md\` 절차로 frontmatter 갱신 시 자동 등록됨.
 
 ## 작업 → 룰 / 방 매핑
@@ -116,6 +118,8 @@ generator: scripts/regenerate-indexes.sh
 # By-surface 인덱스
 
 코드 surface (모듈 / 디렉토리) → 관련 active rule/convention. 자동 생성 — 직접 편집 금지. 메모리 frontmatter 의 \`surface:\` 필드를 input 으로 한다.
+
+본 인덱스는 routing-only cross-link 다. 규칙 / 결정 / 문서 SOT 가 아니며 owner 는 링크 대상 memory/docs/skill 이다.
 
 ## Surface → 룰 매핑
 
