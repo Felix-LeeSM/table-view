@@ -13,6 +13,7 @@ import {
   waitForLauncher,
   waitForWorkspaceTextAll,
 } from "./_helpers";
+import { runMysqlFamilyStructureDdlSmoke } from "./mysql-family-structure-ddl";
 import { waitForTabHistoryStatuses } from "./query-history-helpers";
 
 interface MysqlFamilySmokeOptions {
@@ -371,6 +372,8 @@ export function defineMysqlFamilySmoke({
           await waitForTabHistoryStatuses(["cancelled", "success"]);
         },
       );
+
+      await runMysqlFamilyStructureDdlSmoke({ dbLabel, database });
 
       await step("verify query history source labels", async () => {
         await waitForGlobalHistoryEvidence({
