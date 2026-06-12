@@ -187,7 +187,7 @@ async function verifyMysqlFamilyPhysicalDdl({
 
   await typeQuery(
     [
-      "SELECT CONSTRAINT_NAME AS created_fk, REFERENCED_TABLE_NAME AS referenced_table, REFERENCED_COLUMN_NAME AS referenced_column",
+      "SELECT CONSTRAINT_NAME AS created_fk, CAST(REFERENCED_TABLE_NAME AS CHAR) AS referenced_table, REFERENCED_COLUMN_NAME AS referenced_column",
       "FROM information_schema.KEY_COLUMN_USAGE",
       `WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ${sqlStringLiteral(
         tableName,
