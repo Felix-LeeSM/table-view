@@ -2,6 +2,10 @@
 
 Date: 2026-05-21 KST
 
+Historical note: this file records one diagnosed incident. It is not the current
+git or push-recovery policy. Current workflow rules live in
+[`memory/workflow/git-policy/memory.md`](../../memory/workflow/git-policy/memory.md).
+
 Scope: diagnose why a linked worktree branch ref moved back to `FETCH_HEAD`
 around push time, then separate that from ordinary push rejection or GitHub
 merge cleanup failures.
@@ -78,7 +82,7 @@ snapback was a systemic failure mode rather than a one-off command typo.
 - `scripts/hooks/test-worktree-push-ref-safety.sh`: static regression guard for
   both invariants.
 
-## Prevention Rule
+## Historical Prevention Rule
 
 Hook steps may inspect the current repository, but any hook step that invokes a
 tool capable of running its own Git commands must either:
