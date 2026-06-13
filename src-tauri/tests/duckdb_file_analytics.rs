@@ -239,6 +239,10 @@ async fn duckdb_file_analytics_global_query_keeps_file_boundaries_blocked() {
             "WITH rows AS (SELECT * FROM \"{}\") SELECT * FROM rows",
             source.alias
         ),
+        format!(
+            "UPDATE \"{}\" SET name = 'Mutated' WHERE id = 1",
+            source.alias
+        ),
         format!("DELETE FROM \"{}\"", source.alias),
         format!(
             "SELECT * FROM \"{}\" JOIN read_csv_auto('{secret_path_sql}') ON true",
@@ -323,6 +327,72 @@ async fn duckdb_file_analytics_global_query_keeps_file_boundaries_blocked() {
         .await
         .unwrap();
     assert_eq!(source_still_readable.rows[0][1], serde_json::json!("Ada"));
+}
+
+#[tokio::test]
+async fn duckdb_file_analytics_global_query_blocks_registered_alias_write_collisions() {
+    let (dir, adapter) = connected_fixture().await;
+    let csv_path = dir.path().join("people.csv");
+    fs::write(&csv_path, "id,name\n1,Ada\n").unwrap();
+    adapter
+        .execute_sql(
+            r#"CREATE TABLE "file_00000001" (id INTEGER, name TEXT)"#,
+            None,
+        )
+        .await
+        .unwrap();
+    adapter
+        .execute_sql(
+            r#"INSERT INTO "file_00000001" VALUES (10, 'Persistent')"#,
+            None,
+        )
+        .await
+        .unwrap();
+    let source = adapter
+        .register_file_analytics_source(csv_path.to_str().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(source.alias, "file_00000001");
+
+    for sql in [
+        format!(
+            "UPDATE \"{}\" SET name = 'Mutated' WHERE id = 10",
+            source.alias
+        ),
+        format!("INSERT INTO \"{}\" VALUES (11, 'Inserted')", source.alias),
+        format!(
+            "CREATE OR REPLACE TABLE \"{}\" AS SELECT 99 AS id, 'Replaced' AS name",
+            source.alias
+        ),
+        format!("ALTER TABLE \"{}\" ADD COLUMN leaked INTEGER", source.alias),
+        format!(
+            "CREATE TABLE IF NOT EXISTS \"{}\" (id INTEGER, name TEXT)",
+            source.alias
+        ),
+        format!(
+            "CREATE INDEX file_analytics_collision_idx ON \"{}\"(id)",
+            source.alias
+        ),
+    ] {
+        let blocked = adapter.execute_sql(&sql, None).await;
+        assert!(
+            matches!(blocked, Err(AppError::Unsupported(_))),
+            "{sql} should block registered file alias writes, got {blocked:?}"
+        );
+    }
+
+    let routed = adapter
+        .execute_sql(&format!("SELECT name FROM \"{}\"", source.alias), None)
+        .await
+        .unwrap();
+    assert_eq!(routed.rows, vec![vec![serde_json::json!("Ada")]]);
+
+    adapter.clear_file_analytics_sources().await.unwrap();
+    let persistent = adapter
+        .execute_sql(r#"SELECT name FROM "file_00000001" ORDER BY id"#, None)
+        .await
+        .unwrap();
+    assert_eq!(persistent.rows, vec![vec![serde_json::json!("Persistent")]]);
 }
 
 #[tokio::test]
