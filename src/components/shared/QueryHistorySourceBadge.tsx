@@ -70,12 +70,16 @@ export function QueryHistorySourceBadge({
     source === "file-analytics" && label !== meta.label
       ? `Recorded from ${label} DuckDB local-file source query`
       : meta.title;
+  const labelClass =
+    source === "file-analytics" && label !== meta.label
+      ? "inline-block max-w-48 truncate align-bottom"
+      : "";
   return (
     <span
       data-testid="query-history-source-badge"
       data-source={source}
       title={title}
-      className={`max-w-48 shrink-0 truncate rounded px-1.5 py-0.5 text-3xs font-semibold tracking-wide ${meta.className}`}
+      className={`shrink-0 rounded px-1.5 py-0.5 text-3xs font-semibold tracking-wide ${labelClass} ${meta.className}`}
     >
       {label}
     </span>
