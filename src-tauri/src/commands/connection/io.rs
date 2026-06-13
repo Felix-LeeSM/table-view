@@ -12,10 +12,12 @@
 //!     accepts both envelope and plain-JSON payloads (heuristic: presence of
 //!     `kdf` + `ciphertext` fields routes to envelope decrypt).
 
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
-use crate::models::{ConnectionConfig, ConnectionConfigPublic, ConnectionGroup};
+use crate::models::{ConnectionConfig, ConnectionConfigPublic, ConnectionGroup, DatabaseType};
 use crate::storage;
 
 const EXPORT_SCHEMA_VERSION: u32 = 1;
@@ -79,6 +81,7 @@ pub fn export_connections(ids: Vec<String>) -> Result<String, AppError> {
         .map(|c| {
             let mut p: ConnectionConfigPublic = c.into();
             p.has_password = *presence.get(&c.id).unwrap_or(&false);
+            p.database = export_database_name(&p.db_type, &p.database);
             p
         })
         .collect();
@@ -207,6 +210,8 @@ pub fn import_connections(json: String) -> Result<ImportResult, AppError> {
 
     // Process connections
     for conn in &payload.connections {
+        reject_imported_local_database_path(conn)?;
+
         // Always regenerate id to avoid collisions with the receiving store
         let new_id = uuid::Uuid::new_v4().to_string();
 
@@ -270,6 +275,42 @@ pub fn import_connections(json: String) -> Result<ImportResult, AppError> {
     }
 
     Ok(result)
+}
+
+fn export_database_name(db_type: &DatabaseType, database: &str) -> String {
+    if !matches!(db_type, DatabaseType::Duckdb) {
+        return database.to_string();
+    }
+    if !is_absolute_local_path(database) {
+        return database.to_string();
+    }
+    local_path_file_name(database)
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn reject_imported_local_database_path(conn: &ConnectionConfigPublic) -> Result<(), AppError> {
+    if matches!(conn.db_type, DatabaseType::Duckdb) && is_absolute_local_path(&conn.database) {
+        return Err(AppError::Validation(
+            "DuckDB connection import payload cannot contain an absolute local database path"
+                .into(),
+        ));
+    }
+    Ok(())
+}
+
+fn is_absolute_local_path(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    let is_windows_drive_path =
+        bytes.len() > 2 && bytes[1] == b':' && matches!(bytes[2], b'\\' | b'/');
+    Path::new(value).is_absolute() || is_windows_drive_path || value.starts_with("\\\\")
+}
+
+fn local_path_file_name(value: &str) -> Option<&str> {
+    value
+        .split(['/', '\\'])
+        .filter(|part| !part.is_empty())
+        .next_back()
 }
 
 #[cfg(test)]
@@ -343,6 +384,32 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_export_connections_hides_duckdb_absolute_database_path() {
+        let _dir = setup_test_env();
+        let absolute_path = "/Users/felix/private/app.duckdb";
+        let mut conn = sample_connection("duck-1", "Local DuckDB");
+        conn.db_type = DatabaseType::Duckdb;
+        conn.database = absolute_path.into();
+        storage_save_conn(conn).unwrap();
+
+        let exported = export_connections(vec!["duck-1".into()]).unwrap();
+        let payload: ExportPayload = serde_json::from_str(&exported).unwrap();
+
+        assert!(!exported.contains(absolute_path));
+        assert_eq!(payload.connections[0].database, "app.duckdb");
+        cleanup_test_env();
+    }
+
+    #[test]
+    fn export_database_name_strips_windows_absolute_path() {
+        assert_eq!(
+            export_database_name(&DatabaseType::Duckdb, r"C:\Users\felix\private\app.duckdb"),
+            "app.duckdb"
+        );
+    }
+
+    #[test]
+    #[serial]
     fn test_import_connections_regenerates_uuids() {
         let _dir = setup_test_env();
 
@@ -387,6 +454,54 @@ mod tests {
         assert_eq!(stored.connections.len(), 2);
 
         cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_import_connections_rejects_duckdb_absolute_database_path() {
+        let _dir = setup_test_env();
+        let absolute_path = "/Users/felix/private/app.duckdb";
+        let mut conn: ConnectionConfigPublic =
+            (&sample_connection("duck-import", "Duck Import")).into();
+        conn.db_type = DatabaseType::Duckdb;
+        conn.paradigm = crate::models::Paradigm::Rdb;
+        conn.database = absolute_path.into();
+        let payload = ExportPayload {
+            schema_version: EXPORT_SCHEMA_VERSION,
+            exported_at_unix_secs: 0,
+            app: "table-view".into(),
+            connections: vec![conn],
+            groups: vec![],
+        };
+
+        let err = import_connections(serde_json::to_string(&payload).unwrap()).unwrap_err();
+
+        match err {
+            AppError::Validation(message) => {
+                assert!(message.contains("absolute local database path"));
+                assert!(!message.contains(absolute_path));
+            }
+            other => panic!("Expected Validation, got {other:?}"),
+        }
+        cleanup_test_env();
+    }
+
+    #[test]
+    fn reject_imported_local_database_path_rejects_windows_absolute_path() {
+        let mut conn: ConnectionConfigPublic =
+            (&sample_connection("duck-import", "Duck Import")).into();
+        conn.db_type = DatabaseType::Duckdb;
+        conn.database = r"C:\Users\felix\private\app.duckdb".into();
+
+        let err = reject_imported_local_database_path(&conn).unwrap_err();
+
+        match err {
+            AppError::Validation(message) => {
+                assert!(message.contains("absolute local database path"));
+                assert!(!message.contains(r"C:\Users\felix\private\app.duckdb"));
+            }
+            other => panic!("Expected Validation, got {other:?}"),
+        }
     }
 
     #[test]

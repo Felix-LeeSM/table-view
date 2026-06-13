@@ -168,9 +168,10 @@ describe("history wrappers (Phase 5 sprint-371)", () => {
   // getHistoryDetail
   // -------------------------------------------------------------------------
 
-  it("getHistoryDetail returns the 3-key response (id / sql / sqlRedacted)", async () => {
+  it("getHistoryDetail returns source with the SQL detail response", async () => {
     invokeMock.mockResolvedValueOnce({
       id: 42,
+      source: "raw",
       sql: "SELECT * FROM users WHERE email = 'leak@example.com'",
       sqlRedacted: "SELECT * FROM users WHERE email = ?",
     });
@@ -178,7 +179,13 @@ describe("history wrappers (Phase 5 sprint-371)", () => {
     expect(invokeMock).toHaveBeenCalledWith("get_history_detail", {
       req: { id: 42 },
     });
-    expect(Object.keys(resp).sort()).toEqual(["id", "sql", "sqlRedacted"]);
+    expect(Object.keys(resp).sort()).toEqual([
+      "id",
+      "source",
+      "sql",
+      "sqlRedacted",
+    ]);
+    expect(resp.source).toBe("raw");
     expect(resp.sql).toContain("leak@example.com");
   });
 

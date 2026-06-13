@@ -1,13 +1,12 @@
 //! 작성 2026-05-17 (Phase 5 sprint-371, AC-371-06) — `get_history_detail`
-//! 응답이 정확히 3 키 (`id`, `sql`, `sqlRedacted`) 만 carry.
+//! 응답이 `id`, `source`, `sql`, `sqlRedacted` 만 carry.
 //!
 //! Wire shape (camelCase):
 //!   request : `{ id: 42 }`
-//!   response: `{ id: 42, sql: "...", sqlRedacted: "..." }`
+//!   response: `{ id: 42, source: "raw", sql: "...", sqlRedacted: "..." }`
 //!
 //! 본 IPC 는 bulk dump path 가 0 — 단일 row id 만 받아 단일 row 반환.
-//! 본 sprint 의 privacy invariant 는 "원본 SQL 노출은 detail 한 곳" 이라
-//! 이 응답 shape 의 키 set 변화는 정책 변경 신호.
+//! file-analytics 는 detail 에서도 redacted SQL 만 반환한다.
 
 use serde_json::{json, Value};
 use serial_test::serial;
@@ -44,7 +43,7 @@ fn now_ms() -> i64 {
 
 #[tokio::test]
 #[serial]
-async fn ac_371_06_detail_response_carries_exactly_three_keys() {
+async fn ac_371_06_detail_response_carries_expected_keys() {
     let (_dir, pool) = setup().await;
 
     let add_req: AddHistoryEntryRequest = serde_json::from_value(json!({
@@ -64,13 +63,14 @@ async fn ac_371_06_detail_response_carries_exactly_three_keys() {
         .await
         .unwrap();
     assert_eq!(detail.id, added.id);
+    assert_eq!(detail.source, "raw");
     assert_eq!(
         detail.sql,
         "SELECT * FROM users WHERE email = 'user@example.com'"
     );
     assert_eq!(detail.sql_redacted, "SELECT * FROM users WHERE email = ?");
 
-    // Wire shape: serialize and assert exactly 3 keys.
+    // Wire shape: serialize and assert exactly 4 keys.
     let serialized: Value = serde_json::to_value(&detail).unwrap();
     let obj = serialized
         .as_object()
@@ -78,13 +78,44 @@ async fn ac_371_06_detail_response_carries_exactly_three_keys() {
     let keys: Vec<&String> = obj.keys().collect();
     assert_eq!(
         keys.len(),
-        3,
-        "detail response must have exactly 3 keys, got: {:?}",
+        4,
+        "detail response must have exactly 4 keys, got: {:?}",
         keys
     );
     assert!(obj.contains_key("id"));
+    assert!(obj.contains_key("source"));
     assert!(obj.contains_key("sql"));
     assert!(obj.contains_key("sqlRedacted"));
+
+    cleanup();
+}
+
+#[tokio::test]
+#[serial]
+async fn file_analytics_detail_does_not_return_absolute_path_sql() {
+    let (_dir, pool) = setup().await;
+
+    let add_req: AddHistoryEntryRequest = serde_json::from_value(json!({
+        "connectionId": "duckdb-1",
+        "paradigm": "rdb",
+        "queryMode": "sql",
+        "source": "file-analytics",
+        "sql": "SELECT '/Users/felix/private/sales.csv' AS path FROM \"sales_csv\"",
+        "status": "success",
+        "durationMs": 7,
+        "executedAt": now_ms(),
+    }))
+    .unwrap();
+    let added = add_history_entry_inner(&pool, add_req).await.unwrap();
+
+    let detail = get_history_detail_inner(&pool, GetHistoryDetailRequest { id: added.id })
+        .await
+        .unwrap();
+    let serialized = serde_json::to_string(&detail).unwrap();
+
+    assert_eq!(detail.source, "file-analytics");
+    assert_eq!(detail.sql, detail.sql_redacted);
+    assert!(!serialized.contains("/Users/felix/private/sales.csv"));
 
     cleanup();
 }

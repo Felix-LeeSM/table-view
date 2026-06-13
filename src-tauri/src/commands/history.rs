@@ -7,8 +7,8 @@
 //!   - `list_history`       — paginated rows, NEVER returns `sql`. Filter
 //!     union enforces paradigm/queryMode pairing; `tabId` requires
 //!     `connectionId`. `limit` defaults 100, clamped 500.
-//!   - `get_history_detail` — single row `{id, sql, sqlRedacted}` — the
-//!     only path that returns the original SQL.
+//!   - `get_history_detail` — single row `{id, source, sql, sqlRedacted}`;
+//!     file-analytics rows return redacted SQL even on detail.
 //!   - `clear_history`      — BEGIN→COUNT→DELETE→COMMIT, then VACUUM
 //!     (transaction 밖 — SQLite 제약), emits `history.clear`, returns
 //!     `{deletedCount}`.
@@ -29,6 +29,7 @@ use crate::events::{emit_state_changed, EmitArgs, EventDomain, EventOp, EventVer
 use crate::storage::sql_redact::sql_redact;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use std::path::Path;
 use tauri::{AppHandle, Runtime, State};
 use tracing::warn;
 
@@ -489,18 +490,37 @@ impl From<HistoryRowTuple> for HistoryListRow {
             tab_id: t.2,
             paradigm: t.3,
             query_mode: t.4,
-            database: t.5,
-            collection: t.6,
+            database: t.5.map(|value| redact_visible_local_paths(&value)),
+            collection: t.6.map(|value| redact_visible_local_paths(&value)),
             source: t.7,
             sql_redacted: t.8,
             status: t.9,
-            error_message: t.10,
+            error_message: t.10.map(|value| redact_visible_local_paths(&value)),
             rows_affected: t.11,
             duration_ms: t.12,
             executed_at: t.13,
             server_pid: t.14,
         }
     }
+}
+
+fn redact_visible_local_paths(message: &str) -> String {
+    let mut redacted = message.to_string();
+    for token in message
+        .split(|ch: char| ch.is_whitespace() || matches!(ch, '\'' | '"' | '(' | ')' | ',' | ';'))
+    {
+        let token = token.trim_matches(|ch: char| matches!(ch, ':' | '.' | '!' | '?'));
+        if token.is_empty() {
+            continue;
+        }
+        let is_windows_path = token.len() > 2
+            && token.as_bytes()[1] == b':'
+            && matches!(token.as_bytes()[2], b'\\' | b'/');
+        if Path::new(token).is_absolute() || is_windows_path {
+            redacted = redacted.replace(token, "<local-file>");
+        }
+    }
+    redacted
 }
 
 #[tauri::command]
@@ -522,12 +542,12 @@ pub struct GetHistoryDetailRequest {
     pub id: i64,
 }
 
-/// detail 응답 — 정확히 3 키 (`id`, `sql`, `sqlRedacted`). bulk dump path
-/// 가 0 이므로 단일 row id 만 받는다.
+/// detail 응답 — bulk dump path 가 0 이므로 단일 row id 만 받는다.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryDetailResponse {
     pub id: i64,
+    pub source: String,
     pub sql: String,
     pub sql_redacted: String,
 }
@@ -536,17 +556,25 @@ pub async fn get_history_detail_inner(
     pool: &SqlitePool,
     req: GetHistoryDetailRequest,
 ) -> Result<HistoryDetailResponse, AppError> {
-    let row: Option<(i64, String, String)> =
-        sqlx::query_as("SELECT id, sql, sql_redacted FROM query_history WHERE id = ?")
+    let row: Option<(i64, String, String, String)> =
+        sqlx::query_as("SELECT id, source, sql, sql_redacted FROM query_history WHERE id = ?")
             .bind(req.id)
             .fetch_optional(pool)
             .await?;
     match row {
-        Some((id, sql, sql_redacted)) => Ok(HistoryDetailResponse {
-            id,
-            sql,
-            sql_redacted,
-        }),
+        Some((id, source, sql, sql_redacted)) => {
+            let sql = if source == "file-analytics" {
+                sql_redacted.clone()
+            } else {
+                sql
+            };
+            Ok(HistoryDetailResponse {
+                id,
+                source,
+                sql,
+                sql_redacted,
+            })
+        }
         None => Err(AppError::NotFound(format!(
             "history entry {} not found",
             req.id
@@ -929,6 +957,40 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    async fn list_inner_redacts_visible_local_paths() {
+        let (_dir, pool) = setup().await;
+        let req: AddHistoryEntryRequest = serde_json::from_value(serde_json::json!({
+            "connectionId": "duckdb-1",
+            "paradigm": "rdb",
+            "queryMode": "sql",
+            "database": "/Users/felix/private/app.duckdb",
+            "collection": "/Users/felix/private/sales.csv",
+            "source": "file-analytics",
+            "sql": "SELECT * FROM \"sales_csv\"",
+            "status": "error",
+            "errorMessage": "DuckDB failed while reading /Users/felix/private/sales.csv",
+            "durationMs": 1,
+            "executedAt": now_ms(),
+        }))
+        .unwrap();
+        add_history_entry_inner(&pool, req).await.unwrap();
+
+        let resp = list_history_inner(&pool, empty_list_request())
+            .await
+            .unwrap();
+        let row = resp.rows.first().unwrap();
+
+        assert_eq!(row.database.as_deref(), Some("<local-file>"));
+        assert_eq!(row.collection.as_deref(), Some("<local-file>"));
+        assert_eq!(
+            row.error_message.as_deref(),
+            Some("DuckDB failed while reading <local-file>")
+        );
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn list_inner_rejects_tab_id_without_connection_id() {
         let (_dir, pool) = setup().await;
         let req = ListHistoryRequest {
@@ -1145,8 +1207,40 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.id, id);
+        assert_eq!(resp.source, "raw");
         assert_eq!(resp.sql, sql, "detail IPC returns the unredacted SQL");
         assert!(!resp.sql_redacted.is_empty());
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn detail_inner_redacts_file_analytics_sql() {
+        let (_dir, pool) = setup().await;
+        let req: AddHistoryEntryRequest = serde_json::from_value(serde_json::json!({
+            "connectionId": "c-1",
+            "paradigm": "rdb",
+            "queryMode": "sql",
+            "source": "file-analytics",
+            "sql": "SELECT '/Users/felix/private/sales.csv' AS path FROM \"sales_csv\"",
+            "status": "success",
+            "durationMs": 1,
+            "executedAt": now_ms(),
+        }))
+        .unwrap();
+        let id = add_history_entry_inner(&pool, req).await.unwrap().id;
+
+        let resp = get_history_detail_inner(&pool, GetHistoryDetailRequest { id })
+            .await
+            .unwrap();
+
+        assert_eq!(resp.source, "file-analytics");
+        assert_eq!(resp.sql, resp.sql_redacted);
+        assert!(!resp.sql.contains("/Users/felix/private/sales.csv"));
+        assert!(
+            !resp.sql_redacted.contains("/Users/felix/private/sales.csv"),
+            "redacted detail variant must hide local paths"
+        );
         cleanup();
     }
 
