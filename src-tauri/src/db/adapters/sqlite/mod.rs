@@ -11,6 +11,7 @@
 
 mod batch;
 mod connection;
+mod ddl;
 mod queries;
 mod sql_text;
 
@@ -22,10 +23,10 @@ use std::pin::Pin;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
-    ConstraintInfo, CreateIndexRequest, CreateTableRequest, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, IndexInfo,
-    RenameTableRequest, SchemaChangeResult, SqliteCapabilityInventory, TableData, TableInfo,
-    ViewInfo,
+    ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest,
+    DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition,
+    IndexInfo, RenameTableRequest, SchemaChangeResult, SqliteCapabilityInventory, TableData,
+    TableInfo, ViewInfo,
 };
 
 use crate::db::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -190,9 +191,16 @@ impl RdbAdapter for SqliteAdapter {
 
     fn create_table<'a>(
         &'a self,
-        _req: &'a CreateTableRequest,
+        req: &'a CreateTableRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("table creation")) })
+        Box::pin(async move { self.create_table(req).await })
+    }
+
+    fn create_table_plan<'a>(
+        &'a self,
+        req: &'a CreateTablePlanRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.create_table_plan(req).await })
     }
 
     fn create_index<'a>(
