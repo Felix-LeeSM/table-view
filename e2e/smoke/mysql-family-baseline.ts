@@ -240,9 +240,12 @@ export function defineMysqlFamilySmoke({
   createConnection,
 }: MysqlFamilySmokeOptions) {
   describe(`${dbLabel} smoke`, () => {
-    it("covers connect, browse, SELECT, DML batch, row edit, cancellation, and history evidence", async () => {
+    it("covers connect, browse, SELECT, CALL, DML batch, row edit, cancellation, and history evidence", async () => {
       const editedName = `Alice ${dbLabel} Smoke ${Date.now()}`;
       const smokeProductName = `${dbLabel} Smoke Product ${Date.now()}`;
+      const runtimeProcedureName =
+        dbLabel === "MariaDB" ? "mariadb_runtime_ping" : "mysql_runtime_ping";
+      const runtimeProcedureInput = dbLabel === "MariaDB" ? 87202 : 87201;
 
       await step(
         `create ${dbLabel} connection and open workspace`,
@@ -330,6 +333,23 @@ export function defineMysqlFamilySmoke({
             ],
             15000,
             `${dbLabel} DML batch result was not visible through a follow-up SELECT`,
+          );
+        },
+      );
+
+      await step(
+        "execute seeded CALL procedure through WARN preview",
+        async () => {
+          await typeQuery(
+            `CALL ${runtimeProcedureName}(${runtimeProcedureInput})`,
+          );
+          await runQuery();
+          await executeSqlPreview();
+
+          await waitForGridTextAll(
+            ["echoed_id", String(runtimeProcedureInput)],
+            15000,
+            `${dbLabel} CALL procedure result did not render through the query grid`,
           );
         },
       );

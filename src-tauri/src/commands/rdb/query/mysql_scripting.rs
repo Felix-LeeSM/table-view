@@ -243,3 +243,45 @@ fn is_routine_control_flow_word(word: &str) -> bool {
             | "END"
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn allows_narrow_call_for_mysql_family() {
+        assert!(validate_mysql_scripting_boundary(
+            "CALL mysql_runtime_ping(872)",
+            &DatabaseType::Mysql,
+        )
+        .is_ok());
+        assert!(validate_mysql_scripting_boundary(
+            "CALL mariadb_runtime_ping(DEFAULT)",
+            &DatabaseType::Mariadb,
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn rejects_routine_scripting_before_dispatch() {
+        for (sql, expected) in [
+            (
+                "DELIMITER //\nCREATE PROCEDURE p() SELECT 1 //",
+                "DELIMITER",
+            ),
+            (
+                "LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users",
+                "LOAD DATA",
+            ),
+            ("CREATE PROCEDURE p() SELECT 1", "stored routine"),
+            ("IF user_id IS NULL THEN SELECT 1", "control-flow"),
+        ] {
+            match validate_mysql_scripting_boundary(sql, &DatabaseType::Mysql) {
+                Err(AppError::Unsupported(msg)) => {
+                    assert!(msg.contains(expected), "expected {expected:?} in {msg:?}")
+                }
+                other => panic!("Expected Unsupported({expected}), got: {other:?}"),
+            }
+        }
+    }
+}

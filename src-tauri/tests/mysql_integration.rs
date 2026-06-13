@@ -24,6 +24,7 @@ mod common;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
 use table_view_lib::db::mysql::MysqlAdapter;
 use table_view_lib::db::{DbAdapter, RdbAdapter};
 use table_view_lib::error::AppError;
@@ -138,6 +139,69 @@ async fn test_mysql_select_query_returns_columns_and_rows() {
     assert_eq!(result.total_count, 1);
     assert!(matches!(result.query_type, QueryType::Select));
 
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_call_procedure_returns_result_rows() {
+    let config = match common::mysql_test_config().await {
+        Some(c) => c,
+        None => return,
+    };
+    let adapter = MysqlAdapter::new();
+    adapter
+        .connect_pool(&config)
+        .await
+        .expect("connect mysql adapter");
+
+    let setup_pool = MySqlPoolOptions::new()
+        .max_connections(1)
+        .acquire_timeout(Duration::from_secs(5))
+        .connect_with(
+            MySqlConnectOptions::new()
+                .host(&config.host)
+                .port(config.port)
+                .username(&config.user)
+                .password(&config.password)
+                .database(&config.database),
+        )
+        .await
+        .expect("procedure setup pool");
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let proc_name = format!("mysql_runtime_ping_{ts}");
+
+    sqlx::raw_sql(&format!("DROP PROCEDURE IF EXISTS {proc_name}"))
+        .execute(&setup_pool)
+        .await
+        .expect("DROP PROCEDURE before test");
+    sqlx::raw_sql(&format!(
+        "CREATE PROCEDURE {proc_name}(IN input_id BIGINT) SELECT input_id AS echoed_id"
+    ))
+    .execute(&setup_pool)
+    .await
+    .expect("CREATE PROCEDURE");
+
+    let result = adapter
+        .execute_query(&format!("CALL {proc_name}(872)"), None)
+        .await
+        .expect("CALL procedure");
+
+    assert!(matches!(result.query_type, QueryType::Select));
+    assert_eq!(result.columns.len(), 1);
+    assert_eq!(result.columns[0].name, "echoed_id");
+    assert_eq!(result.total_count, 1);
+    assert_eq!(result.rows.len(), 1);
+    assert_eq!(result.rows[0][0].as_i64(), Some(872));
+
+    sqlx::raw_sql(&format!("DROP PROCEDURE IF EXISTS {proc_name}"))
+        .execute(&setup_pool)
+        .await
+        .ok();
+    setup_pool.close().await;
     adapter.disconnect_pool().await.ok();
 }
 

@@ -220,8 +220,8 @@ fn validate_raw_where(rw: &str) -> Result<(), AppError> {
 
 impl MysqlAdapter {
     /// Free-form SQL 실행. PG `execute_query` 와 동일 contract:
-    /// SELECT/WITH/SHOW/EXPLAIN/DESCRIBE → `QueryType::Select` + columns +
-    /// rows; INSERT/UPDATE/DELETE → `QueryType::Dml { rows_affected }`;
+    /// SELECT/WITH/SHOW/EXPLAIN/DESCRIBE/CALL → `QueryType::Select` +
+    /// columns + rows; INSERT/UPDATE/DELETE → `QueryType::Dml { rows_affected }`;
     /// 그 외 → `QueryType::Ddl`.
     pub async fn execute_query(
         &self,
@@ -247,6 +247,7 @@ impl MysqlAdapter {
             || trimmed_query.starts_with("EXPLAIN")
             || trimmed_query.starts_with("DESCRIBE")
             || trimmed_query.starts_with("DESC ")
+            || trimmed_query.starts_with("CALL")
         {
             QueryType::Select
         } else if trimmed_query.starts_with("INSERT")

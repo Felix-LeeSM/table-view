@@ -86,6 +86,21 @@ describe("mysql scripting boundary", () => {
     });
   });
 
+  it("allows narrow CALL dispatch while routine bodies stay blocked", () => {
+    expect(
+      findMysqlScriptingBoundaryViolation(
+        ["CALL mysql_runtime_ping(872)"],
+        "mysql",
+      ),
+    ).toBeNull();
+    expect(
+      findMysqlScriptingBoundaryViolation(
+        ["CALL mariadb_runtime_ping(DEFAULT)"],
+        "mariadb",
+      ),
+    ).toBeNull();
+  });
+
   it("does not reject transaction BEGIN as routine control-flow", () => {
     expect(findMysqlScriptingBoundaryViolation(["BEGIN"], "mysql")).toBeNull();
     expect(
