@@ -146,6 +146,50 @@ impl DuckdbAdapter {
 
         result.map_err(|error| redact_app_error(error, &redactions))
     }
+
+    pub(super) async fn execute_file_analytics_global_query(
+        &self,
+        sql: &str,
+        start: Instant,
+    ) -> Result<Option<QueryResult>, AppError> {
+        let sources = self.list_registered_file_analytics_sources().await?;
+        let referenced_sources = sources
+            .into_iter()
+            .filter(|source| references_source_alias(sql, &source.public.alias))
+            .collect::<Vec<_>>();
+        if referenced_sources.is_empty() {
+            return Ok(None);
+        }
+        if !matches!(first_sql_word(sql), Some("SELECT")) {
+            return Err(AppError::Unsupported(
+                "DuckDB file analytics supports read-only SELECT queries".into(),
+            ));
+        }
+        let referenced_sources = referenced_sources
+            .into_iter()
+            .map(|source| refresh_registered_file_source(&source))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let settings = self.active_settings().await?;
+        let mut redactions = vec![settings.path];
+        redactions.extend(referenced_sources.iter().map(|source| source.path.clone()));
+        redactions.extend(sql_path_literals(sql));
+        let sql = sql.to_string();
+
+        let result = run_blocking(move || {
+            let conn = open_file_analytics_connection()?;
+            for source in &referenced_sources {
+                create_source_view(&conn, source)?;
+            }
+            disable_external_access(&conn)?;
+            execute_select_query(&conn, &sql, start)
+        })
+        .await;
+
+        result
+            .map(Some)
+            .map_err(|error| redact_app_error(error, &redactions))
+    }
 }
 
 fn validate_local_file_source(path: &str) -> Result<ValidatedFileSource, AppError> {
@@ -287,7 +331,7 @@ fn references_source_alias(sql: &str, source_alias: &str) -> bool {
                     index += 1;
                 }
                 let word = sql[start..index].to_ascii_uppercase();
-                if matches!(word.as_str(), "FROM" | "JOIN")
+                if relation_keyword_can_reference_alias(word.as_str())
                     && table_reference_contains_alias(sql, index, source_alias)
                 {
                     return true;
@@ -298,6 +342,13 @@ fn references_source_alias(sql: &str, source_alias: &str) -> bool {
     }
 
     false
+}
+
+fn relation_keyword_can_reference_alias(word: &str) -> bool {
+    matches!(
+        word,
+        "FROM" | "JOIN" | "UPDATE" | "INTO" | "TABLE" | "VIEW" | "ON" | "REFERENCES" | "USING"
+    )
 }
 
 fn table_reference_contains_alias(sql: &str, start: usize, source_alias: &str) -> bool {
@@ -312,6 +363,7 @@ fn table_reference_contains_alias(sql: &str, start: usize, source_alias: &str) -
             index = skip_whitespace_and_comments(bytes, next_index);
         }
     }
+    index = skip_optional_table_reference_prefix(sql, index);
 
     loop {
         index = skip_whitespace_and_comments(bytes, index);
@@ -348,6 +400,34 @@ fn table_reference_contains_alias(sql: &str, start: usize, source_alias: &str) -
         }
         index += 1;
     }
+}
+
+fn skip_optional_table_reference_prefix(sql: &str, index: usize) -> usize {
+    let bytes = sql.as_bytes();
+    let index = skip_whitespace_and_comments(bytes, index);
+    let Some((first, first_end)) = read_word(sql, index) else {
+        return index;
+    };
+    if first.eq_ignore_ascii_case("ONLY") {
+        return skip_whitespace_and_comments(bytes, first_end);
+    }
+    if !first.eq_ignore_ascii_case("IF") {
+        return index;
+    }
+
+    let second_start = skip_whitespace_and_comments(bytes, first_end);
+    let Some((second, second_end)) = read_word(sql, second_start) else {
+        return index;
+    };
+    let third_start = skip_whitespace_and_comments(bytes, second_end);
+    let Some((third, third_end)) = read_word(sql, third_start) else {
+        return index;
+    };
+    if second.eq_ignore_ascii_case("NOT") && third.eq_ignore_ascii_case("EXISTS") {
+        return skip_whitespace_and_comments(bytes, third_end);
+    }
+
+    index
 }
 
 fn read_word(sql: &str, start: usize) -> Option<(String, usize)> {

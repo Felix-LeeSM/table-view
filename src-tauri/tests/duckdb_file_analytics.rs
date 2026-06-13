@@ -175,6 +175,227 @@ async fn duckdb_file_analytics_requires_the_registered_source_alias() {
 }
 
 #[tokio::test]
+async fn duckdb_file_analytics_global_query_uses_registered_aliases_without_source_id() {
+    let (dir, adapter) = connected_fixture().await;
+    let csv_path = dir.path().join("people.csv");
+    fs::write(&csv_path, "id,name\n1,Ada\n2,Bob\n").unwrap();
+    let csv_path = csv_path.to_str().unwrap().to_string();
+    let source = adapter
+        .register_file_analytics_source(&csv_path)
+        .await
+        .unwrap();
+
+    let result = adapter
+        .execute_sql(
+            &format!(
+                "SELECT name FROM \"{}\" WHERE id = 2 ORDER BY name",
+                source.alias
+            ),
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.rows, vec![vec![serde_json::json!("Bob")]]);
+    assert!(!serde_json::to_string(&result).unwrap().contains(&csv_path));
+
+    let normal_duckdb_query = adapter.execute_sql("SELECT 1 AS ok", None).await.unwrap();
+    assert_eq!(normal_duckdb_query.rows, vec![vec![serde_json::json!(1)]]);
+}
+
+#[tokio::test]
+async fn duckdb_file_analytics_global_query_keeps_file_boundaries_blocked() {
+    let (dir, adapter) = connected_fixture().await;
+    let csv_path = dir.path().join("people.csv");
+    fs::write(&csv_path, "id,name\n1,Ada\n").unwrap();
+    let secret_path = dir.path().join("secret.csv");
+    fs::write(&secret_path, "id,name\n9,Hidden\n").unwrap();
+    let secret_path = secret_path.to_str().unwrap().to_string();
+    let secret_path_sql = secret_path.replace('\'', "''");
+    let source = adapter
+        .register_file_analytics_source(csv_path.to_str().unwrap())
+        .await
+        .unwrap();
+
+    for sql in [
+        "INSTALL httpfs".to_string(),
+        "FORCE INSTALL httpfs".to_string(),
+        "LOAD httpfs".to_string(),
+        "SELECT install_extension('httpfs')".to_string(),
+        "SELECT load_extension('httpfs')".to_string(),
+        format!("COPY \"{}\" TO '{secret_path_sql}'", source.alias),
+        format!("ATTACH '{secret_path_sql}' AS external_db"),
+        "DETACH external_db".to_string(),
+        format!("CREATE TABLE copied AS SELECT * FROM \"{}\"", source.alias),
+        format!(
+            "INSERT INTO missing_sink SELECT * FROM \"{}\"",
+            source.alias
+        ),
+        format!(
+            "WITH rows AS (SELECT * FROM \"{}\") INSERT INTO missing_sink SELECT * FROM rows",
+            source.alias
+        ),
+        format!(
+            "WITH rows AS (SELECT * FROM \"{}\") SELECT * FROM rows",
+            source.alias
+        ),
+        format!(
+            "UPDATE \"{}\" SET name = 'Mutated' WHERE id = 1",
+            source.alias
+        ),
+        format!("DELETE FROM \"{}\"", source.alias),
+        format!(
+            "SELECT * FROM \"{}\" JOIN read_csv_auto('{secret_path_sql}') ON true",
+            source.alias
+        ),
+        format!(
+            "SELECT * FROM \"{}\" JOIN read_parquet('{secret_path_sql}') ON true",
+            source.alias
+        ),
+        format!(
+            "SELECT * FROM \"{}\" JOIN read_json_auto('{secret_path_sql}') ON true",
+            source.alias
+        ),
+        format!(
+            "SELECT * FROM \"{}\" JOIN read_ndjson_auto('{secret_path_sql}') ON true",
+            source.alias
+        ),
+        format!(
+            "SELECT * FROM \"{}\" JOIN read_text('{secret_path_sql}') ON true",
+            source.alias
+        ),
+        format!(
+            "SELECT * FROM \"{}\" JOIN read_blob('{secret_path_sql}') ON true",
+            source.alias
+        ),
+        format!(
+            "SELECT * FROM \"{}\" JOIN sniff_csv('{secret_path_sql}') ON true",
+            source.alias
+        ),
+        format!(
+            "SELECT * FROM \"{}\" JOIN glob('{secret_path_sql}') ON true",
+            source.alias
+        ),
+        format!(
+            "SELECT * FROM \"{}\" JOIN parquet_metadata('{secret_path_sql}') ON true",
+            source.alias
+        ),
+        format!(
+            "SELECT * FROM \"{}\" JOIN parquet_schema('{secret_path_sql}') ON true",
+            source.alias
+        ),
+        format!(
+            "SELECT * FROM \"{}\" JOIN parquet_file_metadata('{secret_path_sql}') ON true",
+            source.alias
+        ),
+        format!(
+            "SELECT * FROM \"{}\" JOIN '{secret_path_sql}' ON true",
+            source.alias
+        ),
+        format!("SELECT * FROM '{secret_path_sql}'"),
+        format!("SELECT * FROM read_csv_auto('{secret_path_sql}')"),
+    ] {
+        let blocked = adapter.execute_sql(&sql, None).await;
+        assert!(
+            matches!(blocked, Err(AppError::Unsupported(_))),
+            "{sql} should stay blocked, got {blocked:?}"
+        );
+    }
+
+    let redacted = adapter
+        .execute_sql(
+            &format!(
+                "SELECT CAST('{secret_path_sql}' AS INTEGER) FROM \"{}\"",
+                source.alias
+            ),
+            None,
+        )
+        .await;
+    match redacted {
+        Err(AppError::Database(message)) => {
+            assert!(!message.contains(&secret_path), "leaked path: {message}");
+            assert!(
+                message.contains("<local-file>"),
+                "missing redacted path marker: {message}"
+            );
+        }
+        other => panic!("Expected redacted driver error, got {other:?}"),
+    }
+
+    let source_still_readable = adapter
+        .execute_sql(&format!("SELECT * FROM \"{}\"", source.alias), None)
+        .await
+        .unwrap();
+    assert_eq!(source_still_readable.rows[0][1], serde_json::json!("Ada"));
+}
+
+#[tokio::test]
+async fn duckdb_file_analytics_global_query_blocks_registered_alias_write_collisions() {
+    let (dir, adapter) = connected_fixture().await;
+    let csv_path = dir.path().join("people.csv");
+    fs::write(&csv_path, "id,name\n1,Ada\n").unwrap();
+    adapter
+        .execute_sql(
+            r#"CREATE TABLE "file_00000001" (id INTEGER, name TEXT)"#,
+            None,
+        )
+        .await
+        .unwrap();
+    adapter
+        .execute_sql(
+            r#"INSERT INTO "file_00000001" VALUES (10, 'Persistent')"#,
+            None,
+        )
+        .await
+        .unwrap();
+    let source = adapter
+        .register_file_analytics_source(csv_path.to_str().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(source.alias, "file_00000001");
+
+    for sql in [
+        format!(
+            "UPDATE \"{}\" SET name = 'Mutated' WHERE id = 10",
+            source.alias
+        ),
+        format!("INSERT INTO \"{}\" VALUES (11, 'Inserted')", source.alias),
+        format!(
+            "CREATE OR REPLACE TABLE \"{}\" AS SELECT 99 AS id, 'Replaced' AS name",
+            source.alias
+        ),
+        format!("ALTER TABLE \"{}\" ADD COLUMN leaked INTEGER", source.alias),
+        format!(
+            "CREATE TABLE IF NOT EXISTS \"{}\" (id INTEGER, name TEXT)",
+            source.alias
+        ),
+        format!(
+            "CREATE INDEX file_analytics_collision_idx ON \"{}\"(id)",
+            source.alias
+        ),
+    ] {
+        let blocked = adapter.execute_sql(&sql, None).await;
+        assert!(
+            matches!(blocked, Err(AppError::Unsupported(_))),
+            "{sql} should block registered file alias writes, got {blocked:?}"
+        );
+    }
+
+    let routed = adapter
+        .execute_sql(&format!("SELECT name FROM \"{}\"", source.alias), None)
+        .await
+        .unwrap();
+    assert_eq!(routed.rows, vec![vec![serde_json::json!("Ada")]]);
+
+    adapter.clear_file_analytics_sources().await.unwrap();
+    let persistent = adapter
+        .execute_sql(r#"SELECT name FROM "file_00000001" ORDER BY id"#, None)
+        .await
+        .unwrap();
+    assert_eq!(persistent.rows, vec![vec![serde_json::json!("Persistent")]]);
+}
+
+#[tokio::test]
 async fn duckdb_file_analytics_supports_json_ndjson_and_parquet_sources() {
     let (dir, adapter) = connected_fixture().await;
     let json_path = dir.path().join("people.json");

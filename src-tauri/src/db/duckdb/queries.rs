@@ -40,6 +40,12 @@ impl DuckdbAdapter {
         }
         validate_supported_sql(&query)?;
         let query_type = duckdb_query_type(&query);
+        if let Some(result) = self
+            .execute_file_analytics_global_query(&query, start)
+            .await?
+        {
+            return Ok(result);
+        }
 
         self.with_connection(move |conn| execute_query_uncancelled(conn, &query, query_type, start))
             .await
