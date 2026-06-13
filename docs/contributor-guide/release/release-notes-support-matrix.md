@@ -37,8 +37,8 @@ Known limits to state in release notes:
   and Oracle SID/TNS/wallet/TLS/raw-admin/full PL/SQL support remain out of
   scope.
 - DuckDB COPY/ATTACH/DETACH, extension install/load, raw external-file SQL
-  functions, import/export workflow, structured DDL/write UI, and admin parity
-  remain out of scope.
+  functions, automatic import/export workflow, structured DDL/write UI, and
+  admin parity remain out of scope.
 
 ## Support Matrix
 
@@ -70,7 +70,7 @@ wired matrix leg to pass.
 | MySQL | `e2e/smoke/mysql.spec.ts` | `e2e/fixtures/mysql/query/seed.sql` | Wired baseline for connect/browse/query/edit/cancel/history/result-envelope. |
 | MariaDB | `e2e/smoke/mariadb.spec.ts` | `e2e/fixtures/mariadb/query/seed.sql` | Distinct MariaDB engine smoke plus catalog/workbench probe objects. |
 | SQLite | `e2e/smoke/sqlite.spec.ts` | `e2e/fixtures/sqlite/query/seed.sql` | Deterministic file create/open, browse, query, writable DML, row edit, read-only rejection, and internal app-state DB rejection. |
-| DuckDB | `e2e/smoke/duckdb.spec.ts`, `e2e/smoke/duckdb-file-analytics.spec.ts` | `e2e/fixtures/duckdb/query/seed.sql`, deterministic CSV source fixture | `.duckdb` file smoke stays separate from file analytics smoke; file analytics covers registered deterministic CSV source -> global editor SELECT -> result grid -> `FILE` history/source evidence -> no absolute local path in visible UI, not COPY/ATTACH/DETACH, extensions, raw external-file SQL functions, import/export workflow, structured DDL/write UI, or admin parity. |
+| DuckDB | `e2e/smoke/duckdb.spec.ts`, `e2e/smoke/duckdb-file-analytics.spec.ts` | `e2e/fixtures/duckdb/query/seed.sql`, deterministic CSV source fixture | `.duckdb` file smoke stays separate from file analytics smoke; file analytics covers registered deterministic CSV source -> global editor SELECT -> result grid -> `FILE` history/source evidence -> no absolute local path in visible UI, not COPY/ATTACH/DETACH, extension install/load, raw external-file SQL functions, automatic import/export workflow, structured DDL/write UI, or admin parity. |
 | MongoDB | `e2e/smoke/mongodb.spec.ts` | `e2e/fixtures/mongodb/document/seed.json` | Whitelisted document browse/edit/query/safety/cancel representative smoke. |
 | Redis | `e2e/smoke/redis.spec.ts` | `e2e/fixtures/redis/kv/seed.json` | DB 2 connect/scan/preview/GET/guarded-write/TTL/delete representative smoke. |
 | Valkey | `e2e/smoke/valkey.spec.ts` | `e2e/fixtures/valkey/kv/seed.json`, `e2e/fixtures/valkey.redis-compatibility.json` | Proven bounded Valkey command rows only; compatibility inventory is not full Redis compatibility evidence. |
