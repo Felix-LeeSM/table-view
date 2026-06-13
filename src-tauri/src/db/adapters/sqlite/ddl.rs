@@ -130,6 +130,7 @@ impl SqliteAdapter {
 fn build_create_table_sql(req: &CreateTableRequest) -> Result<String, AppError> {
     validate_namespace(&req.schema)?;
     validate_identifier(&req.name, "Table name")?;
+    validate_sqlite_object_name(&req.name, "Table name")?;
     reject_non_empty_comment(req.table_comment.as_deref(), "Table comments")?;
 
     if req.columns.is_empty() {
@@ -417,6 +418,15 @@ fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+fn validate_sqlite_object_name(name: &str, label: &str) -> Result<(), AppError> {
+    if name.trim().to_ascii_lowercase().starts_with("sqlite_") {
+        return Err(AppError::Validation(format!(
+            "{label} must not start with reserved SQLite prefix sqlite_"
+        )));
+    }
+    Ok(())
+}
+
 fn reject_non_empty_comment(value: Option<&str>, label: &str) -> Result<(), AppError> {
     if value.is_some_and(|comment| !comment.trim().is_empty()) {
         return Err(AppError::Unsupported(format!(
@@ -473,6 +483,18 @@ mod tests {
         let result = build_create_table_sql(&req);
 
         assert!(matches!(result, Err(AppError::Validation(message)) if message.contains("main")));
+    }
+
+    #[test]
+    fn build_create_table_sql_rejects_internal_sqlite_object_prefix() {
+        let mut req = request();
+        req.name = "sqlite_structured".to_string();
+
+        let result = build_create_table_sql(&req);
+
+        assert!(
+            matches!(result, Err(AppError::Validation(message)) if message.contains("sqlite_"))
+        );
     }
 
     #[test]

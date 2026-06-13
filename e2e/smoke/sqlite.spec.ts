@@ -36,8 +36,8 @@ describe("SQLite file workflow smoke", () => {
     const stateDbPath = resolve(dataDir, "state.db");
     const editedName = `Alice SQLite Smoke ${Date.now()}`;
     const smokeProductName = `SQLite Smoke Product ${Date.now()}`;
-    const createdTableName = `sqlite_structured_${Date.now()}`;
-    const readOnlyTableName = `sqlite_readonly_${Date.now()}`;
+    const createdTableName = `structured_sqlite_${Date.now()}`;
+    const readOnlyTableName = `readonly_sqlite_${Date.now()}`;
 
     await step("prepare deterministic SQLite fixture file", async () => {
       prepareSqliteFixture(sqlitePath);
