@@ -162,6 +162,17 @@ describe("DBMS-specific E2E seed fixtures", () => {
     },
   );
 
+  it("mysql seed carries the narrow CALL runtime procedure probe", () => {
+    const sql = readFileSync(
+      resolve("e2e/fixtures", "mysql/query/seed.sql"),
+      "utf-8",
+    );
+
+    expect(sql).toContain("mysql_runtime_ping");
+    expect(sql).toMatch(/CREATE\s+PROCEDURE\s+mysql_runtime_ping/i);
+    expect(sql).toMatch(/SELECT\s+input_id\s+AS\s+echoed_id/i);
+  });
+
   it("mariadb seed carries live catalog/workbench metadata probes", () => {
     const sql = readFileSync(
       resolve("e2e/fixtures", "mariadb/query/seed.sql"),
@@ -172,6 +183,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(sql).toContain("active_mariadb_users");
     expect(sql).toContain("mariadb_tax_rate");
     expect(sql).toContain("mariadb_catalog_ping");
+    expect(sql).toContain("mariadb_runtime_ping");
     expect(sql).toContain("uq_mariadb_catalog_probe_code");
     expect(sql).toContain("ix_mariadb_catalog_probe_user");
     expect(sql).toContain("fk_mariadb_catalog_probe_user");

@@ -65,6 +65,10 @@ DROP PROCEDURE IF EXISTS mariadb_catalog_ping;
 CREATE PROCEDURE mariadb_catalog_ping(IN input_id BIGINT)
 SELECT input_id AS echoed_id;
 
+DROP PROCEDURE IF EXISTS mariadb_runtime_ping;
+CREATE PROCEDURE mariadb_runtime_ping(IN input_id BIGINT)
+SELECT input_id AS echoed_id;
+
 DELETE FROM orders WHERE user_id = @alice_user_id AND total = 99.99;
 INSERT INTO orders (user_id, total) VALUES (@alice_user_id, 99.99);
 

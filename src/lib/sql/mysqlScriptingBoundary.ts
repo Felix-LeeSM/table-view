@@ -4,7 +4,8 @@ export type MysqlScriptingFeature =
   | "DELIMITER"
   | "LOAD DATA"
   | "STORED ROUTINE"
-  | "CONTROL FLOW";
+  | "CONTROL FLOW"
+  | "CALL";
 
 export interface MysqlScriptingBoundaryViolation {
   feature: MysqlScriptingFeature;
@@ -21,6 +22,7 @@ const MESSAGES: Record<MysqlScriptingFeature, string> = {
     "MySQL stored routine and event bodies are not supported in the query editor. Use a dedicated MySQL client for CREATE PROCEDURE, CREATE FUNCTION, or CREATE EVENT scripts.",
   "CONTROL FLOW":
     "MySQL routine control-flow scripting is not supported in the query editor. Submit a single server SQL statement without IF/LOOP routine-body fragments.",
+  CALL: "MySQL-family CALL support is limited to a narrow routine name plus scalar literal, DEFAULT, NULL, boolean, or user-variable arguments. Function calls, expressions, subqueries, system variables, and routine body authoring are not supported in the query editor.",
 };
 
 export function isMysqlFamilyDbType(
@@ -59,7 +61,29 @@ function mysqlScriptingFeature(sql: string): MysqlScriptingFeature | null {
     return "STORED ROUTINE";
   }
   if (isRoutineControlFlowWord(words[0])) return "CONTROL FLOW";
+  if (words[0] === "CALL" && !isNarrowCallStatement(sql)) return "CALL";
   return null;
+}
+
+function isNarrowCallStatement(sql: string): boolean {
+  const keyword = readWord(sql, skipWhitespaceAndComments(sql, 0));
+  if (!keyword || keyword.word.toUpperCase() !== "CALL") return true;
+
+  let index = skipWhitespaceAndComments(sql, keyword.end);
+  const name = readRoutineName(sql, index);
+  if (!name) return false;
+  index = skipWhitespaceAndComments(sql, name.end);
+
+  if (sql[index] !== "(") return false;
+  const args = readCallArguments(sql, index + 1);
+  if (!args) return false;
+
+  index = skipWhitespaceAndComments(sql, args.end);
+  if (sql[index] === ";") {
+    index = skipWhitespaceAndComments(sql, index + 1);
+  }
+
+  return index >= sql.length;
 }
 
 function leadingExecutableCommentFeature(
@@ -117,18 +141,156 @@ function leadingSqlWords(sql: string, limit: number): string[] {
     index = skipWhitespaceAndComments(sql, index);
     if (index >= sql.length) break;
 
-    const first = sql.charCodeAt(index);
-    if (!isWordStart(first)) break;
-
-    const start = index;
-    index += 1;
-    while (index < sql.length && isWordContinue(sql.charCodeAt(index))) {
-      index += 1;
-    }
-    words.push(sql.slice(start, index).toUpperCase());
+    const word = readWord(sql, index);
+    if (!word) break;
+    index = word.end;
+    words.push(word.word.toUpperCase());
   }
 
   return words;
+}
+
+function readWord(
+  sql: string,
+  start: number,
+): { word: string; end: number } | null {
+  const first = sql.charCodeAt(start);
+  if (!isWordStart(first)) return null;
+
+  let index = start + 1;
+  while (index < sql.length && isWordContinue(sql.charCodeAt(index))) {
+    index += 1;
+  }
+  return { word: sql.slice(start, index), end: index };
+}
+
+function readRoutineName(sql: string, start: number): { end: number } | null {
+  let index = start;
+  let segmentCount = 0;
+
+  while (true) {
+    const segment = readIdentifierSegment(sql, index);
+    if (!segment) return segmentCount > 0 ? { end: index } : null;
+
+    index = skipWhitespaceAndComments(sql, segment.end);
+    segmentCount += 1;
+
+    if (sql[index] !== ".") return { end: index };
+    index = skipWhitespaceAndComments(sql, index + 1);
+  }
+}
+
+function readIdentifierSegment(
+  sql: string,
+  start: number,
+): { end: number } | null {
+  if (sql[start] === "`") {
+    let index = start + 1;
+    while (index < sql.length) {
+      if (sql[index] === "`") {
+        if (sql[index + 1] === "`") {
+          index += 2;
+          continue;
+        }
+        return { end: index + 1 };
+      }
+      index += 1;
+    }
+    return null;
+  }
+
+  const word = readWord(sql, start);
+  return word ? { end: word.end } : null;
+}
+
+function readCallArguments(sql: string, start: number): { end: number } | null {
+  let index = skipWhitespaceAndComments(sql, start);
+  if (sql[index] === ")") return { end: index + 1 };
+
+  while (index < sql.length) {
+    const argStart = index;
+    let quoted = false;
+
+    while (index < sql.length) {
+      const char = sql[index]!;
+      if (char === "'" || char === '"') {
+        index = skipQuotedString(sql, index, char);
+        if (index > sql.length) return null;
+        quoted = true;
+        continue;
+      }
+      if (char === "`") {
+        index = skipBacktickIdentifier(sql, index);
+        if (index > sql.length) return null;
+        continue;
+      }
+      if (char === "," || char === ")") break;
+      index += 1;
+    }
+
+    const arg = sql.slice(argStart, index).trim();
+    if (!isNarrowCallArgument(arg, quoted)) return null;
+
+    if (sql[index] === ",") {
+      index = skipWhitespaceAndComments(sql, index + 1);
+      if (sql[index] === ")") return null;
+      continue;
+    }
+    if (sql[index] === ")") return { end: index + 1 };
+    return null;
+  }
+
+  return null;
+}
+
+function skipQuotedString(sql: string, start: number, quote: string): number {
+  let index = start + 1;
+  while (index < sql.length) {
+    if (sql[index] === "\\") {
+      index += 2;
+      continue;
+    }
+    if (sql[index] === quote) {
+      if (sql[index + 1] === quote) {
+        index += 2;
+        continue;
+      }
+      return index + 1;
+    }
+    index += 1;
+  }
+  return sql.length + 1;
+}
+
+function skipBacktickIdentifier(sql: string, start: number): number {
+  let index = start + 1;
+  while (index < sql.length) {
+    if (sql[index] === "`") {
+      if (sql[index + 1] === "`") {
+        index += 2;
+        continue;
+      }
+      return index + 1;
+    }
+    index += 1;
+  }
+  return sql.length + 1;
+}
+
+function isNarrowCallArgument(arg: string, quoted: boolean): boolean {
+  if (!arg) return false;
+  if (quoted) return isSingleQuotedScalar(arg) || isDoubleQuotedScalar(arg);
+  if (/^(DEFAULT|NULL|TRUE|FALSE)$/i.test(arg)) return true;
+  if (/^@[A-Za-z_][A-Za-z0-9_]*$/.test(arg)) return true;
+  return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(arg);
+}
+
+function isSingleQuotedScalar(arg: string): boolean {
+  return arg.startsWith("'") && skipQuotedString(arg, 0, "'") === arg.length;
+}
+
+function isDoubleQuotedScalar(arg: string): boolean {
+  return arg.startsWith('"') && skipQuotedString(arg, 0, '"') === arg.length;
 }
 
 function skipWhitespaceAndComments(sql: string, start: number): number {

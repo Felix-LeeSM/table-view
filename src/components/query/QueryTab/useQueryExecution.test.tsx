@@ -47,6 +47,14 @@ const SECOND_SELECT_RESULT: QueryResult = {
   queryType: "select",
 };
 
+const CALL_RESULT: QueryResult = {
+  columns: [{ name: "echoed_id", dataType: "bigint", category: "int" }],
+  rows: [[872]],
+  totalCount: 1,
+  executionTimeMs: 5,
+  queryType: "select",
+};
+
 const DOC_RESULT: DocumentQueryResult = {
   columns: [{ name: "_id", dataType: "objectId", category: "unknown" }],
   rows: [["abc"]],
@@ -171,6 +179,72 @@ describe("useQueryExecution scaffold", () => {
       status: "completed",
       result: SELECT_RESULT,
     });
+  });
+
+  it.each([
+    ["mysql", "CALL mysql_runtime_ping(872)"],
+    ["mariadb", "CALL mariadb_runtime_ping(872)"],
+  ] as const)(
+    "keeps %s CALL behind WARN preview and dispatches after confirmation",
+    async (dbType, sql) => {
+      executeQueryMock.mockResolvedValueOnce(CALL_RESULT);
+      const tab = seedRdbTab(sql, {}, { dbType });
+      const { result } = renderHook(() => useQueryExecution({ tab }));
+
+      await act(async () => {
+        await result.current.handleExecute();
+      });
+
+      expect(result.current.pendingRdbWarn).toEqual({
+        statements: [sql],
+      });
+      expect(executeQueryMock).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await result.current.confirmRdbWarn();
+      });
+
+      expect(executeQueryMock).toHaveBeenCalledWith(
+        "conn1",
+        sql,
+        expect.stringMatching(/^query-1-/),
+        "db1",
+      );
+      await waitFor(() => {
+        expect(getSeededRdbTab().queryState.status).toBe("completed");
+      });
+      const updated = getSeededRdbTab();
+      expect(updated.queryState).toMatchObject({
+        status: "completed",
+        result: CALL_RESULT,
+      });
+    },
+  );
+
+  it("rejects broad MySQL CALL argument expressions before IPC", async () => {
+    executeQueryMock.mockResolvedValue(CALL_RESULT);
+    const tab = seedRdbTab(
+      "CALL refresh_user_stats(NOW())",
+      {},
+      {
+        dbType: "mysql",
+      },
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(executeQueryMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(getSeededRdbTab().queryState.status).toBe("error");
+    });
+    const state = getSeededRdbTab().queryState;
+    if (state.status !== "error") {
+      throw new Error(`Expected error state, got ${state.status}`);
+    }
+    expect(state.error).toContain("CALL support is limited");
   });
 
   it("rejects MySQL DELIMITER scripts before any SQL reaches IPC", async () => {

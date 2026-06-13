@@ -49,3 +49,7 @@ INSERT INTO orders (user_id, total) VALUES (@alice_user_id, 99.99);
 
 DELETE FROM products WHERE name = 'Widget';
 INSERT INTO products (name, price) VALUES ('Widget', 19.99);
+
+DROP PROCEDURE IF EXISTS mysql_runtime_ping;
+CREATE PROCEDURE mysql_runtime_ping(IN input_id BIGINT)
+SELECT input_id AS echoed_id;
