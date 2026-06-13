@@ -146,6 +146,47 @@ impl DuckdbAdapter {
 
         result.map_err(|error| redact_app_error(error, &redactions))
     }
+
+    pub(super) async fn execute_file_analytics_global_query(
+        &self,
+        sql: &str,
+        start: Instant,
+    ) -> Result<Option<QueryResult>, AppError> {
+        let sources = self.list_registered_file_analytics_sources().await?;
+        let referenced_sources = sources
+            .into_iter()
+            .filter(|source| references_source_alias(sql, &source.public.alias))
+            .map(|source| refresh_registered_file_source(&source))
+            .collect::<Result<Vec<_>, _>>()?;
+        if referenced_sources.is_empty() {
+            return Ok(None);
+        }
+        if !matches!(first_sql_word(sql), Some("SELECT")) {
+            return Err(AppError::Unsupported(
+                "DuckDB file analytics supports read-only SELECT queries".into(),
+            ));
+        }
+
+        let settings = self.active_settings().await?;
+        let mut redactions = vec![settings.path];
+        redactions.extend(referenced_sources.iter().map(|source| source.path.clone()));
+        redactions.extend(sql_path_literals(sql));
+        let sql = sql.to_string();
+
+        let result = run_blocking(move || {
+            let conn = open_file_analytics_connection()?;
+            for source in &referenced_sources {
+                create_source_view(&conn, source)?;
+            }
+            disable_external_access(&conn)?;
+            execute_select_query(&conn, &sql, start)
+        })
+        .await;
+
+        result
+            .map(Some)
+            .map_err(|error| redact_app_error(error, &redactions))
+    }
 }
 
 fn validate_local_file_source(path: &str) -> Result<ValidatedFileSource, AppError> {
