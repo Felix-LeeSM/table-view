@@ -7,7 +7,6 @@ import {
   createSqliteConnection,
   editGridCellInRow,
   executeSqlPreview,
-  expandIfCollapsed,
   openConnection,
   openNewConnectionDialog,
   openNewQueryTab,
@@ -124,8 +123,6 @@ describe("SQLite file workflow smoke", () => {
     });
 
     await step("create table through SQLite structured DDL", async () => {
-      await expandIfCollapsed('[aria-label="main schema"]', 15000);
-      await expandIfCollapsed('[aria-label="Tables in main"]');
       await clickAria("Create table in main");
       await waitForVisibleText("Create Table", 10000);
 
@@ -170,8 +167,6 @@ describe("SQLite file workflow smoke", () => {
     await step(
       "read-only connection rejects structured table creation",
       async () => {
-        await expandIfCollapsed('[aria-label="main schema"]', 15000);
-        await expandIfCollapsed('[aria-label="Tables in main"]');
         await clickAria("Create table in main");
         await waitForVisibleText("Create Table", 10000);
 
