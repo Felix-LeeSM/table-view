@@ -198,6 +198,19 @@ describe("buildSqlCompletionRequest", () => {
     expect(unknownMariaDb.vocabulary.keywords).toContain("RETURNING");
   });
 
+  it("does not inherit MariaDB RETURNING vocabulary into MySQL requests", () => {
+    const mysqlWithMariaDbVersion = requestFor(
+      "mysql",
+      "5.5.5-10.11.8-MariaDB",
+    );
+
+    expect(mysqlWithMariaDbVersion.dialect).toBe("mysql");
+    expect(mysqlWithMariaDbVersion.capabilities.returning).toBe(false);
+    expect(mysqlWithMariaDbVersion.vocabulary.keywords).not.toContain(
+      "RETURNING",
+    );
+  });
+
   it("preserves cache state so future providers can schedule background prefetch", () => {
     const req = requestFor("postgresql");
 
