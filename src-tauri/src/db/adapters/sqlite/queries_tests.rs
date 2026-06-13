@@ -105,8 +105,20 @@ fn sqlite_load_extension_scanner_ignores_comments_and_strings() {
     assert!(sqlite_invokes_load_extension(
         "SELECT /* allowed comment */ LOAD_EXTENSION ( 'x' )"
     ));
+    assert!(sqlite_invokes_load_extension(
+        "SELECT \"load_extension\"('spellfix')"
+    ));
+    assert!(sqlite_invokes_load_extension(
+        "SELECT `load_extension`('spellfix')"
+    ));
+    assert!(sqlite_invokes_load_extension(
+        "SELECT [load_extension]('spellfix')"
+    ));
     assert!(!sqlite_invokes_load_extension(
         "SELECT 'load_extension(' AS label -- load_extension('x')"
+    ));
+    assert!(!sqlite_invokes_load_extension(
+        "SELECT \"load_extension\" AS label"
     ));
 }
 

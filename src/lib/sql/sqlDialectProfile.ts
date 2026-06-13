@@ -2,8 +2,8 @@ import {
   MySQL,
   PostgreSQL,
   SQLite,
+  SQLDialect,
   StandardSQL,
-  type SQLDialect,
 } from "@codemirror/lang-sql";
 import type { DatabaseType } from "@/types/connection";
 
@@ -266,6 +266,11 @@ const SQLITE_SQL_FUNCTIONS: readonly string[] = [
   "IFNULL",
 ];
 
+export const SQLITE_COMPLETION_DIALECT = SQLDialect.define({
+  ...SQLite.spec,
+  keywords: removeSqlKeyword(SQLite.spec.keywords ?? "", "match"),
+});
+
 const DUCKDB_SQL_FUNCTIONS: readonly string[] = [
   "DATE_TRUNC",
   "STRFTIME",
@@ -339,6 +344,14 @@ function vocabulary(
   };
 }
 
+function removeSqlKeyword(keywords: string, keyword: string): string {
+  const normalized = keyword.toLowerCase();
+  return keywords
+    .split(/\s+/)
+    .filter((candidate) => candidate.toLowerCase() !== normalized)
+    .join(" ");
+}
+
 export const SQL_DIALECT_PROFILES: Record<SqlDialectId, SqlDialectProfile> = {
   postgresql: {
     id: "postgresql",
@@ -387,7 +400,7 @@ export const SQL_DIALECT_PROFILES: Record<SqlDialectId, SqlDialectProfile> = {
   sqlite: {
     id: "sqlite",
     family: "sqlite",
-    codeMirrorDialect: SQLite,
+    codeMirrorDialect: SQLITE_COMPLETION_DIALECT,
     identifierQuote: '"',
     defaultShell: "sqlite-cli",
     capabilities: {

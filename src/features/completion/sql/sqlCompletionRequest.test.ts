@@ -230,7 +230,7 @@ describe("buildSqlCompletionRequest", () => {
     );
   });
 
-  it("gates SQLite JSON1 FTS5 and RTREE vocabulary by capability inventory", () => {
+  it("gates SQLite JSON1 and FTS5 vocabulary by capability inventory", () => {
     const missing = sqliteRequestWithCapabilities(null);
     const jsonOnly = sqliteRequestWithCapabilities({
       json1: true,
@@ -258,7 +258,7 @@ describe("buildSqlCompletionRequest", () => {
     expect(allDetected.vocabulary.functions).toContain("BM25");
     expect(allDetected.vocabulary.functions).toContain("HIGHLIGHT");
     expect(allDetected.vocabulary.keywords).toContain("MATCH");
-    expect(allDetected.vocabulary.keywords).toContain("RTREE");
+    expect(allDetected.vocabulary.keywords).not.toContain("RTREE");
   });
 
   it("preserves cache state so future providers can schedule background prefetch", () => {

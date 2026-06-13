@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { MySQL, PostgreSQL, SQLite, StandardSQL } from "@codemirror/lang-sql";
+import {
+  keywordCompletionSource,
+  MySQL,
+  PostgreSQL,
+  SQLite,
+  StandardSQL,
+} from "@codemirror/lang-sql";
+import { CompletionContext } from "@codemirror/autocomplete";
+import { EditorState } from "@codemirror/state";
 import {
   COMMON_SQL_FUNCTIONS,
   COMMON_SQL_KEYWORDS,
+  SQLITE_COMPLETION_DIALECT,
   SQL_DIALECT_PROFILES,
   SQL_SHELL_PROFILES,
   codeMirrorDialectForDatabaseType,
@@ -29,11 +38,36 @@ describe("sqlDialectProfile", () => {
     expect(codeMirrorDialectForDatabaseType("postgresql")).toBe(PostgreSQL);
     expect(codeMirrorDialectForDatabaseType("mysql")).toBe(MySQL);
     expect(codeMirrorDialectForDatabaseType("mariadb")).toBe(MySQL);
-    expect(codeMirrorDialectForDatabaseType("sqlite")).toBe(SQLite);
+    expect(codeMirrorDialectForDatabaseType("sqlite")).toBe(
+      SQLITE_COMPLETION_DIALECT,
+    );
     expect(codeMirrorDialectForDatabaseType("duckdb")).toBe(StandardSQL);
     expect(codeMirrorDialectForDatabaseType("mssql")).toBe(StandardSQL);
     expect(codeMirrorDialectForDatabaseType("oracle")).toBe(StandardSQL);
     expect(codeMirrorDialectForDatabaseType(undefined)).toBe(StandardSQL);
+  });
+
+  it("keeps SQLite FTS MATCH out of CodeMirror keyword completion", () => {
+    expect(SQLITE_COMPLETION_DIALECT).not.toBe(SQLite);
+    expect(SQLITE_COMPLETION_DIALECT.spec.identifierQuotes).toBe(
+      SQLite.spec.identifierQuotes,
+    );
+    expect(SQLITE_COMPLETION_DIALECT.spec.keywords).not.toMatch(/\bmatch\b/i);
+
+    const source = keywordCompletionSource(SQLITE_COMPLETION_DIALECT, true);
+    const state = EditorState.create({
+      doc: "MA",
+      extensions: [SQLITE_COMPLETION_DIALECT.language],
+    });
+    const result = source(new CompletionContext(state, 2, true));
+    if (result && typeof (result as Promise<unknown>).then === "function") {
+      throw new Error("keyword completion should be synchronous");
+    }
+
+    const completionResult = result as Exclude<typeof result, Promise<unknown>>;
+    expect(
+      completionResult?.options.map((option) => option.label),
+    ).not.toContain("MATCH");
   });
 
   it("models capability differences without provider-level dbType branching", () => {

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { MySQL, PostgreSQL, SQLite, StandardSQL } from "@codemirror/lang-sql";
 import { databaseTypeToSqlDialect } from "./sqlDialect";
+import { SQLITE_COMPLETION_DIALECT } from "./sqlDialectProfile";
 import type { DatabaseType } from "@/types/connection";
 
 describe("databaseTypeToSqlDialect", () => {
@@ -19,8 +20,9 @@ describe("databaseTypeToSqlDialect", () => {
   });
 
   // AC-03: SQLite resolution
-  it("maps sqlite to the SQLite dialect", () => {
-    expect(databaseTypeToSqlDialect("sqlite")).toBe(SQLite);
+  it("maps sqlite to the gated SQLite completion dialect", () => {
+    expect(databaseTypeToSqlDialect("sqlite")).toBe(SQLITE_COMPLETION_DIALECT);
+    expect(databaseTypeToSqlDialect("sqlite")).not.toBe(SQLite);
   });
 
   // AC-07: Fallback for document / kv / deleted-connection references

@@ -27,15 +27,26 @@ pub(super) fn sqlite_invokes_load_extension(sql: &str) -> bool {
     let mut idx = 0;
     while idx < bytes.len() {
         match bytes[idx] {
-            b'\'' | b'"' | b'`' => {
+            b'\'' => {
                 idx = skip_quoted(bytes, idx, bytes[idx]).unwrap_or(bytes.len());
             }
-            b'[' => {
-                idx += 1;
-                while idx < bytes.len() && bytes[idx] != b']' {
-                    idx += 1;
+            b'"' | b'`' => {
+                let Some((identifier, end)) = read_quoted_identifier(bytes, idx, bytes[idx]) else {
+                    return false;
+                };
+                if is_load_extension_call(sql, &identifier, end) {
+                    return true;
                 }
-                idx = idx.saturating_add(1);
+                idx = end;
+            }
+            b'[' => {
+                let Some((identifier, end)) = read_bracket_identifier(bytes, idx) else {
+                    return false;
+                };
+                if is_load_extension_call(sql, &identifier, end) {
+                    return true;
+                }
+                idx = end;
             }
             b'-' if bytes.get(idx + 1) == Some(&b'-') => {
                 idx += 2;
@@ -70,6 +81,58 @@ pub(super) fn sqlite_invokes_load_extension(sql: &str) -> bool {
         }
     }
     false
+}
+
+fn is_load_extension_call(sql: &str, identifier: &[u8], end: usize) -> bool {
+    if !ascii_eq_ignore_case(identifier, b"load_extension") {
+        return false;
+    }
+    let next = skip_sql_whitespace_and_comments(sql, end);
+    sql.as_bytes().get(next) == Some(&b'(')
+}
+
+fn read_quoted_identifier(bytes: &[u8], start: usize, quote: u8) -> Option<(Vec<u8>, usize)> {
+    let mut value = Vec::new();
+    let mut idx = start + 1;
+    while idx < bytes.len() {
+        if bytes[idx] == quote {
+            if bytes.get(idx + 1) == Some(&quote) {
+                value.push(quote);
+                idx += 2;
+                continue;
+            }
+            return Some((value, idx + 1));
+        }
+        value.push(bytes[idx]);
+        idx += 1;
+    }
+    None
+}
+
+fn read_bracket_identifier(bytes: &[u8], start: usize) -> Option<(Vec<u8>, usize)> {
+    let mut value = Vec::new();
+    let mut idx = start + 1;
+    while idx < bytes.len() {
+        if bytes[idx] == b']' {
+            if bytes.get(idx + 1) == Some(&b']') {
+                value.push(b']');
+                idx += 2;
+                continue;
+            }
+            return Some((value, idx + 1));
+        }
+        value.push(bytes[idx]);
+        idx += 1;
+    }
+    None
+}
+
+fn ascii_eq_ignore_case(left: &[u8], right: &[u8]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|(l, r)| l.eq_ignore_ascii_case(r))
 }
 
 fn strip_leading_comments(sql: &str) -> &str {

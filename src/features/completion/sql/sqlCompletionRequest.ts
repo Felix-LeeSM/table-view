@@ -40,7 +40,6 @@ const SQLITE_JSON1_FUNCTIONS = [
 
 const SQLITE_FTS5_KEYWORDS = ["MATCH"] as const;
 const SQLITE_FTS5_FUNCTIONS = ["BM25", "HIGHLIGHT", "SNIPPET"] as const;
-const SQLITE_RTREE_KEYWORDS = ["RTREE"] as const;
 
 export interface SqlCompletionRequest {
   language: Extract<CompletionLanguage, "sql">;
@@ -113,10 +112,6 @@ function completionVocabularyForContext(
     appendUnique(keywords, SQLITE_FTS5_KEYWORDS);
     appendUnique(functions, SQLITE_FTS5_FUNCTIONS);
   }
-  if (context.sqliteCapabilities.rtree) {
-    appendUnique(keywords, SQLITE_RTREE_KEYWORDS);
-  }
-
   return {
     ...next,
     keywords,
