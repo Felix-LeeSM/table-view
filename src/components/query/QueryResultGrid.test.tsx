@@ -11,6 +11,12 @@ import QueryResultGrid from "./QueryResultGrid";
 import type { QueryResult } from "@/types/query";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
+
+const mockSave = vi.fn();
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  save: (opts: unknown) => mockSave(opts),
+}));
+
 beforeEach(() => {
   setupTauriMock({
     getTableColumns: vi.fn(async () => [
@@ -38,6 +44,10 @@ beforeEach(() => {
       },
     ]),
     executeQuery: vi.fn(async () => ({})),
+    exportGridRows: vi.fn(async () => ({
+      rows_written: 2,
+      bytes_written: 32,
+    })),
   });
 });
 
@@ -75,8 +85,12 @@ describe("QueryResultGrid", () => {
   beforeEach(() => {
     // Reset the per-connection PK metadata cache between tests so the
     // editable-vs-read-only paths fetch fresh.
-    useSchemaStore.setState({ tableColumnsCache: {} });
+    useSchemaStore.setState({
+      tableColumnsCache: {},
+      fileAnalyticsSources: {},
+    });
     useConnectionStore.setState({ connections: [] });
+    mockSave.mockReset();
   });
 
   it("shows idle prompt when status is idle", () => {
@@ -310,5 +324,138 @@ describe("QueryResultGrid", () => {
       />,
     );
     expect(screen.getByText("No data")).toBeInTheDocument();
+  });
+
+  it("disables SQL export for DuckDB registered file alias query results", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-duck",
+          name: "DuckDB",
+          dbType: "duckdb",
+          host: "",
+          port: 0,
+          user: "",
+          database: "analytics.duckdb",
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+    });
+    useSchemaStore.setState({
+      fileAnalyticsSources: {
+        "conn-duck": [
+          {
+            source: {
+              id: "source-1",
+              alias: "sales_csv",
+              fileName: "sales.csv",
+              kind: "csv",
+              sizeBytes: 128,
+            },
+            columns: [],
+            previewSql: 'SELECT * FROM "sales_csv" LIMIT 100',
+          },
+        ],
+      },
+    });
+
+    render(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: SELECT_RESULT }}
+        connectionId="conn-duck"
+        database="analytics.duckdb"
+        sql='SELECT id, name FROM "sales_csv"'
+      />,
+    );
+
+    expect(screen.getByText(/Read-only/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/active-session query sources/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Editable/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+    const sqlItem = await screen.findByRole("menuitem", {
+      name: /SQL INSERT/i,
+    });
+    expect(sqlItem).toHaveAttribute("aria-disabled", "true");
+    expect(sqlItem.getAttribute("title")).toMatch(/registered file source/i);
+    expect(screen.getByRole("menuitem", { name: /CSV/i })).not.toHaveAttribute(
+      "aria-disabled",
+    );
+    expect(screen.getByRole("menuitem", { name: /TSV/i })).not.toHaveAttribute(
+      "aria-disabled",
+    );
+  });
+
+  it("exports DuckDB file alias query results as current grid rows without source-table context", async () => {
+    mockSave.mockResolvedValueOnce("/tmp/sales.csv");
+    const exportGridRows = vi.fn(async () => ({
+      rows_written: 2,
+      bytes_written: 32,
+    }));
+    setupTauriMock({ exportGridRows });
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-duck",
+          name: "DuckDB",
+          dbType: "duckdb",
+          host: "",
+          port: 0,
+          user: "",
+          database: "analytics.duckdb",
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+    });
+    useSchemaStore.setState({
+      fileAnalyticsSources: {
+        "conn-duck": [
+          {
+            source: {
+              id: "source-1",
+              alias: "sales_csv",
+              fileName: "sales.csv",
+              kind: "csv",
+              sizeBytes: 128,
+            },
+            columns: [],
+            previewSql: 'SELECT * FROM "sales_csv" LIMIT 100',
+          },
+        ],
+      },
+    });
+
+    render(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: SELECT_RESULT }}
+        connectionId="conn-duck"
+        database="analytics.duckdb"
+        sql='SELECT id, name FROM "sales_csv"'
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /CSV/i }));
+    await act(async () => {});
+
+    expect(exportGridRows).toHaveBeenCalledWith(
+      "csv",
+      "/tmp/sales.csv",
+      ["id", "name"],
+      [
+        [1, "Alice"],
+        [2, null],
+      ],
+      { kind: "query", source_table: null },
+      null,
+    );
   });
 });

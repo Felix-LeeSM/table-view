@@ -81,6 +81,22 @@ describe("ImportExportDialog", () => {
       expect(screen.getByText(/pw set/i)).toBeInTheDocument();
     });
 
+    it("states export includes saved connections only and excludes active-session file analytics", () => {
+      useConnectionStore.setState({ connections: [makeConn("c1")] });
+      render(<ImportExportDialog onClose={vi.fn()} />);
+
+      expect(
+        screen.getByText(
+          /passwords and active-session file analytics registrations are not embedded/i,
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          /active-session file analytics sources\s+and local file registrations are\s+not included/i,
+        ),
+      ).toBeInTheDocument();
+    });
+
     it("calls exportConnectionsEncrypted with selected ids only and surfaces the auto-generated recovery phrase", async () => {
       const { exportConnectionsEncrypted } = await import("@lib/tauri");
       (
@@ -239,6 +255,21 @@ describe("ImportExportDialog", () => {
       expect(btn).toBeDisabled();
     });
 
+    it("states imported connections need passwords and DuckDB file analytics re-registration", () => {
+      render(<ImportExportDialog onClose={vi.fn()} initialTab="import" />);
+
+      expect(
+        screen.getByText(
+          /imported connections start\s+without passwords and without registered local file analytics sources/i,
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          /re-register files in a DuckDB session before using file analytics/i,
+        ),
+      ).toBeInTheDocument();
+    });
+
     it("envelope round-trip: encrypted payload + recovery phrase → importConnectionsEncrypted", async () => {
       const { importConnectionsEncrypted } = await import("@lib/tauri");
       (
@@ -314,6 +345,11 @@ describe("ImportExportDialog", () => {
       await waitFor(() => {
         expect(screen.getByText(/imported 1 connection/i)).toBeInTheDocument();
       });
+      expect(
+        screen.getByText(
+          /registered local file analytics sources are not imported;\s+re-register files in a DuckDB session/i,
+        ),
+      ).toBeInTheDocument();
     });
 
     it("envelope without recovery phrase shows inline 'master password required' error", async () => {

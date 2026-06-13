@@ -51,7 +51,7 @@ export default function ImportExportDialog({
   return (
     <TabsDialog
       title="Import / Export Connections"
-      description="Move connections between machines as an encrypted JSON envelope. Passwords are never embedded — the master password is required only to wrap and unwrap the file."
+      description="Move saved connection records between machines as an encrypted JSON envelope. Passwords and active-session file analytics registrations are not embedded."
       className="w-dialog-lg bg-secondary"
       onClose={onClose}
       value={tab}
@@ -145,10 +145,12 @@ function ExportPanel() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Select connections to include. A 12-word recovery phrase is generated
-        automatically and used to encrypt the export with{" "}
-        <strong>AES-256-GCM</strong> via an Argon2id key. Individual connection
-        passwords are never embedded — only the data needed to recreate them.
+        Select saved connections to include. Saved connection records only:
+        active-session file analytics sources and local file registrations are
+        not included. A 12-word recovery phrase is generated automatically and
+        used to encrypt the export with <strong>AES-256-GCM</strong> via an
+        Argon2id key. Individual connection passwords are never embedded — only
+        the data needed to recreate them.
       </p>
 
       <SelectionTree
@@ -354,11 +356,11 @@ function ImportPanel({ onImported }: ImportPanelProps) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Paste a previously-exported JSON below. Encrypted envelopes need the
-        original master password; plain JSON exports are accepted unchanged for
-        backward compatibility. Imported connections start{" "}
-        <strong>without a password</strong>; you must edit each one before
-        connecting.
+        Paste a previously-exported connection JSON below. Encrypted envelopes
+        need the original master password; plain JSON exports are accepted
+        unchanged for backward compatibility. Imported connections start without
+        passwords and without registered local file analytics sources;
+        re-register files in a DuckDB session before using file analytics.
       </p>
 
       <MasterPasswordField
@@ -470,8 +472,9 @@ function ImportResultPanel({ result }: { result: ImportResult }) {
         </details>
       )}
       <p className="border-t border-border pt-2 text-muted-foreground">
-        Open each imported connection in the sidebar and re-enter its password
-        before connecting.
+        Open each imported connection in the sidebar and re-enter its password.
+        Registered local file analytics sources are not imported; re-register
+        files in a DuckDB session.
       </p>
     </div>
   );

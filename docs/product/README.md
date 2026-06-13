@@ -245,7 +245,7 @@ candidate-only 상태다.
   generic explicit save-dialog export of current grid rows, not automatic export
   of a registered local file source; import workflows remain future work, and
   connection export is a separate encrypted-envelope flow that does not embed
-  connection passwords.
+  connection passwords or active-session registered file source metadata.
 - DuckDB autocomplete is an editor-assistance surface: vocabulary and cached
   schema suggestions do not imply runtime permission for adapter-blocked
   extension, `COPY`, `ATTACH`/`DETACH`, capability-setting, or raw external-file
