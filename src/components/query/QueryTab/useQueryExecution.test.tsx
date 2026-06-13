@@ -221,6 +221,32 @@ describe("useQueryExecution scaffold", () => {
     },
   );
 
+  it("rejects broad MySQL CALL argument expressions before IPC", async () => {
+    executeQueryMock.mockResolvedValue(CALL_RESULT);
+    const tab = seedRdbTab(
+      "CALL refresh_user_stats(NOW())",
+      {},
+      {
+        dbType: "mysql",
+      },
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(executeQueryMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(getSeededRdbTab().queryState.status).toBe("error");
+    });
+    const state = getSeededRdbTab().queryState;
+    if (state.status !== "error") {
+      throw new Error(`Expected error state, got ${state.status}`);
+    }
+    expect(state.error).toContain("CALL support is limited");
+  });
+
   it("rejects MySQL DELIMITER scripts before any SQL reaches IPC", async () => {
     executeQueryMock.mockResolvedValue(SELECT_RESULT);
     const tab = seedRdbTab(

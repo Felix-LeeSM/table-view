@@ -99,6 +99,28 @@ describe("mysql scripting boundary", () => {
         "mariadb",
       ),
     ).toBeNull();
+    expect(
+      findMysqlScriptingBoundaryViolation(
+        ["CALL `reporting`.`runtime_ping`('alice', NULL, TRUE, @user_id);"],
+        "mysql",
+      ),
+    ).toBeNull();
+  });
+
+  it.each([
+    ["function call", "CALL refresh_user_stats(NOW())"],
+    ["arithmetic", "CALL refresh_user_stats(1 + 2)"],
+    ["subquery", "CALL refresh_user_stats((SELECT id FROM users))"],
+    ["bare identifier", "CALL refresh_user_stats(user_id)"],
+    ["system variable", "CALL refresh_user_stats(@@session_sql_mode)"],
+  ])("rejects unsupported CALL argument form: %s", (_label, sql) => {
+    const violation = findMysqlScriptingBoundaryViolation([sql], "mysql");
+
+    expect(violation).toMatchObject({
+      feature: "CALL",
+      statementIndex: 0,
+      message: expect.stringContaining("CALL support is limited"),
+    });
   });
 
   it("does not reject transaction BEGIN as routine control-flow", () => {

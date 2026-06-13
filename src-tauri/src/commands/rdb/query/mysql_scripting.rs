@@ -7,6 +7,7 @@ enum MysqlScriptingFeature {
     LoadData,
     StoredRoutine,
     ControlFlow,
+    Call,
 }
 
 pub(super) fn validate_mysql_scripting_boundary(
@@ -31,6 +32,9 @@ pub(super) fn validate_mysql_scripting_boundary(
         )),
         Some(MysqlScriptingFeature::ControlFlow) => Err(AppError::Unsupported(
             "MySQL routine control-flow scripting is not supported in the query editor. Submit a single server SQL statement without IF/LOOP routine-body fragments.".into(),
+        )),
+        Some(MysqlScriptingFeature::Call) => Err(AppError::Unsupported(
+            "MySQL-family CALL support is limited to a narrow routine name plus scalar literal, DEFAULT, NULL, boolean, or user-variable arguments. Function calls, expressions, subqueries, system variables, and routine body authoring are not supported in the query editor.".into(),
         )),
         None => Ok(()),
     }
@@ -73,8 +77,41 @@ fn mysql_scripting_feature(sql: &str) -> Option<MysqlScriptingFeature> {
     {
         return Some(MysqlScriptingFeature::ControlFlow);
     }
+    if words.first().is_some_and(|word| word == "CALL") && !is_narrow_call_statement(sql) {
+        return Some(MysqlScriptingFeature::Call);
+    }
 
     None
+}
+
+fn is_narrow_call_statement(sql: &str) -> bool {
+    let bytes = sql.as_bytes();
+    let keyword = match read_word(sql, skip_whitespace_and_comments(bytes, 0)) {
+        Some(word) if word.word.eq_ignore_ascii_case("CALL") => word,
+        _ => return true,
+    };
+
+    let mut index = skip_whitespace_and_comments(bytes, keyword.end);
+    let name = match read_routine_name(sql, index) {
+        Some(name) => name,
+        None => return false,
+    };
+    index = skip_whitespace_and_comments(bytes, name.end);
+
+    if bytes.get(index) != Some(&b'(') {
+        return false;
+    }
+    let args = match read_call_arguments(sql, index + 1) {
+        Some(args) => args,
+        None => return false,
+    };
+
+    index = skip_whitespace_and_comments(bytes, args.end);
+    if bytes.get(index) == Some(&b';') {
+        index = skip_whitespace_and_comments(bytes, index + 1);
+    }
+
+    index >= bytes.len()
 }
 
 fn leading_executable_comment_feature(sql: &str) -> Option<MysqlScriptingFeature> {
@@ -160,19 +197,241 @@ fn leading_sql_words(sql: &str, limit: usize) -> Vec<String> {
 
     while words.len() < limit {
         index = skip_whitespace_and_comments(bytes, index);
-        if index >= bytes.len() || !is_word_start(bytes[index]) {
+        let Some(word) = read_word(sql, index) else {
             break;
-        }
-
-        let start = index;
-        index += 1;
-        while index < bytes.len() && is_word_continue(bytes[index]) {
-            index += 1;
-        }
-        words.push(sql[start..index].to_ascii_uppercase());
+        };
+        index = word.end;
+        words.push(word.word.to_ascii_uppercase());
     }
 
     words
+}
+
+struct Word<'a> {
+    word: &'a str,
+    end: usize,
+}
+
+fn read_word(sql: &str, start: usize) -> Option<Word<'_>> {
+    let bytes = sql.as_bytes();
+    if start >= bytes.len() || !is_word_start(bytes[start]) {
+        return None;
+    }
+
+    let mut index = start + 1;
+    while index < bytes.len() && is_word_continue(bytes[index]) {
+        index += 1;
+    }
+
+    Some(Word {
+        word: &sql[start..index],
+        end: index,
+    })
+}
+
+struct Span {
+    end: usize,
+}
+
+fn read_routine_name(sql: &str, start: usize) -> Option<Span> {
+    let bytes = sql.as_bytes();
+    let mut index = start;
+    let mut segment_count = 0;
+
+    loop {
+        let segment = match read_identifier_segment(sql, index) {
+            Some(segment) => segment,
+            None if segment_count > 0 => return Some(Span { end: index }),
+            None => return None,
+        };
+
+        segment_count += 1;
+        index = skip_whitespace_and_comments(bytes, segment.end);
+
+        if bytes.get(index) != Some(&b'.') {
+            return Some(Span { end: index });
+        }
+        index = skip_whitespace_and_comments(bytes, index + 1);
+    }
+}
+
+fn read_identifier_segment(sql: &str, start: usize) -> Option<Span> {
+    let bytes = sql.as_bytes();
+    if bytes.get(start) == Some(&b'`') {
+        return skip_backtick_identifier(bytes, start).map(|end| Span { end });
+    }
+    read_word(sql, start).map(|word| Span { end: word.end })
+}
+
+fn read_call_arguments(sql: &str, start: usize) -> Option<Span> {
+    let bytes = sql.as_bytes();
+    let mut index = skip_whitespace_and_comments(bytes, start);
+    if bytes.get(index) == Some(&b')') {
+        return Some(Span { end: index + 1 });
+    }
+
+    while index < bytes.len() {
+        let arg_start = index;
+        let mut quoted = false;
+
+        while index < bytes.len() {
+            match bytes[index] {
+                b'\'' | b'"' => {
+                    index = skip_quoted_string(bytes, index, bytes[index])?;
+                    quoted = true;
+                }
+                b'`' => {
+                    index = skip_backtick_identifier(bytes, index)?;
+                }
+                b',' | b')' => break,
+                _ => index += 1,
+            }
+        }
+
+        let arg = sql[arg_start..index].trim();
+        if !is_narrow_call_argument(arg, quoted) {
+            return None;
+        }
+
+        match bytes.get(index) {
+            Some(b',') => {
+                index = skip_whitespace_and_comments(bytes, index + 1);
+                if bytes.get(index) == Some(&b')') {
+                    return None;
+                }
+            }
+            Some(b')') => return Some(Span { end: index + 1 }),
+            _ => return None,
+        }
+    }
+
+    None
+}
+
+fn skip_quoted_string(bytes: &[u8], start: usize, quote: u8) -> Option<usize> {
+    let mut index = start + 1;
+    while index < bytes.len() {
+        if bytes[index] == b'\\' {
+            index += 2;
+            continue;
+        }
+        if bytes[index] == quote {
+            if bytes.get(index + 1) == Some(&quote) {
+                index += 2;
+                continue;
+            }
+            return Some(index + 1);
+        }
+        index += 1;
+    }
+    None
+}
+
+fn skip_backtick_identifier(bytes: &[u8], start: usize) -> Option<usize> {
+    let mut index = start + 1;
+    while index < bytes.len() {
+        if bytes[index] == b'`' {
+            if bytes.get(index + 1) == Some(&b'`') {
+                index += 2;
+                continue;
+            }
+            return Some(index + 1);
+        }
+        index += 1;
+    }
+    None
+}
+
+fn is_narrow_call_argument(arg: &str, quoted: bool) -> bool {
+    if arg.is_empty() {
+        return false;
+    }
+    if quoted {
+        return is_single_quoted_scalar(arg) || is_double_quoted_scalar(arg);
+    }
+    if matches_ignore_ascii_case(arg, &["DEFAULT", "NULL", "TRUE", "FALSE"]) {
+        return true;
+    }
+    if is_user_variable(arg) {
+        return true;
+    }
+    is_numeric_literal(arg)
+}
+
+fn is_single_quoted_scalar(arg: &str) -> bool {
+    arg.as_bytes().first() == Some(&b'\'')
+        && skip_quoted_string(arg.as_bytes(), 0, b'\'') == Some(arg.len())
+}
+
+fn is_double_quoted_scalar(arg: &str) -> bool {
+    arg.as_bytes().first() == Some(&b'"')
+        && skip_quoted_string(arg.as_bytes(), 0, b'"') == Some(arg.len())
+}
+
+fn matches_ignore_ascii_case(value: &str, candidates: &[&str]) -> bool {
+    candidates
+        .iter()
+        .any(|candidate| value.eq_ignore_ascii_case(candidate))
+}
+
+fn is_user_variable(arg: &str) -> bool {
+    let bytes = arg.as_bytes();
+    if bytes.first() != Some(&b'@') || bytes.get(1) == Some(&b'@') {
+        return false;
+    }
+    let Some(first) = bytes.get(1) else {
+        return false;
+    };
+    if !is_word_start(*first) && *first != b'_' {
+        return false;
+    }
+    bytes[2..]
+        .iter()
+        .all(|byte| is_word_continue(*byte) || *byte == b'_')
+}
+
+fn is_numeric_literal(arg: &str) -> bool {
+    let bytes = arg.as_bytes();
+    let mut index = 0;
+
+    if matches!(bytes.get(index), Some(b'+') | Some(b'-')) {
+        index += 1;
+    }
+
+    let mut digits_before_dot = 0;
+    while bytes.get(index).is_some_and(|byte| byte.is_ascii_digit()) {
+        index += 1;
+        digits_before_dot += 1;
+    }
+
+    let mut digits_after_dot = 0;
+    if bytes.get(index) == Some(&b'.') {
+        index += 1;
+        while bytes.get(index).is_some_and(|byte| byte.is_ascii_digit()) {
+            index += 1;
+            digits_after_dot += 1;
+        }
+    }
+
+    if digits_before_dot == 0 && digits_after_dot == 0 {
+        return false;
+    }
+
+    if matches!(bytes.get(index), Some(b'e') | Some(b'E')) {
+        index += 1;
+        if matches!(bytes.get(index), Some(b'+') | Some(b'-')) {
+            index += 1;
+        }
+        let exponent_start = index;
+        while bytes.get(index).is_some_and(|byte| byte.is_ascii_digit()) {
+            index += 1;
+        }
+        if index == exponent_start {
+            return false;
+        }
+    }
+
+    index == bytes.len()
 }
 
 fn skip_whitespace_and_comments(bytes: &[u8], mut index: usize) -> usize {
@@ -260,6 +519,29 @@ mod tests {
             &DatabaseType::Mariadb,
         )
         .is_ok());
+        assert!(validate_mysql_scripting_boundary(
+            "CALL `reporting`.`runtime_ping`('alice', NULL, TRUE, @user_id);",
+            &DatabaseType::Mysql,
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn rejects_unsupported_call_argument_forms_before_dispatch() {
+        for sql in [
+            "CALL refresh_user_stats(NOW())",
+            "CALL refresh_user_stats(1 + 2)",
+            "CALL refresh_user_stats((SELECT id FROM users))",
+            "CALL refresh_user_stats(user_id)",
+            "CALL refresh_user_stats(@@session_sql_mode)",
+        ] {
+            match validate_mysql_scripting_boundary(sql, &DatabaseType::Mysql) {
+                Err(AppError::Unsupported(msg)) => {
+                    assert!(msg.contains("CALL support is limited"), "{msg:?}")
+                }
+                other => panic!("Expected unsupported CALL argument form, got: {other:?}"),
+            }
+        }
     }
 
     #[test]
