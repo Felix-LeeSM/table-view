@@ -130,8 +130,12 @@ export default function QueryTab({ tab }: QueryTabProps) {
   const views = useSchemaStore((s) => s.views);
   const functions = useSchemaStore((s) => s.functions);
   const postgresExtensions = useSchemaStore((s) => s.postgresExtensions);
+  const sqliteCapabilities = useSchemaStore((s) => s.sqliteCapabilities);
   const loadPostgresExtensions = useSchemaStore(
     (s) => s.loadPostgresExtensions,
+  );
+  const loadSqliteCapabilities = useSchemaStore(
+    (s) => s.loadSqliteCapabilities,
   );
   const tableColumnsCache = useSchemaStore((s) => s.tableColumnsCache);
   const fileAnalyticsSources = useSchemaStore((s) => s.fileAnalyticsSources);
@@ -153,6 +157,24 @@ export default function QueryTab({ tab }: QueryTabProps) {
     connection?.dbType,
     loadPostgresExtensions,
   ]);
+  useEffect(() => {
+    if (
+      tab.paradigm !== "rdb" ||
+      connection?.dbType !== "sqlite" ||
+      !tab.database
+    ) {
+      return;
+    }
+    void loadSqliteCapabilities(tab.connectionId, tab.database).catch(() => {
+      // Background completion inventory; schemaStore records the error.
+    });
+  }, [
+    tab.paradigm,
+    tab.connectionId,
+    tab.database,
+    connection?.dbType,
+    loadSqliteCapabilities,
+  ]);
   const completionContext = useMemo(() => {
     if (tab.paradigm !== "rdb") return undefined;
     return buildSqlCompletionContext({
@@ -162,6 +184,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
       views,
       functions,
       postgresExtensions,
+      sqliteCapabilities,
       tableColumnsCache,
       fileAnalyticsSources,
       connectionId: tab.connectionId,
@@ -175,6 +198,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     views,
     functions,
     postgresExtensions,
+    sqliteCapabilities,
     tableColumnsCache,
     fileAnalyticsSources,
     tab.paradigm,

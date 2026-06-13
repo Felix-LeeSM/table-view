@@ -87,6 +87,7 @@ describe("schemaStore — DbMismatch silent sync (Sprint 271a)", () => {
       views: {},
       functions: {},
       postgresExtensions: {},
+      sqliteCapabilities: {},
       tableColumnsCache: {},
       loading: false,
       error: null,

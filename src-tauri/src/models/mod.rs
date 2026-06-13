@@ -41,8 +41,8 @@ pub use schema::{
 };
 pub use schema::{
     ColumnInfo, ConstraintInfo, FilterCondition, FilterOperator, FunctionInfo, IndexInfo,
-    PostgresExtensionInfo, PostgresTypeInfo, SchemaInfo, TableData, TableInfo, TriggerInfo,
-    ViewInfo,
+    PostgresExtensionInfo, PostgresTypeInfo, SchemaInfo, SqliteCapabilityInventory, TableData,
+    TableInfo, TriggerInfo, ViewInfo,
 };
 pub use search::{
     validate_search_destructive_request, SearchAggregationEnvelope, SearchAliasInfo,

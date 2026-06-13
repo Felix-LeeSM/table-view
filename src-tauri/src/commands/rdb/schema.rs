@@ -26,8 +26,8 @@
 use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{
-    ColumnInfo, FunctionInfo, PostgresExtensionInfo, PostgresTypeInfo, SchemaInfo, TableInfo,
-    TriggerInfo, ViewInfo,
+    ColumnInfo, FunctionInfo, PostgresExtensionInfo, PostgresTypeInfo, SchemaInfo,
+    SqliteCapabilityInventory, TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::{ensure_expected_db, not_connected, register_cancel_token, release_cancel_token};
@@ -504,6 +504,17 @@ async fn list_postgres_extensions_inner(
     .await
 }
 
+async fn list_sqlite_capabilities_inner(
+    state: &AppState,
+    connection_id: &str,
+    expected_database: Option<&str>,
+) -> Result<SqliteCapabilityInventory, AppError> {
+    with_rdb_schema_contract!(state, connection_id, expected_database, |adapter| {
+        adapter.sqlite_capabilities()
+    })
+    .await
+}
+
 /// Sprint 230 — list every Postgres-style data type visible to the
 /// active connection (built-ins from `pg_catalog`, extension types
 /// like PostGIS `geometry`, user-defined enums / domains / ranges /
@@ -532,6 +543,16 @@ pub async fn list_postgres_extensions(
     expected_database: Option<String>,
 ) -> Result<Vec<PostgresExtensionInfo>, AppError> {
     list_postgres_extensions_inner(state.inner(), &connection_id, expected_database.as_deref())
+        .await
+}
+
+#[tauri::command]
+pub async fn list_sqlite_capabilities(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    expected_database: Option<String>,
+) -> Result<SqliteCapabilityInventory, AppError> {
+    list_sqlite_capabilities_inner(state.inner(), &connection_id, expected_database.as_deref())
         .await
 }
 
@@ -811,6 +832,14 @@ mod tests {
             Err(AppError::Unsupported(_))
         ));
     }
+    #[tokio::test]
+    async fn list_sqlite_capabilities_document_paradigm_returns_unsupported() {
+        let state = state_with("doc", document_default()).await;
+        assert!(matches!(
+            list_sqlite_capabilities_inner(&state, "doc", None).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
 
     // ── 11 routing tests — schema-arg propagation ────────────────────────
     //
@@ -1033,6 +1062,25 @@ mod tests {
         assert_eq!(r[0].name, "pg_trgm");
         assert_eq!(r[0].schema, "public");
         assert_eq!(r[0].version, "1.6");
+    }
+
+    #[tokio::test]
+    async fn list_sqlite_capabilities_routes_to_sqlite_capabilities_trait_method() {
+        let mut s = StubRdbAdapter::default();
+        s.sqlite_capabilities_fn = Some(Box::new(|| {
+            Ok(SqliteCapabilityInventory {
+                json1: true,
+                fts5: true,
+                rtree: false,
+            })
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let r = list_sqlite_capabilities_inner(&state, "c", None)
+            .await
+            .unwrap();
+        assert!(r.json1);
+        assert!(r.fts5);
+        assert!(!r.rtree);
     }
 
     // ── cancel-token registration round-trip witness ─────────────────────
@@ -1273,6 +1321,20 @@ mod tests {
         s.list_extensions_fn = Some(Box::new(|| panic!("must not run on mismatch")));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
         match list_postgres_extensions_inner(&state, "c", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn list_sqlite_capabilities_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.sqlite_capabilities_fn = Some(Box::new(|| panic!("must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match list_sqlite_capabilities_inner(&state, "c", Some("dbB")).await {
             Err(AppError::DbMismatch { expected, actual }) => {
                 assert_eq!(expected, "dbB");
                 assert_eq!(actual, "dbA");

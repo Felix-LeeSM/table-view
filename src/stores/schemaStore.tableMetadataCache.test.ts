@@ -35,6 +35,7 @@ describe("schemaStore table metadata caches", () => {
       views: {},
       functions: {},
       postgresExtensions: {},
+      sqliteCapabilities: {},
       tableColumnsCache: {},
       tableIndexesCache: {},
       tableConstraintsCache: {},

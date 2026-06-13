@@ -13,11 +13,11 @@ import { render, act, waitFor } from "@testing-library/react";
 import {
   MySQL,
   PostgreSQL,
-  SQLite,
   StandardSQL,
   type SQLDialect,
 } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
+import { SQLITE_COMPLETION_DIALECT } from "@/lib/sql/sqlDialectProfile";
 import type {
   RedisCommandCompletionTarget,
   RedisKeySuggestion,
@@ -56,6 +56,9 @@ beforeEach(() => {
     findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
     aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
     listPostgresExtensions: vi.fn(() => Promise.resolve([])),
+    listSqliteCapabilities: vi.fn(() =>
+      Promise.resolve({ json1: true, fts5: false, rtree: false }),
+    ),
   });
 });
 
@@ -230,7 +233,8 @@ describe("QueryTab — dialect", () => {
   });
 
   it("loads PostgreSQL extension inventory for PostgreSQL query tabs only", async () => {
-    const { listPostgresExtensions } = await import("@lib/tauri");
+    const { listPostgresExtensions, listSqliteCapabilities } =
+      await import("@lib/tauri");
     useConnectionStore.setState({
       connections: [makeConn({ id: "conn1", dbType: "postgresql" })],
     });
@@ -242,6 +246,7 @@ describe("QueryTab — dialect", () => {
     await waitFor(() =>
       expect(listPostgresExtensions).toHaveBeenCalledWith("conn1", "db"),
     );
+    expect(listSqliteCapabilities).not.toHaveBeenCalled();
 
     unmount();
     vi.clearAllMocks();
@@ -250,6 +255,25 @@ describe("QueryTab — dialect", () => {
     });
     render(<QueryTab tab={makeQueryTab({ database: "db" })} />);
 
+    expect(listPostgresExtensions).not.toHaveBeenCalled();
+    expect(listSqliteCapabilities).not.toHaveBeenCalled();
+  });
+
+  it("loads SQLite capability inventory for SQLite query tabs only", async () => {
+    const { listPostgresExtensions, listSqliteCapabilities } =
+      await import("@lib/tauri");
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "conn1", dbType: "sqlite" })],
+    });
+
+    render(<QueryTab tab={makeQueryTab({ database: "/tmp/app.sqlite" })} />);
+
+    await waitFor(() =>
+      expect(listSqliteCapabilities).toHaveBeenCalledWith(
+        "conn1",
+        "/tmp/app.sqlite",
+      ),
+    );
     expect(listPostgresExtensions).not.toHaveBeenCalled();
   });
 
@@ -270,7 +294,7 @@ describe("QueryTab — dialect", () => {
     });
     const tab = makeQueryTab();
     render(<QueryTab tab={tab} />);
-    expect(mockEditorProps.lastDialect).toBe(SQLite);
+    expect(mockEditorProps.lastDialect).toBe(SQLITE_COMPLETION_DIALECT);
   });
 
   // AC-07: Missing connection (deleted mid-session) → silent StandardSQL

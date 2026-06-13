@@ -65,6 +65,25 @@ function requestFor(dbType: DatabaseType, serverVersion = "test-version") {
   );
 }
 
+function sqliteRequestWithCapabilities(
+  capabilities: { json1: boolean; fts5: boolean; rtree: boolean } | null,
+) {
+  const snapshot = emptySnapshot();
+  if (capabilities) {
+    snapshot.sqliteCapabilities = {
+      conn1: { "/tmp/app.sqlite": capabilities },
+    };
+  }
+  const ctx = buildSqlCompletionContext({
+    ...snapshot,
+    connectionId: "conn1",
+    database: "/tmp/app.sqlite",
+    dbType: "sqlite",
+    catalogRevision: "sqlite-capability-rev",
+  });
+  return buildSqlCompletionRequest("JSON_EX", 7, ctx);
+}
+
 describe("buildSqlCompletionRequest", () => {
   it.each([
     ["postgresql", "postgres", "psql"],
@@ -209,6 +228,37 @@ describe("buildSqlCompletionRequest", () => {
     expect(mysqlWithMariaDbVersion.vocabulary.keywords).not.toContain(
       "RETURNING",
     );
+  });
+
+  it("gates SQLite JSON1 and FTS5 vocabulary by capability inventory", () => {
+    const missing = sqliteRequestWithCapabilities(null);
+    const jsonOnly = sqliteRequestWithCapabilities({
+      json1: true,
+      fts5: false,
+      rtree: false,
+    });
+    const allDetected = sqliteRequestWithCapabilities({
+      json1: true,
+      fts5: true,
+      rtree: true,
+    });
+
+    expect(missing.vocabulary.functions).not.toContain("JSON_EXTRACT");
+    expect(missing.vocabulary.functions).not.toContain("BM25");
+    expect(missing.vocabulary.keywords).not.toContain("MATCH");
+    expect(missing.vocabulary.keywords).not.toContain("RTREE");
+
+    expect(jsonOnly.vocabulary.functions).toContain("JSON_EXTRACT");
+    expect(jsonOnly.vocabulary.functions).toContain("JSON_VALID");
+    expect(jsonOnly.vocabulary.functions).not.toContain("BM25");
+    expect(jsonOnly.vocabulary.keywords).not.toContain("MATCH");
+    expect(jsonOnly.vocabulary.keywords).not.toContain("RTREE");
+
+    expect(allDetected.vocabulary.functions).toContain("JSON_EXTRACT");
+    expect(allDetected.vocabulary.functions).toContain("BM25");
+    expect(allDetected.vocabulary.functions).toContain("HIGHLIGHT");
+    expect(allDetected.vocabulary.keywords).toContain("MATCH");
+    expect(allDetected.vocabulary.keywords).not.toContain("RTREE");
   });
 
   it("preserves cache state so future providers can schedule background prefetch", () => {

@@ -3,7 +3,8 @@
 // 사유: Q23 self-window schemaCache invalidate — DDL 후 사이드바가 100ms 안에
 // `foo` 를 표시하려면 `clearForConnection(connId)` 가 그 conn 의 **모든** 캐시
 // 슬롯(databases / schemas / tables / views / functions / postgresExtensions /
-// tableColumnsCache / tableIndexesCache / tableConstraintsCache / triggers)을
+// sqliteCapabilities / tableColumnsCache / tableIndexesCache /
+// tableConstraintsCache / triggers)을
 // 한 번에 비워 wide drop 을 보장해야 한다. Sprint 130/263 의 기존 행동을
 // sprint-360 의 contract 어휘 (AC-360-01 / AC-360-05) 로 다시 고정한다.
 
@@ -80,6 +81,10 @@ const SEEDED_CACHE = {
     },
     conn2: { db1: [] },
   },
+  sqliteCapabilities: {
+    conn1: { db1: { json1: true, fts5: false, rtree: true } },
+    conn2: { db1: { json1: false, fts5: false, rtree: false } },
+  },
   tableColumnsCache: {
     conn1: { db1: { public: { users: [] } } },
     conn2: { db1: { public: { users: [] } } },
@@ -128,6 +133,7 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
       views: {},
       functions: {},
       postgresExtensions: {},
+      sqliteCapabilities: {},
       tableColumnsCache: {},
       tableIndexesCache: {},
       tableConstraintsCache: {},
@@ -151,6 +157,7 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
     expect(state.views.conn1).toBeUndefined();
     expect(state.functions.conn1).toBeUndefined();
     expect(state.postgresExtensions.conn1).toBeUndefined();
+    expect(state.sqliteCapabilities.conn1).toBeUndefined();
     expect(state.tableColumnsCache.conn1).toBeUndefined();
     expect(state.tableIndexesCache.conn1).toBeUndefined();
     expect(state.tableConstraintsCache.conn1).toBeUndefined();
@@ -170,6 +177,11 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
     expect(state.schemas.conn2?.db1).toHaveLength(1);
     expect(state.tables.conn2?.db1?.public).toHaveLength(1);
     expect(state.postgresExtensions.conn2?.db1).toEqual([]);
+    expect(state.sqliteCapabilities.conn2?.db1).toEqual({
+      json1: false,
+      fts5: false,
+      rtree: false,
+    });
     expect(state.tableColumnsCache.conn2?.db1?.public?.users).toEqual([]);
     expect(state.tableIndexesCache.conn2?.db1?.public?.users).toEqual([]);
     expect(state.tableConstraintsCache.conn2?.db1?.public?.users).toEqual([]);

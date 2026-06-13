@@ -10,7 +10,10 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::error::AppError;
-use crate::models::{ColumnCategory, ColumnInfo, ConnectionConfig, IndexInfo, TableInfo, ViewInfo};
+use crate::models::{
+    ColumnCategory, ColumnInfo, ConnectionConfig, IndexInfo, SqliteCapabilityInventory, TableInfo,
+    ViewInfo,
+};
 use crate::storage;
 
 const SQLITE_POOL_MAX_CONNECTIONS: u32 = 5;
@@ -23,6 +26,7 @@ pub struct SqlitePoolState {
     pool: Option<SqlitePool>,
     database_path: Option<String>,
     read_only: bool,
+    capability_inventory: Option<SqliteCapabilityInventory>,
 }
 
 #[derive(Clone)]
@@ -184,12 +188,14 @@ impl SqliteAdapter {
             .connect_with(options)
             .await
             .map_err(|e| AppError::Connection(e.to_string()))?;
+        let capability_inventory = probe_sqlite_capabilities(&pool).await;
 
         let old_pool = {
             let mut guard = self.inner.lock().await;
             let old_pool = guard.pool.replace(pool);
             guard.database_path = Some(Self::database_path(config)?.to_string());
             guard.read_only = config.read_only;
+            guard.capability_inventory = Some(capability_inventory);
             old_pool
         };
         if let Some(old_pool) = old_pool {
@@ -203,6 +209,7 @@ impl SqliteAdapter {
         let pool = guard.pool.take();
         guard.database_path = None;
         guard.read_only = false;
+        guard.capability_inventory = None;
         drop(guard);
         if let Some(pool) = pool {
             pool.close().await;
@@ -226,6 +233,13 @@ impl SqliteAdapter {
     pub async fn current_database_path(&self) -> Option<String> {
         let guard = self.inner.lock().await;
         guard.database_path.clone()
+    }
+
+    pub async fn capability_inventory(&self) -> Result<SqliteCapabilityInventory, AppError> {
+        let guard = self.inner.lock().await;
+        guard
+            .capability_inventory
+            .ok_or_else(|| AppError::Connection("Not connected".into()))
     }
 
     pub(super) async fn active_pool(&self) -> Result<SqlitePool, AppError> {
@@ -442,6 +456,59 @@ impl SqliteAdapter {
         }
         Ok(result)
     }
+}
+
+async fn probe_sqlite_capabilities(pool: &SqlitePool) -> SqliteCapabilityInventory {
+    SqliteCapabilityInventory {
+        json1: probe_sqlite_json1(pool).await,
+        fts5: probe_sqlite_compile_option(pool, "ENABLE_FTS5").await
+            || probe_sqlite_fts5_runtime(pool).await,
+        rtree: probe_sqlite_compile_option(pool, "ENABLE_RTREE").await
+            || probe_sqlite_rtree_runtime(pool).await,
+    }
+}
+
+async fn probe_sqlite_json1(pool: &SqlitePool) -> bool {
+    sqlx::query_scalar::<_, i64>("SELECT json_valid('{}')")
+        .fetch_one(pool)
+        .await
+        .is_ok_and(|value| value != 0)
+}
+
+async fn probe_sqlite_compile_option(pool: &SqlitePool, option: &str) -> bool {
+    sqlx::query_scalar::<_, i64>("SELECT sqlite_compileoption_used(?)")
+        .bind(option)
+        .fetch_one(pool)
+        .await
+        .is_ok_and(|value| value != 0)
+}
+
+async fn probe_sqlite_fts5_runtime(pool: &SqlitePool) -> bool {
+    probe_sqlite_temp_virtual_table(
+        pool,
+        "CREATE VIRTUAL TABLE temp.__table_view_fts5_capability_probe USING fts5(content)",
+        "DROP TABLE IF EXISTS temp.__table_view_fts5_capability_probe",
+    )
+    .await
+}
+
+async fn probe_sqlite_rtree_runtime(pool: &SqlitePool) -> bool {
+    probe_sqlite_temp_virtual_table(
+        pool,
+        "CREATE VIRTUAL TABLE temp.__table_view_rtree_capability_probe USING rtree(id, min_x, max_x, min_y, max_y)",
+        "DROP TABLE IF EXISTS temp.__table_view_rtree_capability_probe",
+    )
+    .await
+}
+
+async fn probe_sqlite_temp_virtual_table(
+    pool: &SqlitePool,
+    create_sql: &str,
+    drop_sql: &str,
+) -> bool {
+    let created = sqlx::query(create_sql).execute(pool).await.is_ok();
+    let _ = sqlx::query(drop_sql).execute(pool).await;
+    created
 }
 
 fn reject_internal_app_state_path(path: &Path) -> Result<(), AppError> {

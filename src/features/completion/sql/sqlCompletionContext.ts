@@ -6,6 +6,7 @@ import type {
   FunctionInfo,
   PostgresExtensionInfo,
   SchemaInfo,
+  SqliteCapabilityInventory,
   TableInfo,
   ViewInfo,
 } from "@/types/schema";
@@ -31,6 +32,7 @@ export interface SqlCompletionCatalogStoreSnapshot {
   functions: ByConn<BySchema<FunctionInfo[]>>;
   tableColumnsCache: ByConn<BySchema<ByTable<ColumnInfo[]>>>;
   postgresExtensions?: ByConn<PostgresExtensionInfo[]>;
+  sqliteCapabilities?: ByConn<SqliteCapabilityInventory>;
   fileAnalyticsSources?: Record<string, FileAnalyticsSourceMetadata[]>;
 }
 
@@ -113,6 +115,7 @@ export interface SqlCompletionCacheState {
   columnsLoaded: boolean;
   functionsLoaded: boolean;
   extensionsLoaded: boolean;
+  sqliteCapabilitiesLoaded: boolean;
 }
 
 export interface SqlCompletionContext {
@@ -122,6 +125,7 @@ export interface SqlCompletionContext {
   family: SqlDialectFamily;
   shell: SqlShellId;
   serverVersion: string | null;
+  sqliteCapabilities: SqliteCapabilityInventory | null;
   defaultSchema: string | null;
   searchPath: readonly string[];
   catalog: SqlCompletionCatalogSnapshot;
@@ -188,6 +192,8 @@ export function buildSqlCompletionContext(
         compareCatalogExtension,
       )
     : [];
+  const sqliteCapabilities =
+    profile.id === "sqlite" ? byConnDb.sqliteCapabilities : null;
   const schemas = mergeSchemas(
     explicitSchemas,
     Object.keys(byConnDb.tables),
@@ -208,6 +214,7 @@ export function buildSqlCompletionContext(
       columns,
       functions,
       extensions,
+      sqliteCapabilities,
     );
 
   return {
@@ -217,6 +224,7 @@ export function buildSqlCompletionContext(
     family: profile.family,
     shell: resolveSqlShell(profile.id, input.shell),
     serverVersion: input.serverVersion ?? null,
+    sqliteCapabilities,
     defaultSchema:
       input.defaultSchema ?? inferDefaultSchema(profile.id, schemas),
     searchPath: input.searchPath ?? inferSearchPath(profile.id, schemas),
@@ -241,6 +249,8 @@ export function buildSqlCompletionContext(
       columnsLoaded: byConnDb.columnsLoaded || fileAnalyticsColumns.length > 0,
       functionsLoaded: byConnDb.functionsLoaded,
       extensionsLoaded: supportsExtensionInventory && byConnDb.extensionsLoaded,
+      sqliteCapabilitiesLoaded:
+        profile.id === "sqlite" && byConnDb.sqliteCapabilitiesLoaded,
     },
   };
 }
@@ -257,6 +267,7 @@ function selectDb(
   functions: BySchema<FunctionInfo[]>;
   tableColumnsCache: BySchema<ByTable<ColumnInfo[]>>;
   postgresExtensions: PostgresExtensionInfo[];
+  sqliteCapabilities: SqliteCapabilityInventory | null;
   databasesLoaded: boolean;
   schemasLoaded: boolean;
   tablesLoaded: boolean;
@@ -264,6 +275,7 @@ function selectDb(
   functionsLoaded: boolean;
   columnsLoaded: boolean;
   extensionsLoaded: boolean;
+  sqliteCapabilitiesLoaded: boolean;
 } {
   const databases = snapshot.databases?.[connectionId];
   const schemas = snapshot.schemas[connectionId]?.[database];
@@ -274,6 +286,8 @@ function selectDb(
     snapshot.tableColumnsCache[connectionId]?.[database];
   const postgresExtensions =
     snapshot.postgresExtensions?.[connectionId]?.[database];
+  const sqliteCapabilities =
+    snapshot.sqliteCapabilities?.[connectionId]?.[database];
 
   return {
     databases: databases ?? [],
@@ -283,6 +297,7 @@ function selectDb(
     functions: functions ?? {},
     tableColumnsCache: tableColumnsCache ?? {},
     postgresExtensions: postgresExtensions ?? [],
+    sqliteCapabilities: sqliteCapabilities ?? null,
     databasesLoaded: databases !== undefined,
     schemasLoaded: schemas !== undefined,
     tablesLoaded: tables !== undefined,
@@ -290,6 +305,7 @@ function selectDb(
     functionsLoaded: functions !== undefined,
     columnsLoaded: tableColumnsCache !== undefined,
     extensionsLoaded: postgresExtensions !== undefined,
+    sqliteCapabilitiesLoaded: sqliteCapabilities !== undefined,
   };
 }
 
@@ -484,6 +500,7 @@ function deriveCatalogRevision(
   columns: readonly SqlCompletionCatalogColumn[],
   functions: readonly SqlCompletionCatalogFunction[],
   extensions: readonly SqlCompletionCatalogExtension[],
+  sqliteCapabilities: SqliteCapabilityInventory | null,
 ): string {
   const parts = [
     ...databases.map((db) => `d:${db}`),
@@ -507,6 +524,9 @@ function deriveCatalogRevision(
         `x:${extension.schema}:${extension.name}:${extension.version}:` +
         `${extension.comment ?? ""}`,
     ),
+    sqliteCapabilities
+      ? `q:sqlite:${sqliteCapabilities.json1}:${sqliteCapabilities.fts5}:${sqliteCapabilities.rtree}`
+      : "q:sqlite:missing",
   ];
   return [
     connectionId,
