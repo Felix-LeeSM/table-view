@@ -34,6 +34,12 @@ const row = (id: number, sqlRedacted = `SELECT ${id}`) => ({
   executedAt: 1_700_000_000_000 + id,
 });
 
+const fileAnalyticsRow = (id: number) => ({
+  ...row(id, 'SELECT * FROM "sales_csv"'),
+  source: "file-analytics" as const,
+  collection: "sales.csv",
+});
+
 async function expandHistoryPanel() {
   const toggle = screen.getByRole("button", { name: /tab history/i });
   await act(async () => {
@@ -112,6 +118,18 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
     expect(panel).not.toHaveTextContent("leak@example.com");
     // backend 가 redact 한 placeholder 가 표시됨
     expect(panel).toHaveTextContent("?");
+  });
+
+  it("surfaces DuckDB file analytics source badges in tab history rows", async () => {
+    invokeMock.mockResolvedValueOnce({
+      rows: [fileAnalyticsRow(7)],
+    });
+    render(<QueryHistoryPanel connectionId="conn-1" tabId="tab-1" />);
+    await expandHistoryPanel();
+
+    const badge = await screen.findByTestId("query-history-source-badge");
+    expect(badge).toHaveAttribute("data-source", "file-analytics");
+    expect(badge).toHaveTextContent("sales.csv");
   });
 
   // AC-372-06 — cursor pagination 중 create event → refetch 0 + "New entry"

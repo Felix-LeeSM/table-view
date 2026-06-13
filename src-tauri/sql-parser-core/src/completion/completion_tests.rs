@@ -701,6 +701,45 @@ fn sqlite_catalog_context_suggests_tables_columns_and_qualified_columns() {
 }
 
 #[test]
+fn duckdb_file_analytics_catalog_suggests_registered_sources_and_columns() {
+    let mut req = empty_vocabulary_request("duckdb", "none", "SELECT * FROM sal");
+    req.catalog.schemas = vec![SqlCompletionCatalogSchema {
+        database: "app.duckdb".to_string(),
+        name: "main".to_string(),
+    }];
+    req.catalog.objects = vec![SqlCompletionCatalogObject {
+        kind: "table".to_string(),
+        database: "app.duckdb".to_string(),
+        schema: "main".to_string(),
+        name: "sales_csv".to_string(),
+        qualified_name: "main.sales_csv".to_string(),
+    }];
+    req.catalog.columns = vec![
+        column("main", "sales_csv", "order_id"),
+        column("main", "sales_csv", "amount"),
+    ];
+
+    let source_result = complete_sql(req.clone());
+    assert!(source_result.items.iter().any(|item| {
+        item.label == "sales_csv"
+            && item.kind == "table"
+            && item.detail.as_deref() == Some("main")
+    }));
+
+    req.text = "SELECT sales_csv.or FROM sales_csv".to_string();
+    req.cursor = CompletionCursorOffsets {
+        utf16: 19,
+        utf8: 19,
+    };
+    let column_result = complete_sql(req);
+    assert!(column_result.items.iter().any(|item| {
+        item.label == "order_id"
+            && item.kind == "column"
+            && item.detail.as_deref() == Some("main.sales_csv")
+    }));
+}
+
+#[test]
 fn sqlite_extension_inventory_does_not_enable_extension_completion_packs() {
     let mut req = empty_vocabulary_request("sqlite", "sqlite-cli", "MATCHI");
     req.catalog.extensions = vec![extension("fts5"), extension("rtree")];
