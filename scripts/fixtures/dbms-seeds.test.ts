@@ -517,7 +517,25 @@ describe("DBMS-specific E2E seed fixtures", () => {
       const duckdbSmoke = readFileSync(resolve("e2e/smoke/duckdb.spec.ts"), {
         encoding: "utf8",
       });
-      const consumers = [seedScript, sqliteSmoke, duckdbSmoke].join("\n");
+      const duckdbFixture = readFileSync(
+        resolve("e2e/smoke/duckdb-fixture.ts"),
+        {
+          encoding: "utf8",
+        },
+      );
+      const duckdbFileAnalyticsSmoke = readFileSync(
+        resolve("e2e/smoke/duckdb-file-analytics.spec.ts"),
+        {
+          encoding: "utf8",
+        },
+      );
+      const consumers = [
+        seedScript,
+        sqliteSmoke,
+        duckdbSmoke,
+        duckdbFixture,
+        duckdbFileAnalyticsSmoke,
+      ].join("\n");
 
       if (dbms === "sqlite" || dbms === "duckdb") {
         expect(consumers).toContain(file);

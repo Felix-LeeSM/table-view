@@ -1,0 +1,7 @@
+order_id,ordered_at,region,channel,customer,product,quantity,unit_price,discount_rate,net_amount
+1001,2026-01-02,North,online,Ada Lovelace,Notebook,3,12.50,0.00,37.50
+1002,2026-01-03,West,retail,Grace Hopper,Keyboard,2,45.00,0.10,81.00
+1003,2026-01-04,North,partner,Katherine Johnson,Monitor,1,199.99,0.15,169.99
+1004,2026-01-05,South,online,Dorothy Vaughan,Mouse,5,18.00,0.00,90.00
+1005,2026-01-06,West,online,Mary Jackson,Notebook,4,12.50,0.05,47.50
+1006,2026-01-07,East,retail,Joan Clarke,Keyboard,1,45.00,0.00,45.00

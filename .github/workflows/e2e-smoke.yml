@@ -468,6 +468,8 @@ jobs:
         include:
           - spec_key: sqlite
             spec: e2e/smoke/sqlite.spec.ts
+          - spec_key: duckdb-file-analytics
+            spec: e2e/smoke/duckdb-file-analytics.spec.ts
 
     steps:
       - name: Checkout

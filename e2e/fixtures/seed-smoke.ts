@@ -203,6 +203,7 @@ const SEED_TARGETS_BY_SPEC_KEY: Record<string, readonly SeedTarget[]> = {
   "history-source-5": ["postgres", "mongodb"],
   sqlite: [],
   duckdb: [],
+  "duckdb-file-analytics": [],
 };
 
 async function retry(label: string, fn: () => Promise<void>) {

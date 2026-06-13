@@ -1,10 +1,5 @@
 import { $, $$, browser, expect } from "@wdio/globals";
-import duckdb, {
-  type Connection as NativeDuckdbConnection,
-  type Database as NativeDuckdbDatabase,
-} from "duckdb";
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import {
   createDuckdbConnection,
@@ -19,6 +14,7 @@ import {
   waitForLauncher,
   waitForWorkspaceTextAll,
 } from "./_helpers";
+import { prepareDuckdbFixture } from "./duckdb-fixture";
 import { waitForTabHistoryStatuses } from "./query-history-helpers";
 
 const WRITABLE_CONNECTION = "E2E DuckDB";
@@ -136,64 +132,6 @@ function testDataDir(): string {
     process.env.TABLE_VIEW_TEST_DATA_DIR ??
     resolve(tmpdir(), "table-view-smoke", "duckdb")
   );
-}
-
-async function prepareDuckdbFixture(path: string) {
-  mkdirSync(dirname(path), { recursive: true });
-  rmSync(path, { force: true });
-  rmSync(`${path}.wal`, { force: true });
-
-  const sql = readFileSync(
-    resolve("e2e/fixtures/duckdb/query/seed.sql"),
-    "utf-8",
-  );
-  const database = new duckdb.Database(path);
-  const connection = database.connect();
-
-  try {
-    for (const statement of splitSqlStatements(sql)) {
-      await runDuckdb(connection, statement);
-    }
-  } finally {
-    await closeDuckdb(connection, database);
-  }
-}
-
-function splitSqlStatements(sql: string): string[] {
-  return sql
-    .split(";")
-    .map((statement) => statement.trim())
-    .filter((statement) => statement.length > 0);
-}
-
-async function runDuckdb(
-  connection: NativeDuckdbConnection,
-  sql: string,
-): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    connection.run(sql, (err) => {
-      if (err) reject(new Error(err.message ?? String(err)));
-      else resolve();
-    });
-  });
-}
-
-async function closeDuckdb(
-  connection: NativeDuckdbConnection,
-  database: NativeDuckdbDatabase,
-): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    connection.close((err) => {
-      if (err) reject(new Error(err.message ?? String(err)));
-      else resolve();
-    });
-  });
-  await new Promise<void>((resolve, reject) => {
-    database.close((err) => {
-      if (err) reject(new Error(err.message ?? String(err)));
-      else resolve();
-    });
-  });
 }
 
 async function waitForGlobalHistoryEvidence(rawFragments: string[]) {
