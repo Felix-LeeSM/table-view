@@ -21,6 +21,13 @@ describe("QueryHistorySourceBadge", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it("renders nothing for unknown backend source labels", () => {
+    const { container } = render(
+      <QueryHistorySourceBadge source="future-source" />,
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
   it("[AC-196-06-2a] surfaces a GRID badge for grid-edit", () => {
     render(<QueryHistorySourceBadge source="grid-edit" />);
     const badge = screen.getByTestId("query-history-source-badge");

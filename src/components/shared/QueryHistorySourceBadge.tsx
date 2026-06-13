@@ -51,16 +51,30 @@ const META: Record<Exclude<QueryHistorySource, "raw">, SourceMeta> = {
   },
 };
 
+const SOURCES = new Set<QueryHistorySource>([
+  "raw",
+  "grid-edit",
+  "ddl-structure",
+  "mongo-op",
+  "explain",
+  "file-analytics",
+  "sidebar-prefetch",
+]);
+
 interface QueryHistorySourceBadgeProps {
-  source?: QueryHistorySource;
+  source?: string | null;
   sourceLabel?: string | null;
+}
+
+function isQueryHistorySource(source: string): source is QueryHistorySource {
+  return SOURCES.has(source as QueryHistorySource);
 }
 
 export function QueryHistorySourceBadge({
   source,
   sourceLabel,
 }: QueryHistorySourceBadgeProps) {
-  if (!source || source === "raw") return null;
+  if (!source || !isQueryHistorySource(source) || source === "raw") return null;
   const meta = META[source];
   const label =
     source === "file-analytics" && sourceLabel

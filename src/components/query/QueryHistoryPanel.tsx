@@ -18,6 +18,7 @@ import { useId, useState } from "react";
 import { ChevronDown, ChevronRight, Clock, RefreshCw } from "lucide-react";
 import { Button } from "@components/ui/button";
 import QuerySyntax from "@components/shared/QuerySyntax";
+import QueryHistorySourceBadge from "@components/shared/QueryHistorySourceBadge";
 import { useQueryHistory } from "@hooks/useQueryHistory";
 import QueryHistoryDetailModal from "./QueryHistoryDetailModal";
 
@@ -129,6 +130,10 @@ export default function QueryHistoryPanel({
                         : "bg-destructive"
                   }`}
                   title={row.status}
+                />
+                <QueryHistorySourceBadge
+                  source={row.source}
+                  sourceLabel={row.collection}
                 />
                 <button
                   type="button"

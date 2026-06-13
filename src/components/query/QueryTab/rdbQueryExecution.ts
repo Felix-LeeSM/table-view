@@ -3,6 +3,7 @@ import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActi
 import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { stripSqlComments } from "@lib/sql/stripSqlComments";
+import { parseFromContext, tokenizeSql } from "@lib/completion/shared";
 import { findMysqlScriptingBoundaryViolation } from "@lib/sql/mysqlScriptingBoundary";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
@@ -10,11 +11,13 @@ import { toast } from "@lib/runtime/toast";
 import { dispatchDbMutationHint } from "./queryHelpers";
 import type { SafeModeGate } from "@hooks/useSafeModeGate";
 import type { DatabaseType } from "@/types/connection";
+import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import type {
   QueryResult,
   QueryState,
   QueryStatementResult,
 } from "@/types/query";
+import type { QueryHistorySource } from "@stores/queryHistoryStore";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { MultiStatementPayload } from "@stores/workspaceStore/types";
 
@@ -25,9 +28,19 @@ export interface RdbHistoryPayload {
   executedAt: number;
   duration: number;
   status: RdbHistoryStatus;
+  source?: QueryHistorySource;
+  collection?: string | null;
 }
 
-export type RdbSingleRunner = (stmt: string) => Promise<void>;
+export interface RdbHistoryOverrides {
+  source?: QueryHistorySource;
+  collection?: string | null;
+}
+
+export type RdbSingleRunner = (
+  stmt: string,
+  history?: RdbHistoryOverrides,
+) => Promise<void>;
 export type RdbBatchRunner = (
   statements: string[],
   joinedSql: string,
@@ -81,6 +94,7 @@ interface PrepareRdbStatementsResult {
 export interface ExecuteRdbSingleStatementRequest extends RdbSingleLifecycleActions {
   tab: RdbTabContext;
   stmt: string;
+  history?: RdbHistoryOverrides;
   workspaceDb: string | null | undefined;
   findLiveIdleTab: (tabId: string, connectionId: string) => QueryTab | null;
   runRdbSingleRef: RdbRunnerRef<RdbSingleRunner>;
@@ -99,6 +113,7 @@ export interface ExecuteRdbQueryRequest {
   tab: RdbTabContext;
   sql: string;
   dbType: DatabaseType | null | undefined;
+  fileAnalyticsSources?: FileAnalyticsSourceMetadata[];
   decideSafeMode: SafeModeGate["decide"];
   updateQueryState: (tabId: string, state: QueryState) => void;
   recordHistory: (payload: RdbHistoryPayload) => void;
@@ -148,9 +163,49 @@ function isQueryCancellationMessage(message: string): boolean {
   );
 }
 
+function firstMeaningfulToken(sql: string): string | null {
+  const token = tokenizeSql(sql).find(
+    (item) => item.kind !== "whitespace" && item.kind !== "comment",
+  );
+  return token?.text.toUpperCase() ?? null;
+}
+
+function normalizeRelationName(value: string): string {
+  const parts = value.split(".");
+  return parts[parts.length - 1]?.toLowerCase() ?? value.toLowerCase();
+}
+
+function resolveFileAnalyticsHistory(
+  sql: string,
+  dbType: DatabaseType | null | undefined,
+  sources: FileAnalyticsSourceMetadata[] | undefined,
+): RdbHistoryOverrides | undefined {
+  if (dbType !== "duckdb" || !sources || sources.length === 0) {
+    return undefined;
+  }
+  if (firstMeaningfulToken(sql) !== "SELECT") {
+    return undefined;
+  }
+  const relationNames = new Set(
+    parseFromContext(sql).tables.map(normalizeRelationName),
+  );
+  const matched = sources.filter((metadata) =>
+    relationNames.has(metadata.source.alias.toLowerCase()),
+  );
+  if (matched.length === 0) return undefined;
+  return {
+    source: "file-analytics",
+    collection:
+      matched.length === 1
+        ? matched[0]!.source.fileName
+        : `${matched.length} file sources`,
+  };
+}
+
 export async function executeRdbSingleStatement({
   tab,
   stmt,
+  history,
   workspaceDb,
   updateQueryState,
   completeQuery,
@@ -180,6 +235,7 @@ export async function executeRdbSingleStatement({
       executedAt: Date.now(),
       duration: Date.now() - startTime,
       status: "success",
+      ...history,
     });
   } catch (err) {
     const message = getTauriErrorMessage(err);
@@ -195,11 +251,13 @@ export async function executeRdbSingleStatement({
       executedAt: Date.now(),
       duration: Date.now() - startTime,
       status: wasCancelled ? "cancelled" : "error",
+      ...history,
     });
     if (!wasCancelled && dbMismatch) {
       const capturedTabId = tab.id;
       const capturedConnectionId = tab.connectionId;
       const capturedStmt = stmt;
+      const capturedHistory = history;
       void syncMismatchedActiveDb(capturedConnectionId, (actual) => {
         toast.warning(
           `Active DB synced to '${actual}'. Re-run the query if needed.`,
@@ -214,7 +272,7 @@ export async function executeRdbSingleStatement({
                 if (!live) return;
                 const fn = runRdbSingleRef.current;
                 if (!fn) return;
-                void fn(capturedStmt);
+                void fn(capturedStmt, capturedHistory);
               },
             },
           },
@@ -351,6 +409,7 @@ export async function executeRdbQuery({
   tab,
   sql,
   dbType,
+  fileAnalyticsSources,
   decideSafeMode,
   updateQueryState,
   recordHistory,
@@ -377,6 +436,10 @@ export async function executeRdbQuery({
     return;
   }
   if (statements.length === 0) return;
+  const fileAnalyticsHistory =
+    statements.length === 1
+      ? resolveFileAnalyticsHistory(sql, dbType, fileAnalyticsSources)
+      : undefined;
 
   let worstAction: "allow" | "confirm" | "block" = "allow";
   let worstReason = "";
@@ -441,7 +504,7 @@ export async function executeRdbQuery({
   }
 
   if (statements.length === 1) {
-    await runRdbSingle(sql);
+    await runRdbSingle(sql, fileAnalyticsHistory);
     return;
   }
   await runRdbBatch(statements, sql);

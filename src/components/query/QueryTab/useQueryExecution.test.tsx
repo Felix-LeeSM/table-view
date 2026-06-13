@@ -11,6 +11,7 @@ import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useHistorySettingsStore } from "@stores/historySettingsStore";
 import { useToastStore } from "@stores/toastStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import { useQueryExecution } from "./useQueryExecution";
 import {
   makeQueryTab,
@@ -154,6 +155,7 @@ describe("useQueryExecution scaffold", () => {
     useHistorySettingsStore.setState({ queryHistoryEnabled: false });
     useSafeModeStore.setState({ mode: "warn" });
     useToastStore.setState({ toasts: [] });
+    useSchemaStore.setState({ fileAnalyticsSources: {} });
   });
 
   it("runs a single RDB SELECT and completes the tab", async () => {
@@ -179,6 +181,169 @@ describe("useQueryExecution scaffold", () => {
       status: "completed",
       result: SELECT_RESULT,
     });
+  });
+
+  it("runs DuckDB registered file aliases through the normal query surface and records FILE history", async () => {
+    executeQueryMock.mockResolvedValueOnce(SELECT_RESULT);
+    const addOptimisticEntry = vi.fn().mockResolvedValue(undefined);
+    useHistorySettingsStore.setState({ queryHistoryEnabled: true });
+    useQueryHistoryStore.setState({ addOptimisticEntry });
+    useSchemaStore.setState({
+      fileAnalyticsSources: {
+        conn1: [
+          {
+            source: {
+              id: "source-1",
+              alias: "sales_csv",
+              fileName: "sales.csv",
+              kind: "csv",
+              sizeBytes: 128,
+            },
+            columns: [
+              { name: "id", dataType: "INTEGER" },
+              { name: "name", dataType: "VARCHAR" },
+            ],
+            previewSql: 'SELECT * FROM "sales_csv" LIMIT 100',
+          },
+        ],
+      },
+    });
+    const tab = seedRdbTab(
+      'SELECT name FROM "sales_csv" WHERE id = 1',
+      {},
+      { dbType: "duckdb" },
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(executeQueryMock).toHaveBeenCalledWith(
+      "conn1",
+      'SELECT name FROM "sales_csv" WHERE id = 1',
+      expect.stringMatching(/^query-1-/),
+      "db1",
+    );
+    await waitFor(() => {
+      expect(getSeededRdbTab().queryState.status).toBe("completed");
+    });
+    expect(getSeededRdbTab().queryState).toMatchObject({
+      status: "completed",
+      result: SELECT_RESULT,
+    });
+    expect(addOptimisticEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "file-analytics",
+        collection: "sales.csv",
+        sql: 'SELECT name FROM "sales_csv" WHERE id = 1',
+        status: "success",
+        paradigm: "rdb",
+        queryMode: "sql",
+      }),
+    );
+  });
+
+  it("keeps normal DuckDB SELECT history as raw when no registered file alias is referenced", async () => {
+    executeQueryMock.mockResolvedValueOnce(SELECT_RESULT);
+    const addOptimisticEntry = vi.fn().mockResolvedValue(undefined);
+    useHistorySettingsStore.setState({ queryHistoryEnabled: true });
+    useQueryHistoryStore.setState({ addOptimisticEntry });
+    useSchemaStore.setState({
+      fileAnalyticsSources: {
+        conn1: [
+          {
+            source: {
+              id: "source-1",
+              alias: "sales_csv",
+              fileName: "sales.csv",
+              kind: "csv",
+              sizeBytes: 128,
+            },
+            columns: [{ name: "id", dataType: "INTEGER" }],
+            previewSql: 'SELECT * FROM "sales_csv" LIMIT 100',
+          },
+        ],
+      },
+    });
+    const tab = seedRdbTab("SELECT 1 AS ok", {}, { dbType: "duckdb" });
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    await waitFor(() => {
+      expect(getSeededRdbTab().queryState.status).toBe("completed");
+    });
+    expect(addOptimisticEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "raw",
+        collection: undefined,
+        sql: "SELECT 1 AS ok",
+        status: "success",
+      }),
+    );
+  });
+
+  it("summarizes multi-source DuckDB file analytics history without leaving the normal result surface", async () => {
+    executeQueryMock.mockResolvedValueOnce(SELECT_RESULT);
+    const addOptimisticEntry = vi.fn().mockResolvedValue(undefined);
+    useHistorySettingsStore.setState({ queryHistoryEnabled: true });
+    useQueryHistoryStore.setState({ addOptimisticEntry });
+    useSchemaStore.setState({
+      fileAnalyticsSources: {
+        conn1: [
+          {
+            source: {
+              id: "source-1",
+              alias: "sales_csv",
+              fileName: "sales.csv",
+              kind: "csv",
+              sizeBytes: 128,
+            },
+            columns: [{ name: "id", dataType: "INTEGER" }],
+            previewSql: 'SELECT * FROM "sales_csv" LIMIT 100',
+          },
+          {
+            source: {
+              id: "source-2",
+              alias: "returns_json",
+              fileName: "returns.json",
+              kind: "json",
+              sizeBytes: 96,
+            },
+            columns: [{ name: "id", dataType: "INTEGER" }],
+            previewSql: 'SELECT * FROM "returns_json" LIMIT 100',
+          },
+        ],
+      },
+    });
+    const tab = seedRdbTab(
+      'SELECT s.id FROM main."sales_csv" s JOIN "returns_json" r ON s.id = r.id',
+      {},
+      { dbType: "duckdb" },
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    await waitFor(() => {
+      expect(getSeededRdbTab().queryState.status).toBe("completed");
+    });
+    expect(getSeededRdbTab().queryState).toMatchObject({
+      status: "completed",
+      result: SELECT_RESULT,
+    });
+    expect(addOptimisticEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "file-analytics",
+        collection: "2 file sources",
+        status: "success",
+      }),
+    );
   });
 
   it.each([

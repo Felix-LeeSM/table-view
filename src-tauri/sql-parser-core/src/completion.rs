@@ -936,7 +936,7 @@ fn dedupe_items(items: &mut Vec<CompletionItem>) {
 fn supports_sql_completion(dialect: &str) -> bool {
     matches!(
         dialect,
-        "postgresql" | "mysql" | "mariadb" | "sqlite" | "mssql" | "oracle"
+        "postgresql" | "mysql" | "mariadb" | "sqlite" | "duckdb" | "mssql" | "oracle"
     )
 }
 
@@ -958,6 +958,7 @@ fn dialect_label(dialect: &str) -> &'static str {
         "mysql" => "MySQL",
         "mariadb" => "MariaDB",
         "sqlite" => "SQLite",
+        "duckdb" => "DuckDB",
         "mssql" => "MSSQL",
         "oracle" => "Oracle",
         _ => "SQL",

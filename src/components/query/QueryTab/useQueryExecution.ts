@@ -25,6 +25,7 @@ import {
   executeRdbQuery,
   executeRdbSingleStatement,
   executeRdbStatementBatch,
+  type RdbHistoryOverrides,
   type RdbBatchRunner,
   type RdbSingleRunner,
 } from "./rdbQueryExecution";
@@ -182,6 +183,9 @@ export function useQueryExecution({
   );
 
   const clearSchemaForConnection = useSchemaStore((s) => s.clearForConnection);
+  const fileAnalyticsSources = useSchemaStore(
+    (s) => s.fileAnalyticsSources[tab.connectionId],
+  );
   const recordHistory = useCallback(
     (payload: {
       sql: string;
@@ -189,16 +193,18 @@ export function useQueryExecution({
       duration: number;
       status: "success" | "error" | "cancelled";
       queryMode?: DocumentRecordHistoryQueryMode;
+      source?: RdbHistoryOverrides["source"];
+      collection?: RdbHistoryOverrides["collection"];
     }) => {
       const common = {
         sql: payload.sql,
         executedAt: payload.executedAt,
         duration: payload.duration,
         status: payload.status,
-        source: "raw" as const,
+        source: payload.source ?? ("raw" as const),
         connectionId: tab.connectionId,
         database: tab.database,
-        collection: tab.collection,
+        collection: payload.collection ?? tab.collection,
         tabId: tab.id,
       };
       if (tab.paradigm === "rdb") {
@@ -374,10 +380,11 @@ export function useQueryExecution({
   // re-enter the same try/catch + recordHistory + DB-mutation hint flow
   // without inline duplication.
   const runRdbSingleNow = useCallback(
-    async (stmt: string) => {
+    async (stmt: string, history?: RdbHistoryOverrides) => {
       await executeRdbSingleStatement({
         tab,
         stmt,
+        history,
         workspaceDb,
         updateQueryState,
         completeQuery,
@@ -580,6 +587,7 @@ export function useQueryExecution({
       tab,
       sql,
       dbType,
+      fileAnalyticsSources,
       decideSafeMode,
       updateQueryState,
       recordHistory,
@@ -608,6 +616,7 @@ export function useQueryExecution({
     canCancelQuery,
     canExecuteQuery,
     dbType,
+    fileAnalyticsSources,
     queryProductLabel,
     decideSafeMode,
     completeQuery,
