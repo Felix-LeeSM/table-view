@@ -7,6 +7,7 @@ import {
   Database,
   FileText,
   Rows3,
+  Plus,
 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useActiveTab } from "@stores/workspaceStore";
@@ -106,6 +107,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     dbType === "mysql" ||
     dbType === "mariadb" ||
     dbType === "sqlite";
+  const flatCreateTableSchema =
+    dbType === "sqlite" ? (actions.schemas[0]?.name ?? null) : null;
   const {
     exportSchema: exportSchemaWithInclude,
     exportDatabase: exportDatabaseWithInclude,
@@ -228,6 +231,17 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           <span />
         )}
         <div className="flex items-center gap-0.5">
+          {flatCreateTableSchema && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => actions.handleCreateTable(flatCreateTableSchema)}
+              aria-label={`Create table in ${flatCreateTableSchema}`}
+              title="Create Table"
+            >
+              <Plus size={12} />
+            </Button>
+          )}
           {/* RDB export Popover — three modes (DDL / DML / Full) ×
               two scopes (single schema / all schemas). MySQL/SQLite
               adapters are still placeholders, so the actual export only

@@ -1108,6 +1108,48 @@ describe("SchemaTree — actions", () => {
     expect(schemaTrigger.textContent).toContain("public");
   });
 
+  it("SQLite flat tree root '+' click → CreateTableDialog 열림", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "SQLite",
+          dbType: "sqlite",
+          host: "localhost",
+          port: 0,
+          user: "",
+          hasPassword: false,
+          database: "test.sqlite",
+          groupId: null,
+          color: null,
+          environment: null,
+          paradigm: "rdb",
+        },
+      ],
+    });
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "main" }] },
+      tables: { "conn1:main": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    expect(screen.queryByLabelText("main schema")).toBeNull();
+    expect(screen.queryByLabelText("Tables in main")).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Create table in main"));
+    });
+
+    expect(screen.getByText("Create Table")).toBeInTheDocument();
+    const schemaTrigger = screen.getByRole("combobox", {
+      name: "Target schema",
+    });
+    expect(schemaTrigger.textContent).toContain("main");
+  });
+
   it("Views/Functions 카테고리에는 '+' 버튼 없음 — Tables 한정", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },

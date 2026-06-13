@@ -10,9 +10,10 @@ use table_view_lib::db::{DbAdapter, RdbAdapter, SqliteAdapter};
 use table_view_lib::error::AppError;
 use table_view_lib::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
-    ConnectionConfig, ConstraintDefinition, CreateIndexRequest, CreateTablePlanRequest,
-    CreateTableRequest, DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
-    DropTableRequest, RenameTableRequest, SchemaChangeResult,
+    ConnectionConfig, ConstraintDefinition, CreateIndexRequest, CreateTablePlanConstraint,
+    CreateTablePlanIndex, CreateTablePlanRequest, CreateTableRequest, DatabaseType,
+    DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
+    RenameTableRequest, SchemaChangeResult,
 };
 use table_view_lib::storage::local as app_sqlite_state;
 use tempfile::TempDir;
@@ -110,6 +111,19 @@ async fn connected_fixture() -> (TempDir, SqliteAdapter) {
         .connect(&sqlite_config(db_path.to_str().unwrap()))
         .await
         .unwrap();
+
+    (dir, adapter)
+}
+
+async fn connected_read_only_fixture() -> (TempDir, SqliteAdapter) {
+    let dir = TempDir::new().unwrap();
+    let db_path = dir.path().join("user.sqlite");
+    seed_sqlite(&db_path).await;
+
+    let mut config = sqlite_config(db_path.to_str().unwrap());
+    config.read_only = true;
+    let adapter = SqliteAdapter::new();
+    adapter.connect(&config).await.unwrap();
 
     (dir, adapter)
 }
@@ -322,7 +336,7 @@ async fn sqlite_contract_execute_query_rejects_ddl_as_current_delta() {
     assert_rdb_unsupported_query(
         &adapter,
         "CREATE TABLE contract_created (id INTEGER)",
-        "SQLite DDL is not supported",
+        "Raw SQLite DDL is not supported",
     )
     .await;
 }
@@ -358,6 +372,302 @@ fn ddl_column(name: &str) -> ColumnDefinition {
         comment: None,
         is_identity: false,
     }
+}
+
+#[tokio::test]
+async fn sqlite_contract_previews_structured_create_table_without_mutating_schema() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    let result = adapter
+        .create_table(&CreateTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            name: "people".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    default_value: None,
+                    comment: None,
+                    is_identity: false,
+                },
+                ColumnDefinition {
+                    name: "name".to_string(),
+                    data_type: "TEXT".to_string(),
+                    nullable: false,
+                    default_value: Some("'unknown'".to_string()),
+                    comment: None,
+                    is_identity: false,
+                },
+            ],
+            primary_key: Some(vec!["id".to_string()]),
+            preview_only: true,
+            table_comment: None,
+            expected_database: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        result.sql,
+        "CREATE TABLE \"people\" (\"id\" INTEGER NOT NULL, \"name\" TEXT NOT NULL DEFAULT 'unknown', PRIMARY KEY (\"id\"))"
+    );
+    let tables = adapter.list_tables("main").await.unwrap();
+    assert!(!tables.iter().any(|table| table.name == "people"));
+}
+
+#[tokio::test]
+async fn sqlite_contract_executes_structured_create_table_and_refreshes_schema() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    let result = adapter
+        .create_table(&CreateTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            name: "people".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    nullable: false,
+                    default_value: None,
+                    comment: None,
+                    is_identity: false,
+                },
+                ddl_column("name"),
+            ],
+            primary_key: Some(vec!["id".to_string()]),
+            preview_only: false,
+            table_comment: None,
+            expected_database: None,
+        })
+        .await
+        .unwrap();
+
+    assert!(result.sql.contains("CREATE TABLE \"people\""));
+    let tables = adapter.list_tables("main").await.unwrap();
+    assert!(tables.iter().any(|table| table.name == "people"));
+    let columns = adapter.get_columns("main", "people", None).await.unwrap();
+    let id = columns.iter().find(|column| column.name == "id").unwrap();
+    assert!(id.is_primary_key);
+    assert!(!id.nullable);
+}
+
+#[tokio::test]
+async fn sqlite_contract_allows_structured_create_table_preview_on_read_only_connection() {
+    let (_dir, adapter) = connected_read_only_fixture().await;
+
+    let result = adapter
+        .create_table(&CreateTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            name: "people".to_string(),
+            columns: vec![ddl_column("name")],
+            primary_key: None,
+            preview_only: true,
+            table_comment: None,
+            expected_database: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.sql, "CREATE TABLE \"people\" (\"name\" TEXT)");
+    let tables = adapter.list_tables("main").await.unwrap();
+    assert!(!tables.iter().any(|table| table.name == "people"));
+}
+
+#[tokio::test]
+async fn sqlite_contract_rejects_structured_create_table_execute_on_read_only_connection() {
+    let (_dir, adapter) = connected_read_only_fixture().await;
+
+    let result = adapter
+        .create_table(&CreateTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            name: "people".to_string(),
+            columns: vec![ddl_column("name")],
+            primary_key: None,
+            preview_only: false,
+            table_comment: None,
+            expected_database: None,
+        })
+        .await;
+
+    match result {
+        Err(AppError::Unsupported(message)) => {
+            assert!(message.contains("read-only SQLite connection"))
+        }
+        other => panic!(
+            "Expected read-only create table rejection, got: {:?}",
+            other
+        ),
+    }
+}
+
+#[tokio::test]
+async fn sqlite_contract_create_table_plan_supports_table_only_slice() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    let result = adapter
+        .create_table_plan(&CreateTablePlanRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            name: "people".to_string(),
+            columns: vec![ddl_column("name")],
+            primary_key: None,
+            table_comment: None,
+            indexes: Vec::new(),
+            constraints: Vec::new(),
+            preview_only: false,
+            expected_database: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.sql, "CREATE TABLE \"people\" (\"name\" TEXT)");
+    let tables = adapter.list_tables("main").await.unwrap();
+    assert!(tables.iter().any(|table| table.name == "people"));
+}
+
+#[tokio::test]
+async fn sqlite_contract_create_table_plan_rejects_indexes_before_creating_table() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    let result = adapter
+        .create_table_plan(&CreateTablePlanRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            name: "people".to_string(),
+            columns: vec![ddl_column("name")],
+            primary_key: None,
+            table_comment: None,
+            indexes: vec![CreateTablePlanIndex {
+                index_name: "idx_people_name".to_string(),
+                columns: vec!["name".to_string()],
+                index_type: "BTREE".to_string(),
+                is_unique: false,
+            }],
+            constraints: Vec::new(),
+            preview_only: false,
+            expected_database: None,
+        })
+        .await;
+
+    assert_sqlite_ddl_unsupported(result, "index creation");
+    let tables = adapter.list_tables("main").await.unwrap();
+    assert!(!tables.iter().any(|table| table.name == "people"));
+}
+
+#[tokio::test]
+async fn sqlite_contract_create_table_plan_rejects_constraints_before_creating_table() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    let result = adapter
+        .create_table_plan(&CreateTablePlanRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            name: "people".to_string(),
+            columns: vec![ddl_column("name")],
+            primary_key: None,
+            table_comment: None,
+            indexes: Vec::new(),
+            constraints: vec![CreateTablePlanConstraint {
+                constraint_name: "uq_people_name".to_string(),
+                definition: ConstraintDefinition::Unique {
+                    columns: vec!["name".to_string()],
+                },
+            }],
+            preview_only: false,
+            expected_database: None,
+        })
+        .await;
+
+    assert_sqlite_ddl_unsupported(result, "standalone constraints");
+    let tables = adapter.list_tables("main").await.unwrap();
+    assert!(!tables.iter().any(|table| table.name == "people"));
+}
+
+#[tokio::test]
+async fn sqlite_contract_create_table_rejects_statement_escape_fragments() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    let result = adapter
+        .create_table(&CreateTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            name: "people".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "name".to_string(),
+                data_type: "TEXT".to_string(),
+                nullable: true,
+                default_value: Some("'Ada'; DROP TABLE users".to_string()),
+                comment: None,
+                is_identity: false,
+            }],
+            primary_key: None,
+            preview_only: true,
+            table_comment: None,
+            expected_database: None,
+        })
+        .await;
+
+    assert!(
+        matches!(result, Err(AppError::Validation(message)) if message.contains("statement terminators"))
+    );
+}
+
+#[tokio::test]
+async fn sqlite_contract_create_table_rejects_inline_constraint_fragments() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    let type_result = adapter
+        .create_table(&CreateTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            name: "people".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "name".to_string(),
+                data_type: "TEXT UNIQUE".to_string(),
+                nullable: true,
+                default_value: None,
+                comment: None,
+                is_identity: false,
+            }],
+            primary_key: None,
+            preview_only: false,
+            table_comment: None,
+            expected_database: None,
+        })
+        .await;
+
+    assert_sqlite_ddl_unsupported(type_result, "UNIQUE");
+    let tables = adapter.list_tables("main").await.unwrap();
+    assert!(!tables.iter().any(|table| table.name == "people"));
+
+    let default_result = adapter
+        .create_table(&CreateTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            name: "people".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "name".to_string(),
+                data_type: "TEXT".to_string(),
+                nullable: true,
+                default_value: Some("0 NOT NULL".to_string()),
+                comment: None,
+                is_identity: false,
+            }],
+            primary_key: None,
+            preview_only: false,
+            table_comment: None,
+            expected_database: None,
+        })
+        .await;
+
+    assert_sqlite_ddl_unsupported(default_result, "NOT");
+    let tables = adapter.list_tables("main").await.unwrap();
+    assert!(!tables.iter().any(|table| table.name == "people"));
 }
 
 #[tokio::test]
@@ -437,38 +747,6 @@ async fn assert_structured_ddl_methods_unsupported(adapter: &SqliteAdapter, prev
             })
             .await,
         "column drop",
-    );
-    assert_sqlite_ddl_unsupported(
-        adapter
-            .create_table(&CreateTableRequest {
-                connection_id: "sqlite-contract".to_string(),
-                schema: "main".to_string(),
-                name: "people".to_string(),
-                columns: vec![ddl_column("name")],
-                primary_key: None,
-                preview_only,
-                table_comment: None,
-                expected_database: None,
-            })
-            .await,
-        "table creation",
-    );
-    assert_sqlite_ddl_unsupported(
-        adapter
-            .create_table_plan(&CreateTablePlanRequest {
-                connection_id: "sqlite-contract".to_string(),
-                schema: "main".to_string(),
-                name: "people".to_string(),
-                columns: vec![ddl_column("name")],
-                primary_key: None,
-                table_comment: None,
-                indexes: Vec::new(),
-                constraints: Vec::new(),
-                preview_only,
-                expected_database: None,
-            })
-            .await,
-        "table creation",
     );
     assert_sqlite_ddl_unsupported(
         adapter

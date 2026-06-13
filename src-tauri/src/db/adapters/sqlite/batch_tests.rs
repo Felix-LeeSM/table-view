@@ -178,7 +178,7 @@ async fn execute_query_batch_rejects_sqlite_ddl_clearly() {
 
     match result {
         Err(AppError::Unsupported(message)) => {
-            assert!(message.contains("SQLite DDL is not supported"))
+            assert!(message.contains("Raw SQLite DDL is not supported"))
         }
         other => panic!("Expected SQLite DDL unsupported error, got: {:?}", other),
     }

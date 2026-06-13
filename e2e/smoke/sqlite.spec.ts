@@ -36,6 +36,8 @@ describe("SQLite file workflow smoke", () => {
     const stateDbPath = resolve(dataDir, "state.db");
     const editedName = `Alice SQLite Smoke ${Date.now()}`;
     const smokeProductName = `SQLite Smoke Product ${Date.now()}`;
+    const createdTableName = `structured_sqlite_${Date.now()}`;
+    const readOnlyTableName = `readonly_sqlite_${Date.now()}`;
 
     await step("prepare deterministic SQLite fixture file", async () => {
       prepareSqliteFixture(sqlitePath);
@@ -120,6 +122,29 @@ describe("SQLite file workflow smoke", () => {
       );
     });
 
+    await step("create table through SQLite structured DDL", async () => {
+      await clickAria("Create table in main");
+      await waitForVisibleText("Create Table", 10000);
+
+      await setInputByAria("Table name", createdTableName);
+      await setNthInputByAria("Column name", 0, "id");
+      await setNthInputByAria("Column data type", 0, "INTEGER");
+      await clickAria("Add column");
+      await setNthInputByAria("Column name", 1, "label");
+      await setNthInputByAria("Column data type", 1, "TEXT");
+
+      await waitForDdlPreview([createdTableName, "CREATE TABLE"]);
+      await clickEnabledButtonText("Execute");
+      await waitUntilTextGone("Create Table", 20000);
+
+      const createdTable = await $(`[aria-label="${createdTableName} table"]`);
+      await createdTable.waitForDisplayed({
+        timeout: 20000,
+        timeoutMsg: `${createdTableName} table did not appear after SQLite create_table_plan refresh`,
+      });
+      expect(await createdTable.isDisplayed()).toBe(true);
+    });
+
     await step("read-only connection rejects writes", async () => {
       await returnToLauncher();
       await createSqliteConnection(READ_ONLY_CONNECTION, sqlitePath, {
@@ -138,6 +163,28 @@ describe("SQLite file workflow smoke", () => {
         "SQLite read-only write rejection did not render",
       );
     });
+
+    await step(
+      "read-only connection rejects structured table creation",
+      async () => {
+        await clickAria("Create table in main");
+        await waitForVisibleText("Create Table", 10000);
+
+        await setInputByAria("Table name", readOnlyTableName);
+        await setNthInputByAria("Column name", 0, "name");
+        await setNthInputByAria("Column data type", 0, "TEXT");
+        await waitForDdlPreview([readOnlyTableName, "CREATE TABLE"]);
+        await clickEnabledButtonText("Execute");
+
+        await waitForWorkspaceTextAll(
+          ["read-only SQLite connection"],
+          15000,
+          "SQLite read-only structured create-table rejection did not render",
+        );
+        await clickEnabledButtonText("Cancel");
+        await waitUntilTextGone("Create Table", 10000);
+      },
+    );
 
     await step("internal app-state SQLite path is rejected", async () => {
       await returnToLauncher();
@@ -217,4 +264,199 @@ async function setInput(selector: string, value: string) {
   await input.waitForDisplayed({ timeout: 5000 });
   await input.clearValue();
   await input.setValue(value);
+}
+
+async function setInputByAria(label: string, value: string) {
+  await setNthInputByAria(label, 0, value);
+}
+
+async function setNthInputByAria(label: string, index: number, value: string) {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (ariaLabel, nth) =>
+          document.querySelectorAll<HTMLInputElement>(
+            `input[aria-label="${ariaLabel}"]`,
+          ).length > nth,
+        label,
+        index,
+      ),
+    {
+      timeout: 10000,
+      timeoutMsg: `${label} input #${index} did not appear`,
+    },
+  );
+  await browser.execute(
+    (ariaLabel, nth, nextValue) => {
+      const input = document.querySelectorAll<HTMLInputElement>(
+        `input[aria-label="${ariaLabel}"]`,
+      )[nth];
+      if (!input) throw new Error(`${ariaLabel} input #${nth} did not appear`);
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      if (!setter) throw new Error("HTMLInputElement value setter missing");
+      input.focus();
+      setter.call(input, nextValue);
+      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      input.blur();
+    },
+    label,
+    index,
+    value,
+  );
+}
+
+async function clickAria(label: string) {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((ariaLabel) => {
+        const isVisible = (element: HTMLElement) => {
+          const style = window.getComputedStyle(element);
+          return (
+            element.getClientRects().length > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden"
+          );
+        };
+        return Array.from(
+          document.querySelectorAll<HTMLElement>(`[aria-label="${ariaLabel}"]`),
+        ).some(isVisible);
+      }, label),
+    {
+      timeout: 10000,
+      timeoutMsg: `${label} control did not appear`,
+    },
+  );
+  await browser.execute((ariaLabel) => {
+    const isVisible = (element: HTMLElement) => {
+      const style = window.getComputedStyle(element);
+      return (
+        element.getClientRects().length > 0 &&
+        style.display !== "none" &&
+        style.visibility !== "hidden"
+      );
+    };
+    const target = Array.from(
+      document.querySelectorAll<HTMLElement>(`[aria-label="${ariaLabel}"]`),
+    ).find(isVisible);
+    if (!target) throw new Error(`${ariaLabel} control did not appear`);
+    target.click();
+  }, label);
+}
+
+async function clickEnabledButtonText(text: string) {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((needle) => {
+        const isVisible = (element: HTMLElement) => {
+          const style = window.getComputedStyle(element);
+          return (
+            element.getClientRects().length > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden"
+          );
+        };
+        return Array.from(
+          document.querySelectorAll<HTMLButtonElement>("button"),
+        ).some(
+          (candidate) =>
+            isVisible(candidate) &&
+            candidate.textContent?.trim() === needle &&
+            !candidate.disabled,
+        );
+      }, text),
+    {
+      timeout: 15000,
+      timeoutMsg: `${text} enabled button did not appear`,
+    },
+  );
+  await browser.execute((needle) => {
+    const isVisible = (element: HTMLElement) => {
+      const style = window.getComputedStyle(element);
+      return (
+        element.getClientRects().length > 0 &&
+        style.display !== "none" &&
+        style.visibility !== "hidden"
+      );
+    };
+    const button = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("button"),
+    ).find(
+      (candidate) =>
+        isVisible(candidate) &&
+        candidate.textContent?.trim() === needle &&
+        !candidate.disabled,
+    );
+    if (!button) throw new Error(`${needle} enabled button did not appear`);
+    button.click();
+  }, text);
+}
+
+async function waitForDdlPreview(snippets: string[]) {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((needles) => {
+        const text =
+          document.querySelector<HTMLElement>("#create-table-ddl-preview")
+            ?.textContent ?? "";
+        return needles.every((needle) =>
+          text.toLowerCase().includes(needle.toLowerCase()),
+        );
+      }, snippets),
+    {
+      timeout: 15000,
+      timeoutMsg: `DDL preview did not include ${snippets.join(", ")}`,
+    },
+  );
+}
+
+async function waitForVisibleText(text: string, timeout: number) {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((needle) => {
+        const isVisible = (element: HTMLElement) => {
+          const style = window.getComputedStyle(element);
+          return (
+            element.getClientRects().length > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden"
+          );
+        };
+        return Array.from(
+          document.querySelectorAll<HTMLElement>("body *"),
+        ).some(
+          (candidate) =>
+            isVisible(candidate) &&
+            (candidate.textContent ?? "").includes(needle),
+        );
+      }, text),
+    { timeout, timeoutMsg: `${text} did not become visible` },
+  );
+}
+
+async function waitUntilTextGone(text: string, timeout: number) {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((needle) => {
+        const isVisible = (element: HTMLElement) => {
+          const style = window.getComputedStyle(element);
+          return (
+            element.getClientRects().length > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden"
+          );
+        };
+        return !Array.from(
+          document.querySelectorAll<HTMLElement>('[role="dialog"]'),
+        ).some(
+          (candidate) =>
+            isVisible(candidate) &&
+            (candidate.textContent ?? "").includes(needle),
+        );
+      }, text),
+    { timeout, timeoutMsg: `${text} dialog did not close` },
+  );
 }
