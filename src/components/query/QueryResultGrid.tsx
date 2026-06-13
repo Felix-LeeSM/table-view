@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
-import Decimal from "decimal.js";
+import { useEffect, useMemo } from "react";
 import { AlertTriangle, Info, Loader2, Pencil } from "lucide-react";
 import type {
   QueryResult,
@@ -14,10 +6,6 @@ import type {
   QueryStatementResult,
   QueryType,
 } from "@/types/query";
-import { safeStringifyCell } from "@lib/jsonCell";
-import { useColumnWidths } from "@/hooks/useColumnWidths";
-import { CellDetailDialog, useColumnResize } from "@components/datagrid";
-import { getDefaultRem } from "@/lib/columnCategory";
 import {
   analyzeResultEditability,
   parseSingleTableSelect,
@@ -26,12 +14,13 @@ import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { ExportButton } from "@components/shared/ExportButton";
-import type { ExportContext, ExportFormat } from "@/lib/tauri";
 import { getDataSourceProfile } from "@/types/dataSource";
 import { SearchResultView } from "@components/search/SearchResultView";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
+import { QueryResultTable } from "./QueryResultTable";
 import ScalarOrListPanel from "./ScalarOrListPanel";
 import WriteSummaryPanel from "./WriteSummaryPanel";
+import { resolveQueryExportBoundary } from "./queryExportBoundary";
 
 export interface QueryResultGridProps {
   queryState: QueryState;
@@ -60,193 +49,6 @@ function queryTypeLabel(qt: QueryType): string {
   if (qt === "ddl") return "DDL";
   if (typeof qt === "object" && "dml" in qt) return "DML";
   return "Query";
-}
-
-/** Format a cell value for display. Sprint 238: compact JSON 1-line.
- * Sprint 261 (ADR 0026) — Decimal is `typeof === "object"` so it must
- * be detected before the generic object branch (which would emit a
- * quoted JSON string). BigInt is `typeof === "bigint"` and falls through
- * to `String(cell)` losslessly via BigInt.toString. */
-function formatCell(cell: unknown): string {
-  if (cell == null) return "NULL";
-  if (cell instanceof Decimal) return cell.toString();
-  if (typeof cell === "object" && cell !== null) {
-    return safeStringifyCell(cell);
-  }
-  return String(cell);
-}
-
-function ResultTable({ result }: { result: QueryResult }) {
-  const [cellDetail, setCellDetail] = useState<{
-    data: unknown;
-    columnName: string;
-    dataType: string;
-  } | null>(null);
-
-  // Sprint 258 — column widths via shared hook + `--cols` CSS variable.
-  // Sprint 260 (AC-260-02) — drag-resize 도 활성, 단 read-only query
-  // 결과는 stable identity 가 없어 (다음 query 마다 columns 가 바뀜)
-  // persistenceKey 없이 in-memory only. cmd+shift+r reset 도 미연결.
-  const widthColumns = useMemo(
-    () => result.columns.map((c) => ({ name: c.name, category: c.category })),
-    [result.columns],
-  );
-  const { widths, setWidth } = useColumnWidths(widthColumns);
-
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-
-  const visualWidthsPx = useMemo(() => {
-    const rootFontSizePx =
-      typeof window !== "undefined"
-        ? (() => {
-            const measured = parseFloat(
-              getComputedStyle(document.documentElement).fontSize,
-            );
-            return Number.isFinite(measured) ? measured : 16;
-          })()
-        : 16;
-    return result.columns.map((col) => {
-      const stored = widths[col.name];
-      if (stored != null) return stored;
-      return getDefaultRem(col.category) * rootFontSizePx;
-    });
-  }, [result.columns, widths]);
-
-  const colsTemplate = useMemo(
-    () => visualWidthsPx.map((w) => `${w}px`).join(" "),
-    [visualWidthsPx],
-  );
-
-  const visualWidthsRef = useRef(visualWidthsPx);
-  visualWidthsRef.current = visualWidthsPx;
-  const getCurrentWidths = useCallback(() => visualWidthsRef.current, []);
-
-  const { handleResizeStart } = useColumnResize({
-    outerRef: scrollContainerRef,
-    getCurrentWidths,
-    onCommitWidth: setWidth,
-  });
-
-  return (
-    <div
-      ref={scrollContainerRef}
-      className="flex-1 overflow-auto text-sm"
-      role="grid"
-      aria-rowcount={1 + result.rows.length}
-      aria-colcount={result.columns.length}
-      style={{ "--cols": colsTemplate } as CSSProperties}
-    >
-      <div
-        role="rowgroup"
-        className="sticky top-0 z-10 bg-secondary"
-        style={{ minWidth: "max-content" }}
-      >
-        <div
-          role="row"
-          aria-rowindex={1}
-          style={{
-            display: "grid",
-            gridTemplateColumns: "var(--cols)",
-            // Sprint 261 — bg-secondary 가 horizontal scroll 끝까지 그려지도록.
-            minWidth: "max-content",
-          }}
-        >
-          {result.columns.map((col, visualIdx) => (
-            <div
-              key={col.name}
-              role="columnheader"
-              aria-colindex={visualIdx + 1}
-              className="relative flex flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
-            >
-              <div className="truncate">{col.name}</div>
-              <div className="mt-0.5 truncate text-3xs text-muted-foreground">
-                {col.dataType}
-              </div>
-              <div
-                className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
-                onMouseDown={(e) => handleResizeStart(e, col.name, visualIdx)}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-      <div role="rowgroup">
-        {result.rows.map((row, rowIdx) => (
-          <div
-            key={`row-${rowIdx}`}
-            role="row"
-            aria-rowindex={rowIdx + 2}
-            className="border-b border-border hover:bg-muted"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "var(--cols)",
-              minWidth: "max-content",
-            }}
-          >
-            {row.map((cell, cellIdx) => {
-              const col = result.columns[cellIdx];
-              return (
-                <div
-                  key={cellIdx}
-                  role="gridcell"
-                  aria-colindex={cellIdx + 1}
-                  className="flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground cursor-pointer"
-                  title={`${formatCell(cell)}\n\n(double-click to expand)`}
-                  onDoubleClick={() => {
-                    if (col) {
-                      setCellDetail({
-                        data: cell,
-                        columnName: col.name,
-                        dataType: col.dataType,
-                      });
-                    }
-                  }}
-                >
-                  {cell == null ? (
-                    <span className="italic text-muted-foreground">NULL</span>
-                  ) : (
-                    <span
-                      dir="auto"
-                      className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
-                    >
-                      {formatCell(cell)}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-        {result.rows.length === 0 && (
-          <div
-            role="row"
-            className="border-b border-border"
-            style={{ minWidth: "max-content" }}
-          >
-            <div
-              role="gridcell"
-              aria-colindex={1}
-              style={{ gridColumn: "1 / -1" }}
-              className="px-3 py-4 text-center text-xs text-muted-foreground"
-            >
-              No data
-            </div>
-          </div>
-        )}
-      </div>
-      {cellDetail && (
-        <CellDetailDialog
-          open={cellDetail !== null}
-          onOpenChange={(open) => {
-            if (!open) setCellDetail(null);
-          }}
-          data={cellDetail.data}
-          columnName={cellDetail.columnName}
-          dataType={cellDetail.dataType}
-        />
-      )}
-    </div>
-  );
 }
 
 function resultUnitNoun(result: QueryResult): string {
@@ -297,6 +99,9 @@ function SelectResultArea({
 }) {
   const tableColumnsCache = useSchemaStore((s) => s.tableColumnsCache);
   const getTableColumns = useSchemaStore((s) => s.getTableColumns);
+  const fileAnalyticsSources = useSchemaStore((s) =>
+    connectionId ? s.fileAnalyticsSources[connectionId] : undefined,
+  );
   const connection = useConnectionStore((s) =>
     connectionId
       ? s.connections.find((candidate) => candidate.id === connectionId)
@@ -304,7 +109,6 @@ function SelectResultArea({
   );
   const defaultSchema = connection?.dbType === "sqlite" ? "main" : "public";
   const isDocumentResult = result.resultUnit === "document";
-
   // Identify the source table once per SQL so we can fetch + look up its
   // primary-key metadata. Resolution falls back to "public" because that's
   // the default schema in PostgreSQL.
@@ -315,9 +119,24 @@ function SelectResultArea({
     if (!info) return null;
     return { schema: info.schema ?? defaultSchema, table: info.table };
   }, [defaultSchema, isDocumentResult, sql]);
+  const exportBoundary = useMemo(
+    () =>
+      resolveQueryExportBoundary(
+        connection?.dbType,
+        parsed,
+        fileAnalyticsSources,
+      ),
+    [connection?.dbType, parsed, fileAnalyticsSources],
+  );
 
   useEffect(() => {
-    if (!parsed || !connectionId || !database) return;
+    if (
+      !parsed ||
+      exportBoundary.registeredFileAlias ||
+      !connectionId ||
+      !database
+    )
+      return;
     const cached =
       tableColumnsCache[connectionId]?.[database]?.[parsed.schema]?.[
         parsed.table
@@ -333,30 +152,61 @@ function SelectResultArea({
         // analyser surfaces this as "Loading column metadata…".
       });
     }
-  }, [parsed, connectionId, database, tableColumnsCache, getTableColumns]);
+  }, [
+    parsed,
+    exportBoundary.registeredFileAlias,
+    connectionId,
+    database,
+    tableColumnsCache,
+    getTableColumns,
+  ]);
 
   const tableColumns = useMemo(() => {
-    if (!parsed || !connectionId || !database) return null;
+    if (
+      !parsed ||
+      exportBoundary.registeredFileAlias ||
+      !connectionId ||
+      !database
+    )
+      return null;
     return (
       tableColumnsCache[connectionId]?.[database]?.[parsed.schema]?.[
         parsed.table
       ] ?? null
     );
-  }, [parsed, connectionId, database, tableColumnsCache]);
+  }, [
+    parsed,
+    exportBoundary.registeredFileAlias,
+    connectionId,
+    database,
+    tableColumnsCache,
+  ]);
 
   const editability = useMemo(
     () =>
       isDocumentResult
         ? null
-        : sql
-          ? analyzeResultEditability(
-              sql,
-              result.columns,
-              tableColumns,
-              defaultSchema,
-            )
-          : null,
-    [isDocumentResult, sql, result.columns, tableColumns, defaultSchema],
+        : exportBoundary.readOnlyReason
+          ? {
+              editable: false as const,
+              reason: exportBoundary.readOnlyReason,
+            }
+          : sql
+            ? analyzeResultEditability(
+                sql,
+                result.columns,
+                tableColumns,
+                defaultSchema,
+              )
+            : null,
+    [
+      isDocumentResult,
+      exportBoundary.readOnlyReason,
+      sql,
+      result.columns,
+      tableColumns,
+      defaultSchema,
+    ],
   );
   const rowEditBlockReason = useMemo(() => {
     if (!connection) return null;
@@ -370,18 +220,13 @@ function SelectResultArea({
     return null;
   }, [connection]);
 
-  const exportContext: ExportContext = {
-    kind: "query",
-    source_table: parsed ? { schema: parsed.schema, name: parsed.table } : null,
-  };
-  const disabledExportFormats: ExportFormat[] = parsed ? [] : ["sql"];
-
   const exportButton = (
     <ExportButton
-      context={exportContext}
+      context={exportBoundary.context}
       headers={result.columns.map((c) => c.name)}
       getRows={() => result.rows as unknown[][]}
-      disabledFormats={disabledExportFormats}
+      disabledFormats={exportBoundary.disabledFormats}
+      disabledFormatReasons={exportBoundary.disabledReasons}
     />
   );
 
@@ -430,7 +275,7 @@ function SelectResultArea({
           {exportButton}
         </div>
       )}
-      <ResultTable result={result} />
+      <QueryResultTable result={result} />
     </>
   );
 }

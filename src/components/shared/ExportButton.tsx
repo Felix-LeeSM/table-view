@@ -10,6 +10,8 @@ import { runExport } from "@/lib/runtime/export";
 import type { ExportContext, ExportFormat } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
+const DEFAULT_DISABLED_REASON = "Single-table SELECT only";
+
 const FORMAT_LABELS: Record<ExportFormat, string> = {
   csv: "CSV",
   tsv: "TSV",
@@ -36,6 +38,8 @@ export interface ExportButtonProps {
   getRows: () => Promise<unknown[][]> | unknown[][];
   /** Formats that should appear disabled (with tooltip explaining why). */
   disabledFormats?: ExportFormat[];
+  /** Per-format disabled tooltip. Falls back to the single-table reason. */
+  disabledFormatReasons?: Partial<Record<ExportFormat, string>>;
   /** Optional cancel-token id forwarded to the query-token registry. */
   exportId?: string | null;
   className?: string;
@@ -46,6 +50,7 @@ export function ExportButton({
   headers,
   getRows,
   disabledFormats = [],
+  disabledFormatReasons = {},
   exportId = null,
   className,
 }: ExportButtonProps) {
@@ -96,7 +101,7 @@ export function ExportButton({
               onClick={() => handleSelect(format)}
               title={
                 disabled
-                  ? "Single-table SELECT only"
+                  ? (disabledFormatReasons[format] ?? DEFAULT_DISABLED_REASON)
                   : `Export as ${FORMAT_LABELS[format]}`
               }
               className={cn(

@@ -121,6 +121,26 @@ describe("ExportButton", () => {
     expect(sqlItem.getAttribute("title")).toMatch(/single-table/i);
   });
 
+  it("uses caller-provided disabled reasons for SQL export", async () => {
+    render(
+      <ExportButton
+        context={queryContext()}
+        headers={HEADERS}
+        getRows={() => ROWS}
+        disabledFormats={["sql"]}
+        disabledFormatReasons={{
+          sql: "SQL INSERT export is disabled for DuckDB registered file sources.",
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+    const sqlItem = await screen.findByRole("menuitem", {
+      name: /SQL INSERT/i,
+    });
+    expect(sqlItem).toHaveAttribute("aria-disabled", "true");
+    expect(sqlItem.getAttribute("title")).toMatch(/registered file sources/i);
+  });
+
   // [AC-181-02e] Save dialog cancel produces no toast.
   // 2026-05-01 — User-initiated cancel must stay silent.
   it("does not show a toast when the save dialog is cancelled", async () => {

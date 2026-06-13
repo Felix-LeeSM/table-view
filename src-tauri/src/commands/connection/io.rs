@@ -401,6 +401,58 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn test_export_connections_omits_duckdb_registered_file_analytics_source_data() {
+        let _dir = setup_test_env();
+        let source_path = "/Users/felix/private/sales.csv";
+        let source_alias = "sales_csv";
+        let source_file_name = "sales.csv";
+        let source_preview_sql = "SELECT * FROM \"sales_csv\" LIMIT 100";
+        let mut conn = sample_connection("duck-analytics", "Duck Analytics");
+        conn.db_type = DatabaseType::Duckdb;
+        conn.database = "/Users/felix/private/app.duckdb".into();
+        storage_save_conn(conn).unwrap();
+
+        let data_dir = std::env::var("TABLE_VIEW_TEST_DATA_DIR").unwrap();
+        let storage_path = std::path::Path::new(&data_dir).join("connections.json");
+        let raw = std::fs::read_to_string(&storage_path).unwrap();
+        let mut raw_json: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        raw_json["connections"][0]["registeredSources"] = serde_json::json!([{
+            "path": source_path,
+            "source": {
+                "id": "duckdb-file-1",
+                "alias": source_alias,
+                "fileName": source_file_name,
+                "kind": "csv",
+                "sizeBytes": 42
+            },
+            "columns": [{"name": "amount", "data_type": "DOUBLE"}],
+            "previewSql": source_preview_sql
+        }]);
+        std::fs::write(
+            &storage_path,
+            serde_json::to_string_pretty(&raw_json).unwrap(),
+        )
+        .unwrap();
+
+        let exported = export_connections(vec!["duck-analytics".into()]).unwrap();
+        let payload: ExportPayload = serde_json::from_str(&exported).unwrap();
+        let exported_json: serde_json::Value = serde_json::from_str(&exported).unwrap();
+        let exported_connection = exported_json["connections"][0].as_object().unwrap();
+
+        assert_eq!(payload.connections[0].database, "app.duckdb");
+        assert!(!exported.contains(source_path));
+        assert!(!exported.contains(source_alias));
+        assert!(!exported.contains(source_file_name));
+        assert!(!exported.contains(source_preview_sql));
+        assert!(exported_connection.get("registeredSources").is_none());
+        assert!(exported_connection.get("fileAnalyticsSources").is_none());
+        assert!(exported_connection.get("sourceMetadata").is_none());
+
+        cleanup_test_env();
+    }
+
+    #[test]
     fn export_database_name_strips_windows_absolute_path() {
         assert_eq!(
             export_database_name(&DatabaseType::Duckdb, r"C:\Users\felix\private\app.duckdb"),
@@ -483,6 +535,84 @@ mod tests {
             }
             other => panic!("Expected Validation, got {other:?}"),
         }
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_import_connections_drops_duckdb_registered_file_analytics_source_data() {
+        let _dir = setup_test_env();
+        let source_path = "/Users/felix/private/import-sales.csv";
+        let source_alias = "import_sales_csv";
+        let source_file_name = "import-sales.csv";
+        let source_preview_sql = "SELECT * FROM \"import_sales_csv\" LIMIT 100";
+        let mut conn: ConnectionConfigPublic =
+            (&sample_connection("duck-import", "Duck Import")).into();
+        conn.db_type = DatabaseType::Duckdb;
+        conn.paradigm = crate::models::Paradigm::Rdb;
+        conn.database = "imported.duckdb".into();
+
+        let mut payload = serde_json::to_value(ExportPayload {
+            schema_version: EXPORT_SCHEMA_VERSION,
+            exported_at_unix_secs: 0,
+            app: "table-view".into(),
+            connections: vec![conn],
+            groups: vec![],
+        })
+        .unwrap();
+        let source_metadata = serde_json::json!({
+            "path": source_path,
+            "source": {
+                "id": "duckdb-file-1",
+                "alias": source_alias,
+                "fileName": source_file_name,
+                "kind": "csv",
+                "sizeBytes": 42
+            },
+            "columns": [{"name": "amount", "data_type": "DOUBLE"}],
+            "previewSql": source_preview_sql
+        });
+        payload["registeredSources"] = serde_json::json!([source_metadata.clone()]);
+        payload["connections"][0]["registeredSources"] =
+            serde_json::json!([source_metadata.clone()]);
+        payload["connections"][0]["fileAnalyticsSources"] =
+            serde_json::json!([source_metadata.clone()]);
+        payload["connections"][0]["sourceMetadata"] = source_metadata;
+
+        let import_json = payload.to_string();
+        assert!(import_json.contains(source_path));
+        assert!(import_json.contains(source_alias));
+        let result = import_connections(import_json).unwrap();
+
+        assert_eq!(result.imported.len(), 1);
+        let stored = storage::load_storage_redacted().unwrap();
+        assert_eq!(stored.connections.len(), 1);
+        assert!(matches!(
+            stored.connections[0].db_type,
+            DatabaseType::Duckdb
+        ));
+        assert_eq!(stored.connections[0].database, "imported.duckdb");
+        assert_eq!(stored.connections[0].password, "");
+
+        let data_dir = std::env::var("TABLE_VIEW_TEST_DATA_DIR").unwrap();
+        let raw = std::fs::read_to_string(std::path::Path::new(&data_dir).join("connections.json"))
+            .unwrap();
+        assert!(!raw.contains(source_path));
+        assert!(!raw.contains(source_alias));
+        assert!(!raw.contains(source_file_name));
+        assert!(!raw.contains(source_preview_sql));
+
+        let exported = export_connections(vec![result.imported[0].clone()]).unwrap();
+        let exported_json: serde_json::Value = serde_json::from_str(&exported).unwrap();
+        let exported_connection = exported_json["connections"][0].as_object().unwrap();
+        assert!(!exported.contains(source_path));
+        assert!(!exported.contains(source_alias));
+        assert!(!exported.contains(source_file_name));
+        assert!(!exported.contains(source_preview_sql));
+        assert!(exported_connection.get("registeredSources").is_none());
+        assert!(exported_connection.get("fileAnalyticsSources").is_none());
+        assert!(exported_connection.get("sourceMetadata").is_none());
+
         cleanup_test_env();
     }
 
