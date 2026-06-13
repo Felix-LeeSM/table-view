@@ -13,11 +13,11 @@ import { render, act, waitFor } from "@testing-library/react";
 import {
   MySQL,
   PostgreSQL,
-  SQLite,
   StandardSQL,
   type SQLDialect,
 } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
+import { SQLITE_COMPLETION_DIALECT } from "@/lib/sql/sqlDialectProfile";
 import type {
   RedisCommandCompletionTarget,
   RedisKeySuggestion,
@@ -294,7 +294,7 @@ describe("QueryTab — dialect", () => {
     });
     const tab = makeQueryTab();
     render(<QueryTab tab={tab} />);
-    expect(mockEditorProps.lastDialect).toBe(SQLite);
+    expect(mockEditorProps.lastDialect).toBe(SQLITE_COMPLETION_DIALECT);
   });
 
   // AC-07: Missing connection (deleted mid-session) → silent StandardSQL
