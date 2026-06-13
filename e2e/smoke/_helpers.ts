@@ -1,4 +1,4 @@
-import { $, $$, browser, expect } from "@wdio/globals";
+import { $, browser, expect } from "@wdio/globals";
 import { formatGridWaitDiagnostic } from "./grid-wait-diagnostic";
 
 export { editGridCellInRow } from "./grid-edit";
@@ -736,7 +736,7 @@ export async function waitForWorkspaceTextAll(
 }
 
 export async function executeSqlPreview() {
-  await executePreviewAction("Execute SQL");
+  await executePreviewAction(["Execute SQL", "Execute"]);
 }
 
 export async function waitForDialogTextAll(
@@ -871,26 +871,59 @@ export async function executeMqlPreview() {
   await executePreviewAction("Execute MQL commands");
 }
 
-async function executePreviewAction(ariaLabel: string) {
+async function executePreviewAction(ariaLabels: string | string[]) {
+  const labels = Array.isArray(ariaLabels) ? ariaLabels : [ariaLabels];
   await switchToWorkspaceWindow();
-  const execute = await $(`[aria-label="${ariaLabel}"]`);
-  await execute.waitForDisplayed({ timeout: 10000 });
-  await browser.execute((label) => {
-    const button = Array.from(
-      document.querySelectorAll<HTMLElement>("[aria-label]"),
-    ).find((candidate) => candidate.getAttribute("aria-label") === label);
-    if (!button) throw new Error(`${label} button did not appear`);
-    button.click();
-  }, ariaLabel);
   await browser.waitUntil(
-    async () => {
-      const previewActions = await $$(`[aria-label="${ariaLabel}"]`);
-      return previewActions.length === 0;
+    async () => (await visibleDialogActionLabel(labels)) !== null,
+    {
+      timeout: 10000,
+      timeoutMsg: `preview action did not appear: ${labels.join(" or ")}`,
     },
+  );
+  const clickedLabel = await visibleDialogActionLabel(labels);
+  if (!clickedLabel) {
+    throw new Error(`${labels.join(" or ")} button did not appear`);
+  }
+  await clickDialogAction(clickedLabel);
+  await browser.waitUntil(
+    async () => (await visibleDialogActionLabel([clickedLabel])) === null,
     {
       timeout: 15000,
-      timeoutMsg: `${ariaLabel} preview did not close after execution`,
+      timeoutMsg: `${clickedLabel} preview did not close after execution`,
     },
+  );
+}
+
+async function visibleDialogActionLabel(labels: readonly string[]) {
+  return await browser.execute(
+    (expectedLabels, dialogSelector) => {
+      const dialogs = Array.from(
+        document.querySelectorAll<HTMLElement>(dialogSelector),
+      ).filter(isVisible);
+      const button = dialogs
+        .flatMap((dialog) =>
+          Array.from(dialog.querySelectorAll<HTMLElement>("[aria-label]")),
+        )
+        .find(
+          (candidate) =>
+            expectedLabels.includes(
+              candidate.getAttribute("aria-label") ?? "",
+            ) && isVisible(candidate),
+        );
+      return button?.getAttribute("aria-label") ?? null;
+
+      function isVisible(element: HTMLElement) {
+        const style = window.getComputedStyle(element);
+        return (
+          element.getClientRects().length > 0 &&
+          style.display !== "none" &&
+          style.visibility !== "hidden"
+        );
+      }
+    },
+    labels,
+    DIALOG_SELECTOR,
   );
 }
 
