@@ -12,6 +12,51 @@ use crate::models::{
 use super::connection::{quote_identifier, validate_namespace, SqliteAdapter};
 
 const SQLITE_IDENTIFIER_MAX_BYTES: usize = 128;
+const SQLITE_DATA_TYPE_UNSUPPORTED_TOKENS: &[&str] = &[
+    "CONSTRAINT",
+    "PRIMARY",
+    "KEY",
+    "UNIQUE",
+    "CHECK",
+    "REFERENCES",
+    "FOREIGN",
+    "DEFAULT",
+    "COLLATE",
+    "GENERATED",
+    "ALWAYS",
+    "AS",
+    "NOT",
+    "NULL",
+    "AUTOINCREMENT",
+    "ON",
+    "CONFLICT",
+    "DEFERRABLE",
+    "INITIALLY",
+    "DEFERRED",
+    "IMMEDIATE",
+    "MATCH",
+    "INDEX",
+];
+const SQLITE_DEFAULT_UNSUPPORTED_TOKENS: &[&str] = &[
+    "CONSTRAINT",
+    "PRIMARY",
+    "KEY",
+    "UNIQUE",
+    "CHECK",
+    "REFERENCES",
+    "FOREIGN",
+    "COLLATE",
+    "GENERATED",
+    "ALWAYS",
+    "AS",
+    "AUTOINCREMENT",
+    "DEFERRABLE",
+    "INITIALLY",
+    "DEFERRED",
+    "IMMEDIATE",
+    "MATCH",
+    "INDEX",
+];
 
 impl SqliteAdapter {
     pub async fn create_table(
@@ -137,7 +182,7 @@ fn build_column_definition(column: &ColumnDefinition) -> Result<String, AppError
             column.name
         )));
     }
-    validate_sql_fragment(data_type, "Column data type")?;
+    validate_sqlite_data_type(data_type)?;
 
     let mut definition = format!("{} {}", quote_identifier(column.name.trim()), data_type);
     if !column.nullable {
@@ -146,11 +191,127 @@ fn build_column_definition(column: &ColumnDefinition) -> Result<String, AppError
     if let Some(default) = &column.default_value {
         let default = default.trim();
         if !default.is_empty() {
-            validate_sql_fragment(default, "Column default value")?;
+            validate_sqlite_default_value(default)?;
             definition.push_str(&format!(" DEFAULT {default}"));
         }
     }
     Ok(definition)
+}
+
+fn validate_sqlite_data_type(value: &str) -> Result<(), AppError> {
+    validate_sql_fragment(value, "Column data type")?;
+    validate_sqlite_data_type_shape(value)?;
+    reject_unsupported_sql_tokens(
+        value,
+        "Column data type",
+        SQLITE_DATA_TYPE_UNSUPPORTED_TOKENS,
+    )
+}
+
+fn validate_sqlite_data_type_shape(value: &str) -> Result<(), AppError> {
+    let trimmed = value.trim();
+    let (base, params) = match trimmed.find('(') {
+        Some(open_idx) => {
+            if !trimmed.ends_with(')')
+                || trimmed[open_idx + 1..trimmed.len() - 1].contains(['(', ')'])
+            {
+                return Err(AppError::Validation(
+                    "Column data type must be a type name with optional numeric parameters".into(),
+                ));
+            }
+            (
+                trimmed[..open_idx].trim(),
+                Some(trimmed[open_idx + 1..trimmed.len() - 1].trim()),
+            )
+        }
+        None => (trimmed, None),
+    };
+
+    if base.is_empty() {
+        return Err(AppError::Validation(
+            "Column data type must include a type name".into(),
+        ));
+    }
+    for word in base.split_whitespace() {
+        validate_type_word(word)?;
+    }
+
+    if let Some(params) = params {
+        let parts = params.split(',').collect::<Vec<_>>();
+        if parts.is_empty() || parts.len() > 2 {
+            return Err(AppError::Validation(
+                "Column data type parameters must be one or two numeric values".into(),
+            ));
+        }
+        for part in parts {
+            let trimmed = part.trim();
+            if trimmed.is_empty() || !trimmed.chars().all(|ch| ch.is_ascii_digit()) {
+                return Err(AppError::Validation(
+                    "Column data type parameters must be numeric".into(),
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_type_word(word: &str) -> Result<(), AppError> {
+    let mut chars = word.chars();
+    let Some(first) = chars.next() else {
+        return Err(AppError::Validation(
+            "Column data type must include a type name".into(),
+        ));
+    };
+    if !first.is_ascii_alphabetic() {
+        return Err(AppError::Validation(
+            "Column data type words must start with a letter".into(),
+        ));
+    }
+    if chars.any(|ch| !ch.is_ascii_alphanumeric() && ch != '_') {
+        return Err(AppError::Validation(
+            "Column data type words must contain only alphanumeric characters and underscores"
+                .into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_sqlite_default_value(value: &str) -> Result<(), AppError> {
+    validate_sql_fragment(value, "Column default value")?;
+    validate_default_fragment_shape(value)?;
+    reject_unsupported_sql_tokens(
+        value,
+        "Column default value",
+        SQLITE_DEFAULT_UNSUPPORTED_TOKENS,
+    )
+}
+
+fn validate_default_fragment_shape(value: &str) -> Result<(), AppError> {
+    let mut in_string = false;
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\'' {
+            if in_string && chars.peek().is_some_and(|next| *next == '\'') {
+                let _ = chars.next();
+                continue;
+            }
+            in_string = !in_string;
+            continue;
+        }
+        if !in_string && (ch == ',' || ch == '"') {
+            return Err(AppError::Validation(
+                "Column default value must not contain unquoted column separators or identifiers"
+                    .into(),
+            ));
+        }
+    }
+    if in_string {
+        return Err(AppError::Validation(
+            "Column default value must not contain unterminated string literals".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn validate_sql_fragment(value: &str, label: &str) -> Result<(), AppError> {
@@ -165,6 +326,61 @@ fn validate_sql_fragment(value: &str, label: &str) -> Result<(), AppError> {
         )));
     }
     Ok(())
+}
+
+fn reject_unsupported_sql_tokens(
+    value: &str,
+    label: &str,
+    unsupported_tokens: &[&str],
+) -> Result<(), AppError> {
+    let mut in_string = false;
+    let mut token = String::new();
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\'' {
+            if in_string && chars.peek().is_some_and(|next| *next == '\'') {
+                let _ = chars.next();
+                continue;
+            }
+            if let Some(unsupported) = unsupported_sql_token(&token, unsupported_tokens) {
+                return unsupported_sql_token_error(label, unsupported);
+            }
+            token.clear();
+            in_string = !in_string;
+            continue;
+        }
+        if in_string {
+            continue;
+        }
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            token.push(ch);
+            continue;
+        }
+        if let Some(unsupported) = unsupported_sql_token(&token, unsupported_tokens) {
+            return unsupported_sql_token_error(label, unsupported);
+        }
+        token.clear();
+    }
+    if let Some(unsupported) = unsupported_sql_token(&token, unsupported_tokens) {
+        return unsupported_sql_token_error(label, unsupported);
+    }
+    Ok(())
+}
+
+fn unsupported_sql_token<'a>(token: &str, unsupported_tokens: &'a [&str]) -> Option<&'a str> {
+    if token.is_empty() {
+        return None;
+    }
+    unsupported_tokens
+        .iter()
+        .copied()
+        .find(|candidate| token.eq_ignore_ascii_case(candidate))
+}
+
+fn unsupported_sql_token_error(label: &str, token: &str) -> Result<(), AppError> {
+    Err(AppError::Unsupported(format!(
+        "{label} must not contain inline SQLite constraint or index token {token}"
+    )))
 }
 
 fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
@@ -276,6 +492,42 @@ mod tests {
 
         assert!(
             matches!(result, Err(AppError::Validation(message)) if message.contains("statement terminators"))
+        );
+    }
+
+    #[test]
+    fn build_create_table_sql_allows_common_sqlite_type_shapes() {
+        let mut req = request();
+        req.columns[0].data_type = "DOUBLE PRECISION".to_string();
+        req.columns[1].data_type = "NUMERIC(10, 2)".to_string();
+
+        let sql = build_create_table_sql(&req).unwrap();
+
+        assert!(sql.contains("\"id\" DOUBLE PRECISION NOT NULL"));
+        assert!(sql.contains("\"name\" NUMERIC(10, 2)"));
+    }
+
+    #[test]
+    fn build_create_table_sql_rejects_inline_constraint_in_type() {
+        let mut req = request();
+        req.columns[0].data_type = "TEXT UNIQUE".to_string();
+
+        let result = build_create_table_sql(&req);
+
+        assert!(
+            matches!(result, Err(AppError::Unsupported(message)) if message.contains("UNIQUE"))
+        );
+    }
+
+    #[test]
+    fn build_create_table_sql_rejects_inline_constraint_in_default() {
+        let mut req = request();
+        req.columns[0].default_value = Some("0 UNIQUE".to_string());
+
+        let result = build_create_table_sql(&req);
+
+        assert!(
+            matches!(result, Err(AppError::Unsupported(message)) if message.contains("UNIQUE"))
         );
     }
 }

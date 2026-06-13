@@ -618,6 +618,59 @@ async fn sqlite_contract_create_table_rejects_statement_escape_fragments() {
 }
 
 #[tokio::test]
+async fn sqlite_contract_create_table_rejects_inline_constraint_fragments() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    let type_result = adapter
+        .create_table(&CreateTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            name: "people".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "name".to_string(),
+                data_type: "TEXT UNIQUE".to_string(),
+                nullable: true,
+                default_value: None,
+                comment: None,
+                is_identity: false,
+            }],
+            primary_key: None,
+            preview_only: false,
+            table_comment: None,
+            expected_database: None,
+        })
+        .await;
+
+    assert_sqlite_ddl_unsupported(type_result, "UNIQUE");
+    let tables = adapter.list_tables("main").await.unwrap();
+    assert!(!tables.iter().any(|table| table.name == "people"));
+
+    let default_result = adapter
+        .create_table(&CreateTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            name: "people".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "name".to_string(),
+                data_type: "TEXT".to_string(),
+                nullable: true,
+                default_value: Some("0 REFERENCES users(id)".to_string()),
+                comment: None,
+                is_identity: false,
+            }],
+            primary_key: None,
+            preview_only: false,
+            table_comment: None,
+            expected_database: None,
+        })
+        .await;
+
+    assert_sqlite_ddl_unsupported(default_result, "REFERENCES");
+    let tables = adapter.list_tables("main").await.unwrap();
+    assert!(!tables.iter().any(|table| table.name == "people"));
+}
+
+#[tokio::test]
 async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
     let (_dir, adapter) = connected_fixture().await;
 
