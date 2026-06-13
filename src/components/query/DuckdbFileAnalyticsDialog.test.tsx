@@ -115,6 +115,7 @@ describe("DuckdbFileAnalyticsDialog", () => {
     expect(mockRecordHistoryEntry).toHaveBeenCalledWith(
       expect.objectContaining({
         connectionId: "conn-1",
+        collection: "sales.csv",
         source: "file-analytics",
         paradigm: "rdb",
         queryMode: "sql",
@@ -191,5 +192,64 @@ describe("DuckdbFileAnalyticsDialog", () => {
     expect(
       screen.queryByRole("region", { name: /query result/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("redacts absolute local paths from registration errors", async () => {
+    const user = userEvent.setup();
+    const absolutePath = "/Users/felix/private/sales.csv";
+    mockOpen.mockResolvedValueOnce(absolutePath);
+    mockRegisterFileAnalyticsSource.mockRejectedValueOnce(
+      new Error(`DuckDB could not read ${absolutePath}`),
+    );
+
+    render(
+      <DuckdbFileAnalyticsDialog connectionId="conn-1" onClose={vi.fn()} />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /choose local file/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "DuckDB could not read sales.csv",
+    );
+    expect(document.body).not.toHaveTextContent(absolutePath);
+  });
+
+  it("redacts absolute local paths from source query errors", async () => {
+    const user = userEvent.setup();
+    const absolutePath = "/Users/felix/private/sales.csv";
+    mockOpen.mockResolvedValueOnce(absolutePath);
+    mockRegisterFileAnalyticsSource.mockResolvedValueOnce(source);
+    mockPreviewFileAnalyticsSource.mockResolvedValueOnce({
+      source,
+      executedSql: 'SELECT * FROM "sales_csv" LIMIT 100',
+      result: {
+        columns: [{ name: "name", dataType: "text", category: "string" }],
+        rows: [["Ada"]],
+        totalCount: 1,
+        executionTimeMs: 4,
+        queryType: "select",
+      },
+    });
+    mockExecuteFileAnalyticsQuery.mockRejectedValueOnce(
+      new Error(`DuckDB error while scanning ${absolutePath}`),
+    );
+
+    render(
+      <DuckdbFileAnalyticsDialog connectionId="conn-1" onClose={vi.fn()} />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /choose local file/i }),
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /run source query/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "DuckDB error while scanning sales.csv",
+    );
+    expect(document.body).not.toHaveTextContent(absolutePath);
   });
 });

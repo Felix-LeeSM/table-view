@@ -58,4 +58,20 @@ describe("QueryHistorySourceBadge", () => {
     expect(badge.getAttribute("data-source")).toBe("file-analytics");
     expect(badge.getAttribute("title")).toMatch(/duckdb local-file source/i);
   });
+
+  it("surfaces only the file name for DuckDB file analytics source labels", () => {
+    const absolutePath = "/Users/felix/private/sales.csv";
+    render(
+      <QueryHistorySourceBadge
+        source="file-analytics"
+        sourceLabel={absolutePath}
+      />,
+    );
+    const badge = screen.getByTestId("query-history-source-badge");
+    expect(badge).toHaveTextContent("sales.csv");
+    expect(document.body).not.toHaveTextContent(absolutePath);
+    expect(badge.getAttribute("title")).toBe(
+      "Recorded from sales.csv DuckDB local-file source query",
+    );
+  });
 });

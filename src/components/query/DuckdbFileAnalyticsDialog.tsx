@@ -35,6 +35,34 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function fileNameFromPath(path: string): string | null {
+  const parts = path.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] ?? null;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function visibleFileAnalyticsError(
+  error: unknown,
+  replacement: string | null,
+  exactPath?: string,
+): string {
+  const safeReplacement = replacement ?? "<local-file>";
+  let message = errorMessage(error);
+  if (exactPath) {
+    message = message.replace(
+      new RegExp(escapeRegExp(exactPath), "g"),
+      safeReplacement,
+    );
+  }
+  return message.replace(
+    /(?:[A-Za-z]:\\|\/(?:Users|home|private|tmp|var|Volumes)\/)[^\s"'<>)]*/g,
+    safeReplacement,
+  );
+}
+
 function pickedPath(value: string | string[] | null): string | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value;
@@ -107,8 +135,9 @@ export default function DuckdbFileAnalyticsDialog({
   const chooseFile = async () => {
     setLoading(true);
     setError(null);
+    let selectedPath: string | null = null;
     try {
-      const selected = pickedPath(
+      selectedPath = pickedPath(
         await open({
           multiple: false,
           directory: false,
@@ -120,7 +149,7 @@ export default function DuckdbFileAnalyticsDialog({
           ],
         }),
       );
-      if (!selected) return;
+      if (!selectedPath) return;
 
       setSource(null);
       setPreview(null);
@@ -128,7 +157,7 @@ export default function DuckdbFileAnalyticsDialog({
       setQuerySql("");
       const registered = await registerFileAnalyticsSource(
         connectionId,
-        selected,
+        selectedPath,
       );
       const nextPreview = await previewFileAnalyticsSource(
         connectionId,
@@ -140,7 +169,13 @@ export default function DuckdbFileAnalyticsDialog({
       setQuerySql(defaultSourceSql(registered));
       void loadFileAnalyticsSources(connectionId).catch(() => undefined);
     } catch (err) {
-      setError(errorMessage(err));
+      setError(
+        visibleFileAnalyticsError(
+          err,
+          selectedPath ? fileNameFromPath(selectedPath) : null,
+          selectedPath ?? undefined,
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -163,6 +198,7 @@ export default function DuckdbFileAnalyticsDialog({
       recordHistoryEntry({
         connectionId,
         database,
+        collection: source.fileName,
         tabId,
         source: "file-analytics",
         sql: querySql,
@@ -174,7 +210,7 @@ export default function DuckdbFileAnalyticsDialog({
         queryMode: "sql",
       });
     } catch (err) {
-      setError(errorMessage(err));
+      setError(visibleFileAnalyticsError(err, source.fileName));
     } finally {
       setQueryLoading(false);
     }

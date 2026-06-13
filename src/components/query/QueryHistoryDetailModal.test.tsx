@@ -28,6 +28,7 @@ describe("QueryHistoryDetailModal (sprint-372)", () => {
   it("[AC-372-03] mount calls get_history_detail and shows original sql", async () => {
     invokeMock.mockResolvedValueOnce({
       id: 7,
+      source: "raw",
       sql: "SELECT * FROM users WHERE email = 'leak@example.com'",
       sqlRedacted: "SELECT * FROM users WHERE email = ?",
     });
@@ -70,6 +71,7 @@ describe("QueryHistoryDetailModal (sprint-372)", () => {
 
     resolveFn({
       id: 3,
+      source: "raw",
       sql: "SELECT 1",
       sqlRedacted: "SELECT 1",
     });
@@ -102,6 +104,7 @@ describe("QueryHistoryDetailModal (sprint-372)", () => {
   it("invokes onClose when Close button is clicked", async () => {
     invokeMock.mockResolvedValueOnce({
       id: 1,
+      source: "raw",
       sql: "SELECT 1",
       sqlRedacted: "SELECT 1",
     });
@@ -118,5 +121,29 @@ describe("QueryHistoryDetailModal (sprint-372)", () => {
     closeBtn.click();
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows only redacted SQL for file analytics history details", async () => {
+    invokeMock.mockResolvedValueOnce({
+      id: 12,
+      source: "file-analytics",
+      sql: "SELECT '/Users/felix/private/sales.csv' AS path FROM \"sales_csv\"",
+      sqlRedacted: 'SELECT ? AS path FROM "sales_csv"',
+    });
+
+    render(<QueryHistoryDetailModal id={12} onClose={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("query-history-detail-sql")).toHaveTextContent(
+        'SELECT ? AS path FROM "sales_csv"',
+      );
+    });
+
+    expect(document.body).not.toHaveTextContent(
+      "/Users/felix/private/sales.csv",
+    );
+    expect(
+      screen.queryByTestId("query-history-detail-sql-redacted"),
+    ).not.toBeInTheDocument();
   });
 });

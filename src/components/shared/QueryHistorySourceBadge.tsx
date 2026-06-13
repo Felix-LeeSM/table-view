@@ -53,21 +53,35 @@ const META: Record<Exclude<QueryHistorySource, "raw">, SourceMeta> = {
 
 interface QueryHistorySourceBadgeProps {
   source?: QueryHistorySource;
+  sourceLabel?: string | null;
 }
 
 export function QueryHistorySourceBadge({
   source,
+  sourceLabel,
 }: QueryHistorySourceBadgeProps) {
   if (!source || source === "raw") return null;
   const meta = META[source];
+  const label =
+    source === "file-analytics" && sourceLabel
+      ? (sourceLabel.split(/[\\/]/).filter(Boolean).pop() ?? meta.label)
+      : meta.label;
+  const title =
+    source === "file-analytics" && label !== meta.label
+      ? `Recorded from ${label} DuckDB local-file source query`
+      : meta.title;
+  const labelClass =
+    source === "file-analytics" && label !== meta.label
+      ? "inline-block max-w-48 truncate align-bottom"
+      : "";
   return (
     <span
       data-testid="query-history-source-badge"
       data-source={source}
-      title={meta.title}
-      className={`shrink-0 rounded px-1.5 py-0.5 text-3xs font-semibold tracking-wide ${meta.className}`}
+      title={title}
+      className={`shrink-0 rounded px-1.5 py-0.5 text-3xs font-semibold tracking-wide ${labelClass} ${meta.className}`}
     >
-      {meta.label}
+      {label}
     </span>
   );
 }

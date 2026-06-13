@@ -200,6 +200,7 @@ export default function GlobalQueryLogPanel({
                 )}
                 <QueryHistorySourceBadge
                   source={row.source as QueryHistorySource}
+                  sourceLabel={row.collection}
                 />
               </div>
             </div>

@@ -7,7 +7,7 @@
  *
  * 책임:
  *   - mount 시 `getHistoryDetail({ id })` 1회 호출 + loading state.
- *   - 응답 sql 을 `<pre>` 안에 raw 로 표시 (단, sqlRedacted 와 비교 라벨).
+ *   - 응답 sql 을 `<pre>` 안에 표시. file-analytics 는 redacted variant 만 표시.
  *   - close 시 modal 사라짐.
  *
  * Test:
@@ -81,7 +81,7 @@ export default function QueryHistoryDetailModal({
             Query history entry #{id}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Original SQL is fetched on demand from
+            SQL detail is fetched on demand from
             <code className="ml-1">get_history_detail</code>; the list view
             never carries it.
           </DialogDescription>
@@ -110,26 +110,30 @@ export default function QueryHistoryDetailModal({
           <div className="space-y-3">
             <section>
               <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Original SQL
+                {detail.source === "file-analytics" ? "SQL" : "Original SQL"}
               </h3>
               <pre
                 className="max-h-64 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs text-foreground"
                 data-testid="query-history-detail-sql"
               >
-                {detail.sql}
+                {detail.source === "file-analytics"
+                  ? detail.sqlRedacted
+                  : detail.sql}
               </pre>
             </section>
-            <section>
-              <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Redacted
-              </h3>
-              <pre
-                className="max-h-32 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs text-muted-foreground"
-                data-testid="query-history-detail-sql-redacted"
-              >
-                {detail.sqlRedacted}
-              </pre>
-            </section>
+            {detail.source !== "file-analytics" && (
+              <section>
+                <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Redacted
+                </h3>
+                <pre
+                  className="max-h-32 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs text-muted-foreground"
+                  data-testid="query-history-detail-sql-redacted"
+                >
+                  {detail.sqlRedacted}
+                </pre>
+              </section>
+            )}
           </div>
         )}
 

@@ -54,4 +54,22 @@ describe("GlobalQueryLogPanel", () => {
       "explain",
     );
   });
+
+  it("renders DuckDB file analytics source badges with file name only", async () => {
+    invokeMock.mockResolvedValueOnce({
+      rows: [
+        row({
+          source: "file-analytics",
+          collection: "sales.csv",
+          sqlRedacted: 'SELECT * FROM "sales_csv"',
+        }),
+      ],
+    });
+
+    render(<GlobalQueryLogPanel visible onClose={vi.fn()} />);
+
+    const badge = await screen.findByTestId("query-history-source-badge");
+    expect(badge).toHaveTextContent("sales.csv");
+    expect(document.body).not.toHaveTextContent("/Users/felix/private");
+  });
 });

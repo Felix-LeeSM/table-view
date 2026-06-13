@@ -11,7 +11,7 @@
  *   - `paradigm` + `queryMode` are a discriminated union — invalid combos
  *     are rejected by serde at the backend before any handler logic.
  *   - `list_history` responses NEVER carry `sql` — only `sqlRedacted`.
- *   - `get_history_detail` is the only path that returns the original SQL.
+ *   - `get_history_detail` is the only path that can return original SQL.
  *   - `clear_history` returns `{deletedCount}` and emits `state-changed`
  *     with domain `history`, op `clear`.
  *
@@ -170,9 +170,10 @@ export interface GetHistoryDetailRequest {
   id: number;
 }
 
-/** Detail response — exactly 3 keys. The only path that exposes original `sql`. */
+/** Detail response. `source` lets privacy-sensitive callers suppress raw SQL. */
 export interface HistoryDetailResponse {
   id: number;
+  source: string;
   sql: string;
   sqlRedacted: string;
 }

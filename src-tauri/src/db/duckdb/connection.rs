@@ -70,16 +70,14 @@ impl DuckdbAdapter {
             ));
         }
         if !path_ref.exists() {
-            return Err(AppError::Validation(format!(
-                "DuckDB database file does not exist: {}",
-                path_ref.display()
-            )));
+            return Err(AppError::Validation(
+                "DuckDB database file does not exist".into(),
+            ));
         }
         if !path_ref.is_file() {
-            return Err(AppError::Validation(format!(
-                "DuckDB database path is not a file: {}",
-                path_ref.display()
-            )));
+            return Err(AppError::Validation(
+                "DuckDB database path is not a file".into(),
+            ));
         }
         let is_duckdb_file = path_ref
             .extension()
@@ -500,7 +498,11 @@ fn open_connection_with_external_access(
         .and_then(|config| config.enable_autoload_extension(false))
         .map_err(|e| AppError::Connection(e.to_string()))?;
     Connection::open_with_flags(&settings.path, config)
-        .map_err(|e| AppError::Connection(e.to_string()))
+        .map_err(|e| AppError::Connection(redact_duckdb_path(&e.to_string(), &settings.path)))
+}
+
+fn redact_duckdb_path(message: &str, path: &str) -> String {
+    message.replace(path, "<local-file>")
 }
 
 fn table_names(
@@ -572,4 +574,30 @@ where
     rows.into_iter()
         .map(|row| row.map_err(|e| AppError::Database(e.to_string())))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_user_database_path_hides_missing_absolute_path() {
+        let path = "/Users/felix/private/missing.duckdb";
+        let err = DuckdbAdapter::validate_user_database_path(path).unwrap_err();
+
+        let message = err.to_string();
+        assert!(message.contains("DuckDB database file does not exist"));
+        assert!(!message.contains(path));
+    }
+
+    #[test]
+    fn redact_duckdb_path_replaces_database_path_in_driver_errors() {
+        let path = "/Users/felix/private/app.duckdb";
+        let message = redact_duckdb_path(
+            "IO Error: cannot open /Users/felix/private/app.duckdb",
+            path,
+        );
+
+        assert_eq!(message, "IO Error: cannot open <local-file>");
+    }
 }
