@@ -74,6 +74,7 @@ const TAURI_FUNCTIONS = [
   "listSchemas",
   "listSearchCatalogSummary",
   "listSearchIndexTemplates",
+  "listSqliteCapabilities",
   "listTables",
   "listTriggers",
   "listViews",

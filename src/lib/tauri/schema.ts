@@ -7,6 +7,7 @@ import type {
   PostgresExtensionInfo,
   PostgresTypeInfo,
   SchemaInfo,
+  SqliteCapabilityInventory,
   TableInfo,
   TriggerInfo,
   ViewInfo,
@@ -245,6 +246,16 @@ export async function listPostgresExtensions(
   expectedDatabase?: string,
 ): Promise<PostgresExtensionInfo[]> {
   return invoke<PostgresExtensionInfo[]>("list_postgres_extensions", {
+    connectionId,
+    expectedDatabase: expectedDatabase ?? null,
+  });
+}
+
+export async function listSqliteCapabilities(
+  connectionId: string,
+  expectedDatabase?: string,
+): Promise<SqliteCapabilityInventory> {
+  return invoke<SqliteCapabilityInventory>("list_sqlite_capabilities", {
     connectionId,
     expectedDatabase: expectedDatabase ?? null,
   });

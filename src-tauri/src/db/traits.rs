@@ -20,7 +20,7 @@ use crate::models::{
     SearchAliasInfo, SearchClusterIdentity, SearchDataStreamInfo, SearchDeleteByQueryRequest,
     SearchDestructiveOperationPlan, SearchFieldStatsEnvelope, SearchIndexInfo, SearchIndexMapping,
     SearchIndexSettings, SearchIndexTemplateInfo, SearchQueryRequest, SearchResultEnvelope,
-    TableData, TableInfo, TriggerInfo, ViewInfo,
+    SqliteCapabilityInventory, TableData, TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::types::{
@@ -621,6 +621,20 @@ pub trait RdbAdapter: DbAdapter {
         Box::pin(async {
             Err(AppError::Unsupported(
                 "This adapter does not list PostgreSQL extensions".into(),
+            ))
+        })
+    }
+
+    /// SQLite capability inventory for built-in extension modules. SQLite
+    /// overrides this with probed JSON1/FTS5/RTREE booleans; other RDBMS
+    /// adapters keep this unsupported so callers cannot reuse PostgreSQL
+    /// extension inventory semantics.
+    fn sqlite_capabilities<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<SqliteCapabilityInventory, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not list SQLite capabilities".into(),
             ))
         })
     }

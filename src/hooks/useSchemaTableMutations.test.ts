@@ -59,6 +59,7 @@ function resetSchemaStore(): void {
     views: {},
     functions: {},
     postgresExtensions: {},
+    sqliteCapabilities: {},
     tableColumnsCache: {},
     triggers: {},
     loading: false,

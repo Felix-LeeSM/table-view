@@ -56,6 +56,9 @@ beforeEach(() => {
         },
       ]),
     ),
+    listSqliteCapabilities: vi.fn(() =>
+      Promise.resolve({ json1: true, fts5: false, rtree: true }),
+    ),
     getTableColumns: vi.fn(() =>
       Promise.resolve([
         {
@@ -202,6 +205,7 @@ describe("schemaStore", () => {
       views: {},
       functions: {},
       postgresExtensions: {},
+      sqliteCapabilities: {},
       tableColumnsCache: {},
       // Sprint 272 — reset the triggers slice between tests so cache
       // residue from a prior `getTableTriggers` doesn't leak into the
@@ -323,6 +327,23 @@ describe("schemaStore", () => {
     expect(listPostgresExtensions).toHaveBeenCalledTimes(1);
     expect(second).toEqual(first);
     expect(useSchemaStore.getState().postgresExtensions.conn1?.db1).toEqual(
+      first,
+    );
+  });
+
+  it("loadSqliteCapabilities caches inventory by connection and database", async () => {
+    const { listSqliteCapabilities } = await import("@lib/tauri");
+    const first = await useSchemaStore
+      .getState()
+      .loadSqliteCapabilities("conn1", "db1");
+    const second = await useSchemaStore
+      .getState()
+      .loadSqliteCapabilities("conn1", "db1");
+
+    expect(listSqliteCapabilities).toHaveBeenCalledWith("conn1", "db1");
+    expect(listSqliteCapabilities).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(first);
+    expect(useSchemaStore.getState().sqliteCapabilities.conn1?.db1).toEqual(
       first,
     );
   });
@@ -834,6 +855,10 @@ describe("schemaStore", () => {
           db1: [],
         },
       },
+      sqliteCapabilities: {
+        conn1: { db1: { json1: true, fts5: false, rtree: true } },
+        conn2: { db1: { json1: false, fts5: false, rtree: false } },
+      },
       tableColumnsCache: {
         conn1: { db1: { public: { users: [] } } },
         conn2: { db1: { public: { users: [] } } },
@@ -851,7 +876,13 @@ describe("schemaStore", () => {
     expect(state.views.conn1?.db1?.public).toBeUndefined();
     expect(state.functions.conn1?.db1?.public).toBeUndefined();
     expect(state.postgresExtensions.conn1?.db1).toBeUndefined();
+    expect(state.sqliteCapabilities.conn1?.db1).toBeUndefined();
     expect(state.postgresExtensions.conn2?.db1).toEqual([]);
+    expect(state.sqliteCapabilities.conn2?.db1).toEqual({
+      json1: false,
+      fts5: false,
+      rtree: false,
+    });
     expect(state.tableColumnsCache.conn1?.db1?.public?.users).toBeUndefined();
     expect(state.tableColumnsCache.conn2?.db1?.public?.users).toEqual([]);
   });

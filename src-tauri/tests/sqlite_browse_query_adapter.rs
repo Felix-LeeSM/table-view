@@ -114,6 +114,51 @@ async fn connected_fixture() -> (TempDir, SqliteAdapter) {
     (dir, adapter)
 }
 
+async fn seed_sqlite_capability_tables(path: &std::path::Path) -> (bool, bool) {
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(
+            SqliteConnectOptions::new()
+                .filename(path)
+                .create_if_missing(false)
+                .foreign_keys(true),
+        )
+        .await
+        .unwrap();
+
+    let fts5 = sqlx::query("CREATE VIRTUAL TABLE docs_fts USING fts5(title, body)")
+        .execute(&pool)
+        .await
+        .is_ok();
+    if fts5 {
+        sqlx::query(
+            "INSERT INTO docs_fts(rowid, title, body)
+             VALUES (1, 'Ada notes', 'Ada writes SQLite search notes')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    let rtree =
+        sqlx::query("CREATE VIRTUAL TABLE boxes_rtree USING rtree(id, min_x, max_x, min_y, max_y)")
+            .execute(&pool)
+            .await
+            .is_ok();
+    if rtree {
+        sqlx::query(
+            "INSERT INTO boxes_rtree(id, min_x, max_x, min_y, max_y)
+             VALUES (1, 0.0, 1.0, 0.0, 1.0)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    pool.close().await;
+    (fts5, rtree)
+}
+
 #[tokio::test]
 async fn sqlite_contract_opens_user_file_and_browses_tables_and_columns() {
     let (_dir, adapter) = connected_fixture().await;
@@ -208,6 +253,59 @@ async fn sqlite_contract_execute_query_returns_tabular_result_envelope() {
         ]],
     )
     .await;
+}
+
+#[tokio::test]
+async fn sqlite_contract_probes_capabilities_and_runs_only_read_query_evidence() {
+    let dir = TempDir::new().unwrap();
+    let db_path = dir.path().join("user.sqlite");
+    seed_sqlite(&db_path).await;
+    let (seeded_fts5, seeded_rtree) = seed_sqlite_capability_tables(&db_path).await;
+
+    let adapter = SqliteAdapter::new();
+    adapter
+        .connect(&sqlite_config(db_path.to_str().unwrap()))
+        .await
+        .unwrap();
+    let inventory = <SqliteAdapter as RdbAdapter>::sqlite_capabilities(&adapter)
+        .await
+        .unwrap();
+
+    if inventory.json1 {
+        assert_rdb_select_envelope(
+            &adapter,
+            "SELECT json_extract('{\"name\":\"Ada\"}', '$.name') AS name",
+            &["name"],
+            vec![vec![serde_json::json!("Ada")]],
+        )
+        .await;
+    }
+    if inventory.fts5 {
+        assert!(
+            seeded_fts5,
+            "FTS5 was probed true but seeded virtual table creation failed"
+        );
+        assert_rdb_select_envelope(
+            &adapter,
+            "SELECT rowid, title FROM docs_fts WHERE docs_fts MATCH 'Ada'",
+            &["rowid", "title"],
+            vec![vec![serde_json::json!(1), serde_json::json!("Ada notes")]],
+        )
+        .await;
+    }
+    if inventory.rtree {
+        assert!(
+            seeded_rtree,
+            "RTREE was probed true but seeded virtual table creation failed"
+        );
+        assert_rdb_select_envelope(
+            &adapter,
+            "SELECT id FROM boxes_rtree WHERE min_x >= 0.0 AND max_x <= 1.0",
+            &["id"],
+            vec![vec![serde_json::json!(1)]],
+        )
+        .await;
+    }
 }
 
 #[tokio::test]

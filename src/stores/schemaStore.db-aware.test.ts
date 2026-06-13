@@ -41,6 +41,7 @@ describe("schemaStore — db-aware caching (Sprint 263)", () => {
       views: {},
       functions: {},
       postgresExtensions: {},
+      sqliteCapabilities: {},
       tableColumnsCache: {},
       loading: false,
       error: null,
@@ -102,6 +103,12 @@ describe("schemaStore — db-aware caching (Sprint 263)", () => {
           db2: [],
         },
       },
+      sqliteCapabilities: {
+        conn1: {
+          db1: { json1: true, fts5: false, rtree: false },
+          db2: { json1: false, fts5: false, rtree: false },
+        },
+      },
     });
 
     useSchemaStore.getState().clearForWorkspace("conn1", "db1");
@@ -113,6 +120,12 @@ describe("schemaStore — db-aware caching (Sprint 263)", () => {
     expect(state.tables.conn1?.db2?.public).toBeDefined();
     expect(state.postgresExtensions.conn1?.db1).toBeUndefined();
     expect(state.postgresExtensions.conn1?.db2).toEqual([]);
+    expect(state.sqliteCapabilities.conn1?.db1).toBeUndefined();
+    expect(state.sqliteCapabilities.conn1?.db2).toEqual({
+      json1: false,
+      fts5: false,
+      rtree: false,
+    });
   });
 
   it("clearForConnection drops every db slot for the connection", async () => {
@@ -124,6 +137,13 @@ describe("schemaStore — db-aware caching (Sprint 263)", () => {
         conn1: { db1: [], db2: [] },
         conn2: { db1: [] },
       },
+      sqliteCapabilities: {
+        conn1: {
+          db1: { json1: true, fts5: false, rtree: false },
+          db2: { json1: false, fts5: true, rtree: false },
+        },
+        conn2: { db1: { json1: false, fts5: false, rtree: true } },
+      },
     });
 
     useSchemaStore.getState().clearForConnection("conn1");
@@ -133,6 +153,12 @@ describe("schemaStore — db-aware caching (Sprint 263)", () => {
     expect(state.schemas.conn2?.db1).toEqual([{ name: "public" }]);
     expect(state.postgresExtensions.conn1).toBeUndefined();
     expect(state.postgresExtensions.conn2?.db1).toEqual([]);
+    expect(state.sqliteCapabilities.conn1).toBeUndefined();
+    expect(state.sqliteCapabilities.conn2?.db1).toEqual({
+      json1: false,
+      fts5: false,
+      rtree: true,
+    });
   });
 
   it("evictSchemaForName drops only the (connId, db, schemaName) triple", async () => {

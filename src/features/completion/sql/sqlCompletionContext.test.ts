@@ -532,6 +532,11 @@ describe("buildSqlCompletionContext", () => {
         "/tmp/app.sqlite": [pgExtension("fts5"), pgExtension("rtree")],
       },
     };
+    snapshot.sqliteCapabilities = {
+      conn1: {
+        "/tmp/app.sqlite": { json1: true, fts5: false, rtree: true },
+      },
+    };
 
     const ctx = buildSqlCompletionContext({
       ...snapshot,
@@ -551,7 +556,13 @@ describe("buildSqlCompletionContext", () => {
         tablesLoaded: true,
         columnsLoaded: true,
         extensionsLoaded: false,
+        sqliteCapabilitiesLoaded: true,
       },
+    });
+    expect(ctx.sqliteCapabilities).toEqual({
+      json1: true,
+      fts5: false,
+      rtree: true,
     });
     expect(ctx.catalog.objects.map((object) => object.qualifiedName)).toEqual([
       "main.users",
@@ -561,6 +572,18 @@ describe("buildSqlCompletionContext", () => {
       "main.users.id",
     ]);
     expect(ctx.catalog.extensions).toEqual([]);
+  });
+
+  it("keeps missing SQLite capability inventory explicit", () => {
+    const ctx = buildSqlCompletionContext({
+      ...emptySnapshot(),
+      connectionId: "conn1",
+      database: "/tmp/app.sqlite",
+      dbType: "sqlite",
+    });
+
+    expect(ctx.sqliteCapabilities).toBeNull();
+    expect(ctx.cacheState.sqliteCapabilitiesLoaded).toBe(false);
   });
 
   it("keeps backend completion metadata fetch state explicit for empty results", () => {
@@ -587,6 +610,7 @@ describe("buildSqlCompletionContext", () => {
       columnsLoaded: false,
       functionsLoaded: false,
       extensionsLoaded: false,
+      sqliteCapabilitiesLoaded: false,
     });
 
     const loadedEmpty = emptySnapshot();
@@ -622,6 +646,7 @@ describe("buildSqlCompletionContext", () => {
       columnsLoaded: true,
       functionsLoaded: true,
       extensionsLoaded: true,
+      sqliteCapabilitiesLoaded: false,
     });
   });
 

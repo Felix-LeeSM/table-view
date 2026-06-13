@@ -587,3 +587,9 @@ export interface PostgresExtensionInfo {
   version: string;
   comment: string | null;
 }
+
+export interface SqliteCapabilityInventory {
+  json1: boolean;
+  fts5: boolean;
+  rtree: boolean;
+}

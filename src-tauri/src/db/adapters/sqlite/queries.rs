@@ -13,7 +13,9 @@ use crate::models::{
 use super::connection::{
     quote_identifier, sqlite_column_category, validate_namespace, SqliteAdapter,
 };
-use super::sql_text::{sqlite_query_type, strip_trailing_terminator};
+use super::sql_text::{
+    sqlite_invokes_load_extension, sqlite_query_type, strip_trailing_terminator,
+};
 
 fn validate_raw_where(rw: &str) -> Result<(), AppError> {
     validate_raw_where_clause(RawWhereDialect::Sqlite, rw)
@@ -98,6 +100,19 @@ pub(super) fn validate_sqlite_write_guardrails(
     }
 }
 
+pub(super) fn validate_sqlite_execution_guardrails(
+    sql: &str,
+    query_type: &QueryType,
+    read_only: bool,
+) -> Result<(), AppError> {
+    if sqlite_invokes_load_extension(sql) {
+        return Err(AppError::Unsupported(
+            "SQLite loadable extensions are not supported by Table View.".into(),
+        ));
+    }
+    validate_sqlite_write_guardrails(query_type, read_only)
+}
+
 impl SqliteAdapter {
     pub async fn execute_query(
         &self,
@@ -118,7 +133,7 @@ impl SqliteAdapter {
 
         let (pool, read_only) = self.active_pool_with_mode().await?;
         let query_type = sqlite_query_type(query);
-        validate_sqlite_write_guardrails(&query_type, read_only)?;
+        validate_sqlite_execution_guardrails(query, &query_type, read_only)?;
 
         let work = async {
             match query_type {

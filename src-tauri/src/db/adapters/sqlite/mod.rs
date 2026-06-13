@@ -24,7 +24,8 @@ use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, DropColumnRequest,
     DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, IndexInfo,
-    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
+    RenameTableRequest, SchemaChangeResult, SqliteCapabilityInventory, TableData, TableInfo,
+    ViewInfo,
 };
 
 use crate::db::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -74,6 +75,13 @@ impl RdbAdapter for SqliteAdapter {
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Option<String>, AppError>> + Send + 'a>> {
         Box::pin(async move { Ok(self.current_database_path().await) })
+    }
+
+    fn sqlite_capabilities<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<SqliteCapabilityInventory, AppError>> + Send + 'a>>
+    {
+        Box::pin(async move { self.capability_inventory().await })
     }
 
     fn list_tables<'a>(

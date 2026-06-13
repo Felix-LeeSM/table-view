@@ -20,6 +20,7 @@ import {
   listPostgresTypes,
   listSchemaColumns,
   listSchemas,
+  listSqliteCapabilities,
   listTables,
   listTriggers,
   listViews,
@@ -172,6 +173,14 @@ const cases: SchemaCase[] = [
   {
     command: "list_postgres_extensions",
     run: (expected) => listPostgresExtensions("conn-1", expected),
+    payload: (expectedDatabase) => ({
+      connectionId: "conn-1",
+      expectedDatabase,
+    }),
+  },
+  {
+    command: "list_sqlite_capabilities",
+    run: (expected) => listSqliteCapabilities("conn-1", expected),
     payload: (expectedDatabase) => ({
       connectionId: "conn-1",
       expectedDatabase,

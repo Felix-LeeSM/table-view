@@ -212,6 +212,32 @@ async fn test_sqlite_adapter_lists_main_namespace_and_tables() {
 }
 
 #[tokio::test]
+async fn test_sqlite_adapter_caches_capability_inventory_until_disconnect() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("app.sqlite");
+    seed_sqlite(&db_path).await;
+    let adapter = SqliteAdapter::new();
+    adapter
+        .connect_pool(&sqlite_config(db_path.to_str().unwrap()))
+        .await
+        .unwrap();
+
+    let inventory = adapter.capability_inventory().await.unwrap();
+    if inventory.json1 {
+        adapter
+            .execute_query("SELECT json_extract('{\"a\":1}', '$.a') AS value", None)
+            .await
+            .unwrap();
+    }
+
+    adapter.disconnect_pool().await.unwrap();
+    assert!(matches!(
+        adapter.capability_inventory().await,
+        Err(AppError::Connection(_))
+    ));
+}
+
+#[tokio::test]
 async fn test_sqlite_adapter_reads_columns_and_foreign_keys() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("app.sqlite");

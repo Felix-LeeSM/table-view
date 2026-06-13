@@ -153,6 +153,7 @@ describe("QueryTab — lifecycle", () => {
       views: {},
       functions: {},
       postgresExtensions: {},
+      sqliteCapabilities: {},
       tableColumnsCache: {},
       fileAnalyticsSources: {
         conn1: [
@@ -263,6 +264,7 @@ describe("QueryTab — lifecycle", () => {
         },
       },
       postgresExtensions: {},
+      sqliteCapabilities: {},
       tableColumnsCache: {
         conn1: {
           FREEPDB1: {

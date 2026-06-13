@@ -97,6 +97,19 @@ fn sqlite_query_type_classifies_cte_prefixed_main_statement() {
     ));
 }
 
+#[test]
+fn sqlite_load_extension_scanner_ignores_comments_and_strings() {
+    assert!(sqlite_invokes_load_extension(
+        "SELECT load_extension('spellfix')"
+    ));
+    assert!(sqlite_invokes_load_extension(
+        "SELECT /* allowed comment */ LOAD_EXTENSION ( 'x' )"
+    ));
+    assert!(!sqlite_invokes_load_extension(
+        "SELECT 'load_extension(' AS label -- load_extension('x')"
+    ));
+}
+
 #[tokio::test]
 async fn execute_query_select_returns_columns_and_rows() {
     let (_dir, adapter) = connected_adapter().await;
@@ -175,6 +188,25 @@ async fn execute_query_rejects_sqlite_ddl_clearly() {
             assert!(message.contains("SQLite DDL is not supported"))
         }
         other => panic!("Expected SQLite DDL unsupported error, got: {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn execute_query_rejects_loadable_extensions_explicitly() {
+    let (_dir, adapter) = connected_adapter().await;
+
+    let result = adapter
+        .execute_query("SELECT load_extension('spellfix')", None)
+        .await;
+
+    match result {
+        Err(AppError::Unsupported(message)) => {
+            assert!(message.contains("loadable extensions"))
+        }
+        other => panic!(
+            "Expected loadable extension unsupported error, got: {:?}",
+            other
+        ),
     }
 }
 

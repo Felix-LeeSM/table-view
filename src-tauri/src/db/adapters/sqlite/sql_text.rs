@@ -22,6 +22,56 @@ pub(super) fn sqlite_query_type(sql: &str) -> QueryType {
     }
 }
 
+pub(super) fn sqlite_invokes_load_extension(sql: &str) -> bool {
+    let bytes = sql.as_bytes();
+    let mut idx = 0;
+    while idx < bytes.len() {
+        match bytes[idx] {
+            b'\'' | b'"' | b'`' => {
+                idx = skip_quoted(bytes, idx, bytes[idx]).unwrap_or(bytes.len());
+            }
+            b'[' => {
+                idx += 1;
+                while idx < bytes.len() && bytes[idx] != b']' {
+                    idx += 1;
+                }
+                idx = idx.saturating_add(1);
+            }
+            b'-' if bytes.get(idx + 1) == Some(&b'-') => {
+                idx += 2;
+                while idx < bytes.len() && bytes[idx] != b'\n' {
+                    idx += 1;
+                }
+            }
+            b'/' if bytes.get(idx + 1) == Some(&b'*') => {
+                idx += 2;
+                while idx + 1 < bytes.len() {
+                    if bytes[idx] == b'*' && bytes[idx + 1] == b'/' {
+                        idx += 2;
+                        break;
+                    }
+                    idx += 1;
+                }
+            }
+            byte if is_word_start(byte) => {
+                let start = idx;
+                idx += 1;
+                while idx < bytes.len() && is_word_continue(bytes[idx]) {
+                    idx += 1;
+                }
+                if sql[start..idx].eq_ignore_ascii_case("load_extension") {
+                    let next = skip_sql_whitespace_and_comments(sql, idx);
+                    if bytes.get(next) == Some(&b'(') {
+                        return true;
+                    }
+                }
+            }
+            _ => idx += 1,
+        }
+    }
+    false
+}
+
 fn strip_leading_comments(sql: &str) -> &str {
     let mut s = sql.trim_start();
     loop {

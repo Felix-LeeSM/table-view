@@ -6,6 +6,7 @@ import type {
   IndexInfo,
   PostgresExtensionInfo,
   SchemaInfo,
+  SqliteCapabilityInventory,
   TableInfo,
   TriggerInfo,
   ViewInfo,
@@ -40,6 +41,7 @@ import {
  *   views:             Record<connId, Record<db, Record<schema, ViewInfo[]>>>
  *   functions:         Record<connId, Record<db, Record<schema, FunctionInfo[]>>>
  *   postgresExtensions: Record<connId, Record<db, PostgresExtensionInfo[]>>
+ *   sqliteCapabilities: Record<connId, Record<db, SqliteCapabilityInventory>>
  *   tableColumnsCache: Record<connId, Record<db, Record<schema, Record<table, ColumnInfo[]>>>>
  *   tableIndexesCache: Record<connId, Record<db, Record<schema, Record<table, IndexInfo[]>>>>
  *   tableConstraintsCache: Record<connId, Record<db, Record<schema, Record<table, ConstraintInfo[]>>>>
@@ -78,6 +80,7 @@ interface SchemaState {
   views: ByConn<BySchema<ViewInfo[]>>;
   functions: ByConn<BySchema<FunctionInfo[]>>;
   postgresExtensions: ByConn<PostgresExtensionInfo[]>;
+  sqliteCapabilities: ByConn<SqliteCapabilityInventory>;
   tableColumnsCache: ByConn<BySchema<ByTable<ColumnInfo[]>>>;
   tableIndexesCache: ByConn<BySchema<ByTable<IndexInfo[]>>>;
   tableConstraintsCache: ByConn<BySchema<ByTable<ConstraintInfo[]>>>;
@@ -120,6 +123,10 @@ interface SchemaState {
     connId: string,
     db: string,
   ) => Promise<PostgresExtensionInfo[]>;
+  loadSqliteCapabilities: (
+    connId: string,
+    db: string,
+  ) => Promise<SqliteCapabilityInventory>;
   loadFileAnalyticsSources: (
     connId: string,
   ) => Promise<FileAnalyticsSourceMetadata[]>;
@@ -221,6 +228,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   views: {},
   functions: {},
   postgresExtensions: {},
+  sqliteCapabilities: {},
   tableColumnsCache: {},
   tableIndexesCache: {},
   tableConstraintsCache: {},
@@ -407,6 +415,27 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     }
   },
 
+  loadSqliteCapabilities: async (connId, db) => {
+    const cached = get().sqliteCapabilities[connId]?.[db];
+    if (cached) return cached;
+    try {
+      const capabilities = await tauri.listSqliteCapabilities(connId, db);
+      set((state) => ({
+        sqliteCapabilities: setConnDb(
+          state.sqliteCapabilities,
+          connId,
+          db,
+          capabilities,
+        ),
+      }));
+      return capabilities;
+    } catch (e) {
+      handleDbMismatch(connId, e);
+      set({ error: getTauriErrorMessage(e) });
+      throw e;
+    }
+  },
+
   loadFileAnalyticsSources: async (connId) => {
     try {
       const sources = await tauri.listFileAnalyticsSourceMetadata(connId);
@@ -580,6 +609,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       views: deleteConn(state.views, connId),
       functions: deleteConn(state.functions, connId),
       postgresExtensions: deleteConn(state.postgresExtensions, connId),
+      sqliteCapabilities: deleteConn(state.sqliteCapabilities, connId),
       tableColumnsCache: deleteConn(state.tableColumnsCache, connId),
       tableIndexesCache: deleteConn(state.tableIndexesCache, connId),
       tableConstraintsCache: deleteConn(state.tableConstraintsCache, connId),
@@ -599,6 +629,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       views: deleteConnDb(state.views, connId, db),
       functions: deleteConnDb(state.functions, connId, db),
       postgresExtensions: deleteConnDb(state.postgresExtensions, connId, db),
+      sqliteCapabilities: deleteConnDb(state.sqliteCapabilities, connId, db),
       tableColumnsCache: deleteConnDb(state.tableColumnsCache, connId, db),
       tableIndexesCache: deleteConnDb(state.tableIndexesCache, connId, db),
       tableConstraintsCache: deleteConnDb(

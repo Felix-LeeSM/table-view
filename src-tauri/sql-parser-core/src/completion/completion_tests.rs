@@ -628,11 +628,19 @@ fn mariadb_returning_keyword_is_version_sensitive() {
 #[test]
 fn sqlite_reference_vocabulary_smoke() {
     assert_builtin_completion_contains("sqlite", "sqlite-cli", "WITHO", "WITHOUT ROWID");
-    assert_builtin_completion_contains("sqlite", "sqlite-cli", "JSON_EX", "JSON_EXTRACT");
     assert_builtin_completion_contains("sqlite", "sqlite-cli", "STRF", "STRFTIME");
     assert_builtin_completion_contains("sqlite", "sqlite-cli", ".rec", ".recover");
     assert_builtin_completion_contains("sqlite", "sqlite-cli", ".exp", ".expert");
     assert_builtin_completion_contains("sqlite", "sqlite-cli", ".sch", ".schema");
+}
+
+#[test]
+fn sqlite_json1_completion_depends_on_request_vocabulary() {
+    let absent = complete_sql(empty_vocabulary_request("sqlite", "sqlite-cli", "JSON_EX"));
+    assert!(!labels(&absent).contains(&"JSON_EXTRACT".to_string()));
+
+    let present = complete_sql(request_for_dialect("sqlite", "sqlite-cli", "JSON_EX"));
+    assert!(labels(&present).contains(&"JSON_EXTRACT".to_string()));
 }
 
 #[test]

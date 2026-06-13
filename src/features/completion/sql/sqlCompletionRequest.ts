@@ -23,6 +23,25 @@ import type {
   SqlCompletionContext,
 } from "./sqlCompletionContext";
 
+const SQLITE_JSON1_FUNCTIONS = [
+  "JSON",
+  "JSON_ARRAY",
+  "JSON_EXTRACT",
+  "JSON_GROUP_ARRAY",
+  "JSON_GROUP_OBJECT",
+  "JSON_OBJECT",
+  "JSON_PATCH",
+  "JSON_REMOVE",
+  "JSON_REPLACE",
+  "JSON_SET",
+  "JSON_TYPE",
+  "JSON_VALID",
+] as const;
+
+const SQLITE_FTS5_KEYWORDS = ["MATCH"] as const;
+const SQLITE_FTS5_FUNCTIONS = ["BM25", "HIGHLIGHT", "SNIPPET"] as const;
+const SQLITE_RTREE_KEYWORDS = ["RTREE"] as const;
+
 export interface SqlCompletionRequest {
   language: Extract<CompletionLanguage, "sql">;
   text: string;
@@ -68,17 +87,51 @@ function completionVocabularyForContext(
   vocabulary: SqlDialectVocabulary,
   context: SqlCompletionContext,
 ): SqlDialectVocabulary {
-  if (context.dialect !== "mariadb") return vocabulary;
-  if (mariadbServerVersionSupportsReturning(context.serverVersion)) {
-    return vocabulary;
+  let next = vocabulary;
+  if (
+    context.dialect === "mariadb" &&
+    !mariadbServerVersionSupportsReturning(context.serverVersion)
+  ) {
+    next = {
+      ...next,
+      keywords: next.keywords.filter(
+        (keyword) => keyword.toUpperCase() !== "RETURNING",
+      ),
+    };
+  }
+
+  if (context.dialect !== "sqlite" || context.sqliteCapabilities === null) {
+    return next;
+  }
+
+  const keywords = [...next.keywords];
+  const functions = [...next.functions];
+  if (context.sqliteCapabilities.json1) {
+    appendUnique(functions, SQLITE_JSON1_FUNCTIONS);
+  }
+  if (context.sqliteCapabilities.fts5) {
+    appendUnique(keywords, SQLITE_FTS5_KEYWORDS);
+    appendUnique(functions, SQLITE_FTS5_FUNCTIONS);
+  }
+  if (context.sqliteCapabilities.rtree) {
+    appendUnique(keywords, SQLITE_RTREE_KEYWORDS);
   }
 
   return {
-    ...vocabulary,
-    keywords: vocabulary.keywords.filter(
-      (keyword) => keyword.toUpperCase() !== "RETURNING",
-    ),
+    ...next,
+    keywords,
+    functions,
   };
+}
+
+function appendUnique(target: string[], values: readonly string[]): void {
+  const seen = new Set(target.map((value) => value.toUpperCase()));
+  for (const value of values) {
+    const key = value.toUpperCase();
+    if (seen.has(key)) continue;
+    target.push(value);
+    seen.add(key);
+  }
 }
 
 function mariadbServerVersionSupportsReturning(

@@ -76,6 +76,7 @@ describe("SchemaErdPanel", () => {
       views: {},
       functions: {},
       postgresExtensions: {},
+      sqliteCapabilities: {},
       tableColumnsCache: {},
       tableIndexesCache: {},
       tableConstraintsCache: {},
