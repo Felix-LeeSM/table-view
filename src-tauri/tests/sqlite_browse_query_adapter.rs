@@ -654,7 +654,7 @@ async fn sqlite_contract_create_table_rejects_inline_constraint_fragments() {
                 name: "name".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: true,
-                default_value: Some("0 REFERENCES users(id)".to_string()),
+                default_value: Some("0 NOT NULL".to_string()),
                 comment: None,
                 is_identity: false,
             }],
@@ -665,7 +665,7 @@ async fn sqlite_contract_create_table_rejects_inline_constraint_fragments() {
         })
         .await;
 
-    assert_sqlite_ddl_unsupported(default_result, "REFERENCES");
+    assert_sqlite_ddl_unsupported(default_result, "NOT");
     let tables = adapter.list_tables("main").await.unwrap();
     assert!(!tables.iter().any(|table| table.name == "people"));
 }
