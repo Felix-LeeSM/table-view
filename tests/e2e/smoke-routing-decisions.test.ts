@@ -46,8 +46,12 @@ describe("smoke-routing-decisions.json", () => {
     const result = validateSmokeRoutingDecisions();
 
     expect(result.errors).toEqual([]);
+    expect(result.blockingDecisionMatrix).toContainEqual({
+      specKey: "duckdb-file-analytics",
+      spec: "e2e/smoke/duckdb-file-analytics.spec.ts",
+    });
     expect(result.blockingDecisionMatrix).toEqual(collectSmokeScriptMatrix());
     expect(result.blockingDecisionMatrix).toEqual(collectWorkflowMatrix());
-    expect(result.blockingDecisionMatrix).toHaveLength(17);
+    expect(result.blockingDecisionMatrix).toHaveLength(18);
   });
 });

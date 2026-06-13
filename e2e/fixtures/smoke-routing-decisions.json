@@ -242,6 +242,21 @@
       "action": "keep blocking E2E"
     },
     {
+      "id": "duckdb-file-analytics-smoke-fixture",
+      "fixture": "e2e/fixtures/duckdb/file-analytics/sales.csv",
+      "specs": ["e2e/smoke/duckdb-file-analytics.spec.ts"],
+      "specKeys": ["duckdb-file-analytics"],
+      "seedTargets": [],
+      "tier": "blocking E2E",
+      "wiredInSmokeScript": true,
+      "runtimeCost": "New file-backed matrix route from issue #879; no external service startup. Job timeout remains 40 minutes.",
+      "flakeRisk": "Lower than service-backed rows; spec uses an isolated app data directory and registers a deterministic repo-local CSV fixture.",
+      "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
+      "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-duckdb-file-analytics.",
+      "supportClaimImpact": "Runtime Happy Path evidence for registered local CSV source query and FILE history only, and only through the wired duckdb-file-analytics spec/workflow/script; fixture existence alone is not support evidence.",
+      "action": "promote as blocking E2E for registered local CSV analytics only"
+    },
+    {
       "id": "mongodb-runtime-smoke-seed",
       "fixture": "e2e/fixtures/mongodb/document/seed.json",
       "specs": ["e2e/smoke/mongodb.spec.ts"],

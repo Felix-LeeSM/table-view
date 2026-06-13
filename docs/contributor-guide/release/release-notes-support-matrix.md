@@ -36,6 +36,9 @@ Known limits to state in release notes:
   arbitrary JavaScript shell behavior, MSSQL full T-SQL/SQLCMD/admin support,
   and Oracle SID/TNS/wallet/TLS/raw-admin/full PL/SQL support remain out of
   scope.
+- DuckDB COPY/ATTACH/DETACH, extension install/load, raw external-file SQL
+  functions, import/export workflow, structured DDL/write UI, and admin parity
+  remain out of scope.
 
 ## Support Matrix
 
@@ -45,7 +48,7 @@ Known limits to state in release notes:
 | MySQL | Runtime/query/edit/catalog/DDL adapter is active for the tested MySQL-family baseline: connect, browse, SELECT, DML batch, row edit, cancellation, history labels, bounded DDL, and catalog-aware completion assistance. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
 | MariaDB | Distinct MariaDB identity and engine smoke baseline. Shared MySQL-family adapter paths are intentional and bounded; MariaDB-only syntax/admin/import/export claims are not widened. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
 | SQLite | File-backed workflow for open/create, browse, read query, writable-file DML, primary-key row edit, read-only rejection, and internal app-state DB separation. Structured DDL parity and sqlite-cli execution remain unsupported. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
-| DuckDB | `.duckdb` file workflow supports connect, catalog/table read, raw SELECT, history evidence, writable DML readback, and read-only rejection. Registered local file analytics global-editor query/history remains focused evidence below import/export and E2E parity. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
+| DuckDB | `.duckdb` file smoke supports connect, catalog/table read, raw SELECT, history evidence, writable DML readback, and read-only rejection. Dedicated file analytics smoke proves registered deterministic CSV source -> global editor SELECT -> result grid -> `FILE` history/source evidence -> no absolute local path in visible UI. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
 | MongoDB | Whitelisted document workflow supports collection browse, MQL query/edit preview, selected admin/destructive confirmations, autocomplete, bulk/index/validator focused paths, and cancellation. Arbitrary JavaScript shell and native document-first result parity remain future work. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
 | Redis | KV profile supports connection, key scan, typed value preview/edit, guarded string write, TTL, exact-key delete, bounded command dispatch, and bounded command/key completion. Full CLI/admin/cluster/pubsub/modules/consumer-group parity remains out of scope. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
 | Valkey | Active KV runtime slice for connection, key scan/value preview, selected Redis-compatible command query rows, bounded SET/EXPIRE, destructive/unsupported guards, and proven-row command completion. Direct key mutation controls and full Redis compatibility are not claimed. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
@@ -67,7 +70,7 @@ wired matrix leg to pass.
 | MySQL | `e2e/smoke/mysql.spec.ts` | `e2e/fixtures/mysql/query/seed.sql` | Wired baseline for connect/browse/query/edit/cancel/history/result-envelope. |
 | MariaDB | `e2e/smoke/mariadb.spec.ts` | `e2e/fixtures/mariadb/query/seed.sql` | Distinct MariaDB engine smoke plus catalog/workbench probe objects. |
 | SQLite | `e2e/smoke/sqlite.spec.ts` | `e2e/fixtures/sqlite/query/seed.sql` | Deterministic file create/open, browse, query, writable DML, row edit, read-only rejection, and internal app-state DB rejection. |
-| DuckDB | `e2e/smoke/duckdb.spec.ts` | `e2e/fixtures/duckdb/query/seed.sql` | `.duckdb` file smoke; file analytics preview/query/history remains focused below smoke. |
+| DuckDB | `e2e/smoke/duckdb.spec.ts`, `e2e/smoke/duckdb-file-analytics.spec.ts` | `e2e/fixtures/duckdb/query/seed.sql`, deterministic CSV source fixture | `.duckdb` file smoke stays separate from file analytics smoke; file analytics covers registered deterministic CSV source -> global editor SELECT -> result grid -> `FILE` history/source evidence -> no absolute local path in visible UI, not COPY/ATTACH/DETACH, extensions, raw external-file SQL functions, import/export workflow, structured DDL/write UI, or admin parity. |
 | MongoDB | `e2e/smoke/mongodb.spec.ts` | `e2e/fixtures/mongodb/document/seed.json` | Whitelisted document browse/edit/query/safety/cancel representative smoke. |
 | Redis | `e2e/smoke/redis.spec.ts` | `e2e/fixtures/redis/kv/seed.json` | DB 2 connect/scan/preview/GET/guarded-write/TTL/delete representative smoke. |
 | Valkey | `e2e/smoke/valkey.spec.ts` | `e2e/fixtures/valkey/kv/seed.json`, `e2e/fixtures/valkey.redis-compatibility.json` | Proven bounded Valkey command rows only; compatibility inventory is not full Redis compatibility evidence. |

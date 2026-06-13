@@ -115,6 +115,7 @@ else
   run_wdio "$BASE_DATA_DIR/oracle" "e2e/smoke/oracle.spec.ts"
   run_wdio "$BASE_DATA_DIR/sqlite" "e2e/smoke/sqlite.spec.ts"
   run_wdio "$BASE_DATA_DIR/duckdb" "e2e/smoke/duckdb.spec.ts"
+  run_wdio "$BASE_DATA_DIR/duckdb-file-analytics" "e2e/smoke/duckdb-file-analytics.spec.ts"
   run_wdio "$BASE_DATA_DIR/mongodb" "e2e/smoke/mongodb.spec.ts"
   run_wdio "$BASE_DATA_DIR/redis" "e2e/smoke/redis.spec.ts"
   run_wdio "$BASE_DATA_DIR/valkey" "e2e/smoke/valkey.spec.ts"
