@@ -1,7 +1,7 @@
 ---
 title: Data Source Architecture
 type: memory
-updated: 2026-06-12
+updated: 2026-06-15
 surface: src-tauri/src/db/**, src/lib/**, src/types/dataSource*, src/types/queryLanguage*
 task: data-source, architecture, adapter, capability
 trigger:
@@ -176,11 +176,11 @@ ERD/`SchemaGraph` input 은 schema/table/column cache 와 cached/fetched explici
 index/constraint cache 를 함께 사용한다. `ColumnInfo` PK/FK/CHECK metadata 는
 explicit metadata 가 비어 있을 때 synthetic constraint 보강에 사용한다.
 
-Future dependency view, migration impact, and dense-view work should extend the
-shared `SchemaGraph`/catalog input path. Duplicate catalog parsing 금지. 현재 FK
-navigation 은 DataGrid cell/icon path 이며 ERD interaction claim 이 아니다.
-Migration export 는 `SchemaTree`/`useMigrationExport` delegate path 이고
-`SchemaGraph` dependency/impact surface 가 아니다.
+Dependency view and migration impact summaries extend the shared
+`SchemaGraph`/catalog input path. Future dense-view work should use the same
+path. Duplicate catalog parsing 금지. 현재 FK navigation 은 DataGrid cell/icon
+path 이며 ERD interaction claim 이 아니다. Migration export 는
+`SchemaTree`/`useMigrationExport` delegate path 이고 `SchemaGraph` dependency/impact surface 가 아니다.
 
 ## Anti-Patterns
 
