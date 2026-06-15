@@ -1,13 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Network } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@components/ui/select";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import { selectSchemaGraphDiff } from "@/lib/schemaGraphDiff";
 import { selectSchemaGraphIntelligence } from "@/lib/schemaGraphSelectors";
 import { buildSchemaGraphCatalogSnapshot } from "@/lib/schemaGraphSnapshot";
 import {
   RUNTIME_RDBMS_DATABASE_TYPES,
   type RuntimeRdbmsDatabaseType,
 } from "@/types/rdbmsDataSources";
+import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
+import SchemaGraphDiffPanel from "./SchemaGraphDiffPanel";
 import SchemaErdRenderer from "./SchemaErdRenderer";
 
 interface SchemaErdPanelProps {
@@ -17,18 +27,25 @@ interface SchemaErdPanelProps {
 
 const EMPTY_SCHEMAS = Object.freeze([]);
 const EMPTY_BY_SCHEMA = Object.freeze({}) as Record<string, never>;
+const NO_COMPARISON = "__no_schema_graph_comparison__";
+
+interface CachedSchemaGraphSnapshotOption {
+  readonly key: string;
+  readonly label: string;
+  readonly snapshot: SchemaGraphCatalogSnapshot;
+}
 
 export default function SchemaErdPanel({
   connectionId,
   database,
 }: SchemaErdPanelProps) {
   const [selectedTableId, setSelectedTableId] = useState<string | undefined>();
+  const [comparisonKey, setComparisonKey] = useState(NO_COMPARISON);
   const metadataInFlightRef = useRef<Set<string>>(new Set());
-  const dbType = useConnectionStore(
-    (state) =>
-      state.connections.find((connection) => connection.id === connectionId)
-        ?.dbType,
-  );
+  const connections = useConnectionStore((state) => state.connections);
+  const dbType = connections.find(
+    (connection) => connection.id === connectionId,
+  )?.dbType;
   const schemas = useSchemaStore(
     (state) => state.schemas[connectionId]?.[database] ?? EMPTY_SCHEMAS,
   );
@@ -46,6 +63,13 @@ export default function SchemaErdPanel({
   const constraintsByTable = useSchemaStore(
     (state) =>
       state.tableConstraintsCache[connectionId]?.[database] ?? EMPTY_BY_SCHEMA,
+  );
+  const allSchemas = useSchemaStore((state) => state.schemas);
+  const allTables = useSchemaStore((state) => state.tables);
+  const allColumnsByTable = useSchemaStore((state) => state.tableColumnsCache);
+  const allIndexesByTable = useSchemaStore((state) => state.tableIndexesCache);
+  const allConstraintsByTable = useSchemaStore(
+    (state) => state.tableConstraintsCache,
   );
   const loadSchemas = useSchemaStore((state) => state.loadSchemas);
   const loadTables = useSchemaStore((state) => state.loadTables);
@@ -144,20 +168,26 @@ export default function SchemaErdPanel({
     tablesBySchema,
   ]);
 
-  const intelligence = useMemo(() => {
+  const currentSnapshot = useMemo(() => {
     if (!runtimeDbType) return null;
-    const snapshot = buildSchemaGraphCatalogSnapshot({
+    const connectionLabel = connections.find(
+      (connection) => connection.id === connectionId,
+    )?.name;
+    return buildSchemaGraphCatalogSnapshot({
       dbType: runtimeDbType,
       database,
+      connectionId,
+      label: connectionLabel,
       schemas,
       tablesBySchema,
       columnsByTable,
       indexesByTable,
       constraintsByTable,
     });
-    return selectSchemaGraphIntelligence(snapshot);
   }, [
     columnsByTable,
+    connectionId,
+    connections,
     constraintsByTable,
     database,
     indexesByTable,
@@ -165,6 +195,53 @@ export default function SchemaErdPanel({
     schemas,
     tablesBySchema,
   ]);
+  const intelligence = useMemo(
+    () =>
+      currentSnapshot ? selectSchemaGraphIntelligence(currentSnapshot) : null,
+    [currentSnapshot],
+  );
+  const cachedSnapshotOptions = useMemo(
+    () =>
+      buildCachedSchemaGraphSnapshotOptions({
+        connections,
+        currentConnectionId: connectionId,
+        currentDatabase: database,
+        schemasByConnection: allSchemas,
+        tablesByConnection: allTables,
+        columnsByConnection: allColumnsByTable,
+        indexesByConnection: allIndexesByTable,
+        constraintsByConnection: allConstraintsByTable,
+      }),
+    [
+      allColumnsByTable,
+      allConstraintsByTable,
+      allIndexesByTable,
+      allSchemas,
+      allTables,
+      connectionId,
+      connections,
+      database,
+    ],
+  );
+  const comparisonOption = cachedSnapshotOptions.find(
+    (option) => option.key === comparisonKey,
+  );
+  const schemaDiff = useMemo(
+    () =>
+      currentSnapshot && comparisonOption
+        ? selectSchemaGraphDiff(comparisonOption.snapshot, currentSnapshot)
+        : null,
+    [comparisonOption, currentSnapshot],
+  );
+
+  useEffect(() => {
+    if (
+      comparisonKey !== NO_COMPARISON &&
+      !cachedSnapshotOptions.some((option) => option.key === comparisonKey)
+    ) {
+      setComparisonKey(NO_COMPARISON);
+    }
+  }, [cachedSnapshotOptions, comparisonKey]);
 
   if (!runtimeDbType || !intelligence) {
     return (
@@ -185,13 +262,122 @@ export default function SchemaErdPanel({
   }
 
   return (
-    <SchemaErdRenderer
-      graph={intelligence.graph}
-      intelligence={intelligence}
-      selectedTableId={selectedTableId}
-      onSelectedTableIdChange={setSelectedTableId}
-    />
+    <div className="flex flex-1 flex-col overflow-hidden">
+      {cachedSnapshotOptions.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-secondary px-3 py-1.5">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-foreground">Schema diff</p>
+            <p className="text-3xs text-muted-foreground">
+              Compare cached SchemaGraph snapshots only
+            </p>
+          </div>
+          <label className="flex min-w-[14rem] max-w-md flex-1 items-center gap-2 text-xs text-muted-foreground sm:flex-none">
+            <span className="sr-only">Compare cached schema snapshot</span>
+            <Select value={comparisonKey} onValueChange={setComparisonKey}>
+              <SelectTrigger
+                aria-label="Compare cached schema snapshot"
+                size="xs"
+                className="min-w-0 flex-1 border-border bg-background text-xs"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_COMPARISON}>No comparison</SelectItem>
+                {cachedSnapshotOptions.map((option) => (
+                  <SelectItem key={option.key} value={option.key}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+        </div>
+      ) : null}
+      {schemaDiff ? (
+        <div className="border-b border-border bg-background px-3 py-2">
+          <SchemaGraphDiffPanel diff={schemaDiff} />
+        </div>
+      ) : null}
+      <SchemaErdRenderer
+        graph={intelligence.graph}
+        intelligence={intelligence}
+        selectedTableId={selectedTableId}
+        onSelectedTableIdChange={setSelectedTableId}
+      />
+    </div>
   );
+}
+
+function buildCachedSchemaGraphSnapshotOptions({
+  connections,
+  currentConnectionId,
+  currentDatabase,
+  schemasByConnection,
+  tablesByConnection,
+  columnsByConnection,
+  indexesByConnection,
+  constraintsByConnection,
+}: {
+  readonly connections: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly dbType: string;
+  }[];
+  readonly currentConnectionId: string;
+  readonly currentDatabase: string;
+  readonly schemasByConnection: ReturnType<
+    typeof useSchemaStore.getState
+  >["schemas"];
+  readonly tablesByConnection: ReturnType<
+    typeof useSchemaStore.getState
+  >["tables"];
+  readonly columnsByConnection: ReturnType<
+    typeof useSchemaStore.getState
+  >["tableColumnsCache"];
+  readonly indexesByConnection: ReturnType<
+    typeof useSchemaStore.getState
+  >["tableIndexesCache"];
+  readonly constraintsByConnection: ReturnType<
+    typeof useSchemaStore.getState
+  >["tableConstraintsCache"];
+}): readonly CachedSchemaGraphSnapshotOption[] {
+  return connections
+    .flatMap((connection) => {
+      if (!isRuntimeRdbmsDatabaseType(connection.dbType)) return [];
+      const dbType = connection.dbType;
+      const dbSchemas = schemasByConnection[connection.id] ?? {};
+      return Object.entries(dbSchemas).flatMap(([db, cachedSchemas]) => {
+        if (connection.id === currentConnectionId && db === currentDatabase) {
+          return [];
+        }
+        const tables = tablesByConnection[connection.id]?.[db];
+        const columns = columnsByConnection[connection.id]?.[db];
+        if (!tables || !columns) return [];
+        return [
+          {
+            key: cachedSnapshotKey(connection.id, db),
+            label: `${connection.name} / ${db} (${connection.dbType})`,
+            snapshot: buildSchemaGraphCatalogSnapshot({
+              dbType,
+              database: db,
+              connectionId: connection.id,
+              label: connection.name,
+              schemas: cachedSchemas,
+              tablesBySchema: tables,
+              columnsByTable: columns,
+              indexesByTable: indexesByConnection[connection.id]?.[db] ?? {},
+              constraintsByTable:
+                constraintsByConnection[connection.id]?.[db] ?? {},
+            }),
+          },
+        ];
+      });
+    })
+    .sort((left, right) => left.label.localeCompare(right.label, "en"));
+}
+
+function cachedSnapshotKey(connectionId: string, database: string): string {
+  return `${connectionId}\u0000${database}`;
 }
 
 function isRuntimeRdbmsDatabaseType(

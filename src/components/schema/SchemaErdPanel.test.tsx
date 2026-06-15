@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { SchemaGraphIntelligenceSelectors } from "@/lib/schemaGraphSelectors";
@@ -138,6 +138,88 @@ describe("SchemaErdPanel", () => {
     ]);
   });
 
+  it("shows a read-only diff against another cached RDBMS snapshot", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "Local Postgres",
+          dbType: "postgresql",
+          paradigm: "rdb",
+          host: "localhost",
+          port: 5432,
+          user: "postgres",
+          database: "app",
+          groupId: null,
+          color: null,
+          hasPassword: false,
+        },
+        {
+          id: "conn2",
+          name: "Staging MySQL",
+          dbType: "mysql",
+          paradigm: "rdb",
+          host: "localhost",
+          port: 3306,
+          user: "mysql",
+          database: "staging",
+          groupId: null,
+          color: null,
+          hasPassword: false,
+        },
+      ],
+    });
+    useSchemaStore.setState({
+      schemas: {
+        conn1: { app: [{ name: "public" }] },
+        conn2: { staging: [{ name: "public" }] },
+      },
+      tables: {
+        conn1: {
+          app: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
+        conn2: {
+          staging: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
+      },
+      tableColumnsCache: {
+        conn1: { app: { public: { users: [idColumn(), emailColumn()] } } },
+        conn2: { staging: { public: { users: [idColumn()] } } },
+      },
+      tableIndexesCache: {
+        conn1: { app: { public: { users: INDEXES } } },
+        conn2: { staging: { public: { users: [] } } },
+      },
+      tableConstraintsCache: {
+        conn1: { app: { public: { users: CONSTRAINTS } } },
+        conn2: { staging: { public: { users: [] } } },
+      },
+    });
+
+    render(<SchemaErdPanel connectionId="conn1" database="app" />);
+
+    fireEvent.click(
+      screen.getByRole("combobox", {
+        name: /compare cached schema snapshot/i,
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole("option", {
+        name: /staging mysql \/ staging/i,
+      }),
+    );
+
+    expect(
+      screen.getByRole("region", { name: /schema diff/i }),
+    ).toHaveTextContent(/read-only cached schemagraph diff/i);
+    expect(screen.getByText("public.users.email")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /apply|migrate/i })).toBeNull();
+  });
+
   it("fetches missing table metadata for loaded ERD tables and renders it", async () => {
     const tauri = await import("@lib/tauri");
     useSchemaStore.setState({
@@ -238,6 +320,19 @@ function emailColumn() {
     nullable: false,
     default_value: null,
     is_primary_key: false,
+    is_foreign_key: false,
+    fk_reference: null,
+    comment: null,
+  };
+}
+
+function idColumn() {
+  return {
+    name: "id",
+    data_type: "integer",
+    nullable: false,
+    default_value: null,
+    is_primary_key: true,
     is_foreign_key: false,
     fk_reference: null,
     comment: null,

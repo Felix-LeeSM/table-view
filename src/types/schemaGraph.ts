@@ -10,6 +10,8 @@ import type {
 export interface SchemaGraphSource {
   readonly dbType: RuntimeRdbmsDatabaseType;
   readonly database?: string;
+  readonly connectionId?: string;
+  readonly label?: string;
 }
 
 export interface SchemaGraphCatalogSnapshot {
