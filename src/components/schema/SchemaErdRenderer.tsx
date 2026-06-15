@@ -1,6 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   Crosshair,
+  KeyRound,
+  Link2,
   Maximize2,
   Network,
   Search,
@@ -8,7 +11,19 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { Button } from "@components/ui/button";
-import type { SchemaGraph } from "@/types/schemaGraph";
+import {
+  selectSchemaGraphIntelligence,
+  type SchemaGraphForeignKeySelection,
+  type SchemaGraphIntelligenceSelectors,
+  type SchemaGraphTableForeignKeys,
+  type SchemaGraphTableMetadataReadiness,
+} from "@/lib/schemaGraphSelectors";
+import type {
+  SchemaGraph,
+  SchemaGraphConstraintNode,
+  SchemaGraphIndexNode,
+  SchemaGraphTableNode,
+} from "@/types/schemaGraph";
 import {
   buildErdLayout,
   buildSelectedNeighborhood,
@@ -21,12 +36,14 @@ import {
 
 interface SchemaErdRendererProps {
   graph: SchemaGraph;
+  intelligence?: SchemaGraphIntelligenceSelectors;
   selectedTableId?: string;
   onSelectedTableIdChange?: (tableId: string) => void;
 }
 
 export default function SchemaErdRenderer({
   graph,
+  intelligence,
   selectedTableId,
   onSelectedTableIdChange,
 }: SchemaErdRendererProps) {
@@ -37,7 +54,11 @@ export default function SchemaErdRenderer({
   const [zoom, setZoom] = useState(1);
   const tableRefs = useRef(new Map<string, HTMLButtonElement>());
   const selected = selectedTableId ?? internalSelectedTableId;
-  const layout = useMemo(() => buildErdLayout(graph), [graph]);
+  const selectors = useMemo(
+    () => intelligence ?? selectSchemaGraphIntelligence(graph),
+    [graph, intelligence],
+  );
+  const layout = useMemo(() => buildErdLayout(selectors.graph), [selectors]);
   const activeSelected = layout.tables.some(
     ({ table }) => table.id === selected,
   )
@@ -51,10 +72,9 @@ export default function SchemaErdRenderer({
     () => filterTables(layout.tables, searchTerm),
     [layout.tables, searchTerm],
   );
-  const selectedTableLabel = activeSelected
-    ? layout.tables.find(({ table }) => table.id === activeSelected)?.table
-        .label
-    : null;
+  const selectedTable = activeSelected
+    ? selectors.tablesById.get(activeSelected)
+    : undefined;
 
   if (layout.tables.length === 0) {
     return (
@@ -377,13 +397,276 @@ export default function SchemaErdRenderer({
           })}
         </div>
       </div>
-      {selectedTableLabel && (
-        <div className="border-t border-border bg-muted/20 px-3 py-1 text-3xs text-muted-foreground">
-          Focused table: {selectedTableLabel}
-        </div>
+      {selectedTable && (
+        <SelectedTableDependencyView
+          table={selectedTable}
+          foreignKeys={selectors.foreignKeysByTableId.get(selectedTable.id)}
+          indexes={selectors.indexesByTableId.get(selectedTable.id) ?? []}
+          constraints={
+            selectors.constraintsByTableId.get(selectedTable.id) ?? []
+          }
+          metadata={selectors.metadataReadinessByTableId.get(selectedTable.id)}
+          tableLabel={`${selectedTable.schema}.${selectedTable.table}`}
+        />
       )}
     </div>
   );
+}
+
+interface SelectedTableDependencyViewProps {
+  table: SchemaGraphTableNode;
+  foreignKeys?: SchemaGraphTableForeignKeys;
+  indexes: readonly SchemaGraphIndexNode[];
+  constraints: readonly SchemaGraphConstraintNode[];
+  metadata?: SchemaGraphTableMetadataReadiness;
+  tableLabel: string;
+}
+
+function SelectedTableDependencyView({
+  table,
+  foreignKeys,
+  indexes,
+  constraints,
+  metadata,
+  tableLabel,
+}: SelectedTableDependencyViewProps) {
+  const incoming = foreignKeys?.incomingForeignKeys ?? [];
+  const outgoing = foreignKeys?.outgoingForeignKeys ?? [];
+  const hasDependencyRows = incoming.length > 0 || outgoing.length > 0;
+  const hasMetadataRows = indexes.length > 0 || constraints.length > 0;
+  const metadataNotice = formatMetadataNotice(metadata);
+
+  return (
+    <section
+      aria-label={`Dependencies for ${table.schema}.${table.table}`}
+      className="max-h-56 overflow-auto border-t border-border bg-muted/20 px-3 py-2"
+    >
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Link2 size={13} className="shrink-0 text-muted-foreground" />
+          <h2 className="truncate text-xs font-semibold text-foreground">
+            Dependencies
+          </h2>
+          <span className="truncate text-3xs text-muted-foreground">
+            {tableLabel}
+          </span>
+        </div>
+        <span className="text-3xs text-muted-foreground">
+          read-only SchemaGraph view
+        </span>
+      </div>
+
+      {metadataNotice && (
+        <div
+          role="status"
+          className="mb-2 flex items-start gap-2 rounded border border-border bg-background px-2 py-1.5 text-3xs text-muted-foreground"
+        >
+          <AlertTriangle
+            size={12}
+            aria-hidden="true"
+            className="mt-0.5 shrink-0 text-amber-600"
+          />
+          <span>{metadataNotice}</span>
+        </div>
+      )}
+
+      {!hasDependencyRows && !hasMetadataRows && (
+        <div className="rounded border border-dashed border-border bg-background px-2 py-2 text-xs text-muted-foreground">
+          No dependencies for selected table.
+        </div>
+      )}
+
+      <div className="grid gap-2 lg:grid-cols-2">
+        <ForeignKeyGroup title="Incoming" foreignKeys={incoming} />
+        <ForeignKeyGroup title="Outgoing" foreignKeys={outgoing} />
+      </div>
+
+      <div className="mt-2 grid gap-2 lg:grid-cols-2">
+        <IndexGroup indexes={indexes} />
+        <ConstraintGroup constraints={constraints} />
+      </div>
+
+      {metadata?.diagnostics.length ? (
+        <div className="mt-2 rounded border border-border bg-background px-2 py-2">
+          <div className="mb-1 flex items-center gap-1 text-3xs font-semibold uppercase text-muted-foreground">
+            <AlertTriangle size={11} aria-hidden="true" />
+            SchemaGraph diagnostics
+          </div>
+          <ul className="space-y-1 text-3xs text-muted-foreground">
+            {metadata.diagnostics.map((diagnostic) => (
+              <li key={diagnostic.id} className="min-w-0">
+                <span className="font-medium text-foreground">
+                  {diagnostic.kind}
+                </span>
+                <span>: {diagnostic.message}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ForeignKeyGroup({
+  title,
+  foreignKeys,
+}: {
+  title: "Incoming" | "Outgoing";
+  foreignKeys: readonly SchemaGraphForeignKeySelection[];
+}) {
+  return (
+    <div className="min-w-0 rounded border border-border bg-background px-2 py-2">
+      <div className="mb-1 flex items-center gap-1 text-3xs font-semibold uppercase text-muted-foreground">
+        <KeyRound size={11} aria-hidden="true" />
+        {title}
+      </div>
+      {foreignKeys.length > 0 ? (
+        <ul className="space-y-1">
+          {foreignKeys.map((foreignKey) => (
+            <li
+              key={foreignKey.edgeId}
+              className="min-w-0 rounded bg-muted/30 px-2 py-1 text-3xs text-muted-foreground"
+            >
+              <div className="truncate font-medium text-foreground">
+                {foreignKey.relationship.rawMetadata.constraintName}
+              </div>
+              <div
+                className="truncate"
+                title={formatForeignKeyTitle(foreignKey)}
+              >
+                {formatTableEndpoint(foreignKey.relationship.source)} {"->"}{" "}
+                {formatTableEndpoint(foreignKey.relationship.target)}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-3xs text-muted-foreground">
+          No {title.toLowerCase()} FKs.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function IndexGroup({ indexes }: { indexes: readonly SchemaGraphIndexNode[] }) {
+  return (
+    <div className="min-w-0 rounded border border-border bg-background px-2 py-2">
+      <div className="mb-1 text-3xs font-semibold uppercase text-muted-foreground">
+        Related indexes
+      </div>
+      {indexes.length > 0 ? (
+        <ul className="space-y-1">
+          {indexes.map((index) => (
+            <li
+              key={index.id}
+              className="min-w-0 rounded bg-muted/30 px-2 py-1 text-3xs"
+            >
+              <div className="truncate font-medium text-foreground">
+                {index.index}
+              </div>
+              <div className="truncate text-muted-foreground">
+                {formatIndexFlags(index)} on {formatColumns(index.data.columns)}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-3xs text-muted-foreground">No related indexes.</p>
+      )}
+    </div>
+  );
+}
+
+function ConstraintGroup({
+  constraints,
+}: {
+  constraints: readonly SchemaGraphConstraintNode[];
+}) {
+  return (
+    <div className="min-w-0 rounded border border-border bg-background px-2 py-2">
+      <div className="mb-1 text-3xs font-semibold uppercase text-muted-foreground">
+        Constraints
+      </div>
+      {constraints.length > 0 ? (
+        <ul className="space-y-1">
+          {constraints.map((constraint) => (
+            <li
+              key={constraint.id}
+              className="min-w-0 rounded bg-muted/30 px-2 py-1 text-3xs"
+            >
+              <div className="flex min-w-0 items-center gap-1">
+                <span className="truncate font-medium text-foreground">
+                  {constraint.constraint}
+                </span>
+                <span className="shrink-0 rounded bg-secondary px-1 text-3xs text-muted-foreground">
+                  {constraint.data.constraintType}
+                </span>
+              </div>
+              <div className="truncate text-muted-foreground">
+                {formatColumns(constraint.data.columns)}
+              </div>
+              {constraint.data.checkExpression && (
+                <div
+                  className="truncate font-mono text-3xs text-muted-foreground"
+                  title={constraint.data.checkExpression}
+                >
+                  {constraint.data.checkExpression}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-3xs text-muted-foreground">No constraints.</p>
+      )}
+    </div>
+  );
+}
+
+function formatMetadataNotice(
+  metadata: SchemaGraphTableMetadataReadiness | undefined,
+): string | null {
+  if (!metadata || metadata.status === "ready") return null;
+  if (metadata.status === "unknown") {
+    return "Metadata readiness unknown for this graph.";
+  }
+  if (metadata.missing.length === 0) {
+    return "Dependency metadata may be incomplete.";
+  }
+  return `Dependency metadata incomplete: missing ${metadata.missing.join(
+    ", ",
+  )}.`;
+}
+
+function formatIndexFlags(index: SchemaGraphIndexNode): string {
+  const flags = [
+    index.data.is_primary ? "primary" : null,
+    index.data.is_unique ? "unique" : null,
+    index.data.index_type || "index",
+  ].filter(Boolean);
+  return flags.join(" ");
+}
+
+function formatColumns(columns: readonly string[]): string {
+  return columns.length > 0 ? columns.join(", ") : "no columns";
+}
+
+function formatTableEndpoint(
+  endpoint: SchemaGraphForeignKeySelection["relationship"]["source"],
+): string {
+  return `${endpoint.schema}.${endpoint.table} (${formatColumns(
+    endpoint.columns,
+  )})`;
+}
+
+function formatForeignKeyTitle(
+  foreignKey: SchemaGraphForeignKeySelection,
+): string {
+  return `${formatTableEndpoint(
+    foreignKey.relationship.source,
+  )} -> ${formatTableEndpoint(foreignKey.relationship.target)}`;
 }
 
 function runAfterPaint(callback: () => void) {

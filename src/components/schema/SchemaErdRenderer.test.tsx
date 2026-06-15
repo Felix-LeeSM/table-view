@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { extractSchemaGraph } from "@/lib/schemaGraph";
+import { selectSchemaGraphIntelligence } from "@/lib/schemaGraphSelectors";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
 import type { ColumnInfo, TableInfo } from "@/types/schema";
 import SchemaErdRenderer from "./SchemaErdRenderer";
@@ -45,9 +46,52 @@ describe("SchemaErdRenderer", () => {
     expect(users).toHaveAttribute("aria-pressed", "true");
     expect(within(users).getByText("id")).toBeInTheDocument();
     expect(within(users).getByText("email")).toBeInTheDocument();
+    expect(
+      screen.getByText(/metadata readiness unknown for this graph/i),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /public\.orders/i }));
     expect(handleSelect).toHaveBeenCalledWith("table:public.orders");
+  });
+
+  it("shows incoming and outgoing dependencies with selected-table metadata", () => {
+    const intelligence = selectSchemaGraphIntelligence(
+      ordersSnapshotWithMetadata(),
+    );
+
+    render(
+      <SchemaErdRenderer
+        graph={intelligence.graph}
+        intelligence={intelligence}
+        selectedTableId="table:public.users"
+      />,
+    );
+
+    const dependencies = screen.getByRole("region", {
+      name: /dependencies for public\.users/i,
+    });
+    expect(within(dependencies).getByText("Incoming")).toBeInTheDocument();
+    expect(within(dependencies).getByText("Outgoing")).toBeInTheDocument();
+    expect(
+      within(dependencies).getByText("orders_user_id_fkey"),
+    ).toBeInTheDocument();
+    expect(
+      within(dependencies).getByText(
+        "public.orders (user_id) -> public.users (id)",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(dependencies).getByText("users_email_idx"),
+    ).toBeInTheDocument();
+    expect(
+      within(dependencies).getByText("users_email_key"),
+    ).toBeInTheDocument();
+    expect(
+      within(dependencies).getByText("CHECK ((age >= 0))"),
+    ).toBeInTheDocument();
+    expect(
+      within(dependencies).queryByText(/metadata incomplete/i),
+    ).not.toBeInTheDocument();
   });
 
   it("shows useful empty and isolated-table states", () => {
@@ -67,6 +111,51 @@ describe("SchemaErdRenderer", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       /no relationships yet/i,
     );
+  });
+
+  it("shows selected-table dependency empty state without row navigation links", () => {
+    const intelligence = selectSchemaGraphIntelligence(
+      dependencyEmptySnapshotWithMetadata(),
+    );
+
+    render(
+      <SchemaErdRenderer
+        graph={intelligence.graph}
+        intelligence={intelligence}
+        selectedTableId="table:main.event_log"
+      />,
+    );
+
+    const dependencies = screen.getByRole("region", {
+      name: /dependencies for main\.event_log/i,
+    });
+    expect(dependencies).toHaveTextContent(/no dependencies/i);
+    expect(within(dependencies).queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("shows metadata gaps and SchemaGraph diagnostics for selected tables", () => {
+    const intelligence = selectSchemaGraphIntelligence(
+      missingReferenceSnapshot(),
+    );
+
+    render(
+      <SchemaErdRenderer
+        graph={intelligence.graph}
+        intelligence={intelligence}
+        selectedTableId="table:public.orders"
+      />,
+    );
+
+    const dependencies = screen.getByRole("region", {
+      name: /dependencies for public\.orders/i,
+    });
+    expect(dependencies).toHaveTextContent(
+      /dependency metadata incomplete: missing constraints/i,
+    );
+    expect(
+      within(dependencies).getByText("missing-reference-table"),
+    ).toBeInTheDocument();
+    expect(within(dependencies).queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("filters search results and focuses a matching table", async () => {
@@ -273,6 +362,72 @@ function ordersSnapshot(): SchemaGraphCatalogSnapshot {
   };
 }
 
+function ordersSnapshotWithMetadata(): SchemaGraphCatalogSnapshot {
+  return {
+    ...ordersSnapshot(),
+    columnsByTable: {
+      public: {
+        users: [
+          column("id", { is_primary_key: true }),
+          column("email", { data_type: "text" }),
+          column("age", {
+            data_type: "integer",
+            check_clauses: ["CHECK ((age >= 0))"],
+          }),
+        ],
+        orders: [
+          column("id", { is_primary_key: true }),
+          column("user_id", {
+            is_foreign_key: true,
+            fk_reference: "public.users(id)",
+          }),
+          column("total", { data_type: "numeric" }),
+        ],
+        payments: [
+          column("id", { is_primary_key: true }),
+          column("order_id", {
+            is_foreign_key: true,
+            fk_reference: "public.orders(id)",
+          }),
+          column("status", { data_type: "text" }),
+        ],
+      },
+    },
+    constraintsByTable: {
+      public: {
+        users: [constraint("users_email_key", "UNIQUE", ["email"])],
+        orders: [
+          constraint("orders_user_id_fkey", "FOREIGN KEY", ["user_id"], {
+            reference_table: "public.users",
+            reference_columns: ["id"],
+          }),
+        ],
+        payments: [
+          constraint("payments_order_id_fkey", "FOREIGN KEY", ["order_id"], {
+            reference_table: "public.orders",
+            reference_columns: ["id"],
+          }),
+        ],
+      },
+    },
+    indexesByTable: {
+      public: {
+        users: [
+          {
+            name: "users_email_idx",
+            columns: ["email"],
+            index_type: "btree",
+            is_unique: true,
+            is_primary: false,
+          },
+        ],
+        orders: [],
+        payments: [],
+      },
+    },
+  };
+}
+
 function emptySnapshot(): SchemaGraphCatalogSnapshot {
   return {
     source: { dbType: "sqlite", database: "empty.sqlite" },
@@ -302,6 +457,43 @@ function isolatedSnapshot(): SchemaGraphCatalogSnapshot {
   };
 }
 
+function dependencyEmptySnapshotWithMetadata(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "duckdb", database: "events.duckdb" },
+    schemas: [{ name: "main" }],
+    tablesBySchema: { main: [table("main", "event_log")] },
+    columnsByTable: {
+      main: {
+        event_log: [column("payload", { data_type: "json" })],
+      },
+    },
+    indexesByTable: { main: { event_log: [] } },
+    constraintsByTable: { main: { event_log: [] } },
+  };
+}
+
+function missingReferenceSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [table("public", "orders")],
+    },
+    columnsByTable: {
+      public: {
+        orders: [
+          column("id", { is_primary_key: true }),
+          column("account_id", {
+            is_foreign_key: true,
+            fk_reference: "public.accounts(id)",
+          }),
+        ],
+      },
+    },
+    indexesByTable: { public: { orders: [] } },
+  };
+}
+
 function table(schema: string, name: string): TableInfo {
   return { schema, name, row_count: null };
 }
@@ -316,6 +508,25 @@ function column(name: string, overrides: Partial<ColumnInfo> = {}): ColumnInfo {
     is_foreign_key: false,
     fk_reference: null,
     comment: null,
+    ...overrides,
+  };
+}
+
+function constraint(
+  name: string,
+  constraint_type: string,
+  columns: string[],
+  overrides: {
+    reference_table?: string | null;
+    reference_columns?: string[] | null;
+  } = {},
+) {
+  return {
+    name,
+    constraint_type,
+    columns,
+    reference_table: null,
+    reference_columns: null,
     ...overrides,
   };
 }

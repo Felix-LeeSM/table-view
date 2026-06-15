@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Network } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
-import { extractSchemaGraph } from "@/lib/schemaGraph";
+import { selectSchemaGraphIntelligence } from "@/lib/schemaGraphSelectors";
 import { buildSchemaGraphCatalogSnapshot } from "@/lib/schemaGraphSnapshot";
 import {
   RUNTIME_RDBMS_DATABASE_TYPES,
@@ -144,19 +144,18 @@ export default function SchemaErdPanel({
     tablesBySchema,
   ]);
 
-  const graph = useMemo(() => {
+  const intelligence = useMemo(() => {
     if (!runtimeDbType) return null;
-    return extractSchemaGraph(
-      buildSchemaGraphCatalogSnapshot({
-        dbType: runtimeDbType,
-        database,
-        schemas,
-        tablesBySchema,
-        columnsByTable,
-        indexesByTable,
-        constraintsByTable,
-      }),
-    );
+    const snapshot = buildSchemaGraphCatalogSnapshot({
+      dbType: runtimeDbType,
+      database,
+      schemas,
+      tablesBySchema,
+      columnsByTable,
+      indexesByTable,
+      constraintsByTable,
+    });
+    return selectSchemaGraphIntelligence(snapshot);
   }, [
     columnsByTable,
     constraintsByTable,
@@ -167,7 +166,7 @@ export default function SchemaErdPanel({
     tablesBySchema,
   ]);
 
-  if (!runtimeDbType || !graph) {
+  if (!runtimeDbType || !intelligence) {
     return (
       <div
         role="status"
@@ -175,7 +174,11 @@ export default function SchemaErdPanel({
       >
         <Network size={28} aria-hidden="true" />
         <p className="text-sm font-medium text-foreground">
-          ERD is available for relational runtime adapters
+          ERD and dependency view are available for relational runtime adapters
+        </p>
+        <p className="max-w-md text-xs">
+          Non-RDB connections and file analytics aliases do not expose this
+          SchemaGraph surface.
         </p>
       </div>
     );
@@ -183,7 +186,8 @@ export default function SchemaErdPanel({
 
   return (
     <SchemaErdRenderer
-      graph={graph}
+      graph={intelligence.graph}
+      intelligence={intelligence}
       selectedTableId={selectedTableId}
       onSelectedTableIdChange={setSelectedTableId}
     />
