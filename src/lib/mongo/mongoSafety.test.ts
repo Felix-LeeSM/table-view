@@ -12,6 +12,7 @@ import {
   analyzeMongoPipeline,
   analyzeMongoRunCommand,
   isInfoMongoOperation,
+  READ_ONLY_RUN_COMMAND_ALLOWLIST,
 } from "./mongoSafety";
 
 describe("analyzeMongoPipeline", () => {
@@ -411,6 +412,15 @@ describe("analyzeMongoRunCommand (sprint-381)", () => {
       const a = analyzeMongoRunCommand(body);
       expect(a.severity).toBe("info");
       expect(a.kind).toBe("mongo-other");
+    }
+  });
+
+  it("[AC-886-S1] read-only runCommand allowlist is table-covered as info", () => {
+    for (const command of READ_ONLY_RUN_COMMAND_ALLOWLIST) {
+      const a = analyzeMongoRunCommand({ [command]: 1 });
+      expect(a.severity, command).toBe("info");
+      expect(a.kind, command).toBe("mongo-other");
+      expect(a.reasons, command).toEqual([]);
     }
   });
 

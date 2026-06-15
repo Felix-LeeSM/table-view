@@ -9,10 +9,31 @@ import { describe, it, expect } from "vitest";
 import {
   MONGOSH_METHOD_WHITELIST,
   parseMongoshExpression,
+  type MongoshMethod,
   type ParsedMongoshCall,
   type ParsedMongoshError,
 } from "@features/query";
 import { MONGOSH_DB_METHODS } from "./mongoShellCompletionVocabulary";
+
+const WHITELIST_EXAMPLES = {
+  find: "db.users.find({active: true})",
+  findOne: "db.users.findOne({_id: 1})",
+  aggregate: "db.users.aggregate([{$match: {active: true}}])",
+  countDocuments: "db.users.countDocuments({active: true})",
+  estimatedDocumentCount: "db.users.estimatedDocumentCount()",
+  distinct: 'db.users.distinct("country", {active: true})',
+  insertOne: 'db.users.insertOne({name: "alice"})',
+  insertMany: 'db.users.insertMany([{name: "alice"}, {name: "bob"}])',
+  updateOne: 'db.users.updateOne({_id: "x"}, {$set: {active: true}})',
+  updateMany: "db.users.updateMany({active: false}, {$set: {active: true}})",
+  replaceOne:
+    'db.users.replaceOne({_id: "x"}, {_id: "x", active: true}, {upsert: false})',
+  deleteOne: 'db.users.deleteOne({_id: "x"})',
+  deleteMany: "db.users.deleteMany({active: false})",
+  createIndex: 'db.users.createIndex({email: 1}, {name: "email_1"})',
+  dropIndex: 'db.users.dropIndex("email_1")',
+  bulkWrite: "db.users.bulkWrite([{insertOne: {document: {a: 1}}}])",
+} satisfies Record<MongoshMethod, string>;
 
 function expectSuccess(
   result: ParsedMongoshCall | ParsedMongoshError,
@@ -62,6 +83,15 @@ describe("MONGOSH_METHOD_WHITELIST", () => {
 
     expect(autocompleteOnly).toEqual([]);
   });
+
+  it.each(MONGOSH_METHOD_WHITELIST)(
+    "parses whitelisted method %s through the public parser",
+    (method) => {
+      const result = parseMongoshExpression(WHITELIST_EXAMPLES[method]);
+      expectSuccess(result);
+      expect(result.method).toBe(method);
+    },
+  );
 });
 
 describe("parseMongoshExpression — happy path methods (AC-02)", () => {
@@ -354,7 +384,8 @@ describe("parseMongoshExpression — refusal kinds (AC-04)", () => {
       'db.getSiblingDB("other").users.find({})',
     );
     expectError(result);
-    expect(result.errorKind).toBe("unsupported-syntax");
+    expect(result.errorKind).toBe("unsupported-method");
+    expect(result.message).toMatch(/Cross-database shell navigation/i);
   });
 
   it("unknown method db.users.deleteAll → unsupported-method", () => {
@@ -615,6 +646,7 @@ describe("parseMongoshExpression — lexer / value coverage", () => {
     const result = parseMongoshExpression("db.users.find({}).unknownChain(1)");
     expectError(result);
     expect(result.errorKind).toBe("invalid-cursor-chain");
+    expect(result.message).toMatch(/not supported/i);
   });
 
   it("rejects a value token in an unexpected slot (stray `:`)", () => {

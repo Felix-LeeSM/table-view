@@ -55,6 +55,12 @@ export interface ParsedMongoshError {
 export function parseMongoshExpression(
   input: string,
 ): ParsedMongoshCall | ParsedMongoshError {
+  if (looksLikeCrossDbHelper(input)) {
+    return makeError(
+      "unsupported-method",
+      "Cross-database shell navigation (`db.getSiblingDB(...)`) is not supported. Select the target database from the toolbar chip, then run one `db.<collection>...` expression.",
+    );
+  }
   if (looksLikeTransactionHelper(input)) {
     return makeError(
       "unsupported-method",
@@ -102,13 +108,25 @@ function looksLikeTransactionHelper(input: string): boolean {
   );
 }
 
+function looksLikeCrossDbHelper(input: string): boolean {
+  return /\bdb\s*\.\s*getSiblingDB\s*\(/.test(input);
+}
+
 function findInvalidCursorChain(
   method: MongoshMethod,
   cursorChain: readonly CursorChainStep[],
 ): ParsedMongoshError | null {
   if (cursorChain.length === 0) return null;
   for (const step of cursorChain) {
-    if (!CURSOR_CHAIN_METHODS.has(step.name) || !CURSOR_METHODS.has(method)) {
+    if (!CURSOR_CHAIN_METHODS.has(step.name)) {
+      return makeError(
+        "invalid-cursor-chain",
+        `Cursor method '${step.name}' is not supported. Supported cursor methods: ${[
+          ...CURSOR_CHAIN_METHODS,
+        ].join(", ")}.`,
+      );
+    }
+    if (!CURSOR_METHODS.has(method)) {
       return makeError(
         "invalid-cursor-chain",
         `Cursor method '${step.name}' is only supported after find() or aggregate().`,

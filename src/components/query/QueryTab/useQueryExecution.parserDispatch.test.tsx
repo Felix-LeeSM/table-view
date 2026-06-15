@@ -47,6 +47,16 @@ const findOneDocumentMock = vi.fn();
 const countDocumentsMock = vi.fn();
 const estimatedDocumentCountMock = vi.fn();
 const distinctDocumentsMock = vi.fn();
+const insertDocumentMock = vi.fn();
+const insertManyDocumentsMock = vi.fn();
+const updateDocumentMock = vi.fn();
+const updateManyMock = vi.fn();
+const deleteDocumentMock = vi.fn();
+const deleteManyMock = vi.fn();
+const bulkWriteDocumentsMock = vi.fn();
+const createMongoIndexMock = vi.fn();
+const dropMongoIndexMock = vi.fn();
+const runMongoCommandMock = vi.fn();
 beforeEach(() => {
   setupTauriMock({
     executeQuery: (...args: unknown[]) => executeQueryMock(...args),
@@ -59,6 +69,17 @@ beforeEach(() => {
     estimatedDocumentCount: (...args: unknown[]) =>
       estimatedDocumentCountMock(...args),
     distinctDocuments: (...args: unknown[]) => distinctDocumentsMock(...args),
+    insertDocument: (...args: unknown[]) => insertDocumentMock(...args),
+    insertManyDocuments: (...args: unknown[]) =>
+      insertManyDocumentsMock(...args),
+    updateDocument: (...args: unknown[]) => updateDocumentMock(...args),
+    updateMany: (...args: unknown[]) => updateManyMock(...args),
+    deleteDocument: (...args: unknown[]) => deleteDocumentMock(...args),
+    deleteMany: (...args: unknown[]) => deleteManyMock(...args),
+    bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocumentsMock(...args),
+    createMongoIndex: (...args: unknown[]) => createMongoIndexMock(...args),
+    dropMongoIndex: (...args: unknown[]) => dropMongoIndexMock(...args),
+    runMongoCommand: (...args: unknown[]) => runMongoCommandMock(...args),
   });
 });
 
@@ -111,6 +132,41 @@ function seedDocTab(
   return tab;
 }
 
+function expectNoMongoIpc() {
+  for (const mock of [
+    findDocumentsMock,
+    aggregateDocumentsMock,
+    findOneDocumentMock,
+    countDocumentsMock,
+    estimatedDocumentCountMock,
+    distinctDocumentsMock,
+    insertDocumentMock,
+    insertManyDocumentsMock,
+    updateDocumentMock,
+    updateManyMock,
+    deleteDocumentMock,
+    deleteManyMock,
+    bulkWriteDocumentsMock,
+    createMongoIndexMock,
+    dropMongoIndexMock,
+    runMongoCommandMock,
+  ]) {
+    expect(mock).not.toHaveBeenCalled();
+  }
+}
+
+function queryTabError(tabId: string): string {
+  const state = getTestWorkspace("conn-mongo", "table_view_test");
+  const updated = state.tabs.find((t) => t.id === tabId);
+  if (!updated || updated.type !== "query") {
+    throw new Error("tab not found");
+  }
+  if (updated.queryState.status !== "error") {
+    throw new Error(`expected error, got ${updated.queryState.status}`);
+  }
+  return updated.queryState.error;
+}
+
 describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () => {
   beforeEach(() => {
     executeQueryMock.mockReset();
@@ -122,6 +178,16 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
     countDocumentsMock.mockReset();
     estimatedDocumentCountMock.mockReset();
     distinctDocumentsMock.mockReset();
+    insertDocumentMock.mockReset();
+    insertManyDocumentsMock.mockReset();
+    updateDocumentMock.mockReset();
+    updateManyMock.mockReset();
+    deleteDocumentMock.mockReset();
+    deleteManyMock.mockReset();
+    bulkWriteDocumentsMock.mockReset();
+    createMongoIndexMock.mockReset();
+    dropMongoIndexMock.mockReset();
+    runMongoCommandMock.mockReset();
     useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({ connections: [] });
     useQueryHistoryStore.setState({ recentVisible: [] });
@@ -305,21 +371,41 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
     [
       "shell helper `use admin`",
       "use admin",
-      "shell helpers (`use`, `show`) are not supported — type a `db....` expression",
+      /shell helpers \(`use`, `show`\) are not supported/i,
     ],
     [
       "shell helper `show dbs`",
       "show dbs",
-      "shell helpers (`use`, `show`) are not supported — type a `db....` expression",
+      /shell helpers \(`use`, `show`\) are not supported/i,
     ],
     [
       "multiple statements",
       "db.users.find({}); db.users.find({})",
-      "multiple statements separated by `;` are not supported — submit one mongosh expression at a time",
+      /multiple statements separated by `;` are not supported/i,
+    ],
+    [
+      "cross-db shell navigation",
+      'db.getSiblingDB("other").users.find({})',
+      /Cross-database shell navigation/i,
+    ],
+    [
+      "arbitrary JavaScript callback",
+      "db.users.find({}).forEach(d => print(d))",
+      /arrow functions \(`=>`\) are not supported/i,
+    ],
+    [
+      "unsupported cursor helper",
+      "db.users.find({}).explain()",
+      /Cursor method 'explain' is not supported/i,
+    ],
+    [
+      "transaction-style helper",
+      "session.withTransaction(() => db.users.insertOne({}))",
+      /Transactions are not supported/i,
     ],
   ])(
-    "[AC-470-03] %s → clear error, IPC not called",
-    async (_, sql, message) => {
+    "[AC-886-Q1] %s → visible error, no Mongo IPC, no confirm runner",
+    async (_, sql, messagePattern) => {
       const tab = seedDocTab(sql);
       const { result } = renderHook(() => useQueryExecution({ tab }));
 
@@ -327,18 +413,10 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
         await result.current.handleExecute();
       });
 
-      expect(findDocumentsMock).not.toHaveBeenCalled();
-      expect(aggregateDocumentsMock).not.toHaveBeenCalled();
+      expectNoMongoIpc();
+      expect(result.current.pendingMongoConfirm).toBeNull();
       await waitFor(() => {
-        const state = getTestWorkspace("conn-mongo", "table_view_test");
-        const updated = state.tabs.find((t) => t.id === tab.id);
-        if (!updated || updated.type !== "query") {
-          throw new Error("tab not found");
-        }
-        if (updated.queryState.status !== "error") {
-          throw new Error(`expected error, got ${updated.queryState.status}`);
-        }
-        expect(updated.queryState.error).toBe(message);
+        expect(queryTabError(tab.id)).toMatch(messagePattern);
       });
     },
   );
