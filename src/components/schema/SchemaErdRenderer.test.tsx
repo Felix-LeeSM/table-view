@@ -271,12 +271,12 @@ describe("SchemaErdRenderer", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /public\.orders/i }));
     fireEvent.click(screen.getByRole("button", { name: /zoom in erd/i }));
-    expect(screen.getByText("110%")).toBeInTheDocument();
+    expect(screen.getByLabelText("ERD zoom percent")).toHaveTextContent("110%");
 
     fireEvent.click(
       screen.getByRole("button", { name: /fit selected table/i }),
     );
-    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByLabelText("ERD zoom percent")).toHaveTextContent("100%");
     expect(
       screen.getByRole("button", { name: /public\.orders table/i }),
     ).toHaveAttribute("aria-pressed", "true");

@@ -83,25 +83,43 @@ async function verifyDenseErdSurface(
   await clickSearchResult(`public.erd_${searchTerm}`);
   await expectSelected(`public.erd_${searchTerm} table`);
 
-  const zoomBefore = await readZoomPercent();
+  const zoomBefore = await waitForZoomPercent(viewportName);
   await clickButton("Zoom in ERD");
-  await browser.waitUntil(async () => (await readZoomPercent()) > zoomBefore, {
-    timeout: 5000,
-    timeoutMsg: `${viewportName} ERD zoom-in did not change the zoom percent`,
-  });
+  await browser.waitUntil(
+    async () => {
+      const zoom = await readZoomPercent();
+      return zoom !== null && zoom > zoomBefore;
+    },
+    {
+      timeout: 5000,
+      timeoutMsg: `${viewportName} ERD zoom-in did not change the zoom percent`,
+    },
+  );
 
   await clickButton("Zoom out ERD");
   await clickButton("Fit ERD");
-  await browser.waitUntil(async () => (await readZoomPercent()) === 85, {
-    timeout: 5000,
-    timeoutMsg: `${viewportName} ERD fit did not set the expected zoom percent`,
-  });
+  await browser.waitUntil(
+    async () => {
+      const zoom = await readZoomPercent();
+      return zoom === 85;
+    },
+    {
+      timeout: 5000,
+      timeoutMsg: `${viewportName} ERD fit did not set the expected zoom percent`,
+    },
+  );
 
   await clickButton("Fit selected table");
-  await browser.waitUntil(async () => (await readZoomPercent()) === 100, {
-    timeout: 5000,
-    timeoutMsg: `${viewportName} ERD fit-selected did not restore 100% zoom`,
-  });
+  await browser.waitUntil(
+    async () => {
+      const zoom = await readZoomPercent();
+      return zoom === 100;
+    },
+    {
+      timeout: 5000,
+      timeoutMsg: `${viewportName} ERD fit-selected did not restore 100% zoom`,
+    },
+  );
 
   await setErdSearch("");
 }
@@ -309,16 +327,31 @@ async function activateVisibleTab(label: string) {
   );
 }
 
-async function readZoomPercent(): Promise<number> {
+async function waitForZoomPercent(viewportName: string): Promise<number> {
+  await browser.waitUntil(async () => (await readZoomPercent()) !== null, {
+    timeout: 5000,
+    timeoutMsg: `${viewportName} ERD zoom percent did not appear`,
+  });
+
+  const zoom = await readZoomPercent();
+  if (zoom === null)
+    throw new Error(`${viewportName} ERD zoom percent missing`);
+  return zoom;
+}
+
+async function readZoomPercent(): Promise<number | null> {
+  await switchToWorkspaceWindow();
   return await browser.execute(() => {
-    const body = document.body.textContent ?? "";
-    const match = body.match(/\b(\d{2,3})%\b/);
-    if (!match) throw new Error("ERD zoom percent did not appear");
-    return Number(match[1]);
+    const label = document.querySelector<HTMLElement>(
+      '[aria-label="ERD zoom percent"]',
+    );
+    const match = label?.textContent?.trim().match(/^(\d{2,3})%$/);
+    return match ? Number(match[1]) : null;
   });
 }
 
 async function saveNonEmptyScreenshot(viewportName: string) {
+  await switchToWorkspaceWindow();
   const reportDir = resolve(
     process.cwd(),
     process.env.E2E_REPORT_DIR ?? "e2e/wdio-report",
