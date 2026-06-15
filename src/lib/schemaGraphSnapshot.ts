@@ -11,6 +11,8 @@ import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
 interface BuildSchemaGraphCatalogSnapshotArgs {
   dbType: RuntimeRdbmsDatabaseType;
   database: string;
+  connectionId?: string;
+  label?: string;
   schemas: readonly SchemaInfo[];
   tablesBySchema: Readonly<Record<string, readonly TableInfo[]>>;
   columnsByTable: Readonly<
@@ -27,6 +29,8 @@ interface BuildSchemaGraphCatalogSnapshotArgs {
 export function buildSchemaGraphCatalogSnapshot({
   dbType,
   database,
+  connectionId,
+  label,
   schemas,
   tablesBySchema,
   columnsByTable,
@@ -34,7 +38,7 @@ export function buildSchemaGraphCatalogSnapshot({
   constraintsByTable = {},
 }: BuildSchemaGraphCatalogSnapshotArgs): SchemaGraphCatalogSnapshot {
   return {
-    source: { dbType, database },
+    source: { dbType, database, connectionId, label },
     schemas,
     tablesBySchema,
     columnsByTable,
