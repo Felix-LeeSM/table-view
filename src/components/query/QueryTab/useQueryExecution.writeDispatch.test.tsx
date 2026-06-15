@@ -420,6 +420,40 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     );
   });
 
+  it("surfaces ordered partial-commit warning when bulkWrite dispatch fails", async () => {
+    bulkWriteDocumentsMock.mockRejectedValueOnce(
+      new Error("bulk_write op 1 insert_one failed: duplicate key"),
+    );
+    const tab = seedDocTab(
+      "db.users.bulkWrite([{insertOne:{document:{n:1}}},{insertOne:{document:{n:2}}}])",
+    );
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await actAsync(result.current.handleExecute);
+
+    await waitFor(() => {
+      expect(bulkWriteDocumentsMock).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      const state = getTestWorkspace("conn-mongo", "table_view_test");
+      const updated = state.tabs.find((t) => t.id === tab.id);
+      expect(updated?.type).toBe("query");
+      if (updated?.type === "query") {
+        expect(updated.queryState.status).toBe("error");
+        if (updated.queryState.status === "error") {
+          expect(updated.queryState.error).toMatch(/ordered operations/);
+          expect(updated.queryState.error).toMatch(/not transactional/);
+          expect(updated.queryState.error).toMatch(
+            /earlier operations may already be committed/,
+          );
+          expect(updated.queryState.error).toMatch(/before retry/);
+          expect(updated.queryState.error).toMatch(/bulk_write op 1/);
+          expect(updated.queryState.error).not.toMatch(/rolled back/i);
+        }
+      }
+    });
+  });
+
   it("rejects real mongosh bulkWrite updateOne without an _id-only filter before IPC", async () => {
     const tab = seedDocTab(
       'db.users.bulkWrite([{updateOne:{filter:{email:"x@y.com"}, update:{$set:{verified:true}}}}])',

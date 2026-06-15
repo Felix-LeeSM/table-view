@@ -50,4 +50,29 @@ describe("DocumentBulkUpdateDialog", () => {
       screen.getByText("Enter a valid JSON object to preview updateMany."),
     );
   });
+
+  it("keeps the updateMany preview and warning when a server error is shown", () => {
+    render(
+      <DocumentBulkUpdateDialog
+        open
+        onOpenChange={vi.fn()}
+        database="app"
+        collection="users"
+        activeFilter={{ status: "pending" }}
+        patchInput='{ "status": "archived" }'
+        onPatchInputChange={vi.fn()}
+        error="updateMany is not wrapped in a transaction. duplicate key"
+        loading={false}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("MQL bulk update preview")).toHaveTextContent(
+      'db.users.updateMany({"status":"pending"}, { $set: {"status":"archived"} })',
+    );
+    expect(screen.getByText(/duplicate key/)).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("MongoDB bulk update warning"),
+    ).toHaveTextContent("not wrapped in a transaction");
+  });
 });

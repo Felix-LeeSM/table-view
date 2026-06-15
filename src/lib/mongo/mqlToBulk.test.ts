@@ -88,6 +88,45 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
     ]);
   });
 
+  it("maps string, number, and raw document ids without coercion", () => {
+    const cmds: MqlCommand[] = [
+      {
+        kind: "updateOne",
+        database: DB,
+        collection: COLL,
+        documentId: { string: "user:ada" },
+        patch: { $set: { name: "Ada" } },
+      },
+      {
+        kind: "deleteOne",
+        database: DB,
+        collection: COLL,
+        documentId: { number: 42 },
+      },
+      {
+        kind: "deleteOne",
+        database: DB,
+        collection: COLL,
+        documentId: { raw: { tenant: "app", key: "grace" } },
+      },
+    ];
+    expect(mqlCommandsToBulkOps(cmds)).toEqual([
+      {
+        op: "updateOne",
+        filter: { _id: "user:ada" },
+        update: { $set: { name: "Ada" } },
+      },
+      {
+        op: "deleteOne",
+        filter: { _id: 42 },
+      },
+      {
+        op: "deleteOne",
+        filter: { _id: { tenant: "app", key: "grace" } },
+      },
+    ]);
+  });
+
   it("preserves insert→update→delete order", () => {
     const cmds: MqlCommand[] = [
       {
@@ -115,6 +154,42 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
       "insertOne",
       "updateOne",
       "deleteOne",
+    ]);
+  });
+
+  it("preserves mixed command order and update operator payloads", () => {
+    const cmds: MqlCommand[] = [
+      {
+        kind: "deleteOne",
+        database: DB,
+        collection: COLL,
+        documentId: { objectId: "507f1f77bcf86cd799439022" },
+      },
+      {
+        kind: "updateOne",
+        database: DB,
+        collection: COLL,
+        documentId: { objectId: "507f1f77bcf86cd799439011" },
+        patch: { $set: { status: "archived" }, $unset: { stale: "" } },
+      },
+      {
+        kind: "insertOne",
+        database: DB,
+        collection: COLL,
+        document: { name: "Marie" },
+      },
+    ];
+    expect(mqlCommandsToBulkOps(cmds)).toEqual([
+      {
+        op: "deleteOne",
+        filter: { _id: { $oid: "507f1f77bcf86cd799439022" } },
+      },
+      {
+        op: "updateOne",
+        filter: { _id: { $oid: "507f1f77bcf86cd799439011" } },
+        update: { $set: { status: "archived" }, $unset: { stale: "" } },
+      },
+      { op: "insertOne", document: { name: "Marie" } },
     ]);
   });
 

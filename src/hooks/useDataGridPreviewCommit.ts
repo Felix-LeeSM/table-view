@@ -347,8 +347,9 @@ export function useDataGridPreviewCommit(
       }
       // Failure: keep the preview visible so the user can see what was
       // attempted. RDB adapters surface `failedKey` + `failedIndex` from
-      // the backend's `"statement N of M failed"` error; Mongo leaves
-      // both undefined and the banner falls back to the first item.
+      // the backend's `"statement N of M failed"` error. Mongo surfaces
+      // `failedIndex` when the adapter error includes `bulk_write op N`;
+      // otherwise the banner falls back to the first item.
       const failedIndex = result.failedIndex ?? 0;
       const failedItem = sess.items[failedIndex];
       setCommitError({

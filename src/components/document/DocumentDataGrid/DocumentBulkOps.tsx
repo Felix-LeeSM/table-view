@@ -70,6 +70,7 @@ export default function DocumentBulkOps({
         database={database}
         collection={collection}
         activeFilter={activeFilter}
+        error={bulkOps.deleteManyError}
         loading={bulkOps.deleteManyLoading}
         onConfirm={bulkOps.handleConfirmDeleteMany}
       />

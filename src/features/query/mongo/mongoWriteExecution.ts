@@ -113,6 +113,9 @@ export interface CreateMongoWriteDispatchersRequest extends MongoWriteExecutionA
   tabId: string;
 }
 
+const MONGO_QUERY_BULK_WRITE_PARTIAL_COMMIT_WARNING =
+  "MongoDB bulkWrite executes ordered operations but is not transactional in this app. If a later operation fails, earlier operations may already be committed; review the current collection state before retry.";
+
 export function createMongoWriteDispatchers({
   tabId,
   updateQueryState,
@@ -147,11 +150,12 @@ export function createMongoWriteDispatchers({
         queryMode,
       });
     } catch (err) {
-      failQuery(
-        tabId,
-        queryId,
-        err instanceof Error ? err.message : String(err),
-      );
+      const detail = err instanceof Error ? err.message : String(err);
+      const message =
+        queryMode === "bulkWrite"
+          ? `${MONGO_QUERY_BULK_WRITE_PARTIAL_COMMIT_WARNING} ${detail}`
+          : detail;
+      failQuery(tabId, queryId, message);
       recordHistory({
         sql: rawSql,
         executedAt: Date.now(),
