@@ -1,12 +1,19 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { SchemaGraphIntelligenceSelectors } from "@/lib/schemaGraphSelectors";
 import type { SchemaGraph } from "@/types/schemaGraph";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
 
 vi.mock("./SchemaErdRenderer", () => ({
-  default: ({ graph }: { graph: SchemaGraph }) => (
+  default: ({
+    graph,
+    intelligence,
+  }: {
+    graph: SchemaGraph;
+    intelligence?: SchemaGraphIntelligenceSelectors;
+  }) => (
     <output aria-label="erd graph">
       {JSON.stringify({
         indexes: graph.nodes
@@ -15,6 +22,13 @@ vi.mock("./SchemaErdRenderer", () => ({
         constraints: graph.nodes
           .filter((node) => node.kind === "constraint")
           .map((node) => node.id),
+        metadata: [...(intelligence?.metadataReadinessByTableId.values() ?? [])]
+          .map((metadata) => ({
+            tableId: metadata.tableId,
+            status: metadata.status,
+            missing: metadata.missing,
+          }))
+          .sort((left, right) => left.tableId.localeCompare(right.tableId)),
       })}
     </output>
   ),
@@ -115,6 +129,13 @@ describe("SchemaErdPanel", () => {
     expect(readGraphSummary().constraints).toEqual([
       "table:public.users.constraint:users_email_key",
     ]);
+    expect(readGraphSummary().metadata).toEqual([
+      {
+        tableId: "table:public.users",
+        status: "ready",
+        missing: [],
+      },
+    ]);
   });
 
   it("fetches missing table metadata for loaded ERD tables and renders it", async () => {
@@ -134,6 +155,14 @@ describe("SchemaErdPanel", () => {
     });
 
     render(<SchemaErdPanel connectionId="conn1" database="app" />);
+
+    expect(readGraphSummary().metadata).toEqual([
+      {
+        tableId: "table:public.users",
+        status: "partial",
+        missing: ["indexes", "constraints"],
+      },
+    ]);
 
     await waitFor(() => {
       expect(tauri.getTableIndexes).toHaveBeenCalledTimes(1);
@@ -159,7 +188,46 @@ describe("SchemaErdPanel", () => {
       expect(readGraphSummary().constraints).toEqual([
         "table:public.users.constraint:users_email_key",
       ]);
+      expect(readGraphSummary().metadata).toEqual([
+        {
+          tableId: "table:public.users",
+          status: "ready",
+          missing: [],
+        },
+      ]);
     });
+  });
+
+  it("shows non-RDB and file analytics aliases as unsupported for SchemaGraph", async () => {
+    const tauri = await import("@lib/tauri");
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "Document Store",
+          dbType: "mongodb",
+          paradigm: "document",
+          host: "localhost",
+          port: 27017,
+          user: "mongo",
+          database: "app",
+          groupId: null,
+          color: null,
+          hasPassword: false,
+        },
+      ],
+    });
+
+    render(<SchemaErdPanel connectionId="conn1" database="app" />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /erd and dependency view are available for relational runtime adapters/i,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /file analytics aliases do not expose this schemagraph surface/i,
+    );
+    expect(tauri.getTableIndexes).not.toHaveBeenCalled();
+    expect(tauri.getTableConstraints).not.toHaveBeenCalled();
   });
 });
 
@@ -179,7 +247,20 @@ function emailColumn() {
 function readGraphSummary(): {
   indexes: string[];
   constraints: string[];
+  metadata: {
+    tableId: string;
+    status: string;
+    missing: string[];
+  }[];
 } {
   const text = screen.getByLabelText("erd graph").textContent ?? "{}";
-  return JSON.parse(text) as { indexes: string[]; constraints: string[] };
+  return JSON.parse(text) as {
+    indexes: string[];
+    constraints: string[];
+    metadata: {
+      tableId: string;
+      status: string;
+      missing: string[];
+    }[];
+  };
 }
