@@ -131,7 +131,8 @@
         "e2e/smoke/postgres-explain.spec.ts",
         "e2e/smoke/postgres-extension-completion.spec.ts",
         "e2e/smoke/postgres-cancellation.spec.ts",
-        "e2e/smoke/postgres-structure-ddl.spec.ts"
+        "e2e/smoke/postgres-structure-ddl.spec.ts",
+        "e2e/smoke/erd-dense.spec.ts"
       ],
       "specKeys": [
         "postgres",
@@ -139,16 +140,17 @@
         "postgres-explain",
         "postgres-extension-completion",
         "postgres-cancellation",
-        "postgres-structure-ddl"
+        "postgres-structure-ddl",
+        "erd-dense"
       ],
       "seedTargets": ["postgres"],
       "tier": "blocking E2E",
       "wiredInSmokeScript": true,
-      "runtimeCost": "Existing service-backed matrix route plus the scoped PostgreSQL Structure DDL smoke from issue #868. Job timeout remains 40 minutes.",
+      "runtimeCost": "Existing service-backed matrix route plus the scoped PostgreSQL Structure DDL smoke from issue #868 and dense ERD screenshot smoke from issue #885. Job timeout remains 40 minutes.",
       "flakeRisk": "Existing Postgres runtime risk; isolated app data directory per spec and idempotent seed reduce cross-spec state bleed.",
       "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
       "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-<spec_key>.",
-      "supportClaimImpact": "Runtime Happy Path evidence for the documented PostgreSQL slices only, including bounded table-plus-index Structure DDL.",
+      "supportClaimImpact": "Runtime Happy Path evidence for the documented PostgreSQL slices only, including bounded table-plus-index Structure DDL and dense ERD render/search/selection/zoom/fit screenshot evidence. ERD smoke does not claim FK row navigation, schema diff, migration impact, or data compare.",
       "action": "keep blocking E2E"
     },
     {

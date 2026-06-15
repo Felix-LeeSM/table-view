@@ -190,6 +190,7 @@ const SEED_TARGETS_BY_SPEC_KEY: Record<string, readonly SeedTarget[]> = {
   "postgres-extension-completion": ["postgres"],
   "postgres-cancellation": ["postgres"],
   "postgres-structure-ddl": ["postgres"],
+  "erd-dense": ["postgres"],
   mysql: ["mysql"],
   mariadb: ["mariadb"],
   mssql: ["mssql"],

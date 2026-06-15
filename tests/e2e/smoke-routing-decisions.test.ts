@@ -50,8 +50,12 @@ describe("smoke-routing-decisions.json", () => {
       specKey: "duckdb-file-analytics",
       spec: "e2e/smoke/duckdb-file-analytics.spec.ts",
     });
+    expect(result.blockingDecisionMatrix).toContainEqual({
+      specKey: "erd-dense",
+      spec: "e2e/smoke/erd-dense.spec.ts",
+    });
     expect(result.blockingDecisionMatrix).toEqual(collectSmokeScriptMatrix());
     expect(result.blockingDecisionMatrix).toEqual(collectWorkflowMatrix());
-    expect(result.blockingDecisionMatrix).toHaveLength(18);
+    expect(result.blockingDecisionMatrix).toHaveLength(19);
   });
 });
