@@ -166,7 +166,10 @@ export default function SchemaErdRenderer({
           >
             <ZoomOut />
           </Button>
-          <span className="w-10 text-center text-3xs tabular-nums text-muted-foreground">
+          <span
+            aria-label="ERD zoom percent"
+            className="w-10 text-center text-3xs tabular-nums text-muted-foreground"
+          >
             {zoomPercent}%
           </span>
           <Button

@@ -68,6 +68,7 @@ if [[ -n "$SPEC_TO_RUN" ]]; then
 else
   REPORT_DIR="${E2E_REPORT_DIR:-$ROOT_DIR/e2e/wdio-report}"
 fi
+export E2E_REPORT_DIR="$REPORT_DIR"
 mkdir -p "$REPORT_DIR"
 find "$REPORT_DIR" -type f ! -name .gitkeep -delete
 
@@ -109,6 +110,7 @@ else
   run_wdio "$BASE_DATA_DIR/postgres-extension-completion" "e2e/smoke/postgres-extension-completion.spec.ts"
   run_wdio "$BASE_DATA_DIR/postgres-cancellation" "e2e/smoke/postgres-cancellation.spec.ts"
   run_wdio "$BASE_DATA_DIR/postgres-structure-ddl" "e2e/smoke/postgres-structure-ddl.spec.ts"
+  run_wdio "$BASE_DATA_DIR/erd-dense" "e2e/smoke/erd-dense.spec.ts"
   run_wdio "$BASE_DATA_DIR/mysql" "e2e/smoke/mysql.spec.ts"
   run_wdio "$BASE_DATA_DIR/mariadb" "e2e/smoke/mariadb.spec.ts"
   run_wdio "$BASE_DATA_DIR/mssql" "e2e/smoke/mssql.spec.ts"
