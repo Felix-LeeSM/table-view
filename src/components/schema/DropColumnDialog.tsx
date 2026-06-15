@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
@@ -14,6 +14,10 @@ import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecu
 import { ConfirmDestructiveDialog } from "@features/workspace";
 import SqlSyntax from "@components/shared/SqlSyntax";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaGraphIntelligence } from "@/hooks/useSchemaGraphIntelligence";
+import { selectSchemaGraphMigrationImpact } from "@/lib/schemaGraphSelectors";
+import { schemaGraphColumnId } from "@/lib/schemaGraphSupport";
+import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSummary";
 
 /**
  * Sprint 236 — `DropColumnDialog`. Mirrors the Sprint 235
@@ -91,6 +95,20 @@ export default function DropColumnDialog({
   const connectionEnvironment = useConnectionStore(
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
+  const schemaGraphIntelligence = useSchemaGraphIntelligence(
+    connectionId,
+    database ?? "",
+  );
+  const migrationImpact = useMemo(
+    () =>
+      database && schemaGraphIntelligence
+        ? selectSchemaGraphMigrationImpact(schemaGraphIntelligence, {
+            kind: "column",
+            columnId: schemaGraphColumnId(schemaName, tableName, columnName),
+          })
+        : null,
+    [columnName, database, schemaGraphIntelligence, schemaName, tableName],
   );
 
   const ddl = useDdlPreviewExecution({
@@ -257,8 +275,9 @@ export default function DropColumnDialog({
               {showDdl && (
                 <div
                   id="drop-column-ddl-preview"
-                  className="border-t border-border bg-background px-4 py-2"
+                  className="space-y-2 border-t border-border bg-background px-4 py-2"
                 >
+                  <SchemaGraphMigrationImpactSummary impact={migrationImpact} />
                   {ddl.previewLoading ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />

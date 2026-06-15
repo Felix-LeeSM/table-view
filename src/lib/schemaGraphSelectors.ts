@@ -16,6 +16,11 @@ import {
   schemaGraphColumnId,
   schemaGraphTableId,
 } from "./schemaGraphSupport";
+export {
+  selectSchemaGraphMigrationImpact,
+  type SchemaGraphMigrationImpactSummary,
+  type SchemaGraphMigrationRemovalTarget,
+} from "./schemaGraphMigrationImpact";
 
 export type SchemaGraphMetadataField = "columns" | "indexes" | "constraints";
 export type SchemaGraphMetadataFieldState = "available" | "missing" | "unknown";

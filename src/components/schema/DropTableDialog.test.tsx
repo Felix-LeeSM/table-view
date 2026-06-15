@@ -52,6 +52,10 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import {
+  SCHEMA_GRAPH_IMPACT_SESSION_FK,
+  seedSchemaGraphMigrationImpactFixture,
+} from "@/test-utils/schemaGraphImpactFixture";
 
 function setProductionConnection() {
   useConnectionStore.setState({
@@ -121,7 +125,13 @@ describe("DropTableDialog (Sprint 235)", () => {
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
     useQueryHistoryStore.setState({ recentVisible: [] });
-    useSchemaStore.setState({ tables: {} });
+    useSchemaStore.setState({
+      schemas: {},
+      tables: {},
+      tableColumnsCache: {},
+      tableIndexesCache: {},
+      tableConstraintsCache: {},
+    });
     setDevConnection();
     mockDropTableRequest.mockResolvedValue({
       sql: 'DROP TABLE "public"."users"',
@@ -154,6 +164,17 @@ describe("DropTableDialog (Sprint 235)", () => {
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("shows cached SchemaGraph migration impact in the DDL preview", () => {
+    seedSchemaGraphMigrationImpactFixture();
+    renderDialog({ tableName: "users" });
+
+    expect(screen.getByText("Migration impact")).toBeInTheDocument();
+    expect(screen.getByText("public.sessions")).toBeInTheDocument();
+    expect(
+      screen.getByText(SCHEMA_GRAPH_IMPACT_SESSION_FK),
+    ).toBeInTheDocument();
   });
 
   // AC-235-05 — CASCADE checkbox default off → emits SQL without CASCADE.

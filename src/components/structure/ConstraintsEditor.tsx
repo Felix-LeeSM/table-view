@@ -27,6 +27,12 @@ import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import { ConfirmDestructiveDialog } from "@features/workspace";
+import { useSchemaGraphIntelligence } from "@/hooks/useSchemaGraphIntelligence";
+import {
+  selectSchemaGraphMigrationImpact,
+  type SchemaGraphMigrationImpactSummary,
+} from "@/lib/schemaGraphSelectors";
+import { schemaGraphConstraintId } from "@/lib/schemaGraphSupport";
 import {
   StructureShell,
   StructureActionBar,
@@ -354,6 +360,8 @@ export default function ConstraintsEditor({
 }: ConstraintsEditorProps) {
   const [showAddConstraintModal, setShowAddConstraintModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [migrationImpact, setMigrationImpact] =
+    useState<SchemaGraphMigrationImpactSummary | null>(null);
 
   // Preview SQL state, Safe Mode gate, history record + commit closure
   // live in `useDdlPreviewExecution`. `showPreviewModal` stays editor-local
@@ -364,6 +372,10 @@ export default function ConstraintsEditor({
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
   const ddl = useDdlPreviewExecution({ connectionId, onRefresh });
+  const schemaGraphIntelligence = useSchemaGraphIntelligence(
+    connectionId,
+    database,
+  );
   const getTableColumns = useSchemaStore((s) => s.getTableColumns);
 
   // -------------------------------------------------------------------------
@@ -375,6 +387,7 @@ export default function ConstraintsEditor({
     definition: ConstraintDefinition;
   }) => {
     setShowAddConstraintModal(false);
+    setMigrationImpact(null);
     setShowPreviewModal(true);
     await ddl.loadPreview(
       () =>
@@ -409,6 +422,18 @@ export default function ConstraintsEditor({
   // -------------------------------------------------------------------------
 
   const handleDropConstraint = async (constraintName: string) => {
+    setMigrationImpact(
+      schemaGraphIntelligence
+        ? selectSchemaGraphMigrationImpact(schemaGraphIntelligence, {
+            kind: "constraint",
+            constraintId: schemaGraphConstraintId(
+              schema,
+              table,
+              constraintName,
+            ),
+          })
+        : null,
+    );
     setShowPreviewModal(true);
     await ddl.loadPreview(
       () =>
@@ -442,6 +467,7 @@ export default function ConstraintsEditor({
 
   const handlePreviewCancel = () => {
     setShowPreviewModal(false);
+    setMigrationImpact(null);
     ddl.cancelPreview();
   };
 
@@ -531,6 +557,7 @@ export default function ConstraintsEditor({
           loading={ddl.previewLoading}
           error={ddl.previewError}
           environment={connectionEnvironment}
+          migrationImpact={migrationImpact}
           onConfirm={ddl.attemptExecute}
           onCancel={handlePreviewCancel}
         />

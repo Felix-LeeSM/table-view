@@ -193,7 +193,7 @@ connection model until runtime evidence requires a separate paradigm.
 
 This matrix is the H4 ERD/SchemaGraph gate. It separates current unit/component
 evidence from future desktop smoke so reusable graph claims do not imply
-migration impact, schema diff, data compare, or dense-view E2E coverage.
+schema diff, data compare, or dense-view E2E coverage.
 
 | Claim / journey | Current evidence | Current gap / routing |
 |---|---|---|
@@ -202,8 +202,9 @@ migration impact, schema diff, data compare, or dense-view E2E coverage.
 | Reusable SchemaGraph extraction and FK semantics | `src/lib/schemaGraph.ts`, `src/lib/schemaGraph.test.ts`, `src/lib/schemaGraphRelationships.ts`, `src/lib/schemaGraphRelationships.test.ts` | RDB catalog/FK semantics are current scope. Other paradigms may expose catalog graphs later, but must not pretend to be RDB schemas. |
 | ERD renderer local interactions | `src/components/schema/SchemaErdRenderer.test.tsx`, `src/components/schema/SchemaErdLayout.ts` | Table cards, FK edges, search, select, zoom, fit, focus, and highlight are local diagram interactions. There is no desktop/narrow screenshot smoke claim today. |
 | Read-only dependency view | `src/components/schema/SchemaErdRenderer.test.tsx`, `src/components/schema/SchemaErdPanel.test.tsx` | Selected ERD tables show incoming/outgoing FK tables/columns, related indexes/constraints, CHECK expressions, and visible metadata/SchemaGraph diagnostics. Empty, diagnostic, and non-RDB unsupported states have focused component evidence. |
+| Migration impact summaries | `src/lib/schemaGraphSelectors.test.ts`, `src/components/structure/SqlPreviewDialog.test.tsx`, `src/components/schema/DropTableDialog.test.tsx`, `src/components/schema/DropColumnDialog.test.tsx`, `src/components/structure/IndexesEditor.test.tsx`, `src/components/structure/ConstraintsEditor.test.tsx` | Table, column, constraint, and index removal previews show cached SchemaGraph impact summaries for dependent tables/columns/indexes/constraints/FKs and metadata diagnostics. Current evidence is pure selector plus affected dialog/editor component coverage; no desktop smoke claim is made. |
 | FK row navigation boundary | `src/components/datagrid/DataGridTable.fk-navigation.test.tsx`, `src/components/datagrid/DataGridTable.parseFkReference.test.ts` | FK row navigation remains the DataGrid foreign-key cell/icon path. ERD interactions are not FK row navigation claims. |
-| Future migration/schema diff/data compare surfaces | `docs/ROADMAP.md`, `memory/engineering/architecture/data-source/memory.md` | Future surfaces must reuse `SchemaGraph`/catalog input and avoid duplicate catalog parsing before support claims widen. |
+| Future schema diff/data compare surfaces | `docs/ROADMAP.md`, `memory/engineering/architecture/data-source/memory.md` | Future surfaces must reuse `SchemaGraph`/catalog input and avoid duplicate catalog parsing before support claims widen. |
 | Runtime E2E smoke inventory | This matrix and current ERD component evidence | Required before future E2E promotion: open a seeded RDBMS schema, open ERD, verify table nodes, FK edges, search, selection, zoom, fit, and narrow viewport behavior, confirm metadata fetch stability, and confirm no FK row-navigation claim through ERD. |
 
 ## H5 Non-RDBMS Smoke Matrix

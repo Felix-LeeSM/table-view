@@ -37,6 +37,12 @@ beforeEach(() => {
 import * as tauri from "@lib/tauri";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import {
+  SCHEMA_GRAPH_IMPACT_SESSION_FK,
+  SCHEMA_GRAPH_IMPACT_USER_EMAIL_INDEX,
+  seedSchemaGraphMigrationImpactFixture,
+} from "@/test-utils/schemaGraphImpactFixture";
 
 const SAMPLE_INDEX = {
   name: "idx_users_email",
@@ -65,7 +71,7 @@ function setProductionConnection() {
   });
 }
 
-async function renderEditorAndOpenPreview() {
+async function renderEditorAndOpenPreview(index = SAMPLE_INDEX) {
   const onRefresh = vi.fn().mockResolvedValue(undefined);
   const view = render(
     <IndexesEditor
@@ -73,16 +79,14 @@ async function renderEditorAndOpenPreview() {
       database="db-1"
       table="users"
       schema="public"
-      indexes={[SAMPLE_INDEX]}
+      indexes={[index]}
       columns={[]}
       onColumnsChange={vi.fn()}
       onRefresh={onRefresh}
     />,
   );
-  // Click the trash icon next to idx_users_email — populates previewSql
-  // via the dropIndex mock and opens the preview dialog.
   fireEvent.click(
-    screen.getByRole("button", { name: /Delete index idx_users_email/i }),
+    screen.getByRole("button", { name: `Delete index ${index.name}` }),
   );
   await waitFor(() => {
     expect(
@@ -97,6 +101,13 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "strict" });
+    useSchemaStore.setState({
+      schemas: {},
+      tables: {},
+      tableColumnsCache: {},
+      tableIndexesCache: {},
+      tableConstraintsCache: {},
+    });
   });
 
   // AC-187-05a — production + strict + DROP INDEX preview opens the
@@ -281,5 +292,38 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
         }),
       ).toBe(true);
     });
+  });
+
+  it("shows cached SchemaGraph migration impact for index drops", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-1",
+          name: "dev-conn",
+          dbType: "postgresql",
+          host: "localhost",
+          port: 5432,
+          database: "app",
+          username: "u",
+          password: null,
+          environment: "development",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ],
+    });
+    seedSchemaGraphMigrationImpactFixture();
+    await renderEditorAndOpenPreview({
+      ...SAMPLE_INDEX,
+      name: SCHEMA_GRAPH_IMPACT_USER_EMAIL_INDEX,
+      is_unique: true,
+    });
+
+    expect(screen.getByText("Migration impact")).toBeInTheDocument();
+    expect(
+      screen.getByText(/public\.users\.users_email_idx \(email\)/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(SCHEMA_GRAPH_IMPACT_SESSION_FK),
+    ).toBeInTheDocument();
   });
 });
