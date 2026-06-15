@@ -1,6 +1,8 @@
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
 import SqlSyntax from "@components/shared/SqlSyntax";
 import ExecuteButton from "@components/ui/ExecuteButton";
+import SchemaGraphMigrationImpactSummary from "@components/schema/SchemaGraphMigrationImpactSummary";
+import type { SchemaGraphMigrationImpactSummary as MigrationImpactSummary } from "@/lib/schemaGraphSelectors";
 
 /**
  * Surfaced commit failure passed through from `useDataGridEdit`'s
@@ -54,6 +56,7 @@ export interface SqlPreviewDialogProps {
    * (no env plumbed) keep the plain "Execute" label.
    */
   connectionLabel?: string | null;
+  migrationImpact?: MigrationImpactSummary | null;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -65,6 +68,7 @@ export default function SqlPreviewDialog({
   commitError,
   environment = null,
   connectionLabel = null,
+  migrationImpact = null,
   onConfirm,
   onCancel,
 }: SqlPreviewDialogProps) {
@@ -79,15 +83,18 @@ export default function SqlPreviewDialog({
       copyText={sql}
       copyAriaLabel="Copy SQL to clipboard"
       preview={
-        <pre className="max-h-scroll-lg overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-3 text-xs font-mono text-foreground">
-          {sql.trim() ? (
-            <SqlSyntax sql={sql} />
-          ) : (
-            <span className="italic text-muted-foreground">
-              -- No changes to preview
-            </span>
-          )}
-        </pre>
+        <>
+          <SchemaGraphMigrationImpactSummary impact={migrationImpact} />
+          <pre className="max-h-scroll-lg overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-3 text-xs font-mono text-foreground">
+            {sql.trim() ? (
+              <SqlSyntax sql={sql} />
+            ) : (
+              <span className="italic text-muted-foreground">
+                -- No changes to preview
+              </span>
+            )}
+          </pre>
+        </>
       }
       error={error}
       commitError={commitError ?? null}

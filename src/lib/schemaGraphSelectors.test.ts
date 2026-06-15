@@ -9,12 +9,14 @@ import type {
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
 import { extractSchemaGraph } from "./schemaGraph";
 import {
+  selectSchemaGraphMigrationImpact,
   selectSchemaGraphIntelligence,
   selectSchemaGraphNodeMaps,
 } from "./schemaGraphSelectors";
 import {
   schemaGraphColumnId,
   schemaGraphConstraintId,
+  schemaGraphIndexId,
   schemaGraphTableId,
 } from "./schemaGraphSupport";
 
@@ -200,6 +202,104 @@ describe("SchemaGraph intelligence selectors", () => {
       missing: [],
     });
   });
+
+  it("summarizes table removal impact with incoming FK metadata", () => {
+    const selectors = selectSchemaGraphIntelligence(migrationImpactSnapshot());
+    const impact = selectSchemaGraphMigrationImpact(selectors, {
+      kind: "table",
+      tableId: schemaGraphTableId("public", "users"),
+    });
+
+    expect(impact.targetFound).toBe(true);
+    expect(impact.targetLabel).toBe("public.users");
+    expect(impact.affectedTables.map((table) => table.table)).toEqual([
+      "sessions",
+      "users",
+    ]);
+    expect(
+      impact.affectedConstraints.map((constraint) => constraint.constraint),
+    ).toEqual(["sessions_user_email_fkey", "users_email_key", "users_pkey"]);
+    expect(
+      impact.foreignKeys.map(
+        (foreignKey) => foreignKey.relationship.rawMetadata.constraintName,
+      ),
+    ).toEqual(["sessions_user_email_fkey"]);
+  });
+
+  it("summarizes column removal impact with dependent indexes, constraints, and FK columns", () => {
+    const selectors = selectSchemaGraphIntelligence(migrationImpactSnapshot());
+    const impact = selectSchemaGraphMigrationImpact(selectors, {
+      kind: "column",
+      columnId: schemaGraphColumnId("public", "users", "email"),
+    });
+
+    expect(impact.affectedIndexes.map((indexNode) => indexNode.index)).toEqual([
+      "users_email_idx",
+    ]);
+    expect(
+      impact.affectedConstraints.map((constraint) => constraint.constraint),
+    ).toEqual(["sessions_user_email_fkey", "users_email_key"]);
+    expect(
+      impact.affectedColumns.map((columnNode) => columnNode.column),
+    ).toEqual(["user_email", "email"]);
+  });
+
+  it("summarizes unique constraint removal impact with inbound FK metadata", () => {
+    const selectors = selectSchemaGraphIntelligence(migrationImpactSnapshot());
+    const impact = selectSchemaGraphMigrationImpact(selectors, {
+      kind: "constraint",
+      constraintId: schemaGraphConstraintId(
+        "public",
+        "users",
+        "users_email_key",
+      ),
+    });
+
+    expect(
+      impact.affectedConstraints.map((constraint) => constraint.constraint),
+    ).toEqual(["sessions_user_email_fkey", "users_email_key"]);
+    expect(impact.affectedTables.map((tableNode) => tableNode.table)).toEqual([
+      "sessions",
+      "users",
+    ]);
+    expect(
+      impact.foreignKeys.map(
+        (foreignKey) => foreignKey.relationship.rawMetadata.constraintName,
+      ),
+    ).toEqual(["sessions_user_email_fkey"]);
+  });
+
+  it("summarizes unique index removal impact through same-column constraints and inbound FKs", () => {
+    const selectors = selectSchemaGraphIntelligence(migrationImpactSnapshot());
+    const impact = selectSchemaGraphMigrationImpact(selectors, {
+      kind: "index",
+      indexId: schemaGraphIndexId("public", "users", "users_email_idx"),
+    });
+
+    expect(impact.affectedIndexes.map((indexNode) => indexNode.index)).toEqual([
+      "users_email_idx",
+    ]);
+    expect(
+      impact.affectedConstraints.map((constraint) => constraint.constraint),
+    ).toEqual(["sessions_user_email_fkey", "users_email_key"]);
+    expect(
+      impact.foreignKeys.map(
+        (foreignKey) => foreignKey.relationship.rawMetadata.constraintName,
+      ),
+    ).toEqual(["sessions_user_email_fkey"]);
+  });
+
+  it("returns an empty summary for a missing removal target", () => {
+    const selectors = selectSchemaGraphIntelligence(migrationImpactSnapshot());
+    const impact = selectSchemaGraphMigrationImpact(selectors, {
+      kind: "table",
+      tableId: schemaGraphTableId("public", "missing"),
+    });
+
+    expect(impact.targetFound).toBe(false);
+    expect(impact.affectedTables).toEqual([]);
+    expect(impact.foreignKeys).toEqual([]);
+  });
 });
 
 function postgresLikeSnapshot(
@@ -281,6 +381,64 @@ function duckdbSparseSnapshot(): SchemaGraphCatalogSnapshot {
     columnsByTable: {
       main: {
         sales: [column("id", { is_primary_key: false }), column("amount")],
+      },
+    },
+  };
+}
+
+function migrationImpactSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [table("public", "users"), table("public", "sessions")],
+    },
+    columnsByTable: {
+      public: {
+        users: [
+          column("id", { is_primary_key: true }),
+          column("email", { data_type: "text" }),
+        ],
+        sessions: [
+          column("id", { is_primary_key: true }),
+          column("user_email", {
+            data_type: "text",
+            is_foreign_key: true,
+            fk_reference: "public.users(email)",
+          }),
+        ],
+      },
+    },
+    indexesByTable: {
+      public: {
+        users: [
+          index("users_pkey_idx", ["id"], {
+            is_primary: true,
+            is_unique: true,
+          }),
+          index("users_email_idx", ["email"], { is_unique: true }),
+        ],
+        sessions: [index("sessions_user_email_idx", ["user_email"])],
+      },
+    },
+    constraintsByTable: {
+      public: {
+        users: [
+          constraint("users_pkey", "PRIMARY KEY", ["id"]),
+          constraint("users_email_key", "UNIQUE", ["email"]),
+        ],
+        sessions: [
+          constraint("sessions_pkey", "PRIMARY KEY", ["id"]),
+          constraint(
+            "sessions_user_email_fkey",
+            "FOREIGN KEY",
+            ["user_email"],
+            {
+              reference_table: "public.users",
+              reference_columns: ["email"],
+            },
+          ),
+        ],
       },
     },
   };

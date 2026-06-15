@@ -34,8 +34,15 @@ beforeEach(() => {
 import * as tauri from "@lib/tauri";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import type { ConstraintInfo } from "@/types/schema";
+import {
+  SCHEMA_GRAPH_IMPACT_SESSION_FK,
+  SCHEMA_GRAPH_IMPACT_USER_EMAIL_CONSTRAINT,
+  seedSchemaGraphMigrationImpactFixture,
+} from "@/test-utils/schemaGraphImpactFixture";
 
-const SAMPLE_CONSTRAINT = {
+const SAMPLE_CONSTRAINT: ConstraintInfo = {
   name: "fk_users_org",
   constraint_type: "FOREIGN KEY",
   columns: ["org_id"],
@@ -62,7 +69,7 @@ function setProductionConnection() {
   });
 }
 
-async function renderEditorAndOpenPreview() {
+async function renderEditorAndOpenPreview(constraint = SAMPLE_CONSTRAINT) {
   const onRefresh = vi.fn().mockResolvedValue(undefined);
   const view = render(
     <ConstraintsEditor
@@ -70,14 +77,16 @@ async function renderEditorAndOpenPreview() {
       database="db-1"
       table="users"
       schema="public"
-      constraints={[SAMPLE_CONSTRAINT]}
+      constraints={[constraint]}
       columns={[]}
       onColumnsChange={vi.fn()}
       onRefresh={onRefresh}
     />,
   );
   fireEvent.click(
-    screen.getByRole("button", { name: /Delete constraint fk_users_org/i }),
+    screen.getByRole("button", {
+      name: `Delete constraint ${constraint.name}`,
+    }),
   );
   await waitFor(() => {
     expect(
@@ -92,6 +101,13 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "strict" });
+    useSchemaStore.setState({
+      schemas: {},
+      tables: {},
+      tableColumnsCache: {},
+      tableIndexesCache: {},
+      tableConstraintsCache: {},
+    });
   });
 
   // AC-187-06a — production + strict + DROP CONSTRAINT preview opens
@@ -224,5 +240,40 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
         ),
       ).toBe(true);
     });
+  });
+
+  it("shows cached SchemaGraph migration impact for constraint drops", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-1",
+          name: "dev-conn",
+          dbType: "postgresql",
+          host: "localhost",
+          port: 5432,
+          database: "app",
+          username: "u",
+          password: null,
+          environment: "development",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ],
+    });
+    seedSchemaGraphMigrationImpactFixture();
+    await renderEditorAndOpenPreview({
+      name: SCHEMA_GRAPH_IMPACT_USER_EMAIL_CONSTRAINT,
+      constraint_type: "UNIQUE",
+      columns: ["email"],
+      reference_table: null,
+      reference_columns: null,
+    });
+
+    expect(screen.getByText("Migration impact")).toBeInTheDocument();
+    expect(
+      screen.getByText(/public\.users\.users_email_key \(UNIQUE on email\)/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(SCHEMA_GRAPH_IMPACT_SESSION_FK),
+    ).toBeInTheDocument();
   });
 });

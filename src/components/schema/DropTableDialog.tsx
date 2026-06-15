@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
@@ -15,6 +15,10 @@ import { ConfirmDestructiveDialog } from "@features/workspace";
 import SqlSyntax from "@components/shared/SqlSyntax";
 import { useSchemaTableMutations } from "@/hooks/useSchemaTableMutations";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaGraphIntelligence } from "@/hooks/useSchemaGraphIntelligence";
+import { selectSchemaGraphMigrationImpact } from "@/lib/schemaGraphSelectors";
+import { schemaGraphTableId } from "@/lib/schemaGraphSupport";
+import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSummary";
 
 /**
  * Sprint 235 — `DropTableDialog`. Typing-confirm input + CASCADE
@@ -82,6 +86,20 @@ export default function DropTableDialog({
   const connectionEnvironment = useConnectionStore(
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
+  const schemaGraphIntelligence = useSchemaGraphIntelligence(
+    connectionId,
+    database,
+  );
+  const migrationImpact = useMemo(
+    () =>
+      schemaGraphIntelligence
+        ? selectSchemaGraphMigrationImpact(schemaGraphIntelligence, {
+            kind: "table",
+            tableId: schemaGraphTableId(schemaName, tableName),
+          })
+        : null,
+    [schemaGraphIntelligence, schemaName, tableName],
   );
 
   const ddl = useDdlPreviewExecution({
@@ -236,8 +254,9 @@ export default function DropTableDialog({
               {showDdl && (
                 <div
                   id="drop-table-ddl-preview"
-                  className="border-t border-border bg-background px-4 py-2"
+                  className="space-y-2 border-t border-border bg-background px-4 py-2"
                 >
+                  <SchemaGraphMigrationImpactSummary impact={migrationImpact} />
                   {ddl.previewLoading ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />

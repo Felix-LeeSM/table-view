@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
+import {
+  selectSchemaGraphIntelligence,
+  selectSchemaGraphMigrationImpact,
+} from "@/lib/schemaGraphSelectors";
+import { buildSchemaGraphCatalogSnapshot } from "@/lib/schemaGraphSnapshot";
+import { schemaGraphTableId } from "@/lib/schemaGraphSupport";
 
 // ---------------------------------------------------------------------------
 // Sprint 109 — SqlPreviewDialog uses SqlSyntax for syntax-highlighted preview.
@@ -137,6 +143,52 @@ describe("SqlPreviewDialog (sprint-109 syntax highlight)", () => {
     expect(btn.getAttribute("style")).toMatch(/--tv-success\)/);
     // Plain "Execute" — no "on" suffix.
     expect(btn.textContent?.trim()).toBe("Execute");
+  });
+
+  it("renders SchemaGraph migration impact above the SQL preview", () => {
+    const selectors = selectSchemaGraphIntelligence(
+      buildSchemaGraphCatalogSnapshot({
+        dbType: "postgresql",
+        database: "app",
+        schemas: [{ name: "public" }],
+        tablesBySchema: {
+          public: [{ name: "users", schema: "public", row_count: null }],
+        },
+        columnsByTable: {
+          public: {
+            users: [
+              {
+                name: "id",
+                data_type: "integer",
+                nullable: false,
+                default_value: null,
+                is_primary_key: true,
+                is_foreign_key: false,
+                fk_reference: null,
+                comment: null,
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    render(
+      <SqlPreviewDialog
+        sql="DROP TABLE users"
+        loading={false}
+        error={null}
+        migrationImpact={selectSchemaGraphMigrationImpact(selectors, {
+          kind: "table",
+          tableId: schemaGraphTableId("public", "users"),
+        })}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Migration impact")).toBeInTheDocument();
+    expect(screen.getAllByText("public.users").length).toBeGreaterThan(0);
   });
 
   // Sprint 256 (2026-05-09): the AC-187-03a 1px env color stripe above the

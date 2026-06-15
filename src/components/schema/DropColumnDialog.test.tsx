@@ -41,6 +41,12 @@ import DropColumnDialog from "./DropColumnDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import {
+  SCHEMA_GRAPH_IMPACT_DB,
+  SCHEMA_GRAPH_IMPACT_SESSION_FK,
+  seedSchemaGraphMigrationImpactFixture,
+} from "@/test-utils/schemaGraphImpactFixture";
 
 function setProductionConnection() {
   useConnectionStore.setState({
@@ -87,6 +93,7 @@ function renderDialog(
     schemaName: string;
     tableName: string;
     columnName: string;
+    database: string;
   }> = {},
 ) {
   const onClose = overrides.onClose ?? vi.fn();
@@ -98,6 +105,7 @@ function renderDialog(
   const view = render(
     <DropColumnDialog
       connectionId="conn-1"
+      database={overrides.database}
       schemaName={schemaName}
       tableName={tableName}
       columnName={columnName}
@@ -123,6 +131,13 @@ describe("DropColumnDialog (Sprint 236)", () => {
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
     useQueryHistoryStore.setState({ recentVisible: [] });
+    useSchemaStore.setState({
+      schemas: {},
+      tables: {},
+      tableColumnsCache: {},
+      tableIndexesCache: {},
+      tableConstraintsCache: {},
+    });
     setDevConnection();
     mockDropColumnRequest.mockResolvedValue({
       sql: 'ALTER TABLE "public"."users" DROP COLUMN "email"',
@@ -161,6 +176,17 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email" });
     expect(
       screen.getByText("Drop dependent objects (CASCADE)"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows cached SchemaGraph migration impact in the DDL preview", () => {
+    seedSchemaGraphMigrationImpactFixture();
+    renderDialog({ columnName: "email", database: SCHEMA_GRAPH_IMPACT_DB });
+
+    expect(screen.getByText("Migration impact")).toBeInTheDocument();
+    expect(screen.getByText("public.sessions.user_email")).toBeInTheDocument();
+    expect(
+      screen.getByText(SCHEMA_GRAPH_IMPACT_SESSION_FK),
     ).toBeInTheDocument();
   });
 

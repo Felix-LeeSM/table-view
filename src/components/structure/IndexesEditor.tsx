@@ -24,6 +24,12 @@ import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { useConnectionStore } from "@stores/connectionStore";
 import { ConfirmDestructiveDialog } from "@features/workspace";
 import { OrderedColumnPicker } from "@features/catalog";
+import { useSchemaGraphIntelligence } from "@/hooks/useSchemaGraphIntelligence";
+import {
+  selectSchemaGraphMigrationImpact,
+  type SchemaGraphMigrationImpactSummary,
+} from "@/lib/schemaGraphSelectors";
+import { schemaGraphIndexId } from "@/lib/schemaGraphSupport";
 import {
   StructureShell,
   StructureActionBar,
@@ -248,6 +254,8 @@ export default function IndexesEditor({
 }: IndexesEditorProps) {
   const [showCreateIndexModal, setShowCreateIndexModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [migrationImpact, setMigrationImpact] =
+    useState<SchemaGraphMigrationImpactSummary | null>(null);
 
   // Preview SQL state, Safe Mode gate, history record + commit closure all
   // live in `useDdlPreviewExecution`. `showPreviewModal` stays editor-local
@@ -259,6 +267,10 @@ export default function IndexesEditor({
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
   const ddl = useDdlPreviewExecution({ connectionId, onRefresh });
+  const schemaGraphIntelligence = useSchemaGraphIntelligence(
+    connectionId,
+    database,
+  );
   const getTableColumns = useSchemaStore((s) => s.getTableColumns);
 
   // -------------------------------------------------------------------------
@@ -272,6 +284,7 @@ export default function IndexesEditor({
     isUnique: boolean;
   }) => {
     setShowCreateIndexModal(false);
+    setMigrationImpact(null);
     setShowPreviewModal(true);
     await ddl.loadPreview(
       () =>
@@ -307,6 +320,7 @@ export default function IndexesEditor({
 
   const handlePreviewCancel = () => {
     setShowPreviewModal(false);
+    setMigrationImpact(null);
     ddl.cancelPreview();
   };
 
@@ -315,6 +329,14 @@ export default function IndexesEditor({
   // -------------------------------------------------------------------------
 
   const handleDropIndex = async (indexName: string) => {
+    setMigrationImpact(
+      schemaGraphIntelligence
+        ? selectSchemaGraphMigrationImpact(schemaGraphIntelligence, {
+            kind: "index",
+            indexId: schemaGraphIndexId(schema, table, indexName),
+          })
+        : null,
+    );
     setShowPreviewModal(true);
     await ddl.loadPreview(
       () =>
@@ -442,6 +464,7 @@ export default function IndexesEditor({
           loading={ddl.previewLoading}
           error={ddl.previewError}
           environment={connectionEnvironment}
+          migrationImpact={migrationImpact}
           onConfirm={ddl.attemptExecute}
           onCancel={handlePreviewCancel}
         />
