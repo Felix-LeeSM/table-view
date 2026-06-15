@@ -401,7 +401,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
     [
       "transaction-style helper",
       "session.withTransaction(() => db.users.insertOne({}))",
-      /Transactions are not supported/i,
+      /standalone MongoDB servers/i,
     ],
   ])(
     "[AC-886-Q1] %s → visible error, no Mongo IPC, no confirm runner",

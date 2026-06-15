@@ -55,6 +55,19 @@ describe("mongoAutocomplete constants", () => {
     expect(labels).toEqual([...MONGOSH_METHOD_WHITELIST]);
   });
 
+  it("db-level method copy stays allowlist-scoped", () => {
+    const runCommand = MONGOSH_DB_LEVEL_METHODS.find(
+      (method) => method.label === "runCommand",
+    );
+    const adminCommand = MONGOSH_DB_LEVEL_METHODS.find(
+      (method) => method.label === "adminCommand",
+    );
+    expect(runCommand?.info).toContain("allowlisted");
+    expect(adminCommand?.info).toContain("allowlisted");
+    expect(runCommand?.info).not.toMatch(/arbitrary|full support/i);
+    expect(adminCommand?.info).not.toMatch(/arbitrary|full support/i);
+  });
+
   it("MONGO_QUERY_OPERATORS covers official query predicate groups", () => {
     expect(MONGO_QUERY_OPERATORS).toContain("$eq");
     expect(MONGO_QUERY_OPERATORS).toContain("$and");

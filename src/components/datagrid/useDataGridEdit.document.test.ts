@@ -319,10 +319,31 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
       await result.current.handleExecuteCommit();
     });
 
+    const firstDispatchArgs = mockBulkWriteDocuments.mock.calls[0];
     expect(result.current.mqlPreview).toBe(previewBeforeFailure);
+    expect(result.current.commitError?.statementIndex).toBe(1);
+    expect(result.current.commitError?.statementCount).toBe(2);
+    expect(result.current.commitError?.message).toMatch(/not transactional/);
+    expect(result.current.commitError?.message).toMatch(
+      /earlier document writes may already be committed/,
+    );
+    expect(result.current.commitError?.message).toMatch(/retry/);
+    expect(result.current.commitError?.message).not.toMatch(/rolled back/i);
     expect(result.current.pendingEdits.size).toBe(1);
     expect(result.current.pendingDeletedRowKeys.size).toBe(1);
     expect(mockFetchData).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+
+    expect(mockBulkWriteDocuments).toHaveBeenCalledTimes(2);
+    expect(mockBulkWriteDocuments.mock.calls[1]).toEqual(firstDispatchArgs);
+    expect(result.current.mqlPreview).toBeNull();
+    expect(result.current.commitError).toBeNull();
+    expect(result.current.pendingEdits.size).toBe(0);
+    expect(result.current.pendingDeletedRowKeys.size).toBe(0);
+    expect(mockFetchData).toHaveBeenCalledTimes(1);
   });
 
   it("handleCommit surfaces generator errors without opening a preview when every row is invalid", () => {

@@ -439,6 +439,11 @@ describe("DocumentDataGrid", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("unsupported server command");
+    expect(alert).toHaveTextContent("ordered but not transactional");
+    expect(alert).toHaveTextContent(
+      "earlier document writes may already be committed",
+    );
+    expect(alert).not.toHaveTextContent(/rolled back/i);
     expect(
       screen.getByRole("dialog", { name: "MQL Preview" }),
     ).toBeInTheDocument();

@@ -21,6 +21,7 @@ export interface DocumentBulkDeleteDialogProps {
   database: string;
   collection: string;
   activeFilter: Record<string, unknown>;
+  error?: string | null;
   loading: boolean;
   onConfirm: () => void;
 }
@@ -31,6 +32,7 @@ export default function DocumentBulkDeleteDialog({
   database,
   collection,
   activeFilter,
+  error = null,
   loading,
   onConfirm,
 }: DocumentBulkDeleteDialogProps) {
@@ -60,6 +62,11 @@ export default function DocumentBulkDeleteDialog({
             >
               {previewLine}
             </pre>
+            {error && (
+              <p role="alert" className="mb-2 text-xs text-destructive">
+                {error}
+              </p>
+            )}
             <div
               role="alert"
               aria-label="MongoDB bulk delete warning"

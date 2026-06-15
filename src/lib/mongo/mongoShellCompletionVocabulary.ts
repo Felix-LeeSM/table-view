@@ -132,13 +132,13 @@ export const MONGOSH_DB_LEVEL_METHODS: ReadonlyArray<MongoshMethodCompletion> =
       label: "runCommand",
       type: "function",
       detail: "({<cmd>: <arg>, ...})",
-      info: "Send an arbitrary admin or diagnostic command to the bound database.",
+      info: "Run an allowlisted database command against the bound database.",
     },
     {
       label: "adminCommand",
       type: "function",
       detail: "({<cmd>: <arg>, ...})",
-      info: "Send an admin command against the admin database.",
+      info: "Run an allowlisted admin-database command.",
     },
     {
       label: "getCollection",

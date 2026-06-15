@@ -155,6 +155,18 @@ export interface DocumentAdapterDeps {
   history: HistoryRecorder;
 }
 
+const MONGO_ORDERED_BULK_WRITE_PARTIAL_COMMIT_WARNING =
+  "MongoDB bulk writes are ordered but not transactional in this app. " +
+  "If a later command fails, earlier document writes may already be committed; " +
+  "pending edits stay available for retry.";
+
+function parseMongoBulkWriteFailedIndex(message: string): number | undefined {
+  const indexMatch = message.match(/\bbulk_write op (\d+)\b/);
+  if (!indexMatch) return undefined;
+  const index = Number(indexMatch[1]);
+  return Number.isInteger(index) && index >= 0 ? index : undefined;
+}
+
 /** Build an RDB session directly from raw SQL strings. Used by the hook's
  *  `setSqlPreview` back-door (test seeding path); the adapter's own
  *  `preparePreview` calls this after generating the SQL list. */
@@ -346,17 +358,19 @@ export function documentEditAdapter(
                 : typeof err === "string"
                   ? err
                   : "Failed to commit document changes.";
-            toast.error(`Commit failed: ${message}`);
+            const failedIndex = parseMongoBulkWriteFailedIndex(message);
+            const errorMessage = `Commit failed. ${MONGO_ORDERED_BULK_WRITE_PARTIAL_COMMIT_WARNING} ${message}`;
+            toast.error(errorMessage);
             deps.history.recordError({
               sql: joinedMql,
               startedAt,
               duration: Date.now() - startedAt,
             });
-            // Mongo commits dispatch per-command and have no batch
-            // rollback semantics — the failed index is not knowable from
-            // the error message alone. Leaving `failedIndex` undefined
-            // matches the legacy toast-only behaviour at this surface.
-            return { ok: false, errorMessage: message };
+            // The backend preserves ordered short-circuit position in
+            // `bulk_write op N ...` errors. Surface it when present so the
+            // preview banner highlights the failed MQL line without implying
+            // that earlier document writes rolled back.
+            return { ok: false, failedIndex, errorMessage };
           }
         },
       };

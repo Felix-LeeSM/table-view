@@ -40,6 +40,27 @@ describe("MqlPreviewModal", () => {
     );
   });
 
+  it("keeps the ordered partial-commit warning when a commit error is rendered", () => {
+    renderModal({
+      commitError: {
+        statementIndex: 1,
+        statementCount: 2,
+        sql: 'db.users.deleteOne({ _id: ObjectId("507f1f77bcf86cd799439022") })',
+        message:
+          "Commit failed. MongoDB bulk writes are ordered but not transactional; earlier document writes may already be committed.",
+      },
+    });
+
+    expect(
+      screen.getByLabelText("MongoDB ordered bulk write warning"),
+    ).toHaveTextContent("pending edits stay available for retry");
+    const commitError = screen.getByTestId("sql-preview-commit-error");
+    expect(commitError).toHaveTextContent("failed at: 2 of 2");
+    expect(commitError).toHaveTextContent(
+      "earlier document writes may already be committed",
+    );
+  });
+
   it("renders the errors list when the preview reports per-row failures", () => {
     renderModal({
       errors: [

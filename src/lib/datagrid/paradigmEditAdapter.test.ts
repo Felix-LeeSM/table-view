@@ -404,7 +404,7 @@ describe("documentEditAdapter.preparePreview + execute", () => {
     expect(history.recordSuccess).toHaveBeenCalledTimes(1);
   });
 
-  it("execute failure surfaces ok:false without failedIndex (bulkWrite rejection)", async () => {
+  it("execute failure surfaces partial-commit copy without rollback wording", async () => {
     bulkWriteDocuments.mockRejectedValue(new Error("write failed"));
     const adapter = documentEditAdapter({
       connectionId: "conn-mongo",
@@ -423,7 +423,50 @@ describe("documentEditAdapter.preparePreview + execute", () => {
     expect(result.ok).toBe(false);
     expect(result.failedIndex).toBeUndefined();
     expect(result.errorMessage).toMatch(/write failed/);
+    expect(result.errorMessage).toMatch(/ordered but not transactional/);
+    expect(result.errorMessage).toMatch(
+      /earlier document writes may already be committed/,
+    );
+    expect(result.errorMessage).toMatch(
+      /pending edits stay available for retry/,
+    );
+    expect(result.errorMessage).not.toMatch(/rolled back/i);
     expect(toastError).toHaveBeenCalledTimes(1);
+    expect(toastError).toHaveBeenCalledWith(result.errorMessage);
+    expect(toastError.mock.calls[0]![0]).not.toMatch(/rolled back/i);
+    expect(history.recordError).toHaveBeenCalledTimes(1);
+  });
+
+  it("execute failure parses backend bulk_write op index for the failed MQL line", async () => {
+    bulkWriteDocuments.mockRejectedValue(
+      new Error("bulk_write op 1 delete_one failed: duplicate key"),
+    );
+    const adapter = documentEditAdapter({
+      connectionId: "conn-mongo",
+      history,
+    });
+    const { session } = adapter.preparePreview({
+      data: {
+        ...docData,
+        rows: [
+          ["507f1f77bcf86cd799439011", "alice"],
+          ["507f1f77bcf86cd799439022", "grace"],
+        ],
+        total_count: 2,
+      },
+      schema: "mydb",
+      table: "users",
+      page: 1,
+      pendingEdits: new Map([["0-1", "bob"]]),
+      pendingNewRows: [],
+      pendingDeletedRowKeys: new Set(["row-1-1"]),
+    });
+    const result = await session!.execute();
+    expect(result.ok).toBe(false);
+    expect(result.failedIndex).toBe(1);
+    expect(result.errorMessage).toMatch(/bulk_write op 1 delete_one failed/);
+    expect(result.errorMessage).toMatch(/not transactional/);
+    expect(result.errorMessage).not.toMatch(/rolled back/i);
     expect(history.recordError).toHaveBeenCalledTimes(1);
   });
 });

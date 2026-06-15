@@ -35,6 +35,7 @@ export interface UseMongoBulkOpsResult {
   // Delete dialog state + handlers
   deleteManyDialogOpen: boolean;
   deleteManyLoading: boolean;
+  deleteManyError: string | null;
   setDeleteManyDialogOpen: (open: boolean) => void;
   handleDeleteManyClick: () => void;
   handleConfirmDeleteMany: () => Promise<void>;
@@ -48,6 +49,16 @@ export interface UseMongoBulkOpsResult {
   setUpdatePatchInput: (value: string) => void;
   handleUpdateManyClick: () => void;
   handleConfirmUpdateMany: () => Promise<void>;
+}
+
+const MONGO_BULK_DELETE_PARTIAL_COMMIT_WARNING =
+  "deleteMany is not wrapped in a transaction. If MongoDB reports an error after matching work starts, some matched documents may already be deleted. Retry only after reviewing the current collection state.";
+
+const MONGO_BULK_UPDATE_PARTIAL_COMMIT_WARNING =
+  "updateMany is not wrapped in a transaction. If MongoDB reports an error after matching work starts, some matched documents may already be updated. Retry only after reviewing the current collection state.";
+
+function formatMongoBulkOpFailure(detail: string, warning: string): string {
+  return `${warning} ${detail}`;
 }
 
 export function useMongoBulkOps({
@@ -64,6 +75,7 @@ export function useMongoBulkOps({
   // as `danger`.
   const [deleteManyDialogOpen, setDeleteManyDialogOpen] = useState(false);
   const [deleteManyLoading, setDeleteManyLoading] = useState(false);
+  const [deleteManyError, setDeleteManyError] = useState<string | null>(null);
   const [updateManyDialogOpen, setUpdateManyDialogOpen] = useState(false);
   const [updateManyLoading, setUpdateManyLoading] = useState(false);
   const [updatePatchInput, setUpdatePatchInput] = useState("");
@@ -79,6 +91,7 @@ export function useMongoBulkOps({
       toast.error(decision.reason);
       return;
     }
+    setDeleteManyError(null);
     setDeleteManyDialogOpen(true);
   }, [safeModeGate, activeFilter]);
 
@@ -112,7 +125,12 @@ export function useMongoBulkOps({
       });
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
-      toast.error(`Failed to delete: ${detail}`);
+      const message = formatMongoBulkOpFailure(
+        detail,
+        MONGO_BULK_DELETE_PARTIAL_COMMIT_WARNING,
+      );
+      setDeleteManyError(message);
+      toast.error(`Failed to delete: ${message}`);
       recordHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
@@ -203,7 +221,12 @@ export function useMongoBulkOps({
       });
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
-      setUpdateManyError(detail);
+      setUpdateManyError(
+        formatMongoBulkOpFailure(
+          detail,
+          MONGO_BULK_UPDATE_PARTIAL_COMMIT_WARNING,
+        ),
+      );
       recordHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
@@ -231,6 +254,7 @@ export function useMongoBulkOps({
   return {
     deleteManyDialogOpen,
     deleteManyLoading,
+    deleteManyError,
     setDeleteManyDialogOpen,
     handleDeleteManyClick,
     handleConfirmDeleteMany,
