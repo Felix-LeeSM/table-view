@@ -220,7 +220,7 @@ function analyzeBulkSubOp(sub: BulkWriteOp): StatementAnalysis {
  * runCommand convention 은 `{ <command>: <arg>, ...options }` 이므로 두
  * 번째 key 부터는 옵션이다.
  */
-const READ_ONLY_RUN_COMMANDS = new Set([
+export const READ_ONLY_RUN_COMMAND_ALLOWLIST = [
   "buildInfo",
   "collStats",
   "connectionStatus",
@@ -242,7 +242,11 @@ const READ_ONLY_RUN_COMMANDS = new Set([
   "ping",
   "serverStatus",
   "whatsmyuri",
-]);
+] as const;
+
+const READ_ONLY_RUN_COMMANDS: ReadonlySet<string> = new Set(
+  READ_ONLY_RUN_COMMAND_ALLOWLIST,
+);
 
 export function analyzeMongoRunCommand(
   body: Record<string, unknown>,

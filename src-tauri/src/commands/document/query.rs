@@ -472,6 +472,30 @@ fn extjson_to_bson_document(value: serde_json::Value) -> Result<bson::Document, 
         .map_err(|e| AppError::Validation(format!("invalid extended-JSON in runCommand body: {e}")))
 }
 
+const READ_ONLY_MONGO_RUN_COMMANDS: &[&str] = &[
+    "buildInfo",
+    "collStats",
+    "connectionStatus",
+    "count",
+    "currentOp",
+    "dbStats",
+    "distinct",
+    "explain",
+    "find",
+    "getCmdLineOpts",
+    "getLog",
+    "getParameter",
+    "hello",
+    "hostInfo",
+    "isMaster",
+    "listCollections",
+    "listDatabases",
+    "listIndexes",
+    "ping",
+    "serverStatus",
+    "whatsmyuri",
+];
+
 async fn run_mongo_command_inner(
     state: &AppState,
     connection_id: &str,
@@ -490,33 +514,10 @@ async fn run_mongo_command_inner(
 }
 
 fn require_run_command_safety(command: &bson::Document, confirmed: bool) -> Result<(), AppError> {
-    const READ_ONLY_COMMANDS: &[&str] = &[
-        "buildInfo",
-        "collStats",
-        "connectionStatus",
-        "count",
-        "currentOp",
-        "dbStats",
-        "distinct",
-        "explain",
-        "find",
-        "getCmdLineOpts",
-        "getLog",
-        "getParameter",
-        "hello",
-        "hostInfo",
-        "isMaster",
-        "listCollections",
-        "listDatabases",
-        "listIndexes",
-        "ping",
-        "serverStatus",
-        "whatsmyuri",
-    ];
     let Some(first_key) = command.keys().next() else {
         return Ok(());
     };
-    if READ_ONLY_COMMANDS.contains(&first_key.as_str()) || confirmed {
+    if READ_ONLY_MONGO_RUN_COMMANDS.contains(&first_key.as_str()) || confirmed {
         return Ok(());
     }
     Err(AppError::Validation(format!(
@@ -1043,6 +1044,16 @@ mod tests {
             Some(Some("myapp".to_string())),
             "expected database=Some(\"myapp\") routing"
         );
+    }
+
+    #[test]
+    fn run_mongo_command_read_only_allowlist_does_not_require_safety_ack() {
+        for command_name in READ_ONLY_MONGO_RUN_COMMANDS {
+            let mut command = bson::Document::new();
+            command.insert(*command_name, 1);
+            require_run_command_safety(&command, false)
+                .unwrap_or_else(|err| panic!("{command_name} should be read-only: {err:?}"));
+        }
     }
 
     #[tokio::test]
