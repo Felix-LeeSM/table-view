@@ -64,6 +64,14 @@ pub struct SearchVersionInfo {
     pub lucene: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub build_flavor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_snapshot: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

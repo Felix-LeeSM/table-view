@@ -408,6 +408,10 @@ impl SearchCatalogFixture {
                     distribution,
                     lucene: Some("9.9.2".into()),
                     build_flavor: Some("default".into()),
+                    build_type: Some("tar".into()),
+                    build_hash: Some("fixture-build".into()),
+                    build_date: Some("2026-05-24T00:00:00Z".into()),
+                    build_snapshot: Some(false),
                 },
                 capabilities: SearchClusterCapabilities {
                     search: true,

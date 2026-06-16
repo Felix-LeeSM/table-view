@@ -418,6 +418,16 @@ fn identity_from_root(
             raw_distribution.unwrap_or_else(|| "opensearch".to_string())
         }
     };
+    let version_number = version
+        .get("number")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            AppError::Connection(format!(
+                "{} root probe did not include a version number",
+                expected_product.label()
+            ))
+        })?;
+    ensure_supported_search_version(expected_product, version_number)?;
 
     Ok(SearchClusterIdentity {
         product: expected_product,
@@ -434,11 +444,7 @@ fn identity_from_root(
             .and_then(Value::as_str)
             .map(str::to_string),
         version: SearchVersionInfo {
-            number: version
-                .get("number")
-                .and_then(Value::as_str)
-                .unwrap_or("unknown")
-                .to_string(),
+            number: version_number.to_string(),
             distribution: Some(distribution),
             lucene: version
                 .get("lucene_version")
@@ -448,10 +454,54 @@ fn identity_from_root(
                 .get("build_flavor")
                 .and_then(Value::as_str)
                 .map(str::to_string),
+            build_type: version
+                .get("build_type")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            build_hash: version
+                .get("build_hash")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            build_date: version
+                .get("build_date")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            build_snapshot: version.get("build_snapshot").and_then(Value::as_bool),
         },
         capabilities: root_probe_capabilities(expected_product),
         product_delta: SearchProductDelta::for_product(expected_product),
     })
+}
+
+fn ensure_supported_search_version(
+    product: SearchProductKind,
+    version_number: &str,
+) -> Result<(), AppError> {
+    let Some(major) = search_major_version(version_number) else {
+        return Err(AppError::Connection(format!(
+            "{} version {version_number} is not supported: expected a semantic major version",
+            product.label()
+        )));
+    };
+    let minimum_major = match product {
+        SearchProductKind::Elasticsearch => 7,
+        SearchProductKind::OpenSearch => 1,
+    };
+    if major < minimum_major {
+        return Err(AppError::Connection(format!(
+            "{} version {version_number} is not supported: requires major version {minimum_major} or newer",
+            product.label()
+        )));
+    }
+    Ok(())
+}
+
+fn search_major_version(version_number: &str) -> Option<u64> {
+    version_number
+        .split('.')
+        .next()
+        .filter(|part| !part.is_empty())
+        .and_then(|part| part.parse::<u64>().ok())
 }
 
 fn root_probe_capabilities(product: SearchProductKind) -> SearchClusterCapabilities {

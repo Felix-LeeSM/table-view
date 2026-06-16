@@ -16,6 +16,10 @@ export interface SearchClusterIdentity {
     distribution?: string;
     lucene?: string;
     buildFlavor?: string;
+    buildType?: string;
+    buildHash?: string;
+    buildDate?: string;
+    buildSnapshot?: boolean;
   };
   capabilities: {
     search: boolean;

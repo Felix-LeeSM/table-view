@@ -491,6 +491,10 @@ mod tests {
                         distribution: Some("elasticsearch".into()),
                         lucene: None,
                         build_flavor: None,
+                        build_type: None,
+                        build_hash: None,
+                        build_date: None,
+                        build_snapshot: None,
                     },
                     capabilities: SearchClusterCapabilities {
                         search: true,
