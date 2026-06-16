@@ -88,6 +88,12 @@ describe("redis command completion vocabulary", () => {
       arguments: ["key", "start", "end", "COUNT"],
       snippet: "XRANGE ${key} - + COUNT 100",
     });
+    expect(
+      REDIS_COMMAND_COMPLETIONS.find((command) => command.name === "ZRANGE"),
+    ).toMatchObject({
+      arguments: ["key", "start", "stop", "WITHSCORES"],
+      snippet: "ZRANGE ${key} 0 99 WITHSCORES",
+    });
   });
 
   it("documents unsupported families without surfacing them as candidates", () => {
@@ -204,8 +210,12 @@ describe("redis command completion vocabulary", () => {
     expect(VALKEY_COMMAND_COMPLETIONS.map((command) => command.name)).toEqual([
       "GET",
       "HGETALL",
+      "LRANGE",
+      "SMEMBERS",
+      "ZRANGE",
       "XRANGE",
       "TYPE",
+      "TTL",
       "EXISTS",
       "SET",
       "EXPIRE",
@@ -216,19 +226,38 @@ describe("redis command completion vocabulary", () => {
       VALKEY_COMMAND_COMPLETIONS.map((command) => command.name),
     );
     expect(labels(runSource("H", true, [], "valkey"))).toEqual(["HGETALL"]);
-    expect(labels(runSource("L", true, [], "valkey"))).toEqual([]);
-    expect(labels(runSource("Z", true, [], "valkey"))).toEqual([]);
+    expect(labels(runSource("L", true, [], "valkey"))).toEqual(["LRANGE"]);
+    expect(labels(runSource("SM", true, [], "valkey"))).toEqual(["SMEMBERS"]);
+    expect(labels(runSource("Z", true, [], "valkey"))).toEqual(["ZRANGE"]);
   });
 
   it("keeps Valkey key suggestions on the proven current-keyspace commands", () => {
     expect(
+      labels(runSource("GET pro", true, KEY_SUGGESTIONS, "valkey")),
+    ).toEqual(["profile:1"]);
+    expect(
       labels(runSource("HGETALL profiles", true, KEY_SUGGESTIONS, "valkey")),
     ).toEqual(["profiles:hash"]);
+    expect(
+      labels(runSource("LRANGE profiles", true, KEY_SUGGESTIONS, "valkey")),
+    ).toEqual(["profiles:list"]);
+    expect(
+      labels(runSource("SMEMBERS profiles", true, KEY_SUGGESTIONS, "valkey")),
+    ).toEqual(["profiles:set"]);
+    expect(
+      labels(runSource("ZRANGE profiles", true, KEY_SUGGESTIONS, "valkey")),
+    ).toEqual(["profiles:zset"]);
     expect(
       labels(runSource("XRANGE profiles", true, KEY_SUGGESTIONS, "valkey")),
     ).toEqual(["profiles:stream"]);
     expect(
-      labels(runSource("LRANGE profiles", true, KEY_SUGGESTIONS, "valkey")),
-    ).toEqual([]);
+      labels(runSource("TTL profiles", true, KEY_SUGGESTIONS, "valkey")),
+    ).toEqual([
+      "profiles:list",
+      "profiles:set",
+      "profiles:zset",
+      "profiles:hash",
+      "profiles:stream",
+    ]);
   });
 });

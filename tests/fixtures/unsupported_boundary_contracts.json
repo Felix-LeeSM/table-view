@@ -87,9 +87,6 @@
       "valkeyCompletionExclusions": [
         "KEYS",
         "HSET",
-        "LRANGE",
-        "SMEMBERS",
-        "ZRANGE",
         "XADD",
         "FLUSHDB",
         "CLUSTER",

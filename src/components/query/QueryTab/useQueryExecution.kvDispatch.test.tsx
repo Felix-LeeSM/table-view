@@ -213,9 +213,15 @@ describe("useQueryExecution — Redis command dispatch", () => {
     });
   });
 
-  it("runs bounded Valkey commands through the KV IPC wrapper", async () => {
+  it.each([
+    "GET profile:1",
+    "LRANGE profiles:list 0 1",
+    "SMEMBERS profiles:set",
+    "ZRANGE profiles:zset 0 1 WITHSCORES",
+    "TTL profile:1",
+  ])("runs bounded Valkey %s through the KV IPC wrapper", async (command) => {
     executeKvCommandMock.mockResolvedValueOnce(REDIS_RESULT);
-    const tab = seedValkeyTab("GET profile:1", "2");
+    const tab = seedValkeyTab(command, "2");
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
     await act(async () => {
@@ -227,7 +233,7 @@ describe("useQueryExecution — Redis command dispatch", () => {
     });
     expect(executeKvCommandMock).toHaveBeenCalledWith(
       "conn-valkey",
-      { command: "GET profile:1", database: 2 },
+      { command, database: 2 },
       expect.stringMatching(/^query-valkey-/),
     );
     const updated = getTestWorkspace("conn-valkey", "2").tabs[0];

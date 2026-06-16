@@ -3,6 +3,7 @@
   "product": "valkey",
   "supportLevel": "static-matrix-plus-focused-runtime-proof",
   "compatibilityTarget": "redis-command",
+  "newlyPromotedCommandGaps": ["LRANGE", "SMEMBERS", "ZRANGE WITHSCORES", "TTL"],
   "runtimeSupport": true,
   "completionSupport": {
     "status": "proven-row-editor-assistance",
@@ -10,8 +11,12 @@
     "commands": [
       "GET",
       "HGETALL",
+      "LRANGE",
+      "SMEMBERS",
+      "ZRANGE",
       "XRANGE",
       "TYPE",
+      "TTL",
       "EXISTS",
       "SET",
       "EXPIRE",
@@ -92,11 +97,11 @@
     },
     {
       "family": "list-read-command",
-      "status": "candidate-after-local-valkey-proof",
+      "status": "proven-local-valkey-runtime",
       "redisCommands": ["LRANGE"],
-      "currentEvidence": "No local Valkey command-runtime evidence exists for bounded list ranges.",
-      "knownValkeyDelta": "List range bounds and result ordering require separate Valkey evidence.",
-      "promotionGate": "local Valkey focused evidence must prove non-negative bounded ranges and list projection.",
+      "currentEvidence": "Local Valkey testcontainer covers LRANGE non-negative bounded ranges and list projection.",
+      "knownValkeyDelta": "List range proof is limited to non-negative bounded ranges and ordered string projection.",
+      "promotionGate": "broader Valkey list support must add write/runtime projection evidence.",
       "unsupportedAssumption": "Do not claim Valkey list parity from Redis allowlist coverage alone."
     },
     {
@@ -110,11 +115,11 @@
     },
     {
       "family": "set-read-command",
-      "status": "candidate-after-local-valkey-proof",
+      "status": "proven-local-valkey-runtime",
       "redisCommands": ["SMEMBERS"],
-      "currentEvidence": "No local Valkey command-runtime evidence exists for set member projection.",
-      "knownValkeyDelta": "Set member ordering and projection require separate Valkey evidence.",
-      "promotionGate": "local Valkey focused evidence must prove set read projection.",
+      "currentEvidence": "Local Valkey testcontainer covers SMEMBERS dispatch and set member projection.",
+      "knownValkeyDelta": "Set read proof is limited to member projection; set ordering is not a product claim.",
+      "promotionGate": "broader Valkey set support must add write/runtime projection evidence.",
       "unsupportedAssumption": "Do not treat static set fixture inventory as live Valkey support."
     },
     {
@@ -128,11 +133,11 @@
     },
     {
       "family": "sorted-set-read-command",
-      "status": "candidate-after-local-valkey-proof",
+      "status": "proven-local-valkey-runtime",
       "redisCommands": ["ZRANGE"],
-      "currentEvidence": "No local Valkey command-runtime evidence exists for sorted-set range projection.",
-      "knownValkeyDelta": "Scores, WITHSCORES projection, and ordering behavior require separate Valkey evidence.",
-      "promotionGate": "local Valkey focused evidence must prove sorted-set read projection with score handling.",
+      "currentEvidence": "Local Valkey testcontainer covers ZRANGE WITHSCORES dispatch and sorted-set score projection.",
+      "knownValkeyDelta": "Sorted-set read proof is limited to bounded index ranges with WITHSCORES score projection.",
+      "promotionGate": "broader Valkey sorted-set support must add write/runtime projection evidence.",
       "unsupportedAssumption": "Do not inherit Redis sorted-set projection claims without Valkey runtime evidence."
     },
     {
@@ -146,11 +151,11 @@
     },
     {
       "family": "ttl-read-command",
-      "status": "candidate-after-local-valkey-proof",
+      "status": "proven-local-valkey-runtime",
       "redisCommands": ["TTL"],
-      "currentEvidence": "No local Valkey command-runtime evidence exists for TTL read result projection.",
-      "knownValkeyDelta": "TTL timing tolerance and state labels require separate Valkey evidence.",
-      "promotionGate": "local Valkey focused evidence must prove TTL read labels and timing tolerance.",
+      "currentEvidence": "Local Valkey testcontainer covers TTL read result projection; Runtime Happy Path smoke also confirms the expires label after EXPIRE.",
+      "knownValkeyDelta": "TTL proof is limited to positive expiry state and label projection; exact second timing is tolerance-based.",
+      "promotionGate": "broader Valkey TTL support must add missing-key and no-expiry state evidence.",
       "unsupportedAssumption": "Do not reuse Redis TTL timing evidence for Valkey."
     },
     {
