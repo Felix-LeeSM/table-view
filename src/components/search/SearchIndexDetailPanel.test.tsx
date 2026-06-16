@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type {
   SearchCatalogSummary,
   SearchFieldStatsEnvelope,
@@ -127,6 +133,19 @@ const mapping: SearchIndexMapping = {
     analyzer: idx === 3 ? "standard" : undefined,
   })),
   raw: { properties: { message: { type: "text" } } },
+};
+
+const systemMapping: SearchIndexMapping = {
+  index: ".kibana_8.12.2",
+  fields: [
+    {
+      path: "system_field",
+      fieldType: "keyword",
+      searchable: true,
+      aggregatable: true,
+    },
+  ],
+  raw: { properties: { system_field: { type: "keyword" } } },
 };
 
 const settings: SearchIndexSettings = {
@@ -258,6 +277,14 @@ function commandCount(command: string) {
   return invokeMock.mock.calls.filter(([name]) => name === command).length;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
+
 describe("SearchIndexDetailPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -303,6 +330,10 @@ describe("SearchIndexDetailPanel", () => {
     expect(screen.getByText("field_59")).toBeInTheDocument();
     expect(commandCount("get_search_index_mapping")).toBe(1);
     expect(commandCount("get_search_index_settings")).toBe(0);
+
+    fireEvent.click(screen.getByRole("tab", { name: /overview/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /mapping/i }));
+    expect(commandCount("get_search_index_mapping")).toBe(1);
   });
 
   it("loads settings, matching templates, samples, and field stats through separate actions", async () => {
@@ -328,6 +359,11 @@ describe("SearchIndexDetailPanel", () => {
     fireEvent.click(screen.getByRole("tab", { name: /samples/i }));
     expect(await screen.findByText("2 hits")).toBeInTheDocument();
     expect(screen.getByText("doc-1")).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith("sample_search_documents", {
+      connectionId: "search-1",
+      index: "logs-elastic-2026.05.24",
+      limit: 5,
+    });
 
     fireEvent.click(screen.getByRole("tab", { name: /field stats/i }));
     expect(await screen.findByText("status")).toBeInTheDocument();
@@ -378,7 +414,51 @@ describe("SearchIndexDetailPanel", () => {
     expect(commandCount("sample_search_documents")).toBe(1);
   });
 
-  it("surfaces hidden/system and error states without fetching other detail tabs", async () => {
+  it("ignores stale detail responses after the selected index changes", async () => {
+    const staleMapping = deferred<SearchIndexMapping>();
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_search_catalog_summary") {
+        return Promise.resolve(catalog);
+      }
+      if (command === "get_search_index_mapping") {
+        return commandCount("get_search_index_mapping") === 1
+          ? staleMapping.promise
+          : Promise.resolve(systemMapping);
+      }
+      return Promise.reject(new Error(`unexpected ${command}`));
+    });
+
+    const { rerender } = render(
+      <SearchIndexDetailPanel
+        connectionId="search-1"
+        index="logs-elastic-2026.05.24"
+      />,
+    );
+
+    await screen.findByText(/Elasticsearch fixture/);
+    fireEvent.click(screen.getByRole("tab", { name: /mapping/i }));
+    expect(commandCount("get_search_index_mapping")).toBe(1);
+
+    rerender(
+      <SearchIndexDetailPanel connectionId="search-1" index=".kibana_8.12.2" />,
+    );
+    await screen.findByText("system");
+    await act(async () => {
+      staleMapping.resolve(mapping);
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: /mapping/i }));
+
+    expect(await screen.findByText("system_field")).toBeInTheDocument();
+    expect(screen.queryByText("@timestamp")).not.toBeInTheDocument();
+    expect(commandCount("get_search_index_mapping")).toBe(2);
+    expect(invokeMock).toHaveBeenCalledWith("get_search_index_mapping", {
+      connectionId: "search-1",
+      index: ".kibana_8.12.2",
+    });
+  });
+
+  it("scopes detail errors to their selected tab", async () => {
     installInvokeMock({
       get_search_index_mapping: new Error("mapping unavailable"),
     });
@@ -397,5 +477,13 @@ describe("SearchIndexDetailPanel", () => {
     expect(commandCount("get_search_index_mapping")).toBe(1);
     expect(commandCount("get_search_index_settings")).toBe(0);
     expect(commandCount("sample_search_documents")).toBe(0);
+
+    fireEvent.click(screen.getByRole("tab", { name: /settings/i }));
+    expect(await screen.findByText("default")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(commandCount("get_search_index_settings")).toBe(1);
+
+    fireEvent.click(screen.getByRole("tab", { name: /mapping/i }));
+    expect(screen.getByRole("alert")).toHaveTextContent("mapping unavailable");
   });
 });
