@@ -3,10 +3,12 @@ import {
   BarChart3,
   Braces,
   FileJson,
+  FileSearch,
   FileStack,
   type LucideIcon,
   Settings2,
 } from "lucide-react";
+import { Button } from "@components/ui/button";
 import { Skeleton } from "@components/ui/skeleton";
 import {
   getSearchIndexFieldStats,
@@ -25,6 +27,7 @@ import type {
   SearchIndexTemplateInfo,
   SearchResultEnvelope,
 } from "@/types/search";
+import { SearchDeleteByQueryPreviewDialog } from "./SearchDeleteByQueryPreviewDialog";
 
 export interface SearchIndexDetailPanelProps {
   connectionId: string;
@@ -80,6 +83,7 @@ export default function SearchIndexDetailPanel({
     useState<AsyncSlot<SearchResultEnvelope>>(idle());
   const [stats, setStats] =
     useState<AsyncSlot<SearchFieldStatsEnvelope>>(idle());
+  const [deletePreviewOpen, setDeletePreviewOpen] = useState(false);
   const detailRequestGeneration = useRef(0);
 
   useEffect(() => {
@@ -219,6 +223,8 @@ export default function SearchIndexDetailPanel({
   const indexInfo = catalog.data?.indexes.find((item) => item.name === index);
   const identity = catalog.data?.identity;
   const supportsSearchSamples = identity?.capabilities.search === true;
+  const supportsDeleteByQueryPreview =
+    identity?.capabilities.deleteByQuery === true;
   const availableTabs = useMemo(
     () =>
       tabItems.filter(
@@ -271,6 +277,24 @@ export default function SearchIndexDetailPanel({
               </>
             ) : null}
             {isSystemName(index) ? <Badge>system</Badge> : null}
+            {identity ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                disabled={!supportsDeleteByQueryPreview}
+                aria-label="Preview delete-by-query plan"
+                title={
+                  supportsDeleteByQueryPreview
+                    ? "Preview delete-by-query plan"
+                    : "Delete-by-query preview unsupported by this connection"
+                }
+                onClick={() => setDeletePreviewOpen(true)}
+              >
+                <FileSearch aria-hidden="true" />
+                Preview plan
+              </Button>
+            ) : null}
           </div>
         </div>
       </header>
@@ -321,6 +345,14 @@ export default function SearchIndexDetailPanel({
           <StatsContent slot={stats} />
         )}
       </div>
+      <SearchDeleteByQueryPreviewDialog
+        open={deletePreviewOpen}
+        connectionId={connectionId}
+        target={index}
+        supported={supportsDeleteByQueryPreview}
+        docsCount={indexInfo?.docsCount}
+        onOpenChange={setDeletePreviewOpen}
+      />
     </section>
   );
 }
@@ -359,7 +391,24 @@ function OverviewContent({
           ["Aliases", aliases.join(", ")],
         ]}
       />
+      <SearchDestructivePolicyNotice
+        deleteByQuerySupported={identity.capabilities.deleteByQuery}
+      />
       <JsonBlock value={indexInfo} label="Index summary JSON" />
+    </div>
+  );
+}
+
+function SearchDestructivePolicyNotice({
+  deleteByQuerySupported,
+}: {
+  deleteByQuerySupported: boolean;
+}) {
+  return (
+    <div className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+      {deleteByQuerySupported
+        ? "Admin and destructive execution are unsupported in this milestone. Delete-by-query is preview only."
+        : "Delete-by-query preview is unsupported by this connection. Admin and destructive execution are unsupported in this milestone."}
     </div>
   );
 }

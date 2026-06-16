@@ -305,6 +305,12 @@ describe("SearchIndexDetailPanel", () => {
     expect(screen.getByText("8.12.2")).toBeInTheDocument();
     expect(screen.getAllByText("elasticsearch").length).toBeGreaterThan(0);
     expect(screen.getByText("composableIndexTemplate")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Admin and destructive execution are unsupported/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /preview delete-by-query plan/i }),
+    ).toBeEnabled();
 
     expect(commandCount("list_search_catalog_summary")).toBe(1);
     expect(commandCount("get_search_index_mapping")).toBe(0);
@@ -312,6 +318,79 @@ describe("SearchIndexDetailPanel", () => {
     expect(commandCount("list_search_index_templates")).toBe(0);
     expect(commandCount("sample_search_documents")).toBe(0);
     expect(commandCount("get_search_index_field_stats")).toBe(0);
+  });
+
+  it("opens a preview-only delete-by-query plan from the index header", async () => {
+    installInvokeMock({
+      plan_search_delete_by_query: {
+        operation: "deleteByQuery",
+        target: "logs-elastic-2026.05.24",
+        previewOnly: true,
+        requiresConfirmation: false,
+        warnings: [
+          "Delete-by-query is destructive; execution is unsupported in this milestone",
+        ],
+        estimatedDocumentCount: 7,
+      },
+    });
+    render(
+      <SearchIndexDetailPanel
+        connectionId="search-1"
+        index="logs-elastic-2026.05.24"
+      />,
+    );
+
+    await screen.findByText(/Elasticsearch fixture/);
+    fireEvent.click(
+      screen.getByRole("button", { name: /preview delete-by-query plan/i }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /generate plan/i }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("plan_search_delete_by_query", {
+        connectionId: "search-1",
+        request: {
+          indexPattern: "logs-elastic-2026.05.24",
+          body: { query: { match_all: {} } },
+          previewOnly: true,
+          safety: {
+            acknowledgedRisk: false,
+            allowWildcard: false,
+          },
+        },
+      }),
+    );
+    expect(
+      await screen.findByLabelText("Delete-by-query preview plan"),
+    ).toHaveTextContent("Estimated documents7");
+    expect(
+      screen.getByLabelText("Delete-by-query preview plan"),
+    ).toHaveTextContent("Unsupported in this milestone");
+  });
+
+  it("states delete-by-query preview is unsupported when the Search connection lacks capability", async () => {
+    installInvokeMock({
+      list_search_catalog_summary: opensearchCatalog,
+    });
+    render(
+      <SearchIndexDetailPanel
+        connectionId="open-1"
+        index="logs-opensearch-2026.05.24"
+      />,
+    );
+
+    expect(await screen.findByText(/OpenSearch dev/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Delete-by-query preview is unsupported/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /preview delete-by-query plan/i }),
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole("button", { name: /preview delete-by-query plan/i }),
+    );
+
+    expect(commandCount("plan_search_delete_by_query")).toBe(0);
   });
 
   it("loads large mapping only after the Mapping tab is requested", async () => {

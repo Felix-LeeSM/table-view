@@ -273,7 +273,7 @@ mod tests {
 
         assert_eq!(plan.operation, "deleteByQuery");
         assert_eq!(plan.estimated_document_count, Some(1));
-        assert!(plan.requires_confirmation);
+        assert!(!plan.requires_confirmation);
     }
 
     #[tokio::test]

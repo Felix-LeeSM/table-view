@@ -14,10 +14,7 @@ pub(crate) fn validate_delete_by_query_request(
     request: &SearchDeleteByQueryRequest,
 ) -> Result<(), AppError> {
     validate_search_destructive_request(request)?;
-    validate_delete_by_query_target(
-        delete_by_query_target(request),
-        request.safety.allow_wildcard,
-    )?;
+    validate_delete_by_query_target(delete_by_query_target(request))?;
     let body = delete_by_query_body_object(request)?;
     for key in body.keys() {
         if key != "query" {
@@ -66,7 +63,7 @@ pub(crate) fn build_delete_by_query_plan(
 ) -> SearchDestructiveOperationPlan {
     let target = delete_by_query_target(request).to_string();
     let mut warnings =
-        vec!["Delete-by-query is destructive and must be confirmed before execution".into()];
+        vec!["Delete-by-query is destructive; execution is unsupported in this milestone".into()];
     if target == "_all" || target.contains('*') {
         warnings
             .push("Target uses a wildcard; confirm the expanded target before execution".into());
@@ -79,7 +76,7 @@ pub(crate) fn build_delete_by_query_plan(
         operation: "deleteByQuery".into(),
         target,
         preview_only: request.preview_only,
-        requires_confirmation: request.preview_only,
+        requires_confirmation: false,
         warnings,
         estimated_document_count,
     }
@@ -95,7 +92,7 @@ pub(crate) fn target_pattern_matches(pattern: &str, value: &str) -> bool {
     wildcard_match(pattern.as_bytes(), value.as_bytes())
 }
 
-fn validate_delete_by_query_target(target: &str, allow_wildcard: bool) -> Result<(), AppError> {
+fn validate_delete_by_query_target(target: &str) -> Result<(), AppError> {
     let lower = target.to_ascii_lowercase();
     if target.contains('/')
         || target.contains('\\')
@@ -116,9 +113,9 @@ fn validate_delete_by_query_target(target: &str, allow_wildcard: bool) -> Result
     {
         return Err(AppError::Validation(RAW_PATH_TARGET_ERROR.into()));
     }
-    if (target == "_all" || target.contains('*')) && !allow_wildcard {
+    if target == "_all" || target.contains('*') {
         return Err(AppError::Validation(
-            "delete-by-query wildcard targets require allowWildcard".into(),
+            "delete-by-query wildcard targets are unsupported for preview-only planning".into(),
         ));
     }
     Ok(())
@@ -136,6 +133,7 @@ fn matches_admin_target(target: &str) -> bool {
         "_template",
         "_index_template",
         "_nodes",
+        "_plugins",
     ]
     .iter()
     .any(|admin| target == *admin || target.starts_with(&format!("{admin}*")))

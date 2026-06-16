@@ -137,7 +137,7 @@ describe("Search Tauri wrappers", () => {
       operation: "deleteByQuery",
       target: "logs-2026.05.24",
       previewOnly: true,
-      requiresConfirmation: true,
+      requiresConfirmation: false,
       warnings: [],
       estimatedDocumentCount: 7,
     });

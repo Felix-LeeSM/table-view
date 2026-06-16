@@ -110,6 +110,40 @@ describe("searchQueryExecution seam", () => {
     });
   });
 
+  it("rejects raw destructive or wildcard Search targets before IPC", async () => {
+    for (const index of [
+      "logs-2026.06.10/_delete_by_query",
+      "_cat",
+      "logs-*",
+    ]) {
+      expect(() =>
+        parseSearchDslRequest(
+          JSON.stringify({
+            index,
+            body: { query: { match_all: {} } },
+          }),
+        ),
+      ).toThrow(/raw\/destructive paths|wildcard targets/);
+    }
+
+    const actions = createActions();
+    await executeSearchDslQuery({
+      tab,
+      sql: JSON.stringify({
+        index: "logs-2026.06.10/_delete_by_query",
+        body: { query: { match_all: {} } },
+      }),
+      ...actions,
+    });
+
+    expect(executeSearchQueryMock).not.toHaveBeenCalled();
+    expect(actions.updateQueryState).toHaveBeenCalledWith("query-search", {
+      status: "error",
+      error:
+        "Search DSL execution only accepts index or alias targets, not raw/destructive paths",
+    });
+  });
+
   it("dispatches Search DSL through the Search IPC wrapper and completes with Search result state", async () => {
     executeSearchQueryMock.mockResolvedValueOnce(SEARCH_RESULT);
     const actions = createActions();

@@ -1,5 +1,6 @@
 import { executeSearchQuery } from "@lib/tauri";
 import { getTauriErrorMessage } from "@lib/tauri/error";
+import { getSearchDslTargetError } from "@lib/search/searchTargetPolicy";
 import type { QueryState } from "@/types/query";
 import type { SearchQueryRequest, SearchResultEnvelope } from "@/types/search";
 import type { QueryTab } from "@stores/workspaceStore";
@@ -44,6 +45,10 @@ export function parseSearchDslRequest(
     throw new Error(
       "Search DSL request requires a selected Search index or alias target.",
     );
+  }
+  const targetError = getSearchDslTargetError(index);
+  if (targetError) {
+    throw new Error(targetError);
   }
   if (!isRecord(body)) {
     throw new Error("Search DSL request requires an object body.");

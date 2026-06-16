@@ -1068,7 +1068,7 @@ fn delete_by_query_request(
 }
 
 #[tokio::test]
-async fn fixture_delete_by_query_preview_estimates_and_requires_confirmation() {
+async fn fixture_delete_by_query_preview_estimates_and_marks_execution_unsupported() {
     let adapter = SearchEngineAdapter::fixture_elasticsearch();
 
     let plan = adapter
@@ -1079,38 +1079,19 @@ async fn fixture_delete_by_query_preview_estimates_and_requires_confirmation() {
     assert_eq!(plan.operation, "deleteByQuery");
     assert_eq!(plan.target, "logs-elastic-2026.05.24");
     assert!(plan.preview_only);
-    assert!(plan.requires_confirmation);
+    assert!(!plan.requires_confirmation);
     assert_eq!(plan.estimated_document_count, Some(1));
     assert!(plan
         .warnings
         .iter()
-        .any(|warning| warning.contains("confirmed before execution")));
-}
-
-#[tokio::test]
-async fn fixture_delete_by_query_confirmed_plan_satisfies_confirmation_gate() {
-    let adapter = SearchEngineAdapter::fixture_elasticsearch();
-
-    let plan = adapter
-        .plan_delete_by_query(&delete_by_query_request(
-            false,
-            true,
-            Some("logs-elastic-2026.05.24"),
-        ))
-        .await
-        .unwrap();
-
-    assert!(!plan.preview_only);
-    assert!(!plan.requires_confirmation);
-    assert_eq!(plan.estimated_document_count, Some(1));
+        .any(|warning| warning.contains("execution is unsupported")));
 }
 
 #[tokio::test]
 async fn fixture_delete_by_query_rejects_raw_destructive_paths() {
     let adapter = SearchEngineAdapter::fixture_elasticsearch();
-    let mut request = delete_by_query_request(false, true, Some("logs-elastic-2026.05.24"));
+    let mut request = delete_by_query_request(true, false, None);
     request.index_pattern = "logs-elastic-2026.05.24/_delete_by_query".into();
-    request.safety.expected_target = Some(request.index_pattern.clone());
 
     let result = adapter.plan_delete_by_query(&request).await;
 

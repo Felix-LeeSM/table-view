@@ -521,6 +521,11 @@ describe("QueryTab search route", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "raw/destructive paths",
     );
+    expect(
+      invokeMock.mock.calls.some(
+        ([command]) => command === "execute_search_query",
+      ),
+    ).toBe(false);
     expect(screen.queryByRole("grid")).not.toBeInTheDocument();
   });
 

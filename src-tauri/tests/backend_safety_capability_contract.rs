@@ -143,7 +143,7 @@ async fn dbms_specific_unsupported_delta_paths_return_explicit_app_errors() {
 }
 
 #[tokio::test]
-async fn destructive_search_plan_keeps_confirmation_required_until_acknowledged() {
+async fn destructive_search_plan_stays_preview_only() {
     let search = SearchEngineAdapter::fixture_opensearch();
     let preview = search
         .plan_delete_by_query(&preview_delete_by_query_request())
@@ -153,26 +153,27 @@ async fn destructive_search_plan_keeps_confirmation_required_until_acknowledged(
     assert_eq!(preview.operation, "deleteByQuery");
     assert_eq!(preview.target, "logs-opensearch-2026.05.24");
     assert!(preview.preview_only);
-    assert!(preview.requires_confirmation);
+    assert!(!preview.requires_confirmation);
     assert!(preview
         .warnings
         .iter()
-        .any(|warning| warning.contains("confirmed before execution")));
+        .any(|warning| warning.contains("execution is unsupported")));
 
-    let mut unacknowledged = preview_delete_by_query_request();
-    unacknowledged.preview_only = false;
-    assert_validation(
-        search.plan_delete_by_query(&unacknowledged).await,
-        "acknowledgedRisk",
+    let mut execution = preview_delete_by_query_request();
+    execution.preview_only = false;
+    execution.safety.acknowledged_risk = true;
+    execution.safety.expected_target = Some("logs-opensearch-2026.05.24".into());
+    assert_unsupported(
+        search.plan_delete_by_query(&execution).await,
+        &["only preview plans are available"],
     );
 
-    let mut mismatched_target = preview_delete_by_query_request();
-    mismatched_target.preview_only = false;
-    mismatched_target.safety.acknowledged_risk = true;
-    mismatched_target.safety.expected_target = Some("logs-*".into());
+    let mut wildcard = preview_delete_by_query_request();
+    wildcard.index_pattern = "logs-*".into();
+    wildcard.safety.allow_wildcard = true;
     assert_validation(
-        search.plan_delete_by_query(&mismatched_target).await,
-        "expectedTarget",
+        search.plan_delete_by_query(&wildcard).await,
+        "wildcard targets are unsupported",
     );
 }
 
