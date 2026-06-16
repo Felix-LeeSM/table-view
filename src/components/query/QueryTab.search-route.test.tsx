@@ -95,6 +95,23 @@ function makeOpenSearchTab(): QueryTabType {
   };
 }
 
+function makeSelectedAliasSearchTab(): QueryTabType {
+  return {
+    ...makeSearchTab(),
+    title: "Query logs-elastic",
+    searchTarget: { kind: "alias", name: "logs-elastic" },
+    sql: JSON.stringify({
+      query: { match_all: {} },
+      aggs: {
+        by_status: { terms: { field: "status.keyword" } },
+      },
+      from: 1,
+      size: 5,
+      track_total_hits: true,
+    }),
+  };
+}
+
 const searchCatalog = {
   identity: {
     product: "elasticsearch",
@@ -305,6 +322,79 @@ describe("QueryTab search route", () => {
     });
   });
 
+  it("dispatches body-only Search DSL through the selected alias target", async () => {
+    const tab = makeSelectedAliasSearchTab();
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id, "search-1", "db1"));
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_history") {
+        return Promise.resolve({ rows: [] });
+      }
+      if (command === "list_search_catalog_summary") {
+        return Promise.resolve(searchCatalog);
+      }
+      if (command === "get_search_index_mapping") {
+        return Promise.resolve(searchMapping);
+      }
+      if (command === "execute_search_query") {
+        return Promise.resolve({
+          tookMs: 3,
+          timedOut: false,
+          total: { value: 1, relation: "eq" },
+          hits: [
+            {
+              index: "logs-elastic-2026.05.24",
+              id: "doc-2",
+              score: 1,
+              source: { message: "alias-routed log", status: "ok" },
+              sort: ["doc-2"],
+            },
+          ],
+          aggregations: [
+            {
+              kind: "terms",
+              name: "by_status",
+              buckets: [{ key: "ok", docCount: 1 }],
+            },
+          ],
+        });
+      }
+      throw new Error(`unexpected invoke: ${command}`);
+    });
+
+    render(<LiveQueryTab />);
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("execute_search_query", {
+        connectionId: "search-1",
+        request: {
+          index: "logs-elastic",
+          body: {
+            query: { match_all: {} },
+            aggs: {
+              by_status: { terms: { field: "status.keyword" } },
+            },
+            from: 1,
+            size: 5,
+            track_total_hits: true,
+          },
+          from: undefined,
+          size: undefined,
+          trackTotalHits: undefined,
+        },
+        queryId: expect.stringMatching(/^query-search-/),
+      });
+    });
+
+    expect(await screen.findByLabelText("Search results")).toHaveTextContent(
+      "1 hit",
+    );
+    expect(screen.getByLabelText("Search hits")).toHaveTextContent(
+      "alias-routed log",
+    );
+    expect(screen.queryByRole("grid")).not.toBeInTheDocument();
+  });
+
   it("dispatches OpenSearch Search DSL and renders hits and aggregations", async () => {
     useConnectionStore.setState({
       connections: [makeOpenSearchConnection()],
@@ -393,6 +483,47 @@ describe("QueryTab search route", () => {
     });
   });
 
+  it("surfaces destructive Search target rejects through the Search-native error view", async () => {
+    const tab: QueryTabType = {
+      ...makeSearchTab(),
+      sql: JSON.stringify({
+        index: "logs-elastic-2026.05.24/_delete_by_query",
+        body: { query: { match_all: {} } },
+      }),
+    };
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id, "search-1", "db1"));
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_history") {
+        return Promise.resolve({ rows: [] });
+      }
+      if (command === "list_search_catalog_summary") {
+        return Promise.resolve(searchCatalog);
+      }
+      if (command === "get_search_index_mapping") {
+        return Promise.resolve(searchMapping);
+      }
+      if (command === "execute_search_query") {
+        return Promise.reject(
+          new Error(
+            "Search DSL execution only accepts index or alias targets, not raw/destructive paths",
+          ),
+        );
+      }
+      throw new Error(`unexpected invoke: ${command}`);
+    });
+
+    render(<LiveQueryTab />);
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Search query failed",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "raw/destructive paths",
+    );
+    expect(screen.queryByRole("grid")).not.toBeInTheDocument();
+  });
+
   it("routes Search loading and error states through the Search-native result surface", () => {
     invokeMock.mockImplementation((command: string) => {
       if (command === "list_history") {
@@ -403,6 +534,9 @@ describe("QueryTab search route", () => {
       }
       if (command === "get_search_index_mapping") {
         return Promise.resolve(searchMapping);
+      }
+      if (command === "cancel_query") {
+        return Promise.resolve("cancelled");
       }
       throw new Error(`unexpected invoke: ${command}`);
     });
@@ -421,6 +555,10 @@ describe("QueryTab search route", () => {
       "Search query running",
     );
     expect(screen.queryByRole("grid")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Cancel query"));
+    expect(invokeMock).toHaveBeenCalledWith("cancel_query", {
+      queryId: "search-q-1",
+    });
     unmount();
 
     const errorTab: QueryTabType = {

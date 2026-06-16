@@ -208,7 +208,8 @@ OpenSearch probe 는 Elasticsearch endpoint 를 거부한다. Elasticsearch/Open
 live catalog 는 sidebar 에서 index/alias/data-stream shell 을 보여주고, selected
 index tab 에서 명시적으로 선택한 mappings/settings/analyzers/templates/field
 stats 를 lazy fetch 한다. OpenSearch detail 은 sample documents 를 지원하고,
-query tab 은 bounded Search DSL 을 live `_search` 로 dispatch 한다. Delete-by-query
+query tab 은 selected index/alias target 에 scoped 된 bounded Search DSL 을
+live `_search` 로 dispatch 한다. Delete-by-query
 safety planning 은 Elasticsearch/OpenSearch 모두 safe `_search` estimate 와
 acknowledged-risk/exact-target confirmation gate 를 사용한다. Search DSL editor
 completion 은 Elasticsearch/OpenSearch product identity 를 분리하고 catalog/mapping

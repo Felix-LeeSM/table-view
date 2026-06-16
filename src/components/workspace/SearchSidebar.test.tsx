@@ -313,7 +313,7 @@ describe("SearchSidebar", () => {
     render(<SearchSidebar connectionId="search-1" />);
 
     const rowText = await screen.findByText("logs-elastic-2026.05.24");
-    const row = rowText.closest("button");
+    const row = rowText.closest('[role="treeitem"]');
     expect(row).not.toBeNull();
     if (!row) return;
     fireEvent.click(row);
@@ -337,6 +337,56 @@ describe("SearchSidebar", () => {
     expect(commandCount("get_search_index_mapping")).toBe(0);
     expect(commandCount("get_search_index_settings")).toBe(0);
     expect(commandCount("sample_search_documents")).toBe(0);
+  });
+
+  it("opens selected index and alias query tabs with Search target metadata", async () => {
+    render(<SearchSidebar connectionId="search-1" />);
+
+    await screen.findByText("logs-elastic-2026.05.24");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /open search query for logs-elastic-2026\.05\.24/i,
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /open search query for logs-elastic$/i,
+      }),
+    );
+
+    const tabs = getAllTabsForConnection("search-1").filter(
+      (tab) => tab.type === "query",
+    );
+    expect(tabs).toHaveLength(2);
+    expect(tabs[0]).toMatchObject({
+      type: "query",
+      title: "Query logs-elastic-2026.05.24",
+      paradigm: "search",
+      queryLanguage: "search-dsl",
+      searchTarget: {
+        kind: "index",
+        name: "logs-elastic-2026.05.24",
+      },
+    });
+    expect(tabs[0]?.type === "query" ? tabs[0].sql : "").toContain(
+      '"track_total_hits": true',
+    );
+    expect(tabs[1]).toMatchObject({
+      type: "query",
+      title: "Query logs-elastic",
+      paradigm: "search",
+      queryLanguage: "search-dsl",
+      searchTarget: { kind: "alias", name: "logs-elastic" },
+    });
+    expect(useConnectionStore.getState().activeStatuses["search-1"]).toEqual({
+      type: "connected",
+      activeDb: "_search",
+    });
+    expect(commandCount("list_search_catalog_summary")).toBe(1);
+    expect(commandCount("get_search_index_mapping")).toBe(0);
+    expect(commandCount("get_search_index_settings")).toBe(0);
+    expect(commandCount("sample_search_documents")).toBe(0);
+    expect(commandCount("execute_search_query")).toBe(0);
   });
 
   it("renders many-index summaries without changing the sidebar shell", async () => {

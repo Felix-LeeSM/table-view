@@ -560,6 +560,7 @@ export function useQueryExecution({
         sql,
         updateQueryState,
         completeSearchQuery,
+        cancelRunningQuery,
         failQuery,
       });
       return;
@@ -619,6 +620,7 @@ export function useQueryExecution({
     fileAnalyticsSources,
     queryProductLabel,
     decideSafeMode,
+    cancelRunningQuery,
     completeQuery,
     completeSearchQuery,
     failQuery,
