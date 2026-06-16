@@ -19,15 +19,20 @@ use tokio_util::sync::CancellationToken;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
-    ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, FunctionInfo,
-    IndexInfo, QueryResult, RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
+    ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest, DatabaseType,
+    DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition,
+    FunctionInfo, IndexInfo, QueryResult, RenameTableRequest, SchemaChangeResult, TableData,
+    TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::{BoxFuture, DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter};
 
 pub struct MssqlAdapter {
     connected_config: Mutex<Option<ConnectionConfig>>,
+}
+
+pub struct MssqlConnectionOnlyAdapter {
+    inner: MssqlAdapter,
 }
 
 impl MssqlAdapter {
@@ -92,11 +97,48 @@ impl MssqlAdapter {
         if host.is_empty() {
             return Err(AppError::Validation("SQL Server host is required".into()));
         }
+        if host.contains('\\') {
+            return Err(AppError::Validation(
+                "SQL Server named instances are unsupported; use host and port".into(),
+            ));
+        }
+        if config.port == 0 {
+            return Err(AppError::Validation("SQL Server port is required".into()));
+        }
 
         let user = config.user.trim();
         if user.is_empty() {
             return Err(AppError::Validation(
                 "SQL Server SQL authentication user is required".into(),
+            ));
+        }
+        if user.contains('\\') {
+            return Err(AppError::Validation(
+                "SQL Server Windows authentication is unsupported; use SQL authentication".into(),
+            ));
+        }
+        if config.password.is_empty() {
+            return Err(AppError::Validation(
+                "SQL Server SQL authentication password is required".into(),
+            ));
+        }
+        if config
+            .auth_source
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+        {
+            return Err(AppError::Validation(
+                "SQL Server AAD/authSource modes are unsupported; use SQL authentication".into(),
+            ));
+        }
+        if config
+            .replica_set
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+        {
+            return Err(AppError::Validation(
+                "SQL Server named instance/replica-set routing is unsupported; use host and port"
+                    .into(),
             ));
         }
 
@@ -109,9 +151,25 @@ impl MssqlAdapter {
         tds_config.authentication(AuthMethod::sql_server(user, config.password.as_str()));
 
         if config.tls_enabled.unwrap_or(false) {
+            match config.trust_server_certificate {
+                Some(true) | Some(false) => {}
+                None => {
+                    return Err(AppError::Validation(
+                        "SQL Server TLS requires an explicit trustServerCertificate decision"
+                            .into(),
+                    ));
+                }
+            }
             tds_config.encryption(EncryptionLevel::Required);
-            tds_config.trust_cert();
+            if config.trust_server_certificate == Some(true) {
+                tds_config.trust_cert();
+            }
         } else {
+            if config.trust_server_certificate == Some(true) {
+                return Err(AppError::Validation(
+                    "SQL Server trustServerCertificate requires TLS/encryption".into(),
+                ));
+            }
             tds_config.encryption(EncryptionLevel::NotSupported);
         }
 
@@ -130,6 +188,20 @@ impl MssqlAdapter {
 }
 
 impl Default for MssqlAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MssqlConnectionOnlyAdapter {
+    pub fn new() -> Self {
+        Self {
+            inner: MssqlAdapter::new(),
+        }
+    }
+}
+
+impl Default for MssqlConnectionOnlyAdapter {
     fn default() -> Self {
         Self::new()
     }
@@ -163,6 +235,259 @@ impl DbAdapter for MssqlAdapter {
             Self::test(&config).await
         })
     }
+}
+
+impl DbAdapter for MssqlConnectionOnlyAdapter {
+    fn kind(&self) -> DatabaseType {
+        DatabaseType::Mssql
+    }
+
+    fn connect<'a>(&'a self, config: &'a ConnectionConfig) -> BoxFuture<'a, Result<(), AppError>> {
+        self.inner.connect(config)
+    }
+
+    fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+        self.inner.disconnect()
+    }
+
+    fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+        self.inner.ping()
+    }
+}
+
+impl RdbAdapter for MssqlConnectionOnlyAdapter {
+    fn namespace_label(&self) -> NamespaceLabel {
+        NamespaceLabel::Schema
+    }
+
+    fn list_namespaces<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn switch_database<'a>(&'a self, _db_name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn list_tables<'a>(
+        &'a self,
+        _namespace: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn get_columns<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn execute_sql<'a>(
+        &'a self,
+        _sql: &'a str,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<QueryResult, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn execute_sql_batch<'a>(
+        &'a self,
+        _statements: &'a [String],
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<QueryResult>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn dry_run_sql_batch<'a>(
+        &'a self,
+        _statements: &'a [String],
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<QueryResult>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn query_table_data<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _page: i32,
+        _page_size: i32,
+        _order_by: Option<&'a str>,
+        _filters: Option<&'a [FilterCondition]>,
+        _raw_where: Option<&'a str>,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<TableData, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn drop_table<'a>(
+        &'a self,
+        _req: &'a DropTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn rename_table<'a>(
+        &'a self,
+        _req: &'a RenameTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn alter_table<'a>(
+        &'a self,
+        _req: &'a AlterTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn add_column<'a>(
+        &'a self,
+        _req: &'a AddColumnRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn drop_column<'a>(
+        &'a self,
+        _req: &'a DropColumnRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn create_table<'a>(
+        &'a self,
+        _req: &'a CreateTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn create_table_plan<'a>(
+        &'a self,
+        _req: &'a CreateTablePlanRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn create_index<'a>(
+        &'a self,
+        _req: &'a CreateIndexRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn drop_index<'a>(
+        &'a self,
+        _req: &'a DropIndexRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn add_constraint<'a>(
+        &'a self,
+        _req: &'a AddConstraintRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn drop_constraint<'a>(
+        &'a self,
+        _req: &'a DropConstraintRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn get_table_indexes<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn get_table_constraints<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn list_views<'a>(
+        &'a self,
+        _namespace: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<ViewInfo>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn get_view_definition<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _view: &'a str,
+    ) -> BoxFuture<'a, Result<String, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn get_view_columns<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _view: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn list_schema_columns<'a>(
+        &'a self,
+        _namespace: &'a str,
+    ) -> BoxFuture<'a, Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn get_function_source<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _function: &'a str,
+    ) -> BoxFuture<'a, Result<String, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn list_functions<'a>(
+        &'a self,
+        _namespace: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<FunctionInfo>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+
+    fn list_triggers<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<TriggerInfo>, AppError>> {
+        mssql_connection_only_unsupported()
+    }
+}
+
+fn mssql_connection_only_unsupported<'a, T>() -> BoxFuture<'a, Result<T, AppError>>
+where
+    T: Send + 'a,
+{
+    Box::pin(async {
+        Err(AppError::Unsupported(
+            "SQL Server supports connection test, connect, and ping only in this slice; query/catalog/edit/DDL runtime is unsupported".into(),
+        ))
+    })
 }
 
 impl RdbAdapter for MssqlAdapter {

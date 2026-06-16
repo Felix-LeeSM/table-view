@@ -32,6 +32,7 @@ use crate::db::search::SearchEngineAdapter;
 use crate::db::sqlite::SqliteAdapter;
 use crate::db::ActiveAdapter;
 use crate::db::DuckdbAdapter;
+use crate::db::MssqlConnectionOnlyAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
 use crate::state::introspection_pool::IntrospectionPool;
@@ -53,7 +54,6 @@ pub use io::{
 pub use session::get_session_id;
 pub use sqlite_file::create_sqlite_database_file;
 
-const SQL_SERVER_DECLARED_ONLY_RUNTIME_MESSAGE: &str = "SQL Server is declared-only until source-specific connection.test and matching runtime evidence land";
 const ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE: &str =
     "Oracle is declared-only until source-specific connection.test and matching runtime evidence land";
 
@@ -65,9 +65,9 @@ const ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE: &str =
 /// surfaces still return `AppError::Unsupported` until Slice B~G land.
 /// MariaDB shares the MySQL protocol adapter while preserving its distinct
 /// `DatabaseType` on the active adapter. SQLite and DuckDB have file-backed
-/// adapters. SQL Server and Oracle are declared-only identities: factory
-/// dispatch rejects runtime promotion until source-specific `connection.test`
-/// and matching runtime/docs/smoke evidence land.
+/// adapters. SQL Server is connection-only for issue #901: lifecycle
+/// connect/ping may run, but catalog/query/edit/DDL RDB calls return
+/// `Unsupported`. Oracle remains declared-only.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
@@ -75,9 +75,9 @@ pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppE
         DatabaseType::Mariadb => Ok(ActiveAdapter::Rdb(Box::new(MysqlAdapter::new_mariadb()))),
         DatabaseType::Sqlite => Ok(ActiveAdapter::Rdb(Box::new(SqliteAdapter::new()))),
         DatabaseType::Duckdb => Ok(ActiveAdapter::Rdb(Box::new(DuckdbAdapter::new()))),
-        DatabaseType::Mssql => Err(AppError::Unsupported(
-            SQL_SERVER_DECLARED_ONLY_RUNTIME_MESSAGE.into(),
-        )),
+        DatabaseType::Mssql => Ok(ActiveAdapter::Rdb(Box::new(
+            MssqlConnectionOnlyAdapter::new(),
+        ))),
         DatabaseType::Oracle => Err(AppError::Unsupported(
             ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE.into(),
         )),
@@ -95,9 +95,6 @@ pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppE
 
 pub(crate) fn declared_only_runtime_error(db_type: &DatabaseType) -> Option<AppError> {
     match db_type {
-        DatabaseType::Mssql => Some(AppError::Unsupported(
-            SQL_SERVER_DECLARED_ONLY_RUNTIME_MESSAGE.into(),
-        )),
         DatabaseType::Oracle => Some(AppError::Unsupported(
             ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE.into(),
         )),
@@ -247,6 +244,7 @@ pub(super) mod test_helpers {
             auth_source: None,
             replica_set: None,
             tls_enabled: None,
+            trust_server_certificate: None,
         }
     }
 
@@ -338,17 +336,34 @@ mod tests {
     }
 
     #[test]
-    fn test_make_adapter_mssql_rejects_declared_only_runtime_promotion() {
-        let result = make_adapter(&DatabaseType::Mssql);
+    fn test_make_adapter_mssql_returns_connection_only_rdb_variant() {
+        let adapter = make_adapter(&DatabaseType::Mssql).expect("mssql should succeed");
+        assert!(
+            matches!(adapter, ActiveAdapter::Rdb(_)),
+            "expected Rdb variant"
+        );
+        assert!(matches!(adapter.kind(), DatabaseType::Mssql));
+    }
 
-        match result {
-            Err(AppError::Unsupported(msg)) => {
-                assert!(msg.contains("SQL Server is declared-only"));
-                assert!(msg.contains("source-specific connection.test"));
-            }
-            Err(other) => panic!("Expected SQL Server declared-only rejection, got: {other:?}"),
-            Ok(_) => panic!("Expected SQL Server declared-only rejection, got adapter"),
-        }
+    #[tokio::test]
+    async fn test_make_adapter_mssql_rdb_methods_stay_unsupported() {
+        let adapter = make_adapter(&DatabaseType::Mssql).expect("mssql should succeed");
+        let rdb = adapter.as_rdb().expect("mssql remains an RDB handle");
+
+        assert_mssql_connection_only_unsupported(rdb.list_namespaces().await);
+        assert_mssql_connection_only_unsupported(rdb.execute_sql("SELECT 1", None).await);
+        assert_mssql_connection_only_unsupported(rdb.list_views("dbo").await);
+        assert_mssql_connection_only_unsupported(rdb.list_triggers("dbo", "users").await);
+
+        let drop = crate::models::DropTableRequest {
+            connection_id: "mssql".into(),
+            schema: "dbo".into(),
+            table: "users".into(),
+            cascade: false,
+            preview_only: false,
+            expected_database: None,
+        };
+        assert_mssql_connection_only_unsupported(rdb.drop_table(&drop).await);
     }
 
     #[test]
@@ -383,6 +398,13 @@ mod tests {
             "expected Kv variant"
         );
         assert!(matches!(adapter.kind(), DatabaseType::Redis));
+    }
+
+    fn assert_mssql_connection_only_unsupported<T: std::fmt::Debug>(result: Result<T, AppError>) {
+        assert!(
+            matches!(result, Err(AppError::Unsupported(ref message)) if message.contains("connection test, connect, and ping only")),
+            "expected MSSQL connection-only Unsupported, got {result:?}"
+        );
     }
 
     #[test]

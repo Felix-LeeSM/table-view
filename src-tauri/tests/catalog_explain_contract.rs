@@ -32,6 +32,7 @@ fn sqlite_config(path: &str) -> ConnectionConfig {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     }
 }
 
@@ -54,6 +55,7 @@ fn duckdb_config(path: &str) -> ConnectionConfig {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     }
 }
 

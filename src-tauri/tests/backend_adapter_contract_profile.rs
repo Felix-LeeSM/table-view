@@ -100,7 +100,7 @@ fn backend_profiles_encode_current_database_type_contracts() {
     let mssql = get_data_source_profile(&DatabaseType::Mssql);
     assert_eq!(
         mssql.adapter_contract.state,
-        BackendAdapterContractState::DeclaredOnly
+        BackendAdapterContractState::FactoryBacked
     );
     assert_eq!(mssql.backend_adapter.id, BackendAdapterId::Mssql);
     assert_eq!(
@@ -111,8 +111,11 @@ fn backend_profiles_encode_current_database_type_contracts() {
         mssql.dialect.version_probe,
         ServerVersionProbeId::MssqlServerProperty
     );
-    assert!(mssql.adapter_contract.capabilities.is_empty());
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert_eq!(
+        mssql.adapter_contract.capabilities,
+        [BackendAdapterCapability::Lifecycle]
+    );
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
@@ -369,15 +372,18 @@ fn rdbms_integration_gate_profiles_are_coherent() {
     assert_eq!(mssql.paradigm, Paradigm::Rdb);
     assert_eq!(
         mssql.adapter_contract.state,
-        BackendAdapterContractState::DeclaredOnly
+        BackendAdapterContractState::FactoryBacked
     );
     assert_eq!(mssql.backend_adapter.id, BackendAdapterId::Mssql);
     assert_eq!(
         mssql.backend_adapter.capability_source,
         BackendAdapterCapabilitySource::Mssql
     );
-    assert!(mssql.adapter_contract.capabilities.is_empty());
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert_eq!(
+        mssql.adapter_contract.capabilities,
+        [BackendAdapterCapability::Lifecycle]
+    );
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));

@@ -252,8 +252,8 @@ async fn reconcile_connections(pool: &SqlitePool) -> Result<(), AppError> {
                 "INSERT OR REPLACE INTO connections \
                  (id, name, db_type, host, port, user, password_enc, database, read_only, group_id, color, \
                  connection_timeout, keep_alive_interval, environment, auth_source, replica_set, \
-                 tls_enabled, sort_order, created_at, updated_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 tls_enabled, trust_server_certificate, sort_order, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(&c.id)
             .bind(&c.name)
@@ -277,6 +277,10 @@ async fn reconcile_connections(pool: &SqlitePool) -> Result<(), AppError> {
             .bind(&c.auth_source)
             .bind(&c.replica_set)
             .bind(c.tls_enabled.map(|v| if v { 1i64 } else { 0i64 }))
+            .bind(
+                c.trust_server_certificate
+                    .map(|v| if v { 1i64 } else { 0i64 }),
+            )
             .bind(idx as i64)
             .bind(now_ms)
             .bind(now_ms)
@@ -475,6 +479,7 @@ mod tests {
             auth_source: None,
             replica_set: None,
             tls_enabled: None,
+            trust_server_certificate: None,
         };
         crate::storage::save_connection(conn, None).unwrap();
         mismatch_counter::increment();

@@ -331,7 +331,11 @@ export const DUCKDB_CAPABILITIES = capabilities({
   },
 });
 
-export const MSSQL_CAPABILITIES = capabilities();
+export const MSSQL_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+});
 
 export const MONGODB_CAPABILITIES = capabilities({
   connection: {

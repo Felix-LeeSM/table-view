@@ -55,6 +55,7 @@ async fn ac_370_01_no_drift_when_all_four_domains_match() {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     };
     table_view_lib::storage::save_connection(conn, None).unwrap();
     sqlx::query(
@@ -178,6 +179,7 @@ async fn ac_370_01_drift_in_all_four_domains_triggers_four_increments() {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     };
     table_view_lib::storage::save_connection(conn, None).unwrap();
     save_favorites_file(&[FavoriteRecord {

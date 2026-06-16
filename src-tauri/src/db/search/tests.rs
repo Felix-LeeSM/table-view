@@ -1073,6 +1073,7 @@ fn search_config_for(port: u16, db_type: DatabaseType) -> ConnectionConfig {
         auth_source: None,
         replica_set: None,
         tls_enabled: Some(false),
+        trust_server_certificate: None,
     }
 }
 

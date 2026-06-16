@@ -249,6 +249,9 @@ export function normalizeConnectionConfig(value: unknown): ConnectionConfig {
     authSource: optionalString(pick(r, "authSource", "auth_source")),
     replicaSet: optionalString(pick(r, "replicaSet", "replica_set")),
     tlsEnabled: optionalBool(pick(r, "tlsEnabled", "tls_enabled")),
+    trustServerCertificate: optionalBool(
+      pick(r, "trustServerCertificate", "trust_server_certificate"),
+    ),
   };
 }
 

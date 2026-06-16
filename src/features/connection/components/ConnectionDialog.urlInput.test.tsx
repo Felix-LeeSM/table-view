@@ -127,6 +127,7 @@ interface PasteCase {
     database?: string;
     password?: string;
     tlsEnabled?: boolean;
+    trustServerCertificate?: boolean;
   };
 }
 
@@ -178,6 +179,20 @@ const PASTE_CASES: PasteCase[] = [
       user: "root",
       database: "app",
       password: "p",
+    },
+  },
+  {
+    scheme: "mssql",
+    url: "mssql://sa:p@mssql.local:1433/master?encrypt=false&trustServerCertificate=false",
+    expected: {
+      dbType: "mssql",
+      host: "mssql.local",
+      port: 1433,
+      user: "sa",
+      database: "master",
+      password: "p",
+      tlsEnabled: false,
+      trustServerCertificate: false,
     },
   },
   {
@@ -334,6 +349,7 @@ describe("[AC-178-01] form-mode host paste detection", () => {
       const isSearchProtocol =
         c.expected.dbType === "elasticsearch" ||
         c.expected.dbType === "opensearch";
+      const isMssql = c.expected.dbType === "mssql";
       const userInput =
         c.expected.dbType === "mongodb"
           ? (screen.getByLabelText(/^User \(optional\)/) as HTMLInputElement)
@@ -363,7 +379,15 @@ describe("[AC-178-01] form-mode host paste detection", () => {
                 .find((el) => el.tagName === "INPUT") as HTMLInputElement);
         expect(dbInput.value).toBe(c.expected.database ?? "");
       }
-      if (isKvProtocol || isSearchProtocol) {
+      if (isMssql) {
+        expect(screen.getByLabelText("Enable encryption (TLS)")).toHaveProperty(
+          "checked",
+          !!c.expected.tlsEnabled,
+        );
+        expect(
+          screen.getByLabelText("Trust server certificate"),
+        ).toHaveProperty("checked", !!c.expected.trustServerCertificate);
+      } else if (isKvProtocol || isSearchProtocol) {
         const tlsInput = screen.getByLabelText(
           "Enable TLS",
         ) as HTMLInputElement;
@@ -623,10 +647,6 @@ describe("[Sprint 447] URL import support follows data-source profiles", () => {
   });
 
   for (const c of [
-    {
-      dbType: "mssql",
-      url: "mssql://sa:pw@mssql.local:1433/master",
-    },
     {
       dbType: "oracle",
       url: "oracle://system:pw@oracle.local:1521/FREEPDB1",

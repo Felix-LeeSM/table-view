@@ -109,8 +109,8 @@ describe("ConnectionDialog", () => {
     expect(screen.getByRole("option", { name: "MariaDB" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
     expect(
-      screen.queryByRole("option", { name: "Microsoft SQL Server" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("option", { name: "Microsoft SQL Server" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("option", { name: "Oracle" }),
     ).not.toBeInTheDocument();
@@ -127,21 +127,19 @@ describe("ConnectionDialog", () => {
 
   // 편집 모드에서 현재 connection 의 dbType 은 그대로 표시되도록 예외적으로
   // 자기 자신만 추가 — Select 가 빈값으로 보이지 않도록.
-  it("Sprint 276: edit mode preserves the current dbType in the dropdown", async () => {
+  it("Sprint 276: edit mode preserves the current unsupported dbType in the dropdown", async () => {
     const user = userEvent.setup();
     renderDialog({
-      connection: makeConnection({ dbType: "mssql", port: 1433 }),
+      connection: makeConnection({ dbType: "oracle", port: 1521 }),
     });
 
     await user.click(screen.getByLabelText("Database Type"));
     // 편집 중인 connection 의 dbType 은 노출. 다른 unsupported 어댑터는 숨김.
+    expect(screen.getByRole("option", { name: "Oracle" })).toBeInTheDocument();
     expect(
       screen.getByRole("option", { name: "Microsoft SQL Server" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("option", { name: "Oracle" }),
-    ).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -510,7 +508,7 @@ describe("ConnectionDialog", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("rejects mssql URLs until connection.test evidence promotes SQL Server", async () => {
+  it("accepts mssql URLs after connection.test promotes SQL Server", async () => {
     renderDialog();
     await act(async () => {
       fireEvent.click(screen.getByText("URL"));
@@ -524,10 +522,35 @@ describe("ConnectionDialog", () => {
       fireEvent.click(screen.getByText("Parse & Continue"));
     });
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Microsoft SQL Server is not yet supported",
-    );
-    expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Host")).toHaveValue("mssql.local");
+    expect(screen.getByLabelText("Port")).toHaveValue(1433);
+    expect(screen.getByLabelText("User")).toHaveValue("sa");
+    expect(screen.getByLabelText("Database")).toHaveValue("master");
+    expect(screen.getByLabelText("Enable encryption (TLS)")).toBeChecked();
+    expect(screen.getByLabelText("Trust server certificate")).toBeChecked();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("maps sqlserver URL encrypt/trustServerCertificate params into the MSSQL form", async () => {
+    renderDialog();
+    await act(async () => {
+      fireEvent.click(screen.getByText("URL"));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Connection URL"), {
+        target: {
+          value:
+            "sqlserver://sa:pw@mssql.local:1433/master?encrypt=false&trustServerCertificate=false",
+        },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Parse & Continue"));
+    });
+
+    expect(screen.getByLabelText("Host")).toHaveValue("mssql.local");
+    expect(screen.getByLabelText("Enable encryption (TLS)")).not.toBeChecked();
+    expect(screen.getByLabelText("Trust server certificate")).not.toBeChecked();
   });
 
   it("rejects oracle URLs until connection.test evidence promotes Oracle", async () => {
@@ -1722,6 +1745,74 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
     });
 
+    it("MSSQL: SQL auth plus encryption and trust certificate controls are visible", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      const trigger = screen.getByLabelText("Database Type");
+      await user.click(trigger);
+      await user.click(
+        screen.getByRole("option", { name: "Microsoft SQL Server" }),
+      );
+
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        "1433",
+      );
+      expect((screen.getByLabelText("User") as HTMLInputElement).value).toBe(
+        "sa",
+      );
+      expect(
+        (screen.getByLabelText("Database") as HTMLInputElement).value,
+      ).toBe("master");
+      expect(screen.getByLabelText("Password")).toBeInTheDocument();
+      expect(screen.getByLabelText("Authentication method")).toHaveTextContent(
+        "SQL authentication",
+      );
+      expect(
+        screen.getByText(
+          /Windows authentication and Azure AD are unsupported/i,
+        ),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Enable encryption (TLS)")).toBeChecked();
+      expect(screen.getByLabelText("Trust server certificate")).toBeChecked();
+    });
+
+    it("MSSQL save includes tlsEnabled and trustServerCertificate without query/catalog/edit claims", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText("Name"), {
+          target: { value: "SQL Server local" },
+        });
+      });
+
+      await user.click(screen.getByLabelText("Database Type"));
+      await user.click(
+        screen.getByRole("option", { name: "Microsoft SQL Server" }),
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByLabelText("Enable encryption (TLS)"));
+        fireEvent.click(screen.getByLabelText("Trust server certificate"));
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Save"));
+      });
+
+      expect(mockAddConnection).toHaveBeenCalledTimes(1);
+      const draft = mockAddConnection.mock.calls[0]![0] as ConnectionDraft;
+      expect(draft.dbType).toBe("mssql");
+      expect(draft.tlsEnabled).toBe(false);
+      expect(draft.trustServerCertificate).toBe(false);
+      expect(
+        dataSourceProfiles.getDataSourceProfile("mssql").capabilities,
+      ).toMatchObject({
+        connection: { test: true },
+        query: { query: false },
+        catalog: { browse: false },
+        edit: { editRows: false },
+      });
+    });
+
     // Sprint 276 — Redis 옵션 hide. Redis 어댑터 합류 시 unskip.
     it.skip("AC-S138-01 Redis: database index defaults to 0 and clamps to 0..15", async () => {
       const user = userEvent.setup();
@@ -1765,6 +1856,105 @@ describe("ConnectionDialog", () => {
     });
   });
 
+  describe("Issue 901: MSSQL unsupported auth and instance validation", () => {
+    it("shows a visible named-instance error before save/test and blocks backend calls", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText("Name"), {
+          target: { value: "SQL Server instance" },
+        });
+      });
+      await user.click(screen.getByLabelText("Database Type"));
+      await user.click(
+        screen.getByRole("option", { name: "Microsoft SQL Server" }),
+      );
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText("Host"), {
+          target: { value: "localhost\\SQLEXPRESS" },
+        });
+      });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "SQL Server named instances are not supported",
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Test Connection"));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText("Save"));
+      });
+
+      expect(mockTestConnection).not.toHaveBeenCalled();
+      expect(mockAddConnection).not.toHaveBeenCalled();
+    });
+
+    it("shows a visible Windows-auth user error before save/test and blocks backend calls", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText("Name"), {
+          target: { value: "SQL Server Windows user" },
+        });
+      });
+      await user.click(screen.getByLabelText("Database Type"));
+      await user.click(
+        screen.getByRole("option", { name: "Microsoft SQL Server" }),
+      );
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText("User"), {
+          target: { value: "DOMAIN\\felix" },
+        });
+      });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Windows authentication is not supported",
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Test Connection"));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText("Save"));
+      });
+
+      expect(mockTestConnection).not.toHaveBeenCalled();
+      expect(mockAddConnection).not.toHaveBeenCalled();
+    });
+
+    it("does not default missing trustServerCertificate to true when editing an existing MSSQL connection", async () => {
+      renderDialog({
+        connection: makeConnection({
+          dbType: "mssql",
+          port: 1433,
+          user: "sa",
+          database: "master",
+          tlsEnabled: true,
+          trustServerCertificate: undefined,
+        }),
+      });
+
+      const trust = screen.getByLabelText(
+        "Trust server certificate",
+      ) as HTMLInputElement;
+      expect(trust).toBeInTheDocument();
+      expect(trust).not.toBeChecked();
+
+      await act(async () => {
+        fireEvent.click(trust);
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText("Update"));
+      });
+
+      const draft = mockUpdateConnection.mock.calls[0]![0] as ConnectionDraft;
+      expect(draft.trustServerCertificate).toBe(true);
+    });
+  });
+
   describe("Sprint 446: profile connection-kind compatibility", () => {
     it("preserves server-profile field visibility for the current network DBMS forms", async () => {
       for (const { label, dbType, userLabel, passwordLabel, databaseLabel } of [
@@ -1785,6 +1975,13 @@ describe("ConnectionDialog", () => {
         {
           label: "MariaDB",
           dbType: "mariadb",
+          userLabel: "User",
+          passwordLabel: "Password",
+          databaseLabel: "Database",
+        },
+        {
+          label: "Microsoft SQL Server",
+          dbType: "mssql",
           userLabel: "User",
           passwordLabel: "Password",
           databaseLabel: "Database",

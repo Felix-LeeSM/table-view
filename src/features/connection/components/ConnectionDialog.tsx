@@ -51,7 +51,10 @@
 
 import { useState } from "react";
 import type { ConnectionConfig, ConnectionDraft } from "../model";
-import { DATABASE_DEFAULTS } from "../model";
+import {
+  DATABASE_DEFAULTS,
+  getMssqlConnectionUnsupportedMessage,
+} from "../model";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "../store";
 import { useConnectionMutations } from "@lib/runtime/connection/useConnectionMutations";
@@ -164,6 +167,11 @@ export default function ConnectionDialog({
         ...form,
         password: resolvePassword(),
       });
+      const unsupportedMessage = getMssqlConnectionUnsupportedMessage(draft);
+      if (unsupportedMessage) {
+        setTestResult({ status: "error", message: unsupportedMessage });
+        return;
+      }
       const msg = await testConnection(draft, connection?.id ?? null);
       setTestResult({ status: "success", message: msg });
     } catch (e) {
@@ -216,6 +224,11 @@ export default function ConnectionDialog({
           ? "Service name is required"
           : "Database is required",
       );
+      return;
+    }
+    const unsupportedMessage = getMssqlConnectionUnsupportedMessage(trimmed);
+    if (unsupportedMessage) {
+      setError(unsupportedMessage);
       return;
     }
 

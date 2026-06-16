@@ -353,6 +353,7 @@ pub async fn mysql_test_config() -> Option<ConnectionConfig> {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     })
 }
 
@@ -384,6 +385,7 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             auth_source: None,
             replica_set: None,
             tls_enabled: None,
+            trust_server_certificate: None,
         },
         DatabaseType::Mysql => ConnectionConfig {
             id: "test-conn".to_string(),
@@ -403,6 +405,7 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             auth_source: None,
             replica_set: None,
             tls_enabled: None,
+            trust_server_certificate: None,
         },
         DatabaseType::Mongodb => ConnectionConfig {
             id: "test-conn".to_string(),
@@ -422,6 +425,7 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             auth_source: None,
             replica_set: None,
             tls_enabled: None,
+            trust_server_certificate: None,
         },
         other => panic!("test_config: unsupported DatabaseType {:?}", other),
     }
@@ -455,6 +459,7 @@ pub async fn pg_test_config() -> Option<ConnectionConfig> {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     })
 }
 
@@ -482,6 +487,7 @@ pub async fn mongo_test_config() -> Option<ConnectionConfig> {
         auth_source: endpoint.auth_source,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     })
 }
 
@@ -517,6 +523,7 @@ pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     };
 
     let adapter = PostgresAdapter::new();
@@ -561,6 +568,7 @@ pub async fn setup_mysql_adapter() -> Option<MysqlAdapter> {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     };
 
     let adapter = MysqlAdapter::new();
@@ -601,6 +609,7 @@ pub async fn setup_mongo_adapter() -> Option<MongoAdapter> {
         auth_source: endpoint.auth_source,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     };
 
     let adapter = MongoAdapter::new();
