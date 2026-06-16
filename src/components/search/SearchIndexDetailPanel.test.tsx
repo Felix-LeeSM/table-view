@@ -539,7 +539,9 @@ describe("SearchIndexDetailPanel", () => {
 
   it("scopes detail errors to their selected tab", async () => {
     installInvokeMock({
-      get_search_index_mapping: new Error("mapping unavailable"),
+      get_search_index_mapping: new Error(
+        "mapping unavailable from https://elastic:secret@example.test:9200/.kibana_8.12.2/_mapping?token=abc123",
+      ),
     });
     render(
       <SearchIndexDetailPanel connectionId="search-1" index=".kibana_8.12.2" />,
@@ -548,11 +550,12 @@ describe("SearchIndexDetailPanel", () => {
     expect(await screen.findByText("system")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: /mapping/i }));
 
-    await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent(
-        "mapping unavailable",
-      ),
-    );
+    const mappingAlert = await screen.findByRole("alert");
+    expect(mappingAlert).toHaveTextContent("Search mapping failed");
+    expect(mappingAlert).toHaveTextContent("mapping unavailable");
+    expect(mappingAlert).not.toHaveTextContent("elastic:secret");
+    expect(mappingAlert).not.toHaveTextContent("token=abc123");
+    expect(mappingAlert).not.toHaveTextContent("https://");
     expect(commandCount("get_search_index_mapping")).toBe(1);
     expect(commandCount("get_search_index_settings")).toBe(0);
     expect(commandCount("sample_search_documents")).toBe(0);
@@ -563,6 +566,8 @@ describe("SearchIndexDetailPanel", () => {
     expect(commandCount("get_search_index_settings")).toBe(1);
 
     fireEvent.click(screen.getByRole("tab", { name: /mapping/i }));
-    expect(screen.getByRole("alert")).toHaveTextContent("mapping unavailable");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Search mapping failed",
+    );
   });
 });

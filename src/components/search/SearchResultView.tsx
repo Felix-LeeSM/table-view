@@ -11,6 +11,7 @@ import {
 import type { ReactNode } from "react";
 import { Skeleton } from "@components/ui/skeleton";
 import type { QueryState } from "@/types/query";
+import { formatSearchUiError } from "@lib/search/searchUiError";
 import type {
   SearchAggregationEnvelope,
   SearchHitEnvelope,
@@ -104,6 +105,7 @@ function SearchLoadingState() {
 }
 
 function SearchErrorState({ message }: { message: string }) {
+  const error = formatSearchUiError("query", message);
   return (
     <section
       aria-label="Search results"
@@ -115,9 +117,9 @@ function SearchErrorState({ message }: { message: string }) {
       >
         <div className="flex items-center gap-2 font-medium">
           <AlertTriangle size={14} aria-hidden="true" />
-          <span>Search query failed</span>
+          <span>{error.label}</span>
         </div>
-        <p className="mt-1 whitespace-pre-wrap text-xs">{message}</p>
+        <p className="mt-1 whitespace-pre-wrap text-xs">{error.detail}</p>
       </div>
     </section>
   );

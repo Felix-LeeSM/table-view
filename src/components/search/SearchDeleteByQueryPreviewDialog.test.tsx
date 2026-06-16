@@ -86,6 +86,23 @@ describe("SearchDeleteByQueryPreviewDialog", () => {
     ).toHaveTextContent("execution is unsupported");
   });
 
+  it("shows scoped redacted preview errors from Search IPC", async () => {
+    invokeMock.mockRejectedValueOnce(
+      "Elasticsearch search request failed at https://elastic:leaked-pass@127.0.0.1:9200/_search password=leaked-pass",
+    );
+
+    renderDialog();
+
+    fireEvent.click(screen.getByRole("button", { name: /generate plan/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Delete-by-query preview failed");
+    expect(alert).toHaveTextContent("Elasticsearch search request failed");
+    expect(alert).not.toHaveTextContent("leaked-pass");
+    expect(alert).not.toHaveTextContent("https://elastic");
+    expect(alert).not.toHaveTextContent("127.0.0.1:9200");
+  });
+
   it("keeps unsupported connections on a no-IPC state", () => {
     renderDialog({ supported: false });
 

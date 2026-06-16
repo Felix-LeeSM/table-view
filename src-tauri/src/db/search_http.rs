@@ -1,6 +1,8 @@
 use std::collections::HashMap;
+use std::sync::OnceLock;
 use std::time::Duration;
 
+use regex::Regex;
 use reqwest::{RequestBuilder, Response, StatusCode};
 use serde_json::{json, Map, Value};
 use tokio_util::sync::CancellationToken;
@@ -210,19 +212,21 @@ impl SearchHttpConnection {
         let response = request
             .send()
             .await
-            .map_err(|err| search_network_error(self.label(), err))?;
+            .map_err(|err| search_network_error(self.label(), "catalog request", err))?;
         let status = response.status();
-        if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
-            return Err(AppError::Connection(format!(
-                "{} authentication failed ({status})",
-                self.label()
-            )));
-        }
         if !status.is_success() {
-            return Err(AppError::Connection(format!(
-                "{} catalog request {path} failed with HTTP {status}",
-                self.label()
-            )));
+            let detail = response
+                .text()
+                .await
+                .ok()
+                .map(|body| search_http_error_detail(&body, false));
+            return Err(search_http_status_error(
+                self.label(),
+                "catalog request",
+                status,
+                Some(path),
+                detail.as_deref(),
+            ));
         }
         response.json::<Value>().await.map_err(|err| {
             AppError::Connection(format!(
@@ -245,22 +249,19 @@ impl SearchHttpConnection {
         );
         let response = send_with_cancel(request, cancel, self.label()).await?;
         let status = response.status();
-        if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
-            return Err(AppError::Connection(format!(
-                "{} authentication failed ({status})",
-                self.label()
-            )));
-        }
         if !status.is_success() {
-            let detail = response
-                .text()
-                .await
-                .map(search_error_detail)
-                .unwrap_or_else(|err| format!("failed to read error body: {err}"));
-            return Err(AppError::Connection(format!(
-                "{} search request {path} failed with HTTP {status}: {detail}",
-                self.label()
-            )));
+            let body = response.text().await;
+            let detail = match body {
+                Ok(body) => search_http_error_detail(&body, status.is_server_error()),
+                Err(err) => format!("failed to read error body: {}", err.without_url()),
+            };
+            return Err(search_http_status_error(
+                self.label(),
+                "search request",
+                status,
+                Some(path),
+                Some(detail.as_str()),
+            ));
         }
         response.json::<Value>().await.map_err(|err| {
             AppError::Connection(format!(
@@ -289,11 +290,125 @@ async fn send_with_cancel(
     } else {
         request.send().await
     };
-    response.map_err(|err| search_network_error(label, err))
+    response.map_err(|err| search_network_error(label, "search request", err))
 }
 
-fn search_network_error(label: &str, err: reqwest::Error) -> AppError {
-    AppError::Connection(format!("{label} network error: {}", err.without_url()))
+fn search_network_error(label: &str, endpoint_class: &str, err: reqwest::Error) -> AppError {
+    if err.is_timeout() {
+        return AppError::Connection(format!("{label} timeout during {endpoint_class}"));
+    }
+    if is_tls_error(&err) {
+        return AppError::Connection(format!("{label} TLS error during {endpoint_class}"));
+    }
+    AppError::Connection(format!(
+        "{label} network error during {endpoint_class}: {}",
+        err.without_url()
+    ))
+}
+
+fn is_tls_error(err: &reqwest::Error) -> bool {
+    if !(err.is_connect() || err.is_decode() || err.is_request()) {
+        return false;
+    }
+    let message = format!("{err:?}").to_ascii_lowercase();
+    [
+        "tls",
+        "rustls",
+        "certificate",
+        "handshake",
+        "invalidcontenttype",
+        "invalid content type",
+        "received corrupt message",
+        "unexpected eof",
+    ]
+    .iter()
+    .any(|needle| message.contains(needle))
+}
+
+fn search_http_status_error(
+    label: &str,
+    endpoint_class: &str,
+    status: StatusCode,
+    path: Option<&str>,
+    detail: Option<&str>,
+) -> AppError {
+    let mut message = if status == StatusCode::UNAUTHORIZED {
+        format!("{label} authentication failed during {endpoint_class} ({status})")
+    } else if status == StatusCode::FORBIDDEN {
+        format!("{label} permission denied during {endpoint_class} ({status})")
+    } else if status.is_server_error() {
+        format!("{label} server error during {endpoint_class} ({status})")
+    } else if let Some(path) = path {
+        format!("{label} {endpoint_class} {path} failed with HTTP {status}")
+    } else {
+        format!("{label} {endpoint_class} failed with HTTP {status}")
+    };
+
+    if let Some(detail) = detail.filter(|value| !value.trim().is_empty()) {
+        message.push_str(": ");
+        message.push_str(detail);
+    }
+    AppError::Connection(message)
+}
+
+fn search_http_error_detail(body: &str, include_shard_failure: bool) -> String {
+    let mut detail = search_error_detail(body.to_string());
+    if include_shard_failure {
+        if let Some(shard_detail) = shard_failure_detail(body) {
+            detail.push_str("; shard failure: ");
+            detail.push_str(&shard_detail);
+        }
+    }
+    sanitize_search_error_detail(&detail)
+}
+
+fn sanitize_search_error_detail(detail: &str) -> String {
+    static URL_RE: OnceLock<Regex> = OnceLock::new();
+    static AUTH_HEADER_RE: OnceLock<Regex> = OnceLock::new();
+    static JSON_SECRET_RE: OnceLock<Regex> = OnceLock::new();
+    static SECRET_RE: OnceLock<Regex> = OnceLock::new();
+
+    let without_urls = URL_RE
+        .get_or_init(|| Regex::new(r#"https?://[^\s"'<>]+"#).expect("URL redaction regex compiles"))
+        .replace_all(detail, "[redacted-url]");
+    let without_auth = AUTH_HEADER_RE
+        .get_or_init(|| {
+            Regex::new(r#"(?i)\b(authorization\s*[:=]\s*)(basic|bearer)\s+[^\s,;]+"#)
+                .expect("Search auth header redaction regex compiles")
+        })
+        .replace_all(&without_urls, "$1$2 [redacted]");
+    let without_json_secrets = JSON_SECRET_RE
+        .get_or_init(|| {
+            Regex::new(
+                r#"(?i)(["']?(?:password|passwd|pwd|token|api[_-]?key|apikey|access[_-]?token|secret)["']?\s*:\s*)["'][^"']+["']"#,
+            )
+            .expect("Search JSON secret redaction regex compiles")
+        })
+        .replace_all(&without_auth, "$1\"[redacted]\"");
+    SECRET_RE
+        .get_or_init(|| {
+            Regex::new(
+                r#"(?i)\b(password|passwd|pwd|token|api[_-]?key|apikey|access[_-]?token|secret)=([^\s&"'<>]+)"#,
+            )
+                .expect("Search secret redaction regex compiles")
+        })
+        .replace_all(&without_json_secrets, "$1=[redacted]")
+        .into_owned()
+}
+
+fn shard_failure_detail(body: &str) -> Option<String> {
+    let value = serde_json::from_str::<Value>(body).ok()?;
+    let reason = value
+        .pointer("/error/failed_shards/0/reason")
+        .or_else(|| value.pointer("/_shards/failures/0/reason"))?;
+    let error_type = reason.get("type").and_then(Value::as_str);
+    let reason_text = reason.get("reason").and_then(Value::as_str);
+    match (error_type, reason_text) {
+        (Some(error_type), Some(reason_text)) => Some(format!("{error_type}: {reason_text}")),
+        (Some(error_type), None) => Some(error_type.to_string()),
+        (None, Some(reason_text)) => Some(reason_text.to_string()),
+        (None, None) => Some(reason.to_string()),
+    }
 }
 
 impl SearchHttpAuth {
@@ -342,18 +457,22 @@ async fn probe_search_root(
     let response = request
         .send()
         .await
-        .map_err(|err| search_network_error(label, err))?;
+        .map_err(|err| search_network_error(label, "root probe", err))?;
     let status = response.status();
 
-    if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
-        return Err(AppError::Connection(format!(
-            "{label} authentication failed ({status})"
-        )));
-    }
     if !status.is_success() {
-        return Err(AppError::Connection(format!(
-            "{label} root probe failed with HTTP {status}"
-        )));
+        let detail = response
+            .text()
+            .await
+            .ok()
+            .map(|body| search_http_error_detail(&body, false));
+        return Err(search_http_status_error(
+            label,
+            "root probe",
+            status,
+            None,
+            detail.as_deref(),
+        ));
     }
 
     let product_header = response

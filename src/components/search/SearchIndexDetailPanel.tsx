@@ -11,6 +11,10 @@ import {
 import { Button } from "@components/ui/button";
 import { Skeleton } from "@components/ui/skeleton";
 import {
+  formatSearchUiError,
+  type SearchUiError,
+} from "@lib/search/searchUiError";
+import {
   getSearchIndexFieldStats,
   getSearchIndexMapping,
   getSearchIndexSettings,
@@ -46,7 +50,7 @@ type AsyncSlot<T> =
   | { status: "idle"; data: null; error: null }
   | { status: "loading"; data: null; error: null }
   | { status: "loaded"; data: T; error: null }
-  | { status: "error"; data: null; error: string };
+  | { status: "error"; data: null; error: SearchUiError };
 
 const idle = <T,>(): AsyncSlot<T> => ({
   status: "idle",
@@ -107,7 +111,7 @@ export default function SearchIndexDetailPanel({
           setCatalog({
             status: "error",
             data: null,
-            error: errorMessage(err),
+            error: formatSearchUiError("indexOverview", err),
           });
         }
       });
@@ -128,7 +132,11 @@ export default function SearchIndexDetailPanel({
       }
     } catch (err) {
       if (detailRequestGeneration.current === generation) {
-        setMapping({ status: "error", data: null, error: errorMessage(err) });
+        setMapping({
+          status: "error",
+          data: null,
+          error: formatSearchUiError("mapping", err),
+        });
       }
     }
   }, [connectionId, index, mapping.status]);
@@ -147,7 +155,7 @@ export default function SearchIndexDetailPanel({
         setSettings({
           status: "error",
           data: null,
-          error: errorMessage(err),
+          error: formatSearchUiError("settings", err),
         });
       }
     }
@@ -167,7 +175,7 @@ export default function SearchIndexDetailPanel({
         setTemplates({
           status: "error",
           data: null,
-          error: errorMessage(err),
+          error: formatSearchUiError("templates", err),
         });
       }
     }
@@ -184,7 +192,11 @@ export default function SearchIndexDetailPanel({
       }
     } catch (err) {
       if (detailRequestGeneration.current === generation) {
-        setSamples({ status: "error", data: null, error: errorMessage(err) });
+        setSamples({
+          status: "error",
+          data: null,
+          error: formatSearchUiError("samples", err),
+        });
       }
     }
   }, [connectionId, index, samples.status]);
@@ -200,7 +212,11 @@ export default function SearchIndexDetailPanel({
       }
     } catch (err) {
       if (detailRequestGeneration.current === generation) {
-        setStats({ status: "error", data: null, error: errorMessage(err) });
+        setStats({
+          status: "error",
+          data: null,
+          error: formatSearchUiError("fieldStats", err),
+        });
       }
     }
   }, [connectionId, index, stats.status]);
@@ -624,10 +640,11 @@ function DetailSkeleton({ label }: { label: string }) {
   );
 }
 
-function ErrorBlock({ message }: { message: string }) {
+function ErrorBlock({ message }: { message: SearchUiError }) {
   return (
     <div role="alert" className="border-b border-border p-3 text-destructive">
-      {message}
+      <div className="font-medium">{message.label}</div>
+      <p className="mt-1 whitespace-pre-wrap text-xs">{message.detail}</p>
     </div>
   );
 }
@@ -638,10 +655,6 @@ function EmptyBlock({ message }: { message: string }) {
       {message}
     </div>
   );
-}
-
-function errorMessage(err: unknown) {
-  return err instanceof Error ? err.message : String(err);
 }
 
 function matchesPattern(index: string, pattern: string) {

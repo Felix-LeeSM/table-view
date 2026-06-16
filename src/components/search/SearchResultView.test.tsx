@@ -183,11 +183,19 @@ describe("SearchResultView", () => {
 
     rerender(
       <SearchResultView
-        queryState={{ status: "error", error: "fixture failure" }}
+        queryState={{
+          status: "error",
+          error:
+            "fixture failure from https://elastic:secret@example.test:9200/logs/_search?password=hunter2",
+        }}
       />,
     );
-    expect(screen.getByRole("alert")).toHaveTextContent("Search query failed");
-    expect(screen.getByRole("alert")).toHaveTextContent("fixture failure");
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Search query failed");
+    expect(alert).toHaveTextContent("fixture failure");
+    expect(alert).not.toHaveTextContent("elastic:secret");
+    expect(alert).not.toHaveTextContent("password=hunter2");
+    expect(alert).not.toHaveTextContent("https://");
     expectNoGrid();
 
     rerender(

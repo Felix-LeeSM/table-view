@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use super::*;
 use crate::models::{SearchDeleteByQueryRequest, SearchDestructiveSafety};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -296,6 +298,29 @@ async fn search_root_network_errors_redact_url_and_credentials() {
 }
 
 #[tokio::test]
+async fn elasticsearch_root_probe_tls_errors_are_classified_without_url() {
+    // Reason: issue #898 requires Search HTTP TLS failures to be distinct and redacted (2026-06-16).
+    let (port, server) = spawn_plain_tcp_server().await;
+    let mut config = search_config(port);
+    config.tls_enabled = Some(true);
+
+    let result = SearchEngineAdapter::test(&config).await;
+    server.abort();
+
+    match result {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("Elasticsearch TLS error"));
+            assert!(message.contains("root probe"));
+            assert!(
+                !message.contains("http://") && !message.contains("https://"),
+                "TLS error leaked a full URL: {message}"
+            );
+        }
+        other => panic!("Expected classified TLS connection error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn elasticsearch_live_catalog_reads_indexes_aliases_and_streams() {
     let routes = vec![
         route(
@@ -544,7 +569,9 @@ async fn elasticsearch_live_catalog_summary_surfaces_permission_errors() {
 
     match result {
         Err(AppError::Connection(message)) => {
-            assert!(message.contains("Elasticsearch authentication failed (403 Forbidden)"));
+            assert!(message.contains("Elasticsearch permission denied"));
+            assert!(message.contains("403"));
+            assert!(message.contains("catalog request"));
         }
         other => panic!("Expected permission error, got {other:?}"),
     }
@@ -1140,30 +1167,43 @@ async fn spawn_root_probe_server(
     (port, handle)
 }
 
+async fn spawn_plain_tcp_server() -> (u16, JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let handle = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut buf = [0; 4096];
+        let _ = socket.read(&mut buf).await.unwrap();
+        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok";
+        let _ = socket.write_all(response.as_bytes()).await;
+    });
+    (port, handle)
+}
+
 struct SearchHttpRoute {
     method: &'static str,
     path_prefix: &'static str,
     status: u16,
     expected_body: Option<&'static str>,
-    body: &'static str,
+    body: Cow<'static, str>,
     delay_ms: u64,
 }
 
-fn route(path_prefix: &'static str, body: &'static str) -> SearchHttpRoute {
+fn route(path_prefix: &'static str, body: impl Into<Cow<'static, str>>) -> SearchHttpRoute {
     route_with_status(path_prefix, 200, body)
 }
 
 fn route_with_status(
     path_prefix: &'static str,
     status: u16,
-    body: &'static str,
+    body: impl Into<Cow<'static, str>>,
 ) -> SearchHttpRoute {
     SearchHttpRoute {
         method: "GET",
         path_prefix,
         status,
         expected_body: None,
-        body,
+        body: body.into(),
         delay_ms: 0,
     }
 }
@@ -1171,7 +1211,7 @@ fn route_with_status(
 fn post_route(
     path_prefix: &'static str,
     expected_body: &'static str,
-    body: &'static str,
+    body: impl Into<Cow<'static, str>>,
 ) -> SearchHttpRoute {
     post_route_with_status(path_prefix, 200, Some(expected_body), body)
 }
@@ -1180,14 +1220,14 @@ fn post_route_with_status(
     path_prefix: &'static str,
     status: u16,
     expected_body: Option<&'static str>,
-    body: &'static str,
+    body: impl Into<Cow<'static, str>>,
 ) -> SearchHttpRoute {
     SearchHttpRoute {
         method: "POST",
         path_prefix,
         status,
         expected_body,
-        body,
+        body: body.into(),
         delay_ms: 0,
     }
 }
@@ -1195,14 +1235,14 @@ fn post_route_with_status(
 fn delayed_post_route(
     path_prefix: &'static str,
     delay_ms: u64,
-    body: &'static str,
+    body: impl Into<Cow<'static, str>>,
 ) -> SearchHttpRoute {
     SearchHttpRoute {
         method: "POST",
         path_prefix,
         status: 200,
         expected_body: None,
-        body,
+        body: body.into(),
         delay_ms,
     }
 }
