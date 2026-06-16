@@ -55,6 +55,10 @@ async fn elasticsearch_network_adapter_detects_root_identity() {
         "version": {
             "number": "8.12.2",
             "build_flavor": "default",
+            "build_type": "tar",
+            "build_hash": "abc123",
+            "build_date": "2026-05-24T00:00:00Z",
+            "build_snapshot": false,
             "lucene_version": "9.9.2"
         }
     }"#;
@@ -80,10 +84,26 @@ async fn elasticsearch_network_adapter_detects_root_identity() {
     assert_eq!(identity.cluster_uuid.as_deref(), Some("elastic-uuid-1"));
     assert_eq!(identity.version.number, "8.12.2");
     assert_eq!(identity.version.lucene.as_deref(), Some("9.9.2"));
+    assert_eq!(identity.version.build_flavor.as_deref(), Some("default"));
+    assert_eq!(identity.version.build_type.as_deref(), Some("tar"));
+    assert_eq!(identity.version.build_hash.as_deref(), Some("abc123"));
+    assert_eq!(
+        identity.version.build_date.as_deref(),
+        Some("2026-05-24T00:00:00Z")
+    );
+    assert_eq!(identity.version.build_snapshot, Some(false));
     assert_eq!(
         identity.version.distribution.as_deref(),
         Some("elasticsearch")
     );
+    assert!(identity.capabilities.search);
+    assert!(identity.capabilities.aggregations);
+    assert!(identity.capabilities.aliases);
+    assert!(identity.capabilities.mappings);
+    assert!(!identity.capabilities.legacy_index_templates);
+    assert!(identity.capabilities.composable_index_templates);
+    assert!(!identity.capabilities.delete_by_query);
+    assert!(identity.product_delta.supports_elastic_license_api);
 }
 
 #[tokio::test]
@@ -94,6 +114,10 @@ async fn opensearch_network_adapter_detects_root_identity() {
         "version": {
             "number": "2.13.0",
             "distribution": "opensearch",
+            "build_type": "tar",
+            "build_hash": "open123",
+            "build_date": "2026-05-24T00:00:00Z",
+            "build_snapshot": false,
             "lucene_version": "9.10.0"
         },
         "tagline": "The OpenSearch Project: https://opensearch.org/"
@@ -121,6 +145,13 @@ async fn opensearch_network_adapter_detects_root_identity() {
     assert_eq!(identity.version.number, "2.13.0");
     assert_eq!(identity.version.lucene.as_deref(), Some("9.10.0"));
     assert_eq!(identity.version.distribution.as_deref(), Some("opensearch"));
+    assert_eq!(identity.version.build_type.as_deref(), Some("tar"));
+    assert_eq!(identity.version.build_hash.as_deref(), Some("open123"));
+    assert_eq!(
+        identity.version.build_date.as_deref(),
+        Some("2026-05-24T00:00:00Z")
+    );
+    assert_eq!(identity.version.build_snapshot, Some(false));
     assert!(identity.capabilities.search);
     assert!(identity.capabilities.aggregations);
     assert!(identity.capabilities.aliases);
@@ -128,6 +159,110 @@ async fn opensearch_network_adapter_detects_root_identity() {
     assert!(identity.capabilities.legacy_index_templates);
     assert!(identity.capabilities.composable_index_templates);
     assert!(identity.product_delta.supports_opensearch_plugins_api);
+}
+
+#[tokio::test]
+async fn elasticsearch_root_probe_rejects_unsupported_major_version() {
+    let body = r#"{
+        "cluster_name": "legacy-elastic",
+        "version": {
+            "number": "6.8.23",
+            "distribution": "elasticsearch"
+        }
+    }"#;
+    let (port, server) = spawn_root_probe_server(200, body, None).await;
+    let config = search_config(port);
+
+    let result = SearchEngineAdapter::test(&config).await;
+    if result.is_err() {
+        server.abort();
+    }
+
+    match result {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("Elasticsearch version 6.8.23 is not supported"));
+            assert!(message.contains("requires major version 7 or newer"));
+        }
+        other => panic!("Expected unsupported Elasticsearch version error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn opensearch_root_probe_requires_parseable_version_number() {
+    let body = r#"{
+        "cluster_name": "open-dev",
+        "version": {
+            "number": "unknown",
+            "distribution": "opensearch"
+        },
+        "tagline": "The OpenSearch Project: https://opensearch.org/"
+    }"#;
+    let (port, server) = spawn_root_probe_server(200, body, None).await;
+    let config = search_config_for(port, DatabaseType::Opensearch);
+
+    let result = SearchEngineAdapter::test(&config).await;
+    if result.is_err() {
+        server.abort();
+    }
+
+    match result {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("OpenSearch version unknown is not supported"));
+            assert!(message.contains("expected a semantic major version"));
+        }
+        other => panic!("Expected unsupported OpenSearch version error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn elasticsearch_root_probe_requires_version_number() {
+    let body = r#"{
+        "cluster_name": "elastic-dev",
+        "version": {
+            "distribution": "elasticsearch"
+        }
+    }"#;
+    let (port, server) = spawn_root_probe_server(200, body, None).await;
+    let config = search_config(port);
+
+    let result = SearchEngineAdapter::test(&config).await;
+    if result.is_err() {
+        server.abort();
+    }
+
+    match result {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("Elasticsearch root probe did not include a version number"));
+        }
+        other => panic!("Expected missing Elasticsearch version error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn opensearch_root_probe_rejects_unsupported_major_version() {
+    let body = r#"{
+        "cluster_name": "legacy-open",
+        "version": {
+            "number": "0.90.0",
+            "distribution": "opensearch"
+        },
+        "tagline": "The OpenSearch Project: https://opensearch.org/"
+    }"#;
+    let (port, server) = spawn_root_probe_server(200, body, None).await;
+    let config = search_config_for(port, DatabaseType::Opensearch);
+
+    let result = SearchEngineAdapter::test(&config).await;
+    if result.is_err() {
+        server.abort();
+    }
+
+    match result {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("OpenSearch version 0.90.0 is not supported"));
+            assert!(message.contains("requires major version 1 or newer"));
+        }
+        other => panic!("Expected unsupported OpenSearch version error, got {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -715,6 +850,33 @@ async fn opensearch_connection_rejects_elasticsearch_endpoint() {
             assert!(message.contains("detected Elasticsearch"));
         }
         other => panic!("Expected OpenSearch product mismatch error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn elasticsearch_connection_rejects_opensearch_endpoint() {
+    let body = r#"{
+        "cluster_name": "open-dev",
+        "version": {
+            "number": "2.13.0",
+            "distribution": "opensearch"
+        },
+        "tagline": "The OpenSearch Project: https://opensearch.org/"
+    }"#;
+    let (port, server) = spawn_root_probe_server(200, body, None).await;
+    let config = search_config(port);
+
+    let result = SearchEngineAdapter::test(&config).await;
+    if result.is_err() {
+        server.abort();
+    }
+
+    match result {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("Expected Elasticsearch endpoint"));
+            assert!(message.contains("detected OpenSearch"));
+        }
+        other => panic!("Expected Elasticsearch product mismatch error, got {other:?}"),
     }
 }
 
