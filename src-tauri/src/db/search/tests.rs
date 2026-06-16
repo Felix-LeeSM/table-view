@@ -7,6 +7,7 @@ use tokio::time::{sleep, Duration};
 
 mod destructive;
 mod live_query;
+mod metadata;
 
 #[tokio::test]
 async fn fixture_adapter_returns_catalog_without_network() {

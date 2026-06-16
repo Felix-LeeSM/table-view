@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Braces,
@@ -80,9 +80,11 @@ export default function SearchIndexDetailPanel({
     useState<AsyncSlot<SearchResultEnvelope>>(idle());
   const [stats, setStats] =
     useState<AsyncSlot<SearchFieldStatsEnvelope>>(idle());
+  const detailRequestGeneration = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
+    detailRequestGeneration.current += 1;
     setCatalog({ status: "loading", data: null, error: null });
     setMapping(idle());
     setSettings(idle());
@@ -107,61 +109,95 @@ export default function SearchIndexDetailPanel({
       });
     return () => {
       cancelled = true;
+      detailRequestGeneration.current += 1;
     };
   }, [connectionId, index]);
 
   const loadMapping = useCallback(async () => {
     if (mapping.status !== "idle") return;
+    const generation = detailRequestGeneration.current;
     setMapping({ status: "loading", data: null, error: null });
     try {
       const next = await getSearchIndexMapping(connectionId, index);
-      setMapping({ status: "loaded", data: next, error: null });
+      if (detailRequestGeneration.current === generation) {
+        setMapping({ status: "loaded", data: next, error: null });
+      }
     } catch (err) {
-      setMapping({ status: "error", data: null, error: errorMessage(err) });
+      if (detailRequestGeneration.current === generation) {
+        setMapping({ status: "error", data: null, error: errorMessage(err) });
+      }
     }
   }, [connectionId, index, mapping.status]);
 
   const loadSettings = useCallback(async () => {
     if (settings.status !== "idle") return;
+    const generation = detailRequestGeneration.current;
     setSettings({ status: "loading", data: null, error: null });
     try {
       const next = await getSearchIndexSettings(connectionId, index);
-      setSettings({ status: "loaded", data: next, error: null });
+      if (detailRequestGeneration.current === generation) {
+        setSettings({ status: "loaded", data: next, error: null });
+      }
     } catch (err) {
-      setSettings({ status: "error", data: null, error: errorMessage(err) });
+      if (detailRequestGeneration.current === generation) {
+        setSettings({
+          status: "error",
+          data: null,
+          error: errorMessage(err),
+        });
+      }
     }
   }, [connectionId, index, settings.status]);
 
   const loadTemplates = useCallback(async () => {
     if (templates.status !== "idle") return;
+    const generation = detailRequestGeneration.current;
     setTemplates({ status: "loading", data: null, error: null });
     try {
       const next = await listSearchIndexTemplates(connectionId);
-      setTemplates({ status: "loaded", data: next, error: null });
+      if (detailRequestGeneration.current === generation) {
+        setTemplates({ status: "loaded", data: next, error: null });
+      }
     } catch (err) {
-      setTemplates({ status: "error", data: null, error: errorMessage(err) });
+      if (detailRequestGeneration.current === generation) {
+        setTemplates({
+          status: "error",
+          data: null,
+          error: errorMessage(err),
+        });
+      }
     }
   }, [connectionId, templates.status]);
 
   const loadSamples = useCallback(async () => {
     if (samples.status !== "idle") return;
+    const generation = detailRequestGeneration.current;
     setSamples({ status: "loading", data: null, error: null });
     try {
       const next = await sampleSearchDocuments(connectionId, index, 5);
-      setSamples({ status: "loaded", data: next, error: null });
+      if (detailRequestGeneration.current === generation) {
+        setSamples({ status: "loaded", data: next, error: null });
+      }
     } catch (err) {
-      setSamples({ status: "error", data: null, error: errorMessage(err) });
+      if (detailRequestGeneration.current === generation) {
+        setSamples({ status: "error", data: null, error: errorMessage(err) });
+      }
     }
   }, [connectionId, index, samples.status]);
 
   const loadStats = useCallback(async () => {
     if (stats.status !== "idle") return;
+    const generation = detailRequestGeneration.current;
     setStats({ status: "loading", data: null, error: null });
     try {
       const next = await getSearchIndexFieldStats(connectionId, index);
-      setStats({ status: "loaded", data: next, error: null });
+      if (detailRequestGeneration.current === generation) {
+        setStats({ status: "loaded", data: next, error: null });
+      }
     } catch (err) {
-      setStats({ status: "error", data: null, error: errorMessage(err) });
+      if (detailRequestGeneration.current === generation) {
+        setStats({ status: "error", data: null, error: errorMessage(err) });
+      }
     }
   }, [connectionId, index, stats.status]);
 
