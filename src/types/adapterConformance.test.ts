@@ -253,7 +253,7 @@ describe("adapter conformance matrix", () => {
     ]);
   });
 
-  it("locks the Valkey runtime claim to connection, db switching, key browsing, and command query", () => {
+  it("locks the Valkey runtime claim to bounded key browsing, command query, and key edits", () => {
     const valkey = ADAPTER_CONFORMANCE_MATRIX.valkey;
 
     expect(valkey.level).toBe("runtime");
@@ -277,11 +277,8 @@ describe("adapter conformance matrix", () => {
       "query.cancel",
       "query.explain",
     ]);
-    expect(valkey.areas.edit.checks).toEqual([]);
-    expect(valkey.areas.edit.deferred).toEqual([
-      "edit.editKeys",
-      "edit.bulkWrite",
-    ]);
+    expect(valkey.areas.edit.checks).toEqual(["edit.editKeys"]);
+    expect(valkey.areas.edit.deferred).toEqual(["edit.bulkWrite"]);
   });
 
   it("locks MSSQL catalog/query/edit/DDL runtime claims while keeping explain deferred", () => {

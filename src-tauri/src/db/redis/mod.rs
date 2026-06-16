@@ -75,15 +75,6 @@ impl RedisProtocolProduct {
     fn unsupported_key_type_message(self) -> String {
         format!("Unsupported {} key type", self.label())
     }
-
-    fn mutation_unsupported(self) -> Option<AppError> {
-        match self {
-            Self::Redis => None,
-            Self::Valkey => Some(AppError::Unsupported(
-                "Valkey key mutation is not supported yet".into(),
-            )),
-        }
-    }
 }
 
 #[derive(Debug, Default)]
@@ -359,9 +350,6 @@ impl KvAdapter for RedisAdapter {
         request: KvSetStringRequest,
     ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
         Box::pin(async move {
-            if let Some(error) = self.product.mutation_unsupported() {
-                return Err(error);
-            }
             validate_key(&request.key)?;
             let cmd = build_set_string_command(&request)?;
             self.ensure_database(request.database).await?;
@@ -393,9 +381,6 @@ impl KvAdapter for RedisAdapter {
         request: KvDeleteRequest,
     ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
         Box::pin(async move {
-            if let Some(error) = self.product.mutation_unsupported() {
-                return Err(error);
-            }
             validate_key(&request.key)?;
             require_confirm_key(&request.key, &request.confirm_key)?;
             self.ensure_database(request.database).await?;
@@ -422,9 +407,6 @@ impl KvAdapter for RedisAdapter {
         request: KvTtlUpdateRequest,
     ) -> BoxFuture<'a, Result<KvMutationResult, AppError>> {
         Box::pin(async move {
-            if let Some(error) = self.product.mutation_unsupported() {
-                return Err(error);
-            }
             validate_key(&request.key)?;
             self.ensure_database(request.database).await?;
             let changed = match &request.update {
@@ -491,7 +473,7 @@ async fn ensure_string_write_allowed(
                     .arg(&request.key)
                     .query_async::<u64>(connection)
                     .await
-                    .map_err(redis_database_error)?
+                    .map_err(|err| adapter.database_error(err))?
                     > 0
             } else {
                 true
@@ -502,11 +484,13 @@ async fn ensure_string_write_allowed(
 
     match (key_type, exists) {
         (KvKeyType::String, _) | (KvKeyType::Unknown, false) => Ok(()),
-        (KvKeyType::Unknown, true) => Err(AppError::Validation(
-            "Cannot overwrite existing Redis key of unsupported type with a string".into(),
-        )),
+        (KvKeyType::Unknown, true) => Err(AppError::Validation(format!(
+            "Cannot overwrite existing {} key of unsupported type with a string",
+            adapter.product.label()
+        ))),
         (existing_type, true) => Err(AppError::Validation(format!(
-            "Cannot overwrite existing Redis {} key with a string",
+            "Cannot overwrite existing {} {} key with a string",
+            adapter.product.label(),
             key_type_label(existing_type)
         ))),
         (_, false) => Ok(()),
@@ -539,7 +523,7 @@ async fn expire_key(adapter: &RedisAdapter, key: &str, seconds: u64) -> Result<b
                 .arg(seconds)
                 .query_async(connection)
                 .await
-                .map_err(redis_database_error)
+                .map_err(|err| adapter.database_error(err))
         })
         .await
 }
@@ -551,7 +535,7 @@ async fn persist_key(adapter: &RedisAdapter, key: &str) -> Result<bool, AppError
                 .arg(key)
                 .query_async(connection)
                 .await
-                .map_err(redis_database_error)
+                .map_err(|err| adapter.database_error(err))
         })
         .await
 }

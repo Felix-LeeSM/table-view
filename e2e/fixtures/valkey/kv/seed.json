@@ -10,14 +10,14 @@
     "kv.destructive-guard",
     "kv.redis-compatibility-boundary"
   ],
-  "supportClaimImpact": "Valkey seed is wired only to current Runtime Happy Path KV workflow and does not widen support to direct mutation controls, full Redis compatibility, or broader command families.",
+  "supportClaimImpact": "Valkey seed is wired only to current Runtime Happy Path KV workflow. Focused backend/component tests separately prove direct UTF-8 string-key mutation controls; this seed does not widen support to hash/list/set/zset writes, full Redis compatibility, or broader command families.",
   "product": "valkey",
   "supportLevel": "runtime-smoke-seed",
   "compatibilityTarget": "redis-command",
   "runtimeSupport": true,
   "database": 2,
   "idempotencyContract": "Idempotency contract: select isolated fixture DB 2, clear it, then recreate stable Redis-compatible keys for the Valkey Runtime Happy Path smoke.",
-  "promotionGate": "Current Valkey smoke proves connect, scan, preview, selected bounded command dispatch, TTL command dispatch, and unsupported/destructive guard behavior without inheriting Redis smoke evidence. Direct mutation controls, full Redis compatibility, and broader command families remain future gates.",
+  "promotionGate": "Current Valkey smoke proves connect, scan, preview, selected bounded command dispatch, TTL command dispatch, and unsupported/destructive guard behavior without inheriting Redis smoke evidence. Direct UTF-8 string-key mutation controls are promoted by focused Valkey backend/component evidence; hash/list/set/zset writes, full Redis compatibility, and broader command families remain future gates.",
   "commands": [
     {
       "command": "SELECT",

@@ -111,7 +111,7 @@ describe("Valkey smoke", () => {
         await setCodeMirrorText("DEL vk:cmd");
         await runQuery();
         await waitForWorkspaceTextAll(
-          ["Confirmation key must exactly match the Redis key"],
+          ["Confirmation key must exactly match the target key"],
           15000,
           "Valkey DEL command did not surface exact-key confirmation guard",
         );

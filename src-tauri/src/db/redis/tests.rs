@@ -62,6 +62,46 @@ fn destructive_delete_requires_exact_key_confirmation() {
     ));
 }
 
+#[tokio::test]
+async fn valkey_direct_mutations_validate_requests_without_unsupported_gate() {
+    let adapter = RedisAdapter::new_valkey();
+
+    assert!(matches!(
+        adapter
+            .set_string(KvSetStringRequest {
+                key: "".into(),
+                value: "v".into(),
+                database: Some(0),
+                ttl_seconds: None,
+                safety: KvWriteSafety::RejectOverwrite,
+            })
+            .await,
+        Err(AppError::Validation(_))
+    ));
+    assert!(matches!(
+        adapter
+            .set_string(KvSetStringRequest {
+                key: "tv:direct".into(),
+                value: "v".into(),
+                database: Some(0),
+                ttl_seconds: Some(0),
+                safety: KvWriteSafety::RejectOverwrite,
+            })
+            .await,
+        Err(AppError::Validation(_))
+    ));
+    assert!(matches!(
+        adapter
+            .delete_key(KvDeleteRequest {
+                key: "tv:direct".into(),
+                database: Some(0),
+                confirm_key: "wrong".into(),
+            })
+            .await,
+        Err(AppError::Validation(_))
+    ));
+}
+
 #[test]
 fn connection_url_percent_encodes_auth_and_database() {
     let (url, db) = connection_url(&config("2")).unwrap();

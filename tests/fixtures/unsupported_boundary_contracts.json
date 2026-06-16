@@ -68,14 +68,14 @@
       "consumedBy": ["tests/fixtures/unsupported_boundary_contracts.test.ts"]
     },
     {
-      "id": "valkey-direct-mutation-full-redis-nonclaim",
-      "minimumRow": "Valkey direct mutation/full Redis compatibility non-claim",
+      "id": "valkey-non-string-mutation-full-redis-nonclaim",
+      "minimumRow": "Valkey non-string mutation/full Redis compatibility non-claim",
       "products": ["valkey"],
-      "claimBoundary": "Valkey completion and runtime evidence stay limited to proven rows; direct key mutation controls and full Redis compatibility stay deferred.",
+      "claimBoundary": "Valkey direct mutation evidence is limited to UTF-8 string-key controls; hash/list/set/zset writes and full Redis compatibility stay deferred.",
       "docs": [
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "Direct key mutation controls, full Redis compatibility, CLI/admin parity, cluster/pubsub/modules, and consumer-group flows remain out of scope."
+          "mustContain": "Hash/list/set/zset writes, full Redis compatibility, CLI/admin parity, cluster/pubsub/modules, and consumer-group flows remain out of scope."
         }
       ],
       "fixtureEvidence": [

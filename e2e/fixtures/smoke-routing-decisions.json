@@ -300,7 +300,7 @@
       "flakeRisk": "Low service startup risk; seed selects isolated DB 2 and flushes before recreating Valkey keys.",
       "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
       "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-valkey.",
-      "supportClaimImpact": "Runtime Happy Path evidence for bounded Valkey KV workflow only; Redis smoke is not reused as Valkey evidence.",
+      "supportClaimImpact": "Runtime Happy Path evidence for bounded Valkey KV workflow only; focused backend/component tests separately cover direct UTF-8 string-key mutation controls, and Redis smoke is not reused as Valkey evidence.",
       "action": "keep blocking E2E"
     },
     {

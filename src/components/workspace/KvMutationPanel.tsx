@@ -12,7 +12,24 @@ interface KvMutationPanelProps {
   value: KvValueEnvelope;
   connectionId: string;
   database: number;
+  mutationScope?: KvMutationScope;
   onMutationSuccess: (key: string) => Promise<void>;
+}
+
+export type KvMutationScope = "redis" | "valkey";
+
+export function canRenderKvMutationPanel(
+  value: KvValueEnvelope,
+  mutationEnabled: boolean,
+  mutationScope: KvMutationScope,
+): boolean {
+  if (!mutationEnabled) return false;
+  if (mutationScope === "redis") return true;
+  return (
+    value.value.type === "string" &&
+    value.value.encoding === "utf8" &&
+    value.value.text !== undefined
+  );
 }
 
 interface PendingMutation {
@@ -56,6 +73,7 @@ export function KvMutationPanel({
   value,
   connectionId,
   database,
+  mutationScope = "redis",
   onMutationSuccess,
 }: KvMutationPanelProps) {
   const [form, setForm] = useState<MutationForm>(() =>
@@ -69,7 +87,8 @@ export function KvMutationPanel({
     key: value.key,
     type: value.value.type,
   });
-  const unsupported = unsupportedMutationMessage(value);
+  const unsupported = unsupportedMutationMessage(value, mutationScope);
+  const collectionMutationsEnabled = mutationScope === "redis";
   const fieldClass =
     "rounded border border-border bg-background px-2 py-1 text-3xs outline-none";
 
@@ -259,26 +278,26 @@ export function KvMutationPanel({
           )}
         </div>
       )}
-      {value.value.type === "hash" && (
+      {collectionMutationsEnabled && value.value.type === "hash" && (
         <div className="grid gap-1">
           {input("Hash field", "field", "field")}
           {input("Hash value", "entry", "value")}
           {action("Preview HSET", () => previewCollectionMutation("HSET"))}
         </div>
       )}
-      {value.value.type === "list" && (
+      {collectionMutationsEnabled && value.value.type === "list" && (
         <div className="grid gap-1">
           {input("List value", "entry")}
           {action("Preview RPUSH", () => previewCollectionMutation("RPUSH"))}
         </div>
       )}
-      {value.value.type === "set" && (
+      {collectionMutationsEnabled && value.value.type === "set" && (
         <div className="grid gap-1">
           {input("Set member", "entry")}
           {action("Preview SADD", () => previewCollectionMutation("SADD"))}
         </div>
       )}
-      {value.value.type === "zSet" && (
+      {collectionMutationsEnabled && value.value.type === "zSet" && (
         <div className="grid gap-1">
           {input("ZSet score", "score", "score")}
           {input("ZSet member", "entry")}
@@ -335,8 +354,14 @@ export function KvMutationPanel({
   );
 }
 
-function unsupportedMutationMessage(envelope: KvValueEnvelope): string | null {
+function unsupportedMutationMessage(
+  envelope: KvValueEnvelope,
+  mutationScope: KvMutationScope,
+): string | null {
   const { value } = envelope;
+  if (mutationScope === "valkey" && value.type !== "string") {
+    return "Valkey direct mutation controls are only enabled for UTF-8 string keys.";
+  }
   switch (value.type) {
     case "string":
       return value.encoding === "utf8" && value.text !== undefined

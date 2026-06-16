@@ -210,7 +210,7 @@ const DEFERRED_FEATURES = Object.freeze({
     connection: [],
     catalog: ["catalog.schema", "catalog.indexes", "catalog.relationships"],
     query: ["query.cancel", "query.explain"],
-    edit: ["edit.editKeys", "edit.bulkWrite"],
+    edit: ["edit.bulkWrite"],
     ddl: [],
   },
   elasticsearch: {

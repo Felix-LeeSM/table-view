@@ -149,7 +149,7 @@ describe("KvSidebar", () => {
     expect(screen.getAllByText(/persistent/)).toHaveLength(2);
   });
 
-  it("labels Valkey key browsing and hides mutation controls", async () => {
+  it("labels Valkey key browsing and hides non-string mutation controls", async () => {
     useConnectionStore.setState({
       connections: [valkeyConnection()],
       activeStatuses: { "valkey-1": { type: "connected", activeDb: "0" } },

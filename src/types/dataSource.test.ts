@@ -175,6 +175,7 @@ describe("DataSourceProfile registry", () => {
       connection: { test: true, switchDatabase: true },
       query: { query: true },
       catalog: { browse: true },
+      edit: { editKeys: true },
       paradigmSpecific: { keyBrowser: true },
     }),
     elasticsearch: expectedCapabilities({
@@ -361,7 +362,7 @@ describe("DataSourceProfile registry", () => {
     });
     expect(valkey.capabilities).toEqual(expectedCapabilitiesByType.valkey);
     expect(valkey.capabilities.query.query).toBe(true);
-    expect(valkey.capabilities.edit.editKeys).toBe(false);
+    expect(valkey.capabilities.edit.editKeys).toBe(true);
     expect(valkey.capabilities.paradigmSpecific.keyBrowser).toBe(true);
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });

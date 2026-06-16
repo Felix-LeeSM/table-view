@@ -195,7 +195,7 @@ fn backend_profiles_encode_current_database_type_contracts() {
     assert_eq!(valkey.dialect.family, DataSourceDialectFamily::Valkey);
     assert!(valkey.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
     assert!(valkey.has_backend_capability(BackendAdapterCapability::KeyValueRead));
-    assert!(!valkey.has_backend_capability(BackendAdapterCapability::KeyValueMutation));
+    assert!(valkey.has_backend_capability(BackendAdapterCapability::KeyValueMutation));
     assert!(!valkey.has_backend_capability(BackendAdapterCapability::KeyValueMarker));
 
     let elasticsearch = get_data_source_profile(&DatabaseType::Elasticsearch);
