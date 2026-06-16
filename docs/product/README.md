@@ -16,7 +16,8 @@
 경계, fixture/live evidence 가 같이 있는 범위만 의미한다.
 
 - Active connection UI/runtime 대상: PostgreSQL, MySQL, MariaDB, SQLite,
-  DuckDB, MongoDB, Redis, Valkey, Elasticsearch, OpenSearch.
+  DuckDB, MSSQL connection-only, MongoDB, Redis, Valkey, Elasticsearch,
+  OpenSearch.
 - RDBMS workbench: catalog/tree browse, tabular result rendering, raw query path,
   bounded DML/row-edit path, source-specific safety confirmation. PostgreSQL 이
   routine desktop smoke-backed 주 lane 이고 MySQL/MariaDB 는 runtime smoke

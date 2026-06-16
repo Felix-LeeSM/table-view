@@ -174,7 +174,13 @@ export default function MssqlFormFields({
             type="checkbox"
             className="cursor-pointer"
             checked={draft.tlsEnabled ?? true}
-            onChange={(e) => onChange({ tlsEnabled: e.target.checked })}
+            onChange={(e) => {
+              const tlsEnabled = e.target.checked;
+              onChange({
+                tlsEnabled,
+                ...(tlsEnabled ? {} : { trustServerCertificate: false }),
+              });
+            }}
           />
           Enable encryption (TLS)
         </label>
@@ -184,6 +190,7 @@ export default function MssqlFormFields({
             type="checkbox"
             className="cursor-pointer"
             checked={draft.trustServerCertificate === true}
+            disabled={!(draft.tlsEnabled ?? true)}
             onChange={(e) =>
               onChange({ trustServerCertificate: e.target.checked })
             }

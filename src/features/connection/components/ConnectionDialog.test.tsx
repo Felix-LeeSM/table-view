@@ -1776,7 +1776,7 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Trust server certificate")).toBeChecked();
     });
 
-    it("MSSQL save includes tlsEnabled and trustServerCertificate without query/catalog/edit claims", async () => {
+    it("MSSQL save clears trustServerCertificate when encryption is disabled without query/catalog/edit claims", async () => {
       const user = userEvent.setup();
       renderDialog();
       await act(async () => {
@@ -1791,8 +1791,11 @@ describe("ConnectionDialog", () => {
       );
       await act(async () => {
         fireEvent.click(screen.getByLabelText("Enable encryption (TLS)"));
-        fireEvent.click(screen.getByLabelText("Trust server certificate"));
       });
+      expect(
+        screen.getByLabelText("Trust server certificate"),
+      ).not.toBeChecked();
+      expect(screen.getByLabelText("Trust server certificate")).toBeDisabled();
 
       await act(async () => {
         fireEvent.click(screen.getByText("Save"));
