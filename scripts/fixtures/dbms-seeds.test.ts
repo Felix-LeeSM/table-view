@@ -191,7 +191,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(sql).toMatch(/CHECK\s*\(amount >= 0\)/i);
   });
 
-  it("mssql seed carries declared-only catalog inventory probes", () => {
+  it("mssql seed carries catalog/query runtime inventory probes", () => {
     const sql = readFileSync(
       resolve("e2e/fixtures", "seed.mssql.sql"),
       "utf-8",
@@ -506,7 +506,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     },
   );
 
-  it("mssql fixture seed stays dormant until SQL Server runtime promotion", () => {
+  it("mssql fixture seed stays out of smoke wiring until SQL Server smoke promotion", () => {
     const workflow = readFileSync(resolve(".github/workflows/e2e-smoke.yml"), {
       encoding: "utf8",
     });

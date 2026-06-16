@@ -335,6 +335,18 @@ export const MSSQL_CAPABILITIES = capabilities({
   connection: {
     test: true,
   },
+  query: {
+    query: true,
+    multiStatement: true,
+    cancel: true,
+  },
+  catalog: {
+    browse: true,
+    schema: true,
+    indexes: true,
+    constraints: true,
+    relationships: true,
+  },
 });
 
 export const MONGODB_CAPABILITIES = capabilities({

@@ -38,7 +38,7 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "mssql")
         .length === 1,
-      `${profile}: expected exactly one declared-only MSSQL fixture connection`,
+      `${profile}: expected exactly one MSSQL runtime fixture connection`,
     );
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "oracle")
@@ -117,18 +117,25 @@ function verifyEnterpriseRdbmsPromotionBoundary(): void {
 
   assert(
     isSupportedDatabaseType("mssql"),
-    "mssql: connection-only profile must be exposed for connection support",
+    "mssql: runtime catalog/query profile must be exposed for connection support",
   );
   assert(
     hasConnectionCapability("mssql", "test"),
-    "mssql: connection.test must be enabled for the connection-only slice",
+    "mssql: connection.test must be enabled for the runtime catalog/query slice",
   );
   assert(
-    !mssql.capabilities.query.query &&
-      !mssql.capabilities.catalog.browse &&
+    mssql.capabilities.query.query &&
+      mssql.capabilities.query.multiStatement &&
+      mssql.capabilities.query.cancel &&
+      !mssql.capabilities.query.explain &&
+      mssql.capabilities.catalog.browse &&
+      mssql.capabilities.catalog.schema &&
+      mssql.capabilities.catalog.indexes &&
+      mssql.capabilities.catalog.constraints &&
+      mssql.capabilities.catalog.relationships &&
       !mssql.capabilities.edit.editRows &&
       !mssql.capabilities.ddl.createTable,
-    "mssql: connection-only profile must not expose query/catalog/edit/DDL capabilities",
+    "mssql: runtime support is limited to catalog/query/cancel/tabular; edit/DDL/admin/import/export/full workbench stay unsupported",
   );
 
   assert(
@@ -224,5 +231,5 @@ verifyEnterpriseRdbmsPromotionBoundary();
 verifySearchConnectionPromotionBoundary();
 
 console.log(
-  "[e2e:pre-smoke] release gate declared-only enterprise RDBMS and live Search contract assertions passed.",
+  "[e2e:pre-smoke] release gate MSSQL runtime catalog/query, Oracle declared-only, and live Search contract assertions passed.",
 );
