@@ -281,7 +281,7 @@
       "seedTargets": ["redis"],
       "tier": "blocking E2E",
       "wiredInSmokeScript": true,
-      "runtimeCost": "Existing service-backed matrix route; no new spec or service cost in issue #753. Job timeout remains 40 minutes.",
+      "runtimeCost": "Existing service-backed matrix route; live Search contract now covers connect/auth/TLS, catalog metadata, bounded render, delete-plan preview, and error surface in the same spec. Job timeout remains 40 minutes.",
       "flakeRisk": "Low service startup risk; seed selects isolated DB 2 and flushes before recreating keys.",
       "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
       "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-redis.",
@@ -315,7 +315,7 @@
       "flakeRisk": "Existing Elasticsearch container/runtime risk; seed deletes and recreates deterministic index state.",
       "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache; Elasticsearch JVM service is part of the service-backed job.",
       "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-elasticsearch.",
-      "supportClaimImpact": "Runtime Happy Path evidence for bounded Search connect/catalog/query/delete-plan slices only.",
+      "supportClaimImpact": "Live HTTP Runtime Happy Path evidence for bounded Elasticsearch connect/auth/TLS, catalog metadata, query render, delete-plan preview, and error surface only; fixture-only Search evidence stays separate.",
       "action": "keep blocking E2E"
     },
     {
@@ -326,11 +326,11 @@
       "seedTargets": ["opensearch"],
       "tier": "blocking E2E",
       "wiredInSmokeScript": true,
-      "runtimeCost": "Existing on-demand OpenSearch container route; no new spec or service cost in issue #753. Job timeout remains 40 minutes.",
+      "runtimeCost": "Existing on-demand OpenSearch container route; live Search contract now covers connect/auth/TLS, catalog metadata, bounded render, delete-plan preview, and error surface in the same spec. Job timeout remains 40 minutes.",
       "flakeRisk": "Higher than always-on service rows due OpenSearch cold start; workflow waits up to 40 attempts before WDIO.",
       "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache; OpenSearch service is per matrix row.",
       "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-opensearch; container logs print on startup failure.",
-      "supportClaimImpact": "Runtime Happy Path evidence for bounded OpenSearch connect/catalog/query/delete-plan slices only.",
+      "supportClaimImpact": "Live HTTP Runtime Happy Path evidence for bounded OpenSearch connect/auth/TLS, catalog metadata, query render, delete-plan preview, and error surface only; fixture-only Search evidence stays separate.",
       "action": "keep blocking E2E"
     },
     {

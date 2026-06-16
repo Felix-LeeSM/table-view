@@ -410,7 +410,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     ["elasticsearch", NON_SQL_SEED_FILES.elasticsearch, "logs-elastic"],
     ["opensearch", NON_SQL_SEED_FILES.opensearch, "logs-opensearch"],
   ] as const)(
-    "%s has a dedicated fixture-backed search seed",
+    "%s has dedicated fixture-only search seed data for live smoke input",
     (product, file, alias) => {
       const fixture = readJson<SearchSeedFixture>(file);
 
@@ -424,6 +424,10 @@ describe("DBMS-specific E2E seed fixtures", () => {
         ]),
       );
       expect(fixture.supportClaimImpact).toContain("does not widen");
+      expect(fixture.supportClaimImpact).toContain(
+        "fixture-only contract data",
+      );
+      expect(fixture.supportClaimImpact).toContain("live HTTP evidence");
       expect(fixture.supportClaimImpact).toContain(
         "actual live admin execution",
       );
@@ -453,26 +457,54 @@ describe("DBMS-specific E2E seed fixtures", () => {
     },
   );
 
-  it("opensearch fixture seed is wired into Runtime Happy Path smoke", () => {
-    const workflow = readFileSync(resolve(".github/workflows/e2e-smoke.yml"), {
-      encoding: "utf8",
-    });
-    const smokeScript = readFileSync(resolve("scripts/e2e-smoke-ci.sh"), {
-      encoding: "utf8",
-    });
-    const seedScript = readFileSync(resolve("e2e/fixtures/seed-smoke.ts"), {
-      encoding: "utf8",
-    });
+  it.each([
+    [
+      "elasticsearch",
+      "docker.elastic.co/elasticsearch/elasticsearch:8.12.2",
+      "E2E_ELASTICSEARCH_PORT: 19200",
+      'elasticsearch: ["elasticsearch"]',
+      'fixtureKey: "elasticsearch"',
+    ],
+    [
+      "opensearch",
+      "opensearchproject/opensearch:2.13.0",
+      "E2E_OPENSEARCH_PORT: 29200",
+      'opensearch: ["opensearch"]',
+      'fixtureKey: "opensearch"',
+    ],
+  ] as const)(
+    "%s fixture seed is wired into Runtime Happy Path smoke",
+    (
+      specKey,
+      serviceNeedle,
+      portNeedle,
+      seedTargetNeedle,
+      fixtureKeyNeedle,
+    ) => {
+      const workflow = readFileSync(
+        resolve(".github/workflows/e2e-smoke.yml"),
+        {
+          encoding: "utf8",
+        },
+      );
+      const smokeScript = readFileSync(resolve("scripts/e2e-smoke-ci.sh"), {
+        encoding: "utf8",
+      });
+      const seedScript = readFileSync(resolve("e2e/fixtures/seed-smoke.ts"), {
+        encoding: "utf8",
+      });
 
-    expect(workflow).toContain("spec_key: opensearch");
-    expect(workflow).toContain("spec: e2e/smoke/opensearch.spec.ts");
-    expect(workflow).toContain("opensearchproject/opensearch:2.13.0");
-    expect(smokeScript).toContain(
-      'run_wdio "$BASE_DATA_DIR/opensearch" "e2e/smoke/opensearch.spec.ts"',
-    );
-    expect(seedScript).toContain('opensearch: ["opensearch"]');
-    expect(seedScript).toContain('fixtureKey: "opensearch"');
-  });
+      expect(workflow).toContain(`spec_key: ${specKey}`);
+      expect(workflow).toContain(`spec: e2e/smoke/${specKey}.spec.ts`);
+      expect(workflow).toContain(serviceNeedle);
+      expect(workflow).toContain(portNeedle);
+      expect(smokeScript).toContain(
+        `run_wdio "$BASE_DATA_DIR/${specKey}" "e2e/smoke/${specKey}.spec.ts"`,
+      );
+      expect(seedScript).toContain(seedTargetNeedle);
+      expect(seedScript).toContain(fixtureKeyNeedle);
+    },
+  );
 
   it("mssql fixture seed is wired into Runtime Happy Path smoke", () => {
     const workflow = readFileSync(resolve(".github/workflows/e2e-smoke.yml"), {
