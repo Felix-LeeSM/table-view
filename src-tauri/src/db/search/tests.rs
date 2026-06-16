@@ -131,6 +131,34 @@ async fn opensearch_network_adapter_detects_root_identity() {
 }
 
 #[tokio::test]
+async fn search_root_network_errors_redact_url_and_credentials() {
+    let port = unused_tcp_port().await;
+    let mut config = search_config(port);
+    config.host = "127.0.0.1".into();
+    config.user = "elastic".into();
+    let password = ["unique", "search", "credential"].join("-");
+    config.password = password.clone();
+    config.connection_timeout = Some(1);
+
+    let result = SearchEngineAdapter::test(&config).await;
+
+    match result {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("Elasticsearch network error"));
+            assert!(
+                !message.contains("http://") && !message.contains("https://"),
+                "network error leaked a full URL: {message}"
+            );
+            assert!(
+                !message.contains(&password),
+                "network error leaked a credential: {message}"
+            );
+        }
+        other => panic!("Expected redacted network connection error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn elasticsearch_live_catalog_reads_indexes_aliases_and_streams() {
     let routes = vec![
         route(
