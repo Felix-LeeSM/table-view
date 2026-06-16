@@ -17,10 +17,11 @@ use crate::models::{
     DropTableRequest, DropTriggerRequest, FileAnalyticsPreview, FileAnalyticsQueryResponse,
     FileAnalyticsSource, FileAnalyticsSourceMetadata, FilterCondition, FunctionInfo, IndexInfo,
     PostgresExtensionInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult,
-    SearchAliasInfo, SearchClusterIdentity, SearchDataStreamInfo, SearchDeleteByQueryRequest,
-    SearchDestructiveOperationPlan, SearchFieldStatsEnvelope, SearchIndexInfo, SearchIndexMapping,
-    SearchIndexSettings, SearchIndexTemplateInfo, SearchQueryRequest, SearchResultEnvelope,
-    SqliteCapabilityInventory, TableData, TableInfo, TriggerInfo, ViewInfo,
+    SearchAliasInfo, SearchCatalogSummary, SearchClusterIdentity, SearchDataStreamInfo,
+    SearchDeleteByQueryRequest, SearchDestructiveOperationPlan, SearchFieldStatsEnvelope,
+    SearchIndexInfo, SearchIndexMapping, SearchIndexSettings, SearchIndexTemplateInfo,
+    SearchQueryRequest, SearchResultEnvelope, SqliteCapabilityInventory, TableData, TableInfo,
+    TriggerInfo, ViewInfo,
 };
 
 use super::types::{
@@ -1150,6 +1151,23 @@ pub trait SearchAdapter: DbAdapter {
         &'a self,
     ) -> BoxFuture<'a, Result<Vec<SearchDataStreamInfo>, AppError>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+
+    fn catalog_summary<'a>(&'a self) -> BoxFuture<'a, Result<SearchCatalogSummary, AppError>> {
+        Box::pin(async move {
+            let (identity, indexes, aliases, data_streams) = tokio::try_join!(
+                self.cluster_identity(),
+                self.list_indexes(),
+                self.list_aliases(),
+                self.list_data_streams(),
+            )?;
+            Ok(SearchCatalogSummary {
+                identity,
+                indexes,
+                aliases,
+                data_streams,
+            })
+        })
     }
 
     fn get_index_mapping<'a>(

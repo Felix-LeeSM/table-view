@@ -15,19 +15,7 @@ async fn list_search_catalog_summary_inner(
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    let search = active.as_search()?;
-    let (identity, indexes, aliases, data_streams) = tokio::try_join!(
-        search.cluster_identity(),
-        search.list_indexes(),
-        search.list_aliases(),
-        search.list_data_streams(),
-    )?;
-    Ok(SearchCatalogSummary {
-        identity,
-        indexes,
-        aliases,
-        data_streams,
-    })
+    active.as_search()?.catalog_summary().await
 }
 
 #[tauri::command]

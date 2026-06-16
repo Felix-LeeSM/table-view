@@ -7,11 +7,12 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, CancelError};
 use crate::models::{
-    ConnectionConfig, SearchAliasInfo, SearchAnalyzerInfo, SearchClusterCapabilities,
-    SearchClusterIdentity, SearchDataStreamInfo, SearchFieldStatsEnvelope, SearchFieldStatsInfo,
-    SearchIndexHealth, SearchIndexInfo, SearchIndexMapping, SearchIndexSettings,
-    SearchIndexTemplateInfo, SearchMappingField, SearchProductDelta, SearchProductKind,
-    SearchQueryRequest, SearchResultEnvelope, SearchTemplateEndpointKind, SearchVersionInfo,
+    ConnectionConfig, SearchAliasInfo, SearchAnalyzerInfo, SearchCatalogSummary,
+    SearchClusterCapabilities, SearchClusterIdentity, SearchDataStreamInfo,
+    SearchFieldStatsEnvelope, SearchFieldStatsInfo, SearchIndexHealth, SearchIndexInfo,
+    SearchIndexMapping, SearchIndexSettings, SearchIndexTemplateInfo, SearchMappingField,
+    SearchProductDelta, SearchProductKind, SearchQueryRequest, SearchResultEnvelope,
+    SearchTemplateEndpointKind, SearchVersionInfo,
 };
 
 use super::search_live_query::{
@@ -80,27 +81,31 @@ impl SearchHttpConnection {
     }
 
     pub(crate) async fn list_indexes(&self) -> Result<Vec<SearchIndexInfo>, AppError> {
+        let indexes = self.list_index_summaries().await?;
+        let aliases = self.list_aliases().await?;
+        Ok(attach_aliases(indexes, &aliases))
+    }
+
+    pub(crate) async fn catalog_summary(&self) -> Result<SearchCatalogSummary, AppError> {
+        let identity = self.identity();
+        let indexes = self.list_index_summaries().await?;
+        let aliases = self.list_aliases().await?;
+        let data_streams = self.list_data_streams().await?;
+        Ok(SearchCatalogSummary {
+            identity,
+            indexes: attach_aliases(indexes, &aliases),
+            aliases,
+            data_streams,
+        })
+    }
+
+    async fn list_index_summaries(&self) -> Result<Vec<SearchIndexInfo>, AppError> {
         let payload = self
             .get_json(
                 "/_cat/indices?format=json&bytes=b&h=health,status,index,uuid,docs.count,store.size,pri,rep",
             )
             .await?;
-        let aliases = self.list_aliases().await?;
-        let aliases_by_index =
-            aliases
-                .into_iter()
-                .fold(HashMap::<String, Vec<String>>::new(), |mut acc, alias| {
-                    acc.entry(alias.index).or_default().push(alias.name);
-                    acc
-                });
-        let mut indexes = parse_cat_indices(&payload, self.label())?;
-        for index in &mut indexes {
-            index.aliases = aliases_by_index
-                .get(&index.name)
-                .cloned()
-                .unwrap_or_default();
-        }
-        Ok(indexes)
+        parse_cat_indices(&payload, self.label())
     }
 
     pub(crate) async fn list_aliases(&self) -> Result<Vec<SearchAliasInfo>, AppError> {
@@ -796,6 +801,28 @@ fn alias_routing(object: &Map<String, Value>) -> Option<String> {
     ["routing", "search_routing", "index_routing"]
         .iter()
         .find_map(|key| object.get(*key).and_then(value_to_string))
+}
+
+fn attach_aliases(
+    mut indexes: Vec<SearchIndexInfo>,
+    aliases: &[SearchAliasInfo],
+) -> Vec<SearchIndexInfo> {
+    let aliases_by_index =
+        aliases
+            .iter()
+            .fold(HashMap::<String, Vec<String>>::new(), |mut acc, alias| {
+                acc.entry(alias.index.clone())
+                    .or_default()
+                    .push(alias.name.clone());
+                acc
+            });
+    for index in &mut indexes {
+        index.aliases = aliases_by_index
+            .get(&index.name)
+            .cloned()
+            .unwrap_or_default();
+    }
+    indexes
 }
 
 fn parse_health(value: Option<&str>) -> SearchIndexHealth {

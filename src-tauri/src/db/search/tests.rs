@@ -408,6 +408,147 @@ async fn elasticsearch_live_catalog_reads_indexes_aliases_and_streams() {
 }
 
 #[tokio::test]
+async fn elasticsearch_live_catalog_summary_uses_summary_endpoints_once() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "elastic-dev",
+                "cluster_uuid": "elastic-uuid-1",
+                "version": { "number": "8.12.2", "lucene_version": "9.9.2" }
+            }"#,
+        ),
+        route(
+            "/_cat/indices?",
+            r#"[
+                {
+                    "health": "green",
+                    "status": "open",
+                    "index": "logs-elastic-2026.05.24",
+                    "uuid": "idx-1",
+                    "docs.count": "42",
+                    "store.size": "8192",
+                    "pri": "1",
+                    "rep": "1"
+                }
+            ]"#,
+        ),
+        route(
+            "/_aliases",
+            r#"{
+                "logs-elastic-2026.05.24": {
+                    "aliases": {
+                        "logs-current": { "is_write_index": true }
+                    }
+                }
+            }"#,
+        ),
+        route(
+            "/_data_stream",
+            r#"{
+                "data_streams": [
+                    {
+                        "name": "logs-elastic-default",
+                        "status": "GREEN",
+                        "hidden": false,
+                        "indices": [
+                            { "index_name": ".ds-logs-elastic-default-2026.05.24-000001" }
+                        ]
+                    }
+                ]
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        adapter.catalog_summary().await
+    }
+    .await;
+    if result.is_err() {
+        server.abort();
+    }
+    let summary = result.unwrap();
+    server.await.unwrap();
+
+    assert_eq!(summary.identity.cluster_name, "elastic-dev");
+    assert_eq!(summary.indexes[0].name, "logs-elastic-2026.05.24");
+    assert_eq!(summary.indexes[0].aliases, vec!["logs-current"]);
+    assert_eq!(summary.aliases[0].name, "logs-current");
+    assert_eq!(summary.data_streams[0].name, "logs-elastic-default");
+}
+
+#[tokio::test]
+async fn elasticsearch_live_catalog_summary_allows_empty_catalogs() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "elastic-dev",
+                "version": { "number": "8.12.2" }
+            }"#,
+        ),
+        route("/_cat/indices?", "[]"),
+        route("/_aliases", "{}"),
+        route("/_data_stream", r#"{ "data_streams": [] }"#),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        adapter.catalog_summary().await
+    }
+    .await;
+    if result.is_err() {
+        server.abort();
+    }
+    let summary = result.unwrap();
+    server.await.unwrap();
+
+    assert!(summary.indexes.is_empty());
+    assert!(summary.aliases.is_empty());
+    assert!(summary.data_streams.is_empty());
+}
+
+#[tokio::test]
+async fn elasticsearch_live_catalog_summary_surfaces_permission_errors() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "elastic-dev",
+                "version": { "number": "8.12.2" }
+            }"#,
+        ),
+        route("/_cat/indices?", "[]"),
+        route_with_status("/_aliases", 403, r#"{ "error": "forbidden" }"#),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        adapter.catalog_summary().await
+    }
+    .await;
+    server.abort();
+    let _ = server.await;
+
+    match result {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("Elasticsearch authentication failed (403 Forbidden)"));
+        }
+        other => panic!("Expected permission error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn elasticsearch_live_catalog_reads_mappings_settings_and_templates() {
     let routes = vec![
         route(
@@ -1026,10 +1167,18 @@ struct SearchHttpRoute {
 }
 
 fn route(path_prefix: &'static str, body: &'static str) -> SearchHttpRoute {
+    route_with_status(path_prefix, 200, body)
+}
+
+fn route_with_status(
+    path_prefix: &'static str,
+    status: u16,
+    body: &'static str,
+) -> SearchHttpRoute {
     SearchHttpRoute {
         method: "GET",
         path_prefix,
-        status: 200,
+        status,
         expected_body: None,
         body,
         delay_ms: 0,
