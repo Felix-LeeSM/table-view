@@ -188,7 +188,7 @@ describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
     expect(result!.password).toBe("my#pw");
   });
 
-  it("recognizes mssql/sqlserver/sqlsrv URLs as unsupported typed drafts", () => {
+  it("parses mssql/sqlserver/sqlsrv URLs with SQL Server TLS defaults", () => {
     for (const scheme of ["mssql", "sqlserver", "sqlsrv"]) {
       const result = parseConnectionUrl(`${scheme}://sa:pw@host:1433/master`);
       expect(result).toMatchObject({
@@ -197,9 +197,32 @@ describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
         port: 1433,
         user: "sa",
         database: "master",
+        tlsEnabled: true,
+        trustServerCertificate: true,
         paradigm: "rdb",
       });
     }
+  });
+
+  it("maps SQL Server encrypt/trustServerCertificate URL params", () => {
+    expect(
+      parseConnectionUrl(
+        "sqlserver://sa:pw@host:1433/master?encrypt=false&trustServerCertificate=false",
+      ),
+    ).toMatchObject({
+      dbType: "mssql",
+      tlsEnabled: false,
+      trustServerCertificate: false,
+    });
+    expect(
+      parseConnectionUrl(
+        "mssql://sa:pw@host:1433/master?encrypt=1&trustServerCertificate=yes",
+      ),
+    ).toMatchObject({
+      dbType: "mssql",
+      tlsEnabled: true,
+      trustServerCertificate: true,
+    });
   });
 
   it("recognizes oracle URLs as service-name typed drafts", () => {
@@ -380,6 +403,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
       "mariadb",
       "sqlite",
       "duckdb",
+      "mssql",
       "mongodb",
       "redis",
       "valkey",
@@ -394,12 +418,12 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("mariadb")).toBe(true);
     expect(isSupportedDatabaseType("sqlite")).toBe(true);
     expect(isSupportedDatabaseType("duckdb")).toBe(true);
+    expect(isSupportedDatabaseType("mssql")).toBe(true);
     expect(isSupportedDatabaseType("mongodb")).toBe(true);
     expect(isSupportedDatabaseType("redis")).toBe(true);
     expect(isSupportedDatabaseType("valkey")).toBe(true);
     expect(isSupportedDatabaseType("elasticsearch")).toBe(true);
     expect(isSupportedDatabaseType("opensearch")).toBe(true);
-    expect(isSupportedDatabaseType("mssql")).toBe(false);
     expect(isSupportedDatabaseType("oracle")).toBe(false);
   });
 

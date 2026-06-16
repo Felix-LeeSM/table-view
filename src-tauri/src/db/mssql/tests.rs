@@ -21,6 +21,7 @@ fn config() -> ConnectionConfig {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     }
 }
 
@@ -48,6 +49,7 @@ fn connection_config_validation_and_lifecycle_errors_are_local() {
         host: " sqlserver.local ".into(),
         database: " ".into(),
         tls_enabled: Some(false),
+        trust_server_certificate: None,
         ..config()
     })
     .unwrap();
@@ -57,10 +59,72 @@ fn connection_config_validation_and_lifecycle_errors_are_local() {
         host: " sqlserver.local ".into(),
         port: 1444,
         tls_enabled: Some(true),
+        trust_server_certificate: Some(false),
         ..config()
     })
     .unwrap();
     assert_eq!(tds_config.get_addr(), "sqlserver.local:1444");
+
+    let tds_config = MssqlAdapter::build_tds_config(&ConnectionConfig {
+        host: " sqlserver.local ".into(),
+        port: 1445,
+        tls_enabled: Some(true),
+        trust_server_certificate: Some(true),
+        ..config()
+    })
+    .unwrap();
+    assert_eq!(tds_config.get_addr(), "sqlserver.local:1445");
+}
+
+#[test]
+fn connection_config_rejects_unsupported_mssql_auth_and_tls_modes_before_network() {
+    let err = MssqlAdapter::build_tds_config(&ConnectionConfig {
+        host: "localhost\\SQLEXPRESS".into(),
+        ..config()
+    })
+    .unwrap_err();
+    assert!(matches!(err, AppError::Validation(message) if message.contains("named instances")));
+
+    let err = MssqlAdapter::build_tds_config(&ConnectionConfig {
+        user: "DOMAIN\\alice".into(),
+        ..config()
+    })
+    .unwrap_err();
+    assert!(
+        matches!(err, AppError::Validation(message) if message.contains("Windows authentication"))
+    );
+
+    let err = MssqlAdapter::build_tds_config(&ConnectionConfig {
+        auth_source: Some("ActiveDirectoryPassword".into()),
+        ..config()
+    })
+    .unwrap_err();
+    assert!(matches!(err, AppError::Validation(message) if message.contains("AAD")));
+
+    let err = MssqlAdapter::build_tds_config(&ConnectionConfig {
+        replica_set: Some("SQLEXPRESS".into()),
+        ..config()
+    })
+    .unwrap_err();
+    assert!(matches!(err, AppError::Validation(message) if message.contains("named instance")));
+
+    let err = MssqlAdapter::build_tds_config(&ConnectionConfig {
+        tls_enabled: Some(true),
+        trust_server_certificate: None,
+        ..config()
+    })
+    .unwrap_err();
+    assert!(
+        matches!(err, AppError::Validation(message) if message.contains("trustServerCertificate"))
+    );
+
+    let err = MssqlAdapter::build_tds_config(&ConnectionConfig {
+        tls_enabled: Some(false),
+        trust_server_certificate: Some(true),
+        ..config()
+    })
+    .unwrap_err();
+    assert!(matches!(err, AppError::Validation(message) if message.contains("requires TLS")));
 }
 
 #[test]

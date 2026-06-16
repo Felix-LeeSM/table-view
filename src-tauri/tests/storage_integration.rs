@@ -49,6 +49,7 @@ fn sample_connection(id: &str, name: &str) -> ConnectionConfig {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     }
 }
 

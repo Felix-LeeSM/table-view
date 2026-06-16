@@ -115,7 +115,9 @@ describe("DataSourceProfile registry", () => {
       query: { query: true },
       catalog: { browse: true, schema: true },
     }),
-    mssql: expectedCapabilities(),
+    mssql: expectedCapabilities({
+      connection: { test: true },
+    }),
     oracle: expectedCapabilities(),
     mongodb: expectedCapabilities({
       connection: { test: true },
@@ -333,7 +335,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
-  it("keeps MSSQL and Oracle declared-only until source-specific connection evidence lands", () => {
+  it("promotes MSSQL connection-test only while Oracle stays declared-only", () => {
     const mssql = getDataSourceProfile("mssql");
     expect(mssql).toMatchObject({
       id: "mssql",
@@ -355,7 +357,11 @@ describe("DataSourceProfile registry", () => {
       versionProbe: "mssql-server-property",
     });
     expect(mssql.capabilities).toEqual(expectedCapabilitiesByType.mssql);
-    expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
+    expect(mssql.capabilities.connection.test).toBe(true);
+    expect(mssql.capabilities.query.query).toBe(false);
+    expect(mssql.capabilities.catalog.browse).toBe(false);
+    expect(mssql.capabilities.edit.editRows).toBe(false);
+    expect(isConnectionSupportedDatabaseType("mssql")).toBe(true);
 
     const oracle = getDataSourceProfile("oracle");
     expect(oracle).toMatchObject({
@@ -388,6 +394,7 @@ describe("DataSourceProfile registry", () => {
       "mariadb",
       "sqlite",
       "duckdb",
+      "mssql",
       "mongodb",
       "redis",
       "valkey",
@@ -397,9 +404,9 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("postgresql")).toBe(true);
     expect(isConnectionSupportedDatabaseType("mongodb")).toBe(true);
     expect(isConnectionSupportedDatabaseType("duckdb")).toBe(true);
+    expect(isConnectionSupportedDatabaseType("mssql")).toBe(true);
     expect(isConnectionSupportedDatabaseType("redis")).toBe(true);
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
-    expect(isConnectionSupportedDatabaseType("mssql")).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
     expect(isConnectionSupportedDatabaseType("elasticsearch")).toBe(true);
     expect(isConnectionSupportedDatabaseType("opensearch")).toBe(true);
@@ -479,7 +486,7 @@ describe("DataSourceProfile registry", () => {
       kind: "rdb",
       capabilitySource: "mssql",
     });
-    expect(mssql.capabilities.connection.test).toBe(false);
+    expect(mssql.capabilities.connection.test).toBe(true);
     expect(mssql.capabilities.query.query).toBe(false);
     expect(mssql.capabilities.query.multiStatement).toBe(false);
     expect(mssql.capabilities.query.cancel).toBe(false);

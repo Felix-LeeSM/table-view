@@ -23,9 +23,9 @@ export type DatabaseType =
  * tables / columns) 만 동작 — DDL / queries / streaming 은 Slice B~G
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
- * MSSQL and Oracle are declared identities only until their source-specific
- * `connection.test` evidence lands. They keep labels/defaults/URL parsing so
- * saved drafts can round-trip, but they stay hidden from new connection creation.
+ * MSSQL is exposed for connection-test/auth only. Query/catalog/edit support
+ * remains unclaimed. Oracle stays a declared identity until its
+ * source-specific `connection.test` evidence lands.
  */
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",
@@ -33,6 +33,7 @@ export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "mariadb",
   "sqlite",
   "duckdb",
+  "mssql",
   "mongodb",
   "redis",
   "valkey",
@@ -98,6 +99,12 @@ export interface ConnectionConfig {
    * can rely on it being present.
    */
   paradigm: Paradigm;
+  // ── Connection/auth optional fields ───────────────────────────────
+  /** Whether TLS/encryption is enabled for DBMS forms that expose it. */
+  tlsEnabled?: boolean | null;
+  /** SQL Server: trust the server certificate instead of validating it. */
+  trustServerCertificate?: boolean | null;
+
   // ── MongoDB-specific optional fields ──────────────────────────────
   // Serialised by the backend only when the user fills them in; the
   // frontend treats them as optional so non-mongo connections type-check
@@ -106,8 +113,6 @@ export interface ConnectionConfig {
   authSource?: string | null;
   /** MongoDB replica set name. */
   replicaSet?: string | null;
-  /** Whether TLS is enabled for this MongoDB connection. */
-  tlsEnabled?: boolean | null;
 }
 
 /**
@@ -120,6 +125,19 @@ export interface ConnectionConfig {
  */
 export interface ConnectionDraft extends Omit<ConnectionConfig, "hasPassword"> {
   password: string | null;
+}
+
+export function getMssqlConnectionUnsupportedMessage(
+  draft: Pick<ConnectionDraft, "dbType" | "host" | "user">,
+): string | null {
+  if (draft.dbType !== "mssql") return null;
+  if (draft.host.includes("\\")) {
+    return "SQL Server named instances are not supported. Use the server host and TCP port.";
+  }
+  if (draft.user.includes("\\")) {
+    return "Windows authentication is not supported. Use SQL authentication with a SQL Server login.";
+  }
+  return null;
 }
 
 export interface ConnectionGroup {
@@ -279,7 +297,9 @@ export function draftFromConnection(conn: ConnectionConfig): ConnectionDraft {
     paradigm: conn.paradigm,
     authSource: conn.authSource,
     replicaSet: conn.replicaSet,
-    tlsEnabled: conn.tlsEnabled,
+    tlsEnabled:
+      conn.dbType === "mssql" ? (conn.tlsEnabled ?? true) : conn.tlsEnabled,
+    trustServerCertificate: conn.trustServerCertificate,
     password: null,
   };
 }
@@ -328,6 +348,17 @@ export function parseConnectionUrl(
     // unchanged (silent best-effort, no alert).
     if (!parsed.hostname) return null;
     const database = parsed.pathname.replace(/^\//, "");
+    const searchParams = parsed.searchParams;
+    const sqlServerEncrypt = sqlServerBooleanParam(
+      searchParams,
+      "encrypt",
+      true,
+    );
+    const sqlServerTrustServerCertificate = sqlServerBooleanParam(
+      searchParams,
+      "trustServerCertificate",
+      true,
+    );
     return {
       dbType,
       host: parsed.hostname,
@@ -339,12 +370,28 @@ export function parseConnectionUrl(
           ? "0"
           : database,
       ...(parsed.protocol === "rediss:" ? { tlsEnabled: true } : {}),
+      ...(dbType === "mssql"
+        ? {
+            tlsEnabled: sqlServerEncrypt,
+            trustServerCertificate: sqlServerTrustServerCertificate,
+          }
+        : {}),
       paradigm: paradigmOf(dbType),
     };
   } catch {
     // Input is not a parseable URL — caller will try other connection-string forms.
     return null;
   }
+}
+
+function sqlServerBooleanParam(
+  searchParams: URLSearchParams,
+  key: string,
+  defaultValue: boolean,
+): boolean {
+  const value = searchParams.get(key);
+  if (value === null) return defaultValue;
+  return ["true", "1", "yes"].includes(value.toLowerCase());
 }
 
 /**

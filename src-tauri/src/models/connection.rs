@@ -114,8 +114,8 @@ pub struct ConnectionConfig {
     pub keep_alive_interval: Option<u32>,
     #[serde(default)]
     pub environment: Option<String>,
-    // ── MongoDB-specific optional fields (Sprint 65). ─────────────────────
-    // All three are `#[serde(default)]` so existing non-mongo persisted JSON
+    // ── Source-specific optional fields. ─────────────────────────────────
+    // Fields are `#[serde(default)]` so existing persisted JSON
     // (which lacks these keys entirely) still deserializes unchanged.
     /// MongoDB authentication database (`authSource`). Ignored by non-mongo
     /// adapters.
@@ -124,10 +124,14 @@ pub struct ConnectionConfig {
     /// MongoDB replica set name. Ignored by non-mongo adapters.
     #[serde(default)]
     pub replica_set: Option<String>,
-    /// Whether to enable TLS for the MongoDB connection. Ignored by non-mongo
-    /// adapters.
+    /// Whether to enable TLS/encryption for adapters that support it.
     #[serde(default)]
     pub tls_enabled: Option<bool>,
+    /// SQL Server trust-server-certificate decision. `None` means the caller
+    /// did not make an explicit certificate decision; MSSQL TLS paths require
+    /// an explicit value.
+    #[serde(default)]
+    pub trust_server_certificate: Option<bool>,
 }
 
 /// Public-facing connection shape returned to the frontend and exported to
@@ -166,13 +170,15 @@ pub struct ConnectionConfigPublic {
     /// `Paradigm` string-literal union (`"rdb" | "document" | "search" |
     /// "kv"`) mirrors the lowercase serialization.
     pub paradigm: Paradigm,
-    // ── MongoDB-specific optional fields (Sprint 65) ─────────────────────
+    // ── Source-specific optional fields ──────────────────────────────────
     #[serde(default, alias = "auth_source")]
     pub auth_source: Option<String>,
     #[serde(default, alias = "replica_set")]
     pub replica_set: Option<String>,
     #[serde(default, alias = "tls_enabled")]
     pub tls_enabled: Option<bool>,
+    #[serde(default, alias = "trust_server_certificate")]
+    pub trust_server_certificate: Option<bool>,
 }
 
 impl From<&ConnectionConfig> for ConnectionConfigPublic {
@@ -196,6 +202,7 @@ impl From<&ConnectionConfig> for ConnectionConfigPublic {
             auth_source: c.auth_source.clone(),
             replica_set: c.replica_set.clone(),
             tls_enabled: c.tls_enabled,
+            trust_server_certificate: c.trust_server_certificate,
         }
     }
 }
@@ -224,6 +231,7 @@ impl ConnectionConfigPublic {
             auth_source: self.auth_source,
             replica_set: self.replica_set,
             tls_enabled: self.tls_enabled,
+            trust_server_certificate: self.trust_server_certificate,
         }
     }
 }
@@ -395,6 +403,7 @@ mod tests {
             auth_source: None,
             replica_set: None,
             tls_enabled: None,
+            trust_server_certificate: None,
         };
         let public = ConnectionConfigPublic::from(&conn);
         assert_eq!(public.paradigm, Paradigm::Rdb);
@@ -442,6 +451,7 @@ mod tests {
             auth_source: Some("admin".into()),
             replica_set: Some("rs0".into()),
             tls_enabled: Some(true),
+            trust_server_certificate: None,
         };
         let public = ConnectionConfigPublic::from(&conn);
         assert_eq!(public.paradigm, Paradigm::Document);
@@ -508,6 +518,42 @@ mod tests {
         assert_eq!(public.auth_source.as_deref(), Some("admin"));
         assert_eq!(public.replica_set.as_deref(), Some("rs0"));
         assert_eq!(public.tls_enabled, Some(true));
+        assert_eq!(public.trust_server_certificate, None);
+    }
+
+    #[test]
+    fn connection_config_public_deserializes_trust_server_certificate_wire_keys() {
+        let camel = r#"{
+            "id": "c1",
+            "name": "SQL Server",
+            "dbType": "mssql",
+            "host": "localhost",
+            "port": 1433,
+            "user": "sa",
+            "database": "master",
+            "groupId": null,
+            "color": null,
+            "paradigm": "rdb",
+            "trustServerCertificate": true
+        }"#;
+        let public: ConnectionConfigPublic = serde_json::from_str(camel).unwrap();
+        assert_eq!(public.trust_server_certificate, Some(true));
+
+        let snake = r#"{
+            "id": "c1",
+            "name": "SQL Server",
+            "db_type": "mssql",
+            "host": "localhost",
+            "port": 1433,
+            "user": "sa",
+            "database": "master",
+            "group_id": null,
+            "color": null,
+            "paradigm": "rdb",
+            "trust_server_certificate": false
+        }"#;
+        let public: ConnectionConfigPublic = serde_json::from_str(snake).unwrap();
+        assert_eq!(public.trust_server_certificate, Some(false));
     }
 
     #[test]
@@ -590,6 +636,7 @@ mod tests {
             auth_source: None,
             replica_set: None,
             tls_enabled: None,
+            trust_server_certificate: None,
         };
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: ConnectionConfig = serde_json::from_str(&json).unwrap();
@@ -625,6 +672,7 @@ mod tests {
         assert_eq!(config.auth_source, None);
         assert_eq!(config.replica_set, None);
         assert_eq!(config.tls_enabled, None);
+        assert_eq!(config.trust_server_certificate, None);
     }
 
     #[test]
@@ -647,6 +695,7 @@ mod tests {
             auth_source: Some("admin".into()),
             replica_set: Some("rs0".into()),
             tls_enabled: Some(true),
+            trust_server_certificate: None,
         };
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: ConnectionConfig = serde_json::from_str(&json).unwrap();
@@ -676,6 +725,7 @@ mod tests {
                 auth_source: None,
                 replica_set: None,
                 tls_enabled: None,
+                trust_server_certificate: None,
             }],
             groups: vec![ConnectionGroup {
                 id: "g1".into(),

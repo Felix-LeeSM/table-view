@@ -436,6 +436,7 @@ mod tests {
             auth_source: None,
             replica_set: None,
             tls_enabled: None,
+            trust_server_certificate: None,
         }
     }
 

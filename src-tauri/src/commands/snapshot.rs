@@ -261,7 +261,7 @@ async fn read_connections(
     let conn_rows = sqlx::query_as::<_, ConnectionRow>(
         "SELECT id, name, db_type, host, port, user, password_enc, database, read_only, group_id, color, \
          connection_timeout, keep_alive_interval, environment, auth_source, replica_set, \
-         tls_enabled \
+         tls_enabled, trust_server_certificate \
          FROM connections ORDER BY sort_order ASC, id ASC",
     )
     .fetch_all(&mut **tx)
@@ -313,6 +313,7 @@ struct ConnectionRow {
     auth_source: Option<String>,
     replica_set: Option<String>,
     tls_enabled: Option<i64>,
+    trust_server_certificate: Option<i64>,
 }
 
 impl ConnectionRow {
@@ -339,6 +340,7 @@ impl ConnectionRow {
             auth_source: self.auth_source,
             replica_set: self.replica_set,
             tls_enabled: self.tls_enabled.map(|v| v != 0),
+            trust_server_certificate: self.trust_server_certificate.map(|v| v != 0),
         }
     }
 }

@@ -659,6 +659,7 @@ fn valkey_config(port: u16, database: &str) -> ConnectionConfig {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     }
 }
 
@@ -681,5 +682,6 @@ fn redis_config(port: u16, database: &str) -> ConnectionConfig {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     }
 }

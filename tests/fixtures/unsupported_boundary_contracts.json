@@ -54,17 +54,17 @@
     },
     {
       "id": "mssql-oracle-profile-identity-static-fixture-nonclaim",
-      "minimumRow": "MSSQL/Oracle declared-only identities",
+      "minimumRow": "MSSQL connection-only and Oracle declared-only identities",
       "products": ["mssql", "oracle"],
-      "claimBoundary": "Profile identity and static fixture inventory are not enough to widen SQL Server or Oracle beyond declared-only support.",
+      "claimBoundary": "Profile identity and static fixture inventory are not enough to widen SQL Server beyond connection-only support or Oracle beyond declared-only support.",
       "docs": [
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "MSSQL/Oracle specs and fixtures are declared-only inventory"
+          "mustContain": "MSSQL smoke specs and fixtures are inventory beyond connection-only evidence"
         },
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "SQL Server auth/encryption/TDS/T-SQL"
+          "mustContain": "Named instances, Windows authentication, Azure AD/authSource modes"
         },
         {
           "path": "docs/product/known-limitations.md",

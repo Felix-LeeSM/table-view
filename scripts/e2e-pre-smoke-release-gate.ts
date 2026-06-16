@@ -111,24 +111,24 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
   }
 }
 
-function verifyEnterpriseRdbmsDeclaredOnlyBoundary(): void {
+function verifyEnterpriseRdbmsPromotionBoundary(): void {
   const mssql = getDataSourceProfile("mssql");
   const oracle = getDataSourceProfile("oracle");
 
   assert(
-    !isSupportedDatabaseType("mssql"),
-    "mssql: declared-only profile must stay hidden from connection support",
+    isSupportedDatabaseType("mssql"),
+    "mssql: connection-only profile must be exposed for connection support",
   );
   assert(
-    !hasConnectionCapability("mssql", "test"),
-    "mssql: connection.test must stay disabled until source-specific evidence lands",
+    hasConnectionCapability("mssql", "test"),
+    "mssql: connection.test must be enabled for the connection-only slice",
   );
   assert(
     !mssql.capabilities.query.query &&
       !mssql.capabilities.catalog.browse &&
       !mssql.capabilities.edit.editRows &&
       !mssql.capabilities.ddl.createTable,
-    "mssql: declared-only profile must not expose query/catalog/edit/DDL capabilities",
+    "mssql: connection-only profile must not expose query/catalog/edit/DDL capabilities",
   );
 
   assert(
@@ -220,7 +220,7 @@ function verifySearchConnectionPromotionBoundary(): void {
 
 await verifyProfile("development");
 await verifyProfile("e2e");
-verifyEnterpriseRdbmsDeclaredOnlyBoundary();
+verifyEnterpriseRdbmsPromotionBoundary();
 verifySearchConnectionPromotionBoundary();
 
 console.log(

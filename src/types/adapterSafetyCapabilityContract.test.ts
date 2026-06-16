@@ -64,11 +64,19 @@ describe("adapter safety/capability contract", () => {
     expect(getConnectionSupportedDatabaseTypes()).toEqual(expectedRuntime);
 
     for (const dbType of ALL_DATABASE_TYPES) {
-      const hasRuntimeConnection =
-        DATA_SOURCE_PROFILES[dbType].capabilities.connection.test;
+      const capabilities = DATA_SOURCE_PROFILES[dbType].capabilities;
+      const hasRuntimeWorkflow =
+        Object.values(capabilities.catalog).some(Boolean) ||
+        Object.values(capabilities.query).some(Boolean) ||
+        Object.values(capabilities.edit).some(Boolean) ||
+        Object.values(capabilities.ddl).some(Boolean);
 
       expect(ADAPTER_CONFORMANCE_MATRIX[dbType].level, dbType).toBe(
-        hasRuntimeConnection ? "runtime" : "declared",
+        hasRuntimeWorkflow
+          ? "runtime"
+          : capabilities.connection.test
+            ? "contract"
+            : "declared",
       );
     }
   });

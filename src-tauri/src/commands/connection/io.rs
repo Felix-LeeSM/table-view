@@ -267,6 +267,7 @@ pub fn import_connections(json: String) -> Result<ImportResult, AppError> {
             auth_source: conn.auth_source.clone(),
             replica_set: conn.replica_set.clone(),
             tls_enabled: conn.tls_enabled,
+            trust_server_certificate: conn.trust_server_certificate,
         };
 
         // Save with explicit empty password (no preserve / no encrypt)
@@ -489,6 +490,7 @@ mod tests {
                 auth_source: None,
                 replica_set: None,
                 tls_enabled: None,
+                trust_server_certificate: None,
             }],
             groups: vec![],
         };
@@ -664,6 +666,7 @@ mod tests {
                 auth_source: None,
                 replica_set: None,
                 tls_enabled: None,
+                trust_server_certificate: None,
             }],
             groups: vec![],
         };
@@ -705,6 +708,7 @@ mod tests {
                 auth_source: None,
                 replica_set: None,
                 tls_enabled: None,
+                trust_server_certificate: None,
             }],
             groups: vec![], // group_id refers to nothing
         };
@@ -748,6 +752,7 @@ mod tests {
                 auth_source: None,
                 replica_set: None,
                 tls_enabled: None,
+                trust_server_certificate: None,
             }],
             groups: vec![ConnectionGroup {
                 id: "g-new".into(),
@@ -939,6 +944,7 @@ mod tests {
                 auth_source: None,
                 replica_set: None,
                 tls_enabled: None,
+                trust_server_certificate: None,
             }],
             groups: vec![],
         };

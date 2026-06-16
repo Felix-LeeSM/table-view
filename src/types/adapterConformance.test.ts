@@ -56,8 +56,12 @@ describe("adapter conformance matrix", () => {
   it("keeps profile presence separate from runtime support claims", () => {
     for (const dbType of allDatabaseTypes) {
       const conformance = ADAPTER_CONFORMANCE_MATRIX[dbType];
-      const connectionTest =
-        getVersionAwareDataSourceCapabilities(dbType).connection.test;
+      const capabilities = getVersionAwareDataSourceCapabilities(dbType);
+      const hasRuntimeWorkflow =
+        Object.values(capabilities.catalog).some(Boolean) ||
+        Object.values(capabilities.query).some(Boolean) ||
+        Object.values(capabilities.edit).some(Boolean) ||
+        Object.values(capabilities.ddl).some(Boolean);
 
       expect(conformance.areas.profile.level).toBe("declared");
       expect(conformance.areas.profile.checks).toEqual([
@@ -66,7 +70,13 @@ describe("adapter conformance matrix", () => {
         "profile.backendAdapter",
         "profile.dialect",
       ]);
-      expect(conformance.level).toBe(connectionTest ? "runtime" : "declared");
+      expect(conformance.level).toBe(
+        hasRuntimeWorkflow
+          ? "runtime"
+          : capabilities.connection.test
+            ? "contract"
+            : "declared",
+      );
     }
   });
 
@@ -281,17 +291,16 @@ describe("adapter conformance matrix", () => {
     expect(valkey.areas.edit.deferred).toEqual(["edit.bulkWrite"]);
   });
 
-  it("keeps MSSQL declared-only until connection evidence promotes capabilities", () => {
+  it("keeps MSSQL connection-only while query/catalog/edit remain unclaimed", () => {
     const mssql = ADAPTER_CONFORMANCE_MATRIX.mssql;
 
-    expect(mssql.level).toBe("declared");
-    expect(mssql.areas.connection.checks).toEqual([]);
+    expect(mssql.level).toBe("contract");
+    expect(mssql.areas.connection.checks).toEqual(["connection.test"]);
     expect(mssql.areas.catalog.checks).toEqual([]);
     expect(mssql.areas.query.checks).toEqual([]);
     expect(mssql.areas.edit.checks).toEqual([]);
     expect(mssql.areas.ddl.checks).toEqual([]);
     expect(mssql.areas.connection.unsupported).toEqual([
-      "connection.test",
       "connection.switchDatabase",
       "connection.readOnly",
       "connection.filePicker",

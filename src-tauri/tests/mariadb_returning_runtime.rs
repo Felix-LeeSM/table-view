@@ -43,6 +43,7 @@ async fn setup_mariadb_runtime() -> Option<MariaDbRuntime> {
         auth_source: None,
         replica_set: None,
         tls_enabled: None,
+        trust_server_certificate: None,
     };
 
     let adapter = MysqlAdapter::new_mariadb();

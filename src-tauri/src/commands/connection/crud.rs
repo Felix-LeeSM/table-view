@@ -22,6 +22,7 @@ use crate::db::redis::RedisAdapter;
 use crate::db::search::SearchEngineAdapter;
 use crate::db::sqlite::SqliteAdapter;
 use crate::db::DuckdbAdapter;
+use crate::db::MssqlAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
 use crate::storage;
@@ -121,8 +122,11 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         DatabaseType::Duckdb => {
             DuckdbAdapter::test(&full).await?;
         }
-        DatabaseType::Mssql | DatabaseType::Oracle => {
-            unreachable!("declared-only database types are rejected before adapter dispatch");
+        DatabaseType::Mssql => {
+            MssqlAdapter::test(&full).await?;
+        }
+        DatabaseType::Oracle => {
+            unreachable!("Oracle is rejected before adapter dispatch");
         }
         DatabaseType::Mongodb => {
             MongoAdapter::test(&full).await?;

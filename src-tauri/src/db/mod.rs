@@ -44,7 +44,7 @@ pub mod types;
 pub use adapters::sqlite::SqliteAdapter;
 pub use duckdb::DuckdbAdapter;
 pub use mongodb::MongoAdapter;
-pub use mssql::MssqlAdapter;
+pub use mssql::{MssqlAdapter, MssqlConnectionOnlyAdapter};
 pub use mysql::MysqlAdapter;
 pub use oracle::OracleAdapter;
 pub use postgres::PostgresAdapter;

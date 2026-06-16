@@ -372,6 +372,7 @@ mod tests {
             auth_source: Some("admin".into()),
             replica_set: Some("rs0".into()),
             tls_enabled: Some(true),
+            trust_server_certificate: None,
         }
     }
 
@@ -429,6 +430,7 @@ mod tests {
             auth_source: None,
             replica_set: None,
             tls_enabled: None,
+            trust_server_certificate: None,
         };
         let opts = MongoAdapter::build_options(&cfg).expect("build_options should succeed");
         assert!(opts.credential.is_none());

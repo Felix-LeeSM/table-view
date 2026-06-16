@@ -334,7 +334,14 @@ function runtimeClaim(
 }
 
 function entryLevel(capabilities: DataSourceCapabilities): ConformanceLevel {
-  if (capabilities.connection.test) return "runtime";
+  const hasRuntimeWorkflow =
+    Object.values(capabilities.catalog).some(Boolean) ||
+    Object.values(capabilities.query).some(Boolean) ||
+    Object.values(capabilities.edit).some(Boolean) ||
+    Object.values(capabilities.ddl).some(Boolean);
+
+  if (hasRuntimeWorkflow) return "runtime";
+  if (capabilities.connection.test) return "contract";
   return "declared";
 }
 

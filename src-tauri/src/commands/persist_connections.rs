@@ -54,6 +54,8 @@ pub struct PersistConnectionRequest {
     #[serde(default)]
     pub tls_enabled: Option<bool>,
     #[serde(default)]
+    pub trust_server_certificate: Option<bool>,
+    #[serde(default)]
     pub sort_order: i64,
 }
 
@@ -82,6 +84,7 @@ pub async fn persist_connection_inner(
         auth_source: req.auth_source.clone(),
         replica_set: req.replica_set.clone(),
         tls_enabled: req.tls_enabled,
+        trust_server_certificate: req.trust_server_certificate,
     };
     crate::storage::save_connection(config, None)?;
 
@@ -108,8 +111,8 @@ async fn write_sqlite_mirror(
         "INSERT INTO connections \
          (id, name, db_type, host, port, user, password_enc, database, read_only, group_id, color, \
          connection_timeout, keep_alive_interval, environment, auth_source, replica_set, \
-         tls_enabled, sort_order, created_at, updated_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+         tls_enabled, trust_server_certificate, sort_order, created_at, updated_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
          ON CONFLICT(id) DO UPDATE SET \
             name=excluded.name, db_type=excluded.db_type, host=excluded.host, \
             port=excluded.port, user=excluded.user, database=excluded.database, \
@@ -118,7 +121,9 @@ async fn write_sqlite_mirror(
             connection_timeout=excluded.connection_timeout, \
             keep_alive_interval=excluded.keep_alive_interval, environment=excluded.environment, \
             auth_source=excluded.auth_source, replica_set=excluded.replica_set, \
-            tls_enabled=excluded.tls_enabled, sort_order=excluded.sort_order, \
+            tls_enabled=excluded.tls_enabled, \
+            trust_server_certificate=excluded.trust_server_certificate, \
+            sort_order=excluded.sort_order, \
             updated_at=excluded.updated_at",
     )
     .bind(&req.id)
@@ -138,6 +143,10 @@ async fn write_sqlite_mirror(
     .bind(&req.auth_source)
     .bind(&req.replica_set)
     .bind(req.tls_enabled.map(|v| if v { 1i64 } else { 0i64 }))
+    .bind(
+        req.trust_server_certificate
+            .map(|v| if v { 1i64 } else { 0i64 }),
+    )
     .bind(req.sort_order)
     .bind(now_ms)
     .bind(now_ms)
@@ -201,6 +210,7 @@ mod tests {
             auth_source: None,
             replica_set: None,
             tls_enabled: None,
+            trust_server_certificate: None,
             sort_order: 0,
         }
     }

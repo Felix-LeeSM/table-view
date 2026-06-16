@@ -56,7 +56,17 @@ fn capabilities_do_not_cross_paradigm_boundaries() {
 
         match profile.paradigm {
             Paradigm::Rdb => {
-                assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+                if matches!(db_type, DatabaseType::Mssql | DatabaseType::Oracle) {
+                    assert!(
+                        !profile.has_backend_capability(BackendAdapterCapability::RelationalQuery),
+                        "{db_type:?} must not claim relational query"
+                    );
+                } else {
+                    assert!(
+                        profile.has_backend_capability(BackendAdapterCapability::RelationalQuery),
+                        "{db_type:?} should claim relational query"
+                    );
+                }
                 assert!(
                     !profile.has_backend_capability(BackendAdapterCapability::DocumentQuery),
                     "{db_type:?} must not claim document query"
@@ -109,6 +119,18 @@ fn future_language_placeholders_remain_out_of_runtime_profiles() {
 
 #[test]
 fn dbms_specific_unsupported_capability_deltas_are_declared() {
+    let mssql = get_data_source_profile(&DatabaseType::Mssql);
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+
+    let oracle = get_data_source_profile(&DatabaseType::Oracle);
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+
     assert!(!get_data_source_profile(&DatabaseType::Sqlite)
         .has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
     assert!(!get_data_source_profile(&DatabaseType::Duckdb)

@@ -192,6 +192,31 @@ async fn test_connections_read_only_column_defaults_to_false() {
     cleanup_env();
 }
 
+#[tokio::test]
+#[serial]
+async fn test_connections_trust_server_certificate_column_defaults_to_null() {
+    let (_dir, pool) = setup_with_migrations().await;
+
+    let rows = sqlx::query("PRAGMA table_info(connections)")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    let trust_server_certificate = rows
+        .iter()
+        .find(|row| row.get::<String, _>("name") == "trust_server_certificate")
+        .expect("connections.trust_server_certificate column missing after migrations");
+
+    assert_eq!(trust_server_certificate.get::<i64, _>("notnull"), 0);
+    assert_eq!(
+        trust_server_certificate
+            .get::<Option<String>, _>("dflt_value")
+            .as_deref(),
+        None
+    );
+
+    cleanup_env();
+}
+
 // AC-355-02: migration runner is idempotent — running twice on the same db
 // must succeed (the migration tool tracks applied versions).
 #[tokio::test]
