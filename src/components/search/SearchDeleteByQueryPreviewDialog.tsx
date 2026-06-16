@@ -12,6 +12,10 @@ import {
 } from "@components/ui/dialog";
 import { planSearchDeleteByQuery } from "@lib/tauri/search";
 import { getTauriErrorMessage } from "@lib/tauri/error";
+import {
+  formatSearchUiError,
+  type SearchUiError,
+} from "@lib/search/searchUiError";
 import { getDeleteByQueryPreviewTargetError } from "@lib/search/searchTargetPolicy";
 import type { SearchDestructiveOperationPlan } from "@/types/search";
 
@@ -28,7 +32,7 @@ type PlanState =
   | { status: "idle"; plan: null; error: null }
   | { status: "loading"; plan: null; error: null }
   | { status: "loaded"; plan: SearchDestructiveOperationPlan; error: null }
-  | { status: "error"; plan: null; error: string };
+  | { status: "error"; plan: null; error: SearchUiError };
 
 const defaultBody = JSON.stringify(
   {
@@ -70,12 +74,19 @@ export function SearchDeleteByQueryPreviewDialog({
       setPlanState({
         status: "error",
         plan: null,
-        error: "Delete-by-query planning is unsupported by this connection.",
+        error: formatSearchUiError(
+          "deletePreview",
+          "Delete-by-query planning is unsupported by this connection.",
+        ),
       });
       return;
     }
     if (targetError) {
-      setPlanState({ status: "error", plan: null, error: targetError });
+      setPlanState({
+        status: "error",
+        plan: null,
+        error: formatSearchUiError("deletePreview", targetError),
+      });
       return;
     }
 
@@ -86,7 +97,7 @@ export function SearchDeleteByQueryPreviewDialog({
       setPlanState({
         status: "error",
         plan: null,
-        error: err instanceof Error ? err.message : String(err),
+        error: formatSearchUiError("deletePreview", err),
       });
       return;
     }
@@ -94,7 +105,10 @@ export function SearchDeleteByQueryPreviewDialog({
       setPlanState({
         status: "error",
         plan: null,
-        error: "delete-by-query body must be a JSON object.",
+        error: formatSearchUiError(
+          "deletePreview",
+          "delete-by-query body must be a JSON object.",
+        ),
       });
       return;
     }
@@ -115,7 +129,7 @@ export function SearchDeleteByQueryPreviewDialog({
       setPlanState({
         status: "error",
         plan: null,
-        error: getTauriErrorMessage(err),
+        error: formatSearchUiError("deletePreview", getTauriErrorMessage(err)),
       });
     }
   }
@@ -244,9 +258,10 @@ function PlanFeedback({ state }: { state: PlanState }) {
     return (
       <div
         role="alert"
-        className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        className="space-y-1 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
       >
-        {state.error}
+        <p className="font-medium">{state.error.label}</p>
+        <p>{state.error.detail}</p>
       </div>
     );
   }

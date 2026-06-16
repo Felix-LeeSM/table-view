@@ -13,6 +13,10 @@ import { Skeleton } from "@components/ui/skeleton";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore } from "@stores/mruStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import {
+  formatSearchUiError,
+  type SearchUiError,
+} from "@lib/search/searchUiError";
 import { listSearchCatalogSummary } from "@lib/tauri/search";
 import type {
   SearchAliasInfo,
@@ -58,7 +62,7 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
   const [showSystem, setShowSystem] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<SearchUiError | null>(null);
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
@@ -70,7 +74,7 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
     } catch (err) {
       setCatalog(null);
       setSelectedId(null);
-      setError(err instanceof Error ? err.message : String(err));
+      setError(formatSearchUiError("catalog", err));
     } finally {
       setLoading(false);
     }
@@ -195,7 +199,8 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
           role="alert"
           className="border-b border-border px-3 py-2 text-destructive"
         >
-          {error}
+          <div className="font-medium">{error.label}</div>
+          <p className="mt-1 whitespace-pre-wrap text-3xs">{error.detail}</p>
         </div>
       )}
 

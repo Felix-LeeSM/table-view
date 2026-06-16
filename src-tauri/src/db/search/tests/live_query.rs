@@ -35,20 +35,10 @@ async fn elasticsearch_live_search_dispatches_request_and_parses_result_envelope
                 "timed_out": false,
                 "_shards": {
                     "total": 2,
-                    "successful": 1,
+                    "successful": 2,
                     "skipped": 0,
-                    "failed": 1,
-                    "failures": [
-                        {
-                            "shard": 0,
-                            "index": "logs-elastic-2026.05.24",
-                            "node": "node-a",
-                            "reason": {
-                                "type": "query_shard_exception",
-                                "reason": "bad shard"
-                            }
-                        }
-                    ]
+                    "failed": 0,
+                    "failures": []
                 },
                 "hits": {
                     "total": { "value": 42, "relation": "gte" },
@@ -136,11 +126,7 @@ async fn elasticsearch_live_search_dispatches_request_and_parses_result_envelope
         result.hits[0].explanation.as_ref().unwrap()["description"],
         json!("match")
     );
-    assert_eq!(result.shards.as_ref().unwrap().failed, 1);
-    assert_eq!(
-        result.shards.as_ref().unwrap().failures[0].reason["reason"],
-        json!("bad shard")
-    );
+    assert_eq!(result.shards.as_ref().unwrap().failed, 0);
     assert_eq!(
         result.profile.as_ref().unwrap()["shards"][0]["id"],
         json!("profile-1")
@@ -210,20 +196,10 @@ async fn opensearch_live_search_dispatches_request_and_parses_result_envelope() 
                 "timed_out": false,
                 "_shards": {
                     "total": 2,
-                    "successful": 1,
+                    "successful": 2,
                     "skipped": 0,
-                    "failed": 1,
-                    "failures": [
-                        {
-                            "shard": 0,
-                            "index": "logs-opensearch-2026.05.24",
-                            "node": "node-open-a",
-                            "reason": {
-                                "type": "query_shard_exception",
-                                "reason": "bad OpenSearch shard"
-                            }
-                        }
-                    ]
+                    "failed": 0,
+                    "failures": []
                 },
                 "hits": {
                     "total": { "value": 31, "relation": "eq" },
@@ -305,7 +281,7 @@ async fn opensearch_live_search_dispatches_request_and_parses_result_envelope() 
         json!("<em>OpenSearch</em> live log")
     );
     assert_eq!(result.hits[0].sort[1], json!("open-doc-1"));
-    assert_eq!(result.shards.as_ref().unwrap().failed, 1);
+    assert_eq!(result.shards.as_ref().unwrap().failed, 0);
     assert_eq!(
         result.profile.as_ref().unwrap()["shards"][0]["id"],
         json!("open-profile-1")
@@ -553,6 +529,266 @@ async fn elasticsearch_live_search_surfaces_http_error_body() {
             assert!(message.contains("parse_exception"));
         }
         other => panic!("Expected live Search HTTP error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn elasticsearch_live_search_redacts_http_error_body_urls_and_credentials() {
+    // Reason: issue #898 requires Search HTTP error bodies to keep diagnostics without leaking secrets (2026-06-16).
+    let password = ["unique", "search", "credential"].join("-");
+    let leaked_url = format!("http://elastic:{password}@127.0.0.1:9200/_search");
+    let body = format!(
+        r#"{{
+            "error": {{
+                "type": "parse_exception",
+                "reason": "failed to call {leaked_url} password={password}"
+            }}
+        }}"#
+    );
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "elastic-dev",
+                "version": { "number": "8.12.2" }
+            }"#,
+        ),
+        post_route_with_status("/logs-elastic-2026.05.24/_search", 400, None, body),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+    adapter.connect(&config).await.unwrap();
+
+    let result = adapter
+        .search(
+            &SearchQueryRequest {
+                index: "logs-elastic-2026.05.24".into(),
+                body: json!({ "query": { "match_all": {} } }),
+                from: None,
+                size: None,
+                track_total_hits: None,
+            },
+            None,
+        )
+        .await;
+    if result.is_err() {
+        server.abort();
+    }
+
+    match result {
+        Err(AppError::Connection(message)) => {
+            assert!(message.contains("Elasticsearch search request"));
+            assert!(message.contains("parse_exception"));
+            assert!(
+                !message.contains("http://") && !message.contains("https://"),
+                "HTTP error body leaked a full URL: {message}"
+            );
+            assert!(
+                !message.contains(&password),
+                "HTTP error body leaked a credential: {message}"
+            );
+        }
+        other => panic!("Expected redacted Search HTTP error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn elasticsearch_live_search_timeout_is_classified_and_redacted() {
+    // Reason: issue #898 requires Search HTTP timeout failures to be distinct from generic network errors (2026-06-16).
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "elastic-dev",
+                "version": { "number": "8.12.2" }
+            }"#,
+        ),
+        delayed_post_route(
+            "/logs-elastic-2026.05.24/_search",
+            2_000,
+            r#"{
+                "took": 2000,
+                "timed_out": false,
+                "hits": { "total": 0, "hits": [] }
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let mut config = search_config(port);
+    config.connection_timeout = Some(1);
+    adapter.connect(&config).await.unwrap();
+
+    let result = adapter
+        .search(
+            &SearchQueryRequest {
+                index: "logs-elastic-2026.05.24".into(),
+                body: json!({ "query": { "match_all": {} } }),
+                from: None,
+                size: None,
+                track_total_hits: None,
+            },
+            None,
+        )
+        .await;
+    server.abort();
+
+    match result {
+        Err(AppError::SearchTimeout(message)) => {
+            assert!(message.contains("Elasticsearch timeout"));
+            assert!(message.contains("search request"));
+            assert!(
+                !message.contains("http://") && !message.contains("https://"),
+                "timeout error leaked a full URL: {message}"
+            );
+        }
+        other => panic!("Expected classified timeout error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn elasticsearch_live_search_partial_shard_failure_is_typed() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "elastic-dev",
+                "version": { "number": "8.12.2" }
+            }"#,
+        ),
+        post_route(
+            "/logs-elastic-2026.05.24/_search",
+            r#"{
+                "query": { "match_all": {} }
+            }"#,
+            r#"{
+                "took": 8,
+                "timed_out": false,
+                "_shards": {
+                    "total": 2,
+                    "successful": 1,
+                    "skipped": 0,
+                    "failed": 1,
+                    "failures": [
+                        {
+                            "shard": 0,
+                            "index": "logs-elastic-2026.05.24",
+                            "reason": {
+                                "type": "query_shard_exception",
+                                "reason": "bad shard filter"
+                            }
+                        }
+                    ]
+                },
+                "hits": {
+                    "total": { "value": 1, "relation": "eq" },
+                    "hits": [
+                        {
+                            "_index": "logs-elastic-2026.05.24",
+                            "_id": "doc-1",
+                            "_source": { "message": "partial" }
+                        }
+                    ]
+                }
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+    adapter.connect(&config).await.unwrap();
+
+    let result = adapter
+        .search(
+            &SearchQueryRequest {
+                index: "logs-elastic-2026.05.24".into(),
+                body: json!({ "query": { "match_all": {} } }),
+                from: None,
+                size: None,
+                track_total_hits: None,
+            },
+            None,
+        )
+        .await;
+    if result.is_err() {
+        server.abort();
+    }
+
+    match result {
+        Err(AppError::SearchPartialFailure(message)) => {
+            assert!(message.contains("failed shard"));
+            assert!(message.contains("query_shard_exception"));
+            assert!(message.contains("bad shard filter"));
+        }
+        other => panic!("Expected typed partial shard failure, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn elasticsearch_live_search_http_error_reports_shard_failure_detail() {
+    // Reason: issue #898 requires shard/partial failure bodies to surface clear diagnostics (2026-06-16).
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "elastic-dev",
+                "version": { "number": "8.12.2" }
+            }"#,
+        ),
+        post_route_with_status(
+            "/logs-elastic-2026.05.24/_search",
+            503,
+            None,
+            r#"{
+                "error": {
+                    "type": "search_phase_execution_exception",
+                    "reason": "all shards failed",
+                    "failed_shards": [
+                        {
+                            "shard": 0,
+                            "index": "logs-elastic-2026.05.24",
+                            "reason": {
+                                "type": "query_shard_exception",
+                                "reason": "bad shard filter"
+                            }
+                        }
+                    ]
+                },
+                "status": 503
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+    adapter.connect(&config).await.unwrap();
+
+    let result = adapter
+        .search(
+            &SearchQueryRequest {
+                index: "logs-elastic-2026.05.24".into(),
+                body: json!({ "query": { "match_all": {} } }),
+                from: None,
+                size: None,
+                track_total_hits: None,
+            },
+            None,
+        )
+        .await;
+    if result.is_err() {
+        server.abort();
+    }
+
+    match result {
+        Err(AppError::SearchShardFailure(message)) => {
+            assert!(message.contains("Elasticsearch server error"));
+            assert!(message.contains("search_phase_execution_exception"));
+            assert!(message.contains("shard failure"));
+            assert!(message.contains("query_shard_exception"));
+            assert!(message.contains("bad shard filter"));
+        }
+        other => panic!("Expected shard failure HTTP error, got {other:?}"),
     }
 }
 

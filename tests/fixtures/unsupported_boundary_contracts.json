@@ -7,7 +7,7 @@
       "id": "search-live-http-deferred-admin-boundaries",
       "minimumRow": "Search live HTTP non-claim",
       "products": ["elasticsearch", "opensearch"],
-      "claimBoundary": "Live Search support stays bounded to connect/catalog/_search/render/delete-plan slices. Fixture and live evidence do not promote broader admin, observability, profile/explain, raw target, or actual delete-by-query execution.",
+      "claimBoundary": "Live Search support stays bounded to connect/catalog/_search/render/delete-plan/scoped-error slices. Fixture and live evidence do not promote broader admin, global audit/security dashboards, profile/explain, raw target, or actual delete-by-query execution.",
       "docs": [
         {
           "path": "docs/product/known-limitations.md",
@@ -15,7 +15,7 @@
         },
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "broader admin APIs, observability"
+          "mustContain": "global audit/admin/security dashboards"
         },
         {
           "path": "docs/product/README.md",

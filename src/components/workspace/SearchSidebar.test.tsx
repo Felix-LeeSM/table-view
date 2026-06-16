@@ -417,16 +417,19 @@ describe("SearchSidebar", () => {
 
   it("renders permission failures clearly without deep metadata fetches", async () => {
     invokeMock.mockRejectedValueOnce(
-      new Error("Elasticsearch authentication failed (403 Forbidden)"),
+      new Error(
+        "Elasticsearch authentication failed for https://elastic:secret@example.test:9200/logs/_search?api_key=abc123 (403 Forbidden)",
+      ),
     );
 
     render(<SearchSidebar connectionId="search-1" />);
 
-    await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent(
-        "Elasticsearch authentication failed (403 Forbidden)",
-      ),
-    );
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Search catalog failed");
+    expect(alert).toHaveTextContent("403 Forbidden");
+    expect(alert).not.toHaveTextContent("elastic:secret");
+    expect(alert).not.toHaveTextContent("api_key=abc123");
+    expect(alert).not.toHaveTextContent("https://");
     expect(commandCount("list_search_catalog_summary")).toBe(1);
     expect(commandCount("get_search_index_mapping")).toBe(0);
     expect(commandCount("get_search_index_settings")).toBe(0);
