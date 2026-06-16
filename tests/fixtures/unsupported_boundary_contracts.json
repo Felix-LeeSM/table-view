@@ -53,22 +53,26 @@
       "consumedBy": ["tests/fixtures/unsupported_boundary_contracts.test.ts"]
     },
     {
-      "id": "mssql-oracle-profile-identity-static-fixture-nonclaim",
-      "minimumRow": "MSSQL connection-only and Oracle declared-only identities",
+      "id": "mssql-runtime-oracle-declared-only-boundaries",
+      "minimumRow": "MSSQL runtime catalog/query slice and Oracle declared-only identity",
       "products": ["mssql", "oracle"],
-      "claimBoundary": "Profile identity and static fixture inventory are not enough to widen SQL Server beyond connection-only support or Oracle beyond declared-only support.",
+      "claimBoundary": "Issue #902 promotes SQL Server to bounded catalog/query/cancel/tabular runtime support while keeping edit, DDL, admin, import/export, and full workbench parity unsupported. Oracle remains declared-only.",
       "docs": [
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "MSSQL smoke specs and fixtures are inventory beyond connection-only evidence"
+          "mustContain": "MSSQL runtime support now covers SQL-auth/TDS connection, catalog browse/schema/indexes/constraints/relationships, query, multi-statement execution, cancellation, and tabular result rendering."
         },
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "Named instances, Windows authentication, Azure AD/authSource modes"
+          "mustContain": "MSSQL edit rows, structured DDL, admin/security/jobs/users/roles, DB-level import/export, profiler/activity dashboards, full T-SQL semantic parity, and full workbench parity remain unsupported."
         },
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "SID/TNS/wallet/TLS"
+          "mustContain": "Oracle specs and fixtures remain declared-only inventory while Oracle is hidden and capability-empty."
+        },
+        {
+          "path": "docs/product/README.md",
+          "mustContain": "MSSQL: runtime catalog/query support is active for issue #902."
         }
       ],
       "fixtureEvidence": [

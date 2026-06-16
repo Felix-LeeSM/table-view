@@ -291,13 +291,23 @@ describe("adapter conformance matrix", () => {
     expect(valkey.areas.edit.deferred).toEqual(["edit.bulkWrite"]);
   });
 
-  it("keeps MSSQL connection-only while query/catalog/edit remain unclaimed", () => {
+  it("keeps MSSQL runtime scoped to catalog/query while edit and DDL remain unclaimed", () => {
     const mssql = ADAPTER_CONFORMANCE_MATRIX.mssql;
 
-    expect(mssql.level).toBe("contract");
+    expect(mssql.level).toBe("runtime");
     expect(mssql.areas.connection.checks).toEqual(["connection.test"]);
-    expect(mssql.areas.catalog.checks).toEqual([]);
-    expect(mssql.areas.query.checks).toEqual([]);
+    expect(mssql.areas.catalog.checks).toEqual([
+      "catalog.browse",
+      "catalog.schema",
+      "catalog.indexes",
+      "catalog.constraints",
+      "catalog.relationships",
+    ]);
+    expect(mssql.areas.query.checks).toEqual([
+      "query.query",
+      "query.multiStatement",
+      "query.cancel",
+    ]);
     expect(mssql.areas.edit.checks).toEqual([]);
     expect(mssql.areas.ddl.checks).toEqual([]);
     expect(mssql.areas.connection.unsupported).toEqual([
@@ -305,19 +315,8 @@ describe("adapter conformance matrix", () => {
       "connection.readOnly",
       "connection.filePicker",
     ]);
-    expect(mssql.areas.catalog.unsupported).toEqual([
-      "catalog.browse",
-      "catalog.schema",
-      "catalog.indexes",
-      "catalog.constraints",
-      "catalog.relationships",
-    ]);
-    expect(mssql.areas.query.unsupported).toEqual([
-      "query.query",
-      "query.multiStatement",
-      "query.cancel",
-      "query.explain",
-    ]);
+    expect(mssql.areas.catalog.unsupported).toEqual([]);
+    expect(mssql.areas.query.unsupported).toEqual(["query.explain"]);
     expect(mssql.areas.query.deferred).toEqual([]);
     expect(mssql.areas.edit.unsupported).toEqual([
       "edit.editRows",
