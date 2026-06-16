@@ -102,7 +102,7 @@
       "docs": [
         {
           "path": "docs/product/README.md",
-          "mustContain": "Full CLI/admin parity, stream consumer UI, cluster/pubsub/modules/consumer-group management"
+          "mustContain": "Full CLI/admin parity, consumer-group stream UI, cluster/pubsub/modules/consumer-group management"
         }
       ],
       "fixtureEvidence": [
