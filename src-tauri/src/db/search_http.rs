@@ -518,7 +518,7 @@ fn root_probe_capabilities(product: SearchProductKind) -> SearchClusterCapabilit
             mappings: true,
             legacy_index_templates: false,
             composable_index_templates: true,
-            delete_by_query: false,
+            delete_by_query: true,
         },
         SearchProductKind::OpenSearch => SearchClusterCapabilities {
             search: true,
@@ -527,7 +527,7 @@ fn root_probe_capabilities(product: SearchProductKind) -> SearchClusterCapabilit
             mappings: true,
             legacy_index_templates: true,
             composable_index_templates: true,
-            delete_by_query: false,
+            delete_by_query: true,
         },
     }
 }

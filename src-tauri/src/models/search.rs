@@ -438,23 +438,17 @@ pub fn validate_search_destructive_request(
     }
 
     let wildcard_target = target == "_all" || target.contains('*');
-    if wildcard_target && !request.safety.allow_wildcard {
+    if wildcard_target {
         return Err(AppError::Validation(
-            "delete-by-query wildcard targets require allowWildcard".into(),
+            "delete-by-query wildcard targets are unsupported for preview-only planning".into(),
         ));
     }
 
     if !request.preview_only {
-        if !request.safety.acknowledged_risk {
-            return Err(AppError::Validation(
-                "delete-by-query execution requires acknowledgedRisk".into(),
-            ));
-        }
-        if request.safety.expected_target.as_deref() != Some(target) {
-            return Err(AppError::Validation(
-                "delete-by-query execution requires expectedTarget to match the target".into(),
-            ));
-        }
+        return Err(AppError::Unsupported(
+            "delete-by-query execution is unsupported in this milestone; only preview plans are available"
+                .into(),
+        ));
     }
 
     let has_query = request

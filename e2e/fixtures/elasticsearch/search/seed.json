@@ -130,7 +130,7 @@
   },
   "destructivePlan": {
     "operation": "deleteByQuery",
-    "requiresConfirmation": true,
+    "requiresConfirmation": false,
     "previewOnlyDefault": true
   }
 }
