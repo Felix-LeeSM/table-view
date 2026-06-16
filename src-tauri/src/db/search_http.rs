@@ -363,12 +363,14 @@ fn search_http_status_error(
         message.push_str(": ");
         message.push_str(detail);
     }
-    if detail_has_shard_failure(detail) {
-        return AppError::SearchShardFailure(message);
-    }
     match variant {
         SearchHttpStatusVariant::Authentication => AppError::SearchAuthentication(message),
         SearchHttpStatusVariant::Permission => AppError::SearchPermission(message),
+        SearchHttpStatusVariant::Server | SearchHttpStatusVariant::Other
+            if detail_has_shard_failure(detail) =>
+        {
+            AppError::SearchShardFailure(message)
+        }
         SearchHttpStatusVariant::Server | SearchHttpStatusVariant::Other => {
             AppError::Connection(message)
         }
@@ -1044,4 +1046,45 @@ fn matches_ignore_ascii_case(value: &str, candidates: &[&str]) -> bool {
     candidates
         .iter()
         .any(|candidate| value.eq_ignore_ascii_case(candidate))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn search_http_status_auth_and_permission_win_over_shard_detail() {
+        let shard_detail = Some("search_phase_execution_exception; shard failure: bad shard");
+
+        let auth = search_http_status_error(
+            "Elasticsearch",
+            "search request",
+            StatusCode::UNAUTHORIZED,
+            Some("/logs/_search"),
+            shard_detail,
+        );
+        assert!(matches!(auth, AppError::SearchAuthentication(_)));
+
+        let permission = search_http_status_error(
+            "Elasticsearch",
+            "search request",
+            StatusCode::FORBIDDEN,
+            Some("/logs/_search"),
+            shard_detail,
+        );
+        assert!(matches!(permission, AppError::SearchPermission(_)));
+    }
+
+    #[test]
+    fn search_http_status_shard_detail_overrides_server_error() {
+        let error = search_http_status_error(
+            "Elasticsearch",
+            "search request",
+            StatusCode::SERVICE_UNAVAILABLE,
+            Some("/logs/_search"),
+            Some("search_phase_execution_exception; shard failure: bad shard"),
+        );
+
+        assert!(matches!(error, AppError::SearchShardFailure(_)));
+    }
 }
