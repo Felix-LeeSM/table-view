@@ -267,7 +267,12 @@ describe("SearchSidebar", () => {
     );
     expect(commandCount("list_search_catalog_summary")).toBe(1);
     expect(commandCount("get_search_index_mapping")).toBe(0);
+    expect(commandCount("get_search_index_settings")).toBe(0);
+    expect(commandCount("get_search_index_field_stats")).toBe(0);
+    expect(commandCount("list_search_index_templates")).toBe(0);
     expect(commandCount("sample_search_documents")).toBe(0);
+    expect(commandCount("execute_search_query")).toBe(0);
+    expect(commandCount("plan_search_delete_by_query")).toBe(0);
   });
 
   it("keeps hidden/system entries behind an explicit toggle", async () => {
@@ -358,6 +363,28 @@ describe("SearchSidebar", () => {
     expect(screen.getByTestId("search-catalog-status")).toHaveTextContent(
       "25 indexes · 0 aliases · 0 data streams",
     );
+  });
+
+  it("renders permission failures clearly without deep metadata fetches", async () => {
+    invokeMock.mockRejectedValueOnce(
+      new Error("Elasticsearch authentication failed (403 Forbidden)"),
+    );
+
+    render(<SearchSidebar connectionId="search-1" />);
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Elasticsearch authentication failed (403 Forbidden)",
+      ),
+    );
+    expect(commandCount("list_search_catalog_summary")).toBe(1);
+    expect(commandCount("get_search_index_mapping")).toBe(0);
+    expect(commandCount("get_search_index_settings")).toBe(0);
+    expect(commandCount("get_search_index_field_stats")).toBe(0);
+    expect(commandCount("list_search_index_templates")).toBe(0);
+    expect(commandCount("sample_search_documents")).toBe(0);
+    expect(commandCount("execute_search_query")).toBe(0);
+    expect(commandCount("plan_search_delete_by_query")).toBe(0);
   });
 
   it("renders empty, loading, refresh, and error states", async () => {

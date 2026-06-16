@@ -5,13 +5,13 @@ use tokio::sync::Mutex;
 
 use crate::error::{AppError, CancelError};
 use crate::models::{
-    ConnectionConfig, DatabaseType, SearchAliasInfo, SearchAnalyzerInfo, SearchClusterCapabilities,
-    SearchClusterIdentity, SearchDataStreamInfo, SearchDeleteByQueryRequest,
-    SearchDestructiveOperationPlan, SearchFieldStatsEnvelope, SearchFieldStatsInfo,
-    SearchHitEnvelope, SearchIndexHealth, SearchIndexInfo, SearchIndexMapping, SearchIndexSettings,
-    SearchIndexTemplateInfo, SearchMappingField, SearchProductDelta, SearchProductKind,
-    SearchQueryRequest, SearchResultEnvelope, SearchTemplateEndpointKind, SearchTotalHits,
-    SearchTotalHitsRelation, SearchVersionInfo,
+    ConnectionConfig, DatabaseType, SearchAliasInfo, SearchAnalyzerInfo, SearchCatalogSummary,
+    SearchClusterCapabilities, SearchClusterIdentity, SearchDataStreamInfo,
+    SearchDeleteByQueryRequest, SearchDestructiveOperationPlan, SearchFieldStatsEnvelope,
+    SearchFieldStatsInfo, SearchHitEnvelope, SearchIndexHealth, SearchIndexInfo,
+    SearchIndexMapping, SearchIndexSettings, SearchIndexTemplateInfo, SearchMappingField,
+    SearchProductDelta, SearchProductKind, SearchQueryRequest, SearchResultEnvelope,
+    SearchTemplateEndpointKind, SearchTotalHits, SearchTotalHitsRelation, SearchVersionInfo,
 };
 
 use super::search_destructive::{build_delete_by_query_plan, validate_delete_by_query_request};
@@ -265,6 +265,20 @@ impl SearchAdapter for SearchEngineAdapter {
                 return Ok(fixture.data_streams.clone());
             }
             self.live_connection().await?.list_data_streams().await
+        })
+    }
+
+    fn catalog_summary<'a>(&'a self) -> BoxFuture<'a, Result<SearchCatalogSummary, AppError>> {
+        Box::pin(async move {
+            if let Some(fixture) = self.fixture.as_ref() {
+                return Ok(SearchCatalogSummary {
+                    identity: fixture.identity.clone(),
+                    indexes: fixture.indexes.clone(),
+                    aliases: fixture.aliases.clone(),
+                    data_streams: fixture.data_streams.clone(),
+                });
+            }
+            self.live_connection().await?.catalog_summary().await
         })
     }
 
