@@ -202,9 +202,10 @@ impl SearchHttpConnection {
             self.base_url.trim_end_matches('/'),
             path
         )));
-        let response = request.send().await.map_err(|err| {
-            AppError::Connection(format!("{} network error: {err}", self.label()))
-        })?;
+        let response = request
+            .send()
+            .await
+            .map_err(|err| search_network_error(self.label(), err))?;
         let status = response.status();
         if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
             return Err(AppError::Connection(format!(
@@ -283,7 +284,11 @@ async fn send_with_cancel(
     } else {
         request.send().await
     };
-    response.map_err(|err| AppError::Connection(format!("{label} network error: {err}")))
+    response.map_err(|err| search_network_error(label, err))
+}
+
+fn search_network_error(label: &str, err: reqwest::Error) -> AppError {
+    AppError::Connection(format!("{label} network error: {}", err.without_url()))
 }
 
 impl SearchHttpAuth {
@@ -332,7 +337,7 @@ async fn probe_search_root(
     let response = request
         .send()
         .await
-        .map_err(|err| AppError::Connection(format!("{label} network error: {err}")))?;
+        .map_err(|err| search_network_error(label, err))?;
     let status = response.status();
 
     if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
