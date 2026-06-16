@@ -3,6 +3,8 @@ import {
   openConnection,
   openNewQueryTab,
   runQuery,
+  searchSmokePassword,
+  searchSmokeUser,
   step,
   waitForLauncher,
   waitForWorkspaceTextAll,
@@ -64,10 +66,14 @@ export function runSearchRuntimeSmoke(options: SearchRuntimeSmokeOptions) {
         async () => {
           await waitForLauncher();
           const baseConfig = makeSearchProbeConfig(dbType, productLabel);
+          const probePassword = searchProbePassword(dbType);
+          expect(baseConfig.user).not.toBe("");
+          expect(probePassword).not.toBe("");
+
           const result = await invokeTauri<string>("test_connection", {
             req: {
               config: baseConfig,
-              password: searchProbePassword(dbType) || "unused-smoke-password",
+              password: probePassword,
               existing_id: null,
             },
           });
@@ -77,9 +83,37 @@ export function runSearchRuntimeSmoke(options: SearchRuntimeSmokeOptions) {
             "test_connection",
             {
               req: {
+                config: baseConfig,
+                password: wrongSearchProbePassword(dbType),
+                existing_id: null,
+              },
+            },
+            [
+              "Search authentication error",
+              `${productLabel} authentication failed`,
+              "401",
+              "root probe",
+            ],
+          );
+
+          const authenticatedRetry = await invokeTauri<string>(
+            "test_connection",
+            {
+              req: {
+                config: baseConfig,
+                password: probePassword,
+                existing_id: null,
+              },
+            },
+          );
+          expect(authenticatedRetry).toBe("Connection successful");
+
+          await expectTauriCommandError(
+            "test_connection",
+            {
+              req: {
                 config: { ...baseConfig, tlsEnabled: true },
-                password:
-                  searchProbePassword(dbType) || "unused-smoke-password",
+                password: probePassword,
                 existing_id: null,
               },
             },
@@ -98,8 +132,7 @@ export function runSearchRuntimeSmoke(options: SearchRuntimeSmokeOptions) {
                   name: `E2E ${oppositeDbType} mismatch probe`,
                   dbType: oppositeDbType,
                 },
-                password:
-                  searchProbePassword(dbType) || "unused-smoke-password",
+                password: probePassword,
                 existing_id: null,
               },
             },
@@ -295,15 +328,15 @@ function searchProbePort(dbType: SearchDbType): number {
 }
 
 function searchProbeUser(dbType: SearchDbType): string {
-  return dbType === "elasticsearch"
-    ? (process.env.ELASTICSEARCH_USER ?? "")
-    : (process.env.OPENSEARCH_USER ?? "");
+  return searchSmokeUser(dbType);
 }
 
 function searchProbePassword(dbType: SearchDbType): string {
-  return dbType === "elasticsearch"
-    ? (process.env.ELASTICSEARCH_PASSWORD ?? "")
-    : (process.env.OPENSEARCH_PASSWORD ?? "");
+  return searchSmokePassword(dbType);
+}
+
+function wrongSearchProbePassword(dbType: SearchDbType): string {
+  return `${searchProbePassword(dbType)}-wrong`;
 }
 
 async function findConnectionByName(name: string): Promise<PublicConnection> {

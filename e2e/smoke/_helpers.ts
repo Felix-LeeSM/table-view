@@ -34,6 +34,32 @@ const ENVIRONMENT_LABELS: Record<ConnectionEnvironment, string> = {
   production: "Production",
 };
 
+export type SearchSmokeDbType = "elasticsearch" | "opensearch";
+
+const DEFAULT_SEARCH_SMOKE_PASSWORD = "TableViewSearch1!";
+
+export function searchSmokeUser(dbType: SearchSmokeDbType): string {
+  return dbType === "elasticsearch"
+    ? searchSmokeEnv(process.env.ELASTICSEARCH_USER, "elastic")
+    : searchSmokeEnv(process.env.OPENSEARCH_USER, "admin");
+}
+
+export function searchSmokePassword(dbType: SearchSmokeDbType): string {
+  return dbType === "elasticsearch"
+    ? searchSmokeEnv(
+        process.env.ELASTICSEARCH_PASSWORD,
+        DEFAULT_SEARCH_SMOKE_PASSWORD,
+      )
+    : searchSmokeEnv(
+        process.env.OPENSEARCH_PASSWORD,
+        DEFAULT_SEARCH_SMOKE_PASSWORD,
+      );
+}
+
+function searchSmokeEnv(value: string | undefined, fallback: string): string {
+  return value && value.trim() !== "" ? value : fallback;
+}
+
 export async function step<T>(label: string, action: () => Promise<T>) {
   console.log(`[e2e smoke] step: ${label}`);
   return await action();
@@ -467,14 +493,8 @@ export async function createElasticsearchConnection(
       process.env.ELASTICSEARCH_PORT ??
       "19200",
   );
-  const user = process.env.ELASTICSEARCH_USER ?? "";
-  if (user) {
-    await setInput("#conn-user", user);
-  }
-  const password = process.env.ELASTICSEARCH_PASSWORD ?? "";
-  if (password) {
-    await setInput("#conn-password", password);
-  }
+  await setInput("#conn-user", searchSmokeUser("elasticsearch"));
+  await setInput("#conn-password", searchSmokePassword("elasticsearch"));
 
   await saveConnectionDialog(dialog);
   await expectConnectionVisible(name);
@@ -495,14 +515,8 @@ export async function createOpenSearchConnection(name = "E2E OpenSearch") {
     "#conn-port",
     process.env.E2E_OPENSEARCH_PORT ?? process.env.OPENSEARCH_PORT ?? "29200",
   );
-  const user = process.env.OPENSEARCH_USER ?? "";
-  if (user) {
-    await setInput("#conn-user", user);
-  }
-  const password = process.env.OPENSEARCH_PASSWORD ?? "";
-  if (password) {
-    await setInput("#conn-password", password);
-  }
+  await setInput("#conn-user", searchSmokeUser("opensearch"));
+  await setInput("#conn-password", searchSmokePassword("opensearch"));
 
   await saveConnectionDialog(dialog);
   await expectConnectionVisible(name);
