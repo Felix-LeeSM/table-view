@@ -281,6 +281,75 @@ async fn valkey_testcontainer_covers_connection_key_browse_and_command_policy() 
         .unwrap();
     assert_eq!(stream_result.columns[1].name, "fields");
 
+    let list_result = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "LRANGE tv:list 0 1".into(),
+                database: Some(2),
+                confirm_key: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        list_result.rows[0],
+        vec![serde_json::json!(0), serde_json::json!("alpha")]
+    );
+    assert_eq!(
+        list_result.rows[1],
+        vec![serde_json::json!(1), serde_json::json!("beta")]
+    );
+
+    let set_result = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "SMEMBERS tv:set".into(),
+                database: Some(2),
+                confirm_key: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    let set_members: Vec<_> = set_result.rows.iter().map(|row| row[0].clone()).collect();
+    assert!(set_members.contains(&serde_json::json!("one")));
+    assert!(set_members.contains(&serde_json::json!("two")));
+
+    let zset_result = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "ZRANGE tv:zset 0 1 WITHSCORES".into(),
+                database: Some(2),
+                confirm_key: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        zset_result.rows[0],
+        vec![serde_json::json!("low"), serde_json::json!(1.5)]
+    );
+    assert_eq!(
+        zset_result.rows[1],
+        vec![serde_json::json!("high"), serde_json::json!(3.25)]
+    );
+
+    let ttl_read_result = adapter
+        .execute_command(
+            KvCommandRequest {
+                command: "TTL tv:string".into(),
+                database: Some(2),
+                confirm_key: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(ttl_read_result.rows[0][1], serde_json::json!("expires"));
+    assert!(ttl_read_result.rows[0][2].as_i64().unwrap_or_default() > 0);
+
     let ttl_result = adapter
         .execute_command(
             KvCommandRequest {
@@ -431,6 +500,30 @@ async fn seed_valkey(port: u16) {
         .arg("tv:hash")
         .arg("name")
         .arg("Ada")
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+    let _: () = ::redis::cmd("RPUSH")
+        .arg("tv:list")
+        .arg("alpha")
+        .arg("beta")
+        .arg("gamma")
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+    let _: () = ::redis::cmd("SADD")
+        .arg("tv:set")
+        .arg("one")
+        .arg("two")
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+    let _: () = ::redis::cmd("ZADD")
+        .arg("tv:zset")
+        .arg(1.5)
+        .arg("low")
+        .arg(3.25)
+        .arg("high")
         .query_async(&mut connection)
         .await
         .unwrap();

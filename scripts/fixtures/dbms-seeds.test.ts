@@ -81,6 +81,7 @@ type ValkeyRedisCompatibilityFixture = {
   product: "valkey";
   supportLevel: "static-matrix-plus-focused-runtime-proof";
   compatibilityTarget: "redis-command";
+  newlyPromotedCommandGaps: string[];
   runtimeSupport: true;
   detectionRules: string[];
   commandFamilyMatrix: ValkeyCompatibilityMatrixEntry[];
@@ -341,6 +342,12 @@ describe("DBMS-specific E2E seed fixtures", () => {
       "static-matrix-plus-focused-runtime-proof",
     );
     expect(fixture.compatibilityTarget).toBe("redis-command");
+    expect(fixture.newlyPromotedCommandGaps).toEqual([
+      "LRANGE",
+      "SMEMBERS",
+      "ZRANGE WITHSCORES",
+      "TTL",
+    ]);
     expect(fixture.runtimeSupport).toBe(true);
     expect(fixture.detectionRules.join(" ")).toContain("valkey_version");
 
@@ -376,6 +383,10 @@ describe("DBMS-specific E2E seed fixtures", () => {
         "string-read-preview",
         "string-write-command",
         "hash-read-command",
+        "list-read-command",
+        "set-read-command",
+        "sorted-set-read-command",
+        "ttl-read-command",
         "ttl-mutation-command",
         "stream-read-command",
         "single-key-destructive",

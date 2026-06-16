@@ -92,7 +92,7 @@ export const REDIS_COMMAND_COMPLETIONS = [
     effect: "read",
     arity: "key start stop [WITHSCORES]",
     arguments: ["key", "start", "stop", "WITHSCORES"],
-    snippet: "ZRANGE ${key} 0 99",
+    snippet: "ZRANGE ${key} 0 99 WITHSCORES",
     summary: "Read a bounded sorted-set range.",
   },
   {
@@ -211,8 +211,12 @@ const REDIS_COMMAND_COMPLETION_NAMES = new Set<RedisCommandCompletionName>(
 const VALKEY_COMMAND_COMPLETION_NAMES = new Set<RedisCommandCompletionName>([
   "GET",
   "HGETALL",
+  "LRANGE",
+  "SMEMBERS",
+  "ZRANGE",
   "XRANGE",
   "TYPE",
+  "TTL",
   "EXISTS",
   "SET",
   "EXPIRE",
