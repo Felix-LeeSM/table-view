@@ -46,8 +46,9 @@ describe("CollectionStatsPanel (Sprint 338 U3 live wire)", () => {
     mongoMock.mockReset();
   });
 
-  it("renders RDB stats grid after collection_stats_rdb resolves", async () => {
+  it("renders RDB stats grid after explicit collection_stats_rdb load", async () => {
     rdbMock.mockResolvedValueOnce(rdbStub);
+    const user = userEvent.setup();
     render(
       <CollectionStatsPanel
         connectionId="conn-pg"
@@ -57,6 +58,8 @@ describe("CollectionStatsPanel (Sprint 338 U3 live wire)", () => {
       />,
     );
     expect(screen.getByTestId("collection-stats-panel")).toBeInTheDocument();
+    expect(rdbMock).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId("collection-stats-refresh"));
     await waitFor(() =>
       expect(screen.getByTestId("collection-stats-grid")).toBeInTheDocument(),
     );
@@ -65,8 +68,9 @@ describe("CollectionStatsPanel (Sprint 338 U3 live wire)", () => {
     expect(screen.getByText(/2026-05-15T00:00:00Z/)).toBeInTheDocument();
   });
 
-  it("dispatches Mongo stats on paradigm=document and renders extras", async () => {
+  it("dispatches Mongo stats on explicit paradigm=document load and renders extras", async () => {
     mongoMock.mockResolvedValueOnce(mongoStub);
+    const user = userEvent.setup();
     render(
       <CollectionStatsPanel
         connectionId="conn-m"
@@ -75,6 +79,8 @@ describe("CollectionStatsPanel (Sprint 338 U3 live wire)", () => {
         paradigm="document"
       />,
     );
+    expect(mongoMock).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId("collection-stats-refresh"));
     await waitFor(() =>
       expect(screen.getByTestId("collection-stats-grid")).toBeInTheDocument(),
     );
@@ -84,6 +90,7 @@ describe("CollectionStatsPanel (Sprint 338 U3 live wire)", () => {
 
   it("renders error alert when fetch rejects", async () => {
     rdbMock.mockRejectedValueOnce(new Error("permission denied"));
+    const user = userEvent.setup();
     render(
       <CollectionStatsPanel
         connectionId="conn-pg"
@@ -92,6 +99,8 @@ describe("CollectionStatsPanel (Sprint 338 U3 live wire)", () => {
         paradigm="table"
       />,
     );
+    expect(rdbMock).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId("collection-stats-refresh"));
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/permission denied/);
     expect(screen.queryByTestId("collection-stats-grid")).toBeNull();
@@ -108,6 +117,8 @@ describe("CollectionStatsPanel (Sprint 338 U3 live wire)", () => {
         paradigm="table"
       />,
     );
+    expect(rdbMock).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId("collection-stats-refresh"));
     await waitFor(() => expect(rdbMock).toHaveBeenCalledTimes(1));
     await user.click(screen.getByTestId("collection-stats-refresh"));
     await waitFor(() => expect(rdbMock).toHaveBeenCalledTimes(2));

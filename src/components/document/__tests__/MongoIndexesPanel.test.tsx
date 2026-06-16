@@ -18,6 +18,10 @@ import {
   fireEvent,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import {
+  __resetDocumentCatalogStoreForTests,
+  useDocumentCatalogStore,
+} from "@/stores/documentCatalogStore";
 import { MongoIndexesPanel } from "../MongoIndexesPanel";
 
 const listMongoIndexesMock = vi.fn();
@@ -32,6 +36,7 @@ beforeEach(() => {
 });
 
 beforeEach(() => {
+  __resetDocumentCatalogStoreForTests();
   listMongoIndexesMock.mockReset();
   createMongoIndexMock.mockReset();
   dropMongoIndexMock.mockReset();
@@ -125,6 +130,37 @@ describe("MongoIndexesPanel (Sprint 350 — tracer RO list)", () => {
     render(
       <MongoIndexesPanel connectionId="conn-mongo" database="" collection="" />,
     );
+    expect(listMongoIndexesMock).not.toHaveBeenCalled();
+  });
+
+  it("renders cached index inventory without an eager refetch", async () => {
+    useDocumentCatalogStore.setState({
+      indexesCache: {
+        "conn-mongo": {
+          app: {
+            users: [
+              {
+                name: "email_1",
+                columns: ["email"],
+                index_type: "btree",
+                is_unique: true,
+                is_primary: false,
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    render(
+      <MongoIndexesPanel
+        connectionId="conn-mongo"
+        database="app"
+        collection="users"
+      />,
+    );
+
+    expect(await screen.findByText("email_1")).toBeInTheDocument();
     expect(listMongoIndexesMock).not.toHaveBeenCalled();
   });
 

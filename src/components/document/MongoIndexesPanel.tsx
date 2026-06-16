@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
-import { listMongoIndexes } from "@lib/tauri";
+import { useDocumentCatalogStore } from "@/stores/documentCatalogStore";
 import {
   Tooltip,
   TooltipContent,
@@ -12,6 +12,8 @@ import type { IndexInfo } from "@/types/schema";
 
 import { CreateMongoIndexDialog } from "./CreateMongoIndexDialog";
 import { DropMongoIndexDialog } from "./DropMongoIndexDialog";
+
+const EMPTY_INDEXES: readonly IndexInfo[] = [];
 
 export interface MongoIndexesPanelProps {
   connectionId: string;
@@ -34,49 +36,50 @@ export function MongoIndexesPanel({
   database,
   collection,
 }: MongoIndexesPanelProps) {
-  const [indexes, setIndexes] = useState<IndexInfo[]>([]);
+  const indexes =
+    useDocumentCatalogStore(
+      (s) => s.indexesCache[connectionId]?.[database]?.[collection],
+    ) ?? EMPTY_INDEXES;
+  const loadCollectionIndexes = useDocumentCatalogStore(
+    (s) => s.loadCollectionIndexes,
+  );
   const [loading, setLoading] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  // Bump this to force the fetch effect to re-run after a successful
-  // create / drop. Using a counter rather than the indexes list itself
-  // keeps the effect dependency array stable.
-  const [refreshNonce, setRefreshNonce] = useState(0);
+
+  const loadIndexes = useCallback(
+    async (force = false) => {
+      if (database === "" || collection === "") return;
+      setLoading(true);
+      setError(null);
+      try {
+        await loadCollectionIndexes(connectionId, database, collection, {
+          force,
+        });
+        setHasFetched(true);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : String(err));
+        setHasFetched(true);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [connectionId, database, collection, loadCollectionIndexes],
+  );
 
   const refresh = useCallback(() => {
-    setRefreshNonce((n) => n + 1);
-  }, []);
+    void loadIndexes(true);
+  }, [loadIndexes]);
 
   useEffect(() => {
     // The placeholder branch in `MainArea` already blocks this code path
     // when the tab lacks `database` / `collection`, but we guard again
     // so unit-mounted panels (tests, hot-reload) don't dispatch an
     // invalid IPC.
-    if (database === "" || collection === "") return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    listMongoIndexes(connectionId, database, collection)
-      .then((rows) => {
-        if (cancelled) return;
-        setIndexes(rows);
-        setHasFetched(true);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
-        setHasFetched(true);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [connectionId, database, collection, refreshNonce]);
+    void loadIndexes(false);
+  }, [loadIndexes]);
 
   const busy = useDelayedFlag(loading, 1000);
 

@@ -213,9 +213,6 @@ export default function QueryTab({ tab }: QueryTabProps) {
   const fieldsCache = useDocumentCatalogStore((s) => s.fieldsCache);
   const indexesCache = useDocumentCatalogStore((s) => s.indexesCache);
   const collectionsCache = useDocumentCatalogStore((s) => s.collections);
-  const loadCollectionIndexes = useDocumentCatalogStore(
-    (s) => s.loadCollectionIndexes,
-  );
   const mongoFieldNames = useMemo(() => {
     if (tab.paradigm !== "document" || !tab.database || !tab.collection) {
       return undefined;
@@ -270,25 +267,6 @@ export default function QueryTab({ tab }: QueryTabProps) {
     tab.database,
     tab.collection,
     tab.paradigm,
-  ]);
-  useEffect(() => {
-    if (tab.paradigm !== "document" || !tab.database || !tab.collection) {
-      return;
-    }
-    void loadCollectionIndexes(
-      tab.connectionId,
-      tab.database,
-      tab.collection,
-    ).catch(() => {
-      // Background completion inventory; index panel remains the visible
-      // error surface for index permissions.
-    });
-  }, [
-    tab.paradigm,
-    tab.connectionId,
-    tab.database,
-    tab.collection,
-    loadCollectionIndexes,
   ]);
   // Sprint 309 — `useMongoAutocomplete` no longer branches on the legacy
   // mode toggle. The unified completion source surfaces both the find

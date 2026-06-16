@@ -264,8 +264,9 @@ claims separate.
 
 ### Search DSL Support Breakdown
 
-- Runtime: Elasticsearch and OpenSearch live connection test, catalog/index
-  detail fetch, bounded `_search` dispatch, Search-native result rendering,
+- Runtime: Elasticsearch and OpenSearch live connection test,
+  index-catalog-first sidebar shell, selected-index/explicit-action catalog
+  detail fetches, bounded `_search` dispatch, Search-native result rendering,
   delete-by-query safety planning, and query cancellation/error surfacing are
   active. Runtime Happy Path smoke covers representative Elasticsearch and
   OpenSearch connect/catalog/search/render/delete-plan paths on Ubuntu.
@@ -291,7 +292,9 @@ claims separate.
   and safe `_search` delete-by-query estimates.
 - Remaining unsupported work: actual live `_delete_by_query` execution,
   profile/explain request workflow, broader admin APIs, and
-  observability/error-surface smoke remain future gates.
+  observability/error-surface smoke remain future gates. Search live HTTP/admin
+  promotion remains owned by the Search roadmap/milestone, not non-RDBMS
+  lazy-loading workbench hardening.
 
 ## Result Boundary
 

@@ -55,6 +55,7 @@ beforeEach(() => {
     cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
     findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
     aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
+    listMongoIndexes: vi.fn(() => Promise.resolve([])),
     listPostgresExtensions: vi.fn(() => Promise.resolve([])),
     listSqliteCapabilities: vi.fn(() =>
       Promise.resolve({ json1: true, fts5: false, rtree: false }),
@@ -362,6 +363,17 @@ describe("QueryTab — dialect", () => {
     expect(mockEditorProps.lastMongoExtensions).toBeDefined();
     expect(Array.isArray(mockEditorProps.lastMongoExtensions)).toBe(true);
     expect(mockEditorProps.lastMongoExtensions?.length).toBe(2);
+  });
+
+  it("does not preload Mongo indexes when a document query tab renders", async () => {
+    const { listMongoIndexes } = await import("@lib/tauri");
+    const docTab = makeDocTab();
+    useWorkspaceStore.setState(seedWorkspace([docTab], "query-1"));
+
+    render(<QueryTab tab={docTab} />);
+
+    expect(mockEditorProps.lastParadigm).toBe("document");
+    expect(listMongoIndexes).not.toHaveBeenCalled();
   });
 
   // Sprint 309 — the "queryMode flip rebuilds mongoExtensions" assertion
