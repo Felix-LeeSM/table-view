@@ -113,11 +113,15 @@ fn backend_profiles_encode_current_database_type_contracts() {
     );
     assert_eq!(
         mssql.adapter_contract.capabilities,
-        [BackendAdapterCapability::Lifecycle]
+        [
+            BackendAdapterCapability::Lifecycle,
+            BackendAdapterCapability::RelationalCatalog,
+            BackendAdapterCapability::RelationalQuery,
+        ]
     );
     assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let oracle = get_data_source_profile(&DatabaseType::Oracle);
@@ -336,11 +340,18 @@ fn rdbms_integration_gate_profiles_are_coherent() {
     );
     assert_eq!(
         database_type_labels(RUNTIME_RDBMS_DATABASE_TYPES),
-        vec!["postgresql", "mysql", "mariadb", "sqlite", "duckdb"]
+        vec![
+            "postgresql",
+            "mysql",
+            "mariadb",
+            "sqlite",
+            "duckdb",
+            "mssql"
+        ]
     );
     assert_eq!(
         database_type_labels(SERVER_RDBMS_DATABASE_TYPES),
-        vec!["postgresql", "mysql", "mariadb"]
+        vec!["postgresql", "mysql", "mariadb", "mssql"]
     );
     assert_eq!(
         database_type_labels(FILE_RDBMS_DATABASE_TYPES),
@@ -381,11 +392,15 @@ fn rdbms_integration_gate_profiles_are_coherent() {
     );
     assert_eq!(
         mssql.adapter_contract.capabilities,
-        [BackendAdapterCapability::Lifecycle]
+        [
+            BackendAdapterCapability::Lifecycle,
+            BackendAdapterCapability::RelationalCatalog,
+            BackendAdapterCapability::RelationalQuery,
+        ]
     );
     assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let oracle = get_data_source_profile(&DatabaseType::Oracle);

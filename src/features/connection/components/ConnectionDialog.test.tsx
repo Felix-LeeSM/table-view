@@ -1776,7 +1776,7 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Trust server certificate")).toBeChecked();
     });
 
-    it("MSSQL save clears trustServerCertificate when encryption is disabled without query/catalog/edit claims", async () => {
+    it("MSSQL save clears trustServerCertificate when encryption is disabled with bounded runtime claims", async () => {
       const user = userEvent.setup();
       renderDialog();
       await act(async () => {
@@ -1810,8 +1810,8 @@ describe("ConnectionDialog", () => {
         dataSourceProfiles.getDataSourceProfile("mssql").capabilities,
       ).toMatchObject({
         connection: { test: true },
-        query: { query: false },
-        catalog: { browse: false },
+        query: { query: true, multiStatement: true, cancel: true },
+        catalog: { browse: true, schema: true, indexes: true },
         edit: { editRows: false },
       });
     });

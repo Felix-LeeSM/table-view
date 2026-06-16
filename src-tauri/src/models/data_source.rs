@@ -294,8 +294,11 @@ const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
 ];
-const MSSQL_CONNECTION_ONLY_CAPABILITIES: &[BackendAdapterCapability] =
-    &[BackendAdapterCapability::Lifecycle];
+const MSSQL_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
+    BackendAdapterCapability::Lifecycle,
+    BackendAdapterCapability::RelationalCatalog,
+    BackendAdapterCapability::RelationalQuery,
+];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::DocumentCatalog,
@@ -362,7 +365,7 @@ const MSSQL_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     state: BackendAdapterContractState::FactoryBacked,
     implementation: BackendAdapterId::Mssql,
     capability_source: BackendAdapterCapabilitySource::Mssql,
-    capabilities: MSSQL_CONNECTION_ONLY_CAPABILITIES,
+    capabilities: MSSQL_RDB_CAPABILITIES,
 };
 const ORACLE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,

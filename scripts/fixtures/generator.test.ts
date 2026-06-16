@@ -117,7 +117,7 @@ describe("generator — determinism", () => {
 });
 
 describe("generator — connection flattening", () => {
-  it("includes declared-only MSSQL and Oracle fixture identities", () => {
+  it("includes MSSQL runtime and Oracle fixture identities", () => {
     const flattened = flattenConnections(spec.profileSpec);
     expect(flattened.map((c) => c.target)).toContain("mssql");
     expect(flattened.map((c) => c.target)).toContain("oracle");

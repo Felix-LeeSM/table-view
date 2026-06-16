@@ -36,9 +36,16 @@ impl MssqlAdapter {
                 "SQL query is empty after removing trailing terminators".into(),
             ));
         }
+        if has_internal_statement_separator(query) {
+            return Err(mssql_runtime_statement_unsupported());
+        }
+
+        let query_type = mssql_query_type(query);
+        if matches!(&query_type, QueryType::Ddl) {
+            return Err(mssql_runtime_statement_unsupported());
+        }
 
         let config = self.connected_config().await?;
-        let query_type = mssql_query_type(query);
         let start = std::time::Instant::now();
 
         let work = async {
@@ -105,22 +112,7 @@ impl MssqlAdapter {
                         query_type: QueryType::Dml { rows_affected },
                     })
                 }
-                QueryType::Ddl => {
-                    client
-                        .simple_query(query)
-                        .await
-                        .map_err(|err| mssql_query_error("SQL Server statement failed", err))?
-                        .into_results()
-                        .await
-                        .map_err(|err| mssql_query_error("SQL Server statement failed", err))?;
-                    Ok(QueryResult {
-                        columns: Vec::new(),
-                        rows: Vec::new(),
-                        total_count: 0,
-                        execution_time_ms: start.elapsed().as_millis() as u64,
-                        query_type: QueryType::Ddl,
-                    })
-                }
+                QueryType::Ddl => Err(mssql_runtime_statement_unsupported()),
             }
         };
 
@@ -282,12 +274,18 @@ impl MssqlAdapter {
             return Err(query_cancelled());
         }
         for (idx, raw) in statements.iter().enumerate() {
-            if strip_trailing_terminator(raw).trim().is_empty() {
+            let statement = strip_trailing_terminator(raw);
+            if statement.trim().is_empty() {
                 return Err(AppError::Validation(format!(
                     "Statement {} of {} is empty",
                     idx + 1,
                     statements.len()
                 )));
+            }
+            if has_internal_statement_separator(statement)
+                || !matches!(mssql_query_type(statement), QueryType::Dml { .. })
+            {
+                return Err(mssql_batch_statement_unsupported(idx + 1, statements.len()));
             }
         }
 
@@ -519,13 +517,13 @@ fn strip_trailing_terminator(sql: &str) -> &str {
     sql.trim_end_matches(|c: char| c == ';' || c.is_whitespace())
 }
 
+fn has_internal_statement_separator(sql: &str) -> bool {
+    strip_trailing_terminator(sql).contains(';')
+}
+
 fn mssql_query_type(query: &str) -> QueryType {
     let trimmed = strip_leading_comments(query).to_uppercase();
-    if trimmed.starts_with("SELECT")
-        || trimmed.starts_with("WITH")
-        || trimmed.starts_with("EXEC")
-        || trimmed.starts_with("EXECUTE")
-    {
+    if trimmed.starts_with("SELECT") || trimmed.starts_with("WITH") {
         QueryType::Select
     } else if trimmed.starts_with("INSERT")
         || trimmed.starts_with("UPDATE")
@@ -536,6 +534,18 @@ fn mssql_query_type(query: &str) -> QueryType {
     } else {
         QueryType::Ddl
     }
+}
+
+fn mssql_runtime_statement_unsupported() -> AppError {
+    AppError::Unsupported(
+        "SQL Server statement is outside issue #902 runtime slice; only SELECT/WITH query and INSERT/UPDATE/DELETE/MERGE DML are supported".into(),
+    )
+}
+
+fn mssql_batch_statement_unsupported(position: usize, total: usize) -> AppError {
+    AppError::Unsupported(format!(
+        "Statement {position} of {total} is outside issue #902 runtime slice; batch supports INSERT/UPDATE/DELETE/MERGE DML only"
+    ))
 }
 
 fn mssql_query_column(column: &Column) -> QueryColumn {
@@ -745,7 +755,7 @@ mod tests {
     }
 
     #[test]
-    fn mssql_query_type_classifies_tsql_select_and_dml() {
+    fn mssql_query_type_classifies_bounded_tsql_runtime_shapes() {
         assert!(matches!(
             mssql_query_type("-- x\nSELECT 1;"),
             QueryType::Select
@@ -768,7 +778,7 @@ mod tests {
         ));
         assert!(matches!(
             mssql_query_type("-- a\n/* b */ EXECUTE dbo.touch_user @id = 1"),
-            QueryType::Select
+            QueryType::Ddl
         ));
         assert!(matches!(
             mssql_query_type("INSERT INTO dbo.users DEFAULT VALUES"),
@@ -780,7 +790,7 @@ mod tests {
         ));
         assert!(matches!(
             mssql_query_type("\n\t/* a */\n-- b\nexec dbo.touch_user"),
-            QueryType::Select
+            QueryType::Ddl
         ));
         assert!(matches!(
             mssql_query_type("-- comment only"),
@@ -790,6 +800,42 @@ mod tests {
             mssql_query_type("/* unterminated"),
             QueryType::Ddl
         ));
+    }
+
+    #[tokio::test]
+    async fn unsupported_runtime_sql_short_circuits_before_connection_lookup() {
+        let adapter = MssqlAdapter::new();
+
+        for query in [
+            "CREATE TABLE dbo.t (id int)",
+            "DROP TABLE dbo.users",
+            "EXEC dbo.touch_user @id = 1",
+            "EXECUTE dbo.touch_user @id = 1",
+            "UPDATE dbo.users SET name = 'Ada'; DROP TABLE dbo.users",
+        ] {
+            let err = adapter.execute_query(query, None).await.unwrap_err();
+            assert!(
+                matches!(err, AppError::Unsupported(ref msg) if msg.contains("outside issue #902")),
+                "expected issue #902 unsupported boundary for {query}, got {err:?}"
+            );
+        }
+
+        let err = adapter
+            .execute_query_batch(
+                &["UPDATE dbo.users SET name = 'Ada'; DROP TABLE dbo.users".to_string()],
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Unsupported(msg) if msg.contains("Statement 1 of 1")));
+
+        let err = adapter
+            .dry_run_query_batch(&["SELECT 1".to_string()], None)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AppError::Unsupported(msg) if msg.contains("batch supports INSERT/UPDATE/DELETE/MERGE"))
+        );
     }
 
     #[tokio::test]
@@ -856,12 +902,7 @@ mod tests {
     async fn connected_runtime_paths_reach_network_boundary() {
         let adapter = connected_loopback_adapter().await;
 
-        for query in [
-            "SELECT 1",
-            "EXECUTE dbo.touch_user @id = 1",
-            "UPDATE dbo.users SET name = 'Ada'",
-            "CREATE TABLE dbo.t (id int)",
-        ] {
+        for query in ["SELECT 1", "UPDATE dbo.users SET name = 'Ada'"] {
             let err = adapter.execute_query(query, None).await.unwrap_err();
             assert!(matches!(err, AppError::Connection(msg) if msg.contains("network connection")));
         }
@@ -900,12 +941,7 @@ mod tests {
     async fn valid_runtime_modes_fail_at_connection_boundary_without_network() {
         let adapter = MssqlAdapter::new();
 
-        for query in [
-            "SELECT 1",
-            "EXEC dbo.touch_user @id = 1",
-            "UPDATE dbo.users SET name = 'Ada'",
-            "CREATE TABLE dbo.t (id int)",
-        ] {
+        for query in ["SELECT 1", "UPDATE dbo.users SET name = 'Ada'"] {
             let err = adapter.execute_query(query, None).await.unwrap_err();
             assert!(matches!(err, AppError::Connection(msg) if msg.contains("not open")));
         }

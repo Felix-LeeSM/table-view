@@ -137,10 +137,10 @@ describe("unsupported_boundary_contracts.json", () => {
     }
   });
 
-  it("keeps MSSQL and Oracle profile identity from becoming a runtime support widening rule", () => {
+  it("keeps MSSQL runtime and Oracle declared-only boundaries explicit", () => {
     const row = rowById(
       loadBoundaryFixture(),
-      "mssql-oracle-profile-identity-static-fixture-nonclaim",
+      "mssql-runtime-oracle-declared-only-boundaries",
     );
     const report = readJson<ProfileParityReport>(
       row.fixtureEvidence[0]?.path ?? "",

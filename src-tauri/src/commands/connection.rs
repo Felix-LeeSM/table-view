@@ -32,7 +32,7 @@ use crate::db::search::SearchEngineAdapter;
 use crate::db::sqlite::SqliteAdapter;
 use crate::db::ActiveAdapter;
 use crate::db::DuckdbAdapter;
-use crate::db::MssqlConnectionOnlyAdapter;
+use crate::db::MssqlAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
 use crate::state::introspection_pool::IntrospectionPool;
@@ -65,9 +65,9 @@ const ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE: &str =
 /// surfaces still return `AppError::Unsupported` until Slice B~G land.
 /// MariaDB shares the MySQL protocol adapter while preserving its distinct
 /// `DatabaseType` on the active adapter. SQLite and DuckDB have file-backed
-/// adapters. SQL Server is connection-only for issue #901: lifecycle
-/// connect/ping may run, but catalog/query/edit/DDL RDB calls return
-/// `Unsupported`. Oracle remains declared-only.
+/// adapters. SQL Server uses the bounded MSSQL runtime slice: lifecycle,
+/// catalog/table/view/routine browse, tabular query, batch DML, and
+/// cooperative cancel. Oracle remains declared-only.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
@@ -75,9 +75,7 @@ pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppE
         DatabaseType::Mariadb => Ok(ActiveAdapter::Rdb(Box::new(MysqlAdapter::new_mariadb()))),
         DatabaseType::Sqlite => Ok(ActiveAdapter::Rdb(Box::new(SqliteAdapter::new()))),
         DatabaseType::Duckdb => Ok(ActiveAdapter::Rdb(Box::new(DuckdbAdapter::new()))),
-        DatabaseType::Mssql => Ok(ActiveAdapter::Rdb(Box::new(
-            MssqlConnectionOnlyAdapter::new(),
-        ))),
+        DatabaseType::Mssql => Ok(ActiveAdapter::Rdb(Box::new(MssqlAdapter::new()))),
         DatabaseType::Oracle => Err(AppError::Unsupported(
             ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE.into(),
         )),
@@ -336,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn test_make_adapter_mssql_returns_connection_only_rdb_variant() {
+    fn test_make_adapter_mssql_returns_runtime_rdb_variant() {
         let adapter = make_adapter(&DatabaseType::Mssql).expect("mssql should succeed");
         assert!(
             matches!(adapter, ActiveAdapter::Rdb(_)),
@@ -346,14 +344,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_make_adapter_mssql_rdb_methods_stay_unsupported() {
+    async fn test_make_adapter_mssql_rdb_methods_route_to_runtime() {
         let adapter = make_adapter(&DatabaseType::Mssql).expect("mssql should succeed");
-        let rdb = adapter.as_rdb().expect("mssql remains an RDB handle");
+        let rdb = adapter.as_rdb().expect("mssql is an RDB handle");
 
-        assert_mssql_connection_only_unsupported(rdb.list_namespaces().await);
-        assert_mssql_connection_only_unsupported(rdb.execute_sql("SELECT 1", None).await);
-        assert_mssql_connection_only_unsupported(rdb.list_views("dbo").await);
-        assert_mssql_connection_only_unsupported(rdb.list_triggers("dbo", "users").await);
+        assert_mssql_runtime_requires_open_connection(rdb.list_namespaces().await);
+        assert_mssql_runtime_requires_open_connection(rdb.execute_sql("SELECT 1", None).await);
+        assert_mssql_runtime_requires_open_connection(rdb.list_views("dbo").await);
+        assert_mssql_runtime_requires_open_connection(rdb.list_functions("dbo").await);
 
         let drop = crate::models::DropTableRequest {
             connection_id: "mssql".into(),
@@ -363,7 +361,7 @@ mod tests {
             preview_only: false,
             expected_database: None,
         };
-        assert_mssql_connection_only_unsupported(rdb.drop_table(&drop).await);
+        assert_mssql_runtime_ddl_unsupported(rdb.drop_table(&drop).await);
     }
 
     #[test]
@@ -400,10 +398,19 @@ mod tests {
         assert!(matches!(adapter.kind(), DatabaseType::Redis));
     }
 
-    fn assert_mssql_connection_only_unsupported<T: std::fmt::Debug>(result: Result<T, AppError>) {
+    fn assert_mssql_runtime_requires_open_connection<T: std::fmt::Debug>(
+        result: Result<T, AppError>,
+    ) {
         assert!(
-            matches!(result, Err(AppError::Unsupported(ref message)) if message.contains("connection test, connect, and ping only")),
-            "expected MSSQL connection-only Unsupported, got {result:?}"
+            matches!(result, Err(AppError::Connection(ref message)) if message.contains("SQL Server connection is not open")),
+            "expected MSSQL runtime open-connection error, got {result:?}"
+        );
+    }
+
+    fn assert_mssql_runtime_ddl_unsupported<T: std::fmt::Debug>(result: Result<T, AppError>) {
+        assert!(
+            matches!(result, Err(AppError::Unsupported(ref message)) if message.contains("SQL Server structured DDL is outside issue #902")),
+            "expected MSSQL #902 DDL Unsupported, got {result:?}"
         );
     }
 

@@ -19,7 +19,7 @@ describe("query language support documentation", () => {
     }
   });
 
-  it("keeps MSSQL connection-only while Oracle stays declared-only", () => {
+  it("keeps MSSQL runtime scoped while Oracle stays declared-only", () => {
     const supportDocs = [
       "docs/product/README.md",
       "docs/product/known-limitations.md",
@@ -29,21 +29,22 @@ describe("query language support documentation", () => {
       .map((path) => readFileSync(path, "utf8"))
       .join("\n");
 
-    expect(supportDocs).toMatch(/\bMSSQL\b[\s\S]*connection-only/i);
+    expect(supportDocs).toMatch(
+      /\bMSSQL\b[\s\S]*catalog\/query\/cancel\/tabular runtime/i,
+    );
     expect(supportDocs).toMatch(/\bOracle\b[\s\S]*declared-only/i);
     expect(supportDocs).toMatch(
-      /No SQL Server query, catalog, edit, DDL, parser, completion, or runtime smoke support is claimed/,
+      /SQL Server edit, structured DDL, parser, completion, and runtime smoke support remain unclaimed/,
     );
     expect(supportDocs).toMatch(
       /No Oracle connection, query, catalog, edit, DDL, parser, completion, or runtime smoke support is claimed/,
     );
 
     const activeClaimPatterns = [
-      /\bMSSQL\b[^.\n|]*(?:has query\/catalog\/edit runtime support|Runtime Happy Path smoke covers|RelationalCatalog, RelationalQuery)/i,
+      /\bMSSQL\b[^.\n|]*(?:Runtime Happy Path smoke covers|catalog-aware[^.\n|]*completion is active|structured DDL is active|row edit is active)/i,
       /\bOracle\b[^.\n|]*(?:now has|has UI\/runtime support|connection-test runtime evidence|service-name connection UI\/runtime support|Runtime Happy Path smoke covers|RelationalCatalog, RelationalQuery)/i,
-      /SQL Server query, seeded/i,
+      /SQL Server smoke, seeded/i,
       /Oracle service-name connect, seeded/i,
-      /\bMSSQL\b[^.\n|]*catalog-aware[^.\n|]*completion is active/i,
       /\bOracle\b[^.\n|]*autocomplete is active/i,
     ];
 
