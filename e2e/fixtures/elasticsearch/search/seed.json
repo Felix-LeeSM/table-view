@@ -9,7 +9,7 @@
     "search.delete-plan",
     "search.smoke-routing"
   ],
-  "supportClaimImpact": "Search seed is fixture-backed and wired to Runtime Happy Path smoke; it does not widen support to actual live admin execution, observability, profile/explain, raw targets, or delete-by-query execution.",
+  "supportClaimImpact": "Search seed is fixture-only contract data and deterministic live smoke input; live HTTP evidence comes only from the wired Elasticsearch/OpenSearch smoke. It does not widen support to actual live admin execution, observability, profile/explain, raw targets, or delete-by-query execution.",
   "idempotencyContract": "Idempotency contract: embedded fixture state is deterministic and never opens a network connection.",
   "identity": {
     "clusterName": "Elasticsearch fixture",

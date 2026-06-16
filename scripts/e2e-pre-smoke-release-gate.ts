@@ -124,6 +124,12 @@ function verifySearchConnectionPromotionBoundary(): void {
     "elasticsearch: live connection test capability should be exposed",
   );
   assert(
+    elasticsearch.connectionKind === "server" &&
+      elasticsearch.catalogModel === "search" &&
+      elasticsearch.resultKinds.includes("searchHits"),
+    "elasticsearch: live smoke contract should stay server/search/searchHits scoped",
+  );
+  assert(
     elasticsearch.capabilities.catalog.browse &&
       elasticsearch.capabilities.catalog.indexes,
     "elasticsearch: live catalog browse/index capability should be exposed",
@@ -135,12 +141,25 @@ function verifySearchConnectionPromotionBoundary(): void {
     "elasticsearch: bounded live query/cancel should be exposed without explain",
   );
   assert(
+    !elasticsearch.capabilities.edit.bulkWrite &&
+      !elasticsearch.capabilities.ddl.dropObject &&
+      !elasticsearch.capabilities.operations.activity &&
+      !elasticsearch.capabilities.operations.serverInfo,
+    "elasticsearch: live smoke must not promote admin, destructive execution, or observability",
+  );
+  assert(
     isSupportedDatabaseType("opensearch"),
     "opensearch: live connection/catalog/query slice should be advertised as connectable",
   );
   assert(
     hasConnectionCapability("opensearch", "test"),
     "opensearch: live connection test capability should be exposed",
+  );
+  assert(
+    opensearch.connectionKind === "server" &&
+      opensearch.catalogModel === "search" &&
+      opensearch.resultKinds.includes("searchHits"),
+    "opensearch: live smoke contract should stay server/search/searchHits scoped",
   );
   assert(
     opensearch.capabilities.catalog.browse &&
@@ -153,10 +172,19 @@ function verifySearchConnectionPromotionBoundary(): void {
       !opensearch.capabilities.query.explain,
     "opensearch: live query/cancel should be exposed while explain remains deferred",
   );
+  assert(
+    !opensearch.capabilities.edit.bulkWrite &&
+      !opensearch.capabilities.ddl.dropObject &&
+      !opensearch.capabilities.operations.activity &&
+      !opensearch.capabilities.operations.serverInfo,
+    "opensearch: live smoke must not promote admin, destructive execution, or observability",
+  );
 }
 
 await verifyProfile("development");
 await verifyProfile("e2e");
 verifySearchConnectionPromotionBoundary();
 
-console.log("[e2e:pre-smoke] release gate fixture assertions passed.");
+console.log(
+  "[e2e:pre-smoke] release gate live Search contract assertions passed.",
+);

@@ -229,13 +229,15 @@ jobs:
         image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
         env:
           discovery.type: single-node
-          xpack.security.enabled: false
+          ELASTIC_PASSWORD: TableViewSearch1!
+          xpack.security.enabled: true
           xpack.security.http.ssl.enabled: false
+          xpack.security.transport.ssl.enabled: false
           ES_JAVA_OPTS: -Xms512m -Xmx512m
         ports:
           - 19200:9200
         options: >-
-          --health-cmd "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s || exit 1"
+          --health-cmd "curl -fsS -u elastic:TableViewSearch1! http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s || exit 1"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 20
@@ -326,15 +328,15 @@ jobs:
             --name table-view-opensearch \
             --publish 29200:9200 \
             --env "discovery.type=single-node" \
-            --env "DISABLE_INSTALL_DEMO_CONFIG=true" \
-            --env "DISABLE_SECURITY_PLUGIN=true" \
+            --env "OPENSEARCH_INITIAL_ADMIN_PASSWORD=TableViewSearch1!" \
+            --env "plugins.security.ssl.http.enabled=false" \
             --env "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" \
             --ulimit memlock=-1:-1 \
             --ulimit nofile=65536:65536 \
             opensearchproject/opensearch:2.13.0
 
           for attempt in {1..40}; do
-            if curl -fsS "http://localhost:29200/_cluster/health?wait_for_status=yellow&timeout=1s"; then
+            if curl -fsS -u admin:TableViewSearch1! "http://localhost:29200/_cluster/health?wait_for_status=yellow&timeout=1s"; then
               exit 0
             fi
             echo "OpenSearch is not ready yet (attempt ${attempt}/40)."
@@ -430,8 +432,12 @@ jobs:
           E2E_VALKEY_DB: 2
           E2E_ELASTICSEARCH_HOST: localhost
           E2E_ELASTICSEARCH_PORT: 19200
+          ELASTICSEARCH_USER: elastic
+          ELASTICSEARCH_PASSWORD: TableViewSearch1!
           E2E_OPENSEARCH_HOST: localhost
           E2E_OPENSEARCH_PORT: 29200
+          OPENSEARCH_USER: admin
+          OPENSEARCH_PASSWORD: TableViewSearch1!
           E2E_SKIP_BUILD: "1"
           E2E_SPEC: ${{ matrix.spec }}
           E2E_SPEC_KEY: ${{ matrix.spec_key }}
