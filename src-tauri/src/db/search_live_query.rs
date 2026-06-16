@@ -32,6 +32,10 @@ pub(crate) fn parse_search_response(
     payload: &Value,
     label: &str,
 ) -> Result<SearchResultEnvelope, AppError> {
+    let shards = parse_shards(payload.get("_shards"), label)?;
+    if let Some(shards) = &shards {
+        reject_failed_shards(shards, label)?;
+    }
     let hits_root = payload
         .get("hits")
         .and_then(Value::as_object)
@@ -57,7 +61,7 @@ pub(crate) fn parse_search_response(
         total: parse_total_hits(hits_root.get("total")),
         hits,
         aggregations: parse_search_aggregations(payload.get("aggregations"), label)?,
-        shards: parse_shards(payload.get("_shards"), label)?,
+        shards,
         explain: payload.get("explain").cloned(),
         profile: payload.get("profile").cloned(),
     })
@@ -239,6 +243,37 @@ fn parse_shard_failure(value: &Value, label: &str) -> Result<SearchShardFailure,
         node: string_field(object, "node"),
         reason: object.get("reason").cloned().unwrap_or(Value::Null),
     })
+}
+
+fn reject_failed_shards(shards: &SearchShardSummary, label: &str) -> Result<(), AppError> {
+    if shards.failed == 0 {
+        return Ok(());
+    }
+    let detail = shards
+        .failures
+        .first()
+        .map(shard_failure_reason_detail)
+        .unwrap_or_else(|| "no shard failure detail returned".into());
+    let message = format!(
+        "{label} search response reported {} failed shard(s) out of {}: {detail}",
+        shards.failed, shards.total
+    );
+    if shards.successful > 0 {
+        Err(AppError::SearchPartialFailure(message))
+    } else {
+        Err(AppError::SearchShardFailure(message))
+    }
+}
+
+fn shard_failure_reason_detail(failure: &SearchShardFailure) -> String {
+    let error_type = failure.reason.get("type").and_then(Value::as_str);
+    let reason_text = failure.reason.get("reason").and_then(Value::as_str);
+    match (error_type, reason_text) {
+        (Some(error_type), Some(reason_text)) => format!("{error_type}: {reason_text}"),
+        (Some(error_type), None) => error_type.to_string(),
+        (None, Some(reason_text)) => reason_text.to_string(),
+        (None, None) => failure.reason.to_string(),
+    }
 }
 
 fn string_field(object: &Map<String, Value>, key: &str) -> Option<String> {

@@ -183,7 +183,7 @@ async fn elasticsearch_root_probe_rejects_unsupported_major_version() {
     }
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchUnsupportedVersion(message)) => {
             assert!(message.contains("Elasticsearch version 6.8.23 is not supported"));
             assert!(message.contains("requires major version 7 or newer"));
         }
@@ -210,7 +210,7 @@ async fn opensearch_root_probe_requires_parseable_version_number() {
     }
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchUnsupportedVersion(message)) => {
             assert!(message.contains("OpenSearch version unknown is not supported"));
             assert!(message.contains("expected a semantic major version"));
         }
@@ -235,7 +235,7 @@ async fn elasticsearch_root_probe_requires_version_number() {
     }
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchUnsupportedVersion(message)) => {
             assert!(message.contains("Elasticsearch root probe did not include a version number"));
         }
         other => panic!("Expected missing Elasticsearch version error, got {other:?}"),
@@ -261,7 +261,7 @@ async fn opensearch_root_probe_rejects_unsupported_major_version() {
     }
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchUnsupportedVersion(message)) => {
             assert!(message.contains("OpenSearch version 0.90.0 is not supported"));
             assert!(message.contains("requires major version 1 or newer"));
         }
@@ -282,7 +282,7 @@ async fn search_root_network_errors_redact_url_and_credentials() {
     let result = SearchEngineAdapter::test(&config).await;
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchNetwork(message)) => {
             assert!(message.contains("Elasticsearch network error"));
             assert!(
                 !message.contains("http://") && !message.contains("https://"),
@@ -308,7 +308,7 @@ async fn elasticsearch_root_probe_tls_errors_are_classified_without_url() {
     server.abort();
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchTls(message)) => {
             assert!(message.contains("Elasticsearch TLS error"));
             assert!(message.contains("root probe"));
             assert!(
@@ -568,7 +568,7 @@ async fn elasticsearch_live_catalog_summary_surfaces_permission_errors() {
     let _ = server.await;
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchPermission(message)) => {
             assert!(message.contains("Elasticsearch permission denied"));
             assert!(message.contains("403"));
             assert!(message.contains("catalog request"));
@@ -943,7 +943,7 @@ async fn elasticsearch_test_connection_surfaces_auth_failures() {
     }
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchAuthentication(message)) => {
             assert!(message.contains("Elasticsearch authentication failed"));
             assert!(message.contains("401"));
         }
@@ -957,7 +957,7 @@ async fn elasticsearch_test_connection_surfaces_network_errors() {
     let config = search_config(port);
 
     match SearchEngineAdapter::test(&config).await {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchNetwork(message)) => {
             assert!(message.contains("Elasticsearch network error"));
         }
         other => panic!("Expected user-facing network connection error, got {other:?}"),
@@ -976,7 +976,7 @@ async fn opensearch_test_connection_surfaces_auth_failures() {
     }
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchAuthentication(message)) => {
             assert!(message.contains("OpenSearch authentication failed"));
             assert!(message.contains("401"));
         }
@@ -990,7 +990,7 @@ async fn opensearch_test_connection_surfaces_network_errors() {
     let config = search_config_for(port, DatabaseType::Opensearch);
 
     match SearchEngineAdapter::test(&config).await {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchNetwork(message)) => {
             assert!(message.contains("OpenSearch network error"));
         }
         other => panic!("Expected user-facing OpenSearch network error, got {other:?}"),
@@ -1015,7 +1015,7 @@ async fn opensearch_connection_rejects_elasticsearch_endpoint() {
     }
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchProductMismatch(message)) => {
             assert!(message.contains("Expected OpenSearch endpoint"));
             assert!(message.contains("detected Elasticsearch"));
         }
@@ -1042,7 +1042,7 @@ async fn elasticsearch_connection_rejects_opensearch_endpoint() {
     }
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchProductMismatch(message)) => {
             assert!(message.contains("Expected Elasticsearch endpoint"));
             assert!(message.contains("detected OpenSearch"));
         }

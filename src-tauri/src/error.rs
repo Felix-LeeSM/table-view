@@ -35,6 +35,33 @@ pub enum AppError {
     #[error("Connection error: {0}")]
     Connection(String),
 
+    #[error("Search authentication error: {0}")]
+    SearchAuthentication(String),
+
+    #[error("Search TLS error: {0}")]
+    SearchTls(String),
+
+    #[error("Search network error: {0}")]
+    SearchNetwork(String),
+
+    #[error("Search timeout error: {0}")]
+    SearchTimeout(String),
+
+    #[error("Search permission error: {0}")]
+    SearchPermission(String),
+
+    #[error("Search unsupported version: {0}")]
+    SearchUnsupportedVersion(String),
+
+    #[error("Search product mismatch: {0}")]
+    SearchProductMismatch(String),
+
+    #[error("Search shard failure: {0}")]
+    SearchShardFailure(String),
+
+    #[error("Search partial failure: {0}")]
+    SearchPartialFailure(String),
+
     #[error("Storage error: {0}")]
     Storage(String),
 
@@ -143,6 +170,42 @@ mod tests {
         assert_eq!(
             AppError::Connection("refused".into()).to_string(),
             "Connection error: refused"
+        );
+        assert_eq!(
+            AppError::SearchAuthentication("bad credentials".into()).to_string(),
+            "Search authentication error: bad credentials"
+        );
+        assert_eq!(
+            AppError::SearchTls("certificate rejected".into()).to_string(),
+            "Search TLS error: certificate rejected"
+        );
+        assert_eq!(
+            AppError::SearchNetwork("connection refused".into()).to_string(),
+            "Search network error: connection refused"
+        );
+        assert_eq!(
+            AppError::SearchTimeout("root probe".into()).to_string(),
+            "Search timeout error: root probe"
+        );
+        assert_eq!(
+            AppError::SearchPermission("forbidden".into()).to_string(),
+            "Search permission error: forbidden"
+        );
+        assert_eq!(
+            AppError::SearchUnsupportedVersion("6.8.23".into()).to_string(),
+            "Search unsupported version: 6.8.23"
+        );
+        assert_eq!(
+            AppError::SearchProductMismatch("OpenSearch detected".into()).to_string(),
+            "Search product mismatch: OpenSearch detected"
+        );
+        assert_eq!(
+            AppError::SearchShardFailure("all shards failed".into()).to_string(),
+            "Search shard failure: all shards failed"
+        );
+        assert_eq!(
+            AppError::SearchPartialFailure("1 shard failed".into()).to_string(),
+            "Search partial failure: 1 shard failed"
         );
         assert_eq!(
             AppError::Storage("file not found".into()).to_string(),

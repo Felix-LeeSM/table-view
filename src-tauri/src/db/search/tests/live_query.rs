@@ -35,20 +35,10 @@ async fn elasticsearch_live_search_dispatches_request_and_parses_result_envelope
                 "timed_out": false,
                 "_shards": {
                     "total": 2,
-                    "successful": 1,
+                    "successful": 2,
                     "skipped": 0,
-                    "failed": 1,
-                    "failures": [
-                        {
-                            "shard": 0,
-                            "index": "logs-elastic-2026.05.24",
-                            "node": "node-a",
-                            "reason": {
-                                "type": "query_shard_exception",
-                                "reason": "bad shard"
-                            }
-                        }
-                    ]
+                    "failed": 0,
+                    "failures": []
                 },
                 "hits": {
                     "total": { "value": 42, "relation": "gte" },
@@ -136,11 +126,7 @@ async fn elasticsearch_live_search_dispatches_request_and_parses_result_envelope
         result.hits[0].explanation.as_ref().unwrap()["description"],
         json!("match")
     );
-    assert_eq!(result.shards.as_ref().unwrap().failed, 1);
-    assert_eq!(
-        result.shards.as_ref().unwrap().failures[0].reason["reason"],
-        json!("bad shard")
-    );
+    assert_eq!(result.shards.as_ref().unwrap().failed, 0);
     assert_eq!(
         result.profile.as_ref().unwrap()["shards"][0]["id"],
         json!("profile-1")
@@ -210,20 +196,10 @@ async fn opensearch_live_search_dispatches_request_and_parses_result_envelope() 
                 "timed_out": false,
                 "_shards": {
                     "total": 2,
-                    "successful": 1,
+                    "successful": 2,
                     "skipped": 0,
-                    "failed": 1,
-                    "failures": [
-                        {
-                            "shard": 0,
-                            "index": "logs-opensearch-2026.05.24",
-                            "node": "node-open-a",
-                            "reason": {
-                                "type": "query_shard_exception",
-                                "reason": "bad OpenSearch shard"
-                            }
-                        }
-                    ]
+                    "failed": 0,
+                    "failures": []
                 },
                 "hits": {
                     "total": { "value": 31, "relation": "eq" },
@@ -305,7 +281,7 @@ async fn opensearch_live_search_dispatches_request_and_parses_result_envelope() 
         json!("<em>OpenSearch</em> live log")
     );
     assert_eq!(result.hits[0].sort[1], json!("open-doc-1"));
-    assert_eq!(result.shards.as_ref().unwrap().failed, 1);
+    assert_eq!(result.shards.as_ref().unwrap().failed, 0);
     assert_eq!(
         result.profile.as_ref().unwrap()["shards"][0]["id"],
         json!("open-profile-1")
@@ -659,7 +635,7 @@ async fn elasticsearch_live_search_timeout_is_classified_and_redacted() {
     server.abort();
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchTimeout(message)) => {
             assert!(message.contains("Elasticsearch timeout"));
             assert!(message.contains("search request"));
             assert!(
@@ -668,6 +644,84 @@ async fn elasticsearch_live_search_timeout_is_classified_and_redacted() {
             );
         }
         other => panic!("Expected classified timeout error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn elasticsearch_live_search_partial_shard_failure_is_typed() {
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "elastic-dev",
+                "version": { "number": "8.12.2" }
+            }"#,
+        ),
+        post_route(
+            "/logs-elastic-2026.05.24/_search",
+            r#"{
+                "query": { "match_all": {} }
+            }"#,
+            r#"{
+                "took": 8,
+                "timed_out": false,
+                "_shards": {
+                    "total": 2,
+                    "successful": 1,
+                    "skipped": 0,
+                    "failed": 1,
+                    "failures": [
+                        {
+                            "shard": 0,
+                            "index": "logs-elastic-2026.05.24",
+                            "reason": {
+                                "type": "query_shard_exception",
+                                "reason": "bad shard filter"
+                            }
+                        }
+                    ]
+                },
+                "hits": {
+                    "total": { "value": 1, "relation": "eq" },
+                    "hits": [
+                        {
+                            "_index": "logs-elastic-2026.05.24",
+                            "_id": "doc-1",
+                            "_source": { "message": "partial" }
+                        }
+                    ]
+                }
+            }"#,
+        ),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+    adapter.connect(&config).await.unwrap();
+
+    let result = adapter
+        .search(
+            &SearchQueryRequest {
+                index: "logs-elastic-2026.05.24".into(),
+                body: json!({ "query": { "match_all": {} } }),
+                from: None,
+                size: None,
+                track_total_hits: None,
+            },
+            None,
+        )
+        .await;
+    if result.is_err() {
+        server.abort();
+    }
+
+    match result {
+        Err(AppError::SearchPartialFailure(message)) => {
+            assert!(message.contains("failed shard"));
+            assert!(message.contains("query_shard_exception"));
+            assert!(message.contains("bad shard filter"));
+        }
+        other => panic!("Expected typed partial shard failure, got {other:?}"),
     }
 }
 
@@ -727,7 +781,7 @@ async fn elasticsearch_live_search_http_error_reports_shard_failure_detail() {
     }
 
     match result {
-        Err(AppError::Connection(message)) => {
+        Err(AppError::SearchShardFailure(message)) => {
             assert!(message.contains("Elasticsearch server error"));
             assert!(message.contains("search_phase_execution_exception"));
             assert!(message.contains("shard failure"));

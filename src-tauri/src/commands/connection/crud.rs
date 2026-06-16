@@ -591,7 +591,7 @@ mod tests {
         let result = test_connection(req).await;
 
         match result {
-            Err(AppError::Connection(msg)) => {
+            Err(AppError::SearchNetwork(msg)) => {
                 assert!(msg.contains("Elasticsearch network error"));
             }
             Err(AppError::Unsupported(msg)) => {
@@ -630,7 +630,7 @@ mod tests {
         let result = test_connection(req).await;
 
         match result {
-            Err(AppError::Connection(msg)) => {
+            Err(AppError::SearchNetwork(msg)) => {
                 assert!(msg.contains("OpenSearch network error"));
             }
             Err(AppError::Unsupported(msg)) => {

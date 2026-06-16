@@ -252,7 +252,7 @@ impl SearchHttpConnection {
         if !status.is_success() {
             let body = response.text().await;
             let detail = match body {
-                Ok(body) => search_http_error_detail(&body, status.is_server_error()),
+                Ok(body) => search_http_error_detail(&body, true),
                 Err(err) => format!("failed to read error body: {}", err.without_url()),
             };
             return Err(search_http_status_error(
@@ -295,12 +295,12 @@ async fn send_with_cancel(
 
 fn search_network_error(label: &str, endpoint_class: &str, err: reqwest::Error) -> AppError {
     if err.is_timeout() {
-        return AppError::Connection(format!("{label} timeout during {endpoint_class}"));
+        return AppError::SearchTimeout(format!("{label} timeout during {endpoint_class}"));
     }
     if is_tls_error(&err) {
-        return AppError::Connection(format!("{label} TLS error during {endpoint_class}"));
+        return AppError::SearchTls(format!("{label} TLS error during {endpoint_class}"));
     }
-    AppError::Connection(format!(
+    AppError::SearchNetwork(format!(
         "{label} network error during {endpoint_class}: {}",
         err.without_url()
     ))
@@ -332,23 +332,59 @@ fn search_http_status_error(
     path: Option<&str>,
     detail: Option<&str>,
 ) -> AppError {
-    let mut message = if status == StatusCode::UNAUTHORIZED {
-        format!("{label} authentication failed during {endpoint_class} ({status})")
+    let (mut message, variant) = if status == StatusCode::UNAUTHORIZED {
+        (
+            format!("{label} authentication failed during {endpoint_class} ({status})"),
+            SearchHttpStatusVariant::Authentication,
+        )
     } else if status == StatusCode::FORBIDDEN {
-        format!("{label} permission denied during {endpoint_class} ({status})")
+        (
+            format!("{label} permission denied during {endpoint_class} ({status})"),
+            SearchHttpStatusVariant::Permission,
+        )
     } else if status.is_server_error() {
-        format!("{label} server error during {endpoint_class} ({status})")
+        (
+            format!("{label} server error during {endpoint_class} ({status})"),
+            SearchHttpStatusVariant::Server,
+        )
     } else if let Some(path) = path {
-        format!("{label} {endpoint_class} {path} failed with HTTP {status}")
+        (
+            format!("{label} {endpoint_class} {path} failed with HTTP {status}"),
+            SearchHttpStatusVariant::Other,
+        )
     } else {
-        format!("{label} {endpoint_class} failed with HTTP {status}")
+        (
+            format!("{label} {endpoint_class} failed with HTTP {status}"),
+            SearchHttpStatusVariant::Other,
+        )
     };
 
     if let Some(detail) = detail.filter(|value| !value.trim().is_empty()) {
         message.push_str(": ");
         message.push_str(detail);
     }
-    AppError::Connection(message)
+    if detail_has_shard_failure(detail) {
+        return AppError::SearchShardFailure(message);
+    }
+    match variant {
+        SearchHttpStatusVariant::Authentication => AppError::SearchAuthentication(message),
+        SearchHttpStatusVariant::Permission => AppError::SearchPermission(message),
+        SearchHttpStatusVariant::Server | SearchHttpStatusVariant::Other => {
+            AppError::Connection(message)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SearchHttpStatusVariant {
+    Authentication,
+    Permission,
+    Server,
+    Other,
+}
+
+fn detail_has_shard_failure(detail: Option<&str>) -> bool {
+    detail.is_some_and(|value| value.contains("shard failure"))
 }
 
 fn search_http_error_detail(body: &str, include_shard_failure: bool) -> String {
@@ -510,12 +546,12 @@ fn identity_from_root(
     let distribution = match expected_product {
         SearchProductKind::Elasticsearch => {
             if product_header.is_some_and(|value| !value.eq_ignore_ascii_case("Elasticsearch")) {
-                return Err(AppError::Connection(
+                return Err(AppError::SearchProductMismatch(
                     "Expected Elasticsearch endpoint but detected a different product".into(),
                 ));
             }
             if has_opensearch_signal {
-                return Err(AppError::Connection(
+                return Err(AppError::SearchProductMismatch(
                     "Expected Elasticsearch endpoint but detected OpenSearch".into(),
                 ));
             }
@@ -525,17 +561,17 @@ fn identity_from_root(
             if product_header.is_some_and(|value| !value.eq_ignore_ascii_case("Elasticsearch"))
                 && !has_opensearch_signal
             {
-                return Err(AppError::Connection(
+                return Err(AppError::SearchProductMismatch(
                     "Expected OpenSearch endpoint but detected a different product".into(),
                 ));
             }
             if has_elasticsearch_signal {
-                return Err(AppError::Connection(
+                return Err(AppError::SearchProductMismatch(
                     "Expected OpenSearch endpoint but detected Elasticsearch".into(),
                 ));
             }
             if !has_opensearch_signal {
-                return Err(AppError::Connection(
+                return Err(AppError::SearchProductMismatch(
                     "Expected OpenSearch endpoint but product could not be verified".into(),
                 ));
             }
@@ -546,7 +582,7 @@ fn identity_from_root(
         .get("number")
         .and_then(Value::as_str)
         .ok_or_else(|| {
-            AppError::Connection(format!(
+            AppError::SearchUnsupportedVersion(format!(
                 "{} root probe did not include a version number",
                 expected_product.label()
             ))
@@ -602,7 +638,7 @@ fn ensure_supported_search_version(
     version_number: &str,
 ) -> Result<(), AppError> {
     let Some(major) = search_major_version(version_number) else {
-        return Err(AppError::Connection(format!(
+        return Err(AppError::SearchUnsupportedVersion(format!(
             "{} version {version_number} is not supported: expected a semantic major version",
             product.label()
         )));
@@ -612,7 +648,7 @@ fn ensure_supported_search_version(
         SearchProductKind::OpenSearch => 1,
     };
     if major < minimum_major {
-        return Err(AppError::Connection(format!(
+        return Err(AppError::SearchUnsupportedVersion(format!(
             "{} version {version_number} is not supported: requires major version {minimum_major} or newer",
             product.label()
         )));
