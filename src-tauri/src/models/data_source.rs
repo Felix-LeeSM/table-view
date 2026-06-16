@@ -294,18 +294,6 @@ const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
 ];
-const MSSQL_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
-    BackendAdapterCapability::Lifecycle,
-    BackendAdapterCapability::RelationalCatalog,
-    BackendAdapterCapability::RelationalQuery,
-    BackendAdapterCapability::RelationalSchemaMutation,
-];
-const ORACLE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
-    BackendAdapterCapability::Lifecycle,
-    BackendAdapterCapability::RelationalCatalog,
-    BackendAdapterCapability::RelationalQuery,
-    BackendAdapterCapability::RelationalSchemaMutation,
-];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::DocumentCatalog,
@@ -369,17 +357,17 @@ const DUCKDB_FILE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract 
 };
 const MSSQL_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
-    state: BackendAdapterContractState::FactoryBacked,
+    state: BackendAdapterContractState::DeclaredOnly,
     implementation: BackendAdapterId::Mssql,
     capability_source: BackendAdapterCapabilitySource::Mssql,
-    capabilities: MSSQL_RDB_CAPABILITIES,
+    capabilities: &[],
 };
 const ORACLE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
-    state: BackendAdapterContractState::FactoryBacked,
+    state: BackendAdapterContractState::DeclaredOnly,
     implementation: BackendAdapterId::Oracle,
     capability_source: BackendAdapterCapabilitySource::Oracle,
-    capabilities: ORACLE_RDB_CAPABILITIES,
+    capabilities: &[],
 };
 const FACTORY_DOCUMENT_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Document,

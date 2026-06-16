@@ -109,9 +109,11 @@ describe("ConnectionDialog", () => {
     expect(screen.getByRole("option", { name: "MariaDB" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
     expect(
-      screen.getByRole("option", { name: "Microsoft SQL Server" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Oracle" })).toBeInTheDocument();
+      screen.queryByRole("option", { name: "Microsoft SQL Server" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "Oracle" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: "MongoDB" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Redis" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Valkey" })).toBeInTheDocument();
@@ -137,7 +139,9 @@ describe("ConnectionDialog", () => {
       screen.getByRole("option", { name: "Microsoft SQL Server" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "SQLite" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Oracle" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "Oracle" }),
+    ).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -231,36 +235,31 @@ describe("ConnectionDialog", () => {
   });
 
   it("shows error when Oracle service name is empty on save", async () => {
-    renderDialog();
-    await act(async () => {
-      fireEvent.click(screen.getByText("URL"));
-    });
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText("Connection URL"), {
-        target: { value: "oracle://system:pw@oracle.local:1521/FREEPDB1" },
-      });
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByText("Parse & Continue"));
+    renderDialog({
+      connection: makeConnection({
+        dbType: "oracle",
+        name: "Oracle DB",
+        host: "oracle.local",
+        port: 1521,
+        user: "system",
+        database: "FREEPDB1",
+      }),
     });
 
     await act(async () => {
-      fireEvent.change(screen.getByLabelText("Name"), {
-        target: { value: "Oracle DB" },
-      });
       fireEvent.change(screen.getByLabelText("Service name"), {
         target: { value: "" },
       });
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByText("Save"));
+      fireEvent.click(screen.getByText("Update"));
     });
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Service name is required",
     );
-    expect(mockAddConnection).not.toHaveBeenCalled();
+    expect(mockUpdateConnection).not.toHaveBeenCalled();
   });
 
   it("shows error when name is whitespace-only on save", async () => {
@@ -511,7 +510,7 @@ describe("ConnectionDialog", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("accepts mssql URLs and switches to the SQL Server form", async () => {
+  it("rejects mssql URLs until connection.test evidence promotes SQL Server", async () => {
     renderDialog();
     await act(async () => {
       fireEvent.click(screen.getByText("URL"));
@@ -525,17 +524,13 @@ describe("ConnectionDialog", () => {
       fireEvent.click(screen.getByText("Parse & Continue"));
     });
 
-    expect(screen.getByLabelText("Database Type")).toHaveTextContent(
-      "Microsoft SQL Server",
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Microsoft SQL Server is not yet supported",
     );
-    expect(screen.getByLabelText("Host")).toHaveValue("mssql.local");
-    expect(screen.getByLabelText("Port")).toHaveValue(1433);
-    expect(screen.getByLabelText("User")).toHaveValue("sa");
-    expect(screen.getByLabelText("Database")).toHaveValue("master");
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();
   });
 
-  it("accepts oracle URLs and switches to the service-name form", async () => {
+  it("rejects oracle URLs until connection.test evidence promotes Oracle", async () => {
     renderDialog();
     await act(async () => {
       fireEvent.click(screen.getByText("URL"));
@@ -549,12 +544,10 @@ describe("ConnectionDialog", () => {
       fireEvent.click(screen.getByText("Parse & Continue"));
     });
 
-    expect(screen.getByLabelText("Database Type")).toHaveTextContent("Oracle");
-    expect(screen.getByLabelText("Host")).toHaveValue("oracle.local");
-    expect(screen.getByLabelText("Port")).toHaveValue(1521);
-    expect(screen.getByLabelText("User")).toHaveValue("system");
-    expect(screen.getByLabelText("Service name")).toHaveValue("FREEPDB1");
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Oracle is not yet supported",
+    );
+    expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();
   });
 
   it("uses database name as connection name when name is empty", async () => {

@@ -49,37 +49,15 @@ bounded Search behavior, but OpenSearch-specific product detection,
 Elasticsearch endpoint rejection, composable/legacy templates, sample documents,
 and product-scoped completion must remain named.
 
-`sql` is active for connection-supported SQL/RDBMS profiles only. MSSQL now has
-connection-test runtime evidence for SQL authentication and SQL Server version
-probe, bounded SELECT/DML query runtime, catalog/workbench metadata browse, and
-primary-key-scoped row edit/write workflow support, plus bounded structured
-table/index/constraint DDL preview/execute. Catalog-aware T-SQL completion is
-active as SQL editor assistance where live cached metadata is loaded. Bounded
-static T-SQL parser/Safe Mode metadata covers supported `SELECT`/DML/DDL slices
-plus rejected scripting/admin paths. Runtime Happy Path smoke now covers the
-representative MSSQL connect/catalog browse/SELECT/DML/row-edit/Safe Mode
-confirmation path. These slices do not create TLS-required workflow, broader SQL
-Server instance/auth behavior, SQLCMD/admin/security/backup/jobs/users/roles
-support, or full T-SQL semantic support claims.
-Oracle has connection-test runtime evidence for service-name connections plus
-bounded SELECT tabular result envelopes, transactional DML batch commit/dry-run,
-cancellation/error surfacing, catalog/workbench metadata for schemas, tables,
-views, columns, indexes, constraints/FKs, routines/packages, and read-only
-sequences/synonyms, and catalog-aware SQL editor autocomplete for schemas,
-tables/views, columns, packages, sequences, synonyms, Oracle sequence members,
-selected keywords/functions, and bind placeholders. Oracle completion has no
-extra server-version gate today; capability-sensitive package/sequence/synonym
-suggestions appear only when live cached catalog metadata contains those kinds,
-and empty or metadata-denied catalog state yields no catalog suggestions. Oracle
-also has primary-key-scoped row edit and a bounded static parser/Safe Mode
-boundary for common SELECT/DML/DDL safety classification, with PL/SQL
-package/admin paths unsupported. Bounded structured table/index/constraint DDL
-preview/execute is active through the Structure DDL path, while raw DDL/admin
-execution remains blocked. Runtime Happy Path smoke now proves the representative
-local Oracle service-name connect/catalog browse/SELECT/DML preview/readback/
-row-edit/Safe Mode confirmation path. Those slices do not create Oracle
-sequence/synonym DDL/admin workflows, SID/TNS alias/wallet/TLS behavior, raw
-DDL/admin execution, or full Oracle SQL/PL/SQL executable-semantics claims.
+`sql` is active for connection-supported SQL/RDBMS profiles only. MSSQL and
+Oracle are declared-only identities today: their source-specific dialect/profile
+records remain for future promotion, URL parsing, labels, defaults, and seed/spec
+inventory, but current capabilities are empty and they are hidden from new
+connection support. They have no active connection, query, catalog, edit, DDL,
+parser, completion, or runtime smoke support claim. Future promotion must land a
+source-specific `connection.test` implementation and matching runtime, contract,
+docs, and smoke evidence before adding SQL Server T-SQL or Oracle SQL/PLSQL
+parser/completion/runtime claims.
 
 `redis-command` is active because Redis and Valkey are connection-supported KV
 profiles. Redis has key browser/value panel support plus focused backend
@@ -124,8 +102,8 @@ cannot add parser or completion vocabulary without an owner decision.
 | Redis command | Redis connection/profile, backend KV primitives, key browser, value preview/edit UI, selected-key bounded stream reader, bounded command editor vocabulary/key suggestions, and static KV/stream fixture inventory are active. Backend primitives are typed IPC calls for database/key scan, typed value reads, guarded string set, delete confirmation, TTL expire/persist, and bounded stream reads. The backend command allowlist classifies read/write/TTL/stream/destructive effects and only allows single-key destructive `DEL`/TTL-removal `PERSIST` when the request carries an exact `confirmKey`. The value panel promotes bounded string/hash/list/set/zset edits, selected stream start/end/count reads through `read_kv_stream`, and expire/persist/delete preview/confirm controls; partial or unsupported key types fail visibly. The Redis command editor suggests selected read/write/TTL/stream/destructive allowlist commands with arity hints/snippets and suggests current-DB keys filtered by command key type when scan cache is available. Focused tests cover dispatch through `executeKvCommand`, tabular projection, selected-key stream reader refresh/error behavior, and non-blocking scan-cache fallback. Valkey reuses the KV protocol for connection/key scan/value preview, selected-key stream reads, bounded command query dispatch, a narrower command completion target for proven Valkey rows, and direct UTF-8 string-key mutation controls for SET/EXPIRE/exact-key PERSIST/exact-key DEL. | Redis command parser is not owned by language-core yet, and the current backend parser is an allowlist, not arbitrary Redis CLI support. Completion is TypeScript allowlist vocabulary plus current scan-cache key suggestions; it is not an unsupported command-family surface or full Redis autocomplete implementation. Unsupported command families reject with explicit messages. Key suggestions are hints only and can be stale if Redis/Valkey keyspace changes after scan. Full Redis CLI/admin parity, consumer-group stream UI, broader command coverage, cluster/pubsub/modules/consumer-group management, multi-key destructive commands, Valkey hash/list/set/zset writes, and full Valkey compatibility are not claimed. |
 | Valkey `redis-command` target | Valkey has a KV runtime slice for connection, database/key scan, typed value preview, selected-key bounded stream reads, bounded Redis-compatible command query dispatch, direct UTF-8 string-key mutation controls for SET/EXPIRE/exact-key PERSIST/exact-key DEL, and TypeScript command completion for proven local-runtime rows (`GET`, `HGETALL`, `XRANGE`, `TYPE`, `EXISTS`, `SET`, `EXPIRE`, `PERSIST`, `DEL`). Runtime Happy Path smoke covers connect/key scan/value preview, `GET`, `HGETALL`, `XRANGE`, bounded `SET`/`EXPIRE` DML summaries with readback/TTL verification, and destructive/unsupported command guards through the Valkey service and `e2e/fixtures/valkey/kv/seed.json`. Focused local Valkey testcontainer evidence owns direct string set, expire, persist, exact-key delete, exact-key `PERSIST`/`DEL` confirmation success, and broader proven-row backend details below smoke. Completion key suggestions use the current DB scan cache and stay hidden for unpromoted command families. Static fixture inventory includes `e2e/fixtures/valkey.redis-compatibility.json`, which separates proven local runtime rows from candidate families and rejected Redis assumptions. | The matrix and Redis evidence are not direct string-key mutation UI or full Redis compatibility evidence. Hash/list/set/zset writes, binary string editing, admin/server-control, broad destructive, cluster, pub/sub, modules/functions, scripting, and consumer-group commands stay rejected until separate workflow-specific safety/result-envelope decisions land. |
 | Search DSL | Fixture-backed Search identities and bounded fixture DSL exist for Elasticsearch/OpenSearch fixture result paths. Elasticsearch connection/auth/TLS root probe is active, detects product/version/distribution, live catalog reads indexes, aliases, data streams, mappings, settings/analyzers, templates, and field paths, bounded live `_search` dispatch validates `match_all`, `term`, `terms`, `match`, `bool` filter clauses, `range`, `exists`, `terms`/`value_count` aggregations, pagination, `track_total_hits`, bounded field sort, and bounded `_source` filters before HTTP dispatch, and delete-by-query safety planning estimates matching documents through a safe `_search` request as a preview-only plan with actual execution unsupported. OpenSearch connection/auth/TLS root probe is active, detects OpenSearch product/version/distribution, rejects Elasticsearch endpoints, surfaces auth/network failures, reads live indexes, aliases, data streams, mappings, settings/analyzers, composable/legacy templates, and field paths, dispatches bounded live `_search` requests through the same validator/result renderer with sample documents, HTTP error handling, and cancellation, and uses the same preview-only safe `_search` estimate for delete-by-query safety planning. Bounded TypeScript editor completion uses product-scoped catalog/mapping context for Elasticsearch/OpenSearch index, alias, data stream, field, type, `sort`, and `_source` suggestions plus shared query/aggs/sort/source snippets. The response parser renders hits/source/fields/highlights/sort, shard/timeout metadata, aggregations, and explain/profile payloads returned by Elasticsearch/OpenSearch live query or fixture paths. Runtime Happy Path smoke now proves representative live Elasticsearch/OpenSearch connect/auth/TLS, catalog metadata, selected-index detail, search/render, delete-plan, and error-surface workflows on Ubuntu. | Full language-core parser/completion ownership, actual live `_delete_by_query` execution, broader admin APIs, profile/explain request workflow, observability, and full query-language support are deferred. Unsupported Search DSL body keys, unsupported aggregation kinds/options, raw/admin targets, wildcard targets, unsupported delete-by-query body keys, script sort, broad source options, and destructive/admin APIs are rejected before live Search dispatch or destructive planning. Search fixture files mirror embedded adapter contracts only. |
-| MSSQL SQL | SQL Server is an RDBMS identity with bounded connection/query/catalog/edit/DDL metadata runtime support, catalog-aware SQL editor completion, bounded static parser/Safe Mode metadata, and a wired Runtime Happy Path smoke. The active runtime slice is SQL authentication connection testing with TCP/TDS login, `SERVERPROPERTY('ProductVersion')` probe evidence, bounded SELECT tabular result envelopes, table data reads, DML/DDL execution, transactional DML batch commit/dry-run, cancellation, server error surfacing, primary-key-projected row edits, structured table/index/constraint DDL preview/execute, and catalog/workbench metadata for databases, schemas, tables, views, procedures/functions, columns, indexes, constraints, and FKs. Runtime smoke covers SQL Server connect, seeded `dbo` table/view/procedure browse, `SELECT TOP`, DML preview/execute/readback, destructive confirmation, and grid-edit SQL preview/commit. Row edit and generated structured DDL use bracket identifiers; row edit stays PK-only with no all-column WHERE fallback. Completion uses the live cached catalog for database, schema, table/view, procedure/function, and column suggestions where metadata is loaded, and keeps curated keyword/function plus bracket identifier quoting support for editor assistance only; procedure/function candidates are object suggestions, not procedure execution or body-authoring support. Static parser/Safe Mode recognizes bounded T-SQL slices: bracket identifiers, `N'...'` strings, `SELECT TOP`, common DML, bounded CREATE/ALTER/DROP/TRUNCATE DDL, and SQL Server type synonyms that map to existing AST types. Unsupported scripting/admin boundaries such as `EXEC`, `EXECUTE`, `GO`, `USE`, `DBCC`, `DENY`, `BACKUP`, and `RESTORE` classify as warn/danger safety metadata instead of active execution support. | MSSQL has Lifecycle, RelationalCatalog, RelationalQuery, and RelationalSchemaMutation backend capability plus primary-key-scoped row-edit profile/runtime support. TLS-required workflow, broader SQL Server instance/auth behavior, `TOP PERCENT`, `WITH TIES`, procedure bodies, batches, SQLCMD, SQL Server admin tooling, security/backup/jobs/users/roles support, and full T-SQL semantic completion remain unsupported. Completion suggestions and static parser/Safe Mode metadata do not widen runtime SQL Server support. |
-| Oracle SQL | Oracle has service-name connection UI/runtime support, bounded SELECT tabular result envelopes, transactional DML batch commit/dry-run, cancellation/error surfacing, table-data browse, primary-key-scoped row edit, bounded structured table/index/constraint DDL preview/execute, live catalog/workbench metadata for current service/database, schemas, tables, views, columns, indexes, constraints/FKs, routines/packages, and read-only sequences/synonyms through the shared RDB model, catalog-aware Oracle SQL editor autocomplete for schemas, tables/views, columns, packages, sequences, synonyms, detected sequence members, selected keywords/functions, and bind placeholders, and bounded static parser/Safe Mode evidence for SELECT including `DUAL`, INSERT, bounded UPDATE/DELETE, WHERE-less UPDATE/DELETE destructive detection, narrow MERGE, CREATE TABLE/INDEX/VIEW, Oracle `NUMBER`/`VARCHAR2`/`CLOB`/`BLOB` column types, ALTER ADD/RENAME, and DROP/TRUNCATE/ALTER DROP destructive detection. Runtime Happy Path smoke covers local Oracle service-name connect, current-user catalog browse, SELECT, DML preview/readback, row-edit preview/commit, and Safe Mode destructive confirmation. | Oracle has Lifecycle, RelationalCatalog, RelationalQuery, and RelationalSchemaMutation runtime capability for the bounded Structure DDL path only. Row edit uses Oracle quoted identifiers and no all-column WHERE fallback; no-PK tables remain browse-only. Metadata-denied dictionary reads fail safe-empty where the adapter can identify Oracle metadata denial. Oracle completion has no extra server-version gate today; capability-sensitive package/sequence/synonym suggestions require detected catalog kinds, and empty catalog state stays safe-empty. Raw DDL/admin execution, sequence/synonym DDL/admin workflows, SID/TNS alias/wallet/TLS behavior, and full PL/SQL executable semantics remain unsupported. PL/SQL blocks, package/routine DDL, routine execution, users/roles/grants/session/storage/admin paths, and privilege paths are outside the runtime boundary. Completion suggestions and parser/Safe Mode metadata do not widen runtime Oracle support. |
+| MSSQL SQL | Declared-only identity. `mssql` keeps SQL Server profile/dialect metadata, labels, defaults, URL parsing, and seed/spec inventory for future promotion. | Current capabilities are empty and new connection support is hidden. No SQL Server connection, query, catalog, edit, DDL, parser, completion, or runtime smoke support is claimed until SQL Server-specific `connection.test` and matching evidence land. SQL Server auth/encryption/TDS/T-SQL, SQLCMD/batch scripting, admin/security/backup/jobs/users/roles, import/export, profiler/activity, and full T-SQL semantics remain out of scope. |
+| Oracle SQL | Declared-only identity. `oracle` keeps Oracle profile/dialect metadata, labels, service-name defaults, URL parsing, and seed/spec inventory for future promotion. | Current capabilities are empty and new connection support is hidden. No Oracle connection, query, catalog, edit, DDL, parser, completion, or runtime smoke support is claimed until Oracle-specific `connection.test` and matching evidence land. SID/TNS/wallet/TLS, raw DDL/admin, sequence/synonym DDL/admin, PL/SQL execution, users/roles/grants/session/storage/admin paths, import/export, profiler/activity, and full Oracle semantics remain out of scope. |
 
 ### PostgreSQL SQL Support Breakdown
 
@@ -346,7 +324,7 @@ are:
   dialect profile and completion vocabulary delta; it is not yet a separate
   runtime/version-gated support claim. Constraint catalog conformance is
   version-gated separately from this completion delta.
-- MySQL/MariaDB/MSSQL structured DDL is bounded to the implemented table/index/
+- MySQL/MariaDB structured DDL is bounded to the implemented table/index/
   constraint requests and their preview/export or preview/execute lifecycle. Trigger metadata
   remains browse-only in Structure; trigger create/drop, DB-level dump/restore/
   import/export, and vendor-restorable SQL export remain future work or raw-SQL/
@@ -428,27 +406,12 @@ are:
   suggestions, but actual live `_delete_by_query` execution, full language-core
   parser/completion ownership, broader admin, observability, and product-delta
   gates remain deferred.
-- MSSQL runtime is limited to SQL authentication connection test, SQL Server
-  version probe, bounded SELECT tabular envelopes, DML/DDL execution,
-  transactional DML batch commit/dry-run, cancellation, server error surfacing,
-  table data browse, primary-key-projected row edit, bounded structured
-  table/index/constraint DDL, and catalog/workbench metadata
-  browse for databases/schemas/tables/views/procedures/functions/columns/indexes/constraints/FKs.
-  Runtime Happy Path smoke covers representative connect/catalog browse/SELECT/DML/row-edit/Safe
-  Mode confirmation paths, and completion uses that
-  live cached catalog for database/schema/table/view/procedure/column
-  suggestions where metadata is loaded, plus curated T-SQL vocabulary and
-  bracket identifier quoting. These do not imply TLS-required workflow,
-  SQLCMD/admin/security/backup/jobs/users/roles/full T-SQL semantics, or runtime
-  support for every suggested object. Oracle has a bounded runtime slice for
-  service-name connection, SELECT tabular envelopes, transactional DML batches,
-  cancellation, error surfacing, and catalog/workbench metadata for the shared
-  RDB model, primary-key-scoped row edit, bounded static SQL editor autocomplete
-  vocabulary, bounded static parser/Safe Mode metadata, and representative
-  Runtime Happy Path smoke; this does not imply Oracle sequence/synonym
-  DDL/admin workflows, raw DDL/admin execution, SID/TNS/wallet/TLS behavior, or
-  full Oracle SQL/PL/SQL executable semantics. Bounded table/index/constraint
-  structured DDL is the explicit exception.
+- MSSQL/Oracle are declared-only SQL identities. Their labels, defaults, URL
+  parsing, dialect/profile ids, and seed/spec inventory do not create active
+  parser, completion, connection, query, catalog, edit, DDL, or runtime smoke
+  support. Promotion requires source-specific `connection.test` implementation
+  plus matching runtime, contract, docs, and smoke evidence before any SQL Server
+  or Oracle support claim widens.
 - Deferred language ids for CQL, PartiQL, Cypher, GQL, Gremlin, vector query,
   and stream commands do not create active profiles or support claims.
   Cassandra/Scylla, DynamoDB, graph, vector, and stream sources stay

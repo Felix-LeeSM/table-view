@@ -16,7 +16,7 @@
 경계, fixture/live evidence 가 같이 있는 범위만 의미한다.
 
 - Active connection UI/runtime 대상: PostgreSQL, MySQL, MariaDB, SQLite,
-  DuckDB, MongoDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, Oracle.
+  DuckDB, MongoDB, Redis, Valkey, Elasticsearch, OpenSearch.
 - RDBMS workbench: catalog/tree browse, tabular result rendering, raw query path,
   bounded DML/row-edit path, source-specific safety confirmation. PostgreSQL 이
   routine desktop smoke-backed 주 lane 이고 MySQL/MariaDB 는 runtime smoke
@@ -75,50 +75,15 @@
   execution and actual Search admin execution 은 deferred 다. Support closure 는
   Elasticsearch 와 OpenSearch product-specific probe/catalog/completion deltas 를
   분리해서 기록한다.
-- MSSQL: SQL authentication connection UI/runtime probe, SQL Server version
-  detection through `SERVERPROPERTY`, and a bounded SELECT/DML query runtime are
-  active. Catalog/workbench metadata covers databases, schemas, tables, views,
-  procedures/functions, columns, indexes, constraints, and FKs. The runtime
-  returns the shared tabular result envelope and supports DML batch commit/dry-run
-  plus cancellation/error surfacing. Row edit is active for primary-key-projected
-  table data only: generated SQL uses bracket identifiers, preview/discard/commit
-  uses the shared batch path, dry-run rolls back, commit failures roll back the
-  transaction, and no-PK tables can be browsed but not edited. T-SQL editor
-  completion uses the live
-  cached catalog for database/schema/table/view/procedure/column suggestions
-  where metadata is loaded, plus curated vocabulary and bracket identifier
-  quoting. Bounded static parser/Safe Mode metadata is active as editor/safety
-  assistance. Structured table/index/constraint DDL preview/execute is active for
-  the bounded adapter path. Runtime Happy Path smoke now covers the representative
-  SQL Server connect/catalog browse/SELECT/DML/row-edit/Safe Mode confirmation
-  path through the wired MSSQL smoke; the seed fixture alone is contract evidence,
-  not a live runtime claim. TLS-required workflow evidence,
-  SQLCMD/admin/security/backup/jobs/users/roles support, and full T-SQL semantic
-  parity remain deferred.
-- Oracle: service-name connection UI/runtime probe plus bounded SELECT query
-  runtime, transactional DML batch commit/dry-run, cancellation/error surfacing,
-  tabular result envelopes, table-data browse, primary-key-scoped row edit, and
-  catalog/workbench metadata browse are active.
-  Catalog metadata covers the current service/database, schemas, tables, views,
-  columns, indexes, constraints/FKs, routines/packages, and read-only
-  sequences/synonyms through the shared RDB model, with safe-empty behavior for
-  metadata-denied dictionary reads.
-  Catalog-aware SQL editor autocomplete is active as editor assistance where
-  live cached metadata is loaded. It suggests schemas, tables/views, columns,
-  packages, sequences, synonyms, and Oracle sequence members from the catalog;
-  empty or metadata-denied catalog state falls back to no catalog suggestions.
-  Oracle completion has no extra server-version gate today: capability-sensitive
-  package/sequence/synonym suggestions appear only when those catalog kinds are
-  detected. Bounded static parser/Safe Mode classifies common SELECT/DML/DDL
-  slices and blocks PL/SQL package/admin paths. No-PK Oracle tables can be
-  browsed but row edit controls stay disabled. Bounded structured table/index/
-  constraint DDL preview/execute is active through the Structure DDL path; raw
-  DDL/admin execution remains blocked. Runtime Happy Path smoke now covers the
-  representative Oracle connect/catalog browse/SELECT/DML preview/readback/
-  row-edit/Safe Mode confirmation path through the wired Oracle smoke; the seed
-  fixture alone is contract evidence, not a broader live-runtime claim. SID,
-  TNS alias, wallet/TLS, sequence/synonym DDL/admin workflows, raw DDL/admin
-  execution, and full PL/SQL executable semantics remain deferred.
+- MSSQL/Oracle: declared-only enterprise RDBMS identities. Their profiles keep
+  source-specific backend adapter, dialect, connection/auth defaults, labels, URL
+  parsing, and seed/spec inventory, but current capabilities are empty. They are
+  hidden from new connection add/support lists and have no active connection,
+  query, catalog, edit, DDL, parser, completion, or runtime smoke support claim.
+  Promotion requires source-specific `connection.test` implementation plus
+  matching runtime, contract, docs, and smoke evidence. Full admin parity,
+  import/export, profiler/activity, role/user/permission UI, and broad scripting
+  remain out of scope.
 
 ## Current Support Snapshot
 
@@ -133,8 +98,8 @@
 | Redis | connection/profile + backend KV primitives + key browser/value preview/edit UI + selected-key bounded stream reader + bounded command editor vocabulary/key suggestions | backend KV guardrails plus bounded command allowlist and typed-confirm mutation controls; not language-core parser ownership | TypeScript bounded command vocabulary + current-DB/type-filtered key suggestions | key browser/value preview and selected-key bounded stream reader are live. Runtime Happy Path smoke covers Redis connection, deterministic DB 2 seed/reset, key scan, string value preview, `GET` command result, guarded string overwrite, TTL update, and exact-key delete confirmation. The value panel promotes bounded string/hash/list/set/zset edits plus expire/persist/delete preview/confirm flows, while partial/unsupported surfaces fail visibly. Frontend stream reader evidence covers selected stream start/end/count controls, refresh, loading/error states, and bounded table rendering through `read_kv_stream`. Backend guarded string set, delete confirmation, TTL expire/persist, bounded stream read, selected read/write/TTL/stream command dispatch, tabular projection, and exact-key `confirmKey` enforcement for single-key `DEL`/`PERSIST` have focused IPC/runtime evidence. The Redis command editor suggests the backend allowlist command names with arity hints/snippets plus current-DB key suggestions filtered by command key type. It still does not own full Redis CLI parsing or admin parity. Full CLI/admin parity, consumer-group stream UI, cluster/pubsub/modules/consumer-group management, multi-key destructive commands, broader command coverage, language-core parser/completion ownership, and Valkey command compatibility are follow-up |
 | Valkey | KV runtime for connection + key browser/value preview + selected-key stream reader + bounded command query + direct UTF-8 string-key mutation controls | Redis-compatible bounded command allowlist and typed confirmation; hash/list/set/zset writes remain hidden | TypeScript proven Valkey command subset + current-DB/type-filtered key suggestions | `valkey` is an active `DatabaseType`/profile identity with server connection kind, product label, KV paradigm, Valkey backend adapter profile, and `redis-command` compatibility target. Connection UI/runtime support is exposed for test/connect/key browse/value preview and selected bounded command query rows through the same Redis command allowlist. Selected stream keys use the same read-only bounded stream reader panel backed by `read_kv_stream`. Direct mutation controls are limited to UTF-8 string keys for string set, expire, exact-key persist, and exact-key delete paths with focused Valkey backend/component evidence. Runtime Happy Path smoke uses `e2e/fixtures/valkey/kv/seed.json` for connect/key scan/value preview, `GET`, `HGETALL`, `XRANGE`, bounded `SET`/`EXPIRE`, and destructive/unsupported guard evidence. Command completion is limited to the proven local Valkey runtime rows plus safe current-keyspace hints. `e2e/fixtures/valkey.redis-compatibility.json` separates proven local-runtime rows from candidate/rejected command families. Hash/list/set/zset writes and full Redis compatibility are not claimed |
 | Elasticsearch/OpenSearch | Elasticsearch live connection + live catalog + bounded live Search query plus fixture/live delete-by-query safety planning; OpenSearch live connection + live catalog + bounded live Search query plus fixture/live delete-by-query safety planning | index-catalog sidebar shell plus selected-index lazy catalog detail and samples for both products; mapping/search guardrails for both products; destructive-plan guardrails for both products | Backend Search DSL validator active; full language-core parser/completion ownership remains future; bounded TypeScript completion is editor assistance for Elasticsearch/OpenSearch catalog and mapping context | Search uses an index-catalog-first workbench boundary: the sidebar shell loads only index/alias/data-stream summaries, and selected-index mappings/settings/analyzers/templates/field stats/sample documents load from detail tabs or explicit actions. Elasticsearch exposes URL/auth/TLS connection UI, a live HTTP root probe that detects product/version/distribution and surfaces scoped redacted auth/TLS/network/timeout/permission/server/shard failures, live catalog reads for indexes, aliases, data streams, mappings, settings/analyzers, templates, and field paths, bounded live `_search` execution with backend validation for `match_all`, `term`, `terms`, `match`, `bool` filters, `range`, `exists`, `terms`/`value_count` aggregations, pagination, `track_total_hits`, bounded field sort, and bounded `_source` filtering plus hits/source/fields/highlights/sort/shards/aggs response parsing, and delete-by-query safety planning that estimates matching documents through a safe `_search` request while leaving actual execution unsupported. OpenSearch exposes URL/auth/TLS connection UI, a live HTTP root probe that verifies OpenSearch product/version/distribution, rejects Elasticsearch endpoints, surfaces scoped redacted auth/TLS/network/timeout/permission/server/shard failures, reads live indexes, aliases, data streams, mappings, settings/analyzers, composable/legacy templates, and field paths, dispatches bounded live `_search` requests through the same validator/result renderer with cancellation and scoped HTTP error handling, and uses the same preview-only safe `_search` estimate for delete-by-query safety plans. Runtime Happy Path smoke covers representative Elasticsearch and OpenSearch live connect/auth/TLS, catalog metadata, selected-index detail, search/render, delete-plan, and error-surface workflows. Bounded Search DSL editor completion uses product-scoped catalog/mapping context for index, alias, data stream, field, type, `sort`, and `_source` suggestions plus shared query/aggs/sort/source snippets. Unsupported body keys, unsupported aggregation kinds/options, script sort, broad source options, raw/admin targets, wildcard targets, and destructive/admin APIs reject before live Search dispatch or destructive planning. Search live HTTP/admin promotion remains owned by the Search roadmap/milestone, not non-RDBMS lazy-loading workbench hardening. Actual live `_delete_by_query` execution, broader Search admin APIs, global audit/admin/security dashboards, profile/explain request workflow, and product-specific live deltas beyond these slices are deferred |
-| MSSQL | bounded SQL Server auth/query/catalog/edit/DDL runtime + Runtime Happy Path smoke | bounded static T-SQL parser/Safe Mode metadata plus representative runtime safety smoke | catalog-aware T-SQL editor assistance | `mssql` profile/dialect identity exists with Lifecycle, RelationalCatalog, RelationalQuery, and RelationalSchemaMutation backend capability plus primary-key-scoped row-edit support. Connection UI/runtime test covers SQL authentication, TCP/TDS login, timeout-bounded `SERVERPROPERTY('ProductVersion')` probe, and live testcontainer evidence. Query runtime supports bounded SELECT tabular envelopes plus DML/DDL execution, transactional DML batches, cancellation, and server error surfacing. Catalog/workbench metadata covers databases, schemas, tables, views, procedures/functions, columns, indexes, constraints, and FK references consumed by SchemaTree/DataGrid contracts. Row edit uses bracket-quoted T-SQL generated from primary-key projection; no-PK tables can be browsed but edit controls stay disabled, and write batches use preview/discard/commit plus transactional rollback on dry-run/failure. Structured table/index/constraint DDL preview/execute is active for bounded adapter plans with bracket identifiers and transactional execution where a live connection is open. Runtime Happy Path smoke covers MSSQL connect, seeded `dbo` table/view/procedure browse, `SELECT TOP`, DML preview/execute/readback, destructive confirmation, and grid-edit SQL preview/commit; the fixture seed alone is not live runtime evidence. Editor completion uses the live cached catalog for database/schema/table/view/procedure/column suggestions where metadata is loaded, plus curated T-SQL keywords/functions and bracket identifier quoting as editor assistance only. Static parser/Safe Mode covers bounded `SELECT TOP`, bracket identifiers, `N'...'` strings, common DML, bounded DDL, and warn/danger metadata for unsupported SQL Server scripting/admin boundaries. TLS-required workflow, SQLCMD/admin/security/backup/jobs/users/roles support, broader SQL Server instance/auth behavior, and full T-SQL semantic completion remain follow-up |
-| Oracle | bounded service-name connection/query/catalog/edit/DDL metadata runtime with representative smoke | bounded static Oracle SQL parser/Safe Mode boundary plus destructive-confirm smoke | catalog-aware Oracle SQL editor assistance | `oracle` profile/dialect identity exists with Lifecycle, RelationalCatalog, RelationalQuery, and RelationalSchemaMutation backend capability. Connection UI/runtime test covers Host/Port/User/Password/Service name through the backend Oracle lifecycle adapter. Query runtime supports bounded SELECT tabular envelopes, transactional DML batch commit/dry-run, cancellation, server error surfacing, table-data browse, and primary-key-scoped row edit with Oracle quoted identifiers and no all-column WHERE fallback. Structured table/index/constraint DDL preview/execute is active through the bounded Structure DDL path; raw DDL/admin execution stays blocked. Catalog/workbench metadata covers current service/database, schemas, tables, views, columns, indexes, constraints/FKs, routines/packages, and read-only sequences/synonyms through the shared RDB model, with safe-empty behavior for metadata-denied dictionary reads. Editor completion uses live cached catalog metadata for schema/table/view/column/package/sequence/synonym suggestions, Oracle sequence members for detected sequence objects, selected Oracle SQL keywords/functions, and bind placeholders. There is no extra Oracle server-version completion gate today; capability-sensitive suggestions stay tied to detected catalog kinds, and empty or denied catalog state yields no catalog suggestions. Static parser/Safe Mode evidence classifies bounded SELECT/DML/DDL slices and marks PL/SQL package/admin paths unsupported. Runtime Happy Path smoke covers connect, seeded catalog browse, SELECT, DML preview/readback, row edit, and destructive confirmation against the local Oracle fixture. SID, TNS alias, wallet/TLS, sequence/synonym DDL/admin workflows, raw DDL/admin execution, and full PL/SQL executable semantics are not implemented |
+| MSSQL | declared-only; no active runtime capability | declared-only; no active parser/Safe Mode support claim | declared-only; no active completion support claim | `mssql` remains a source-specific profile/dialect identity with SQL Server labels, defaults, URL parsing, and seed/spec inventory. Its capability set is empty, backend contract state is declared-only, and the new-connection support list hides it until a source-specific `connection.test` implementation and matching runtime/docs/smoke evidence land. No query, catalog, edit, DDL, parser, completion, or runtime smoke support is claimed. |
+| Oracle | declared-only; no active runtime capability | declared-only; no active parser/Safe Mode support claim | declared-only; no active completion support claim | `oracle` remains a source-specific profile/dialect identity with Oracle labels, service-name defaults, URL parsing, and seed/spec inventory. Its capability set is empty, backend contract state is declared-only, and the new-connection support list hides it until a source-specific `connection.test` implementation and matching runtime/docs/smoke evidence land. No query, catalog, edit, DDL, parser, completion, or runtime smoke support is claimed. |
 | Cassandra/Scylla, DynamoDB, graph, vector, stream | candidate only | deferred language ids only | deferred | no active `DatabaseType`/profile/runtime identity. Workflow value, profile target, connection kind, language owner, catalog model, result envelope, safety policy, fixture strategy, and smoke evidence must be locked before promotion |
 
 ## Fixture Coverage Snapshot
@@ -159,8 +124,8 @@ page, `known-limitations.md`, `query-language-support.md`, and testing matrix �
 | Redis | `e2e/fixtures/redis/kv/seed.json` | wired Runtime Happy Path seed for Redis DB 2 connect/scan/preview/GET plus guarded string write, TTL, and exact-key delete smoke. Broader stream consumer, cluster/pubsub/modules, admin, and Valkey parity remain future work |
 | Elasticsearch | `e2e/fixtures/elasticsearch/search/seed.json`, `e2e/smoke/elasticsearch.spec.ts`, `src-tauri/src/db/search.rs`, `src-tauri/src/db/search_destructive.rs`, `src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_http.rs`, `src-tauri/src/db/search_live_destructive.rs`, `src-tauri/src/db/search_live_query.rs` | embedded Search fixture contract plus wired Runtime Happy Path smoke for live HTTP connect/auth/TLS, catalog metadata, bounded Search render, delete-by-query preview planning, and visible error surface; actual live admin execution deferred |
 | OpenSearch | `e2e/fixtures/opensearch/search/seed.json`, `.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`, `e2e/fixtures/seed-smoke.ts`, `e2e/smoke/opensearch.spec.ts`, `e2e/smoke/search-runtime-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts`, `src-tauri/src/db/search.rs`, `src-tauri/src/db/search_destructive.rs`, `src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_http.rs`, `src-tauri/src/db/search_live_destructive.rs`, `src-tauri/src/db/search_live_query.rs`, `src-tauri/src/db/search/tests.rs`, `src-tauri/src/db/search/tests/destructive.rs`, `src-tauri/src/db/search/tests/live_query.rs`, `src/lib/search/searchDslCompletion.ts`, `src/lib/search/searchDslCompletion.test.ts`, `src/hooks/useSearchAutocomplete.ts`, `src/hooks/useSearchAutocomplete.test.ts`, `src/components/workspace/SearchSidebar.test.tsx`, `src/components/search/SearchIndexDetailPanel.test.tsx`, `src/components/query/QueryTab.search-route.test.tsx`, `src/types/dataSource.ts` | embedded Search fixture contract plus wired Runtime Happy Path smoke, focused live HTTP connection/catalog/query tests, and mapping-aware TypeScript editor completion for URL/auth/TLS, product/version/distribution detection, Elasticsearch endpoint rejection, auth/network failures, indexes, aliases, data streams, mappings, settings/analyzers, composable/legacy templates, field paths, bounded `_search` dispatch/result rendering, shared DSL parser/safety validation for query/filter/aggs/sort/source shapes, sample documents, cancellation, HTTP error surfacing, safe `_search` delete-by-query preview-only plan estimates, and product-scoped index/alias/data-stream/field/type/sort/source suggestions; the smoke covers connect/auth/TLS, catalog metadata, selected-index detail, bounded render, delete-plan preview, and visible error surface, with no actual OpenSearch admin execution claim |
-| MSSQL | `e2e/fixtures/seed.mssql.sql`, `.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`, `e2e/fixtures/seed-smoke.ts`, `e2e/smoke/mssql.spec.ts`, `src-tauri/tests/mssql_connection_routing.rs`, `src-tauri/src/db/mssql/tests.rs`, `src-tauri/src/db/mssql/ddl_tests.rs`, `src-tauri/tests/backend_adapter_contract_profile.rs` | wired Runtime Happy Path smoke seed/spec for SQL Server connection, seeded `dbo` table/view/procedure browse, `SELECT TOP` result rendering, DML preview/execute/readback, destructive confirmation, and primary-key row-edit preview/commit. Focused backend tests continue to cover TCP/TDS login, `SERVERPROPERTY` version probe, bounded SELECT tabular envelope, table data read, DML batch commit/dry-run rollback/failure rollback, server error surfacing, query cancellation, catalog/workbench metadata for databases/schemas/tables/views/procedures/functions/columns/indexes/constraints/FKs, structured table/index/constraint DDL preview evidence, and capability/conformance boundaries. The fixture asset is seed/contract evidence until wired by this smoke path |
-| Oracle | `e2e/fixtures/seed.oracle.sql`, `.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`, `e2e/fixtures/seed-smoke.ts`, `e2e/smoke/oracle.spec.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed/spec for Oracle connect, current-user schema browse, `USERS` table read, `ACTIVE_ORACLE_USERS` view and `ORACLE_CATALOG_PING` routine browse, SELECT, DML preview/readback, row edit, and Safe Mode destructive confirmation. The fixture asset is seed/contract evidence until wired by this smoke path. SID/TNS/wallet/TLS, sequence/synonym DDL/admin, raw DDL/admin, and full PL/SQL semantics remain unpromoted |
+| MSSQL | `e2e/fixtures/seed.mssql.sql`, `e2e/smoke/mssql.spec.ts`, `src-tauri/tests/backend_adapter_contract_profile.rs` | declared-only seed/spec inventory. The fixture and historical spec files are not active product evidence for connection, query, catalog, edit, DDL, parser, completion, or runtime smoke support until a source-specific `connection.test` promotion PR wires matching evidence and docs. |
+| Oracle | `e2e/fixtures/seed.oracle.sql`, `e2e/smoke/oracle.spec.ts`, `src-tauri/tests/backend_adapter_contract_profile.rs` | declared-only seed/spec inventory. The fixture and historical spec files are not active product evidence for connection, query, catalog, edit, DDL, parser, completion, or runtime smoke support until a source-specific `connection.test` promotion PR wires matching evidence and docs. |
 | Valkey | `e2e/fixtures/valkey/kv/seed.json`, `e2e/fixtures/valkey.redis-compatibility.json` | wired Runtime Happy Path seed for Valkey DB 2 connect/scan/preview/GET/HGETALL/XRANGE plus bounded SET/EXPIRE and destructive/unsupported command guards. Focused backend/component evidence covers direct UTF-8 string-key mutation controls. The compatibility matrix separates proven local-runtime rows from candidate/rejected command families; hash/list/set/zset writes, broader command families, and full Redis compatibility remain future gates |
 | Wider candidates | none | no active fixture/live evidence |
 
@@ -170,19 +135,15 @@ page, `known-limitations.md`, `query-language-support.md`, and testing matrix �
 포함한다. Profile 존재는 곧 runtime support claim 이 아니다. 현재 connection dialog
 와 runtime connection support 는 `capabilities.connection.test` 가 true 인
 PostgreSQL, MySQL, MariaDB, SQLite, DuckDB, MongoDB, Redis, Valkey,
-Elasticsearch, OpenSearch, MSSQL, Oracle 로 제한된다. MSSQL 의 active slice 는 SQL
-authentication connection test, SQL Server `SERVERPROPERTY` version probe, bounded
-SELECT/DML query runtime, table data browse, transactional DML batch support,
-primary-key-projected row edit, bounded structured table/index/constraint DDL,
-and catalog/workbench metadata browse for
-databases/schemas/tables/views/procedures/functions/columns/indexes/constraints/FKs
-이다. Runtime Happy Path smoke 는 wired MSSQL smoke 로 connect/catalog browse/SELECT/DML/
-row edit/Safe Mode confirmation 대표 경로를 증명한다. fixture file 만으로는
-runtime claim 을 넓히지 않는다. Bounded editor completion 은 curated T-SQL vocabulary,
-live cached catalog database/schema/table/view/procedure/column suggestions, and
-bracket identifier quoting 으로 제한된다. bounded static parser/Safe Mode metadata 는
-editor/safety assistance 로 active 이고, TLS-required workflow/SQLCMD/admin/
-security/backup/jobs/users/roles 는 follow-up 이다.
+Elasticsearch, OpenSearch 로 제한된다. MSSQL/Oracle 은 declared-only identity 다:
+profile, source-specific backend adapter id, dialect id, labels, defaults, URL
+parsing, and seed/spec inventory 는 남아 있지만 capabilities 는 비어 있고
+connection dialog add/support list 에서 숨긴다. 이 상태는 query, catalog, edit,
+DDL, parser, completion, or runtime smoke support claim 을 만들지 않는다.
+MSSQL/Oracle 승격은 각 source 의 `connection.test` 구현과 matching runtime,
+contract, docs, smoke evidence 가 같은 PR/linked PR set 에서 닫힐 때만 가능하다.
+Shared enterprise abstraction 은 SQL Server auth/TDS/T-SQL contract 와 Oracle
+service/SID/TNS/wallet/Oracle SQL contract 를 합쳐 숨기면 안 된다.
 Valkey 는 KV runtime slice 이며 `connection.test`, `query.query`,
 `catalog.browse`, `paradigmSpecific.keyBrowser` 가 true 다.
 `e2e/fixtures/valkey/kv/seed.json` 는 wired Valkey Runtime Happy Path seed 이고,
@@ -194,15 +155,10 @@ command query rows, direct UTF-8 string-key mutation controls 까지 support cla
 proven local-runtime rows 에 제한된다. Full Redis compatibility 또는 hash/list/set/zset
 mutation claim 은 아니다.
 
-MSSQL 은 connection plus bounded query runtime support, primary-key-scoped row edit,
-bounded structured table/index/constraint DDL, bounded editor completion,
-catalog/workbench metadata browse, bounded static parser/Safe Mode metadata,
-representative runtime smoke 로 승격됐지만, TLS/admin/full-T-SQL claim 은 아직 없다. Oracle 은
-representative Runtime Happy Path smoke/live evidence 로
-service-name connect, catalog browse, bounded SELECT, DML preview/readback,
-primary-key-scoped row edit, destructive confirmation 까지 승격됐다. SID/TNS
-alias, wallet/TLS, raw DDL/admin, sequence/synonym DDL/admin, full PL/SQL,
-unproven lazy view definition claim 은 아직 없다.
+MSSQL/Oracle 은 현재 active runtime 으로 승격되지 않았다. SQL Server
+connection/auth/dialect work, Oracle connection/auth/dialect work, parser,
+completion, catalog, row edit, DDL, smoke, and admin widening 은 각각 source-specific
+promotion issue 에서 evidence 를 잠근 뒤 capability/profile claim 을 바꾼다.
 Elasticsearch/OpenSearch 는 Search identity, live runtime slice, and separated
 fixture contract 를 갖고 있다. Elasticsearch 와 OpenSearch 는 connection dialog 와 backend
 `test_connection` 에서 URL/auth/TLS 기반 live HTTP root probe 를 지원하고,
@@ -320,10 +276,11 @@ candidate-only 상태다.
   sqlite-cli command execution, and nested JSON edits remain future promotion
   gates.
 - Routine runtime smoke currently proves the GitHub Runtime Happy Path for
-  PostgreSQL, MySQL, MariaDB, MSSQL, Oracle, SQLite, DuckDB `.duckdb`, MongoDB,
-  Redis, Valkey, Elasticsearch, and OpenSearch. Other smoke specs or source
-  inventories do not widen product support until the CI script and support docs
-  promote them.
+  PostgreSQL, MySQL, MariaDB, SQLite, DuckDB `.duckdb`, MongoDB, Redis, Valkey,
+  Elasticsearch, and OpenSearch. MSSQL/Oracle smoke specs and seed inventory do
+  not widen product support while those profiles remain declared-only and
+  capability-empty. Other smoke specs or source inventories do not widen product
+  support until the CI script and support docs promote them.
 - Destructive/security behavior is source-specific. RDB DDL preview/confirm,
   RDB Safe Mode confirmations, MongoDB safety confirmations, Redis typed
   confirmation keys, and fixture/live Search destructive plan estimates exist, but

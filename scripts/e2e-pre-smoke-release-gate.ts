@@ -38,12 +38,12 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "mssql")
         .length === 1,
-      `${profile}: expected exactly one active MSSQL fixture connection`,
+      `${profile}: expected exactly one declared-only MSSQL fixture connection`,
     );
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "oracle")
         .length === 1,
-      `${profile}: expected exactly one active Oracle fixture connection`,
+      `${profile}: expected exactly one declared-only Oracle fixture connection`,
     );
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "sqlite")
@@ -85,14 +85,14 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     assert(duckdb?.database === duckdbPath, `${profile}: DuckDB path drifted`);
     assert(
       mssql?.database === spec.profileSpec.database.mssql,
-      `${profile}: MSSQL database drifted`,
+      `${profile}: MSSQL fixture database drifted`,
     );
     assert(
       oracle?.database ===
         (process.env.ORACLE_SERVICE ??
           process.env.E2E_ORACLE_SERVICE ??
           "XEPDB1"),
-      `${profile}: Oracle service drifted`,
+      `${profile}: Oracle fixture service drifted`,
     );
     assert(existsSync(sqlitePath), `${profile}: SQLite fixture file missing`);
     assert(existsSync(duckdbPath), `${profile}: DuckDB fixture file missing`);
@@ -109,6 +109,43 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     }
     rmSync(dataDir, { recursive: true, force: true });
   }
+}
+
+function verifyEnterpriseRdbmsDeclaredOnlyBoundary(): void {
+  const mssql = getDataSourceProfile("mssql");
+  const oracle = getDataSourceProfile("oracle");
+
+  assert(
+    !isSupportedDatabaseType("mssql"),
+    "mssql: declared-only profile must stay hidden from connection support",
+  );
+  assert(
+    !hasConnectionCapability("mssql", "test"),
+    "mssql: connection.test must stay disabled until source-specific evidence lands",
+  );
+  assert(
+    !mssql.capabilities.query.query &&
+      !mssql.capabilities.catalog.browse &&
+      !mssql.capabilities.edit.editRows &&
+      !mssql.capabilities.ddl.createTable,
+    "mssql: declared-only profile must not expose query/catalog/edit/DDL capabilities",
+  );
+
+  assert(
+    !isSupportedDatabaseType("oracle"),
+    "oracle: declared-only profile must stay hidden from connection support",
+  );
+  assert(
+    !hasConnectionCapability("oracle", "test"),
+    "oracle: connection.test must stay disabled until source-specific evidence lands",
+  );
+  assert(
+    !oracle.capabilities.query.query &&
+      !oracle.capabilities.catalog.browse &&
+      !oracle.capabilities.edit.editRows &&
+      !oracle.capabilities.ddl.createTable,
+    "oracle: declared-only profile must not expose query/catalog/edit/DDL capabilities",
+  );
 }
 
 function verifySearchConnectionPromotionBoundary(): void {
@@ -183,8 +220,9 @@ function verifySearchConnectionPromotionBoundary(): void {
 
 await verifyProfile("development");
 await verifyProfile("e2e");
+verifyEnterpriseRdbmsDeclaredOnlyBoundary();
 verifySearchConnectionPromotionBoundary();
 
 console.log(
-  "[e2e:pre-smoke] release gate live Search contract assertions passed.",
+  "[e2e:pre-smoke] release gate declared-only enterprise RDBMS and live Search contract assertions passed.",
 );

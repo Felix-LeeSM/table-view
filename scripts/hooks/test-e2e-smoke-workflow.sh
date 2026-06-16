@@ -208,10 +208,11 @@ assert_contains "$smoke_script" "pnpm tsx e2e/fixtures/seed-smoke.ts" "smoke scr
 if grep -Eq 'run_wdio .* \|\| true|seed-smoke\.ts.*\|\| true' "$SMOKE_SCRIPT"; then
 	fail "smoke script must not convert setup or spec failures into passes"
 fi
-assert_contains "$smoke_block" "spec_key: oracle" "oracle smoke promotion"
-assert_contains "$smoke_block" "e2e/smoke/oracle.spec.ts" "oracle smoke promotion"
-assert_contains "$smoke_block" "Start Oracle service" "oracle smoke promotion"
-assert_contains "$smoke_block" "timeout-minutes: 12" "oracle smoke timeout"
-assert_contains "$smoke_script" "e2e/smoke/oracle.spec.ts" "oracle smoke promotion"
+assert_not_contains "$smoke_block" "spec_key: mssql" "enterprise RDBMS dormant smoke"
+assert_not_contains "$smoke_block" "spec_key: oracle" "enterprise RDBMS dormant smoke"
+assert_not_contains "$smoke_block" "Start MSSQL service" "enterprise RDBMS dormant smoke"
+assert_not_contains "$smoke_block" "Start Oracle service" "enterprise RDBMS dormant smoke"
+assert_not_contains "$smoke_script" 'run_wdio "$BASE_DATA_DIR/mssql" "e2e/smoke/mssql.spec.ts"' "enterprise RDBMS dormant smoke"
+assert_not_contains "$smoke_script" 'run_wdio "$BASE_DATA_DIR/oracle" "e2e/smoke/oracle.spec.ts"' "enterprise RDBMS dormant smoke"
 
 echo "PASS: e2e-smoke workflow cache check"

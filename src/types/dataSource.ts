@@ -231,32 +231,7 @@ function capabilities(
 
 export const UNSUPPORTED_CAPABILITIES = capabilities();
 
-export const ORACLE_CAPABILITIES = capabilities({
-  connection: {
-    test: true,
-  },
-  query: {
-    query: true,
-    multiStatement: true,
-    cancel: true,
-  },
-  catalog: {
-    browse: true,
-    schema: true,
-    indexes: true,
-    constraints: true,
-    relationships: true,
-  },
-  edit: {
-    editRows: true,
-  },
-  ddl: {
-    createTable: true,
-    alterTable: true,
-    createIndex: true,
-    dropObject: true,
-  },
-});
+export const ORACLE_CAPABILITIES = capabilities();
 
 export const POSTGRESQL_CAPABILITIES = capabilities({
   connection: {
@@ -356,33 +331,7 @@ export const DUCKDB_CAPABILITIES = capabilities({
   },
 });
 
-export const MSSQL_CAPABILITIES = capabilities({
-  connection: {
-    test: true,
-    switchDatabase: true,
-  },
-  query: {
-    query: true,
-    multiStatement: true,
-    cancel: true,
-  },
-  catalog: {
-    browse: true,
-    schema: true,
-    indexes: true,
-    constraints: true,
-    relationships: true,
-  },
-  edit: {
-    editRows: true,
-  },
-  ddl: {
-    createTable: true,
-    alterTable: true,
-    createIndex: true,
-    dropObject: true,
-  },
-});
+export const MSSQL_CAPABILITIES = capabilities();
 
 export const MONGODB_CAPABILITIES = capabilities({
   connection: {

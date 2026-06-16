@@ -116,7 +116,7 @@ describe("spec — loadSpec validation", () => {
     ]);
   });
 
-  it("makes MSSQL and Oracle active fixture identities", () => {
+  it("keeps MSSQL and Oracle declared-only fixture identities", () => {
     const spec = loadSpec("e2e");
     const mssql = spec.profileSpec.connections?.mssql?.[0];
     const oracle = spec.profileSpec.connections?.oracle?.[0];

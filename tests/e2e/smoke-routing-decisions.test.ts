@@ -56,6 +56,6 @@ describe("smoke-routing-decisions.json", () => {
     });
     expect(result.blockingDecisionMatrix).toEqual(collectSmokeScriptMatrix());
     expect(result.blockingDecisionMatrix).toEqual(collectWorkflowMatrix());
-    expect(result.blockingDecisionMatrix).toHaveLength(19);
+    expect(result.blockingDecisionMatrix).toHaveLength(17);
   });
 });
