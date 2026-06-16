@@ -105,7 +105,7 @@ beforeEach(() => {
 });
 
 // ===========================================================================
-// AC-178-01: Pasting any of the 8 recognised URLs into the form-mode host
+// AC-178-01: Pasting any recognised supported URL into the form-mode host
 // field populates dbType / host / port / user / database / password and
 // surfaces a non-modal "detected" affordance.
 //
@@ -200,30 +200,6 @@ const PASTE_CASES: PasteCase[] = [
       port: 0,
       database: "/data/warehouse.duckdb",
       password: "",
-    },
-  },
-  {
-    scheme: "mssql",
-    url: "mssql://sa:pw@mssql.local:1433/master",
-    expected: {
-      dbType: "mssql",
-      host: "mssql.local",
-      port: 1433,
-      user: "sa",
-      database: "master",
-      password: "pw",
-    },
-  },
-  {
-    scheme: "oracle",
-    url: "oracle://system:pw@oracle.local:1521/FREEPDB1",
-    expected: {
-      dbType: "oracle",
-      host: "oracle.local",
-      port: 1521,
-      user: "system",
-      database: "FREEPDB1",
-      password: "pw",
     },
   },
   {
@@ -645,6 +621,37 @@ describe("[Sprint 447] URL import support follows data-source profiles", () => {
       supportSpy.mockRestore();
     }
   });
+
+  for (const c of [
+    {
+      dbType: "mssql",
+      url: "mssql://sa:pw@mssql.local:1433/master",
+    },
+    {
+      dbType: "oracle",
+      url: "oracle://system:pw@oracle.local:1521/FREEPDB1",
+    },
+  ] as const) {
+    it(`leaves ${c.dbType} URL pastes silent while connection.test is false`, async () => {
+      renderDialog();
+      const hostInput = screen.getByLabelText("Host") as HTMLInputElement;
+      const hostBefore = hostInput.value;
+
+      await act(async () => {
+        pasteIntoHost(c.url);
+      });
+
+      expect(
+        dataSourceProfiles.isConnectionSupportedDatabaseType(c.dbType),
+      ).toBe(false);
+      expect((screen.getByLabelText("Host") as HTMLInputElement).value).toBe(
+        hostBefore,
+      );
+      expect(
+        screen.queryByTestId("connection-url-detected"),
+      ).not.toBeInTheDocument();
+    });
+  }
 });
 
 describe("[AC-178-04] malformed URL paste is silent", () => {

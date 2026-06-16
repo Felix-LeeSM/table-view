@@ -191,7 +191,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(sql).toMatch(/CHECK\s*\(amount >= 0\)/i);
   });
 
-  it("mssql seed carries Runtime Happy Path catalog probes", () => {
+  it("mssql seed carries declared-only catalog inventory probes", () => {
     const sql = readFileSync(
       resolve("e2e/fixtures", "seed.mssql.sql"),
       "utf-8",
@@ -203,7 +203,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(sql).toMatch(/CREATE OR ALTER PROCEDURE dbo\.mssql_catalog_ping/i);
   });
 
-  it("oracle seed carries Runtime Happy Path catalog probes", () => {
+  it("oracle seed carries declared-only catalog inventory probes", () => {
     const sql = readFileSync(resolve("e2e/fixtures", "seed.oracle.sql"), {
       encoding: "utf8",
     });
@@ -506,7 +506,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     },
   );
 
-  it("mssql fixture seed is wired into Runtime Happy Path smoke", () => {
+  it("mssql fixture seed stays dormant until SQL Server runtime promotion", () => {
     const workflow = readFileSync(resolve(".github/workflows/e2e-smoke.yml"), {
       encoding: "utf8",
     });
@@ -517,10 +517,12 @@ describe("DBMS-specific E2E seed fixtures", () => {
       encoding: "utf8",
     });
 
-    expect(workflow).toContain("spec_key: mssql");
-    expect(workflow).toContain("spec: e2e/smoke/mssql.spec.ts");
-    expect(workflow).toContain("mcr.microsoft.com/mssql/server:2022-latest");
-    expect(smokeScript).toContain(
+    expect(workflow).not.toContain("spec_key: mssql");
+    expect(workflow).not.toContain("spec: e2e/smoke/mssql.spec.ts");
+    expect(workflow).not.toContain(
+      "mcr.microsoft.com/mssql/server:2022-latest",
+    );
+    expect(smokeScript).not.toContain(
       'run_wdio "$BASE_DATA_DIR/mssql" "e2e/smoke/mssql.spec.ts"',
     );
     expect(seedScript).toContain('mssql: ["mssql"]');
@@ -588,7 +590,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     },
   );
 
-  it("oracle fixture seed is wired into Runtime Happy Path smoke", () => {
+  it("oracle fixture seed stays dormant until Oracle runtime promotion", () => {
     const workflow = readFileSync(resolve(".github/workflows/e2e-smoke.yml"), {
       encoding: "utf8",
     });
@@ -599,11 +601,11 @@ describe("DBMS-specific E2E seed fixtures", () => {
       encoding: "utf8",
     });
 
-    expect(workflow).toContain("spec_key: oracle");
-    expect(workflow).toContain("spec: e2e/smoke/oracle.spec.ts");
-    expect(workflow).toContain("gvenzl/oracle-xe:21");
-    expect(workflow).toContain("timeout-minutes: 12");
-    expect(smokeScript).toContain(
+    expect(workflow).not.toContain("spec_key: oracle");
+    expect(workflow).not.toContain("spec: e2e/smoke/oracle.spec.ts");
+    expect(workflow).not.toContain("gvenzl/oracle-xe:21");
+    expect(workflow).not.toContain("timeout-minutes: 12");
+    expect(smokeScript).not.toContain(
       'run_wdio "$BASE_DATA_DIR/oracle" "e2e/smoke/oracle.spec.ts"',
     );
     expect(seedScript).toContain('oracle: ["oracle"]');

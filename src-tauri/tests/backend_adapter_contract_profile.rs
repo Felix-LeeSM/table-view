@@ -100,7 +100,7 @@ fn backend_profiles_encode_current_database_type_contracts() {
     let mssql = get_data_source_profile(&DatabaseType::Mssql);
     assert_eq!(
         mssql.adapter_contract.state,
-        BackendAdapterContractState::FactoryBacked
+        BackendAdapterContractState::DeclaredOnly
     );
     assert_eq!(mssql.backend_adapter.id, BackendAdapterId::Mssql);
     assert_eq!(
@@ -111,10 +111,28 @@ fn backend_profiles_encode_current_database_type_contracts() {
         mssql.dialect.version_probe,
         ServerVersionProbeId::MssqlServerProperty
     );
-    assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
-    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
-    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+    assert!(mssql.adapter_contract.capabilities.is_empty());
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+
+    let oracle = get_data_source_profile(&DatabaseType::Oracle);
+    assert_eq!(oracle.paradigm, Paradigm::Rdb);
+    assert_eq!(
+        oracle.adapter_contract.state,
+        BackendAdapterContractState::DeclaredOnly
+    );
+    assert_eq!(oracle.backend_adapter.id, BackendAdapterId::Oracle);
+    assert_eq!(
+        oracle.backend_adapter.capability_source,
+        BackendAdapterCapabilitySource::Oracle
+    );
+    assert!(oracle.adapter_contract.capabilities.is_empty());
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let mongodb = get_data_source_profile(&DatabaseType::Mongodb);
     assert_eq!(mongodb.paradigm, Paradigm::Document);
@@ -315,19 +333,11 @@ fn rdbms_integration_gate_profiles_are_coherent() {
     );
     assert_eq!(
         database_type_labels(RUNTIME_RDBMS_DATABASE_TYPES),
-        vec![
-            "postgresql",
-            "mysql",
-            "mariadb",
-            "sqlite",
-            "duckdb",
-            "mssql",
-            "oracle"
-        ]
+        vec!["postgresql", "mysql", "mariadb", "sqlite", "duckdb"]
     );
     assert_eq!(
         database_type_labels(SERVER_RDBMS_DATABASE_TYPES),
-        vec!["postgresql", "mysql", "mariadb", "mssql", "oracle"]
+        vec!["postgresql", "mysql", "mariadb"]
     );
     assert_eq!(
         database_type_labels(FILE_RDBMS_DATABASE_TYPES),
@@ -359,33 +369,35 @@ fn rdbms_integration_gate_profiles_are_coherent() {
     assert_eq!(mssql.paradigm, Paradigm::Rdb);
     assert_eq!(
         mssql.adapter_contract.state,
-        BackendAdapterContractState::FactoryBacked
+        BackendAdapterContractState::DeclaredOnly
     );
     assert_eq!(mssql.backend_adapter.id, BackendAdapterId::Mssql);
     assert_eq!(
         mssql.backend_adapter.capability_source,
         BackendAdapterCapabilitySource::Mssql
     );
-    assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
-    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
-    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+    assert!(mssql.adapter_contract.capabilities.is_empty());
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let oracle = get_data_source_profile(&DatabaseType::Oracle);
     assert_eq!(oracle.paradigm, Paradigm::Rdb);
     assert_eq!(
         oracle.adapter_contract.state,
-        BackendAdapterContractState::FactoryBacked
+        BackendAdapterContractState::DeclaredOnly
     );
     assert_eq!(oracle.backend_adapter.id, BackendAdapterId::Oracle);
     assert_eq!(
         oracle.backend_adapter.capability_source,
         BackendAdapterCapabilitySource::Oracle
     );
-    assert!(oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
-    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
-    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+    assert!(oracle.adapter_contract.capabilities.is_empty());
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 }
 
 #[test]

@@ -25,9 +25,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::db::mongodb::MongoAdapter;
-use crate::db::mssql::MssqlAdapter;
 use crate::db::mysql::MysqlAdapter;
-use crate::db::oracle::OracleAdapter;
 use crate::db::postgres::PostgresAdapter;
 use crate::db::redis::RedisAdapter;
 use crate::db::search::SearchEngineAdapter;
@@ -55,6 +53,10 @@ pub use io::{
 pub use session::get_session_id;
 pub use sqlite_file::create_sqlite_database_file;
 
+const SQL_SERVER_DECLARED_ONLY_RUNTIME_MESSAGE: &str = "SQL Server is declared-only until source-specific connection.test and matching runtime evidence land";
+const ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE: &str =
+    "Oracle is declared-only until source-specific connection.test and matching runtime evidence land";
+
 /// Build an `ActiveAdapter` for the given database type.
 ///
 /// Sprint 65 adds MongoDB dispatch on top of Sprint 64's Postgres wiring.
@@ -63,9 +65,9 @@ pub use sqlite_file::create_sqlite_database_file;
 /// surfaces still return `AppError::Unsupported` until Slice B~G land.
 /// MariaDB shares the MySQL protocol adapter while preserving its distinct
 /// `DatabaseType` on the active adapter. SQLite and DuckDB have file-backed
-/// adapters. MSSQL and Oracle are connection-backed with bounded relational
-/// query execution. Catalog/edit/admin remain gated until later parity issues
-/// land.
+/// adapters. SQL Server and Oracle are declared-only identities: factory
+/// dispatch rejects runtime promotion until source-specific `connection.test`
+/// and matching runtime/docs/smoke evidence land.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
@@ -73,8 +75,12 @@ pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppE
         DatabaseType::Mariadb => Ok(ActiveAdapter::Rdb(Box::new(MysqlAdapter::new_mariadb()))),
         DatabaseType::Sqlite => Ok(ActiveAdapter::Rdb(Box::new(SqliteAdapter::new()))),
         DatabaseType::Duckdb => Ok(ActiveAdapter::Rdb(Box::new(DuckdbAdapter::new()))),
-        DatabaseType::Mssql => Ok(ActiveAdapter::Rdb(Box::new(MssqlAdapter::new()))),
-        DatabaseType::Oracle => Ok(ActiveAdapter::Rdb(Box::new(OracleAdapter::new()))),
+        DatabaseType::Mssql => Err(AppError::Unsupported(
+            SQL_SERVER_DECLARED_ONLY_RUNTIME_MESSAGE.into(),
+        )),
+        DatabaseType::Oracle => Err(AppError::Unsupported(
+            ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE.into(),
+        )),
         DatabaseType::Mongodb => Ok(ActiveAdapter::Document(Box::new(MongoAdapter::new()))),
         DatabaseType::Redis => Ok(ActiveAdapter::Kv(Box::new(RedisAdapter::new()))),
         DatabaseType::Valkey => Ok(ActiveAdapter::Kv(Box::new(RedisAdapter::new_valkey()))),
@@ -84,6 +90,18 @@ pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppE
         DatabaseType::Opensearch => Ok(ActiveAdapter::Search(Box::new(
             SearchEngineAdapter::new_opensearch(),
         ))),
+    }
+}
+
+pub(crate) fn declared_only_runtime_error(db_type: &DatabaseType) -> Option<AppError> {
+    match db_type {
+        DatabaseType::Mssql => Some(AppError::Unsupported(
+            SQL_SERVER_DECLARED_ONLY_RUNTIME_MESSAGE.into(),
+        )),
+        DatabaseType::Oracle => Some(AppError::Unsupported(
+            ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE.into(),
+        )),
+        _ => None,
     }
 }
 
@@ -320,23 +338,31 @@ mod tests {
     }
 
     #[test]
-    fn test_make_adapter_mssql_returns_rdb_variant() {
-        let adapter = make_adapter(&DatabaseType::Mssql).expect("mssql should succeed");
-        assert!(
-            matches!(adapter, ActiveAdapter::Rdb(_)),
-            "expected Rdb variant"
-        );
-        assert!(matches!(adapter.kind(), DatabaseType::Mssql));
+    fn test_make_adapter_mssql_rejects_declared_only_runtime_promotion() {
+        let result = make_adapter(&DatabaseType::Mssql);
+
+        match result {
+            Err(AppError::Unsupported(msg)) => {
+                assert!(msg.contains("SQL Server is declared-only"));
+                assert!(msg.contains("source-specific connection.test"));
+            }
+            Err(other) => panic!("Expected SQL Server declared-only rejection, got: {other:?}"),
+            Ok(_) => panic!("Expected SQL Server declared-only rejection, got adapter"),
+        }
     }
 
     #[test]
-    fn test_make_adapter_oracle_returns_query_catalog_edit_bounded_rdb_variant() {
-        let adapter = make_adapter(&DatabaseType::Oracle).expect("oracle should succeed");
-        assert!(
-            matches!(adapter, ActiveAdapter::Rdb(_)),
-            "expected Rdb variant"
-        );
-        assert!(matches!(adapter.kind(), DatabaseType::Oracle));
+    fn test_make_adapter_oracle_rejects_declared_only_runtime_promotion() {
+        let result = make_adapter(&DatabaseType::Oracle);
+
+        match result {
+            Err(AppError::Unsupported(msg)) => {
+                assert!(msg.contains("Oracle is declared-only"));
+                assert!(msg.contains("source-specific connection.test"));
+            }
+            Err(other) => panic!("Expected Oracle declared-only rejection, got: {other:?}"),
+            Ok(_) => panic!("Expected Oracle declared-only rejection, got adapter"),
+        }
     }
 
     #[test]

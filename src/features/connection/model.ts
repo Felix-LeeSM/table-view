@@ -23,9 +23,9 @@ export type DatabaseType =
  * tables / columns) 만 동작 — DDL / queries / streaming 은 Slice B~G
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
- * MSSQL is connection-backed with query/catalog metadata runtime support.
- * Oracle is connection-backed with bounded query runtime support.
- * Catalog/edit/runtime-safety widening stays split behind follow-up parity issues.
+ * MSSQL and Oracle are declared identities only until their source-specific
+ * `connection.test` evidence lands. They keep labels/defaults/URL parsing so
+ * saved drafts can round-trip, but they stay hidden from new connection creation.
  */
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",
@@ -33,8 +33,6 @@ export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "mariadb",
   "sqlite",
   "duckdb",
-  "mssql",
-  "oracle",
   "mongodb",
   "redis",
   "valkey",

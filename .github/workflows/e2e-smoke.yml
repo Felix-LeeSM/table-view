@@ -134,10 +134,6 @@ jobs:
             spec: e2e/smoke/mysql.spec.ts
           - spec_key: mariadb
             spec: e2e/smoke/mariadb.spec.ts
-          - spec_key: mssql
-            spec: e2e/smoke/mssql.spec.ts
-          - spec_key: oracle
-            spec: e2e/smoke/oracle.spec.ts
           - spec_key: duckdb
             spec: e2e/smoke/duckdb.spec.ts
           - spec_key: mongodb
@@ -346,51 +342,6 @@ jobs:
           docker logs table-view-opensearch || true
           exit 1
 
-      - name: Start MSSQL service
-        if: matrix.spec_key == 'mssql'
-        run: |
-          docker run -d \
-            --name table-view-mssql \
-            --publish 14333:1433 \
-            --env "ACCEPT_EULA=Y" \
-            --env "MSSQL_SA_PASSWORD=Testpass123!" \
-            mcr.microsoft.com/mssql/server:2022-latest
-
-          for attempt in {1..40}; do
-            if docker exec table-view-mssql /opt/mssql-tools18/bin/sqlcmd \
-              -S localhost -U sa -P 'Testpass123!' -C -Q 'SELECT 1'; then
-              exit 0
-            fi
-            echo "MSSQL is not ready yet (attempt ${attempt}/40)."
-            sleep 5
-          done
-
-          docker logs table-view-mssql || true
-          exit 1
-
-      - name: Start Oracle service
-        if: matrix.spec_key == 'oracle'
-        timeout-minutes: 12
-        run: |
-          docker run -d \
-            --name table-view-oracle \
-            --publish 1521:1521 \
-            --env "ORACLE_PASSWORD=testpass" \
-            --env "APP_USER=testuser" \
-            --env "APP_USER_PASSWORD=testpass" \
-            gvenzl/oracle-xe:21
-
-          for attempt in {1..60}; do
-            if docker exec table-view-oracle bash -lc "echo 'SELECT 1 FROM DUAL;' | sqlplus -s testuser/testpass@localhost/XEPDB1 | grep -q '1'"; then
-              exit 0
-            fi
-            echo "Oracle is not ready yet (attempt ${attempt}/60)."
-            sleep 5
-          done
-
-          docker logs table-view-oracle || true
-          exit 1
-
       - name: Run E2E smoke
         env:
           E2E_PG_HOST: localhost
@@ -447,14 +398,6 @@ jobs:
       - name: Stop OpenSearch service
         if: always() && matrix.spec_key == 'opensearch'
         run: docker rm --force table-view-opensearch || true
-
-      - name: Stop MSSQL service
-        if: always() && matrix.spec_key == 'mssql'
-        run: docker rm --force table-view-mssql || true
-
-      - name: Stop Oracle service
-        if: always() && matrix.spec_key == 'oracle'
-        run: docker rm --force table-view-oracle || true
 
       - name: Upload E2E artifacts
         if: always()

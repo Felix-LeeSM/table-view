@@ -281,75 +281,91 @@ describe("adapter conformance matrix", () => {
     expect(valkey.areas.edit.deferred).toEqual(["edit.bulkWrite"]);
   });
 
-  it("locks MSSQL catalog/query/edit/DDL runtime claims while keeping explain deferred", () => {
+  it("keeps MSSQL declared-only until connection evidence promotes capabilities", () => {
     const mssql = ADAPTER_CONFORMANCE_MATRIX.mssql;
 
-    expect(mssql.level).toBe("runtime");
-    expect(mssql.areas.connection.checks).toEqual([
+    expect(mssql.level).toBe("declared");
+    expect(mssql.areas.connection.checks).toEqual([]);
+    expect(mssql.areas.catalog.checks).toEqual([]);
+    expect(mssql.areas.query.checks).toEqual([]);
+    expect(mssql.areas.edit.checks).toEqual([]);
+    expect(mssql.areas.ddl.checks).toEqual([]);
+    expect(mssql.areas.connection.unsupported).toEqual([
       "connection.test",
       "connection.switchDatabase",
-    ]);
-    expect(mssql.areas.connection.deferred).toEqual([]);
-    expect(mssql.areas.catalog.checks).toEqual([
-      "catalog.browse",
-      "catalog.schema",
-      "catalog.indexes",
-      "catalog.constraints",
-      "catalog.relationships",
-    ]);
-    expect(mssql.areas.catalog.deferred).toEqual([]);
-    expect(mssql.areas.query.checks).toEqual([
-      "query.query",
-      "query.multiStatement",
-      "query.cancel",
-    ]);
-    expect(mssql.areas.query.deferred).toEqual(["query.explain"]);
-    expect(mssql.areas.edit.checks).toEqual(["edit.editRows"]);
-    expect(mssql.areas.edit.deferred).toEqual([]);
-    expect(mssql.areas.ddl.checks).toEqual([
-      "ddl.createTable",
-      "ddl.alterTable",
-      "ddl.createIndex",
-      "ddl.dropObject",
-    ]);
-    expect(mssql.areas.ddl.deferred).toEqual([]);
-  });
-
-  it("locks Oracle to query-catalog-edit-DDL bounded conformance", () => {
-    const oracle = ADAPTER_CONFORMANCE_MATRIX.oracle;
-
-    expect(oracle.level).toBe("runtime");
-    expect(oracle.areas.connection.checks).toEqual(["connection.test"]);
-    expect(oracle.areas.connection.deferred).toEqual([
-      "connection.switchDatabase",
-    ]);
-    expect(oracle.areas.connection.unsupported).toEqual([
       "connection.readOnly",
       "connection.filePicker",
     ]);
-    expect(oracle.areas.catalog.checks).toEqual([
+    expect(mssql.areas.catalog.unsupported).toEqual([
       "catalog.browse",
       "catalog.schema",
       "catalog.indexes",
       "catalog.constraints",
       "catalog.relationships",
     ]);
-    expect(oracle.areas.catalog.deferred).toEqual([]);
-    expect(oracle.areas.query.checks).toEqual([
+    expect(mssql.areas.query.unsupported).toEqual([
       "query.query",
       "query.multiStatement",
       "query.cancel",
+      "query.explain",
     ]);
-    expect(oracle.areas.query.deferred).toEqual(["query.explain"]);
-    expect(oracle.areas.edit.checks).toEqual(["edit.editRows"]);
-    expect(oracle.areas.edit.deferred).toEqual([]);
-    expect(oracle.areas.ddl.checks).toEqual([
+    expect(mssql.areas.query.deferred).toEqual([]);
+    expect(mssql.areas.edit.unsupported).toEqual([
+      "edit.editRows",
+      "edit.editDocuments",
+      "edit.editKeys",
+      "edit.bulkWrite",
+    ]);
+    expect(mssql.areas.ddl.unsupported).toEqual([
       "ddl.createTable",
       "ddl.alterTable",
       "ddl.createIndex",
       "ddl.dropObject",
     ]);
-    expect(oracle.areas.ddl.deferred).toEqual([]);
+  });
+
+  it("keeps Oracle declared-only until connection evidence promotes capabilities", () => {
+    const oracle = ADAPTER_CONFORMANCE_MATRIX.oracle;
+
+    expect(oracle.level).toBe("declared");
+    expect(oracle.areas.connection.checks).toEqual([]);
+    expect(oracle.areas.catalog.checks).toEqual([]);
+    expect(oracle.areas.query.checks).toEqual([]);
+    expect(oracle.areas.edit.checks).toEqual([]);
+    expect(oracle.areas.ddl.checks).toEqual([]);
+    expect(oracle.areas.connection.deferred).toEqual([]);
+    expect(oracle.areas.connection.unsupported).toEqual([
+      "connection.test",
+      "connection.switchDatabase",
+      "connection.readOnly",
+      "connection.filePicker",
+    ]);
+    expect(oracle.areas.catalog.unsupported).toEqual([
+      "catalog.browse",
+      "catalog.schema",
+      "catalog.indexes",
+      "catalog.constraints",
+      "catalog.relationships",
+    ]);
+    expect(oracle.areas.query.unsupported).toEqual([
+      "query.query",
+      "query.multiStatement",
+      "query.cancel",
+      "query.explain",
+    ]);
+    expect(oracle.areas.query.deferred).toEqual([]);
+    expect(oracle.areas.edit.unsupported).toEqual([
+      "edit.editRows",
+      "edit.editDocuments",
+      "edit.editKeys",
+      "edit.bulkWrite",
+    ]);
+    expect(oracle.areas.ddl.unsupported).toEqual([
+      "ddl.createTable",
+      "ddl.alterTable",
+      "ddl.createIndex",
+      "ddl.dropObject",
+    ]);
   });
 });
 

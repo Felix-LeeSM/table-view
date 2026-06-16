@@ -56,19 +56,19 @@
       "id": "mssql-oracle-profile-identity-static-fixture-nonclaim",
       "minimumRow": "MSSQL/Oracle declared-only identities",
       "products": ["mssql", "oracle"],
-      "claimBoundary": "Profile identity and static fixture inventory are not enough to widen SQL Server or Oracle beyond the documented runtime slices.",
+      "claimBoundary": "Profile identity and static fixture inventory are not enough to widen SQL Server or Oracle beyond declared-only support.",
       "docs": [
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "fixture file alone is not live runtime evidence."
+          "mustContain": "MSSQL/Oracle specs and fixtures are declared-only inventory"
         },
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "TLS-required workflow"
+          "mustContain": "SQL Server auth/encryption/TDS/T-SQL"
         },
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "SID, TNS alias, wallet/TLS"
+          "mustContain": "SID/TNS/wallet/TLS"
         }
       ],
       "fixtureEvidence": [
