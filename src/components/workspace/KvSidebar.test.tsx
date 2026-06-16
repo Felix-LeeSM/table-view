@@ -117,6 +117,7 @@ describe("KvSidebar", () => {
       });
     });
     expect(scanRequests()).toHaveLength(1);
+    expect(commandCalls("get_kv_value")).toHaveLength(0);
     expect(
       screen.getByRole("tree", { name: /redis keys/i }),
     ).toBeInTheDocument();

@@ -2,7 +2,7 @@
 // BackendPendingPlaceholder with a live stats grid sourced from
 // `pg_stat_user_tables` (RDB) or `runCommand({collStats})` (Mongo).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +27,7 @@ export function CollectionStatsPanel({
 }: CollectionStatsPanelProps) {
   const [stats, setStats] = useState<CollectionStatsRow | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hasFetched, setHasFetched] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -38,16 +39,14 @@ export function CollectionStatsPanel({
           ? await collectionStatsMongo(connectionId, database, collection)
           : await collectionStatsRdb(connectionId, database, collection);
       setStats(next);
+      setHasFetched(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setHasFetched(true);
     } finally {
       setLoading(false);
     }
   }, [connectionId, paradigm, database, collection]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   return (
     <section
@@ -73,7 +72,7 @@ export function CollectionStatsPanel({
           ) : (
             <RefreshCw size={12} aria-hidden />
           )}
-          Refresh
+          {hasFetched ? "Refresh" : "Load stats"}
         </Button>
       </header>
 

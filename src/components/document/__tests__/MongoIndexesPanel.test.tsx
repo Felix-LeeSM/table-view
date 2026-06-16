@@ -18,6 +18,10 @@ import {
   fireEvent,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import {
+  __resetDocumentCatalogStoreForTests,
+  useDocumentCatalogStore,
+} from "@/stores/documentCatalogStore";
 import { MongoIndexesPanel } from "../MongoIndexesPanel";
 
 const listMongoIndexesMock = vi.fn();
@@ -32,6 +36,7 @@ beforeEach(() => {
 });
 
 beforeEach(() => {
+  __resetDocumentCatalogStoreForTests();
   listMongoIndexesMock.mockReset();
   createMongoIndexMock.mockReset();
   dropMongoIndexMock.mockReset();
@@ -126,6 +131,90 @@ describe("MongoIndexesPanel (Sprint 350 — tracer RO list)", () => {
       <MongoIndexesPanel connectionId="conn-mongo" database="" collection="" />,
     );
     expect(listMongoIndexesMock).not.toHaveBeenCalled();
+  });
+
+  it("renders cached index inventory without an eager refetch", async () => {
+    useDocumentCatalogStore.setState({
+      indexesCache: {
+        "conn-mongo": {
+          app: {
+            users: [
+              {
+                name: "email_1",
+                columns: ["email"],
+                index_type: "btree",
+                is_unique: true,
+                is_primary: false,
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    render(
+      <MongoIndexesPanel
+        connectionId="conn-mongo"
+        database="app"
+        collection="users"
+      />,
+    );
+
+    expect(await screen.findByText("email_1")).toBeInTheDocument();
+    expect(listMongoIndexesMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores stale index load failures after switching collections", async () => {
+    let rejectUsers: (error: Error) => void = () => {};
+    listMongoIndexesMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectUsers = reject as (error: Error) => void;
+          }),
+      )
+      .mockResolvedValueOnce([
+        {
+          name: "created_at_1",
+          columns: ["created_at"],
+          index_type: "btree",
+          is_unique: false,
+          is_primary: false,
+        },
+      ]);
+
+    const { rerender } = render(
+      <MongoIndexesPanel
+        connectionId="conn-mongo"
+        database="app"
+        collection="users"
+      />,
+    );
+    await waitFor(() => {
+      expect(listMongoIndexesMock).toHaveBeenCalledWith(
+        "conn-mongo",
+        "app",
+        "users",
+      );
+    });
+
+    rerender(
+      <MongoIndexesPanel
+        connectionId="conn-mongo"
+        database="app"
+        collection="orders"
+      />,
+    );
+    expect(await screen.findByText("created_at_1")).toBeInTheDocument();
+
+    await act(async () => {
+      rejectUsers(new Error("users denied"));
+    });
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByTestId("mongo-indexes-panel")).toHaveTextContent(
+      "Indexes — app.orders",
+    );
   });
 
   it("delays the loading flag until 1000ms have elapsed (useDelayedFlag gate)", async () => {

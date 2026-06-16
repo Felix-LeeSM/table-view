@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create, type StoreApi, type UseBoundStore } from "zustand";
 import type { ColumnInfo, IndexInfo } from "@/types/schema";
 import type { CollectionInfo, DatabaseInfo } from "@/types/document";
 import * as tauri from "@lib/tauri";
@@ -34,6 +34,7 @@ export interface DocumentCatalogState {
     connectionId: string,
     database: string,
     collection: string,
+    options?: { force?: boolean },
   ) => Promise<IndexInfo[]>;
   clearConnection: (connectionId: string) => void;
 }
@@ -64,7 +65,9 @@ function clearCatalogCounters(connectionId: string): void {
   }
 }
 
-export const useDocumentCatalogStore = create<DocumentCatalogState>((set) => ({
+export const useDocumentCatalogStore: UseBoundStore<
+  StoreApi<DocumentCatalogState>
+> = create<DocumentCatalogState>((set) => ({
   databases: {},
   collections: {},
   fieldsCache: {},
@@ -143,7 +146,19 @@ export const useDocumentCatalogStore = create<DocumentCatalogState>((set) => ({
     return columns;
   },
 
-  loadCollectionIndexes: async (connectionId, database, collection) => {
+  loadCollectionIndexes: async (
+    connectionId,
+    database,
+    collection,
+    options,
+  ) => {
+    const cached =
+      useDocumentCatalogStore.getState().indexesCache[connectionId]?.[
+        database
+      ]?.[collection];
+    if (cached && options?.force !== true) {
+      return cached;
+    }
     const key = `indexes:${connectionId}:${database}:${collection}`;
     const reqId = nextRequestId(key);
     const indexes = await tauri.listMongoIndexes(

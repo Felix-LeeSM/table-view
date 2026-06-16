@@ -177,6 +177,31 @@ describe("documentStore", () => {
     ).toHaveLength(2);
   });
 
+  it("loadCollectionIndexes reuses cached indexes unless force refresh is requested", async () => {
+    await useDocumentStore
+      .getState()
+      .loadCollectionIndexes("conn-1", "db", "users");
+    const cached = await useDocumentStore
+      .getState()
+      .loadCollectionIndexes("conn-1", "db", "users");
+
+    expect(cached).toHaveLength(2);
+    expect(tauri.listMongoIndexes).toHaveBeenCalledTimes(1);
+
+    vi.mocked(tauri.listMongoIndexes).mockResolvedValueOnce([
+      indexFixture("created_at_1", ["created_at"]),
+    ]);
+    const refreshed = await useDocumentStore
+      .getState()
+      .loadCollectionIndexes("conn-1", "db", "users", { force: true });
+
+    expect(tauri.listMongoIndexes).toHaveBeenCalledTimes(2);
+    expect(refreshed[0]?.name).toBe("created_at_1");
+    expect(
+      useDocumentStore.getState().indexesCache["conn-1"]?.["db"]?.["users"],
+    ).toEqual(refreshed);
+  });
+
   it("runFind caches the DocumentQueryResult and returns it", async () => {
     const result = await useDocumentStore
       .getState()

@@ -16,6 +16,18 @@
         {
           "path": "docs/product/known-limitations.md",
           "mustContain": "broader admin APIs, observability"
+        },
+        {
+          "path": "docs/product/README.md",
+          "mustContain": "Search uses an index-catalog-first workbench boundary"
+        },
+        {
+          "path": "docs/ROADMAP.md",
+          "mustContain": "Search live HTTP/admin promotion remains owned by the Search roadmap/milestone"
+        },
+        {
+          "path": "docs/contributor-guide/testing-and-quality.md",
+          "mustContain": "Initial Search workbench load is index-catalog-first"
         }
       ],
       "fixtureEvidence": [
