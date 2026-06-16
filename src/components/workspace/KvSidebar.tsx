@@ -26,7 +26,11 @@ import type {
 import { formatKvTtl } from "@/types/kv";
 import { DATABASE_TYPE_LABELS } from "@/types/connection";
 import { getDataSourceProfile } from "@/types/dataSource";
-import { KvMutationPanel } from "./KvMutationPanel";
+import {
+  canRenderKvMutationPanel,
+  KvMutationPanel,
+  type KvMutationScope,
+} from "./KvMutationPanel";
 
 const KEY_SCAN_LIMIT = 100;
 const STREAM_READ_DEFAULT_LIMIT = 100;
@@ -49,6 +53,8 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   const mutationEnabled = connection
     ? getDataSourceProfile(connection.dbType).capabilities.edit.editKeys
     : true;
+  const mutationScope: KvMutationScope =
+    connection?.dbType === "valkey" ? "valkey" : "redis";
   const initialDatabase = useMemo(() => {
     const activeDb = status?.type === "connected" ? status.activeDb : undefined;
     const raw = activeDb ?? connection?.database ?? "0";
@@ -348,6 +354,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
           connectionId={connectionId}
           database={database}
           mutationEnabled={mutationEnabled}
+          mutationScope={mutationScope}
           onMutationSuccess={refreshAfterMutation}
         />
       </div>
@@ -400,6 +407,7 @@ function KvValuePreview({
   connectionId,
   database,
   mutationEnabled,
+  mutationScope,
   onMutationSuccess,
 }: {
   value: KvValueEnvelope | null;
@@ -407,6 +415,7 @@ function KvValuePreview({
   connectionId: string;
   database: number;
   mutationEnabled: boolean;
+  mutationScope: KvMutationScope;
   onMutationSuccess: (key: string) => Promise<void>;
 }) {
   if (loading) {
@@ -455,11 +464,12 @@ function KvValuePreview({
         )}
       </div>
       {valueBody}
-      {mutationEnabled && (
+      {canRenderKvMutationPanel(value, mutationEnabled, mutationScope) && (
         <KvMutationPanel
           value={value}
           connectionId={connectionId}
           database={database}
+          mutationScope={mutationScope}
           onMutationSuccess={onMutationSuccess}
         />
       )}

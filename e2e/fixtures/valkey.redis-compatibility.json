@@ -3,7 +3,12 @@
   "product": "valkey",
   "supportLevel": "static-matrix-plus-focused-runtime-proof",
   "compatibilityTarget": "redis-command",
-  "newlyPromotedCommandGaps": ["LRANGE", "SMEMBERS", "ZRANGE WITHSCORES", "TTL"],
+  "newlyPromotedCommandGaps": [
+    "LRANGE",
+    "SMEMBERS",
+    "ZRANGE WITHSCORES",
+    "TTL"
+  ],
   "runtimeSupport": true,
   "completionSupport": {
     "status": "proven-row-editor-assistance",
@@ -23,9 +28,9 @@
       "PERSIST",
       "DEL"
     ],
-    "nonClaim": "Completion is not Runtime Happy Path smoke, direct mutation UI, broader command-family runtime promotion, or full Valkey compatibility evidence."
+    "nonClaim": "Completion is not Runtime Happy Path smoke, direct string-key mutation UI evidence, collection mutation UI evidence, broader command-family runtime promotion, or full Valkey compatibility evidence."
   },
-  "matrixScope": "Redis-compatible command-family matrix for Table View's bounded Redis command slice, with focused local Valkey testcontainer proof for selected rows and editor-assistance completion for proven rows only. This is not Runtime Happy Path smoke, direct mutation UI, or full Valkey compatibility evidence.",
+  "matrixScope": "Redis-compatible command-family matrix for Table View's bounded Redis command slice, with focused local Valkey testcontainer proof for selected rows and editor-assistance completion for proven rows only. This is not Runtime Happy Path smoke, direct string-key mutation UI evidence, collection mutation UI evidence, or full Valkey compatibility evidence.",
   "detectionRules": [
     "Do not identify Valkey by redis_version alone; future broader runtime promotion must use server_name/valkey_version or HELLO server/version evidence.",
     "Do not reuse Redis Runtime Happy Path smoke as Valkey evidence.",
@@ -72,8 +77,8 @@
       "family": "string-write-command",
       "status": "proven-local-valkey-runtime",
       "redisCommands": ["SET"],
-      "currentEvidence": "Local Valkey testcontainer covers SET with EX through bounded command query dispatch and tabular projection.",
-      "knownValkeyDelta": "SET NX/XX and broader string option policy are not proven by this focused slice.",
+      "currentEvidence": "Local Valkey testcontainer covers SET with EX through bounded command query dispatch and tabular projection, plus direct typed UTF-8 string set through the Valkey adapter. Component evidence covers the direct string-key panel path.",
+      "knownValkeyDelta": "SET NX/XX, binary string editing, and broader string option policy are not proven by this focused slice.",
       "promotionGate": "broader Valkey string write support must add option-specific runtime evidence and docs.",
       "unsupportedAssumption": "Do not inherit Redis string write option coverage without Valkey-specific tests."
     },
@@ -162,9 +167,9 @@
       "family": "ttl-mutation-command",
       "status": "proven-local-valkey-runtime",
       "redisCommands": ["EXPIRE", "PERSIST"],
-      "currentEvidence": "Local Valkey testcontainer covers EXPIRE command dispatch and exact-key PERSIST confirmation through the bounded command policy.",
-      "knownValkeyDelta": "TTL read labels and post-mutation UI refresh remain outside this focused proof.",
-      "promotionGate": "The wired Valkey smoke now proves EXPIRE dispatch. Exact-key PERSIST success remains focused backend evidence until a UI path can supply confirmKey.",
+      "currentEvidence": "Local Valkey testcontainer covers EXPIRE command dispatch, exact-key PERSIST confirmation through the bounded command policy, and direct typed EXPIRE/PERSIST through the Valkey adapter. Component evidence covers the direct string-key panel path.",
+      "knownValkeyDelta": "TTL read labels in smoke remain command-path evidence; non-string TTL UI remains outside this focused proof.",
+      "promotionGate": "The wired Valkey smoke proves EXPIRE dispatch. Direct string-key EXPIRE/PERSIST controls are promoted by focused backend/component evidence; broader TTL UI claims need separate Valkey evidence.",
       "unsupportedAssumption": "Do not reuse Redis TTL confirmation evidence for Valkey."
     },
     {
@@ -189,9 +194,9 @@
       "family": "single-key-destructive",
       "status": "proven-local-valkey-runtime",
       "redisCommands": ["DEL"],
-      "currentEvidence": "Local Valkey testcontainer covers exact-key DEL confirmation and command projection.",
-      "knownValkeyDelta": "Missing-key projection and key browser refresh are not promoted by this focused proof.",
-      "promotionGate": "The wired Valkey smoke proves the destructive exact-key guard error. Confirmed delete and browser refresh remain future UI evidence because the query editor does not collect confirmKey.",
+      "currentEvidence": "Local Valkey testcontainer covers exact-key DEL confirmation, command projection, and direct typed delete through the Valkey adapter. Component evidence covers the direct string-key delete panel path.",
+      "knownValkeyDelta": "Missing-key projection and non-string delete UI remain outside this focused proof.",
+      "promotionGate": "The wired Valkey smoke proves the destructive exact-key guard error. Direct string-key delete controls are promoted by focused backend/component evidence; broader destructive UI claims need separate Valkey evidence.",
       "unsupportedAssumption": "Do not enable broad or multi-key destructive Valkey commands because single-key DEL is proven."
     },
     {
@@ -247,6 +252,7 @@
     "Redis Runtime Happy Path smoke is not Valkey runtime evidence.",
     "Valkey seed/reset commands are wired to Runtime Happy Path smoke for the promoted slice; broader fixture rows remain inventory until separately proven.",
     "Focused local Valkey testcontainer evidence promotes only the explicitly marked proven command/query families.",
+    "Direct UTF-8 string-key mutation controls are promoted by focused Valkey backend/component evidence, not by Redis evidence or the compatibility matrix alone.",
     "Admin, broad destructive, cluster, pub/sub, modules/functions, scripting, and consumer-group workflows remain rejected even if Valkey accepts Redis-compatible command names."
   ],
   "unsupportedRedisAssumptions": [

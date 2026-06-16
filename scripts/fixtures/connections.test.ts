@@ -13,7 +13,7 @@
 // 의 실제 ~/Library/Application Support/table-view 를 절대 건드리지
 // 않는다.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDecipheriv, randomBytes as nodeRandomBytes } from "node:crypto";
 import {
   existsSync,
@@ -29,6 +29,9 @@ import { loadSpec } from "./spec.js";
 
 let tempDir: string;
 let originalEnv: string | undefined;
+
+// Pre-push runs this storage fixture file alongside Rust coverage.
+vi.setConfig({ testTimeout: 30_000 });
 
 beforeEach(() => {
   tempDir = mkdtempSync(resolve(tmpdir(), "fixture-conn-"));

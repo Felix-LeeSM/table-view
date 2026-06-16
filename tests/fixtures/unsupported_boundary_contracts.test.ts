@@ -160,17 +160,17 @@ describe("unsupported_boundary_contracts.json", () => {
     }
   });
 
-  it("keeps Valkey direct mutation and full Redis compatibility outside completion promotion", () => {
+  it("keeps Valkey non-string mutation and full Redis compatibility outside completion promotion", () => {
     const row = rowById(
       loadBoundaryFixture(),
-      "valkey-direct-mutation-full-redis-nonclaim",
+      "valkey-non-string-mutation-full-redis-nonclaim",
     );
     const compatibility = readJson<ValkeyCompatibilityFixture>(
       row.fixtureEvidence[0]?.path ?? "",
     );
 
     expect(compatibility.completionSupport.nonClaim).toContain(
-      "direct mutation UI",
+      "direct string-key mutation UI evidence",
     );
     expect(compatibility.completionSupport.nonClaim).toContain(
       "full Valkey compatibility evidence",

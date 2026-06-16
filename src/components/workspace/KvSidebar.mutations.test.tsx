@@ -71,6 +71,110 @@ describe("KvSidebar mutations", () => {
     expect(await screen.findByDisplayValue("Grace Hopper")).toBeInTheDocument();
   });
 
+  it("enables Valkey direct string set, expire, persist, and delete controls", async () => {
+    let text = "Ada";
+    useConnectionStore.setState({
+      connections: [valkeyConnection()],
+      activeStatuses: { "valkey-1": { type: "connected", activeDb: "0" } },
+    });
+    mockRedisRuntime(() => stringValueEnvelope(text), {
+      set_kv_string_value: (payload) => {
+        text = (payload as { request: { value: string } }).request.value;
+        return { key: "user:1", changed: true, ttl: { state: "persistent" } };
+      },
+    });
+
+    render(<KvSidebar connectionId="valkey-1" />);
+    await selectRenderedKey(/valkey keys/i);
+
+    expect(screen.getByText("Mutation")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /preview string set/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /preview expire/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /preview persist/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /preview delete/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /preview hset|rpush|sadd|zadd/i }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("String value"), {
+      target: { value: "Grace Hopper" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /preview string set/i }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /confirm string set/i }),
+    );
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("set_kv_string_value", {
+        connectionId: "valkey-1",
+        request: {
+          database: 0,
+          key: "user:1",
+          value: "Grace Hopper",
+          safety: "allowOverwrite",
+        },
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText("Expire seconds"), {
+      target: { value: "60" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /preview expire/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm expire/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("update_kv_ttl", {
+        connectionId: "valkey-1",
+        request: {
+          database: 0,
+          key: "user:1",
+          update: { mode: "expire", seconds: 60 },
+        },
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText("Persist confirm key"), {
+      target: { value: "user:1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /preview persist/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm persist/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("update_kv_ttl", {
+        connectionId: "valkey-1",
+        request: {
+          database: 0,
+          key: "user:1",
+          update: { mode: "persist", confirmKey: "user:1" },
+        },
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText("Delete confirm key"), {
+      target: { value: "user:1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /preview delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("delete_kv_key", {
+        connectionId: "valkey-1",
+        request: { database: 0, key: "user:1", confirmKey: "user:1" },
+      });
+    });
+    expect(commandCalls("execute_kv_command")).toHaveLength(0);
+  });
+
   it("keeps a dirty string draft when a same-key value refresh arrives before preview", async () => {
     mockRedisRuntime(stringValueEnvelope("Ada"));
 
@@ -188,6 +292,31 @@ describe("KvSidebar mutations", () => {
     },
   );
 
+  it.each([
+    ["hash", defaultValueEnvelope],
+    ["list", listValueEnvelope],
+    ["set", setValueEnvelope],
+    ["zset", zSetValueEnvelope],
+  ])(
+    "hides Valkey %s collection mutation controls",
+    async (_name, envelope) => {
+      useConnectionStore.setState({
+        connections: [valkeyConnection()],
+        activeStatuses: { "valkey-1": { type: "connected", activeDb: "0" } },
+      });
+      mockRedisRuntime(envelope);
+
+      render(<KvSidebar connectionId="valkey-1" />);
+      await selectRenderedKey(/valkey keys/i);
+
+      expect(screen.queryByText("Mutation")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /preview hset|rpush|sadd|zadd/i }),
+      ).not.toBeInTheDocument();
+      expect(commandCalls("execute_kv_command")).toHaveLength(0);
+    },
+  );
+
   it("previews and confirms expire, persist, and delete safety flows", async () => {
     mockRedisRuntime(defaultValueEnvelope());
 
@@ -293,6 +422,15 @@ function redisConnection(): ConnectionConfig {
   };
 }
 
+function valkeyConnection(): ConnectionConfig {
+  return {
+    ...redisConnection(),
+    id: "valkey-1",
+    name: "Valkey",
+    dbType: "valkey",
+  };
+}
+
 function mockRedisRuntime(
   envelope: KvValueEnvelope | (() => KvValueEnvelope),
   handlers: Partial<
@@ -334,13 +472,13 @@ function mockRedisRuntime(
   });
 }
 
-async function selectRenderedKey() {
+async function selectRenderedKey(treeName: RegExp = /redis keys/i) {
   const scanButton = await screen.findByRole("button", {
     name: /scan 100 keys/i,
   });
   await waitFor(() => expect(scanButton).toBeEnabled());
   fireEvent.click(scanButton);
-  const tree = await screen.findByRole("tree", { name: /redis keys/i });
+  const tree = await screen.findByRole("tree", { name: treeName });
   fireEvent.click((await within(tree).findAllByRole("treeitem"))[0]!);
   await waitFor(() =>
     expect(screen.queryByText("Loading value")).not.toBeInTheDocument(),

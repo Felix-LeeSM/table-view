@@ -2,8 +2,9 @@ use std::mem;
 
 use table_view_lib::{
     db::{
-        DbAdapter, KvAdapter, KvCommandRequest, KvKeyScanRequest, KvSetStringRequest,
-        KvStreamReadRequest, KvValue, KvValueReadRequest, KvWriteSafety, RedisAdapter,
+        DbAdapter, KvAdapter, KvCommandRequest, KvDeleteRequest, KvKeyScanRequest,
+        KvSetStringRequest, KvStreamReadRequest, KvTtlState, KvTtlUpdate, KvTtlUpdateRequest,
+        KvValue, KvValueReadRequest, KvWriteSafety, RedisAdapter,
     },
     models::{ConnectionConfig, DatabaseType},
 };
@@ -376,7 +377,7 @@ async fn valkey_testcontainer_covers_connection_key_browse_and_command_policy() 
         .unwrap_err();
     assert!(persist_error
         .to_string()
-        .contains("Confirmation key must exactly match the Redis key"));
+        .contains("Confirmation key must exactly match the target key"));
 
     let persist_result = adapter
         .execute_command(
@@ -404,7 +405,7 @@ async fn valkey_testcontainer_covers_connection_key_browse_and_command_policy() 
         .unwrap_err();
     assert!(delete_error
         .to_string()
-        .contains("Confirmation key must exactly match the Redis key"));
+        .contains("Confirmation key must exactly match the target key"));
 
     let delete_result = adapter
         .execute_command(
@@ -434,19 +435,114 @@ async fn valkey_testcontainer_covers_connection_key_browse_and_command_policy() 
         .to_string()
         .contains("outside the bounded runtime slice"));
 
-    let mutation_error = adapter
+    let direct_set = adapter
         .set_string(KvSetStringRequest {
-            key: "tv:written".into(),
-            value: "ok".into(),
+            key: "tv:direct".into(),
+            value: "typed".into(),
             database: Some(2),
             ttl_seconds: Some(30),
             safety: KvWriteSafety::RejectOverwrite,
         })
         .await
+        .unwrap();
+    assert!(direct_set.changed);
+    assert_eq!(direct_set.ttl.unwrap().state, KvTtlState::Expires);
+
+    match adapter
+        .read_value(
+            KvValueReadRequest {
+                key: "tv:direct".into(),
+                database: Some(2),
+                limit: Some(10),
+                cursor: None,
+            },
+            None,
+        )
+        .await
+        .unwrap()
+        .value
+    {
+        KvValue::String(value) => assert_eq!(value.text.as_deref(), Some("typed")),
+        other => panic!("expected direct string mutation readback, got {other:?}"),
+    }
+
+    let overwrite_error = adapter
+        .set_string(KvSetStringRequest {
+            key: "tv:hash".into(),
+            value: "blocked".into(),
+            database: Some(2),
+            ttl_seconds: None,
+            safety: KvWriteSafety::AllowOverwrite,
+        })
+        .await
         .unwrap_err();
-    assert!(mutation_error
+    assert!(overwrite_error
         .to_string()
-        .contains("Valkey key mutation is not supported yet"));
+        .contains("Cannot overwrite existing Valkey hash key with a string"));
+
+    let direct_expire = adapter
+        .update_ttl(KvTtlUpdateRequest {
+            key: "tv:direct".into(),
+            database: Some(2),
+            update: KvTtlUpdate::Expire { seconds: 60 },
+        })
+        .await
+        .unwrap();
+    assert!(direct_expire.changed);
+    assert_eq!(direct_expire.ttl.unwrap().state, KvTtlState::Expires);
+
+    let direct_persist = adapter
+        .update_ttl(KvTtlUpdateRequest {
+            key: "tv:direct".into(),
+            database: Some(2),
+            update: KvTtlUpdate::Persist {
+                confirm_key: "tv:direct".into(),
+            },
+        })
+        .await
+        .unwrap();
+    assert!(direct_persist.changed);
+    assert_eq!(direct_persist.ttl.unwrap().state, KvTtlState::Persistent);
+
+    let direct_delete_error = adapter
+        .delete_key(KvDeleteRequest {
+            key: "tv:direct".into(),
+            database: Some(2),
+            confirm_key: "wrong".into(),
+        })
+        .await
+        .unwrap_err();
+    assert!(direct_delete_error
+        .to_string()
+        .contains("Confirmation key must exactly match the target key"));
+
+    let direct_delete = adapter
+        .delete_key(KvDeleteRequest {
+            key: "tv:direct".into(),
+            database: Some(2),
+            confirm_key: "tv:direct".into(),
+        })
+        .await
+        .unwrap();
+    assert!(direct_delete.changed);
+
+    match adapter
+        .read_value(
+            KvValueReadRequest {
+                key: "tv:direct".into(),
+                database: Some(2),
+                limit: Some(10),
+                cursor: None,
+            },
+            None,
+        )
+        .await
+        .unwrap()
+        .value
+    {
+        KvValue::Missing => {}
+        other => panic!("expected direct deletion readback to miss, got {other:?}"),
+    }
 }
 
 async fn seed_redis(port: u16) {

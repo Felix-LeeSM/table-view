@@ -445,6 +445,9 @@ export const VALKEY_CAPABILITIES = capabilities({
   catalog: {
     browse: true,
   },
+  edit: {
+    editKeys: true,
+  },
   paradigmSpecific: {
     keyBrowser: true,
   },

@@ -326,6 +326,7 @@ const VALKEY_KV_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::KeyValueCatalog,
     BackendAdapterCapability::KeyValueRead,
+    BackendAdapterCapability::KeyValueMutation,
 ];
 const SEARCH_MARKER_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
@@ -682,14 +683,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn redis_profile_declares_value_and_stream_result_support() {
-        let profile = DatabaseType::Redis.data_source_profile();
-
-        assert_eq!(profile.paradigm, Paradigm::Kv);
-        assert_eq!(profile.result_kinds, KV_RESULTS);
-        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
-        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueRead));
-        assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueMutation));
-        assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    fn kv_profiles_declare_value_stream_and_bounded_mutation_support() {
+        for db_type in [DatabaseType::Redis, DatabaseType::Valkey] {
+            let profile = db_type.data_source_profile();
+            assert_eq!(profile.paradigm, Paradigm::Kv);
+            assert_eq!(profile.result_kinds, KV_RESULTS);
+            assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueCatalog));
+            assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueRead));
+            assert!(profile.has_backend_capability(BackendAdapterCapability::KeyValueMutation));
+            assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+        }
     }
 }

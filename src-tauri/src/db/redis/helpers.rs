@@ -19,7 +19,7 @@ pub(super) fn validate_key(key: &str) -> Result<(), AppError> {
 pub(super) fn require_confirm_key(key: &str, confirm_key: &str) -> Result<(), AppError> {
     if key != confirm_key {
         return Err(AppError::Validation(
-            "Confirmation key must exactly match the Redis key".into(),
+            "Confirmation key must exactly match the target key".into(),
         ));
     }
     Ok(())

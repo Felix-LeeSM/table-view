@@ -115,7 +115,7 @@ fn dbms_specific_unsupported_capability_deltas_are_declared() {
         .has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
     assert!(get_data_source_profile(&DatabaseType::Redis)
         .has_backend_capability(BackendAdapterCapability::KeyValueMutation));
-    assert!(!get_data_source_profile(&DatabaseType::Valkey)
+    assert!(get_data_source_profile(&DatabaseType::Valkey)
         .has_backend_capability(BackendAdapterCapability::KeyValueMutation));
 }
 
@@ -128,9 +128,9 @@ async fn dbms_specific_unsupported_delta_paths_return_explicit_app_errors() {
     );
 
     let valkey = RedisAdapter::new_valkey();
-    assert_unsupported(
+    assert_connection(
         valkey.set_string(valkey_set_string_request()).await,
-        &["Valkey", "not supported"],
+        "Valkey connection is not open",
     );
 
     let search = SearchEngineAdapter::fixture_elasticsearch();
@@ -178,15 +178,10 @@ async fn destructive_search_plan_keeps_confirmation_required_until_acknowledged(
 
 #[test]
 fn unsupported_app_error_keeps_legacy_tauri_string_mapping() {
-    let value = serde_json::to_value(AppError::Unsupported(
-        "Valkey key mutation is not supported yet".into(),
-    ))
-    .expect("unsupported error should serialize");
+    let value = serde_json::to_value(AppError::Unsupported("feature not supported".into()))
+        .expect("unsupported error should serialize");
 
-    assert_eq!(
-        value,
-        json!("Unsupported operation: Valkey key mutation is not supported yet")
-    );
+    assert_eq!(value, json!("Unsupported operation: feature not supported"));
 }
 
 fn drop_table_request() -> DropTableRequest {
@@ -253,6 +248,17 @@ fn assert_unsupported<T>(result: Result<T, AppError>, fragments: &[&str]) {
         }
         Err(other) => panic!("expected Unsupported, got {other:?}"),
         Ok(_) => panic!("expected Unsupported, got Ok"),
+    }
+}
+
+fn assert_connection<T>(result: Result<T, AppError>, fragment: &str) {
+    match result {
+        Err(AppError::Connection(message)) => assert!(
+            message.contains(fragment),
+            "expected connection message to contain {fragment:?}, got {message:?}",
+        ),
+        Err(other) => panic!("expected Connection, got {other:?}"),
+        Ok(_) => panic!("expected Connection, got Ok"),
     }
 }
 
