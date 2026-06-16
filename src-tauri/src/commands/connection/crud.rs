@@ -11,11 +11,12 @@
 //!     for every active connection.
 
 use super::session::keep_alive_loop;
-use super::{make_adapter, AppState, SaveConnectionRequest, TestConnectionRequest};
+use super::{
+    declared_only_runtime_error, make_adapter, AppState, SaveConnectionRequest,
+    TestConnectionRequest,
+};
 use crate::db::mongodb::MongoAdapter;
-use crate::db::mssql::MssqlAdapter;
 use crate::db::mysql::MysqlAdapter;
-use crate::db::oracle::OracleAdapter;
 use crate::db::postgres::PostgresAdapter;
 use crate::db::redis::RedisAdapter;
 use crate::db::search::SearchEngineAdapter;
@@ -103,6 +104,10 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
     let mut full = config.into_config_with_empty_password();
     full.password = resolved_password;
 
+    if let Some(error) = declared_only_runtime_error(&full.db_type) {
+        return Err(error);
+    }
+
     match full.db_type {
         DatabaseType::Postgresql => {
             PostgresAdapter::test(&full).await?;
@@ -116,11 +121,8 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         DatabaseType::Duckdb => {
             DuckdbAdapter::test(&full).await?;
         }
-        DatabaseType::Mssql => {
-            MssqlAdapter::test(&full).await?;
-        }
-        DatabaseType::Oracle => {
-            OracleAdapter::test(&full).await?;
+        DatabaseType::Mssql | DatabaseType::Oracle => {
+            unreachable!("declared-only database types are rejected before adapter dispatch");
         }
         DatabaseType::Mongodb => {
             MongoAdapter::test(&full).await?;

@@ -174,7 +174,7 @@ pub async fn duckdb_execute_file_analytics_query(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{ActiveAdapter, DbAdapter, DuckdbAdapter, OracleAdapter};
+    use crate::db::{ActiveAdapter, DbAdapter, DuckdbAdapter, PostgresAdapter};
     use crate::models::ConnectionConfig;
     use std::fs;
 
@@ -256,20 +256,21 @@ mod tests {
     async fn file_analytics_commands_require_duckdb_active_connection() {
         let state = AppState::default();
         state.active_connections.lock().await.insert(
-            "oracle".into(),
-            ActiveAdapter::Rdb(Box::new(OracleAdapter::new())),
+            "postgres".into(),
+            ActiveAdapter::Rdb(Box::new(PostgresAdapter::new())),
         );
 
         assert_duckdb_required(
-            register_file_analytics_source_inner(&state, "oracle", "/tmp/data.csv").await,
+            register_file_analytics_source_inner(&state, "postgres", "/tmp/data.csv").await,
         );
         assert_duckdb_required(
-            preview_file_analytics_source_inner(&state, "oracle", "src", Some(1)).await,
+            preview_file_analytics_source_inner(&state, "postgres", "src", Some(1)).await,
         );
-        assert_duckdb_required(list_file_analytics_source_metadata_inner(&state, "oracle").await);
-        assert_duckdb_required(clear_file_analytics_sources_inner(&state, "oracle").await);
+        assert_duckdb_required(list_file_analytics_source_metadata_inner(&state, "postgres").await);
+        assert_duckdb_required(clear_file_analytics_sources_inner(&state, "postgres").await);
         assert_duckdb_required(
-            execute_file_analytics_query_inner(&state, "oracle", "src", "SELECT * FROM src").await,
+            execute_file_analytics_query_inner(&state, "postgres", "src", "SELECT * FROM src")
+                .await,
         );
     }
 

@@ -122,7 +122,7 @@ async fn start_mssql_container() -> Option<(ContainerAsync<GenericImage>, u16)> 
 }
 
 #[tokio::test]
-async fn test_connection_routes_mssql_to_mssql_adapter() {
+async fn test_connection_rejects_mssql_declared_only_before_adapter_dispatch() {
     let port = unused_tcp_port().await;
 
     let result = test_connection(TestConnectionRequest {
@@ -133,17 +133,11 @@ async fn test_connection_routes_mssql_to_mssql_adapter() {
     .await;
 
     match result {
-        Err(AppError::Connection(msg)) => {
-            assert!(
-                msg.contains("SQL Server network connection failed")
-                    || msg.contains("SQL Server login failed"),
-                "unexpected SQL Server connection error: {msg}"
-            );
-        }
         Err(AppError::Unsupported(msg)) => {
-            panic!("MSSQL routing regressed to Unsupported: {msg}");
+            assert!(msg.contains("SQL Server is declared-only"));
+            assert!(msg.contains("source-specific connection.test"));
         }
-        other => panic!("Expected SQL Server connection error, got: {other:?}"),
+        other => panic!("Expected SQL Server declared-only rejection, got: {other:?}"),
     }
 }
 
@@ -178,19 +172,14 @@ async fn mssql_login_uses_configured_connection_timeout() {
 }
 
 #[tokio::test]
-async fn test_connection_succeeds_against_live_mssql_serverproperty_probe() {
+async fn mssql_adapter_inventory_probe_succeeds_against_live_mssql_serverproperty_probe() {
     let Some((_container, port)) = start_mssql_container().await else {
         return;
     };
 
-    let result = test_connection(TestConnectionRequest {
-        config: mssql_public(port, Some(15), Some(false)),
-        password: Some(MSSQL_PASSWORD.into()),
-        existing_id: None,
-    })
-    .await;
-
-    assert_eq!(result.unwrap(), "Connection successful");
+    MssqlAdapter::test(&mssql_config(port, MSSQL_PASSWORD, Some(15)))
+        .await
+        .expect("live SQL Server adapter inventory probe should succeed");
 }
 
 #[tokio::test]
