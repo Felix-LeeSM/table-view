@@ -164,6 +164,59 @@ describe("MongoIndexesPanel (Sprint 350 — tracer RO list)", () => {
     expect(listMongoIndexesMock).not.toHaveBeenCalled();
   });
 
+  it("ignores stale index load failures after switching collections", async () => {
+    let rejectUsers: (error: Error) => void = () => {};
+    listMongoIndexesMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectUsers = reject as (error: Error) => void;
+          }),
+      )
+      .mockResolvedValueOnce([
+        {
+          name: "created_at_1",
+          columns: ["created_at"],
+          index_type: "btree",
+          is_unique: false,
+          is_primary: false,
+        },
+      ]);
+
+    const { rerender } = render(
+      <MongoIndexesPanel
+        connectionId="conn-mongo"
+        database="app"
+        collection="users"
+      />,
+    );
+    await waitFor(() => {
+      expect(listMongoIndexesMock).toHaveBeenCalledWith(
+        "conn-mongo",
+        "app",
+        "users",
+      );
+    });
+
+    rerender(
+      <MongoIndexesPanel
+        connectionId="conn-mongo"
+        database="app"
+        collection="orders"
+      />,
+    );
+    expect(await screen.findByText("created_at_1")).toBeInTheDocument();
+
+    await act(async () => {
+      rejectUsers(new Error("users denied"));
+    });
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByTestId("mongo-indexes-panel")).toHaveTextContent(
+      "Indexes — app.orders",
+    );
+  });
+
   it("delays the loading flag until 1000ms have elapsed (useDelayedFlag gate)", async () => {
     vi.useFakeTimers();
     try {

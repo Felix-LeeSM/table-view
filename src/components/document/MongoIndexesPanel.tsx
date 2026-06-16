@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useDocumentCatalogStore } from "@/stores/documentCatalogStore";
@@ -48,22 +48,33 @@ export function MongoIndexesPanel({
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const loadRequestIdRef = useRef(0);
 
   const loadIndexes = useCallback(
     async (force = false) => {
-      if (database === "" || collection === "") return;
+      if (database === "" || collection === "") {
+        loadRequestIdRef.current += 1;
+        return;
+      }
+      const requestId = loadRequestIdRef.current + 1;
+      loadRequestIdRef.current = requestId;
+      const isCurrent = () => loadRequestIdRef.current === requestId;
       setLoading(true);
       setError(null);
       try {
         await loadCollectionIndexes(connectionId, database, collection, {
           force,
         });
+        if (!isCurrent()) return;
         setHasFetched(true);
       } catch (err: unknown) {
+        if (!isCurrent()) return;
         setError(err instanceof Error ? err.message : String(err));
         setHasFetched(true);
       } finally {
-        setLoading(false);
+        if (isCurrent()) {
+          setLoading(false);
+        }
       }
     },
     [connectionId, database, collection, loadCollectionIndexes],
@@ -79,6 +90,9 @@ export function MongoIndexesPanel({
     // so unit-mounted panels (tests, hot-reload) don't dispatch an
     // invalid IPC.
     void loadIndexes(false);
+    return () => {
+      loadRequestIdRef.current += 1;
+    };
   }, [loadIndexes]);
 
   const busy = useDelayedFlag(loading, 1000);
