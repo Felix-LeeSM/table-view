@@ -108,9 +108,9 @@ export function runSearchRuntimeSmoke(options: SearchRuntimeSmokeOptions) {
           expect(plan.operation).toBe("deleteByQuery");
           expect(plan.target).toBe(index);
           expect(plan.previewOnly).toBe(true);
-          expect(plan.requiresConfirmation).toBe(true);
+          expect(plan.requiresConfirmation).toBe(false);
           expect(plan.estimatedDocumentCount).toBe(1);
-          expect(plan.warnings.join(" ")).toContain("confirmed");
+          expect(plan.warnings.join(" ")).toContain("execution is unsupported");
         },
       );
     });

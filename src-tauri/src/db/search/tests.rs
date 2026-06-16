@@ -103,7 +103,7 @@ async fn elasticsearch_network_adapter_detects_root_identity() {
     assert!(identity.capabilities.mappings);
     assert!(!identity.capabilities.legacy_index_templates);
     assert!(identity.capabilities.composable_index_templates);
-    assert!(!identity.capabilities.delete_by_query);
+    assert!(identity.capabilities.delete_by_query);
     assert!(identity.product_delta.supports_elastic_license_api);
 }
 
@@ -159,6 +159,7 @@ async fn opensearch_network_adapter_detects_root_identity() {
     assert!(identity.capabilities.mappings);
     assert!(identity.capabilities.legacy_index_templates);
     assert!(identity.capabilities.composable_index_templates);
+    assert!(identity.capabilities.delete_by_query);
     assert!(identity.product_delta.supports_opensearch_plugins_api);
 }
 

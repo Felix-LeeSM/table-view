@@ -447,7 +447,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
       expect(fixture.destructivePlan).toEqual(
         expect.objectContaining({
           operation: "deleteByQuery",
-          requiresConfirmation: true,
+          requiresConfirmation: false,
         }),
       );
     },
