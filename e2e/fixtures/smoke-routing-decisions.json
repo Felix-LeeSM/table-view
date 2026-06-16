@@ -281,7 +281,7 @@
       "seedTargets": ["redis"],
       "tier": "blocking E2E",
       "wiredInSmokeScript": true,
-      "runtimeCost": "Existing service-backed matrix route; live Search contract now covers connect/auth/TLS, catalog metadata, bounded render, delete-plan preview, and error surface in the same spec. Job timeout remains 40 minutes.",
+      "runtimeCost": "Existing service-backed matrix route; no new spec or service cost in issue #753. Job timeout remains 40 minutes.",
       "flakeRisk": "Low service startup risk; seed selects isolated DB 2 and flushes before recreating keys.",
       "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
       "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-redis.",
