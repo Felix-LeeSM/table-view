@@ -12,14 +12,25 @@ import {
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
-import { currentKvDatabase, getKvValue, scanKvKeys } from "@lib/tauri/kv";
-import type { KvKeyMetadata, KvValueEnvelope } from "@/types/kv";
+import {
+  currentKvDatabase,
+  getKvValue,
+  readKvStream,
+  scanKvKeys,
+} from "@lib/tauri/kv";
+import type {
+  KvKeyMetadata,
+  KvStreamReadResult,
+  KvValueEnvelope,
+} from "@/types/kv";
 import { formatKvTtl } from "@/types/kv";
 import { DATABASE_TYPE_LABELS } from "@/types/connection";
 import { getDataSourceProfile } from "@/types/dataSource";
 import { KvMutationPanel } from "./KvMutationPanel";
 
 const KEY_SCAN_LIMIT = 100;
+const STREAM_READ_DEFAULT_LIMIT = 100;
+const STREAM_READ_MAX_LIMIT = 500;
 
 export interface KvSidebarProps {
   connectionId: string;
@@ -409,6 +420,18 @@ function KvValuePreview({
     );
   }
   if (!value) return null;
+  const valueBody =
+    value.value.type === "stream" ? (
+      <KvStreamReaderPanel
+        connectionId={connectionId}
+        database={database}
+        stream={value.value}
+      />
+    ) : (
+      <pre className="max-h-48 overflow-auto rounded border border-border bg-muted/40 p-2 text-3xs text-foreground">
+        {renderValueText(value)}
+      </pre>
+    );
   return (
     <div className="border-t border-border px-3 py-3">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -431,9 +454,7 @@ function KvValuePreview({
           <span>{formatBytes(value.metadata.memoryBytes)}</span>
         )}
       </div>
-      <pre className="max-h-48 overflow-auto rounded border border-border bg-muted/40 p-2 text-3xs text-foreground">
-        {renderValueText(value)}
-      </pre>
+      {valueBody}
       {mutationEnabled && (
         <KvMutationPanel
           value={value}
@@ -442,6 +463,181 @@ function KvValuePreview({
           onMutationSuccess={onMutationSuccess}
         />
       )}
+    </div>
+  );
+}
+
+function KvStreamReaderPanel({
+  connectionId,
+  database,
+  stream,
+}: {
+  connectionId: string;
+  database: number;
+  stream: KvStreamReadResult;
+}) {
+  const [start, setStart] = useState(stream.start || "-");
+  const [end, setEnd] = useState(stream.end || "+");
+  const [limitText, setLimitText] = useState(
+    String(clampStreamLimit(stream.limit)),
+  );
+  const [result, setResult] = useState<KvStreamReadResult>(stream);
+  const [loading, setLoading] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStart(stream.start || "-");
+    setEnd(stream.end || "+");
+    setLimitText(String(clampStreamLimit(stream.limit)));
+    setResult(stream);
+    setLoading(false);
+    setStreamError(null);
+  }, [stream]);
+
+  const refreshStream = useCallback(async () => {
+    const parsedLimit = Number.parseInt(limitText, 10);
+    if (!Number.isFinite(parsedLimit)) {
+      setStreamError(
+        `Stream count must be between 1 and ${STREAM_READ_MAX_LIMIT}.`,
+      );
+      return;
+    }
+    const limit = clampStreamLimit(parsedLimit);
+    const rangeStart = start.trim() || "-";
+    const rangeEnd = end.trim() || "+";
+    setLoading(true);
+    setStreamError(null);
+    try {
+      const next = await readKvStream(connectionId, {
+        database,
+        key: stream.key,
+        start: rangeStart,
+        end: rangeEnd,
+        limit,
+      });
+      setLimitText(String(next.limit));
+      setResult(next);
+    } catch (err) {
+      setStreamError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [connectionId, database, end, limitText, start, stream.key]);
+
+  return (
+    <div className="rounded border border-border bg-muted/20">
+      <div className="grid gap-2 border-b border-border p-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6rem_auto]">
+        <label className="grid min-w-0 gap-1 text-3xs text-muted-foreground">
+          Stream start
+          <input
+            className="min-w-0 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none"
+            value={start}
+            onChange={(event) => setStart(event.target.value)}
+            placeholder="-"
+          />
+        </label>
+        <label className="grid min-w-0 gap-1 text-3xs text-muted-foreground">
+          Stream end
+          <input
+            className="min-w-0 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none"
+            value={end}
+            onChange={(event) => setEnd(event.target.value)}
+            placeholder="+"
+          />
+        </label>
+        <label className="grid min-w-0 gap-1 text-3xs text-muted-foreground">
+          Stream count
+          <input
+            className="min-w-0 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none"
+            type="number"
+            min={1}
+            max={STREAM_READ_MAX_LIMIT}
+            value={limitText}
+            onChange={(event) => setLimitText(event.target.value)}
+          />
+        </label>
+        <div className="flex items-end">
+          <Button
+            variant="secondary"
+            size="xs"
+            className="w-full"
+            disabled={loading}
+            aria-label="Refresh stream entries"
+            onClick={() => void refreshStream()}
+          >
+            {loading ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <RefreshCw size={12} />
+            )}
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {loading && (
+        <div
+          role="status"
+          className="flex items-center gap-2 border-b border-border px-2 py-2 text-muted-foreground"
+        >
+          <Loader2 size={12} className="animate-spin" aria-hidden />
+          Loading stream entries
+        </div>
+      )}
+
+      {streamError && (
+        <div
+          role="alert"
+          className="border-b border-border px-2 py-2 text-destructive"
+        >
+          {streamError}
+        </div>
+      )}
+
+      <div className="max-h-56 overflow-auto">
+        <table
+          className="w-full table-fixed text-left text-3xs"
+          aria-label={`${stream.key} stream entries`}
+        >
+          <thead className="sticky top-0 bg-muted text-muted-foreground">
+            <tr>
+              <th className="w-32 px-2 py-1 font-medium">ID</th>
+              <th className="px-2 py-1 font-medium">Fields</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.entries.map((entry) => (
+              <tr key={entry.id} className="border-t border-border">
+                <td className="px-2 py-1 align-top font-mono text-foreground">
+                  {entry.id}
+                </td>
+                <td className="px-2 py-1 align-top text-foreground">
+                  <div className="flex flex-wrap gap-1">
+                    {entry.fields.map((field, index) => (
+                      <span
+                        key={`${entry.id}:${field.field}:${index}`}
+                        className="rounded bg-background px-1.5 py-0.5"
+                      >
+                        {field.field}={field.value}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {result.entries.length === 0 && (
+              <tr>
+                <td
+                  colSpan={2}
+                  className="border-t border-border px-2 py-3 text-muted-foreground"
+                >
+                  No stream entries in range.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -479,4 +675,11 @@ function renderValueText(envelope: KvValueEnvelope): string {
     case "unsupported":
       return value.message;
   }
+}
+
+function clampStreamLimit(value: number | undefined): number {
+  return Math.min(
+    STREAM_READ_MAX_LIMIT,
+    Math.max(1, Math.trunc(value ?? STREAM_READ_DEFAULT_LIMIT)),
+  );
 }
