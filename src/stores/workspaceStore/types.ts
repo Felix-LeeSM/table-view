@@ -103,6 +103,7 @@ export interface QueryTab {
   queryMode?: WorkspaceQueryMode;
   /** Canonical query language metadata for future routing. */
   queryLanguage?: QueryLanguageId;
+  searchTarget?: SearchQueryTarget;
   database?: string;
   collection?: string;
 }
@@ -132,8 +133,16 @@ export type QueryTabOptions = {
   paradigm?: Paradigm;
   queryMode?: WorkspaceQueryMode;
   queryLanguage?: QueryLanguageId;
+  title?: string;
+  sql?: string;
+  searchTarget?: SearchQueryTarget;
   database?: string;
   collection?: string;
+};
+
+export type SearchQueryTarget = {
+  kind: "index" | "alias";
+  name: string;
 };
 
 export type LoadQueryPayload = {

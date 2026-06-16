@@ -103,14 +103,15 @@ export function createQuerySlice(
           const newTab: QueryTab = {
             type: "query" as const,
             id,
-            title,
+            title: opts.title ?? title,
             connectionId: connId,
             closable: true,
-            sql: "",
+            sql: opts.sql ?? "",
             queryState: { status: "idle" } as QueryState,
             paradigm,
             queryMode,
             queryLanguage,
+            searchTarget: paradigm === "search" ? opts.searchTarget : undefined,
             database:
               opts.database ??
               (paradigm === "rdb" || paradigm === "document" ? db : undefined),

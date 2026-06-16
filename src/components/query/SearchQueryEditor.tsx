@@ -61,7 +61,7 @@ const SearchQueryEditor = forwardRef<EditorView | null, SearchQueryEditorProps>(
           indentOnInput(),
           bracketMatching(),
           placeholder(
-            '{ "index": "logs-elastic", "body": { "query": { "match_all": {} } } }',
+            '{ "query": { "match_all": {} }, "size": 10, "track_total_hits": true }',
           ),
           languageCompartment.current.of(
             buildSearchExtensions(searchExtensionsRef.current),
