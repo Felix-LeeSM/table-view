@@ -12,6 +12,8 @@ set -euo pipefail
 # UTF-8 locale 보장: wc -m 이 한국어를 문자 수로 세도록 (wc -l 은 locale 무관).
 # macOS BSD wc 는 LC_ALL=C 일 때 멀티바이트를 바이트 수로 세 CI 와 불일치.
 # LC_ALL 이 이미 UTF-8 계열이면 존중, 그 외(C 등)이거나 비어있으면 override 한다.
+# (UTF-8 locale 이 전혀 없는 POSIX-only minimal 환경에서는 폴백이 no-op →
+#  한국어 false-positive 가능. macOS / GH Actions ubuntu 는 기본 C.UTF-8 보유.)
 case "${LC_ALL:-}" in
 	*UTF-8*|*utf8*) ;;
 	*)

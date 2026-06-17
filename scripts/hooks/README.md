@@ -32,7 +32,8 @@ Current dispatchers:
 
 - `check-memory-size.sh` — `memory.md` 복합 cap: 200줄 + 12,000 chars. 어느 하나라도
   초과 시 경고, `--strict` 시 block. override: `MEMORY_LINE_THRESHOLD`,
-  `MEMORY_CHAR_THRESHOLD`.
+  `MEMORY_CHAR_THRESHOLD`. (pre-push `--strict` 전용.)
 - `check-doc-size.sh` — docs 지속 참조 문서 chars cap: 120,000 (advisory). 일회성
   산출물(`docs/{sprints,archives,table_plus,explorations}`)은 제외. override:
   `DOCS_CHAR_THRESHOLD`. ratchet 시점에 threshold 를 내려 분할을 유도한다.
+  (CI advisory 전용 — memory-size 와 정책 분리.)
