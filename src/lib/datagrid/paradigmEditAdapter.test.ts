@@ -136,6 +136,16 @@ describe("classifyRdbRisk", () => {
     expect(result.risk).toBe("warn");
     expect(result.reason).toMatch(/DROP/);
   });
+
+  it("Oracle unsupported PL/SQL stays destructive even when generic gate allows", () => {
+    const result = classifyRdbRisk(
+      "CREATE OR REPLACE PACKAGE app_pkg AS END app_pkg",
+      gateAllowAll(),
+      "oracle",
+    );
+    expect(result.risk).toBe("destructive");
+    expect(result.reason).toMatch(/Oracle PL\/SQL package\/routine DDL/);
+  });
 });
 
 describe("buildRdbSession + execute", () => {
@@ -208,6 +218,25 @@ describe("buildRdbSession + execute", () => {
     expect(result.ok).toBe(false);
     expect(result.failedIndex).toBe(0);
     expect(result.failedKey).toBe("0-0");
+  });
+
+  it("forwards Oracle dialect risk to raw RDB preview sessions", () => {
+    const executeQueryBatch = vi.fn();
+    const session = buildRdbSession(
+      ["CREATE OR REPLACE PACKAGE app_pkg AS END app_pkg"],
+      [undefined],
+      {
+        connectionId: "conn-1",
+        safeModeGate: gateAllowAll(),
+        executeQueryBatch,
+        history,
+        dialect: "oracle",
+      },
+    );
+    expect(session.items[0]).toMatchObject({
+      risk: "destructive",
+      reason: expect.stringMatching(/Oracle PL\/SQL package\/routine DDL/),
+    });
   });
 });
 

@@ -54,9 +54,9 @@
     },
     {
       "id": "mssql-runtime-oracle-runtime-slice-boundaries",
-      "minimumRow": "MSSQL runtime catalog/query/edit-row slice and Oracle catalog/query/cancel/tabular runtime slice",
+      "minimumRow": "MSSQL runtime catalog/query/edit-row slice and Oracle catalog/query/cancel/tabular/edit-row runtime slice",
       "products": ["mssql", "oracle"],
-      "claimBoundary": "Issue #903 promotes SQL Server to bounded catalog/query/cancel/tabular runtime support plus editRows through frontend SQL batch with primary-key projection, while keeping DDL, admin, import/export, full T-SQL parity, and full workbench parity unsupported. Issue #905 promotes Oracle only to service-name lifecycle plus bounded catalog/query/cancel/tabular runtime; SID, TNS, wallet, TLS, advanced auth, switch database, editRows, structured DDL, raw DDL/admin, parser, completion, runtime smoke, triggers, and PL/SQL body/package work remain unsupported or unclaimed.",
+      "claimBoundary": "Issue #903 promotes SQL Server to bounded catalog/query/cancel/tabular runtime support plus editRows through frontend SQL batch with primary-key projection, while keeping DDL, admin, import/export, full T-SQL parity, and full workbench parity unsupported. Issues #905/#906 promote Oracle to service-name lifecycle, bounded catalog/query/cancel/tabular runtime, key-projected editRows through frontend SQL batch, tested SELECT/DML/DDL Safe Mode classification, and bounded editor assistance; SID, TNS, wallet, TLS, advanced auth, switch database, structured DDL, raw DDL/admin, full parser/completion promotion, runtime smoke, triggers, and PL/SQL body/package work remain unsupported or unclaimed.",
       "docs": [
         {
           "path": "docs/product/known-limitations.md",
@@ -68,7 +68,7 @@
         },
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "Oracle supports service-name lifecycle plus a bounded #905 catalog/query/cancel/tabular runtime slice."
+          "mustContain": "Oracle supports service-name lifecycle plus a bounded #905/#906 catalog/query/cancel/tabular/edit-row runtime slice."
         },
         {
           "path": "docs/product/README.md",
@@ -76,7 +76,7 @@
         },
         {
           "path": "docs/product/README.md",
-          "mustContain": "Oracle: bounded catalog/query/cancel/tabular runtime support is active for"
+          "mustContain": "Oracle: bounded catalog/query/cancel/tabular/edit-row runtime support is active"
         }
       ],
       "fixtureEvidence": [

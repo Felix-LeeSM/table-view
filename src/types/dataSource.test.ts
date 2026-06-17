@@ -131,6 +131,7 @@ describe("DataSourceProfile registry", () => {
         constraints: true,
         relationships: true,
       },
+      edit: { editRows: true },
     }),
     mongodb: expectedCapabilities({
       connection: { test: true },

@@ -65,10 +65,11 @@ pub use sqlite_file::create_sqlite_database_file;
 /// `DatabaseType` on the active adapter. SQLite and DuckDB have file-backed
 /// adapters. SQL Server uses the bounded MSSQL runtime slice: lifecycle,
 /// catalog/table/view/routine browse, tabular query, batch DML, and
-/// cooperative cancel. Oracle uses the #905 bounded runtime RDB wrapper:
+/// cooperative cancel. Oracle uses the #905/#906 bounded runtime RDB wrapper:
 /// service-name lifecycle, catalog metadata, SELECT/DML batch, cooperative
-/// cancel, and tabular table-data queries are live, while switch-database,
-/// edit/DDL, source/body, trigger, and admin surfaces return Unsupported.
+/// cancel, tabular table-data queries, and frontend SQL-batch row edits are
+/// live, while switch-database, structured DDL, source/body, trigger, and admin
+/// surfaces return Unsupported.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),

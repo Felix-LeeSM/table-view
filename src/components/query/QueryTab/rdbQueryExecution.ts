@@ -5,7 +5,10 @@ import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { stripSqlComments } from "@lib/sql/stripSqlComments";
 import { parseFromContext, tokenizeSql } from "@lib/completion/shared";
 import { findMysqlScriptingBoundaryViolation } from "@lib/sql/mysqlScriptingBoundary";
-import { analyzeStatement } from "@lib/sql/sqlSafety";
+import {
+  analyzeRdbStatementForDialect,
+  decideOracleOrGenericSafeMode,
+} from "@lib/sql/oracleSafety";
 import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
 import { toast } from "@lib/runtime/toast";
 import { dispatchDbMutationHint } from "./queryHelpers";
@@ -446,11 +449,10 @@ export async function executeRdbQuery({
   let hasWarn = false;
   const escalationCandidates: { stmt: string; reason: string }[] = [];
   for (const stmt of statements) {
-    const analysis = analyzeStatement(
-      stmt,
-      dbType === "mssql" ? { dialect: "mssql" } : undefined,
-    );
-    const decision = decideSafeMode(analysis);
+    const dialect =
+      dbType === "mssql" || dbType === "oracle" ? dbType : undefined;
+    const analysis = analyzeRdbStatementForDialect(stmt, dialect);
+    const decision = decideOracleOrGenericSafeMode(analysis, decideSafeMode);
     if (decision.action === "block") {
       worstAction = "block";
       worstReason = decision.reason;

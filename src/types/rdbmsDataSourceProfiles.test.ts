@@ -56,10 +56,11 @@ const expectedOracleRuntimeCapabilities = expectedCapabilities({
     constraints: true,
     relationships: true,
   },
+  edit: { editRows: true },
 });
 
 describe("RDBMS data source profiles", () => {
-  it("promotes MSSQL and Oracle runtime while keeping Oracle edit and DDL unclaimed", () => {
+  it("promotes MSSQL and Oracle runtime/edit while keeping Oracle DDL unclaimed", () => {
     const mssql = getDataSourceProfile("mssql");
     expect(mssql).toMatchObject({
       id: "mssql",
@@ -127,7 +128,7 @@ describe("RDBMS data source profiles", () => {
     expect(oracle.capabilities.catalog.indexes).toBe(true);
     expect(oracle.capabilities.catalog.constraints).toBe(true);
     expect(oracle.capabilities.catalog.relationships).toBe(true);
-    expect(oracle.capabilities.edit.editRows).toBe(false);
+    expect(oracle.capabilities.edit.editRows).toBe(true);
     expect(oracle.capabilities.ddl.createTable).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
   });
@@ -213,7 +214,7 @@ describe("RDBMS data source profiles", () => {
     expect(oracle.capabilities.catalog.indexes).toBe(true);
     expect(oracle.capabilities.catalog.constraints).toBe(true);
     expect(oracle.capabilities.catalog.relationships).toBe(true);
-    expect(oracle.capabilities.edit.editRows).toBe(false);
+    expect(oracle.capabilities.edit.editRows).toBe(true);
     expect(oracle.capabilities.ddl.createTable).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
   });

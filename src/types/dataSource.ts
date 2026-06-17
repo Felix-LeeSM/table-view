@@ -247,6 +247,9 @@ export const ORACLE_CAPABILITIES = capabilities({
     constraints: true,
     relationships: true,
   },
+  edit: {
+    editRows: true,
+  },
 });
 
 export const POSTGRESQL_CAPABILITIES = capabilities({
