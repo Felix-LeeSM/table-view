@@ -299,6 +299,7 @@ const MSSQL_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
 ];
+const ORACLE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[BackendAdapterCapability::Lifecycle];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::DocumentCatalog,
@@ -369,10 +370,10 @@ const MSSQL_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
 };
 const ORACLE_RDB_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Rdb,
-    state: BackendAdapterContractState::DeclaredOnly,
+    state: BackendAdapterContractState::FactoryBacked,
     implementation: BackendAdapterId::Oracle,
     capability_source: BackendAdapterCapabilitySource::Oracle,
-    capabilities: &[],
+    capabilities: ORACLE_RDB_CAPABILITIES,
 };
 const FACTORY_DOCUMENT_CONTRACT: BackendAdapterContract = BackendAdapterContract {
     kind: BackendAdapterContractKind::Document,

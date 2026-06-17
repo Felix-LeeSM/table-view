@@ -140,7 +140,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "echo 'SELECT 1 FROM DUAL;' | sqlplus -s / as sysdba | grep -q '1'",
+          "echo 'SELECT 1 FROM DUAL;' | sqlplus -s '${ORACLE_USER:-testuser}/${ORACLE_PASSWORD:-testpass}@localhost:1521/${ORACLE_SERVICE:-XEPDB1}' | grep -q '1'",
         ]
       interval: 15s
       timeout: 10s

@@ -231,7 +231,11 @@ function capabilities(
 
 export const UNSUPPORTED_CAPABILITIES = capabilities();
 
-export const ORACLE_CAPABILITIES = capabilities();
+export const ORACLE_CAPABILITIES = capabilities({
+  connection: {
+    test: true,
+  },
+});
 
 export const POSTGRESQL_CAPABILITIES = capabilities({
   connection: {

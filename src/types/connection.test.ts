@@ -404,6 +404,7 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
       "sqlite",
       "duckdb",
       "mssql",
+      "oracle",
       "mongodb",
       "redis",
       "valkey",
@@ -419,12 +420,12 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
     expect(isSupportedDatabaseType("sqlite")).toBe(true);
     expect(isSupportedDatabaseType("duckdb")).toBe(true);
     expect(isSupportedDatabaseType("mssql")).toBe(true);
+    expect(isSupportedDatabaseType("oracle")).toBe(true);
     expect(isSupportedDatabaseType("mongodb")).toBe(true);
     expect(isSupportedDatabaseType("redis")).toBe(true);
     expect(isSupportedDatabaseType("valkey")).toBe(true);
     expect(isSupportedDatabaseType("elasticsearch")).toBe(true);
     expect(isSupportedDatabaseType("opensearch")).toBe(true);
-    expect(isSupportedDatabaseType("oracle")).toBe(false);
   });
 
   it("DATABASE_TYPE_LABELS covers every DatabaseType variant", () => {

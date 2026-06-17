@@ -345,7 +345,7 @@ describe("DataGrid", () => {
     expect(nameCell.querySelector("input")).not.toBeInTheDocument();
   });
 
-  it("does not enable row editing controls for Oracle declared-only tables with a primary key", async () => {
+  it("does not enable row editing controls for Oracle connection-only tables with a primary key", async () => {
     useConnectionStore.setState({
       connections: [
         {

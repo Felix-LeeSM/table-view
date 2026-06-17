@@ -331,18 +331,17 @@ describe("adapter conformance matrix", () => {
     ]);
   });
 
-  it("keeps Oracle declared-only until connection evidence promotes capabilities", () => {
+  it("keeps Oracle at connection-test contract without query/catalog/edit/DDL claims", () => {
     const oracle = ADAPTER_CONFORMANCE_MATRIX.oracle;
 
-    expect(oracle.level).toBe("declared");
-    expect(oracle.areas.connection.checks).toEqual([]);
+    expect(oracle.level).toBe("contract");
+    expect(oracle.areas.connection.checks).toEqual(["connection.test"]);
     expect(oracle.areas.catalog.checks).toEqual([]);
     expect(oracle.areas.query.checks).toEqual([]);
     expect(oracle.areas.edit.checks).toEqual([]);
     expect(oracle.areas.ddl.checks).toEqual([]);
     expect(oracle.areas.connection.deferred).toEqual([]);
     expect(oracle.areas.connection.unsupported).toEqual([
-      "connection.test",
       "connection.switchDatabase",
       "connection.readOnly",
       "connection.filePicker",

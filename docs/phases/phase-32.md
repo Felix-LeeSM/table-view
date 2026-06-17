@@ -84,6 +84,8 @@ ROADMAP 의 H2/H5/H6 rows 를 우선한다.
 - Search: current product docs now separate shipped Elasticsearch/OpenSearch live
   connection/catalog/query/destructive-plan slices from deferred admin,
   observability, profile/explain, and broader smoke work.
-- MSSQL/Oracle: current product docs now separate shipped bounded runtime/catalog/
-  edit/DDL/parser/completion slices from deferred MSSQL TLS/SQLCMD/admin/security/
-  full T-SQL work and deferred Oracle SID/TNS/wallet/TLS/raw-admin/full-PL/SQL work.
+- MSSQL/Oracle: current product docs now separate shipped MSSQL bounded runtime/
+  catalog/edit slices and Oracle service-name connection/test baseline from
+  deferred MSSQL TLS/SQLCMD/admin/security/full T-SQL work and deferred Oracle
+  query/catalog/edit/DDL/parser/completion/SID/TNS/wallet/TLS/raw-admin/full
+  PL/SQL work.

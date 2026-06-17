@@ -196,6 +196,18 @@ const PASTE_CASES: PasteCase[] = [
     },
   },
   {
+    scheme: "oracle",
+    url: "oracle://system:p@oracle.local:1521/FREEPDB1",
+    expected: {
+      dbType: "oracle",
+      host: "oracle.local",
+      port: 1521,
+      user: "system",
+      database: "FREEPDB1",
+      password: "p",
+    },
+  },
+  {
     scheme: "sqlite",
     url: "sqlite:/data/app.sqlite",
     expected: {
@@ -646,32 +658,11 @@ describe("[Sprint 447] URL import support follows data-source profiles", () => {
     }
   });
 
-  for (const c of [
-    {
-      dbType: "oracle",
-      url: "oracle://system:pw@oracle.local:1521/FREEPDB1",
-    },
-  ] as const) {
-    it(`leaves ${c.dbType} URL pastes silent while connection.test is false`, async () => {
-      renderDialog();
-      const hostInput = screen.getByLabelText("Host") as HTMLInputElement;
-      const hostBefore = hostInput.value;
-
-      await act(async () => {
-        pasteIntoHost(c.url);
-      });
-
-      expect(
-        dataSourceProfiles.isConnectionSupportedDatabaseType(c.dbType),
-      ).toBe(false);
-      expect((screen.getByLabelText("Host") as HTMLInputElement).value).toBe(
-        hostBefore,
-      );
-      expect(
-        screen.queryByTestId("connection-url-detected"),
-      ).not.toBeInTheDocument();
-    });
-  }
+  it("treats Oracle paste support as data-source profile gated", () => {
+    expect(dataSourceProfiles.isConnectionSupportedDatabaseType("oracle")).toBe(
+      true,
+    );
+  });
 });
 
 describe("[AC-178-04] malformed URL paste is silent", () => {

@@ -11,10 +11,7 @@
 //!     for every active connection.
 
 use super::session::keep_alive_loop;
-use super::{
-    declared_only_runtime_error, make_adapter, AppState, SaveConnectionRequest,
-    TestConnectionRequest,
-};
+use super::{make_adapter, AppState, SaveConnectionRequest, TestConnectionRequest};
 use crate::db::mongodb::MongoAdapter;
 use crate::db::mysql::MysqlAdapter;
 use crate::db::postgres::PostgresAdapter;
@@ -23,6 +20,7 @@ use crate::db::search::SearchEngineAdapter;
 use crate::db::sqlite::SqliteAdapter;
 use crate::db::DuckdbAdapter;
 use crate::db::MssqlAdapter;
+use crate::db::OracleAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
 use crate::storage;
@@ -105,10 +103,6 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
     let mut full = config.into_config_with_empty_password();
     full.password = resolved_password;
 
-    if let Some(error) = declared_only_runtime_error(&full.db_type) {
-        return Err(error);
-    }
-
     match full.db_type {
         DatabaseType::Postgresql => {
             PostgresAdapter::test(&full).await?;
@@ -126,7 +120,7 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
             MssqlAdapter::test(&full).await?;
         }
         DatabaseType::Oracle => {
-            unreachable!("Oracle is rejected before adapter dispatch");
+            OracleAdapter::test(&full).await?;
         }
         DatabaseType::Mongodb => {
             MongoAdapter::test(&full).await?;

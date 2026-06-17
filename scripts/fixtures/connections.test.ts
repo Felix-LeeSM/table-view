@@ -186,6 +186,7 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
       connections: {
         id: string;
         db_type: string;
+        database: string;
       }[];
     };
 
@@ -199,6 +200,7 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
     expect(oracle).toEqual(
       expect.objectContaining({
         db_type: "oracle",
+        database: "XEPDB1",
       }),
     );
   });

@@ -13,14 +13,57 @@ export interface OracleConnection {
   serviceName: string;
 }
 
-export function oracleEnvConn(): OracleConnection {
+type OracleFixtureEnv = Readonly<Record<string, string | undefined>>;
+
+const DEFAULT_ORACLE_SERVICE_NAME = "XEPDB1";
+const SERVICE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
+const UNSUPPORTED_ORACLE_ENV = [
+  ["ORACLE_SID", "SID"],
+  ["ORACLE_TNS_ADMIN", "TNS"],
+  ["TNS_ADMIN", "TNS"],
+  ["ORACLE_WALLET", "wallet"],
+  ["ORACLE_WALLET_LOCATION", "wallet"],
+  ["ORACLE_EXTERNAL_AUTH", "advanced auth"],
+  ["ORACLE_AUTH_MODE", "advanced auth"],
+  ["ORACLE_PRIVILEGE", "advanced auth"],
+] as const;
+
+export function oracleEnvConn(
+  env: OracleFixtureEnv = process.env,
+): OracleConnection {
+  assertServiceNameFixtureBoundary(env);
+  const serviceName = env.ORACLE_SERVICE ?? DEFAULT_ORACLE_SERVICE_NAME;
+  assertOracleServiceName(serviceName);
+
   return {
-    host: process.env.ORACLE_HOST ?? "localhost",
-    port: Number(process.env.ORACLE_PORT ?? 1521),
-    user: process.env.ORACLE_USER ?? "testuser",
-    password: process.env.ORACLE_PASSWORD ?? "testpass",
-    serviceName: process.env.ORACLE_SERVICE ?? "XEPDB1",
+    host: env.ORACLE_HOST ?? "localhost",
+    port: Number(env.ORACLE_PORT ?? 1521),
+    user: env.ORACLE_USER ?? "testuser",
+    password: env.ORACLE_PASSWORD ?? "testpass",
+    serviceName,
   };
+}
+
+function assertServiceNameFixtureBoundary(env: OracleFixtureEnv): void {
+  const configured = UNSUPPORTED_ORACLE_ENV.filter(([key]) => env[key]).map(
+    ([key, mode]) => `${key} (${mode})`,
+  );
+  if (configured.length === 0) return;
+
+  throw new Error(
+    `Oracle fixture supports service-name connections only for #904; unsupported: ${configured.join(", ")}. Use ORACLE_SERVICE for the local XE service name.`,
+  );
+}
+
+function assertOracleServiceName(serviceName: string): void {
+  if (!serviceName.trim()) {
+    throw new Error("Oracle fixture service name is required.");
+  }
+  if (!SERVICE_NAME_PATTERN.test(serviceName)) {
+    throw new Error(
+      "Oracle fixture service name must be a simple service-name token; SID, TNS descriptors, wallet aliases, and connect strings are unsupported for #904.",
+    );
+  }
 }
 
 function connectString(conn: OracleConnection): string {
@@ -308,6 +351,9 @@ function coerceForOracle(col: Column, v: unknown): unknown {
 }
 
 export const __testing = {
+  DEFAULT_ORACLE_SERVICE_NAME,
+  UNSUPPORTED_ORACLE_ENV,
+  connectString,
   buildCreateTable,
   mapType,
 };

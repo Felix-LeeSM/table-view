@@ -1,12 +1,11 @@
-//! Oracle connection lifecycle, bounded query adapter, and catalog metadata browse.
+//! Oracle adapter internals.
 //!
-//! Oracle supports service-name connection, bounded SELECT/DML query runtime,
-//! live catalog/workbench metadata, primary-key-scoped row edits, and bounded
-//! structured table/index/constraint DDL. Runtime Safe Mode smoke,
-//! fixture/live/E2E, SID/TNS, wallet/TLS, sequence/synonym DDL/admin workflows,
-//! packages, and full PL/SQL parity remain unsupported.
+//! Issue #904 promotes only service-name connection test/connect/ping through
+//! `OracleConnectionOnlyAdapter`. Query/catalog/edit/DDL/PLSQL helpers stay out
+//! of `make_adapter`; SID/TNS/wallet/TLS/advanced auth remain unsupported.
 
 mod catalog;
+mod connection_only;
 mod ddl;
 #[cfg(test)]
 mod ddl_tests;
@@ -14,6 +13,8 @@ mod runtime;
 mod table_data;
 #[cfg(test)]
 mod tests;
+
+pub use connection_only::OracleConnectionOnlyAdapter;
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -143,17 +144,55 @@ impl OracleAdapter {
         let host = config.host.trim();
         let service_name = config.database.trim();
         let username = config.user.trim();
+        let service_name_upper = service_name.to_ascii_uppercase();
 
         if host.is_empty() {
             return Err(AppError::Validation("Oracle host is required".into()));
+        }
+        if config.port == 0 {
+            return Err(AppError::Validation("Oracle port is required".into()));
         }
         if service_name.is_empty() {
             return Err(AppError::Validation(
                 "Oracle service name is required".into(),
             ));
         }
+        if service_name_upper.contains("SID=") {
+            return Err(AppError::Validation(
+                "Oracle SID connections are unsupported in issue #904; use a service name".into(),
+            ));
+        }
+        if service_name_upper.contains("DESCRIPTION=")
+            || service_name_upper.contains("CONNECT_DATA=")
+            || service_name.starts_with("//")
+            || service_name.contains('/')
+        {
+            return Err(AppError::Validation(
+                "Oracle TNS/easy-connect descriptors are unsupported in issue #904; use host, port, and service name fields".into(),
+            ));
+        }
         if username.is_empty() {
             return Err(AppError::Validation("Oracle user is required".into()));
+        }
+        if config.password.is_empty() {
+            return Err(AppError::Validation(
+                "Oracle password authentication is required; advanced/external auth is unsupported in issue #904".into(),
+            ));
+        }
+        if has_non_empty(&config.auth_source) {
+            return Err(AppError::Validation(
+                "Oracle SID/TNS/advanced auth fields are unsupported in issue #904; use service-name username/password auth".into(),
+            ));
+        }
+        if has_non_empty(&config.replica_set) {
+            return Err(AppError::Validation(
+                "Oracle TNS/wallet routing fields are unsupported in issue #904; use host, port, and service name".into(),
+            ));
+        }
+        if config.tls_enabled.unwrap_or(false) || config.trust_server_certificate.unwrap_or(false) {
+            return Err(AppError::Validation(
+                "Oracle wallet/TLS modes are unsupported in issue #904; use service-name username/password without wallet options".into(),
+            ));
         }
 
         Ok(OracleConfig::new(
@@ -456,6 +495,12 @@ fn connection_timeout_secs(config: &ConnectionConfig) -> u64 {
 
 fn map_oracle_connection_error(error: oracle_rs::Error) -> AppError {
     AppError::Connection(error.to_string())
+}
+
+fn has_non_empty(value: &Option<String>) -> bool {
+    value
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
 }
 
 fn non_empty(value: String) -> Option<String> {
