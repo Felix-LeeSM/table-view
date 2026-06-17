@@ -137,11 +137,15 @@ fn backend_profiles_encode_current_database_type_contracts() {
     );
     assert_eq!(
         oracle.adapter_contract.capabilities,
-        [BackendAdapterCapability::Lifecycle]
+        [
+            BackendAdapterCapability::Lifecycle,
+            BackendAdapterCapability::RelationalCatalog,
+            BackendAdapterCapability::RelationalQuery,
+        ]
     );
     assert!(oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
-    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
-    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let mongodb = get_data_source_profile(&DatabaseType::Mongodb);
@@ -349,12 +353,13 @@ fn rdbms_integration_gate_profiles_are_coherent() {
             "mariadb",
             "sqlite",
             "duckdb",
-            "mssql"
+            "mssql",
+            "oracle",
         ]
     );
     assert_eq!(
         database_type_labels(SERVER_RDBMS_DATABASE_TYPES),
-        vec!["postgresql", "mysql", "mariadb", "mssql"]
+        vec!["postgresql", "mysql", "mariadb", "mssql", "oracle"]
     );
     assert_eq!(
         database_type_labels(FILE_RDBMS_DATABASE_TYPES),
@@ -419,11 +424,15 @@ fn rdbms_integration_gate_profiles_are_coherent() {
     );
     assert_eq!(
         oracle.adapter_contract.capabilities,
-        [BackendAdapterCapability::Lifecycle]
+        [
+            BackendAdapterCapability::Lifecycle,
+            BackendAdapterCapability::RelationalCatalog,
+            BackendAdapterCapability::RelationalQuery,
+        ]
     );
     assert!(oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
-    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
-    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 }
 

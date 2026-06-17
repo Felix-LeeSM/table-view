@@ -117,8 +117,9 @@ describe("generator — determinism", () => {
 });
 
 describe("generator — connection flattening", () => {
-  it("includes MSSQL runtime and Oracle fixture identities", () => {
+  it("includes MariaDB, MSSQL, and Oracle active fixture identities", () => {
     const flattened = flattenConnections(spec.profileSpec);
+    expect(flattened.map((c) => c.target)).toContain("mariadb");
     expect(flattened.map((c) => c.target)).toContain("mssql");
     expect(flattened.map((c) => c.target)).toContain("oracle");
   });

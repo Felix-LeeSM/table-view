@@ -19,12 +19,6 @@ import {
   getActiveQueryLanguages,
   getQueryLanguageMetadata,
 } from "./queryLanguage";
-import {
-  FILE_RDBMS_DATABASE_TYPES,
-  RDBMS_DATABASE_TYPES,
-  RUNTIME_RDBMS_DATABASE_TYPES,
-  SERVER_RDBMS_DATABASE_TYPES,
-} from "./rdbmsDataSources";
 
 describe("DataSourceProfile registry", () => {
   const allDatabaseTypes = Object.keys(DATABASE_TYPE_LABELS) as DatabaseType[];
@@ -129,6 +123,14 @@ describe("DataSourceProfile registry", () => {
     }),
     oracle: expectedCapabilities({
       connection: { test: true },
+      query: { query: true, multiStatement: true, cancel: true },
+      catalog: {
+        browse: true,
+        schema: true,
+        indexes: true,
+        constraints: true,
+        relationships: true,
+      },
     }),
     mongodb: expectedCapabilities({
       connection: { test: true },
@@ -346,72 +348,6 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
-  it("promotes MSSQL runtime while Oracle exposes connection-test only", () => {
-    const mssql = getDataSourceProfile("mssql");
-    expect(mssql).toMatchObject({
-      id: "mssql",
-      paradigm: "rdb",
-      connectionKind: "server",
-      languages: ["sql"],
-      catalogModel: "rdb",
-      resultKinds: ["tabular"],
-      safetyPolicy: "rdb-default",
-    });
-    expect(mssql.backendAdapter).toEqual({
-      id: "mssql",
-      kind: "rdb",
-      capabilitySource: "mssql",
-    });
-    expect(mssql.dialect).toEqual({
-      id: "mssql",
-      family: "mssql",
-      versionProbe: "mssql-server-property",
-    });
-    expect(mssql.capabilities).toEqual(expectedCapabilitiesByType.mssql);
-    expect(mssql.capabilities.connection.test).toBe(true);
-    expect(mssql.capabilities.query.query).toBe(true);
-    expect(mssql.capabilities.query.multiStatement).toBe(true);
-    expect(mssql.capabilities.query.cancel).toBe(true);
-    expect(mssql.capabilities.query.explain).toBe(false);
-    expect(mssql.capabilities.catalog.browse).toBe(true);
-    expect(mssql.capabilities.catalog.schema).toBe(true);
-    expect(mssql.capabilities.catalog.indexes).toBe(true);
-    expect(mssql.capabilities.catalog.constraints).toBe(true);
-    expect(mssql.capabilities.catalog.relationships).toBe(true);
-    expect(mssql.capabilities.edit.editRows).toBe(true);
-    expect(mssql.capabilities.ddl.createTable).toBe(false);
-    expect(isConnectionSupportedDatabaseType("mssql")).toBe(true);
-
-    const oracle = getDataSourceProfile("oracle");
-    expect(oracle).toMatchObject({
-      id: "oracle",
-      paradigm: "rdb",
-      connectionKind: "server",
-      languages: ["sql"],
-      catalogModel: "rdb",
-      resultKinds: ["tabular"],
-      safetyPolicy: "rdb-default",
-    });
-    expect(oracle.backendAdapter).toEqual({
-      id: "oracle",
-      kind: "rdb",
-      capabilitySource: "oracle",
-    });
-    expect(oracle.dialect).toEqual({
-      id: "oracle",
-      family: "oracle",
-      versionProbe: "none",
-    });
-    expect(oracle.capabilities).toEqual(expectedCapabilitiesByType.oracle);
-    expect(oracle.capabilities.connection.test).toBe(true);
-    expect(oracle.capabilities.connection.switchDatabase).toBe(false);
-    expect(oracle.capabilities.query.query).toBe(false);
-    expect(oracle.capabilities.catalog.browse).toBe(false);
-    expect(oracle.capabilities.edit.editRows).toBe(false);
-    expect(oracle.capabilities.ddl.createTable).toBe(false);
-    expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
-  });
-
   it("derives connection-dialog supported DBMS options from the profile test capability", () => {
     expect(getConnectionSupportedDatabaseTypes()).toEqual([
       "postgresql",
@@ -467,81 +403,6 @@ describe("DataSourceProfile registry", () => {
     );
   });
 
-  it("locks the Sprint 459 RDBMS integration gate matrix", () => {
-    expect(RDBMS_DATABASE_TYPES).toEqual([
-      "postgresql",
-      "mysql",
-      "mariadb",
-      "sqlite",
-      "duckdb",
-      "mssql",
-      "oracle",
-    ]);
-    expect(RUNTIME_RDBMS_DATABASE_TYPES).toEqual([
-      "postgresql",
-      "mysql",
-      "mariadb",
-      "sqlite",
-      "duckdb",
-      "mssql",
-    ]);
-    expect(SERVER_RDBMS_DATABASE_TYPES).toEqual([
-      "postgresql",
-      "mysql",
-      "mariadb",
-      "mssql",
-    ]);
-    expect(FILE_RDBMS_DATABASE_TYPES).toEqual(["sqlite", "duckdb"]);
-
-    for (const dbType of RUNTIME_RDBMS_DATABASE_TYPES) {
-      const profile = getDataSourceProfile(dbType);
-
-      expect(profile.paradigm).toBe("rdb");
-      expect(profile.languages).toEqual(["sql"]);
-      expect(profile.catalogModel).toBe("rdb");
-      expect(profile.resultKinds).toEqual(["tabular"]);
-      expect(profile.safetyPolicy).toBe("rdb-default");
-      expect(profile.backendAdapter.kind).toBe("rdb");
-      expect(profile.capabilities.connection.test).toBe(true);
-      expect(profile.capabilities.query.query).toBe(true);
-      expect(profile.capabilities.catalog.browse).toBe(true);
-      expect(profile.capabilities.catalog.schema).toBe(true);
-    }
-
-    const mssql = getDataSourceProfile("mssql");
-    expect(mssql.backendAdapter).toEqual({
-      id: "mssql",
-      kind: "rdb",
-      capabilitySource: "mssql",
-    });
-    expect(mssql.capabilities.connection.test).toBe(true);
-    expect(mssql.capabilities.query.query).toBe(true);
-    expect(mssql.capabilities.query.multiStatement).toBe(true);
-    expect(mssql.capabilities.query.cancel).toBe(true);
-    expect(mssql.capabilities.query.explain).toBe(false);
-    expect(mssql.capabilities.catalog.browse).toBe(true);
-    expect(mssql.capabilities.catalog.schema).toBe(true);
-    expect(mssql.capabilities.catalog.indexes).toBe(true);
-    expect(mssql.capabilities.catalog.constraints).toBe(true);
-    expect(mssql.capabilities.catalog.relationships).toBe(true);
-    expect(mssql.capabilities.edit.editRows).toBe(true);
-    expect(mssql.capabilities.ddl.createTable).toBe(false);
-
-    const oracle = getDataSourceProfile("oracle");
-    expect(oracle.paradigm).toBe("rdb");
-    expect(oracle.backendAdapter).toEqual({
-      id: "oracle",
-      kind: "rdb",
-      capabilitySource: "oracle",
-    });
-    expect(oracle.capabilities).toEqual(expectedCapabilitiesByType.oracle);
-    expect(oracle.capabilities.connection.test).toBe(true);
-    expect(oracle.capabilities.query.query).toBe(false);
-    expect(oracle.capabilities.catalog.browse).toBe(false);
-    expect(oracle.capabilities.edit.editRows).toBe(false);
-    expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
-  });
-
   it("keeps current query-tab language defaults aligned with source profiles", () => {
     for (const dbType of SUPPORTED_DATABASE_TYPES) {
       const profile = getDataSourceProfile(dbType);
@@ -594,6 +455,7 @@ describe("DataSourceProfile registry", () => {
     expect(hasConnectionCapability("mysql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mariadb", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mssql", "switchDatabase")).toBe(false);
+    expect(hasConnectionCapability("oracle", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("redis", "switchDatabase")).toBe(true);

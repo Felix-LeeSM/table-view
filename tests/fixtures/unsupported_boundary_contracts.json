@@ -53,10 +53,10 @@
       "consumedBy": ["tests/fixtures/unsupported_boundary_contracts.test.ts"]
     },
     {
-      "id": "mssql-runtime-oracle-service-name-connection-boundaries",
-      "minimumRow": "MSSQL runtime catalog/query/edit-row slice and Oracle service-name connection baseline",
+      "id": "mssql-runtime-oracle-runtime-slice-boundaries",
+      "minimumRow": "MSSQL runtime catalog/query/edit-row slice and Oracle catalog/query/cancel/tabular runtime slice",
       "products": ["mssql", "oracle"],
-      "claimBoundary": "Issue #903 promotes SQL Server to bounded catalog/query/cancel/tabular runtime support plus editRows through frontend SQL batch with primary-key projection, while keeping DDL, admin, import/export, full T-SQL parity, and full workbench parity unsupported. Issue #904 promotes Oracle only to a service-name local connection baseline; SID, TNS, wallet, advanced auth, query, catalog, edit, DDL, parser, completion, runtime smoke, and PL/SQL remain unsupported or unclaimed.",
+      "claimBoundary": "Issue #903 promotes SQL Server to bounded catalog/query/cancel/tabular runtime support plus editRows through frontend SQL batch with primary-key projection, while keeping DDL, admin, import/export, full T-SQL parity, and full workbench parity unsupported. Issue #905 promotes Oracle only to service-name lifecycle plus bounded catalog/query/cancel/tabular runtime; SID, TNS, wallet, TLS, advanced auth, switch database, editRows, structured DDL, raw DDL/admin, parser, completion, runtime smoke, triggers, and PL/SQL body/package work remain unsupported or unclaimed.",
       "docs": [
         {
           "path": "docs/product/known-limitations.md",
@@ -68,7 +68,7 @@
         },
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "Oracle supports only the service-name local connection baseline (`host:port/serviceName`, default `XEPDB1`)."
+          "mustContain": "Oracle supports service-name lifecycle plus a bounded #905 catalog/query/cancel/tabular runtime slice."
         },
         {
           "path": "docs/product/README.md",
@@ -76,7 +76,7 @@
         },
         {
           "path": "docs/product/README.md",
-          "mustContain": "Oracle: service-name connection baseline only."
+          "mustContain": "Oracle: bounded catalog/query/cancel/tabular runtime support is active for"
         }
       ],
       "fixtureEvidence": [

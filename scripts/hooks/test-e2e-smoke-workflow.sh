@@ -135,12 +135,16 @@ if [ -z "$cleanup_line" ]; then
 	echo "FAIL: e2e-smoke-prepare must free disk headroom before building the Tauri smoke binary" >&2
 	exit 1
 fi
-if [ "$telemetry_line" -le "$cache_line" ] || [ "$telemetry_line" -ge "$build_line" ]; then
-	echo "FAIL: disk usage telemetry must run after Rust cache restore and before Build E2E smoke binary" >&2
+if [ "$telemetry_line" -ge "$cleanup_line" ]; then
+	echo "FAIL: disk usage telemetry must run before disk headroom cleanup" >&2
 	exit 1
 fi
-if [ "$cleanup_line" -le "$telemetry_line" ] || [ "$cleanup_line" -ge "$build_line" ]; then
-	echo "FAIL: disk headroom cleanup must run after disk telemetry and before Build E2E smoke binary" >&2
+if [ "$cleanup_line" -ge "$cache_line" ]; then
+	echo "FAIL: disk headroom cleanup must run before Rust cache restore" >&2
+	exit 1
+fi
+if [ "$cache_line" -ge "$build_line" ]; then
+	echo "FAIL: Rust target cache restore must run before Build E2E smoke binary" >&2
 	exit 1
 fi
 

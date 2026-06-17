@@ -331,13 +331,23 @@ describe("adapter conformance matrix", () => {
     ]);
   });
 
-  it("keeps Oracle at connection-test contract without query/catalog/edit/DDL claims", () => {
+  it("keeps Oracle scoped to catalog/query/cancel runtime without edit or DDL claims", () => {
     const oracle = ADAPTER_CONFORMANCE_MATRIX.oracle;
 
-    expect(oracle.level).toBe("contract");
+    expect(oracle.level).toBe("runtime");
     expect(oracle.areas.connection.checks).toEqual(["connection.test"]);
-    expect(oracle.areas.catalog.checks).toEqual([]);
-    expect(oracle.areas.query.checks).toEqual([]);
+    expect(oracle.areas.catalog.checks).toEqual([
+      "catalog.browse",
+      "catalog.schema",
+      "catalog.indexes",
+      "catalog.constraints",
+      "catalog.relationships",
+    ]);
+    expect(oracle.areas.query.checks).toEqual([
+      "query.query",
+      "query.multiStatement",
+      "query.cancel",
+    ]);
     expect(oracle.areas.edit.checks).toEqual([]);
     expect(oracle.areas.ddl.checks).toEqual([]);
     expect(oracle.areas.connection.deferred).toEqual([]);
@@ -346,19 +356,8 @@ describe("adapter conformance matrix", () => {
       "connection.readOnly",
       "connection.filePicker",
     ]);
-    expect(oracle.areas.catalog.unsupported).toEqual([
-      "catalog.browse",
-      "catalog.schema",
-      "catalog.indexes",
-      "catalog.constraints",
-      "catalog.relationships",
-    ]);
-    expect(oracle.areas.query.unsupported).toEqual([
-      "query.query",
-      "query.multiStatement",
-      "query.cancel",
-      "query.explain",
-    ]);
+    expect(oracle.areas.catalog.unsupported).toEqual([]);
+    expect(oracle.areas.query.unsupported).toEqual(["query.explain"]);
     expect(oracle.areas.query.deferred).toEqual([]);
     expect(oracle.areas.edit.unsupported).toEqual([
       "edit.editRows",

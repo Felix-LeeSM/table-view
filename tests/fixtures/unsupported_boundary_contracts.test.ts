@@ -137,10 +137,10 @@ describe("unsupported_boundary_contracts.json", () => {
     }
   });
 
-  it("keeps MSSQL runtime and Oracle service-name connection boundaries explicit", () => {
+  it("keeps MSSQL runtime and Oracle runtime-slice boundaries explicit", () => {
     const row = rowById(
       loadBoundaryFixture(),
-      "mssql-runtime-oracle-service-name-connection-boundaries",
+      "mssql-runtime-oracle-runtime-slice-boundaries",
     );
     const report = readJson<ProfileParityReport>(
       row.fixtureEvidence[0]?.path ?? "",

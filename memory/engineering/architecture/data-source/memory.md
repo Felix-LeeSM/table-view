@@ -93,12 +93,14 @@ and bounded static parser/Safe Mode metadata. SQL Server TLS-required workflow,
 SQLCMD/admin/security/backup/jobs/users/roles, broader auth/encryption, instance
 discovery, and full T-SQL semantic parity remain separate contracts.
 
-Oracle is active for service-name lifecycle, bounded query/result/table browse,
-primary-key row edit, bounded structured DDL, catalog/workbench metadata
-including read-only sequences/synonyms, representative smoke, catalog-aware
-completion, and bounded static parser/Safe Mode metadata. Raw DDL/admin,
-sequence/synonym DDL/admin, SID/TNS/wallet/TLS, and full PL/SQL executable
-semantics remain separate contracts.
+Oracle is active for service-name lifecycle plus bounded catalog/query/cancel/
+tabular runtime: catalog metadata, SELECT/DML batch execution, cooperative
+cancellation, and table-data query through the bounded runtime wrapper. SID/TNS/
+wallet/TLS, advanced auth, switch database, editRows, structured DDL, raw
+DDL/admin, parser/completion, runtime smoke, triggers, PL/SQL source/body/
+package authoring, sequences/synonyms DDL/admin, import/export, profiler/
+activity, users/roles/grants/session/storage, full workbench parity, and full
+PL/SQL executable semantics remain separate contracts.
 
 Redis and Valkey are active KV profiles with bounded connection/key browse/value
 preview and command-query slices. Redis has direct key mutation controls for the
@@ -176,10 +178,10 @@ ERD/`SchemaGraph` input 은 schema/table/column cache 와 cached/fetched explici
 index/constraint cache 를 함께 사용한다. `ColumnInfo` PK/FK/CHECK metadata 는
 explicit metadata 가 비어 있을 때 synthetic constraint 보강에 사용한다.
 
-Dependency view, migration impact summaries, read-only cached schema diff, and
-dense ERD screenshot smoke extend the shared `SchemaGraph`/catalog input path.
-Future data compare work should use the same path. Duplicate catalog parsing 금지. 현재 FK
-navigation 은 DataGrid cell/icon path 이며 ERD interaction claim 이 아니다.
+Dependency view, migration impact summaries, read-only cached schema diff,
+dense ERD screenshot smoke, and future data compare should use the shared
+`SchemaGraph`/catalog input path. Duplicate catalog parsing 금지. FK navigation
+은 DataGrid cell/icon path 이며 ERD interaction claim 이 아니다.
 Migration export 는 `SchemaTree`/`useMigrationExport` delegate path 이다.
 
 ## Anti-Patterns
@@ -190,11 +192,9 @@ Migration export 는 `SchemaTree`/`useMigrationExport` delegate path 이다.
 - Enabling features by `dbType` checks instead of capabilities.
 - Treating profile presence as runtime support.
 - Persisting file paths, cloud endpoints, or query text without privacy/export policy.
-
 ## Related
 
 - [adding data source](adding/memory.md)
 - [query language](../query-language/memory.md)
 - [fixture strategy](../../conventions/testing-scenarios/fixtures/memory.md)
 - [roadmap](../../../../docs/ROADMAP.md)
-- [historical snapshot](../../../../docs/archives/design-snapshots/data-source-architecture-2026-05-27.md)

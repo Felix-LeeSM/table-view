@@ -116,11 +116,18 @@ describe("spec — loadSpec validation", () => {
     ]);
   });
 
-  it("keeps MSSQL fixture identity and Oracle service-name fixture identity", () => {
+  it("keeps MariaDB, MSSQL, and Oracle active fixture identities", () => {
     const spec = loadSpec("e2e");
+    const mariadb = spec.profileSpec.connections?.mariadb?.[0];
     const mssql = spec.profileSpec.connections?.mssql?.[0];
     const oracle = spec.profileSpec.connections?.oracle?.[0];
 
+    expect(mariadb).toEqual(
+      expect.objectContaining({
+        id: "fixture-e2e-mariadb",
+      }),
+    );
+    expect(mariadb).not.toHaveProperty("status");
     expect(mssql).toEqual(
       expect.objectContaining({
         id: "fixture-e2e-mssql",

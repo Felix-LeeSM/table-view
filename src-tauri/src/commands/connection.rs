@@ -33,7 +33,7 @@ use crate::db::sqlite::SqliteAdapter;
 use crate::db::ActiveAdapter;
 use crate::db::DuckdbAdapter;
 use crate::db::MssqlAdapter;
-use crate::db::OracleConnectionOnlyAdapter;
+use crate::db::OracleRuntimeAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
 use crate::state::introspection_pool::IntrospectionPool;
@@ -65,9 +65,10 @@ pub use sqlite_file::create_sqlite_database_file;
 /// `DatabaseType` on the active adapter. SQLite and DuckDB have file-backed
 /// adapters. SQL Server uses the bounded MSSQL runtime slice: lifecycle,
 /// catalog/table/view/routine browse, tabular query, batch DML, and
-/// cooperative cancel. Oracle uses the #904 connection-only RDB wrapper:
-/// service-name connection test/connect/ping are live, while query/catalog/edit
-/// surfaces return Unsupported.
+/// cooperative cancel. Oracle uses the #905 bounded runtime RDB wrapper:
+/// service-name lifecycle, catalog metadata, SELECT/DML batch, cooperative
+/// cancel, and tabular table-data queries are live, while switch-database,
+/// edit/DDL, source/body, trigger, and admin surfaces return Unsupported.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
@@ -76,9 +77,7 @@ pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppE
         DatabaseType::Sqlite => Ok(ActiveAdapter::Rdb(Box::new(SqliteAdapter::new()))),
         DatabaseType::Duckdb => Ok(ActiveAdapter::Rdb(Box::new(DuckdbAdapter::new()))),
         DatabaseType::Mssql => Ok(ActiveAdapter::Rdb(Box::new(MssqlAdapter::new()))),
-        DatabaseType::Oracle => Ok(ActiveAdapter::Rdb(Box::new(
-            OracleConnectionOnlyAdapter::new(),
-        ))),
+        DatabaseType::Oracle => Ok(ActiveAdapter::Rdb(Box::new(OracleRuntimeAdapter::new()))),
         DatabaseType::Mongodb => Ok(ActiveAdapter::Document(Box::new(MongoAdapter::new()))),
         DatabaseType::Redis => Ok(ActiveAdapter::Kv(Box::new(RedisAdapter::new()))),
         DatabaseType::Valkey => Ok(ActiveAdapter::Kv(Box::new(RedisAdapter::new_valkey()))),
@@ -356,7 +355,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_make_adapter_oracle_returns_connection_only_rdb_variant() {
+    async fn test_make_adapter_oracle_returns_runtime_rdb_variant() {
         let adapter = make_adapter(&DatabaseType::Oracle).expect("oracle should dispatch");
         assert!(
             matches!(adapter, ActiveAdapter::Rdb(_)),
@@ -365,10 +364,12 @@ mod tests {
         assert!(matches!(adapter.kind(), DatabaseType::Oracle));
 
         let rdb = adapter.as_rdb().expect("oracle is an RDB handle");
-        assert_oracle_connection_only_unsupported(rdb.list_namespaces().await);
-        assert_oracle_connection_only_unsupported(
-            rdb.execute_sql("SELECT 1 FROM DUAL", None).await,
-        );
+        assert_eq!(rdb.current_database().await.unwrap(), None);
+        assert_oracle_runtime_requires_open_connection(rdb.list_namespaces().await);
+
+        let token = CancellationToken::new();
+        token.cancel();
+        assert_oracle_runtime_cancelled(rdb.execute_sql("SELECT 1 FROM DUAL", Some(&token)).await);
 
         let drop = crate::models::DropTableRequest {
             connection_id: "oracle".into(),
@@ -378,7 +379,7 @@ mod tests {
             preview_only: false,
             expected_database: None,
         };
-        assert_oracle_connection_only_unsupported(rdb.drop_table(&drop).await);
+        assert_oracle_runtime_slice_unsupported(rdb.drop_table(&drop).await, "structured DDL");
     }
 
     #[test]
@@ -417,10 +418,29 @@ mod tests {
         );
     }
 
-    fn assert_oracle_connection_only_unsupported<T: std::fmt::Debug>(result: Result<T, AppError>) {
+    fn assert_oracle_runtime_requires_open_connection<T: std::fmt::Debug>(
+        result: Result<T, AppError>,
+    ) {
         assert!(
-            matches!(result, Err(AppError::Unsupported(ref message)) if message.contains("issue #904") && message.contains("connection test, connect, and ping only")),
-            "expected Oracle #904 connection-only Unsupported, got {result:?}"
+            matches!(result, Err(AppError::Connection(ref message)) if message.contains("Oracle connection is not open")),
+            "expected Oracle runtime open-connection error, got {result:?}"
+        );
+    }
+
+    fn assert_oracle_runtime_cancelled<T: std::fmt::Debug>(result: Result<T, AppError>) {
+        assert!(
+            matches!(result, Err(AppError::Database(ref message)) if message == "Query cancelled"),
+            "expected Oracle cooperative cancellation, got {result:?}"
+        );
+    }
+
+    fn assert_oracle_runtime_slice_unsupported<T: std::fmt::Debug>(
+        result: Result<T, AppError>,
+        surface: &str,
+    ) {
+        assert!(
+            matches!(result, Err(AppError::Unsupported(ref message)) if message.contains("issue #905") && message.contains(surface)),
+            "expected Oracle #905 runtime-slice Unsupported for {surface}, got {result:?}"
         );
     }
 

@@ -175,6 +175,8 @@ const ALL_SEED_TARGETS = [
   "mongodb",
   "mysql",
   "mariadb",
+  "mssql",
+  "oracle",
   "redis",
   "valkey",
   "elasticsearch",

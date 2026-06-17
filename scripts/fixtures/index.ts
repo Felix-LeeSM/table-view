@@ -578,7 +578,7 @@ function usage(): string {
     "  pnpm db:connections clear",
     "  pnpm db:generate <profile> [--target <db>]",
     "",
-    "Targets: all/default (pg + mongo + mysql + sqlite + duckdb + redis) | pg | mongo | mysql | sqlite | duckdb | mariadb | mssql | oracle | redis",
+    "Targets: all/default (pg + mongo + mysql + sqlite + duckdb + mariadb + mssql + oracle + redis) | pg | mongo | mysql | sqlite | duckdb | mariadb | mssql | oracle | redis",
   ].join("\n");
 }
 

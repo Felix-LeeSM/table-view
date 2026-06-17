@@ -299,7 +299,11 @@ const MSSQL_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
 ];
-const ORACLE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[BackendAdapterCapability::Lifecycle];
+const ORACLE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
+    BackendAdapterCapability::Lifecycle,
+    BackendAdapterCapability::RelationalCatalog,
+    BackendAdapterCapability::RelationalQuery,
+];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::DocumentCatalog,

@@ -336,7 +336,7 @@ describe("ConnectionDialog", () => {
     expect(mockTestConnection).toHaveBeenCalledTimes(1);
   });
 
-  it("tests Oracle service-name connections without enabling query/catalog/edit UI", async () => {
+  it("tests Oracle service-name connections without enabling edit UI", async () => {
     const user = userEvent.setup();
     renderDialog();
 
@@ -348,8 +348,6 @@ describe("ConnectionDialog", () => {
     await user.click(screen.getByRole("option", { name: "Oracle" }));
 
     expect(screen.getByLabelText("Service name")).toHaveValue("FREEPDB1");
-    expect(screen.queryByText(/Query/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Catalog/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Edit/i)).not.toBeInTheDocument();
 
     await act(async () => {

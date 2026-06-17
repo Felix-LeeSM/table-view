@@ -55,16 +55,6 @@ jobs:
         with:
           toolchain: 1.91.0
 
-      - name: Cache Rust dependencies and build output
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-          cache-workspace-crates: false
-          cache-bin: false
-          cache-on-failure: true
-          shared-key: e2e-smoke-linux
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
       - name: Show disk usage before E2E build
         run: |
           echo "::group::Filesystem usage"
@@ -92,6 +82,16 @@ jobs:
           echo "::group::Build cache usage after cleanup"
           du -sh src-tauri/target 2>/dev/null || true
           echo "::endgroup::"
+
+      - name: Cache Rust dependencies and build output
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-workspace-crates: false
+          cache-bin: false
+          cache-on-failure: true
+          shared-key: e2e-smoke-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build E2E smoke binary
         env:

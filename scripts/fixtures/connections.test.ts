@@ -177,32 +177,62 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
     expect(existsSync(duckdb?.database ?? "")).toBe(true);
   });
 
-  it("surfaces MSSQL and Oracle fixture connections", async () => {
+  it("surfaces MariaDB, MSSQL, and Oracle fixture connections with localhost compose defaults", async () => {
     await upsertConnections(loadSpec("e2e"));
 
+    const key = Buffer.from(
+      readFileSync(resolve(tempDir, ".key"), "utf8").trim(),
+      "base64",
+    );
     const data = JSON.parse(
       readFileSync(resolve(tempDir, "connections.json"), "utf8"),
     ) as {
       connections: {
         id: string;
         db_type: string;
+        host: string;
+        port: number;
+        user: string;
+        password: string;
         database: string;
       }[];
     };
 
+    const mariadb = data.connections.find(
+      (c) => c.id === "fixture-e2e-mariadb",
+    );
     const mssql = data.connections.find((c) => c.id === "fixture-e2e-mssql");
     const oracle = data.connections.find((c) => c.id === "fixture-e2e-oracle");
+    expect(mariadb).toEqual(
+      expect.objectContaining({
+        db_type: "mariadb",
+        host: "localhost",
+        port: 23306,
+        user: "testuser",
+        database: "table_view_e2e",
+      }),
+    );
+    expect(decrypt(mariadb!.password, key)).toBe("testpass");
     expect(mssql).toEqual(
       expect.objectContaining({
         db_type: "mssql",
+        host: "localhost",
+        port: 14333,
+        user: "sa",
+        database: "table_view_e2e",
       }),
     );
+    expect(decrypt(mssql!.password, key)).toBe("Testpass123!");
     expect(oracle).toEqual(
       expect.objectContaining({
         db_type: "oracle",
+        host: "localhost",
+        port: 1521,
+        user: "testuser",
         database: "XEPDB1",
       }),
     );
+    expect(decrypt(oracle!.password, key)).toBe("testpass");
   });
 
   it("does not rewrite user-created SQLite or DuckDB file connections", async () => {

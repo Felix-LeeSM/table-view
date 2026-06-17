@@ -56,17 +56,10 @@ fn capabilities_do_not_cross_paradigm_boundaries() {
 
         match profile.paradigm {
             Paradigm::Rdb => {
-                if matches!(db_type, DatabaseType::Oracle) {
-                    assert!(
-                        !profile.has_backend_capability(BackendAdapterCapability::RelationalQuery),
-                        "{db_type:?} must not claim relational query"
-                    );
-                } else {
-                    assert!(
-                        profile.has_backend_capability(BackendAdapterCapability::RelationalQuery),
-                        "{db_type:?} should claim relational query"
-                    );
-                }
+                assert!(
+                    profile.has_backend_capability(BackendAdapterCapability::RelationalQuery),
+                    "{db_type:?} should claim relational query"
+                );
                 assert!(
                     !profile.has_backend_capability(BackendAdapterCapability::DocumentQuery),
                     "{db_type:?} must not claim document query"
@@ -127,8 +120,8 @@ fn dbms_specific_unsupported_capability_deltas_are_declared() {
 
     let oracle = get_data_source_profile(&DatabaseType::Oracle);
     assert!(oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
-    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
-    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     assert!(!get_data_source_profile(&DatabaseType::Sqlite)
