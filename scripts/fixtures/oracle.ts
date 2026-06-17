@@ -298,8 +298,7 @@ async function insertEntity(
   for (const row of data) {
     const cols = colNames.join(", ");
     const vals = colNames.map((colName) => {
-      const v = coerceForOracle(entity.columns[colName]!, row[colName]);
-      return literal(v);
+      return literalForColumn(entity.columns[colName]!, row[colName]);
     });
 
     // Use MERGE for idempotency on PK
@@ -307,9 +306,7 @@ async function insertEntity(
       ([, col]) => col.primary,
     )?.[0];
     if (pkCol) {
-      const pkVal = literal(
-        coerceForOracle(entity.columns[pkCol]!, row[pkCol]),
-      );
+      const pkVal = literalForColumn(entity.columns[pkCol]!, row[pkCol]);
       await c.execute(
         `MERGE INTO ${table} t USING (SELECT ${pkVal} AS ${pkCol} FROM dual) s ON (t.${pkCol} = s.${pkCol}) WHEN NOT MATCHED THEN INSERT (${cols}) VALUES (${vals.join(", ")})`,
       );
@@ -319,6 +316,16 @@ async function insertEntity(
       );
     }
   }
+}
+
+function literalForColumn(col: Column, v: unknown): string {
+  const coerced = coerceForOracle(col, v);
+  if (coerced === null || coerced === undefined) return "NULL";
+  if (col.type === "timestamp") return timestampLiteral(coerced);
+  if (typeof coerced === "string" && coerced.length === 0 && !col.nullable) {
+    return stringLiteral(" ");
+  }
+  return literal(coerced);
 }
 
 function literal(v: unknown): string {
@@ -341,6 +348,15 @@ function stringLiteral(value: string): string {
   return chunks.join(" || ");
 }
 
+function timestampLiteral(value: unknown): string {
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`invalid Oracle timestamp fixture value: ${String(value)}`);
+  }
+  const normalized = date.toISOString().replace(/Z$/, "+00:00");
+  return `TO_TIMESTAMP_TZ('${normalized}', 'YYYY-MM-DD"T"HH24:MI:SS.FFTZH:TZM')`;
+}
+
 function coerceForOracle(col: Column, v: unknown): unknown {
   if (v === null || v === undefined) return null;
   if (col.type === "array_of")
@@ -355,5 +371,6 @@ export const __testing = {
   UNSUPPORTED_ORACLE_ENV,
   connectString,
   buildCreateTable,
+  literalForColumn,
   mapType,
 };

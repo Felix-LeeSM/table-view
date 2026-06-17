@@ -815,6 +815,30 @@ describe("MainArea", () => {
       expect(screen.getByText(/c1 DB/)).toBeInTheDocument();
     });
 
+    it("describes the Redis empty-state CTA as command-oriented, not SQL", () => {
+      const redisConnection: ConnectionConfig = {
+        ...makeConnection("redis-1"),
+        name: "Local Redis",
+        dbType: "redis",
+        database: "2",
+        paradigm: "kv",
+      };
+      setConnections({
+        connections: [redisConnection],
+        active: ["redis-1"],
+      });
+      useConnectionStore.setState({
+        activeStatuses: { "redis-1": { type: "connected", activeDb: "2" } },
+      });
+
+      render(<MainArea />);
+
+      expect(
+        screen.getByText(/start writing Redis commands against/i),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/start writing SQL against/i)).toBeNull();
+    });
+
     it("clicking New Query opens a query tab against the connected DB", () => {
       setConnections({
         connections: [makeConnection("c1")],

@@ -294,6 +294,12 @@ function EmptyState() {
     (c) => activeStatuses[c.id]?.type === "connected",
   );
   const target = mruConnection ?? firstConnected;
+  const emptyStateLead =
+    target?.paradigm === "kv"
+      ? `Open a key from the sidebar, or start writing ${
+          target.dbType === "valkey" ? "Valkey" : "Redis"
+        } commands against `
+      : "Open a table from the sidebar, or start writing SQL against ";
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-muted-foreground">
@@ -301,7 +307,7 @@ function EmptyState() {
       {target ? (
         <>
           <p className="text-sm">
-            Open a table from the sidebar, or start writing SQL against{" "}
+            {emptyStateLead}
             <span className="font-medium text-foreground">{target.name}</span>.
           </p>
           <Button

@@ -34,6 +34,9 @@ const DEFAULT_TARGETS = new Set<ConcreteTarget>([
   "mysql",
   "sqlite",
   "duckdb",
+  "mariadb",
+  "mssql",
+  "oracle",
   "redis",
 ]);
 

@@ -78,6 +78,19 @@ describe("fixture stack wiring", () => {
     );
   });
 
+  it("loads every active localhost runtime fixture from the E2E seed-smoke default", () => {
+    const seedSmoke = readFileSync(resolve("e2e/fixtures/seed-smoke.ts"), {
+      encoding: "utf8",
+    });
+    const allTargets = seedSmoke.match(
+      /const ALL_SEED_TARGETS = \[([\s\S]*?)\] as const/,
+    )?.[1];
+
+    expect(allTargets).toContain('"mariadb"');
+    expect(allTargets).toContain('"mssql"');
+    expect(allTargets).toContain('"oracle"');
+  });
+
   it("loads the fixture CLI for a non-DuckDB target", () => {
     const out = execFileSync(
       "pnpm",

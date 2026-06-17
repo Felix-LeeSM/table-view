@@ -63,4 +63,22 @@ describe("oracle fixture DDL", () => {
     expect(ddl).toContain("body CLOB");
     expect(ddl).not.toContain("VARCHAR2(5000)");
   });
+
+  it("renders timestamp values with an explicit Oracle timestamp parser", () => {
+    const value = oracleTesting.literalForColumn(
+      { type: "timestamp" },
+      "2026-06-17T06:15:30.123Z",
+    );
+
+    expect(value).toBe(
+      `TO_TIMESTAMP_TZ('2026-06-17T06:15:30.123+00:00', 'YYYY-MM-DD"T"HH24:MI:SS.FFTZH:TZM')`,
+    );
+  });
+
+  it("does not render non-nullable empty strings as Oracle NULL", () => {
+    expect(oracleTesting.literalForColumn({ type: "text" }, "")).toBe("' '");
+    expect(
+      oracleTesting.literalForColumn({ type: "text", nullable: true }, ""),
+    ).toBe("''");
+  });
 });
