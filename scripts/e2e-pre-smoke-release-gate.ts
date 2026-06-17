@@ -43,7 +43,7 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "oracle")
         .length === 1,
-      `${profile}: expected exactly one declared-only Oracle fixture connection`,
+      `${profile}: expected exactly one Oracle service-name fixture connection`,
     );
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "sqlite")
@@ -139,19 +139,19 @@ function verifyEnterpriseRdbmsPromotionBoundary(): void {
   );
 
   assert(
-    !isSupportedDatabaseType("oracle"),
-    "oracle: declared-only profile must stay hidden from connection support",
+    isSupportedDatabaseType("oracle"),
+    "oracle: service-name connection/test profile must be exposed for connection support",
   );
   assert(
-    !hasConnectionCapability("oracle", "test"),
-    "oracle: connection.test must stay disabled until source-specific evidence lands",
+    hasConnectionCapability("oracle", "test"),
+    "oracle: connection.test must be enabled for the service-name baseline",
   );
   assert(
     !oracle.capabilities.query.query &&
       !oracle.capabilities.catalog.browse &&
       !oracle.capabilities.edit.editRows &&
       !oracle.capabilities.ddl.createTable,
-    "oracle: declared-only profile must not expose query/catalog/edit/DDL capabilities",
+    "oracle: service-name baseline must not expose query/catalog/edit/DDL capabilities",
   );
 }
 
@@ -231,5 +231,5 @@ verifyEnterpriseRdbmsPromotionBoundary();
 verifySearchConnectionPromotionBoundary();
 
 console.log(
-  "[e2e:pre-smoke] release gate MSSQL runtime catalog/query/editRows, Oracle declared-only, and live Search contract assertions passed.",
+  "[e2e:pre-smoke] release gate MSSQL runtime catalog/query/editRows, Oracle service-name connection/test, and live Search contract assertions passed.",
 );

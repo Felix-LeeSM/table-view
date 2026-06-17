@@ -206,12 +206,12 @@
       "seedTargets": ["oracle"],
       "tier": "dormant E2E",
       "wiredInSmokeScript": false,
-      "runtimeCost": "No routine runtime cost while Oracle remains declared-only. Re-promotion must budget the on-demand Oracle container route and startup timeout.",
-      "flakeRisk": "Dormant until a source-specific connection.test promotion reintroduces Oracle runtime evidence.",
+      "runtimeCost": "No routine runtime smoke cost while Oracle remains service-name connection/test only. Query/catalog/edit/DDL/parser/completion/PLSQL promotion must budget the on-demand Oracle container route and startup timeout.",
+      "flakeRisk": "Dormant until a source-specific runtime-smoke promotion reintroduces Oracle query/catalog/edit/DDL/parser/completion/PLSQL evidence.",
       "cacheImpact": "No cache impact while dormant; future promotion would use the shared prepared Tauri binary and Rust target cache.",
       "failureArtifacts": "No routine artifact while dormant; future promotion must restore scoped WDIO artifacts and container logs.",
       "supportClaimImpact": "Seed/spec inventory only. This does not create connection, query, catalog, edit, DDL, parser, completion, or runtime smoke support.",
-      "action": "keep dormant until source-specific Oracle connection.test and matching runtime/docs/smoke evidence land"
+      "action": "keep dormant until source-specific Oracle runtime/docs/smoke evidence beyond #904 service-name connection/test lands"
     },
     {
       "id": "sqlite-file-backed-smoke-seed",
