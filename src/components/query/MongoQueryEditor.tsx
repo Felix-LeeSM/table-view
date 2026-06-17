@@ -39,11 +39,9 @@ export interface MongoQueryEditorProps {
   onExecute: () => void;
   /**
    * Sprint 248 (ADR 0022 Phase 4) — `Cmd+Shift+Enter` dry-run handler.
-   * Accepted for prop-shape parity with `SqlQueryEditor` so callers can
-   * pass it unconditionally, but the MongoDB editor does NOT bind a
-   * keymap for it — the dry-run IPC is rdb-only and the
-   * `useQueryExecution` hook surfaces a `toast.info` disclaimer when
-   * invoked on document tabs.
+   * MongoDB dry-run IPC is unsupported; the binding still calls this handler
+   * so the tab can surface the same explicit info/unsupported action instead
+   * of making the shortcut feel broken.
    */
   onDryRun?: () => void;
   /**
@@ -63,14 +61,9 @@ const buildJsonLang = (mongoExtensions: readonly Extension[]): Extension => [
 
 const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
   function MongoQueryEditor(
-    // Sprint 248 — `onDryRun` is accepted on `MongoQueryEditorProps`
-    // for shape parity with `SqlQueryEditor` (so callers can pass it
-    // unconditionally), but the Mongo editor binds no keymap for it.
-    // Intentionally omitted from the destructure so ESLint's
-    // no-unused-vars rule stays clean.
     // Sprint 309 — paradigm-mode prop dropped from the interface; the
     // editor surface is a single mongosh-flavoured CodeMirror instance.
-    { sql, onSqlChange, onExecute, mongoExtensions },
+    { sql, onSqlChange, onExecute, onDryRun, mongoExtensions },
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -85,6 +78,8 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
     onSqlChangeRef.current = onSqlChange;
     const onExecuteRef = useRef(onExecute);
     onExecuteRef.current = onExecute;
+    const onDryRunRef = useRef(onDryRun);
+    onDryRunRef.current = onDryRun;
 
     // Keep a ref to the latest sql so we can avoid recreating the editor
     // on every keystroke.
@@ -122,6 +117,15 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
               key: "Mod-Enter",
               run: () => {
                 onExecuteRef.current();
+                return true;
+              },
+            },
+            {
+              key: "Cmd-Shift-Enter",
+              run: () => {
+                const handler = onDryRunRef.current;
+                if (!handler) return false;
+                handler();
                 return true;
               },
             },

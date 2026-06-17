@@ -35,7 +35,7 @@ import { hasConnectionCapability } from "@/types/dataSource";
  * On failure (Document `Unsupported`, PG sub-pool open error) the popover
  * stays open so the error chip stays visible alongside the toast.
  *
- * Search and disconnected tabs render the read-only chrome —
+ * Fixed-scope profiles and disconnected tabs render the read-only chrome —
  * `aria-disabled="true"`, not in keyboard tab order.
  *
  * Resolution rules for the trigger label:
@@ -43,7 +43,8 @@ import { hasConnectionCapability } from "@/types/dataSource";
  *                                (set by `setActiveDb` after a successful
  *                                 switch, seeded with `connection.database`
  *                                 on connect).
- *   - Document-paradigm query tab → `tab.database` (Mongo db name).
+ *   - Document-paradigm query tab → `tab.database` (Mongo db name; rendered by
+ *                                    the tab-local chip, not this toolbar).
  *   - Fallback (legacy table tab) → `tab.schema` for back-compat.
  *   - No active tab               → "—"
  *   - Active tab but no value     → "(default)"
@@ -63,7 +64,7 @@ function readOnlyTooltipCopy(args: {
     return "Open a connection to switch databases.";
   }
   if (args.paradigm === "search") {
-    return "Database switching isn't supported for this connection type.";
+    return "Search scope is selected by index, alias, or data stream.";
   }
   if (args.dbType === "sqlite") {
     return "SQLite uses one database file per connection.";
@@ -246,9 +247,9 @@ export default function DbSwitcher() {
     return null;
   }
 
-  // Read-only fallback — Search/Kv paradigms, no connection, or
-  // disconnected tab. Preserves chrome footprint so the toolbar doesn't
-  // shift when paradigm/state changes.
+  // Read-only fallback — fixed-scope profiles, no connection, or disconnected
+  // tab. KV profiles do not belong here when connected; Redis/Valkey expose the
+  // numeric database index through the same active switcher.
   if (!enabled) {
     // Paradigm/state-aware copy via Radix Tooltip only — the native HTML
     // `title` attribute is omitted to avoid the "stuck tooltip" bug

@@ -141,6 +141,22 @@ describe("ExportButton", () => {
     expect(sqlItem.getAttribute("title")).toMatch(/registered file sources/i);
   });
 
+  it("can disable the whole export trigger with a reason", () => {
+    render(
+      <ExportButton
+        context={queryContext()}
+        headers={HEADERS}
+        getRows={() => ROWS}
+        disabled
+        disabledReason="No displayed rows to export."
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: /export/i });
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveAttribute("title", "No displayed rows to export.");
+  });
+
   // [AC-181-02e] Save dialog cancel produces no toast.
   // 2026-05-01 — User-initiated cancel must stay silent.
   it("does not show a toast when the save dialog is cancelled", async () => {

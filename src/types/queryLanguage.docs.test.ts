@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { SUPPORTED_DATABASE_TYPES } from "../features/connection/model";
 import { QUERY_LANGUAGE_REGISTRY } from "./queryLanguage";
 
 describe("query language support documentation", () => {
@@ -57,5 +58,51 @@ describe("query language support documentation", () => {
     for (const pattern of activeClaimPatterns) {
       expect(supportDocs).not.toMatch(pattern);
     }
+  });
+
+  it("documents current connection support and dedicated DBMS form owners", () => {
+    const productDocs = readFileSync("docs/product/README.md", "utf8");
+
+    expect(SUPPORTED_DATABASE_TYPES).toHaveLength(12);
+    expect(productDocs).toContain("getConnectionSupportedDatabaseTypes");
+    expect(productDocs).toContain("isConnectionSupportedDatabaseType");
+    expect(productDocs).toContain("SUPPORTED_DATABASE_TYPES");
+    expect(productDocs).toContain("12개 allow-list");
+
+    for (const formComponent of [
+      "PgFormFields",
+      "MysqlFormFields",
+      "MssqlFormFields",
+      "OracleFormFields",
+      "SearchFormFields",
+      "MongoFormFields",
+      "RedisFormFields",
+      "SqliteFormFields",
+    ]) {
+      expect(productDocs).toContain(formComponent);
+    }
+
+    expect(productDocs).toContain(
+      "MSSQL/Oracle/Search 는 Pg form reuse claim 을 하지 않는다.",
+    );
+    expect(productDocs).toMatch(/line-number references are\s+not stable SOT/);
+  });
+
+  it("keeps Search fixture contracts separate from live runtime evidence", () => {
+    const productDocs = [
+      "docs/product/README.md",
+      "docs/product/known-limitations.md",
+      "docs/product/query-language-support.md",
+    ]
+      .map((path) => readFileSync(path, "utf8"))
+      .join("\n");
+
+    expect(productDocs).toMatch(/Search fixture files.*contract evidence/i);
+    expect(productDocs).toMatch(
+      /Elasticsearch\/OpenSearch Runtime Happy Path smoke.*live runtime evidence/i,
+    );
+    expect(productDocs).toMatch(
+      /fixture files.*contract evidence.*do not promote unwired Search paths/i,
+    );
   });
 });

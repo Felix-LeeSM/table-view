@@ -218,40 +218,51 @@ describe("DbSwitcher", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders an active switcher for kv paradigm when connected", async () => {
-    setStores({
-      paradigm: "kv",
-      connected: true,
-      dbType: "redis",
-      tab: makeQueryTab({ paradigm: "kv" }),
-      activeDb: "0",
-    });
-    listDatabasesMock.mockResolvedValueOnce([{ name: "0" }, { name: "1" }]);
-    render(<DbSwitcher />);
-    const trigger = screen.getByRole("button", {
-      name: /active database switcher/i,
-    });
-    expect(trigger.textContent).toMatch(/0/);
+  it.each(["redis", "valkey"] as const)(
+    "renders an active switcher for connected %s kv profile",
+    async (dbType) => {
+      setStores({
+        paradigm: "kv",
+        connected: true,
+        dbType,
+        tab: makeQueryTab({ paradigm: "kv" }),
+        activeDb: "0",
+      });
+      listDatabasesMock.mockResolvedValueOnce([{ name: "0" }, { name: "1" }]);
+      render(<DbSwitcher />);
+      const trigger = screen.getByRole("button", {
+        name: /active database switcher/i,
+      });
+      expect(trigger.textContent).toMatch(/0/);
 
-    fireEvent.click(trigger);
+      fireEvent.click(trigger);
 
-    const listbox = await screen.findByRole("listbox", {
-      name: /available databases/i,
-    });
-    expect(within(listbox).getAllByRole("option")).toHaveLength(2);
-  });
+      const listbox = await screen.findByRole("listbox", {
+        name: /available databases/i,
+      });
+      expect(within(listbox).getAllByRole("option")).toHaveLength(2);
+    },
+  );
 
-  it("stays read-only for search paradigm even when connected", () => {
+  it("stays read-only for search paradigm even when connected", async () => {
     setStores({
       paradigm: "search",
       connected: true,
-      dbType: "mongodb",
+      dbType: "elasticsearch",
       tab: makeQueryTab({ paradigm: "search" }),
     });
     render(<DbSwitcher />);
+    const trigger = screen.getByRole("button", {
+      name: /active database \(read-only\)/i,
+    });
+    expect(trigger).toBeInTheDocument();
+    fireEvent.pointerMove(trigger);
     expect(
-      screen.getByRole("button", { name: /active database \(read-only\)/i }),
-    ).toBeInTheDocument();
+      await screen.findAllByText(
+        /search scope is selected by index, alias, or data stream/i,
+      ),
+    ).not.toHaveLength(0);
+    expect(screen.queryAllByText(/redis|valkey|kv/i)).toHaveLength(0);
   });
 
   // -- S128 active behavior (rdb + connected) --

@@ -40,6 +40,10 @@ export interface ExportButtonProps {
   disabledFormats?: ExportFormat[];
   /** Per-format disabled tooltip. Falls back to the single-table reason. */
   disabledFormatReasons?: Partial<Record<ExportFormat, string>>;
+  /** Disable the whole export action when the current surface has no rows. */
+  disabled?: boolean;
+  /** Tooltip for a disabled export trigger. */
+  disabledReason?: string;
   /** Optional cancel-token id forwarded to the query-token registry. */
   exportId?: string | null;
   className?: string;
@@ -51,6 +55,8 @@ export function ExportButton({
   getRows,
   disabledFormats = [],
   disabledFormatReasons = {},
+  disabled = false,
+  disabledReason = "Nothing to export.",
   exportId = null,
   className,
 }: ExportButtonProps) {
@@ -59,7 +65,7 @@ export function ExportButton({
   const formats = FORMATS_BY_KIND[context.kind];
 
   async function handleSelect(format: ExportFormat) {
-    if (disabledFormats.includes(format) || running) return;
+    if (disabled || disabledFormats.includes(format) || running) return;
     setOpen(false);
     setRunning(true);
     try {
@@ -73,15 +79,20 @@ export function ExportButton({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={disabled ? false : open}
+      onOpenChange={(nextOpen) => {
+        if (!disabled) setOpen(nextOpen);
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           type="button"
           variant="ghost"
           size="icon-xs"
-          disabled={running}
+          disabled={disabled || running}
           aria-label="Export"
-          title="Export"
+          title={disabled ? disabledReason : "Export"}
           data-testid="export-button"
           className={cn("text-muted-foreground", className)}
         >

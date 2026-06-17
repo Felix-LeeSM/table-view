@@ -1,7 +1,26 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SearchResultEnvelope } from "@/types/search";
 import { SearchResultView } from "./SearchResultView";
+
+const writeText = vi.fn<(text: string) => Promise<void>>(() =>
+  Promise.resolve(),
+);
+
+beforeEach(() => {
+  writeText.mockReset();
+  writeText.mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+});
 
 const baseHit = {
   index: "logs-2026.05.24",
@@ -61,6 +80,25 @@ describe("SearchResultView", () => {
     );
     expect(within(hit).getByLabelText("sort")).toHaveTextContent("doc-1");
     expectNoGrid();
+  });
+
+  it("exposes copy and export actions for displayed Search hits", async () => {
+    render(<SearchResultView result={result} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /copy search hits/i }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledTimes(1);
+    });
+    expect(writeText.mock.calls[0]?.[0]).toContain("fixture log");
+
+    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+    expect(
+      await screen.findByRole("menuitem", { name: /CSV/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /TSV/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: /SQL INSERT/i }),
+    ).toHaveAttribute("aria-disabled", "true");
   });
 
   it("surfaces took time, gte total relation, timeout, and shard failures", () => {
@@ -221,6 +259,10 @@ describe("SearchResultView", () => {
 
     expect(screen.getByText("No Search hits")).toBeInTheDocument();
     expect(screen.getByText("No aggregations")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /copy search hits/i }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: /export/i })).toBeDisabled();
     expectNoGrid();
 
     rerender(

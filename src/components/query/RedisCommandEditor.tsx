@@ -27,6 +27,10 @@ export interface RedisCommandEditorProps {
   sql: string;
   onSqlChange: (sql: string) => void;
   onExecute: () => void;
+  /**
+   * Redis/Valkey dry-run IPC is unsupported; the shortcut still routes here so
+   * the parent tab can show an explicit unsupported/info action.
+   */
   onDryRun?: () => void;
   redisExtensions?: readonly Extension[];
   redisKeySuggestions?: readonly RedisKeySuggestion[];
@@ -55,12 +59,11 @@ const RedisCommandEditor = forwardRef<
   EditorView | null,
   RedisCommandEditorProps
 >(function RedisCommandEditor(
-  // `onDryRun` is accepted for prop-shape parity with SQL/document editors.
-  // Redis command dry-run has no runtime contract yet, so no key binding.
   {
     sql,
     onSqlChange,
     onExecute,
+    onDryRun,
     redisExtensions = [],
     redisKeySuggestions = [],
     redisCommandTarget = "redis",
@@ -75,6 +78,8 @@ const RedisCommandEditor = forwardRef<
   onSqlChangeRef.current = onSqlChange;
   const onExecuteRef = useRef(onExecute);
   onExecuteRef.current = onExecute;
+  const onDryRunRef = useRef(onDryRun);
+  onDryRunRef.current = onDryRun;
   const sqlRef = useRef(sql);
 
   const completionCompartment = useRef(new Compartment());
@@ -103,6 +108,15 @@ const RedisCommandEditor = forwardRef<
             key: "Mod-Enter",
             run: () => {
               onExecuteRef.current();
+              return true;
+            },
+          },
+          {
+            key: "Cmd-Shift-Enter",
+            run: () => {
+              const handler = onDryRunRef.current;
+              if (!handler) return false;
+              handler();
               return true;
             },
           },

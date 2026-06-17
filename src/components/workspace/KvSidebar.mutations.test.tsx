@@ -73,6 +73,7 @@ describe("KvSidebar mutations", () => {
 
   it("enables Valkey direct string set, expire, persist, and delete controls", async () => {
     let text = "Ada";
+    useSafeModeStore.setState({ mode: "warn" });
     useConnectionStore.setState({
       connections: [valkeyConnection()],
       activeStatuses: { "valkey-1": { type: "connected", activeDb: "0" } },
@@ -173,6 +174,43 @@ describe("KvSidebar mutations", () => {
       });
     });
     expect(commandCalls("execute_kv_command")).toHaveLength(0);
+  });
+
+  it("surfaces selected-key workbench actions and keeps create-key unsupported", async () => {
+    mockRedisRuntime(stringValueEnvelope("Ada"));
+
+    render(<KvSidebar connectionId="redis-1" />);
+
+    const newKeyAction = screen.getByRole("button", {
+      name: /new key \(unsupported\)/i,
+    });
+    expect(newKeyAction).toBeDisabled();
+
+    await selectRenderedKey();
+
+    const editAction = screen.getByRole("button", {
+      name: /edit selected key/i,
+    });
+    expect(editAction).toBeEnabled();
+    fireEvent.click(editAction);
+    expect(screen.getByLabelText("String value")).toHaveFocus();
+
+    const deleteAction = screen.getByRole("button", {
+      name: /delete selected key/i,
+    });
+    expect(deleteAction).toBeEnabled();
+    fireEvent.click(deleteAction);
+    expect(screen.getByLabelText("Delete confirm key")).toHaveFocus();
+
+    fireEvent.change(screen.getByLabelText("Delete confirm key"), {
+      target: { value: "user:1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /preview delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
+
+    expect(commandCalls("delete_kv_key")).toHaveLength(0);
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/kv delete key user:1/i);
   });
 
   it("keeps a dirty string draft when a same-key value refresh arrives before preview", async () => {
@@ -318,6 +356,7 @@ describe("KvSidebar mutations", () => {
   );
 
   it("previews and confirms expire, persist, and delete safety flows", async () => {
+    useSafeModeStore.setState({ mode: "warn" });
     mockRedisRuntime(defaultValueEnvelope());
 
     render(<KvSidebar connectionId="redis-1" />);
@@ -373,6 +412,91 @@ describe("KvSidebar mutations", () => {
       expect(invokeMock).toHaveBeenCalledWith("delete_kv_key", {
         connectionId: "redis-1",
         request: { database: 0, key: "user:1", confirmKey: "user:1" },
+      });
+    });
+  });
+
+  it.each([
+    ["strict", "development", true],
+    ["warn", "development", false],
+    ["off", "development", false],
+    ["off", "production", true],
+  ] as const)(
+    "routes Redis delete through Safe Mode %s on %s before backend mutation",
+    async (mode, environment, expectsDialog) => {
+      useSafeModeStore.setState({ mode });
+      useConnectionStore.setState({
+        connections: [{ ...redisConnection(), environment }],
+        activeStatuses: { "redis-1": { type: "connected", activeDb: "0" } },
+      });
+      mockRedisRuntime(defaultValueEnvelope());
+
+      render(<KvSidebar connectionId="redis-1" />);
+      await selectRenderedKey();
+
+      fireEvent.change(screen.getByLabelText("Delete confirm key"), {
+        target: { value: "user:1" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /preview delete/i }));
+      fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
+
+      if (expectsDialog) {
+        expect(commandCalls("delete_kv_key")).toHaveLength(0);
+        const dialog = await screen.findByRole("alertdialog");
+        expect(dialog).toHaveTextContent(
+          environment === "production"
+            ? /production database/i
+            : /destructive statement/i,
+        );
+        expect(dialog).toHaveTextContent(/kv delete key user:1/i);
+
+        fireEvent.click(
+          within(dialog).getByRole("button", { name: "Confirm" }),
+        );
+      }
+
+      await waitFor(() => {
+        expect(invokeMock).toHaveBeenCalledWith("delete_kv_key", {
+          connectionId: "redis-1",
+          request: { database: 0, key: "user:1", confirmKey: "user:1" },
+        });
+      });
+    },
+  );
+
+  it("keeps Redis string overwrite on the non-destructive Safe Mode path", async () => {
+    useSafeModeStore.setState({ mode: "strict" });
+    let text = "Ada";
+    mockRedisRuntime(() => stringValueEnvelope(text), {
+      set_kv_string_value: (payload) => {
+        text = (payload as { request: { value: string } }).request.value;
+        return { key: "user:1", changed: true, ttl: { state: "persistent" } };
+      },
+    });
+
+    render(<KvSidebar connectionId="redis-1" />);
+    await selectRenderedKey();
+
+    fireEvent.change(screen.getByLabelText("String value"), {
+      target: { value: "Grace Hopper" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /preview string set/i }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /confirm string set/i }),
+    );
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("set_kv_string_value", {
+        connectionId: "redis-1",
+        request: {
+          database: 0,
+          key: "user:1",
+          value: "Grace Hopper",
+          safety: "allowOverwrite",
+        },
       });
     });
   });
