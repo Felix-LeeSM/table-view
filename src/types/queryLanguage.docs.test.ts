@@ -19,7 +19,7 @@ describe("query language support documentation", () => {
     }
   });
 
-  it("keeps MSSQL runtime scoped while Oracle stays connection-only", () => {
+  it("keeps enterprise SQL runtime slices scoped", () => {
     const supportDocs = [
       "docs/product/README.md",
       "docs/product/known-limitations.md",
@@ -33,19 +33,22 @@ describe("query language support documentation", () => {
       /\bMSSQL\b[\s\S]*catalog\/query\/cancel\/tabular runtime/i,
     );
     expect(supportDocs).toMatch(
-      /\bOracle\b[\s\S]*service-name local connection\/test baseline/i,
+      /\bOracle\b[\s\S]*catalog\/query\/cancel\/tabular runtime/i,
     );
     expect(supportDocs).toMatch(
       /SQL Server structured DDL, admin\/security\/backup\/jobs\/users\/roles, broad parser\/completion semantics, and runtime smoke support remain unclaimed/,
     );
     expect(supportDocs).toMatch(
-      /No query, catalog, edit, DDL, parser, completion, PL\/SQL, or runtime smoke support is claimed/,
+      /Oracle SQL parser\/completion promotion remains unclaimed/,
+    );
+    expect(supportDocs).toMatch(
+      /#905 does not enable editRows, switch database, structured DDL, raw DDL\/admin, PL\/SQL body\/package authoring\/source, trigger catalog/,
     );
 
     const activeClaimPatterns = [
       /\bMSSQL\b[^.\n|]*(?:Runtime Happy Path smoke covers|catalog-aware[^.\n|]*completion is active|structured DDL is active)/i,
-      /\bOracle\b[^.\n|]*(?:Runtime Happy Path smoke covers|RelationalCatalog, RelationalQuery)/i,
-      /\bOracle\b[^.\n|]*(?:query|catalog|edit)[^.\n|]*(?:is active|is supported|runtime support is active|support is active)/i,
+      /\bOracle\b[^.\n|]*(?:Runtime Happy Path smoke covers|routine smoke is active|routine smoke support is active)/i,
+      /\bOracle\b[^.\n|]*(?:editRows|structured DDL|raw DDL\/admin|parser\/completion|PL\/SQL)[^.\n|]*(?:is active|is supported|runtime support is active|support is active)/i,
       /SQL Server smoke, seeded/i,
       /Oracle service-name connect, seeded/i,
       /\bOracle\b[^.\n|]*autocomplete is active/i,

@@ -1,8 +1,10 @@
 //! Oracle adapter internals.
 //!
-//! Issue #904 promotes only service-name connection test/connect/ping through
-//! `OracleConnectionOnlyAdapter`. Query/catalog/edit/DDL/PLSQL helpers stay out
-//! of `make_adapter`; SID/TNS/wallet/TLS/advanced auth remain unsupported.
+//! Issue #905 promotes the bounded Oracle runtime slice through
+//! `OracleRuntimeAdapter`: service-name lifecycle, catalog metadata, SELECT/DML
+//! batch, cooperative cancel, and tabular table-data queries. Structured DDL,
+//! PL/SQL body/package source, triggers, admin, SID/TNS/wallet/TLS, and
+//! advanced auth remain unsupported.
 
 mod catalog;
 mod connection_only;
@@ -14,7 +16,7 @@ mod table_data;
 #[cfg(test)]
 mod tests;
 
-pub use connection_only::OracleConnectionOnlyAdapter;
+pub use connection_only::OracleRuntimeAdapter;
 
 use std::collections::HashMap;
 use std::future::Future;

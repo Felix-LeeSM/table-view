@@ -56,14 +56,16 @@ source-specific SQL-auth/TDS connection test/connect/ping, catalog metadata,
 multi-statement query execution, cancellation, and tabular result rendering with
 explicit encryption and trust-server-certificate inputs. That slice does not
 promote SQL Server structured DDL, broad parser/completion semantics, admin
-workflows, or runtime smoke support. Oracle has a service-name local
-connection/test baseline only: its source-specific dialect/profile records,
-URL parsing, labels, defaults, and seed/spec inventory remain, but SID, TNS,
-wallet, TLS, and advanced auth stay unsupported and it has no active
-query/catalog/edit/DDL/parser/completion/PLSQL/runtime smoke support claim.
-Future promotion beyond the MSSQL runtime slice or Oracle service-name
-connection baseline must land matching source-specific runtime, contract, docs,
-and smoke evidence before adding broader SQL Server T-SQL or Oracle SQL/PLSQL
+workflows, or runtime smoke support. Oracle has a bounded #905
+catalog/query/cancel/tabular runtime slice: source-specific service-name
+lifecycle, catalog metadata, SELECT/DML batch execution, cooperative
+cancellation, and tabular table-data query are active through a wrapper that
+blocks structured DDL/body-source surfaces. SID, TNS, wallet, TLS, advanced
+auth, editRows, raw DDL/admin, parser/completion promotion, PL/SQL body/package
+authoring/source, trigger catalog, and runtime smoke support remain unclaimed.
+Future promotion beyond the MSSQL runtime slice or Oracle #905 runtime slice
+must land matching source-specific runtime, contract, docs, and smoke evidence
+before adding broader SQL Server T-SQL or Oracle SQL/PLSQL
 parser/completion/runtime claims.
 
 `redis-command` is active because Redis and Valkey are connection-supported KV
@@ -110,7 +112,7 @@ cannot add parser or completion vocabulary without an owner decision.
 | Valkey `redis-command` target | Valkey has a KV runtime slice for connection, database/key scan, typed value preview, selected-key bounded stream reads, bounded Redis-compatible command query dispatch, direct UTF-8 string-key mutation controls for SET/EXPIRE/exact-key PERSIST/exact-key DEL, and TypeScript command completion for proven local-runtime rows (`GET`, `HGETALL`, `XRANGE`, `TYPE`, `EXISTS`, `SET`, `EXPIRE`, `PERSIST`, `DEL`). Runtime Happy Path smoke covers connect/key scan/value preview, `GET`, `HGETALL`, `XRANGE`, bounded `SET`/`EXPIRE` DML summaries with readback/TTL verification, and destructive/unsupported command guards through the Valkey service and `e2e/fixtures/valkey/kv/seed.json`. Focused local Valkey testcontainer evidence owns direct string set, expire, persist, exact-key delete, exact-key `PERSIST`/`DEL` confirmation success, and broader proven-row backend details below smoke. Completion key suggestions use the current DB scan cache and stay hidden for unpromoted command families. Static fixture inventory includes `e2e/fixtures/valkey.redis-compatibility.json`, which separates proven local runtime rows from candidate families and rejected Redis assumptions. | The matrix and Redis evidence are not direct string-key mutation UI or full Redis compatibility evidence. Hash/list/set/zset writes, binary string editing, admin/server-control, broad destructive, cluster, pub/sub, modules/functions, scripting, and consumer-group commands stay rejected until separate workflow-specific safety/result-envelope decisions land. |
 | Search DSL | Fixture-backed Search identities and bounded fixture DSL exist for Elasticsearch/OpenSearch fixture result paths. Elasticsearch connection/auth/TLS root probe is active, detects product/version/distribution, live catalog reads indexes, aliases, data streams, mappings, settings/analyzers, templates, and field paths, bounded live `_search` dispatch validates `match_all`, `term`, `terms`, `match`, `bool` filter clauses, `range`, `exists`, `terms`/`value_count` aggregations, pagination, `track_total_hits`, bounded field sort, and bounded `_source` filters before HTTP dispatch, and delete-by-query safety planning estimates matching documents through a safe `_search` request as a preview-only plan with actual execution unsupported. OpenSearch connection/auth/TLS root probe is active, detects OpenSearch product/version/distribution, rejects Elasticsearch endpoints, surfaces auth/network failures, reads live indexes, aliases, data streams, mappings, settings/analyzers, composable/legacy templates, and field paths, dispatches bounded live `_search` requests through the same validator/result renderer with sample documents, HTTP error handling, and cancellation, and uses the same preview-only safe `_search` estimate for delete-by-query safety planning. Bounded TypeScript editor completion uses product-scoped catalog/mapping context for Elasticsearch/OpenSearch index, alias, data stream, field, type, `sort`, and `_source` suggestions plus shared query/aggs/sort/source snippets. The response parser renders hits/source/fields/highlights/sort, shard/timeout metadata, aggregations, and explain/profile payloads returned by Elasticsearch/OpenSearch live query or fixture paths. Runtime Happy Path smoke now proves representative live Elasticsearch/OpenSearch connect/auth/TLS, catalog metadata, selected-index detail, search/render, delete-plan, and error-surface workflows on Ubuntu. | Full language-core parser/completion ownership, actual live `_delete_by_query` execution, broader admin APIs, profile/explain request workflow, observability, and full query-language support are deferred. Unsupported Search DSL body keys, unsupported aggregation kinds/options, raw/admin targets, wildcard targets, unsupported delete-by-query body keys, script sort, broad source options, and destructive/admin APIs are rejected before live Search dispatch or destructive planning. Search fixture files mirror embedded adapter contracts only. |
 | MSSQL SQL | Bounded SQL Server catalog/query/cancel/tabular runtime plus primary-key-projected row edit through the frontend SQL batch path. `mssql` exposes SQL-auth connection test/connect/ping, catalog browse/schema/indexes/constraints/relationships, query, multi-statement execution, cancellation, tabular result rendering, and key-projected editRows with host, port, database, user, password, encryption, and trust-server-certificate inputs. Parser/Safe Mode and completion own bounded editor assistance plus unsupported-boundary recognition for tested T-SQL scripting/admin heads. | SQL Server structured DDL, admin/security/backup/jobs/users/roles, broad parser/completion semantics, and runtime smoke support remain unclaimed. Named instances, Windows authentication, Azure AD/authSource modes, SQLCMD/batch scripting, procedure-body scripting, import/export, profiler/activity, full workbench parity, and full T-SQL semantics remain out of scope. |
-| Oracle SQL | Service-name connection baseline only. `oracle` keeps Oracle profile/dialect metadata, labels, service-name defaults, URL parsing, and seed/spec inventory for future promotion. | Oracle SQL remains non-runtime for query/catalog/edit/DDL/parser/completion/PLSQL. #904 supports only local-first `host:port/serviceName` connection/test with default fixture service `XEPDB1`. SID/TNS/wallet/TLS, advanced auth, raw DDL/admin, sequence/synonym DDL/admin, users/roles/grants/session/storage/admin paths, import/export, profiler/activity, runtime smoke, and full Oracle semantics remain out of scope. |
+| Oracle SQL | Bounded #905 Oracle catalog/query/cancel/tabular runtime slice. `oracle` keeps Oracle profile/dialect metadata, labels, service-name defaults, URL parsing, and seed/spec inventory while enabling service-name lifecycle, catalog metadata, SELECT/DML batch execution, cooperative cancellation, and tabular table-data query through the bounded runtime wrapper. | Oracle SQL parser/completion promotion remains unclaimed. #905 does not enable editRows, switch database, structured DDL, raw DDL/admin, PL/SQL body/package authoring/source, trigger catalog, SID/TNS/wallet/TLS, advanced auth, users/roles/grants/session/storage/admin paths, import/export, profiler/activity, runtime smoke, or full Oracle semantics. |
 
 ### PostgreSQL SQL Support Breakdown
 
@@ -416,9 +418,10 @@ are:
 - MSSQL is a bounded SQL Server catalog/query/cancel/tabular runtime identity.
   Its labels, defaults, URL parsing, dialect/profile ids, SQL-auth/TDS
   connection path, catalog/query runtime, and seed/spec inventory do not create
-  active parser, completion, edit, structured DDL, admin, or runtime smoke
-  support. Oracle is limited to service-name local connection/test and does not
-  add Oracle SQL query/catalog/edit/DDL/parser/completion/PLSQL support.
+  active parser, completion, structured DDL, admin, or runtime smoke support.
+  Oracle is a bounded catalog/query/cancel/tabular runtime identity, but does
+  not add Oracle editRows, structured DDL, raw DDL/admin, parser/completion,
+  PL/SQL body/package work, trigger catalog, or routine smoke support.
   Promotion requires source-specific runtime, contract, docs, and smoke evidence
   before any SQL Server or Oracle support claim widens beyond those boundaries.
 - Deferred language ids for CQL, PartiQL, Cypher, GQL, Gremlin, vector query,

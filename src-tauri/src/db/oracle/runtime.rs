@@ -33,7 +33,7 @@ impl OracleAdapter {
         let query_type = oracle_query_type(query);
         if matches!(query_type, QueryType::Ddl) {
             return Err(AppError::Unsupported(
-                "Oracle raw DDL/admin execution is unsupported; use Structure DDL for bounded table/index/constraint changes".into(),
+                "Oracle raw DDL/admin execution is outside issue #905; supported runtime is limited to SELECT and DML batch".into(),
             ));
         }
 

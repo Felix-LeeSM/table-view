@@ -129,6 +129,14 @@ describe("DataSourceProfile registry", () => {
     }),
     oracle: expectedCapabilities({
       connection: { test: true },
+      query: { query: true, multiStatement: true, cancel: true },
+      catalog: {
+        browse: true,
+        schema: true,
+        indexes: true,
+        constraints: true,
+        relationships: true,
+      },
     }),
     mongodb: expectedCapabilities({
       connection: { test: true },
@@ -346,7 +354,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
-  it("promotes MSSQL runtime while Oracle exposes connection-test only", () => {
+  it("promotes MSSQL and Oracle runtime while keeping Oracle edit and DDL unclaimed", () => {
     const mssql = getDataSourceProfile("mssql");
     expect(mssql).toMatchObject({
       id: "mssql",
@@ -405,8 +413,15 @@ describe("DataSourceProfile registry", () => {
     expect(oracle.capabilities).toEqual(expectedCapabilitiesByType.oracle);
     expect(oracle.capabilities.connection.test).toBe(true);
     expect(oracle.capabilities.connection.switchDatabase).toBe(false);
-    expect(oracle.capabilities.query.query).toBe(false);
-    expect(oracle.capabilities.catalog.browse).toBe(false);
+    expect(oracle.capabilities.query.query).toBe(true);
+    expect(oracle.capabilities.query.multiStatement).toBe(true);
+    expect(oracle.capabilities.query.cancel).toBe(true);
+    expect(oracle.capabilities.query.explain).toBe(false);
+    expect(oracle.capabilities.catalog.browse).toBe(true);
+    expect(oracle.capabilities.catalog.schema).toBe(true);
+    expect(oracle.capabilities.catalog.indexes).toBe(true);
+    expect(oracle.capabilities.catalog.constraints).toBe(true);
+    expect(oracle.capabilities.catalog.relationships).toBe(true);
     expect(oracle.capabilities.edit.editRows).toBe(false);
     expect(oracle.capabilities.ddl.createTable).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
@@ -484,12 +499,14 @@ describe("DataSourceProfile registry", () => {
       "sqlite",
       "duckdb",
       "mssql",
+      "oracle",
     ]);
     expect(SERVER_RDBMS_DATABASE_TYPES).toEqual([
       "postgresql",
       "mysql",
       "mariadb",
       "mssql",
+      "oracle",
     ]);
     expect(FILE_RDBMS_DATABASE_TYPES).toEqual(["sqlite", "duckdb"]);
 
@@ -536,9 +553,17 @@ describe("DataSourceProfile registry", () => {
     });
     expect(oracle.capabilities).toEqual(expectedCapabilitiesByType.oracle);
     expect(oracle.capabilities.connection.test).toBe(true);
-    expect(oracle.capabilities.query.query).toBe(false);
-    expect(oracle.capabilities.catalog.browse).toBe(false);
+    expect(oracle.capabilities.query.query).toBe(true);
+    expect(oracle.capabilities.query.multiStatement).toBe(true);
+    expect(oracle.capabilities.query.cancel).toBe(true);
+    expect(oracle.capabilities.query.explain).toBe(false);
+    expect(oracle.capabilities.catalog.browse).toBe(true);
+    expect(oracle.capabilities.catalog.schema).toBe(true);
+    expect(oracle.capabilities.catalog.indexes).toBe(true);
+    expect(oracle.capabilities.catalog.constraints).toBe(true);
+    expect(oracle.capabilities.catalog.relationships).toBe(true);
     expect(oracle.capabilities.edit.editRows).toBe(false);
+    expect(oracle.capabilities.ddl.createTable).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
   });
 
@@ -594,6 +619,7 @@ describe("DataSourceProfile registry", () => {
     expect(hasConnectionCapability("mysql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mariadb", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mssql", "switchDatabase")).toBe(false);
+    expect(hasConnectionCapability("oracle", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("redis", "switchDatabase")).toBe(true);
