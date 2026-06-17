@@ -7,7 +7,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CHECK="$ROOT/scripts/hooks/check-memory-size.sh"
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/memory-size-test.XXXXXX")"
 TMP2=""
-trap 'rm -rf "$TMP_DIR" "$TMP2"' EXIT
+TMP3=""
+trap 'rm -rf "$TMP_DIR" "$TMP2" "$TMP3"' EXIT
 
 # per_line_chars × lines 인 파일 생성 (마지막 개행 포함).
 gen_file() {
@@ -67,6 +68,25 @@ out2="$(cd "$TMP2" && bash "$CHECK")"
 if ! (cd "$TMP2" && bash "$CHECK" --strict) >/dev/null 2>&1; then
 	echo "FAIL: 정상 파일 --strict 시 exit 0 이어야" >&2
 	exit 1
+fi
+
+# LC_ALL=C 환경에서 한글 chars 가 바이트 수로 부풀려지지 않는지 (폴백 SIGPIPE-safe 회귀).
+# 한글 1글자 = UTF-8 3바이트. 100줄 × 50 한글 = 5000 chars(UTF-8). LC_ALL=C 면 15000
+# 바이트로 세 cap(12000) 위반 false-positive. 폴백이 UTF-8 locale 로 오버라이드하면
+# 5000 chars 정상 측정 → 경고 없음. macOS/CI 등 UTF-8 locale 가용 환경에서만 검증.
+if { locale -a 2>/dev/null || true; } | grep -Eiq 'UTF-?8'; then
+	TMP3="$(mktemp -d "${TMPDIR:-/tmp}/memory-size-test3.XXXXXX")"
+	mkdir -p "$TMP3/memory/ko"
+	ko_line="$(printf '가%.0s' $(seq 1 50))"
+	for ((i = 0; i < 100; i++)); do printf '%s\n' "$ko_line"; done >"$TMP3/memory/ko/memory.md"
+	out3="$(cd "$TMP3" && LC_ALL=C bash "$CHECK" 2>&1)"
+	[ -z "$out3" ] || { echo "FAIL: LC_ALL=C 폴백 실패 — 한글 chars 부풀림: $out3" >&2; exit 1; }
+	if ! (cd "$TMP3" && LC_ALL=C bash "$CHECK" --strict) >/dev/null 2>&1; then
+		echo "FAIL: LC_ALL=C 폴백 — --strict 시 exit 0 이어야" >&2
+		exit 1
+	fi
+else
+	echo "  (UTF-8 locale 미가용 환경 — LC_ALL=C 폴백 회귀 케이스 스킵)"
 fi
 
 echo "PASS: memory size 복합 게이트 smoke check"
