@@ -126,7 +126,8 @@ export function useConnectionDraftForm(
         user: defaults.user,
         database: defaults.database,
         readOnly: false,
-        tlsEnabled: dbType === "mssql" ? true : f.tlsEnabled,
+        tlsEnabled:
+          dbType === "mssql" ? true : dbType === "oracle" ? null : f.tlsEnabled,
         trustServerCertificate: dbType === "mssql" ? true : null,
         paradigm: paradigmOf(dbType),
       };

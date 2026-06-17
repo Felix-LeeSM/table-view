@@ -33,6 +33,7 @@ use crate::db::sqlite::SqliteAdapter;
 use crate::db::ActiveAdapter;
 use crate::db::DuckdbAdapter;
 use crate::db::MssqlAdapter;
+use crate::db::OracleConnectionOnlyAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
 use crate::state::introspection_pool::IntrospectionPool;
@@ -54,9 +55,6 @@ pub use io::{
 pub use session::get_session_id;
 pub use sqlite_file::create_sqlite_database_file;
 
-const ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE: &str =
-    "Oracle is declared-only until source-specific connection.test and matching runtime evidence land";
-
 /// Build an `ActiveAdapter` for the given database type.
 ///
 /// Sprint 65 adds MongoDB dispatch on top of Sprint 64's Postgres wiring.
@@ -67,7 +65,9 @@ const ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE: &str =
 /// `DatabaseType` on the active adapter. SQLite and DuckDB have file-backed
 /// adapters. SQL Server uses the bounded MSSQL runtime slice: lifecycle,
 /// catalog/table/view/routine browse, tabular query, batch DML, and
-/// cooperative cancel. Oracle remains declared-only.
+/// cooperative cancel. Oracle uses the #904 connection-only RDB wrapper:
+/// service-name connection test/connect/ping are live, while query/catalog/edit
+/// surfaces return Unsupported.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
@@ -76,9 +76,9 @@ pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppE
         DatabaseType::Sqlite => Ok(ActiveAdapter::Rdb(Box::new(SqliteAdapter::new()))),
         DatabaseType::Duckdb => Ok(ActiveAdapter::Rdb(Box::new(DuckdbAdapter::new()))),
         DatabaseType::Mssql => Ok(ActiveAdapter::Rdb(Box::new(MssqlAdapter::new()))),
-        DatabaseType::Oracle => Err(AppError::Unsupported(
-            ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE.into(),
-        )),
+        DatabaseType::Oracle => Ok(ActiveAdapter::Rdb(Box::new(
+            OracleConnectionOnlyAdapter::new(),
+        ))),
         DatabaseType::Mongodb => Ok(ActiveAdapter::Document(Box::new(MongoAdapter::new()))),
         DatabaseType::Redis => Ok(ActiveAdapter::Kv(Box::new(RedisAdapter::new()))),
         DatabaseType::Valkey => Ok(ActiveAdapter::Kv(Box::new(RedisAdapter::new_valkey()))),
@@ -88,15 +88,6 @@ pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppE
         DatabaseType::Opensearch => Ok(ActiveAdapter::Search(Box::new(
             SearchEngineAdapter::new_opensearch(),
         ))),
-    }
-}
-
-pub(crate) fn declared_only_runtime_error(db_type: &DatabaseType) -> Option<AppError> {
-    match db_type {
-        DatabaseType::Oracle => Some(AppError::Unsupported(
-            ORACLE_DECLARED_ONLY_RUNTIME_MESSAGE.into(),
-        )),
-        _ => None,
     }
 }
 
@@ -364,18 +355,30 @@ mod tests {
         assert_mssql_runtime_ddl_unsupported(rdb.drop_table(&drop).await);
     }
 
-    #[test]
-    fn test_make_adapter_oracle_rejects_declared_only_runtime_promotion() {
-        let result = make_adapter(&DatabaseType::Oracle);
+    #[tokio::test]
+    async fn test_make_adapter_oracle_returns_connection_only_rdb_variant() {
+        let adapter = make_adapter(&DatabaseType::Oracle).expect("oracle should dispatch");
+        assert!(
+            matches!(adapter, ActiveAdapter::Rdb(_)),
+            "expected Rdb variant"
+        );
+        assert!(matches!(adapter.kind(), DatabaseType::Oracle));
 
-        match result {
-            Err(AppError::Unsupported(msg)) => {
-                assert!(msg.contains("Oracle is declared-only"));
-                assert!(msg.contains("source-specific connection.test"));
-            }
-            Err(other) => panic!("Expected Oracle declared-only rejection, got: {other:?}"),
-            Ok(_) => panic!("Expected Oracle declared-only rejection, got adapter"),
-        }
+        let rdb = adapter.as_rdb().expect("oracle is an RDB handle");
+        assert_oracle_connection_only_unsupported(rdb.list_namespaces().await);
+        assert_oracle_connection_only_unsupported(
+            rdb.execute_sql("SELECT 1 FROM DUAL", None).await,
+        );
+
+        let drop = crate::models::DropTableRequest {
+            connection_id: "oracle".into(),
+            schema: "SYSTEM".into(),
+            table: "USERS".into(),
+            cascade: false,
+            preview_only: false,
+            expected_database: None,
+        };
+        assert_oracle_connection_only_unsupported(rdb.drop_table(&drop).await);
     }
 
     #[test]
@@ -411,6 +414,13 @@ mod tests {
         assert!(
             matches!(result, Err(AppError::Unsupported(ref message)) if message.contains("SQL Server structured DDL is outside issue #903")),
             "expected MSSQL #903 DDL Unsupported, got {result:?}"
+        );
+    }
+
+    fn assert_oracle_connection_only_unsupported<T: std::fmt::Debug>(result: Result<T, AppError>) {
+        assert!(
+            matches!(result, Err(AppError::Unsupported(ref message)) if message.contains("issue #904") && message.contains("connection test, connect, and ping only")),
+            "expected Oracle #904 connection-only Unsupported, got {result:?}"
         );
     }
 

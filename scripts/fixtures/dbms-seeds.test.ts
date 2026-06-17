@@ -203,7 +203,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(sql).toMatch(/CREATE OR ALTER PROCEDURE dbo\.mssql_catalog_ping/i);
   });
 
-  it("oracle seed carries declared-only catalog inventory probes", () => {
+  it("oracle seed carries dormant catalog inventory probes beyond connection baseline", () => {
     const sql = readFileSync(resolve("e2e/fixtures", "seed.oracle.sql"), {
       encoding: "utf8",
     });
@@ -590,7 +590,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     },
   );
 
-  it("oracle fixture seed stays dormant until Oracle runtime promotion", () => {
+  it("oracle fixture seed stays dormant beyond Oracle connection baseline", () => {
     const workflow = readFileSync(resolve(".github/workflows/e2e-smoke.yml"), {
       encoding: "utf8",
     });

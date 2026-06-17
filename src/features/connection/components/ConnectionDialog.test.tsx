@@ -111,9 +111,7 @@ describe("ConnectionDialog", () => {
     expect(
       screen.getByRole("option", { name: "Microsoft SQL Server" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("option", { name: "Oracle" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Oracle" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "MongoDB" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Redis" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Valkey" })).toBeInTheDocument();
@@ -125,17 +123,14 @@ describe("ConnectionDialog", () => {
     ).toBeInTheDocument();
   });
 
-  // 편집 모드에서 현재 connection 의 dbType 은 그대로 표시되도록 예외적으로
-  // 자기 자신만 추가 — Select 가 빈값으로 보이지 않도록.
-  it("Sprint 276: edit mode preserves the current unsupported dbType in the dropdown", async () => {
+  it("shows Oracle once in edit mode after connection.test support is enabled", async () => {
     const user = userEvent.setup();
     renderDialog({
       connection: makeConnection({ dbType: "oracle", port: 1521 }),
     });
 
     await user.click(screen.getByLabelText("Database Type"));
-    // 편집 중인 connection 의 dbType 은 노출. 다른 unsupported 어댑터는 숨김.
-    expect(screen.getByRole("option", { name: "Oracle" })).toBeInTheDocument();
+    expect(screen.getAllByRole("option", { name: "Oracle" })).toHaveLength(1);
     expect(
       screen.getByRole("option", { name: "Microsoft SQL Server" }),
     ).toBeInTheDocument();
@@ -339,6 +334,41 @@ describe("ConnectionDialog", () => {
       expect(screen.getByText("Connection successful")).toBeInTheDocument();
     });
     expect(mockTestConnection).toHaveBeenCalledTimes(1);
+  });
+
+  it("tests Oracle service-name connections without enabling query/catalog/edit UI", async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.click(screen.getByLabelText("Database Type"));
+    await user.click(
+      screen.getByRole("option", { name: "Microsoft SQL Server" }),
+    );
+    await user.click(screen.getByLabelText("Database Type"));
+    await user.click(screen.getByRole("option", { name: "Oracle" }));
+
+    expect(screen.getByLabelText("Service name")).toHaveValue("FREEPDB1");
+    expect(screen.queryByText(/Query/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Catalog/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Edit/i)).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Test Connection"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Connection successful")).toBeInTheDocument();
+    });
+    expect(mockTestConnection).toHaveBeenCalledTimes(1);
+    expect(mockTestConnection.mock.calls[0]![0]).toMatchObject({
+      dbType: "oracle",
+      host: "localhost",
+      port: 1521,
+      user: "system",
+      database: "FREEPDB1",
+      tlsEnabled: null,
+      trustServerCertificate: null,
+    });
   });
 
   it("shows error result when test connection fails", async () => {
@@ -553,7 +583,7 @@ describe("ConnectionDialog", () => {
     expect(screen.getByLabelText("Trust server certificate")).not.toBeChecked();
   });
 
-  it("rejects oracle URLs until connection.test evidence promotes Oracle", async () => {
+  it("accepts oracle URLs after connection.test promotes service-name support", async () => {
     renderDialog();
     await act(async () => {
       fireEvent.click(screen.getByText("URL"));
@@ -567,10 +597,11 @@ describe("ConnectionDialog", () => {
       fireEvent.click(screen.getByText("Parse & Continue"));
     });
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Oracle is not yet supported",
-    );
-    expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Host")).toHaveValue("oracle.local");
+    expect(screen.getByLabelText("Port")).toHaveValue(1521);
+    expect(screen.getByLabelText("User")).toHaveValue("system");
+    expect(screen.getByLabelText("Service name")).toHaveValue("FREEPDB1");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("uses database name as connection name when name is empty", async () => {

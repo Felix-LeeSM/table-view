@@ -46,7 +46,7 @@ pub use duckdb::DuckdbAdapter;
 pub use mongodb::MongoAdapter;
 pub use mssql::{MssqlAdapter, MssqlConnectionOnlyAdapter};
 pub use mysql::MysqlAdapter;
-pub use oracle::OracleAdapter;
+pub use oracle::{OracleAdapter, OracleConnectionOnlyAdapter};
 pub use postgres::PostgresAdapter;
 pub use redis::RedisAdapter;
 pub use search::SearchEngineAdapter;

@@ -127,7 +127,9 @@ describe("DataSourceProfile registry", () => {
       },
       edit: { editRows: true },
     }),
-    oracle: expectedCapabilities(),
+    oracle: expectedCapabilities({
+      connection: { test: true },
+    }),
     mongodb: expectedCapabilities({
       connection: { test: true },
       query: { query: true, cancel: true, explain: true },
@@ -344,7 +346,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
-  it("promotes MSSQL catalog/query/primary-key row-edit runtime while Oracle stays declared-only", () => {
+  it("promotes MSSQL runtime while Oracle exposes connection-test only", () => {
     const mssql = getDataSourceProfile("mssql");
     expect(mssql).toMatchObject({
       id: "mssql",
@@ -401,7 +403,13 @@ describe("DataSourceProfile registry", () => {
       versionProbe: "none",
     });
     expect(oracle.capabilities).toEqual(expectedCapabilitiesByType.oracle);
-    expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
+    expect(oracle.capabilities.connection.test).toBe(true);
+    expect(oracle.capabilities.connection.switchDatabase).toBe(false);
+    expect(oracle.capabilities.query.query).toBe(false);
+    expect(oracle.capabilities.catalog.browse).toBe(false);
+    expect(oracle.capabilities.edit.editRows).toBe(false);
+    expect(oracle.capabilities.ddl.createTable).toBe(false);
+    expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
   });
 
   it("derives connection-dialog supported DBMS options from the profile test capability", () => {
@@ -412,6 +420,7 @@ describe("DataSourceProfile registry", () => {
       "sqlite",
       "duckdb",
       "mssql",
+      "oracle",
       "mongodb",
       "redis",
       "valkey",
@@ -424,7 +433,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(true);
     expect(isConnectionSupportedDatabaseType("redis")).toBe(true);
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
-    expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
+    expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
     expect(isConnectionSupportedDatabaseType("elasticsearch")).toBe(true);
     expect(isConnectionSupportedDatabaseType("opensearch")).toBe(true);
   });
@@ -526,7 +535,11 @@ describe("DataSourceProfile registry", () => {
       capabilitySource: "oracle",
     });
     expect(oracle.capabilities).toEqual(expectedCapabilitiesByType.oracle);
-    expect(isConnectionSupportedDatabaseType("oracle")).toBe(false);
+    expect(oracle.capabilities.connection.test).toBe(true);
+    expect(oracle.capabilities.query.query).toBe(false);
+    expect(oracle.capabilities.catalog.browse).toBe(false);
+    expect(oracle.capabilities.edit.editRows).toBe(false);
+    expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
   });
 
   it("keeps current query-tab language defaults aligned with source profiles", () => {

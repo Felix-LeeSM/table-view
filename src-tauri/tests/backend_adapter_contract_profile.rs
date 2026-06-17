@@ -128,15 +128,18 @@ fn backend_profiles_encode_current_database_type_contracts() {
     assert_eq!(oracle.paradigm, Paradigm::Rdb);
     assert_eq!(
         oracle.adapter_contract.state,
-        BackendAdapterContractState::DeclaredOnly
+        BackendAdapterContractState::FactoryBacked
     );
     assert_eq!(oracle.backend_adapter.id, BackendAdapterId::Oracle);
     assert_eq!(
         oracle.backend_adapter.capability_source,
         BackendAdapterCapabilitySource::Oracle
     );
-    assert!(oracle.adapter_contract.capabilities.is_empty());
-    assert!(!oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert_eq!(
+        oracle.adapter_contract.capabilities,
+        [BackendAdapterCapability::Lifecycle]
+    );
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
@@ -407,15 +410,18 @@ fn rdbms_integration_gate_profiles_are_coherent() {
     assert_eq!(oracle.paradigm, Paradigm::Rdb);
     assert_eq!(
         oracle.adapter_contract.state,
-        BackendAdapterContractState::DeclaredOnly
+        BackendAdapterContractState::FactoryBacked
     );
     assert_eq!(oracle.backend_adapter.id, BackendAdapterId::Oracle);
     assert_eq!(
         oracle.backend_adapter.capability_source,
         BackendAdapterCapabilitySource::Oracle
     );
-    assert!(oracle.adapter_contract.capabilities.is_empty());
-    assert!(!oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
+    assert_eq!(
+        oracle.adapter_contract.capabilities,
+        [BackendAdapterCapability::Lifecycle]
+    );
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));

@@ -33,6 +33,18 @@ fn assert_oracle_not_open<T>(result: Result<T, AppError>) {
     ));
 }
 
+fn assert_oracle_connection_only_unsupported<T: std::fmt::Debug>(result: Result<T, AppError>) {
+    assert!(
+        matches!(
+            result,
+            Err(AppError::Unsupported(ref message))
+                if message.contains("issue #904")
+                    && message.contains("connection test, connect, and ping only")
+        ),
+        "expected Oracle #904 connection-only rejection, got {result:?}"
+    );
+}
+
 #[test]
 fn connect_config_uses_service_name_without_sid_wallet_or_tls() {
     let config = OracleAdapter::connect_config(&oracle_config(), 30).unwrap();
@@ -47,6 +59,12 @@ fn connect_config_uses_service_name_without_sid_wallet_or_tls() {
         config.service,
         ServiceMethod::ServiceName(ref service) if service == "XEPDB1"
     ));
+
+    let mut explicit_false = oracle_config();
+    explicit_false.tls_enabled = Some(false);
+    explicit_false.trust_server_certificate = Some(false);
+    OracleAdapter::connect_config(&explicit_false, 30)
+        .expect("explicit false TLS flags should not enable unsupported Oracle TLS mode");
 }
 
 #[test]
@@ -70,10 +88,76 @@ fn connect_config_rejects_empty_required_fields() {
     ));
 
     config = oracle_config();
+    config.port = 0;
+    assert!(matches!(
+        OracleAdapter::connect_config(&config, 5),
+        Err(AppError::Validation(message)) if message.contains("port")
+    ));
+
+    config = oracle_config();
     config.user = " ".into();
     assert!(matches!(
         OracleAdapter::connect_config(&config, 5),
         Err(AppError::Validation(message)) if message.contains("user")
+    ));
+}
+
+#[test]
+fn connect_config_rejects_sid_tns_wallet_and_advanced_auth_modes() {
+    let mut sid = oracle_config();
+    sid.database = "SID=ORCL".into();
+    assert!(matches!(
+        OracleAdapter::connect_config(&sid, 5),
+        Err(AppError::Validation(message))
+            if message.contains("SID") && message.contains("service name")
+    ));
+
+    let mut tns = oracle_config();
+    tns.database = "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)))".into();
+    assert!(matches!(
+        OracleAdapter::connect_config(&tns, 5),
+        Err(AppError::Validation(message))
+            if message.contains("TNS") && message.contains("service name")
+    ));
+
+    let mut advanced = oracle_config();
+    advanced.password.clear();
+    assert!(matches!(
+        OracleAdapter::connect_config(&advanced, 5),
+        Err(AppError::Validation(message))
+            if message.contains("password authentication") && message.contains("advanced")
+    ));
+
+    let mut auth_field = oracle_config();
+    auth_field.auth_source = Some("kerberos".into());
+    assert!(matches!(
+        OracleAdapter::connect_config(&auth_field, 5),
+        Err(AppError::Validation(message))
+            if message.contains("advanced auth") && message.contains("service-name")
+    ));
+
+    let mut tns_field = oracle_config();
+    tns_field.replica_set = Some("tnsnames-alias".into());
+    assert!(matches!(
+        OracleAdapter::connect_config(&tns_field, 5),
+        Err(AppError::Validation(message))
+            if message.contains("TNS") && message.contains("wallet")
+    ));
+
+    let mut wallet = oracle_config();
+    wallet.tls_enabled = Some(true);
+    assert!(matches!(
+        OracleAdapter::connect_config(&wallet, 5),
+        Err(AppError::Validation(message))
+            if message.contains("wallet/TLS") && message.contains("issue #904")
+    ));
+
+    let mut trust = oracle_config();
+    trust.trust_server_certificate = Some(true);
+    assert!(matches!(
+        OracleAdapter::connect_config(&trust, 5),
+        Err(AppError::Validation(message))
+            if message.contains("wallet/TLS") && message.contains("issue #904")
     ));
 }
 
@@ -159,6 +243,34 @@ async fn db_adapter_lifecycle_fails_closed_without_connection() {
     assert!(<OracleAdapter as DbAdapter>::disconnect(&adapter)
         .await
         .is_ok());
+}
+
+#[tokio::test]
+async fn connection_only_adapter_rejects_query_catalog_and_edit_surfaces() {
+    let adapter = OracleConnectionOnlyAdapter::new();
+    assert!(matches!(adapter.kind(), DatabaseType::Oracle));
+    assert!(matches!(adapter.namespace_label(), NamespaceLabel::Schema));
+
+    assert_oracle_connection_only_unsupported(adapter.list_namespaces().await);
+    assert_oracle_connection_only_unsupported(adapter.current_database().await);
+    assert_oracle_connection_only_unsupported(
+        RdbAdapter::execute_sql(&adapter, "SELECT 1 FROM DUAL", None).await,
+    );
+    assert_oracle_connection_only_unsupported(
+        RdbAdapter::query_table_data(&adapter, "SYSTEM", "T", 1, 10, None, None, None, None).await,
+    );
+    assert_oracle_connection_only_unsupported(adapter.list_functions("SYSTEM").await);
+    assert_oracle_connection_only_unsupported(adapter.list_triggers("SYSTEM", "T").await);
+
+    let drop_table = DropTableRequest {
+        connection_id: "oracle-1".into(),
+        schema: "SYSTEM".into(),
+        table: "T".into(),
+        cascade: false,
+        preview_only: false,
+        expected_database: None,
+    };
+    assert_oracle_connection_only_unsupported(adapter.drop_table(&drop_table).await);
 }
 
 #[tokio::test]

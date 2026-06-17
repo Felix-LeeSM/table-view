@@ -19,7 +19,7 @@ fn oracle_public() -> ConnectionConfigPublic {
         environment: None,
         has_password: true,
         paradigm: DatabaseType::Oracle.paradigm(),
-        auth_source: None,
+        auth_source: Some("SID=ORCL".into()),
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
@@ -27,7 +27,7 @@ fn oracle_public() -> ConnectionConfigPublic {
 }
 
 #[tokio::test]
-async fn test_connection_rejects_oracle_declared_only_before_adapter_dispatch() {
+async fn test_connection_dispatches_oracle_validation_instead_of_declared_only_rejection() {
     let result = test_connection(TestConnectionRequest {
         config: oracle_public(),
         password: Some("pw".into()),
@@ -36,10 +36,10 @@ async fn test_connection_rejects_oracle_declared_only_before_adapter_dispatch() 
     .await;
 
     match result {
-        Err(AppError::Unsupported(msg)) => {
-            assert!(msg.contains("Oracle is declared-only"));
-            assert!(msg.contains("source-specific connection.test"));
+        Err(AppError::Validation(msg)) => {
+            assert!(msg.contains("Oracle SID/TNS/advanced auth fields"));
+            assert!(msg.contains("service-name"));
         }
-        other => panic!("Expected Oracle declared-only rejection, got: {other:?}"),
+        other => panic!("Expected Oracle validation rejection, got: {other:?}"),
     }
 }
