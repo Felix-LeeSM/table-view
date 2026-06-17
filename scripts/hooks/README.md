@@ -19,6 +19,12 @@ Rules:
 
 Current dispatchers:
 
+- `pre-tool-use.sh` — neutral PreToolUse/PermissionRequest wrapper (Claude Code +
+  codex 공유). policy 스크립트의 exit 1 을 JSON `permissionDecision:"deny"` +
+  exit 0 으로 변환. Claude Code 는 PreToolUse **exit 2 만 block** 하고 exit 1 은
+  non-blocking("Execution continues")이므로, 이 변환이 없으면 매니페스트에서
+  policy 스크립트를 직접 부를 때 차단이 무시된다. 단일 변환 layer — policy
+  스크립트 자체는 brain-agnostic 하게 exit code 만 내도록 유지.
 - `check-edit-policy.sh` — Edit/Write hard blocks and advisory warnings.
 - `check-dangerous-bash.sh` — Bash command policy.
 - `check-main-worktree-source-edit.sh` — primary-worktree source/app edit guard.
