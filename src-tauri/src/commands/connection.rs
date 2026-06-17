@@ -409,8 +409,8 @@ mod tests {
 
     fn assert_mssql_runtime_ddl_unsupported<T: std::fmt::Debug>(result: Result<T, AppError>) {
         assert!(
-            matches!(result, Err(AppError::Unsupported(ref message)) if message.contains("SQL Server structured DDL is outside issue #902")),
-            "expected MSSQL #902 DDL Unsupported, got {result:?}"
+            matches!(result, Err(AppError::Unsupported(ref message)) if message.contains("SQL Server structured DDL is outside issue #903")),
+            "expected MSSQL #903 DDL Unsupported, got {result:?}"
         );
     }
 

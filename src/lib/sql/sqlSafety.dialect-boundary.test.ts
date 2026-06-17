@@ -4,6 +4,7 @@ import {
   mssqlBatchSeparatorSql,
   mssqlDestructiveDdlSql,
   mssqlScriptingBoundaryCases,
+  mssqlUnsupportedScriptingSql,
 } from "./sqlSafety.fixtures";
 import { usePreloadedSqlAst } from "./sqlSafetyTestHarness";
 
@@ -170,6 +171,18 @@ describe("sqlSafety.analyzeStatement — PostgreSQL and MSSQL boundary contracts
         expect(a.kind).toBe("other");
         expect(a.severity).toBe("warn");
         expect(a.reasons).toEqual(["GO — T-SQL batch separator unsupported"]);
+        expect(isInfoStatement(a)).toBe(false);
+      }
+    });
+
+    it("[AC-903-X01] unsupported T-SQL routine/control-flow bodies stay bounded", () => {
+      for (const sql of mssqlUnsupportedScriptingSql) {
+        const a = analyzeStatement(sql);
+        expect(a.kind).toBe("routine-call");
+        expect(a.severity).toBe("warn");
+        expect(a.reasons).toEqual([
+          "T-SQL procedural scripting unsupported in Safe Mode",
+        ]);
         expect(isInfoStatement(a)).toBe(false);
       }
     });

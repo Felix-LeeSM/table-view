@@ -347,6 +347,9 @@ export const MSSQL_CAPABILITIES = capabilities({
     constraints: true,
     relationships: true,
   },
+  edit: {
+    editRows: true,
+  },
 });
 
 export const MONGODB_CAPABILITIES = capabilities({

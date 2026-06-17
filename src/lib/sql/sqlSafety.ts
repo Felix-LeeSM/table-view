@@ -342,6 +342,17 @@ function hasMssqlBatchSeparator(sql: string): boolean {
   return /^[ \t]*GO(?:\s+\d+)?[ \t]*;?[ \t]*$/im.test(stripComments(sql));
 }
 
+function isUnsupportedTsqlProceduralScript(upper: string): boolean {
+  return (
+    /^CREATE\s+(?:OR\s+ALTER\s+)?PROCEDURE\b/.test(upper) ||
+    /^ALTER\s+PROCEDURE\b/.test(upper) ||
+    /^DECLARE\b/.test(upper) ||
+    /^BEGIN\s+(?!TRAN(?:SACTION)?\b|WORK\b)/.test(upper) ||
+    /^BEGIN\s+TRY\b/.test(upper) ||
+    /^WHILE\b/.test(upper)
+  );
+}
+
 function hasOuterWhere(stripped: string): boolean {
   return WORD_BOUNDARY_WHERE_RE.test(stripped);
 }
@@ -419,6 +430,14 @@ export function analyzeStatement(sql: string): StatementAnalysis {
       kind: "other",
       severity: "warn",
       reasons: ["GO — T-SQL batch separator unsupported"],
+    };
+  }
+
+  if (isUnsupportedTsqlProceduralScript(upper)) {
+    return {
+      kind: "routine-call",
+      severity: "warn",
+      reasons: ["T-SQL procedural scripting unsupported in Safe Mode"],
     };
   }
 

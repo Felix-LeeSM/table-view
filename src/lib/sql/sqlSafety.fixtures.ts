@@ -78,3 +78,13 @@ export const mssqlBatchSeparatorSql = [
   "SELECT 1\nGO\nRESTORE DATABASE [app] FROM DISK = N'/tmp/app.bak'",
   "SELECT 1\nGO 2\nDROP TABLE [dbo].[users]",
 ] as const;
+
+export const mssqlUnsupportedScriptingSql = [
+  "CREATE PROCEDURE dbo.refresh_users AS BEGIN SELECT 1; END",
+  "ALTER PROCEDURE dbo.refresh_users AS BEGIN SELECT 1; END",
+  "CREATE OR ALTER PROCEDURE dbo.refresh_users AS BEGIN SELECT 1; END",
+  "BEGIN SELECT 1; END",
+  "DECLARE @id int = 1",
+  "BEGIN TRY SELECT 1; END TRY BEGIN CATCH SELECT ERROR_MESSAGE(); END CATCH",
+  "WHILE 1 = 0 BEGIN SELECT 1; END",
+] as const;

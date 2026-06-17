@@ -133,9 +133,9 @@ function verifyEnterpriseRdbmsPromotionBoundary(): void {
       mssql.capabilities.catalog.indexes &&
       mssql.capabilities.catalog.constraints &&
       mssql.capabilities.catalog.relationships &&
-      !mssql.capabilities.edit.editRows &&
+      mssql.capabilities.edit.editRows &&
       !mssql.capabilities.ddl.createTable,
-    "mssql: runtime support is limited to catalog/query/cancel/tabular; edit/DDL/admin/import/export/full workbench stay unsupported",
+    "mssql: runtime support is limited to catalog/query/cancel/tabular plus PK-projected editRows; DDL/admin/import/export/full workbench stay unsupported",
   );
 
   assert(
@@ -231,5 +231,5 @@ verifyEnterpriseRdbmsPromotionBoundary();
 verifySearchConnectionPromotionBoundary();
 
 console.log(
-  "[e2e:pre-smoke] release gate MSSQL runtime catalog/query, Oracle declared-only, and live Search contract assertions passed.",
+  "[e2e:pre-smoke] release gate MSSQL runtime catalog/query/editRows, Oracle declared-only, and live Search contract assertions passed.",
 );

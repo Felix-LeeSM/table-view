@@ -1812,7 +1812,7 @@ describe("ConnectionDialog", () => {
         connection: { test: true },
         query: { query: true, multiStatement: true, cancel: true },
         catalog: { browse: true, schema: true, indexes: true },
-        edit: { editRows: false },
+        edit: { editRows: true },
       });
     });
 

@@ -34,14 +34,14 @@ describe("query language support documentation", () => {
     );
     expect(supportDocs).toMatch(/\bOracle\b[\s\S]*declared-only/i);
     expect(supportDocs).toMatch(
-      /SQL Server edit, structured DDL, parser, completion, and runtime smoke support remain unclaimed/,
+      /SQL Server structured DDL, admin\/security\/backup\/jobs\/users\/roles, broad parser\/completion semantics, and runtime smoke support remain unclaimed/,
     );
     expect(supportDocs).toMatch(
       /No Oracle connection, query, catalog, edit, DDL, parser, completion, or runtime smoke support is claimed/,
     );
 
     const activeClaimPatterns = [
-      /\bMSSQL\b[^.\n|]*(?:Runtime Happy Path smoke covers|catalog-aware[^.\n|]*completion is active|structured DDL is active|row edit is active)/i,
+      /\bMSSQL\b[^.\n|]*(?:Runtime Happy Path smoke covers|catalog-aware[^.\n|]*completion is active|structured DDL is active)/i,
       /\bOracle\b[^.\n|]*(?:now has|has UI\/runtime support|connection-test runtime evidence|service-name connection UI\/runtime support|Runtime Happy Path smoke covers|RelationalCatalog, RelationalQuery)/i,
       /SQL Server smoke, seeded/i,
       /Oracle service-name connect, seeded/i,

@@ -291,7 +291,7 @@ describe("adapter conformance matrix", () => {
     expect(valkey.areas.edit.deferred).toEqual(["edit.bulkWrite"]);
   });
 
-  it("keeps MSSQL runtime scoped to catalog/query while edit and DDL remain unclaimed", () => {
+  it("keeps MSSQL runtime scoped to catalog/query/edit while DDL remains unclaimed", () => {
     const mssql = ADAPTER_CONFORMANCE_MATRIX.mssql;
 
     expect(mssql.level).toBe("runtime");
@@ -308,7 +308,7 @@ describe("adapter conformance matrix", () => {
       "query.multiStatement",
       "query.cancel",
     ]);
-    expect(mssql.areas.edit.checks).toEqual([]);
+    expect(mssql.areas.edit.checks).toEqual(["edit.editRows"]);
     expect(mssql.areas.ddl.checks).toEqual([]);
     expect(mssql.areas.connection.unsupported).toEqual([
       "connection.switchDatabase",
@@ -319,7 +319,6 @@ describe("adapter conformance matrix", () => {
     expect(mssql.areas.query.unsupported).toEqual(["query.explain"]);
     expect(mssql.areas.query.deferred).toEqual([]);
     expect(mssql.areas.edit.unsupported).toEqual([
-      "edit.editRows",
       "edit.editDocuments",
       "edit.editKeys",
       "edit.bulkWrite",

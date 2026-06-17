@@ -125,6 +125,7 @@ describe("DataSourceProfile registry", () => {
         constraints: true,
         relationships: true,
       },
+      edit: { editRows: true },
     }),
     oracle: expectedCapabilities(),
     mongodb: expectedCapabilities({
@@ -343,7 +344,7 @@ describe("DataSourceProfile registry", () => {
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
-  it("promotes MSSQL catalog/query runtime while Oracle stays declared-only", () => {
+  it("promotes MSSQL catalog/query/primary-key row-edit runtime while Oracle stays declared-only", () => {
     const mssql = getDataSourceProfile("mssql");
     expect(mssql).toMatchObject({
       id: "mssql",
@@ -375,7 +376,7 @@ describe("DataSourceProfile registry", () => {
     expect(mssql.capabilities.catalog.indexes).toBe(true);
     expect(mssql.capabilities.catalog.constraints).toBe(true);
     expect(mssql.capabilities.catalog.relationships).toBe(true);
-    expect(mssql.capabilities.edit.editRows).toBe(false);
+    expect(mssql.capabilities.edit.editRows).toBe(true);
     expect(mssql.capabilities.ddl.createTable).toBe(false);
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(true);
 
@@ -514,7 +515,7 @@ describe("DataSourceProfile registry", () => {
     expect(mssql.capabilities.catalog.indexes).toBe(true);
     expect(mssql.capabilities.catalog.constraints).toBe(true);
     expect(mssql.capabilities.catalog.relationships).toBe(true);
-    expect(mssql.capabilities.edit.editRows).toBe(false);
+    expect(mssql.capabilities.edit.editRows).toBe(true);
     expect(mssql.capabilities.ddl.createTable).toBe(false);
 
     const oracle = getDataSourceProfile("oracle");

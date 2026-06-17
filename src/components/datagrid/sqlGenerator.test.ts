@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { generateSql } from "./sqlGenerator";
+import { generateSql, type CoerceError } from "./sqlGenerator";
 import { BASE_DATA } from "./sqlGenerator.fixtures";
+import type { TableData } from "@/types/schema";
 
 describe("generateSql — UPDATE tri-state (null vs empty string vs text)", () => {
   it("emits no row-write SQL when row writes are disabled", () => {
@@ -112,6 +113,86 @@ describe("generateSql — INSERT null vs empty string", () => {
     );
     expect(statements[1]).toBe(
       "INSERT INTO public.users (id, name) VALUES (3, 'x');",
+    );
+  });
+});
+
+describe("generateSql — MSSQL edit boundary", () => {
+  const MSSQL_DATA: TableData = {
+    columns: [
+      {
+        name: "user id",
+        data_type: "int",
+        nullable: false,
+        default_value: null,
+        is_primary_key: true,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+      {
+        name: "select",
+        data_type: "nvarchar(255)",
+        nullable: true,
+        default_value: null,
+        is_primary_key: false,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+    ],
+    rows: [[7, "old"]],
+    total_count: 1,
+    page: 1,
+    page_size: 100,
+    executed_query: "SELECT [user id], [select] FROM [sales].[order detail]",
+  };
+
+  it("uses bracket identifiers for schema, table, SET column, and primary-key WHERE", () => {
+    const statements = generateSql(
+      MSSQL_DATA,
+      "sales",
+      "order detail",
+      new Map<string, string | null>([["0-1", "new"]]),
+      new Set(["row-1-0"]),
+      [],
+      { dialect: "mssql" },
+    );
+
+    expect(statements).toEqual([
+      "UPDATE [sales].[order detail] SET [select] = 'new' WHERE [user id] = 7;",
+      "DELETE FROM [sales].[order detail] WHERE [user id] = 7;",
+    ]);
+  });
+
+  it("blocks MSSQL row writes without a projected primary key", () => {
+    const errors: CoerceError[] = [];
+    const dataWithoutPrimaryKey: TableData = {
+      ...MSSQL_DATA,
+      columns: MSSQL_DATA.columns.map((column) => ({
+        ...column,
+        is_primary_key: false,
+      })),
+    };
+
+    const statements = generateSql(
+      dataWithoutPrimaryKey,
+      "sales",
+      "order detail",
+      new Map<string, string | null>([["0-1", "new"]]),
+      new Set(["row-1-0"]),
+      [[8, "inserted"]],
+      { dialect: "mssql", onCoerceError: (error) => errors.push(error) },
+    );
+
+    expect(statements).toEqual([]);
+    expect(errors.map((error) => error.key)).toEqual([
+      "0-1",
+      "row-1-0",
+      "new-0-0",
+    ]);
+    expect(errors.every((error) => error.message.includes("primary key"))).toBe(
+      true,
     );
   });
 });

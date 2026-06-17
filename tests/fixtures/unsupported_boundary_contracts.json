@@ -54,17 +54,17 @@
     },
     {
       "id": "mssql-runtime-oracle-declared-only-boundaries",
-      "minimumRow": "MSSQL runtime catalog/query slice and Oracle declared-only identity",
+      "minimumRow": "MSSQL runtime catalog/query/edit-row slice and Oracle declared-only identity",
       "products": ["mssql", "oracle"],
-      "claimBoundary": "Issue #902 promotes SQL Server to bounded catalog/query/cancel/tabular runtime support while keeping edit, DDL, admin, import/export, and full workbench parity unsupported. Oracle remains declared-only.",
+      "claimBoundary": "Issue #903 promotes SQL Server to bounded catalog/query/cancel/tabular runtime support plus editRows through frontend SQL batch with primary-key projection, while keeping DDL, admin, import/export, full T-SQL parity, and full workbench parity unsupported. Oracle remains declared-only.",
       "docs": [
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "MSSQL runtime support now covers SQL-auth/TDS connection, catalog browse/schema/indexes/constraints/relationships, query, multi-statement execution, cancellation, and tabular result rendering."
+          "mustContain": "MSSQL runtime support now covers SQL-auth/TDS connection, catalog browse/schema/indexes/constraints/relationships, query, multi-statement execution, cancellation, tabular result rendering, and editRows through the frontend SQL batch path with primary-key projection."
         },
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "MSSQL edit rows, structured DDL, admin/security/jobs/users/roles, DB-level import/export, profiler/activity dashboards, full T-SQL semantic parity, and full workbench parity remain unsupported."
+          "mustContain": "Structured DDL, admin/security/jobs/users/roles, DB-level import/export, profiler/activity dashboards, full T-SQL semantic parity, full workbench parity, and SQLCMD/meta-command/procedure-body scripting remain unsupported."
         },
         {
           "path": "docs/product/known-limitations.md",
@@ -72,7 +72,7 @@
         },
         {
           "path": "docs/product/README.md",
-          "mustContain": "MSSQL: runtime catalog/query support is active for issue #902."
+          "mustContain": "MSSQL: runtime catalog/query/edit-row support is active for issue #903."
         }
       ],
       "fixtureEvidence": [

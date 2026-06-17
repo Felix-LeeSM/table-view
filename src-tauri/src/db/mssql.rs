@@ -743,7 +743,7 @@ where
 {
     Box::pin(async {
         Err(AppError::Unsupported(
-            "SQL Server structured DDL is outside issue #902 runtime slice".into(),
+            "SQL Server structured DDL is outside issue #903 runtime/edit boundary".into(),
         ))
     })
 }
