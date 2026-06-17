@@ -519,7 +519,77 @@ fn strip_trailing_terminator(sql: &str) -> &str {
 }
 
 fn has_internal_statement_separator(sql: &str) -> bool {
-    strip_trailing_terminator(sql).contains(';')
+    contains_unquoted_statement_separator(strip_trailing_terminator(sql))
+}
+
+fn contains_unquoted_statement_separator(sql: &str) -> bool {
+    let bytes = sql.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\'' => {
+                i += 1;
+                while i < bytes.len() {
+                    if bytes[i] == b'\'' {
+                        i += 1;
+                        if bytes.get(i) == Some(&b'\'') {
+                            i += 1;
+                            continue;
+                        }
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b'"' => {
+                i += 1;
+                while i < bytes.len() {
+                    if bytes[i] == b'"' {
+                        i += 1;
+                        if bytes.get(i) == Some(&b'"') {
+                            i += 1;
+                            continue;
+                        }
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b'[' => {
+                i += 1;
+                while i < bytes.len() {
+                    if bytes[i] == b']' {
+                        i += 1;
+                        if bytes.get(i) == Some(&b']') {
+                            i += 1;
+                            continue;
+                        }
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b'-' if bytes.get(i + 1) == Some(&b'-') => {
+                i += 2;
+                while i < bytes.len() && !matches!(bytes[i], b'\n' | b'\r') {
+                    i += 1;
+                }
+            }
+            b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                i += 2;
+                while i + 1 < bytes.len() {
+                    if bytes[i] == b'*' && bytes[i + 1] == b'/' {
+                        i += 2;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b';' => return true,
+            _ => i += 1,
+        }
+    }
+    false
 }
 
 fn has_mssql_batch_separator(sql: &str) -> bool {
@@ -954,6 +1024,26 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn mssql_statement_separator_ignores_literals_identifiers_and_comments() {
+        assert!(!has_internal_statement_separator(
+            "UPDATE dbo.users SET note = 'a;b' WHERE id = 1"
+        ));
+        assert!(!has_internal_statement_separator(
+            "UPDATE [semi;table] SET [note;field] = N'a;''b' WHERE [id] = 1"
+        ));
+        assert!(!has_internal_statement_separator(
+            "SELECT 1 -- not a separator ;"
+        ));
+        assert!(!has_internal_statement_separator(
+            "SELECT /* not a separator ; */ 1"
+        ));
+        assert!(has_internal_statement_separator(
+            "UPDATE dbo.users SET note = 'a'; DROP TABLE dbo.users"
+        ));
+        assert!(has_internal_statement_separator("SELECT 'a'; SELECT 2"));
+    }
+
     #[tokio::test]
     async fn unsupported_runtime_sql_short_circuits_before_connection_lookup() {
         let adapter = MssqlAdapter::new();
@@ -978,6 +1068,15 @@ mod tests {
         }
 
         let err = adapter
+            .execute_query("UPDATE dbo.users SET note = 'a;b' WHERE id = 1", None)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AppError::Connection(ref msg) if msg.contains("SQL Server connection is not open")),
+            "expected semicolon literal to pass unsupported guard and reach connection lookup, got {err:?}"
+        );
+
+        let err = adapter
             .execute_query_batch(
                 &["UPDATE dbo.users SET name = 'Ada'; DROP TABLE dbo.users".to_string()],
                 None,
@@ -985,6 +1084,18 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, AppError::Unsupported(msg) if msg.contains("Statement 1 of 1")));
+
+        let err = adapter
+            .execute_query_batch(
+                &["UPDATE dbo.users SET note = 'a;b' WHERE id = 1".to_string()],
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AppError::Connection(ref msg) if msg.contains("SQL Server connection is not open")),
+            "expected batch semicolon literal to pass unsupported guard and reach connection lookup, got {err:?}"
+        );
 
         let err = adapter
             .execute_query_batch(

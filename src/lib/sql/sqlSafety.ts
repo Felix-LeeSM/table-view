@@ -107,6 +107,10 @@ export interface StatementAnalysis {
   reasons: string[];
 }
 
+export interface StatementAnalysisOptions {
+  dialect?: "postgresql" | "mysql" | "sqlite" | "mssql" | "oracle";
+}
+
 import { parseSqlPreloaded, type SqlParseResult } from "./sqlAst";
 
 const LINE_COMMENT_RE = /--[^\n\r]*/g;
@@ -353,6 +357,10 @@ function isUnsupportedTsqlProceduralScript(upper: string): boolean {
   );
 }
 
+function isMssqlSafetyContext(options?: StatementAnalysisOptions): boolean {
+  return options?.dialect === "mssql";
+}
+
 function hasOuterWhere(stripped: string): boolean {
   return WORD_BOUNDARY_WHERE_RE.test(stripped);
 }
@@ -367,7 +375,10 @@ function hasOuterWhere(stripped: string): boolean {
  * 면 그 statement body 를 `analyzeStatement` 로 재귀 분석해 severity 를
  * 결정한다. 단순 `SELECT` CTE 는 INFO 보존.
  */
-function analyzeDmlCte(upper: string): StatementAnalysis | null {
+function analyzeDmlCte(
+  upper: string,
+  options?: StatementAnalysisOptions,
+): StatementAnalysis | null {
   // Match: WITH [RECURSIVE]? <ident> AS ( <innerKeyword>
   // 여러 CTE 가 있을 경우 가장 first 의 CTE body 만 검사한다 (worst tier
   // 결정은 caller 의 multi-statement 루프 책임 — single statement 단위에서는
@@ -389,7 +400,7 @@ function analyzeDmlCte(upper: string): StatementAnalysis | null {
   // Re-analyse the inner statement; preserve outer kind so callers /
   // tests that key on `kind === "select"` for pure WITH-SELECT still pass
   // — but the inner *severity* is what flows through.
-  const innerAnalysis = analyzeStatement(inner);
+  const innerAnalysis = analyzeStatement(inner, options);
   // The wrapped form's kind stays as the inner DML op so downstream
   // dispatch (e.g. dry-run) treats it as a write surface, not a SELECT.
   return innerAnalysis;
@@ -414,7 +425,10 @@ function extractBalanced(s: string, idx: number): string | null {
   return null;
 }
 
-export function analyzeStatement(sql: string): StatementAnalysis {
+export function analyzeStatement(
+  sql: string,
+  options?: StatementAnalysisOptions,
+): StatementAnalysis {
   const normalized = normalize(sql);
   if (normalized.length === 0) {
     // Sprint 254 — empty / unrecognised input defaults to INFO so the
@@ -425,7 +439,7 @@ export function analyzeStatement(sql: string): StatementAnalysis {
 
   const upper = normalized.toUpperCase();
 
-  if (hasMssqlBatchSeparator(sql)) {
+  if (isMssqlSafetyContext(options) && hasMssqlBatchSeparator(sql)) {
     return {
       kind: "other",
       severity: "warn",
@@ -433,7 +447,10 @@ export function analyzeStatement(sql: string): StatementAnalysis {
     };
   }
 
-  if (isUnsupportedTsqlProceduralScript(upper)) {
+  if (
+    isMssqlSafetyContext(options) &&
+    isUnsupportedTsqlProceduralScript(upper)
+  ) {
     return {
       kind: "routine-call",
       severity: "warn",
@@ -703,7 +720,7 @@ export function analyzeStatement(sql: string): StatementAnalysis {
   if (/^WITH\b/.test(upper)) {
     // Sprint 254 — DML CTE 식별. `WITH x AS (UPDATE …) SELECT *` 같은 form
     // 은 wrapped DML 의 severity 를 따른다. 순수 WITH-SELECT 만 INFO.
-    const dml = analyzeDmlCte(upper);
+    const dml = analyzeDmlCte(upper, options);
     if (dml) return dml;
     return { kind: "select", severity: "info", reasons: [] };
   }

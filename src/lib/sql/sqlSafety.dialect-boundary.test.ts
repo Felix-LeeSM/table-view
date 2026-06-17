@@ -8,6 +8,8 @@ import {
 } from "./sqlSafety.fixtures";
 import { usePreloadedSqlAst } from "./sqlSafetyTestHarness";
 
+const MSSQL_CONTEXT = { dialect: "mssql" } as const;
+
 describe("sqlSafety.analyzeStatement — PostgreSQL and MSSQL boundary contracts", () => {
   describe("Sprint 482 — PostgreSQL parser Safe Mode kickoff (AC-482-X)", () => {
     usePreloadedSqlAst();
@@ -158,7 +160,7 @@ describe("sqlSafety.analyzeStatement — PostgreSQL and MSSQL boundary contracts
 
     it("[AC-512-X04] T-SQL scripting/admin boundaries do not fall through to info", () => {
       for (const expected of mssqlScriptingBoundaryCases) {
-        const a = analyzeStatement(expected.sql);
+        const a = analyzeStatement(expected.sql, MSSQL_CONTEXT);
         expect(a.kind).toBe(expected.kind);
         expect(a.severity).toBe(expected.severity);
         expect(a.reasons).toEqual(expected.reasons);
@@ -167,7 +169,7 @@ describe("sqlSafety.analyzeStatement — PostgreSQL and MSSQL boundary contracts
 
     it("[AC-512-X05] line-level GO inside mixed chunks stays bounded", () => {
       for (const sql of mssqlBatchSeparatorSql) {
-        const a = analyzeStatement(sql);
+        const a = analyzeStatement(sql, MSSQL_CONTEXT);
         expect(a.kind).toBe("other");
         expect(a.severity).toBe("warn");
         expect(a.reasons).toEqual(["GO — T-SQL batch separator unsupported"]);
@@ -177,7 +179,7 @@ describe("sqlSafety.analyzeStatement — PostgreSQL and MSSQL boundary contracts
 
     it("[AC-903-X01] unsupported T-SQL routine/control-flow bodies stay bounded", () => {
       for (const sql of mssqlUnsupportedScriptingSql) {
-        const a = analyzeStatement(sql);
+        const a = analyzeStatement(sql, MSSQL_CONTEXT);
         expect(a.kind).toBe("routine-call");
         expect(a.severity).toBe("warn");
         expect(a.reasons).toEqual([
@@ -185,6 +187,20 @@ describe("sqlSafety.analyzeStatement — PostgreSQL and MSSQL boundary contracts
         ]);
         expect(isInfoStatement(a)).toBe(false);
       }
+    });
+
+    it("[AC-903-X02] T-SQL-only guards require MSSQL context", () => {
+      for (const sql of mssqlUnsupportedScriptingSql) {
+        const a = analyzeStatement(sql);
+        expect(a.reasons).not.toContain(
+          "T-SQL procedural scripting unsupported in Safe Mode",
+        );
+      }
+
+      const go = analyzeStatement("SELECT 1\nGO\nSELECT 2");
+      expect(go.reasons).not.toContain(
+        "GO — T-SQL batch separator unsupported",
+      );
     });
   });
 });
