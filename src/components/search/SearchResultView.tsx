@@ -9,6 +9,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { CopyTextButton } from "@components/shared/CopyTextButton";
+import { ExportButton } from "@components/shared/ExportButton";
 import { Skeleton } from "@components/ui/skeleton";
 import type { QueryState } from "@/types/query";
 import { formatSearchUiError } from "@lib/search/searchUiError";
@@ -34,6 +36,17 @@ export interface SearchResultViewProps {
 
 const LARGE_SOURCE_LENGTH = 4000;
 const LONG_HIGHLIGHT_LENGTH = 1600;
+const SEARCH_HIT_EXPORT_HEADERS = [
+  "_index",
+  "_id",
+  "_score",
+  "_source",
+  "fields",
+  "highlight",
+  "sort",
+];
+const NON_GRID_SQL_EXPORT_REASON =
+  "SQL INSERT export requires a single-table SQL result.";
 
 export function SearchResultView({
   result,
@@ -165,6 +178,9 @@ function CompletedSearchResult({ result }: { result: SearchResultEnvelope }) {
 
   const { result: data } = normalized;
   const shownHits = data.hits.length;
+  const exportRows = searchHitRows(data.hits);
+  const hasDisplayedHits = exportRows.length > 0;
+  const copyText = hasDisplayedHits ? formatSearchJson(data.hits) : "";
 
   return (
     <section
@@ -172,18 +188,38 @@ function CompletedSearchResult({ result }: { result: SearchResultEnvelope }) {
       className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-sm"
     >
       <header className="shrink-0 border-b border-border px-3 py-2">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <Metric icon={Search}>
-            {formatTotalHits(data.total.value, data.total.relation)} hits
-          </Metric>
-          <Metric icon={Clock3}>{data.tookMs} ms</Metric>
-          <Metric icon={FileJson}>Showing {shownHits} hits</Metric>
-          {data.shards ? <ShardMetric shards={data.shards} /> : null}
-          {data.timedOut ? (
-            <span className="rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-destructive">
-              timed out
-            </span>
-          ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Metric icon={Search}>
+              {formatTotalHits(data.total.value, data.total.relation)} hits
+            </Metric>
+            <Metric icon={Clock3}>{data.tookMs} ms</Metric>
+            <Metric icon={FileJson}>Showing {shownHits} hits</Metric>
+            {data.shards ? <ShardMetric shards={data.shards} /> : null}
+            {data.timedOut ? (
+              <span className="rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-destructive">
+                timed out
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-1">
+            <CopyTextButton
+              text={copyText}
+              ariaLabel="Copy Search hits"
+              disabledReason="No displayed Search hits to copy."
+            />
+            <ExportButton
+              context={{ kind: "query", source_table: null }}
+              headers={SEARCH_HIT_EXPORT_HEADERS}
+              getRows={() => exportRows}
+              disabled={!hasDisplayedHits}
+              disabledReason="No displayed Search hits to export."
+              disabledFormats={["sql"]}
+              disabledFormatReasons={{
+                sql: NON_GRID_SQL_EXPORT_REASON,
+              }}
+            />
+          </div>
         </div>
       </header>
 
@@ -239,6 +275,18 @@ function CompletedSearchResult({ result }: { result: SearchResultEnvelope }) {
       </div>
     </section>
   );
+}
+
+function searchHitRows(hits: SearchHitEnvelope[]): unknown[][] {
+  return hits.map((hit) => [
+    hit.index,
+    hit.id,
+    hit.score ?? null,
+    formatSearchJson(hit.source),
+    hit.fields === undefined ? null : formatSearchJson(hit.fields),
+    hit.highlight === undefined ? null : formatSearchJson(hit.highlight),
+    hit.sort.length === 0 ? null : formatSearchJson(hit.sort),
+  ]);
 }
 
 function SearchHitItem({

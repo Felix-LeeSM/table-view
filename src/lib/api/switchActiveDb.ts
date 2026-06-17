@@ -1,8 +1,12 @@
 /**
- * Paradigm-aware "switch active database" wrapper. Thin Tauri bridge
- * for `switch_active_db(connection_id, db_name)`. PG swaps the active
- * sub-pool; SQLite / MySQL / Search / Kv / Document currently surface
- * `AppError::Unsupported` via the trait default.
+ * Paradigm-aware "switch active database" wrapper. Thin Tauri bridge for
+ * `switch_active_db(connection_id, db_name)`.
+ *
+ * RDB switch-capable adapters swap the active sub-pool/catalog. Redis/Valkey
+ * parse `db_name` as a numeric DB index and run the KV adapter switch. Mongo
+ * backend support exists below the product contract, but the frontend keeps
+ * Mongo database scope tab-local through TabDbChip instead of this toolbar.
+ * Search and fixed-scope profiles surface `AppError::Unsupported`.
  */
 import { invoke } from "@tauri-apps/api/core";
 
@@ -14,7 +18,7 @@ import { invoke } from "@tauri-apps/api/core";
  *   - `NotFound`     — connection id has no live adapter
  *   - `Validation`   — empty `dbName`
  *   - `Connection`   — adapter never connected, or the lazy pool open failed
- *   - `Unsupported`  — paradigm doesn't (yet) support DB switching
+ *   - `Unsupported`  — active adapter/profile keeps database scope fixed
  *
  * The DbSwitcher UI converts each rejection into a user-facing toast so
  * the frontend doesn't need to branch on the error variant.

@@ -16,6 +16,9 @@ const mockSave = vi.fn();
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   save: (opts: unknown) => mockSave(opts),
 }));
+const writeText = vi.fn<(text: string) => Promise<void>>(() =>
+  Promise.resolve(),
+);
 
 beforeEach(() => {
   setupTauriMock({
@@ -91,6 +94,12 @@ describe("QueryResultGrid", () => {
     });
     useConnectionStore.setState({ connections: [] });
     mockSave.mockReset();
+    writeText.mockReset();
+    writeText.mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
   });
 
   it("shows idle prompt when status is idle", () => {
@@ -205,6 +214,59 @@ describe("QueryResultGrid", () => {
       />,
     );
     expect(screen.getByText("Query executed successfully")).toBeInTheDocument();
+  });
+
+  it("exposes copy and export actions for scalar results", async () => {
+    const countResult: QueryResult = {
+      columns: [{ name: "count", dataType: "Int64", category: "int" }],
+      rows: [[42]],
+      totalCount: 1,
+      executionTimeMs: 3,
+      queryType: "select",
+      resultKind: "scalar",
+    };
+    render(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: countResult }}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /copy result values/i }),
+    );
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("42");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+    expect(
+      await screen.findByRole("menuitem", { name: /CSV/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /TSV/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: /SQL INSERT/i }),
+    ).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("disables copy and export for empty findOne scalar results", () => {
+    const emptyResult: QueryResult = {
+      columns: [],
+      rows: [],
+      totalCount: 0,
+      executionTimeMs: 2,
+      queryType: "select",
+      resultKind: "scalar",
+    };
+    render(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: emptyResult }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /copy result values/i }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: /export/i })).toBeDisabled();
   });
 
   it("shows execution time for DDL", () => {

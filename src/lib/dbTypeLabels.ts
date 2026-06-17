@@ -28,10 +28,10 @@ const SIDEBAR_OBJECT_LABELS: Record<DatabaseType, SidebarObjectLabel> = {
   mssql: { single: "schema", plural: "schemas" },
   oracle: { single: "schema", plural: "schemas" },
   // MongoDB 는 database > collection 구조이지만 sidebar 의 "전부" 단위는
-  // collection (database 는 connection 시 선택; 변경은 DbSwitcher 로).
+  // collection. Database binding 은 query tab-local TabDbChip 이 맡는다.
   mongodb: { single: "collection", plural: "collections" },
-  // Redis 는 현재 connection dialog 에 노출되지 않지만 DatabaseType variant
-  // 이므로 매핑은 정의. KEYS 명령 단위 = key.
+  // Redis/Valkey 는 active KV profiles; toolbar DbSwitcher 는 numeric DB index,
+  // sidebar collapse/expand 단위는 key.
   redis: { single: "key", plural: "keys" },
   valkey: { single: "key", plural: "keys" },
   // Search engines browse index/catalog objects outside the RDB tree.

@@ -216,6 +216,30 @@ describe("MongoQueryEditor (Sprint 139)", () => {
     expect(localOnExecute).toHaveBeenCalled();
   });
 
+  it("fires the unsupported dry-run handler via Cmd-Shift-Enter binding", () => {
+    const localOnExecute = vi.fn();
+    const localOnDryRun = vi.fn();
+    render(
+      <MongoQueryEditor
+        sql="db.users.find({})"
+        onSqlChange={onSqlChange}
+        onExecute={localOnExecute}
+        onDryRun={localOnDryRun}
+        mongoExtensions={[]}
+      />,
+    );
+    const view = getEditorView("MongoDB Query Editor");
+    const bindings = getKeymapBindings(view).filter(
+      (binding) => binding.key === "Cmd-Shift-Enter",
+    );
+    expect(bindings.length).toBeGreaterThanOrEqual(1);
+    for (const binding of bindings) {
+      binding.run?.(view);
+    }
+    expect(localOnDryRun).toHaveBeenCalled();
+    expect(localOnExecute).not.toHaveBeenCalled();
+  });
+
   it("preserves cursor position across external query text sync", () => {
     const { rerender } = render(
       <MongoQueryEditor

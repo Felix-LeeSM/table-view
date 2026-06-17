@@ -13,6 +13,7 @@ import {
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
+import { CopyTextButton } from "@components/shared/CopyTextButton";
 import { ExportButton } from "@components/shared/ExportButton";
 import { getDataSourceProfile } from "@/types/dataSource";
 import { SearchResultView } from "@components/search/SearchResultView";
@@ -21,6 +22,9 @@ import { QueryResultTable } from "./QueryResultTable";
 import ScalarOrListPanel from "./ScalarOrListPanel";
 import WriteSummaryPanel from "./WriteSummaryPanel";
 import { resolveQueryExportBoundary } from "./queryExportBoundary";
+
+const NON_GRID_SQL_EXPORT_REASON =
+  "SQL INSERT export requires a single-table SQL result.";
 
 export interface QueryResultGridProps {
   queryState: QueryState;
@@ -54,6 +58,40 @@ function queryTypeLabel(qt: QueryType): string {
 function resultUnitNoun(result: QueryResult): string {
   const singular = result.resultUnit === "document" ? "document" : "row";
   return result.totalCount === 1 ? singular : `${singular}s`;
+}
+
+function formatCopyValue(value: unknown): string {
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value === "string") return value;
+  if (
+    typeof value === "number" ||
+    typeof value === "bigint" ||
+    typeof value === "boolean"
+  ) {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function formatCopyJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function formatNonGridCopyText(
+  result: QueryResult,
+  mode: "count" | "list" | "findOne-empty",
+): string {
+  if (mode === "findOne-empty" || result.rows.length === 0) return "";
+  if (mode === "count") return formatCopyValue(result.rows[0]?.[0]);
+  return result.rows.map((row) => formatCopyValue(row[0])).join("\n");
 }
 
 function DmlMessage({ result }: { result: QueryResult }) {
@@ -305,13 +343,28 @@ function CompletedSingleResult({
   // top of the function so the status-bar + DataGrid scaffolding stays
   // unchanged for the grid path (zero RDB regression risk).
   if (result.resultKind === "writeSummary" && result.writeSummary) {
+    const summaryText = formatCopyJson(result.writeSummary);
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground">
           <span>Write</span>
-          <span className="text-muted-foreground">
-            {result.executionTimeMs} ms
-          </span>
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground">
+              {result.executionTimeMs} ms
+            </span>
+            <CopyTextButton
+              text={summaryText}
+              ariaLabel="Copy write summary"
+              disabledReason="No write summary to copy."
+            />
+            <ExportButton
+              context={{ kind: "query", source_table: null }}
+              headers={[]}
+              getRows={() => []}
+              disabled
+              disabledReason="Write summaries are not exportable as grid rows."
+            />
+          </div>
         </div>
         <WriteSummaryPanel summary={result.writeSummary} />
       </div>
@@ -327,6 +380,8 @@ function CompletedSingleResult({
         : result.columns[0]?.name === "count"
           ? "count"
           : "findOne-empty";
+    const canExportValues = mode !== "findOne-empty" && result.rows.length > 0;
+    const copyText = formatNonGridCopyText(result, mode);
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground">
@@ -340,9 +395,27 @@ function CompletedSingleResult({
               </>
             )}
           </span>
-          <span className="text-muted-foreground">
-            {result.executionTimeMs} ms
-          </span>
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground">
+              {result.executionTimeMs} ms
+            </span>
+            <CopyTextButton
+              text={copyText}
+              ariaLabel="Copy result values"
+              disabledReason="No result values to copy."
+            />
+            <ExportButton
+              context={{ kind: "query", source_table: null }}
+              headers={result.columns.map((column) => column.name)}
+              getRows={() => result.rows as unknown[][]}
+              disabled={!canExportValues}
+              disabledReason="No result values to export."
+              disabledFormats={["sql"]}
+              disabledFormatReasons={{
+                sql: NON_GRID_SQL_EXPORT_REASON,
+              }}
+            />
+          </div>
         </div>
         <ScalarOrListPanel result={result} mode={mode} />
       </div>

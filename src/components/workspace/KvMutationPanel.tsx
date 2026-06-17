@@ -1,22 +1,32 @@
-import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, type Ref, useEffect, useRef, useState } from "react";
 import { Button } from "@components/ui/button";
+import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import {
   deleteKvKey,
   executeKvCommand,
   setKvStringValue,
   updateKvTtl,
 } from "@lib/tauri/kv";
+import { useConnectionStore } from "@stores/connectionStore";
+import type { StatementAnalysis } from "@lib/sql/sqlSafety";
 import type { KvValueEnvelope } from "@/types/kv";
+import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
 
 interface KvMutationPanelProps {
   value: KvValueEnvelope;
   connectionId: string;
   database: number;
   mutationScope?: KvMutationScope;
+  actionIntent?: KvMutationActionIntent | null;
   onMutationSuccess: (key: string) => Promise<void>;
 }
 
 export type KvMutationScope = "redis" | "valkey";
+export interface KvMutationActionIntent {
+  kind: "edit" | "delete";
+  key: string;
+  requestId: number;
+}
 
 export function canRenderKvMutationPanel(
   value: KvValueEnvelope,
@@ -40,6 +50,11 @@ interface PendingMutation {
   command?: string;
   confirmKey?: string;
   seconds?: number;
+}
+
+interface SafeModePendingMutation {
+  mutation: PendingMutation;
+  reason: string;
 }
 
 type MutationField =
@@ -74,15 +89,27 @@ export function KvMutationPanel({
   connectionId,
   database,
   mutationScope = "redis",
+  actionIntent = null,
   onMutationSuccess,
 }: KvMutationPanelProps) {
   const [form, setForm] = useState<MutationForm>(() =>
     mutationFormForValue(value),
   );
   const [pending, setPending] = useState<PendingMutation | null>(null);
+  const [safeModeConfirm, setSafeModeConfirm] =
+    useState<SafeModePendingMutation | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const safeModeGate = useSafeModeGate(connectionId, {
+    missingConnectionEnvironment: "production",
+  });
+  const connection = useConnectionStore((s) =>
+    s.connections.find((candidate) => candidate.id === connectionId),
+  );
   const formDirtyRef = useRef(false);
+  const stringValueRef = useRef<HTMLTextAreaElement>(null);
+  const firstEditInputRef = useRef<HTMLInputElement>(null);
+  const deleteConfirmInputRef = useRef<HTMLInputElement>(null);
   const valueIdentityRef = useRef({
     key: value.key,
     type: value.value.type,
@@ -101,8 +128,19 @@ export function KvMutationPanel({
     formDirtyRef.current = false;
     setForm(mutationFormForValue(value));
     setPending(null);
+    setSafeModeConfirm(null);
     setMutationError(null);
   }, [value]);
+
+  useEffect(() => {
+    if (!actionIntent || actionIntent.key !== value.key) return;
+    const target =
+      actionIntent.kind === "delete"
+        ? deleteConfirmInputRef.current
+        : (stringValueRef.current ?? firstEditInputRef.current);
+    target?.scrollIntoView?.({ block: "nearest" });
+    target?.focus();
+  }, [actionIntent, value.key]);
 
   const bind =
     (field: MutationField) =>
@@ -110,14 +148,17 @@ export function KvMutationPanel({
       formDirtyRef.current = true;
       setForm((current) => ({ ...current, [field]: event.target.value }));
       setPending(null);
+      setSafeModeConfirm(null);
     };
 
   const input = (
     label: string,
     field: MutationField,
     placeholder = label.toLocaleLowerCase(),
+    inputRef?: Ref<HTMLInputElement>,
   ) => (
     <input
+      ref={inputRef}
       aria-label={label}
       className={fieldClass}
       value={form[field]}
@@ -135,6 +176,7 @@ export function KvMutationPanel({
   const preview = (next: PendingMutation | null, error?: string) => {
     setMutationError(error ?? null);
     setPending(next);
+    setSafeModeConfirm(null);
   };
 
   const previewCommand = (label: string, summary: string, command: string) =>
@@ -198,45 +240,66 @@ export function KvMutationPanel({
     });
   };
 
-  const confirmPendingMutation = async () => {
+  const confirmPendingMutation = () => {
     if (!pending) return;
+    const decision = safeModeGate.decide(
+      analyzeKvMutationSafety(pending, value.key),
+    );
+    if (decision.action === "confirm") {
+      setSafeModeConfirm({ mutation: pending, reason: decision.reason });
+      return;
+    }
+    if (decision.action === "block") {
+      setMutationError(decision.reason);
+      return;
+    }
+    void executePendingMutation(pending);
+  };
+
+  const confirmSafeModeMutation = async () => {
+    if (!safeModeConfirm) return;
+    await executePendingMutation(safeModeConfirm.mutation);
+  };
+
+  const executePendingMutation = async (mutation: PendingMutation) => {
     const keyRequest = { database, key: value.key };
     setSaving(true);
     setMutationError(null);
     try {
-      switch (pending.kind) {
+      switch (mutation.kind) {
         case "string":
           await setKvStringValue(connectionId, {
             ...keyRequest,
-            value: pending.value ?? "",
+            value: mutation.value ?? "",
             safety: "allowOverwrite",
           });
           break;
         case "command":
           await executeKvCommand(connectionId, {
             database,
-            command: pending.command ?? "",
+            command: mutation.command ?? "",
           });
           break;
         case "delete":
           await deleteKvKey(connectionId, {
             ...keyRequest,
-            confirmKey: pending.confirmKey ?? "",
+            confirmKey: mutation.confirmKey ?? "",
           });
           break;
         case "expire":
           await updateKvTtl(connectionId, {
             ...keyRequest,
-            update: { mode: "expire", seconds: pending.seconds ?? 0 },
+            update: { mode: "expire", seconds: mutation.seconds ?? 0 },
           });
           break;
         case "persist":
           await updateKvTtl(connectionId, {
             ...keyRequest,
-            update: { mode: "persist", confirmKey: pending.confirmKey ?? "" },
+            update: { mode: "persist", confirmKey: mutation.confirmKey ?? "" },
           });
       }
       setPending(null);
+      setSafeModeConfirm(null);
       formDirtyRef.current = false;
       await onMutationSuccess(value.key);
     } catch (err) {
@@ -245,6 +308,10 @@ export function KvMutationPanel({
       setSaving(false);
     }
   };
+
+  const confirmEnvironment =
+    connection?.environment === "production" ? "production" : "non-production";
+  const connectionLabel = connection?.name ?? connectionId;
 
   if (unsupported) {
     return (
@@ -263,6 +330,7 @@ export function KvMutationPanel({
       {value.value.type === "string" && (
         <div className="space-y-1">
           <textarea
+            ref={stringValueRef}
             aria-label="String value"
             className="h-20 w-full resize-y rounded border border-border bg-background p-2 text-3xs outline-none"
             value={form.text}
@@ -280,26 +348,26 @@ export function KvMutationPanel({
       )}
       {collectionMutationsEnabled && value.value.type === "hash" && (
         <div className="grid gap-1">
-          {input("Hash field", "field", "field")}
+          {input("Hash field", "field", "field", firstEditInputRef)}
           {input("Hash value", "entry", "value")}
           {action("Preview HSET", () => previewCollectionMutation("HSET"))}
         </div>
       )}
       {collectionMutationsEnabled && value.value.type === "list" && (
         <div className="grid gap-1">
-          {input("List value", "entry")}
+          {input("List value", "entry", "list value", firstEditInputRef)}
           {action("Preview RPUSH", () => previewCollectionMutation("RPUSH"))}
         </div>
       )}
       {collectionMutationsEnabled && value.value.type === "set" && (
         <div className="grid gap-1">
-          {input("Set member", "entry")}
+          {input("Set member", "entry", "set member", firstEditInputRef)}
           {action("Preview SADD", () => previewCollectionMutation("SADD"))}
         </div>
       )}
       {collectionMutationsEnabled && value.value.type === "zSet" && (
         <div className="grid gap-1">
-          {input("ZSet score", "score", "score")}
+          {input("ZSet score", "score", "score", firstEditInputRef)}
           {input("ZSet member", "entry")}
           {action("Preview ZADD", () => previewCollectionMutation("ZADD"))}
         </div>
@@ -327,7 +395,12 @@ export function KvMutationPanel({
         )}
       </div>
       <div className="grid gap-1 border-t border-border pt-2">
-        {input("Delete confirm key", "deleteKey", "type exact key")}
+        {input(
+          "Delete confirm key",
+          "deleteKey",
+          "type exact key",
+          deleteConfirmInputRef,
+        )}
         {action("Preview delete", () => previewExact("delete", form.deleteKey))}
       </div>
       {pending && (
@@ -345,13 +418,64 @@ export function KvMutationPanel({
           variant="default"
           size="xs"
           disabled={saving}
-          onClick={() => void confirmPendingMutation()}
+          onClick={confirmPendingMutation}
         >
           {saving ? "Applying" : `Confirm ${pending.label}`}
         </Button>
       )}
+      <ConfirmDestructiveDialog
+        open={safeModeConfirm !== null}
+        reason={safeModeConfirm?.reason ?? ""}
+        sqlPreview={safeModeConfirm?.mutation.summary ?? ""}
+        environment={confirmEnvironment}
+        connectionId={connectionId}
+        statements={safeModeConfirm ? [safeModeConfirm.mutation.summary] : []}
+        paradigm="kv"
+        connectionLabel={connectionLabel}
+        onConfirm={() => void confirmSafeModeMutation()}
+        onCancel={() => setSafeModeConfirm(null)}
+      />
     </div>
   );
+}
+
+function analyzeKvMutationSafety(
+  mutation: PendingMutation,
+  key: string,
+): StatementAnalysis {
+  if (mutation.kind === "delete") {
+    return {
+      kind: "other",
+      severity: "danger",
+      reasons: [`KV delete key ${key}`],
+    };
+  }
+  if (mutation.kind === "string") {
+    return {
+      kind: "other",
+      severity: "warn",
+      reasons: [`KV overwrite string key ${key}`],
+    };
+  }
+  if (mutation.kind === "expire") {
+    return {
+      kind: "other",
+      severity: "warn",
+      reasons: [`KV expire key ${key}`],
+    };
+  }
+  if (mutation.kind === "persist") {
+    return {
+      kind: "other",
+      severity: "warn",
+      reasons: [`KV persist key ${key}`],
+    };
+  }
+  return {
+    kind: "other",
+    severity: "warn",
+    reasons: [`KV mutation command ${mutation.label}`],
+  };
 }
 
 function unsupportedMutationMessage(

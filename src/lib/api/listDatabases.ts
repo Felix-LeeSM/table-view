@@ -1,9 +1,10 @@
 /**
  * Paradigm-neutral database list wrapper. Thin Tauri bridge for the
  * unified `list_databases(connection_id)` command. Returns:
- *   - PG: every non-template entry from `pg_database`
+ *   - RDB switch-capable profiles: available database/catalog names
  *   - Mongo: every database visible to the user
- *   - Search / Kv: empty list (the backend returns rather than throws)
+ *   - Redis/Valkey: numeric DB indexes
+ *   - Search/fixed-scope profiles: empty list
  *
  * Reuses `DatabaseInfo` from `@/types/document` since the wire shape
  * matches what `list_mongo_databases` already emits.
@@ -14,9 +15,10 @@ import type { DatabaseInfo } from "@/types/document";
 /**
  * Fetch the list of databases visible to `connectionId`'s active adapter.
  *
- * Resolves with an empty array when the paradigm has no per-connection
- * database concept (Search/Kv) — callers should treat this the same as a
- * legitimate "no databases" response and keep the read-only switcher chrome.
+ * Resolves with an empty array when the active adapter has no selectable
+ * database scope. Callers should treat this the same as a legitimate "no
+ * databases" response and keep the read-only switcher chrome only when the
+ * profile capability says switching is unavailable.
  *
  * Rejects with the serialised `AppError` when the connection id has no live
  * adapter (the backend surfaces `AppError::NotFound`) or when the underlying

@@ -103,14 +103,15 @@ describe("RedisCommandEditor", () => {
     );
   });
 
-  it("binds Mod-Enter to execute without binding dry-run", () => {
+  it("binds Mod-Enter to execute and Cmd-Shift-Enter to unsupported dry-run", () => {
     const onExecute = vi.fn();
+    const onDryRun = vi.fn();
     render(
       <RedisCommandEditor
         sql="TTL session:1"
         onSqlChange={vi.fn()}
         onExecute={onExecute}
-        onDryRun={vi.fn()}
+        onDryRun={onDryRun}
       />,
     );
 
@@ -123,8 +124,13 @@ describe("RedisCommandEditor", () => {
     }
 
     expect(onExecute).toHaveBeenCalled();
-    expect(bindings.some((entry) => entry.key === "Cmd-Shift-Enter")).toBe(
-      false,
+    const dryRunBindings = bindings.filter(
+      (entry) => entry.key === "Cmd-Shift-Enter",
     );
+    expect(dryRunBindings.length).toBeGreaterThanOrEqual(1);
+    for (const binding of dryRunBindings) {
+      binding.run?.(view);
+    }
+    expect(onDryRun).toHaveBeenCalled();
   });
 });
