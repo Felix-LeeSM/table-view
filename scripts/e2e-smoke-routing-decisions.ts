@@ -97,6 +97,7 @@ export function collectWorkflowMatrix(
   return sortMatrix([
     ...collectWorkflowJobMatrix(workflow, "e2e-smoke"),
     ...collectWorkflowJobMatrix(workflow, "e2e-smoke-file-backed"),
+    ...collectWorkflowJobMatrix(workflow, "e2e-smoke-enterprise-rdbms"),
   ]);
 }
 

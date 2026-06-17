@@ -113,6 +113,8 @@ else
   run_wdio "$BASE_DATA_DIR/erd-dense" "e2e/smoke/erd-dense.spec.ts"
   run_wdio "$BASE_DATA_DIR/mysql" "e2e/smoke/mysql.spec.ts"
   run_wdio "$BASE_DATA_DIR/mariadb" "e2e/smoke/mariadb.spec.ts"
+  run_wdio "$BASE_DATA_DIR/mssql" "e2e/smoke/mssql.spec.ts"
+  run_wdio "$BASE_DATA_DIR/oracle" "e2e/smoke/oracle.spec.ts"
   run_wdio "$BASE_DATA_DIR/sqlite" "e2e/smoke/sqlite.spec.ts"
   run_wdio "$BASE_DATA_DIR/duckdb" "e2e/smoke/duckdb.spec.ts"
   run_wdio "$BASE_DATA_DIR/duckdb-file-analytics" "e2e/smoke/duckdb-file-analytics.spec.ts"

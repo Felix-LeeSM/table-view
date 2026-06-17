@@ -54,9 +54,9 @@
     },
     {
       "id": "mssql-runtime-oracle-runtime-slice-boundaries",
-      "minimumRow": "MSSQL runtime catalog/query/edit-row slice and Oracle catalog/query/cancel/tabular/edit-row runtime slice",
+      "minimumRow": "MSSQL and Oracle bounded Runtime Happy Path smoke slices",
       "products": ["mssql", "oracle"],
-      "claimBoundary": "Issue #903 promotes SQL Server to bounded catalog/query/cancel/tabular runtime support plus editRows through frontend SQL batch with primary-key projection, while keeping DDL, admin, import/export, full T-SQL parity, and full workbench parity unsupported. Issues #905/#906 promote Oracle to service-name lifecycle, bounded catalog/query/cancel/tabular runtime, key-projected editRows through frontend SQL batch, tested SELECT/DML/DDL Safe Mode classification, and bounded editor assistance; SID, TNS, wallet, TLS, advanced auth, switch database, structured DDL, raw DDL/admin, full parser/completion promotion, runtime smoke, triggers, and PL/SQL body/package work remain unsupported or unclaimed.",
+      "claimBoundary": "Issue #907 wires representative Runtime Happy Path smoke for the already-promoted SQL Server and Oracle runtime slices. SQL Server stays bounded to catalog/query/cancel/tabular support plus editRows through frontend SQL batch with primary-key projection, while DDL, admin, import/export, full T-SQL parity, and full workbench parity remain unsupported. Oracle stays bounded to service-name lifecycle, catalog/query/cancel/tabular runtime, key-projected editRows through frontend SQL batch, tested SELECT/DML/DDL Safe Mode classification, bounded editor assistance, and the #907 smoke path; SID, TNS, wallet, TLS, advanced auth, switch database, structured DDL, raw DDL/admin, full parser/completion promotion, triggers beyond the bounded catalog smoke path, and PL/SQL body/package authoring/source work remain unsupported or unclaimed.",
       "docs": [
         {
           "path": "docs/product/known-limitations.md",

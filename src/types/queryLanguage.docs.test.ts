@@ -37,21 +37,20 @@ describe("query language support documentation", () => {
       /\bOracle\b[\s\S]*catalog\/query\/cancel\/tabular runtime/i,
     );
     expect(supportDocs).toMatch(
-      /SQL Server structured DDL, admin\/security\/backup\/jobs\/users\/roles, broad parser\/completion semantics, and runtime smoke support remain unclaimed/,
+      /#907 Runtime Happy Path smoke covers representative connect, seeded catalog browse, SELECT\/DML, destructive Safe Mode confirmation, cancellation, and grid edit/,
     );
     expect(supportDocs).toMatch(
       /Full Oracle SQL parser\/completion promotion remains unclaimed/,
     );
     expect(supportDocs).toMatch(
-      /#906 enables key-projected editRows and bounded static Safe Mode\/editor assistance; it does not enable switch database, structured DDL, raw DDL\/admin, PL\/SQL body\/package authoring\/source, trigger catalog/,
+      /#907 Runtime Happy Path smoke covers representative service-name connect, seeded catalog\/routine browse, SELECT\/DML, destructive Safe Mode confirmation, cancellation, and grid edit/,
     );
 
     const activeClaimPatterns = [
-      /\bMSSQL\b[^.\n|]*(?:Runtime Happy Path smoke covers|catalog-aware[^.\n|]*completion is active|structured DDL is active)/i,
-      /\bOracle\b[^.\n|]*(?:Runtime Happy Path smoke covers|routine smoke is active|routine smoke support is active)/i,
+      /\bMSSQL\b[^.\n|]*(?:catalog-aware[^.\n|]*completion is active|structured DDL is active|full T-SQL semantics are active)/i,
+      /\bOracle\b[^.\n|]*(?:routine smoke is active|routine smoke support is active)/i,
       /\bOracle\b[^.\n|]*(?:structured DDL|raw DDL\/admin|full parser\/completion|PL\/SQL)[^.\n|]*(?:is active|is supported|runtime support is active|support is active)/i,
       /SQL Server smoke, seeded/i,
-      /Oracle service-name connect, seeded/i,
       /\bOracle\b[^.\n|]*autocomplete is active/i,
     ];
 
