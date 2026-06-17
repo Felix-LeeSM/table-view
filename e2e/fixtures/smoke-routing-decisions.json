@@ -206,12 +206,12 @@
       "seedTargets": ["oracle"],
       "tier": "dormant E2E",
       "wiredInSmokeScript": false,
-      "runtimeCost": "No routine runtime smoke cost while Oracle remains service-name connection/test only. Query/catalog/edit/DDL/parser/completion/PLSQL promotion must budget the on-demand Oracle container route and startup timeout.",
-      "flakeRisk": "Dormant until a source-specific runtime-smoke promotion reintroduces Oracle query/catalog/edit/DDL/parser/completion/PLSQL evidence.",
+      "runtimeCost": "No routine runtime smoke cost while Oracle has focused #905 catalog/query/cancel/tabular evidence but remains unwired from the smoke matrix. Edit/DDL/parser/completion/PLSQL promotion must budget the on-demand Oracle container route and startup timeout.",
+      "flakeRisk": "Dormant until #907 or a later source-specific runtime-smoke promotion wires Oracle smoke evidence without widening edit/DDL/parser/completion/PLSQL claims.",
       "cacheImpact": "No cache impact while dormant; future promotion would use the shared prepared Tauri binary and Rust target cache.",
       "failureArtifacts": "No routine artifact while dormant; future promotion must restore scoped WDIO artifacts and container logs.",
-      "supportClaimImpact": "Seed/spec inventory only. This does not create connection, query, catalog, edit, DDL, parser, completion, or runtime smoke support.",
-      "action": "keep dormant until source-specific Oracle runtime/docs/smoke evidence beyond #904 service-name connection/test lands"
+      "supportClaimImpact": "Focused #905 catalog/query/cancel/tabular evidence exists below routine smoke. This row does not create Oracle edit, DDL, parser, completion, PL/SQL, admin, or Runtime Happy Path smoke support.",
+      "action": "keep dormant until #907 wires source-specific Oracle smoke evidence and claim closure"
     },
     {
       "id": "sqlite-file-backed-smoke-seed",

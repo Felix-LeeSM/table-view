@@ -43,7 +43,7 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "oracle")
         .length === 1,
-      `${profile}: expected exactly one Oracle service-name fixture connection`,
+      `${profile}: expected exactly one Oracle bounded runtime fixture connection`,
     );
     assert(
       fixtureConnections.filter((connection) => connection.db_type === "sqlite")
@@ -140,18 +140,25 @@ function verifyEnterpriseRdbmsPromotionBoundary(): void {
 
   assert(
     isSupportedDatabaseType("oracle"),
-    "oracle: service-name connection/test profile must be exposed for connection support",
+    "oracle: bounded catalog/query profile must be exposed for connection support",
   );
   assert(
     hasConnectionCapability("oracle", "test"),
-    "oracle: connection.test must be enabled for the service-name baseline",
+    "oracle: connection.test must stay enabled for the service-name lifecycle",
   );
   assert(
-    !oracle.capabilities.query.query &&
-      !oracle.capabilities.catalog.browse &&
+    oracle.capabilities.query.query &&
+      oracle.capabilities.query.multiStatement &&
+      oracle.capabilities.query.cancel &&
+      !oracle.capabilities.query.explain &&
+      oracle.capabilities.catalog.browse &&
+      oracle.capabilities.catalog.schema &&
+      oracle.capabilities.catalog.indexes &&
+      oracle.capabilities.catalog.constraints &&
+      oracle.capabilities.catalog.relationships &&
       !oracle.capabilities.edit.editRows &&
       !oracle.capabilities.ddl.createTable,
-    "oracle: service-name baseline must not expose query/catalog/edit/DDL capabilities",
+    "oracle: runtime support is limited to service-name catalog/query/cancel/tabular; edit/DDL/admin/import/export/full workbench stay unsupported",
   );
 }
 
@@ -231,5 +238,5 @@ verifyEnterpriseRdbmsPromotionBoundary();
 verifySearchConnectionPromotionBoundary();
 
 console.log(
-  "[e2e:pre-smoke] release gate MSSQL runtime catalog/query/editRows, Oracle service-name connection/test, and live Search contract assertions passed.",
+  "[e2e:pre-smoke] release gate MSSQL runtime catalog/query/editRows, Oracle service-name catalog/query/cancel/tabular, and live Search contract assertions passed.",
 );

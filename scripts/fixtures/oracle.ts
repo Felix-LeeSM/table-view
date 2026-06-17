@@ -51,7 +51,7 @@ function assertServiceNameFixtureBoundary(env: OracleFixtureEnv): void {
   if (configured.length === 0) return;
 
   throw new Error(
-    `Oracle fixture supports service-name connections only for #904; unsupported: ${configured.join(", ")}. Use ORACLE_SERVICE for the local XE service name.`,
+    `Oracle fixture supports service-name connections only for the bounded #905 runtime slice; unsupported: ${configured.join(", ")}. Use ORACLE_SERVICE for the local XE service name.`,
   );
 }
 
@@ -61,7 +61,7 @@ function assertOracleServiceName(serviceName: string): void {
   }
   if (!SERVICE_NAME_PATTERN.test(serviceName)) {
     throw new Error(
-      "Oracle fixture service name must be a simple service-name token; SID, TNS descriptors, wallet aliases, and connect strings are unsupported for #904.",
+      "Oracle fixture service name must be a simple service-name token; SID, TNS descriptors, wallet aliases, and connect strings are unsupported for #905.",
     );
   }
 }

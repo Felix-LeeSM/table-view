@@ -203,7 +203,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(sql).toMatch(/CREATE OR ALTER PROCEDURE dbo\.mssql_catalog_ping/i);
   });
 
-  it("oracle seed carries dormant catalog inventory probes beyond connection baseline", () => {
+  it("oracle seed carries catalog/query runtime inventory probes below smoke wiring", () => {
     const sql = readFileSync(resolve("e2e/fixtures", "seed.oracle.sql"), {
       encoding: "utf8",
     });
@@ -590,7 +590,7 @@ describe("DBMS-specific E2E seed fixtures", () => {
     },
   );
 
-  it("oracle fixture seed stays dormant beyond Oracle connection baseline", () => {
+  it("oracle fixture seed stays dormant until Oracle smoke wiring", () => {
     const workflow = readFileSync(resolve(".github/workflows/e2e-smoke.yml"), {
       encoding: "utf8",
     });
