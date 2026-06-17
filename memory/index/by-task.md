@@ -103,7 +103,6 @@ generator: scripts/regenerate-indexes.sh
 
 - [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/engineering/conventions/react/memory.md)
-- [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
 
 ### god-file
 
