@@ -47,3 +47,4 @@ Historical source: 구 `docs/paradigm-ui-map.md` (2026-04-24) 압축본. Old Pha
 
 - [architecture](../memory.md)
 - [conventions](../../conventions/memory.md)
+- [product/ui-parity](../../../product/ui-parity/memory.md) — cross-paradigm UI parity merge gate (이 방 heuristic 의 게이트 버전; heuristic 은 머지를 막지 않지만 ui-parity rule 은 막는다)
