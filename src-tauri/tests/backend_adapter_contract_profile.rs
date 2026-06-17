@@ -353,12 +353,13 @@ fn rdbms_integration_gate_profiles_are_coherent() {
             "mariadb",
             "sqlite",
             "duckdb",
-            "mssql"
+            "mssql",
+            "oracle",
         ]
     );
     assert_eq!(
         database_type_labels(SERVER_RDBMS_DATABASE_TYPES),
-        vec!["postgresql", "mysql", "mariadb", "mssql"]
+        vec!["postgresql", "mysql", "mariadb", "mssql", "oracle"]
     );
     assert_eq!(
         database_type_labels(FILE_RDBMS_DATABASE_TYPES),
