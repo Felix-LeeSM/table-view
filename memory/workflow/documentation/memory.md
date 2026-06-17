@@ -13,6 +13,26 @@ trigger:
 모든 PR 은 "문서가 필요한가?" 와 "기존 SOT 어디에 반영했나?" 를 먼저
 판단한다. 새 문서 생성은 마지막 선택지이며, 기존 체계 우회 금지.
 
+## PR body contract
+
+모든 PR body 는 `scripts/hooks/check-pr-body.mjs` (CI `PR Body Contract` job) 가
+강제하는 7 섹션을 포함해야 머지 가능. agent 는 `pr-create` skill
+(`.agents/skills/pr-create/SKILL.md`) 로 template 기반 조립 + 로컬 검증 후 생성 —
+push 전 통과로 CI re-push 낭비 차단. template: `.github/PULL_REQUEST_TEMPLATE.md`.
+
+| 섹션 | 요구 |
+|---|---|
+| Summary | 한두 문장 |
+| Changes | repo-relative path 또는 bullet |
+| Invariants | 보존할 사용자 동작/data/API/workflow invariant |
+| Test plan | 실행 check 또는 해당 없음 사유 |
+| Smoke impact | `Smoke-Test-Plan:` **같은 줄** — Added/updated · Covered by existing · Not required(사유) |
+| Documentation impact | 아래 4 필드 |
+| Links | issue/ADR/sprint/CI/PR |
+
+상세 검증 로직은 `check-pr-body.mjs` 가 소유(본 방은 중복不). 금지: 절대경로
+(`/Users`, `/tmp`, `file://`, `worktrees/`) — Evidence portability 참조.
+
 ## Documentation impact 필수 판단
 
 PR body 에 다음 섹션을 포함:
