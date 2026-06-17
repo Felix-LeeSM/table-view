@@ -156,9 +156,9 @@ function verifyEnterpriseRdbmsPromotionBoundary(): void {
       oracle.capabilities.catalog.indexes &&
       oracle.capabilities.catalog.constraints &&
       oracle.capabilities.catalog.relationships &&
-      !oracle.capabilities.edit.editRows &&
+      oracle.capabilities.edit.editRows &&
       !oracle.capabilities.ddl.createTable,
-    "oracle: runtime support is limited to service-name catalog/query/cancel/tabular; edit/DDL/admin/import/export/full workbench stay unsupported",
+    "oracle: runtime support is limited to service-name catalog/query/cancel/tabular plus PK-projected editRows; DDL/admin/import/export/full workbench stay unsupported",
   );
 }
 
@@ -238,5 +238,5 @@ verifyEnterpriseRdbmsPromotionBoundary();
 verifySearchConnectionPromotionBoundary();
 
 console.log(
-  "[e2e:pre-smoke] release gate MSSQL runtime catalog/query/editRows, Oracle service-name catalog/query/cancel/tabular, and live Search contract assertions passed.",
+  "[e2e:pre-smoke] release gate MSSQL runtime catalog/query/editRows, Oracle service-name catalog/query/cancel/tabular/editRows, and live Search contract assertions passed.",
 );
