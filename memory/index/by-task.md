@@ -103,6 +103,7 @@ generator: scripts/regenerate-indexes.sh
 
 - [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/engineering/conventions/react/memory.md)
+- [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
 
 ### god-file
 
@@ -137,6 +138,7 @@ generator: scripts/regenerate-indexes.sh
 ### merge-gate
 
 - [Product 머지 기준](../../memory/product/memory.md)
+- [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
 
 ### mock-scope
 
@@ -225,6 +227,7 @@ generator: scripts/regenerate-indexes.sh
 ### review
 
 - [Engineering](../../memory/engineering/memory.md)
+- [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 - [PR Review Behavior](../../memory/workflow/review/memory.md)
@@ -275,6 +278,10 @@ generator: scripts/regenerate-indexes.sh
 ### ui
 
 - [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
+
+### ui-parity
+
+- [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
 
 ### user-report
 
