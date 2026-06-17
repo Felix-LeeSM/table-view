@@ -203,13 +203,6 @@ jobs:
         with:
           toolchain: 1.91.0
 
-      - name: Cache Rust artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-          cache-bin: false
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
       - name: Show disk usage before integration build
         run: |
           df -h /
@@ -223,6 +216,13 @@ jobs:
           docker system prune -af || true
           df -h /
           docker system df || true
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run integration tests
         env:
