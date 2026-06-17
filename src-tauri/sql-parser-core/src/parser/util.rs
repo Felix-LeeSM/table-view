@@ -40,12 +40,95 @@ pub(super) fn first_word(input: &str) -> Option<(String, usize)> {
     }
 }
 
+pub(super) fn known_unsupported_sql_head(input: &str) -> Option<(String, usize)> {
+    let words = first_words(input, 4);
+    let upper: Vec<String> = words
+        .iter()
+        .map(|(word, _)| word.to_ascii_uppercase())
+        .collect();
+
+    let head = match upper.as_slice() {
+        [first, ..] if matches!(first.as_str(), "EXEC" | "EXECUTE") => Some(1),
+        [first, ..]
+            if matches!(
+                first.as_str(),
+                "BACKUP" | "RESTORE" | "DBCC" | "USE" | "DENY" | "GO"
+            ) =>
+        {
+            Some(1)
+        }
+        [first, second, ..]
+            if matches!(first.as_str(), "CREATE" | "ALTER" | "DROP")
+                && is_tsql_admin_or_procedure_head(second) =>
+        {
+            Some(2)
+        }
+        [first, second, third, fourth, ..]
+            if first == "CREATE"
+                && second == "OR"
+                && third == "ALTER"
+                && is_tsql_admin_or_procedure_head(fourth) =>
+        {
+            Some(4)
+        }
+        _ => None,
+    }?;
+
+    let at = words.first().map(|(_, at)| *at)?;
+    let phrase = words
+        .iter()
+        .take(head)
+        .map(|(word, _)| word.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    Some((phrase, at))
+}
+
 pub(super) fn syntax_err(at: Option<usize>, msg: &str) -> ParseError {
     ParseError {
         error_kind: ParseErrorKind::SyntaxError,
         message: msg.to_string(),
         at,
     }
+}
+
+fn first_words(input: &str, max: usize) -> Vec<(String, usize)> {
+    let bytes = input.as_bytes();
+    let mut words = Vec::new();
+    let mut i = 0usize;
+    while i < bytes.len() && words.len() < max {
+        while i < bytes.len()
+            && (bytes[i] == b' ' || bytes[i] == b'\t' || bytes[i] == b'\n' || bytes[i] == b'\r')
+        {
+            i += 1;
+        }
+        let start = i;
+        while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+            i += 1;
+        }
+        if i == start {
+            break;
+        }
+        if let Ok(word) = std::str::from_utf8(&bytes[start..i]) {
+            words.push((word.to_string(), start));
+        }
+    }
+    words
+}
+
+fn is_tsql_admin_or_procedure_head(word: &str) -> bool {
+    matches!(
+        word,
+        "PROC"
+            | "PROCEDURE"
+            | "LOGIN"
+            | "SERVER"
+            | "ASSEMBLY"
+            | "CERTIFICATE"
+            | "CREDENTIAL"
+            | "ENDPOINT"
+            | "JOB"
+    )
 }
 
 pub(super) fn is_known_sql_verb(name: &str) -> bool {

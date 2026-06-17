@@ -446,7 +446,10 @@ export async function executeRdbQuery({
   let hasWarn = false;
   const escalationCandidates: { stmt: string; reason: string }[] = [];
   for (const stmt of statements) {
-    const analysis = analyzeStatement(stmt);
+    const analysis = analyzeStatement(
+      stmt,
+      dbType === "mssql" ? { dialect: "mssql" } : undefined,
+    );
     const decision = decideSafeMode(analysis);
     if (decision.action === "block") {
       worstAction = "block";

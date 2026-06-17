@@ -132,6 +132,23 @@ fn reference_vocabulary_smoke_without_sqlcmd_scripting() {
         "MSSQL completion must not imply SQLCMD scripting commands are executable: {:?}",
         sqlcmd_result.items
     );
+
+    let procedure_result = complete_sql(empty_request("CREATE "));
+    let procedure_item = procedure_result
+        .items
+        .iter()
+        .find(|item| item.label == "CREATE PROCEDURE")
+        .expect("MSSQL procedure vocabulary candidate");
+    assert_eq!(procedure_item.kind, "keyword");
+    assert_eq!(procedure_item.apply.as_deref(), Some("CREATE PROCEDURE"));
+    assert_eq!(procedure_item.runtime_executable, None);
+    assert!(
+        procedure_item
+            .detail
+            .as_deref()
+            .is_some_and(|detail| !detail.contains("body") && !detail.contains("scripting")),
+        "MSSQL completion stays editor assistance, got {procedure_item:?}"
+    );
 }
 
 #[test]

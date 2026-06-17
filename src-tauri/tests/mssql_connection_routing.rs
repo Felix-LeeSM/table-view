@@ -411,7 +411,7 @@ async fn run_mssql_runtime_assertions(
     };
     let ddl = RdbAdapter::drop_table(adapter, &drop).await;
     assert!(
-        matches!(ddl, Err(AppError::Unsupported(message)) if message.contains("outside issue #902"))
+        matches!(ddl, Err(AppError::Unsupported(message)) if message.contains("outside issue #903"))
     );
 
     for sql in [
@@ -423,7 +423,7 @@ async fn run_mssql_runtime_assertions(
             .await
             .unwrap_err();
         assert!(
-            matches!(err, AppError::Unsupported(ref message) if message.contains("outside issue #902")),
+            matches!(err, AppError::Unsupported(ref message) if message.contains("outside issue #903")),
             "expected MSSQL runtime boundary for {sql}, got {err:?}"
         );
     }

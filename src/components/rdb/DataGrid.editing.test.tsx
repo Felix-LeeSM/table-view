@@ -270,7 +270,7 @@ describe("DataGrid", () => {
     expect(nameCell.querySelector("input")).not.toBeInTheDocument();
   });
 
-  it("does not enable row editing controls for MSSQL declared-only tables with a primary key", async () => {
+  it("enables row editing controls for writable MSSQL tables with a primary key", async () => {
     useConnectionStore.setState({
       connections: [
         {
@@ -293,7 +293,7 @@ describe("DataGrid", () => {
     renderDataGrid({ database: "MssqlApp", schema: "dbo" });
     await screen.findByText("3 rows");
 
-    expect(screen.queryByLabelText("Add row")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Add row")).toBeInTheDocument();
 
     const cells = screen.getAllByRole("gridcell");
     const nameCell = cells[1]!;
@@ -301,7 +301,7 @@ describe("DataGrid", () => {
       fireEvent.dblClick(nameCell);
     });
 
-    expect(nameCell.querySelector("input")).not.toBeInTheDocument();
+    expect(nameCell.querySelector("input")).toBeInTheDocument();
   });
 
   it("does not enable row editing controls for MSSQL tables without primary keys", async () => {

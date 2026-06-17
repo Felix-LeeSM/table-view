@@ -273,29 +273,31 @@ execution, or MongoDB full-support parity has shipped.
 
 H6 wider source 는 **bounded-runtime / declared-only enterprise RDBMS +
 planned/candidate contract 정합성 gate**다. MSSQL 은 SQL-auth/TDS
-catalog/query/cancel/tabular runtime slice 이고, Oracle 은 source-specific identity
+catalog/query/cancel/tabular runtime slice plus primary-key-projected row edit
+through the frontend SQL batch path 이고, Oracle 은 source-specific identity
 inventory 다. `DatabaseType`/profile/dialect/labels/defaults/URL parsing/
 seed-spec inventory 는 남기되 MSSQL 은 connection.test/connect/ping,
-catalog/query/cancel/tabular result 만, Oracle 은 empty capability + hidden new
-connection support 만 허용한다. MSSQL edit/DDL/parser/completion/runtime smoke/
-admin claim 과 Oracle connection/query/catalog/edit/DDL/parser/completion/runtime
-smoke claim 은 각 source 의 matching runtime, contract, docs, and smoke evidence
-없이 만들지 않는다. Cassandra/Scylla, DynamoDB, graph, vector, stream 은
+catalog/query/cancel/tabular result 와 key-projected editRows 만, Oracle 은 empty
+capability + hidden new connection support 만 허용한다. MSSQL DDL/admin/runtime
+smoke/broad parser/completion claim 과 Oracle connection/query/catalog/edit/DDL/
+parser/completion/runtime smoke claim 은 각 source 의 matching runtime, contract,
+docs, and smoke evidence 없이 만들지 않는다. Cassandra/Scylla, DynamoDB, graph,
+vector, stream 은
 아직 active `DatabaseType`/profile/runtime 이 없는 candidate 다.
 
 H6 closure 는 MSSQL/Oracle 을 source-specific promotion guardrail 뒤에 둔다는 뜻이지
 enterprise RDBMS full workbench support 를 출시했다는 뜻이 아니다. Full admin parity,
 import/export, profiler/activity, role/user/permission UI, broad scripting,
-MSSQL edit/DDL/parser/completion/smoke/full T-SQL semantics, and Oracle raw
-DDL/admin/TLS/PLSQL semantics 는 별도 source-specific evidence 전까지 out of scope 다.
+MSSQL DDL/admin/smoke/full T-SQL semantics, and Oracle raw DDL/admin/TLS/PLSQL
+semantics 는 별도 source-specific evidence 전까지 out of scope 다.
 
 | Gate | Current owner | H6 boundary |
 |---|---|---|
-| MSSQL runtime guardrail | `src/types/dataSource.ts`, `src/types/connection.ts`, `src/types/adapterConformance.test.ts`, `src-tauri/src/models/data_source.rs`, `src-tauri/tests/backend_adapter_contract_profile.rs`, `src-tauri/tests/mssql_connection_routing.rs`, `docs/product/README.md`, `docs/product/query-language-support.md`, `docs/product/known-limitations.md`, this roadmap, #902 | `mssql` keeps source-specific identity, backend adapter id, dialect id, labels, defaults, URL parsing, and seed/spec inventory. Capability is limited to SQL Server connection.test/connect/ping, catalog browse/schema/indexes/constraints/relationships, query, multi-statement execution, cancel, and tabular result rendering. Runtime/server RDBMS lists include it, while edit/DDL/parser/completion/runtime smoke/admin support stays unclaimed until matching evidence lands. |
+| MSSQL runtime/edit boundary | `src/types/dataSource.ts`, `src/types/connection.ts`, `src/types/adapterConformance.test.ts`, `src-tauri/src/models/data_source.rs`, `src-tauri/tests/backend_adapter_contract_profile.rs`, `src-tauri/tests/mssql_connection_routing.rs`, `src/components/datagrid/sqlGenerator.test.ts`, `src/components/rdb/DataGrid.editing.test.tsx`, `src/lib/sql/sqlSafety.dialect-boundary.test.ts`, `src-tauri/sql-parser-core/src/parser/tests.rs`, `src-tauri/sql-parser-core/src/completion/mssql_completion_tests.rs`, `docs/product/README.md`, `docs/product/query-language-support.md`, `docs/product/known-limitations.md`, this roadmap, #902/#903 | `mssql` keeps source-specific identity, backend adapter id, dialect id, labels, defaults, URL parsing, and seed/spec inventory. Capability is limited to SQL Server connection.test/connect/ping, catalog browse/schema/indexes/constraints/relationships, query, multi-statement execution, cancel, tabular result rendering, and primary-key-projected editRows through frontend SQL batch. Runtime/server RDBMS lists include it, while structured DDL, admin, runtime smoke, SQLCMD/procedure scripting, broad parser/completion semantics, and full T-SQL support stay unclaimed until matching evidence lands. |
 | Oracle declared-only guardrail | `src/types/dataSource.ts`, `src/types/connection.ts`, `src/types/adapterConformance.test.ts`, `src-tauri/src/models/data_source.rs`, `src-tauri/tests/backend_adapter_contract_profile.rs`, `docs/product/README.md`, `docs/product/query-language-support.md`, `docs/product/known-limitations.md`, this roadmap, #900 | `oracle` keeps source-specific identity, backend adapter id, dialect id, labels, service-name defaults, URL parsing, and seed/spec inventory. Capabilities stay empty, backend contract state stays declared-only, runtime/server RDBMS lists exclude it, and new connection support stays hidden until Oracle-specific `connection.test` plus matching query/catalog/edit/DDL/parser/completion/runtime evidence lands. |
 | Wider candidate workflow proof | `memory/engineering/architecture/data-source/memory.md`, `memory/engineering/architecture/data-source/adding/memory.md`, this roadmap | Promotion requires workflow value, profile target, connection kind, language, catalog model, result envelope, safety policy, fixture strategy, conformance scope, and docs/memory routing before implementation. |
 | Candidate source contract inventory | this roadmap, `docs/product/README.md`, `docs/product/query-language-support.md` | Candidate targets are inventoried below. They are profile targets, not active profile entries. |
-| Parser/completion/runtime non-claim | `docs/product/query-language-support.md`, `docs/product/known-limitations.md` | Deferred language ids, MSSQL runtime slice, and declared-only Oracle identities do not create active parser, completion, edit, DDL, admin, or E2E smoke claims by themselves. Runtime changes must land in later source-specific PRs with matching smoke evidence. |
+| Parser/completion/runtime non-claim | `docs/product/query-language-support.md`, `docs/product/known-limitations.md` | Deferred language ids, MSSQL runtime/edit slice, and declared-only Oracle identities do not create active structured DDL, admin, full parser/completion, or E2E smoke claims by themselves. Runtime changes must land in later source-specific PRs with matching smoke evidence. |
 | H6 smoke matrix | `docs/contributor-guide/testing-and-quality.md` | Current E2E smoke proves PostgreSQL, MySQL, MariaDB, SQLite, DuckDB `.duckdb`, DuckDB file analytics, MongoDB, Redis, Valkey, Elasticsearch, and OpenSearch journeys only. MSSQL smoke specs/fixtures remain inventory until #907 wires smoke evidence, Oracle smoke specs/fixtures are inventory while declared-only/capability-empty, and wider candidates have future smoke inventories only. |
 
 Candidate target inventory:
@@ -406,7 +408,7 @@ Near-term follow-up groups:
 1. 새 partial workflow 를 추가하기 전에 눈에 보이는 미완성 workflow 를 먼저 닫는다.
 2. connect/browse/query 만 노출하는 runtime 을 하나 더 붙이는 것보다, 기존 runtime
    깊이를 우선한다.
-3. Runtime promotion freeze: Search admin execution, MSSQL edit/DDL/parser/completion/smoke widening, Oracle runtime
+3. Runtime promotion freeze: Search admin execution, MSSQL DDL/admin/smoke/full parser-completion widening, Oracle runtime
    promotion, 기타 새 DBMS lane 은 현재 지원 DBMS 하나가
    query/workbench parity lane 을 통과할 때까지 기다린다.
 4. Query/workbench parity 범위는 SQL/MQL execution, parser/Safe Mode, completion,

@@ -36,7 +36,7 @@ impl MssqlAdapter {
                 "SQL query is empty after removing trailing terminators".into(),
             ));
         }
-        if has_internal_statement_separator(query) {
+        if has_internal_statement_separator(query) || has_mssql_batch_separator(query) {
             return Err(mssql_runtime_statement_unsupported());
         }
 
@@ -283,6 +283,7 @@ impl MssqlAdapter {
                 )));
             }
             if has_internal_statement_separator(statement)
+                || has_mssql_batch_separator(statement)
                 || !matches!(mssql_query_type(statement), QueryType::Dml { .. })
             {
                 return Err(mssql_batch_statement_unsupported(idx + 1, statements.len()));
@@ -518,12 +519,104 @@ fn strip_trailing_terminator(sql: &str) -> &str {
 }
 
 fn has_internal_statement_separator(sql: &str) -> bool {
-    strip_trailing_terminator(sql).contains(';')
+    contains_unquoted_statement_separator(strip_trailing_terminator(sql))
+}
+
+fn contains_unquoted_statement_separator(sql: &str) -> bool {
+    let bytes = sql.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\'' => {
+                i += 1;
+                while i < bytes.len() {
+                    if bytes[i] == b'\'' {
+                        i += 1;
+                        if bytes.get(i) == Some(&b'\'') {
+                            i += 1;
+                            continue;
+                        }
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b'"' => {
+                i += 1;
+                while i < bytes.len() {
+                    if bytes[i] == b'"' {
+                        i += 1;
+                        if bytes.get(i) == Some(&b'"') {
+                            i += 1;
+                            continue;
+                        }
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b'[' => {
+                i += 1;
+                while i < bytes.len() {
+                    if bytes[i] == b']' {
+                        i += 1;
+                        if bytes.get(i) == Some(&b']') {
+                            i += 1;
+                            continue;
+                        }
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b'-' if bytes.get(i + 1) == Some(&b'-') => {
+                i += 2;
+                while i < bytes.len() && !matches!(bytes[i], b'\n' | b'\r') {
+                    i += 1;
+                }
+            }
+            b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                i += 2;
+                while i + 1 < bytes.len() {
+                    if bytes[i] == b'*' && bytes[i + 1] == b'/' {
+                        i += 2;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b';' => return true,
+            _ => i += 1,
+        }
+    }
+    false
+}
+
+fn has_mssql_batch_separator(sql: &str) -> bool {
+    strip_leading_comments(sql).lines().any(|line| {
+        let line = line
+            .split("--")
+            .next()
+            .unwrap_or(line)
+            .split("/*")
+            .next()
+            .unwrap_or(line);
+        let parts = line
+            .trim()
+            .trim_end_matches(';')
+            .split_whitespace()
+            .collect::<Vec<_>>();
+        match parts.as_slice() {
+            [head] => head.eq_ignore_ascii_case("GO"),
+            [head, count] => head.eq_ignore_ascii_case("GO") && count.parse::<u32>().is_ok(),
+            _ => false,
+        }
+    })
 }
 
 fn mssql_query_type(query: &str) -> QueryType {
     let trimmed = strip_leading_comments(query).to_uppercase();
-    if trimmed.starts_with("SELECT") || trimmed.starts_with("WITH") {
+    if trimmed.starts_with("SELECT") || is_mssql_select_with_query(&trimmed) {
         QueryType::Select
     } else if trimmed.starts_with("INSERT")
         || trimmed.starts_with("UPDATE")
@@ -536,15 +629,140 @@ fn mssql_query_type(query: &str) -> QueryType {
     }
 }
 
+fn is_mssql_select_with_query(trimmed_upper: &str) -> bool {
+    if !trimmed_upper.starts_with("WITH") {
+        return false;
+    }
+    top_level_keyword_after_ctes(trimmed_upper).is_some_and(|keyword| keyword == "SELECT")
+}
+
+fn top_level_keyword_after_ctes(input: &str) -> Option<&str> {
+    let bytes = input.as_bytes();
+    let mut i = "WITH".len();
+    loop {
+        skip_ascii_ws(bytes, &mut i);
+        skip_identifier_like(bytes, &mut i)?;
+        skip_ascii_ws(bytes, &mut i);
+        if bytes.get(i) == Some(&b'(') {
+            i = skip_balanced_parens(input, i)?;
+            skip_ascii_ws(bytes, &mut i);
+        }
+        let rest = input.get(i..)?;
+        if !rest.starts_with("AS") {
+            return None;
+        }
+        i += "AS".len();
+        skip_ascii_ws(bytes, &mut i);
+        if bytes.get(i) != Some(&b'(') {
+            return None;
+        }
+        i = skip_balanced_parens(input, i)?;
+        skip_ascii_ws(bytes, &mut i);
+        if bytes.get(i) == Some(&b',') {
+            i += 1;
+            continue;
+        }
+        skip_ascii_ws(bytes, &mut i);
+        return first_ascii_word(input.get(i..)?);
+    }
+}
+
+fn skip_ascii_ws(bytes: &[u8], i: &mut usize) {
+    while matches!(bytes.get(*i), Some(b' ' | b'\t' | b'\n' | b'\r')) {
+        *i += 1;
+    }
+}
+
+fn skip_identifier_like(bytes: &[u8], i: &mut usize) -> Option<()> {
+    match bytes.get(*i) {
+        Some(b'[') => {
+            *i += 1;
+            while let Some(byte) = bytes.get(*i) {
+                *i += 1;
+                if *byte == b']' {
+                    if bytes.get(*i) == Some(&b']') {
+                        *i += 1;
+                        continue;
+                    }
+                    return Some(());
+                }
+            }
+            None
+        }
+        Some(byte) if byte.is_ascii_alphabetic() || *byte == b'_' => {
+            *i += 1;
+            while matches!(bytes.get(*i), Some(byte) if byte.is_ascii_alphanumeric() || *byte == b'_')
+            {
+                *i += 1;
+            }
+            Some(())
+        }
+        _ => None,
+    }
+}
+
+fn skip_balanced_parens(input: &str, start: usize) -> Option<usize> {
+    let bytes = input.as_bytes();
+    if bytes.get(start) != Some(&b'(') {
+        return None;
+    }
+    let mut depth = 0usize;
+    let mut i = start;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\'' => {
+                i += 1;
+                while i < bytes.len() {
+                    if bytes[i] == b'\'' {
+                        i += 1;
+                        if bytes.get(i) == Some(&b'\'') {
+                            i += 1;
+                            continue;
+                        }
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b'(' => {
+                depth += 1;
+                i += 1;
+            }
+            b')' => {
+                depth = depth.checked_sub(1)?;
+                i += 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    None
+}
+
+fn first_ascii_word(input: &str) -> Option<&str> {
+    let bytes = input.as_bytes();
+    let mut end = 0usize;
+    while matches!(bytes.get(end), Some(byte) if byte.is_ascii_alphabetic()) {
+        end += 1;
+    }
+    if end == 0 {
+        None
+    } else {
+        input.get(..end)
+    }
+}
+
 fn mssql_runtime_statement_unsupported() -> AppError {
     AppError::Unsupported(
-        "SQL Server statement is outside issue #902 runtime slice; only SELECT/WITH query and INSERT/UPDATE/DELETE/MERGE DML are supported".into(),
+        "SQL Server statement is outside issue #903 runtime slice; only SELECT/WITH query and INSERT/UPDATE/DELETE/MERGE DML are supported".into(),
     )
 }
 
 fn mssql_batch_statement_unsupported(position: usize, total: usize) -> AppError {
     AppError::Unsupported(format!(
-        "Statement {position} of {total} is outside issue #902 runtime slice; batch supports INSERT/UPDATE/DELETE/MERGE DML only"
+        "Statement {position} of {total} is outside issue #903 runtime slice; batch supports INSERT/UPDATE/DELETE/MERGE DML only"
     ))
 }
 
@@ -765,6 +983,10 @@ mod tests {
             QueryType::Select
         ));
         assert!(matches!(
+            mssql_query_type("WITH cte AS (SELECT 1 AS id) UPDATE dbo.users SET name = 'Ada'"),
+            QueryType::Ddl
+        ));
+        assert!(matches!(
             mssql_query_type("UPDATE dbo.users SET name = 'Ada'"),
             QueryType::Dml { .. }
         ));
@@ -802,6 +1024,26 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn mssql_statement_separator_ignores_literals_identifiers_and_comments() {
+        assert!(!has_internal_statement_separator(
+            "UPDATE dbo.users SET note = 'a;b' WHERE id = 1"
+        ));
+        assert!(!has_internal_statement_separator(
+            "UPDATE [semi;table] SET [note;field] = N'a;''b' WHERE [id] = 1"
+        ));
+        assert!(!has_internal_statement_separator(
+            "SELECT 1 -- not a separator ;"
+        ));
+        assert!(!has_internal_statement_separator(
+            "SELECT /* not a separator ; */ 1"
+        ));
+        assert!(has_internal_statement_separator(
+            "UPDATE dbo.users SET note = 'a'; DROP TABLE dbo.users"
+        ));
+        assert!(has_internal_statement_separator("SELECT 'a'; SELECT 2"));
+    }
+
     #[tokio::test]
     async fn unsupported_runtime_sql_short_circuits_before_connection_lookup() {
         let adapter = MssqlAdapter::new();
@@ -812,17 +1054,55 @@ mod tests {
             "EXEC dbo.touch_user @id = 1",
             "EXECUTE dbo.touch_user @id = 1",
             "UPDATE dbo.users SET name = 'Ada'; DROP TABLE dbo.users",
+            "SELECT 1\nGO\nSELECT 2",
+            "SELECT 1\nGO 2\nSELECT 2",
+            "SELECT 1\nGO -- repeat\nSELECT 2",
+            "SELECT 1\nGO /* repeat */\nSELECT 2",
+            "WITH cte AS (SELECT 1 AS id) UPDATE dbo.users SET name = 'Ada'",
         ] {
             let err = adapter.execute_query(query, None).await.unwrap_err();
             assert!(
-                matches!(err, AppError::Unsupported(ref msg) if msg.contains("outside issue #902")),
-                "expected issue #902 unsupported boundary for {query}, got {err:?}"
+                matches!(err, AppError::Unsupported(ref msg) if msg.contains("outside issue #903")),
+                "expected issue #903 unsupported boundary for {query}, got {err:?}"
             );
         }
 
         let err = adapter
+            .execute_query("UPDATE dbo.users SET note = 'a;b' WHERE id = 1", None)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AppError::Connection(ref msg) if msg.contains("SQL Server connection is not open")),
+            "expected semicolon literal to pass unsupported guard and reach connection lookup, got {err:?}"
+        );
+
+        let err = adapter
             .execute_query_batch(
                 &["UPDATE dbo.users SET name = 'Ada'; DROP TABLE dbo.users".to_string()],
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Unsupported(msg) if msg.contains("Statement 1 of 1")));
+
+        let err = adapter
+            .execute_query_batch(
+                &["UPDATE dbo.users SET note = 'a;b' WHERE id = 1".to_string()],
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AppError::Connection(ref msg) if msg.contains("SQL Server connection is not open")),
+            "expected batch semicolon literal to pass unsupported guard and reach connection lookup, got {err:?}"
+        );
+
+        let err = adapter
+            .execute_query_batch(
+                &[
+                    "UPDATE dbo.users SET name = 'Ada'\nGO\nUPDATE dbo.users SET name = 'Bob'"
+                        .to_string(),
+                ],
                 None,
             )
             .await

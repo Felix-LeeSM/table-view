@@ -58,8 +58,8 @@ mod select;
 mod util;
 
 use util::{
-    first_word, is_known_sql_verb, is_supported_sql_verb, syntax_err, token_word,
-    unsupported_message,
+    first_word, is_known_sql_verb, is_supported_sql_verb, known_unsupported_sql_head, syntax_err,
+    token_word, unsupported_message,
 };
 
 /// Entry point. Lex + parse + verify "no trailing tokens" in one shot.
@@ -81,6 +81,14 @@ pub fn parse(input: &str) -> ParseResult {
     // punctuation we don't support (`(`, `)`), so e.g.
     // `INSERT INTO users VALUES (1)` would otherwise surface as
     // `LexError` instead of the more informative `UnsupportedStatement`.
+    if let Some((verb, at)) = known_unsupported_sql_head(input) {
+        return ParseResult::Error(ParseError {
+            error_kind: ParseErrorKind::UnsupportedStatement,
+            message: unsupported_message(&verb),
+            at: Some(at),
+        });
+    }
+
     if let Some((verb, at)) = first_word(input) {
         let upper = verb.to_ascii_uppercase();
         if !is_supported_sql_verb(&upper) && is_known_sql_verb(&upper) {
