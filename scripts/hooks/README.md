@@ -27,3 +27,12 @@ Current dispatchers:
 - `check-signed-commits.sh` — pre-push outgoing signed-commit gate.
 - `pre-push-path-router.sh` — path-sensitive pre-push TS/Rust gate router.
 - `post-tool-use.sh` — post-edit formatter/check dispatcher.
+
+## Memory / doc size cap thresholds
+
+- `check-memory-size.sh` — `memory.md` 복합 cap: 200줄 + 12,000 chars. 어느 하나라도
+  초과 시 경고, `--strict` 시 block. override: `MEMORY_LINE_THRESHOLD`,
+  `MEMORY_CHAR_THRESHOLD`.
+- `check-doc-size.sh` — docs 지속 참조 문서 chars cap: 120,000 (advisory). 일회성
+  산출물(`docs/{sprints,archives,table_plus,explorations}`)은 제외. override:
+  `DOCS_CHAR_THRESHOLD`. ratchet 시점에 threshold 를 내려 분할을 유도한다.

@@ -64,8 +64,9 @@ updated: 2026-06-12
 
 ## 팔레스 규칙
 
-- 손작성 active rule 파일은 `memory.md` 만 허용. 각 `memory.md` 는 200줄 이하.
-  초과 시 `split-memory` skill 로 하위 주제 분할.
+- 손작성 active rule 파일은 `memory.md` 만 허용. 각 `memory.md` 는 200줄 이하
+  및 12,000 chars 이하 (둘 다 지켜야 함). 어느 하나라도 초과 시
+  `split-memory` skill 로 하위 주제 분할.
 - `memory/index/by-task.md`, `memory/index/by-surface.md` 는 자동 생성 cross-link
   예외다. rule SOT 가 아니며 `scripts/regenerate-indexes.sh` 가 재생성한다.
 - 새 non-`memory.md` 파일 추가 금지. index 예외 변경은 별도 memory/tooling 결정으로

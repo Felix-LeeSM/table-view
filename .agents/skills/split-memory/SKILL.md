@@ -1,18 +1,18 @@
 ---
 name: split-memory
-description: 200줄을 초과한 memory.md를 주제별 sub-room으로 분할하고 index memory.md로 전환. 사용자가 split-memory 실행을 요청하거나 memory size 초과를 발견했을 때 사용.
+description: 200줄 또는 12,000 chars를 초과한 memory.md를 주제별 sub-room으로 분할하고 index memory.md로 전환. 사용자가 split-memory 실행을 요청하거나 memory size 초과를 발견했을 때 사용.
 ---
 
 # split-memory skill
 
 `.agents/skills/split-memory/SKILL.md` 가 source.
 
-인자 (`$ARGUMENTS`): 분할할 `memory.md` 경로. 생략 시 200줄 초과 파일을 탐색해
-사용자에게 선택 요청.
+인자 (`$ARGUMENTS`): 분할할 `memory.md` 경로. 생략 시 분량 cap(200줄 / 12,000 chars)
+초과 파일을 탐색해 사용자에게 선택 요청.
 
 ## 동작
 
-1. 대상 파일이 실제로 200줄 초과인지 확인. 아니면 "분할 불필요" 반환.
+1. 대상 파일이 실제로 분량 cap(200줄 또는 12,000 chars) 초과인지 확인. 아니면 "분할 불필요" 반환.
 2. `##` heading 기준으로 분할 계획 제안 → **사용자 승인 대기**.
 3. 승인 후 실행:
    - 각 섹션 → `<원본 디렉토리>/<slug>/memory.md` 로 이동.
@@ -28,6 +28,6 @@ description: 200줄을 초과한 memory.md를 주제별 sub-room으로 분할하
 
 ## 관련
 
-- `remember` skill — 새 룰 저장 (200줄 cap 점검 포함)
+- `remember` skill — 새 룰 저장 (분량 cap 점검 포함)
 - `memory/memory.md` — 팔레스 입구
 - `scripts/hooks/check-memory-structure.sh` — `memory.md` 외 파일 차단

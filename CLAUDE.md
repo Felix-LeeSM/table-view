@@ -19,7 +19,7 @@ Tauri 2.0 + React + Rust TablePlus-like 로컬 DB 도구. 다중 DBMS.
 ## 강제 룰
 
 - 별도 Claude 전용 정책을 여기서 만들지 않는다. 충돌 시 `AGENTS.md` 가 우선.
-- `memory/` 트리 200줄 cap, `memory.md` 만.
+- `memory/` 트리 200줄 / 12,000 chars cap, `memory.md` 만.
 - ADR 본문 동결. 결정 뒤집기 = 새 ADR + `Superseded`.
 - `--no-verify`, `--no-gpg-sign`, `LEFTHOOK=0`, `HUSKY=0`, agent path 의
   `git push --force` 금지.
