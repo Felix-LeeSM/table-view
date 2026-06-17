@@ -4,6 +4,7 @@ import {
   analyzeStatement,
   type Severity,
   type StatementAnalysis,
+  type StatementAnalysisOptions,
   type StatementKind,
 } from "./sqlSafety";
 
@@ -250,4 +251,44 @@ export function decideOracleSafeModeAction(
   }
 
   return decideSafeModeAction(mode, environment, analysis);
+}
+
+export function analyzeRdbStatementForDialect(
+  sql: string,
+  dialect?: StatementAnalysisOptions["dialect"],
+): StatementAnalysis {
+  if (dialect === "oracle") return analyzeOracleStatement(sql);
+  return analyzeStatement(sql, dialect ? { dialect } : undefined);
+}
+
+export function decideOracleOrGenericSafeMode(
+  analysis: StatementAnalysis,
+  decideSafeMode: (analysis: StatementAnalysis) => SafeModeDecision,
+): SafeModeDecision {
+  if (isOracleStatementAnalysis(analysis)) {
+    return decideOracleSafeModeGate(analysis, decideSafeMode);
+  }
+  return decideSafeMode(analysis);
+}
+
+function isOracleStatementAnalysis(
+  analysis: StatementAnalysis,
+): analysis is OracleStatementAnalysis {
+  return "dialect" in analysis && analysis.dialect === "oracle";
+}
+
+export function decideOracleSafeModeGate(
+  analysis: OracleStatementAnalysis,
+  decideSafeMode: (analysis: StatementAnalysis) => SafeModeDecision,
+): SafeModeDecision {
+  if (analysis.support === "unsupported") {
+    return {
+      action: "block",
+      reason:
+        analysis.boundaryReason ??
+        "Oracle statement is outside the bounded static safety slice",
+    };
+  }
+
+  return decideSafeMode(analysis);
 }

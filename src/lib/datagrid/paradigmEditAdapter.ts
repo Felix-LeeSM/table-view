@@ -9,7 +9,10 @@ import {
   type MqlCommand,
   type MqlPreview,
 } from "@/lib/mongo/mqlGenerator";
-import { analyzeStatement } from "@/lib/sql/sqlSafety";
+import {
+  analyzeRdbStatementForDialect,
+  decideOracleOrGenericSafeMode,
+} from "@/lib/sql/oracleSafety";
 import { bulkWriteDocuments } from "@/lib/tauri";
 import { mqlCommandsToBulkOps } from "@/lib/mongo/mqlToBulk";
 import { toast } from "@/lib/runtime/toast";
@@ -109,8 +112,10 @@ export interface ParadigmEditAdapter {
 export function classifyRdbRisk(
   sql: string,
   safeModeGate: SafeModeGate,
+  dialect?: SqlDialect,
 ): { risk: PreviewRisk; reason?: string } {
-  const decision = safeModeGate.decide(analyzeStatement(sql));
+  const analysis = analyzeRdbStatementForDialect(sql, dialect);
+  const decision = decideOracleOrGenericSafeMode(analysis, safeModeGate.decide);
   if (decision.action === "block") {
     return { risk: "destructive", reason: decision.reason };
   }
@@ -176,7 +181,11 @@ export function buildRdbSession(
   deps: RdbAdapterDeps,
 ): RdbPreviewSession {
   const items: PreviewItem[] = sqls.map((sql, i) => {
-    const { risk, reason } = classifyRdbRisk(sql, deps.safeModeGate);
+    const { risk, reason } = classifyRdbRisk(
+      sql,
+      deps.safeModeGate,
+      deps.dialect,
+    );
     return { text: sql, risk, reason, key: keys[i] };
   });
   return {

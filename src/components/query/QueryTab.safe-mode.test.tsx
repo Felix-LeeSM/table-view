@@ -151,9 +151,12 @@ vi.mock("@lib/sql/sqlUtils", () => ({
   uglifySql: (sql: string) => sql.replace(/\s+/g, " ").trim(),
 }));
 
-function seedConnection(env: string | null) {
+function seedConnection(
+  env: string | null,
+  overrides: Parameters<typeof makeConn>[0] = {},
+) {
   useConnectionStore.setState({
-    connections: [makeConn({ id: "conn1", environment: env })],
+    connections: [makeConn({ id: "conn1", environment: env, ...overrides })],
   });
 }
 
@@ -341,6 +344,43 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     expect(
       screen.queryByTestId("confirm-destructive-confirm"),
     ).not.toBeInTheDocument();
+  });
+
+  it("[AC-906-01] development + warn + Oracle PL/SQL package → error block, executeQuery NOT called", async () => {
+    seedConnection("development", {
+      dbType: "oracle",
+      port: 1521,
+      user: "app",
+      database: "FREEPDB1",
+    });
+    useSafeModeStore.setState({ mode: "warn" });
+    const tab = seedTab("CREATE OR REPLACE PACKAGE app_pkg AS END app_pkg");
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockExecuteQuery).not.toHaveBeenCalled();
+    await waitFor(() => {
+      const updated = getTestWorkspace().tabs.find((t) => t.id === "query-1");
+      if (!updated || updated.type !== "query") {
+        throw new Error("query tab missing");
+      }
+      expect(updated.queryState.status).toBe("error");
+      if (updated.queryState.status === "error") {
+        expect(updated.queryState.error).toMatch(
+          /Oracle PL\/SQL package\/routine DDL/,
+        );
+      }
+    });
+    expect(
+      screen.queryByTestId("confirm-destructive-confirm"),
+    ).not.toBeInTheDocument();
+    expect(useQueryHistoryStore.getState().recentVisible[0]).toMatchObject({
+      status: "error",
+      sqlRedacted: "CREATE OR REPLACE PACKAGE app_pkg AS END app_pkg",
+    });
   });
 
   // ── AC-231-01b: Confirm on production + warn + dangerous ──

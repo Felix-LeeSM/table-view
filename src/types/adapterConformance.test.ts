@@ -331,7 +331,7 @@ describe("adapter conformance matrix", () => {
     ]);
   });
 
-  it("keeps Oracle scoped to catalog/query/cancel runtime without edit or DDL claims", () => {
+  it("keeps Oracle scoped to catalog/query/edit runtime without DDL claims", () => {
     const oracle = ADAPTER_CONFORMANCE_MATRIX.oracle;
 
     expect(oracle.level).toBe("runtime");
@@ -348,7 +348,7 @@ describe("adapter conformance matrix", () => {
       "query.multiStatement",
       "query.cancel",
     ]);
-    expect(oracle.areas.edit.checks).toEqual([]);
+    expect(oracle.areas.edit.checks).toEqual(["edit.editRows"]);
     expect(oracle.areas.ddl.checks).toEqual([]);
     expect(oracle.areas.connection.deferred).toEqual([]);
     expect(oracle.areas.connection.unsupported).toEqual([
@@ -360,7 +360,6 @@ describe("adapter conformance matrix", () => {
     expect(oracle.areas.query.unsupported).toEqual(["query.explain"]);
     expect(oracle.areas.query.deferred).toEqual([]);
     expect(oracle.areas.edit.unsupported).toEqual([
-      "edit.editRows",
       "edit.editDocuments",
       "edit.editKeys",
       "edit.bulkWrite",
