@@ -25,7 +25,9 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 
 1. **T1 Commit** — `git add <specific files>` + `git commit -m "..."`. pre-commit hook 통과 책임.
 2. **T2 Push** — `git push`. pre-push stage 통과. `sprint-N/*` branch 의 contract 가 `review-profile: code` 면 [tdd](../tdd/memory.md) 의 RED evidence 를 push 전 확인한다.
-3. **T3 PR** — `gh pr create`. body 는 Summary / Changes / Invariants / Test plan / Smoke impact / Documentation impact / Links.
+3. **T3 PR** — `pr-create` skill (`.agents/skills/pr-create/SKILL.md`) 적용:
+   `.github/PULL_REQUEST_TEMPLATE.md` 기반 body 조립 + `check-pr-body.mjs` 로컬
+   검증 → PASS 시 `gh pr create`. CI re-push 낭비 차단.
 4. **T4 Review** — `pr-reviewer` coordinator spawn (1회, default 자동):
    - 정량은 자동 layer (hook / lint / pre-push / scripts/review/run-checks.sh) 가 이미 함
    - pr-reviewer 는 `.agents/skills/pr-review/SKILL.md` 를 적용하고 필요 시
