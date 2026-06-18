@@ -315,7 +315,7 @@ Candidate target inventory:
 | DynamoDB | `cloud-document` | `cloud-api` | `partiql` or native API decision | table/keySchema/GSI/LSI | `document`, `tabular` | access-pattern and cost guardrails; DynamoDB Local/emulator or bounded mock |
 | Graph | `graph` | `server` | Cypher-first; GQL/Gremlin deferred split | labels/relationships/properties/indexes | `graph` envelope with path view, plus `tabular` projection | traversal/write guardrails; future Neo4j-compatible fixture graph/testcontainer for Cypher baseline; GQL/Gremlin fixtures deferred |
 | Vector | `vector` | `server`; cloud providers need separate `cloud-api` profile decision | `vector-query` or provider filter DSL | collection/vectorSchema/payloadIndex | `vectorNeighbors` | bounded search/write/delete guardrails; embedded/mock or container fixture |
-| Stream | `stream` | `cluster` | `stream-command` or API decision | topic/partition/consumerGroup/schema | `streamRecords`, `metrics` | offset/consumer/destructive guardrails; Kafka/Redpanda fixture |
+| Stream | `stream` | `cluster` | `stream-command` or typed API decision; language-core parser deferred | topic/partition/consumerGroup/schema | `streamRecords`, `metrics` | offset/consumer lag/replay/commit guardrails; produce/admin/destructive deferred; Kafka baseline plus Redpanda compatibility fixture as future non-routine CI inventory |
 
 Cassandra/Scylla remains one wide-column candidate contract until promotion
 evidence proves product-specific deltas. The future Cassandra baseline must prove
@@ -335,6 +335,19 @@ for query tables. A new top-level path envelope requires an ADR or architecture
 note before implementation. Future evidence must prove traversal/write
 guardrails and a Neo4j-compatible fixture graph/testcontainer before any active
 runtime, connection UI, parser/completion, fixture/live, or smoke claim.
+
+Stream remains a candidate-only source contract. Its promotion target is a
+cluster-backed `stream` profile with a `stream-command` or typed API decision
+before any language-core parser/completion ownership. The stream catalog owns
+topic/partition/consumerGroup/schema inventory. Result rendering uses
+`streamRecords` for bounded consume/read output and `metrics` for lag,
+throughput, and broker/consumer evidence. Future evidence must prove bounded
+consume/read behavior, offset/consumer lag/replay/commit guardrails, and
+produce/admin/destructive gating. Produce/admin support is deferred. Kafka is the
+future baseline fixture target and Redpanda is a compatibility delta; both remain
+future non-routine CI inventory, not routine Runtime Happy Path wiring. This
+inventory does not add active runtime, connection UI, parser/completion,
+fixture/live, or smoke support.
 
 Promotion order for wider candidates is decided by workflow value and contract
 readiness: clear user workflow first, then adapter-family fit, language/core

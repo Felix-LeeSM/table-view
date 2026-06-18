@@ -299,6 +299,15 @@ profile, runtime, parser/completion, fixture/live evidence, E2E smoke claim 이
 없다. 이 후보들은 `docs/ROADMAP.md` H6 계약과 adding-data-source checklist 를
 통과하기 전까지 candidate-only 상태다.
 
+Stream 은 candidate-only `stream` profile target 이다. Promotion 전 계약은
+`cluster` connection kind, `stream-command` or typed API decision,
+topic/partition/consumerGroup/schema catalog, `streamRecords`/`metrics` result
+envelope, offset/consumer lag/replay/commit guardrails, produce/admin/destructive
+defer 를 요구한다. Kafka 는 future baseline fixture target, Redpanda 는
+compatibility delta 이며 둘 다 routine Runtime Happy Path wiring 이 아닌 future
+non-routine CI inventory 다. 이 문단은 active runtime, connection UI,
+parser/completion, fixture/live evidence, E2E smoke claim 을 만들지 않는다.
+
 ## Current Boundaries
 
 - 새 DBMS/runtime promotion 은 기존 지원 DBMS 하나가 데스크톱 DB 클라이언트 수준의
