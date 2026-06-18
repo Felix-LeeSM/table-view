@@ -13,7 +13,7 @@ ensure_utf8_locale() {
 	for _l in en_US.UTF-8 en_US.utf8 C.UTF-8 C.utf8; do
 		# producer(locale -a)가 grep -q 의 early-close 로 SIGPIPE(141)를 받는 것을
 		# 삼킨다. pipefail 하에서 producer 의 non-zero exit 이 파이프 전체를 실패로
-		# 만들어, 매칭에 성공해도 폴백이永不 진입하는(LC_ALL=C 가 유지되어 wc -m 이
+		# 만들어, 매칭에 성공해도 폴백이 영원히 진입하지 않는(LC_ALL=C 가 유지되어 wc -m 이
 		# 한국어를 바이트 수로 세는) 회귀를 방지한다.
 		if { locale -a 2>/dev/null || true; } | grep -qix "$_l"; then LC_ALL="$_l"; export LC_ALL; return 0; fi
 	done
