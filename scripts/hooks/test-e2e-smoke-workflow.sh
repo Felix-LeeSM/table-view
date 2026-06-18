@@ -96,7 +96,8 @@ assert_matrix_contract() {
 
 prepare_block="$(sed -n '/^  e2e-smoke-prepare:/,/^  e2e-smoke:/p' "$WORKFLOW" | sed '$d')"
 smoke_block="$(sed -n '/^  e2e-smoke:/,/^  e2e-smoke-file-backed:/p' "$WORKFLOW" | sed '$d')"
-file_backed_block="$(sed -n '/^  e2e-smoke-file-backed:/,/^  e2e-smoke-required:/p' "$WORKFLOW" | sed '$d')"
+file_backed_block="$(sed -n '/^  e2e-smoke-file-backed:/,/^  e2e-smoke-enterprise-rdbms:/p' "$WORKFLOW" | sed '$d')"
+enterprise_block="$(sed -n '/^  e2e-smoke-enterprise-rdbms:/,/^  e2e-smoke-required:/p' "$WORKFLOW" | sed '$d')"
 required_block="$(sed -n '/^  e2e-smoke-required:/,$p' "$WORKFLOW")"
 smoke_script="$(cat "$SMOKE_SCRIPT")"
 search_smoke="$(cat "$ROOT/e2e/smoke/search-runtime-smoke.ts")"
@@ -117,6 +118,10 @@ if [ -z "$cache_line" ]; then
 fi
 if [ -z "$file_backed_block" ]; then
 	echo "FAIL: e2e-smoke-file-backed job is missing from $WORKFLOW" >&2
+	exit 1
+fi
+if [ -z "$enterprise_block" ]; then
+	echo "FAIL: e2e-smoke-enterprise-rdbms job is missing from $WORKFLOW" >&2
 	exit 1
 fi
 if [ -z "$build_line" ]; then
@@ -194,6 +199,8 @@ assert_contains "$file_backed_block" "E2E_SPEC_KEY: \${{ matrix.spec_key }}" "sq
 assert_not_contains "$file_backed_block" "services:" "sqlite file-backed smoke"
 assert_contains "$required_block" "e2e-smoke-file-backed" "sqlite file-backed smoke required gate"
 assert_contains "$required_block" "needs.e2e-smoke-file-backed.result" "sqlite file-backed smoke required gate"
+assert_contains "$required_block" "e2e-smoke-enterprise-rdbms" "enterprise RDBMS smoke required gate"
+assert_contains "$required_block" "needs.e2e-smoke-enterprise-rdbms.result" "enterprise RDBMS smoke required gate"
 assert_not_contains "$smoke_block" "spec_key: sqlite" "sqlite service-backed smoke"
 assert_not_contains "$smoke_block" "e2e/smoke/sqlite.spec.ts" "sqlite service-backed smoke"
 assert_not_contains "$smoke_block" "spec_key: duckdb-file-analytics" "duckdb file analytics service-backed smoke"
@@ -212,11 +219,16 @@ assert_contains "$smoke_script" "pnpm tsx e2e/fixtures/seed-smoke.ts" "smoke scr
 if grep -Eq 'run_wdio .* \|\| true|seed-smoke\.ts.*\|\| true' "$SMOKE_SCRIPT"; then
 	fail "smoke script must not convert setup or spec failures into passes"
 fi
-assert_not_contains "$smoke_block" "spec_key: mssql" "enterprise RDBMS dormant smoke"
-assert_not_contains "$smoke_block" "spec_key: oracle" "enterprise RDBMS dormant smoke"
-assert_not_contains "$smoke_block" "Start MSSQL service" "enterprise RDBMS dormant smoke"
-assert_not_contains "$smoke_block" "Start Oracle service" "enterprise RDBMS dormant smoke"
-assert_not_contains "$smoke_script" 'run_wdio "$BASE_DATA_DIR/mssql" "e2e/smoke/mssql.spec.ts"' "enterprise RDBMS dormant smoke"
-assert_not_contains "$smoke_script" 'run_wdio "$BASE_DATA_DIR/oracle" "e2e/smoke/oracle.spec.ts"' "enterprise RDBMS dormant smoke"
+assert_contains "$smoke_script" 'run_wdio "$BASE_DATA_DIR/mssql" "e2e/smoke/mssql.spec.ts"' "enterprise RDBMS smoke promotion"
+assert_contains "$smoke_script" 'run_wdio "$BASE_DATA_DIR/oracle" "e2e/smoke/oracle.spec.ts"' "enterprise RDBMS smoke promotion"
+assert_contains "$enterprise_block" "spec_key: mssql" "enterprise RDBMS smoke promotion"
+assert_contains "$enterprise_block" "spec_key: oracle" "enterprise RDBMS smoke promotion"
+assert_contains "$enterprise_block" "Start MSSQL service" "enterprise RDBMS smoke promotion"
+assert_contains "$enterprise_block" "Start Oracle service" "enterprise RDBMS smoke promotion"
+assert_contains "$enterprise_block" "mcr.microsoft.com/mssql/server:2022-latest" "enterprise RDBMS smoke promotion"
+assert_contains "$enterprise_block" "gvenzl/oracle-xe:21-slim-faststart" "enterprise RDBMS smoke promotion"
+assert_contains "$enterprise_block" "max-parallel: 1" "enterprise RDBMS smoke promotion"
+assert_contains "$required_block" "Enterprise RDBMS runtime result" "enterprise RDBMS smoke promotion"
+assert_contains "$required_block" "Runtime matrix passed." "enterprise RDBMS smoke promotion"
 
 echo "PASS: e2e-smoke workflow cache check"

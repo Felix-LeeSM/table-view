@@ -517,11 +517,186 @@ jobs:
           path: e2e/wdio-report
           if-no-files-found: ignore
 
+  e2e-smoke-enterprise-rdbms:
+    name: Runtime Happy Path (${{ matrix.spec_key }}, ${{ matrix.spec }})
+    needs: e2e-smoke-prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - spec_key: mssql
+            spec: e2e/smoke/mssql.spec.ts
+          - spec_key: oracle
+            spec: e2e/smoke/oracle.spec.ts
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            webkit2gtk-driver \
+            xvfb
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Restore tauri binary
+        uses: actions/download-artifact@v5
+        with:
+          name: e2e-smoke-tauri-binary
+          path: src-tauri/target/debug
+
+      - name: Make tauri binary executable
+        run: chmod +x src-tauri/target/debug/table-view
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+
+      - name: Cache tauri-driver binary
+        id: cache-tauri-driver
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/tauri-driver
+            ~/.cargo/bin/tauri-driver.version
+          key: tauri-driver-${{ runner.os }}-v${{ env.TAURI_DRIVER_VERSION }}
+
+      - name: Ensure tauri-driver cache contract
+        run: |
+          marker="${HOME}/.cargo/bin/tauri-driver.version"
+          needs_install=0
+
+          if [ ! -x "${HOME}/.cargo/bin/tauri-driver" ]; then
+            needs_install=1
+          elif [ ! -f "$marker" ] || [ "$(cat "$marker")" != "${TAURI_DRIVER_VERSION}" ]; then
+            needs_install=1
+          fi
+
+          if [ "$needs_install" -eq 1 ]; then
+            cargo install tauri-driver --version "${TAURI_DRIVER_VERSION}" --locked --force
+            printf '%s\n' "${TAURI_DRIVER_VERSION}" > "$marker"
+          fi
+
+          tauri-driver --help >/dev/null
+          cached_version="$(cat "$marker")"
+          case "$cached_version" in
+            "${TAURI_DRIVER_VERSION}") ;;
+            *)
+              echo "ERROR: tauri-driver cache drift: expected ${TAURI_DRIVER_VERSION}, got ${cached_version}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Start MSSQL service
+        if: matrix.spec_key == 'mssql'
+        run: |
+          docker run -d \
+            --name table-view-mssql \
+            --publish 14333:1433 \
+            --env "ACCEPT_EULA=Y" \
+            --env "MSSQL_PID=Developer" \
+            --env "MSSQL_SA_PASSWORD=Testpass123!" \
+            mcr.microsoft.com/mssql/server:2022-latest
+
+          for attempt in {1..60}; do
+            if docker exec table-view-mssql bash -lc "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Testpass123!' -C -Q 'SELECT 1' >/dev/null 2>&1 || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Testpass123!' -Q 'SELECT 1' >/dev/null 2>&1"; then
+              exit 0
+            fi
+            echo "MSSQL is not ready yet (attempt ${attempt}/60)."
+            sleep 5
+          done
+
+          docker logs table-view-mssql || true
+          exit 1
+
+      - name: Start Oracle service
+        if: matrix.spec_key == 'oracle'
+        run: |
+          docker run -d \
+            --name table-view-oracle \
+            --publish 1521:1521 \
+            --env "ORACLE_PASSWORD=OracleTest123!" \
+            --env "APP_USER=testuser" \
+            --env "APP_USER_PASSWORD=testpass" \
+            gvenzl/oracle-xe:21-slim-faststart
+
+          for attempt in {1..90}; do
+            status="$(docker inspect --format='{{.State.Health.Status}}' table-view-oracle 2>/dev/null || true)"
+            if [ "$status" = "healthy" ] || docker logs table-view-oracle 2>&1 | grep -q "DATABASE IS READY TO USE"; then
+              exit 0
+            fi
+            echo "Oracle is not ready yet (attempt ${attempt}/90, status=${status:-unknown})."
+            sleep 5
+          done
+
+          docker logs table-view-oracle || true
+          exit 1
+
+      - name: Run E2E smoke
+        env:
+          E2E_MSSQL_HOST: localhost
+          E2E_MSSQL_PORT: 14333
+          MSSQL_USER: sa
+          MSSQL_PASSWORD: Testpass123!
+          MSSQL_DATABASE: table_view_test
+          E2E_ORACLE_HOST: localhost
+          E2E_ORACLE_PORT: 1521
+          ORACLE_USER: testuser
+          ORACLE_PASSWORD: testpass
+          E2E_ORACLE_SERVICE: XEPDB1
+          E2E_SKIP_BUILD: "1"
+          E2E_SPEC: ${{ matrix.spec }}
+          E2E_SPEC_KEY: ${{ matrix.spec_key }}
+          E2E_REPORT_DIR: e2e/wdio-report/${{ matrix.spec_key }}
+        run: bash scripts/e2e-smoke-ci.sh
+
+      - name: Stop MSSQL service
+        if: always() && matrix.spec_key == 'mssql'
+        run: docker rm --force table-view-mssql || true
+
+      - name: Stop Oracle service
+        if: always() && matrix.spec_key == 'oracle'
+        run: docker rm --force table-view-oracle || true
+
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-artifacts-${{ matrix.spec_key }}
+          path: e2e/wdio-report
+          if-no-files-found: ignore
+
   e2e-smoke-required:
     name: Runtime Happy Path
     needs:
       - e2e-smoke
       - e2e-smoke-file-backed
+      - e2e-smoke-enterprise-rdbms
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
@@ -535,6 +710,10 @@ jobs:
           fi
           if [ "${{ needs.e2e-smoke-file-backed.result }}" != "success" ]; then
             echo "File-backed runtime result: ${{ needs.e2e-smoke-file-backed.result }}"
+            exit 1
+          fi
+          if [ "${{ needs.e2e-smoke-enterprise-rdbms.result }}" != "success" ]; then
+            echo "Enterprise RDBMS runtime result: ${{ needs.e2e-smoke-enterprise-rdbms.result }}"
             exit 1
           fi
           echo "Runtime matrix passed."

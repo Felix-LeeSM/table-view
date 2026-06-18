@@ -34,7 +34,7 @@ Known limits to state in release notes:
   Windows desktop runtime smoke remain deferred.
 - Search live admin execution, Redis/Valkey full CLI/admin parity, MongoDB
   arbitrary JavaScript shell behavior, MSSQL full T-SQL/SQLCMD/admin support,
-  and Oracle SID/TNS/wallet/TLS/DDL/raw-admin/full PL/SQL/smoke support remain out of
+  and Oracle SID/TNS/wallet/TLS/DDL/raw-admin/full PL/SQL support remain out of
   scope.
 - DuckDB COPY/ATTACH/DETACH, extension install/load, raw external-file SQL
   functions, automatic import/export workflow, structured DDL/write UI, and
@@ -54,8 +54,8 @@ Known limits to state in release notes:
 | Valkey | Active KV runtime slice for connection, key scan/value preview, selected stream reads, selected Redis-compatible command query rows, bounded SET/EXPIRE, destructive/unsupported guards, direct UTF-8 string-key mutation controls, and proven-row command completion. Hash/list/set/zset writes and full Redis compatibility are not claimed. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
 | Elasticsearch | Live URL/auth/TLS root probe, live catalog, bounded `_search`, Search DSL validation, Runtime Happy Path smoke, and delete-by-query safety planning are active. Actual live admin execution and broader observability/profile/explain workflows remain deferred. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
 | OpenSearch | OpenSearch-specific live root probe, Elasticsearch endpoint rejection, live catalog, bounded `_search`, mapping-aware completion, Runtime Happy Path smoke, and delete-by-query safety planning are active. Actual live admin execution remains deferred. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
-| MSSQL | Bounded SQL authentication, catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, and bounded T-SQL editor guardrails are active. Structured DDL, SQLCMD/admin/security/backup/jobs/users/roles, broad parser/completion semantics, runtime smoke, and full T-SQL semantics remain unsupported. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
-| Oracle | Service-name lifecycle, bounded catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, bounded Safe Mode classification, and bounded editor assistance are supported for `host:port/serviceName` with default fixture service `XEPDB1`. SID, TNS, wallet, advanced auth, structured DDL, raw DDL/admin, full parser/completion promotion, PL/SQL body/package work, and representative Runtime Happy Path smoke remain unsupported until Oracle-specific evidence lands. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
+| MSSQL | Bounded SQL authentication, catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, bounded T-SQL editor guardrails, and representative Runtime Happy Path smoke are active. Structured DDL, SQLCMD/admin/security/backup/jobs/users/roles, broad parser/completion semantics, and full T-SQL semantics remain unsupported. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
+| Oracle | Service-name lifecycle, bounded catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, bounded Safe Mode classification, bounded editor assistance, and representative Runtime Happy Path smoke are supported for `host:port/serviceName` with default fixture service `XEPDB1`. SID, TNS, wallet, advanced auth, structured DDL, raw DDL/admin, full parser/completion promotion, and PL/SQL body/package work remain unsupported until Oracle-specific evidence lands. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
 
 ## Fixture And Smoke Coverage
 
@@ -77,7 +77,7 @@ wired matrix leg to pass.
 | Elasticsearch | `e2e/smoke/elasticsearch.spec.ts` | `e2e/fixtures/elasticsearch/search/seed.json` | Live connect/catalog/search/render/delete-plan smoke; fixture is embedded contract evidence. |
 | OpenSearch | `e2e/smoke/opensearch.spec.ts` | `e2e/fixtures/opensearch/search/seed.json` | OpenSearch-specific live connect/catalog/search/render/delete-plan smoke with product-separated deltas. |
 | MSSQL | `e2e/smoke/mssql.spec.ts` | `e2e/fixtures/seed.mssql.sql` | SQL Server connect/catalog/SELECT/DML/row-edit/Safe Mode representative smoke. |
-| Oracle | `e2e/smoke/oracle.spec.ts` | `e2e/fixtures/seed.oracle.sql` | Dormant smoke inventory beyond #905/#906 focused catalog/query/cancel/tabular/edit-row runtime and bounded Safe Mode/editor-assistance evidence; no Oracle structured DDL/raw-admin/full-parser-completion/PLSQL/runtime smoke claim. |
+| Oracle | `e2e/smoke/oracle.spec.ts` | `e2e/fixtures/seed.oracle.sql` | Oracle service-name connect/catalog/SELECT/DML/row-edit/Safe Mode representative smoke; no Oracle structured DDL/raw-admin/full-parser-completion/PLSQL claim. |
 
 ## Release Note Checklist
 

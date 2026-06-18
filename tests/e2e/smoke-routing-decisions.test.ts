@@ -54,8 +54,16 @@ describe("smoke-routing-decisions.json", () => {
       specKey: "erd-dense",
       spec: "e2e/smoke/erd-dense.spec.ts",
     });
+    expect(result.blockingDecisionMatrix).toContainEqual({
+      specKey: "mssql",
+      spec: "e2e/smoke/mssql.spec.ts",
+    });
+    expect(result.blockingDecisionMatrix).toContainEqual({
+      specKey: "oracle",
+      spec: "e2e/smoke/oracle.spec.ts",
+    });
     expect(result.blockingDecisionMatrix).toEqual(collectSmokeScriptMatrix());
     expect(result.blockingDecisionMatrix).toEqual(collectWorkflowMatrix());
-    expect(result.blockingDecisionMatrix).toHaveLength(17);
+    expect(result.blockingDecisionMatrix).toHaveLength(19);
   });
 });
