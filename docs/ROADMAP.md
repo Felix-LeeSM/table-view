@@ -314,7 +314,7 @@ Candidate target inventory:
 | Cassandra/Scylla | `wide-column` | `cluster` | `cql` with future Rust/WASM language-core owner | keyspace/table/partition/clustering | `tabular` | partition-key and expensive-read guardrails; future evidence path is a Cassandra testcontainer baseline plus a Scylla testcontainer compatibility delta before any Scylla claim |
 | DynamoDB | `cloud-document` | `cloud-api` | native API-first; `partiql` deferred editor/query-language inventory | table/keySchema/GSI/LSI | `document`, `tabular` | access-pattern, cost, IAM, and credential guardrails; DynamoDB Local/emulator or bounded mock future-only; threat-model handoff before auth/KDF/ACL/secrets/provider decisions |
 | Graph | `graph` | `server` | Cypher-first; GQL/Gremlin deferred split | labels/relationships/properties/indexes | `graph` envelope with path view, plus `tabular` projection | traversal/write guardrails; future Neo4j-compatible fixture graph/testcontainer for Cypher baseline; GQL/Gremlin fixtures deferred |
-| Vector | `vector` | `server`; cloud providers need separate `cloud-api` profile decision | `vector-query` or provider filter DSL | collection/vectorSchema/payloadIndex | `vectorNeighbors` | bounded search/write/delete guardrails; embedded/mock or container fixture |
+| Vector | `vector` | `server`; cloud providers need separate `cloud-api` profile decision | future `vector-query` or provider filter DSL | collection/vectorSchema/payloadIndex | `vectorNeighbors` | topK/filter/write/delete guardrails; embedded/mock or container fixture future-only; threat-model handoff before cloud credential/provider decisions |
 | Stream | `stream` | `cluster` | `stream-command` or typed API decision; language-core parser deferred | topic/partition/consumerGroup/schema | `streamRecords`, `metrics` | offset/consumer lag/replay/commit guardrails; produce/admin/destructive deferred; Kafka baseline plus Redpanda compatibility fixture as future non-routine CI inventory |
 
 Cassandra/Scylla remains one wide-column candidate contract until promotion
@@ -349,6 +349,18 @@ for query tables. A new top-level path envelope requires an ADR or architecture
 note before implementation. Future evidence must prove traversal/write
 guardrails and a Neo4j-compatible fixture graph/testcontainer before any active
 runtime, connection UI, parser/completion, fixture/live, or smoke claim.
+
+Vector remains a candidate-only source contract. Its promotion target is a
+server-backed `vector` profile; cloud providers require a separate `cloud-api`
+profile decision before provider or credential choices. The language route is a
+future `vector-query` or provider filter DSL only, so no parser/completion owner
+is active. The vector-source catalog owns collection, vectorSchema, and
+payloadIndex metadata. Result rendering uses `vectorNeighbors`. Future evidence
+must prove topK limits, metadata filter guardrails, write/delete gating, and an
+embedded/mock or container fixture strategy before any runtime path. Cloud
+credentials, provider selection, ACL, secrets, and KDF decisions require a
+threat-model handoff before implementation. This inventory does not add active
+runtime, connection UI, parser/completion, fixture/live, or smoke support.
 
 Stream remains a candidate-only source contract. Its promotion target is a
 cluster-backed `stream` profile with a `stream-command` or typed API decision
