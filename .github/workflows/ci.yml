@@ -111,6 +111,10 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Documentation links (advisory)
+        run: pnpm docs:links
+        continue-on-error: true
+
       - name: Test
         run: pnpm test -- --run --coverage --coverage.reporter=text-summary
 

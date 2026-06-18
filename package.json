@@ -20,6 +20,7 @@
     "build:sql-wasm": "cd src-tauri/sql-parser-core && wasm-pack build --target web --out-dir ../../src/lib/sql/wasm --features wasm && cd ../.. && tsx scripts/reset-sql-wasm-gitignore.ts",
     "build:mongosh-wasm": "cd src-tauri/mongosh-parser-core && wasm-pack build --target web --out-dir ../../src/lib/mongo/wasm --features wasm && cd ../.. && tsx scripts/reset-mongosh-wasm-gitignore.ts",
     "wasm:size": "bash scripts/check-wasm-size.sh",
+    "docs:links": "tsx scripts/check-doc-links.ts",
     "test": "vitest run",
     "contrast:check": "tsx scripts/check-theme-contrast.ts",
     "build:e2e": "vite build --mode e2e --minify=false",
