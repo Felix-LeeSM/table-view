@@ -74,9 +74,6 @@ find "$REPORT_DIR" -type f ! -name .gitkeep -delete
 
 pnpm tsx scripts/e2e-smoke-routing-decisions.ts
 pnpm tsx scripts/e2e-pre-smoke-release-gate.ts
-if [[ "${E2E_BUILD_ONLY:-0}" != "1" ]]; then
-  pnpm tsx e2e/fixtures/seed-smoke.ts
-fi
 if [[ "${E2E_SKIP_BUILD:-0}" != "1" ]]; then
   pnpm tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
 fi
@@ -88,9 +85,20 @@ BASE_DATA_DIR="${TABLE_VIEW_TEST_DATA_DIR:-${RUNNER_TEMP:-/tmp}/table-view-smoke
 rm -rf "$BASE_DATA_DIR"
 mkdir -p "$BASE_DATA_DIR"
 
+seed_smoke_spec() {
+  local spec_key="$1"
+  local spec="$2"
+
+  E2E_SPEC_KEY="$spec_key" E2E_SPEC="$spec" pnpm tsx e2e/fixtures/seed-smoke.ts
+}
+
 run_wdio() {
   local data_dir="$1"
   local spec="$2"
+  local spec_key
+  spec_key="$(basename "$data_dir")"
+
+  seed_smoke_spec "$spec_key" "$spec"
 
   if command -v xvfb-run >/dev/null 2>&1; then
     TABLE_VIEW_TEST_DATA_DIR="$data_dir" xvfb-run -a pnpm exec wdio run wdio.smoke.conf.ts --spec "$spec"

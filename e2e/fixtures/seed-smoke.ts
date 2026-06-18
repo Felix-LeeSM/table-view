@@ -722,30 +722,34 @@ async function seedTarget(target: SeedTarget) {
   }
 }
 
-function seedTargetsForCurrentRun(): readonly SeedTarget[] {
+function specKeyForCurrentRun(): string | null {
   const explicitSpecKey = process.env.E2E_SPEC_KEY?.trim();
-  if (explicitSpecKey) {
-    return SEED_TARGETS_BY_SPEC_KEY[explicitSpecKey] ?? ALL_SEED_TARGETS;
-  }
+  if (explicitSpecKey) return explicitSpecKey;
+
   const explicitSpec = process.env.E2E_SPEC?.trim();
-  if (explicitSpec) {
-    const specKey = explicitSpec
-      .split("/")
+  return (
+    explicitSpec
+      ?.split("/")
       .pop()
-      ?.replace(/\.spec\.ts$/, "");
-    return specKey
-      ? (SEED_TARGETS_BY_SPEC_KEY[specKey] ?? ALL_SEED_TARGETS)
-      : ALL_SEED_TARGETS;
-  }
-  return ALL_SEED_TARGETS;
+      ?.replace(/\.spec\.ts$/, "") ?? null
+  );
 }
 
-const seedTargets = seedTargetsForCurrentRun();
+function seedTargetsForCurrentRun(
+  specKey: string | null,
+): readonly SeedTarget[] {
+  return specKey
+    ? (SEED_TARGETS_BY_SPEC_KEY[specKey] ?? ALL_SEED_TARGETS)
+    : ALL_SEED_TARGETS;
+}
+
+const seedSpecKey = specKeyForCurrentRun();
+const seedTargets = seedTargetsForCurrentRun(seedSpecKey);
 for (const target of seedTargets) {
   await seedTarget(target);
 }
 console.log(
-  `[e2e:seed] ${seedTargets.length > 0 ? seedTargets.join(", ") : "no external"} smoke fixtures are ready.`,
+  `[e2e:seed] spec=${seedSpecKey ?? "all-specs"} targets=${seedTargets.length > 0 ? seedTargets.join(", ") : "no external"} smoke fixtures are ready.`,
 );
 
 function isRecord(value: unknown): value is Record<string, unknown> {

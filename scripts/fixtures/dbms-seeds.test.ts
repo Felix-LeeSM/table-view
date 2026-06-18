@@ -571,6 +571,27 @@ describe("DBMS-specific E2E seed fixtures", () => {
     expect(seedScript).not.toContain("seed.mysql.sql");
   });
 
+  it("runtime smoke resets the current fixture before each wired spec", () => {
+    const smokeScript = readFileSync(resolve("scripts/e2e-smoke-ci.sh"), {
+      encoding: "utf8",
+    });
+    const seedScript = readFileSync(resolve("e2e/fixtures/seed-smoke.ts"), {
+      encoding: "utf8",
+    });
+
+    expect(smokeScript).toContain(
+      'E2E_SPEC_KEY="$spec_key" E2E_SPEC="$spec" pnpm tsx e2e/fixtures/seed-smoke.ts',
+    );
+    expect(smokeScript).toContain('seed_smoke_spec "$spec_key" "$spec"');
+    expect(smokeScript).toContain('spec_key="$(basename "$data_dir")"');
+    expect(smokeScript).not.toContain(
+      'if [[ "${E2E_BUILD_ONLY:-0}" != "1" ]]; then',
+    );
+    expect(seedScript).toContain("[e2e:seed] spec=");
+    expect(seedScript).toContain("targets=");
+    expect(seedScript).toContain("SEED_TARGETS_BY_SPEC_KEY[specKey]");
+  });
+
   it.each([
     ["postgresql", E2E_SEED_FIXTURE_PATHS.postgresql.canonical],
     ["mariadb", E2E_SEED_FIXTURE_PATHS.mariadb.canonical],

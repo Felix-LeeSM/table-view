@@ -50,8 +50,10 @@ smoke or measurement gates:
 - Internal-doc link checking is advisory, and Node package audit is deferred.
   Rust dependency security is covered by blocking PR/main `cargo deny check`;
   runtime dependency upgrades remain separate PRs.
-- Per-spec database fixture reset for broad E2E expansion. The current runtime
-  smoke seeds once and gives each wired spec a separate app data directory.
+- Broader E2E fixture reset coverage. Current runtime smoke separates app data
+  directories from external DB resets and resets the matching fixture before
+  each wired spec. That does not add Cassandra, DynamoDB, graph, vector, stream,
+  or broader MSSQL/Oracle/Search service coverage.
 
 ## Related
 

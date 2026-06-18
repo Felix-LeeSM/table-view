@@ -215,7 +215,10 @@ assert_contains "$sqlite_spec" "SQLite read-only write rejection did not render"
 assert_contains "$duckdb_spec" "DuckDB DML readback did not appear in result grid" "duckdb visible smoke assertions"
 assert_contains "$duckdb_spec" "DuckDB read-only write rejection did not render" "duckdb visible smoke assertions"
 assert_contains "$smoke_script" "set -euo pipefail" "smoke script failure handling"
-assert_contains "$smoke_script" "pnpm tsx e2e/fixtures/seed-smoke.ts" "smoke script fixture setup"
+assert_contains "$smoke_script" 'seed_smoke_spec "$spec_key" "$spec"' "per-spec fixture setup"
+assert_contains "$smoke_script" 'E2E_SPEC_KEY="$spec_key" E2E_SPEC="$spec" pnpm tsx e2e/fixtures/seed-smoke.ts' "per-spec fixture setup"
+assert_contains "$smoke_script" 'spec_key="$(basename "$data_dir")"' "per-spec fixture setup"
+assert_not_contains "$smoke_script" 'if [[ "${E2E_BUILD_ONLY:-0}" != "1" ]]; then' "per-spec fixture setup"
 if grep -Eq 'run_wdio .* \|\| true|seed-smoke\.ts.*\|\| true' "$SMOKE_SCRIPT"; then
 	fail "smoke script must not convert setup or spec failures into passes"
 fi
