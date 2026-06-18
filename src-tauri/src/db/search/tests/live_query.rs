@@ -882,9 +882,14 @@ async fn elasticsearch_live_search_honors_in_flight_cancel_token() {
         track_total_hits: None,
     };
 
+    // Cancel mid-flight deterministically — not a timing race. The ordering
+    // invariant client timeout (10s) >> mock response delay (2s) >> cancel
+    // window means the token always fires while the request is still
+    // in-flight, so the biased select! in send_with_cancel resolves to Cancel.
+    let cancel_window = Duration::from_millis(50);
     let result = tokio::join!(
         async {
-            sleep(Duration::from_millis(50)).await;
+            sleep(cancel_window).await;
             token.cancel();
         },
         adapter.search(&request, Some(&token))
@@ -932,9 +937,14 @@ async fn opensearch_live_search_honors_in_flight_cancel_token() {
         track_total_hits: None,
     };
 
+    // Cancel mid-flight deterministically — not a timing race. The ordering
+    // invariant client timeout (10s) >> mock response delay (2s) >> cancel
+    // window means the token always fires while the request is still
+    // in-flight, so the biased select! in send_with_cancel resolves to Cancel.
+    let cancel_window = Duration::from_millis(50);
     let result = tokio::join!(
         async {
-            sleep(Duration::from_millis(50)).await;
+            sleep(cancel_window).await;
             token.cancel();
         },
         adapter.search(&request, Some(&token))
