@@ -313,7 +313,7 @@ Candidate target inventory:
 |---|---|---|---|---|---|---|
 | Cassandra/Scylla | `wide-column` | `cluster` | `cql` with future Rust/WASM language-core owner | keyspace/table/partition/clustering | `tabular` | partition-key and expensive-read guardrails; future evidence path is a Cassandra testcontainer baseline plus a Scylla testcontainer compatibility delta before any Scylla claim |
 | DynamoDB | `cloud-document` | `cloud-api` | `partiql` or native API decision | table/keySchema/GSI/LSI | `document`, `tabular` | access-pattern and cost guardrails; DynamoDB Local/emulator or bounded mock |
-| Graph | `graph` | `server` | Cypher/GQL/Gremlin decision | label/relationship/property/index | `graph`, `path`, `tabular` | destructive traversal/write guardrails; fixture graph |
+| Graph | `graph` | `server` | Cypher-first; GQL/Gremlin deferred split | labels/relationships/properties/indexes | `graph` envelope with path view, plus `tabular` projection | traversal/write guardrails; future Neo4j-compatible fixture graph/testcontainer for Cypher baseline; GQL/Gremlin fixtures deferred |
 | Vector | `vector` | `server`; cloud providers need separate `cloud-api` profile decision | `vector-query` or provider filter DSL | collection/vectorSchema/payloadIndex | `vectorNeighbors` | bounded search/write/delete guardrails; embedded/mock or container fixture |
 | Stream | `stream` | `cluster` | `stream-command` or API decision | topic/partition/consumerGroup/schema | `streamRecords`, `metrics` | offset/consumer/destructive guardrails; Kafka/Redpanda fixture |
 
@@ -324,6 +324,17 @@ reads/writes, tabular rendering, partition-key guardrails, and expensive-read
 blocking. A Scylla compatibility testcontainer is a separate future delta before
 any Scylla-specific support claim. This inventory does not add active runtime,
 connection UI, parser/completion, fixture/live, or smoke support.
+
+Graph remains a candidate-only source contract. Its promotion target is a
+server-backed `graph` profile with Cypher first; GQL and Gremlin are explicit
+deferred language splits. The graph-source catalog owns
+labels/relationships/properties/indexes and stays separate from the RDBMS
+`SchemaGraph` used for ERD/FK metadata. Result rendering uses the existing
+`graph` envelope for node/edge and path-shaped views, plus `tabular` projections
+for query tables. A new top-level path envelope requires an ADR or architecture
+note before implementation. Future evidence must prove traversal/write
+guardrails and a Neo4j-compatible fixture graph/testcontainer before any active
+runtime, connection UI, parser/completion, fixture/live, or smoke claim.
 
 Promotion order for wider candidates is decided by workflow value and contract
 readiness: clear user workflow first, then adapter-family fit, language/core

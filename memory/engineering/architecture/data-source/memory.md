@@ -113,24 +113,23 @@ Runtime Happy Path smoke, and delete-by-query safety planning. Embedded fixtures
 remain contract evidence; actual live `_delete_by_query` and broader admin APIs
 remain deferred.
 
-Cassandra/Scylla, DynamoDB, graph, vector, stream 은 workflow value, profile target,
-connection kind, language owner, catalog model, result envelope, safety policy,
-fixture strategy 가 잠기기 전 active `DatabaseType`/profile/runtime 으로 추가하지
-않는다.
+Cassandra/Scylla, DynamoDB, graph, vector, stream 은
+workflow/profile/connection/language/catalog/result/safety/fixture contract 전
+active `DatabaseType`/profile/runtime 으로 추가하지 않는다.
 
 ## Paradigm Map
 
-| Paradigm         | Examples                                   | Primary language        | Catalog model                                | Primary result           |
-| ---------------- | ------------------------------------------ | ----------------------- | -------------------------------------------- | ------------------------ |
-| `rdb`            | PostgreSQL, MySQL, MariaDB, SQLite, DuckDB | SQL                     | schema/table/view/column/index/constraint/FK | tabular                  |
-| `document`       | MongoDB                                    | mongosh/MQL             | database/collection/index/validator/view     | document, tabular        |
-| `kv`             | Redis, Valkey                              | redis-command           | database/key/type/TTL/stream                 | key-value, stream        |
-| `search`         | Elasticsearch/OpenSearch                   | search-dsl              | index/mapping/alias/template                 | searchHits, aggregations |
-| `wide-column`    | Cassandra/ScyllaDB                         | CQL                     | keyspace/table/partition/clustering          | tabular                  |
-| `cloud-document` | DynamoDB                                   | PartiQL/native API      | table/keySchema/GSI/LSI                      | document, tabular        |
-| `graph`          | Neo4j/Memgraph                             | Cypher/GQL/Gremlin      | label/relationship/property/index            | graph, path, tabular     |
-| `vector`         | Qdrant/Milvus/Pinecone                     | vector-query/filter DSL | collection/vectorSchema/payloadIndex         | vectorNeighbors          |
-| `stream`         | Kafka/Redpanda                             | stream command/API      | topic/partition/consumerGroup/schema         | records, metrics         |
+| Paradigm         | Examples                                   | Primary language                   | Catalog model                                | Primary result           |
+| ---------------- | ------------------------------------------ | ---------------------------------- | -------------------------------------------- | ------------------------ |
+| `rdb`            | PostgreSQL, MySQL, MariaDB, SQLite, DuckDB | SQL                                | schema/table/view/column/index/constraint/FK | tabular                  |
+| `document`       | MongoDB                                    | mongosh/MQL                        | database/collection/index/validator/view     | document, tabular        |
+| `kv`             | Redis, Valkey                              | redis-command                      | database/key/type/TTL/stream                 | key-value, stream        |
+| `search`         | Elasticsearch/OpenSearch                   | search-dsl                         | index/mapping/alias/template                 | searchHits, aggregations |
+| `wide-column`    | Cassandra/ScyllaDB                         | CQL                                | keyspace/table/partition/clustering          | tabular                  |
+| `cloud-document` | DynamoDB                                   | PartiQL/native API                 | table/keySchema/GSI/LSI                      | document, tabular        |
+| `graph`          | Neo4j/Memgraph                             | Cypher-first; GQL/Gremlin deferred | label/relationship/property/index            | graph path-view, tabular |
+| `vector`         | Qdrant/Milvus/Pinecone                     | vector-query/filter DSL            | collection/vectorSchema/payloadIndex         | vectorNeighbors          |
+| `stream`         | Kafka/Redpanda                             | stream command/API                 | topic/partition/consumerGroup/schema         | records, metrics         |
 
 새 paradigm 은 ADR 이 필요하다.
 
@@ -192,6 +191,7 @@ Migration export 는 `SchemaTree`/`useMigrationExport` delegate path 이다.
 - Enabling features by `dbType` checks instead of capabilities.
 - Treating profile presence as runtime support.
 - Persisting file paths, cloud endpoints, or query text without privacy/export policy.
+
 ## Related
 
 - [adding data source](adding/memory.md)

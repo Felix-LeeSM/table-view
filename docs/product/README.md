@@ -400,6 +400,15 @@ profile, runtime, parser/completion, fixture/live evidence, E2E smoke claim 이
   는 Cassandra testcontainer baseline plus Scylla compatibility testcontainer
   delta 이며, 이것은 active runtime/connection UI/parser/completion/smoke claim
   이 아니다.
+- Graph candidate contract 는 `graph` profile target, `server` connection kind,
+  Cypher-first language route with deferred GQL/Gremlin split,
+  labels/relationships/properties/indexes catalog, existing `graph` envelope
+  path view plus `tabular` projection 으로 제한된다. Graph-source catalog 는 RDBMS
+  ERD/FK `SchemaGraph` 와 별도이며, 새 top-level path envelope 는 ADR 또는
+  architecture note 전에는 만들지 않는다. Future evidence path 는
+  Neo4j-compatible fixture graph/testcontainer plus traversal/write guardrails
+  이며, 이것은 active runtime/connection UI/parser/completion/smoke claim 이
+  아니다.
 - Current user-visible support boundaries and unmeasured UI/a11y/perf areas are
   tracked in [`known-limitations.md`](known-limitations.md).
 
