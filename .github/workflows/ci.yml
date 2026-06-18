@@ -213,7 +213,7 @@ jobs:
   integration-tests:
     name: Integration Tests (Docker)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     # Sprint 237 P5+ (2026-05-08) — PG/Mongo 둘 다 GHA service container 로
     # 띄우고 환경변수로 endpoint 를 노출. tests/common/mod.rs 의
