@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/pre-tool-use.sh\"",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/pre-tool-use.sh\"",
             "timeout": 30,
             "statusMessage": "Checking repo policy"
           }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/pre-tool-use.sh\"",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/pre-tool-use.sh\"",
             "timeout": 30,
             "statusMessage": "Checking approval request"
           }

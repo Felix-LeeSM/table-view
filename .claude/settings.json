@@ -6,17 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/hooks/check-edit-policy.sh",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/pre-tool-use.sh\"",
             "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/hooks/check-dangerous-bash.sh"
           }
         ]
       }

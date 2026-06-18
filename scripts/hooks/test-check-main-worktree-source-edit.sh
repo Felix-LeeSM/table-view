@@ -6,7 +6,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOK="$SCRIPT_DIR/check-main-worktree-source-edit.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CODEX_HOOK="$REPO_ROOT/.codex/hooks/pre-tool-use.sh"
+CODEX_HOOK="$REPO_ROOT/scripts/hooks/pre-tool-use.sh"  # neutral wrapper (Claude/codex 공유)
 CLAUDE_SETTINGS="$REPO_ROOT/.claude/settings.json"
 
 PASS_COUNT=0
@@ -263,9 +263,9 @@ run_codex_hook_case \
 	"$apply_patch_payload" \
 	deny
 
-run_jq_case "Claude settings: edit policy also runs for Bash" '
+run_jq_case "Claude settings: PreToolUse wrapper routes edit policy + Bash (via pre-tool-use.sh)" '
   .hooks.PreToolUse[]
-  | select(any(.hooks[]?; (.command // "") | contains("check-edit-policy.sh")))
+  | select(any(.hooks[]?; (.command // "") | contains("pre-tool-use.sh")))
   | .matcher
   | split("|")
   | (index("Read") and index("Edit") and index("Write") and index("MultiEdit") and index("Bash"))
