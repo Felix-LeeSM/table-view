@@ -41,8 +41,12 @@ smoke or measurement gates:
   grid/gridcell/edit feedback, Connection and Import/Export dialog labels/error
   regions, and secret-free alert/status/aria-live credential feedback.
 - Full 72-theme light/dark WCAG AA measurement.
-- SchemaTree 1k/10k table scroll FPS.
-- DataGrid page-size 1000 wheel-to-paint latency.
+- SchemaTree 1k/10k table scroll FPS remains ungated. Current evidence is
+  deterministic component fixtures plus advisory render p50/p95/env and
+  virtualization DOM bounds only.
+- DataGrid page-size 1000 wheel-to-paint latency remains ungated. Current
+  evidence is a deterministic page-size 1000 fixture plus advisory render
+  p50/p95/env and virtualization DOM bounds only.
 - VoiceOver/NVDA paths for Quick Open, DataGrid, and SchemaTree.
 - Candidate-source UI accessibility smoke.
 - 1024x600 minimum viewport with max sidebar and dialog overlap.

@@ -2,6 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import DataGridTable from "./DataGridTable";
 import type { TableData } from "@/types/schema";
+import {
+  DATAGRID_PERF_PAGE_SIZE,
+  makeDataGridPageSize1000Fixture,
+  makeDataGridPerfTable,
+} from "./DataGridTable.perfFixtures";
+import {
+  emitAdvisoryTiming,
+  measureAdvisoryTiming,
+} from "@/lib/perf/advisoryTiming";
 
 /**
  * Sprint-114 (#PERF-1, #GRID-3) — virtualization regression tests.
@@ -18,44 +27,8 @@ import type { TableData } from "@/types/schema";
 const VIEWPORT_HEIGHT = 600;
 const ROW_HEIGHT = 32;
 
-function makeColumns(): TableData["columns"] {
-  return [
-    {
-      name: "id",
-      data_type: "integer",
-      nullable: false,
-      default_value: null,
-      is_primary_key: true,
-      is_foreign_key: false,
-      fk_reference: null,
-      comment: null,
-    },
-    {
-      name: "name",
-      data_type: "text",
-      nullable: true,
-      default_value: null,
-      is_primary_key: false,
-      is_foreign_key: false,
-      fk_reference: null,
-      comment: null,
-    },
-  ];
-}
-
 function makeTable(rowCount: number, executedQuery = "q1"): TableData {
-  const rows: unknown[][] = [];
-  for (let i = 0; i < rowCount; i++) {
-    rows.push([i, `name-${i}`]);
-  }
-  return {
-    columns: makeColumns(),
-    rows,
-    total_count: rowCount,
-    page: 1,
-    page_size: rowCount,
-    executed_query: executedQuery,
-  };
+  return makeDataGridPerfTable(rowCount, executedQuery);
 }
 
 function makeProps(overrides: Record<string, unknown> = {}) {
@@ -152,13 +125,54 @@ describe("DataGridTable virtualization (sprint-114)", () => {
     HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
   });
 
+  it("keeps a deterministic DataGrid page-size 1000 perf fixture available", () => {
+    const data = makeDataGridPageSize1000Fixture();
+    expect(data.rows).toHaveLength(1_000);
+    expect(data.page_size).toBe(DATAGRID_PERF_PAGE_SIZE);
+    expect(data.rows[0]).toEqual([0, "name-0"]);
+    expect(data.rows[999]).toEqual([999, "name-999"]);
+  });
+
   it("AC-01 — renders ≤ 100 body rows when total rows exceed threshold (1000)", () => {
-    render(<DataGridTable {...makeProps()} />);
+    render(
+      <DataGridTable
+        {...makeProps({ data: makeDataGridPageSize1000Fixture() })}
+      />,
+    );
     const rows = screen.getAllByRole("row");
     // 1 header + ≤ 100 body rows. 600 / 32 ≈ 18 visible + overscan ≈ 28 total.
     expect(rows.length).toBeLessThanOrEqual(101);
     // Sanity: at least the header + a non-trivial slice rendered.
     expect(rows.length).toBeGreaterThan(1);
+  });
+
+  it("reports advisory render timing for the deterministic page-size 1000 fixture", async () => {
+    let renderedRowCount = 0;
+    const report = await measureAdvisoryTiming(
+      "DataGridTable deterministic page-size 1000 render",
+      5,
+      () => {
+        const view = render(
+          <DataGridTable
+            {...makeProps({ data: makeDataGridPageSize1000Fixture() })}
+          />,
+        );
+        const rows = screen.getAllByRole("row");
+        renderedRowCount = rows.length;
+        expect(rows.length).toBeLessThanOrEqual(101);
+        expect(screen.getByRole("grid")).toHaveAttribute(
+          "aria-rowcount",
+          "1001",
+        );
+        view.unmount();
+      },
+    );
+
+    const line = emitAdvisoryTiming(report);
+    expect(line).toContain("p50=");
+    expect(line).toContain("p95=");
+    expect(line).toContain("env=");
+    expect(renderedRowCount).toBeGreaterThan(1);
   });
 
   it("AC-03 — first virtual row carries aria-rowindex=2 (header is row 1)", () => {

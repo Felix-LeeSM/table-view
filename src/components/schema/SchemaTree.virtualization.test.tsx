@@ -1,11 +1,26 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  act,
+  cleanup,
+} from "@testing-library/react";
 import SchemaTree from "./SchemaTree";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import type { TableInfo } from "@/types/schema";
+import {
+  SCHEMA_TREE_PERF_FIXTURE_COUNTS,
+  makeSchemaTreePerfFixture,
+  makeSchemaTreePerfTables,
+  type SchemaTreePerfTableCount,
+} from "./SchemaTree.perfFixtures";
+import {
+  emitAdvisoryTiming,
+  measureAdvisoryTiming,
+} from "@/lib/perf/advisoryTiming";
 
 /**
  * Sprint-115 (#PERF-2, #TREE-4) — virtualization regression tests.
@@ -124,16 +139,34 @@ function resetStores() {
   });
 }
 
-function makeTables(count: number): TableInfo[] {
-  const out: TableInfo[] = [];
-  for (let i = 0; i < count; i++) {
-    out.push({
-      name: `table_${i.toString().padStart(4, "0")}`,
-      schema: "public",
-      row_count: null,
-    });
+function seedPerfFixture(count: SchemaTreePerfTableCount) {
+  const fixture = makeSchemaTreePerfFixture(count);
+  setSchemaStoreState({
+    schemas: { conn1: fixture.schemas },
+    tables: { [`conn1:${fixture.schemaName}`]: fixture.tables },
+  });
+}
+
+function makeTables(count: number) {
+  return makeSchemaTreePerfTables(count);
+}
+
+async function renderSchemaTreeFixture(
+  count: SchemaTreePerfTableCount,
+): Promise<number> {
+  seedPerfFixture(count);
+  await act(async () => {
+    render(<SchemaTree connectionId="conn1" />);
+  });
+  try {
+    const tableButtons = screen.getAllByLabelText(/^table_\d+ table$/);
+    const renderedCount = tableButtons.length;
+    expect(renderedCount).toBeLessThanOrEqual(100);
+    expect(renderedCount).toBeGreaterThan(0);
+    return renderedCount;
+  } finally {
+    cleanup();
   }
-  return out;
 }
 
 const originalOffsetWidth = Object.getOwnPropertyDescriptor(
@@ -227,6 +260,22 @@ describe("SchemaTree virtualization (sprint-115)", () => {
   // ---------------------------------------------------------------------
   // AC-01 — DOM cap with 1000-table fixture
   // ---------------------------------------------------------------------
+  it("keeps deterministic 1k and 10k SchemaTree perf fixtures available", () => {
+    const oneThousand = makeSchemaTreePerfFixture(
+      SCHEMA_TREE_PERF_FIXTURE_COUNTS.oneThousand,
+    );
+    const tenThousand = makeSchemaTreePerfFixture(
+      SCHEMA_TREE_PERF_FIXTURE_COUNTS.tenThousand,
+    );
+
+    expect(oneThousand.tables).toHaveLength(1_000);
+    expect(oneThousand.tables[0]?.name).toBe("table_0000");
+    expect(oneThousand.tables[999]?.name).toBe("table_0999");
+    expect(tenThousand.tables).toHaveLength(10_000);
+    expect(tenThousand.tables[0]?.name).toBe("table_0000");
+    expect(tenThousand.tables[9_999]?.name).toBe("table_9999");
+  });
+
   it("AC-01 — caps DOM table buttons at viewport-sized window when expanded schema has 1000 tables", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
@@ -254,6 +303,31 @@ describe("SchemaTree virtualization (sprint-115)", () => {
     // Sanity: total dataset is still 1000 — the virtualizer just hides the
     // tail. The schema row label should still be present.
     expect(screen.getByLabelText("public schema")).toBeInTheDocument();
+  });
+
+  it("reports advisory render timing for deterministic 1k and 10k fixtures", async () => {
+    let reportCount = 0;
+
+    for (const count of [
+      SCHEMA_TREE_PERF_FIXTURE_COUNTS.oneThousand,
+      SCHEMA_TREE_PERF_FIXTURE_COUNTS.tenThousand,
+    ] as const) {
+      const report = await measureAdvisoryTiming(
+        `SchemaTree deterministic ${count} tables render`,
+        5,
+        async () => {
+          const renderedCount = await renderSchemaTreeFixture(count);
+          expect(renderedCount).toBeLessThanOrEqual(100);
+        },
+      );
+      const line = emitAdvisoryTiming(report);
+      expect(line).toContain("p50=");
+      expect(line).toContain("p95=");
+      expect(line).toContain("env=");
+      reportCount += 1;
+    }
+
+    expect(reportCount).toBe(2);
   });
 
   // ---------------------------------------------------------------------
