@@ -256,6 +256,7 @@ run_hook_gates() {
 run_ci_workflow_gates() {
 	run_step "ci-workflow-cache" bash scripts/hooks/test-ci-workflow-cache.sh
 	run_step "e2e-smoke-workflow-cache" bash scripts/hooks/test-e2e-smoke-workflow.sh
+	run_step "platform-smoke-canary-workflow-cache" bash scripts/hooks/test-platform-smoke-canary-workflow.sh
 }
 
 run_memory_gates() {

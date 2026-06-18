@@ -301,6 +301,7 @@ assert_contains "$ci_workflow_output" "route: frontend=0 rust=0" "ci workflow"
 assert_contains "$ci_workflow_output" "ci_workflow=1" "ci workflow"
 assert_contains "$ci_workflow_output" "RUN ci-workflow-cache:" "ci workflow"
 assert_contains "$ci_workflow_output" "RUN e2e-smoke-workflow-cache:" "ci workflow"
+assert_contains "$ci_workflow_output" "RUN platform-smoke-canary-workflow-cache:" "ci workflow"
 assert_not_contains "$ci_workflow_output" "RUN ts-test:" "ci workflow"
 assert_not_contains "$ci_workflow_output" "RUN rust-test-and-coverage:" "ci workflow"
 

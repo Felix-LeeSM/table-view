@@ -1,0 +1,86 @@
+name: Platform Smoke Canary
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: platform-smoke-canary-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  platform-smoke:
+    name: Platform Smoke Canary (${{ matrix.label }})
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS arm64
+            platform: macos-14
+            target: aarch64-apple-darwin
+            tauri_args: --target aarch64-apple-darwin
+          - label: Windows x86_64
+            platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            tauri_args: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-bin: false
+          key: ${{ matrix.target }}
+          shared-key: platform-smoke-canary
+          save-if: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Tauri no-bundle build
+        shell: bash
+        run: pnpm tauri build --debug --no-bundle --ci ${{ matrix.tauri_args }}
+
+      - name: Record canary result
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Platform smoke canary: ${{ matrix.label }}"
+            echo ""
+            echo "- Runner: ${{ matrix.platform }}"
+            echo "- Target: ${{ matrix.target }}"
+            echo "- Ref: ${{ github.ref_name }}"
+            echo "- SHA: ${{ github.sha }}"
+            echo "- Required gate: no"
+            echo "- Runtime support claim: none"
+          } >> "$GITHUB_STEP_SUMMARY"
