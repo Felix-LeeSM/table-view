@@ -309,6 +309,15 @@ completion, or runtime claim 이 아니라 deferred editor/query-language invent
 이 문단은 active runtime, connection UI, parser/completion, fixture/live
 evidence, E2E smoke claim 을 만들지 않는다.
 
+Vector 는 candidate-only `vector` profile target 이다. Promotion 전 계약은
+`server` connection kind, cloud providers 에 대한 별도 `cloud-api` profile
+decision, future `vector-query` or provider filter DSL, collection/vectorSchema/
+payloadIndex catalog, `vectorNeighbors` result envelope, topK/filter/write/delete
+guardrails 를 요구한다. Embedded/mock or container fixtures are future-only
+inventory. Cloud credential/provider/ACL/secrets/KDF decisions require a
+threat-model handoff before implementation. 이 문단은 active runtime, connection
+UI, parser/completion, fixture/live evidence, E2E smoke claim 을 만들지 않는다.
+
 Stream 은 candidate-only `stream` profile target 이다. Promotion 전 계약은
 `cluster` connection kind, `stream-command` or typed API decision,
 topic/partition/consumerGroup/schema catalog, `streamRecords`/`metrics` result
@@ -428,6 +437,14 @@ parser/completion, fixture/live evidence, E2E smoke claim 을 만들지 않는�
   Neo4j-compatible fixture graph/testcontainer plus traversal/write guardrails
   이며, 이것은 active runtime/connection UI/parser/completion/smoke claim 이
   아니다.
+- Vector candidate contract 는 `vector` profile target, `server` connection
+  kind, cloud providers 의 별도 `cloud-api` profile decision, future
+  `vector-query` or provider filter DSL, collection/vectorSchema/payloadIndex
+  catalog, `vectorNeighbors` result envelope 로 제한된다. Future evidence path 는
+  topK/filter/write/delete guardrails plus embedded/mock or container fixture
+  strategy 이며, cloud credential/provider decisions require threat-model
+  handoff before implementation. 이것은 active runtime/connection
+  UI/parser/completion/smoke claim 이 아니다.
 - Current user-visible support boundaries and unmeasured UI/a11y/perf areas are
   tracked in [`known-limitations.md`](known-limitations.md).
 

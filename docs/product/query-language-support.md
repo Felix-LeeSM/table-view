@@ -105,7 +105,7 @@ fixture/live, or E2E evidence.
 | `cypher` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Graph profiles are not active; future graph promotion is Cypher-first. |
 | `gql` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | GraphQL profiles are not active; GQL is deferred behind the Cypher-first graph contract. |
 | `gremlin` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Graph profiles are not active; Gremlin is deferred behind the Cypher-first graph contract. |
-| `vector-query` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Vector profiles are not active. |
+| `vector-query` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Vector profiles are not active; future promotion must choose `vector-query` or provider filter DSL, prove parser/completion/safety/runtime/fixture/smoke evidence, and keep cloud providers behind a separate `cloud-api` profile decision and threat-model handoff. |
 | `stream-command` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Stream profiles are not active; future promotion must choose bounded `stream-command` or typed API dispatch before language-core parser/completion ownership. |
 
 ## Current Product Surface
