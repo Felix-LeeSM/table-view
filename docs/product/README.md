@@ -393,6 +393,13 @@ profile, runtime, parser/completion, fixture/live evidence, E2E smoke claim 이
 - Cassandra/Scylla, DynamoDB, graph, vector, stream 은 workflow value,
   profile target, capability, parser/completion owner, fixture/live evidence,
   smoke/E2E decision 전 active support 로 승격하지 않는다.
+- Cassandra/Scylla candidate contract 는 `wide-column` profile target,
+  `cluster` connection kind, CQL future Rust/WASM language-core ownership,
+  keyspace/table/partition/clustering catalog, `tabular` result envelope,
+  partition-key and expensive-read guardrails 로 제한된다. Future evidence path
+  는 Cassandra testcontainer baseline plus Scylla compatibility testcontainer
+  delta 이며, 이것은 active runtime/connection UI/parser/completion/smoke claim
+  이 아니다.
 - Current user-visible support boundaries and unmeasured UI/a11y/perf areas are
   tracked in [`known-limitations.md`](known-limitations.md).
 
