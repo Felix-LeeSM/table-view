@@ -311,11 +311,19 @@ Candidate target inventory:
 
 | Candidate | Profile target | Connection kind | Language | Catalog model | Result envelope | Safety / fixture plan |
 |---|---|---|---|---|---|---|
-| Cassandra/Scylla | `wide-column` | `cluster` | `cql` | keyspace/table/partition/clustering | `tabular` | partition and expensive-read guardrails; Cassandra/Scylla fixture or testcontainer |
+| Cassandra/Scylla | `wide-column` | `cluster` | `cql` with future Rust/WASM language-core owner | keyspace/table/partition/clustering | `tabular` | partition-key and expensive-read guardrails; future evidence path is a Cassandra testcontainer baseline plus a Scylla testcontainer compatibility delta before any Scylla claim |
 | DynamoDB | `cloud-document` | `cloud-api` | `partiql` or native API decision | table/keySchema/GSI/LSI | `document`, `tabular` | access-pattern and cost guardrails; DynamoDB Local/emulator or bounded mock |
 | Graph | `graph` | `server` | Cypher/GQL/Gremlin decision | label/relationship/property/index | `graph`, `path`, `tabular` | destructive traversal/write guardrails; fixture graph |
 | Vector | `vector` | `server`; cloud providers need separate `cloud-api` profile decision | `vector-query` or provider filter DSL | collection/vectorSchema/payloadIndex | `vectorNeighbors` | bounded search/write/delete guardrails; embedded/mock or container fixture |
 | Stream | `stream` | `cluster` | `stream-command` or API decision | topic/partition/consumerGroup/schema | `streamRecords`, `metrics` | offset/consumer/destructive guardrails; Kafka/Redpanda fixture |
+
+Cassandra/Scylla remains one wide-column candidate contract until promotion
+evidence proves product-specific deltas. The future Cassandra baseline must prove
+cluster connection, keyspace/table/partition/clustering catalog, bounded CQL
+reads/writes, tabular rendering, partition-key guardrails, and expensive-read
+blocking. A Scylla compatibility testcontainer is a separate future delta before
+any Scylla-specific support claim. This inventory does not add active runtime,
+connection UI, parser/completion, fixture/live, or smoke support.
 
 Promotion order for wider candidates is decided by workflow value and contract
 readiness: clear user workflow first, then adapter-family fit, language/core
