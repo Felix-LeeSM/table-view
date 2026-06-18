@@ -7,32 +7,16 @@
 
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/root-resolve.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/hook-json.sh"
+
 SCRIPT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-ROOT="${CLAUDE_PROJECT_DIR:-}"
-if [ -z "$ROOT" ]; then
-	if ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
-		:
-	else
-		ROOT="$SCRIPT_ROOT"
-	fi
-fi
+ROOT="$(resolve_hook_root "$SCRIPT_ROOT")"
+INPUT="$(hook_read_input)"
 
-INPUT="$(cat || true)"
-if [ -z "$INPUT" ] && [ -n "${TOOL_INPUT:-}" ]; then
-	INPUT="$TOOL_INPUT"
-fi
-
-json_field() {
-	local expr="$1"
-	if ! command -v jq >/dev/null 2>&1 || [ -z "$INPUT" ]; then
-		return 0
-	fi
-	printf '%s' "$INPUT" | jq -r "$expr // empty" 2>/dev/null || true
-}
-
-command="$(json_field '.tool_input.command // .input.command // .command')"
-patch_payload="$(json_field '.tool_input.input // .input.input // .tool_input.patch // .input.patch // .patch')"
-tool_name="$(json_field '.tool_name // .tool // .name')"
+command="$(hook_json_field '.tool_input.command // .input.command // .command')"
+patch_payload="$(hook_json_field '.tool_input.input // .input.input // .tool_input.patch // .input.patch // .patch')"
+tool_name="$(hook_json_field '.tool_name // .tool // .name')"
 
 is_write_path_tool() {
 	case "$tool_name" in
@@ -59,27 +43,6 @@ run_main_worktree_source_check() {
 	if [ -n "$stderr" ]; then
 		printf '%s\n' "$stderr" >&2
 	fi
-}
-
-paths_from_json() {
-	if ! command -v jq >/dev/null 2>&1 || [ -z "$INPUT" ]; then
-		return 0
-	fi
-	printf '%s' "$INPUT" | jq -r '
-    [
-      .tool_input.file_path?, .input.file_path?, .file_path?,
-      .tool_input.path?, .input.path?, .path?,
-      (.tool_input.files?[]? | .file_path? // .path?),
-      (.input.files?[]? | .file_path? // .path?)
-    ] | .[]? | select(type == "string" and length > 0)
-  ' 2>/dev/null || true
-}
-
-paths_from_patch() {
-	{ [ -n "$command" ] || [ -n "$patch_payload" ]; } || return 0
-	printf '%s\n%s\n' "$command" "$patch_payload" | sed -nE \
-		-e 's/^\*\*\* (Add|Update|Delete) File: (.*)$/\2/p' \
-		-e 's/^\*\*\* Move to: (.*)$/\1/p'
 }
 
 check_path() {
@@ -112,7 +75,7 @@ check_path() {
 while IFS= read -r path; do
 	[ -n "$path" ] || continue
 	check_path "$path"
-done < <({ paths_from_json; paths_from_patch; } | sort -u)
+done < <({ hook_paths_from_json; hook_paths_from_patch; } | sort -u)
 
 if [ -n "$command" ]; then
 	run_main_worktree_source_check --command "$command"
