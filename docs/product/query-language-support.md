@@ -101,7 +101,7 @@ fixture/live, or E2E evidence.
 | QueryLanguageId | Lifecycle | Parser owner | Completion owner | Fallback policy | Safety analyzer | Current boundary |
 |---|---|---|---|---|---|---|
 | `cql` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Cassandra/Scylla profiles are not active; future promotion must assign CQL parser/completion to the Rust/WASM language-core owner. |
-| `partiql` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | DynamoDB profiles are not active. |
+| `partiql` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | DynamoDB profiles are not active; DynamoDB's candidate contract is native API-first, so PartiQL remains deferred editor/query-language inventory until a later source-specific PR proves parser, completion, safety, runtime, fixture, and smoke evidence. |
 | `cypher` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Graph profiles are not active; future graph promotion is Cypher-first. |
 | `gql` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | GraphQL profiles are not active; GQL is deferred behind the Cypher-first graph contract. |
 | `gremlin` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Graph profiles are not active; Gremlin is deferred behind the Cypher-first graph contract. |
