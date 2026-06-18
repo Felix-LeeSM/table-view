@@ -75,6 +75,7 @@ has_memory=0
 has_adr=0
 has_code=0
 has_wrapper=0
+has_docs=0
 
 while IFS= read -r raw; do
 	[ -n "$raw" ] || continue
@@ -86,6 +87,8 @@ while IFS= read -r raw; do
 	case "$rel" in
 		memory/*) has_memory=1 ;;
 		docs/archives/decisions/*) has_adr=1 ;;
+		docs/sprints/* | docs/archives/* | docs/table_plus/* | docs/explorations/*) ;;
+		docs/*) has_docs=1 ;;
 		.claude/agents/*.md | .claude/rules/*.md | .claude/commands/*.md | .codex/agents/*.md)
 			has_wrapper=1
 			;;
@@ -138,6 +141,10 @@ fi
 
 if [ "$has_wrapper" = "1" ]; then
 	run_advisory "wrapper-cap" bash -lc "cd \"$ROOT\" && bash scripts/hooks/check-wrapper-cap.sh 2>&1 | head -10"
+fi
+
+if [ "$has_docs" = "1" ]; then
+	run_advisory "doc-size" bash -lc "cd \"$ROOT\" && bash scripts/hooks/check-doc-size.sh 2>&1 | head -10"
 fi
 
 if [ -s "$output_file" ]; then

@@ -30,7 +30,7 @@ description: 대화 중 합의된 결정, 룰, 적용 원칙을 repo memory/docs
 2. **위치 계산**:
    - ADR `NNNN`: `docs/archives/decisions/` 의 최대 번호 + 1 (4자리 zero-pad).
    - 슬러그: 주제 접두사 + 결정 꼬리 kebab-case (예: `global-state-zustand`).
-   - sub-room 임계: 같은 영역 룰 누적되어 본문 200줄 위협 시 sub-room 분기.
+   - sub-room 임계: 같은 영역 룰 누적되어 본문 200줄 또는 12,000 chars 위협 시 sub-room 분기.
 3. **정합성 검증** (필수):
    - 기존 문서 / 메모리 (memory/, docs/, .claude/rules/) 와 모순 점검.
    - 모순 발견 시:
@@ -106,7 +106,7 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
 
 ## 제약
 
-- 200줄 초과 예상 시 즉시 분할 금지. 경고 출력 + `split-memory` skill 안내.
+- 200줄 또는 12,000 chars 초과 예상 시 즉시 분할 금지. 경고 출력 + `split-memory` skill 안내.
 - `memory/` 트리는 `memory.md` 만 (예외: `memory/index/*.md`). 다른 이름 금지.
 - Skill 본문은 `memory/` 에 저장하지 않는다. `.agents/skills/<name>/SKILL.md` 를
   수정하고 별도 Claude command wrapper 를 두지 않는다.
@@ -121,6 +121,6 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
 
 ## 관련
 
-- `split-memory` skill — 200줄 초과 시 분할
+- `split-memory` skill — 200줄 또는 12,000 chars 초과 시 분할
 - `memory/memory.md` — 팔레스 입구
 - `scripts/regenerate-indexes.sh` — index 자동 갱신

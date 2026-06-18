@@ -248,6 +248,8 @@ run_hook_gates() {
 	run_step "generated-fence-tests" bash scripts/hooks/test-generated-fences.sh
 	run_step "pr-body-contract-tests" bash scripts/hooks/test-check-pr-body.sh
 	run_step "pre-push-router-tests" bash scripts/hooks/test-pre-push-path-router.sh
+	run_step "memory-size-tests" bash scripts/hooks/test-check-memory-size.sh
+	run_step "doc-size-tests" bash scripts/hooks/test-check-doc-size.sh
 }
 
 run_ci_workflow_gates() {

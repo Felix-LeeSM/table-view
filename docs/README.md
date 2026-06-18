@@ -22,6 +22,14 @@ updated: 2026-05-28
 | 스프린트 산출물 | `sprints/` | 그대로 유지 |
 | 과거 기록 | `archives/`, retired risk registers, historical `explorations/` | `archives/` 아래로 수렴 |
 
+## 분량 cap
+
+지속 참조 문서(`product/`, `contributor-guide/`, `ROADMAP.md`, `quality/`,
+`phases/`, docs root)는 120,000 chars 분량 cap 을 둔다 — agent 가 읽을 때
+context 부하를 가두기 위함. 일회성 산출물(`sprints/`, `archives/`,
+`table_plus/`, `explorations/`)은 cap 에서 제외한다 (다시 읽을 일이 거의 없음).
+검사는 `scripts/hooks/check-doc-size.sh`. 현재 회귀 0, threshold 는 추후 ratchet.
+
 ## 유지할 최상위 묶음
 
 - `user-guide/` - 사용자가 제품을 쓰는 법. 필요할 때 신설.

@@ -46,6 +46,21 @@ jobs:
       - name: Validate PR body
         run: node scripts/hooks/check-pr-body.mjs
 
+  doc-size:
+    name: Doc Size Advisory (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # advisory (non-blocking) — 현재 회귀 0 (최대 106K chars < 120K cap). threshold 는 추후 ratchet.
+    # pre-push 에는 연동하지 않는다 (신규 advisory 정책). block 전환은 분할 정리 후 별도 결정.
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check doc size
+        run: bash scripts/hooks/check-doc-size.sh
+
   frontend:
     name: Frontend Checks
     runs-on: ubuntu-latest
