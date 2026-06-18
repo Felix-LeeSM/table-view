@@ -124,6 +124,20 @@ WARN_PATTERNS=(
 
 MEMORY_POINTER="memory/workflow/git-policy/memory.md"
 
+# 회복 정답 4-step sequence — FETCH_HEAD reset / reset default / git_pull
+# 3곳에서 byte-identical. reflog 기반 update-ref + SHA refspec push.
+emit_reflog_recovery_steps() {
+  cat >&2 <<EOF
+회복 정답 ($MEMORY_POINTER 외부 race 가짜 신호 + Push reject 절):
+  1) git ls-remote origin <branch>          # remote SHA 진단
+  2) git reflog                              # 직전 본인 commit SHA 확인
+  3) git update-ref refs/heads/<branch> <local-sha>
+                                             # ref 만 본인 SHA 로 fix
+  4) SHA="\$(git rev-parse HEAD)"            # SHA refspec push inline
+     git push origin "\$SHA":refs/heads/<branch>
+EOF
+}
+
 # Sprint 400 — git reset --hard <target> 의 target 별 메시지 dispatch.
 # Sprint 402 — 2-step bypass 차단: FETCH_HEAD / ORIG_HEAD / @{u} / refs/remotes/*
 # 단독 명령도 sequence 차단과 같은 layer 로 끌어올림.
@@ -158,13 +172,9 @@ push reject 후 즉시 reset 으로 가는 것은 거의 항상 잘못된 응급
   - git reset --hard @{u}
   - git reset --hard refs/remotes/<...>
 
-회복 정답 ($MEMORY_POINTER 외부 race 가짜 신호 + Push reject 절):
-  1) git ls-remote origin <branch>          # remote SHA 진단
-  2) git reflog                              # 직전 본인 commit SHA 확인
-  3) git update-ref refs/heads/<branch> <local-sha>
-                                             # ref 만 본인 SHA 로 fix
-  4) SHA="\$(git rev-parse HEAD)"            # SHA refspec push inline
-     git push origin "\$SHA":refs/heads/<branch>
+EOF
+      emit_reflog_recovery_steps
+      cat >&2 <<EOF
 
 자세히: $MEMORY_POINTER (외부 race 가짜 신호 + Push reject 절)
 이 가이드를 따라도 안 풀리면 중단하고 별도 복구 절차를 설계.
@@ -260,13 +270,9 @@ emit_git_reset_hard_default() {
 git reset --hard 는 destructive — 본인 commit 을 wipe 합니다.
 push reject 후 즉시 reset 으로 가는 것은 거의 항상 잘못된 응급 처치.
 
-회복 정답 ($MEMORY_POINTER 외부 race 가짜 신호 + Push reject 절):
-  1) git ls-remote origin <branch>          # remote SHA 진단
-  2) git reflog                              # 직전 본인 commit SHA 확인
-  3) git update-ref refs/heads/<branch> <local-sha>
-                                             # ref 만 본인 SHA 로 fix
-  4) SHA="\$(git rev-parse HEAD)"            # SHA refspec push inline
-     git push origin "\$SHA":refs/heads/<branch>
+EOF
+  emit_reflog_recovery_steps
+  cat >&2 <<EOF
 
 부드러운 대안 (덜 destructive):
   - git reset --soft <sha>   # working tree + index 보존
@@ -412,13 +418,9 @@ push reject → 즉시 \`git pull --rebase\` 는 race-trace 결과 agent 의
   - git pull origin <branch>
   - git pull --rebase origin <branch>
 
-회복 정답 ($MEMORY_POINTER 외부 race 가짜 신호 + Push reject 절):
-  1) git ls-remote origin <branch>          # remote SHA 진단
-  2) git reflog                              # 직전 본인 commit SHA 확인
-  3) git update-ref refs/heads/<branch> <local-sha>
-                                             # ref 만 본인 SHA 로 fix
-  4) SHA="\$(git rev-parse HEAD)"            # SHA refspec push inline
-     git push origin "\$SHA":refs/heads/<branch>
+EOF
+      emit_reflog_recovery_steps
+      cat >&2 <<EOF
 
 예외: 사용자가 채팅에서 직접 \`! git pull\` (! prefix bypass) 로 명시 호출 시는
 본 hook scope 밖.

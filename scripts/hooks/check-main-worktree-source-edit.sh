@@ -292,12 +292,7 @@ paths_from_command_tokens() {
 				mode="last-dest"
 				continue
 				;;
-			mv)
-				reset_mode
-				mode="all-targets"
-				continue
-				;;
-			rm | touch | mkdir | truncate)
+			mv | rm | touch | mkdir | truncate)
 				reset_mode
 				mode="all-targets"
 				continue
