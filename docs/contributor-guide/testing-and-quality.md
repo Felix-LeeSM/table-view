@@ -302,10 +302,10 @@ Required remote evidence on the exact release SHA:
 Deferred or non-blocking checks must stay explicit:
 
 - Theme contrast is advisory today.
-- Link checking, full a11y, perf budgets, Rust llvm-cov cutoffs,
-  macOS/Windows desktop runtime smoke, and per-spec database fixture
-  reset are not routine release blockers unless a release issue explicitly
-  promotes one of them.
+- Link checking, a11y beyond the critical component smoke set, perf budgets,
+  Rust llvm-cov cutoffs, macOS/Windows desktop runtime smoke, and per-spec
+  database fixture reset are not routine release blockers unless a release
+  issue explicitly promotes one of them.
 - Non-routine E2E specs remain scenario inventory or manual regression evidence
   until a workflow/script invokes them.
 - No support claim can ship on fixture-only evidence. Fixture files, profile
@@ -324,7 +324,7 @@ Deferred or non-blocking checks must stay explicit:
 | Credential and local-first privacy | `memory/engineering/architecture/state-management/memory.md`, `docs/product/README.md`, `docs/product/known-limitations.md`, `src-tauri/tests/keyring_new_user.rs` | Sensitive state stays local-first and connection export omits passwords; DuckDB file analytics public payloads redact absolute paths. Credential rotation, keyring diagnostics, broad key lifecycle smoke, and multi-user security flows are future work. |
 | Security decision process | `.agents/skills/grill-with-memory/SKILL.md` | Password, credential, encryption, KDF, file-sharing, ACL, code-signing, supply-chain, or multi-user decisions need a threat-model handoff before option grilling. H7 does not lock new security architecture by documentation-only claim. |
 | Dependency security | `.github/workflows/ci.yml`, `src-tauri/deny.toml`, `scripts/hooks/cargo-deny-summary.sh`, `scripts/hooks/test-cargo-deny-summary.sh`, `scripts/hooks/pre-push-path-router.sh`, `docs/archives/risks/active-risk-register-2026-05-27.md` | `cargo deny check` runs on local Rust/full pre-push routes and as the blocking PR/main Dependency Security job. The job pins `cargo-deny` 0.19.9, caches the installed binary/registry inputs, prints `src-tauri/deny.toml` plus `[advisories].ignore` IDs, and fails on new unignored advisories, denied licenses, or banned crates. Tracked advisory ignores remain bounded follow-ups, including `hickory-proto` through `mongodb 3.6.0`, `rustls-pemfile` through `oracle-rs 0.1.7`, and `rsa 0.9` through `sqlx-mysql`. Node audit is deferred; runtime dependency upgrades remain separate PRs. |
-| A11y | Component tests using roles/labels and `.github/workflows/ci.yml` advisory contrast step | Routine VoiceOver/NVDA, focus-order, and 72-theme strict WCAG gates are not wired. Promote from the follow-up table only when a feature lane gives the check a concrete owner and budget. |
+| A11y | `src/components/schema/SchemaTree.a11y-smoke.test.tsx`, `src/components/datagrid/DataGridTable.a11y-smoke.test.tsx`, `src/features/connection/components/ConnectionDialog.a11y-smoke.test.tsx`, `src/features/connection/components/ImportExportDialog.a11y-smoke.test.tsx`, component tests using roles/labels, and `.github/workflows/ci.yml` advisory contrast step | Critical component smoke covers SchemaTree tree/treeitem roles, DataGrid grid/gridcell/edit feedback, ConnectionDialog labels/error feedback, Import/Export labels/error feedback, and secret-free alert/status/aria-live regions for credential/recovery paths. Routine VoiceOver/NVDA, focus-order, Quick Open, candidate-source UI, and 72-theme strict WCAG gates are not wired. Promote from the follow-up table only when a feature lane gives the check a concrete owner and budget. |
 | Performance | `src-tauri/tests/snapshot_perf.rs`, targeted component perf smoke tests, `docs/product/known-limitations.md` | Snapshot and component-level perf checks do not equal routine SchemaTree/DataGrid FPS or latency gates. Promote FPS/latency budgets only with reproducible fixture size, runtime cost, and failure triage. |
 | Link checking | `scripts/check-doc-links.ts`, `scripts/__tests__/check-doc-links.test.ts`, `package.json`, `.github/workflows/ci.yml` | `pnpm docs:links` checks active docs (`README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/ROADMAP.md`, `docs/product/**`, `docs/contributor-guide/**`) for relative target and anchor resolution while excluding `docs/archives/**` and `docs/sprints/**` as default source roots. CI runs it as advisory only; blocking promotion remains future work after owner/runtime cost/actionability settle. |
 | Platform smoke | `.github/workflows/e2e-smoke.yml`, `.github/workflows/ci.yml` | Runtime Happy Path is Ubuntu/Linux only. Rust unit/storage CI runs on macOS, but macOS desktop runtime smoke and Windows runtime smoke are deferred. |

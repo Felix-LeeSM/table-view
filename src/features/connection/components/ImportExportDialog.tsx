@@ -11,6 +11,7 @@ import {
 } from "@lib/tauri";
 import MasterPasswordField from "./import-export/MasterPasswordField";
 import SelectionTree from "./import-export/SelectionTree";
+import { sanitizeMessage } from "./ConnectionDialog/sanitize";
 
 interface ImportExportDialogProps {
   onClose: () => void;
@@ -124,7 +125,7 @@ function ExportPanel() {
       setGeneratedPassword(result.password);
       setJson(result.json);
     } catch (e) {
-      setError(extractErrorMessage(e));
+      setError(extractErrorMessage(e, generatedPassword));
     }
     setRunning(false);
   };
@@ -348,7 +349,7 @@ function ImportPanel({ onImported }: ImportPanelProps) {
       await loadConnections();
       await loadGroups();
     } catch (e) {
-      setError(extractErrorMessage(e));
+      setError(extractErrorMessage(e, masterPassword));
     }
     setRunning(false);
   };
@@ -486,13 +487,17 @@ function ImportResultPanel({ result }: { result: ImportResult }) {
  * unexpected shapes we fall back to `String(e)`. We special-case the canonical
  * incorrect-password message so the inline text matches across the test
  * suite and the live app. */
-function extractErrorMessage(e: unknown): string {
+function extractErrorMessage(
+  e: unknown,
+  ...secrets: Array<string | null | undefined>
+): string {
   const raw = e instanceof Error ? e.message : String(e);
+  const sanitized = sanitizeMessage(raw, ...secrets);
   // Backend includes the variant prefix `Encryption error: <msg>` — strip
   // it for the canonical wrong-password path so the user sees the clean
   // sentence and tests can assert a stable substring.
-  if (raw.includes(INCORRECT_MASTER_PASSWORD_MESSAGE)) {
+  if (sanitized.includes(INCORRECT_MASTER_PASSWORD_MESSAGE)) {
     return INCORRECT_MASTER_PASSWORD_MESSAGE;
   }
-  return raw;
+  return sanitized;
 }

@@ -411,25 +411,30 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         </div>
       </div>
 
-      <SchemaTreeBody
-        schemas={actions.schemas}
-        treeShape={treeShape}
-        expandedSchemas={actions.expandedSchemas}
-        loadingTables={actions.loadingTables}
-        tables={tables}
-        views={views}
-        functions={functions}
-        fileAnalyticsSources={fileAnalyticsSources}
-        connectionId={connectionId}
-        selectedNodeId={actions.selectedNodeId}
-        activeSchema={activeSchema ?? null}
-        activeTable={activeTable ?? null}
-        tableSearch={actions.tableSearch}
-        visibleRows={visibleRows}
-        shouldVirtualize={shouldVirtualize}
-        rowVirtualizer={rowVirtualizer}
-        ctx={ctx}
-      />
+      <div
+        role="tree"
+        aria-label={`${connectionName || connectionId} schema tree`}
+      >
+        <SchemaTreeBody
+          schemas={actions.schemas}
+          treeShape={treeShape}
+          expandedSchemas={actions.expandedSchemas}
+          loadingTables={actions.loadingTables}
+          tables={tables}
+          views={views}
+          functions={functions}
+          fileAnalyticsSources={fileAnalyticsSources}
+          connectionId={connectionId}
+          selectedNodeId={actions.selectedNodeId}
+          activeSchema={activeSchema ?? null}
+          activeTable={activeTable ?? null}
+          tableSearch={actions.tableSearch}
+          visibleRows={visibleRows}
+          shouldVirtualize={shouldVirtualize}
+          rowVirtualizer={rowVirtualizer}
+          ctx={ctx}
+        />
+      </div>
 
       {/* Sprint 235 — Phase 27 Rename / Drop modal slots replacing the
           legacy minimal confirm-dialog versions. The slot wrappers
