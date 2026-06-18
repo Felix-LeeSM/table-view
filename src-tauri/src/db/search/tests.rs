@@ -1067,7 +1067,7 @@ fn search_config_for(port: u16, db_type: DatabaseType) -> ConnectionConfig {
         read_only: false,
         group_id: None,
         color: None,
-        connection_timeout: Some(1),
+        connection_timeout: Some(10),
         keep_alive_interval: None,
         environment: None,
         auth_source: None,
@@ -1252,34 +1252,46 @@ async fn spawn_search_http_server(routes: Vec<SearchHttpRoute>) -> (u16, JoinHan
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let handle = tokio::spawn(async move {
+        // Connections are accepted in route order (clients always probe `/`
+        // before the POST they exercise, so connect then search maps 1:1 to
+        // the route vector). Each accepted connection runs on its own task so
+        // a delayed response cannot starve the next connection's accept under
+        // parallel-test contention. The outer handle still awaits every
+        // handler, so `server.await` blocks until all responses are written.
+        let mut handlers = Vec::new();
         for route in routes {
             let (mut socket, _) = listener.accept().await.unwrap();
-            let mut buf = [0; 4096];
-            let n = socket.read(&mut buf).await.unwrap();
-            let request = String::from_utf8_lossy(&buf[..n]);
-            let expected_prefix = format!("{} {}", route.method, route.path_prefix);
-            assert!(
-                request.starts_with(&expected_prefix),
-                "expected {expected_prefix:?}, got request:\n{request}"
-            );
-            if let Some(expected_body) = route.expected_body {
-                let actual_body = request.split("\r\n\r\n").nth(1).unwrap_or("");
-                let actual_json: serde_json::Value = serde_json::from_str(actual_body)
-                    .unwrap_or_else(|err| panic!("invalid request JSON {err}: {actual_body}"));
-                let expected_json: serde_json::Value = serde_json::from_str(expected_body)
-                    .expect("expected request body fixture should be valid JSON");
-                assert_eq!(actual_json, expected_json, "request body drift");
-            }
-            if route.delay_ms > 0 {
-                sleep(Duration::from_millis(route.delay_ms)).await;
-            }
-            let response = format!(
-                "HTTP/1.1 {} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-                route.status,
-                route.body.len(),
-                route.body
-            );
-            let _ = socket.write_all(response.as_bytes()).await;
+            handlers.push(tokio::spawn(async move {
+                let mut buf = [0; 4096];
+                let n = socket.read(&mut buf).await.unwrap();
+                let request = String::from_utf8_lossy(&buf[..n]);
+                let expected_prefix = format!("{} {}", route.method, route.path_prefix);
+                assert!(
+                    request.starts_with(&expected_prefix),
+                    "expected {expected_prefix:?}, got request:\n{request}"
+                );
+                if let Some(expected_body) = route.expected_body {
+                    let actual_body = request.split("\r\n\r\n").nth(1).unwrap_or("");
+                    let actual_json: serde_json::Value = serde_json::from_str(actual_body)
+                        .unwrap_or_else(|err| panic!("invalid request JSON {err}: {actual_body}"));
+                    let expected_json: serde_json::Value = serde_json::from_str(expected_body)
+                        .expect("expected request body fixture should be valid JSON");
+                    assert_eq!(actual_json, expected_json, "request body drift");
+                }
+                if route.delay_ms > 0 {
+                    sleep(Duration::from_millis(route.delay_ms)).await;
+                }
+                let response = format!(
+                    "HTTP/1.1 {} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                    route.status,
+                    route.body.len(),
+                    route.body
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }));
+        }
+        for handler in handlers {
+            handler.await.unwrap();
         }
     });
     (port, handle)
