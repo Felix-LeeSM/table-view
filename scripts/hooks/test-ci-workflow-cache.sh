@@ -61,6 +61,7 @@ extract_trigger_block() {
 pull_request_trigger_block="$(extract_trigger_block "$workflow_text" "pull_request")"
 frontend_block="$(sed -n '/^  frontend:/,/^  rust:/p' <<<"$workflow_text" | sed '$d')"
 vite_cache_block="$(sed -n '/- name: Cache Vite transform output/,/- name: Install dependencies/p' <<<"$workflow_text" | sed '$d')"
+dependency_security_block="$(sed -n '/^  dependency-security:/,/^  frontend:/p' <<<"$workflow_text" | sed '$d')"
 rust_block="$(sed -n '/^  rust:/,/^  integration-tests:/p' <<<"$workflow_text" | sed '$d')"
 integration_block="$(sed -n '/^  integration-tests:/,/^  # Runtime E2E smoke/p' <<<"$workflow_text" | sed '$d')"
 pr_body_block="$(sed -n '/^  pr-body:/,/^  frontend:/p' <<<"$workflow_text" | sed '$d')"
@@ -84,6 +85,10 @@ if [ -z "$vite_cache_block" ]; then
 	echo "FAIL: Vite cache step is missing from $WORKFLOW" >&2
 	exit 1
 fi
+if [ -z "$dependency_security_block" ]; then
+	echo "FAIL: dependency security job is missing from $WORKFLOW" >&2
+	exit 1
+fi
 
 assert_contains "$pr_body_block" "name: PR Body Contract" "PR body job"
 assert_contains "$pr_body_block" "node-version: 22.14.0" "PR body job"
@@ -102,6 +107,18 @@ assert_contains "$frontend_block" "COVERAGE_RATCHET_REQUIRE_MAIN: \"1\"" "fronte
 assert_contains "$frontend_block" "run: pnpm exec tsx scripts/check-coverage-ratchet.ts" "frontend coverage ratchet"
 assert_order "$frontend_block" "- name: Fetch coverage ratchet base" "- name: Coverage ratchet" "frontend coverage ratchet base fetch order"
 assert_contains "$frontend_block" "run: pnpm test -- --run --coverage --coverage.reporter=text-summary" "frontend coverage gate"
+assert_contains "$dependency_security_block" "name: Dependency Security" "dependency security job"
+assert_contains "$dependency_security_block" "timeout-minutes: 20" "dependency security job"
+assert_contains "$dependency_security_block" "CARGO_DENY_VERSION: \"0.19.9\"" "dependency security job"
+assert_contains "$dependency_security_block" "toolchain: 1.91.0" "dependency security job"
+assert_contains "$dependency_security_block" "path: |" "dependency security cache"
+assert_contains "$dependency_security_block" "~/.cargo/bin/cargo-deny" "dependency security cache"
+assert_contains "$dependency_security_block" "key: cargo-deny-\${{ runner.os }}-\${{ env.CARGO_DENY_VERSION }}" "dependency security cache"
+assert_contains "$dependency_security_block" "cargo install cargo-deny --version \"\$CARGO_DENY_VERSION\" --locked --force" "dependency security install"
+assert_contains "$dependency_security_block" "bash scripts/hooks/cargo-deny-summary.sh" "dependency security summary"
+assert_contains "$dependency_security_block" "working-directory: src-tauri" "dependency security cargo deny cwd"
+assert_contains "$dependency_security_block" "run: cargo deny check --hide-inclusion-graph" "dependency security cargo deny"
+assert_order "$dependency_security_block" "- name: Dependency security summary" "- name: Run cargo deny" "dependency security summary before gate"
 assert_contains "$rust_block" "workspaces: src-tauri -> target" "rust cache"
 assert_contains "$rust_block" "cache-bin: false" "rust cache"
 assert_contains "$rust_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "rust cache"

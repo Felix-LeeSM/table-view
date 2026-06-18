@@ -47,9 +47,9 @@ smoke or measurement gates:
 - Narrow-column display for `pendingEditErrors`.
 - ERD desktop+narrow screenshot smoke. Dense-view smoke evidence is a future H4
   matrix gate; there is no current dense-view smoke claim.
-- Internal-doc link checking and dependency-security CI. Local Rust/full
-  pre-push routes run `cargo deny check`, but PR/main CI does not currently
-  make dependency security a separate blocking job.
+- Internal-doc link checking is advisory, and Node package audit is deferred.
+  Rust dependency security is covered by blocking PR/main `cargo deny check`;
+  runtime dependency upgrades remain separate PRs.
 - Per-spec database fixture reset for broad E2E expansion. The current runtime
   smoke seeds once and gives each wired spec a separate app data directory.
 

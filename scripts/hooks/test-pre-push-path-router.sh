@@ -209,6 +209,7 @@ assert_contains "$hook_output" "RUN nextest-push-profile-config:" "hook"
 assert_contains "$hook_output" "RUN pre-push-router-tests:" "hook"
 assert_contains "$hook_output" "RUN target-cache-tests:" "hook"
 assert_contains "$hook_output" "RUN generated-fence-tests:" "hook"
+assert_contains "$hook_output" "RUN cargo-deny-summary-tests:" "hook"
 assert_not_contains "$hook_output" "RUN ts-typecheck:" "hook"
 assert_not_contains "$hook_output" "RUN rust-test-and-coverage:" "hook"
 

@@ -61,6 +61,46 @@ jobs:
       - name: Check doc size
         run: bash scripts/hooks/check-doc-size.sh
 
+  dependency-security:
+    name: Dependency Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CARGO_DENY_VERSION: "0.19.9"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+
+      - name: Cache cargo-deny
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-deny
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-deny-${{ runner.os }}-${{ env.CARGO_DENY_VERSION }}
+
+      - name: Install pinned cargo-deny
+        run: |
+          if ! cargo deny --version 2>/dev/null | grep -Fx "cargo-deny ${CARGO_DENY_VERSION}" >/dev/null; then
+            cargo install cargo-deny --version "$CARGO_DENY_VERSION" --locked --force
+          fi
+          cargo deny --version | grep -Fx "cargo-deny ${CARGO_DENY_VERSION}"
+
+      - name: Dependency security summary
+        run: bash scripts/hooks/cargo-deny-summary.sh
+
+      - name: Run cargo deny
+        working-directory: src-tauri
+        run: cargo deny check --hide-inclusion-graph
+
   frontend:
     name: Frontend Checks
     runs-on: ubuntu-latest
