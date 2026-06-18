@@ -37,10 +37,14 @@ in [`docs/archives/risks/active-risk-register-2026-05-27.md`](../archives/risks/
 The following areas are product-visible but not yet backed by routine automated
 smoke or measurement gates:
 
+- Critical component smoke covers SchemaTree tree/treeitem roles, DataGrid
+  grid/gridcell/edit feedback, Connection and Import/Export dialog labels/error
+  regions, and secret-free alert/status/aria-live credential feedback.
 - Full 72-theme light/dark WCAG AA measurement.
 - SchemaTree 1k/10k table scroll FPS.
 - DataGrid page-size 1000 wheel-to-paint latency.
 - VoiceOver/NVDA paths for Quick Open, DataGrid, and SchemaTree.
+- Candidate-source UI accessibility smoke.
 - 1024x600 minimum viewport with max sidebar and dialog overlap.
 - Tauri production shortcut audit for `Cmd+Shift+I`.
 - `MainArea` empty-state MRU policy.

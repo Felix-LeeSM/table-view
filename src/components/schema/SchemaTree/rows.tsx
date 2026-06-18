@@ -113,8 +113,11 @@ export function renderSchemaRow(
               ? "bg-muted text-foreground"
               : "text-secondary-foreground"
           }`}
+          role="treeitem"
+          aria-level={1}
           aria-expanded={row.isExpanded}
           aria-label={`${row.schemaName} schema`}
+          aria-selected={row.isSelected}
           onClick={() => {
             ctx.handleExpandSchema(row.schemaName);
             ctx.setSelectedNodeId(schemaId);
@@ -198,8 +201,11 @@ export function renderCategoryRow(
           ctx.treeShape === "no-schema" ? "pl-3" : "pl-6",
           row.isSelected ? "text-foreground" : "text-secondary-foreground",
         )}
+        role="treeitem"
+        aria-level={ctx.treeShape === "no-schema" ? 1 : 2}
         aria-expanded={row.isExpanded}
         aria-label={`${cat.label} in ${row.schemaName}`}
+        aria-selected={row.isSelected}
         onClick={() => ctx.toggleCategory(row.schemaName, cat.key)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -385,6 +391,7 @@ export function renderItemRow(
   // surviving tab switches. Functions open as query tabs (no active-tab
   // match possible) so they stay on the click-driven `isSelected` path.
   const isHighlighted = isFunc || isMetadata ? row.isSelected : row.isActive;
+  const ariaLevel = flat ? 1 : ctx.treeShape === "no-schema" ? 2 : 3;
   const icon = isView ? (
     <Eye size={12} className="shrink-0 text-muted-foreground" />
   ) : isFunc ? (
@@ -408,7 +415,10 @@ export function renderItemRow(
             ? "bg-primary/10 text-primary font-semibold"
             : "text-foreground",
         )}
+        role="treeitem"
+        aria-level={ariaLevel}
         aria-label={`${item.name} ${itemLabel}`}
+        aria-selected={isHighlighted}
         onClick={handleClick}
         onKeyDown={(e) => {
           if (e.key === "Enter") handleClick();
@@ -437,7 +447,10 @@ export function renderItemRow(
               ? "bg-primary/10 text-primary font-semibold"
               : "text-foreground",
           )}
+          role="treeitem"
+          aria-level={ariaLevel}
           aria-label={`${item.name} ${itemLabel}`}
+          aria-selected={isHighlighted}
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           onKeyDown={(e) => {
