@@ -19,17 +19,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 INPUT="$(cat || true)"
 
-json_field() {
-	local expr="$1"
-	if ! command -v jq >/dev/null 2>&1 || [ -z "$INPUT" ]; then
-		return 0
-	fi
-	printf '%s' "$INPUT" | jq -r "$expr // empty" 2>/dev/null || true
-}
+source "$(dirname "${BASH_SOURCE[0]}")/lib/hook-json.sh"
 
-event_name="$(json_field '.hook_event_name')"
-tool_name="$(json_field '.tool_name')"
-command="$(json_field '.tool_input.command // .input.command // .command')"
+event_name="$(hook_json_field '.hook_event_name')"
+tool_name="$(hook_json_field '.tool_name')"
+command="$(hook_json_field '.tool_input.command // .input.command // .command')"
 
 deny() {
 	local reason="$1"

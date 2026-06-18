@@ -17,6 +17,18 @@ Rules:
 - Shared business/tooling CLIs stay outside this directory until they are proven hook-only.
 - Agent-specific wrappers stay in the runtime directory and delegate here.
 
+## Shared libs (`lib/`)
+
+- `lib/*.sh` are **source-only modules** — pure function definitions, no
+  top-level side effects, no executable bit. Consumed via `source` from
+  dispatchers (same pattern as `path-classifier.sh`).
+- Currently: `lib/locale-utf8.sh` (UTF-8 locale guard), `lib/root-resolve.sh`
+  (repository root resolution), `lib/hook-json.sh` (hook JSON field/path parse).
+- Adding a new lib: it is automatically covered by the `scripts/hooks/lib/*.sh`
+  glob in the `hook-shell-syntax` gate (`pre-push-path-router.sh`). Do **not**
+  put top-level execution code in a lib — it runs on every `source` and breaks
+  callers running under `set -euo pipefail`.
+
 Current dispatchers:
 
 - `pre-tool-use.sh` — neutral PreToolUse/PermissionRequest wrapper (Claude Code +
