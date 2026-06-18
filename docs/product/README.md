@@ -299,6 +299,16 @@ profile, runtime, parser/completion, fixture/live evidence, E2E smoke claim 이
 없다. 이 후보들은 `docs/ROADMAP.md` H6 계약과 adding-data-source checklist 를
 통과하기 전까지 candidate-only 상태다.
 
+DynamoDB 는 candidate-only `cloud-document` profile target 이다. Promotion 전
+계약은 `cloud-api` connection kind, native API-first workflow,
+table/keySchema/GSI/LSI catalog, `document`/`tabular` result envelopes,
+access-pattern/cost/IAM/credential guardrails, and threat-model handoff before
+auth/KDF/ACL/secrets/provider decisions 를 요구한다. `partiql` 은 active parser,
+completion, or runtime claim 이 아니라 deferred editor/query-language inventory
+다. DynamoDB Local/emulator or bounded mock fixtures are future-only inventory;
+이 문단은 active runtime, connection UI, parser/completion, fixture/live
+evidence, E2E smoke claim 을 만들지 않는다.
+
 Stream 은 candidate-only `stream` profile target 이다. Promotion 전 계약은
 `cluster` connection kind, `stream-command` or typed API decision,
 topic/partition/consumerGroup/schema catalog, `streamRecords`/`metrics` result

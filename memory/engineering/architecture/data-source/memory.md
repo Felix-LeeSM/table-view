@@ -126,7 +126,7 @@ active `DatabaseType`/profile/runtime 으로 추가하지 않는다.
 | `kv`             | Redis, Valkey                              | redis-command                      | database/key/type/TTL/stream                 | key-value, stream        |
 | `search`         | Elasticsearch/OpenSearch                   | search-dsl                         | index/mapping/alias/template                 | searchHits, aggregations |
 | `wide-column`    | Cassandra/ScyllaDB                         | CQL                                | keyspace/table/partition/clustering          | tabular                  |
-| `cloud-document` | DynamoDB                                   | PartiQL/native API                 | table/keySchema/GSI/LSI                      | document, tabular        |
+| `cloud-document` | DynamoDB                                   | native API-first; PartiQL deferred | table/keySchema/GSI/LSI; IAM/cost guardrails | document, tabular        |
 | `graph`          | Neo4j/Memgraph                             | Cypher-first; GQL/Gremlin deferred | label/relationship/property/index            | graph path-view, tabular |
 | `vector`         | Qdrant/Milvus/Pinecone                     | vector-query/filter DSL            | collection/vectorSchema/payloadIndex         | vectorNeighbors          |
 | `stream`         | Kafka/Redpanda                             | stream-command/API deferred        | topic/partition/consumerGroup/schema         | streamRecords, metrics   |

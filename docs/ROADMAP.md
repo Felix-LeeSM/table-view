@@ -312,7 +312,7 @@ Candidate target inventory:
 | Candidate | Profile target | Connection kind | Language | Catalog model | Result envelope | Safety / fixture plan |
 |---|---|---|---|---|---|---|
 | Cassandra/Scylla | `wide-column` | `cluster` | `cql` with future Rust/WASM language-core owner | keyspace/table/partition/clustering | `tabular` | partition-key and expensive-read guardrails; future evidence path is a Cassandra testcontainer baseline plus a Scylla testcontainer compatibility delta before any Scylla claim |
-| DynamoDB | `cloud-document` | `cloud-api` | `partiql` or native API decision | table/keySchema/GSI/LSI | `document`, `tabular` | access-pattern and cost guardrails; DynamoDB Local/emulator or bounded mock |
+| DynamoDB | `cloud-document` | `cloud-api` | native API-first; `partiql` deferred editor/query-language inventory | table/keySchema/GSI/LSI | `document`, `tabular` | access-pattern, cost, IAM, and credential guardrails; DynamoDB Local/emulator or bounded mock future-only; threat-model handoff before auth/KDF/ACL/secrets/provider decisions |
 | Graph | `graph` | `server` | Cypher-first; GQL/Gremlin deferred split | labels/relationships/properties/indexes | `graph` envelope with path view, plus `tabular` projection | traversal/write guardrails; future Neo4j-compatible fixture graph/testcontainer for Cypher baseline; GQL/Gremlin fixtures deferred |
 | Vector | `vector` | `server`; cloud providers need separate `cloud-api` profile decision | `vector-query` or provider filter DSL | collection/vectorSchema/payloadIndex | `vectorNeighbors` | bounded search/write/delete guardrails; embedded/mock or container fixture |
 | Stream | `stream` | `cluster` | `stream-command` or typed API decision; language-core parser deferred | topic/partition/consumerGroup/schema | `streamRecords`, `metrics` | offset/consumer lag/replay/commit guardrails; produce/admin/destructive deferred; Kafka baseline plus Redpanda compatibility fixture as future non-routine CI inventory |
@@ -324,6 +324,20 @@ reads/writes, tabular rendering, partition-key guardrails, and expensive-read
 blocking. A Scylla compatibility testcontainer is a separate future delta before
 any Scylla-specific support claim. This inventory does not add active runtime,
 connection UI, parser/completion, fixture/live, or smoke support.
+
+DynamoDB remains a candidate-only source contract. Its promotion target is a
+cloud-backed `cloud-document` profile with `cloud-api` connection kind. The
+query/workflow route is native API-first because DynamoDB access patterns,
+capacity/cost, IAM, and credential boundaries are API-shaped; `partiql` stays a
+deferred editor/query-language inventory item until a later source-specific PR
+proves it. The catalog owns table, keySchema, GSI, and LSI metadata. Result
+rendering uses `document` envelopes for item payloads and `tabular` projections
+for table-like previews. Future evidence must define access-pattern, scan/cost,
+IAM, and credential guardrails; DynamoDB Local/emulator or bounded mock fixtures
+are future-only inventory, not routine Runtime Happy Path wiring. Auth, KDF,
+ACL, secrets, and provider decisions require a threat-model handoff before any
+implementation. This inventory does not add active runtime, connection UI,
+parser/completion, fixture/live, or smoke support.
 
 Graph remains a candidate-only source contract. Its promotion target is a
 server-backed `graph` profile with Cypher first; GQL and Gremlin are explicit
