@@ -23,6 +23,9 @@ widening work lives in `docs/ROADMAP.md`.
   rejected command-family rows. Completion is limited to proven local-runtime
   rows and safe keyspace hints; it is not direct UTF-8 string-key mutation UI
   evidence, full Redis compatibility, or broader command-family support.
+- Deferred language ids for Cassandra/Scylla, DynamoDB, graph, vector, and stream
+  sources are future inventory only. They do not create active `DatabaseType`,
+  profile, runtime, parser/completion, fixture/live, or E2E support claims.
 
 ## Ownership Snapshot
 
@@ -91,7 +94,9 @@ states fall back to no key suggestions instead of blocking the editor.
 | `search-dsl` | `active` | `future-language-core-contract` | `typescript-runtime-adapter` | `none` | `profile-safety-policy` |
 
 Declared or deferred language ids stay in the registry so future active profiles
-cannot add parser or completion vocabulary without an owner decision.
+cannot add parser or completion vocabulary without an owner decision. Deferred
+ids are promotion prerequisites only; they are not active profile, runtime,
+fixture/live, or E2E evidence.
 
 | QueryLanguageId | Lifecycle | Parser owner | Completion owner | Fallback policy | Safety analyzer | Current boundary |
 |---|---|---|---|---|---|---|
@@ -436,7 +441,8 @@ are:
   Cassandra/Scylla, DynamoDB, graph, vector, and stream sources stay
   candidate-only until a source-specific promotion PR locks workflow value,
   profile target, language owner, catalog model, result envelope, safety policy,
-  fixture strategy, and smoke evidence.
+  fixture strategy, and smoke evidence. There is no active `DatabaseType`,
+  runtime, parser/completion, fixture/live, or E2E smoke claim for those sources.
 
 ## Related
 
