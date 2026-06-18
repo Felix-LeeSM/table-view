@@ -106,7 +106,7 @@ fixture/live, or E2E evidence.
 | `gql` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | GraphQL profiles are not active; GQL is deferred behind the Cypher-first graph contract. |
 | `gremlin` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Graph profiles are not active; Gremlin is deferred behind the Cypher-first graph contract. |
 | `vector-query` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Vector profiles are not active. |
-| `stream-command` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Stream profiles are not active. |
+| `stream-command` | `deferred` | `future-language-core-contract` | `future-language-core-contract` | `not-implemented` | `profile-safety-policy` | Stream profiles are not active; future promotion must choose bounded `stream-command` or typed API dispatch before language-core parser/completion ownership. |
 
 ## Current Product Surface
 
