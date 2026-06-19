@@ -91,7 +91,7 @@ run_god_file_check() {
 if [ "$has_memory" = "1" ]; then
 	run_advisory "memory-size" bash -c "cd \"$ROOT\" && bash scripts/hooks/check-memory-size.sh 2>&1 | head -10"
 	run_advisory "memory-structure" bash -c "cd \"$ROOT\" && bash scripts/hooks/check-memory-structure.sh 2>&1 | head -10"
-	run_advisory "memory-index" bash -lc "cd \"$ROOT\" && bash scripts/regenerate-indexes.sh 2>&1 | tail -5"
+	run_advisory "memory-index" bash -c "cd \"$ROOT\" && bash scripts/regenerate-indexes.sh 2>&1 | tail -5"
 fi
 
 if [ "$has_adr" = "1" ]; then
