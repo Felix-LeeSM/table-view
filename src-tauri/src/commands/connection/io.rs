@@ -356,6 +356,11 @@ mod tests {
             !exported.contains(&ciphertext),
             "Exported JSON must not contain on-disk ciphertext"
         );
+        let payload: serde_json::Value = serde_json::from_str(&exported).unwrap();
+        assert!(
+            payload["connections"][0].get("password").is_none(),
+            "Exported connection payload must not contain a password field"
+        );
         // Public payload field that signals presence is fine.
         assert!(exported.contains("\"hasPassword\": true"));
 
@@ -805,6 +810,55 @@ mod tests {
             let pw = storage::get_decrypted_password(&c.id).unwrap();
             assert_eq!(pw, Some(String::new()), "Imported password must be empty");
         }
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_import_connections_requires_password_reentry_when_payload_marks_password_present() {
+        let _dir = setup_test_env();
+
+        let payload = ExportPayload {
+            schema_version: EXPORT_SCHEMA_VERSION,
+            exported_at_unix_secs: 0,
+            app: "table-view".into(),
+            connections: vec![ConnectionConfigPublic {
+                id: "x".into(),
+                name: "Needs Password Reentry".into(),
+                db_type: DatabaseType::Postgresql,
+                host: "h".into(),
+                port: 5432,
+                user: "u".into(),
+                database: "d".into(),
+                read_only: false,
+                group_id: None,
+                color: None,
+                connection_timeout: None,
+                keep_alive_interval: None,
+                environment: None,
+                has_password: true,
+                paradigm: crate::models::Paradigm::Rdb,
+                auth_source: None,
+                replica_set: None,
+                tls_enabled: None,
+                trust_server_certificate: None,
+            }],
+            groups: vec![],
+        };
+
+        let result = import_connections(serde_json::to_string(&payload).unwrap()).unwrap();
+        assert_eq!(result.imported.len(), 1);
+
+        let imported_id = &result.imported[0];
+        let pw = storage::get_decrypted_password(imported_id).unwrap();
+        assert_eq!(
+            pw,
+            Some(String::new()),
+            "import must require password re-entry even when payload has hasPassword=true"
+        );
+        let presence = storage::password_presence_map().unwrap();
+        assert_eq!(presence.get(imported_id), Some(&false));
 
         cleanup_test_env();
     }
