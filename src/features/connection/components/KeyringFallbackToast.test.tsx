@@ -62,6 +62,7 @@ describe("KeyringFallbackToast (Q22 sprint-356)", () => {
     const dismiss = screen.getByRole("button", { name: /dismiss/i });
     fireEvent.click(dismiss);
     await waitFor(() => expect(mockSetDismissed).toHaveBeenCalledTimes(1));
+    expect(mockSetDismissed).toHaveBeenCalledWith();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 

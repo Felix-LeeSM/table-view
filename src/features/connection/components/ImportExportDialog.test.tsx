@@ -403,6 +403,48 @@ describe("ImportExportDialog", () => {
       });
     });
 
+    it("masks the recovery phrase from import error alert and live regions", async () => {
+      const { importConnectionsEncrypted } = await import("@lib/tauri");
+      const encoded = encodeURIComponent(MNEMONIC);
+      (
+        importConnectionsEncrypted as ReturnType<typeof vi.fn>
+      ).mockRejectedValue(
+        new Error(`decrypt failed for ${MNEMONIC} and ${encoded}`),
+      );
+
+      render(<ImportExportDialog onClose={vi.fn()} initialTab="import" />);
+
+      const ta = screen.getByLabelText(
+        "Import JSON input",
+      ) as HTMLTextAreaElement;
+      await act(async () => {
+        fireEvent.change(ta, { target: { value: ENCRYPTED_PAYLOAD } });
+      });
+      await act(async () => {
+        typeInto(/^recovery phrase$/i, MNEMONIC);
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole("alert")).toHaveTextContent(/decrypt failed/i);
+      });
+
+      const regions = [
+        ...document.querySelectorAll('[role="alert"]'),
+        ...document.querySelectorAll('[role="status"]'),
+        ...document.querySelectorAll("[aria-live]"),
+      ];
+      expect(regions.length).toBeGreaterThan(0);
+      for (const region of regions) {
+        const text = region.textContent ?? "";
+        expect(text).not.toContain(MNEMONIC);
+        expect(text).not.toContain(encoded);
+      }
+      expect(screen.getByRole("alert")).toHaveTextContent(/\*\*\*/);
+    });
+
     it("renders renamed entries in a collapsed details", async () => {
       const { importConnections } = await import("@lib/tauri");
       (importConnections as ReturnType<typeof vi.fn>).mockResolvedValue({
