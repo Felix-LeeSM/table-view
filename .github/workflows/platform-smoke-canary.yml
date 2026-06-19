@@ -27,10 +27,12 @@ jobs:
             platform: macos-14
             target: aarch64-apple-darwin
             tauri_args: --target aarch64-apple-darwin
+            cxxflags: ""
           - label: Windows x86_64
             platform: windows-latest
             target: x86_64-pc-windows-msvc
             tauri_args: ""
+            cxxflags: "/std:c++17"
 
     steps:
       - name: Checkout
@@ -68,6 +70,8 @@ jobs:
 
       - name: Run Tauri no-bundle build
         shell: bash
+        env:
+          CXXFLAGS: ${{ matrix.cxxflags }}
         run: pnpm tauri build --debug --no-bundle --ci ${{ matrix.tauri_args }}
 
       - name: Record canary result
