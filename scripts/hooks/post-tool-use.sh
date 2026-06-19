@@ -89,13 +89,13 @@ run_god_file_check() {
 }
 
 if [ "$has_memory" = "1" ]; then
-	run_advisory "memory-size" bash -lc "cd \"$ROOT\" && bash scripts/hooks/check-memory-size.sh 2>&1 | head -10"
-	run_advisory "memory-structure" bash -lc "cd \"$ROOT\" && bash scripts/hooks/check-memory-structure.sh 2>&1 | head -10"
+	run_advisory "memory-size" bash -c "cd \"$ROOT\" && bash scripts/hooks/check-memory-size.sh 2>&1 | head -10"
+	run_advisory "memory-structure" bash -c "cd \"$ROOT\" && bash scripts/hooks/check-memory-structure.sh 2>&1 | head -10"
 	run_advisory "memory-index" bash -lc "cd \"$ROOT\" && bash scripts/regenerate-indexes.sh 2>&1 | tail -5"
 fi
 
 if [ "$has_adr" = "1" ]; then
-	run_advisory "memory-adr" bash -lc "cd \"$ROOT\" && bash scripts/hooks/check-memory-adr.sh 2>&1 | head -30"
+	run_advisory "memory-adr" bash -c "cd \"$ROOT\" && bash scripts/hooks/check-memory-adr.sh 2>&1 | head -30"
 fi
 
 if [ "$has_code" = "1" ]; then
@@ -103,11 +103,11 @@ if [ "$has_code" = "1" ]; then
 fi
 
 if [ "$has_wrapper" = "1" ]; then
-	run_advisory "wrapper-cap" bash -lc "cd \"$ROOT\" && bash scripts/hooks/check-wrapper-cap.sh 2>&1 | head -10"
+	run_advisory "wrapper-cap" bash -c "cd \"$ROOT\" && bash scripts/hooks/check-wrapper-cap.sh 2>&1 | head -10"
 fi
 
 if [ "$has_docs" = "1" ]; then
-	run_advisory "doc-size" bash -lc "cd \"$ROOT\" && bash scripts/hooks/check-doc-size.sh 2>&1 | head -10"
+	run_advisory "doc-size" bash -c "cd \"$ROOT\" && bash scripts/hooks/check-doc-size.sh 2>&1 | head -10"
 fi
 
 if [ -s "$output_file" ]; then
