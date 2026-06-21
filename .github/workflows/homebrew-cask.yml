@@ -3,6 +3,12 @@ name: Homebrew Cask Sync
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to sync (e.g. v0.3.0)"
+        required: true
+        type: string
 
 jobs:
   publish-cask:
@@ -29,7 +35,7 @@ jobs:
       - name: Generate updated cask file
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
           HOMEBREW_TAP_PATH: Casks/table-view.rb
           HOMEBREW_TAP_REPO_PATH: ${{ github.workspace }}/homebrew-tap
           HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
@@ -44,7 +50,7 @@ jobs:
       - name: Open PR in tap repo
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
           HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
           HOMEBREW_TAP_BASE_BRANCH: ${{ vars.HOMEBREW_TAP_BASE_BRANCH || 'main' }}
         working-directory: homebrew-tap
@@ -58,6 +64,10 @@ jobs:
           generated_tap_file="$(mktemp)"
           trap 'rm -f "${generated_tap_file:-}"' EXIT
           cp "${tap_file}" "${generated_tap_file}"
+          # The cask generator writes directly into this tap checkout working
+          # tree. Drop that copy now (generated_tap_file holds the backup) so
+          # it does not carry across the branch switch and mask the diff.
+          rm -f "${tap_file}"
 
           if git ls-remote --exit-code --heads origin "${branch}" > /dev/null 2>&1; then
             git fetch --quiet origin "${branch}"
@@ -76,24 +86,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if git diff --quiet -- "${tap_file}"; then
+          # Stage before the change check: a first-time cask is untracked, and
+          # `git diff --quiet` ignores untracked files. `git diff --cached`
+          # after `git add` catches both new and modified cask files.
+          git add "${tap_file}"
+
+          if git diff --cached --quiet; then
             echo "No changes for Homebrew cask for ${RELEASE_TAG}."
             if gh pr view --repo "${HOMEBREW_TAP_REPO}" "${branch}" > /dev/null 2>&1; then
               echo "PR already exists for ${branch}."
             else
               echo "No PR exists for ${branch}, but the branch already has the generated cask."
-            fi
-            exit 0
-          fi
-
-          git add "${tap_file}"
-
-          if git diff --cached --quiet; then
-            echo "No local tap changes for ${RELEASE_TAG}."
-            if gh pr view --repo "${HOMEBREW_TAP_REPO}" "${branch}" > /dev/null 2>&1; then
-              echo "PR already exists for ${branch}."
-            else
-              echo "No PR exists for ${branch}, but there are no tap changes."
             fi
             exit 0
           fi
