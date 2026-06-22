@@ -199,6 +199,13 @@ export async function loadAllFromSnapshot(): Promise<InitialAppState> {
 
   await applyToStores(snap);
 
+  if (snap.recovered) {
+    toast.warning(
+      "앱 상태를 초기화했어요. 기존 데이터는 state.db.bak 백업에 있습니다.",
+      { durationMs: 8000 },
+    );
+  }
+
   drainBuffer(snap.snapshotVersion);
   bufferActive = false;
 

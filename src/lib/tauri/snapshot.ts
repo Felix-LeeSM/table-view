@@ -70,6 +70,8 @@ export interface InitialAppState {
   generatedAt: number;
   /** 한 store 라도 hydrate 실패면 true. 다른 store 는 정상 진행. */
   partial: boolean;
+  /** v0.3.1: boot 자동 복구(quarantine + fresh)가 발생했으면 true. runtime meta 이라 schemaVersion 은 1 유지. */
+  recovered: boolean;
   stores: {
     connections: StoreSlot<ConnectionsStore>;
     workspaces: StoreSlot<WorkspacesStore>;
