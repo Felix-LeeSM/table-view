@@ -35,14 +35,17 @@ jobs:
             platform: macos-14
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
+            cxxflags: ""
           - label: Windows x86_64
             platform: windows-latest
             target: x86_64-pc-windows-msvc
             args: ""
+            cxxflags: "/std:c++17"
           - label: Linux x64
             platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             args: ""
+            cxxflags: ""
 
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 60
@@ -105,6 +108,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CXXFLAGS: ${{ matrix.cxxflags }}
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('manual-{0}', github.sha) }}
           releaseName: "Table View ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}"

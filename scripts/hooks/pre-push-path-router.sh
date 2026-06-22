@@ -258,6 +258,7 @@ run_ci_workflow_gates() {
 	run_step "e2e-smoke-workflow-cache" bash scripts/hooks/test-e2e-smoke-workflow.sh
 	run_step "platform-smoke-canary-workflow-cache" bash scripts/hooks/test-platform-smoke-canary-workflow.sh
 	run_step "homebrew-cask-workflow" bash scripts/hooks/test-homebrew-cask-workflow.sh
+	run_step "release-workflow" bash scripts/hooks/test-release-workflow.sh
 }
 
 run_memory_gates() {
