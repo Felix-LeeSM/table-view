@@ -68,12 +68,15 @@ async fn test_snapshot_top_level_has_nine_keys() {
     );
     assert!(obj.contains_key("generatedAt"), "missing generatedAt");
     assert!(obj.contains_key("partial"), "missing partial");
+    // v0.3.1 — boot 자동 복구(quarantine + fresh) 발생 여부를 frontend toast 용
+    // runtime meta 로 전달. schemaVersion 은 1 유지.
+    assert!(obj.contains_key("recovered"), "missing recovered");
     assert!(obj.contains_key("stores"), "missing stores");
     assert!(obj.contains_key("runtime"), "missing runtime");
     assert_eq!(
         obj.len(),
-        6,
-        "top-level must have exactly 6 keys, found {:?}",
+        7,
+        "top-level must have exactly 7 keys (schemaVersion, snapshotVersion, generatedAt, partial, recovered, stores, runtime), found {:?}",
         obj.keys().collect::<Vec<_>>()
     );
 

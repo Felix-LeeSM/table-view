@@ -1,9 +1,12 @@
 //! Sprint 355 (Phase 1) — Q2 corrupt recovery.
 //!
-//! 정책 (strategy 2026-05-15 Q2):
+//! 정책 (strategy 2026-05-15 Q2, v0.3.1 확장):
 //! - 앱 boot 시 SQLite 파일이 corrupt 면 `state.db.bak` 으로 quarantine
 //! - 그 후 fresh DB 생성 (`open_pool` 이 `create_if_missing` 로 자동)
-//! - 사용자 toast 없음 (silent recovery)
+//! - v0.3.1: magic header(probe) 뿐 아니라 boot health check(`open_pool` 의
+//!   `BEGIN IMMEDIATE` + read) 실패도 quarantine → 자동 복구. 복구 발생 시
+//!   `DID_RECOVER` flag 가 set 되고 `get_initial_app_state` wrapper 가 이를
+//!   `InitialAppState.recovered` 로 frontend 에 전달 → 사용자 toast 알림.
 //!
 //! Probe 전략: SQLite 의 magic header 16 byte (`"SQLite format 3\0"`) 를
 //! 검사한다. Header 가 손상되면 sqlx 가 어떤 statement 도 실행 못하므로
@@ -15,9 +18,17 @@ use crate::error::AppError;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use tracing::info;
 
 const SQLITE_MAGIC_HEADER: &[u8; 16] = b"SQLite format 3\0";
+
+/// `true` once a boot auto-recovery (quarantine + fresh DB) has run this
+/// process lifetime. `open_pool` sets it whenever it quarantines; the
+/// `get_initial_app_state` wrapper reads it into `InitialAppState.recovered`
+/// so the frontend can toast the user. Reset to `false` after the snapshot
+/// wrapper consumes it (and by tests between cases).
+pub static DID_RECOVER: AtomicBool = AtomicBool::new(false);
 
 /// Returns `Ok(())` if the file at `path` looks like a valid SQLite database
 /// (magic header intact, size ≥ 100 bytes for the database header page).

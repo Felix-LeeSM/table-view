@@ -49,6 +49,10 @@ pub struct InitialAppState {
     pub snapshot_version: u64,
     pub generated_at: i64,
     pub partial: bool,
+    /// v0.3.1: boot 자동 복구(quarantine + fresh)가 이 process lifetime 에
+    /// 발생했으면 `true`. runtime meta 이지 wire shape change 가 아니므로
+    /// `schema_version` 은 1 유지.
+    pub recovered: bool,
     pub stores: Stores,
     pub runtime: Runtime,
 }
@@ -235,6 +239,7 @@ pub async fn get_initial_app_state_inner(
         snapshot_version,
         generated_at,
         partial,
+        recovered: false,
         stores: Stores {
             connections,
             workspaces,
@@ -463,7 +468,12 @@ pub async fn get_initial_app_state(
     let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
     let status_map = state.connection_status.lock().await.clone();
     let label = window.label().to_string();
-    get_initial_app_state_inner(&pool, &label, &status_map).await
+    let mut snap = get_initial_app_state_inner(&pool, &label, &status_map).await?;
+    // boot 자동 복구 발생 여부를 frontend toast 로 전달. swap 으로 읽으면서
+    // reset — 다음 boot cycle 은 false 로 시작.
+    snap.recovered = crate::storage::corrupt_recovery::DID_RECOVER
+        .swap(false, std::sync::atomic::Ordering::SeqCst);
+    Ok(snap)
 }
 
 #[cfg(test)]
@@ -577,6 +587,7 @@ mod tests {
             snapshot_version: 7,
             generated_at: 1_700_000_000_000,
             partial: false,
+            recovered: false,
             stores: Stores {
                 connections: StoreSlot::Ok(ConnectionsStore {
                     items: vec![],

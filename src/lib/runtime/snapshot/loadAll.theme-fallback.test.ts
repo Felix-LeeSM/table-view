@@ -38,6 +38,7 @@ function makeSnapshotWithTheme(theme: {
     snapshotVersion: 1,
     generatedAt: 1_700_000_000_000,
     partial: false,
+    recovered: false,
     stores: {
       connections: { items: [], groups: [] },
       workspaces: { byConnectionId: {} },
