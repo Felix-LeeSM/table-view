@@ -41,6 +41,12 @@ assert_contains "$workflow_text" 'tags: ["v*.*.*"]' "version tag push trigger"
 assert_contains "$matrix_block" 'cxxflags: "/std:c++17"' "Windows C++17 override"
 assert_contains "$matrix_block" 'cxxflags: ""' "non-Windows empty cxxflags"
 
+# Regression: windows-latest now ships VS18 / MSVC 14.51, where DuckDB's vendored
+# fmt references stdext::checked_array_iterator and fails with C2653 even under
+# /std:c++17. Pin the Windows leg to windows-2022 (VS17) to match
+# platform-smoke-canary.yml, whose Windows smoke passes on exactly that image.
+assert_contains "$matrix_block" 'platform: windows-2022' "Windows platform pinned to VS17 (MSVC 14.4x)"
+
 # Regression: the cxxflags matrix value must reach the build step env so cc-rs
 # passes /std:c++17 to cl.exe.
 assert_contains "$workflow_text" 'CXXFLAGS: ${{ matrix.cxxflags }}' "build step CXXFLAGS env"

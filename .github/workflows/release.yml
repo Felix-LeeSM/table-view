@@ -36,8 +36,13 @@ jobs:
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
             cxxflags: ""
+          # Pinned to windows-2022 (VS17 / MSVC 14.4x): windows-latest ships VS18
+          # (MSVC 14.51), where DuckDB's vendored fmt references
+          # stdext::checked_array_iterator and fails with C2653 even under
+          # /std:c++17. Matches platform-smoke-canary.yml. Lift the pin only after
+          # DuckDB's vendored fmt builds clean on MSVC 14.51.
           - label: Windows x86_64
-            platform: windows-latest
+            platform: windows-2022
             target: x86_64-pc-windows-msvc
             args: ""
             cxxflags: "/std:c++17"
