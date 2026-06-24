@@ -146,6 +146,23 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
+      # Regression guard: confirm the macOS bundle carries a proper ad-hoc
+      # signature (Sealed Resources). Without it Gatekeeper trashes the app as
+      # "damaged" — the bundle ends up only linker-signed (flags 0x20002), which
+      # spctl rejects with "code has no resources but signature indicates they
+      # must be present". Catch a Tauri signing regression here, not in a user's
+      # /Applications.
+      - name: Verify macOS bundle signature
+        if: matrix.platform == 'macos-14'
+        shell: bash
+        run: |
+          set -e
+          APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Table View.app"
+          [ -d "$APP" ] || { echo "FAIL: $APP not found"; exit 1; }
+          codesign -dv --verbose=4 "$APP" 2>/tmp/cs.txt || { echo "FAIL: codesign"; cat /tmp/cs.txt; exit 1; }
+          grep -q "Sealed Resources version=2" /tmp/cs.txt || { echo "FAIL: no Sealed Resources — bundle not signed, would be 'damaged'"; cat /tmp/cs.txt; exit 1; }
+          echo "OK: macOS bundle carries Sealed Resources (proper ad-hoc signature)"
+
       # tauri-action exposes `artifactPaths` — the JSON array of bundles it just
       # uploaded as release assets. We hash each one with sha256 and upload the
       # sidecar `.sha256` file (single-line `<hash>  <filename>` so the standard

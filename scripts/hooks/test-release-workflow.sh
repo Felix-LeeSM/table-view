@@ -51,4 +51,19 @@ assert_contains "$matrix_block" 'platform: windows-2022' "Windows platform pinne
 # passes /std:c++17 to cl.exe.
 assert_contains "$workflow_text" 'CXXFLAGS: ${{ matrix.cxxflags }}' "build step CXXFLAGS env"
 
+# Regression: the macOS app bundle must carry a proper ad-hoc signature (Sealed
+# Resources), or Gatekeeper rejects it as "damaged" and trashes it. Without
+# bundle.macOS.signingIdentity the bundle is only linker-signed (flags 0x20002),
+# which spctl rejects with "code has no resources but signature indicates they
+# must be present". tauri.conf.json pins ad-hoc signing so Tauri signs the whole
+# bundle (flags 0x2, Sealed Resources version=2).
+TAURI_CONF="$ROOT/src-tauri/tauri.conf.json"
+[ -f "$TAURI_CONF" ] || fail "tauri.conf.json is missing"
+assert_contains "$(cat "$TAURI_CONF")" '"signingIdentity": "-"' "macOS ad-hoc bundle signing in tauri.conf.json"
+
+# Regression: release.yml must verify the macOS leg actually produced a Sealed
+# Resources signature, so a Tauri signing regression fails the release build
+# instead of shipping a "damaged" bundle to users.
+assert_contains "$workflow_text" "Verify macOS bundle signature" "macOS bundle signature verification step"
+
 echo "PASS: Release workflow check"
