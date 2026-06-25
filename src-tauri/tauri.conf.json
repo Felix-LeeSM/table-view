@@ -40,6 +40,9 @@
     "resources": {
       "icons/Compiled/Assets.car": "Assets.car",
       "icons/Compiled/AppIcon.icns": "AppIcon.icns"
+    },
+    "macOS": {
+      "signingIdentity": "-"
     }
   }
 }
