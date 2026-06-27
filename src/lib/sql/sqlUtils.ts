@@ -52,6 +52,54 @@ export function splitSqlStatements(sql: string): string[] {
       continue;
     }
 
+    // MySQL backtick identifier — `` is an escaped backtick (mirrors '' rule).
+    if (ch === "`") {
+      current += ch;
+      i++;
+      while (i < len) {
+        const inner = sql[i];
+        current += inner;
+        if (inner === "`") {
+          if (i + 1 < len && sql[i + 1] === "`") {
+            i++;
+            current += sql[i];
+            i++;
+          } else {
+            i++;
+            break;
+          }
+        } else {
+          i++;
+        }
+      }
+      continue;
+    }
+
+    // MSSQL bracket identifier — ]] is an escaped ]. A `;` inside [...] is not
+    // valid in any supported dialect (incl. Postgres array subscripts), so
+    // treating bracket content as opaque only ever improves the split.
+    if (ch === "[") {
+      current += ch;
+      i++;
+      while (i < len) {
+        const inner = sql[i];
+        current += inner;
+        if (inner === "]") {
+          if (i + 1 < len && sql[i + 1] === "]") {
+            i++;
+            current += sql[i];
+            i++;
+          } else {
+            i++;
+            break;
+          }
+        } else {
+          i++;
+        }
+      }
+      continue;
+    }
+
     // Line comment (--)
     if (ch === "-" && i + 1 < len && sql[i + 1] === "-") {
       current += ch;
