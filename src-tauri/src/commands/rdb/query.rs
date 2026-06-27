@@ -46,6 +46,30 @@ pub fn validate_cancel_inputs(query_id: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Validate batch execution inputs (shared by execute_query_batch and dry-run).
+///
+/// Returns `Ok(())` if inputs are valid, or `Err(AppError::Validation)` otherwise.
+/// Extracted so the batch/dry-run handlers share one validation source instead
+/// of duplicating the connection-id / empty-batch / per-statement checks.
+pub fn validate_batch_inputs(connection_id: &str, statements: &[String]) -> Result<(), AppError> {
+    if connection_id.trim().is_empty() {
+        return Err(AppError::Validation("Connection ID cannot be empty".into()));
+    }
+    if statements.is_empty() {
+        return Err(AppError::Validation("Query batch cannot be empty".into()));
+    }
+    for (idx, sql) in statements.iter().enumerate() {
+        if sql.trim().is_empty() {
+            return Err(AppError::Validation(format!(
+                "Statement {} of {} is empty",
+                idx + 1,
+                statements.len()
+            )));
+        }
+    }
+    Ok(())
+}
+
 async fn execute_query_inner(
     state: &AppState,
     connection_id: &str,
@@ -171,21 +195,7 @@ async fn execute_query_batch_inner(
         "Executing query batch"
     );
 
-    if connection_id.trim().is_empty() {
-        return Err(AppError::Validation("Connection ID cannot be empty".into()));
-    }
-    if statements.is_empty() {
-        return Err(AppError::Validation("Query batch cannot be empty".into()));
-    }
-    for (idx, sql) in statements.iter().enumerate() {
-        if sql.trim().is_empty() {
-            return Err(AppError::Validation(format!(
-                "Statement {} of {} is empty",
-                idx + 1,
-                statements.len()
-            )));
-        }
-    }
+    validate_batch_inputs(connection_id, statements)?;
 
     let cancel_handle = register_cancel_token(state, Some(query_id)).await;
     let child_token = cancel_handle.as_ref().map(|(_, t)| t.clone());
@@ -280,21 +290,7 @@ async fn execute_query_dry_run_inner(
         "Executing query dry-run"
     );
 
-    if connection_id.trim().is_empty() {
-        return Err(AppError::Validation("Connection ID cannot be empty".into()));
-    }
-    if statements.is_empty() {
-        return Err(AppError::Validation("Query batch cannot be empty".into()));
-    }
-    for (idx, sql) in statements.iter().enumerate() {
-        if sql.trim().is_empty() {
-            return Err(AppError::Validation(format!(
-                "Statement {} of {} is empty",
-                idx + 1,
-                statements.len()
-            )));
-        }
-    }
+    validate_batch_inputs(connection_id, statements)?;
 
     let cancel_handle = register_cancel_token(state, Some(query_id)).await;
     let child_token = cancel_handle.as_ref().map(|(_, t)| t.clone());
@@ -691,6 +687,43 @@ mod tests {
     #[test]
     fn validate_cancel_inputs_accepts_valid_query_id() {
         let result = validate_cancel_inputs("query-123");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_batch_inputs_rejects_empty_connection_id() {
+        let result = validate_batch_inputs("", &["SELECT 1".to_string()]);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Connection ID cannot be empty"));
+    }
+
+    #[test]
+    fn validate_batch_inputs_rejects_empty_batch() {
+        let result = validate_batch_inputs("conn-1", &[]);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Query batch cannot be empty"));
+    }
+
+    #[test]
+    fn validate_batch_inputs_rejects_whitespace_only_statement() {
+        let result = validate_batch_inputs("conn-1", &["SELECT 1".to_string(), "   ".to_string()]);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Statement 2 of 2 is empty"));
+    }
+
+    #[test]
+    fn validate_batch_inputs_accepts_valid_batch() {
+        let result =
+            validate_batch_inputs("conn-1", &["SELECT 1".to_string(), "SELECT 2".to_string()]);
         assert!(result.is_ok());
     }
 
