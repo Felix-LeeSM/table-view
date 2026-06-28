@@ -83,6 +83,36 @@ INSERT INTO t (col) VALUES ('a;b')`;
       "SELECT 'still;literal'",
     ]);
   });
+
+  it("ignores semicolons in MySQL backtick identifiers", () => {
+    const result = splitSqlStatements(
+      "SELECT * FROM `my;table` WHERE id = 1; SELECT 2",
+    );
+    expect(result).toEqual([
+      "SELECT * FROM `my;table` WHERE id = 1",
+      "SELECT 2",
+    ]);
+  });
+
+  it("handles escaped backticks in MySQL identifiers", () => {
+    const result = splitSqlStatements("SELECT `c``;d`; SELECT 2");
+    expect(result).toEqual(["SELECT `c``;d`", "SELECT 2"]);
+  });
+
+  it("ignores semicolons in MSSQL bracket identifiers", () => {
+    const result = splitSqlStatements(
+      "SELECT * FROM [my;table] WHERE id = 1; SELECT 2",
+    );
+    expect(result).toEqual([
+      "SELECT * FROM [my;table] WHERE id = 1",
+      "SELECT 2",
+    ]);
+  });
+
+  it("handles escaped brackets in MSSQL identifiers", () => {
+    const result = splitSqlStatements("SELECT [c]];d]; SELECT 2");
+    expect(result).toEqual(["SELECT [c]];d]", "SELECT 2"]);
+  });
 });
 
 // -- Sprint 40: SQL Formatting --
