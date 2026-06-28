@@ -25,6 +25,7 @@ import {
 } from "@components/ui/popover";
 import WorkspaceSidebar from "@components/workspace/WorkspaceSidebar";
 import ThemePicker from "@components/theme/ThemePicker";
+import LanguageSwitcher from "@components/theme/LanguageSwitcher";
 import { persistSettingValue, resetSetting } from "@lib/tauri/settings";
 import { logger } from "@lib/logger";
 
@@ -299,7 +300,10 @@ export default function Sidebar() {
               collisionPadding={8}
               className="w-72 p-2"
             >
-              <ThemePicker />
+              <div className="flex flex-col gap-2">
+                <ThemePicker />
+                <LanguageSwitcher />
+              </div>
             </PopoverContent>
           </Popover>
           {/* Sprint 376 (Phase 6 Q21 #3-a) — "Reset sidebar width" 가시
