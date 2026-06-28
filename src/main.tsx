@@ -23,6 +23,7 @@ import {
 } from "@lib/runtime/snapshot/loadAll";
 import { registerSettingReceiver } from "@lib/runtime/settings/settingsReceiver";
 import { registerSchemaStoreDbMismatchRecovery } from "@lib/runtime/recovery/syncMismatchedActiveDb";
+import { applyPersistedLocale } from "@lib/i18n";
 import "./index.css";
 
 // Boot sequence: theme → session → hydrate stores → render.
@@ -77,6 +78,12 @@ async function boot() {
     await reconcileThemeFromBackend();
   }
   markBootMilestone("theme:applied");
+
+  // i18n: SQLite 영속 locale 을 첫 render 전에 적용 — theme reconcile 과 같은
+  // 위치/이유(언어 flash 회피). 미설정/실패 시 DEFAULT_LOCALE 유지.
+  if (tauriRuntimeAvailable) {
+    await applyPersistedLocale();
+  }
 
   // Session-scoped localStorage: fetch the process UUID from Rust so both
   // windows can tag their localStorage entries with the same session ID.

@@ -1,4 +1,7 @@
 import "@testing-library/jest-dom/vitest";
+// i18n 전역 인스턴스를 테스트 프로세스 시작 시 1회 init — useTranslation 을
+// 쓰는 컴포넌트(ThemePicker / LanguageSwitcher 등)가 provider 없이도 동작.
+import "@lib/i18n";
 import { beforeAll, beforeEach, vi } from "vitest";
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
 import { resetTauriMock } from "./test-utils/tauriMock";

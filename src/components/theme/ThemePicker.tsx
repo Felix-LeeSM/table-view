@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useThemeStore } from "@stores/themeStore";
 import {
@@ -16,6 +17,7 @@ const VISIBLE_THEMES = THEME_CATALOG.filter((entry) =>
 );
 
 export default function ThemePicker() {
+  const { t } = useTranslation();
   const themeId = useThemeStore((s) => s.themeId);
   const mode = useThemeStore((s) => s.mode);
   const setTheme = useThemeStore((s) => s.setTheme);
@@ -49,7 +51,7 @@ export default function ThemePicker() {
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-1">
         <span className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Appearance
+          {t("appearance")}
         </span>
         <ToggleGroup
           type="single"
@@ -58,35 +60,35 @@ export default function ThemePicker() {
             if (next) setMode(next as ThemeMode);
           }}
           onMouseLeave={() => setPreviewMode(null)}
-          aria-label="Appearance mode"
+          aria-label={t("mode.ariaGroup")}
           className="w-full justify-between"
         >
           <ToggleGroupItem
             value="light"
-            aria-label="Light mode"
+            aria-label={t("mode.lightAria")}
             className="flex-1"
             onMouseEnter={() => setPreviewMode("light")}
           >
             <Sun size={12} />
-            Light
+            {t("mode.light")}
           </ToggleGroupItem>
           <ToggleGroupItem
             value="dark"
-            aria-label="Dark mode"
+            aria-label={t("mode.darkAria")}
             className="flex-1"
             onMouseEnter={() => setPreviewMode("dark")}
           >
             <Moon size={12} />
-            Dark
+            {t("mode.dark")}
           </ToggleGroupItem>
           <ToggleGroupItem
             value="system"
-            aria-label="System mode"
+            aria-label={t("mode.systemAria")}
             className="flex-1"
             onMouseEnter={() => setPreviewMode("system")}
           >
             <Monitor size={12} />
-            System
+            {t("mode.system")}
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
@@ -104,7 +106,7 @@ export default function ThemePicker() {
               type="button"
               data-active={active ? "true" : "false"}
               data-theme-id={entry.id}
-              aria-label={`Theme ${entry.name}`}
+              aria-label={t("theme.aria", { name: entry.name })}
               aria-pressed={active}
               onClick={() => setTheme(entry.id)}
               onMouseEnter={() => setPreviewId(entry.id)}
