@@ -299,6 +299,15 @@ export const en = {
     removed: 'Connection "{{name}}" removed.',
     removedFallback: "Connection removed.",
   },
+  // IPC-failure toasts for ConnectionItem / ConnectionGroup actions
+  errors: {
+    disconnectFailed: "Failed to disconnect.",
+    moveFailed: "Failed to move connection.",
+    removeFailed: "Failed to remove connection.",
+    groupRenameFailed: "Failed to rename group.",
+    groupMoveFailed: "Failed to move connection.",
+    groupRemoveFailed: "Failed to remove group.",
+  },
 } as const;
 
 export const ko = {
@@ -570,5 +579,14 @@ export const ko = {
     updated: '연결 "{{name}}"을(를) 수정했습니다.',
     removed: '연결 "{{name}}"을(를) 삭제했습니다.',
     removedFallback: "연결을 삭제했습니다.",
+  },
+  // IPC-failure toasts for ConnectionItem / ConnectionGroup actions
+  errors: {
+    disconnectFailed: "연결 해제에 실패했습니다.",
+    moveFailed: "연결 이동에 실패했습니다.",
+    removeFailed: "연결 삭제에 실패했습니다.",
+    groupRenameFailed: "그룹 이름 변경에 실패했습니다.",
+    groupMoveFailed: "연결 이동에 실패했습니다.",
+    groupRemoveFailed: "그룹 삭제에 실패했습니다.",
   },
 } as const;

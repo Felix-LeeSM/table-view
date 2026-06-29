@@ -2,7 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within, act } from "@testing-library/react";
 import ConnectionItem from "./ConnectionItem";
 import { useConnectionStore } from "@stores/connectionStore";
+import { toast } from "@lib/runtime/toast";
 import type { ConnectionConfig } from "@/types/connection";
+
+// Narrow the mock to the toast lib boundary so we can assert the IPC-failure
+// feedback path without touching the toast store internals.
+vi.mock("@lib/runtime/toast", () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
 
 // ---------------------------------------------------------------------------
 // Mock child components
@@ -510,6 +517,30 @@ describe("ConnectionItem", () => {
     });
 
     expect(mockDisconnect).toHaveBeenCalledWith("conn-1");
+  });
+
+  // Regression: IPC failure on disconnect must surface a toast.error instead
+  // of an unhandled rejection / silent stale UI.
+  it("shows an error toast when disconnect IPC rejects", async () => {
+    const mockDisconnect = vi.fn().mockRejectedValue(new Error("ipc down"));
+    setStoreState({
+      activeStatuses: { "conn-1": { type: "connected" } },
+      disconnectFromDatabase: mockDisconnect,
+    });
+
+    render(<ConnectionItem connection={makeConnection()} />);
+
+    const item = screen.getByRole("button", { name: /Test DB/ });
+    act(() => {
+      fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Disconnect"));
+    });
+
+    expect(mockDisconnect).toHaveBeenCalledWith("conn-1");
+    expect(toast.error).toHaveBeenCalledWith("Failed to disconnect.");
   });
 
   // -----------------------------------------------------------------------
