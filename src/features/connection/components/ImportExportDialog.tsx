@@ -341,6 +341,11 @@ function ImportPanel({ onImported }: ImportPanelProps) {
     }
     setRunning(true);
     try {
+      // backward-compatible import: the plain `importConnections` path accepts
+      // unencrypted JSON exports from older app versions unchanged; only
+      // envelopes require the master password. frontend-compat 인벤토리가 이
+      // 파일을 이 marker 로 추적한다 (refactor-02) — 사용자 도움말 문구는
+      // locale 로 이주했으므로 호환 동작 설명을 코드 주석에 남겨 marker 보존.
       const r = isEnvelope
         ? await importConnectionsEncrypted(text, masterPassword)
         : await importConnections(text);
@@ -356,18 +361,8 @@ function ImportPanel({ onImported }: ImportPanelProps) {
 
   return (
     <div className="space-y-3">
-      {/* ponytail: 이 도움말 문단만 의도적으로 i18n 미적용(영어 유지). 문장에
-          담긴 "backward compatibility" 는 plain JSON export 를 그대로 수용하는
-          영속 호환 동작을 설명하며, frontend-compat 인벤토리(refactor-02)가
-          이 파일을 marker 로 추적한다. 문자열을 locale 로 옮기면 marker 가
-          코드에서 사라져 인벤토리가 어긋난다. 호환 코드와 그 설명을 한곳에
-          유지. 번역이 필요하면 인벤토리 marker 를 코드 주석으로 옮긴 뒤 분리. */}
       <p className="text-xs text-muted-foreground">
-        Paste a previously-exported connection JSON below. Encrypted envelopes
-        need the original master password; plain JSON exports are accepted
-        unchanged for backward compatibility. Imported connections start without
-        passwords and without registered local file analytics sources;
-        re-register files in a DuckDB session before using file analytics.
+        {t("importExport.importIntro")}
       </p>
 
       <MasterPasswordField
@@ -377,12 +372,12 @@ function ImportPanel({ onImported }: ImportPanelProps) {
         // 사용자 정의 password는 더 이상 만들 수 없으므로 입력 단계에서
         // 길이 검사도 무의미. 빈 값 vs 비어있지 않음만 본다.
         minLength={0}
-        label="Recovery phrase"
-        placeholder="12-word phrase from the original export"
+        label={t("importExport.mpLabel")}
+        placeholder={t("importExport.mpPlaceholder")}
         helpText={
           isEnvelope
-            ? "Paste the 12-word recovery phrase shown when this file was exported."
-            : "Only needed when the payload below is an encrypted envelope."
+            ? t("importExport.mpHelpEnvelope")
+            : t("importExport.mpHelpPlain")
         }
       />
 
@@ -391,7 +386,7 @@ function ImportPanel({ onImported }: ImportPanelProps) {
         placeholder='{"v":1,"kdf":"argon2id","alg":"aes-256-gcm",...} or {"schema_version":1,"connections":[...],"groups":[...]}'
         value={text}
         onChange={(e) => setText(e.target.value)}
-        aria-label="Import JSON input"
+        aria-label={t("importExport.ariaImportJson")}
       />
 
       <div className="flex items-center gap-2">

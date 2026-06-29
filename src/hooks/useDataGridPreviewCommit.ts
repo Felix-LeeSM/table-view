@@ -16,6 +16,7 @@ import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 // `tauri.executeQueryBatch`.
 import * as tauri from "@lib/tauri";
 import { toast } from "@/lib/runtime/toast";
+import i18n from "@lib/i18n";
 import {
   buildRdbSession,
   documentEditAdapter,
@@ -356,14 +357,20 @@ export function useDataGridPreviewCommit(
         statementIndex: failedIndex,
         statementCount: sess.items.length,
         sql: failedItem?.text ?? "",
-        message: result.errorMessage ?? "Commit failed.",
+        message:
+          result.errorMessage ??
+          i18n.t("datagrid:commitFlow.defaultCommitFailed"),
         failedKey: result.failedKey,
       });
       if (result.failedKey) {
         const key = result.failedKey;
         setPendingEditErrors((prev) => {
           const next = new Map(prev);
-          next.set(key, result.errorMessage ?? "Commit failed.");
+          next.set(
+            key,
+            result.errorMessage ??
+              i18n.t("datagrid:commitFlow.defaultCommitFailed"),
+          );
           return next;
         });
       }
@@ -423,7 +430,8 @@ export function useDataGridPreviewCommit(
       const item = session.items[i];
       if (!item) continue;
       if (item.risk === "destructive") {
-        const reason = item.reason ?? "Blocked by Safe Mode";
+        const reason =
+          item.reason ?? i18n.t("datagrid:commitFlow.blockedBySafeMode");
         setCommitError({
           statementIndex: i,
           statementCount: session.items.length,
@@ -435,7 +443,8 @@ export function useDataGridPreviewCommit(
       }
       if (item.risk === "warn") {
         setPendingConfirm({
-          reason: item.reason ?? "Confirmation required",
+          reason:
+            item.reason ?? i18n.t("datagrid:commitFlow.confirmationRequired"),
           sql: item.text,
           statementIndex: i,
         });
@@ -459,8 +468,7 @@ export function useDataGridPreviewCommit(
   const cancelDangerous = useCallback(() => {
     if (!pendingConfirm) return;
     const statementCount = session?.items.length ?? 0;
-    const message =
-      "Safe Mode (warn): confirmation cancelled — no changes committed";
+    const message = i18n.t("datagrid:commitFlow.warnCancelled");
     setCommitError({
       statementIndex: pendingConfirm.statementIndex,
       statementCount,

@@ -42,6 +42,7 @@ import { getInitialAppState, type InitialAppState } from "@lib/tauri/snapshot";
 import { dispatchStateChangedPayload } from "@lib/events/stateChanged";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import { toast } from "@lib/runtime/toast";
+import i18n from "@lib/i18n";
 import { logger } from "@lib/logger";
 
 import { useConnectionStore } from "@stores/connectionStore";
@@ -180,20 +181,17 @@ export async function loadAllFromSnapshot(): Promise<InitialAppState> {
     const message =
       e instanceof Error ? e.message : String(e ?? "unknown error");
     logger.error("[snapshot] boot hydrate failed:", message);
-    toast.error(
-      "Failed to load app state from snapshot. Click Retry to try again.",
-      {
-        durationMs: null, // sticky — the user must act.
-        action: {
-          label: "Retry",
-          onClick: () => {
-            void loadAllFromSnapshot().catch(() => {
-              // Re-thrown again — the next failure pushes a fresh toast.
-            });
-          },
+    toast.error(i18n.t("feedback:snapshotLoadFailed"), {
+      durationMs: null, // sticky — the user must act.
+      action: {
+        label: i18n.t("feedback:retry"),
+        onClick: () => {
+          void loadAllFromSnapshot().catch(() => {
+            // Re-thrown again — the next failure pushes a fresh toast.
+          });
         },
       },
-    );
+    });
     throw e;
   }
 

@@ -103,6 +103,24 @@ export const en = {
 
   // useDataGridEdit — toast
   noChangesToCommit: "No changes to commit",
+
+  // useDataGridPreviewCommit / paradigmEditAdapter — commit lifecycle
+  commitFlow: {
+    committed_one: "{{count}} change committed.",
+    committed_other: "{{count}} changes committed.",
+    committedDoc_one: "{{count}} document change committed.",
+    committedDoc_other: "{{count}} document changes committed.",
+    failed: "Failed to commit changes.",
+    failedDoc: "Failed to commit document changes.",
+    rolledBack: "Commit failed — all changes rolled back: {{message}}",
+    commitFailedDoc:
+      "Commit failed. MongoDB bulk writes are ordered but not transactional in this app. If a later command fails, earlier document writes may already be committed; pending edits stay available for retry. {{message}}",
+    defaultCommitFailed: "Commit failed.",
+    blockedBySafeMode: "Blocked by Safe Mode",
+    confirmationRequired: "Confirmation required",
+    warnCancelled:
+      "Safe Mode (warn): confirmation cancelled — no changes committed",
+  },
 } as const;
 
 export const ko = {
@@ -204,4 +222,22 @@ export const ko = {
 
   // useDataGridEdit — toast
   noChangesToCommit: "커밋할 변경사항이 없습니다",
+
+  // useDataGridPreviewCommit / paradigmEditAdapter — commit lifecycle
+  commitFlow: {
+    committed_one: "변경 {{count}}건 커밋됨.",
+    committed_other: "변경 {{count}}건 커밋됨.",
+    committedDoc_one: "문서 변경 {{count}}건 커밋됨.",
+    committedDoc_other: "문서 변경 {{count}}건 커밋됨.",
+    failed: "변경사항을 커밋하지 못했습니다.",
+    failedDoc: "문서 변경사항을 커밋하지 못했습니다.",
+    rolledBack: "커밋 실패 — 모든 변경사항이 롤백되었습니다: {{message}}",
+    commitFailedDoc:
+      "커밋 실패. MongoDB 대량 쓰기는 이 앱에서 순서대로 처리되지만 트랜잭션은 아닙니다. 이후 명령이 실패하면 앞서 기록된 문서 쓰기는 이미 커밋되었을 수 있습니다. 보류 중인 편집은 재시도할 수 있도록 유지됩니다. {{message}}",
+    defaultCommitFailed: "커밋 실패.",
+    blockedBySafeMode: "세이프 모드에 의해 차단됨",
+    confirmationRequired: "확인 필요",
+    warnCancelled:
+      "세이프 모드(경고): 확인이 취소됨 — 변경사항이 커밋되지 않았습니다",
+  },
 } as const;

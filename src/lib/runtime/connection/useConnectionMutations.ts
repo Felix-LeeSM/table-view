@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 import { useConnectionStore } from "@stores/connectionStore";
 import { toast } from "@lib/runtime/toast";
+import i18n from "@lib/i18n";
 
 /**
  * Sprint 219 (P10 step 1) — moves the user-facing toast notifications for
@@ -39,7 +40,9 @@ export function useConnectionMutations(): {
   const addConnection = useCallback(
     async (draft: ConnectionDraft): Promise<ConnectionConfig> => {
       const saved = await storeAdd(draft);
-      toast.success(`Connection "${saved.name}" added.`);
+      toast.success(
+        i18n.t("featuresConnection:mutations.added", { name: saved.name }),
+      );
       return saved;
     },
     [storeAdd],
@@ -48,7 +51,9 @@ export function useConnectionMutations(): {
   const updateConnection = useCallback(
     async (draft: ConnectionDraft): Promise<void> => {
       await storeUpdate(draft);
-      toast.success(`Connection "${draft.name}" updated.`);
+      toast.success(
+        i18n.t("featuresConnection:mutations.updated", { name: draft.name }),
+      );
     },
     [storeUpdate],
   );
@@ -64,8 +69,10 @@ export function useConnectionMutations(): {
       await storeRemove(id);
       toast.success(
         removed
-          ? `Connection "${removed.name}" removed.`
-          : "Connection removed.",
+          ? i18n.t("featuresConnection:mutations.removed", {
+              name: removed.name,
+            })
+          : i18n.t("featuresConnection:mutations.removedFallback"),
       );
     },
     [storeRemove],

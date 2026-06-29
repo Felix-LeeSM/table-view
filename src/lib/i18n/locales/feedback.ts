@@ -8,9 +8,23 @@
 export const en = {
   loading: "Loading",
   cancel: "Cancel",
+  // loadAllFromSnapshot — boot hydrate failure (sticky toast + retry action)
+  snapshotLoadFailed:
+    "Failed to load app state from snapshot. Click Retry to try again.",
+  retry: "Retry",
+  // one-time column-prefs reset notice (boot migration)
+  columnPrefsReset:
+    "Per-table preferences will reset once — column widths and hidden columns now sync across windows.",
 } as const;
 
 export const ko = {
   loading: "로딩 중",
   cancel: "취소",
+  // loadAllFromSnapshot — boot hydrate failure (sticky toast + retry action)
+  snapshotLoadFailed:
+    "스냅샷에서 앱 상태를 불러오지 못했습니다. 다시 시도하려면 재시도를 클릭하세요.",
+  retry: "재시도",
+  // one-time column-prefs reset notice (boot migration)
+  columnPrefsReset:
+    "테이블별 환경설정이 한 번 초기화됩니다 — 컬럼 너비와 숨긴 컬럼이 이제 창 간에 동기화됩니다.",
 } as const;

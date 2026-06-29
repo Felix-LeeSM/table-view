@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { toast } from "@/lib/runtime/toast";
+import i18n from "@lib/i18n";
 import { logger } from "@/lib/logger";
 import type { SchemaInfo } from "@/types/schema";
 
@@ -117,7 +118,9 @@ export function useSchemaCache(
         for (const s of schemaList) {
           if (!state.tables[connectionId]?.[db]?.[s.name]) {
             loadTables(connectionId, db, s.name).catch((err) => {
-              toast.error(`Failed to load tables for ${s.name}`);
+              toast.error(
+                i18n.t("schema:cache.loadTablesFailed", { name: s.name }),
+              );
               logSchemaError(`loadTables(${s.name})`, err);
             });
           }
@@ -126,7 +129,9 @@ export function useSchemaCache(
             !state.views[connectionId]?.[db]?.[s.name]
           ) {
             loadViews(connectionId, db, s.name).catch((err) => {
-              toast.error(`Failed to load views for ${s.name}`);
+              toast.error(
+                i18n.t("schema:cache.loadViewsFailed", { name: s.name }),
+              );
               logSchemaError(`loadViews(${s.name})`, err);
             });
           }
@@ -135,7 +140,9 @@ export function useSchemaCache(
             !state.functions[connectionId]?.[db]?.[s.name]
           ) {
             loadFunctions(connectionId, db, s.name).catch((err) => {
-              toast.error(`Failed to load functions for ${s.name}`);
+              toast.error(
+                i18n.t("schema:cache.loadFunctionsFailed", { name: s.name }),
+              );
               logSchemaError(`loadFunctions(${s.name})`, err);
             });
           }
@@ -143,7 +150,7 @@ export function useSchemaCache(
         }
       })
       .catch((err) => {
-        toast.error("Failed to load schemas");
+        toast.error(i18n.t("schema:cache.loadSchemasFailed"));
         logSchemaError("loadSchemas (mount)", err);
       })
       .finally(() => setLoadingSchemas(false));
@@ -163,7 +170,7 @@ export function useSchemaCache(
   useEffect(() => {
     if (!db || !autoLoadFileAnalyticsSources) return;
     loadFileAnalyticsSources(connectionId).catch((err) => {
-      toast.error("Failed to load local file sources");
+      toast.error(i18n.t("schema:cache.loadFileSourcesFailed"));
       logSchemaError("loadFileAnalyticsSources (mount)", err);
     });
   }, [
@@ -180,12 +187,12 @@ export function useSchemaCache(
       : Promise.resolve();
     clearSources
       .catch((err) => {
-        toast.error("Failed to clear local file sources");
+        toast.error(i18n.t("schema:cache.clearFileSourcesFailed"));
         logSchemaError("clearFileAnalyticsSources (refresh)", err);
       })
       .then(() => loadSchemas(connectionId, db))
       .catch((err) => {
-        toast.error("Failed to refresh schemas");
+        toast.error(i18n.t("schema:cache.refreshSchemasFailed"));
         logSchemaError("loadSchemas (refresh)", err);
       })
       .finally(() => setLoadingSchemas(false));
@@ -203,7 +210,9 @@ export function useSchemaCache(
       evictSchemaForName(connectionId, db, schemaName);
       loadTables(connectionId, db, schemaName)
         .catch((err) => {
-          toast.error(`Failed to reload tables for ${schemaName}`);
+          toast.error(
+            i18n.t("schema:cache.reloadTablesFailed", { name: schemaName }),
+          );
           logSchemaError(`loadTables (refresh ${schemaName})`, err);
         })
         .finally(() =>
@@ -214,11 +223,15 @@ export function useSchemaCache(
           }),
         );
       loadViews(connectionId, db, schemaName).catch((err) => {
-        toast.error(`Failed to reload views for ${schemaName}`);
+        toast.error(
+          i18n.t("schema:cache.reloadViewsFailed", { name: schemaName }),
+        );
         logSchemaError(`loadViews (refresh ${schemaName})`, err);
       });
       loadFunctions(connectionId, db, schemaName).catch((err) => {
-        toast.error(`Failed to reload functions for ${schemaName}`);
+        toast.error(
+          i18n.t("schema:cache.reloadFunctionsFailed", { name: schemaName }),
+        );
         logSchemaError(`loadFunctions (refresh ${schemaName})`, err);
       });
     },
@@ -240,7 +253,9 @@ export function useSchemaCache(
         setLoadingTables((prev) => new Set(prev).add(schemaName));
         loadTables(connectionId, db, schemaName)
           .catch((err) => {
-            toast.error(`Failed to load tables for ${schemaName}`);
+            toast.error(
+              i18n.t("schema:cache.loadTablesFailed", { name: schemaName }),
+            );
             logSchemaError(`loadTables (expand ${schemaName})`, err);
           })
           .finally(() =>
@@ -254,14 +269,18 @@ export function useSchemaCache(
       const viewsDbSlot = state.views[connectionId]?.[db];
       if (!viewsDbSlot?.[schemaName]) {
         loadViews(connectionId, db, schemaName).catch((err) => {
-          toast.error(`Failed to load views for ${schemaName}`);
+          toast.error(
+            i18n.t("schema:cache.loadViewsFailed", { name: schemaName }),
+          );
           logSchemaError(`loadViews (expand ${schemaName})`, err);
         });
       }
       const functionsDbSlot = state.functions[connectionId]?.[db];
       if (!functionsDbSlot?.[schemaName]) {
         loadFunctions(connectionId, db, schemaName).catch((err) => {
-          toast.error(`Failed to load functions for ${schemaName}`);
+          toast.error(
+            i18n.t("schema:cache.loadFunctionsFailed", { name: schemaName }),
+          );
           logSchemaError(`loadFunctions (expand ${schemaName})`, err);
         });
       }

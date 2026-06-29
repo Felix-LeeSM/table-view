@@ -16,6 +16,7 @@ import {
 import { bulkWriteDocuments } from "@/lib/tauri";
 import { mqlCommandsToBulkOps } from "@/lib/mongo/mqlToBulk";
 import { toast } from "@/lib/runtime/toast";
+import i18n from "@lib/i18n";
 import type { SafeModeGate } from "@/hooks/useSafeModeGate";
 import type { TableData } from "@/types/schema";
 
@@ -160,11 +161,6 @@ export interface DocumentAdapterDeps {
   history: HistoryRecorder;
 }
 
-const MONGO_ORDERED_BULK_WRITE_PARTIAL_COMMIT_WARNING =
-  "MongoDB bulk writes are ordered but not transactional in this app. " +
-  "If a later command fails, earlier document writes may already be committed; " +
-  "pending edits stay available for retry.";
-
 function parseMongoBulkWriteFailedIndex(message: string): number | undefined {
   const indexMatch = message.match(/\bbulk_write op (\d+)\b/);
   if (!indexMatch) return undefined;
@@ -210,7 +206,7 @@ async function executeRdbBatch(
       `edit-${Date.now()}`,
       deps.expectedDatabase,
     );
-    toast.success(`${count} ${count === 1 ? "change" : "changes"} committed.`);
+    toast.success(i18n.t("datagrid:commitFlow.committed", { count }));
     deps.history.recordSuccess({
       sql: joinedSql,
       startedAt,
@@ -223,7 +219,7 @@ async function executeRdbBatch(
         ? err.message
         : typeof err === "string"
           ? err
-          : "Failed to commit changes.";
+          : i18n.t("datagrid:commitFlow.failed");
     // Backend reports `"statement N of M failed"` (1-based). Map back to
     // the 0-based items index so the commitError banner can highlight
     // the right preview line. Falls back to 0 when the message shape
@@ -231,7 +227,7 @@ async function executeRdbBatch(
     const indexMatch = message.match(/statement (\d+) of \d+ failed/);
     const failedIndex = indexMatch ? Math.max(0, Number(indexMatch[1]) - 1) : 0;
     const failedKey = items[failedIndex]?.key;
-    toast.error(`Commit failed — all changes rolled back: ${message}`);
+    toast.error(i18n.t("datagrid:commitFlow.rolledBack", { message }));
     deps.history.recordError({
       sql: joinedSql,
       startedAt,
@@ -241,7 +237,7 @@ async function executeRdbBatch(
       ok: false,
       failedIndex,
       failedKey,
-      errorMessage: `Commit failed — all changes rolled back: ${message}`,
+      errorMessage: i18n.t("datagrid:commitFlow.rolledBack", { message }),
     };
   }
 }
@@ -352,7 +348,7 @@ export function documentEditAdapter(
           try {
             await dispatchMqlBatch(deps.connectionId, commands);
             toast.success(
-              `${count} document ${count === 1 ? "change" : "changes"} committed.`,
+              i18n.t("datagrid:commitFlow.committedDoc", { count }),
             );
             deps.history.recordSuccess({
               sql: joinedMql,
@@ -366,9 +362,11 @@ export function documentEditAdapter(
                 ? err.message
                 : typeof err === "string"
                   ? err
-                  : "Failed to commit document changes.";
+                  : i18n.t("datagrid:commitFlow.failedDoc");
             const failedIndex = parseMongoBulkWriteFailedIndex(message);
-            const errorMessage = `Commit failed. ${MONGO_ORDERED_BULK_WRITE_PARTIAL_COMMIT_WARNING} ${message}`;
+            const errorMessage = i18n.t("datagrid:commitFlow.commitFailedDoc", {
+              message,
+            });
             toast.error(errorMessage);
             deps.history.recordError({
               sql: joinedMql,
