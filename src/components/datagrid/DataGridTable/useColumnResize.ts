@@ -33,7 +33,23 @@ export interface ColumnResize {
     colName: string,
     visualIdx: number,
   ) => void;
+  /**
+   * keydown handler for the resize grip (WCAG 2.1.1). ArrowLeft/Right nudge
+   * the column width by `COL_STEP`, Shift+Arrow by `COL_STEP_LARGE`, then
+   * commit through the same `onCommitWidth` path as drag-end so the IPC
+   * persist fires identically. Mirrors the drag's `Math.max(0, …)` floor
+   * (AC-258-04: no max guard).
+   */
+  handleResizeKeyDown: (
+    e: React.KeyboardEvent,
+    colName: string,
+    visualIdx: number,
+  ) => void;
 }
+
+// Keyboard nudge steps for column width (px). Matches the sidebar's feel.
+const COL_STEP = 10;
+const COL_STEP_LARGE = 50;
 
 function colsToCssValue(widths: ReadonlyArray<number>): string {
   return widths.map((w) => `${w}px`).join(" ");
@@ -103,5 +119,17 @@ export function useColumnResize({
     [outerRef, getCurrentWidths, onCommitWidth],
   );
 
-  return { handleResizeStart };
+  const handleResizeKeyDown = useCallback(
+    (e: React.KeyboardEvent, colName: string, visualIdx: number) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      e.preventDefault();
+      const magnitude = e.shiftKey ? COL_STEP_LARGE : COL_STEP;
+      const delta = e.key === "ArrowRight" ? magnitude : -magnitude;
+      const current = getCurrentWidths()[visualIdx] ?? 0;
+      onCommitWidth(colName, Math.max(0, current + delta));
+    },
+    [getCurrentWidths, onCommitWidth],
+  );
+
+  return { handleResizeStart, handleResizeKeyDown };
 }

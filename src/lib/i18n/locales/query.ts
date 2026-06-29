@@ -5,6 +5,9 @@
  */
 
 export const en = {
+  // Resize grips (keyboard, WCAG 2.1.1)
+  resizeEditorAria: "Resize editor",
+  resizeColumnAria: "Resize column",
   // ── DuckdbFileAnalyticsDialog ─────────────────────────────────────────────
   fileAnalytics: {
     dialogTitle: "Local file query",
@@ -231,6 +234,9 @@ export const en = {
 } as const;
 
 export const ko = {
+  // Resize grips (keyboard, WCAG 2.1.1)
+  resizeEditorAria: "편집기 크기 조절",
+  resizeColumnAria: "열 크기 조절",
   fileAnalytics: {
     dialogTitle: "로컬 파일 쿼리",
     dialogDescriptionSrOnly: "등록된 DuckDB 로컬 파일 소스를 조회합니다.",

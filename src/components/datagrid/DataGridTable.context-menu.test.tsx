@@ -374,13 +374,18 @@ describe("DataGridTable — context menu", () => {
     expect(defaultProps.onSelectRow).toHaveBeenCalledWith(0, false, false);
   });
 
-  // Separator is rendered
+  // Separator is rendered. Column-resize grips are also role="separator"
+  // (WCAG 2.1.1) but carry an aria-label; the context-menu divider does not,
+  // so filter to the unlabeled one to keep this assertion specific.
   it("renders a separator between action items and copy items", () => {
     renderTable();
 
     contextClickFirstDataRow();
 
-    expect(screen.getByRole("separator")).toBeInTheDocument();
+    const menuSeparators = screen
+      .getAllByRole("separator")
+      .filter((el) => !el.getAttribute("aria-label"));
+    expect(menuSeparators.length).toBeGreaterThan(0);
   });
 
   // S61-4: Show Cell Details opens the dialog with the right cell

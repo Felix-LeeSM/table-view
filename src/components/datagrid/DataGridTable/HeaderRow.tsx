@@ -39,6 +39,17 @@ export interface HeaderRowProps {
     visualIdx: number,
   ) => void;
   /**
+   * Sprint — WCAG 2.1.1: keyboard counterpart to `onResizeStart`. Wired in
+   * DataGridTable.tsx / DocumentDataGrid.tsx to
+   * `useColumnResize.handleResizeKeyDown`. Optional so existing tests that
+   * mount HeaderRow without it stay valid.
+   */
+  onResizeKeyDown?: (
+    e: React.KeyboardEvent,
+    colName: string,
+    visualIdx: number,
+  ) => void;
+  /**
    * Sprint 316 — explicit sort override invoked by the context menu.
    * `append=true` mirrors the shift+click multi-key behaviour (push to
    * the end); `append=false` replaces the current sort with a single
@@ -87,6 +98,7 @@ export default function HeaderRow({
   onSort,
   onSaveCurrentEdit,
   onResizeStart,
+  onResizeKeyDown,
   onSortColumn,
   onClearColumnSort,
   onClearAllSorts,
@@ -180,13 +192,18 @@ export default function HeaderRow({
                   mousedown (drag-start) 은 reset 과 독립. e.stopPropagation
                   으로 header onClick/sort 로의 bubble 차단. */}
               <div
-                className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
+                className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 focus-visible:outline-1 focus-visible:outline-ring"
                 onMouseDown={(e) => onResizeStart(e, col.name, visualIdx)}
+                onKeyDown={(e) => onResizeKeyDown?.(e, col.name, visualIdx)}
                 onClick={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   onResetColumnWidths?.();
                 }}
+                tabIndex={0}
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={t("resizeColumnAria")}
               />
             </div>
           );

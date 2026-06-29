@@ -377,7 +377,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
     visualWidthsRef.current = visualWidthsPx;
     const getCurrentWidths = useCallback(() => visualWidthsRef.current, []);
 
-    const { handleResizeStart } = useColumnResize({
+    const { handleResizeStart, handleResizeKeyDown } = useColumnResize({
       outerRef: scrollContainerRef,
       getCurrentWidths,
       onCommitWidth: setWidth,
@@ -508,6 +508,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
           onSort={onSort}
           onSaveCurrentEdit={onSaveCurrentEdit}
           onResizeStart={handleResizeStart}
+          onResizeKeyDown={handleResizeKeyDown}
           onSortColumn={onSortColumn}
           onClearColumnSort={onClearColumnSort}
           onClearAllSorts={onClearAllSorts}

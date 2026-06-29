@@ -28,6 +28,9 @@ export const en = {
   undoAria: "Undo last pending change",
   undoTitle: "Undo (Cmd+Z) — pending changes only",
 
+  // Column resize grip (keyboard, WCAG 2.1.1)
+  resizeColumnAria: "Resize column",
+
   // DataGridToolbar — column / view controls
   resetColumnWidthsAria: "Reset column widths",
   resetColumnWidthsTitle: "Reset column widths to default",
@@ -146,6 +149,9 @@ export const ko = {
   undo: "실행 취소",
   undoAria: "마지막 대기 변경 실행 취소",
   undoTitle: "실행 취소 (Cmd+Z) — 대기 중인 변경사항만",
+
+  // Column resize grip (keyboard, WCAG 2.1.1)
+  resizeColumnAria: "열 크기 조절",
 
   // DataGridToolbar — column / view controls
   resetColumnWidthsAria: "열 너비 초기화",
