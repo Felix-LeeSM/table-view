@@ -24,6 +24,7 @@ import {
   ContextMenuSeparator,
 } from "@components/ui/context-menu";
 import { logger } from "@lib/logger";
+import { toast } from "@lib/runtime/toast";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -84,7 +85,11 @@ export default function ConnectionGroup({
   const handleRenameSubmit = async () => {
     const trimmed = renameValue.trim();
     if (trimmed && trimmed !== group.name) {
-      await updateGroup({ ...group, name: trimmed });
+      try {
+        await updateGroup({ ...group, name: trimmed });
+      } catch {
+        toast.error(t("errors.groupRenameFailed"));
+      }
     }
     setRenaming(false);
   };
@@ -140,7 +145,11 @@ export default function ConnectionGroup({
     e.stopPropagation();
     const connId = draggedConnectionId ?? e.dataTransfer.getData("text/plain");
     if (connId) {
-      await moveConnectionToGroup(connId, group.id);
+      try {
+        await moveConnectionToGroup(connId, group.id);
+      } catch {
+        toast.error(t("errors.groupMoveFailed"));
+      }
     }
   };
 
@@ -291,8 +300,12 @@ export default function ConnectionGroup({
                 variant="destructive"
                 size="sm"
                 onClick={async () => {
-                  await removeGroup(group.id);
-                  setShowDeleteConfirm(false);
+                  try {
+                    await removeGroup(group.id);
+                    setShowDeleteConfirm(false);
+                  } catch {
+                    toast.error(t("errors.groupRemoveFailed"));
+                  }
                 }}
               >
                 {t("group.delete")}

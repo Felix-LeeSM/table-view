@@ -10,6 +10,7 @@ import { ENVIRONMENT_META } from "../model";
 import { useConnectionStore } from "../store";
 import { useConnectionLifecycle } from "@lib/runtime/connection/useConnectionLifecycle";
 import { useConnectionMutations } from "@lib/runtime/connection/useConnectionMutations";
+import { toast } from "@lib/runtime/toast";
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -232,7 +233,11 @@ export default function ConnectionItem({
             disabled={isConnecting}
             onClick={async () => {
               if (isConnected) {
-                await disconnectFromDatabase(connection.id);
+                try {
+                  await disconnectFromDatabase(connection.id);
+                } catch {
+                  toast.error(t("errors.disconnectFailed"));
+                }
               } else {
                 await connectToDatabase(connection.id);
               }
@@ -253,7 +258,11 @@ export default function ConnectionItem({
                 disabled={connection.groupId === null}
                 onClick={async () => {
                   if (connection.groupId !== null) {
-                    await moveConnectionToGroup(connection.id, null);
+                    try {
+                      await moveConnectionToGroup(connection.id, null);
+                    } catch {
+                      toast.error(t("errors.moveFailed"));
+                    }
                   }
                 }}
               >
@@ -273,7 +282,11 @@ export default function ConnectionItem({
                     disabled={isCurrent}
                     onClick={async () => {
                       if (!isCurrent) {
-                        await moveConnectionToGroup(connection.id, g.id);
+                        try {
+                          await moveConnectionToGroup(connection.id, g.id);
+                        } catch {
+                          toast.error(t("errors.moveFailed"));
+                        }
                       }
                     }}
                   >
@@ -371,8 +384,12 @@ export default function ConnectionItem({
                 variant="destructive"
                 size="sm"
                 onClick={async () => {
-                  await removeConnection(connection.id);
-                  setShowDeleteConfirm(false);
+                  try {
+                    await removeConnection(connection.id);
+                    setShowDeleteConfirm(false);
+                  } catch {
+                    toast.error(t("errors.removeFailed"));
+                  }
                 }}
               >
                 {t("item.delete")}
