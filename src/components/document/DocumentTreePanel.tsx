@@ -513,7 +513,7 @@ export function DocumentTreePanel({
           {pendingCount > 0 && (
             <span
               data-testid="document-tree-pending-pill"
-              className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-3xs text-amber-400"
+              className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-3xs text-warning"
             >
               {t("treePanel.unsavedEdits", { count: pendingCount })}
             </span>
@@ -677,9 +677,9 @@ export function DocumentTreePanel({
                 data-testid={`tree-node-${node.path || "__root"}`}
                 className={
                   node.isGhost
-                    ? "rounded border border-amber-400/30 bg-amber-400/10 px-1 py-0.5"
+                    ? "rounded border border-warning/30 bg-warning/10 px-1 py-0.5"
                     : pending !== undefined
-                      ? "rounded bg-amber-400/10 px-1 py-0.5"
+                      ? "rounded bg-warning/10 px-1 py-0.5"
                       : "px-1 py-0.5"
                 }
                 style={{ paddingLeft: `${node.depth * 16}px` }}
@@ -772,7 +772,7 @@ export function DocumentTreePanel({
                       </span>
                     ) : (
                       pending !== undefined && (
-                        <span className="ml-2 text-3xs text-amber-400">
+                        <span className="ml-2 text-3xs text-warning">
                           {t("treePanel.edited")}
                         </span>
                       )
