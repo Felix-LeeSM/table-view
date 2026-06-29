@@ -57,12 +57,15 @@ export function DatabaseRow({
         <button
           type="button"
           className={cn(
-            "flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted",
+            "flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
             isSelected
               ? "bg-muted text-foreground"
               : "text-secondary-foreground",
             isSystem && "italic opacity-60",
           )}
+          role="treeitem"
+          aria-level={1}
+          aria-selected={isSelected}
           aria-expanded={isExpanded}
           aria-label={t("databaseRowAria", { name: db.name })}
           data-system-db={isSystem ? "true" : undefined}
@@ -122,11 +125,14 @@ export function CollectionRow({
         <button
           type="button"
           className={cn(
-            "flex w-full min-w-0 cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-8 text-left hover:bg-muted",
+            "flex w-full min-w-0 cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-8 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
             isSelected
               ? "bg-primary/10 text-primary font-semibold"
               : "text-foreground",
           )}
+          role="treeitem"
+          aria-level={2}
+          aria-selected={isSelected}
           aria-label={t("collectionRowAria", { name: collection.name })}
           // Single-click opens a preview tab; double-click promotes it to a
           // persistent tab. Same model as the relational tree.

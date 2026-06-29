@@ -29,7 +29,7 @@ function TabsTrigger({
       className={cn(
         "px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors select-none",
         "border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-foreground",
-        "focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
         className,
       )}
       {...props}

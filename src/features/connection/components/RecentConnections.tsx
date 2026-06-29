@@ -55,7 +55,7 @@ export default function RecentConnections({
         <div
           key={connectionId}
           role="listitem"
-          className="group flex items-center gap-2 px-3 py-1 text-sm cursor-pointer hover:bg-muted rounded-sm"
+          className="group flex items-center gap-2 px-3 py-1 text-sm cursor-pointer hover:bg-muted rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={t("recent.ariaItem", {
             name: conn.name,
             time: relativeTime(lastUsed),
@@ -90,7 +90,7 @@ export default function RecentConnections({
             <button
               type="button"
               aria-label={t("recent.removeAria", { name: conn.name })}
-              className="col-start-1 row-start-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+              className="col-start-1 row-start-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={(e) => {
                 e.stopPropagation();
                 removeRecent(connectionId);
