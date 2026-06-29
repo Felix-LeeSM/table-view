@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Copy } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/lib/runtime/toast";
 import { cn } from "@/lib/utils";
@@ -14,9 +15,11 @@ export interface CopyTextButtonProps {
 export function CopyTextButton({
   text,
   ariaLabel,
-  disabledReason = "Nothing to copy.",
+  disabledReason,
   className,
 }: CopyTextButtonProps) {
+  const { t } = useTranslation("shared");
+  const resolvedDisabledReason = disabledReason ?? t("nothingToCopy");
   const [copying, setCopying] = useState(false);
   const disabled = copying || text.trim().length === 0;
 
@@ -25,10 +28,10 @@ export function CopyTextButton({
     try {
       setCopying(true);
       await navigator.clipboard.writeText(text);
-      toast.success("Copied to clipboard.");
+      toast.success(t("copiedToClipboard"));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      toast.error(`Copy failed: ${message}`);
+      toast.error(t("copyFailed", { message }));
     } finally {
       setCopying(false);
     }
@@ -40,7 +43,7 @@ export function CopyTextButton({
       variant="ghost"
       size="icon-xs"
       aria-label={ariaLabel}
-      title={disabled ? disabledReason : ariaLabel}
+      title={disabled ? resolvedDisabledReason : ariaLabel}
       disabled={disabled}
       onClick={() => void handleCopy()}
       className={cn("text-muted-foreground", className)}

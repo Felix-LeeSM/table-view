@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import TabBar from "./TabBar";
 import type { TableTab, TabSubView } from "@stores/workspaceStore";
 import {
@@ -37,6 +38,7 @@ interface TableTabProps {
 }
 
 function TableTabView({ tab, onSubViewChange }: TableTabProps) {
+  const { t } = useTranslation("layout");
   // Paradigm dispatch is wrapped in an exhaustive switch so adding a new
   // variant to the `Paradigm` union surfaces a TypeScript error here.
   const paradigm: Paradigm = tab.paradigm ?? "rdb";
@@ -61,7 +63,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
           <div
             className="flex items-center border-b border-border bg-secondary"
             role="tablist"
-            aria-label="Mongo collection view"
+            aria-label={t("mainArea.mongoCollectionViewAria")}
             data-testid="mongo-table-subtab-bar"
           >
             <button
@@ -83,7 +85,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
                 }
               }}
             >
-              Records
+              {t("mainArea.records")}
             </button>
             <button
               role="tab"
@@ -104,7 +106,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
                 }
               }}
             >
-              Structure
+              {t("mainArea.structure")}
             </button>
           </div>
 
@@ -140,7 +142,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
           <div
             className="flex items-center border-b border-border bg-secondary"
             role="tablist"
-            aria-label="Table view"
+            aria-label={t("mainArea.tableViewAria")}
           >
             <button
               role="tab"
@@ -161,7 +163,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
                 }
               }}
             >
-              Records
+              {t("mainArea.records")}
             </button>
             <button
               role="tab"
@@ -182,7 +184,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
                 }
               }}
             >
-              Structure
+              {t("mainArea.structure")}
             </button>
             {paradigm === "rdb" && (
               <button
@@ -202,7 +204,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
                   }
                 }}
               >
-                ERD
+                {t("mainArea.erd")}
               </button>
             )}
           </div>
@@ -252,12 +254,13 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
  * is hydrating, not empty.
  */
 function MainAreaSkeleton() {
+  const { t } = useTranslation("layout");
   return (
     <div
       className="flex flex-1 flex-col items-center justify-center gap-3 px-6"
       role="status"
       aria-busy="true"
-      aria-label="Loading workspace"
+      aria-label={t("mainArea.loadingWorkspaceAria")}
       data-testid="main-area-skeleton"
     >
       <Skeleton className="h-20 w-20" />
@@ -269,6 +272,7 @@ function MainAreaSkeleton() {
 }
 
 function EmptyState() {
+  const { t } = useTranslation("layout");
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const lastUsedConnectionId = useMruStore((s) => s.lastUsedConnectionId);
@@ -296,10 +300,10 @@ function EmptyState() {
   const target = mruConnection ?? firstConnected;
   const emptyStateLead =
     target?.paradigm === "kv"
-      ? `Open a key from the sidebar, or start writing ${
-          target.dbType === "valkey" ? "Valkey" : "Redis"
-        } commands against `
-      : "Open a table from the sidebar, or start writing SQL against ";
+      ? t("mainArea.emptyKvLead", {
+          dbLabel: target.dbType === "valkey" ? "Valkey" : "Redis",
+        })
+      : t("mainArea.emptyTableLead");
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-muted-foreground">
@@ -321,13 +325,11 @@ function EmptyState() {
             }}
           >
             <Plus />
-            New Query
+            {t("mainArea.newQuery")}
           </Button>
         </>
       ) : (
-        <p className="text-sm">
-          Select a connection from the sidebar to get started
-        </p>
+        <p className="text-sm">{t("mainArea.selectConnection")}</p>
       )}
     </div>
   );

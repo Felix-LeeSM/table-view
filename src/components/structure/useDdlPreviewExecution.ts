@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import i18n from "@lib/i18n";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
@@ -128,9 +129,7 @@ export function useDdlPreviewExecution({
       const info = getDbMismatchInfo(err);
       if (!info) return false;
       void syncMismatchedActiveDb(connectionId, (actual) => {
-        toast.warning(
-          `Active database synced to '${actual}'. Re-apply if needed.`,
-        );
+        toast.warning(i18n.t("structure:ddl.dbSyncedToast", { actual }));
       });
       return true;
     },
@@ -234,9 +233,7 @@ export function useDdlPreviewExecution({
 
   const cancelDangerous = useCallback(() => {
     setPendingConfirm(null);
-    setPreviewError(
-      "Safe Mode (warn): confirmation cancelled — no changes committed",
-    );
+    setPreviewError(i18n.t("structure:ddl.safeModeWarnCancelled"));
   }, []);
 
   const cancelPreview = useCallback(() => {

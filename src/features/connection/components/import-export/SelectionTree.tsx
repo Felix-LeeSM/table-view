@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { ConnectionConfig, ConnectionGroup } from "../../model";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +35,7 @@ export default function SelectionTree({
   selected,
   onChange,
 }: SelectionTreeProps) {
+  const { t } = useTranslation("featuresConnection");
   const allConnIds = useMemo(() => connections.map((c) => c.id), [connections]);
 
   const resolvedGroups = useMemo<ResolvedGroup[]>(() => {
@@ -49,12 +51,12 @@ export default function SelectionTree({
     if (ungrouped.length > 0) {
       grouped.push({
         id: null,
-        name: "(No group)",
+        name: t("selectionTree.noGroupName"),
         connections: ungrouped,
       });
     }
     return grouped;
-  }, [connections, groups]);
+  }, [connections, groups, t]);
 
   const selectedCount = useMemo(
     () => connections.filter((c) => selected.has(c.id)).length,
@@ -109,7 +111,7 @@ export default function SelectionTree({
         role="status"
         className="rounded border border-border bg-background px-3 py-4 text-center text-xs text-muted-foreground"
       >
-        No connections to export.
+        {t("selectionTree.noConnections")}
       </div>
     );
   }
@@ -122,19 +124,26 @@ export default function SelectionTree({
           <input
             ref={masterRef}
             type="checkbox"
-            aria-label={`Select all (${connections.length})`}
+            aria-label={t("selectionTree.selectAllAria", {
+              count: connections.length,
+            })}
             aria-checked={
               masterIndeterminate ? "mixed" : allChecked ? "true" : "false"
             }
             checked={allChecked}
             onChange={(e) => toggleAll(e.target.checked)}
           />
-          <span>Select all ({connections.length})</span>
+          <span>
+            {t("selectionTree.selectAllLabel", { count: connections.length })}
+          </span>
         </label>
         <span className="ml-auto text-muted-foreground">
-          {selectedCount} connection{selectedCount === 1 ? "" : "s"},{" "}
-          {fullySelectedGroupCount} group
-          {fullySelectedGroupCount === 1 ? "" : "s"} selected
+          {t("selectionTree.counterLabel", {
+            connCount: selectedCount,
+            connPlural: selectedCount === 1 ? "" : "s",
+            groupCount: fullySelectedGroupCount,
+            groupPlural: fullySelectedGroupCount === 1 ? "" : "s",
+          })}
         </span>
       </div>
 
@@ -166,6 +175,7 @@ function GroupSection({
   onToggleGroup,
   onToggleConnection,
 }: GroupSectionProps) {
+  const { t } = useTranslation("featuresConnection");
   const childSelectedCount = group.connections.filter((c) =>
     selected.has(c.id),
   ).length;
@@ -182,7 +192,7 @@ function GroupSection({
     }
   }, [someChildrenSelected]);
 
-  const groupLabel = `Group ${group.name}`;
+  const groupLabel = t("selectionTree.groupAria", { name: group.name });
 
   return (
     <div className="border-b border-border last:border-b-0">
@@ -229,7 +239,7 @@ function GroupSection({
             </span>
             {c.hasPassword && (
               <span className="ml-auto rounded bg-success/10 px-1.5 text-3xs font-medium text-success">
-                pw set
+                {t("selectionTree.pwSet")}
               </span>
             )}
           </label>

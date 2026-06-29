@@ -22,6 +22,7 @@
  */
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, X } from "lucide-react";
 
 import { setKeyringFallbackDismissed } from "@/lib/keyringFallback";
@@ -39,6 +40,7 @@ export function KeyringFallbackToast({
   fallbackActive,
   dismissed,
 }: KeyringFallbackToastProps) {
+  const { t } = useTranslation("featuresConnection");
   // Local override so a click hides the toast immediately, without waiting
   // for a parent rerender after the IPC sentinel write resolves.
   const [hidden, setHidden] = useState(false);
@@ -71,19 +73,13 @@ export function KeyringFallbackToast({
     >
       <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
       <div className="min-w-0 flex-1">
-        <div className="font-medium">
-          Keyring unavailable — disk fallback active
-        </div>
-        <p className="mt-1 text-xs opacity-90">
-          Your encryption key is stored on disk because the OS keyring (Secret
-          Service / kwallet) is not reachable. Enable full-disk encryption to
-          protect stored passwords against offline disk access.
-        </p>
+        <div className="font-medium">{t("keyring.title")}</div>
+        <p className="mt-1 text-xs opacity-90">{t("keyring.body")}</p>
       </div>
       <button
         type="button"
         onClick={handleDismiss}
-        aria-label="Dismiss notification"
+        aria-label={t("keyring.dismissAria")}
         className="ml-1 inline-flex shrink-0 cursor-pointer rounded-sm p-0.5 opacity-70 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         <X className="size-3.5" />

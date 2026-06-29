@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   Play,
@@ -74,6 +75,7 @@ export default function QueryTabToolbar({
   onOpenFileAnalytics,
   favorites,
 }: QueryTabToolbarProps) {
+  const { t } = useTranslation("query");
   const {
     showSaveForm,
     setShowSaveForm,
@@ -128,22 +130,22 @@ export default function QueryTabToolbar({
           variant="ghost"
           size="xs"
           onClick={onExecute}
-          aria-label="Cancel query"
+          aria-label={t("toolbar.cancelQueryAria")}
         >
           <Square className="text-destructive" />
           <Loader2 className="animate-spin" />
-          <span>Cancel</span>
+          <span>{t("toolbar.cancel")}</span>
         </Button>
       ) : tab.queryState.status === "running" ? (
         <Button
           variant="ghost"
           size="xs"
           disabled
-          aria-label="Query running"
+          aria-label={t("toolbar.queryRunningAria")}
           title="Query cancellation is not supported for this database."
         >
           <Loader2 className="animate-spin" />
-          <span>Running</span>
+          <span>{t("toolbar.running")}</span>
         </Button>
       ) : (
         <Button
@@ -151,11 +153,11 @@ export default function QueryTabToolbar({
           size="xs"
           onClick={onExecute}
           disabled={runDisabled}
-          aria-label="Run query"
+          aria-label={t("toolbar.runQueryAria")}
           title={runDisabledTooltip}
         >
           <Play className="text-success" />
-          <span>Run</span>
+          <span>{t("toolbar.run")}</span>
           <span className="text-3xs text-muted-foreground">{"⌘⏎"}</span>
         </Button>
       )}
@@ -165,11 +167,11 @@ export default function QueryTabToolbar({
           size="xs"
           onClick={onDryRun}
           disabled={tab.queryState.status === "running" || !tab.sql.trim()}
-          aria-label="Dry run query"
+          aria-label={t("toolbar.dryRunAria")}
           title="Dry run (Cmd+Shift+Enter) — BEGIN; ... ROLLBACK"
         >
           <FlaskConical />
-          <span>Dry Run</span>
+          <span>{t("toolbar.dryRun")}</span>
           <span className="text-3xs text-muted-foreground">{"⌘⇧⏎"}</span>
         </Button>
       )}
@@ -179,11 +181,11 @@ export default function QueryTabToolbar({
           size="xs"
           onClick={onExplain}
           disabled={tab.queryState.status === "running" || !tab.sql.trim()}
-          aria-label="Explain query"
+          aria-label={t("toolbar.explainAria")}
           title="Explain query plan"
         >
           <SearchCode />
-          <span>Explain</span>
+          <span>{t("toolbar.explain")}</span>
         </Button>
       )}
       {isRdbTab && (
@@ -192,11 +194,11 @@ export default function QueryTabToolbar({
           size="xs"
           onClick={onFormat}
           disabled={!tab.sql.trim()}
-          aria-label="Format SQL"
+          aria-label={t("toolbar.formatAria")}
           title="Format SQL (Cmd+I)"
         >
           <Paintbrush />
-          <span>Format</span>
+          <span>{t("toolbar.format")}</span>
         </Button>
       )}
       {showFileAnalytics && (
@@ -205,11 +207,11 @@ export default function QueryTabToolbar({
           size="xs"
           onClick={onOpenFileAnalytics}
           disabled={tab.queryState.status === "running"}
-          aria-label="Preview local file"
+          aria-label={t("toolbar.localFileAria")}
           title="Preview local file"
         >
           <FileSearch />
-          <span>Local File</span>
+          <span>{t("toolbar.localFile")}</span>
         </Button>
       )}
       <div className="ml-auto flex items-center gap-1 relative">
@@ -221,11 +223,11 @@ export default function QueryTabToolbar({
             setShowFavorites(false);
           }}
           disabled={!tab.sql.trim()}
-          aria-label="Save to favorites"
+          aria-label={t("toolbar.saveToFavoritesAria")}
           title="Save to favorites"
         >
           <Star />
-          <span>Save</span>
+          <span>{t("toolbar.save")}</span>
         </Button>
         <Button
           variant="ghost"
@@ -234,13 +236,14 @@ export default function QueryTabToolbar({
             setShowFavorites(!showFavorites);
             setShowSaveForm(false);
           }}
-          aria-label="Open favorites"
+          aria-label={t("toolbar.openFavoritesAria")}
           title="Favorites (Cmd+Shift+F)"
         >
           <Star className="text-primary" />
           <span>
-            Favorites
-            {favoritesList.length > 0 ? ` (${favoritesList.length})` : ""}
+            {favoritesList.length > 0
+              ? t("toolbar.favoritesCount", { count: favoritesList.length })
+              : t("toolbar.favorites")}
           </span>
         </Button>
         {showSaveForm && (
@@ -253,7 +256,7 @@ export default function QueryTabToolbar({
                 if (e.key === "Enter") handleSaveFavorite();
                 if (e.key === "Escape") setShowSaveForm(false);
               }}
-              placeholder="Favorite name..."
+              placeholder={t("toolbar.favoritePlaceholder")}
               className="h-6 w-40 rounded border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring"
               autoFocus
             />
@@ -261,7 +264,7 @@ export default function QueryTabToolbar({
               size="xs"
               onClick={handleSaveFavorite}
               disabled={!favoriteName.trim()}
-              aria-label="Confirm save"
+              aria-label={t("toolbar.confirmSaveAria")}
             >
               <Save />
             </Button>
@@ -273,7 +276,7 @@ export default function QueryTabToolbar({
                 setShowSaveForm(false);
                 setFavoriteName("");
               }}
-              aria-label="Cancel save"
+              aria-label={t("toolbar.cancelSaveAria")}
             >
               <X />
             </Button>

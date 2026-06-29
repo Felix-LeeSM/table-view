@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import {
   Dialog,
@@ -26,6 +27,7 @@ export function SqlPreviewDialog({
   connectionEnvironment,
   connectionLabel,
 }: SqlPreviewDialogProps) {
+  const { t } = useTranslation("rdb");
   return (
     <Dialog
       open={!!editState.sqlPreview}
@@ -36,8 +38,10 @@ export function SqlPreviewDialog({
         showCloseButton={false}
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>SQL Preview</DialogTitle>
-          <DialogDescription>Preview SQL before executing</DialogDescription>
+          <DialogTitle>{t("sqlPreviewDialog.title")}</DialogTitle>
+          <DialogDescription>
+            {t("sqlPreviewDialog.description")}
+          </DialogDescription>
         </DialogHeader>
         <div
           className="flex max-h-[80vh] flex-col rounded-lg border border-border bg-background shadow-xl"
@@ -50,17 +54,17 @@ export function SqlPreviewDialog({
         >
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h3 className="text-sm font-semibold text-foreground">
-              SQL Preview
+              {t("sqlPreviewDialog.title")}
             </h3>
             <div className="flex items-center gap-1">
               <PreviewCopyButton
                 text={editState.sqlPreview?.join(";\n") ?? ""}
-                ariaLabel="Copy SQL to clipboard"
+                ariaLabel={t("sqlPreviewDialog.copySqlAria")}
               />
               <button
                 className="rounded p-1 hover:bg-muted"
                 onClick={() => editState.setSqlPreview(null)}
-                aria-label="Close SQL preview"
+                aria-label={t("sqlPreviewDialog.closeAria")}
               >
                 <X size={14} />
               </button>
@@ -90,9 +94,11 @@ export function SqlPreviewDialog({
                 data-testid="datagrid-commit-error"
               >
                 <div className="font-semibold">
-                  executed: {editState.commitError.statementIndex}, failed at:{" "}
-                  {editState.commitError.statementIndex + 1} of{" "}
-                  {editState.commitError.statementCount}
+                  {t("sqlPreviewDialog.commitErrorSummary", {
+                    executed: editState.commitError.statementIndex,
+                    failedAt: editState.commitError.statementIndex + 1,
+                    total: editState.commitError.statementCount,
+                  })}
                 </div>
                 <div className="mt-1 break-words">
                   {editState.commitError.message}
@@ -108,7 +114,7 @@ export function SqlPreviewDialog({
               className="rounded bg-muted px-3 py-1.5 text-xs text-secondary-foreground hover:bg-secondary"
               onClick={() => editState.setSqlPreview(null)}
             >
-              Cancel
+              {t("sqlPreviewDialog.cancel")}
             </button>
             <ExecuteButton
               severity="warn"
@@ -117,7 +123,7 @@ export function SqlPreviewDialog({
               loading={false}
               disabled={false}
               onClick={editState.handleExecuteCommit}
-              ariaLabel="Execute SQL"
+              ariaLabel={t("sqlPreviewDialog.executeAria")}
               autoFocus
             />
           </DialogFooter>

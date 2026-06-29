@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ArrowDown,
   ArrowUp,
@@ -257,6 +258,7 @@ export default function CreateTableDialog({
   onClose,
   onRefresh,
 }: CreateTableDialogProps) {
+  const { t } = useTranslation("schemaDialogs");
   const [tableName, setTableName] = useState("");
   // Sprint 234 — table-level COMMENT ON TABLE input. Optional, default
   // empty string. When non-empty (post-trim), plumbed into
@@ -990,7 +992,7 @@ export default function CreateTableDialog({
     onClose();
   };
 
-  const ddlButtonLabel = showDdl ? "Hide DDL" : "Show DDL";
+  const ddlButtonLabel = showDdl ? t("hideDdl") : t("showDdl");
 
   return (
     <>
@@ -1027,7 +1029,7 @@ export default function CreateTableDialog({
                     htmlFor="create-table-target-schema"
                     className="mb-1 block text-xs font-medium text-secondary-foreground"
                   >
-                    Target schema
+                    {t("createTable.targetSchemaLabel")}
                   </label>
                   <Select
                     value={selectedSchema}
@@ -1035,7 +1037,7 @@ export default function CreateTableDialog({
                   >
                     <SelectTrigger
                       id="create-table-target-schema"
-                      aria-label="Target schema"
+                      aria-label={t("createTable.targetSchemaAria")}
                       size="sm"
                       className="w-full"
                     >
@@ -1058,7 +1060,7 @@ export default function CreateTableDialog({
                   htmlFor="create-table-name"
                   className="mb-1 block text-xs font-medium text-secondary-foreground"
                 >
-                  Table name
+                  {t("createTable.tableNameLabel")}
                 </label>
                 <input
                   id="create-table-name"
@@ -1066,7 +1068,7 @@ export default function CreateTableDialog({
                   value={tableName}
                   onChange={(e) => handleTableNameChange(e.target.value)}
                   placeholder="my_new_table"
-                  aria-label="Table name"
+                  aria-label={t("createTable.tableNameAria")}
                   autoFocus
                 />
               </div>
@@ -1079,15 +1081,15 @@ export default function CreateTableDialog({
                   htmlFor="create-table-comment"
                   className="mb-1 block text-xs font-medium text-secondary-foreground"
                 >
-                  Table comment
+                  {t("createTable.tableCommentLabel")}
                 </label>
                 <input
                   id="create-table-comment"
                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                   value={tableComment}
                   onChange={(e) => handleTableCommentChange(e.target.value)}
-                  placeholder="comment (optional)"
-                  aria-label="Table comment"
+                  placeholder={t("createTable.tableCommentPlaceholder")}
+                  aria-label={t("createTable.tableCommentAria")}
                 />
               </div>
 
@@ -1105,10 +1107,10 @@ export default function CreateTableDialog({
                       (e.g. "Keys (2)" — natural language). Hidden when
                       count is 0 — no `(0)` noise. */}
                   <TabsTrigger value="columns" className="rounded-none">
-                    Columns
+                    {t("createTable.tabColumns")}
                   </TabsTrigger>
                   <TabsTrigger value="keys" className="rounded-none">
-                    Keys
+                    {t("createTable.tabKeys")}
                     {declaredPk.length > 0 && (
                       <span className="ml-1 text-3xs text-muted-foreground">
                         ({declaredPk.length})
@@ -1116,7 +1118,7 @@ export default function CreateTableDialog({
                     )}
                   </TabsTrigger>
                   <TabsTrigger value="indexes" className="rounded-none">
-                    Indexes
+                    {t("createTable.tabIndexes")}
                     {declaredIndexesForChain.length > 0 && (
                       <span className="ml-1 text-3xs text-muted-foreground">
                         ({declaredIndexesForChain.length})
@@ -1124,7 +1126,7 @@ export default function CreateTableDialog({
                     )}
                   </TabsTrigger>
                   <TabsTrigger value="foreign_keys" className="rounded-none">
-                    Constraints
+                    {t("createTable.tabConstraints")}
                     {declaredConstraintsForChain.length > 0 && (
                       <span className="ml-1 text-3xs text-muted-foreground">
                         (
@@ -1151,16 +1153,16 @@ export default function CreateTableDialog({
                   <div>
                     <div className="mb-1 flex items-center justify-between">
                       <label className="text-xs font-medium text-secondary-foreground">
-                        Columns
+                        {t("createTable.columnsLabel")}
                       </label>
                       <Button
                         variant="ghost"
                         size="xs"
                         onClick={handleAddColumn}
-                        aria-label="Add column"
+                        aria-label={t("createTable.addColumnAria")}
                       >
                         <Plus />
-                        Column
+                        {t("createTable.addColumnBtn")}
                       </Button>
                     </div>
                     {/* Sprint 241 — single-layer scroll. Long lists
@@ -1187,8 +1189,10 @@ export default function CreateTableDialog({
                                       name: e.target.value,
                                     })
                                   }
-                                  placeholder="column_name"
-                                  aria-label="Column name"
+                                  placeholder={t(
+                                    "createTable.columnNamePlaceholder",
+                                  )}
+                                  aria-label={t("createTable.columnNameAria")}
                                 />
                                 <div className="flex-1">
                                   <CreateTableTypeCombobox
@@ -1222,13 +1226,15 @@ export default function CreateTableDialog({
                                     }
                                     disabled={col.is_identity}
                                     className="rounded border-border"
-                                    aria-label="Column nullable"
+                                    aria-label={t(
+                                      "createTable.columnNullableAria",
+                                    )}
                                   />
-                                  Nullable
+                                  {t("createTable.columnNullableLabel")}
                                 </label>
                                 <label
                                   className="flex cursor-pointer items-center gap-1 text-xs text-foreground"
-                                  title="Auto-incrementing identity column (PG: GENERATED BY DEFAULT AS IDENTITY)"
+                                  title={t("createTable.columnIdentityTitle")}
                                 >
                                   <input
                                     type="checkbox"
@@ -1239,9 +1245,11 @@ export default function CreateTableDialog({
                                       })
                                     }
                                     className="rounded border-border"
-                                    aria-label="Column identity"
+                                    aria-label={t(
+                                      "createTable.columnIdentityAria",
+                                    )}
                                   />
-                                  Identity
+                                  {t("createTable.columnIdentityLabel")}
                                 </label>
                                 <input
                                   className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary disabled:opacity-50"
@@ -1256,10 +1264,16 @@ export default function CreateTableDialog({
                                   disabled={col.is_identity}
                                   placeholder={
                                     col.is_identity
-                                      ? "(IDENTITY sequence)"
-                                      : "default value (optional)"
+                                      ? t(
+                                          "createTable.columnDefaultIdentityPlaceholder",
+                                        )
+                                      : t(
+                                          "createTable.columnDefaultPlaceholder",
+                                        )
                                   }
-                                  aria-label="Column default value"
+                                  aria-label={t(
+                                    "createTable.columnDefaultAria",
+                                  )}
                                 />
                               </div>
                               <input
@@ -1270,8 +1284,10 @@ export default function CreateTableDialog({
                                     comment: e.target.value,
                                   })
                                 }
-                                placeholder="comment (optional)"
-                                aria-label="Column comment"
+                                placeholder={t(
+                                  "createTable.columnCommentPlaceholder",
+                                )}
+                                aria-label={t("createTable.columnCommentAria")}
                               />
                               {/* Sprint 241 — inline FK + CHECK on the
                                 column row (TablePlus parity). FK is
@@ -1332,8 +1348,10 @@ export default function CreateTableDialog({
                                       check_expression: e.target.value,
                                     })
                                   }
-                                  placeholder="check expression (optional, e.g. age >= 0)"
-                                  aria-label="Column check expression"
+                                  placeholder={t(
+                                    "createTable.columnCheckPlaceholder",
+                                  )}
+                                  aria-label={t("createTable.columnCheckAria")}
                                 />
                               </div>
                             </div>
@@ -1348,8 +1366,8 @@ export default function CreateTableDialog({
                                 handleMoveColumn(col.trackingId, -1)
                               }
                               disabled={isFirst}
-                              aria-label="Move column up"
-                              title="Move column up"
+                              aria-label={t("createTable.moveColumnUpAria")}
+                              title={t("createTable.moveColumnUpTitle")}
                             >
                               <ArrowUp />
                             </Button>
@@ -1360,8 +1378,8 @@ export default function CreateTableDialog({
                                 handleMoveColumn(col.trackingId, 1)
                               }
                               disabled={isLast}
-                              aria-label="Move column down"
-                              title="Move column down"
+                              aria-label={t("createTable.moveColumnDownAria")}
+                              title={t("createTable.moveColumnDownTitle")}
                             >
                               <ArrowDown />
                             </Button>
@@ -1370,11 +1388,11 @@ export default function CreateTableDialog({
                               size="icon-xs"
                               onClick={() => handleRemoveColumn(col.trackingId)}
                               disabled={columns.length <= 1}
-                              aria-label="Remove column"
+                              aria-label={t("createTable.removeColumnAria")}
                               title={
                                 columns.length <= 1
-                                  ? "At least one column required"
-                                  : "Remove column"
+                                  ? t("createTable.removeColumnDisabledTitle")
+                                  : t("createTable.removeColumnTitle")
                               }
                             >
                               <Minus />
@@ -1395,16 +1413,15 @@ export default function CreateTableDialog({
                 >
                   <div>
                     <label className="mb-1 block text-xs font-medium text-secondary-foreground">
-                      Primary key
+                      {t("createTable.primaryKeyLabel")}
                     </label>
                     <div
                       className="max-h-scroll-sm overflow-auto rounded border border-border bg-background p-2"
-                      aria-label="Primary key columns"
+                      aria-label={t("createTable.primaryKeyColumnsAria")}
                     >
                       {validPkColumns.length === 0 ? (
                         <span className="text-xs italic text-muted-foreground">
-                          Add named columns in the Columns tab to use this
-                          picker.
+                          {t("createTable.primaryKeyEmptyHint")}
                         </span>
                       ) : (
                         validPkColumns.map((colName) => {
@@ -1427,7 +1444,9 @@ export default function CreateTableDialog({
                                   });
                                 }}
                                 className="rounded border-border"
-                                aria-label={`Primary key: ${colName}`}
+                                aria-label={t("createTable.primaryKeyColAria", {
+                                  colName,
+                                })}
                               />
                               {colName}
                             </label>
@@ -1524,7 +1543,7 @@ export default function CreateTableDialog({
                   {ddl.previewLoading ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />
-                      Generating preview…
+                      {t("generatingPreview")}
                     </div>
                   ) : ddl.previewError ? (
                     <pre
@@ -1539,7 +1558,7 @@ export default function CreateTableDialog({
                     </pre>
                   ) : (
                     <span className="text-xs italic text-muted-foreground">
-                      -- Fill in the form to see the generated SQL
+                      {t("ddlHintFillForm")}
                     </span>
                   )}
                 </div>
@@ -1548,18 +1567,18 @@ export default function CreateTableDialog({
 
             <DialogFooter className="border-t border-border px-4 py-3">
               <Button variant="ghost" size="sm" onClick={handleCancel}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 size="sm"
                 onClick={handleExecute}
                 disabled={!canPreview || ddl.previewLoading || !ddl.previewSql}
-                aria-label="Execute"
+                aria-label={t("execute")}
               >
                 {ddl.previewLoading ? (
                   <Loader2 className="animate-spin size-3.5" />
                 ) : null}
-                Execute
+                {t("execute")}
               </Button>
             </DialogFooter>
           </DialogShell.Footer>

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
   Crosshair,
@@ -47,6 +48,7 @@ export default function SchemaErdRenderer({
   selectedTableId,
   onSelectedTableIdChange,
 }: SchemaErdRendererProps) {
+  const { t } = useTranslation("schema");
   const [internalSelectedTableId, setInternalSelectedTableId] = useState<
     string | null
   >(null);
@@ -84,12 +86,9 @@ export default function SchemaErdRenderer({
       >
         <Network size={28} aria-hidden="true" />
         <p className="text-sm font-medium text-foreground">
-          No tables to diagram
+          {t("noTablesToDiagram")}
         </p>
-        <p className="max-w-md text-xs">
-          Expand or refresh a relational schema to build an ERD from cached
-          table metadata.
-        </p>
+        <p className="max-w-md text-xs">{t("noTablesHint")}</p>
       </div>
     );
   }
@@ -132,22 +131,24 @@ export default function SchemaErdRenderer({
         <div className="flex min-w-0 items-center gap-2">
           <Network size={14} className="text-muted-foreground" />
           <span className="truncate text-xs font-medium text-foreground">
-            ERD
+            {t("erdLabel")}
           </span>
           <span className="text-3xs text-muted-foreground">
-            {layout.tables.length} tables / {layout.relationships.length}{" "}
-            relationships
+            {t("erdTablesRelationships", {
+              tables: layout.tables.length,
+              relationships: layout.relationships.length,
+            })}
           </span>
         </div>
         <label className="flex min-w-[11rem] max-w-xs flex-1 items-center gap-1 rounded border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
           <Search size={13} aria-hidden="true" />
-          <span className="sr-only">Search ERD tables</span>
+          <span className="sr-only">{t("searchErdTablesAria")}</span>
           <input
-            aria-label="Search ERD tables"
+            aria-label={t("searchErdTablesAria")}
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
-            placeholder="Find table"
+            placeholder={t("findTablePlaceholder")}
           />
           {searchTerm.trim() && (
             <span className="whitespace-nowrap text-3xs tabular-nums">
@@ -160,8 +161,8 @@ export default function SchemaErdRenderer({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label="Zoom out ERD"
-            title="Zoom out"
+            aria-label={t("zoomOutAria")}
+            title={t("zoomOutTitle")}
             onClick={() => setZoom((value) => Math.max(0.55, value - 0.1))}
           >
             <ZoomOut />
@@ -176,8 +177,8 @@ export default function SchemaErdRenderer({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label="Zoom in ERD"
-            title="Zoom in"
+            aria-label={t("zoomInAria")}
+            title={t("zoomInTitle")}
             onClick={() => setZoom((value) => Math.min(1.6, value + 0.1))}
           >
             <ZoomIn />
@@ -186,8 +187,8 @@ export default function SchemaErdRenderer({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label="Fit selected table"
-            title="Fit selected table"
+            aria-label={t("fitSelectedTableAria")}
+            title={t("fitSelectedTableTitle")}
             disabled={!activeSelected}
             onClick={fitSelectedTable}
           >
@@ -197,8 +198,8 @@ export default function SchemaErdRenderer({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label="Fit ERD"
-            title="Fit ERD"
+            aria-label={t("fitErdAria")}
+            title={t("fitErdTitle")}
             onClick={() => setZoom(0.85)}
           >
             <Maximize2 />
@@ -209,7 +210,7 @@ export default function SchemaErdRenderer({
       {searchTerm.trim() && (
         <div
           role="listbox"
-          aria-label="ERD table search results"
+          aria-label={t("erdSearchResultsAria")}
           className="flex max-h-20 flex-wrap gap-1 overflow-auto border-b border-border bg-muted/20 px-3 py-2"
         >
           {searchMatches.length > 0 ? (
@@ -232,7 +233,7 @@ export default function SchemaErdRenderer({
               aria-selected="false"
               className="text-xs text-muted-foreground"
             >
-              No matching tables
+              {t("noMatchingTables")}
             </div>
           )}
         </div>
@@ -243,14 +244,13 @@ export default function SchemaErdRenderer({
           role="status"
           className="border-b border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
         >
-          No relationships yet. Showing isolated tables from the current schema
-          cache.
+          {t("noRelationshipsYet")}
         </div>
       )}
 
       <div
         role="figure"
-        aria-label="Database relationship diagram"
+        aria-label={t("databaseRelationshipDiagram")}
         className="relative flex-1 overflow-auto bg-background"
       >
         <div
@@ -361,7 +361,7 @@ export default function SchemaErdRenderer({
                     </span>
                     {isSelected && (
                       <span className="rounded bg-primary/10 px-1 text-3xs font-semibold text-primary">
-                        focused
+                        {t("focused")}
                       </span>
                     )}
                   </div>
@@ -391,7 +391,7 @@ export default function SchemaErdRenderer({
                   ))}
                   {hiddenColumnCount > 0 && (
                     <div className="px-3 py-1 text-xs text-muted-foreground">
-                      +{hiddenColumnCount} more columns
+                      {t("moreColumns", { count: hiddenColumnCount })}
                     </div>
                   )}
                 </div>
@@ -433,6 +433,7 @@ function SelectedTableDependencyView({
   metadata,
   tableLabel,
 }: SelectedTableDependencyViewProps) {
+  const { t } = useTranslation("schema");
   const incoming = foreignKeys?.incomingForeignKeys ?? [];
   const outgoing = foreignKeys?.outgoingForeignKeys ?? [];
   const hasDependencyRows = incoming.length > 0 || outgoing.length > 0;
@@ -448,14 +449,14 @@ function SelectedTableDependencyView({
         <div className="flex min-w-0 items-center gap-2">
           <Link2 size={13} className="shrink-0 text-muted-foreground" />
           <h2 className="truncate text-xs font-semibold text-foreground">
-            Dependencies
+            {t("dependencies")}
           </h2>
           <span className="truncate text-3xs text-muted-foreground">
             {tableLabel}
           </span>
         </div>
         <span className="text-3xs text-muted-foreground">
-          read-only SchemaGraph view
+          {t("readOnlySchemaGraphView")}
         </span>
       </div>
 
@@ -475,13 +476,13 @@ function SelectedTableDependencyView({
 
       {!hasDependencyRows && !hasMetadataRows && (
         <div className="rounded border border-dashed border-border bg-background px-2 py-2 text-xs text-muted-foreground">
-          No dependencies for selected table.
+          {t("noDependenciesForTable")}
         </div>
       )}
 
       <div className="grid gap-2 lg:grid-cols-2">
-        <ForeignKeyGroup title="Incoming" foreignKeys={incoming} />
-        <ForeignKeyGroup title="Outgoing" foreignKeys={outgoing} />
+        <ForeignKeyGroup title={t("incoming")} foreignKeys={incoming} />
+        <ForeignKeyGroup title={t("outgoing")} foreignKeys={outgoing} />
       </div>
 
       <div className="mt-2 grid gap-2 lg:grid-cols-2">
@@ -493,7 +494,7 @@ function SelectedTableDependencyView({
         <div className="mt-2 rounded border border-border bg-background px-2 py-2">
           <div className="mb-1 flex items-center gap-1 text-3xs font-semibold uppercase text-muted-foreground">
             <AlertTriangle size={11} aria-hidden="true" />
-            SchemaGraph diagnostics
+            {t("schemaGraphDiagnostics")}
           </div>
           <ul className="space-y-1 text-3xs text-muted-foreground">
             {metadata.diagnostics.map((diagnostic) => (
@@ -515,9 +516,10 @@ function ForeignKeyGroup({
   title,
   foreignKeys,
 }: {
-  title: "Incoming" | "Outgoing";
+  title: string;
   foreignKeys: readonly SchemaGraphForeignKeySelection[];
 }) {
+  const { t } = useTranslation("schema");
   return (
     <div className="min-w-0 rounded border border-border bg-background px-2 py-2">
       <div className="mb-1 flex items-center gap-1 text-3xs font-semibold uppercase text-muted-foreground">
@@ -546,7 +548,7 @@ function ForeignKeyGroup({
         </ul>
       ) : (
         <p className="text-3xs text-muted-foreground">
-          No {title.toLowerCase()} FKs.
+          {t("noFks", { direction: title.toLowerCase() })}
         </p>
       )}
     </div>
@@ -554,10 +556,11 @@ function ForeignKeyGroup({
 }
 
 function IndexGroup({ indexes }: { indexes: readonly SchemaGraphIndexNode[] }) {
+  const { t } = useTranslation("schema");
   return (
     <div className="min-w-0 rounded border border-border bg-background px-2 py-2">
       <div className="mb-1 text-3xs font-semibold uppercase text-muted-foreground">
-        Related indexes
+        {t("relatedIndexes")}
       </div>
       {indexes.length > 0 ? (
         <ul className="space-y-1">
@@ -576,7 +579,9 @@ function IndexGroup({ indexes }: { indexes: readonly SchemaGraphIndexNode[] }) {
           ))}
         </ul>
       ) : (
-        <p className="text-3xs text-muted-foreground">No related indexes.</p>
+        <p className="text-3xs text-muted-foreground">
+          {t("noRelatedIndexes")}
+        </p>
       )}
     </div>
   );
@@ -587,10 +592,11 @@ function ConstraintGroup({
 }: {
   constraints: readonly SchemaGraphConstraintNode[];
 }) {
+  const { t } = useTranslation("schema");
   return (
     <div className="min-w-0 rounded border border-border bg-background px-2 py-2">
       <div className="mb-1 text-3xs font-semibold uppercase text-muted-foreground">
-        Constraints
+        {t("constraintsTab")}
       </div>
       {constraints.length > 0 ? (
         <ul className="space-y-1">
@@ -622,7 +628,7 @@ function ConstraintGroup({
           ))}
         </ul>
       ) : (
-        <p className="text-3xs text-muted-foreground">No constraints.</p>
+        <p className="text-3xs text-muted-foreground">{t("noConstraints")}</p>
       )}
     </div>
   );

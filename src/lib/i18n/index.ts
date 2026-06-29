@@ -1,12 +1,13 @@
 /**
  * i18n foundation (react-i18next).
  *
- * 단계 ① 인프라: 라이브러리 init + ko/en `common` 네임스페이스 골격 + boot 시
- * SQLite 영속 locale 적용. surface별 문자열 추출/치환과 네임스페이스 분할은
- * 단계 ②(마이그레이션)에서 채운다.
+ * 라이브러리 init + boot 시 SQLite 영속 locale 적용. 리소스는 `locales/*.ts`
+ * 의 surface별 네임스페이스 파일들을 `import.meta.glob` 로 자동 등록한다.
  *
- * ponytail: 리소스를 인라인 TS 로 둔다 — tsconfig `resolveJsonModule` 의존을
- * 피하고 타입 안전을 얻는다. 양이 커지면 단계 ②에서 surface별 JSON/TS 로 분리.
+ * ponytail: 네임스페이스를 surface별 파일로 분리하고 glob 로 자동 등록한다 —
+ * surface 를 추가/이주할 때 이 파일을 건드릴 필요가 없어 마이그레이션 swarm 의
+ * 공유 파일 충돌(merge conflict)을 원천 차단한다. 파일명(확장자 제외)이 곧
+ * 네임스페이스 이름이고, 각 파일은 `en`/`ko` 를 named export 한다.
  */
 
 import i18n from "i18next";
@@ -21,51 +22,36 @@ export const DEFAULT_LOCALE: Locale = "en";
 /** SQLite settings 의 locale 키. */
 export const LOCALE_SETTING_KEY = "locale";
 
-const resources = {
-  en: {
-    common: {
-      language: "Language",
-      appearance: "Appearance",
-      mode: {
-        light: "Light",
-        dark: "Dark",
-        system: "System",
-        ariaGroup: "Appearance mode",
-        lightAria: "Light mode",
-        darkAria: "Dark mode",
-        systemAria: "System mode",
-      },
-      theme: {
-        aria: "Theme {{name}}",
-      },
-    },
-  },
-  ko: {
-    common: {
-      language: "언어",
-      appearance: "외관",
-      mode: {
-        light: "라이트",
-        dark: "다크",
-        system: "시스템",
-        ariaGroup: "외관 모드",
-        lightAria: "라이트 모드",
-        darkAria: "다크 모드",
-        systemAria: "시스템 모드",
-      },
-      theme: {
-        aria: "테마 {{name}}",
-      },
-    },
-  },
-} as const;
+type LocaleBundle = Partial<Record<Locale, Record<string, unknown>>>;
+
+// 각 `locales/<ns>.ts` 가 `{ en, ko }` 를 named export. eager 로 빌드 타임에
+// 모두 로드해 동기 init — 인라인 리소스라 비동기 로드/Suspense 가 없다.
+const modules = import.meta.glob<LocaleBundle>("./locales/*.ts", {
+  eager: true,
+});
+
+const resources: Record<Locale, Record<string, Record<string, unknown>>> = {
+  en: {},
+  ko: {},
+};
+const namespaces: string[] = [];
+for (const path in modules) {
+  // "./locales/connection.ts" -> "connection"
+  const ns = path.slice(path.lastIndexOf("/") + 1).replace(/\.ts$/, "");
+  const mod = modules[path];
+  if (!mod) continue;
+  namespaces.push(ns);
+  for (const locale of SUPPORTED_LOCALES) {
+    resources[locale][ns] = mod[locale] ?? {};
+  }
+}
 
 void i18n.use(initReactI18next).init({
   resources,
   lng: DEFAULT_LOCALE,
   fallbackLng: DEFAULT_LOCALE,
   defaultNS: "common",
-  ns: ["common"],
+  ns: namespaces.length > 0 ? namespaces : ["common"],
   // React 가 이미 출력값을 escape 하므로 i18next 의 이중 escape 를 끈다.
   interpolation: { escapeValue: false },
   // 인라인 리소스라 비동기 로드가 없다 — Suspense 경계를 요구하지 않도록 off.

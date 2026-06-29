@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import {
   Dialog,
@@ -59,6 +60,7 @@ export function CreateMongoIndexDialog({
   onClose,
   onCreated,
 }: CreateMongoIndexDialogProps) {
+  const { t } = useTranslation("document");
   const [name, setName] = useState("");
   const [fields, setFields] = useState<FieldRow[]>([
     { name: "", direction: "asc" },
@@ -110,7 +112,7 @@ export function CreateMongoIndexDialog({
       ) {
         return {
           ok: false,
-          error: "partialFilterExpression must be a JSON object",
+          error: t("createIndex.errorPartialNotObject"),
         };
       }
       return { ok: true, value: parsed as Record<string, unknown> };
@@ -120,7 +122,7 @@ export function CreateMongoIndexDialog({
         error: e instanceof Error ? e.message : String(e),
       };
     }
-  }, [partialFilter]);
+  }, [partialFilter, t]);
 
   const hasAtLeastOneField = fields.some((f) => f.name.trim().length > 0);
   const canSave = hasAtLeastOneField && partialFilterParse.ok && !submitting;
@@ -161,7 +163,7 @@ export function CreateMongoIndexDialog({
     if (ttlEnabled && !isCompound && ttl.trim().length > 0) {
       const secs = Number(ttl);
       if (!Number.isFinite(secs) || secs < 0 || !Number.isInteger(secs)) {
-        setError("expireAfterSeconds must be a non-negative integer");
+        setError(t("createIndex.errorTtlNotInteger"));
         setSubmitting(false);
         return;
       }
@@ -182,7 +184,7 @@ export function CreateMongoIndexDialog({
         collection,
         request,
       );
-      toast.success(`Index "${result.name}" created`);
+      toast.success(t("createIndex.toastCreated", { name: result.name }));
       await onCreated(result.name);
       onClose();
     } catch (err) {
@@ -204,7 +206,7 @@ export function CreateMongoIndexDialog({
         className="w-dialog-md"
       >
         <DialogHeader layout="column">
-          <DialogTitle>Create Index</DialogTitle>
+          <DialogTitle>{t("createIndex.title")}</DialogTitle>
           <DialogDescription>
             {database}.{collection}
           </DialogDescription>
@@ -216,7 +218,10 @@ export function CreateMongoIndexDialog({
               htmlFor="mongo-create-index-name"
               className="mb-1 block text-xs font-medium"
             >
-              Name <span className="text-muted-foreground">(optional)</span>
+              {t("createIndex.nameLabel")}{" "}
+              <span className="text-muted-foreground">
+                {t("createIndex.nameOptional")}
+              </span>
             </label>
             <input
               id="mongo-create-index-name"
@@ -230,14 +235,16 @@ export function CreateMongoIndexDialog({
 
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-xs font-medium">Fields</span>
+              <span className="text-xs font-medium">
+                {t("createIndex.fieldsLabel")}
+              </span>
               <button
                 type="button"
                 onClick={addField}
                 data-testid="mongo-create-index-add-field"
                 className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
               >
-                <Plus className="size-3" /> Add field
+                <Plus className="size-3" /> {t("createIndex.addField")}
               </button>
             </div>
             <div className="space-y-2">
@@ -248,7 +255,9 @@ export function CreateMongoIndexDialog({
                     value={field.name}
                     onChange={(e) => updateField(i, { name: e.target.value })}
                     placeholder="field name"
-                    aria-label={`Field ${i + 1} name`}
+                    aria-label={t("createIndex.fieldNameAriaLabel", {
+                      n: i + 1,
+                    })}
                     data-testid={`mongo-create-index-field-name-${i}`}
                     className="flex-1 rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
                   />
@@ -259,7 +268,9 @@ export function CreateMongoIndexDialog({
                         direction: e.target.value as MongoIndexDirection,
                       })
                     }
-                    aria-label={`Field ${i + 1} direction`}
+                    aria-label={t("createIndex.fieldDirectionAriaLabel", {
+                      n: i + 1,
+                    })}
                     data-testid={`mongo-create-index-field-dir-${i}`}
                     className="rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
                   >
@@ -270,7 +281,9 @@ export function CreateMongoIndexDialog({
                     type="button"
                     onClick={() => removeField(i)}
                     disabled={fields.length <= 1}
-                    aria-label={`Remove field ${i + 1}`}
+                    aria-label={t("createIndex.removeFieldAriaLabel", {
+                      n: i + 1,
+                    })}
                     data-testid={`mongo-create-index-field-remove-${i}`}
                     className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
                   >
@@ -289,7 +302,7 @@ export function CreateMongoIndexDialog({
                 onChange={(e) => setUnique(e.target.checked)}
                 data-testid="mongo-create-index-unique"
               />
-              unique
+              {t("createIndex.unique")}
             </label>
             <label className="flex items-center gap-2 text-xs">
               <input
@@ -298,7 +311,7 @@ export function CreateMongoIndexDialog({
                 onChange={(e) => setSparse(e.target.checked)}
                 data-testid="mongo-create-index-sparse"
               />
-              sparse
+              {t("createIndex.sparse")}
             </label>
           </div>
 
@@ -317,7 +330,7 @@ export function CreateMongoIndexDialog({
                 data-testid="mongo-create-index-ttl-toggle"
                 className="mr-1.5"
               />
-              expireAfterSeconds (TTL)
+              {t("createIndex.ttlLabel")}
             </label>
             <input
               id="mongo-create-index-ttl"
@@ -327,7 +340,7 @@ export function CreateMongoIndexDialog({
               onChange={(e) => setTtl(e.target.value)}
               disabled={isCompound || !ttlEnabled}
               data-testid="mongo-create-index-ttl"
-              placeholder="seconds"
+              placeholder={t("createIndex.ttlPlaceholder")}
               className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary disabled:cursor-not-allowed disabled:bg-muted/30 disabled:text-muted-foreground"
             />
             {isCompound && (
@@ -335,7 +348,7 @@ export function CreateMongoIndexDialog({
                 className="mt-1 text-3xs text-muted-foreground"
                 data-testid="mongo-create-index-ttl-hint"
               >
-                TTL requires a single-field index.
+                {t("createIndex.ttlHint")}
               </p>
             )}
           </div>
@@ -345,9 +358,9 @@ export function CreateMongoIndexDialog({
               htmlFor="mongo-create-index-partial"
               className="mb-1 block text-xs font-medium"
             >
-              partialFilterExpression{" "}
+              {t("createIndex.partialLabel")}{" "}
               <span className="text-muted-foreground">
-                (raw JSON, optional)
+                {t("createIndex.partialOptional")}
               </span>
             </label>
             <textarea
@@ -372,29 +385,31 @@ export function CreateMongoIndexDialog({
 
           <div>
             <span className="mb-1 block text-xs font-medium">
-              Collation{" "}
-              <span className="text-muted-foreground">(optional)</span>
+              {t("createIndex.collationLabel")}{" "}
+              <span className="text-muted-foreground">
+                {t("createIndex.collationOptional")}
+              </span>
             </span>
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 value={collationLocale}
                 onChange={(e) => setCollationLocale(e.target.value)}
-                placeholder="locale (e.g. en)"
-                aria-label="Collation locale"
+                placeholder={t("createIndex.collationLocalePlaceholder")}
+                aria-label={t("createIndex.collationLocaleAriaLabel")}
                 data-testid="mongo-create-index-collation-locale"
                 className="flex-1 rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
               />
               <select
                 value={collationStrength}
                 onChange={(e) => setCollationStrength(Number(e.target.value))}
-                aria-label="Collation strength"
+                aria-label={t("createIndex.collationStrengthAriaLabel")}
                 data-testid="mongo-create-index-collation-strength"
                 className="rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
               >
                 {[1, 2, 3, 4, 5].map((s) => (
                   <option key={s} value={s}>
-                    strength {s}
+                    {t("createIndex.collationStrengthOption", { n: s })}
                   </option>
                 ))}
               </select>
@@ -419,7 +434,7 @@ export function CreateMongoIndexDialog({
             onClick={onClose}
             disabled={submitting}
           >
-            Cancel
+            {t("createIndex.cancel")}
           </Button>
           <Button
             size="sm"
@@ -430,7 +445,7 @@ export function CreateMongoIndexDialog({
             {submitting && (
               <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden />
             )}
-            Save
+            {t("createIndex.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

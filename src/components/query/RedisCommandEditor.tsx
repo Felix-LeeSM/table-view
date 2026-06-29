@@ -1,4 +1,5 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useTranslation } from "react-i18next";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
@@ -74,6 +75,7 @@ const RedisCommandEditor = forwardRef<
   const viewRef = useRef<EditorView | null>(null);
   useImperativeHandle(ref, () => viewRef.current as EditorView, []);
 
+  const { t } = useTranslation("query");
   const onSqlChangeRef = useRef(onSqlChange);
   onSqlChangeRef.current = onSqlChange;
   const onExecuteRef = useRef(onExecute);
@@ -204,8 +206,8 @@ const RedisCommandEditor = forwardRef<
 
   const editorLabel =
     redisCommandTarget === "valkey"
-      ? "Valkey Command Editor"
-      : "Redis Command Editor";
+      ? t("redis.valkeyEditorAria")
+      : t("redis.redisEditorAria");
 
   return (
     <div

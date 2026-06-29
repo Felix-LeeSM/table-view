@@ -7,6 +7,7 @@
  * Sprint 138 only requires the field shape, not active SSL semantics in
  * the connection_test command.
  */
+import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
 
 export interface MysqlFormFieldsProps {
@@ -34,13 +35,14 @@ export default function MysqlFormFields({
   inputClass,
   labelClass,
 }: MysqlFormFieldsProps) {
+  const { t } = useTranslation("featuresConnection");
   return (
     <>
       {/* Host & Port */}
       <div className="flex gap-3">
         <div className="flex-1">
           <label htmlFor="conn-host" className={labelClass}>
-            Host
+            {t("form.labelHost")}
           </label>
           <input
             id="conn-host"
@@ -52,7 +54,7 @@ export default function MysqlFormFields({
         </div>
         <div className="w-24">
           <label htmlFor="conn-port" className={labelClass}>
-            Port
+            {t("form.labelPort")}
           </label>
           <input
             id="conn-port"
@@ -69,7 +71,7 @@ export default function MysqlFormFields({
       {/* User */}
       <div>
         <label htmlFor="conn-user" className={labelClass}>
-          User
+          {t("form.labelUser")}
         </label>
         <input
           id="conn-user"
@@ -84,7 +86,7 @@ export default function MysqlFormFields({
       <div>
         <div className="flex items-center justify-between">
           <label htmlFor="conn-password" className={labelClass}>
-            Password
+            {t("form.labelPassword")}
           </label>
           {isEditing && (
             <span
@@ -95,7 +97,7 @@ export default function MysqlFormFields({
               }`}
               data-testid="password-status-badge"
             >
-              {hadPassword ? "Password set" : "No password"}
+              {hadPassword ? t("form.passwordSet") : t("form.noPassword")}
             </span>
           )}
         </div>
@@ -108,7 +110,7 @@ export default function MysqlFormFields({
           onChange={(e) => setPasswordInput(e.target.value)}
           placeholder={
             isEditing && hadPassword
-              ? "Leave blank to keep current password"
+              ? t("form.placeholderKeepPassword")
               : "••••••••"
           }
         />
@@ -123,7 +125,7 @@ export default function MysqlFormFields({
                 if (e.target.checked) setPasswordInput("");
               }}
             />
-            Clear stored password on save
+            {t("form.clearPassword")}
           </label>
         )}
       </div>
@@ -131,7 +133,7 @@ export default function MysqlFormFields({
       {/* Database */}
       <div>
         <label htmlFor="conn-database" className={labelClass}>
-          Database
+          {t("form.labelDatabase")}
         </label>
         <input
           id="conn-database"

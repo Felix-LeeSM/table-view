@@ -15,6 +15,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { SortInfo, TableData } from "@/types/schema";
 import { PARADIGM_VOCABULARY } from "@/lib/strings/paradigm-vocabulary";
 import { Button } from "@components/ui/button";
@@ -144,6 +145,7 @@ export default function DataGridToolbar({
   canUndo = false,
   onResetColumnWidths,
 }: DataGridToolbarProps) {
+  const { t } = useTranslation("datagrid");
   return (
     <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
       <div className="flex items-center gap-2 text-xs text-secondary-foreground">
@@ -152,23 +154,24 @@ export default function DataGridToolbar({
             {data.total_count.toLocaleString()} {rowCountLabel}
             {sorts.length > 0 && (
               <span className="text-muted-foreground">
-                Sorted by{" "}
+                {t("sortedBy")}{" "}
                 {sorts.map((s) => `${s.column} ${s.direction}`).join(", ")}
               </span>
             )}
             {pendingEditsSize > 0 && (
               <span className="text-warning">
-                {pendingEditsSize} edit{pendingEditsSize !== 1 ? "s" : ""}
+                {t("pendingEdits", { count: pendingEditsSize })}
               </span>
             )}
             {(pendingNewRowsCount > 0 || pendingDeletedRowKeysSize > 0) && (
               <span className="text-warning">
-                {pendingNewRowsCount > 0 && `${pendingNewRowsCount} new`}
+                {pendingNewRowsCount > 0 &&
+                  t("pendingNew", { count: pendingNewRowsCount })}
                 {pendingNewRowsCount > 0 &&
                   pendingDeletedRowKeysSize > 0 &&
                   ", "}
                 {pendingDeletedRowKeysSize > 0 &&
-                  `${pendingDeletedRowKeysSize} del`}
+                  t("pendingDel", { count: pendingDeletedRowKeysSize })}
               </span>
             )}
             {canEditRows && hasPendingChanges && (
@@ -178,8 +181,8 @@ export default function DataGridToolbar({
                   size="xs"
                   className="bg-success/20 text-success hover:bg-success/30 hover:text-success"
                   onClick={onCommit}
-                  aria-label="Commit changes"
-                  title="Commit changes"
+                  aria-label={t("commitAria")}
+                  title={t("commitAria")}
                   // Surface the flash to AT + tests via aria-busy /
                   // data-committing only. We do NOT set `disabled` —
                   // the click handler is sync, so disabling would just
@@ -192,18 +195,18 @@ export default function DataGridToolbar({
                   ) : (
                     <Check />
                   )}
-                  Commit
+                  {t("commit")}
                 </Button>
                 <Button
                   variant="ghost"
                   size="xs"
                   className="bg-destructive/20 text-destructive hover:bg-destructive/30 hover:text-destructive"
                   onClick={onDiscard}
-                  aria-label="Discard changes"
-                  title="Discard changes"
+                  aria-label={t("discardAria")}
+                  title={t("discardAria")}
                 >
                   <X />
-                  Discard
+                  {t("discard")}
                 </Button>
               </>
             )}
@@ -216,11 +219,11 @@ export default function DataGridToolbar({
                 size="xs"
                 onClick={onUndo}
                 disabled={!canUndo}
-                aria-label="Undo last pending change"
-                title="Undo (Cmd+Z) — pending changes only"
+                aria-label={t("undoAria")}
+                title={t("undoTitle")}
               >
                 <Undo2 />
-                Undo
+                {t("undo")}
               </Button>
             )}
           </>
@@ -265,7 +268,7 @@ export default function DataGridToolbar({
             </Button>
             {selectedRowIdsCount > 1 && (
               <span className="text-xs text-muted-foreground">
-                {selectedRowIdsCount} selected
+                {t("selectedCount", { count: selectedRowIdsCount })}
               </span>
             )}
           </>
@@ -278,8 +281,8 @@ export default function DataGridToolbar({
             size="icon-xs"
             className="relative text-muted-foreground"
             onClick={onResetColumnWidths}
-            aria-label="Reset column widths"
-            title="Reset column widths to default"
+            aria-label={t("resetColumnWidthsAria")}
+            title={t("resetColumnWidthsTitle")}
           >
             <Columns3 />
           </Button>
@@ -289,8 +292,8 @@ export default function DataGridToolbar({
           size="icon-xs"
           className={`relative ${showQuickLook ? "text-primary" : "text-muted-foreground"}`}
           onClick={onToggleQuickLook}
-          aria-label="Toggle Quick Look"
-          title="Quick Look (Cmd+L)"
+          aria-label={t("toggleQuickLookAria")}
+          title={t("toggleQuickLookTitle")}
         >
           <Eye />
         </Button>
@@ -299,8 +302,8 @@ export default function DataGridToolbar({
           size="icon-xs"
           className={`relative ${showFilters ? "text-primary" : "text-muted-foreground"}`}
           onClick={onToggleFilters}
-          aria-label="Toggle filters"
-          title="Toggle filters"
+          aria-label={t("toggleFiltersAria")}
+          title={t("toggleFiltersTitle")}
         >
           <Filter />
           {activeFilterCount > 0 && (
@@ -316,7 +319,7 @@ export default function DataGridToolbar({
               size="icon-xs"
               disabled={page <= 1}
               onClick={() => onSetPage(1)}
-              aria-label="First page"
+              aria-label={t("firstPage")}
             >
               <ChevronsLeft />
             </Button>
@@ -325,7 +328,7 @@ export default function DataGridToolbar({
               size="icon-xs"
               disabled={page <= 1}
               onClick={() => onSetPage(Math.max(1, page - 1))}
-              aria-label="Previous page"
+              aria-label={t("prevPage")}
             >
               <ChevronLeft />
             </Button>
@@ -342,7 +345,7 @@ export default function DataGridToolbar({
               size="icon-xs"
               disabled={page >= totalPages}
               onClick={() => onSetPage(Math.min(totalPages, page + 1))}
-              aria-label="Next page"
+              aria-label={t("nextPage")}
             >
               <ChevronRight />
             </Button>
@@ -351,7 +354,7 @@ export default function DataGridToolbar({
               size="icon-xs"
               disabled={page >= totalPages}
               onClick={() => onSetPage(totalPages)}
-              aria-label="Last page"
+              aria-label={t("lastPage")}
             >
               <ChevronsRight />
             </Button>
@@ -365,7 +368,7 @@ export default function DataGridToolbar({
             <SelectTrigger
               size="xs"
               className="rounded border border-border bg-background px-1 text-foreground shadow-none"
-              aria-label="Page size"
+              aria-label={t("pageSizeAria")}
             >
               <SelectValue />
             </SelectTrigger>
@@ -406,6 +409,7 @@ interface PageJumpInputProps {
  * 사용자가 input 에 focus 중이라도 stale 한 숫자가 남지 않도록.
  */
 function PageJumpInput({ page, totalPages, onCommit }: PageJumpInputProps) {
+  const { t } = useTranslation("datagrid");
   const [draft, setDraft] = useState<string>(String(page));
 
   useEffect(() => {
@@ -429,7 +433,7 @@ function PageJumpInput({ page, totalPages, onCommit }: PageJumpInputProps) {
       max={totalPages}
       value={draft}
       className="w-10 rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-      aria-label="Jump to page"
+      aria-label={t("jumpToPage")}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {

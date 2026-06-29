@@ -1,4 +1,5 @@
 import { useEffect, forwardRef, useImperativeHandle, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
@@ -37,6 +38,7 @@ const SearchQueryEditor = forwardRef<EditorView | null, SearchQueryEditorProps>(
     { sql, onSqlChange, onExecute, searchExtensions = [] },
     ref,
   ) {
+    const { t } = useTranslation("query");
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     useImperativeHandle(ref, () => viewRef.current as EditorView, []);
@@ -157,7 +159,7 @@ const SearchQueryEditor = forwardRef<EditorView | null, SearchQueryEditorProps>(
         ref={containerRef}
         className="h-full w-full overflow-hidden"
         role="textbox"
-        aria-label="Search Query Editor"
+        aria-label={t("search.editorAria")}
         aria-multiline="true"
         data-paradigm="search"
       />

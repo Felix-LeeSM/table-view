@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
@@ -83,6 +84,7 @@ export default function RenameTableDialog({
   open,
   onClose,
 }: RenameTableDialogProps) {
+  const { t } = useTranslation("schemaDialogs");
   const [newName, setNewName] = useState(tableName);
   // Preview pane defaults open — auto-debounced fetch fills it as the
   // user types. Hiding it by default required an extra click and made
@@ -179,7 +181,7 @@ export default function RenameTableDialog({
     onClose();
   };
 
-  const ddlButtonLabel = showDdl ? "Hide DDL" : "Show DDL";
+  const ddlButtonLabel = showDdl ? t("hideDdl") : t("showDdl");
 
   return (
     <>
@@ -196,7 +198,7 @@ export default function RenameTableDialog({
           <div className="rounded-lg bg-secondary shadow-xl">
             <DialogHeader className="border-b border-border px-4 py-3">
               <DialogTitle className="text-sm font-semibold text-foreground">
-                Rename Table
+                {t("renameTable.title")}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
                 {schemaName}.{tableName}
@@ -209,15 +211,15 @@ export default function RenameTableDialog({
                   htmlFor="rename-table-new-name"
                   className="mb-1 block text-xs font-medium text-secondary-foreground"
                 >
-                  New table name
+                  {t("renameTable.newNameLabel")}
                 </label>
                 <input
                   id="rename-table-new-name"
                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="new_table_name"
-                  aria-label="New table name"
+                  placeholder={t("renameTable.newNamePlaceholder")}
+                  aria-label={t("renameTable.newNameAria")}
                   autoFocus
                   onFocus={(e) => e.currentTarget.select()}
                   onKeyDown={(e) => {
@@ -231,7 +233,7 @@ export default function RenameTableDialog({
                   <p
                     className="mt-1 text-xs text-destructive"
                     role="alert"
-                    aria-label="Identifier validation error"
+                    aria-label={t("renameTable.identifierErrorAria")}
                   >
                     {validationError}
                   </p>
@@ -264,7 +266,7 @@ export default function RenameTableDialog({
                   {ddl.previewLoading ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />
-                      Generating preview…
+                      {t("generatingPreview")}
                     </div>
                   ) : ddl.previewError ? (
                     <pre
@@ -279,7 +281,7 @@ export default function RenameTableDialog({
                     </pre>
                   ) : (
                     <span className="text-xs italic text-muted-foreground">
-                      -- Type a new name to see the generated SQL
+                      {t("ddlHintTypeNewName")}
                     </span>
                   )}
                 </div>
@@ -288,18 +290,18 @@ export default function RenameTableDialog({
 
             <DialogFooter className="border-t border-border px-4 py-3">
               <Button variant="ghost" size="sm" onClick={handleCancel}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 size="sm"
                 onClick={handleApply}
                 disabled={!canApply || !ddl.previewSql}
-                aria-label="Apply"
+                aria-label={t("apply")}
               >
                 {ddl.previewLoading ? (
                   <Loader2 className="animate-spin size-3.5" />
                 ) : null}
-                Apply
+                {t("apply")}
               </Button>
             </DialogFooter>
           </div>

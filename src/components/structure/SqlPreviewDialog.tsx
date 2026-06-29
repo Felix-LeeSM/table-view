@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
 import SqlSyntax from "@components/shared/SqlSyntax";
 import ExecuteButton from "@components/ui/ExecuteButton";
@@ -72,16 +73,17 @@ export default function SqlPreviewDialog({
   onConfirm,
   onCancel,
 }: SqlPreviewDialogProps) {
+  const { t } = useTranslation("structure");
   return (
     <PreviewDialog
-      title="Review SQL Changes"
-      description="Review and execute SQL changes"
+      title={t("sqlPreview.title")}
+      description={t("sqlPreview.description")}
       className="w-dialog-md bg-secondary"
       // Sprint 252: Surface header Copy button. PreviewCopyButton self-
       // suppresses on empty/whitespace, so a stub `sql=""` keeps the
       // button hidden and existing AC-109 markup unchanged.
       copyText={sql}
-      copyAriaLabel="Copy SQL to clipboard"
+      copyAriaLabel={t("sqlPreview.copyAria")}
       preview={
         <>
           <SchemaGraphMigrationImpactSummary impact={migrationImpact} />
@@ -90,7 +92,7 @@ export default function SqlPreviewDialog({
               <SqlSyntax sql={sql} />
             ) : (
               <span className="italic text-muted-foreground">
-                -- No changes to preview
+                {t("sqlPreview.noChanges")}
               </span>
             )}
           </pre>

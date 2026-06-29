@@ -11,6 +11,7 @@
 // and forwards `result.writeSummary` to this surface.
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { WriteSummaryData } from "@/types/query";
 import { formatDocumentIdForMql } from "@/types/documentMutate";
@@ -39,10 +40,11 @@ interface InsertSummaryProps {
 }
 
 function InsertSummary({ summary }: InsertSummaryProps) {
+  const { t } = useTranslation("query");
   const [expanded, setExpanded] = useState(false);
   const n = summary.insertedIds.length;
   const headline =
-    n === 1 ? "Inserted 1 document" : `Inserted ${n} document(s)`;
+    n === 1 ? t("write.insertedOne") : t("write.insertedMany", { count: n });
 
   return (
     <div className="flex flex-1 flex-col gap-2 p-4">
@@ -50,7 +52,9 @@ function InsertSummary({ summary }: InsertSummaryProps) {
         {n > 0 && (
           <button
             type="button"
-            aria-label={expanded ? "Hide inserted ids" : "Show inserted ids"}
+            aria-label={
+              expanded ? t("write.hideInsertedIds") : t("write.showInsertedIds")
+            }
             aria-expanded={expanded}
             onClick={() => setExpanded((v) => !v)}
             className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
@@ -78,11 +82,15 @@ interface UpdateSummaryProps {
 }
 
 function UpdateSummary({ summary }: UpdateSummaryProps) {
+  const { t } = useTranslation("query");
   const { matchedCount, modifiedCount } = summary;
-  const modifiedNoun = modifiedCount === 1 ? "document" : "document(s)";
+  const body =
+    modifiedCount === 1
+      ? t("write.modifiedOne", { matchedCount })
+      : t("write.modifiedMany", { count: modifiedCount, matchedCount });
   return (
     <div className="flex flex-1 items-center justify-center p-8 text-sm text-secondary-foreground">
-      Modified {modifiedCount} {modifiedNoun} (matched {matchedCount})
+      {body}
     </div>
   );
 }
@@ -94,8 +102,10 @@ interface DeleteSummaryProps {
 }
 
 function DeleteSummary({ summary }: DeleteSummaryProps) {
+  const { t } = useTranslation("query");
   const n = summary.deletedCount;
-  const headline = n === 1 ? "Deleted 1 document" : `Deleted ${n} document(s)`;
+  const headline =
+    n === 1 ? t("write.deletedOne") : t("write.deletedMany", { count: n });
   return (
     <div className="flex flex-1 items-center justify-center p-8 text-sm text-secondary-foreground">
       {headline}
@@ -110,6 +120,7 @@ interface BulkWriteSummaryProps {
 }
 
 function BulkWriteSummary({ summary }: BulkWriteSummaryProps) {
+  const { t } = useTranslation("query");
   const { result } = summary;
   // Render every numeric counter unconditionally — users want to see
   // "0 across the board" in the trivial case rather than a blank table.
@@ -123,7 +134,7 @@ function BulkWriteSummary({ summary }: BulkWriteSummaryProps) {
     <div className="flex flex-1 flex-col gap-3 p-4 text-sm">
       <table
         className="w-fit min-w-[18rem] border-collapse text-left"
-        aria-label="bulkWrite result counters"
+        aria-label={t("write.bulkWriteAria")}
       >
         <tbody>
           {rows.map((r) => (

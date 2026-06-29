@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, Plus, Trash2, X, Eye } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
@@ -70,6 +71,7 @@ function AddConstraintModal({
   onSubmit,
   onCancel,
 }: AddConstraintModalProps) {
+  const { t } = useTranslation("structure");
   const [constraintName, setConstraintName] = useState("");
   const [constraintType, setConstraintType] =
     useState<ConstraintType>("unique");
@@ -156,16 +158,16 @@ function AddConstraintModal({
           {/* Header */}
           <DialogHeader className="flex items-center justify-between border-b border-border px-4 py-3">
             <DialogTitle className="text-sm font-semibold text-foreground">
-              Add Constraint
+              {t("constraint.addDialogTitle")}
             </DialogTitle>
             <DialogDescription className="sr-only">
-              Add a new constraint to this table
+              {t("constraint.addDialogDesc")}
             </DialogDescription>
             <Button
               variant="ghost"
               size="icon-xs"
               onClick={onCancel}
-              aria-label="Close dialog"
+              aria-label={t("constraint.closeDialogAria")}
             >
               <X />
             </Button>
@@ -176,14 +178,14 @@ function AddConstraintModal({
             {/* Constraint Name */}
             <div>
               <label className="mb-1 block text-xs font-medium text-secondary-foreground">
-                Constraint Name
+                {t("constraint.labelName")}
               </label>
               <input
                 className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                 value={constraintName}
                 onChange={(e) => setConstraintName(e.target.value)}
                 placeholder="constraint_name"
-                aria-label="Constraint name"
+                aria-label={t("constraint.nameAria")}
                 autoFocus
               />
             </div>
@@ -191,7 +193,7 @@ function AddConstraintModal({
             {/* Constraint Type */}
             <div>
               <label className="mb-1 block text-xs font-medium text-secondary-foreground">
-                Type
+                {t("constraint.labelType")}
               </label>
               <Select
                 value={constraintType}
@@ -205,7 +207,7 @@ function AddConstraintModal({
               >
                 <SelectTrigger
                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
-                  aria-label="Constraint type"
+                  aria-label={t("constraint.typeAria")}
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -222,7 +224,7 @@ function AddConstraintModal({
             {needsColumns && (
               <div>
                 <label className="mb-1 block text-xs font-medium text-secondary-foreground">
-                  Columns
+                  {t("constraint.labelColumns")}
                 </label>
                 <div className="max-h-scroll-sm overflow-auto rounded border border-border bg-background p-2">
                   {columns.map((col) => (
@@ -244,7 +246,7 @@ function AddConstraintModal({
                   ))}
                   {columns.length === 0 && (
                     <span className="text-xs text-muted-foreground">
-                      No columns available
+                      {t("constraint.noColumnsAvailable")}
                     </span>
                   )}
                 </div>
@@ -255,26 +257,26 @@ function AddConstraintModal({
               <>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-secondary-foreground">
-                    Reference Table
+                    {t("constraint.labelRefTable")}
                   </label>
                   <input
                     className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                     value={referenceTable}
                     onChange={(e) => setReferenceTable(e.target.value)}
                     placeholder="reference_table"
-                    aria-label="Reference table"
+                    aria-label={t("constraint.refTableAria")}
                   />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-secondary-foreground">
-                    Reference Columns (comma-separated)
+                    {t("constraint.labelRefColumns")}
                   </label>
                   <input
                     className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                     value={referenceColumns}
                     onChange={(e) => setReferenceColumns(e.target.value)}
                     placeholder="id, name"
-                    aria-label="Reference columns"
+                    aria-label={t("constraint.refColumnsAria")}
                   />
                 </div>
               </>
@@ -283,14 +285,14 @@ function AddConstraintModal({
             {needsExpression && (
               <div>
                 <label className="mb-1 block text-xs font-medium text-secondary-foreground">
-                  Check Expression
+                  {t("constraint.labelCheckExpr")}
                 </label>
                 <input
                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                   value={checkExpression}
                   onChange={(e) => setCheckExpression(e.target.value)}
                   placeholder="price > 0"
-                  aria-label="Check expression"
+                  aria-label={t("constraint.checkExprAria")}
                 />
               </div>
             )}
@@ -311,7 +313,7 @@ function AddConstraintModal({
               onClick={onCancel}
               disabled={loading}
             >
-              Cancel
+              {t("constraint.cancelBtn")}
             </Button>
             <Button
               size="sm"
@@ -323,7 +325,9 @@ function AddConstraintModal({
               ) : (
                 <Eye />
               )}
-              {loading ? "Previewing..." : "Preview SQL"}
+              {loading
+                ? t("constraint.previewingBtn")
+                : t("constraint.previewSqlBtn")}
             </Button>
           </DialogFooter>
         </div>
@@ -358,6 +362,7 @@ export default function ConstraintsEditor({
   onColumnsChange,
   onRefresh,
 }: ConstraintsEditorProps) {
+  const { t } = useTranslation("structure");
   const [showAddConstraintModal, setShowAddConstraintModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [migrationImpact, setMigrationImpact] =
@@ -486,16 +491,16 @@ export default function ConstraintsEditor({
   return (
     <StructureShell>
       <StructureActionBar
-        count={`${constraints.length} ${constraints.length === 1 ? "constraint" : "constraints"}`}
+        count={`${constraints.length} ${constraints.length === 1 ? t("constraint.countSingular") : t("constraint.countPlural")}`}
         actions={
           <Button
             variant="ghost"
             size="xs"
             onClick={handleOpenAddConstraint}
-            aria-label="Add constraint"
+            aria-label={t("constraint.addAria")}
           >
             <Plus />
-            Constraint
+            {t("constraint.addLabel")}
           </Button>
         }
       />
@@ -504,11 +509,11 @@ export default function ConstraintsEditor({
         <StructureTable>
           <thead className={STRUCTURE_THEAD}>
             <tr>
-              <th className={STRUCTURE_TH}>Name</th>
-              <th className={STRUCTURE_TH}>Type</th>
-              <th className={STRUCTURE_TH}>Columns</th>
-              <th className={STRUCTURE_TH}>Reference</th>
-              <th className={STRUCTURE_TH_ACTIONS}>Actions</th>
+              <th className={STRUCTURE_TH}>{t("th.name")}</th>
+              <th className={STRUCTURE_TH}>{t("th.type")}</th>
+              <th className={STRUCTURE_TH}>{t("th.columns")}</th>
+              <th className={STRUCTURE_TH}>{t("th.reference")}</th>
+              <th className={STRUCTURE_TH_ACTIONS}>{t("th.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -533,8 +538,8 @@ export default function ConstraintsEditor({
                       size="icon-xs"
                       className="hover:text-destructive"
                       onClick={() => handleDropConstraint(c.name)}
-                      aria-label={`Delete constraint ${c.name}`}
-                      title="Delete"
+                      aria-label={t("constraint.deleteAria", { name: c.name })}
+                      title={t("constraint.deleteTitle")}
                     >
                       <Trash2 />
                     </Button>
@@ -547,7 +552,7 @@ export default function ConstraintsEditor({
       )}
 
       {constraints.length === 0 && (
-        <StructureEmpty>No constraints found</StructureEmpty>
+        <StructureEmpty>{t("constraint.emptyState")}</StructureEmpty>
       )}
 
       {/* SQL Preview Modal */}

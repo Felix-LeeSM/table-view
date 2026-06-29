@@ -5,6 +5,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { useTranslation } from "react-i18next";
 import Decimal from "decimal.js";
 import { X, Save, Trash2, Maximize2, Pencil } from "lucide-react";
 import { Button } from "@components/ui/button";
@@ -75,6 +76,7 @@ export default function EditableQueryResultGrid({
   plan,
   onAfterCommit,
 }: EditableQueryResultGridProps) {
+  const { t } = useTranslation("query");
   const grid = useRawQueryGridEdit({
     result,
     connectionId,
@@ -156,7 +158,7 @@ export default function EditableQueryResultGrid({
   const contextMenuItems: ContextMenuItem[] = contextMenu
     ? [
         {
-          label: "Show Cell Details",
+          label: t("editableGrid.contextMenu.showCellDetails"),
           icon: <Maximize2 size={14} />,
           onClick: () => {
             const cell = result.rows[contextMenu.rowIdx]?.[contextMenu.colIdx];
@@ -171,13 +173,13 @@ export default function EditableQueryResultGrid({
           },
         },
         {
-          label: "Edit Cell",
+          label: t("editableGrid.contextMenu.editCell"),
           icon: <Pencil size={14} />,
           disabled: grid.noPk,
           onClick: () => grid.startEdit(contextMenu.rowIdx, contextMenu.colIdx),
         },
         {
-          label: "Delete Row",
+          label: t("editableGrid.contextMenu.deleteRow"),
           icon: <Trash2 size={14} />,
           danger: true,
           disabled: grid.noPk,
@@ -193,7 +195,7 @@ export default function EditableQueryResultGrid({
           role="status"
           className="border-b border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground"
         >
-          Read-only — primary key required to edit
+          {t("editableGrid.readonlyNoPk")}
         </div>
       )}
       {/* Edit toolbar — only visible when there are pending changes. */}
@@ -210,18 +212,18 @@ export default function EditableQueryResultGrid({
               variant="ghost"
               size="xs"
               onClick={grid.handleDiscard}
-              aria-label="Discard pending changes"
+              aria-label={t("editableGrid.discardAria")}
             >
               <X size={12} />
-              Discard
+              {t("editableGrid.discard")}
             </Button>
             <Button
               size="xs"
               onClick={grid.handleCommit}
-              aria-label="Commit pending changes"
+              aria-label={t("editableGrid.commitAria")}
             >
               <Save size={12} />
-              Commit
+              {t("editableGrid.commit")}
             </Button>
           </div>
         </div>
@@ -271,9 +273,9 @@ export default function EditableQueryResultGrid({
                   <div className="flex items-center gap-1 min-w-0">
                     {isPk && (
                       <span
-                        title="Primary Key"
+                        title={t("editableGrid.pkAria")}
                         className="text-warning"
-                        aria-label="Primary key"
+                        aria-label={t("editableGrid.pkAria")}
                       >
                         🔑
                       </span>
@@ -361,7 +363,9 @@ export default function EditableQueryResultGrid({
                           className="w-full rounded-sm border-none bg-background px-1 py-0 text-xs text-foreground shadow-sm outline-none"
                           value={grid.editValue}
                           autoFocus
-                          aria-label={`Editing ${col.name}`}
+                          aria-label={t("editableGrid.editingCellAria", {
+                            colName: col.name,
+                          })}
                           onChange={(e) => grid.setEditValue(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
@@ -411,7 +415,7 @@ export default function EditableQueryResultGrid({
                 style={{ gridColumn: "1 / -1" }}
                 className="px-3 py-4 text-center text-xs text-muted-foreground"
               >
-                No data
+                {t("editableGrid.noData")}
               </div>
             </div>
           )}
@@ -451,9 +455,9 @@ export default function EditableQueryResultGrid({
           showCloseButton={false}
         >
           <DialogHeader className="sr-only">
-            <DialogTitle>SQL Preview</DialogTitle>
+            <DialogTitle>{t("editableGrid.sqlPreview.title")}</DialogTitle>
             <DialogDescription>
-              Preview SQL for raw query edits before executing
+              {t("editableGrid.sqlPreview.descriptionSrOnly")}
             </DialogDescription>
           </DialogHeader>
           <div
@@ -467,13 +471,13 @@ export default function EditableQueryResultGrid({
           >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h3 className="text-sm font-semibold text-foreground">
-                SQL Preview
+                {t("editableGrid.sqlPreview.h3")}
               </h3>
               <Button
                 variant="ghost"
                 size="icon-xs"
                 onClick={grid.dismissPreview}
-                aria-label="Close SQL preview"
+                aria-label={t("editableGrid.sqlPreview.closeAria")}
               >
                 <X size={14} />
               </Button>
@@ -503,7 +507,7 @@ export default function EditableQueryResultGrid({
                 onClick={grid.dismissPreview}
                 disabled={grid.executing}
               >
-                Cancel
+                {t("editableGrid.sqlPreview.cancel")}
               </Button>
               <ExecuteButton
                 severity="warn"

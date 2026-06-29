@@ -8,6 +8,10 @@ import {
   isMongoshMethod,
   type MongoshMethod,
 } from "@lib/mongo/mongoshMethods";
+import i18n from "@lib/i18n";
+
+const t = (key: string, vars?: Record<string, string>) =>
+  i18n.t(`featuresMisc:${key}`, vars);
 
 export { MONGOSH_METHOD_WHITELIST };
 export type { MongoshMethod };
@@ -56,33 +60,25 @@ export function parseMongoshExpression(
   input: string,
 ): ParsedMongoshCall | ParsedMongoshError {
   if (looksLikeCrossDbHelper(input)) {
-    return makeError(
-      "unsupported-method",
-      "Cross-database shell navigation (`db.getSiblingDB(...)`) is not supported. Select the target database from the toolbar chip, then run one `db.<collection>...` expression.",
-    );
+    return makeError("unsupported-method", t("mongo.crossDbNotSupported"));
   }
   if (looksLikeTransactionHelper(input)) {
-    return makeError(
-      "unsupported-method",
-      "Transactions are not supported for mongosh expressions in Table View. Use explicit single-document writes; standalone MongoDB servers do not support multi-document transactions.",
-    );
+    return makeError("unsupported-method", t("mongo.transactionsNotSupported"));
   }
 
   const parsed = parseMongoshStatement(input);
   if (parsed.kind === "error") return mapParseError(parsed);
   if (parsed.kind !== "collection-command") {
-    return makeError(
-      "unsupported-syntax",
-      "Admin commands are handled by the runCommand dispatcher.",
-    );
+    return makeError("unsupported-syntax", t("mongo.adminCommandsDispatcher"));
   }
 
   if (!isMongoshMethod(parsed.method)) {
     return makeError(
       "unsupported-method",
-      `Unsupported method '${parsed.method}'. Supported methods: ${MONGOSH_METHOD_WHITELIST.join(
-        ", ",
-      )}.`,
+      t("mongo.unsupportedMethod", {
+        method: parsed.method,
+        whitelist: MONGOSH_METHOD_WHITELIST.join(", "),
+      }),
     );
   }
 
@@ -121,15 +117,16 @@ function findInvalidCursorChain(
     if (!CURSOR_CHAIN_METHODS.has(step.name)) {
       return makeError(
         "invalid-cursor-chain",
-        `Cursor method '${step.name}' is not supported. Supported cursor methods: ${[
-          ...CURSOR_CHAIN_METHODS,
-        ].join(", ")}.`,
+        t("mongo.invalidCursorChainMethod", {
+          name: step.name,
+          supported: [...CURSOR_CHAIN_METHODS].join(", "),
+        }),
       );
     }
     if (!CURSOR_METHODS.has(method)) {
       return makeError(
         "invalid-cursor-chain",
-        `Cursor method '${step.name}' is only supported after find() or aggregate().`,
+        t("mongo.cursorChainFindOrAggregate", { name: step.name }),
       );
     }
   }
@@ -144,10 +141,7 @@ function mapParseError(error: MongoshParseError): ParsedMongoshError {
     return makeError("bson-literal", error.message);
   }
   if (error.errorKind === "non-db-statement") {
-    return makeError(
-      "missing-db-prefix",
-      "mongosh expressions must start with `db.`",
-    );
+    return makeError("missing-db-prefix", t("mongo.missingDbPrefix"));
   }
   return makeError("unsupported-syntax", error.message);
 }
@@ -180,34 +174,22 @@ function validateBsonPlaceholder(value: unknown): ParsedMongoshError | null {
 
   const record = value as Record<string, unknown>;
   if ("$oid" in record && !isObjectId(record.$oid)) {
-    return makeError(
-      "bson-literal",
-      "ObjectId(...) expects a 24-character hex string",
-    );
+    return makeError("bson-literal", t("mongo.bsonObjectId"));
   }
   if ("$date" in record && !isIsoDate(record.$date)) {
-    return makeError(
-      "bson-literal",
-      "ISODate(...) expects a valid timestamp string",
-    );
+    return makeError("bson-literal", t("mongo.bsonIsoDate"));
   }
   if ("$numberLong" in record && !isInt64String(record.$numberLong)) {
-    return makeError(
-      "bson-literal",
-      "NumberLong(...) expects a 64-bit integer string",
-    );
+    return makeError("bson-literal", t("mongo.bsonNumberLong"));
   }
   if ("$numberDecimal" in record && !isDecimalString(record.$numberDecimal)) {
-    return makeError(
-      "bson-literal",
-      "NumberDecimal(...) expects a decimal string",
-    );
+    return makeError("bson-literal", t("mongo.bsonNumberDecimal"));
   }
   if ("$uuid" in record && !isUuidString(record.$uuid)) {
-    return makeError("bson-literal", "UUID(...) expects a UUID string");
+    return makeError("bson-literal", t("mongo.bsonUuid"));
   }
   if ("$binary" in record && !isBinaryPlaceholder(record.$binary)) {
-    return makeError("bson-literal", "BinData(...) payload is malformed");
+    return makeError("bson-literal", t("mongo.bsonBinData"));
   }
 
   for (const item of Object.values(record)) {

@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type {
   ConnectionConfig,
   ConnectionStatus,
@@ -58,12 +59,13 @@ interface ConnectionItemProps {
 }
 
 function StatusIndicator({ status }: { status: ConnectionStatus }) {
+  const { t } = useTranslation("featuresConnection");
   if (status.type === "connecting") {
     return (
       <Loader2
         size={10}
         className="shrink-0 animate-spin text-muted-foreground"
-        aria-label="Connecting"
+        aria-label={t("item.statusConnecting")}
       />
     );
   }
@@ -71,7 +73,7 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
     return (
       <span
         className="inline-block h-2 w-2 rounded-full bg-success"
-        aria-label="Connected"
+        aria-label={t("item.statusConnected")}
       />
     );
   }
@@ -80,14 +82,14 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
       <span
         className="inline-block h-2 w-2 rounded-full bg-destructive"
         title={status.message}
-        aria-label={`Error: ${status.message}`}
+        aria-label={t("item.statusError", { message: status.message })}
       />
     );
   }
   return (
     <span
       className="inline-block h-2 w-2 rounded-full bg-muted-foreground"
-      aria-label="Disconnected"
+      aria-label={t("item.statusDisconnected")}
     />
   );
 }
@@ -99,6 +101,7 @@ export default function ConnectionItem({
   onActivate,
   inGroup = false,
 }: ConnectionItemProps) {
+  const { t } = useTranslation("featuresConnection");
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<HTMLDivElement>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -118,6 +121,18 @@ export default function ConnectionItem({
   const isConnecting = status.type === "connecting";
   const errorMessage = status.type === "error" ? status.message : null;
   const [showErrorDetail, setShowErrorDetail] = useState(false);
+
+  // Row aria-label 의 상태어는 standalone status-dot(대문자 "Connecting" 등)
+  // 과 달리 소문자다. 기존 `${name} — ${status.type}` 동작을 보존하기 위해
+  // 별도 rowStatus 키를 쓴다.
+  const statusLabel =
+    status.type === "connected"
+      ? t("item.rowStatus.connected")
+      : status.type === "connecting"
+        ? t("item.rowStatus.connecting")
+        : status.type === "error"
+          ? t("item.rowStatus.error")
+          : t("item.rowStatus.disconnected");
 
   const handleSingleClick = () => {
     onSelect?.(connection.id);
@@ -149,7 +164,10 @@ export default function ConnectionItem({
             tabIndex={0}
             aria-pressed={selected}
             draggable
-            aria-label={`${connection.name} — ${status.type === "connected" ? "connected" : status.type === "connecting" ? "connecting" : status.type === "error" ? "error" : "disconnected"}`}
+            aria-label={t("item.ariaLabel", {
+              name: connection.name,
+              status: statusLabel,
+            })}
             onClick={handleSingleClick}
             onDoubleClick={handleDoubleClick}
             onKeyDown={(e) => {
@@ -221,14 +239,14 @@ export default function ConnectionItem({
             }}
           >
             {isConnected ? <Unplug size={14} /> : <Plug size={14} />}
-            {isConnected ? "Disconnect" : "Connect"}
+            {isConnected ? t("item.disconnect") : t("item.connect")}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => setShowEditDialog(true)}>
-            <Pencil size={14} /> Edit
+            <Pencil size={14} /> {t("item.edit")}
           </ContextMenuItem>
           <ContextMenuSub>
-            <ContextMenuSubTrigger aria-label="Move to group">
-              <FolderInput size={14} /> Move to group
+            <ContextMenuSubTrigger aria-label={t("item.moveToGroup")}>
+              <FolderInput size={14} /> {t("item.moveToGroup")}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent>
               <ContextMenuItem
@@ -244,7 +262,7 @@ export default function ConnectionItem({
                 ) : (
                   <span className="inline-block w-3.5" aria-hidden="true" />
                 )}
-                No group
+                {t("item.noGroup")}
               </ContextMenuItem>
               {groups.length > 0 && <ContextMenuSeparator />}
               {groups.map((g) => {
@@ -277,7 +295,7 @@ export default function ConnectionItem({
             </ContextMenuSubContent>
           </ContextMenuSub>
           <ContextMenuItem danger onClick={() => setShowDeleteConfirm(true)}>
-            <Trash2 size={14} /> Delete
+            <Trash2 size={14} /> {t("item.deleteItem")}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -288,7 +306,7 @@ export default function ConnectionItem({
           size="xs"
           className="h-auto w-full justify-start px-3 py-0 text-left"
           onClick={() => setShowErrorDetail(true)}
-          aria-label="Show error details"
+          aria-label={t("item.showErrorDetails")}
         >
           <span className="shrink-0 w-2" />
           <span
@@ -310,7 +328,7 @@ export default function ConnectionItem({
             size="icon-xs"
             className="shrink-0 text-muted-foreground hover:text-foreground"
             onClick={() => setShowErrorDetail(false)}
-            aria-label="Hide error details"
+            aria-label={t("item.hideErrorDetails")}
           >
             <X />
           </Button>
@@ -335,10 +353,10 @@ export default function ConnectionItem({
           >
             <DialogHeader>
               <DialogTitle className="text-sm font-semibold text-foreground">
-                Delete Connection
+                {t("item.deleteTitle")}
               </DialogTitle>
               <DialogDescription className="mt-2 text-sm text-secondary-foreground">
-                Are you sure you want to delete &quot;{connection.name}&quot;?
+                {t("item.deleteDescription", { name: connection.name })}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="mt-4 flex justify-end gap-2">
@@ -347,7 +365,7 @@ export default function ConnectionItem({
                 size="sm"
                 onClick={() => setShowDeleteConfirm(false)}
               >
-                Cancel
+                {t("item.cancel")}
               </Button>
               <Button
                 variant="destructive"
@@ -357,7 +375,7 @@ export default function ConnectionItem({
                   setShowDeleteConfirm(false);
                 }}
               >
-                Delete
+                {t("item.delete")}
               </Button>
             </DialogFooter>
           </DialogContent>

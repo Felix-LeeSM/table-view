@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
   getMssqlConnectionUnsupportedMessage,
   type ConnectionDraft,
@@ -35,6 +36,7 @@ export default function MssqlFormFields({
   inputClass,
   labelClass,
 }: MssqlFormFieldsProps) {
+  const { t } = useTranslation("featuresConnection");
   const unsupportedMessage = getMssqlConnectionUnsupportedMessage(draft);
 
   return (
@@ -42,7 +44,7 @@ export default function MssqlFormFields({
       <div className="flex gap-3">
         <div className="flex-1">
           <label htmlFor="conn-host" className={labelClass}>
-            Host
+            {t("form.labelHost")}
           </label>
           <input
             id="conn-host"
@@ -57,7 +59,7 @@ export default function MssqlFormFields({
         </div>
         <div className="w-24">
           <label htmlFor="conn-port" className={labelClass}>
-            Port
+            {t("form.labelPort")}
           </label>
           <input
             id="conn-port"
@@ -73,29 +75,28 @@ export default function MssqlFormFields({
 
       <div>
         <label htmlFor="conn-auth-method" className={labelClass}>
-          Authentication method
+          {t("form.labelAuthMethod")}
         </label>
         <Select value="sql" disabled>
           <SelectTrigger
             id="conn-auth-method"
             className={inputClass}
-            aria-label="Authentication method"
+            aria-label={t("form.labelAuthMethod")}
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="sql">SQL authentication</SelectItem>
+            <SelectItem value="sql">{t("form.authSql")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="mt-1 text-2xs text-muted-foreground">
-          Windows authentication and Azure AD are unsupported in this connection
-          slice.
+          {t("form.authUnsupported")}
         </p>
       </div>
 
       <div>
         <label htmlFor="conn-user" className={labelClass}>
-          User
+          {t("form.labelUser")}
         </label>
         <input
           id="conn-user"
@@ -110,7 +111,7 @@ export default function MssqlFormFields({
       <div>
         <div className="flex items-center justify-between">
           <label htmlFor="conn-password" className={labelClass}>
-            Password
+            {t("form.labelPassword")}
           </label>
           {isEditing && (
             <span
@@ -121,7 +122,7 @@ export default function MssqlFormFields({
               }`}
               data-testid="password-status-badge"
             >
-              {hadPassword ? "Password set" : "No password"}
+              {hadPassword ? t("form.passwordSet") : t("form.noPassword")}
             </span>
           )}
         </div>
@@ -134,7 +135,7 @@ export default function MssqlFormFields({
           onChange={(e) => setPasswordInput(e.target.value)}
           placeholder={
             isEditing && hadPassword
-              ? "Leave blank to keep current password"
+              ? t("form.placeholderKeepPassword")
               : "password"
           }
         />
@@ -149,14 +150,14 @@ export default function MssqlFormFields({
                 if (e.target.checked) setPasswordInput("");
               }}
             />
-            Clear stored password on save
+            {t("form.clearPassword")}
           </label>
         )}
       </div>
 
       <div>
         <label htmlFor="conn-database" className={labelClass}>
-          Database
+          {t("form.labelDatabase")}
         </label>
         <input
           id="conn-database"
@@ -182,7 +183,7 @@ export default function MssqlFormFields({
               });
             }}
           />
-          Enable encryption (TLS)
+          {t("form.enableTls")}
         </label>
         <label className="flex items-center gap-2">
           <input
@@ -195,7 +196,7 @@ export default function MssqlFormFields({
               onChange({ trustServerCertificate: e.target.checked })
             }
           />
-          Trust server certificate
+          {t("form.trustServerCert")}
         </label>
       </div>
 

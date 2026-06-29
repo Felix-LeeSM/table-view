@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   RefreshCw,
@@ -57,6 +58,7 @@ const EMPTY_FILE_SOURCES: ReadonlyArray<FileAnalyticsSourceMetadata> =
   Object.freeze([]);
 
 export default function SchemaTree({ connectionId }: SchemaTreeProps) {
+  const { t } = useTranslation("schema");
   const connectionName = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name,
   );
@@ -187,6 +189,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   );
 
   const ctx: SchemaTreeRowsContext = {
+    t: (key, options) => t(key, options as Record<string, unknown>),
     dbType,
     treeShape,
     toggleCategory: actions.toggleCategory,
@@ -225,7 +228,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       <div className="flex items-center justify-between px-3 py-1">
         {treeShape === "with-schema" ? (
           <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
-            Schemas
+            {t("schemasHeader")}
           </span>
         ) : (
           <span />
@@ -236,8 +239,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               variant="ghost"
               size="icon-xs"
               onClick={() => actions.handleCreateTable(flatCreateTableSchema)}
-              aria-label={`Create table in ${flatCreateTableSchema}`}
-              title="Create Table"
+              aria-label={t("createTableInAria", {
+                schema: flatCreateTableSchema,
+              })}
+              title={t("createTableTitle")}
             >
               <Plus size={12} />
             </Button>
@@ -253,8 +258,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                   variant="ghost"
                   size="icon-xs"
                   disabled={isMigrationExporting}
-                  aria-label="Export"
-                  title="Export"
+                  aria-label={t("exportAria")}
+                  title={t("exportTitle")}
                 >
                   <Download size={12} />
                 </Button>
@@ -264,15 +269,15 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                   <>
                     <div className="flex items-center justify-between rounded-sm py-0.5 hover:bg-muted/50">
                       <span className="truncate flex-1 px-2 text-xs italic text-muted-foreground">
-                        All schemas
+                        {t("allSchemas")}
                       </span>
                       <div className="flex items-center gap-0.5 pr-1">
                         <Button
                           variant="ghost"
                           size="icon-xs"
                           disabled={isMigrationExporting}
-                          aria-label="Export all schemas DDL"
-                          title="Schema only (DDL — CREATE TABLE/INDEX/FK)"
+                          aria-label={t("exportAllDdlAria")}
+                          title={t("ddlTitle")}
                           onClick={() =>
                             exportDatabaseWithInclude(
                               connectionId,
@@ -288,8 +293,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           variant="ghost"
                           size="icon-xs"
                           disabled={isMigrationExporting}
-                          aria-label="Export all schemas data"
-                          title="Data only (DML — INSERT)"
+                          aria-label={t("exportAllDataAria")}
+                          title={t("dmlTitle")}
                           onClick={() =>
                             exportDatabaseWithInclude(
                               connectionId,
@@ -305,8 +310,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           variant="ghost"
                           size="icon-xs"
                           disabled={isMigrationExporting}
-                          aria-label="Export all schemas full"
-                          title="Full dump (DDL + data)"
+                          aria-label={t("exportAllFullAria")}
+                          title={t("fullDumpTitle")}
                           onClick={() =>
                             exportDatabaseWithInclude(
                               connectionId,
@@ -324,7 +329,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                   </>
                 )}
                 <div className="px-2 py-1 text-3xs uppercase tracking-wider text-muted-foreground">
-                  Schemas
+                  {t("schemasPopoverLabel")}
                 </div>
                 <div className="flex flex-col">
                   {actions.schemas.map((s) => (
@@ -340,8 +345,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           variant="ghost"
                           size="icon-xs"
                           disabled={isMigrationExporting}
-                          aria-label={`Export ${s.name} DDL`}
-                          title="Schema only (DDL — CREATE TABLE/INDEX/FK)"
+                          aria-label={t("exportSchemaDdlAria", {
+                            schema: s.name,
+                          })}
+                          title={t("ddlTitle")}
                           onClick={() =>
                             exportSchemaWithInclude(
                               connectionId,
@@ -357,8 +364,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           variant="ghost"
                           size="icon-xs"
                           disabled={isMigrationExporting}
-                          aria-label={`Export ${s.name} data`}
-                          title="Data only (DML — INSERT)"
+                          aria-label={t("exportSchemaDataAria", {
+                            schema: s.name,
+                          })}
+                          title={t("dmlTitle")}
                           onClick={() =>
                             exportSchemaWithInclude(
                               connectionId,
@@ -374,8 +383,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           variant="ghost"
                           size="icon-xs"
                           disabled={isMigrationExporting}
-                          aria-label={`Export ${s.name} full`}
-                          title="Full dump (DDL + data)"
+                          aria-label={t("exportSchemaFullAria", {
+                            schema: s.name,
+                          })}
+                          title={t("fullDumpTitle")}
                           onClick={() =>
                             exportSchemaWithInclude(
                               connectionId,
@@ -399,8 +410,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             size="icon-xs"
             onClick={actions.handleRefresh}
             disabled={actions.loadingSchemas}
-            aria-label="Refresh schemas"
-            title="Refresh schemas"
+            aria-label={t("refreshSchemasAria")}
+            title={t("refreshSchemasTitle")}
           >
             {actions.loadingSchemas ? (
               <Loader2 className="animate-spin" size={12} />
@@ -413,7 +424,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
 
       <div
         role="tree"
-        aria-label={`${connectionName || connectionId} schema tree`}
+        aria-label={t("schemaTreeAria", {
+          name: connectionName || connectionId,
+        })}
       >
         <SchemaTreeBody
           schemas={actions.schemas}

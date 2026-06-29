@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import { Popover, PopoverAnchor, PopoverContent } from "@components/ui/popover";
 import {
@@ -92,12 +93,16 @@ function colorClassForTypeKind(kind: string | undefined): string | null {
 export default function CreateTableTypeCombobox({
   value,
   onChange,
-  ariaLabel = "Column data type",
-  placeholder = "varchar(255)",
+  ariaLabel,
+  placeholder,
   className,
   typesSource,
   typeKindMap,
 }: CreateTableTypeComboboxProps) {
+  const { t } = useTranslation("schemaDialogs");
+  const resolvedAriaLabel = ariaLabel ?? t("typeCombobox.defaultAriaLabel");
+  const resolvedPlaceholder =
+    placeholder ?? t("typeCombobox.defaultPlaceholder");
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -219,17 +224,17 @@ export default function CreateTableTypeCombobox({
               setOpen(false);
             }}
             onKeyDown={handleKeyDown}
-            aria-label={ariaLabel}
+            aria-label={resolvedAriaLabel}
             aria-autocomplete="list"
             aria-expanded={open}
             aria-controls="create-table-type-combobox-listbox"
-            placeholder={placeholder}
+            placeholder={resolvedPlaceholder}
             role="combobox"
           />
           <button
             type="button"
             tabIndex={-1}
-            aria-label="Show types"
+            aria-label={t("typeCombobox.showTypesAria")}
             // mousedown rather than click — fires before the input's
             // blur so we can flip `open` without the blur stealing it.
             onMouseDown={(e) => {
@@ -269,7 +274,7 @@ export default function CreateTableTypeCombobox({
             ref={listboxRef}
             id="create-table-type-combobox-listbox"
             role="listbox"
-            aria-label="PostgreSQL types"
+            aria-label={t("typeCombobox.listboxAria")}
             className="flex flex-col gap-0.5 p-1"
             style={{ maxHeight: 240, overflowY: "auto" }}
           >

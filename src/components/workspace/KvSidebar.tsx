@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Hash,
   KeyRound,
@@ -33,6 +34,7 @@ export interface KvSidebarProps {
 }
 
 export default function KvSidebar({ connectionId }: KvSidebarProps) {
+  const { t } = useTranslation("workspace");
   const connection = useConnectionStore((s) =>
     s.connections.find((c) => c.id === connectionId),
   );
@@ -202,8 +204,8 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
         nextCursor !== "0" ? ` · cursor ${nextCursor}` : ""
       }`
     : safeMode === "off"
-      ? "scan pending"
-      : "scan paused";
+      ? t("kvSidebar.scanPending")
+      : t("kvSidebar.scanPaused");
   const selectedValueReady = value?.key === selectedKey && !loadingValue;
   const selectedMutationReady = Boolean(
     selectedValueReady &&
@@ -226,14 +228,14 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 font-medium text-secondary-foreground">
             <KeyRound size={13} aria-hidden />
-            <span className="truncate">Keys</span>
+            <span className="truncate">{t("kvSidebar.keysHeader")}</span>
           </div>
         </div>
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label={`Refresh ${productLabel} catalog`}
-          title={`Refresh ${productLabel} catalog`}
+          aria-label={t("kvSidebar.refreshCatalogAria", { productLabel })}
+          title={t("kvSidebar.refreshCatalogTitle", { productLabel })}
           disabled={loadingCatalog}
           onClick={() => {
             void loadCatalog();
@@ -251,7 +253,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
         <Search size={12} className="text-muted-foreground" aria-hidden />
         <input
           className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-          aria-label={`${productLabel} key pattern`}
+          aria-label={t("kvSidebar.keyPatternAria", { productLabel })}
           value={pattern}
           onChange={(event) => setPattern(event.target.value)}
           onKeyDown={(event) => {
@@ -271,7 +273,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
           ) : (
             <Search size={12} />
           )}
-          Scan {KEY_SCAN_LIMIT} keys
+          {t("kvSidebar.scanButton", { limit: KEY_SCAN_LIMIT })}
         </Button>
       </div>
 
@@ -279,7 +281,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
         className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 text-3xs text-muted-foreground"
         data-testid="redis-scan-status"
       >
-        <span>limit {KEY_SCAN_LIMIT}</span>
+        <span>{t("kvSidebar.limitLabel", { limit: KEY_SCAN_LIMIT })}</span>
         <span>{scanStatusText}</span>
       </div>
 
@@ -299,7 +301,11 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div role="tree" aria-label={`${productLabel} keys`} className="py-1">
+        <div
+          role="tree"
+          aria-label={t("kvSidebar.keysAria", { productLabel })}
+          className="py-1"
+        >
           {keys.map((item) => (
             <button
               key={item.key}
@@ -339,13 +345,13 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
             className="flex items-center gap-2 px-3 py-3 text-muted-foreground"
           >
             <Loader2 size={12} className="animate-spin" aria-hidden />
-            Loading keys
+            {t("kvSidebar.loadingKeys")}
           </div>
         )}
 
         {keys.length === 0 && !loadingKeys && !error && (
           <div role="status" className="px-3 py-3 text-muted-foreground">
-            {emptyKeysMessage(pattern, hasScannedKeys, safeMode)}
+            {emptyKeysMessage(pattern, hasScannedKeys, safeMode, t)}
           </div>
         )}
 
@@ -361,7 +367,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
               {loadingKeys ? (
                 <Loader2 size={12} className="animate-spin" />
               ) : null}
-              More from cursor {nextCursor}
+              {t("kvSidebar.moreCursor", { cursor: nextCursor })}
             </Button>
           </div>
         )}
@@ -385,14 +391,15 @@ function emptyKeysMessage(
   pattern: string,
   hasScannedKeys: boolean,
   safeMode: "strict" | "warn" | "off",
+  t: (key: string, opts?: Record<string, unknown>) => string,
 ) {
   if (!hasScannedKeys) {
-    if (safeMode === "off") return "Waiting for bounded key scan.";
-    return `Safe Mode paused automatic key scan. Run Scan ${KEY_SCAN_LIMIT} keys to load a bounded page.`;
+    if (safeMode === "off") return t("kvSidebar.emptyWaiting");
+    return t("kvSidebar.emptySafeModeHalt", { limit: KEY_SCAN_LIMIT });
   }
   const normalized = pattern.trim();
-  if (!normalized || normalized === "*") return "No keys found.";
-  return `No keys match pattern ${normalized}.`;
+  if (!normalized || normalized === "*") return t("kvSidebar.emptyNoKeys");
+  return t("kvSidebar.emptyNoMatch", { pattern: normalized });
 }
 
 function iconForKeyType(type: KvKeyMetadata["keyType"]) {
@@ -439,13 +446,14 @@ function KvValuePreview({
   mutationActionIntent: KvMutationActionIntent | null;
   onMutationSuccess: (key: string) => Promise<void>;
 }) {
+  const { t } = useTranslation("workspace");
   if (loading) {
     return (
       <div
         role="status"
         className="border-t border-border px-3 py-3 text-muted-foreground"
       >
-        Loading value
+        {t("kvSidebar.loadingValue")}
       </div>
     );
   }
@@ -478,7 +486,11 @@ function KvValuePreview({
           {value.metadata.keyType}
         </span>
         {typeof value.metadata.length === "number" && (
-          <span>{formatCount(value.metadata.length)} item(s)</span>
+          <span>
+            {t("kvSidebar.itemCount", {
+              count: formatCount(value.metadata.length),
+            })}
+          </span>
         )}
         {typeof value.metadata.memoryBytes === "number" && (
           <span>{formatBytes(value.metadata.memoryBytes)}</span>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { logger } from "@lib/logger";
 import { cn } from "@/lib/utils";
@@ -33,18 +34,19 @@ type CopyStatus = "idle" | "success" | "failure";
 const SUCCESS_TIMEOUT_MS = 1500;
 const FAILURE_TIMEOUT_MS = 2000;
 
-const LABEL: Record<CopyStatus, string> = {
-  idle: "Copy",
-  success: "Copied",
-  failure: "Copy failed",
-};
-
 export default function PreviewCopyButton({
   text,
-  ariaLabel = "Copy",
+  ariaLabel,
   className,
 }: PreviewCopyButtonProps) {
+  const { t } = useTranslation("ui");
   const [status, setStatus] = useState<CopyStatus>("idle");
+  const LABEL: Record<CopyStatus, string> = {
+    idle: t("copy"),
+    success: t("copied"),
+    failure: t("copyFailed"),
+  };
+  const resolvedAriaLabel = ariaLabel ?? t("copy");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Tracks mounted state so a late-resolving clipboard promise after
   // unmount doesn't call setStatus on a dead component.
@@ -111,7 +113,7 @@ export default function PreviewCopyButton({
       size="sm"
       onClick={() => void handleClick()}
       data-testid="preview-dialog-copy"
-      aria-label={ariaLabel}
+      aria-label={resolvedAriaLabel}
       className={cn("gap-1.5", className)}
     >
       <Icon className="size-3.5" aria-hidden="true" />

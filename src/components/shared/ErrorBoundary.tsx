@@ -2,6 +2,7 @@ import { Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import { Button } from "@components/ui/button";
 import { logger } from "@lib/logger";
+import i18n from "@lib/i18n";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -38,12 +39,12 @@ export default class ErrorBoundary extends Component<
       return (
         <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-background p-8">
           <h1 className="text-lg font-semibold text-foreground">
-            Something went wrong
+            {i18n.t("shared:errorTitle")}
           </h1>
           <p className="max-w-md text-center text-sm text-secondary-foreground">
-            {this.state.error?.message ?? "An unexpected error occurred."}
+            {this.state.error?.message ?? i18n.t("shared:errorFallback")}
           </p>
-          <Button onClick={this.handleReload}>Reload</Button>
+          <Button onClick={this.handleReload}>{i18n.t("shared:reload")}</Button>
         </div>
       );
     }

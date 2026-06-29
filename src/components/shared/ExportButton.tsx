@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Download } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -9,15 +10,6 @@ import {
 import { runExport } from "@/lib/runtime/export";
 import type { ExportContext, ExportFormat } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
-
-const DEFAULT_DISABLED_REASON = "Single-table SELECT only";
-
-const FORMAT_LABELS: Record<ExportFormat, string> = {
-  csv: "CSV",
-  tsv: "TSV",
-  sql: "SQL INSERT",
-  json: "JSON",
-};
 
 const FORMATS_BY_KIND: Record<ExportContext["kind"], ExportFormat[]> = {
   // RDB table view: row data is structured + has full schema/table context.
@@ -56,10 +48,19 @@ export function ExportButton({
   disabledFormats = [],
   disabledFormatReasons = {},
   disabled = false,
-  disabledReason = "Nothing to export.",
+  disabledReason,
   exportId = null,
   className,
 }: ExportButtonProps) {
+  const { t } = useTranslation("shared");
+  const resolvedDisabledReason = disabledReason ?? t("export.nothingToExport");
+  const FORMAT_LABELS: Record<ExportFormat, string> = {
+    csv: t("export.csv"),
+    tsv: t("export.tsv"),
+    sql: t("export.sql"),
+    json: t("export.json"),
+  };
+  const DEFAULT_DISABLED_REASON = t("export.singleTableOnly");
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const formats = FORMATS_BY_KIND[context.kind];
@@ -91,8 +92,8 @@ export function ExportButton({
           variant="ghost"
           size="icon-xs"
           disabled={disabled || running}
-          aria-label="Export"
-          title={disabled ? disabledReason : "Export"}
+          aria-label={t("export.label")}
+          title={disabled ? resolvedDisabledReason : t("export.label")}
           data-testid="export-button"
           className={cn("text-muted-foreground", className)}
         >
@@ -113,7 +114,7 @@ export function ExportButton({
               title={
                 disabled
                   ? (disabledFormatReasons[format] ?? DEFAULT_DISABLED_REASON)
-                  : `Export as ${FORMAT_LABELS[format]}`
+                  : t("export.exportAs", { label: FORMAT_LABELS[format] })
               }
               className={cn(
                 "flex w-full items-center justify-between rounded-sm px-2 py-1 text-left text-xs",

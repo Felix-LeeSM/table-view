@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import FormDialog from "@components/ui/dialog/FormDialog";
 import { Input } from "@components/ui/input";
 import { CONNECTION_COLOR_PALETTE } from "../color";
@@ -21,6 +22,7 @@ interface GroupDialogProps {
  *   keeps the form-specific bits (palette radio group, name validation).
  */
 export default function GroupDialog({ group, onClose }: GroupDialogProps) {
+  const { t } = useTranslation("featuresConnection");
   const isEditing = !!group;
   const [name, setName] = useState(group?.name ?? "");
   const [color, setColor] = useState<string | null>(group?.color ?? null);
@@ -33,7 +35,7 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
   const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("Group name is required");
+      setError(t("groupDialog.errorGroupNameRequired"));
       return;
     }
     setSaving(true);
@@ -58,16 +60,16 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
 
   return (
     <FormDialog
-      title={isEditing ? "Edit Group" : "New Group"}
+      title={isEditing ? t("groupDialog.titleEdit") : t("groupDialog.titleNew")}
       description={
-        isEditing
-          ? "Rename this group or change its color accent."
-          : "Create a group to organize your connections. Pick a color to make it easy to spot."
+        isEditing ? t("groupDialog.descEdit") : t("groupDialog.descNew")
       }
       className="w-96 bg-secondary p-4"
       onSubmit={handleSave}
       onCancel={onClose}
-      submitLabel={isEditing ? "Save" : "Create Group"}
+      submitLabel={
+        isEditing ? t("groupDialog.submitEdit") : t("groupDialog.submitNew")
+      }
       isSubmitting={saving}
       submitDisabled={!name.trim()}
     >
@@ -75,11 +77,11 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
         className="flex flex-col gap-1 text-xs font-medium text-secondary-foreground"
         htmlFor="group-dialog-name"
       >
-        Name
+        {t("groupDialog.labelName")}
         <Input
           id="group-dialog-name"
           value={name}
-          placeholder="e.g. Production"
+          placeholder={t("groupDialog.placeholderName")}
           autoFocus
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
@@ -93,7 +95,7 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
 
       <div className="flex flex-col gap-1">
         <span className="text-xs font-medium text-secondary-foreground">
-          Color (optional)
+          {t("groupDialog.labelColor")}
         </span>
         <div
           role="radiogroup"
@@ -104,8 +106,8 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
             type="button"
             role="radio"
             aria-checked={color === null}
-            aria-label="No color"
-            title="No color"
+            aria-label={t("groupDialog.ariaNoColor")}
+            title={t("groupDialog.titleNoColor")}
             onClick={() => setColor(null)}
             className={`flex h-6 w-6 items-center justify-center rounded-full border border-border bg-muted text-3xs text-muted-foreground transition-shadow ${
               color === null
@@ -121,7 +123,7 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
               type="button"
               role="radio"
               aria-checked={color === swatch}
-              aria-label={`Color ${swatch}`}
+              aria-label={t("groupDialog.ariaColorSwatch", { swatch })}
               title={swatch}
               onClick={() => setColor(swatch)}
               className={`h-6 w-6 rounded-full border border-border transition-shadow ${

@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   X,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   useToastStore,
   roleForVariant,
@@ -29,6 +30,7 @@ import { cn } from "@/lib/utils";
  * lifecycle — pushing a new toast does not reset existing timers.
  */
 export function Toaster() {
+  const { t } = useTranslation("ui");
   const toasts = useToastStore((s) => s.toasts);
   const dismiss = useToastStore((s) => s.dismiss);
 
@@ -58,7 +60,7 @@ export function Toaster() {
   return (
     <div
       data-slot="toaster"
-      aria-label="Notifications"
+      aria-label={t("notifications")}
       // z-100 sits above dialog overlays (z-50) so a toast surfaced from inside
       // a modal stays visible after the modal closes. Fixed top-right, stacked
       // top-down. `pointer-events-none` on the container so the empty stack
@@ -85,6 +87,7 @@ interface ToastItemProps {
  * toast until the user dismisses it (sticky).
  */
 function ToastItem({ toast, onDismiss }: ToastItemProps) {
+  const { t } = useTranslation("ui");
   const role = roleForVariant(toast.variant);
 
   useEffect(() => {
@@ -133,7 +136,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       <button
         type="button"
         onClick={onDismiss}
-        aria-label="Dismiss notification"
+        aria-label={t("dismissNotification")}
         className="ml-1 inline-flex shrink-0 cursor-pointer rounded-sm p-0.5 opacity-70 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         <X className="size-3.5" />

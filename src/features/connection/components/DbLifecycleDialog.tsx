@@ -3,6 +3,7 @@
 // (collection 첫 write 시 자동 생성) — informational copy 로만 처리.
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { createRdbDatabase, dropRdbDatabase } from "@/lib/tauri/ddl";
 import { dropMongoDatabase } from "@/lib/tauri";
@@ -28,6 +29,7 @@ export function DbLifecycleDialog({
   onClose,
   onSuccess,
 }: DbLifecycleDialogProps) {
+  const { t } = useTranslation("featuresConnection");
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +54,7 @@ export function DbLifecycleDialog({
     setError(null);
     const target = mode === "drop" ? (database ?? name) : name;
     if (target.trim() === "") {
-      setError("Database name is required.");
+      setError(t("lifecycle.errorNameRequired"));
       return;
     }
     setSaving(true);
@@ -82,6 +84,7 @@ export function DbLifecycleDialog({
     name,
     onClose,
     onSuccess,
+    t,
   ]);
 
   if (!open) return null;
@@ -95,7 +98,7 @@ export function DbLifecycleDialog({
       className="flex flex-col gap-3 rounded-md border border-border bg-background p-4 text-sm"
     >
       <header className="text-xs font-medium text-muted-foreground">
-        Database {mode}
+        {t("lifecycle.headerMode", { mode })}
         {database !== undefined ? ` — ${database}` : ""}
       </header>
 
@@ -104,13 +107,11 @@ export function DbLifecycleDialog({
           data-testid="db-lifecycle-mongo-lazy"
           className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
         >
-          MongoDB creates databases <strong>on first write</strong>. Insert a
-          document into a collection inside your target database and it will
-          appear in the sidebar.
+          {t("lifecycle.mongoLazyInfo")}
         </p>
       ) : mode === "create" ? (
         <label className="flex flex-col gap-1 text-xs">
-          <span>Name</span>
+          <span>{t("lifecycle.labelName")}</span>
           <input
             data-testid="db-lifecycle-name"
             value={name}
@@ -121,9 +122,13 @@ export function DbLifecycleDialog({
         </label>
       ) : (
         <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-          This will permanently delete <strong>{database ?? name}</strong> and
-          every {paradigm === "table" ? "table and row" : "collection"} it
-          contains. This cannot be undone.
+          {t("lifecycle.dropWarning", {
+            target: database ?? name,
+            contents:
+              paradigm === "table"
+                ? t("lifecycle.dropContentsTable")
+                : t("lifecycle.dropContentsDocument"),
+          })}
         </p>
       )}
 
@@ -145,7 +150,7 @@ export function DbLifecycleDialog({
           onClick={onClose}
           disabled={saving}
         >
-          Cancel
+          {t("lifecycle.cancel")}
         </Button>
         <Button
           size="sm"
@@ -154,12 +159,12 @@ export function DbLifecycleDialog({
           disabled={saving}
         >
           {saving
-            ? "Working…"
+            ? t("lifecycle.working")
             : isMongoLazyCreate
-              ? "OK"
+              ? t("lifecycle.ok")
               : mode === "drop"
-                ? "Drop"
-                : "Create"}
+                ? t("lifecycle.drop")
+                : t("lifecycle.create")}
         </Button>
       </div>
     </div>

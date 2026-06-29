@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { GitCompareArrows } from "lucide-react";
 import type {
   SchemaGraphDiffChangeKind,
@@ -12,6 +13,7 @@ interface SchemaGraphDiffPanelProps {
 export default function SchemaGraphDiffPanel({
   diff,
 }: SchemaGraphDiffPanelProps) {
+  const { t } = useTranslation("schema");
   if (!diff) return null;
 
   const added = entriesForKind(diff, "added");
@@ -21,7 +23,7 @@ export default function SchemaGraphDiffPanel({
   return (
     <section
       role="region"
-      aria-label="Schema diff"
+      aria-label={t("schemaDiffAria")}
       className="rounded border border-border bg-muted/20 px-3 py-2"
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -31,7 +33,7 @@ export default function SchemaGraphDiffPanel({
             className="shrink-0 text-muted-foreground"
           />
           <h2 className="truncate text-xs font-semibold text-foreground">
-            Schema diff
+            {t("schemaDiffTitle")}
           </h2>
           <span className="truncate text-3xs text-muted-foreground">
             {formatSource(diff.source.before)} {"->"}{" "}
@@ -39,7 +41,7 @@ export default function SchemaGraphDiffPanel({
           </span>
         </div>
         <span className="text-3xs text-muted-foreground">
-          read-only cached SchemaGraph diff
+          {t("readOnlyCachedDiff")}
         </span>
       </div>
 
@@ -48,13 +50,13 @@ export default function SchemaGraphDiffPanel({
           role="status"
           className="rounded border border-dashed border-border bg-background px-2 py-2 text-xs text-muted-foreground"
         >
-          No schema differences found in cached SchemaGraph snapshots.
+          {t("noSchemaDifferences")}
         </div>
       ) : (
         <div className="grid gap-2 lg:grid-cols-3">
-          <DiffBucket title="Added" kind="added" entries={added} />
-          <DiffBucket title="Removed" kind="removed" entries={removed} />
-          <DiffBucket title="Changed" kind="changed" entries={changed} />
+          <DiffBucket title={t("added")} kind="added" entries={added} />
+          <DiffBucket title={t("removed")} kind="removed" entries={removed} />
+          <DiffBucket title={t("changed")} kind="changed" entries={changed} />
         </div>
       )}
     </section>
@@ -70,6 +72,7 @@ function DiffBucket({
   kind: SchemaGraphDiffChangeKind;
   entries: readonly SchemaGraphDiffEntry[];
 }) {
+  const { t } = useTranslation("schema");
   return (
     <div className="min-w-0 rounded border border-border bg-background px-2 py-2">
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -81,7 +84,10 @@ function DiffBucket({
         </span>
       </div>
       {entries.length > 0 ? (
-        <ul aria-label={`${title} schema changes`} className="space-y-1">
+        <ul
+          aria-label={t("schemaChangesAria", { title })}
+          className="space-y-1"
+        >
           {entries.map((entry) => (
             <li
               key={`${entry.kind}:${entry.entityKind}:${entry.id}`}
@@ -111,7 +117,7 @@ function DiffBucket({
           ))}
         </ul>
       ) : (
-        <p className="text-3xs text-muted-foreground">None.</p>
+        <p className="text-3xs text-muted-foreground">{t("none")}</p>
       )}
     </div>
   );

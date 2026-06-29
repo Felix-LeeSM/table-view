@@ -22,6 +22,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Search, X, CheckCircle2, XCircle, CircleSlash } from "lucide-react";
 import { useQueryHistory } from "@hooks/useQueryHistory";
 import { Button } from "@components/ui/button";
@@ -60,6 +61,7 @@ export default function GlobalQueryLogPanel({
   visible,
   onClose,
 }: GlobalQueryLogPanelProps) {
+  const { t } = useTranslation("query");
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState<number | null>(null);
   const { rows, loading, hasMore, newEntryAvailable, loadMore, refresh } =
@@ -88,7 +90,9 @@ export default function GlobalQueryLogPanel({
     >
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
-        <span className="text-xs font-medium text-foreground">Query Log</span>
+        <span className="text-xs font-medium text-foreground">
+          {t("queryLog.title")}
+        </span>
         <span className="rounded bg-muted px-1.5 py-0.5 text-3xs font-medium text-muted-foreground">
           {rows.length}
         </span>
@@ -98,7 +102,7 @@ export default function GlobalQueryLogPanel({
             type="text"
             data-testid="global-log-search"
             className="h-5 flex-1 border-0 bg-transparent text-xs shadow-none text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
-            placeholder="Search queries..."
+            placeholder={t("queryLog.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -113,7 +117,7 @@ export default function GlobalQueryLogPanel({
             }}
             data-testid="global-log-new-entry"
           >
-            New entry — refresh
+            {t("queryLog.newEntry")}
           </Button>
         )}
         <ClearHistoryButton
@@ -125,7 +129,7 @@ export default function GlobalQueryLogPanel({
           size="icon-xs"
           className="text-muted-foreground hover:text-foreground"
           onClick={onClose}
-          aria-label="Close query log"
+          aria-label={t("queryLog.closeAria")}
         >
           <X size={14} />
         </Button>
@@ -136,8 +140,8 @@ export default function GlobalQueryLogPanel({
         {filtered.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
             {rows.length === 0
-              ? "No queries executed yet"
-              : "No matching queries"}
+              ? t("queryLog.noQueriesYet")
+              : t("queryLog.noMatchingQueries")}
           </div>
         ) : (
           filtered.map((row) => (
@@ -217,7 +221,7 @@ export default function GlobalQueryLogPanel({
               disabled={loading}
               data-testid="global-log-load-more"
             >
-              {loading ? "Loading…" : "Load more"}
+              {loading ? t("queryLog.loading") : t("queryLog.loadMore")}
             </Button>
           </div>
         )}

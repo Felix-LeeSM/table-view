@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
   ChevronRight,
@@ -46,6 +47,7 @@ export function DatabaseRow({
   onToggle,
   onNewQueryHere,
 }: DatabaseRowProps) {
+  const { t } = useTranslation("schema");
   // Sprint 346 — admin/config/local 은 사용자가 평소 안 건드림. italic +
   // muted opacity 로 시각 구분 (선택/펼침 동작은 동일).
   const isSystem = isMongoSystemDatabase(db.name);
@@ -62,7 +64,7 @@ export function DatabaseRow({
             isSystem && "italic opacity-60",
           )}
           aria-expanded={isExpanded}
-          aria-label={`${db.name} database`}
+          aria-label={t("databaseRowAria", { name: db.name })}
           data-system-db={isSystem ? "true" : undefined}
           onClick={onToggle}
           onKeyDown={(e) => {
@@ -84,7 +86,7 @@ export function DatabaseRow({
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onSelect={onNewQueryHere}>
-          New query here
+          {t("newQueryHere")}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -109,6 +111,7 @@ export function CollectionRow({
   onDoubleOpen,
   onRequestDrop,
 }: CollectionRowProps) {
+  const { t } = useTranslation("schema");
   const hasOptions = Object.keys(collection.options).length > 0;
   const hasIdIndex = collection.id_index !== null;
   const showType = collection.collection_type !== "collection";
@@ -124,7 +127,7 @@ export function CollectionRow({
               ? "bg-primary/10 text-primary font-semibold"
               : "text-foreground",
           )}
-          aria-label={`${collection.name} collection`}
+          aria-label={t("collectionRowAria", { name: collection.name })}
           // Single-click opens a preview tab; double-click promotes it to a
           // persistent tab. Same model as the relational tree.
           onClick={() => {
@@ -143,43 +146,57 @@ export function CollectionRow({
           <span className="ml-auto flex shrink-0 items-center gap-1 text-3xs text-muted-foreground">
             {showType && (
               <span
-                aria-label={`${collection.name} collection type: ${collection.collection_type}`}
+                aria-label={t("collectionTypeAria", {
+                  name: collection.name,
+                  type: collection.collection_type,
+                })}
                 className="font-medium uppercase"
-                title={`Collection type: ${collection.collection_type}`}
+                title={t("collectionTypeTitle", {
+                  type: collection.collection_type,
+                })}
               >
                 {collection.collection_type}
               </span>
             )}
             {collection.read_only && (
               <span
-                aria-label={`${collection.name} is read-only`}
+                aria-label={t("collectionReadOnlyAria", {
+                  name: collection.name,
+                })}
                 role="img"
-                title="Read-only"
+                title={t("collectionReadOnlyTitle")}
               >
                 <Lock size={10} aria-hidden="true" />
               </span>
             )}
             {hasOptions && (
               <span
-                aria-label={`${collection.name} has collection options`}
+                aria-label={t("collectionOptionsAria", {
+                  name: collection.name,
+                })}
                 role="img"
-                title="Collection options available"
+                title={t("collectionOptionsTitle")}
               >
                 <Settings2 size={10} aria-hidden="true" />
               </span>
             )}
             {hasIdIndex && (
               <span
-                aria-label={`${collection.name} has _id index metadata`}
+                aria-label={t("collectionIdIndexAria", {
+                  name: collection.name,
+                })}
                 role="img"
-                title="_id index metadata available"
+                title={t("collectionIdIndexTitle")}
               >
                 <KeyRound size={10} aria-hidden="true" />
               </span>
             )}
             {collection.document_count != null && (
               <span
-                aria-label={`${collection.name} document count ${collection.document_count}`}
+                aria-label={t("collectionDocCountAria", {
+                  name: collection.name,
+                  count: collection.document_count,
+                })}
               >
                 {collection.document_count.toLocaleString()}
               </span>
@@ -189,7 +206,7 @@ export function CollectionRow({
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem danger onSelect={onRequestDrop}>
-          Drop Collection
+          {t("dropCollection")}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

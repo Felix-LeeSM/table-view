@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Database, MousePointerClick, Plug } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { Skeleton } from "@components/ui/skeleton";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -41,6 +42,7 @@ export interface WorkspaceSidebarProps {
 export default function WorkspaceSidebar({
   selectedId,
 }: WorkspaceSidebarProps) {
+  const { t } = useTranslation("workspace");
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const hasLoadedOnce = useConnectionStore((s) => s.hasLoadedOnce);
@@ -64,10 +66,10 @@ export default function WorkspaceSidebar({
       >
         <Database size={36} className="mb-3 text-muted-foreground" />
         <p className="text-sm font-medium text-secondary-foreground">
-          No connections yet
+          {t("sidebar.noConnections.heading")}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Switch to the Connections tab and add your first database
+          {t("sidebar.noConnections.body")}
         </p>
       </div>
     );
@@ -92,10 +94,10 @@ export default function WorkspaceSidebar({
       >
         <MousePointerClick size={28} className="mb-2 text-muted-foreground" />
         <p className="text-sm font-medium text-secondary-foreground">
-          Select a connection
+          {t("sidebar.selectConnection.heading")}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Pick a connection from the Connections tab to view its schemas
+          {t("sidebar.selectConnection.body")}
         </p>
       </div>
     );
@@ -125,18 +127,20 @@ export default function WorkspaceSidebar({
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {isConnecting ? (
-            "Connecting…"
+            t("sidebar.connecting")
           ) : isError ? (
-            `Failed to connect: ${status?.type === "error" ? status.message : ""}`
+            t("sidebar.connectFailed", {
+              message: status?.type === "error" ? status.message : "",
+            })
           ) : (
             <>
-              Double-click in the Connections tab to connect, or{" "}
+              {t("sidebar.connectPrompt")}{" "}
               <Button
                 variant="link"
                 className="h-auto p-0 text-xs"
                 onClick={() => connectToDatabase(driving.id)}
               >
-                connect now
+                {t("sidebar.connectNow")}
               </Button>
             </>
           )}
@@ -162,12 +166,13 @@ export default function WorkspaceSidebar({
  * blank column.
  */
 function WorkspaceSidebarSkeleton(): ReactNode {
+  const { t } = useTranslation("workspace");
   return (
     <div
       className="flex flex-1 flex-col gap-2 px-4 py-4"
       role="status"
       aria-busy="true"
-      aria-label="Loading connections"
+      aria-label={t("sidebar.loadingConnections")}
       data-testid="workspace-sidebar-skeleton"
     >
       <Skeleton className="h-8 w-full" />

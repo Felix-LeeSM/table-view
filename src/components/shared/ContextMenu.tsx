@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 
 export interface ContextMenuItem {
   label: string;
@@ -17,6 +18,7 @@ interface ContextMenuProps {
 }
 
 export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
+  const { t } = useTranslation("shared");
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: x, top: y });
   const [measured, setMeasured] = useState(false);
@@ -110,7 +112,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       ref={ref}
       style={style}
       role="menu"
-      aria-label="Context menu"
+      aria-label={t("contextMenuLabel")}
       className={measured ? "select-none" : "select-none invisible"}
     >
       <div className="min-w-40 rounded-md border border-border bg-secondary py-1 shadow-lg">

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Plus, Trash2 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import type {
@@ -61,6 +62,7 @@ export default function StructurePanel({
   paradigm,
   initialSubTab,
 }: StructurePanelProps) {
+  const { t } = useTranslation("schema");
   const vocab = getParadigmVocabulary(paradigm);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>(
     initialSubTab ?? "columns",
@@ -218,11 +220,11 @@ export default function StructurePanel({
   // no Mongo/kv equivalent in scope yet.
   const subTabs: { key: SubTab; label: string }[] = [
     { key: "columns", label: vocab.units },
-    { key: "indexes", label: "Indexes" },
-    { key: "constraints", label: "Constraints" },
+    { key: "indexes", label: t("indexesTab") },
+    { key: "constraints", label: t("constraintsTab") },
     // Sprint 272 — read-only Triggers tab. Order is fixed (after
     // Constraints) per master spec § 2 and contract § In Scope.
-    { key: "triggers", label: "Triggers" },
+    { key: "triggers", label: t("triggersTab") },
   ];
 
   return (
@@ -408,17 +410,22 @@ function TriggersList({
   onDrop,
   supportsStructuredCrud,
 }: TriggersListProps) {
+  const { t } = useTranslation("schema");
   return (
     <StructureShell>
       <StructureActionBar
-        count={`${triggers.length} ${triggers.length === 1 ? "trigger" : "triggers"}`}
+        count={
+          triggers.length === 1
+            ? t("triggerCount_one", { count: triggers.length })
+            : t("triggerCount_other", { count: triggers.length })
+        }
         actions={
           supportsStructuredCrud ? (
             <Button
               size="xs"
               variant="ghost"
               onClick={onCreate}
-              aria-label="Create trigger"
+              aria-label={t("createTriggerAria")}
             >
               <Plus />
               Trigger
@@ -427,31 +434,31 @@ function TriggersList({
         }
       />
       {triggers.length === 0 ? (
-        <StructureEmpty>No triggers</StructureEmpty>
+        <StructureEmpty>{t("noTriggers")}</StructureEmpty>
       ) : (
         <div className="flex-1 overflow-auto p-3">
           <ul className="flex flex-col gap-3">
-            {triggers.map((t) => (
+            {triggers.map((trigger) => (
               <li
-                key={`${t.schema}.${t.table}.${t.name}`}
+                key={`${trigger.schema}.${trigger.table}.${trigger.name}`}
                 className="rounded border border-border bg-card p-3"
-                aria-label={`Trigger ${t.name}`}
+                aria-label={`Trigger ${trigger.name}`}
               >
                 <header className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span className="font-mono text-sm font-semibold text-foreground">
-                    {t.name}
+                    {trigger.name}
                   </span>
                   <span className="text-2xs text-muted-foreground">
-                    {t.timing} {t.events.join(" OR ")} · FOR EACH{" "}
-                    {t.orientation}
+                    {trigger.timing} {trigger.events.join(" OR ")} · FOR EACH{" "}
+                    {trigger.orientation}
                   </span>
                   {supportsStructuredCrud && (
                     <Button
                       size="icon-xs"
                       variant="ghost"
-                      onClick={() => onDrop(t.name)}
-                      aria-label={`Drop trigger ${t.name}`}
-                      title={`Drop trigger ${t.name}`}
+                      onClick={() => onDrop(trigger.name)}
+                      aria-label={t("dropTriggerAria", { name: trigger.name })}
+                      title={t("dropTriggerTitle", { name: trigger.name })}
                       className="ml-auto text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     >
                       <Trash2 className="size-3" />
@@ -459,25 +466,29 @@ function TriggersList({
                   )}
                 </header>
                 <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-2xs">
-                  <dt className="text-muted-foreground">Function</dt>
+                  <dt className="text-muted-foreground">
+                    {t("functionLabel")}
+                  </dt>
                   <dd className="font-mono text-foreground">
-                    {t.functionSchema}.{t.functionName}
-                    {t.arguments ? `(${t.arguments})` : "()"}
+                    {trigger.functionSchema}.{trigger.functionName}
+                    {trigger.arguments ? `(${trigger.arguments})` : "()"}
                   </dd>
-                  {t.whenExpression && (
+                  {trigger.whenExpression && (
                     <>
-                      <dt className="text-muted-foreground">When</dt>
+                      <dt className="text-muted-foreground">
+                        {t("whenLabel")}
+                      </dt>
                       <dd className="font-mono text-foreground">
-                        {t.whenExpression}
+                        {trigger.whenExpression}
                       </dd>
                     </>
                   )}
                 </dl>
                 <pre
-                  data-testid={`trigger-source-${t.name}`}
+                  data-testid={`trigger-source-${trigger.name}`}
                   className="mt-2 max-h-72 overflow-auto rounded bg-muted px-2 py-1.5 font-mono text-2xs text-foreground"
                 >
-                  {t.definition}
+                  {trigger.definition}
                 </pre>
               </li>
             ))}

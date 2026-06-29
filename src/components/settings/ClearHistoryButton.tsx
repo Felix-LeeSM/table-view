@@ -17,6 +17,7 @@
  */
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Trash2 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
@@ -25,16 +26,18 @@ import { toast } from "@lib/runtime/toast";
 import { logger } from "@lib/logger";
 
 export interface ClearHistoryButtonProps {
-  /** Visible label; defaults to `"Clear history"`. */
+  /** Visible label; defaults to t("clearHistory.label"). */
   label?: string;
   /** Optional className passthrough so callers can tune size/colour. */
   className?: string;
 }
 
 export default function ClearHistoryButton({
-  label = "Clear history",
+  label,
   className,
 }: ClearHistoryButtonProps) {
+  const { t } = useTranslation("settings");
+  const resolvedLabel = label ?? t("clearHistory.label");
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -45,14 +48,11 @@ export default function ClearHistoryButton({
       const n = resp.deletedCount;
       // 일관된 문구: "N row(s) cleared". 0 row 도 동일 패턴이라
       // assertion 이 간단하다.
-      const message =
-        n === 1
-          ? "1 row cleared from history"
-          : `${n} rows cleared from history`;
+      const message = t("clearHistory.rowCleared", { count: n });
       toast.success(message);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast.error(`Failed to clear history: ${msg}`);
+      toast.error(t("clearHistory.errorPrefix", { msg }));
       logger.warn("[ClearHistoryButton] clear_history failed", msg);
     } finally {
       setBusy(false);
@@ -68,17 +68,17 @@ export default function ClearHistoryButton({
         className={className}
         onClick={() => setConfirming(true)}
         disabled={busy}
-        aria-label={label}
+        aria-label={resolvedLabel}
         data-testid="clear-history-button"
       >
         <Trash2 size={12} />
-        {label}
+        {resolvedLabel}
       </Button>
       {confirming && (
         <ConfirmDialog
-          title="Clear query history"
-          message="Every recorded query (across all connections) will be permanently deleted. This cannot be undone."
-          confirmLabel="Clear all history"
+          title={t("clearHistory.dialogTitle")}
+          message={t("clearHistory.dialogMessage")}
+          confirmLabel={t("clearHistory.dialogConfirm")}
           danger
           loading={busy}
           onConfirm={() => {

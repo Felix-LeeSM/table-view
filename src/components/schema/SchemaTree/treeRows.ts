@@ -8,6 +8,7 @@ import {
   Link2,
   type LucideIcon,
 } from "lucide-react";
+import i18n from "@lib/i18n";
 
 /**
  * Pure helper module for `SchemaTree`. No React or store imports — only
@@ -36,15 +37,15 @@ export function rowCountLabel(
   // null on PG/MySQL/MariaDB when ANALYZE hasn't run yet. Avoid promising a
   // count we don't have.
   if (dbType === "sqlite" || rowCount == null) {
-    return "Exact row count not yet fetched";
+    return i18n.t("schema:rowCountUnknown");
   }
   if (dbType === "postgresql") {
-    return "Estimated row count from pg_class.reltuples";
+    return i18n.t("schema:rowCountPg");
   }
   if (dbType === "mysql" || dbType === "mariadb") {
-    return "Estimated row count from information_schema.tables";
+    return i18n.t("schema:rowCountMysql");
   }
-  return "Estimated row count";
+  return i18n.t("schema:rowCountEstimated");
 }
 
 /**
@@ -65,37 +66,61 @@ export function rowCountText(
 
 /** Category definitions for schema objects. */
 export const CATEGORIES = [
-  { key: "tables", label: "Tables", Icon: LayoutGrid, emptyLabel: "No tables" },
-  { key: "views", label: "Views", Icon: Eye, emptyLabel: "No views" },
+  {
+    key: "tables",
+    label: "Tables",
+    Icon: LayoutGrid,
+    emptyLabel: "No tables",
+    labelKey: "categoryTables",
+    emptyLabelKey: "emptyTables",
+  },
+  {
+    key: "views",
+    label: "Views",
+    Icon: Eye,
+    emptyLabel: "No views",
+    labelKey: "categoryViews",
+    emptyLabelKey: "emptyViews",
+  },
   {
     key: "functions",
     label: "Functions",
     Icon: Code2,
     emptyLabel: "No functions",
+    labelKey: "categoryFunctions",
+    emptyLabelKey: "emptyFunctions",
   },
   {
     key: "procedures",
     label: "Procedures",
     Icon: Terminal,
     emptyLabel: "No procedures",
+    labelKey: "categoryProcedures",
+    emptyLabelKey: "emptyProcedures",
   },
   {
     key: "sequences",
     label: "Sequences",
     Icon: ListOrdered,
     emptyLabel: "No sequences",
+    labelKey: "categorySequences",
+    emptyLabelKey: "emptySequences",
   },
   {
     key: "synonyms",
     label: "Synonyms",
     Icon: Link2,
     emptyLabel: "No synonyms",
+    labelKey: "categorySynonyms",
+    emptyLabelKey: "emptySynonyms",
   },
 ] as const satisfies ReadonlyArray<{
   key: string;
   label: string;
   Icon: LucideIcon;
   emptyLabel: string;
+  labelKey: string;
+  emptyLabelKey: string;
 }>;
 
 export type CategoryKey = (typeof CATEGORIES)[number]["key"];

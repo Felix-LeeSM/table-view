@@ -3,6 +3,7 @@
 // paradigm-neutral so the grid renders both sides identically.
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,7 @@ export function ServerActivityPanel({
   connectionId,
   paradigm,
 }: ServerActivityPanelProps) {
+  const { t } = useTranslation("featuresConnection");
   const [rows, setRows] = useState<ServerActivityRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,13 +61,20 @@ export function ServerActivityPanel({
 
   return (
     <section
-      aria-label="Server activity"
+      aria-label={t("serverActivity.ariaSection")}
       data-paradigm={paradigm}
       data-testid="server-activity-panel"
       className="flex flex-col gap-2 p-3"
     >
       <header className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-        <span>Server activity ({paradigm === "table" ? "PG" : "Mongo"})</span>
+        <span>
+          {t("serverActivity.header", {
+            paradigm:
+              paradigm === "table"
+                ? t("serverActivity.paradigmTable")
+                : t("serverActivity.paradigmDocument"),
+          })}
+        </span>
         <Button
           variant="ghost"
           size="sm"
@@ -78,7 +87,7 @@ export function ServerActivityPanel({
           ) : (
             <RefreshCw size={12} aria-hidden />
           )}
-          Refresh
+          {t("serverActivity.refresh")}
         </Button>
       </header>
 
@@ -98,25 +107,39 @@ export function ServerActivityPanel({
           data-testid="server-activity-empty"
           className="px-3 py-2 text-xs italic text-muted-foreground"
         >
-          No active sessions.
+          {t("serverActivity.empty")}
         </p>
       )}
 
       {rows.length > 0 && (
         <table
-          aria-label="Server activity grid"
+          aria-label={t("serverActivity.ariaGrid")}
           data-testid="server-activity-grid"
           className="w-full border-collapse text-xs"
         >
           <thead>
             <tr className="border-b border-border bg-secondary text-left text-muted-foreground">
-              <th className="px-3 py-1 font-medium">ID</th>
-              <th className="px-3 py-1 font-medium">DB</th>
-              <th className="px-3 py-1 font-medium">User</th>
-              <th className="px-3 py-1 font-medium">State</th>
-              <th className="px-3 py-1 font-medium">Wait</th>
-              <th className="px-3 py-1 font-medium">Query</th>
-              <th className="px-3 py-1 font-medium">Started</th>
+              <th className="px-3 py-1 font-medium">
+                {t("serverActivity.colId")}
+              </th>
+              <th className="px-3 py-1 font-medium">
+                {t("serverActivity.colDb")}
+              </th>
+              <th className="px-3 py-1 font-medium">
+                {t("serverActivity.colUser")}
+              </th>
+              <th className="px-3 py-1 font-medium">
+                {t("serverActivity.colState")}
+              </th>
+              <th className="px-3 py-1 font-medium">
+                {t("serverActivity.colWait")}
+              </th>
+              <th className="px-3 py-1 font-medium">
+                {t("serverActivity.colQuery")}
+              </th>
+              <th className="px-3 py-1 font-medium">
+                {t("serverActivity.colStarted")}
+              </th>
               <th className="px-3 py-1 font-medium" aria-label="actions" />
             </tr>
           </thead>
@@ -146,7 +169,9 @@ export function ServerActivityPanel({
                     onClick={() => void handleKill(r.id)}
                     disabled={killingId === r.id}
                   >
-                    {killingId === r.id ? "Killing…" : "Kill"}
+                    {killingId === r.id
+                      ? t("serverActivity.killing")
+                      : t("serverActivity.kill")}
                   </Button>
                 </td>
               </tr>

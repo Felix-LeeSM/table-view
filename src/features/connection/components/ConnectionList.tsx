@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useConnectionStore } from "../store";
 import { openWorkspaceWindow } from "@lib/tauri/window";
 import { logger } from "@lib/logger";
@@ -22,6 +23,7 @@ export default function ConnectionList({
   onSelect,
   onActivate,
 }: ConnectionListProps) {
+  const { t } = useTranslation("featuresConnection");
   const allConnections = useConnectionStore((s) => s.connections);
   const groups = useConnectionStore((s) => s.groups);
   const moveConnectionToGroup = useConnectionStore(
@@ -64,7 +66,7 @@ export default function ConnectionList({
   return (
     <div
       data-testid="connection-list-root"
-      aria-label="Ungrouped connections drop area"
+      aria-label={t("list.ariaLabel")}
       className="flex min-h-full flex-col py-1 select-none"
       onDragOver={(e) => {
         if (!draggedConnectionId) return;
@@ -107,7 +109,7 @@ export default function ConnectionList({
       {allConnections.length > 0 && groups.length === 0 && (
         <div className="flex items-center gap-1.5 px-3 py-2 text-3xs text-muted-foreground opacity-60">
           <GripVertical size={10} />
-          <span>Drag connections onto each other to create groups</span>
+          <span>{t("list.dragHint")}</span>
         </div>
       )}
 
@@ -119,10 +121,10 @@ export default function ConnectionList({
         >
           <Database size={32} className="mb-3 text-muted-foreground" />
           <p className="text-sm font-medium text-secondary-foreground">
-            No connections yet
+            {t("list.emptyTitle")}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Click the + button to add your first database
+            {t("list.emptySubtitle")}
           </p>
         </div>
       )}

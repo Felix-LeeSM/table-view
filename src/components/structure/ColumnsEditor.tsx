@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Key, Link2, Plus, Pencil, Trash2, X, Check, Eye } from "lucide-react";
 import type { ColumnInfo, ColumnChange } from "@/types/schema";
 import type { Paradigm } from "@/types/connection";
@@ -86,6 +87,7 @@ function EditableColumnRow({
   schema,
   tableName,
 }: EditableColumnRowProps) {
+  const { t } = useTranslation("structure");
   const [dataType, setDataType] = useState(col.data_type);
   const [nullable, setNullable] = useState(col.nullable);
   const [defaultValue, setDefaultValue] = useState(col.default_value ?? "");
@@ -209,16 +211,16 @@ function EditableColumnRow({
       <td className={STRUCTURE_TD}>
         <div className="flex items-center gap-1.5">
           {col.is_primary_key && (
-            <span title="Primary Key">
+            <span title={t("col.primaryKey")}>
               <Key
                 size={12}
                 className="shrink-0 text-warning"
-                aria-label="Primary Key"
+                aria-label={t("col.primaryKey")}
               />
             </span>
           )}
           {col.is_foreign_key && (
-            <span title="Foreign Key">
+            <span title={t("col.foreignKey")}>
               <Link2 size={12} className="shrink-0 text-primary" />
             </span>
           )}
@@ -232,7 +234,7 @@ function EditableColumnRow({
               className={inputClass}
               value={dataType}
               onChange={(e) => setDataType(e.target.value)}
-              aria-label={`Data type for ${col.name}`}
+              aria-label={t("col.dataTypeAria", { name: col.name })}
             />
             {/* Sprint 237 — USING cast expression. Conditionally
                 rendered ONLY when the user has chosen a new type so
@@ -243,9 +245,9 @@ function EditableColumnRow({
                 className={inputClass}
                 value={usingExpression}
                 onChange={(e) => setUsingExpression(e.target.value)}
-                aria-label={`USING expression for ${col.name}`}
-                placeholder="e.g. col::int"
-                title="Used when changing column type if PostgreSQL can't cast implicitly"
+                aria-label={t("col.usingExprAria", { name: col.name })}
+                placeholder={t("col.usingExprPlaceholder")}
+                title={t("col.usingExprTitle")}
               />
             )}
           </div>
@@ -260,7 +262,7 @@ function EditableColumnRow({
               type="checkbox"
               checked={nullable}
               onChange={(e) => setNullable(e.target.checked)}
-              aria-label={`Nullable for ${col.name}`}
+              aria-label={t("col.nullableAria", { name: col.name })}
               className="rounded border-border"
             />
             {/* Sprint 237 — pre-execution conflict warning. Renders
@@ -271,16 +273,18 @@ function EditableColumnRow({
               <span
                 role="alert"
                 className="text-xs text-warning"
-                aria-label={`Null rows warning for ${col.name}`}
+                aria-label={t("col.nullRowsWarningAria", { name: col.name })}
               >
-                {nullRowCount} rows have NULL — adding NOT NULL will fail
+                {t("col.nullRowsWarning", { count: nullRowCount })}
               </span>
             )}
           </div>
         ) : nullable ? (
-          <span className="text-muted-foreground">YES</span>
+          <span className="text-muted-foreground">{t("col.nullableYes")}</span>
         ) : (
-          <span className="font-medium text-foreground">NO</span>
+          <span className="font-medium text-foreground">
+            {t("col.nullableNo")}
+          </span>
         )}
       </td>
       <td className={`${STRUCTURE_TD} max-w-50 truncate`}>
@@ -289,8 +293,8 @@ function EditableColumnRow({
             className={inputClass}
             value={defaultValue}
             onChange={(e) => setDefaultValue(e.target.value)}
-            aria-label={`Default value for ${col.name}`}
-            placeholder="NULL"
+            aria-label={t("col.defaultValueAria", { name: col.name })}
+            placeholder={t("col.defaultValuePlaceholder")}
           />
         ) : (
           <span className="text-muted-foreground">
@@ -330,8 +334,8 @@ function EditableColumnRow({
                 size="icon-xs"
                 className="text-success"
                 onClick={handleSave}
-                aria-label={`Save changes for ${col.name}`}
-                title="Save"
+                aria-label={t("col.saveAria", { name: col.name })}
+                title={t("col.saveTitle")}
               >
                 <Check />
               </Button>
@@ -339,8 +343,8 @@ function EditableColumnRow({
                 variant="ghost"
                 size="icon-xs"
                 onClick={onCancelEdit}
-                aria-label={`Cancel editing ${col.name}`}
-                title="Cancel"
+                aria-label={t("col.cancelEditAria", { name: col.name })}
+                title={t("col.cancelTitle")}
               >
                 <X />
               </Button>
@@ -351,8 +355,8 @@ function EditableColumnRow({
                 variant="ghost"
                 size="icon-xs"
                 onClick={onStartEdit}
-                aria-label={`Edit column ${col.name}`}
-                title="Edit"
+                aria-label={t("col.editAria", { name: col.name })}
+                title={t("col.editTitle")}
               >
                 <Pencil />
               </Button>
@@ -361,8 +365,8 @@ function EditableColumnRow({
                 size="icon-xs"
                 className="hover:text-destructive"
                 onClick={onDelete}
-                aria-label={`Delete column ${col.name}`}
-                title="Delete"
+                aria-label={t("col.deleteAria", { name: col.name })}
+                title={t("col.deleteTitle")}
               >
                 <Trash2 />
               </Button>
@@ -419,6 +423,7 @@ export default function ColumnsEditor({
   onRefresh,
   paradigm,
 }: ColumnsEditorProps) {
+  const { t } = useTranslation("structure");
   // `getParadigmVocabulary` enforces the `undefined → rdb` fallback in
   // one place; component just looks up.
   const vocab = getParadigmVocabulary(paradigm);
@@ -575,10 +580,10 @@ export default function ColumnsEditor({
               <Button
                 size="xs"
                 onClick={handleReviewSql}
-                aria-label={`Review SQL (${pendingCount})`}
+                aria-label={t("col.reviewSqlAria", { count: pendingCount })}
               >
                 <Eye />
-                Review SQL ({pendingCount})
+                {t("col.reviewSqlLabel", { count: pendingCount })}
               </Button>
             )}
           </>
@@ -589,14 +594,14 @@ export default function ColumnsEditor({
         <StructureTable fixed>
           <thead className={STRUCTURE_THEAD}>
             <tr>
-              <th className={STRUCTURE_TH}>Name</th>
-              <th className={STRUCTURE_TH}>Type</th>
-              <th className={STRUCTURE_TH}>Nullable</th>
-              <th className={STRUCTURE_TH}>Default</th>
-              <th className={STRUCTURE_TH}>Check</th>
-              <th className={STRUCTURE_TH}>Ref</th>
-              <th className={STRUCTURE_TH}>Comment</th>
-              <th className={STRUCTURE_TH_ACTIONS}>Actions</th>
+              <th className={STRUCTURE_TH}>{t("th.name")}</th>
+              <th className={STRUCTURE_TH}>{t("th.type")}</th>
+              <th className={STRUCTURE_TH}>{t("th.nullable")}</th>
+              <th className={STRUCTURE_TH}>{t("th.default")}</th>
+              <th className={STRUCTURE_TH}>{t("th.check")}</th>
+              <th className={STRUCTURE_TH}>{t("th.ref")}</th>
+              <th className={STRUCTURE_TH}>{t("th.comment")}</th>
+              <th className={STRUCTURE_TH_ACTIONS}>{t("th.actions")}</th>
             </tr>
           </thead>
           <tbody>

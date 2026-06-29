@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
 import { isEditableTarget } from "@/lib/keyboard/isEditableTarget";
 
@@ -33,52 +34,6 @@ interface ShortcutGroup {
   items: ShortcutItem[];
 }
 
-const SHORTCUT_GROUPS: ShortcutGroup[] = [
-  {
-    label: "Tabs",
-    items: [
-      { label: "Close tab", keys: ["Cmd+W"] },
-      { label: "New query tab", keys: ["Cmd+T"] },
-      { label: "Reopen last closed tab", keys: ["Cmd+Shift+T"] },
-      // Cmd+1..9 jumps to the N-th workspace tab.
-      { label: "Switch to tab 1–9", keys: ["Cmd+1", "…", "Cmd+9"] },
-    ],
-  },
-  {
-    label: "Editing",
-    items: [
-      { label: "Commit changes", keys: ["Cmd+S"] },
-      { label: "Format SQL", keys: ["Cmd+I"] },
-      { label: "Uglify SQL", keys: ["Cmd+Shift+I"] },
-    ],
-  },
-  {
-    label: "Navigation",
-    items: [
-      { label: "Quick open", keys: ["Cmd+P"] },
-      { label: "Refresh", keys: ["Cmd+R", "F5"] },
-      { label: "Cancel running query", keys: ["Cmd+."] },
-      // Connection swap is Home → double-click only — no Cmd+K shortcut.
-    ],
-  },
-  {
-    label: "Panels",
-    items: [
-      // Cmd+, toggles the Home / Workspace screens.
-      { label: "Toggle Home/Workspace", keys: ["Cmd+,"] },
-      { label: "Toggle favorites", keys: ["Cmd+Shift+F"] },
-      { label: "Toggle global query log", keys: ["Cmd+Shift+C"] },
-    ],
-  },
-  {
-    label: "Misc",
-    items: [
-      { label: "New query tab", keys: ["Cmd+N", "Cmd+T"] },
-      { label: "Show this cheatsheet", keys: ["?", "Cmd+/"] },
-    ],
-  },
-];
-
 function matchesShortcut(item: ShortcutItem, query: string): boolean {
   if (!query) return true;
   const haystack = `${item.label} ${item.keys.join(" ")}`.toLowerCase();
@@ -86,8 +41,59 @@ function matchesShortcut(item: ShortcutItem, query: string): boolean {
 }
 
 export default function ShortcutCheatsheet() {
+  const { t } = useTranslation("shared");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+
+  // ponytail: SHORTCUT_GROUPS built inside component so labels stay reactive to locale changes.
+  const SHORTCUT_GROUPS: ShortcutGroup[] = useMemo(
+    () => [
+      {
+        label: t("shortcuts.groupTabs"),
+        items: [
+          { label: t("shortcuts.closeTab"), keys: ["Cmd+W"] },
+          { label: t("shortcuts.newQueryTab"), keys: ["Cmd+T"] },
+          { label: t("shortcuts.reopenLastTab"), keys: ["Cmd+Shift+T"] },
+          // Cmd+1..9 jumps to the N-th workspace tab.
+          { label: t("shortcuts.switchToTab"), keys: ["Cmd+1", "…", "Cmd+9"] },
+        ],
+      },
+      {
+        label: t("shortcuts.groupEditing"),
+        items: [
+          { label: t("shortcuts.commitChanges"), keys: ["Cmd+S"] },
+          { label: t("shortcuts.formatSql"), keys: ["Cmd+I"] },
+          { label: t("shortcuts.uglifySql"), keys: ["Cmd+Shift+I"] },
+        ],
+      },
+      {
+        label: t("shortcuts.groupNavigation"),
+        items: [
+          { label: t("shortcuts.quickOpen"), keys: ["Cmd+P"] },
+          { label: t("shortcuts.refresh"), keys: ["Cmd+R", "F5"] },
+          { label: t("shortcuts.cancelQuery"), keys: ["Cmd+."] },
+          // Connection swap is Home → double-click only — no Cmd+K shortcut.
+        ],
+      },
+      {
+        label: t("shortcuts.groupPanels"),
+        items: [
+          // Cmd+, toggles the Home / Workspace screens.
+          { label: t("shortcuts.toggleHomeWorkspace"), keys: ["Cmd+,"] },
+          { label: t("shortcuts.toggleFavorites"), keys: ["Cmd+Shift+F"] },
+          { label: t("shortcuts.toggleQueryLog"), keys: ["Cmd+Shift+C"] },
+        ],
+      },
+      {
+        label: t("shortcuts.groupMisc"),
+        items: [
+          { label: t("shortcuts.newQueryTab"), keys: ["Cmd+N", "Cmd+T"] },
+          { label: t("shortcuts.showCheatsheet"), keys: ["?", "Cmd+/"] },
+        ],
+      },
+    ],
+    [t],
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -121,7 +127,7 @@ export default function ShortcutCheatsheet() {
         matchesShortcut(item, normalizedQuery),
       ),
     })).filter((group) => group.items.length > 0);
-  }, [normalizedQuery]);
+  }, [normalizedQuery, SHORTCUT_GROUPS]);
 
   const matchCount = filteredGroups.reduce(
     (sum, group) => sum + group.items.length,
@@ -132,8 +138,8 @@ export default function ShortcutCheatsheet() {
 
   return (
     <PreviewDialog
-      title="Keyboard shortcuts"
-      description="Press ? or Cmd+/ to toggle this panel."
+      title={t("shortcuts.title")}
+      description={t("shortcuts.description")}
       className="sm:max-w-2xl"
       onCancel={() => setOpen(false)}
     >
@@ -141,8 +147,8 @@ export default function ShortcutCheatsheet() {
         <input
           type="text"
           autoFocus
-          aria-label="Search shortcuts"
-          placeholder="Search shortcuts..."
+          aria-label={t("shortcuts.searchLabel")}
+          placeholder={t("shortcuts.searchPlaceholder")}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring dark:bg-background"
@@ -153,7 +159,7 @@ export default function ShortcutCheatsheet() {
             role="status"
             className="rounded border border-dashed border-border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground"
           >
-            No shortcuts match
+            {t("shortcuts.noMatch")}
           </div>
         ) : (
           <div className="flex max-h-[60vh] flex-col gap-4 overflow-auto pr-1">

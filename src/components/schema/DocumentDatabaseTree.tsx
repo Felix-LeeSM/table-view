@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { useWorkspaceStore } from "@stores/workspaceStore";
@@ -21,6 +22,7 @@ interface DocumentDatabaseTreeProps {
 export default function DocumentDatabaseTree({
   connectionId,
 }: DocumentDatabaseTreeProps) {
+  const { t } = useTranslation("schema");
   const addTab = useWorkspaceStore((s) => s.addTab);
   const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
   // MRU marking is the caller's responsibility — `addTab` no longer emits
@@ -111,15 +113,15 @@ export default function DocumentDatabaseTree({
     <div className="flex flex-col select-none">
       <div className="flex items-center justify-between px-3 py-1">
         <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
-          Databases
+          {t("databasesHeader")}
         </span>
         <Button
           variant="ghost"
           size="icon-xs"
           onClick={handleRefresh}
           disabled={loadingRoot}
-          aria-label="Refresh databases"
-          title="Refresh databases"
+          aria-label={t("refreshDatabasesAria")}
+          title={t("refreshDatabasesTitle")}
         >
           {loadingRoot ? (
             <Loader2 className="animate-spin" size={12} />
@@ -140,8 +142,8 @@ export default function DocumentDatabaseTree({
               setSearchQuery("");
             }
           }}
-          placeholder="Filter databases and collections"
-          aria-label="Filter databases and collections"
+          placeholder={t("filterDatabasesPlaceholder")}
+          aria-label={t("filterDatabasesAria")}
           className={cn(
             "h-6 w-full rounded border border-input bg-background px-2 text-xs",
             "placeholder:text-muted-foreground/70",
@@ -156,7 +158,7 @@ export default function DocumentDatabaseTree({
           role="status"
         >
           <Loader2 className="animate-spin" size={12} />
-          <span>Loading databases...</span>
+          <span>{t("loadingDatabases")}</span>
         </div>
       )}
 
@@ -165,13 +167,13 @@ export default function DocumentDatabaseTree({
           className="mx-3 my-1 rounded border border-destructive/30 bg-destructive/5 px-2 py-1 text-2xs text-destructive"
           role="alert"
         >
-          Database metadata unavailable: {rootError}
+          {t("databaseMetadataUnavailable", { error: rootError })}
         </div>
       )}
 
       {!loadingRoot && !rootError && databases.length === 0 && (
         <div className="px-3 py-2 text-xs italic text-muted-foreground">
-          No databases visible to this connection
+          {t("noDatabasesVisible")}
         </div>
       )}
 
@@ -183,7 +185,7 @@ export default function DocumentDatabaseTree({
             role="status"
             aria-live="polite"
           >
-            No databases match &quot;{trimmedQuery}&quot;
+            {t("noDatabasesMatch", { query: trimmedQuery })}
           </div>
         )}
 
@@ -226,20 +228,22 @@ export default function DocumentDatabaseTree({
                     className="mx-8 my-1 rounded border border-destructive/30 bg-destructive/5 px-2 py-1 text-2xs text-destructive"
                     role="alert"
                   >
-                    Collection metadata unavailable: {collectionError}
+                    {t("collectionMetadataUnavailable", {
+                      error: collectionError,
+                    })}
                   </div>
                 )}
                 {!collectionError &&
                 isLoading &&
                 allCollections.length === 0 ? (
                   <div className="px-8 py-1 text-xs text-muted-foreground">
-                    Loading...
+                    {t("loadingCollections")}
                   </div>
                 ) : !collectionError && collections.length === 0 ? (
                   <div className="px-8 py-1 text-2xs italic text-muted-foreground">
                     {isFiltering && allCollections.length > 0
-                      ? "No matching collections"
-                      : "No collections"}
+                      ? t("noMatchingCollections")
+                      : t("noCollections")}
                   </div>
                 ) : collections.length > 0 ? (
                   collections.map((coll) => {

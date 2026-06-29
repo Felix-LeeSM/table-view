@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Search, X } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
@@ -43,6 +44,7 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 export default function QueryLog() {
+  const { t } = useTranslation("query");
   const [isVisible, setIsVisible] = useState(false);
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState<number | null>(null);
@@ -77,13 +79,15 @@ export default function QueryLog() {
     >
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
-        <span className="text-xs font-medium text-foreground">Query Log</span>
+        <span className="text-xs font-medium text-foreground">
+          {t("queryLog.title")}
+        </span>
         <div className="flex flex-1 items-center gap-1.5">
           <Search size={12} className="shrink-0 text-muted-foreground" />
           <Input
             type="text"
             className="h-5 flex-1 border-0 bg-transparent text-xs shadow-none text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
-            placeholder="Search queries..."
+            placeholder={t("queryLog.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -98,7 +102,7 @@ export default function QueryLog() {
             }}
             data-testid="query-log-new-entry"
           >
-            New entry — refresh
+            {t("queryLog.newEntry")}
           </Button>
         )}
         <ClearHistoryButton
@@ -110,7 +114,7 @@ export default function QueryLog() {
           size="icon-xs"
           className="text-muted-foreground hover:text-foreground"
           onClick={() => setIsVisible(false)}
-          aria-label="Close query log"
+          aria-label={t("queryLog.closeAria")}
         >
           <X size={14} />
         </Button>
@@ -121,8 +125,8 @@ export default function QueryLog() {
         {filtered.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
             {rows.length === 0
-              ? "No queries executed yet"
-              : "No matching queries"}
+              ? t("queryLog.noQueriesYet")
+              : t("queryLog.noMatchingQueries")}
           </div>
         ) : (
           filtered.map((row) => (
@@ -181,7 +185,7 @@ export default function QueryLog() {
               disabled={loading}
               data-testid="query-log-load-more"
             >
-              {loading ? "Loading…" : "Load more"}
+              {loading ? t("queryLog.loading") : t("queryLog.loadMore")}
             </Button>
           </div>
         )}

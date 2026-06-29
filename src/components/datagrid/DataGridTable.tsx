@@ -9,6 +9,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "@components/ui/button";
 import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
@@ -197,6 +198,8 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
     },
     forwardedRef,
   ) {
+    const { t } = useTranslation("datagrid");
+
     // Active cell editor focus target. Only one cell edits at a time, so a
     // single ref is enough — wired to either the <input> or the NULL chip <div>.
     const editorFocusRef = useRef<HTMLElement | null>(null);
@@ -649,18 +652,18 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
             >
               {activeFilterCount > 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2">
-                  <span>0 rows match current filter</span>
+                  <span>{t("noRowsMatch")}</span>
                   <Button
                     variant="outline"
                     size="xs"
-                    aria-label="Clear filters"
+                    aria-label={t("clearFiltersAria")}
                     onClick={() => onClearFilters?.()}
                   >
-                    Clear filter
+                    {t("clearFilter")}
                   </Button>
                 </div>
               ) : (
-                "Table is empty"
+                t("tableEmpty")
               )}
             </div>
           </div>

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -37,6 +38,7 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation("ui");
   return (
     <AlertDialog open onOpenChange={(open) => !open && onCancel()}>
       <AlertDialogContent
@@ -58,7 +60,7 @@ export default function ConfirmDialog({
             onClick={onCancel}
             disabled={loading}
           >
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             variant={danger ? "destructive" : "default"}
@@ -67,7 +69,7 @@ export default function ConfirmDialog({
             disabled={loading}
             aria-label={confirmLabel}
           >
-            {loading ? "Processing..." : confirmLabel}
+            {loading ? t("processing") : confirmLabel}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

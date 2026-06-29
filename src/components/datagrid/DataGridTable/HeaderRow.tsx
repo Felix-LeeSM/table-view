@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Key } from "lucide-react";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
@@ -94,6 +95,7 @@ export default function HeaderRow({
   onShowAllColumns,
   anyColumnHidden = false,
 }: HeaderRowProps) {
+  const { t } = useTranslation("datagrid");
   const sortMouseStartRef = useRef<{ x: number; y: number } | null>(null);
   const hasContextMenu = !!(
     onSortColumn ||
@@ -144,15 +146,15 @@ export default function HeaderRow({
                 if (editingCell) onSaveCurrentEdit();
                 onSort(col.name, e.shiftKey);
               }}
-              title={`Sort by ${col.name}`}
+              title={t("sortByTitle", { col: col.name })}
             >
               <div className="flex items-center gap-1 min-w-0">
                 {col.is_primary_key && (
-                  <span title="Primary Key" className="shrink-0">
+                  <span title={t("primaryKey")} className="shrink-0">
                     <Key
                       size={12}
                       className="text-warning"
-                      aria-label="Primary Key"
+                      aria-label={t("primaryKey")}
                     />
                   </span>
                 )}
@@ -196,28 +198,30 @@ export default function HeaderRow({
           return (
             <ContextMenu key={col.name}>
               <ContextMenuTrigger asChild>{headerInner}</ContextMenuTrigger>
-              <ContextMenuContent aria-label={`Column actions for ${col.name}`}>
+              <ContextMenuContent
+                aria-label={t("columnActionsAria", { col: col.name })}
+              >
                 {onSortColumn && (
                   <>
                     <ContextMenuItem
                       onSelect={() => onSortColumn(col.name, "ASC", false)}
                     >
-                      Sort ASC
+                      {t("sortAsc")}
                     </ContextMenuItem>
                     <ContextMenuItem
                       onSelect={() => onSortColumn(col.name, "DESC", false)}
                     >
-                      Sort DESC
+                      {t("sortDesc")}
                     </ContextMenuItem>
                     <ContextMenuItem
                       onSelect={() => onSortColumn(col.name, "ASC", true)}
                     >
-                      Add to sort ASC
+                      {t("addToSortAsc")}
                     </ContextMenuItem>
                     <ContextMenuItem
                       onSelect={() => onSortColumn(col.name, "DESC", true)}
                     >
-                      Add to sort DESC
+                      {t("addToSortDesc")}
                     </ContextMenuItem>
                   </>
                 )}
@@ -229,7 +233,7 @@ export default function HeaderRow({
                     disabled={!isSorted}
                     onSelect={() => onClearColumnSort(col.name)}
                   >
-                    Clear sort for this column
+                    {t("clearSortForColumn")}
                   </ContextMenuItem>
                 )}
                 {onClearAllSorts && (
@@ -237,7 +241,7 @@ export default function HeaderRow({
                     disabled={sorts.length === 0}
                     onSelect={() => onClearAllSorts()}
                   >
-                    Clear all sorts
+                    {t("clearAllSorts")}
                   </ContextMenuItem>
                 )}
                 {onHideColumn && (
@@ -246,7 +250,7 @@ export default function HeaderRow({
                       <ContextMenuSeparator />
                     )}
                     <ContextMenuItem onSelect={() => onHideColumn(col.name)}>
-                      Hide column
+                      {t("hideColumn")}
                     </ContextMenuItem>
                   </>
                 )}
@@ -260,7 +264,7 @@ export default function HeaderRow({
                       onHideColumn) && <ContextMenuSeparator />}
                     {onResetColumnWidths && (
                       <ContextMenuItem onSelect={() => onResetColumnWidths()}>
-                        Reset column widths
+                        {t("resetColumnWidths")}
                       </ContextMenuItem>
                     )}
                     {onShowAllColumns && (
@@ -268,7 +272,7 @@ export default function HeaderRow({
                         disabled={!anyColumnHidden}
                         onSelect={() => onShowAllColumns()}
                       >
-                        Show all columns
+                        {t("showAllColumns")}
                       </ContextMenuItem>
                     )}
                   </>

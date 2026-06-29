@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X, Table2, Eye, Code2, Terminal } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   Dialog,
@@ -23,21 +24,26 @@ interface QuickOpenItem {
   source?: string | null;
 }
 
-const KIND_META: Record<
-  QuickOpenItemKind,
-  { label: string; Icon: typeof Table2 }
-> = {
-  table: { label: "Table", Icon: Table2 },
-  view: { label: "View", Icon: Eye },
-  function: { label: "Function", Icon: Code2 },
-  procedure: { label: "Procedure", Icon: Terminal },
+const KIND_ICON: Record<QuickOpenItemKind, typeof Table2> = {
+  table: Table2,
+  view: Eye,
+  function: Code2,
+  procedure: Terminal,
 };
 
 export default function QuickOpen() {
+  const { t } = useTranslation("shared");
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const KIND_LABEL: Record<QuickOpenItemKind, string> = {
+    table: t("quickOpen.kindTable"),
+    view: t("quickOpen.kindView"),
+    function: t("quickOpen.kindFunction"),
+    procedure: t("quickOpen.kindProcedure"),
+  };
 
   const tables = useSchemaStore((s) => s.tables);
   const views = useSchemaStore((s) => s.views);
@@ -187,10 +193,8 @@ export default function QuickOpen() {
         showCloseButton={false}
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>Quick Open</DialogTitle>
-          <DialogDescription>
-            Search tables, views, and functions across connected databases
-          </DialogDescription>
+          <DialogTitle>{t("quickOpen.title")}</DialogTitle>
+          <DialogDescription>{t("quickOpen.description")}</DialogDescription>
         </DialogHeader>
         {/* Search input */}
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -207,7 +211,7 @@ export default function QuickOpen() {
                 : undefined
             }
             className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-            placeholder="Search tables, views, functions..."
+            placeholder={t("quickOpen.placeholder")}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -231,12 +235,13 @@ export default function QuickOpen() {
           {filtered.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">
               {items.length === 0
-                ? "No connected databases — open a connection first"
-                : "No results"}
+                ? t("quickOpen.noConnections")
+                : t("quickOpen.noResults")}
             </div>
           ) : (
             filtered.map((item, index) => {
-              const meta = KIND_META[item.kind];
+              const Icon = KIND_ICON[item.kind];
+              const kindLabel = KIND_LABEL[item.kind];
               return (
                 <Button
                   key={`${item.connectionId}-${item.kind}-${item.schema}-${item.name}`}
@@ -251,10 +256,10 @@ export default function QuickOpen() {
                   onClick={() => handleSelect(item)}
                   onMouseEnter={() => setActiveIndex(index)}
                 >
-                  <meta.Icon
+                  <Icon
                     size={13}
                     className="shrink-0 text-muted-foreground"
-                    aria-label={meta.label}
+                    aria-label={kindLabel}
                   />
                   <span className="text-foreground">{item.name}</span>
                   <span className="text-muted-foreground">· {item.schema}</span>

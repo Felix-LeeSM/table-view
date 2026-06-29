@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, Plus } from "lucide-react";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
@@ -70,6 +71,7 @@ export default function AddDocumentModal({
   database,
   collection,
 }: AddDocumentModalProps) {
+  const { t } = useTranslation("document");
   const [text, setText] = useState<string>(DEFAULT_TEMPLATE);
   const [parseError, setParseError] = useState<string | null>(null);
 
@@ -102,7 +104,7 @@ export default function AddDocumentModal({
     const current = view ? view.state.doc.toString() : text;
     const trimmed = current.trim();
     if (trimmed.length === 0) {
-      setParseError("Document is required");
+      setParseError(t("addDocument.errorRequired"));
       return;
     }
     let parsed: unknown;
@@ -110,12 +112,14 @@ export default function AddDocumentModal({
       parsed = JSON.parse(trimmed);
     } catch (err) {
       setParseError(
-        err instanceof Error ? `Invalid JSON: ${err.message}` : "Invalid JSON",
+        err instanceof Error
+          ? t("addDocument.errorInvalidJsonDetail", { message: err.message })
+          : t("addDocument.errorInvalidJson"),
       );
       return;
     }
     if (!isPlainObject(parsed)) {
-      setParseError("Document must be a JSON object");
+      setParseError(t("addDocument.errorNotObject"));
       return;
     }
     setParseError(null);
@@ -232,36 +236,31 @@ export default function AddDocumentModal({
 
   return (
     <FormDialog
-      title="Add Document"
-      description="Insert a new MongoDB document"
+      title={t("addDocument.title")}
+      description={t("addDocument.description")}
       className="w-dialog-lg bg-background"
       onSubmit={handleSubmit}
       onCancel={onCancel}
       isSubmitting={loading}
-      submitAriaLabel="Submit add document"
+      submitAriaLabel={t("addDocument.submitAriaLabel")}
       submitLabel={
         <>
           {loading ? <Loader2 className="animate-spin" /> : <Plus />}
-          {loading ? "Inserting..." : "Add"}
+          {loading ? t("addDocument.inserting") : t("addDocument.add")}
         </>
       }
     >
       <span className="text-xs font-medium text-secondary-foreground">
-        Document (JSON)
+        {t("addDocument.fieldLabel")}
       </span>
       <div
         ref={setContainerRef}
         role="textbox"
-        aria-label="Document JSON"
+        aria-label={t("addDocument.editorAriaLabel")}
         aria-multiline="true"
         className="rounded border border-border bg-secondary outline-none focus-within:ring-2 focus-within:ring-ring"
       />
-      <p className="text-2xs text-muted-foreground">
-        Omit the <code className="font-mono">_id</code> field to let MongoDB
-        generate one. Press{" "}
-        <kbd className="rounded bg-secondary px-1 py-0.5">Cmd+Enter</kbd> to
-        submit.
-      </p>
+      <p className="text-2xs text-muted-foreground">{t("addDocument.hint")}</p>
       {parseError && (
         <p role="alert" className="text-xs text-destructive">
           {parseError}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FileSearch, Loader2, Play } from "lucide-react";
 
@@ -120,6 +121,7 @@ export default function DuckdbFileAnalyticsDialog({
   tabId,
   onClose,
 }: DuckdbFileAnalyticsDialogProps) {
+  const { t } = useTranslation("query");
   const [source, setSource] = useState<FileAnalyticsSource | null>(null);
   const [preview, setPreview] = useState<FileAnalyticsPreview | null>(null);
   const [querySql, setQuerySql] = useState("");
@@ -224,11 +226,11 @@ export default function DuckdbFileAnalyticsDialog({
             <div className="flex min-w-0 items-center gap-2">
               <FileSearch className="size-4 shrink-0" />
               <DialogTitle className="truncate text-sm">
-                Local file query
+                {t("fileAnalytics.dialogTitle")}
               </DialogTitle>
             </div>
             <DialogDescription className="sr-only">
-              Query a registered DuckDB local file source.
+              {t("fileAnalytics.dialogDescriptionSrOnly")}
             </DialogDescription>
           </DialogHeader>
         </DialogShell.Header>
@@ -239,10 +241,10 @@ export default function DuckdbFileAnalyticsDialog({
               size="sm"
               onClick={chooseFile}
               disabled={loading}
-              aria-label="Choose local file"
+              aria-label={t("fileAnalytics.chooseFileAria")}
             >
               {loading ? <Loader2 className="animate-spin" /> : <FileSearch />}
-              <span>Choose File</span>
+              <span>{t("fileAnalytics.chooseFile")}</span>
             </Button>
             {source && (
               <div className="min-w-0 text-xs text-muted-foreground">
@@ -267,11 +269,11 @@ export default function DuckdbFileAnalyticsDialog({
           {preview && (
             <div
               role="region"
-              aria-label="Preview result"
+              aria-label={t("fileAnalytics.previewResultAria")}
               className="space-y-2"
             >
               <div className="text-xs font-medium text-muted-foreground">
-                Preview result
+                {t("fileAnalytics.previewResult")}
               </div>
               <ResultTable result={preview.result} />
             </div>
@@ -283,7 +285,7 @@ export default function DuckdbFileAnalyticsDialog({
                 htmlFor="duckdb-file-analytics-source-sql"
                 className="text-xs font-medium text-muted-foreground"
               >
-                Source SQL
+                {t("fileAnalytics.sourceSQL")}
               </label>
               <textarea
                 id="duckdb-file-analytics-source-sql"
@@ -297,23 +299,27 @@ export default function DuckdbFileAnalyticsDialog({
                   size="sm"
                   onClick={runSourceQuery}
                   disabled={queryLoading || querySql.trim().length === 0}
-                  aria-label="Run source query"
+                  aria-label={t("fileAnalytics.runSourceQueryAria")}
                 >
                   {queryLoading ? (
                     <Loader2 className="animate-spin" />
                   ) : (
                     <Play />
                   )}
-                  <span>Run Query</span>
+                  <span>{t("fileAnalytics.runQuery")}</span>
                 </Button>
               </div>
             </div>
           )}
 
           {queryResult && (
-            <div role="region" aria-label="Query result" className="space-y-2">
+            <div
+              role="region"
+              aria-label={t("fileAnalytics.queryResultAria")}
+              className="space-y-2"
+            >
               <div className="text-xs font-medium text-muted-foreground">
-                Query result
+                {t("fileAnalytics.queryResult")}
               </div>
               <ResultTable result={queryResult.result} />
             </div>
@@ -323,7 +329,7 @@ export default function DuckdbFileAnalyticsDialog({
         <DialogShell.Footer>
           <DialogFooter className="px-4 py-3">
             <Button variant="outline" size="sm" onClick={onClose}>
-              Close
+              {t("fileAnalytics.close")}
             </Button>
           </DialogFooter>
         </DialogShell.Footer>

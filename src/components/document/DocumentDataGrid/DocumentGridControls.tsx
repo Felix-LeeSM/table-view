@@ -1,4 +1,5 @@
 import { Loader2, Filter } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { ExportButton } from "@components/shared/ExportButton";
 import DocumentFilterBar from "@components/document/DocumentFilterBar";
 import { Button } from "@components/ui/button";
@@ -73,6 +74,7 @@ export default function DocumentGridControls({
   onShowAllHiddenColumns,
   onOpenProjection,
 }: DocumentGridControlsProps) {
+  const { t } = useTranslation("document");
   return (
     <>
       <DataGridToolbar
@@ -121,11 +123,13 @@ export default function DocumentGridControls({
                   : "text-muted-foreground"
               }
               onClick={onOpenProjection}
-              aria-label="Field projection"
+              aria-label={t("gridControls.projectionAriaLabel")}
               title={
                 projection && Object.keys(projection).length > 0
-                  ? `Projection: ${Object.keys(projection).length} field(s)`
-                  : "Server-side field projection"
+                  ? t("gridControls.projectionActiveTitle", {
+                      count: Object.keys(projection).length,
+                    })
+                  : t("gridControls.projectionInactiveTitle")
               }
             >
               <Filter />
@@ -147,21 +151,21 @@ export default function DocumentGridControls({
       {hiddenColumnCount > 0 && (
         <div
           className="flex items-center justify-between border-b border-border bg-muted/40 px-3 py-1.5 text-xs"
-          aria-label="Hidden columns badge"
+          aria-label={t("gridControls.hiddenBadgeAriaLabel")}
         >
           <span className="text-muted-foreground">
             {hiddenColumnCount === 1
-              ? "1 column hidden"
-              : `${hiddenColumnCount} columns hidden`}
+              ? t("gridControls.hiddenOne")
+              : t("gridControls.hiddenMany", { count: hiddenColumnCount })}
           </span>
           <Button
             variant="ghost"
             size="xs"
             className="text-primary hover:text-primary/80"
             onClick={onShowAllHiddenColumns}
-            aria-label="Show all hidden columns"
+            aria-label={t("gridControls.showAllAriaLabel")}
           >
-            Show all
+            {t("gridControls.showAll")}
           </Button>
         </div>
       )}

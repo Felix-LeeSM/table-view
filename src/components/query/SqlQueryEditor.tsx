@@ -1,4 +1,5 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useTranslation } from "react-i18next";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
@@ -98,6 +99,7 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
   ) {
     // Resolve dialect once so ref + reconfigure paths share the same value.
     const effectiveDialect: SQLDialect = sqlDialect ?? StandardSQL;
+    const { t } = useTranslation("query");
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
 
@@ -273,7 +275,7 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
         ref={containerRef}
         className="h-full w-full overflow-hidden"
         role="textbox"
-        aria-label="SQL Query Editor"
+        aria-label={t("sql.editorAria")}
         aria-multiline="true"
         data-paradigm="rdb"
         data-query-mode="sql"

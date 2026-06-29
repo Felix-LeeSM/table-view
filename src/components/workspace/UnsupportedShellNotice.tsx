@@ -1,4 +1,5 @@
 import { KeyRound, SearchCode } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export interface UnsupportedShellNoticeProps {
   /**
@@ -9,15 +10,12 @@ export interface UnsupportedShellNoticeProps {
   paradigm: "kv" | "search";
 }
 
-const PARADIGM_LABEL: Record<UnsupportedShellNoticeProps["paradigm"], string> =
-  {
-    kv: "Key-value",
-    search: "Search",
-  };
-
-const PARADIGM_ARIA: Record<UnsupportedShellNoticeProps["paradigm"], string> = {
-  kv: "Key-value workspace placeholder",
-  search: "Search workspace placeholder",
+const PARADIGM_ICON: Record<
+  UnsupportedShellNoticeProps["paradigm"],
+  typeof KeyRound
+> = {
+  kv: KeyRound,
+  search: SearchCode,
 };
 
 /**
@@ -35,20 +33,21 @@ const PARADIGM_ARIA: Record<UnsupportedShellNoticeProps["paradigm"], string> = {
 export default function UnsupportedShellNotice({
   paradigm,
 }: UnsupportedShellNoticeProps) {
-  const Icon = paradigm === "kv" ? KeyRound : SearchCode;
-  const label = PARADIGM_LABEL[paradigm];
+  const { t } = useTranslation("workspace");
+  const Icon = PARADIGM_ICON[paradigm];
+  const label = t(`unsupportedShell.${paradigm}.label`);
   return (
     <div
       role="status"
-      aria-label={PARADIGM_ARIA[paradigm]}
+      aria-label={t(`unsupportedShell.${paradigm}.ariaLabel`)}
       className="flex flex-1 flex-col items-center justify-center px-4 py-8 text-center select-none"
     >
       <Icon size={36} className="mb-3 text-muted-foreground" />
       <p className="text-sm font-medium text-secondary-foreground">
-        Not available yet
+        {t("unsupportedShell.heading")}
       </p>
       <p className="mt-1 text-xs text-muted-foreground">
-        {label} database support is planned but not yet implemented.
+        {t("unsupportedShell.body", { label })}
       </p>
     </div>
   );

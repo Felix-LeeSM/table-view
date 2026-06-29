@@ -1,6 +1,7 @@
 import * as React from "react";
 import { XIcon, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
+import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,7 @@ function DialogContent({
   showCloseButton?: boolean;
   tone?: DialogTone;
 }) {
+  const { t } = useTranslation("ui");
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -87,7 +89,7 @@ function DialogContent({
             className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t("close")}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -137,6 +139,7 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean;
 }) {
+  const { t } = useTranslation("ui");
   return (
     <div
       data-slot="dialog-footer"
@@ -149,7 +152,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
+          <Button variant="outline">{t("close")}</Button>
         </DialogPrimitive.Close>
       )}
     </div>
@@ -221,11 +224,13 @@ export interface DialogFeedbackProps extends Omit<
 function DialogFeedback({
   state,
   message,
-  loadingText = "Loading...",
+  loadingText,
   slotName = "dialog-feedback",
   className,
   ...rest
 }: DialogFeedbackProps) {
+  const { t } = useTranslation("ui");
+  const resolvedLoadingText = loadingText ?? t("loading");
   return (
     <div
       data-slot={slotName}
@@ -249,7 +254,7 @@ function DialogFeedback({
           className="flex min-h-[2.25rem] items-center gap-2 rounded bg-muted/40 px-3 py-2 text-sm text-muted-foreground duration-200 animate-in fade-in"
         >
           <Loader2 className="size-4 animate-spin" />
-          <span>{loadingText}</span>
+          <span>{resolvedLoadingText}</span>
         </div>
       ) : (
         <div

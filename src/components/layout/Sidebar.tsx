@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Sun,
   Moon,
@@ -48,6 +49,7 @@ const PERSIST_DEBOUNCE_MS = 500;
  * launcher 윈도우 (Cmd+, 또는 dock 아이콘 reopen) 에서 진행한다.
  */
 export default function Sidebar() {
+  const { t } = useTranslation("layout");
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   // sprint-366 (Phase 4, Q15) — Sidebar lives in the workspace window only
@@ -182,8 +184,8 @@ export default function Sidebar() {
   }, [focusedDbType]);
   const isAllCollapsed = expandedCount === 0;
   const toggleLabel = isAllCollapsed
-    ? `Expand all ${sidebarObjectPlural}`
-    : `Collapse all ${sidebarObjectPlural}`;
+    ? t("sidebar.expandAll", { objectPlural: sidebarObjectPlural })
+    : t("sidebar.collapseAll", { objectPlural: sidebarObjectPlural });
   const ToggleIcon = isAllCollapsed ? UnfoldVertical : FoldVertical;
   const handleToggleExpansion = useCallback(() => {
     if (!focusedConnId) return;
@@ -226,8 +228,8 @@ export default function Sidebar() {
           >
             {focusedConnId
               ? (connections.find((c) => c.id === focusedConnId)?.name ??
-                "Schemas")
-              : "Schemas"}
+                t("sidebar.schemasLabel"))
+              : t("sidebar.schemasLabel")}
           </span>
           <div className="flex items-center gap-1">
             {/* Sprint 379 — DB type 별 객체 이름 + 토글. PG → schemas,
@@ -250,8 +252,8 @@ export default function Sidebar() {
               variant="ghost"
               size="xs"
               className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-              aria-label="New Query Tab"
-              title="New Query Tab"
+              aria-label={t("sidebar.newQueryTabAria")}
+              title={t("sidebar.newQueryTabAria")}
               disabled={!selectedConnected}
               onClick={() => {
                 if (selectedConnected && focusedConnId) {
@@ -262,7 +264,7 @@ export default function Sidebar() {
               }}
             >
               <Plus />
-              Query
+              {t("sidebar.query")}
             </Button>
           </div>
         </div>
@@ -282,7 +284,10 @@ export default function Sidebar() {
                 variant="ghost"
                 size="xs"
                 className="w-full justify-start text-muted-foreground"
-                aria-label={`Theme picker: currently ${activeEntry.name} (${themeMode})`}
+                aria-label={t("sidebar.themePickerAria", {
+                  name: activeEntry.name,
+                  mode: themeMode,
+                })}
               >
                 <span
                   aria-hidden="true"
@@ -314,13 +319,13 @@ export default function Sidebar() {
             size="xs"
             type="button"
             className="mt-1 w-full justify-start text-muted-foreground"
-            aria-label="Reset sidebar width"
-            title="Reset sidebar width to default"
+            aria-label={t("sidebar.resetWidthAria")}
+            title={t("sidebar.resetWidthTitle")}
             onClick={handleResetSidebarWidth}
             data-testid="sidebar-reset-width"
           >
             <RotateCcw className="h-3 w-3" aria-hidden="true" />
-            <span className="ml-1 text-3xs">Reset width</span>
+            <span className="ml-1 text-3xs">{t("sidebar.resetWidth")}</span>
           </Button>
         </div>
 

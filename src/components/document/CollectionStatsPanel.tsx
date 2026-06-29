@@ -3,6 +3,7 @@
 // `pg_stat_user_tables` (RDB) or `runCommand({collStats})` (Mongo).
 
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,7 @@ export function CollectionStatsPanel({
   collection,
   paradigm,
 }: CollectionStatsPanelProps) {
+  const { t } = useTranslation("document");
   const [stats, setStats] = useState<CollectionStatsRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
@@ -50,7 +52,7 @@ export function CollectionStatsPanel({
 
   return (
     <section
-      aria-label="Collection stats"
+      aria-label={t("collectionStats.ariaLabel")}
       data-paradigm={paradigm}
       data-testid="collection-stats-panel"
       className="flex flex-col gap-2 p-3"
@@ -72,7 +74,9 @@ export function CollectionStatsPanel({
           ) : (
             <RefreshCw size={12} aria-hidden />
           )}
-          {hasFetched ? "Refresh" : "Load stats"}
+          {hasFetched
+            ? t("collectionStats.refresh")
+            : t("collectionStats.loadStats")}
         </Button>
       </header>
 
@@ -91,45 +95,61 @@ export function CollectionStatsPanel({
           data-testid="collection-stats-grid"
           className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs"
         >
-          <dt className="text-muted-foreground">Rows</dt>
+          <dt className="text-muted-foreground">{t("collectionStats.rows")}</dt>
           <dd className="font-mono">{stats.rows.toLocaleString()}</dd>
-          <dt className="text-muted-foreground">Size (bytes)</dt>
+          <dt className="text-muted-foreground">
+            {t("collectionStats.sizeBytes")}
+          </dt>
           <dd className="font-mono">{stats.sizeBytes.toLocaleString()}</dd>
-          <dt className="text-muted-foreground">Indexes</dt>
+          <dt className="text-muted-foreground">
+            {t("collectionStats.indexes")}
+          </dt>
           <dd className="font-mono">{stats.indexes}</dd>
           {stats.lastVacuum !== null && (
             <>
-              <dt className="text-muted-foreground">Last vacuum</dt>
+              <dt className="text-muted-foreground">
+                {t("collectionStats.lastVacuum")}
+              </dt>
               <dd className="font-mono">{stats.lastVacuum}</dd>
             </>
           )}
           {stats.lastAnalyze !== null && (
             <>
-              <dt className="text-muted-foreground">Last analyze</dt>
+              <dt className="text-muted-foreground">
+                {t("collectionStats.lastAnalyze")}
+              </dt>
               <dd className="font-mono">{stats.lastAnalyze}</dd>
             </>
           )}
           {stats.seqScans !== null && (
             <>
-              <dt className="text-muted-foreground">Seq scans</dt>
+              <dt className="text-muted-foreground">
+                {t("collectionStats.seqScans")}
+              </dt>
               <dd className="font-mono">{stats.seqScans.toLocaleString()}</dd>
             </>
           )}
           {stats.idxScans !== null && (
             <>
-              <dt className="text-muted-foreground">Idx scans</dt>
+              <dt className="text-muted-foreground">
+                {t("collectionStats.idxScans")}
+              </dt>
               <dd className="font-mono">{stats.idxScans.toLocaleString()}</dd>
             </>
           )}
           {stats.nDead !== null && (
             <>
-              <dt className="text-muted-foreground">Dead rows</dt>
+              <dt className="text-muted-foreground">
+                {t("collectionStats.deadRows")}
+              </dt>
               <dd className="font-mono">{stats.nDead.toLocaleString()}</dd>
             </>
           )}
           {Object.keys(stats.extras).length > 0 && (
             <>
-              <dt className="col-span-2 mt-2 text-muted-foreground">Extras</dt>
+              <dt className="col-span-2 mt-2 text-muted-foreground">
+                {t("collectionStats.extras")}
+              </dt>
               <dd className="col-span-2 max-h-48 overflow-auto rounded-md border border-border bg-secondary/30 p-2 font-mono text-xs">
                 {safeStringifyCell(stats.extras, 2)}
               </dd>

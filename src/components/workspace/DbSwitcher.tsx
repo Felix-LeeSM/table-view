@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { ChevronDown, Database, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useActiveTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
@@ -54,28 +55,32 @@ import { hasConnectionCapability } from "@/types/dataSource";
  * branch surfaces the *user-visible* reason the switcher is non-interactive
  * (no internal milestone references in user-facing copy).
  */
-function readOnlyTooltipCopy(args: {
-  hasActiveTab: boolean;
-  paradigm: Paradigm | null;
-  dbType: DatabaseType | null;
-  isConnected: boolean;
-}): string {
+function readOnlyTooltipCopy(
+  args: {
+    hasActiveTab: boolean;
+    paradigm: Paradigm | null;
+    dbType: DatabaseType | null;
+    isConnected: boolean;
+  },
+  t: (key: string) => string,
+): string {
   if (!args.hasActiveTab) {
-    return "Open a connection to switch databases.";
+    return t("dbSwitcher.tooltip.noTab");
   }
   if (args.paradigm === "search") {
-    return "Search scope is selected by index, alias, or data stream.";
+    return t("dbSwitcher.tooltip.searchParadigm");
   }
   if (args.dbType === "sqlite") {
-    return "SQLite uses one database file per connection.";
+    return t("dbSwitcher.tooltip.sqlite");
   }
   if (!args.isConnected) {
-    return "Connect to switch databases.";
+    return t("dbSwitcher.tooltip.notConnected");
   }
-  return "Database switching isn't available right now.";
+  return t("dbSwitcher.tooltip.unavailable");
 }
 
 export default function DbSwitcher() {
+  const { t } = useTranslation("workspace");
   const activeTab = useActiveTab();
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
@@ -152,7 +157,7 @@ export default function DbSwitcher() {
     // tab-specific database — use the connection's activeDb.
     label = activeDb;
   } else {
-    label = "(default)";
+    label = t("dbSwitcher.defaultLabel");
   }
 
   const fetchList = useCallback(async () => {
@@ -170,11 +175,11 @@ export default function DbSwitcher() {
       // didn't open. The inline error chip below renders the same message;
       // the toast is a redundant surface for users who clicked outside
       // before reading the popover.
-      toast.error(`Failed to list databases: ${message}`);
+      toast.error(t("dbSwitcher.toast.listFailed", { message }));
     } finally {
       setLoading(false);
     }
-  }, [activeConn, paradigm]);
+  }, [activeConn, paradigm, t]);
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -221,10 +226,10 @@ export default function DbSwitcher() {
           clearDocumentQueryConnection(activeConn.id);
         }
         setOpen(false);
-        toast.success(`Switched to "${dbName}".`);
+        toast.success(t("dbSwitcher.toast.switched", { dbName }));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        toast.error(`Failed to switch DB: ${message}`);
+        toast.error(t("dbSwitcher.toast.switchFailed", { message }));
       }
     },
     [
@@ -234,6 +239,7 @@ export default function DbSwitcher() {
       setActiveDb,
       clearDocumentCatalogConnection,
       clearDocumentQueryConnection,
+      t,
     ],
   );
 
@@ -254,19 +260,22 @@ export default function DbSwitcher() {
     // Paradigm/state-aware copy via Radix Tooltip only — the native HTML
     // `title` attribute is omitted to avoid the "stuck tooltip" bug
     // (Radix dismisses on hover-out, native bubble does not).
-    const tooltipCopy = readOnlyTooltipCopy({
-      hasActiveTab: !!activeTab,
-      paradigm,
-      dbType: activeConn?.dbType ?? null,
-      isConnected,
-    });
+    const tooltipCopy = readOnlyTooltipCopy(
+      {
+        hasActiveTab: !!activeTab,
+        paradigm,
+        dbType: activeConn?.dbType ?? null,
+        isConnected,
+      },
+      t,
+    );
     return (
       <TooltipProvider delayDuration={200}>
         <Tooltip>
           <TooltipTrigger asChild>
             <span
               role="button"
-              aria-label="Active database (read-only)"
+              aria-label={t("dbSwitcher.readOnlyAria")}
               aria-disabled="true"
               data-disabled="true"
               tabIndex={-1}
@@ -298,7 +307,7 @@ export default function DbSwitcher() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="Active database switcher"
+          aria-label={t("dbSwitcher.switcherAria")}
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-busy={loading || undefined}
@@ -309,7 +318,7 @@ export default function DbSwitcher() {
               <Loader2
                 size={12}
                 className="shrink-0 animate-spin text-muted-foreground"
-                aria-label="Loading databases"
+                aria-label={t("dbSwitcher.loadingDatabasesAria")}
               />
             ) : (
               <Database
@@ -331,7 +340,7 @@ export default function DbSwitcher() {
             className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground"
           >
             <Loader2 size={12} className="animate-spin" aria-hidden />
-            Loading databases…
+            {t("dbSwitcher.loadingDatabases")}
           </div>
         ) : errorMessage ? (
           <div
@@ -343,12 +352,12 @@ export default function DbSwitcher() {
           </div>
         ) : databases.length === 0 ? (
           <div className="px-2 py-1.5 text-xs text-muted-foreground">
-            No databases available.
+            {t("dbSwitcher.noDatabases")}
           </div>
         ) : (
           <ul
             role="listbox"
-            aria-label="Available databases"
+            aria-label={t("dbSwitcher.availableDatabases")}
             className="flex flex-col"
           >
             {databases.map((db, idx) => (

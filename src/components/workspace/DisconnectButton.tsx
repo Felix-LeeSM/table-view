@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Loader2, Unplug } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
@@ -29,8 +30,9 @@ export interface DisconnectButtonProps {
 }
 
 export default function DisconnectButton({
-  ariaLabel = "Disconnect",
+  ariaLabel,
 }: DisconnectButtonProps = {}) {
+  const { t } = useTranslation("workspace");
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const { disconnect: disconnectFromDatabase } = useConnectionLifecycle();
@@ -45,9 +47,10 @@ export default function DisconnectButton({
   const focusedConn = focusedConnId
     ? connections.find((c) => c.id === focusedConnId)
     : undefined;
+  const resolvedAriaLabel = ariaLabel ?? t("disconnect.ariaLabel");
   const tooltip = focusedConn
-    ? `Disconnect from ${focusedConn.name}`
-    : "Disconnect (no active connection)";
+    ? t("disconnect.tooltip", { name: focusedConn.name })
+    : t("disconnect.tooltipNoConn");
 
   const handleClick = async () => {
     if (!focusedConnId || !isConnected) return;
@@ -59,7 +62,12 @@ export default function DisconnectButton({
       // the toast here is the user-facing surface. The button re-enables
       // automatically via `finally` below.
       toast.error(
-        `Failed to disconnect${focusedConn ? ` from "${focusedConn.name}"` : ""}: ${String(e)}`,
+        focusedConn
+          ? t("disconnect.toastFailed", {
+              name: focusedConn.name,
+              error: String(e),
+            })
+          : t("disconnect.toastFailedNoConn", { error: String(e) }),
       );
     } finally {
       setBusy(false);
@@ -71,7 +79,7 @@ export default function DisconnectButton({
       variant="ghost"
       size="icon-xs"
       type="button"
-      aria-label={busy ? "Disconnecting…" : ariaLabel}
+      aria-label={busy ? t("disconnect.disconnecting") : resolvedAriaLabel}
       title={tooltip}
       data-busy={busy ? "true" : "false"}
       disabled={disabled}

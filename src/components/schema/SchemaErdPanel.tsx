@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Network } from "lucide-react";
 import {
   Select,
@@ -39,6 +40,7 @@ export default function SchemaErdPanel({
   connectionId,
   database,
 }: SchemaErdPanelProps) {
+  const { t } = useTranslation("schema");
   const [selectedTableId, setSelectedTableId] = useState<string | undefined>();
   const [comparisonKey, setComparisonKey] = useState(NO_COMPARISON);
   const metadataInFlightRef = useRef<Set<string>>(new Set());
@@ -251,12 +253,9 @@ export default function SchemaErdPanel({
       >
         <Network size={28} aria-hidden="true" />
         <p className="text-sm font-medium text-foreground">
-          ERD and dependency view are available for relational runtime adapters
+          {t("erdNotAvailableTitle")}
         </p>
-        <p className="max-w-md text-xs">
-          Non-RDB connections and file analytics aliases do not expose this
-          SchemaGraph surface.
-        </p>
+        <p className="max-w-md text-xs">{t("erdNotAvailableDesc")}</p>
       </div>
     );
   }
@@ -266,23 +265,27 @@ export default function SchemaErdPanel({
       {cachedSnapshotOptions.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-secondary px-3 py-1.5">
           <div className="min-w-0">
-            <p className="text-xs font-medium text-foreground">Schema diff</p>
+            <p className="text-xs font-medium text-foreground">
+              {t("schemaDiffHeading")}
+            </p>
             <p className="text-3xs text-muted-foreground">
-              Compare cached SchemaGraph snapshots only
+              {t("compareCachedOnly")}
             </p>
           </div>
           <label className="flex min-w-[14rem] max-w-md flex-1 items-center gap-2 text-xs text-muted-foreground sm:flex-none">
-            <span className="sr-only">Compare cached schema snapshot</span>
+            <span className="sr-only">{t("compareCachedAria")}</span>
             <Select value={comparisonKey} onValueChange={setComparisonKey}>
               <SelectTrigger
-                aria-label="Compare cached schema snapshot"
+                aria-label={t("compareCachedAria")}
                 size="xs"
                 className="min-w-0 flex-1 border-border bg-background text-xs"
               >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NO_COMPARISON}>No comparison</SelectItem>
+                <SelectItem value={NO_COMPARISON}>
+                  {t("noComparison")}
+                </SelectItem>
                 {cachedSnapshotOptions.map((option) => (
                   <SelectItem key={option.key} value={option.key}>
                     {option.label}

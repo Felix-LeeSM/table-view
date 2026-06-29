@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -46,6 +47,7 @@ export function DropMongoIndexDialog({
   onClose,
   onDropped,
 }: DropMongoIndexDialogProps) {
+  const { t } = useTranslation("document");
   const [typing, setTyping] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +69,7 @@ export function DropMongoIndexDialog({
     setSubmitting(true);
     try {
       await dropMongoIndex(connectionId, database, collection, indexName, true);
-      toast.success(`Index "${indexName}" dropped`);
+      toast.success(t("dropIndex.toastDropped", { name: indexName }));
       await onDropped(indexName);
       onClose();
     } catch (err) {
@@ -90,7 +92,7 @@ export function DropMongoIndexDialog({
         className="w-dialog-sm"
       >
         <DialogHeader layout="column">
-          <DialogTitle>Drop Index</DialogTitle>
+          <DialogTitle>{t("dropIndex.title")}</DialogTitle>
           <DialogDescription>
             {database}.{collection}
           </DialogDescription>
@@ -98,18 +100,14 @@ export function DropMongoIndexDialog({
 
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            This action cannot be undone. Type the index name to confirm.
+            {t("dropIndex.confirmHint")}
           </p>
           <div>
             <label
               htmlFor="mongo-drop-index-typing"
               className="mb-1 block text-xs font-medium"
             >
-              Type{" "}
-              <code className="rounded bg-muted px-1 font-mono text-3xs">
-                {indexName}
-              </code>{" "}
-              to confirm
+              {t("dropIndex.confirmLabel", { indexName })}
             </label>
             <input
               id="mongo-drop-index-typing"
@@ -118,7 +116,7 @@ export function DropMongoIndexDialog({
               onChange={(e) => setTyping(e.target.value)}
               placeholder={indexName}
               autoFocus
-              aria-label="Type the index name to confirm"
+              aria-label={t("dropIndex.typingAriaLabel")}
               data-testid="mongo-drop-index-typing"
               className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
             />
@@ -142,7 +140,7 @@ export function DropMongoIndexDialog({
             onClick={onClose}
             disabled={submitting}
           >
-            Cancel
+            {t("dropIndex.cancel")}
           </Button>
           <Button
             size="sm"
@@ -154,7 +152,7 @@ export function DropMongoIndexDialog({
             {submitting && (
               <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden />
             )}
-            Confirm
+            {t("dropIndex.confirm")}
           </Button>
         </DialogFooter>
       </DialogContent>

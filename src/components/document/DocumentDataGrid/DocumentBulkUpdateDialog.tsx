@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   Dialog,
@@ -41,6 +42,7 @@ export default function DocumentBulkUpdateDialog({
   loading,
   onConfirm,
 }: DocumentBulkUpdateDialogProps) {
+  const { t } = useTranslation("document");
   const activeFilterCount = Object.keys(activeFilter).length;
   const filterJson = safeStringifyCell(activeFilter);
   let parsedPatch: Record<string, unknown> | null = null;
@@ -68,19 +70,22 @@ export default function DocumentBulkUpdateDialog({
         <div className="rounded-lg border border-border bg-secondary p-4 shadow-xl">
           <DialogHeader>
             <DialogTitle className="mb-2 text-sm font-semibold text-foreground">
-              Update matching documents
+              {t("bulkUpdate.title")}
             </DialogTitle>
             <DialogDescription className="mb-2 text-sm text-secondary-foreground">
               {activeFilterCount > 0
-                ? `Apply a $set patch to every document in "${database}.${collection}" matching the current filter.`
-                : `No filter is active. The patch will apply to EVERY document in "${database}.${collection}".`}
+                ? t("bulkUpdate.descriptionFiltered", {
+                    db: database,
+                    collection,
+                  })
+                : t("bulkUpdate.descriptionAll", { db: database, collection })}
             </DialogDescription>
             <pre className="mb-2 max-h-24 overflow-auto rounded bg-muted p-2 text-xs text-foreground">
               {safeStringifyCell(activeFilter, 2)}
             </pre>
           </DialogHeader>
           <label className="mb-2 block text-xs font-medium text-secondary-foreground">
-            Patch (JSON object — must not contain _id)
+            {t("bulkUpdate.patchLabel")}
           </label>
           <textarea
             value={patchInput}
@@ -101,24 +106,22 @@ export default function DocumentBulkUpdateDialog({
           {previewLine ? (
             <>
               <pre
-                aria-label="MQL bulk update preview"
+                aria-label={t("bulkUpdate.mqlPreviewAriaLabel")}
                 className="mb-2 max-h-24 overflow-auto rounded bg-background p-2 font-mono text-xs text-foreground"
               >
                 {previewLine}
               </pre>
               <div
                 role="alert"
-                aria-label="MongoDB bulk update warning"
+                aria-label={t("bulkUpdate.warningAriaLabel")}
                 className="mb-3 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-xs text-warning"
               >
-                updateMany is not wrapped in a transaction. If MongoDB reports
-                an error after matching work starts, some matched documents may
-                already be updated.
+                {t("bulkUpdate.warningText")}
               </div>
             </>
           ) : (
             <p className="mb-2 text-xs italic text-muted-foreground">
-              Enter a valid JSON object to preview updateMany.
+              {t("bulkUpdate.previewHint")}
             </p>
           )}
           <DialogFooter className="flex justify-end gap-2">
@@ -128,16 +131,18 @@ export default function DocumentBulkUpdateDialog({
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
-              Cancel
+              {t("bulkUpdate.cancel")}
             </Button>
             <Button
               variant="default"
               size="sm"
               onClick={onConfirm}
               disabled={loading || patchInput.trim().length === 0}
-              aria-label="Confirm update matching"
+              aria-label={t("bulkUpdate.confirmAriaLabel")}
             >
-              {loading ? "Updating..." : "Update matching"}
+              {loading
+                ? t("bulkUpdate.updating")
+                : t("bulkUpdate.updateMatching")}
             </Button>
           </DialogFooter>
         </div>

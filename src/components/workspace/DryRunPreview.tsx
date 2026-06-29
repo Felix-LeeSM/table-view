@@ -1,4 +1,5 @@
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useDryRun } from "@hooks/useDryRun";
 
 /**
@@ -38,6 +39,7 @@ export default function DryRunPreview({
   paradigm,
   open,
 }: DryRunPreviewProps) {
+  const { t } = useTranslation("workspace");
   const state = useDryRun({
     connectionId,
     statements,
@@ -48,7 +50,7 @@ export default function DryRunPreview({
 
   return (
     <section
-      aria-label="Dry-run preview"
+      aria-label={t("dryRun.sectionAria")}
       data-testid="dry-run-status"
       data-status={state.status}
       className="rounded-md border border-dashed border-border bg-background/40 p-2 text-xs text-muted-foreground"
@@ -56,7 +58,7 @@ export default function DryRunPreview({
       {state.status === "running" && (
         <div className="flex items-center gap-2">
           <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-          <span>Running dry-run...</span>
+          <span>{t("dryRun.running")}</span>
         </div>
       )}
 
@@ -68,8 +70,12 @@ export default function DryRunPreview({
               data-testid={`dry-run-result-row-${idx}`}
               className="font-mono text-3xs text-foreground"
             >
-              statement {idx + 1} of {state.results!.length} — {r.totalCount}{" "}
-              rows affected ({r.executionTimeMs}ms)
+              {t("dryRun.rowResult", {
+                idx: idx + 1,
+                total: state.results!.length,
+                count: r.totalCount,
+                ms: r.executionTimeMs,
+              })}
             </li>
           ))}
         </ul>
@@ -80,15 +86,17 @@ export default function DryRunPreview({
           data-testid="dry-run-error-message"
           className="whitespace-pre-wrap break-words font-mono text-3xs text-destructive"
         >
-          {state.error ?? "Dry-run failed"}
+          {state.error ?? t("dryRun.failed")}
         </p>
       )}
 
       {state.status === "unsupported" && (
-        <p className="italic">Dry-run not supported for this connection.</p>
+        <p className="italic">{t("dryRun.unsupported")}</p>
       )}
 
-      {state.status === "idle" && <span className="sr-only">Dry-run idle</span>}
+      {state.status === "idle" && (
+        <span className="sr-only">{t("dryRun.idle")}</span>
+      )}
     </section>
   );
 }

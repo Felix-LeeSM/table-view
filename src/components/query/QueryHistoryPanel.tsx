@@ -15,6 +15,7 @@
  */
 
 import { useId, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, Clock, RefreshCw } from "lucide-react";
 import { Button } from "@components/ui/button";
 import QuerySyntax from "@components/shared/QuerySyntax";
@@ -41,6 +42,7 @@ export default function QueryHistoryPanel({
     refresh,
   } = useQueryHistory({ connectionId, tabId });
 
+  const { t } = useTranslation("query");
   const [isExpanded, setIsExpanded] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
   const bodyId = useId();
@@ -56,7 +58,9 @@ export default function QueryHistoryPanel({
           aria-controls={bodyId}
           aria-expanded={isExpanded}
           aria-label={
-            isExpanded ? "Collapse tab history" : "Expand tab history"
+            isExpanded
+              ? t("historyPanel.collapseAria")
+              : t("historyPanel.expandAria")
           }
           className="-ml-1 flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left text-xs font-medium text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => setIsExpanded((expanded) => !expanded)}
@@ -70,7 +74,7 @@ export default function QueryHistoryPanel({
             />
           )}
           <Clock size={12} className="shrink-0 text-muted-foreground" />
-          <span className="truncate">Tab history</span>
+          <span className="truncate">{t("historyPanel.tabHistory")}</span>
           <span
             className="shrink-0 text-xs text-muted-foreground"
             data-testid="query-history-panel-count"
@@ -89,7 +93,7 @@ export default function QueryHistoryPanel({
             data-testid="query-history-panel-new-entry"
           >
             <RefreshCw size={12} />
-            New entry — refresh
+            {t("historyPanel.newEntry")}
           </Button>
         )}
       </div>
@@ -108,7 +112,7 @@ export default function QueryHistoryPanel({
 
           {!loading && rows.length === 0 && error === null && (
             <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-              No queries executed in this tab yet
+              {t("historyPanel.noQueriesYet")}
             </p>
           )}
 
@@ -139,7 +143,9 @@ export default function QueryHistoryPanel({
                   type="button"
                   className="min-w-0 flex-1 truncate text-left text-xs"
                   onClick={() => setDetailId(row.id)}
-                  aria-label={`Inspect history entry ${row.id}`}
+                  aria-label={t("historyPanel.inspectEntryAria", {
+                    id: row.id,
+                  })}
                   data-testid={`query-history-panel-row-${row.id}`}
                 >
                   <QuerySyntax
@@ -166,7 +172,9 @@ export default function QueryHistoryPanel({
                 disabled={loading}
                 data-testid="query-history-panel-load-more"
               >
-                {loading ? "Loading…" : "Load more"}
+                {loading
+                  ? t("historyPanel.loading")
+                  : t("historyPanel.loadMore")}
               </Button>
             </div>
           )}
@@ -176,7 +184,7 @@ export default function QueryHistoryPanel({
               className="px-3 py-1.5 text-center text-xs text-muted-foreground"
               data-testid="query-history-panel-end"
             >
-              End of history
+              {t("historyPanel.endOfHistory")}
             </p>
           )}
         </div>

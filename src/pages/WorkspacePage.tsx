@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Sun, Moon, Monitor } from "lucide-react";
 import Sidebar from "@components/layout/Sidebar";
 import MainArea from "@components/layout/MainArea";
@@ -47,6 +48,7 @@ import { destroyCurrentWindow, focusWindow } from "@lib/window-controls";
  * hide.
  */
 export default function WorkspacePage() {
+  const { t } = useTranslation("pages");
   // Theme store — used to render the theme toggle trigger button alongside
   // the Back button in the workspace header strip. The ThemePicker popover
   // itself reads the store directly, so we only need themeId/mode for the
@@ -95,12 +97,12 @@ export default function WorkspacePage() {
             variant="ghost"
             size="xs"
             className="text-muted-foreground hover:text-secondary-foreground"
-            aria-label="Back to connections"
-            title="Back to connections"
+            aria-label={t("backToConnections")}
+            title={t("backToConnections")}
             onClick={handleBackToConnections}
           >
             <ArrowLeft />
-            <span className="text-xs">Connections</span>
+            <span className="text-xs">{t("connections")}</span>
           </Button>
 
           {/* Workspace-level theme toggle. Mirrors the
@@ -113,8 +115,11 @@ export default function WorkspacePage() {
                 variant="ghost"
                 size="xs"
                 className="text-muted-foreground hover:text-secondary-foreground"
-                aria-label={`Workspace theme: ${activeEntry.name} (${themeMode})`}
-                title="Change theme"
+                aria-label={t("workspaceThemeAria", {
+                  name: activeEntry.name,
+                  mode: themeMode,
+                })}
+                title={t("changeTheme")}
               >
                 <span
                   aria-hidden="true"

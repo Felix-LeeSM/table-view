@@ -3,6 +3,7 @@
 // passthrough — capped / timeseries 전용 form 필드는 후속 sprint.
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   createCollection,
@@ -31,6 +32,7 @@ export function CollectionDdlDialog({
   onClose,
   onSuccess,
 }: CollectionDdlDialogProps) {
+  const { t } = useTranslation("document");
   const [name, setName] = useState("");
   const [optionsText, setOptionsText] = useState("");
   const [renameTo, setRenameTo] = useState("");
@@ -61,7 +63,7 @@ export function CollectionDdlDialog({
     try {
       if (mode === "create") {
         if (name.trim() === "") {
-          setError("Collection name is required.");
+          setError(t("collectionDdl.errorNameRequired"));
           setSaving(false);
           return;
         }
@@ -72,8 +74,10 @@ export function CollectionDdlDialog({
           } catch (e) {
             setError(
               e instanceof Error
-                ? `Invalid options JSON: ${e.message}`
-                : "Invalid options JSON",
+                ? t("collectionDdl.errorOptionsJsonDetail", {
+                    message: e.message,
+                  })
+                : t("collectionDdl.errorOptionsJson"),
             );
             setSaving(false);
             return;
@@ -82,12 +86,12 @@ export function CollectionDdlDialog({
         await createCollection(connectionId, database, name.trim(), parsed);
       } else if (mode === "rename") {
         if (collection === undefined || collection === "") {
-          setError("Source collection is required for rename.");
+          setError(t("collectionDdl.errorSourceRequired"));
           setSaving(false);
           return;
         }
         if (renameTo.trim() === "") {
-          setError("New name is required.");
+          setError(t("collectionDdl.errorNewNameRequired"));
           setSaving(false);
           return;
         }
@@ -99,12 +103,12 @@ export function CollectionDdlDialog({
         );
       } else {
         if (collection === undefined || collection === "") {
-          setError("Collection is required for drop.");
+          setError(t("collectionDdl.errorCollectionRequired"));
           setSaving(false);
           return;
         }
         if (dropConfirm !== collection) {
-          setError("Type the collection name to confirm drop.");
+          setError(t("collectionDdl.errorDropConfirm"));
           setSaving(false);
           return;
         }
@@ -128,6 +132,7 @@ export function CollectionDdlDialog({
     dropConfirm,
     onClose,
     onSuccess,
+    t,
   ]);
 
   if (!open) return null;
@@ -135,7 +140,7 @@ export function CollectionDdlDialog({
   return (
     <div
       role="dialog"
-      aria-label={`Collection DDL — ${mode}`}
+      aria-label={t("collectionDdl.ariaLabel", { mode })}
       data-testid="collection-ddl-dialog"
       className="flex flex-col gap-3 rounded-md border border-border bg-background p-4 text-sm"
     >
@@ -147,7 +152,7 @@ export function CollectionDdlDialog({
       {mode === "create" && (
         <>
           <label className="flex flex-col gap-1 text-xs">
-            <span>Name</span>
+            <span>{t("collectionDdl.nameLabel")}</span>
             <input
               data-testid="collection-ddl-name"
               value={name}
@@ -157,7 +162,7 @@ export function CollectionDdlDialog({
             />
           </label>
           <label className="flex flex-col gap-1 text-xs">
-            <span>Options (JSON, optional)</span>
+            <span>{t("collectionDdl.optionsLabel")}</span>
             <textarea
               data-testid="collection-ddl-options"
               value={optionsText}
@@ -172,7 +177,7 @@ export function CollectionDdlDialog({
 
       {mode === "rename" && (
         <label className="flex flex-col gap-1 text-xs">
-          <span>Rename to</span>
+          <span>{t("collectionDdl.renameToLabel")}</span>
           <input
             data-testid="collection-ddl-rename-to"
             value={renameTo}
@@ -186,17 +191,10 @@ export function CollectionDdlDialog({
       {mode === "drop" && (
         <>
           <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-            This will permanently delete <strong>{collection}</strong> and every
-            document it contains. This cannot be undone.
+            {t("collectionDdl.dropWarning", { collection })}
           </p>
           <label className="flex flex-col gap-1 text-xs">
-            <span>
-              Type{" "}
-              <code className="rounded bg-muted px-1 font-mono text-3xs">
-                {collection}
-              </code>{" "}
-              to confirm
-            </span>
+            <span>{t("collectionDdl.dropConfirmLabel", { collection })}</span>
             <input
               data-testid="collection-ddl-drop-confirm"
               value={dropConfirm}
@@ -222,11 +220,11 @@ export function CollectionDdlDialog({
         <Button
           variant="ghost"
           size="sm"
-          aria-label="Close collection DDL dialog"
+          aria-label={t("collectionDdl.cancelAriaLabel")}
           onClick={onClose}
           disabled={saving}
         >
-          Cancel
+          {t("collectionDdl.cancel")}
         </Button>
         <Button
           size="sm"
@@ -235,7 +233,11 @@ export function CollectionDdlDialog({
           onClick={handleSave}
           disabled={saving || !dropConfirmed}
         >
-          {saving ? "Working…" : mode === "drop" ? "Drop" : "Save"}
+          {saving
+            ? t("collectionDdl.working")
+            : mode === "drop"
+              ? t("collectionDdl.drop")
+              : t("collectionDdl.save")}
         </Button>
       </div>
     </div>

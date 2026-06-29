@@ -12,6 +12,7 @@
  *   - `tlsEnabled` is shared with Mongo's TLS toggle for code reuse and
  *     maps to `rediss://` in the Redis adapter.
  */
+import { useTranslation } from "react-i18next";
 import { DATABASE_TYPE_LABELS, type ConnectionDraft } from "../../model";
 
 export interface RedisFormFieldsProps {
@@ -51,6 +52,7 @@ export default function RedisFormFields({
   inputClass,
   labelClass,
 }: RedisFormFieldsProps) {
+  const { t } = useTranslation("featuresConnection");
   const productLabel = DATABASE_TYPE_LABELS[draft.dbType];
 
   return (
@@ -59,7 +61,7 @@ export default function RedisFormFields({
       <div className="flex gap-3">
         <div className="flex-1">
           <label htmlFor="conn-host" className={labelClass}>
-            Host
+            {t("form.labelHost")}
           </label>
           <input
             id="conn-host"
@@ -71,7 +73,7 @@ export default function RedisFormFields({
         </div>
         <div className="w-24">
           <label htmlFor="conn-port" className={labelClass}>
-            Port
+            {t("form.labelPort")}
           </label>
           <input
             id="conn-port"
@@ -88,7 +90,7 @@ export default function RedisFormFields({
       {/* Username (optional ACL) */}
       <div>
         <label htmlFor="conn-user" className={labelClass}>
-          Username (optional)
+          {t("form.labelUsernameOptional")}
         </label>
         <input
           id="conn-user"
@@ -103,7 +105,7 @@ export default function RedisFormFields({
       <div>
         <div className="flex items-center justify-between">
           <label htmlFor="conn-password" className={labelClass}>
-            Password (optional)
+            {t("form.labelPasswordOptional")}
           </label>
           {isEditing && (
             <span
@@ -114,7 +116,7 @@ export default function RedisFormFields({
               }`}
               data-testid="password-status-badge"
             >
-              {hadPassword ? "Password set" : "No password"}
+              {hadPassword ? t("form.passwordSet") : t("form.noPassword")}
             </span>
           )}
         </div>
@@ -127,7 +129,7 @@ export default function RedisFormFields({
           onChange={(e) => setPasswordInput(e.target.value)}
           placeholder={
             isEditing && hadPassword
-              ? "Leave blank to keep current password"
+              ? t("form.placeholderKeepPassword")
               : "••••••••"
           }
         />
@@ -142,7 +144,7 @@ export default function RedisFormFields({
                 if (e.target.checked) setPasswordInput("");
               }}
             />
-            Clear stored password on save
+            {t("form.clearPassword")}
           </label>
         )}
       </div>
@@ -150,7 +152,7 @@ export default function RedisFormFields({
       {/* Database index (0..15) */}
       <div>
         <label htmlFor="conn-database" className={labelClass}>
-          Database Index
+          {t("form.labelDatabaseIndex")}
         </label>
         <input
           id="conn-database"
@@ -163,7 +165,7 @@ export default function RedisFormFields({
           aria-label={`${productLabel} database index (0-15)`}
         />
         <p className="mt-1 text-2xs text-muted-foreground">
-          {productLabel} numeric DB index. Default is 0; valid range 0–15.
+          {t("form.redisDbIndexHint", { productLabel })}
         </p>
       </div>
 
@@ -176,7 +178,7 @@ export default function RedisFormFields({
           checked={!!draft.tlsEnabled}
           onChange={(e) => onChange({ tlsEnabled: e.target.checked })}
         />
-        Enable TLS
+        {t("form.enableTlsRedis")}
       </label>
     </>
   );

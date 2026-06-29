@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ArrowDownUp,
   ChevronDown,
@@ -63,6 +64,7 @@ import { RotateCcw, Eraser } from "lucide-react";
 // 에서 hydrate 추가), 사용자 토글 시 `persistSetting` IPC 로 즉시 commit.
 
 export default function HomePage() {
+  const { t } = useTranslation("pages");
   // Re-hydrate from session storage on mount and window focus so the
   // launcher picks up disconnects/state changes made in the workspace.
   useWindowFocusHydration();
@@ -197,15 +199,15 @@ export default function HomePage() {
           data-testid="home-header"
           className="block truncate text-xs font-semibold text-foreground"
         >
-          Connections
+          {t("connections")}
         </span>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon-xs"
             className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-            aria-label="Clear recent"
-            title="Clear recent connections"
+            aria-label={t("clearRecent")}
+            title={t("clearRecentTitle")}
             onClick={handleClearRecent}
             data-testid="home-clear-recent"
           >
@@ -215,8 +217,8 @@ export default function HomePage() {
             variant="ghost"
             size="icon-xs"
             className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-            aria-label="Import / Export"
-            title="Import / Export"
+            aria-label={t("importExport")}
+            title={t("importExport")}
             onClick={() => setShowImportExport(true)}
           >
             <ArrowDownUp />
@@ -225,8 +227,8 @@ export default function HomePage() {
             variant="ghost"
             size="icon-xs"
             className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-            aria-label="New Group"
-            title="New Group"
+            aria-label={t("newGroup")}
+            title={t("newGroup")}
             onClick={() => setShowNewGroupDialog(true)}
           >
             <FolderPlus />
@@ -235,8 +237,8 @@ export default function HomePage() {
             variant="ghost"
             size="icon-xs"
             className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-            aria-label="New Connection"
-            title="New Connection"
+            aria-label={t("newConnection")}
+            title={t("newConnection")}
             onClick={() => setShowNewDialog(true)}
           >
             <Plus />
@@ -272,7 +274,7 @@ export default function HomePage() {
             onClick={toggleRecentCollapsed}
             aria-expanded={!recentCollapsed}
             aria-controls="home-recent-body"
-            aria-label="Toggle Recent"
+            aria-label={t("toggleRecent")}
             className="flex flex-1 items-center gap-1.5 text-3xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
           >
             {recentCollapsed ? (
@@ -281,13 +283,13 @@ export default function HomePage() {
               <ChevronDown size={10} />
             )}
             <Clock size={10} />
-            <span>Recent</span>
+            <span>{t("recent")}</span>
           </button>
           <button
             type="button"
             onClick={handleResetRecentCollapse}
-            aria-label="Reset recent collapse"
-            title="Reset recent collapse to default"
+            aria-label={t("resetRecentCollapse")}
+            title={t("resetRecentCollapseTitle")}
             className="rounded p-0.5 text-3xs text-muted-foreground hover:bg-muted hover:text-foreground"
             data-testid="home-recent-reset"
           >
@@ -315,7 +317,10 @@ export default function HomePage() {
               variant="ghost"
               size="xs"
               className="w-full justify-start text-muted-foreground"
-              aria-label={`Theme picker: currently ${activeEntry.name} (${themeMode})`}
+              aria-label={t("themePickerAria", {
+                name: activeEntry.name,
+                mode: themeMode,
+              })}
             >
               <span
                 aria-hidden="true"

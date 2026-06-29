@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, Key, Shield, Plus, Trash2, X, Eye } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
@@ -69,6 +70,7 @@ function CreateIndexModal({
   onSubmit,
   onCancel,
 }: CreateIndexModalProps) {
+  const { t } = useTranslation("structure");
   const [indexName, setIndexName] = useState("");
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [indexType, setIndexType] = useState<string>("btree");
@@ -105,16 +107,16 @@ function CreateIndexModal({
           {/* Header */}
           <DialogHeader className="flex items-center justify-between border-b border-border px-4 py-3">
             <DialogTitle className="text-sm font-semibold text-foreground">
-              Create Index
+              {t("index.createDialogTitle")}
             </DialogTitle>
             <DialogDescription className="sr-only">
-              Create a new index on this table
+              {t("index.createDialogDesc")}
             </DialogDescription>
             <Button
               variant="ghost"
               size="icon-xs"
               onClick={onCancel}
-              aria-label="Close dialog"
+              aria-label={t("index.closeDialogAria")}
             >
               <X />
             </Button>
@@ -125,14 +127,14 @@ function CreateIndexModal({
             {/* Index Name */}
             <div>
               <label className="mb-1 block text-xs font-medium text-secondary-foreground">
-                Index Name
+                {t("index.labelName")}
               </label>
               <input
                 className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                 value={indexName}
                 onChange={(e) => setIndexName(e.target.value)}
                 placeholder="idx_name"
-                aria-label="Index name"
+                aria-label={t("index.nameAria")}
                 autoFocus
               />
             </div>
@@ -141,7 +143,7 @@ function CreateIndexModal({
                 ordinal that will land in the CREATE INDEX statement. */}
             <div>
               <label className="mb-1 block text-xs font-medium text-secondary-foreground">
-                Columns
+                {t("index.labelColumns")}
               </label>
               <OrderedColumnPicker
                 available={columns.map((c) => c.name)}
@@ -159,12 +161,12 @@ function CreateIndexModal({
             {/* Index Type */}
             <div>
               <label className="mb-1 block text-xs font-medium text-secondary-foreground">
-                Index Type
+                {t("index.labelType")}
               </label>
               <Select value={indexType} onValueChange={(v) => setIndexType(v)}>
                 <SelectTrigger
                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
-                  aria-label="Index type"
+                  aria-label={t("index.typeAria")}
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -186,7 +188,7 @@ function CreateIndexModal({
                 onChange={(e) => setIsUnique(e.target.checked)}
                 className="rounded border-border"
               />
-              Unique
+              {t("index.uniqueLabel")}
             </label>
           </div>
 
@@ -205,7 +207,7 @@ function CreateIndexModal({
               onClick={onCancel}
               disabled={loading}
             >
-              Cancel
+              {t("index.cancelBtn")}
             </Button>
             <Button
               size="sm"
@@ -217,7 +219,7 @@ function CreateIndexModal({
               ) : (
                 <Eye />
               )}
-              {loading ? "Previewing..." : "Preview SQL"}
+              {loading ? t("index.previewingBtn") : t("index.previewSqlBtn")}
             </Button>
           </DialogFooter>
         </div>
@@ -252,6 +254,7 @@ export default function IndexesEditor({
   onColumnsChange,
   onRefresh,
 }: IndexesEditorProps) {
+  const { t } = useTranslation("structure");
   const [showCreateIndexModal, setShowCreateIndexModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [migrationImpact, setMigrationImpact] =
@@ -379,16 +382,16 @@ export default function IndexesEditor({
   return (
     <StructureShell>
       <StructureActionBar
-        count={`${indexes.length} ${indexes.length === 1 ? "index" : "indexes"}`}
+        count={`${indexes.length} ${indexes.length === 1 ? t("index.countSingular") : t("index.countPlural")}`}
         actions={
           <Button
             variant="ghost"
             size="xs"
             onClick={handleOpenCreateIndex}
-            aria-label="Create index"
+            aria-label={t("index.createAria")}
           >
             <Plus />
-            Index
+            {t("index.createLabel")}
           </Button>
         }
       />
@@ -397,11 +400,11 @@ export default function IndexesEditor({
         <StructureTable>
           <thead className={STRUCTURE_THEAD}>
             <tr>
-              <th className={STRUCTURE_TH}>Name</th>
-              <th className={STRUCTURE_TH}>Columns</th>
-              <th className={STRUCTURE_TH}>Type</th>
-              <th className={STRUCTURE_TH}>Properties</th>
-              <th className={STRUCTURE_TH_ACTIONS}>Actions</th>
+              <th className={STRUCTURE_TH}>{t("th.name")}</th>
+              <th className={STRUCTURE_TH}>{t("th.columns")}</th>
+              <th className={STRUCTURE_TH}>{t("th.type")}</th>
+              <th className={STRUCTURE_TH}>{t("th.properties")}</th>
+              <th className={STRUCTURE_TH_ACTIONS}>{t("th.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -439,8 +442,8 @@ export default function IndexesEditor({
                         size="icon-xs"
                         className="hover:text-destructive"
                         onClick={() => handleDropIndex(idx.name)}
-                        aria-label={`Delete index ${idx.name}`}
-                        title="Delete"
+                        aria-label={t("index.deleteAria", { name: idx.name })}
+                        title={t("index.deleteTitle")}
                       >
                         <Trash2 />
                       </Button>
@@ -454,7 +457,7 @@ export default function IndexesEditor({
       )}
 
       {indexes.length === 0 && (
-        <StructureEmpty>No indexes found</StructureEmpty>
+        <StructureEmpty>{t("index.emptyState")}</StructureEmpty>
       )}
 
       {/* SQL Preview Modal */}

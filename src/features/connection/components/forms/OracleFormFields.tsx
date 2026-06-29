@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
 
 export interface OracleFormFieldsProps {
@@ -25,12 +26,13 @@ export default function OracleFormFields({
   inputClass,
   labelClass,
 }: OracleFormFieldsProps) {
+  const { t } = useTranslation("featuresConnection");
   return (
     <>
       <div className="flex gap-3">
         <div className="flex-1">
           <label htmlFor="conn-host" className={labelClass}>
-            Host
+            {t("form.labelHost")}
           </label>
           <input
             id="conn-host"
@@ -42,7 +44,7 @@ export default function OracleFormFields({
         </div>
         <div className="w-24">
           <label htmlFor="conn-port" className={labelClass}>
-            Port
+            {t("form.labelPort")}
           </label>
           <input
             id="conn-port"
@@ -58,7 +60,7 @@ export default function OracleFormFields({
 
       <div>
         <label htmlFor="conn-user" className={labelClass}>
-          User
+          {t("form.labelUser")}
         </label>
         <input
           id="conn-user"
@@ -72,7 +74,7 @@ export default function OracleFormFields({
       <div>
         <div className="flex items-center justify-between">
           <label htmlFor="conn-password" className={labelClass}>
-            Password
+            {t("form.labelPassword")}
           </label>
           {isEditing && (
             <span
@@ -83,7 +85,7 @@ export default function OracleFormFields({
               }`}
               data-testid="password-status-badge"
             >
-              {hadPassword ? "Password set" : "No password"}
+              {hadPassword ? t("form.passwordSet") : t("form.noPassword")}
             </span>
           )}
         </div>
@@ -96,7 +98,7 @@ export default function OracleFormFields({
           onChange={(e) => setPasswordInput(e.target.value)}
           placeholder={
             isEditing && hadPassword
-              ? "Leave blank to keep current password"
+              ? t("form.placeholderKeepPassword")
               : "••••••••"
           }
         />
@@ -111,14 +113,14 @@ export default function OracleFormFields({
                 if (e.target.checked) setPasswordInput("");
               }}
             />
-            Clear stored password on save
+            {t("form.clearPassword")}
           </label>
         )}
       </div>
 
       <div>
         <label htmlFor="conn-database" className={labelClass}>
-          Service name
+          {t("form.labelServiceName")}
         </label>
         <input
           id="conn-database"

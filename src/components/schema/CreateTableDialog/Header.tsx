@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   DialogDescription,
@@ -32,20 +33,21 @@ export default function CreateTableDialogHeader({
   selectedSchema,
   onClose,
 }: CreateTableDialogHeaderProps) {
+  const { t } = useTranslation("schemaDialogs");
   return (
     <DialogHeader layout="column" className="border-b border-border px-4 py-3">
       <div className="flex items-center justify-between">
         <DialogTitle className="text-sm font-semibold text-foreground">
-          Create Table
+          {t("createTable.title")}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          Create a new table in {selectedSchema}
+          {t("createTable.descriptionAria", { schema: selectedSchema })}
         </DialogDescription>
         <Button
           variant="ghost"
           size="icon-xs"
           onClick={onClose}
-          aria-label="Close dialog"
+          aria-label={t("closeDialog")}
         >
           <X />
         </Button>
