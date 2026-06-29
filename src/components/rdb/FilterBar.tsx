@@ -122,13 +122,13 @@ export default function FilterBar({
           >
             <ToggleGroupItem
               value="structured"
-              className="data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
+              className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-none"
             >
               {t("filterBar.structured")}
             </ToggleGroupItem>
             <ToggleGroupItem
               value="raw"
-              className="data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
+              className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-none"
             >
               {t("filterBar.rawSql")}
             </ToggleGroupItem>
@@ -190,7 +190,7 @@ export default function FilterBar({
             </Button>
             <Button
               size="xs"
-              className="bg-primary text-white hover:bg-primary/90"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={() => {
                 const err = validateRawSql(rawSql);
                 if (err) {
@@ -312,7 +312,7 @@ export default function FilterBar({
                 </Button>
                 <Button
                   size="xs"
-                  className="bg-primary text-white hover:bg-primary/90"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
                   onClick={onApply}
                 >
                   {t("filterBar.apply")}

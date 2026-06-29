@@ -187,13 +187,13 @@ export default function DocumentFilterBar({
           >
             <ToggleGroupItem
               value="structured"
-              className="data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
+              className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-none"
             >
               {t("filterBar.structured")}
             </ToggleGroupItem>
             <ToggleGroupItem
               value="raw"
-              className="data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
+              className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-none"
             >
               {t("filterBar.rawMql")}
             </ToggleGroupItem>
@@ -236,7 +236,7 @@ export default function DocumentFilterBar({
             </Button>
             <Button
               size="xs"
-              className="bg-primary text-white hover:bg-primary/90"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={handleRawApply}
               aria-label={t("filterBar.applyMqlAriaLabel")}
             >
@@ -261,13 +261,13 @@ export default function DocumentFilterBar({
             >
               <ToggleGroupItem
                 value="all"
-                className="px-2 text-2xs data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
+                className="px-2 text-2xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-none"
               >
                 {t("filterBar.matchAll")}
               </ToggleGroupItem>
               <ToggleGroupItem
                 value="any"
-                className="px-2 text-2xs data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
+                className="px-2 text-2xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-none"
               >
                 {t("filterBar.matchAny")}
               </ToggleGroupItem>
@@ -304,7 +304,7 @@ export default function DocumentFilterBar({
                 </Button>
                 <Button
                   size="xs"
-                  className="bg-primary text-white hover:bg-primary/90"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
                   onClick={handleStructuredApply}
                   aria-label={t("filterBar.applyAriaLabel")}
                 >
