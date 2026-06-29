@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { QueryTab } from "@stores/workspaceStore";
 import {
   resolveActiveDb,
@@ -62,6 +63,7 @@ interface QueryTabProps {
 }
 
 export default function QueryTab({ tab }: QueryTabProps) {
+  const { t } = useTranslation("query");
   const workspaceKey = useCurrentWorkspaceKey();
   const updateQuerySqlAction = useWorkspaceStore((s) => s.updateQuerySql);
   const updateQuerySql = (tabId: string, sql: string) => {
@@ -373,15 +375,20 @@ export default function QueryTab({ tab }: QueryTabProps) {
 
   // Resizable split state
   const containerRef = useRef<HTMLDivElement>(null);
-  const { size: editorPct, handleMouseDown: handleResizeMouseDown } =
-    useResizablePanel({
-      axis: "vertical",
-      min: 10,
-      max: 90,
-      initial: 50,
-      percentage: true,
-      containerRef,
-    });
+  const {
+    size: editorPct,
+    handleMouseDown: handleResizeMouseDown,
+    handleKeyDown: handleResizeKeyDown,
+    min: editorMinPct,
+    max: editorMaxPct,
+  } = useResizablePanel({
+    axis: "vertical",
+    min: 10,
+    max: 90,
+    initial: 50,
+    percentage: true,
+    containerRef,
+  });
 
   return (
     <div ref={containerRef} className="flex flex-1 flex-col overflow-hidden">
@@ -468,8 +475,16 @@ export default function QueryTab({ tab }: QueryTabProps) {
 
       {/* Resize handle */}
       <div
-        className="h-1 cursor-row-resize shrink-0 border-y border-border hover:bg-primary/90 active:bg-primary/90"
+        className="h-1 cursor-row-resize shrink-0 border-y border-border hover:bg-primary/90 active:bg-primary/90 focus-visible:outline-1 focus-visible:outline-ring"
         onMouseDown={handleResizeMouseDown}
+        onKeyDown={handleResizeKeyDown}
+        tabIndex={0}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label={t("resizeEditorAria")}
+        aria-valuemin={editorMinPct}
+        aria-valuemax={editorMaxPct}
+        aria-valuenow={Math.round(editorPct)}
       />
 
       {/* Result area — flex column so QueryResultGrid's flex-1 children fill

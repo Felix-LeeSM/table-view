@@ -94,6 +94,9 @@ export default function Sidebar() {
     size: sidebarWidth,
     panelRef: sidebarRef,
     handleMouseDown: handleResizeMouseDown,
+    handleKeyDown: handleResizeKeyDown,
+    min: sidebarMinWidth,
+    max: sidebarMaxWidth,
   } = useResizablePanel({
     axis: "horizontal",
     min: MIN_WIDTH,
@@ -335,9 +338,17 @@ export default function Sidebar() {
             단일 클릭/drag-start 는 mousedown 만 트리거하므로 reset 과는
             독립이다. */}
         <div
-          className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/90 active:bg-primary/90"
+          className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/90 active:bg-primary/90 focus-visible:outline-1 focus-visible:outline-ring"
           onMouseDown={handleResizeMouseDown}
+          onKeyDown={handleResizeKeyDown}
           onDoubleClick={handleResetSidebarWidth}
+          tabIndex={0}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t("sidebar.resizeAria")}
+          aria-valuemin={sidebarMinWidth}
+          aria-valuemax={sidebarMaxWidth}
+          aria-valuenow={Math.round(sidebarWidth)}
         />
       </div>
     </>

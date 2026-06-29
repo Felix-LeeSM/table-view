@@ -59,7 +59,7 @@ export function QueryResultTable({ result }: { result: QueryResult }) {
   const visualWidthsRef = useRef(visualWidthsPx);
   visualWidthsRef.current = visualWidthsPx;
   const getCurrentWidths = useCallback(() => visualWidthsRef.current, []);
-  const { handleResizeStart } = useColumnResize({
+  const { handleResizeStart, handleResizeKeyDown } = useColumnResize({
     outerRef: scrollContainerRef,
     getCurrentWidths,
     onCommitWidth: setWidth,
@@ -100,8 +100,13 @@ export function QueryResultTable({ result }: { result: QueryResult }) {
                 {col.dataType}
               </div>
               <div
-                className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
+                className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 focus-visible:outline-1 focus-visible:outline-ring"
                 onMouseDown={(e) => handleResizeStart(e, col.name, visualIdx)}
+                onKeyDown={(e) => handleResizeKeyDown(e, col.name, visualIdx)}
+                tabIndex={0}
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={t("resizeColumnAria")}
               />
             </div>
           ))}

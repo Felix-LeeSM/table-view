@@ -31,7 +31,26 @@ export interface UseResizablePanelReturn {
   panelRef: React.RefObject<HTMLDivElement | null>;
   /** mousedown handler for the resize handle. */
   handleMouseDown: (e: React.MouseEvent) => void;
+  /**
+   * keydown handler for the resize handle (WCAG 2.1.1). Arrow keys nudge the
+   * size by `STEP`, Shift+Arrow by `STEP_LARGE`, clamped to [min, max] — same
+   * setter/clamp path as the mouse drag so persist pipelines fire identically.
+   * Axis decides which arrows act: horizontal → Left/Right, vertical → Up/Down.
+   */
+  handleKeyDown: (e: React.KeyboardEvent) => void;
+  /** Lower clamp bound (mirrors `min` option) for `aria-valuemin`. */
+  min: number;
+  /** Upper clamp bound (mirrors `max` option) for `aria-valuemax`. */
+  max: number;
 }
+
+// Keyboard nudge steps. Pixel axis (sidebar): 10px / 50px. Percentage axis
+// (query split): 2% / 10% — a 10% jump matches the 50px feel on a typical
+// pane without overshooting the [10, 90] range in two presses.
+const STEP_PX = 10;
+const STEP_PX_LARGE = 50;
+const STEP_PCT = 2;
+const STEP_PCT_LARGE = 10;
 
 /**
  * Hook for panel resize via mouse drag.
@@ -115,5 +134,20 @@ export function useResizablePanel(
     [axis, min, max, size, percentage, containerRef],
   );
 
-  return { size, setSize, panelRef, handleMouseDown };
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const grow = axis === "horizontal" ? "ArrowRight" : "ArrowDown";
+      const shrink = axis === "horizontal" ? "ArrowLeft" : "ArrowUp";
+      if (e.key !== grow && e.key !== shrink) return;
+      e.preventDefault();
+      const base = percentage ? STEP_PCT : STEP_PX;
+      const large = percentage ? STEP_PCT_LARGE : STEP_PX_LARGE;
+      const magnitude = e.shiftKey ? large : base;
+      const delta = e.key === grow ? magnitude : -magnitude;
+      setSize(Math.max(min, Math.min(max, size + delta)));
+    },
+    [axis, min, max, size, percentage],
+  );
+
+  return { size, setSize, panelRef, handleMouseDown, handleKeyDown, min, max };
 }

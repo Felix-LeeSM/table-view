@@ -363,6 +363,106 @@ describe("useResizablePanel", () => {
     expect(result.current.size).toBe(400);
   });
 
+  // --- Keyboard resize (WCAG 2.1.1) ---
+
+  const keyEvent = (key: string, shiftKey = false) =>
+    ({
+      key,
+      shiftKey,
+      preventDefault: vi.fn(),
+    }) as unknown as React.KeyboardEvent;
+
+  it("ArrowRight nudges horizontal size by one step and preventDefaults", () => {
+    const { result } = renderHook(() =>
+      useResizablePanel({
+        axis: "horizontal",
+        min: 100,
+        max: 500,
+        initial: 250,
+      }),
+    );
+
+    const e = keyEvent("ArrowRight");
+    act(() => {
+      result.current.handleKeyDown(e);
+    });
+
+    expect(result.current.size).toBe(260); // 250 + 10px step
+    expect(e.preventDefault).toHaveBeenCalled();
+  });
+
+  it("Shift+ArrowLeft uses the large step and clamps to min", () => {
+    const { result } = renderHook(() =>
+      useResizablePanel({
+        axis: "horizontal",
+        min: 100,
+        max: 500,
+        initial: 120,
+      }),
+    );
+
+    // 120 - 50 = 70, clamped up to min 100
+    act(() => {
+      result.current.handleKeyDown(keyEvent("ArrowLeft", true));
+    });
+
+    expect(result.current.size).toBe(100);
+  });
+
+  it("ArrowDown nudges vertical (percentage) size by the percent step", () => {
+    const containerRef = { current: document.createElement("div") };
+    const { result } = renderHook(() =>
+      useResizablePanel({
+        axis: "vertical",
+        min: 10,
+        max: 90,
+        initial: 50,
+        percentage: true,
+        containerRef,
+      }),
+    );
+
+    act(() => {
+      result.current.handleKeyDown(keyEvent("ArrowDown"));
+    });
+
+    expect(result.current.size).toBe(52); // 50 + 2% step
+  });
+
+  it("ignores arrow keys off the configured axis", () => {
+    const { result } = renderHook(() =>
+      useResizablePanel({
+        axis: "horizontal",
+        min: 100,
+        max: 500,
+        initial: 250,
+      }),
+    );
+
+    // Horizontal axis ignores vertical arrows.
+    const e = keyEvent("ArrowUp");
+    act(() => {
+      result.current.handleKeyDown(e);
+    });
+
+    expect(result.current.size).toBe(250);
+    expect(e.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("exposes min/max for aria bounds", () => {
+    const { result } = renderHook(() =>
+      useResizablePanel({
+        axis: "horizontal",
+        min: 100,
+        max: 500,
+        initial: 250,
+      }),
+    );
+
+    expect(result.current.min).toBe(100);
+    expect(result.current.max).toBe(500);
+  });
+
   it("no further updates after mouseup", () => {
     const { result } = renderHook(() =>
       useResizablePanel({

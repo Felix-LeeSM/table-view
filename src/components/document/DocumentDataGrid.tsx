@@ -340,7 +340,7 @@ export default function DocumentDataGrid({
   visualWidthsRef.current = visualWidthsPx;
   const getCurrentWidths = useCallback(() => visualWidthsRef.current, []);
 
-  const { handleResizeStart } = useColumnResize({
+  const { handleResizeStart, handleResizeKeyDown } = useColumnResize({
     outerRef: scrollContainerRef,
     getCurrentWidths,
     onCommitWidth: setWidth,
@@ -601,6 +601,7 @@ export default function DocumentDataGrid({
             onSort={handleSort}
             onSaveCurrentEdit={editState.saveCurrentEdit}
             onResizeStart={handleResizeStart}
+            onResizeKeyDown={handleResizeKeyDown}
             onSortColumn={handleSortColumn}
             onClearColumnSort={handleClearColumnSort}
             onClearAllSorts={handleClearAllSorts}
