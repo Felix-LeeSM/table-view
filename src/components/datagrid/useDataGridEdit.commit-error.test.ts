@@ -440,10 +440,13 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
     // structured `BatchResult` ({ ok: false, failedIndex, failedKey,
     // errorMessage }) that the hook above wires into commitError. The
     // executor calls `executeQueryBatch` (single transaction) and emits
-    // the standardised rolled-back wording. A future refactor that
+    // the standardised rolled-back wording — now surfaced via the i18n key
+    // `datagrid:commitFlow.rolledBack`, whose en value byte-mirrors the
+    // original "Commit failed — all changes rolled back: {{message}}" string
+    // (asserted at runtime in the AC tests above). A future refactor that
     // removes the surfacing path will trip these assertions.
     expect(sqlBranchSource).toMatch(/executeQueryBatch\(/);
-    expect(sqlBranchSource).toMatch(/all changes rolled back/);
+    expect(sqlBranchSource).toMatch(/commitFlow\.rolledBack/);
     expect(sqlBranchSource).toMatch(/ok:\s*false/);
     expect(sqlBranchSource).toMatch(/errorMessage/);
     // Sprint 183 — old partial-failure tokens must NOT reappear.

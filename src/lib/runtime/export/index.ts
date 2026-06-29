@@ -6,6 +6,7 @@ import {
   type ExportSummary,
 } from "@/lib/tauri";
 import { toast } from "@/lib/runtime/toast";
+import i18n from "@lib/i18n";
 import { buildExportFilename } from "@/lib/export/filename";
 
 export type { ExportContext, ExportFormat, ExportSummary } from "@/lib/tauri";
@@ -63,12 +64,15 @@ export async function runExport(args: RunExportArgs): Promise<RunExportResult> {
       exportId,
     );
     toast.success(
-      `Exported ${summary.rows_written.toLocaleString()} row${summary.rows_written === 1 ? "" : "s"}`,
+      i18n.t("export:gridRowsExported", {
+        count: summary.rows_written,
+        formatted: summary.rows_written.toLocaleString(),
+      }),
     );
     return { kind: "ok", path: target, summary };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    toast.error(`Export failed: ${message}`);
+    toast.error(i18n.t("export:failed", { message }));
     throw err;
   }
 }

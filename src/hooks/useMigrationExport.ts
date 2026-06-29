@@ -30,6 +30,7 @@ import {
   type SchemaDumpTable,
 } from "@/lib/tauri";
 import { toast } from "@/lib/runtime/toast";
+import i18n from "@lib/i18n";
 
 export type ExportInclude = "ddl" | "dml" | "both";
 
@@ -66,11 +67,8 @@ const DBMS_TO_DIALECT: Partial<Record<string, DdlDialect>> = {
   sqlite: "sqlite",
 };
 
-const INCLUDE_LABEL: Record<ExportInclude, string> = {
-  ddl: "Schema (DDL)",
-  dml: "Data (INSERT)",
-  both: "Full dump (DDL + data)",
-};
+const includeLabel = (include: ExportInclude): string =>
+  i18n.t(`export:includeLabel.${include}`);
 
 const STREAM_BATCH_SIZE = 1000;
 
@@ -134,12 +132,12 @@ export function useMigrationExport(): UseMigrationExportReturn {
       .getState()
       .connections.find((c) => c.id === connectionId);
     if (!conn) {
-      toast.error("Export: connection not found");
+      toast.error(i18n.t("export:connectionNotFound"));
       return null;
     }
     const dialect = DBMS_TO_DIALECT[conn.dbType];
     if (!dialect) {
-      toast.error(`Export: ${conn.dbType} is not yet supported (RDB only)`);
+      toast.error(i18n.t("export:unsupportedDbType", { dbType: conn.dbType }));
       return null;
     }
     return { dialect, dbType: conn.dbType };
@@ -164,7 +162,7 @@ export function useMigrationExport(): UseMigrationExportReturn {
           schema,
         );
         if (ddlTables.length === 0) {
-          toast.info(`Export: schema "${schema}" has no tables`);
+          toast.info(i18n.t("export:schemaNoTables", { schema }));
           return;
         }
 
@@ -192,7 +190,10 @@ export function useMigrationExport(): UseMigrationExportReturn {
         if (include === "ddl") {
           const summary = await writeTextFileExport(target, ddlHeader);
           toast.success(
-            `Exported ${INCLUDE_LABEL.ddl} (${ddlTables.length} table${ddlTables.length === 1 ? "" : "s"}, ${formatKb(summary.bytes_written)} KB)`,
+            i18n.t("export:exported", {
+              label: includeLabel("ddl"),
+              detail: `${ddlTables.length} table${ddlTables.length === 1 ? "" : "s"}, ${formatKb(summary.bytes_written)} KB`,
+            }),
           );
           return;
         }
@@ -215,11 +216,14 @@ export function useMigrationExport(): UseMigrationExportReturn {
           { include, batchSize: STREAM_BATCH_SIZE },
         );
         toast.success(
-          `Exported ${INCLUDE_LABEL[include]} (${formatRows(summary.rows_written)} row${summary.rows_written === 1 ? "" : "s"}, ${formatKb(summary.bytes_written)} KB)`,
+          i18n.t("export:exported", {
+            label: includeLabel(include),
+            detail: `${formatRows(summary.rows_written)} row${summary.rows_written === 1 ? "" : "s"}, ${formatKb(summary.bytes_written)} KB`,
+          }),
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        toast.error(`Export failed: ${message}`);
+        toast.error(i18n.t("export:failed", { message }));
       } finally {
         setIsExporting(false);
       }
@@ -236,7 +240,7 @@ export function useMigrationExport(): UseMigrationExportReturn {
     ) => {
       if (isExporting) return;
       if (schemas.length === 0) {
-        toast.info("Export: no schemas to export");
+        toast.info(i18n.t("export:noSchemas"));
         return;
       }
       const resolved = resolveDialect(connectionId);
@@ -255,7 +259,7 @@ export function useMigrationExport(): UseMigrationExportReturn {
           0,
         );
         if (totalTables === 0) {
-          toast.info("Export: database has no tables");
+          toast.info(i18n.t("export:databaseNoTables"));
           return;
         }
 
@@ -287,7 +291,10 @@ export function useMigrationExport(): UseMigrationExportReturn {
         if (include === "ddl") {
           const summary = await writeTextFileExport(target, ddlHeader);
           toast.success(
-            `Exported ${INCLUDE_LABEL.ddl} (${metas.length} schema${metas.length === 1 ? "" : "s"}, ${totalTables} table${totalTables === 1 ? "" : "s"}, ${formatKb(summary.bytes_written)} KB)`,
+            i18n.t("export:exported", {
+              label: includeLabel("ddl"),
+              detail: `${metas.length} schema${metas.length === 1 ? "" : "s"}, ${totalTables} table${totalTables === 1 ? "" : "s"}, ${formatKb(summary.bytes_written)} KB`,
+            }),
           );
           return;
         }
@@ -307,11 +314,14 @@ export function useMigrationExport(): UseMigrationExportReturn {
           { include, batchSize: STREAM_BATCH_SIZE },
         );
         toast.success(
-          `Exported ${INCLUDE_LABEL[include]} (${metas.length} schema${metas.length === 1 ? "" : "s"}, ${formatRows(summary.rows_written)} row${summary.rows_written === 1 ? "" : "s"}, ${formatKb(summary.bytes_written)} KB)`,
+          i18n.t("export:exported", {
+            label: includeLabel(include),
+            detail: `${metas.length} schema${metas.length === 1 ? "" : "s"}, ${formatRows(summary.rows_written)} row${summary.rows_written === 1 ? "" : "s"}, ${formatKb(summary.bytes_written)} KB`,
+          }),
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        toast.error(`Export failed: ${message}`);
+        toast.error(i18n.t("export:failed", { message }));
       } finally {
         setIsExporting(false);
       }
@@ -341,7 +351,7 @@ export function useMigrationExport(): UseMigrationExportReturn {
         const target = allTables.find((t) => t.name === table);
         if (!target) {
           toast.error(
-            `Export: table "${schema}.${table}" 의 metadata 를 찾을 수 없음`,
+            i18n.t("export:tableMetadataNotFound", { schema, table }),
           );
           return;
         }
@@ -370,7 +380,10 @@ export function useMigrationExport(): UseMigrationExportReturn {
         if (include === "ddl") {
           const summary = await writeTextFileExport(savePath, ddlHeader);
           toast.success(
-            `Exported ${INCLUDE_LABEL.ddl} (${schema}.${table}, ${formatKb(summary.bytes_written)} KB)`,
+            i18n.t("export:exported", {
+              label: includeLabel("ddl"),
+              detail: `${schema}.${table}, ${formatKb(summary.bytes_written)} KB`,
+            }),
           );
           return;
         }
@@ -388,11 +401,14 @@ export function useMigrationExport(): UseMigrationExportReturn {
           { include, batchSize: STREAM_BATCH_SIZE },
         );
         toast.success(
-          `Exported ${INCLUDE_LABEL[include]} (${schema}.${table}, ${formatRows(summary.rows_written)} row${summary.rows_written === 1 ? "" : "s"}, ${formatKb(summary.bytes_written)} KB)`,
+          i18n.t("export:exported", {
+            label: includeLabel(include),
+            detail: `${schema}.${table}, ${formatRows(summary.rows_written)} row${summary.rows_written === 1 ? "" : "s"}, ${formatKb(summary.bytes_written)} KB`,
+          }),
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        toast.error(`Export failed: ${message}`);
+        toast.error(i18n.t("export:failed", { message }));
       } finally {
         setIsExporting(false);
       }

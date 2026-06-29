@@ -162,8 +162,16 @@ export const en = {
     exportJsonPlaceholder:
       "Confirm you saved the recovery phrase to reveal the export.",
     ariaExportJson: "Generated export JSON",
+    mpLabel: "Recovery phrase",
+    mpPlaceholder: "12-word phrase from the original export",
+    mpHelpEnvelope:
+      "Paste the 12-word recovery phrase shown when this file was exported.",
+    mpHelpPlain: "Only needed when the payload below is an encrypted envelope.",
+    ariaImportJson: "Import JSON input",
     errorMasterPasswordRequired:
       "Master password required to decrypt this envelope",
+    importIntro:
+      "Paste a previously-exported connection JSON below. Encrypted envelopes need the original master password; plain JSON exports from older versions are still accepted as-is. Imported connections start without passwords and without registered local file analytics sources; re-register files in a DuckDB session before using file analytics.",
     importing: "Importing…",
     importButton: "Import",
     done: "Done",
@@ -283,6 +291,13 @@ export const en = {
     noGroupName: "(No group)",
     groupAria: "Group {{name}}",
     pwSet: "pw set",
+  },
+  // useConnectionMutations — success toasts
+  mutations: {
+    added: 'Connection "{{name}}" added.',
+    updated: 'Connection "{{name}}" updated.',
+    removed: 'Connection "{{name}}" removed.',
+    removedFallback: "Connection removed.",
   },
 } as const;
 
@@ -433,8 +448,16 @@ export const ko = {
     exportJsonPlaceholder:
       "복구 문구를 저장했음을 확인하면 내보내기가 표시됩니다.",
     ariaExportJson: "생성된 내보내기 JSON",
+    mpLabel: "복구 문구",
+    mpPlaceholder: "원본 내보내기의 12단어 문구",
+    mpHelpEnvelope:
+      "이 파일을 내보낼 때 표시된 12단어 복구 문구를 붙여넣으세요.",
+    mpHelpPlain: "아래 페이로드가 암호화된 봉투일 때만 필요합니다.",
+    ariaImportJson: "JSON 가져오기 입력",
     errorMasterPasswordRequired:
       "이 봉투를 복호화하려면 마스터 비밀번호가 필요합니다",
+    importIntro:
+      "이전에 내보낸 연결 JSON을 아래에 붙여넣으세요. 암호화된 봉투는 원래 마스터 비밀번호가 필요하며, 구버전의 일반 JSON 내보내기도 그대로 가져올 수 있습니다. 가져온 연결은 비밀번호와 등록된 로컬 파일 분석 소스 없이 시작되므로, 파일 분석을 사용하기 전에 DuckDB 세션에서 파일을 다시 등록하세요.",
     importing: "가져오는 중…",
     importButton: "가져오기",
     done: "완료",
@@ -540,5 +563,12 @@ export const ko = {
     noGroupName: "(그룹 없음)",
     groupAria: "그룹 {{name}}",
     pwSet: "비밀번호 설정됨",
+  },
+  // useConnectionMutations — success toasts
+  mutations: {
+    added: '연결 "{{name}}"을(를) 추가했습니다.',
+    updated: '연결 "{{name}}"을(를) 수정했습니다.',
+    removed: '연결 "{{name}}"을(를) 삭제했습니다.',
+    removedFallback: "연결을 삭제했습니다.",
   },
 } as const;

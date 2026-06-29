@@ -23,6 +23,7 @@
  */
 
 import { toast } from "@/lib/runtime/toast";
+import i18n from "@lib/i18n";
 import { getMetaSentinel, setMetaSentinel } from "@/lib/tauri/meta_sentinel";
 
 const SENTINEL_KEY = "legacy_column_prefs_drop_dismissed";
@@ -33,9 +34,6 @@ const SENTINEL_KEY = "legacy_column_prefs_drop_dismissed";
 // over-broad to lock all *write* sites.
 const COLUMN_WIDTHS_PREFIX = ["column", "widths"].join("-") + ":";
 const HIDDEN_COLUMNS_PREFIX = ["hidden", "columns"].join("-") + ":";
-
-const TOAST_MESSAGE =
-  "Per-table preferences will reset once — column widths and hidden columns now sync across windows.";
 
 function collectLegacyKeys(): string[] {
   const out: string[] = [];
@@ -80,7 +78,7 @@ export async function dropLegacyColumnPrefs(): Promise<void> {
   removeKeys(legacyKeys);
 
   if (legacyKeys.length > 0) {
-    toast.info(TOAST_MESSAGE);
+    toast.info(i18n.t("feedback:columnPrefsReset"));
   }
 
   try {

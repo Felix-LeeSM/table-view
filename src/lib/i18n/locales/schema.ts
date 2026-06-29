@@ -218,6 +218,20 @@ export const en = {
   emptyProcedures: "No procedures",
   emptySequences: "No sequences",
   emptySynonyms: "No synonyms",
+
+  // useSchemaCache — load/refresh failure toasts
+  cache: {
+    loadTablesFailed: "Failed to load tables for {{name}}",
+    loadViewsFailed: "Failed to load views for {{name}}",
+    loadFunctionsFailed: "Failed to load functions for {{name}}",
+    loadSchemasFailed: "Failed to load schemas",
+    loadFileSourcesFailed: "Failed to load local file sources",
+    clearFileSourcesFailed: "Failed to clear local file sources",
+    refreshSchemasFailed: "Failed to refresh schemas",
+    reloadTablesFailed: "Failed to reload tables for {{name}}",
+    reloadViewsFailed: "Failed to reload views for {{name}}",
+    reloadFunctionsFailed: "Failed to reload functions for {{name}}",
+  },
 } as const;
 
 export const ko = {
@@ -433,4 +447,18 @@ export const ko = {
   emptyProcedures: "프로시저 없음",
   emptySequences: "시퀀스 없음",
   emptySynonyms: "동의어 없음",
+
+  // useSchemaCache — load/refresh failure toasts
+  cache: {
+    loadTablesFailed: "{{name}}의 테이블을 불러오지 못했습니다",
+    loadViewsFailed: "{{name}}의 뷰를 불러오지 못했습니다",
+    loadFunctionsFailed: "{{name}}의 함수를 불러오지 못했습니다",
+    loadSchemasFailed: "스키마를 불러오지 못했습니다",
+    loadFileSourcesFailed: "로컬 파일 소스를 불러오지 못했습니다",
+    clearFileSourcesFailed: "로컬 파일 소스를 비우지 못했습니다",
+    refreshSchemasFailed: "스키마를 새로고침하지 못했습니다",
+    reloadTablesFailed: "{{name}}의 테이블을 다시 불러오지 못했습니다",
+    reloadViewsFailed: "{{name}}의 뷰를 다시 불러오지 못했습니다",
+    reloadFunctionsFailed: "{{name}}의 함수를 다시 불러오지 못했습니다",
+  },
 } as const;
