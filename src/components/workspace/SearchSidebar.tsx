@@ -322,7 +322,7 @@ function CatalogRow({
       aria-selected={selected}
       data-selected={selected || undefined}
       tabIndex={0}
-      className="grid min-h-9 w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2 px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground data-[selected]:bg-accent data-[selected]:text-accent-foreground"
+      className="grid min-h-9 w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2 px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground data-[selected]:bg-accent data-[selected]:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       onClick={() => onSelect(entry)}
       onDoubleClick={() => onSelect(entry, true)}
       onKeyDown={(event) => {

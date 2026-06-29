@@ -107,7 +107,7 @@ describe("DocumentDatabaseTree", () => {
       expect(screen.getByLabelText("admin database")).toBeInTheDocument();
     });
 
-    const dbButtons = screen.getAllByRole("button", {
+    const dbButtons = screen.getAllByRole("treeitem", {
       name: /database$/,
     });
     const order = dbButtons.map((b) => b.getAttribute("aria-label"));

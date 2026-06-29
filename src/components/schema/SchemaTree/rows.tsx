@@ -109,7 +109,7 @@ export function renderSchemaRow(
       <ContextMenuTrigger asChild>
         <button
           type="button"
-          className={`flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted ${
+          className={`flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
             row.isSelected
               ? "bg-muted text-foreground"
               : "text-secondary-foreground"
@@ -201,6 +201,7 @@ export function renderCategoryRow(
           // (`with-schema`) keeps the deeper indent.
           ctx.treeShape === "no-schema" ? "pl-3" : "pl-6",
           row.isSelected ? "text-foreground" : "text-secondary-foreground",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
         )}
         role="treeitem"
         aria-level={ctx.treeShape === "no-schema" ? 1 : 2}
@@ -413,7 +414,7 @@ export function renderItemRow(
       <button
         type="button"
         className={cn(
-          "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 hover:bg-muted",
+          "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
           indentClass,
           isHighlighted
             ? "bg-primary/10 text-primary font-semibold"

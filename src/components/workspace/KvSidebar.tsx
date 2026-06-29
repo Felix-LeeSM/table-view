@@ -313,7 +313,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
               role="treeitem"
               aria-selected={selectedKey === item.key}
               data-selected={selectedKey === item.key || undefined}
-              className="grid min-h-8 w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2 px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground data-[selected]:bg-accent data-[selected]:text-accent-foreground"
+              className="grid min-h-8 w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2 px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground data-[selected]:bg-accent data-[selected]:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               onClick={() => void loadValue(item.key)}
             >
               <div className="flex min-w-0 items-center gap-2">

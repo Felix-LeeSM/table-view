@@ -110,7 +110,11 @@ export default function DocumentDatabaseTree({
   } = tree;
 
   return (
-    <div className="flex flex-col select-none">
+    <div
+      className="flex flex-col select-none"
+      role="tree"
+      aria-label={t("databasesHeader")}
+    >
       <div className="flex items-center justify-between px-3 py-1">
         <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("databasesHeader")}

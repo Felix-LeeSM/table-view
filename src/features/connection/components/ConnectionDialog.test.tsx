@@ -1215,7 +1215,7 @@ describe("ConnectionDialog", () => {
       expect(document.querySelector('[class*="w-dialog-xs"]')).toBeNull();
     });
 
-    it("marks Test result alert as aria-live='polite' for screen readers", async () => {
+    it("exposes Test result via role=alert for screen readers", async () => {
       renderDialog();
 
       await act(async () => {
@@ -1226,8 +1226,10 @@ describe("ConnectionDialog", () => {
         expect(screen.getByText("Connection successful")).toBeInTheDocument();
       });
 
+      // role="alert" is an implicit assertive live region; the redundant
+      // aria-live="polite" that contradicted the role was removed.
       const alert = screen.getByRole("alert");
-      expect(alert.getAttribute("aria-live")).toBe("polite");
+      expect(alert.getAttribute("aria-live")).toBeNull();
     });
   });
 

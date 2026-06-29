@@ -70,7 +70,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
               role="tab"
               aria-selected={tab.subView === "records"}
               tabIndex={tab.subView === "records" ? 0 : -1}
-              className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+              className={`px-4 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                 tab.subView === "records"
                   ? "border-b-2 border-primary text-foreground"
                   : "text-muted-foreground hover:text-secondary-foreground"
@@ -91,7 +91,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
               role="tab"
               aria-selected={tab.subView === "structure"}
               tabIndex={tab.subView === "structure" ? 0 : -1}
-              className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+              className={`px-4 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                 tab.subView === "structure"
                   ? "border-b-2 border-primary text-foreground"
                   : "text-muted-foreground hover:text-secondary-foreground"
@@ -148,7 +148,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
               role="tab"
               aria-selected={tab.subView === "records"}
               tabIndex={tab.subView === "records" ? 0 : -1}
-              className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+              className={`px-4 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                 tab.subView === "records"
                   ? "border-b-2 border-primary text-foreground"
                   : "text-muted-foreground hover:text-secondary-foreground"
@@ -169,7 +169,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
               role="tab"
               aria-selected={tab.subView === "structure"}
               tabIndex={tab.subView === "structure" ? 0 : -1}
-              className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+              className={`px-4 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                 tab.subView === "structure"
                   ? "border-b-2 border-primary text-foreground"
                   : "text-muted-foreground hover:text-secondary-foreground"
@@ -191,7 +191,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
                 role="tab"
                 aria-selected={tab.subView === "erd"}
                 tabIndex={tab.subView === "erd" ? 0 : -1}
-                className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+                className={`px-4 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                   tab.subView === "erd"
                     ? "border-b-2 border-primary text-foreground"
                     : "text-muted-foreground hover:text-secondary-foreground"

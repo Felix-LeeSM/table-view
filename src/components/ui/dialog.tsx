@@ -259,7 +259,6 @@ function DialogFeedback({
       ) : (
         <div
           role="alert"
-          aria-live="polite"
           className={cn(
             "flex min-h-[2.25rem] items-center gap-2 rounded px-3 py-2 text-sm duration-200 animate-in fade-in slide-in-from-top-1",
             state === "success"

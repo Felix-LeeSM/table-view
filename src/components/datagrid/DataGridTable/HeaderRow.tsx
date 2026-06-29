@@ -132,6 +132,13 @@ export default function HeaderRow({
               key={col.name}
               role="columnheader"
               aria-colindex={visualIdx + 1}
+              aria-sort={
+                sortInfo
+                  ? sortInfo.direction === "ASC"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
               className="relative flex cursor-pointer flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
               onMouseDown={(e) => {
                 sortMouseStartRef.current = { x: e.clientX, y: e.clientY };

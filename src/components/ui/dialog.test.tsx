@@ -389,7 +389,7 @@ describe("DialogFeedback (sprint-95 AC-03)", () => {
     expect(status.textContent).toContain("Working...");
   });
 
-  it("AC-03: success state shows the message inside a polite alert with success tokens", () => {
+  it("AC-03: success state shows the message inside an alert with success tokens", () => {
     render(<DialogFeedback state="success" message="Saved." />);
 
     const slot = document.querySelector(
@@ -398,13 +398,15 @@ describe("DialogFeedback (sprint-95 AC-03)", () => {
     expect(slot.getAttribute("data-state")).toBe("success");
     const alert = slot.querySelector('[role="alert"]') as HTMLElement;
     expect(alert).not.toBeNull();
-    expect(alert.getAttribute("aria-live")).toBe("polite");
+    // role="alert" is an implicit assertive live region; a redundant
+    // aria-live="polite" contradicted the role, so it was removed.
+    expect(alert.getAttribute("aria-live")).toBeNull();
     expect(alert.textContent).toContain("Saved.");
     expect(alert.className).toContain("text-success");
     expect(alert.className).toContain("bg-success/10");
   });
 
-  it("AC-03: error state shows the message inside a polite alert with destructive tokens", () => {
+  it("AC-03: error state shows the message inside an alert with destructive tokens", () => {
     render(<DialogFeedback state="error" message="Boom." />);
 
     const slot = document.querySelector(
@@ -413,7 +415,7 @@ describe("DialogFeedback (sprint-95 AC-03)", () => {
     expect(slot.getAttribute("data-state")).toBe("error");
     const alert = slot.querySelector('[role="alert"]') as HTMLElement;
     expect(alert).not.toBeNull();
-    expect(alert.getAttribute("aria-live")).toBe("polite");
+    expect(alert.getAttribute("aria-live")).toBeNull();
     expect(alert.textContent).toContain("Boom.");
     expect(alert.className).toContain("text-destructive");
     expect(alert.className).toContain("bg-destructive/10");

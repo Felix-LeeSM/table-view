@@ -292,6 +292,7 @@ export default function DataGridToolbar({
           size="icon-xs"
           className={`relative ${showQuickLook ? "text-primary" : "text-muted-foreground"}`}
           onClick={onToggleQuickLook}
+          aria-pressed={showQuickLook}
           aria-label={t("toggleQuickLookAria")}
           title={t("toggleQuickLookTitle")}
         >
@@ -302,6 +303,7 @@ export default function DataGridToolbar({
           size="icon-xs"
           className={`relative ${showFilters ? "text-primary" : "text-muted-foreground"}`}
           onClick={onToggleFilters}
+          aria-pressed={showFilters}
           aria-label={t("toggleFiltersAria")}
           title={t("toggleFiltersTitle")}
         >

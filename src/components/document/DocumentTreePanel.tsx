@@ -688,8 +688,10 @@ export function DocumentTreePanel({
                   <button
                     type="button"
                     onClick={() => toggleCollapsed(node.path)}
-                    className="inline-flex items-center align-middle text-muted-foreground"
+                    className="inline-flex items-center align-middle text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     data-testid={`tree-twist-${node.path || "__root"}`}
+                    role="treeitem"
+                    aria-level={node.depth + 1}
                     aria-expanded={!isCollapsed}
                     aria-label={t("treePanel.toggleAriaLabel", {
                       label: node.label,
@@ -747,7 +749,7 @@ export function DocumentTreePanel({
                         type="button"
                         onClick={() => startEdit(node)}
                         data-testid={`tree-leaf-${node.path}`}
-                        className="ml-1 align-middle text-emerald-700 hover:underline dark:text-emerald-300"
+                        className="ml-1 align-middle text-emerald-700 hover:underline dark:text-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       >
                         {pending !== undefined
                           ? renderPendingText(pending)
@@ -791,7 +793,7 @@ export function DocumentTreePanel({
                           })}
                           title={t("treePanel.deleteFieldTitle")}
                           onClick={() => onCommitEdit(node.path, UNSET_OP)}
-                          className="ml-2 inline-flex items-center align-middle text-muted-foreground transition-colors hover:text-rose-500"
+                          className="ml-2 inline-flex items-center align-middle text-muted-foreground transition-colors hover:text-rose-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                         >
                           <Trash2 size={12} aria-hidden />
                         </button>
@@ -942,7 +944,7 @@ function AddKeyRow({
           data-testid={`tree-add-key-${pathKey}`}
           aria-label={ariaLabel}
           onClick={onStart}
-          className="inline-flex items-center gap-1 rounded border border-dashed border-muted-foreground/40 px-2 py-0 text-3xs text-muted-foreground hover:border-primary hover:text-primary"
+          className="inline-flex items-center gap-1 rounded border border-dashed border-muted-foreground/40 px-2 py-0 text-3xs text-muted-foreground hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <Plus size={10} aria-hidden />
           <span>{t("treePanel.addKeyButton")}</span>
@@ -1081,7 +1083,7 @@ function AddItemRow({
           data-testid={`tree-add-item-${arrayPath}`}
           aria-label={ariaLabel}
           onClick={onStart}
-          className="inline-flex items-center gap-1 rounded border border-dashed border-muted-foreground/40 px-2 py-0 text-3xs text-muted-foreground hover:border-primary hover:text-primary"
+          className="inline-flex items-center gap-1 rounded border border-dashed border-muted-foreground/40 px-2 py-0 text-3xs text-muted-foreground hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <Plus size={10} aria-hidden />
           <span>{t("treePanel.addItemButton")}</span>

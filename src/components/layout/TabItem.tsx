@@ -55,7 +55,7 @@ export default function TabItem({
       // the close button (`size-6` = 24px) inside a comfortable hit
       // target. `text-xs` would tighten things further but drop the
       // close button below the ADR 0008 accessibility floor.
-      className={`group relative flex items-center gap-1.5 border-r border-border pl-3 pr-1.5 py-1 text-sm cursor-pointer select-none transition-opacity ${
+      className={`group relative flex items-center gap-1.5 border-r border-border pl-3 pr-1.5 py-1 text-sm cursor-pointer select-none transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
         isActive
           ? "bg-background text-foreground border-b-2 border-b-primary"
           : "text-secondary-foreground hover:bg-muted"

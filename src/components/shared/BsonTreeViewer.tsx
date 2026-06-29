@@ -235,6 +235,7 @@ function TreeNode({
     <div
       role="treeitem"
       aria-expanded={ariaExpanded}
+      aria-level={depth + 1}
       aria-label={t("bson.nodeAria", { keyLabel })}
       className="font-mono text-xs"
     >
@@ -256,7 +257,7 @@ function TreeNode({
                 ? t("bson.collapse", { keyLabel })
                 : t("bson.expand", { keyLabel })
             }
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             {expanded ? (
               <ChevronDown className="h-3 w-3" />
@@ -294,7 +295,7 @@ function TreeNode({
           type="button"
           onClick={handleCopyValue}
           aria-label={t("bson.copyValue", { path: path === "" ? "$" : path })}
-          className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+          className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:text-foreground focus:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <Copy className="h-3 w-3" />
         </button>
