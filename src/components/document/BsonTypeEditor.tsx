@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   type BsonType,
   coerceToEjson,
@@ -25,13 +26,6 @@ interface BsonTypeEditorProps {
   ariaLabel: string;
 }
 
-const typeHint: Record<BsonType, string> = {
-  objectId: "24-hex (e.g. 65abcdef0123456789abcdef)",
-  date: "ISO 8601 (e.g. 2026-05-15T12:00:00Z)",
-  decimal128: "Numeric string (e.g. 1234.5678)",
-  binData: "Base64 payload (subType 00)",
-};
-
 export default function BsonTypeEditor({
   type,
   initialValue,
@@ -39,10 +33,18 @@ export default function BsonTypeEditor({
   onCancel,
   ariaLabel,
 }: BsonTypeEditorProps) {
+  const { t } = useTranslation("document");
   const [draft, setDraft] = useState<string>(() =>
     ejsonToEditableString(type, initialValue),
   );
   const [error, setError] = useState<string | null>(null);
+
+  const typeHint: Record<BsonType, string> = {
+    objectId: t("bsonTypeEditor.hintObjectId"),
+    date: t("bsonTypeEditor.hintDate"),
+    decimal128: t("bsonTypeEditor.hintDecimal128"),
+    binData: t("bsonTypeEditor.hintBinData"),
+  };
 
   const tryCommit = () => {
     const result = coerceToEjson(type, draft);

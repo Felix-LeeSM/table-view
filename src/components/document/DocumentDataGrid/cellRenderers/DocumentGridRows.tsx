@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import { useTranslation } from "react-i18next";
 import Decimal from "decimal.js";
 import { isDocumentSentinel, type DocumentQueryResult } from "@/types/document";
 import type { ColumnInfo, TableData } from "@/types/schema";
@@ -85,6 +86,7 @@ export default function DocumentGridRows({
   handleStartEditCell,
   scrollContainerWidth,
 }: DocumentGridRowsProps) {
+  const { t } = useTranslation("document");
   return (
     <div role="rowgroup">
       {data.rows.map((row, rowIdx) => {
@@ -158,7 +160,9 @@ export default function DocumentGridRows({
                       <input
                         type="text"
                         autoFocus
-                        aria-label={`Editing ${col.name}`}
+                        aria-label={t("gridRows.editingAriaLabel", {
+                          colName: col.name,
+                        })}
                         className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
                         value={editState.editValue ?? ""}
                         onChange={(e) => editState.setEditValue(e.target.value)}
@@ -178,7 +182,7 @@ export default function DocumentGridRows({
                       pendingValue === null ? (
                         <span
                           className="italic text-muted-foreground"
-                          aria-label="NULL"
+                          aria-label={t("gridRows.nullAriaLabel")}
                         >
                           NULL
                         </span>
@@ -242,7 +246,7 @@ export default function DocumentGridRows({
             style={{ gridColumn: "1 / -1" }}
             className="px-3 py-4 text-center text-xs text-muted-foreground"
           >
-            No documents
+            {t("gridRows.noDocuments")}
           </div>
         </div>
       )}
@@ -271,6 +275,7 @@ function NestedCellToggle({
   pendingEdits,
   rowId,
 }: NestedCellToggleProps) {
+  const { t } = useTranslation("document");
   const sentinelStr = String(cell);
   const isArr = sentinelStr.startsWith("[");
   const isOpen =
@@ -290,7 +295,10 @@ function NestedCellToggle({
         type="button"
         data-testid={`nested-toggle-${rowIdx}-${colIdx}`}
         aria-expanded={isOpen}
-        aria-label={`${isOpen ? "Close" : "Expand"} ${colName}`}
+        aria-label={t("gridRows.expandAriaLabel", {
+          action: isOpen ? t("gridRows.close") : t("gridRows.expand"),
+          colName,
+        })}
         onClick={(e) => {
           e.stopPropagation();
           if (isOpen) {

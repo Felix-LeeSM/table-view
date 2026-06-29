@@ -5,6 +5,7 @@
 // paradigm-stable.
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { serverInfo, type ServerInfoRow } from "@/lib/api/serverInfo";
@@ -19,6 +20,7 @@ export function ServerInfoPanel({
   connectionId,
   paradigm,
 }: ServerInfoPanelProps) {
+  const { t } = useTranslation("featuresConnection");
   const [info, setInfo] = useState<ServerInfoRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,13 +44,20 @@ export function ServerInfoPanel({
 
   return (
     <section
-      aria-label="Server info"
+      aria-label={t("serverInfo.ariaSection")}
       data-paradigm={paradigm}
       data-testid="server-info-panel"
       className="flex flex-col gap-2 p-3"
     >
       <header className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-        <span>Server — {paradigm === "table" ? "PG" : "Mongo"}</span>
+        <span>
+          {t("serverInfo.header", {
+            paradigm:
+              paradigm === "table"
+                ? t("serverInfo.paradigmTable")
+                : t("serverInfo.paradigmDocument"),
+          })}
+        </span>
         <Button
           variant="ghost"
           size="sm"
@@ -61,7 +70,7 @@ export function ServerInfoPanel({
           ) : (
             <RefreshCw size={12} aria-hidden />
           )}
-          Refresh
+          {t("serverInfo.refresh")}
         </Button>
       </header>
 
@@ -80,23 +89,31 @@ export function ServerInfoPanel({
           data-testid="server-info-grid"
           className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs"
         >
-          <dt className="text-muted-foreground">Version</dt>
+          <dt className="text-muted-foreground">
+            {t("serverInfo.rowVersion")}
+          </dt>
           <dd className="font-mono break-all">{info.version}</dd>
           {info.host !== null && (
             <>
-              <dt className="text-muted-foreground">Host</dt>
+              <dt className="text-muted-foreground">
+                {t("serverInfo.rowHost")}
+              </dt>
               <dd className="font-mono">{info.host}</dd>
             </>
           )}
           {info.uptimeSec !== null && (
             <>
-              <dt className="text-muted-foreground">Uptime (s)</dt>
+              <dt className="text-muted-foreground">
+                {t("serverInfo.rowUptime")}
+              </dt>
               <dd className="font-mono">{info.uptimeSec.toLocaleString()}</dd>
             </>
           )}
           {info.connectionsActive !== null && (
             <>
-              <dt className="text-muted-foreground">Connections (active)</dt>
+              <dt className="text-muted-foreground">
+                {t("serverInfo.rowConnections")}
+              </dt>
               <dd className="font-mono">
                 {info.connectionsActive.toLocaleString()}
               </dd>
@@ -104,7 +121,9 @@ export function ServerInfoPanel({
           )}
           {Object.keys(info.extras).length > 0 && (
             <>
-              <dt className="col-span-2 mt-2 text-muted-foreground">Extras</dt>
+              <dt className="col-span-2 mt-2 text-muted-foreground">
+                {t("serverInfo.rowExtras")}
+              </dt>
               <dd className="col-span-2 max-h-48 overflow-auto rounded-md border border-border bg-secondary/30 p-2 font-mono text-xs">
                 {safeStringifyCell(info.extras, 2)}
               </dd>

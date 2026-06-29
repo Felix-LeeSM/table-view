@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
@@ -85,6 +86,7 @@ export default function DropTriggerDialog({
   onClose,
   onRefresh,
 }: DropTriggerDialogProps) {
+  const { t } = useTranslation("schemaDialogs");
   const [typingConfirm, setTypingConfirm] = useState("");
   const [cascade, setCascade] = useState(false);
   // Preview pane defaults open — auto-debounced fetch fills it as the
@@ -181,7 +183,7 @@ export default function DropTriggerDialog({
     onClose();
   };
 
-  const ddlButtonLabel = showDdl ? "Hide DDL" : "Show DDL";
+  const ddlButtonLabel = showDdl ? t("hideDdl") : t("showDdl");
 
   return (
     <>
@@ -198,7 +200,7 @@ export default function DropTriggerDialog({
           <div className="rounded-lg bg-secondary shadow-xl">
             <DialogHeader className="border-b border-border px-4 py-3">
               <DialogTitle className="text-sm font-semibold text-foreground">
-                Drop Trigger
+                {t("dropTrigger.title")}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
                 {triggerName} on {schemaName}.{tableName}
@@ -207,14 +209,14 @@ export default function DropTriggerDialog({
 
             <div className="space-y-3 px-4 py-3">
               <p className="text-xs text-muted-foreground">
-                This action cannot be undone. Type the trigger name to confirm.
+                {t("dropTrigger.warningText")}
               </p>
               <div>
                 <label
                   htmlFor="drop-trigger-typing-confirm"
                   className="mb-1 block text-xs font-medium text-secondary-foreground"
                 >
-                  Type the trigger name to confirm
+                  {t("dropTrigger.typingConfirmLabel")}
                 </label>
                 <input
                   id="drop-trigger-typing-confirm"
@@ -222,7 +224,7 @@ export default function DropTriggerDialog({
                   value={typingConfirm}
                   onChange={(e) => setTypingConfirm(e.target.value)}
                   placeholder={triggerName}
-                  aria-label="Type the trigger name to confirm"
+                  aria-label={t("dropTrigger.typingConfirmAria")}
                   autoFocus
                 />
               </div>
@@ -232,9 +234,9 @@ export default function DropTriggerDialog({
                   checked={cascade}
                   onChange={(e) => setCascade(e.target.checked)}
                   className="rounded border-border"
-                  aria-label="CASCADE"
+                  aria-label={t("dropTrigger.cascadeAria")}
                 />
-                CASCADE — drop dependent objects (default: off)
+                {t("dropTrigger.cascadeLabel")}
               </label>
             </div>
 
@@ -262,7 +264,7 @@ export default function DropTriggerDialog({
                   {ddl.previewLoading ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />
-                      Generating preview…
+                      {t("generatingPreview")}
                     </div>
                   ) : ddl.previewError ? (
                     <pre
@@ -277,7 +279,7 @@ export default function DropTriggerDialog({
                     </pre>
                   ) : (
                     <span className="text-xs italic text-muted-foreground">
-                      -- Type the trigger name to see the generated SQL
+                      {t("ddlHintTypeTriggerName")}
                     </span>
                   )}
                 </div>
@@ -286,19 +288,19 @@ export default function DropTriggerDialog({
 
             <DialogFooter className="border-t border-border px-4 py-3">
               <Button variant="ghost" size="sm" onClick={handleCancel}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 size="sm"
                 variant="destructive"
                 onClick={handleApply}
                 disabled={!canApply}
-                aria-label="Apply"
+                aria-label={t("apply")}
               >
                 {ddl.previewLoading ? (
                   <Loader2 className="animate-spin size-3.5" />
                 ) : null}
-                Apply
+                {t("apply")}
               </Button>
             </DialogFooter>
           </div>

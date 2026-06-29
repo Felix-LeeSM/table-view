@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import PreviewDialog, {
   type PreviewDialogCommitError,
 } from "@components/ui/dialog/PreviewDialog";
@@ -43,25 +44,26 @@ export default function MqlPreviewModal({
   environment = null,
   connectionLabel = null,
 }: MqlPreviewModalProps) {
+  const { t } = useTranslation("document");
   const executeDisabled = loading || previewLines.length === 0;
 
   return (
     <PreviewDialog
-      title="MQL Preview"
-      description="Preview MongoDB commands before executing"
+      title={t("mqlPreview.title")}
+      description={t("mqlPreview.description")}
       className="w-dialog-xl max-h-[80vh] bg-background"
       onConfirm={() => void onExecute()}
       onCancel={onCancel}
       loading={loading}
       confirmDisabled={executeDisabled}
-      confirmAriaLabel="Execute MQL commands"
+      confirmAriaLabel={t("mqlPreview.executeAriaLabel")}
       commitError={commitError}
       // Sprint 252: Plain-text join — Mongo dialect highlighter absent so
       // SqlSyntax is intentionally NOT wrapped here (AC-252-07 plain
       // fallback). Empty previewLines → joined string is "" → button
       // self-suppresses (AC-252-04).
       copyText={previewLines.join("\n")}
-      copyAriaLabel="Copy MQL commands to clipboard"
+      copyAriaLabel={t("mqlPreview.copyAriaLabel")}
       confirmButton={
         <ExecuteButton
           severity="warn"
@@ -70,7 +72,7 @@ export default function MqlPreviewModal({
           loading={loading}
           disabled={executeDisabled}
           onClick={() => void onExecute()}
-          ariaLabel="Execute MQL commands"
+          ariaLabel={t("mqlPreview.executeAriaLabel")}
         />
       }
       preview={
@@ -90,11 +92,11 @@ export default function MqlPreviewModal({
         >
           {previewLines.length === 0 ? (
             <p className="text-xs italic text-muted-foreground">
-              No commands to preview.
+              {t("mqlPreview.noCommands")}
             </p>
           ) : (
             <pre
-              aria-label="MQL commands"
+              aria-label={t("mqlPreview.commandsAriaLabel")}
               className="whitespace-pre-wrap break-all rounded bg-secondary p-2 font-mono text-xs text-secondary-foreground"
             >
               {previewLines.join("\n")}
@@ -103,28 +105,28 @@ export default function MqlPreviewModal({
           {previewLines.length > 1 && (
             <div
               role="alert"
-              aria-label="MongoDB ordered bulk write warning"
+              aria-label={t("mqlPreview.bulkWarningAriaLabel")}
               className="rounded border border-warning/30 bg-warning/10 p-2 text-xs text-warning"
             >
-              {previewLines.length} ordered document writes will execute in one
-              bulk request. If a later command fails, earlier writes may already
-              be committed; pending edits stay available for retry.
+              {t("mqlPreview.bulkWarning", { count: previewLines.length })}
             </div>
           )}
           {errors.length > 0 && (
             <div
               role="alert"
-              aria-label="MQL generation errors"
+              aria-label={t("mqlPreview.errorsAriaLabel")}
               className="rounded border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive"
             >
               <p className="mb-1 font-semibold">
-                {errors.length} document{errors.length !== 1 ? "s" : ""}{" "}
-                skipped:
+                {t("mqlPreview.errorsSkipped", { count: errors.length })}
               </p>
               <ul className="list-inside list-disc space-y-0.5">
                 {errors.map((err, idx) => (
                   <li key={`${err.row}-${idx}`}>
-                    document {err.row}: {err.message}
+                    {t("mqlPreview.errorItem", {
+                      row: err.row,
+                      message: err.message,
+                    })}
                   </li>
                 ))}
               </ul>

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { ChevronRight, ChevronDown, Copy } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@lib/utils";
 import { safeStringifyCell } from "@lib/jsonCell";
 
@@ -169,6 +170,7 @@ function TreeNode({
   defaultExpanded,
   isArrayElement,
 }: NodeProps) {
+  const { t } = useTranslation("shared");
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [copied, setCopied] = useState<"path" | "value" | null>(null);
 
@@ -233,7 +235,7 @@ function TreeNode({
     <div
       role="treeitem"
       aria-expanded={ariaExpanded}
-      aria-label={`${keyLabel} node`}
+      aria-label={t("bson.nodeAria", { keyLabel })}
       className="font-mono text-xs"
     >
       <div
@@ -250,7 +252,9 @@ function TreeNode({
             type="button"
             onClick={handleToggle}
             aria-label={
-              expanded ? `Collapse ${keyLabel}` : `Expand ${keyLabel}`
+              expanded
+                ? t("bson.collapse", { keyLabel })
+                : t("bson.expand", { keyLabel })
             }
             className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
           >
@@ -267,7 +271,7 @@ function TreeNode({
         <button
           type="button"
           onClick={handleCopyPath}
-          title={`Copy path ${path === "" ? "$" : path}`}
+          title={t("bson.copyPath", { path: path === "" ? "$" : path })}
           className={cn(
             "shrink-0 text-left text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
             isArrayElement && "text-muted-foreground",
@@ -289,7 +293,7 @@ function TreeNode({
         <button
           type="button"
           onClick={handleCopyValue}
-          aria-label={`Copy value at ${path === "" ? "$" : path}`}
+          aria-label={t("bson.copyValue", { path: path === "" ? "$" : path })}
           className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:text-foreground focus:opacity-100 group-hover:opacity-100"
         >
           <Copy className="h-3 w-3" />
@@ -300,7 +304,7 @@ function TreeNode({
             role="status"
             className="ml-1 shrink-0 rounded bg-success/15 px-1 text-3xs font-semibold text-success"
           >
-            Copied {copied}
+            {t("bson.copied", { copied })}
           </span>
         )}
       </div>
@@ -350,6 +354,8 @@ function ValueSummary({
   isArray,
   expanded,
 }: ValueSummaryProps) {
+  const { t } = useTranslation("shared");
+
   if (badge) {
     return (
       <span className="flex min-w-0 items-center gap-1">
@@ -370,7 +376,7 @@ function ValueSummary({
     const len = (value as unknown[]).length;
     return (
       <span className="text-muted-foreground">
-        {expanded ? "[" : `[${len} items]`}
+        {expanded ? "[" : t("bson.arrayItems", { len })}
       </span>
     );
   }
@@ -379,7 +385,7 @@ function ValueSummary({
     const len = Object.keys(value as Record<string, unknown>).length;
     return (
       <span className="text-muted-foreground">
-        {expanded ? "{" : `{${len} keys}`}
+        {expanded ? "{" : t("bson.objectKeys", { len })}
       </span>
     );
   }
@@ -431,14 +437,16 @@ export default function BsonTreeViewer({
   value,
   rootLabel,
 }: BsonTreeViewerProps) {
+  const { t } = useTranslation("shared");
+
   if (value === null || value === undefined) {
     return (
       <div
         role="tree"
-        aria-label="BSON document tree"
+        aria-label={t("bson.treeAriaLabel")}
         className="p-3 text-xs italic text-muted-foreground"
       >
-        No document selected
+        {t("bson.noDocumentSelected")}
       </div>
     );
   }
@@ -446,7 +454,7 @@ export default function BsonTreeViewer({
   return (
     <div
       role="tree"
-      aria-label="BSON document tree"
+      aria-label={t("bson.treeAriaLabel")}
       className="overflow-auto p-2"
     >
       <TreeNode

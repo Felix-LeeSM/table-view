@@ -180,7 +180,7 @@ function FlatTableList({
     return (
       <div>
         <div className="px-3 py-1 text-xs text-muted-foreground">
-          Loading...
+          {ctx.t("loadingTables")}
         </div>
       </div>
     );
@@ -190,7 +190,7 @@ function FlatTableList({
     return (
       <div>
         <div className="px-3 py-1 text-2xs italic text-muted-foreground">
-          No tables
+          {ctx.t("emptyTables")}
         </div>
       </div>
     );
@@ -200,7 +200,7 @@ function FlatTableList({
     <div>
       {schemaTables.length === 0 && (
         <div className="px-3 py-1 text-2xs italic text-muted-foreground">
-          No tables
+          {ctx.t("emptyTables")}
         </div>
       )}
       {schemaTables.map((item) => {
@@ -227,7 +227,7 @@ function FlatTableList({
       {fileAnalyticsSources.length > 0 && (
         <>
           <div className="px-3 pt-2 pb-0.5 text-3xs font-medium uppercase text-muted-foreground">
-            Local sources
+            {ctx.t("localSources")}
           </div>
           {fileAnalyticsSources.map((source) =>
             renderFileAnalyticsSourceRow(source),
@@ -259,7 +259,7 @@ function CategoryCascade({
     return (
       <div>
         <div className="px-8 py-1 text-xs text-muted-foreground">
-          Loading...
+          {ctx.t("loadingTables")}
         </div>
       </div>
     );
@@ -375,14 +375,17 @@ function CategorySection({
               ctx,
             )}
           {items.length === 0
-            ? renderEmptyRow({
-                kind: "empty",
-                key: `empty:${schemaName}:${cat.key}`,
-                schemaName,
-                category: cat,
-                hasActiveSearch:
-                  cat.key === "tables" && !!tableSearch[schemaName],
-              })
+            ? renderEmptyRow(
+                {
+                  kind: "empty",
+                  key: `empty:${schemaName}:${cat.key}`,
+                  schemaName,
+                  category: cat,
+                  hasActiveSearch:
+                    cat.key === "tables" && !!tableSearch[schemaName],
+                },
+                ctx,
+              )
             : items.map((item) => {
                 const itemRow = buildItemRow(
                   item,

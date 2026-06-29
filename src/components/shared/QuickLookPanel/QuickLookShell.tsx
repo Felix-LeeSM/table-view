@@ -20,6 +20,7 @@
 // existing `dark:bg-muted/20` variant byte-for-byte.
 import { X, GripHorizontal, Pencil, PencilOff } from "lucide-react";
 import type { ReactNode, MouseEvent, KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { cn } from "@lib/utils";
 import { MIN_HEIGHT, MAX_HEIGHT } from "./helpers";
@@ -70,6 +71,7 @@ export default function QuickLookShell({
   editState,
   children,
 }: QuickLookShellProps) {
+  const { t } = useTranslation("shared");
   return (
     <div
       className="flex shrink-0 flex-col border-t border-border bg-background"
@@ -85,7 +87,7 @@ export default function QuickLookShell({
         tabIndex={0}
         role="separator"
         aria-orientation="horizontal"
-        aria-label="Resize Quick Look panel"
+        aria-label={t("shell.resizeLabel")}
         aria-valuemin={MIN_HEIGHT}
         aria-valuemax={MAX_HEIGHT}
         aria-valuenow={height}
@@ -99,16 +101,16 @@ export default function QuickLookShell({
         <div className="flex items-center gap-1">
           {isDirty && (
             <span className="rounded bg-warning/15 px-1.5 py-0.5 text-3xs font-semibold text-warning">
-              ● Modified
+              {t("shell.modified")}
             </span>
           )}
           {editState && (
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label="Toggle edit mode"
+              aria-label={t("shell.toggleEdit")}
               aria-pressed={editing}
-              title={editing ? "Exit edit mode" : "Enter edit mode"}
+              title={editing ? t("shell.exitEdit") : t("shell.enterEdit")}
               onClick={onToggleEdit}
             >
               {editing ? <PencilOff /> : <Pencil />}
@@ -118,7 +120,11 @@ export default function QuickLookShell({
             variant="ghost"
             size="icon-xs"
             onClick={onClose}
-            aria-label={closeLabel}
+            aria-label={
+              closeLabel === "Close row details"
+                ? t("rowDetails.closeLabel")
+                : t("documentDetails.closeLabel")
+            }
           >
             <X />
           </Button>

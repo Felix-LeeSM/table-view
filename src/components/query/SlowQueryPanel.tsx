@@ -5,6 +5,7 @@
 // sprint can add a selector once usage tells us what range matters.
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { slowQueries, type SlowQueryRow } from "@/lib/api/slowQueries";
@@ -21,6 +22,7 @@ export function SlowQueryPanel({
   connectionId,
   paradigm,
 }: SlowQueryPanelProps) {
+  const { t } = useTranslation("query");
   const [rows, setRows] = useState<SlowQueryRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,15 +46,16 @@ export function SlowQueryPanel({
 
   return (
     <section
-      aria-label="Slow queries"
+      aria-label={t("slowQuery.panelAria")}
       data-paradigm={paradigm}
       data-testid="slow-query-panel"
       className="flex flex-col gap-2 p-3"
     >
       <header className="flex items-center justify-between text-xs font-medium text-muted-foreground">
         <span>
-          Slow queries —{" "}
-          {paradigm === "table" ? "pg_stat_statements" : "system.profile"}
+          {paradigm === "table"
+            ? t("slowQuery.headerPg")
+            : t("slowQuery.headerMongo")}
         </span>
         <Button
           variant="ghost"
@@ -66,7 +69,7 @@ export function SlowQueryPanel({
           ) : (
             <RefreshCw size={12} aria-hidden />
           )}
-          Refresh
+          {t("slowQuery.refresh")}
         </Button>
       </header>
 
@@ -86,8 +89,8 @@ export function SlowQueryPanel({
           className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
         >
           {paradigm === "document"
-            ? "system.profile is empty. Enable Mongo profiling with db.setProfilingLevel(level, slowms)."
-            : "pg_stat_statements returned no rows yet. Run some queries first."}
+            ? t("slowQuery.emptyMongo")
+            : t("slowQuery.emptyPg")}
         </div>
       )}
 
@@ -95,11 +98,21 @@ export function SlowQueryPanel({
         <table data-testid="slow-query-table" className="w-full text-xs">
           <thead className="text-left text-muted-foreground">
             <tr>
-              <th className="px-1 py-1 font-medium">Query</th>
-              <th className="px-1 py-1 font-medium">Calls</th>
-              <th className="px-1 py-1 font-medium">Mean (ms)</th>
-              <th className="px-1 py-1 font-medium">Total (ms)</th>
-              <th className="px-1 py-1 font-medium">Rows</th>
+              <th className="px-1 py-1 font-medium">
+                {t("slowQuery.colQuery")}
+              </th>
+              <th className="px-1 py-1 font-medium">
+                {t("slowQuery.colCalls")}
+              </th>
+              <th className="px-1 py-1 font-medium">
+                {t("slowQuery.colMeanMs")}
+              </th>
+              <th className="px-1 py-1 font-medium">
+                {t("slowQuery.colTotalMs")}
+              </th>
+              <th className="px-1 py-1 font-medium">
+                {t("slowQuery.colRows")}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -138,7 +151,9 @@ export function SlowQueryPanel({
         rows[0] !== undefined &&
         Object.keys(rows[0].extras).length > 0 && (
           <details className="text-xs text-muted-foreground">
-            <summary className="cursor-pointer">Raw extras (first row)</summary>
+            <summary className="cursor-pointer">
+              {t("slowQuery.rawExtras")}
+            </summary>
             <pre
               data-testid="slow-query-extras"
               className="mt-1 max-h-48 overflow-auto rounded-md border border-border bg-secondary/30 p-2 font-mono"

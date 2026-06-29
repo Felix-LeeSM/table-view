@@ -5,6 +5,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { useTranslation } from "react-i18next";
 import Decimal from "decimal.js";
 import { CellDetailDialog, useColumnResize } from "@components/datagrid";
 import { getDefaultRem } from "@/lib/columnCategory";
@@ -23,6 +24,7 @@ function formatCell(cell: unknown): string {
 }
 
 export function QueryResultTable({ result }: { result: QueryResult }) {
+  const { t } = useTranslation("query");
   const [cellDetail, setCellDetail] = useState<{
     data: unknown;
     columnName: string;
@@ -164,7 +166,7 @@ export function QueryResultTable({ result }: { result: QueryResult }) {
               style={{ gridColumn: "1 / -1" }}
               className="px-3 py-4 text-center text-xs text-muted-foreground"
             >
-              No data
+              {t("resultTable.noData")}
             </div>
           </div>
         )}

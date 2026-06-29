@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Minus, Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   Select,
@@ -99,27 +100,27 @@ export default function IndexesTabBody({
   onUpdate,
   onMove,
 }: IndexesTabBodyProps) {
+  const { t } = useTranslation("schemaDialogs");
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
         <label className="text-xs font-medium text-secondary-foreground">
-          Indexes
+          {t("indexesTab.label")}
         </label>
         <Button
           variant="ghost"
           size="xs"
           onClick={onAdd}
-          aria-label="Add index"
+          aria-label={t("indexesTab.addAria")}
         >
           <Plus />
-          Index
+          {t("indexesTab.addBtn")}
         </Button>
       </div>
       {indexes.length === 0 ? (
         <div className="rounded border border-dashed border-border bg-background p-4 text-center">
           <p className="text-xs italic text-muted-foreground">
-            No indexes declared. PostgreSQL implicitly indexes primary-key
-            columns; click &quot;+ Index&quot; to declare additional indexes.
+            {t("indexesTab.emptyHint")}
           </p>
         </div>
       ) : (
@@ -145,8 +146,8 @@ export default function IndexesTabBody({
                       onChange={(e) =>
                         onUpdate(idx.trackingId, { name: e.target.value })
                       }
-                      placeholder="index_name"
-                      aria-label="Index name"
+                      placeholder={t("indexesTab.indexNamePlaceholder")}
+                      aria-label={t("indexesTab.indexNameAria")}
                     />
                     <Select
                       value={idx.index_type}
@@ -157,7 +158,7 @@ export default function IndexesTabBody({
                       }
                     >
                       <SelectTrigger
-                        aria-label="Index type"
+                        aria-label={t("indexesTab.indexTypeAria")}
                         size="sm"
                         className="w-24"
                       >
@@ -181,9 +182,9 @@ export default function IndexesTabBody({
                           })
                         }
                         className="rounded border-border"
-                        aria-label="Index unique"
+                        aria-label={t("indexesTab.indexUniqueAria")}
                       />
-                      Unique
+                      {t("indexesTab.indexUniqueLabel")}
                     </label>
                   </div>
                   <OrderedColumnPicker
@@ -197,7 +198,7 @@ export default function IndexesTabBody({
                   />
                   {dedupe && (
                     <p className="text-xs italic text-muted-foreground">
-                      Skipped — primary key is already indexed
+                      {t("indexesTab.pkSkippedHint")}
                     </p>
                   )}
                 </div>
@@ -207,8 +208,8 @@ export default function IndexesTabBody({
                   size="icon-xs"
                   onClick={() => onMove(idx.trackingId, -1)}
                   disabled={isFirst}
-                  aria-label="Move index up"
-                  title="Move index up"
+                  aria-label={t("indexesTab.moveUpAria")}
+                  title={t("indexesTab.moveUpTitle")}
                 >
                   <ArrowUp />
                 </Button>
@@ -217,8 +218,8 @@ export default function IndexesTabBody({
                   size="icon-xs"
                   onClick={() => onMove(idx.trackingId, 1)}
                   disabled={isLast}
-                  aria-label="Move index down"
-                  title="Move index down"
+                  aria-label={t("indexesTab.moveDownAria")}
+                  title={t("indexesTab.moveDownTitle")}
                 >
                   <ArrowDown />
                 </Button>
@@ -226,8 +227,8 @@ export default function IndexesTabBody({
                   variant="ghost"
                   size="icon-xs"
                   onClick={() => onRemove(idx.trackingId)}
-                  aria-label="Remove index"
-                  title="Remove index"
+                  aria-label={t("indexesTab.removeAria")}
+                  title={t("indexesTab.removeTitle")}
                 >
                   <Minus />
                 </Button>

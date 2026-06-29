@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { readKvStream } from "@lib/tauri/kv";
 import type { KvStreamReadResult } from "@/types/kv";
@@ -18,6 +19,7 @@ export function KvStreamReaderPanel({
   database,
   stream,
 }: KvStreamReaderPanelProps) {
+  const { t } = useTranslation("workspace");
   const [start, setStart] = useState(stream.start || "-");
   const [end, setEnd] = useState(stream.end || "+");
   const [limitText, setLimitText] = useState(
@@ -39,9 +41,7 @@ export function KvStreamReaderPanel({
   const refreshStream = useCallback(async () => {
     const parsedLimit = Number.parseInt(limitText, 10);
     if (!Number.isFinite(parsedLimit)) {
-      setStreamError(
-        `Stream count must be between 1 and ${STREAM_READ_MAX_LIMIT}.`,
-      );
+      setStreamError(t("kvStream.countError", { max: STREAM_READ_MAX_LIMIT }));
       return;
     }
     const limit = clampStreamLimit(parsedLimit);
@@ -64,13 +64,13 @@ export function KvStreamReaderPanel({
     } finally {
       setLoading(false);
     }
-  }, [connectionId, database, end, limitText, start, stream.key]);
+  }, [connectionId, database, end, limitText, start, stream.key, t]);
 
   return (
     <div className="rounded border border-border bg-muted/20">
       <div className="grid gap-2 border-b border-border p-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6rem_auto]">
         <label className="grid min-w-0 gap-1 text-3xs text-muted-foreground">
-          Stream start
+          {t("kvStream.startLabel")}
           <input
             className="min-w-0 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none"
             value={start}
@@ -79,7 +79,7 @@ export function KvStreamReaderPanel({
           />
         </label>
         <label className="grid min-w-0 gap-1 text-3xs text-muted-foreground">
-          Stream end
+          {t("kvStream.endLabel")}
           <input
             className="min-w-0 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none"
             value={end}
@@ -88,7 +88,7 @@ export function KvStreamReaderPanel({
           />
         </label>
         <label className="grid min-w-0 gap-1 text-3xs text-muted-foreground">
-          Stream count
+          {t("kvStream.countLabel")}
           <input
             className="min-w-0 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none"
             type="number"
@@ -104,7 +104,7 @@ export function KvStreamReaderPanel({
             size="xs"
             className="w-full"
             disabled={loading}
-            aria-label="Refresh stream entries"
+            aria-label={t("kvStream.refreshAria")}
             onClick={() => void refreshStream()}
           >
             {loading ? (
@@ -112,7 +112,7 @@ export function KvStreamReaderPanel({
             ) : (
               <RefreshCw size={12} />
             )}
-            Refresh
+            {t("kvStream.refresh")}
           </Button>
         </div>
       </div>
@@ -123,7 +123,7 @@ export function KvStreamReaderPanel({
           className="flex items-center gap-2 border-b border-border px-2 py-2 text-muted-foreground"
         >
           <Loader2 size={12} className="animate-spin" aria-hidden />
-          Loading stream entries
+          {t("kvStream.loading")}
         </div>
       )}
 
@@ -139,12 +139,16 @@ export function KvStreamReaderPanel({
       <div className="max-h-56 overflow-auto">
         <table
           className="w-full table-fixed text-left text-3xs"
-          aria-label={`${stream.key} stream entries`}
+          aria-label={t("kvStream.tableAria", { key: stream.key })}
         >
           <thead className="sticky top-0 bg-muted text-muted-foreground">
             <tr>
-              <th className="w-32 px-2 py-1 font-medium">ID</th>
-              <th className="px-2 py-1 font-medium">Fields</th>
+              <th className="w-32 px-2 py-1 font-medium">
+                {t("kvStream.colId")}
+              </th>
+              <th className="px-2 py-1 font-medium">
+                {t("kvStream.colFields")}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -173,7 +177,7 @@ export function KvStreamReaderPanel({
                   colSpan={2}
                   className="border-t border-border px-2 py-3 text-muted-foreground"
                 >
-                  No stream entries in range.
+                  {t("kvStream.noEntries")}
                 </td>
               </tr>
             )}

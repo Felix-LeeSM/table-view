@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
@@ -59,6 +60,7 @@ export default function FilterBar({
   onFilterModeChange,
   onRawSqlChange,
 }: FilterBarProps) {
+  const { t } = useTranslation("rdb");
   const [rawSqlError, setRawSqlError] = useState<string | null>(null);
 
   const addFilter = () => {
@@ -110,7 +112,7 @@ export default function FilterBar({
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-xs font-medium text-secondary-foreground">
-            Filters
+            {t("filterBar.title")}
           </span>
           {/* Mode toggle — segmented control */}
           <ToggleGroup
@@ -122,13 +124,13 @@ export default function FilterBar({
               value="structured"
               className="data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
             >
-              Structured
+              {t("filterBar.structured")}
             </ToggleGroupItem>
             <ToggleGroupItem
               value="raw"
               className="data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
             >
-              Raw SQL
+              {t("filterBar.rawSql")}
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -137,7 +139,7 @@ export default function FilterBar({
           size="icon-xs"
           className="text-muted-foreground hover:text-secondary-foreground"
           onClick={onClose}
-          aria-label="Close filter bar"
+          aria-label={t("filterBar.closeAria")}
         >
           <X size={12} />
         </Button>
@@ -149,7 +151,7 @@ export default function FilterBar({
           <Input
             type="text"
             className="h-7 w-full border-border bg-background px-2 py-1 font-mono text-xs text-foreground placeholder:text-muted-foreground"
-            placeholder="e.g. id = 13 AND name LIKE '%test%'"
+            placeholder={t("filterBar.rawSqlPlaceholder")}
             value={rawSql}
             onChange={(e) => {
               onRawSqlChange(e.target.value);
@@ -166,7 +168,7 @@ export default function FilterBar({
                 }
               }
             }}
-            aria-label="Raw SQL WHERE clause"
+            aria-label={t("filterBar.rawSqlAria")}
           />
           {rawSqlError && (
             <div className="mt-1 text-2xs text-destructive" role="alert">
@@ -184,7 +186,7 @@ export default function FilterBar({
                 onClearAll();
               }}
             >
-              Clear
+              {t("filterBar.clear")}
             </Button>
             <Button
               size="xs"
@@ -199,7 +201,7 @@ export default function FilterBar({
                 }
               }}
             >
-              Apply
+              {t("filterBar.apply")}
             </Button>
           </div>
         </div>
@@ -216,7 +218,7 @@ export default function FilterBar({
                 <SelectTrigger
                   size="xs"
                   className="rounded border border-border bg-background text-foreground"
-                  aria-label="Filter column"
+                  aria-label={t("filterBar.filterColumnAria")}
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -247,7 +249,7 @@ export default function FilterBar({
                 <SelectTrigger
                   size="xs"
                   className="rounded border border-border bg-background text-foreground"
-                  aria-label="Filter operator"
+                  aria-label={t("filterBar.filterOperatorAria")}
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -265,7 +267,7 @@ export default function FilterBar({
                 <Input
                   type="text"
                   className="h-7 min-w-30 flex-1 border-border bg-background px-2 py-1 text-xs text-foreground"
-                  placeholder="Value..."
+                  placeholder={t("filterBar.valuePlaceholder")}
                   value={filter.value ?? ""}
                   onChange={(e) =>
                     updateFilter(index, { value: e.target.value })
@@ -282,7 +284,7 @@ export default function FilterBar({
                 size="icon-xs"
                 className="text-muted-foreground hover:text-destructive"
                 onClick={() => removeFilter(index)}
-                aria-label="Remove filter"
+                aria-label={t("filterBar.removeFilterAria")}
               >
                 <Trash2 size={12} />
               </Button>
@@ -296,7 +298,7 @@ export default function FilterBar({
               className="text-primary"
               onClick={addFilter}
             >
-              <Plus size={12} /> Add Filter
+              <Plus size={12} /> {t("filterBar.addFilter")}
             </Button>
             {filters.length > 0 && (
               <>
@@ -306,14 +308,14 @@ export default function FilterBar({
                   className="text-muted-foreground"
                   onClick={clearAll}
                 >
-                  Clear All
+                  {t("filterBar.clearAll")}
                 </Button>
                 <Button
                   size="xs"
                   className="bg-primary text-white hover:bg-primary/90"
                   onClick={onApply}
                 >
-                  Apply
+                  {t("filterBar.apply")}
                 </Button>
               </>
             )}

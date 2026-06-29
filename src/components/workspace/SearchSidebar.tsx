@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Boxes,
   Database,
@@ -47,6 +48,7 @@ const SEARCH_QUERY_TEMPLATE = JSON.stringify(
 );
 
 export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
+  const { t } = useTranslation("workspace");
   const connection = useConnectionStore((s) =>
     s.connections.find((c) => c.id === connectionId),
   );
@@ -142,7 +144,7 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 font-medium text-secondary-foreground">
             <Search size={13} aria-hidden />
-            <span className="truncate">Search catalog</span>
+            <span className="truncate">{t("search.catalogHeader")}</span>
           </div>
           <div className="mt-1 truncate text-3xs text-muted-foreground">
             {identity?.clusterName ?? productLabel} · {version}
@@ -151,8 +153,8 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label={`Refresh ${productLabel} catalog`}
-          title={`Refresh ${productLabel} catalog`}
+          aria-label={t("search.refreshAria", { productLabel })}
+          title={t("search.refreshAria", { productLabel })}
           disabled={loading}
           onClick={() => {
             void loadCatalog();
@@ -170,20 +172,20 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
         <Search size={12} className="text-muted-foreground" aria-hidden />
         <input
           className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-          aria-label={`${productLabel} catalog filter`}
+          aria-label={t("search.filterAria", { productLabel })}
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
-          placeholder="Filter indexes, aliases, streams"
+          placeholder={t("search.filterPlaceholder")}
         />
       </div>
 
       <label className="flex items-center gap-2 border-b border-border px-3 py-2 text-3xs text-muted-foreground">
         <Checkbox
-          aria-label="Show system search entries"
+          aria-label={t("search.showSystemAria")}
           checked={showSystem}
           onCheckedChange={(checked) => setShowSystem(checked === true)}
         />
-        Show hidden/system entries
+        {t("search.showSystemLabel")}
       </label>
 
       <div
@@ -210,10 +212,13 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
         ) : (
           <div
             role="tree"
-            aria-label={`${productLabel} search catalog`}
+            aria-label={t("search.catalogAria", { productLabel })}
             className="py-1"
           >
-            <CatalogSection title="Indexes" empty="No indexes found.">
+            <CatalogSection
+              title={t("search.section.indexes")}
+              empty={t("search.empty.indexes")}
+            >
               {visible.indexes.map((item) => (
                 <CatalogRow
                   key={item.name}
@@ -224,7 +229,10 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
                 />
               ))}
             </CatalogSection>
-            <CatalogSection title="Aliases" empty="No aliases found.">
+            <CatalogSection
+              title={t("search.section.aliases")}
+              empty={t("search.empty.aliases")}
+            >
               {visible.aliases.map((item) => (
                 <CatalogRow
                   key={`${item.name}:${item.index}`}
@@ -239,7 +247,10 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
                 />
               ))}
             </CatalogSection>
-            <CatalogSection title="Data streams" empty="No data streams found.">
+            <CatalogSection
+              title={t("search.section.dataStreams")}
+              empty={t("search.empty.dataStreams")}
+            >
               {visible.dataStreams.map((item) => (
                 <CatalogRow
                   key={item.name}
@@ -297,6 +308,7 @@ function CatalogRow({
   onSelect: (entry: CatalogEntry, permanent?: boolean) => void;
   onOpenQuery: (entry: CatalogEntry) => void;
 }) {
+  const { t } = useTranslation("workspace");
   const selected = selectedId === entry.id;
   const Icon =
     entry.kind === "alias"
@@ -356,8 +368,8 @@ function CatalogRow({
           <Button
             variant="ghost"
             size="icon-xs"
-            aria-label={`Open Search query for ${entryTitle(entry)}`}
-            title={`Open Search query for ${entryTitle(entry)}`}
+            aria-label={t("search.openQueryAria", { name: entryTitle(entry) })}
+            title={t("search.openQueryTitle", { name: entryTitle(entry) })}
             onClick={(event) => {
               event.stopPropagation();
               onOpenQuery(entry);
@@ -372,11 +384,12 @@ function CatalogRow({
 }
 
 function SearchCatalogSkeleton() {
+  const { t } = useTranslation("workspace");
   return (
     <div
       role="status"
       aria-busy="true"
-      aria-label="Loading Search catalog"
+      aria-label={t("search.loadingCatalogAria")}
       className="space-y-2 px-3 py-3"
     >
       <Skeleton className="h-8 w-full" />

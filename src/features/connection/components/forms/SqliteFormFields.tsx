@@ -6,6 +6,7 @@
  * backend `connection_test`/`addConnection` command shapes don't change.
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { Database, FolderOpen, LockKeyhole } from "lucide-react";
 import { createSqliteDatabaseFile } from "@/lib/tauri/connection";
@@ -34,6 +35,7 @@ export default function SqliteFormFields({
   fileExtensions = ["sqlite", "sqlite3", "db"],
   createEnabled = true,
 }: SqliteFormFieldsProps) {
+  const { t } = useTranslation("featuresConnection");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const selectTitle = `Select ${databaseLabel} database file`;
@@ -80,7 +82,7 @@ export default function SqliteFormFields({
   return (
     <div>
       <label htmlFor="conn-sqlite-path" className={labelClass}>
-        Database File
+        {t("form.labelDatabaseFile")}
       </label>
       <div className="flex items-stretch gap-2">
         <input
@@ -95,12 +97,12 @@ export default function SqliteFormFields({
           <>
             <button
               type="button"
-              aria-label="Browse for database file"
+              aria-label={t("form.browseAria")}
               onClick={handleBrowse}
               className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs hover:bg-muted"
             >
               <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
-              Browse
+              {t("form.browse")}
             </button>
             {createEnabled && (
               <button
@@ -111,14 +113,14 @@ export default function SqliteFormFields({
                 className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Database className="h-3.5 w-3.5" aria-hidden="true" />
-                {creating ? "Creating" : "Create"}
+                {creating ? t("form.creating") : t("form.createFile")}
               </button>
             )}
           </>
         )}
       </div>
       <p className="mt-1 text-2xs text-muted-foreground">
-        Absolute path to a {databaseLabel} database file.
+        {t("form.absolutePathHint", { databaseLabel })}
       </p>
       <label className="mt-3 flex items-center gap-2 text-xs text-secondary-foreground">
         <input
@@ -131,7 +133,7 @@ export default function SqliteFormFields({
           className="h-3.5 w-3.5 text-muted-foreground"
           aria-hidden="true"
         />
-        Open read-only
+        {t("form.openReadOnly")}
       </label>
       {createError && (
         <p className="mt-1 text-xs text-destructive" role="alert">

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import Decimal from "decimal.js";
 import { Copy, Check } from "lucide-react";
 import { Button } from "@components/ui/button";
@@ -44,6 +45,7 @@ export default function CellDetailDialog({
   columnName,
   dataType,
 }: CellDetailDialogProps) {
+  const { t } = useTranslation("datagrid");
   const [copied, setCopied] = useState(false);
 
   const text = useMemo(() => renderCellText(data), [data]);
@@ -68,7 +70,7 @@ export default function CellDetailDialog({
     <PreviewDialog
       title={
         <span className="flex items-center gap-2">
-          <span>Cell Detail —</span>
+          <span>{t("cellDetailTitle")}</span>
           <span className="font-mono text-primary">{columnName}</span>
           {dataType && (
             <span className="text-xs font-normal text-muted-foreground">
@@ -83,24 +85,24 @@ export default function CellDetailDialog({
         <>
           <div className="flex items-center justify-between border-b border-border pb-2">
             <div className="text-xs text-muted-foreground">
-              {charCount.toLocaleString()} char{charCount !== 1 ? "s" : ""} ·{" "}
-              {lineCount.toLocaleString()} line{lineCount !== 1 ? "s" : ""}
+              {t("charCount", { count: charCount })} ·{" "}
+              {t("lineCount", { count: lineCount })}
             </div>
             <Button
               variant="ghost"
               size="xs"
               onClick={handleCopy}
-              aria-label="Copy cell value"
+              aria-label={t("copyCellAria")}
             >
               {copied ? (
                 <>
                   <Check className="text-success" />
-                  <span>Copied</span>
+                  <span>{t("copied")}</span>
                 </>
               ) : (
                 <>
                   <Copy />
-                  <span>Copy</span>
+                  <span>{t("copy")}</span>
                 </>
               )}
             </Button>
@@ -108,7 +110,7 @@ export default function CellDetailDialog({
 
           <div className="max-h-[70vh] overflow-auto rounded border border-border bg-muted/30">
             <pre className="whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5 text-foreground">
-              {text === "" ? "(empty string)" : text}
+              {text === "" ? t("emptyString") : text}
             </pre>
           </div>
         </>

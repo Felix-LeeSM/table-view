@@ -10,6 +10,7 @@ import {
   Maximize2,
   CircleSlash,
 } from "lucide-react";
+import i18n from "@lib/i18n";
 import type { ContextMenuItem } from "@components/shared/ContextMenu";
 import type { CopyRowData } from "@lib/format";
 import {
@@ -133,9 +134,11 @@ export function buildContextMenuItems(
     return { columns: colNames, rows, schema, table };
   };
 
+  const t = (key: string) => i18n.t(`datagrid:${key}`);
+
   return [
     {
-      label: "Show Cell Details",
+      label: t("showCellDetails"),
       icon: <Maximize2 size={14} />,
       onClick: () => {
         const cell = data.rows[contextMenu.rowIdx]?.[contextMenu.colIdx];
@@ -150,7 +153,7 @@ export function buildContextMenuItems(
       },
     },
     {
-      label: "Edit Cell",
+      label: t("editCell"),
       icon: <Pencil size={14} />,
       disabled: !canEditRows,
       onClick: () => {
@@ -160,7 +163,7 @@ export function buildContextMenuItems(
       },
     },
     {
-      label: "Set to NULL",
+      label: t("setToNull"),
       icon: <CircleSlash size={14} />,
       disabled: !canEditRows,
       onClick: () => {
@@ -169,14 +172,14 @@ export function buildContextMenuItems(
       },
     },
     {
-      label: "Delete Row",
+      label: t("deleteRow"),
       icon: <Trash2 size={14} />,
       danger: true,
       disabled: !canEditRows,
       onClick: onDeleteRow,
     },
     {
-      label: "Duplicate Row",
+      label: t("duplicateRow"),
       icon: <Copy size={14} />,
       disabled: !canEditRows,
       onClick: onDuplicateRow,
@@ -187,22 +190,22 @@ export function buildContextMenuItems(
       onClick: () => {},
     },
     {
-      label: "Copy as Plain Text",
+      label: t("copyAsPlainText"),
       icon: <Clipboard size={14} />,
       onClick: () => copyToClipboard(rowsToPlainText(getSelectedCopyData())),
     },
     {
-      label: "Copy as JSON",
+      label: t("copyAsJson"),
       icon: <FileJson size={14} />,
       onClick: () => copyToClipboard(rowsToJson(getSelectedCopyData())),
     },
     {
-      label: "Copy as CSV",
+      label: t("copyAsCsv"),
       icon: <FileText size={14} />,
       onClick: () => copyToClipboard(rowsToCsv(getSelectedCopyData())),
     },
     {
-      label: "Copy as SQL Insert",
+      label: t("copyAsSqlInsert"),
       icon: <Database size={14} />,
       onClick: () => copyToClipboard(rowsToSqlInsert(getSelectedCopyData())),
     },

@@ -21,6 +21,7 @@
 // `foreign_key` cell.
 
 import { useId } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Popover,
   PopoverContent,
@@ -107,6 +108,7 @@ export default function InlineFkPopover({
   onChange,
   onClear,
 }: InlineFkPopoverProps) {
+  const { t } = useTranslation("schemaDialogs");
   const refSchema =
     value.ref_schema.trim().length > 0 ? value.ref_schema : defaultSchema;
   const tablesForSchema = refTablesByKey[refSchema] ?? [];
@@ -128,8 +130,10 @@ export default function InlineFkPopover({
               ? "rounded border border-primary/40 bg-primary/10 px-2 py-1 text-2xs text-foreground hover:border-primary"
               : "rounded border border-dashed border-border px-2 py-1 text-2xs text-muted-foreground hover:border-primary hover:text-foreground"
           }
-          aria-label={`Foreign key for column ${columnTrackingId}`}
-          title={isSet ? triggerLabel : "Add inline foreign key"}
+          aria-label={t("inlineFk.columnFkAria", {
+            trackingId: columnTrackingId,
+          })}
+          title={isSet ? triggerLabel : t("inlineFk.triggerNoFkTitle")}
         >
           {triggerLabel}
         </button>
@@ -140,15 +144,15 @@ export default function InlineFkPopover({
       >
         <div className="flex items-center justify-between">
           <span id={headingId} className="text-xs font-medium">
-            Foreign key
+            {t("inlineFk.popoverTitle")}
           </span>
           {isSet && (
             <Button
               variant="ghost"
               size="icon-xs"
               onClick={onClear}
-              aria-label="Clear inline foreign key"
-              title="Clear FK"
+              aria-label={t("inlineFk.clearAria")}
+              title={t("inlineFk.clearTitle")}
             >
               <X />
             </Button>
@@ -157,7 +161,7 @@ export default function InlineFkPopover({
 
         <div>
           <label className="mb-0.5 block text-2xs text-muted-foreground">
-            Reference schema
+            {t("inlineFk.refSchemaLabel")}
           </label>
           <Select
             value={refSchema}
@@ -169,7 +173,7 @@ export default function InlineFkPopover({
             <SelectTrigger
               size="sm"
               className="w-full"
-              aria-label="Inline FK reference schema"
+              aria-label={t("inlineFk.refSchemaAria")}
             >
               <SelectValue placeholder={defaultSchema} />
             </SelectTrigger>
@@ -185,7 +189,7 @@ export default function InlineFkPopover({
 
         <div>
           <label className="mb-0.5 block text-2xs text-muted-foreground">
-            Reference table
+            {t("inlineFk.refTableLabel")}
           </label>
           {tablesForSchema.length > 0 ? (
             <Select
@@ -198,7 +202,7 @@ export default function InlineFkPopover({
               <SelectTrigger
                 size="sm"
                 className="w-full"
-                aria-label="Inline FK reference table"
+                aria-label={t("inlineFk.refTablePickAria")}
               >
                 <SelectValue placeholder="(pick table)" />
               </SelectTrigger>
@@ -215,15 +219,15 @@ export default function InlineFkPopover({
               className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
               value={value.ref_table}
               onChange={(e) => onChange({ ref_table: e.target.value })}
-              placeholder="reference_table"
-              aria-label="Inline FK reference table"
+              placeholder={t("inlineFk.refTableInputPlaceholder")}
+              aria-label={t("inlineFk.refTableInputAria")}
             />
           )}
         </div>
 
         <div>
           <label className="mb-0.5 block text-2xs text-muted-foreground">
-            Reference column
+            {t("inlineFk.refColumnLabel")}
           </label>
           {colsForTable.length > 0 ? (
             <Select
@@ -233,7 +237,7 @@ export default function InlineFkPopover({
               <SelectTrigger
                 size="sm"
                 className="w-full"
-                aria-label="Inline FK reference column"
+                aria-label={t("inlineFk.refColumnPickAria")}
               >
                 <SelectValue placeholder="(pick column)" />
               </SelectTrigger>
@@ -250,8 +254,8 @@ export default function InlineFkPopover({
               className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
               value={value.ref_column}
               onChange={(e) => onChange({ ref_column: e.target.value })}
-              placeholder="reference_column"
-              aria-label="Inline FK reference column"
+              placeholder={t("inlineFk.refColumnInputPlaceholder")}
+              aria-label={t("inlineFk.refColumnInputAria")}
             />
           )}
         </div>
@@ -259,7 +263,7 @@ export default function InlineFkPopover({
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="mb-0.5 block text-2xs text-muted-foreground">
-              ON DELETE
+              {t("inlineFk.onDeleteLabel")}
             </label>
             <Select
               value={value.on_delete}
@@ -268,7 +272,7 @@ export default function InlineFkPopover({
               <SelectTrigger
                 size="sm"
                 className="w-full"
-                aria-label="Inline FK on delete"
+                aria-label={t("inlineFk.onDeleteAria")}
               >
                 <SelectValue />
               </SelectTrigger>
@@ -283,7 +287,7 @@ export default function InlineFkPopover({
           </div>
           <div>
             <label className="mb-0.5 block text-2xs text-muted-foreground">
-              ON UPDATE
+              {t("inlineFk.onUpdateLabel")}
             </label>
             <Select
               value={value.on_update}
@@ -292,7 +296,7 @@ export default function InlineFkPopover({
               <SelectTrigger
                 size="sm"
                 className="w-full"
-                aria-label="Inline FK on update"
+                aria-label={t("inlineFk.onUpdateAria")}
               >
                 <SelectValue />
               </SelectTrigger>

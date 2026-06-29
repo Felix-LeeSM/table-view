@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { cn } from "@lib/utils";
@@ -44,16 +45,18 @@ export interface AsyncProgressOverlayProps {
 export default function AsyncProgressOverlay({
   visible,
   onCancel,
-  label = "Loading",
+  label,
   className,
 }: AsyncProgressOverlayProps) {
+  const { t } = useTranslation("feedback");
+  const resolvedLabel = label ?? t("loading");
   if (!visible) return null;
 
   return (
     <div
       role="status"
       aria-live="polite"
-      aria-label={label}
+      aria-label={resolvedLabel}
       data-testid="async-progress-overlay"
       className={cn(
         "absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-background/60",
@@ -95,7 +98,7 @@ export default function AsyncProgressOverlay({
           onCancel();
         }}
       >
-        Cancel
+        {t("cancel")}
       </Button>
     </div>
   );

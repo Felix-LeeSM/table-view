@@ -10,6 +10,7 @@
  *     persisted in the existing `ConnectionConfig` extension fields
  *     (see Sprint 65).
  */
+import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
 
 export interface MongoFormFieldsProps {
@@ -37,13 +38,14 @@ export default function MongoFormFields({
   inputClass,
   labelClass,
 }: MongoFormFieldsProps) {
+  const { t } = useTranslation("featuresConnection");
   return (
     <>
       {/* Host & Port */}
       <div className="flex gap-3">
         <div className="flex-1">
           <label htmlFor="conn-host" className={labelClass}>
-            Host
+            {t("form.labelHost")}
           </label>
           <input
             id="conn-host"
@@ -55,7 +57,7 @@ export default function MongoFormFields({
         </div>
         <div className="w-24">
           <label htmlFor="conn-port" className={labelClass}>
-            Port
+            {t("form.labelPort")}
           </label>
           <input
             id="conn-port"
@@ -72,7 +74,7 @@ export default function MongoFormFields({
       {/* User (optional) */}
       <div>
         <label htmlFor="conn-user" className={labelClass}>
-          User (optional)
+          {t("form.labelUserOptional")}
         </label>
         <input
           id="conn-user"
@@ -87,7 +89,7 @@ export default function MongoFormFields({
       <div>
         <div className="flex items-center justify-between">
           <label htmlFor="conn-password" className={labelClass}>
-            Password (optional)
+            {t("form.labelPasswordOptional")}
           </label>
           {isEditing && (
             <span
@@ -98,7 +100,7 @@ export default function MongoFormFields({
               }`}
               data-testid="password-status-badge"
             >
-              {hadPassword ? "Password set" : "No password"}
+              {hadPassword ? t("form.passwordSet") : t("form.noPassword")}
             </span>
           )}
         </div>
@@ -111,7 +113,7 @@ export default function MongoFormFields({
           onChange={(e) => setPasswordInput(e.target.value)}
           placeholder={
             isEditing && hadPassword
-              ? "Leave blank to keep current password"
+              ? t("form.placeholderKeepPassword")
               : "••••••••"
           }
         />
@@ -126,7 +128,7 @@ export default function MongoFormFields({
                 if (e.target.checked) setPasswordInput("");
               }}
             />
-            Clear stored password on save
+            {t("form.clearPassword")}
           </label>
         )}
       </div>
@@ -139,7 +141,7 @@ export default function MongoFormFields({
           run against the admin DB regardless of any pre-bound default. */}
       <div>
         <label htmlFor="conn-database" className={labelClass}>
-          Database (optional)
+          {t("form.labelDatabaseOptional")}
         </label>
         <input
           id="conn-database"
@@ -153,11 +155,11 @@ export default function MongoFormFields({
       {/* MongoDB-specific extension block (Sprint 65 compatibility) */}
       <div className="space-y-3 rounded border border-border bg-background/40 p-3">
         <div className="text-xs font-semibold text-secondary-foreground">
-          MongoDB Options
+          {t("form.mongoOptionsTitle")}
         </div>
         <div>
           <label htmlFor="conn-auth-source" className={labelClass}>
-            Auth Source
+            {t("form.labelAuthSource")}
           </label>
           <input
             id="conn-auth-source"
@@ -169,7 +171,7 @@ export default function MongoFormFields({
         </div>
         <div>
           <label htmlFor="conn-replica-set" className={labelClass}>
-            Replica Set
+            {t("form.labelReplicaSet")}
           </label>
           <input
             id="conn-replica-set"
@@ -187,7 +189,7 @@ export default function MongoFormFields({
             checked={!!draft.tlsEnabled}
             onChange={(e) => onChange({ tlsEnabled: e.target.checked })}
           />
-          Enable TLS
+          {t("form.enableTlsMongo")}
         </label>
       </div>
     </>

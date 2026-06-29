@@ -11,6 +11,7 @@
  * paradigm-agnostic. This component only owns the network/auth/database
  * row that varies by DBMS.
  */
+import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
 
 export interface PgFormFieldsProps {
@@ -42,13 +43,14 @@ export default function PgFormFields({
   userPlaceholder = "postgres",
   databasePlaceholder = "postgres",
 }: PgFormFieldsProps) {
+  const { t } = useTranslation("featuresConnection");
   return (
     <>
       {/* Host & Port */}
       <div className="flex gap-3">
         <div className="flex-1">
           <label htmlFor="conn-host" className={labelClass}>
-            Host
+            {t("form.labelHost")}
           </label>
           <input
             id="conn-host"
@@ -60,7 +62,7 @@ export default function PgFormFields({
         </div>
         <div className="w-24">
           <label htmlFor="conn-port" className={labelClass}>
-            Port
+            {t("form.labelPort")}
           </label>
           <input
             id="conn-port"
@@ -77,7 +79,7 @@ export default function PgFormFields({
       {/* User */}
       <div>
         <label htmlFor="conn-user" className={labelClass}>
-          User
+          {t("form.labelUser")}
         </label>
         <input
           id="conn-user"
@@ -92,7 +94,7 @@ export default function PgFormFields({
       <div>
         <div className="flex items-center justify-between">
           <label htmlFor="conn-password" className={labelClass}>
-            Password
+            {t("form.labelPassword")}
           </label>
           {isEditing && (
             <span
@@ -103,7 +105,7 @@ export default function PgFormFields({
               }`}
               data-testid="password-status-badge"
             >
-              {hadPassword ? "Password set" : "No password"}
+              {hadPassword ? t("form.passwordSet") : t("form.noPassword")}
             </span>
           )}
         </div>
@@ -116,7 +118,7 @@ export default function PgFormFields({
           onChange={(e) => setPasswordInput(e.target.value)}
           placeholder={
             isEditing && hadPassword
-              ? "Leave blank to keep current password"
+              ? t("form.placeholderKeepPassword")
               : "••••••••"
           }
         />
@@ -131,7 +133,7 @@ export default function PgFormFields({
                 if (e.target.checked) setPasswordInput("");
               }}
             />
-            Clear stored password on save
+            {t("form.clearPassword")}
           </label>
         )}
       </div>
@@ -139,7 +141,7 @@ export default function PgFormFields({
       {/* Database */}
       <div>
         <label htmlFor="conn-database" className={labelClass}>
-          Database
+          {t("form.labelDatabase")}
         </label>
         <input
           id="conn-database"

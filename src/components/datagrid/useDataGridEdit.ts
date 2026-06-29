@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   useActiveTabId,
   useCurrentWorkspaceKey,
@@ -46,6 +47,7 @@ export function useDataGridEdit({
   paradigm = "rdb",
   canEditRows = true,
 }: UseDataGridEditParams): DataGridEditState {
+  const { t } = useTranslation("datagrid");
   const activeTabId = useActiveTabId();
   const workspaceKey = useCurrentWorkspaceKey();
   const promoteTabAction = useWorkspaceStore((s) => s.promoteTab);
@@ -419,7 +421,7 @@ export function useDataGridEdit({
       // Cmd+S with nothing pending → toast instead of a silent no-op (the
       // silent path was inscrutable). No flash — the toast is the feedback.
       if (!hasPendingChanges) {
-        toast.info("No changes to commit");
+        toast.info(t("noChangesToCommit"));
         return;
       }
       // Flip the flash flag at the entry of the event handler so the spinner
@@ -456,6 +458,7 @@ export function useDataGridEdit({
     window.addEventListener("commit-changes", handler);
     return () => window.removeEventListener("commit-changes", handler);
   }, [
+    t,
     hasPendingChanges,
     editingCell,
     editValue,

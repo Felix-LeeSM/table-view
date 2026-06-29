@@ -1,4 +1,5 @@
 import { ShieldCheck, ShieldAlert, ShieldOff } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { useSafeModeStore, type SafeMode } from "@stores/safeModeStore";
 
@@ -27,74 +28,39 @@ import { useSafeModeStore, type SafeMode } from "@stores/safeModeStore";
  * lives in the native `title` tooltip — uniform with every other
  * workspace-toolbar button.
  */
-const MODE_META: Record<
-  SafeMode,
-  {
-    label: string;
-    tooltip: string;
-    ariaPressed: "true" | "mixed" | "false";
-    icon: typeof ShieldCheck;
-  }
-> = {
-  strict: {
-    label: "Safe Mode",
-    tooltip: [
-      "Safe Mode: Strict (click to switch to warn)",
-      "",
-      "Confirms destructive statements in all environments (production + non-production strict). Destructive includes:",
-      " • DROP TABLE / DATABASE / SCHEMA / INDEX / VIEW",
-      " • TRUNCATE TABLE",
-      " • ALTER TABLE … DROP COLUMN / DROP CONSTRAINT",
-      " • UPDATE / DELETE without WHERE",
-      "",
-      "Safe writes (INSERT, UPDATE WHERE, CREATE, ALTER additive) flow through without a dialog — Cmd+Z protects recent commits.",
-    ].join("\n"),
-    ariaPressed: "true",
-    icon: ShieldCheck,
-  },
-  warn: {
-    label: "Safe Mode: Warn",
-    tooltip: [
-      "Safe Mode: Warn (click to disable)",
-      "",
-      "Confirms destructive statements in production only. Non-production environments (local / testing / development / staging) are never gated.",
-      "",
-      "Safe writes flow through everywhere — Cmd+Z protects recent commits.",
-    ].join("\n"),
-    ariaPressed: "mixed",
-    icon: ShieldAlert,
-  },
-  off: {
-    label: "Safe Mode: Off",
-    tooltip: [
-      "Safe Mode: Off (click to re-enable for non-production)",
-      "",
-      "Production-tagged connections still confirm destructive statements automatically (production-auto). Non-production is fully unguarded — use Off for one-off destructive maintenance on local / testing / development / staging.",
-    ].join("\n"),
-    ariaPressed: "false",
-    icon: ShieldOff,
-  },
+const MODE_ICON: Record<SafeMode, typeof ShieldCheck> = {
+  strict: ShieldCheck,
+  warn: ShieldAlert,
+  off: ShieldOff,
+};
+
+const MODE_ARIA_PRESSED: Record<SafeMode, "true" | "mixed" | "false"> = {
+  strict: "true",
+  warn: "mixed",
+  off: "false",
 };
 
 export default function SafeModeToggle() {
+  const { t } = useTranslation("workspace");
   const mode = useSafeModeStore((s) => s.mode);
   const toggle = useSafeModeStore((s) => s.toggle);
-  const meta = MODE_META[mode];
-  const Icon = meta.icon;
+  const Icon = MODE_ICON[mode];
+  const label = t(`safeMode.${mode}.label`);
+  const tooltip = t(`safeMode.${mode}.tooltip`);
 
   return (
     <Button
       variant="ghost"
       size="sm"
       type="button"
-      aria-label={meta.label}
-      aria-pressed={meta.ariaPressed}
-      title={meta.tooltip}
+      aria-label={label}
+      aria-pressed={MODE_ARIA_PRESSED[mode]}
+      title={tooltip}
       data-mode={mode}
       onClick={toggle}
     >
       <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-      <span className="ml-1 text-xs">{meta.label}</span>
+      <span className="ml-1 text-xs">{label}</span>
     </Button>
   );
 }

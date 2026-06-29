@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { QueryResult } from "@/types/query";
 import { cellToEditString, editKey } from "@components/datagrid";
 import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
@@ -102,6 +103,7 @@ export default function PendingChangesTray({
   onRevertEdit,
   onRevertDelete,
 }: PendingChangesTrayProps) {
+  const { t } = useTranslation("query");
   const total = pendingEdits.size + pendingDeletedRowKeys.size;
   if (total === 0) return null;
 
@@ -116,10 +118,10 @@ export default function PendingChangesTray({
     <div
       className="border-t border-border bg-muted/30"
       role="region"
-      aria-label="Pending changes"
+      aria-label={t("pendingChanges.regionAria")}
     >
       <div className="border-b border-border px-3 py-1 text-xs font-medium text-foreground">
-        {total} change{total !== 1 ? "s" : ""} pending
+        {t("pendingChanges.summary", { total, plural: total !== 1 ? "s" : "" })}
       </div>
       <div className="max-h-48 overflow-y-auto">
         <table className="w-full text-xs">
@@ -140,7 +142,7 @@ export default function PendingChangesTray({
                     {entry.newValue === "" ? (
                       <span
                         className="italic text-muted-foreground"
-                        title="Empty input is treated as SQL NULL"
+                        title={t("pendingChanges.nullInputTitle")}
                       >
                         NULL
                       </span>
@@ -159,7 +161,9 @@ export default function PendingChangesTray({
                   <td className="w-8 px-2 py-1 text-right">
                     <button
                       type="button"
-                      aria-label={`Revert ${entry.column}`}
+                      aria-label={t("pendingChanges.revertEditAria", {
+                        column: entry.column,
+                      })}
                       onClick={() => onRevertEdit(entry.key)}
                       className="rounded-sm p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                     >
@@ -192,7 +196,9 @@ export default function PendingChangesTray({
                   <td className="w-8 px-2 py-1 text-right">
                     <button
                       type="button"
-                      aria-label={`Revert delete row ${entry.pkLabel}`}
+                      aria-label={t("pendingChanges.revertDeleteAria", {
+                        pkLabel: entry.pkLabel,
+                      })}
                       onClick={() => onRevertDelete(entry.rowKey)}
                       className="rounded-sm p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                     >

@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { MongoIndexesPanel } from "./MongoIndexesPanel";
 import { ValidatorPanel } from "./ValidatorPanel";
 
@@ -19,14 +20,9 @@ export interface MongoStructurePanelProps {
   onActiveChange?: (next: MongoStructureSubTab) => void;
 }
 
-interface SubTabDef {
-  key: MongoStructureSubTab;
-  label: string;
-}
-
-const SUB_SUB_TABS: readonly SubTabDef[] = [
-  { key: "indexes", label: "Indexes" },
-  { key: "validator", label: "Validator" },
+const SUB_SUB_TABS: readonly MongoStructureSubTab[] = [
+  "indexes",
+  "validator",
 ] as const;
 
 /**
@@ -47,6 +43,7 @@ export function MongoStructurePanel({
   active: activeProp,
   onActiveChange,
 }: MongoStructurePanelProps) {
+  const { t } = useTranslation("document");
   const [activeLocal, setActiveLocal] =
     useState<MongoStructureSubTab>("indexes");
   const active = activeProp ?? activeLocal;
@@ -79,15 +76,19 @@ export function MongoStructurePanel({
     <div className="flex flex-1 flex-col overflow-hidden">
       <div
         role="tablist"
-        aria-label="Mongo structure view"
+        aria-label={t("structurePanel.ariaLabel")}
         data-testid="mongo-structure-subsubtab-bar"
         className="flex items-center border-b border-border bg-secondary"
       >
-        {SUB_SUB_TABS.map((tab) => {
-          const selected = active === tab.key;
+        {SUB_SUB_TABS.map((key) => {
+          const selected = active === key;
+          const label =
+            key === "indexes"
+              ? t("structurePanel.tabIndexes")
+              : t("structurePanel.tabValidator");
           return (
             <button
-              key={tab.key}
+              key={key}
               role="tab"
               aria-selected={selected}
               tabIndex={selected ? 0 : -1}
@@ -96,11 +97,11 @@ export function MongoStructurePanel({
                   ? "border-b-2 border-primary text-foreground"
                   : "text-muted-foreground hover:text-secondary-foreground"
               }`}
-              onClick={() => setActive(tab.key)}
+              onClick={() => setActive(key)}
               onKeyDown={handleKeyDown}
-              data-testid={`mongo-structure-subsubtab-${tab.key}`}
+              data-testid={`mongo-structure-subsubtab-${key}`}
             >
-              {tab.label}
+              {label}
             </button>
           );
         })}

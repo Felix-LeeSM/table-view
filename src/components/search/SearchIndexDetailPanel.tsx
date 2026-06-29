@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   BarChart3,
   Braces,
@@ -60,21 +61,22 @@ const idle = <T,>(): AsyncSlot<T> => ({
 
 const tabItems: Array<{
   value: DetailTab;
-  label: string;
+  labelKey: string;
   icon: LucideIcon;
 }> = [
-  { value: "overview", label: "Overview", icon: FileJson },
-  { value: "mapping", label: "Mapping", icon: Braces },
-  { value: "settings", label: "Settings", icon: Settings2 },
-  { value: "templates", label: "Templates", icon: FileStack },
-  { value: "samples", label: "Samples", icon: FileJson },
-  { value: "stats", label: "Field stats", icon: BarChart3 },
+  { value: "overview", labelKey: "tab.overview", icon: FileJson },
+  { value: "mapping", labelKey: "tab.mapping", icon: Braces },
+  { value: "settings", labelKey: "tab.settings", icon: Settings2 },
+  { value: "templates", labelKey: "tab.templates", icon: FileStack },
+  { value: "samples", labelKey: "tab.samples", icon: FileJson },
+  { value: "stats", labelKey: "tab.fieldStats", icon: BarChart3 },
 ];
 
 export default function SearchIndexDetailPanel({
   connectionId,
   index,
 }: SearchIndexDetailPanelProps) {
+  const { t } = useTranslation("search");
   const [active, setActive] = useState<DetailTab>("overview");
   const [catalog, setCatalog] =
     useState<AsyncSlot<SearchCatalogSummary>>(idle());
@@ -263,7 +265,7 @@ export default function SearchIndexDetailPanel({
 
   return (
     <section
-      aria-label={`Search index details for ${index}`}
+      aria-label={t("indexDetailAria", { index })}
       className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background text-sm"
     >
       <header className="shrink-0 border-b border-border px-3 py-2">
@@ -275,7 +277,7 @@ export default function SearchIndexDetailPanel({
             <p className="mt-1 truncate text-xs text-muted-foreground">
               {identity
                 ? `${identity.clusterName} · ${identity.version.number}${identity.version.distribution ? ` · ${identity.version.distribution}` : ""}`
-                : "fixture-backed Search index"}
+                : t("fixtureBackedIndex")}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5 text-3xs text-muted-foreground">
@@ -299,16 +301,16 @@ export default function SearchIndexDetailPanel({
                 variant="outline"
                 size="xs"
                 disabled={!supportsDeleteByQueryPreview}
-                aria-label="Preview delete-by-query plan"
+                aria-label={t("previewPlanAria")}
                 title={
                   supportsDeleteByQueryPreview
-                    ? "Preview delete-by-query plan"
-                    : "Delete-by-query preview unsupported by this connection"
+                    ? t("previewPlanAria")
+                    : t("previewPlanUnsupportedTitle")
                 }
                 onClick={() => setDeletePreviewOpen(true)}
               >
                 <FileSearch aria-hidden="true" />
-                Preview plan
+                {t("previewPlanButton")}
               </Button>
             ) : null}
           </div>
@@ -317,7 +319,7 @@ export default function SearchIndexDetailPanel({
 
       <div
         role="tablist"
-        aria-label="Search index detail sections"
+        aria-label={t("tablistAria")}
         className="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-border bg-secondary"
       >
         {availableTabs.map((item) => {
@@ -336,7 +338,7 @@ export default function SearchIndexDetailPanel({
               onClick={() => setActive(item.value)}
             >
               <Icon size={12} aria-hidden />
-              {item.label}
+              {t(item.labelKey)}
             </button>
           );
         })}
@@ -382,12 +384,13 @@ function OverviewContent({
   index: string;
   indexInfo: SearchCatalogSummary["indexes"][number] | undefined;
 }) {
+  const { t } = useTranslation("search");
   if (catalog.status === "loading" || catalog.status === "idle") {
-    return <DetailSkeleton label="Loading Search index overview" />;
+    return <DetailSkeleton label={t("loadingOverview")} />;
   }
   if (catalog.status === "error") return <ErrorBlock message={catalog.error} />;
   if (!indexInfo) {
-    return <EmptyBlock message={`Index ${index} is not in the catalog.`} />;
+    return <EmptyBlock message={t("indexNotInCatalog", { index })} />;
   }
   const identity = catalog.data.identity;
   const aliases = indexInfo.aliases.length > 0 ? indexInfo.aliases : ["none"];
@@ -395,22 +398,28 @@ function OverviewContent({
     <div className="space-y-3 p-3">
       <DetailGrid
         rows={[
-          ["Product", identity.product],
-          ["Version", identity.version.number],
-          ["Distribution", identity.version.distribution ?? "unknown"],
-          ["Template endpoint", identity.productDelta.defaultTemplateEndpoint],
-          ["Open", indexInfo.open ? "yes" : "no"],
+          [t("overviewGrid.product"), identity.product],
+          [t("overviewGrid.version"), identity.version.number],
           [
-            "Shards",
+            t("overviewGrid.distribution"),
+            identity.version.distribution ?? t("unknownDistribution"),
+          ],
+          [
+            t("overviewGrid.templateEndpoint"),
+            identity.productDelta.defaultTemplateEndpoint,
+          ],
+          [t("overviewGrid.open"), indexInfo.open ? t("openYes") : t("openNo")],
+          [
+            t("overviewGrid.shards"),
             formatShards(indexInfo.primaryShards, indexInfo.replicaShards),
           ],
-          ["Aliases", aliases.join(", ")],
+          [t("overviewGrid.aliases"), aliases.join(", ")],
         ]}
       />
       <SearchDestructivePolicyNotice
         deleteByQuerySupported={identity.capabilities.deleteByQuery}
       />
-      <JsonBlock value={indexInfo} label="Index summary JSON" />
+      <JsonBlock value={indexInfo} label={t("indexSummaryJson")} />
     </div>
   );
 }
@@ -420,28 +429,29 @@ function SearchDestructivePolicyNotice({
 }: {
   deleteByQuerySupported: boolean;
 }) {
+  const { t } = useTranslation("search");
   return (
     <div className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
       {deleteByQuerySupported
-        ? "Admin and destructive execution are unsupported in this milestone. Delete-by-query is preview only."
-        : "Delete-by-query preview is unsupported by this connection. Admin and destructive execution are unsupported in this milestone."}
+        ? t("destructivePolicyPreviewOnly")
+        : t("destructivePolicyUnsupported")}
     </div>
   );
 }
 
 function MappingContent({ slot }: { slot: AsyncSlot<SearchIndexMapping> }) {
+  const { t } = useTranslation("search");
   if (slot.status === "idle" || slot.status === "loading") {
-    return <DetailSkeleton label="Loading Search mapping" />;
+    return <DetailSkeleton label={t("loadingMapping")} />;
   }
   if (slot.status === "error") return <ErrorBlock message={slot.error} />;
   if (slot.data.fields.length === 0) {
-    return <EmptyBlock message="No mapping fields." />;
+    return <EmptyBlock message={t("noMappingFields")} />;
   }
   return (
     <div className="space-y-3 p-3">
       <div className="text-xs text-muted-foreground">
-        {slot.data.fields.length.toLocaleString()} field
-        {slot.data.fields.length === 1 ? "" : "s"}
+        {t("mappingFieldCount", { count: slot.data.fields.length })}
       </div>
       <div className="divide-y divide-border rounded border border-border">
         {slot.data.fields.map((field) => (
@@ -450,27 +460,32 @@ function MappingContent({ slot }: { slot: AsyncSlot<SearchIndexMapping> }) {
             name={field.path}
             detail={field.fieldType}
             badges={[
-              field.searchable ? "searchable" : "not searchable",
-              field.aggregatable ? "aggregatable" : "not aggregatable",
-              field.analyzer ? `analyzer ${field.analyzer}` : "",
+              field.searchable ? t("fieldSearchable") : t("fieldNotSearchable"),
+              field.aggregatable
+                ? t("fieldAggregatable")
+                : t("fieldNotAggregatable"),
+              field.analyzer
+                ? t("fieldAnalyzer", { name: field.analyzer })
+                : "",
             ]}
           />
         ))}
       </div>
-      <JsonBlock value={slot.data.raw} label="Mapping JSON" />
+      <JsonBlock value={slot.data.raw} label={t("mappingJson")} />
     </div>
   );
 }
 
 function SettingsContent({ slot }: { slot: AsyncSlot<SearchIndexSettings> }) {
+  const { t } = useTranslation("search");
   if (slot.status === "idle" || slot.status === "loading") {
-    return <DetailSkeleton label="Loading Search settings" />;
+    return <DetailSkeleton label={t("loadingSettings")} />;
   }
   if (slot.status === "error") return <ErrorBlock message={slot.error} />;
   return (
     <div className="space-y-3 p-3">
       {slot.data.analyzers.length === 0 ? (
-        <EmptyBlock message="No analyzers." />
+        <EmptyBlock message={t("noAnalyzers")} />
       ) : (
         <div className="divide-y divide-border rounded border border-border">
           {slot.data.analyzers.map((analyzer) => (
@@ -483,7 +498,7 @@ function SettingsContent({ slot }: { slot: AsyncSlot<SearchIndexSettings> }) {
           ))}
         </div>
       )}
-      <JsonBlock value={slot.data.raw} label="Settings JSON" />
+      <JsonBlock value={slot.data.raw} label={t("settingsJson")} />
     </div>
   );
 }
@@ -495,12 +510,13 @@ function TemplatesContent({
   slot: AsyncSlot<SearchIndexTemplateInfo[]>;
   matches: SearchIndexTemplateInfo[];
 }) {
+  const { t } = useTranslation("search");
   if (slot.status === "idle" || slot.status === "loading") {
-    return <DetailSkeleton label="Loading Search templates" />;
+    return <DetailSkeleton label={t("loadingTemplates")} />;
   }
   if (slot.status === "error") return <ErrorBlock message={slot.error} />;
   if (matches.length === 0) {
-    return <EmptyBlock message="No matching templates." />;
+    return <EmptyBlock message={t("noMatchingTemplates")} />;
   }
   return (
     <div className="space-y-3 p-3">
@@ -521,27 +537,29 @@ function TemplatesContent({
       </div>
       <JsonBlock
         value={matches.map((item) => item.raw)}
-        label="Template JSON"
+        label={t("templateJson")}
       />
     </div>
   );
 }
 
 function SamplesContent({ slot }: { slot: AsyncSlot<SearchResultEnvelope> }) {
+  const { t } = useTranslation("search");
   if (slot.status === "idle" || slot.status === "loading") {
-    return <DetailSkeleton label="Loading Search sample documents" />;
+    return <DetailSkeleton label={t("loadingSamples")} />;
   }
   if (slot.status === "error") return <ErrorBlock message={slot.error} />;
   return <SearchResultView result={slot.data} />;
 }
 
 function StatsContent({ slot }: { slot: AsyncSlot<SearchFieldStatsEnvelope> }) {
+  const { t } = useTranslation("search");
   if (slot.status === "idle" || slot.status === "loading") {
-    return <DetailSkeleton label="Loading Search field stats" />;
+    return <DetailSkeleton label={t("loadingFieldStats")} />;
   }
   if (slot.status === "error") return <ErrorBlock message={slot.error} />;
   if (slot.data.fields.length === 0) {
-    return <EmptyBlock message="No field stats." />;
+    return <EmptyBlock message={t("noFieldStats")} />;
   }
   return (
     <div className="space-y-3 p-3">
@@ -552,8 +570,10 @@ function StatsContent({ slot }: { slot: AsyncSlot<SearchFieldStatsEnvelope> }) {
             name={field.path}
             detail={`${field.fieldType} · ${formatOptionalNumber(field.docsCount, "docs")}`}
             badges={[
-              field.searchable ? "searchable" : "not searchable",
-              field.aggregatable ? "aggregatable" : "not aggregatable",
+              field.searchable ? t("fieldSearchable") : t("fieldNotSearchable"),
+              field.aggregatable
+                ? t("fieldAggregatable")
+                : t("fieldNotAggregatable"),
               field.sampleValues.length > 0
                 ? `${field.sampleValues.length} samples`
                 : "",

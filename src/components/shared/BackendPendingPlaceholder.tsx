@@ -3,6 +3,8 @@
 // `role="status"` block with a sprint pointer so the user knows the feature
 // is scaffolded, not abandoned. Sprint 327 decision log: D-71 ~ D-75.
 
+import { useTranslation } from "react-i18next";
+
 interface BackendPendingPlaceholderProps {
   title: string;
   pendingSprint: string;
@@ -16,6 +18,7 @@ export function BackendPendingPlaceholder({
   description,
   testId,
 }: BackendPendingPlaceholderProps) {
+  const { t } = useTranslation("shared");
   return (
     <div
       role="status"
@@ -26,7 +29,7 @@ export function BackendPendingPlaceholder({
         {title}
       </span>
       <span>
-        Backend support pending — tracked in <strong>{pendingSprint}</strong>.
+        {t("backendPending")} <strong>{pendingSprint}</strong>.
       </span>
       {description ? (
         <span className="text-xs text-zinc-500 dark:text-zinc-400">

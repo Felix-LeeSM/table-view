@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, type DragEvent } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronRight,
   ChevronDown,
@@ -60,6 +61,7 @@ export default function ConnectionGroup({
   onSelect,
   onActivate,
 }: ConnectionGroupProps) {
+  const { t } = useTranslation("featuresConnection");
   const [collapsed, setCollapsed] = useState(() => group.collapsed);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(group.name);
@@ -157,7 +159,10 @@ export default function ConnectionGroup({
               role="button"
               tabIndex={0}
               aria-expanded={!collapsed}
-              aria-label={`${group.name} group (${connections.length} connections)`}
+              aria-label={t("group.ariaLabel", {
+                name: group.name,
+                count: connections.length,
+              })}
               onClick={toggleCollapsed}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -215,21 +220,21 @@ export default function ConnectionGroup({
                 setRenaming(true);
               }}
             >
-              <Pencil size={14} /> Rename
+              <Pencil size={14} /> {t("group.rename")}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => setShowEditDialog(true)}>
-              <Palette size={14} /> Change Color
+              <Palette size={14} /> {t("group.changeColor")}
             </ContextMenuItem>
             <ContextMenuSeparator />
             {/* Sprint 376 (Phase 6 Q21 #4) — Reset collapse states. 모든
                 group 의 collapsed=false UPDATE. Confirm dialog 없음
                 (Q21 직접 IPC contract). */}
             <ContextMenuItem onClick={handleResetAllCollapse}>
-              <UnfoldVertical size={14} /> Reset collapse states
+              <UnfoldVertical size={14} /> {t("group.resetCollapseStates")}
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem danger onClick={() => setShowDeleteConfirm(true)}>
-              <Trash2 size={14} /> Delete Group
+              <Trash2 size={14} /> {t("group.deleteGroup")}
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
@@ -262,20 +267,23 @@ export default function ConnectionGroup({
         >
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm font-semibold text-foreground">
-              Delete Group
+              {t("group.deleteTitle")}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-secondary-foreground">
-              Only the group &quot;{group.name}&quot; will be removed. The{" "}
-              {connections.length}{" "}
-              {connections.length === 1 ? "connection" : "connections"} inside
-              will be moved to the ungrouped list — no connection data is
-              deleted.
+              {t("group.deleteDescription", {
+                name: group.name,
+                count: connections.length,
+                connections:
+                  connections.length === 1
+                    ? t("group.connectionSingular")
+                    : t("group.connectionPlural"),
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-3 flex justify-end gap-2">
             <AlertDialogCancel asChild>
               <Button variant="ghost" size="sm">
-                Cancel
+                {t("group.cancel")}
               </Button>
             </AlertDialogCancel>
             <AlertDialogAction asChild>
@@ -287,7 +295,7 @@ export default function ConnectionGroup({
                   setShowDeleteConfirm(false);
                 }}
               >
-                Delete
+                {t("group.delete")}
               </Button>
             </AlertDialogAction>
           </AlertDialogFooter>

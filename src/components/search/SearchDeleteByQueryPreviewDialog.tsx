@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, FileSearch, Loader2, ShieldAlert } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
@@ -50,6 +51,7 @@ export function SearchDeleteByQueryPreviewDialog({
   docsCount,
   onOpenChange,
 }: SearchDeleteByQueryPreviewDialogProps) {
+  const { t } = useTranslation("search");
   const [bodyText, setBodyText] = useState(defaultBody);
   const [planState, setPlanState] = useState<PlanState>({
     status: "idle",
@@ -76,7 +78,7 @@ export function SearchDeleteByQueryPreviewDialog({
         plan: null,
         error: formatSearchUiError(
           "deletePreview",
-          "Delete-by-query planning is unsupported by this connection.",
+          t("deletePreview.errorUnsupported"),
         ),
       });
       return;
@@ -107,7 +109,7 @@ export function SearchDeleteByQueryPreviewDialog({
         plan: null,
         error: formatSearchUiError(
           "deletePreview",
-          "delete-by-query body must be a JSON object.",
+          t("deletePreview.errorNotObject"),
         ),
       });
       return;
@@ -143,11 +145,10 @@ export function SearchDeleteByQueryPreviewDialog({
         <DialogHeader layout="column">
           <DialogTitle className="flex items-center gap-2 text-base">
             <ShieldAlert size={16} aria-hidden="true" />
-            Delete-by-query preview
+            {t("deletePreview.title")}
           </DialogTitle>
           <DialogDescription>
-            Admin and destructive execution are unsupported in this milestone.
-            This dialog only builds a preview plan.
+            {t("deletePreview.description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -155,22 +156,24 @@ export function SearchDeleteByQueryPreviewDialog({
           <PolicyNotice supported={supported} targetError={targetError} />
           <div className="grid grid-cols-[8rem_minmax(0,1fr)] rounded border border-border text-xs">
             <div className="border-r border-b border-border bg-muted/40 px-2 py-1.5 font-medium text-muted-foreground">
-              Target
+              {t("deletePreview.labelTarget")}
             </div>
             <div className="min-w-0 truncate border-b border-border px-2 py-1.5 text-secondary-foreground">
               {target}
             </div>
             <div className="border-r border-border bg-muted/40 px-2 py-1.5 font-medium text-muted-foreground">
-              Catalog docs
+              {t("deletePreview.labelCatalogDocs")}
             </div>
             <div className="px-2 py-1.5 text-secondary-foreground">
-              {docsCount === undefined ? "unknown" : docsCount.toLocaleString()}
+              {docsCount === undefined
+                ? t("deletePreview.unknownDocs")
+                : docsCount.toLocaleString()}
             </div>
           </div>
 
           <label className="block space-y-1 text-xs">
             <span className="font-medium text-foreground">
-              Preview query body
+              {t("deletePreview.labelQueryBody")}
             </span>
             <textarea
               className="h-36 w-full resize-none rounded border border-border bg-background p-2 font-mono text-xs leading-5 outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
@@ -186,7 +189,7 @@ export function SearchDeleteByQueryPreviewDialog({
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="ghost" size="sm">
-              Close
+              {t("deletePreview.closeButton")}
             </Button>
           </DialogClose>
           <Button
@@ -201,7 +204,7 @@ export function SearchDeleteByQueryPreviewDialog({
             ) : (
               <FileSearch aria-hidden="true" />
             )}
-            Generate plan
+            {t("deletePreview.generateButton")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -216,11 +219,12 @@ function PolicyNotice({
   supported: boolean;
   targetError: string | null;
 }) {
+  const { t } = useTranslation("search");
   const message = !supported
-    ? "Delete-by-query preview is unsupported by this Search connection."
+    ? t("deletePreview.policyUnsupported")
     : targetError
       ? targetError
-      : "Preview only. No delete-by-query execution path is available.";
+      : t("deletePreview.policyPreviewOnly");
   const tone = supported && !targetError ? "text-warning" : "text-destructive";
   return (
     <div
@@ -236,10 +240,11 @@ function PolicyNotice({
 }
 
 function PlanFeedback({ state }: { state: PlanState }) {
+  const { t } = useTranslation("search");
   if (state.status === "idle") {
     return (
       <div className="rounded border border-border px-3 py-2 text-xs text-muted-foreground">
-        Plan output appears here.
+        {t("deletePreview.planOutputIdle")}
       </div>
     );
   }
@@ -250,7 +255,7 @@ function PlanFeedback({ state }: { state: PlanState }) {
         className="flex items-center gap-2 text-xs text-muted-foreground"
       >
         <Loader2 className="animate-spin" size={14} aria-hidden="true" />
-        Planning delete-by-query preview
+        {t("deletePreview.planLoading")}
       </div>
     );
   }
@@ -269,22 +274,29 @@ function PlanFeedback({ state }: { state: PlanState }) {
   const { plan } = state;
   return (
     <section
-      aria-label="Delete-by-query preview plan"
+      aria-label={t("deletePreview.planSectionAria")}
       className="space-y-2 rounded border border-border p-3 text-xs"
     >
       <div className="grid grid-cols-[10rem_minmax(0,1fr)] gap-y-1">
-        <span className="font-medium text-muted-foreground">Operation</span>
+        <span className="font-medium text-muted-foreground">
+          {t("deletePreview.planLabelOperation")}
+        </span>
         <span>{plan.operation}</span>
-        <span className="font-medium text-muted-foreground">Target</span>
+        <span className="font-medium text-muted-foreground">
+          {t("deletePreview.planLabelTarget")}
+        </span>
         <span className="truncate">{plan.target}</span>
         <span className="font-medium text-muted-foreground">
-          Estimated documents
+          {t("deletePreview.planLabelEstimatedDocs")}
         </span>
         <span>
-          {plan.estimatedDocumentCount?.toLocaleString() ?? "unknown"}
+          {plan.estimatedDocumentCount?.toLocaleString() ??
+            t("deletePreview.unknownDocs")}
         </span>
-        <span className="font-medium text-muted-foreground">Execution</span>
-        <span>Unsupported in this milestone</span>
+        <span className="font-medium text-muted-foreground">
+          {t("deletePreview.planLabelExecution")}
+        </span>
+        <span>{t("deletePreview.planExecutionUnsupported")}</span>
       </div>
       {plan.warnings.length > 0 ? (
         <ul className="list-disc space-y-1 pl-5 text-warning">

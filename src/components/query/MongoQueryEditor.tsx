@@ -1,4 +1,5 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useTranslation } from "react-i18next";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
@@ -66,6 +67,7 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
     { sql, onSqlChange, onExecute, onDryRun, mongoExtensions },
     ref,
   ) {
+    const { t } = useTranslation("query");
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
 
@@ -223,7 +225,7 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
         ref={containerRef}
         className="h-full w-full overflow-hidden"
         role="textbox"
-        aria-label="MongoDB Query Editor"
+        aria-label={t("mongo.editorAria")}
         aria-multiline="true"
         data-paradigm="document"
       />

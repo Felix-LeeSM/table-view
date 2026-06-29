@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { DB_TYPE_META } from "@lib/db-meta";
 import { useRecentConnections } from "@lib/runtime/connection/useRecentConnections";
 import { Database, Clock, X } from "lucide-react";
@@ -37,24 +38,28 @@ interface RecentConnectionsProps {
 export default function RecentConnections({
   onActivate,
 }: RecentConnectionsProps) {
+  const { t } = useTranslation("featuresConnection");
   const { resolved, removeRecent } = useRecentConnections();
 
   if (resolved.length === 0) {
     return (
       <div className="px-3 py-2 text-xs text-muted-foreground italic">
-        No recent connections
+        {t("recent.empty")}
       </div>
     );
   }
 
   return (
-    <div className="space-y-0.5" role="list" aria-label="Recent connections">
+    <div className="space-y-0.5" role="list" aria-label={t("recent.ariaList")}>
       {resolved.slice(0, 5).map(({ connectionId, lastUsed, conn }) => (
         <div
           key={connectionId}
           role="listitem"
           className="group flex items-center gap-2 px-3 py-1 text-sm cursor-pointer hover:bg-muted rounded-sm"
-          aria-label={`${conn.name} — used ${relativeTime(lastUsed)}`}
+          aria-label={t("recent.ariaItem", {
+            name: conn.name,
+            time: relativeTime(lastUsed),
+          })}
           tabIndex={0}
           onClick={() => {}} // single click: nothing special
           onDoubleClick={() => onActivate?.(connectionId)}
@@ -84,7 +89,7 @@ export default function RecentConnections({
             </div>
             <button
               type="button"
-              aria-label={`Remove ${conn.name} from recent connections`}
+              aria-label={t("recent.removeAria", { name: conn.name })}
               className="col-start-1 row-start-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
               onClick={(e) => {
                 e.stopPropagation();

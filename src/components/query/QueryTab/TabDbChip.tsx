@@ -10,6 +10,7 @@
 // 전역 chip 으로 바인딩하면 다른 탭에 부수효과가 생긴다).
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, Database, Loader2 } from "lucide-react";
 import {
   Popover,
@@ -39,6 +40,7 @@ export default function TabDbChip({
   database,
   connectionId,
 }: TabDbChipProps) {
+  const { t } = useTranslation("query");
   const workspaceKey = useCurrentWorkspaceKey();
   const setQueryTabDatabase = useWorkspaceStore((s) => s.setQueryTabDatabase);
 
@@ -102,7 +104,7 @@ export default function TabDbChip({
   // `db.adminCommand`) can still run; only collection commands require
   // the user to pick one. "(no database)" makes the absence visible
   // without nagging the user to select before every admin call.
-  const label = database === "" ? "(no database)" : database;
+  const label = database === "" ? t("tabDbChip.noDatabase") : database;
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -111,8 +113,8 @@ export default function TabDbChip({
           type="button"
           aria-label={
             database
-              ? `Current database: ${database}. Click to change.`
-              : "No database bound. Click to pick one — admin commands run without it."
+              ? t("tabDbChip.currentDbAria", { database })
+              : t("tabDbChip.noDbAria")
           }
           aria-haspopup="listbox"
           aria-expanded={open}
@@ -143,7 +145,7 @@ export default function TabDbChip({
             className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground"
           >
             <Loader2 size={12} className="animate-spin" aria-hidden />
-            Loading databases…
+            {t("tabDbChip.loadingDatabases")}
           </div>
         ) : errorMessage ? (
           <div
@@ -155,12 +157,12 @@ export default function TabDbChip({
           </div>
         ) : databases.length === 0 ? (
           <div className="px-2 py-1.5 text-xs text-muted-foreground">
-            No databases available.
+            {t("tabDbChip.noDatabasesAvailable")}
           </div>
         ) : (
           <ul
             role="listbox"
-            aria-label="Available databases"
+            aria-label={t("tabDbChip.availableDbsAria")}
             className="flex flex-col"
           >
             {databases.map((db, idx) => (

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import LauncherPage from "./pages/LauncherPage";
@@ -54,6 +55,7 @@ function useMenuNewConnectionBridge() {
  * wiring and portal mounts stay inside the workspace feature boundary.
  */
 export default function AppRouter() {
+  const { t } = useTranslation("app");
   const label = getCurrentWindowLabel();
 
   // `react:first-paint` boot-tracing milestone. `useLayoutEffect` fires
@@ -84,8 +86,10 @@ export default function AppRouter() {
   // `switchToWorkspaceWindow` couldn't distinguish them. Aligning the two
   // titles also fixes the dock/taskbar/alt-tab labels in prod.
   useEffect(() => {
-    document.title = isWorkspaceLabel ? "Table View — Workspace" : "Table View";
-  }, [isWorkspaceLabel]);
+    document.title = isWorkspaceLabel
+      ? t("title.workspace")
+      : t("title.launcher");
+  }, [isWorkspaceLabel, t]);
 
   // Resolve the route up front so the JSX has a single, exhaustive branch.
   // We intentionally accept `string | null` — `getCurrentWindowLabel()`

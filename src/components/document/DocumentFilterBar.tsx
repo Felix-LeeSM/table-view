@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Ban, Plus, Trash2, X } from "lucide-react";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
@@ -71,30 +72,13 @@ function newCondition(field: string): MqlCondition {
   };
 }
 
-// Operator-specific placeholder hint. Sprint 313 D-24: `$in` / `$nin`
-// take CSV input, so show "1, 2, 3" instead of the generic "Value..."
-// so the user does not have to read the operator docs to know the
-// shape.
-function placeholderFor(operator: MqlOperator): string {
-  switch (operator) {
-    case "$exists":
-      return "true / false";
-    case "$in":
-    case "$nin":
-      return "1, 2, 3";
-    case "$regex":
-      return "^pattern";
-    default:
-      return "Value...";
-  }
-}
-
 export default function DocumentFilterBar({
   fieldNames,
   onApply,
   onClose,
   onClear,
 }: DocumentFilterBarProps) {
+  const { t } = useTranslation("document");
   const [mode, setMode] = useState<FilterMode>("structured");
   const [conditions, setConditions] = useState<MqlCondition[]>([]);
   // Sprint 314 — Slice B.2. ALL = implicit `$and` (default). ANY =
@@ -158,8 +142,8 @@ export default function DocumentFilterBar({
     } catch (err) {
       setRawError(
         err instanceof Error
-          ? `Invalid MQL JSON: ${err.message}`
-          : "Invalid MQL JSON",
+          ? t("filterBar.errorInvalidMqlDetail", { message: err.message })
+          : t("filterBar.errorInvalidMql"),
       );
       return;
     }
@@ -168,7 +152,7 @@ export default function DocumentFilterBar({
       parsed === null ||
       Array.isArray(parsed)
     ) {
-      setRawError("MQL filter must be a JSON object");
+      setRawError(t("filterBar.errorMqlNotObject"));
       return;
     }
     setRawError(null);
@@ -194,7 +178,7 @@ export default function DocumentFilterBar({
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-xs font-medium text-secondary-foreground">
-            Filters
+            {t("filterBar.filtersLabel")}
           </span>
           <ToggleGroup
             type="single"
@@ -205,13 +189,13 @@ export default function DocumentFilterBar({
               value="structured"
               className="data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
             >
-              Structured
+              {t("filterBar.structured")}
             </ToggleGroupItem>
             <ToggleGroupItem
               value="raw"
               className="data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
             >
-              Raw MQL
+              {t("filterBar.rawMql")}
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -220,7 +204,7 @@ export default function DocumentFilterBar({
           size="icon-xs"
           className="text-muted-foreground hover:text-secondary-foreground"
           onClick={onClose}
-          aria-label="Close filter bar"
+          aria-label={t("filterBar.closeAriaLabel")}
         >
           <X size={12} />
         </Button>
@@ -248,15 +232,15 @@ export default function DocumentFilterBar({
               className="text-muted-foreground"
               onClick={handleClearAll}
             >
-              Clear
+              {t("filterBar.clear")}
             </Button>
             <Button
               size="xs"
               className="bg-primary text-white hover:bg-primary/90"
               onClick={handleRawApply}
-              aria-label="Apply MQL filter"
+              aria-label={t("filterBar.applyMqlAriaLabel")}
             >
-              Apply
+              {t("filterBar.apply")}
             </Button>
           </div>
         </RawMqlEditor>
@@ -266,24 +250,26 @@ export default function DocumentFilterBar({
               ANY = top-level $or. Effective only when ≥ 2 rows; we show
               it unconditionally so users discover it. */}
           <div className="mb-1.5 flex items-center gap-2">
-            <span className="text-2xs text-muted-foreground">Match</span>
+            <span className="text-2xs text-muted-foreground">
+              {t("filterBar.matchLabel")}
+            </span>
             <ToggleGroup
               type="single"
               value={matchMode}
               onValueChange={(v) => v && setMatchMode(v as MatchMode)}
-              aria-label="Match mode"
+              aria-label={t("filterBar.matchModeAriaLabel")}
             >
               <ToggleGroupItem
                 value="all"
                 className="px-2 text-2xs data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
               >
-                ALL
+                {t("filterBar.matchAll")}
               </ToggleGroupItem>
               <ToggleGroupItem
                 value="any"
                 className="px-2 text-2xs data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
               >
-                ANY
+                {t("filterBar.matchAny")}
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
@@ -304,7 +290,7 @@ export default function DocumentFilterBar({
               className="text-primary"
               onClick={addCondition}
             >
-              <Plus size={12} /> Add Filter
+              <Plus size={12} /> {t("filterBar.addFilter")}
             </Button>
             {conditions.length > 0 && (
               <>
@@ -314,15 +300,15 @@ export default function DocumentFilterBar({
                   className="text-muted-foreground"
                   onClick={handleClearAll}
                 >
-                  Clear All
+                  {t("filterBar.clearAll")}
                 </Button>
                 <Button
                   size="xs"
                   className="bg-primary text-white hover:bg-primary/90"
                   onClick={handleStructuredApply}
-                  aria-label="Apply filter"
+                  aria-label={t("filterBar.applyAriaLabel")}
                 >
-                  Apply
+                  {t("filterBar.apply")}
                 </Button>
               </>
             )}
@@ -348,6 +334,20 @@ function StructuredRow({
   onRemove,
   onApply,
 }: StructuredRowProps) {
+  const { t } = useTranslation("document");
+  const placeholderFor = (operator: MqlOperator): string => {
+    switch (operator) {
+      case "$exists":
+        return t("filterBar.placeholderExists");
+      case "$in":
+      case "$nin":
+        return t("filterBar.placeholderInNin");
+      case "$regex":
+        return t("filterBar.placeholderRegex");
+      default:
+        return t("filterBar.placeholderDefault");
+    }
+  };
   const negate = !!condition.negate;
   return (
     <div className="mb-1.5 flex items-center gap-2">
@@ -357,7 +357,7 @@ function StructuredRow({
       >
         <SelectTrigger
           className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-          aria-label="Filter field"
+          aria-label={t("filterBar.filterFieldAriaLabel")}
         >
           <SelectValue placeholder="field" />
         </SelectTrigger>
@@ -387,7 +387,7 @@ function StructuredRow({
             ? "bg-amber-500 text-white hover:bg-amber-500/90"
             : "text-muted-foreground"
         }
-        aria-label="Negate filter"
+        aria-label={t("filterBar.negateAriaLabel")}
         aria-pressed={negate}
         onClick={() => onChange({ negate: !negate })}
       >
@@ -400,7 +400,7 @@ function StructuredRow({
       >
         <SelectTrigger
           className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-          aria-label="Filter operator"
+          aria-label={t("filterBar.filterOperatorAriaLabel")}
         >
           <SelectValue />
         </SelectTrigger>
@@ -422,7 +422,7 @@ function StructuredRow({
         onKeyDown={(e) => {
           if (e.key === "Enter") onApply();
         }}
-        aria-label="Filter value"
+        aria-label={t("filterBar.filterValueAriaLabel")}
       />
 
       <Button
@@ -430,7 +430,7 @@ function StructuredRow({
         size="icon-xs"
         className="text-muted-foreground hover:text-destructive"
         onClick={onRemove}
-        aria-label="Remove filter"
+        aria-label={t("filterBar.removeFilterAriaLabel")}
       >
         <Trash2 size={12} />
       </Button>
@@ -453,6 +453,7 @@ function RawMqlEditor({
   onSubmit,
   children,
 }: RawMqlEditorProps) {
+  const { t } = useTranslation("document");
   // Sprint 309 — `useMongoAutocomplete` lost its queryMode argument;
   // the unified completion source covers find operators + aggregate
   // stages + accumulators + type tags. RawMqlEditor still threads its
@@ -579,7 +580,7 @@ function RawMqlEditor({
       <div
         ref={setContainerRef}
         role="textbox"
-        aria-label="Raw MQL filter"
+        aria-label={t("filterBar.rawAriaLabel")}
         aria-multiline="true"
         className="rounded border border-border bg-background outline-none focus-within:ring-2 focus-within:ring-ring"
       />

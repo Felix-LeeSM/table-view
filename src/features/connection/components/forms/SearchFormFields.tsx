@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
 
 export interface SearchFormFieldsProps {
@@ -25,12 +26,13 @@ export default function SearchFormFields({
   inputClass,
   labelClass,
 }: SearchFormFieldsProps) {
+  const { t } = useTranslation("featuresConnection");
   return (
     <>
       <div className="flex gap-3">
         <div className="flex-1">
           <label htmlFor="conn-host" className={labelClass}>
-            Host
+            {t("form.labelHost")}
           </label>
           <input
             id="conn-host"
@@ -42,7 +44,7 @@ export default function SearchFormFields({
         </div>
         <div className="w-24">
           <label htmlFor="conn-port" className={labelClass}>
-            Port
+            {t("form.labelPort")}
           </label>
           <input
             id="conn-port"
@@ -58,7 +60,7 @@ export default function SearchFormFields({
 
       <div>
         <label htmlFor="conn-user" className={labelClass}>
-          Username (optional)
+          {t("form.labelUsernameOptional")}
         </label>
         <input
           id="conn-user"
@@ -72,7 +74,7 @@ export default function SearchFormFields({
       <div>
         <div className="flex items-center justify-between">
           <label htmlFor="conn-password" className={labelClass}>
-            Password (optional)
+            {t("form.labelPasswordOptional")}
           </label>
           {isEditing && (
             <span
@@ -83,7 +85,7 @@ export default function SearchFormFields({
               }`}
               data-testid="password-status-badge"
             >
-              {hadPassword ? "Password set" : "No password"}
+              {hadPassword ? t("form.passwordSet") : t("form.noPassword")}
             </span>
           )}
         </div>
@@ -96,7 +98,7 @@ export default function SearchFormFields({
           onChange={(e) => setPasswordInput(e.target.value)}
           placeholder={
             isEditing && hadPassword
-              ? "Leave blank to keep current password"
+              ? t("form.placeholderKeepPassword")
               : "••••••••"
           }
         />
@@ -111,7 +113,7 @@ export default function SearchFormFields({
                 if (e.target.checked) setPasswordInput("");
               }}
             />
-            Clear stored password on save
+            {t("form.clearPassword")}
           </label>
         )}
       </div>
@@ -124,7 +126,7 @@ export default function SearchFormFields({
           checked={!!draft.tlsEnabled}
           onChange={(e) => onChange({ tlsEnabled: e.target.checked })}
         />
-        Enable TLS
+        {t("form.enableTlsSearch")}
       </label>
     </>
   );

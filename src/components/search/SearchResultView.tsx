@@ -9,6 +9,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { CopyTextButton } from "@components/shared/CopyTextButton";
 import { ExportButton } from "@components/shared/ExportButton";
 import { Skeleton } from "@components/ui/skeleton";
@@ -52,6 +53,7 @@ export function SearchResultView({
   result,
   queryState,
 }: SearchResultViewProps) {
+  const { t } = useTranslation("search");
   const state =
     queryState ??
     (result
@@ -75,30 +77,30 @@ export function SearchResultView({
   }
 
   if (state.status === "completed") {
-    return (
-      <SearchMalformedState message="Search renderer received a tabular query result. Search hits must stay on the completedSearch state." />
-    );
+    return <SearchMalformedState message={t("malformedTabular")} />;
   }
 
   return <SearchIdleState />;
 }
 
 function SearchIdleState() {
+  const { t } = useTranslation("search");
   return (
     <section
-      aria-label="Search results"
+      aria-label={t("resultsAria")}
       className="flex h-full min-h-0 flex-col items-center justify-center overflow-hidden bg-background p-6 text-sm text-muted-foreground"
     >
       <Search className="mb-2" size={22} aria-hidden="true" />
-      <p>Run a Search DSL request to inspect hits.</p>
+      <p>{t("idleHint")}</p>
     </section>
   );
 }
 
 function SearchLoadingState() {
+  const { t } = useTranslation("search");
   return (
     <section
-      aria-label="Search results"
+      aria-label={t("resultsAria")}
       className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-sm"
     >
       <div
@@ -106,7 +108,7 @@ function SearchLoadingState() {
         className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2 text-xs text-muted-foreground"
       >
         <Loader2 className="animate-spin" size={14} aria-hidden="true" />
-        <span>Search query running</span>
+        <span>{t("queryRunning")}</span>
       </div>
       <div className="grid gap-3 p-3">
         <Skeleton className="h-16 w-full" />
@@ -118,10 +120,11 @@ function SearchLoadingState() {
 }
 
 function SearchErrorState({ message }: { message: string }) {
+  const { t } = useTranslation("search");
   const error = formatSearchUiError("query", message);
   return (
     <section
-      aria-label="Search results"
+      aria-label={t("resultsAria")}
       className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-sm"
     >
       <div
@@ -139,20 +142,22 @@ function SearchErrorState({ message }: { message: string }) {
 }
 
 function SearchCancelledState({ message }: { message?: string }) {
+  const { t } = useTranslation("search");
   return (
     <section
-      aria-label="Search results"
+      aria-label={t("resultsAria")}
       className="flex h-full min-h-0 flex-col items-center justify-center overflow-hidden bg-background p-6 text-sm text-muted-foreground"
     >
-      <p role="status">{message ?? "Search query cancelled"}</p>
+      <p role="status">{message ?? t("queryCancelled")}</p>
     </section>
   );
 }
 
 function SearchMalformedState({ message }: { message: string }) {
+  const { t } = useTranslation("search");
   return (
     <section
-      aria-label="Search results"
+      aria-label={t("resultsAria")}
       className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-sm"
     >
       <div
@@ -161,7 +166,7 @@ function SearchMalformedState({ message }: { message: string }) {
       >
         <div className="flex items-center gap-2 font-medium">
           <AlertTriangle size={14} aria-hidden="true" />
-          <span>Malformed Search result payload</span>
+          <span>{t("malformedHeader")}</span>
         </div>
         <p className="mt-1 text-xs">{message}</p>
       </div>
@@ -170,6 +175,7 @@ function SearchMalformedState({ message }: { message: string }) {
 }
 
 function CompletedSearchResult({ result }: { result: SearchResultEnvelope }) {
+  const { t } = useTranslation("search");
   const normalized = normalizeSearchResult(result);
 
   if (!normalized.ok) {
@@ -184,36 +190,40 @@ function CompletedSearchResult({ result }: { result: SearchResultEnvelope }) {
 
   return (
     <section
-      aria-label="Search results"
+      aria-label={t("resultsAria")}
       className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-sm"
     >
       <header className="shrink-0 border-b border-border px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Metric icon={Search}>
-              {formatTotalHits(data.total.value, data.total.relation)} hits
+              {t("hitsCount", {
+                count: formatTotalHits(data.total.value, data.total.relation),
+              })}
             </Metric>
             <Metric icon={Clock3}>{data.tookMs} ms</Metric>
-            <Metric icon={FileJson}>Showing {shownHits} hits</Metric>
+            <Metric icon={FileJson}>
+              {t("showingHits", { count: shownHits })}
+            </Metric>
             {data.shards ? <ShardMetric shards={data.shards} /> : null}
             {data.timedOut ? (
               <span className="rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-destructive">
-                timed out
+                {t("timedOut")}
               </span>
             ) : null}
           </div>
           <div className="flex items-center gap-1">
             <CopyTextButton
               text={copyText}
-              ariaLabel="Copy Search hits"
-              disabledReason="No displayed Search hits to copy."
+              ariaLabel={t("copyAriaLabel")}
+              disabledReason={t("copyDisabledReason")}
             />
             <ExportButton
               context={{ kind: "query", source_table: null }}
               headers={SEARCH_HIT_EXPORT_HEADERS}
               getRows={() => exportRows}
               disabled={!hasDisplayedHits}
-              disabledReason="No displayed Search hits to export."
+              disabledReason={t("exportDisabledReason")}
               disabledFormats={["sql"]}
               disabledFormatReasons={{
                 sql: NON_GRID_SQL_EXPORT_REASON,
@@ -229,11 +239,11 @@ function CompletedSearchResult({ result }: { result: SearchResultEnvelope }) {
 
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div
-          aria-label="Search hits"
+          aria-label={t("hitsAria")}
           className="min-h-0 overflow-auto border-b border-border lg:border-r lg:border-b-0"
         >
           {data.hits.length === 0 ? (
-            <div className="p-4 text-muted-foreground">No Search hits</div>
+            <div className="p-4 text-muted-foreground">{t("noHits")}</div>
           ) : (
             <ol className="divide-y divide-border">
               {data.hits.map((hit, index) => (
@@ -248,14 +258,14 @@ function CompletedSearchResult({ result }: { result: SearchResultEnvelope }) {
         </div>
 
         <aside className="min-h-0 overflow-auto p-3">
-          <section aria-label="Search aggregations">
+          <section aria-label={t("aggregationsAria")}>
             <div className="mb-2 flex items-center gap-2 text-xs font-medium text-foreground">
               <BarChart3 size={14} aria-hidden="true" />
-              <span>Aggregations</span>
+              <span>{t("aggregations")}</span>
             </div>
             {data.aggregations.length === 0 ? (
               <div className="text-xs text-muted-foreground">
-                No aggregations
+                {t("noAggregations")}
               </div>
             ) : (
               <ul className="space-y-2">
@@ -269,8 +279,8 @@ function CompletedSearchResult({ result }: { result: SearchResultEnvelope }) {
             )}
           </section>
 
-          <ExpandablePayload label="Explain payload" value={data.explain} />
-          <ExpandablePayload label="Profile payload" value={data.profile} />
+          <ExpandablePayload label={t("explainPayload")} value={data.explain} />
+          <ExpandablePayload label={t("profilePayload")} value={data.profile} />
         </aside>
       </div>
     </section>
@@ -296,6 +306,7 @@ function SearchHitItem({
   hit: SearchHitEnvelope;
   position: number;
 }) {
+  const { t } = useTranslation("search");
   const sourceJson = formatSearchJson(hit.source);
   const highlightJson =
     hit.highlight === undefined ? "" : formatSearchJson(hit.highlight);
@@ -303,7 +314,7 @@ function SearchHitItem({
   const hasLongHighlight = highlightJson.length > LONG_HIGHLIGHT_LENGTH;
 
   return (
-    <li aria-label={`Search hit ${hit.id}`} className="p-3">
+    <li aria-label={t("hitAria", { id: hit.id })} className="p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
         <span className="rounded bg-muted px-2 py-0.5 font-mono text-muted-foreground">
           #{position}
@@ -316,8 +327,10 @@ function SearchHitItem({
         {hit.sort.length > 0 ? (
           <SearchLabel label="sort" value={`${hit.sort.length} values`} />
         ) : null}
-        {hasLargeSource ? <StateBadge>Large _source</StateBadge> : null}
-        {hasLongHighlight ? <StateBadge>Long highlight</StateBadge> : null}
+        {hasLargeSource ? <StateBadge>{t("largeSource")}</StateBadge> : null}
+        {hasLongHighlight ? (
+          <StateBadge>{t("longHighlight")}</StateBadge>
+        ) : null}
       </div>
 
       <div className="grid gap-2">
@@ -333,7 +346,7 @@ function SearchHitItem({
         )}
         {hit.explanation === undefined ? null : (
           <ExpandablePayload
-            label={`Explain payload for ${hit.id}`}
+            label={t("hitExplainPayload", { id: hit.id })}
             value={hit.explanation}
           />
         )}
@@ -375,15 +388,17 @@ function Metric({
 }
 
 function ShardMetric({ shards }: { shards: SearchShardSummary }) {
+  const { t } = useTranslation("search");
   return (
     <Metric icon={Database}>
-      shards {shards.successful}/{shards.total}
-      {shards.failed > 0 ? `, ${shards.failed} failed` : ""}
+      {t("shardMetric", { successful: shards.successful, total: shards.total })}
+      {shards.failed > 0 ? t("shardFailed", { count: shards.failed }) : ""}
     </Metric>
   );
 }
 
 function ShardFailures({ shards }: { shards: SearchShardSummary }) {
+  const { t } = useTranslation("search");
   return (
     <div
       role="alert"
@@ -391,7 +406,7 @@ function ShardFailures({ shards }: { shards: SearchShardSummary }) {
     >
       <div className="flex items-center gap-2 font-medium">
         <AlertTriangle size={14} aria-hidden="true" />
-        <span>Shard failures: {shards.failed}</span>
+        <span>{t("shardFailuresHeader", { count: shards.failed })}</span>
       </div>
       <ul className="mt-1 space-y-1">
         {shards.failures.map((failure, index) => (
@@ -455,12 +470,13 @@ function TermsAggregation({
 }: {
   aggregation: SearchTermsAggregationEnvelope;
 }) {
+  const { t } = useTranslation("search");
   return (
     <li className="rounded border border-border p-2">
       <AggregationHeader
         name={aggregation.name}
         kind="terms"
-        summary={`${aggregation.buckets.length} buckets`}
+        summary={t("bucketsCount", { count: aggregation.buckets.length })}
       />
       <ul className="mt-2 space-y-1">
         {aggregation.buckets.map((bucket) => (
@@ -502,16 +518,15 @@ function RawAggregation({
 }: {
   aggregation: SearchRawAggregationEnvelope;
 }) {
+  const { t } = useTranslation("search");
   return (
     <li className="rounded border border-warning/40 bg-warning/5 p-2">
       <AggregationHeader
         name={aggregation.name}
         kind="raw"
-        summary={aggregation.aggregationType ?? "unsupported shape"}
+        summary={aggregation.aggregationType ?? t("unsupportedShape")}
       />
-      <p className="mt-2 text-xs text-warning">
-        Unsupported aggregation shape rendered as raw JSON.
-      </p>
+      <p className="mt-2 text-xs text-warning">{t("unsupportedAggregation")}</p>
       <pre className="mt-2 max-h-44 overflow-auto rounded bg-background/70 p-2 font-mono text-xs leading-5 text-foreground">
         {formatSearchJson(aggregation.raw)}
       </pre>

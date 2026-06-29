@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useDocumentCatalogStore } from "@/stores/documentCatalogStore";
@@ -49,6 +50,7 @@ export function MongoIndexesPanel({
   const [createOpen, setCreateOpen] = useState(false);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const loadRequestIdRef = useRef(0);
+  const { t } = useTranslation("document");
 
   const loadIndexes = useCallback(
     async (force = false) => {
@@ -100,7 +102,7 @@ export function MongoIndexesPanel({
   return (
     <TooltipProvider>
       <section
-        aria-label="Mongo indexes panel"
+        aria-label={t("indexesPanel.ariaLabel")}
         data-testid="mongo-indexes-panel"
         aria-busy={busy || undefined}
         className="flex flex-col gap-2"
@@ -116,7 +118,7 @@ export function MongoIndexesPanel({
                 data-testid="mongo-indexes-loading"
               >
                 <Loader2 className="animate-spin" size={10} aria-hidden />
-                Loading…
+                {t("indexesPanel.loading")}
               </span>
             )}
             <button
@@ -146,22 +148,30 @@ export function MongoIndexesPanel({
             data-testid="mongo-indexes-empty"
             className="px-3 py-2 text-xs italic text-muted-foreground"
           >
-            No indexes on this collection.
+            {t("indexesPanel.empty")}
           </div>
         )}
 
         {indexes.length > 0 && (
           <table
-            aria-label="Collection indexes"
+            aria-label={t("indexesPanel.tableAriaLabel")}
             data-testid="mongo-indexes-list"
             className="w-full border-collapse text-xs"
           >
             <thead>
               <tr className="border-b border-border bg-secondary text-left text-muted-foreground">
-                <th className="px-3 py-1 font-medium">Name</th>
-                <th className="px-3 py-1 font-medium">Fields</th>
-                <th className="px-3 py-1 font-medium">Type</th>
-                <th className="px-3 py-1 font-medium">Unique</th>
+                <th className="px-3 py-1 font-medium">
+                  {t("indexesPanel.colName")}
+                </th>
+                <th className="px-3 py-1 font-medium">
+                  {t("indexesPanel.colFields")}
+                </th>
+                <th className="px-3 py-1 font-medium">
+                  {t("indexesPanel.colType")}
+                </th>
+                <th className="px-3 py-1 font-medium">
+                  {t("indexesPanel.colUnique")}
+                </th>
                 <th className="px-3 py-1 font-medium w-10" />
               </tr>
             </thead>
@@ -178,7 +188,7 @@ export function MongoIndexesPanel({
                       <span className="font-mono">{idx.name}</span>
                       {isPrimary && (
                         <span className="ml-2 rounded bg-primary/10 px-1 text-3xs uppercase tracking-wider text-primary">
-                          primary
+                          {t("indexesPanel.primaryBadge")}
                         </span>
                       )}
                     </td>
@@ -194,7 +204,9 @@ export function MongoIndexesPanel({
                             <button
                               type="button"
                               aria-disabled="true"
-                              aria-label={`Drop ${idx.name}`}
+                              aria-label={t("indexesPanel.dropAriaLabel", {
+                                name: idx.name,
+                              })}
                               data-testid={dropTestid}
                               onClick={(e) => e.preventDefault()}
                               className="cursor-not-allowed rounded p-1 text-muted-foreground/40"
@@ -203,13 +215,15 @@ export function MongoIndexesPanel({
                             </button>
                           </TooltipTrigger>
                           <TooltipContent>
-                            The _id_ index cannot be dropped
+                            {t("indexesPanel.primaryDropTooltip")}
                           </TooltipContent>
                         </Tooltip>
                       ) : (
                         <button
                           type="button"
-                          aria-label={`Drop ${idx.name}`}
+                          aria-label={t("indexesPanel.dropAriaLabel", {
+                            name: idx.name,
+                          })}
                           data-testid={dropTestid}
                           onClick={() => setDropTarget(idx.name)}
                           className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   Dialog,
@@ -26,17 +27,20 @@ export function DropCollectionDialog({
   onConfirm,
   onCancel,
 }: DropCollectionDialogProps) {
+  const { t } = useTranslation("schema");
   return (
     <Dialog open={!!target} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="w-80 bg-secondary p-4" showCloseButton={false}>
         <div className="rounded-lg border border-border bg-secondary p-4 shadow-xl">
           <DialogHeader>
             <DialogTitle className="mb-2 text-sm font-semibold text-foreground">
-              Drop Collection
+              {t("dropCollectionDialogTitle")}
             </DialogTitle>
             <DialogDescription className="mb-4 text-sm text-secondary-foreground">
               {target
-                ? `Are you sure you want to drop "${target.database}.${target.collection}"? This action cannot be undone.`
+                ? t("dropCollectionConfirmText", {
+                    target: `${target.database}.${target.collection}`,
+                  })
                 : ""}
             </DialogDescription>
           </DialogHeader>
@@ -47,16 +51,16 @@ export function DropCollectionDialog({
               onClick={onCancel}
               disabled={isDropping}
             >
-              Cancel
+              {t("cancel")}
             </Button>
             <Button
               variant="destructive"
               size="sm"
               onClick={onConfirm}
               disabled={isDropping}
-              aria-label="Drop Collection"
+              aria-label={t("dropCollectionDialogTitle")}
             >
-              {isDropping ? "Dropping..." : "Drop Collection"}
+              {isDropping ? t("dropping") : t("dropCollectionDialogTitle")}
             </Button>
           </DialogFooter>
         </div>

@@ -11,6 +11,7 @@
 //   - `resultKind === "scalar"` + columns.length === 0        → "findOne-empty"
 //   - `resultKind === "list"`                                 → "list"
 
+import { useTranslation } from "react-i18next";
 import { safeStringifyCell } from "@lib/jsonCell";
 import type { QueryResult } from "@/types/query";
 
@@ -23,10 +24,11 @@ export default function ScalarOrListPanel({
   result,
   mode,
 }: ScalarOrListPanelProps) {
+  const { t } = useTranslation("query");
   if (mode === "findOne-empty") {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-        No matching document
+        {t("scalar.noMatchingDocument")}
       </div>
     );
   }
@@ -41,7 +43,7 @@ export default function ScalarOrListPanel({
           {display}
         </div>
         <div className="text-xs uppercase tracking-wide text-muted-foreground">
-          Count
+          {t("scalar.count")}
         </div>
       </div>
     );

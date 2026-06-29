@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { ConnectionDraft, DatabaseType } from "../../model";
 import {
   DATABASE_TYPE_LABELS,
@@ -98,6 +99,7 @@ export default function ConnectionDialogBody({
   inputClass,
   labelClass,
 }: ConnectionDialogBodyProps) {
+  const { t } = useTranslation("featuresConnection");
   /**
    * Sprint 138 — exhaustive switch on `dbType`. Adding a new
    * `DatabaseType` variant without updating this switch fails the
@@ -264,11 +266,11 @@ export default function ConnectionDialogBody({
           >
             <ToggleGroupItem value="form" className="flex-1">
               <List />
-              Form
+              {t("body.modeForm")}
             </ToggleGroupItem>
             <ToggleGroupItem value="url" className="flex-1">
               <Link />
-              URL
+              {t("body.modeUrl")}
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -279,7 +281,7 @@ export default function ConnectionDialogBody({
         <div className="space-y-3">
           <div>
             <label htmlFor="conn-url" className={labelClass}>
-              Connection URL
+              {t("body.urlLabel")}
             </label>
             <input
               id="conn-url"
@@ -289,12 +291,11 @@ export default function ConnectionDialogBody({
                 setUrlValue(e.target.value);
                 setUrlError(null);
               }}
-              placeholder="postgresql://user:password@host:5432/database"
+              placeholder={t("body.urlPlaceholder")}
               autoFocus
             />
             <p className="mt-1 text-2xs text-muted-foreground">
-              For SQLite, paste an absolute file path (e.g.{" "}
-              <code>/data/app.sqlite</code>).
+              {t("body.urlHint")}
             </p>
           </div>
           {urlError && (
@@ -306,7 +307,7 @@ export default function ConnectionDialogBody({
             </div>
           )}
           <Button className="w-full" size="sm" onClick={onParseAndContinue}>
-            Parse & Continue
+            {t("body.parseAndContinue")}
           </Button>
         </div>
       )}
@@ -327,14 +328,14 @@ export default function ConnectionDialogBody({
           {/* Name */}
           <div>
             <label htmlFor="conn-name" className={labelClass}>
-              Name
+              {t("body.labelName")}
             </label>
             <input
               id="conn-name"
               className={inputClass}
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="My Database"
+              placeholder={t("body.placeholderName")}
               autoFocus
             />
           </div>
@@ -342,7 +343,7 @@ export default function ConnectionDialogBody({
           {/* Database Type */}
           <div>
             <label htmlFor="conn-db-type" className={labelClass}>
-              Database Type
+              {t("body.labelDatabaseType")}
             </label>
             <Select
               value={form.dbType}
@@ -351,7 +352,7 @@ export default function ConnectionDialogBody({
               <SelectTrigger
                 id="conn-db-type"
                 className={inputClass}
-                aria-label="Database Type"
+                aria-label={t("body.ariaDatabaseType")}
               >
                 <SelectValue />
               </SelectTrigger>
@@ -378,7 +379,7 @@ export default function ConnectionDialogBody({
           {/* Environment */}
           <div>
             <label htmlFor="conn-environment" className={labelClass}>
-              Environment
+              {t("body.labelEnvironment")}
             </label>
             <Select
               value={form.environment ?? ENV_NONE_SENTINEL}
@@ -392,12 +393,14 @@ export default function ConnectionDialogBody({
               <SelectTrigger
                 id="conn-environment"
                 className={inputClass}
-                aria-label="Environment"
+                aria-label={t("body.ariaEnvironment")}
               >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ENV_NONE_SENTINEL}>None</SelectItem>
+                <SelectItem value={ENV_NONE_SENTINEL}>
+                  {t("body.envNone")}
+                </SelectItem>
                 {ENVIRONMENT_OPTIONS.map((env) => (
                   <SelectItem key={env} value={env}>
                     {ENVIRONMENT_META[env].label}
@@ -426,7 +429,7 @@ export default function ConnectionDialogBody({
               className="text-2xs text-muted-foreground"
               data-testid="connection-url-detected"
             >
-              Detected {detectedScheme} URL — fields populated.
+              {t("body.detectedScheme", { scheme: detectedScheme })}
             </p>
           )}
 
@@ -434,12 +437,12 @@ export default function ConnectionDialogBody({
           <div className="border-t border-border pt-3">
             <details>
               <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-secondary-foreground">
-                Advanced Settings
+                {t("body.advancedSettings")}
               </summary>
               <div className="mt-2 space-y-3">
                 <div>
                   <label htmlFor="conn-timeout" className={labelClass}>
-                    Connection Timeout (seconds)
+                    {t("body.labelConnectionTimeout")}
                   </label>
                   <input
                     id="conn-timeout"
@@ -459,7 +462,7 @@ export default function ConnectionDialogBody({
                 </div>
                 <div>
                   <label htmlFor="conn-keepalive" className={labelClass}>
-                    Keep-Alive Interval (seconds)
+                    {t("body.labelKeepAliveInterval")}
                   </label>
                   <input
                     id="conn-keepalive"

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import TabsDialog from "@components/ui/dialog/TabsDialog";
 import { safeStringifyCell } from "@lib/jsonCell";
 
@@ -88,22 +89,20 @@ export default function BlobViewerDialog({
   data,
   columnName,
 }: BlobViewerDialogProps) {
+  const { t } = useTranslation("datagrid");
   const bytes = useMemo(() => toBytes(data), [data]);
   const hexDump = useMemo(() => formatHexDump(bytes), [bytes]);
   const textContent = useMemo(() => {
-    if (bytes.length === 0) return "(empty)";
+    if (bytes.length === 0) return t("blobEmpty");
     const decoded = tryDecodeText(bytes);
-    return (
-      decoded ??
-      `(binary data — cannot decode as UTF-8)\n\n${formatHexDump(bytes)}`
-    );
-  }, [bytes]);
+    return decoded ?? `${t("blobBinary")}\n\n${formatHexDump(bytes)}`;
+  }, [bytes, t]);
 
   if (!open) return null;
 
   const byteFooter = (
     <div className="text-xs text-muted-foreground">
-      {bytes.length} byte{bytes.length !== 1 ? "s" : ""}
+      {t("byteCount", { count: bytes.length })}
     </div>
   );
 
@@ -111,7 +110,8 @@ export default function BlobViewerDialog({
     <TabsDialog
       title={
         <span>
-          BLOB Viewer — <span className="font-mono">{columnName}</span>
+          {t("blobViewerPrefix")}{" "}
+          <span className="font-mono">{columnName}</span>
         </span>
       }
       className="sm:max-w-3xl"
@@ -120,12 +120,12 @@ export default function BlobViewerDialog({
       tabs={[
         {
           value: "hex",
-          label: "Hex",
+          label: t("tabHex"),
           content: (
             <>
               <div className="max-h-[80vh] overflow-auto rounded border border-border bg-muted/30">
                 <pre className="p-3 text-xs leading-5 text-foreground font-mono whitespace-pre">
-                  {bytes.length === 0 ? "(empty)" : hexDump}
+                  {bytes.length === 0 ? t("blobEmpty") : hexDump}
                 </pre>
               </div>
               {byteFooter}
@@ -134,7 +134,7 @@ export default function BlobViewerDialog({
         },
         {
           value: "text",
-          label: "Text",
+          label: t("tabText"),
           content: (
             <>
               <div className="max-h-[80vh] overflow-auto rounded border border-border bg-muted/30">

@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import Decimal from "decimal.js";
 import { Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
@@ -119,6 +120,7 @@ export interface DataRowProps {
 }
 
 export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
+  const { t } = useTranslation("datagrid");
   const {
     data,
     page,
@@ -261,7 +263,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                 const middleLabel = isExpandedHere
                   ? "✕"
                   : isArr
-                    ? `${childCount} item${childCount === 1 ? "" : "s"}`
+                    ? t("nestedItems", { count: childCount })
                     : "...";
                 return (
                   <span className="flex min-w-0 items-center gap-1 font-mono text-muted-foreground">
@@ -270,7 +272,11 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                       type="button"
                       data-testid={`rdb-nested-toggle-${rowIdx}-${dIdx}`}
                       aria-expanded={isExpandedHere}
-                      aria-label={`${isExpandedHere ? "Close" : "Expand"} ${col.name}`}
+                      aria-label={
+                        isExpandedHere
+                          ? t("closeAria", { col: col.name })
+                          : t("expandAria", { col: col.name })
+                      }
                       onClick={(e) => {
                         e.stopPropagation();
                         onToggleNested?.(rowIdx, dIdx);
@@ -304,7 +310,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                         }}
                         className="flex items-center gap-2 outline-none"
                         role="textbox"
-                        aria-label={`Editing ${col.name} — currently NULL`}
+                        aria-label={t("editingNullAria", { col: col.name })}
                         tabIndex={0}
                         onBlur={onSaveCurrentEdit}
                         onKeyDown={(e) => {
@@ -355,7 +361,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                           NULL
                         </span>
                         <span className="text-2xs text-muted-foreground">
-                          Type to edit · Esc to cancel
+                          {t("typeToEdit")}
                         </span>
                       </div>
                     ) : (
@@ -366,7 +372,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                         type={getInputTypeForColumn(col.data_type)}
                         className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
                         value={editValue}
-                        aria-label={`Editing ${col.name}`}
+                        aria-label={t("editingAria", { col: col.name })}
                         onChange={(e) => onSetEditValue(e.target.value)}
                         onBlur={onSaveCurrentEdit}
                         onKeyDown={(e) => {
@@ -437,7 +443,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                   e.stopPropagation();
                   setBlobViewer({ data: cell, columnName: col.name });
                 }}
-                aria-label={`View BLOB data for ${col.name}`}
+                aria-label={t("viewBlobAria", { col: col.name })}
               >
                 <Binary />
                 <span>(BLOB)</span>
@@ -457,8 +463,13 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                     variant="ghost"
                     size="icon-xs"
                     className="shrink-0 opacity-40 transition-opacity group-hover/cell:opacity-100 text-muted-foreground hover:text-foreground"
-                    aria-label={`Open referenced row in ${fkRef.schema}.${fkRef.table}`}
-                    title={`Go to ${fkRef.schema}.${fkRef.table} (${fkRef.column})`}
+                    aria-label={t("openFkAria", {
+                      schemaTable: `${fkRef.schema}.${fkRef.table}`,
+                    })}
+                    title={t("goToFkTitle", {
+                      schemaTable: `${fkRef.schema}.${fkRef.table}`,
+                      column: fkRef.column,
+                    })}
                     onClick={(e) => {
                       e.stopPropagation();
                       onNavigateToFk(

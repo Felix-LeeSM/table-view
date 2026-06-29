@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,7 @@ export default function QueryHistoryDetailModal({
   id,
   onClose,
 }: QueryHistoryDetailModalProps) {
+  const { t } = useTranslation("query");
   const [detail, setDetail] = useState<HistoryDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +80,7 @@ export default function QueryHistoryDetailModal({
       >
         <DialogHeader>
           <DialogTitle className="text-sm font-semibold text-foreground">
-            Query history entry #{id}
+            {t("historyDetail.title", { id })}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
             SQL detail is fetched on demand from
@@ -92,7 +94,7 @@ export default function QueryHistoryDetailModal({
             className="py-4 text-sm text-muted-foreground"
             data-testid="query-history-detail-loading"
           >
-            Loading…
+            {t("historyDetail.loading")}
           </p>
         )}
 
@@ -110,7 +112,9 @@ export default function QueryHistoryDetailModal({
           <div className="space-y-3">
             <section>
               <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {detail.source === "file-analytics" ? "SQL" : "Original SQL"}
+                {detail.source === "file-analytics"
+                  ? t("historyDetail.sectionSql")
+                  : t("historyDetail.sectionOriginalSql")}
               </h3>
               <pre
                 className="max-h-64 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs text-foreground"
@@ -124,7 +128,7 @@ export default function QueryHistoryDetailModal({
             {detail.source !== "file-analytics" && (
               <section>
                 <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Redacted
+                  {t("historyDetail.sectionRedacted")}
                 </h3>
                 <pre
                   className="max-h-32 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs text-muted-foreground"
@@ -144,7 +148,7 @@ export default function QueryHistoryDetailModal({
             onClick={onClose}
             data-testid="query-history-detail-close"
           >
-            Done
+            {t("historyDetail.done")}
           </Button>
         </div>
       </DialogContent>

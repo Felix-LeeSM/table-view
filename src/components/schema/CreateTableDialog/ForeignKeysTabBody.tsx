@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Minus, Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   Select,
@@ -184,6 +185,7 @@ export default function ForeignKeysTabBody({
   onMoveCheck,
   onMoveUnique,
 }: ForeignKeysTabBodyProps) {
+  const { t } = useTranslation("schemaDialogs");
   // Sprint 241 — sub-tab state. Default lands on `fk` because the
   // Constraints tab's most common destination after the column-row
   // inline path is multi-column foreign keys. Tab labels carry an
@@ -201,7 +203,7 @@ export default function ForeignKeysTabBody({
       <Tabs defaultValue="fk">
         <TabsList className="w-full justify-start gap-0 rounded-none border-b border-border">
           <TabsTrigger value="fk" className="rounded-none">
-            Foreign Keys
+            {t("constraintsTab.foreignKeysTab")}
             {fks.length > 0 && (
               <span className="ml-1 text-3xs text-muted-foreground">
                 ({fks.length})
@@ -209,7 +211,7 @@ export default function ForeignKeysTabBody({
             )}
           </TabsTrigger>
           <TabsTrigger value="check" className="rounded-none">
-            CHECK
+            {t("constraintsTab.checkTab")}
             {checks.length > 0 && (
               <span className="ml-1 text-3xs text-muted-foreground">
                 ({checks.length})
@@ -217,7 +219,7 @@ export default function ForeignKeysTabBody({
             )}
           </TabsTrigger>
           <TabsTrigger value="unique" className="rounded-none">
-            UNIQUE
+            {t("constraintsTab.uniqueTab")}
             {uniques.length > 0 && (
               <span className="ml-1 text-3xs text-muted-foreground">
                 ({uniques.length})
@@ -231,31 +233,28 @@ export default function ForeignKeysTabBody({
               for the single-column case, this tab for the multi-column
               variant. */}
           <p className="mb-2 text-2xs text-muted-foreground">
-            Single-column foreign keys are edited inline on the column row
-            (Columns tab). Use this tab when the FK spans multiple local columns
-            (e.g. composite FK).
+            {t("constraintsTab.fkScopeNote")}
           </p>
           {/* ── Foreign Keys sub-section ─────────────────────────────── */}
           <div>
             <div className="mb-1 flex items-center justify-between">
               <label className="text-xs font-medium text-secondary-foreground">
-                Foreign Keys
+                {t("constraintsTab.fkSectionLabel")}
               </label>
               <Button
                 variant="ghost"
                 size="xs"
                 onClick={onAddFk}
-                aria-label="Add foreign key"
+                aria-label={t("constraintsTab.addFkAria")}
               >
                 <Plus />
-                Foreign Key
+                {t("constraintsTab.addFkBtn")}
               </Button>
             </div>
             {fks.length === 0 ? (
               <div className="rounded border border-dashed border-border bg-background p-4 text-center">
                 <p className="text-xs italic text-muted-foreground">
-                  No foreign keys declared. Click &quot;+ Foreign Key&quot; to
-                  add one.
+                  {t("constraintsTab.fkEmptyHint")}
                 </p>
               </div>
             ) : (
@@ -284,8 +283,8 @@ export default function ForeignKeysTabBody({
                           onChange={(e) =>
                             onUpdateFk(fk.trackingId, { name: e.target.value })
                           }
-                          placeholder="fk_table_column"
-                          aria-label="Foreign key name"
+                          placeholder={t("constraintsTab.fkNamePlaceholder")}
+                          aria-label={t("constraintsTab.fkNameAria")}
                         />
 
                         {/* Local columns ordered picker. */}
@@ -312,7 +311,7 @@ export default function ForeignKeysTabBody({
                             }
                           >
                             <SelectTrigger
-                              aria-label="Foreign key reference schema"
+                              aria-label={t("constraintsTab.fkRefSchemaAria")}
                               size="sm"
                               className="flex-1"
                             >
@@ -337,7 +336,7 @@ export default function ForeignKeysTabBody({
                               }
                             >
                               <SelectTrigger
-                                aria-label="Foreign key reference table"
+                                aria-label={t("constraintsTab.fkRefTableAria")}
                                 size="sm"
                                 className="flex-1"
                               >
@@ -365,8 +364,10 @@ export default function ForeignKeysTabBody({
                                   ref_columns: [],
                                 })
                               }
-                              placeholder="reference_table_name"
-                              aria-label="Foreign key reference table"
+                              placeholder={t(
+                                "constraintsTab.fkRefTablePlaceholder",
+                              )}
+                              aria-label={t("constraintsTab.fkRefTableAria")}
                             />
                           )}
                         </div>
@@ -379,25 +380,25 @@ export default function ForeignKeysTabBody({
                         {fk.ref_table.trim().length === 0 ? (
                           <div
                             className="rounded border border-border bg-background p-2"
-                            aria-label="Foreign key reference columns"
+                            aria-label={t("constraintsTab.fkRefColumnsAria")}
                           >
                             <span className="text-xs italic text-muted-foreground">
-                              Pick a reference table to choose reference columns
+                              {t("constraintsTab.fkRefColumnsPickTableHint")}
                             </span>
                           </div>
                         ) : refColsLoading ? (
                           <div
                             className="rounded border border-border bg-background p-2"
-                            aria-label="Foreign key reference columns"
+                            aria-label={t("constraintsTab.fkRefColumnsAria")}
                           >
                             <span className="text-xs italic text-muted-foreground">
-                              Loading reference columns…
+                              {t("constraintsTab.fkRefColumnsLoadingHint")}
                             </span>
                           </div>
                         ) : refCols.length === 0 ? (
                           <div
                             className="rounded border border-border bg-background p-2"
-                            aria-label="Foreign key reference columns"
+                            aria-label={t("constraintsTab.fkRefColumnsAria")}
                           >
                             <input
                               className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
@@ -411,7 +412,9 @@ export default function ForeignKeysTabBody({
                                 })
                               }
                               placeholder="id, ..."
-                              aria-label="Foreign key reference columns text"
+                              aria-label={t(
+                                "constraintsTab.fkRefColumnsTextAria",
+                              )}
                             />
                           </div>
                         ) : (
@@ -422,7 +425,9 @@ export default function ForeignKeysTabBody({
                               onUpdateFk(fk.trackingId, { ref_columns: next })
                             }
                             ariaLabelPrefix="Foreign key reference column"
-                            emptyMessage="No reference columns available"
+                            emptyMessage={t(
+                              "constraintsTab.fkRefColumnsNoAvailable",
+                            )}
                           />
                         )}
 
@@ -430,7 +435,7 @@ export default function ForeignKeysTabBody({
                         <div className="flex gap-1.5">
                           <div className="flex flex-1 items-center gap-1">
                             <span className="text-xs text-muted-foreground">
-                              ON DELETE
+                              {t("constraintsTab.fkOnDeleteLabel")}
                             </span>
                             <Select
                               value={fk.on_delete}
@@ -441,7 +446,7 @@ export default function ForeignKeysTabBody({
                               }
                             >
                               <SelectTrigger
-                                aria-label="Foreign key on delete"
+                                aria-label={t("constraintsTab.fkOnDeleteAria")}
                                 size="sm"
                                 className="flex-1"
                               >
@@ -458,7 +463,7 @@ export default function ForeignKeysTabBody({
                           </div>
                           <div className="flex flex-1 items-center gap-1">
                             <span className="text-xs text-muted-foreground">
-                              ON UPDATE
+                              {t("constraintsTab.fkOnUpdateLabel")}
                             </span>
                             <Select
                               value={fk.on_update}
@@ -469,7 +474,7 @@ export default function ForeignKeysTabBody({
                               }
                             >
                               <SelectTrigger
-                                aria-label="Foreign key on update"
+                                aria-label={t("constraintsTab.fkOnUpdateAria")}
                                 size="sm"
                                 className="flex-1"
                               >
@@ -492,8 +497,8 @@ export default function ForeignKeysTabBody({
                         size="icon-xs"
                         onClick={() => onMoveFk(fk.trackingId, -1)}
                         disabled={isFirst}
-                        aria-label="Move foreign key up"
-                        title="Move foreign key up"
+                        aria-label={t("constraintsTab.moveFkUpAria")}
+                        title={t("constraintsTab.moveFkUpTitle")}
                       >
                         <ArrowUp />
                       </Button>
@@ -502,8 +507,8 @@ export default function ForeignKeysTabBody({
                         size="icon-xs"
                         onClick={() => onMoveFk(fk.trackingId, 1)}
                         disabled={isLast}
-                        aria-label="Move foreign key down"
-                        title="Move foreign key down"
+                        aria-label={t("constraintsTab.moveFkDownAria")}
+                        title={t("constraintsTab.moveFkDownTitle")}
                       >
                         <ArrowDown />
                       </Button>
@@ -511,8 +516,8 @@ export default function ForeignKeysTabBody({
                         variant="ghost"
                         size="icon-xs"
                         onClick={() => onRemoveFk(fk.trackingId)}
-                        aria-label="Remove foreign key"
-                        title="Remove foreign key"
+                        aria-label={t("constraintsTab.removeFkAria")}
+                        title={t("constraintsTab.removeFkTitle")}
                       >
                         <Minus />
                       </Button>
@@ -529,31 +534,28 @@ export default function ForeignKeysTabBody({
           className="pt-3 data-[state=inactive]:hidden"
         >
           <p className="mb-2 text-2xs text-muted-foreground">
-            Single-column CHECK expressions live inline on the column row
-            (Columns tab). Use this tab for CHECK expressions that reference
-            multiple columns (e.g. <code>start_at &lt; end_at</code>).
+            {t("constraintsTab.checkScopeNote")}
           </p>
           {/* ── CHECK constraints sub-section ────────────────────────── */}
           <div>
             <div className="mb-1 flex items-center justify-between">
               <label className="text-xs font-medium text-secondary-foreground">
-                CHECK constraints
+                {t("constraintsTab.checkSectionLabel")}
               </label>
               <Button
                 variant="ghost"
                 size="xs"
                 onClick={onAddCheck}
-                aria-label="Add check"
+                aria-label={t("constraintsTab.addCheckAria")}
               >
                 <Plus />
-                CHECK
+                {t("constraintsTab.addCheckBtn")}
               </Button>
             </div>
             {checks.length === 0 ? (
               <div className="rounded border border-dashed border-border bg-background p-4 text-center">
                 <p className="text-xs italic text-muted-foreground">
-                  No CHECK constraints declared. Click &quot;+ CHECK&quot; to
-                  add one.
+                  {t("constraintsTab.checkEmptyHint")}
                 </p>
               </div>
             ) : (
@@ -576,8 +578,8 @@ export default function ForeignKeysTabBody({
                               name: e.target.value,
                             })
                           }
-                          placeholder="chk_table_n"
-                          aria-label="Check name"
+                          placeholder={t("constraintsTab.checkNamePlaceholder")}
+                          aria-label={t("constraintsTab.checkNameAria")}
                         />
                         <input
                           type="text"
@@ -588,8 +590,8 @@ export default function ForeignKeysTabBody({
                               expression: e.target.value,
                             })
                           }
-                          placeholder="age >= 0"
-                          aria-label="Check expression"
+                          placeholder={t("constraintsTab.checkExprPlaceholder")}
+                          aria-label={t("constraintsTab.checkExprAria")}
                         />
                       </div>
                       {/* Sprint 234 — ↑ / ↓ reorder buttons (left of `−`). */}
@@ -598,8 +600,8 @@ export default function ForeignKeysTabBody({
                         size="icon-xs"
                         onClick={() => onMoveCheck(c.trackingId, -1)}
                         disabled={isFirst}
-                        aria-label="Move check up"
-                        title="Move check up"
+                        aria-label={t("constraintsTab.moveCheckUpAria")}
+                        title={t("constraintsTab.moveCheckUpTitle")}
                       >
                         <ArrowUp />
                       </Button>
@@ -608,8 +610,8 @@ export default function ForeignKeysTabBody({
                         size="icon-xs"
                         onClick={() => onMoveCheck(c.trackingId, 1)}
                         disabled={isLast}
-                        aria-label="Move check down"
-                        title="Move check down"
+                        aria-label={t("constraintsTab.moveCheckDownAria")}
+                        title={t("constraintsTab.moveCheckDownTitle")}
                       >
                         <ArrowDown />
                       </Button>
@@ -617,8 +619,8 @@ export default function ForeignKeysTabBody({
                         variant="ghost"
                         size="icon-xs"
                         onClick={() => onRemoveCheck(c.trackingId)}
-                        aria-label="Remove check"
-                        title="Remove check"
+                        aria-label={t("constraintsTab.removeCheckAria")}
+                        title={t("constraintsTab.removeCheckTitle")}
                       >
                         <Minus />
                       </Button>
@@ -635,32 +637,28 @@ export default function ForeignKeysTabBody({
           className="pt-3 data-[state=inactive]:hidden"
         >
           <p className="mb-2 text-2xs text-muted-foreground">
-            Per-column uniqueness is set in the Keys tab (mark the column as PK)
-            or via a single-column UNIQUE row here. Use this tab when uniqueness
-            must hold across multiple columns together (e.g.{" "}
-            <code>(tenant_id, email)</code>).
+            {t("constraintsTab.uniqueScopeNote")}
           </p>
           {/* ── Table-level UNIQUE constraints sub-section ───────────── */}
           <div>
             <div className="mb-1 flex items-center justify-between">
               <label className="text-xs font-medium text-secondary-foreground">
-                Unique constraints
+                {t("constraintsTab.uniqueSectionLabel")}
               </label>
               <Button
                 variant="ghost"
                 size="xs"
                 onClick={onAddUnique}
-                aria-label="Add unique"
+                aria-label={t("constraintsTab.addUniqueAria")}
               >
                 <Plus />
-                Unique
+                {t("constraintsTab.addUniqueBtn")}
               </Button>
             </div>
             {uniques.length === 0 ? (
               <div className="rounded border border-dashed border-border bg-background p-4 text-center">
                 <p className="text-xs italic text-muted-foreground">
-                  No table-level UNIQUE constraints declared. Click &quot;+
-                  Unique&quot; to add one.
+                  {t("constraintsTab.uniqueEmptyHint")}
                 </p>
               </div>
             ) : (
@@ -683,8 +681,10 @@ export default function ForeignKeysTabBody({
                               name: e.target.value,
                             })
                           }
-                          placeholder="uq_table_columns"
-                          aria-label="Unique name"
+                          placeholder={t(
+                            "constraintsTab.uniqueNamePlaceholder",
+                          )}
+                          aria-label={t("constraintsTab.uniqueNameAria")}
                         />
                         <OrderedColumnPicker
                           available={availableColumns}
@@ -702,8 +702,8 @@ export default function ForeignKeysTabBody({
                         size="icon-xs"
                         onClick={() => onMoveUnique(u.trackingId, -1)}
                         disabled={isFirst}
-                        aria-label="Move unique up"
-                        title="Move unique up"
+                        aria-label={t("constraintsTab.moveUniqueUpAria")}
+                        title={t("constraintsTab.moveUniqueUpTitle")}
                       >
                         <ArrowUp />
                       </Button>
@@ -712,8 +712,8 @@ export default function ForeignKeysTabBody({
                         size="icon-xs"
                         onClick={() => onMoveUnique(u.trackingId, 1)}
                         disabled={isLast}
-                        aria-label="Move unique down"
-                        title="Move unique down"
+                        aria-label={t("constraintsTab.moveUniqueDownAria")}
+                        title={t("constraintsTab.moveUniqueDownTitle")}
                       >
                         <ArrowDown />
                       </Button>
@@ -721,8 +721,8 @@ export default function ForeignKeysTabBody({
                         variant="ghost"
                         size="icon-xs"
                         onClick={() => onRemoveUnique(u.trackingId)}
-                        aria-label="Remove unique"
-                        title="Remove unique"
+                        aria-label={t("constraintsTab.removeUniqueAria")}
+                        title={t("constraintsTab.removeUniqueTitle")}
                       >
                         <Minus />
                       </Button>

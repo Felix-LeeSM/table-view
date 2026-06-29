@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -87,11 +88,14 @@ export default function ConfirmDestructiveDialog({
   onConfirm,
   onCancel,
 }: ConfirmDestructiveDialogProps) {
+  const { t } = useTranslation("workspace");
   const isProduction = environment === "production";
-  const title = isProduction ? "PRODUCTION DATABASE" : "Destructive statement";
+  const title = isProduction
+    ? t("confirmDestructive.titleProduction")
+    : t("confirmDestructive.titleNonProd");
   const subcaption = isProduction
-    ? "Destructive statement"
-    : "Safe Mode (strict) — non-production";
+    ? t("confirmDestructive.subcaptionProduction")
+    : t("confirmDestructive.subcaptionNonProd");
 
   // Sprint 256 (AC-256-06) — production header binds to the env tokens
   // (`--tv-env-prod` / `-prod-text`) for visual gravity matching the
@@ -146,11 +150,12 @@ export default function ConfirmDestructiveDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <p className="text-sm text-foreground">
-          Reason: <span className="font-semibold">{reason}</span>
+          {t("confirmDestructive.reasonLabel")}{" "}
+          <span className="font-semibold">{reason}</span>
         </p>
         <pre
           className="max-h-32 overflow-auto rounded-md bg-muted p-2 font-mono text-xs text-muted-foreground"
-          aria-label="Statement preview"
+          aria-label={t("confirmDestructive.statementPreviewAria")}
         >
           {sqlPreview}
         </pre>
@@ -167,7 +172,7 @@ export default function ConfirmDestructiveDialog({
             onClick={onCancel}
             data-testid="confirm-destructive-cancel"
           >
-            Cancel
+            {t("confirmDestructive.cancel")}
           </Button>
           <ExecuteButton
             severity="danger"
@@ -176,7 +181,7 @@ export default function ConfirmDestructiveDialog({
             loading={false}
             disabled={false}
             onClick={onConfirm}
-            ariaLabel="Confirm"
+            ariaLabel={t("confirmDestructive.confirmAria")}
             autoFocus
             testId="confirm-destructive-confirm"
           />

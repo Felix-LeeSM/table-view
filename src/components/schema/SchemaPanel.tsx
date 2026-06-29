@@ -1,4 +1,5 @@
 import { Database, MousePointerClick, Plug } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
@@ -19,6 +20,7 @@ interface SchemaPanelProps {
  * connection and explore inside it.
  */
 export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
+  const { t } = useTranslation("schema");
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const { connect: connectToDatabase } = useConnectionLifecycle();
@@ -31,10 +33,10 @@ export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
       >
         <Database size={36} className="mb-3 text-muted-foreground" />
         <p className="text-sm font-medium text-secondary-foreground">
-          No connections yet
+          {t("noConnectionsYet")}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Switch to the Connections tab and add your first database
+          {t("noConnectionsHint")}
         </p>
       </div>
     );
@@ -48,10 +50,10 @@ export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
       >
         <MousePointerClick size={28} className="mb-2 text-muted-foreground" />
         <p className="text-sm font-medium text-secondary-foreground">
-          Select a connection
+          {t("selectConnection")}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Pick a connection from the Connections tab to view its schemas
+          {t("selectConnectionHint")}
         </p>
       </div>
     );
@@ -79,18 +81,20 @@ export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {isConnecting ? (
-            "Connecting…"
+            t("connecting")
           ) : isError ? (
-            `Failed to connect: ${status?.type === "error" ? status.message : ""}`
+            t("failedToConnect", {
+              message: status?.type === "error" ? status.message : "",
+            })
           ) : (
             <>
-              Double-click in the Connections tab to connect, or{" "}
+              {t("doubleClickToConnect")}{" "}
               <Button
                 variant="link"
                 className="h-auto p-0 text-xs"
                 onClick={() => connectToDatabase(selectedId)}
               >
-                connect now
+                {t("connectNow")}
               </Button>
             </>
           )}

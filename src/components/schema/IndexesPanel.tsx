@@ -6,6 +6,7 @@
 // 때 진행. Sprint 327 placeholder 가 그 위치를 점유한다.
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { BackendPendingPlaceholder } from "@/components/shared/BackendPendingPlaceholder";
 import { listMongoIndexes } from "@/lib/tauri";
@@ -24,6 +25,7 @@ export function IndexesPanel({
   collection,
   paradigm,
 }: IndexesPanelProps) {
+  const { t } = useTranslation("schema");
   const [indexes, setIndexes] = useState<IndexInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,13 +74,11 @@ export function IndexesPanel({
       className="flex flex-col gap-2"
     >
       <header className="flex items-center justify-between px-3 py-2 text-xs font-medium text-muted-foreground">
-        <span>
-          Indexes — {database}.{collection}
-        </span>
+        <span>{t("indexesHeader", { db: database, collection })}</span>
         {loading && (
           <span className="flex items-center gap-1 text-3xs">
             <Loader2 className="animate-spin" size={10} aria-hidden />
-            Loading…
+            {t("loadingEllipsis")}
           </span>
         )}
       </header>
@@ -99,22 +99,22 @@ export function IndexesPanel({
           data-testid="indexes-panel-empty"
           className="px-3 py-2 text-xs italic text-muted-foreground"
         >
-          No indexes on this collection.
+          {t("noIndexesOnCollection")}
         </div>
       )}
 
       {indexes.length > 0 && (
         <table
-          aria-label="Collection indexes"
+          aria-label={t("collectionIndexesAria")}
           data-testid="indexes-panel-table"
           className="w-full border-collapse text-xs"
         >
           <thead>
             <tr className="border-b border-border bg-secondary text-left text-muted-foreground">
-              <th className="px-3 py-1 font-medium">Name</th>
-              <th className="px-3 py-1 font-medium">Fields</th>
-              <th className="px-3 py-1 font-medium">Type</th>
-              <th className="px-3 py-1 font-medium">Unique</th>
+              <th className="px-3 py-1 font-medium">{t("colNameIndex")}</th>
+              <th className="px-3 py-1 font-medium">{t("colFields")}</th>
+              <th className="px-3 py-1 font-medium">{t("colIndexType")}</th>
+              <th className="px-3 py-1 font-medium">{t("colUnique")}</th>
             </tr>
           </thead>
           <tbody>
@@ -127,7 +127,7 @@ export function IndexesPanel({
                   <span className="font-mono">{idx.name}</span>
                   {idx.is_primary && (
                     <span className="ml-2 rounded bg-primary/10 px-1 text-3xs uppercase tracking-wider text-primary">
-                      primary
+                      {t("primaryBadge")}
                     </span>
                   )}
                 </td>
@@ -135,7 +135,9 @@ export function IndexesPanel({
                   {idx.columns.join(", ")}
                 </td>
                 <td className="px-3 py-1">{idx.index_type}</td>
-                <td className="px-3 py-1">{idx.is_unique ? "Yes" : "—"}</td>
+                <td className="px-3 py-1">
+                  {idx.is_unique ? t("uniqueYes") : "—"}
+                </td>
               </tr>
             ))}
           </tbody>

@@ -5,6 +5,7 @@ import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
 import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { toast } from "@lib/runtime/toast";
+import i18n from "@lib/i18n";
 
 interface UseRdbTableDataParams {
   connectionId: string;
@@ -109,7 +110,7 @@ export function useRdbTableData({
       if (getDbMismatchInfo(e)) {
         void syncMismatchedActiveDb(connectionId, (actual) => {
           toast.warning(
-            `Active DB synced to '${actual}'. Re-open the table to refresh.`,
+            i18n.t("rdb:useRdbTableData.activeDbSynced", { actual }),
           );
         });
       }

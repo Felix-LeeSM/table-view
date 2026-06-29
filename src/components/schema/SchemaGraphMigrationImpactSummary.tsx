@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, GitBranch, KeyRound } from "lucide-react";
 import type {
   SchemaGraphForeignKeySelection,
@@ -18,6 +19,7 @@ interface SchemaGraphMigrationImpactSummaryProps {
 export default function SchemaGraphMigrationImpactSummary({
   impact,
 }: SchemaGraphMigrationImpactSummaryProps) {
+  const { t } = useTranslation("schema");
   if (!impact) return null;
 
   const total =
@@ -37,26 +39,26 @@ export default function SchemaGraphMigrationImpactSummary({
         <div className="flex min-w-0 items-center gap-2">
           <GitBranch size={13} className="shrink-0 text-muted-foreground" />
           <h3 className="truncate text-xs font-semibold text-foreground">
-            Migration impact
+            {t("migrationImpact")}
           </h3>
           <span className="truncate text-3xs text-muted-foreground">
             {impact.targetLabel}
           </span>
         </div>
         <span className="text-3xs text-muted-foreground">
-          SchemaGraph summary
+          {t("schemaGraphSummary")}
         </span>
       </div>
 
       {!impact.targetFound ? (
         <p className="rounded border border-dashed border-border bg-background px-2 py-2 text-xs text-muted-foreground">
-          Target not found in cached SchemaGraph metadata.
+          {t("targetNotFound")}
         </p>
       ) : null}
 
       {impact.targetFound && total === 0 ? (
         <p className="rounded border border-dashed border-border bg-background px-2 py-2 text-xs text-muted-foreground">
-          No dependent metadata found in cached SchemaGraph.
+          {t("noDependentMetadata")}
         </p>
       ) : null}
 
@@ -76,22 +78,22 @@ export default function SchemaGraphMigrationImpactSummary({
 
       <div className="grid gap-2 lg:grid-cols-2">
         <ImpactList
-          title="Tables"
+          title={t("impactTables")}
           rows={impact.affectedTables}
           render={formatTable}
         />
         <ImpactList
-          title="Columns"
+          title={t("impactColumns")}
           rows={impact.affectedColumns}
           render={formatColumn}
         />
         <ImpactList
-          title="Indexes"
+          title={t("impactIndexes")}
           rows={impact.affectedIndexes}
           render={formatIndex}
         />
         <ImpactList
-          title="Constraints"
+          title={t("impactConstraints")}
           rows={impact.affectedConstraints}
           render={formatConstraint}
         />
@@ -100,7 +102,7 @@ export default function SchemaGraphMigrationImpactSummary({
       <div className="mt-2 rounded border border-border bg-background px-2 py-2">
         <div className="mb-1 flex items-center gap-1 text-3xs font-semibold uppercase text-muted-foreground">
           <KeyRound size={11} aria-hidden="true" />
-          Foreign keys
+          {t("foreignKeys")}
         </div>
         {impact.foreignKeys.length > 0 ? (
           <ul className="space-y-1">
@@ -123,7 +125,7 @@ export default function SchemaGraphMigrationImpactSummary({
           </ul>
         ) : (
           <p className="text-3xs text-muted-foreground">
-            No dependent foreign keys.
+            {t("noDependentForeignKeys")}
           </p>
         )}
       </div>
@@ -132,7 +134,7 @@ export default function SchemaGraphMigrationImpactSummary({
         <div className="mt-2 rounded border border-border bg-background px-2 py-2">
           <div className="mb-1 flex items-center gap-1 text-3xs font-semibold uppercase text-muted-foreground">
             <AlertTriangle size={11} aria-hidden="true" />
-            Diagnostics
+            {t("diagnostics")}
           </div>
           <ul className="space-y-1 text-3xs text-muted-foreground">
             {impact.diagnostics.map((diagnostic) => (
@@ -159,6 +161,7 @@ function ImpactList<T>({
   rows: readonly T[];
   render: (row: T) => string;
 }) {
+  const { t } = useTranslation("schema");
   return (
     <div className="min-w-0 rounded border border-border bg-background px-2 py-2">
       <div className="mb-1 text-3xs font-semibold uppercase text-muted-foreground">
@@ -180,7 +183,7 @@ function ImpactList<T>({
           })}
         </ul>
       ) : (
-        <p className="text-3xs text-muted-foreground">None.</p>
+        <p className="text-3xs text-muted-foreground">{t("none")}</p>
       )}
     </div>
   );

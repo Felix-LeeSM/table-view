@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, Copy, Download, Upload, AlertTriangle } from "lucide-react";
 import { useConnectionStore } from "../store";
 import { Button } from "@components/ui/button";
@@ -47,12 +48,13 @@ export default function ImportExportDialog({
   onClose,
   initialTab = "export",
 }: ImportExportDialogProps) {
+  const { t } = useTranslation("featuresConnection");
   const [tab, setTab] = useState<"export" | "import">(initialTab);
 
   return (
     <TabsDialog
-      title="Import / Export Connections"
-      description="Move saved connection records between machines as an encrypted JSON envelope. Passwords and active-session file analytics registrations are not embedded."
+      title={t("importExport.title")}
+      description={t("importExport.description")}
       className="w-dialog-lg bg-secondary"
       onClose={onClose}
       value={tab}
@@ -60,20 +62,20 @@ export default function ImportExportDialog({
       tabs={[
         {
           value: "export",
-          label: "Export",
+          label: t("importExport.tabExport"),
           triggerNode: (
             <span className="inline-flex items-center gap-1.5">
-              <Download size={12} /> Export
+              <Download size={12} /> {t("importExport.tabExport")}
             </span>
           ),
           content: <ExportPanel />,
         },
         {
           value: "import",
-          label: "Import",
+          label: t("importExport.tabImport"),
           triggerNode: (
             <span className="inline-flex items-center gap-1.5">
-              <Upload size={12} /> Import
+              <Upload size={12} /> {t("importExport.tabImport")}
             </span>
           ),
           content: <ImportPanel onImported={onClose} />,
@@ -88,6 +90,7 @@ export default function ImportExportDialog({
 // ---------------------------------------------------------------------------
 
 function ExportPanel() {
+  const { t } = useTranslation("featuresConnection");
   const connections = useConnectionStore((s) => s.connections);
   const groups = useConnectionStore((s) => s.groups);
   const [selected, setSelected] = useState<Set<string>>(
@@ -146,12 +149,7 @@ function ExportPanel() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Select saved connections to include. Saved connection records only:
-        active-session file analytics sources and local file registrations are
-        not included. A 12-word recovery phrase is generated automatically and
-        used to encrypt the export with <strong>AES-256-GCM</strong> via an
-        Argon2id key. Individual connection passwords are never embedded — only
-        the data needed to recreate them.
+        {t("importExport.exportIntro")}
       </p>
 
       <SelectionTree
@@ -169,11 +167,13 @@ function ExportPanel() {
             onClick={handleGenerate}
             disabled={generateDisabled}
           >
-            {running ? "Generating…" : "Generate encrypted export"}
+            {running
+              ? t("importExport.generating")
+              : t("importExport.generateExport")}
           </Button>
           {selected.size === 0 && (
             <span role="status" className="text-3xs text-muted-foreground">
-              Select at least one connection.
+              {t("importExport.selectAtLeastOne")}
             </span>
           )}
         </div>
@@ -198,11 +198,10 @@ function ExportPanel() {
             />
             <div className="space-y-1 text-xs text-foreground">
               <p className="font-medium">
-                Save this recovery phrase to your password manager now.
+                {t("importExport.saveRecoveryTitle")}
               </p>
               <p className="text-muted-foreground">
-                It is shown <strong>only once</strong>. Without it the export
-                file cannot be imported again — there is no recovery.
+                {t("importExport.saveRecoveryBody")}
               </p>
             </div>
           </div>
@@ -212,7 +211,7 @@ function ExportPanel() {
               htmlFor="export-recovery-phrase"
               className="block text-xs font-medium text-secondary-foreground"
             >
-              Recovery phrase (12 words)
+              {t("importExport.labelRecoveryPhrase")}
             </label>
             <div className="flex items-stretch gap-2">
               <textarea
@@ -220,22 +219,23 @@ function ExportPanel() {
                 className="h-16 flex-1 resize-none rounded border border-border bg-background p-2 font-mono text-xs text-foreground outline-none focus:border-primary"
                 value={generatedPassword}
                 readOnly
-                aria-label="Generated recovery phrase"
+                aria-label={t("importExport.ariaRecoveryPhrase")}
               />
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handleCopy(generatedPassword, "password")}
-                aria-label="Copy recovery phrase"
+                aria-label={t("importExport.copyRecoveryAria")}
                 className="shrink-0"
               >
                 {copiedTarget === "password" ? (
                   <>
-                    <Check size={12} className="text-success" /> Copied
+                    <Check size={12} className="text-success" />{" "}
+                    {t("importExport.copied")}
                   </>
                 ) : (
                   <>
-                    <Copy size={12} /> Copy
+                    <Copy size={12} /> {t("importExport.copy")}
                   </>
                 )}
               </Button>
@@ -249,7 +249,7 @@ function ExportPanel() {
               onChange={(e) => setAcknowledged(e.target.checked)}
               className="size-4"
             />
-            I have saved the recovery phrase somewhere safe.
+            {t("importExport.acknowledgeLabel")}
           </label>
         </div>
       )}
@@ -258,22 +258,23 @@ function ExportPanel() {
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-secondary-foreground">
-              Encrypted export
+              {t("importExport.labelEncryptedExport")}
             </span>
             <Button
               variant="outline"
               size="sm"
               onClick={() => handleCopy(json, "json")}
               disabled={!acknowledged}
-              aria-label="Copy export JSON to clipboard"
+              aria-label={t("importExport.copyJsonAria")}
             >
               {copiedTarget === "json" ? (
                 <>
-                  <Check size={12} className="text-success" /> Copied
+                  <Check size={12} className="text-success" />{" "}
+                  {t("importExport.copied")}
                 </>
               ) : (
                 <>
-                  <Copy size={12} /> Copy JSON
+                  <Copy size={12} /> {t("importExport.copyJson")}
                 </>
               )}
             </Button>
@@ -282,13 +283,11 @@ function ExportPanel() {
             className="h-48 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary disabled:opacity-50"
             value={acknowledged ? json : ""}
             placeholder={
-              acknowledged
-                ? undefined
-                : "Confirm you saved the recovery phrase to reveal the export."
+              acknowledged ? undefined : t("importExport.exportJsonPlaceholder")
             }
             readOnly
             disabled={!acknowledged}
-            aria-label="Generated export JSON"
+            aria-label={t("importExport.ariaExportJson")}
           />
         </div>
       )}
@@ -321,6 +320,7 @@ function looksLikeEnvelope(raw: string): boolean {
 }
 
 function ImportPanel({ onImported }: ImportPanelProps) {
+  const { t } = useTranslation("featuresConnection");
   const loadConnections = useConnectionStore((s) => s.loadConnections);
   const loadGroups = useConnectionStore((s) => s.loadGroups);
   const [text, setText] = useState("");
@@ -336,7 +336,7 @@ function ImportPanel({ onImported }: ImportPanelProps) {
     setError(null);
     setResult(null);
     if (requiresPassword) {
-      setError("Master password required to decrypt this envelope");
+      setError(t("importExport.errorMasterPasswordRequired"));
       return;
     }
     setRunning(true);
@@ -356,6 +356,12 @@ function ImportPanel({ onImported }: ImportPanelProps) {
 
   return (
     <div className="space-y-3">
+      {/* ponytail: 이 도움말 문단만 의도적으로 i18n 미적용(영어 유지). 문장에
+          담긴 "backward compatibility" 는 plain JSON export 를 그대로 수용하는
+          영속 호환 동작을 설명하며, frontend-compat 인벤토리(refactor-02)가
+          이 파일을 marker 로 추적한다. 문자열을 locale 로 옮기면 marker 가
+          코드에서 사라져 인벤토리가 어긋난다. 호환 코드와 그 설명을 한곳에
+          유지. 번역이 필요하면 인벤토리 marker 를 코드 주석으로 옮긴 뒤 분리. */}
       <p className="text-xs text-muted-foreground">
         Paste a previously-exported connection JSON below. Encrypted envelopes
         need the original master password; plain JSON exports are accepted
@@ -395,16 +401,18 @@ function ImportPanel({ onImported }: ImportPanelProps) {
           onClick={handleImport}
           disabled={running || !text.trim()}
         >
-          {running ? "Importing…" : "Import"}
+          {running
+            ? t("importExport.importing")
+            : t("importExport.importButton")}
         </Button>
         {result && (
           <Button variant="outline" size="sm" onClick={onImported}>
-            Done
+            {t("importExport.done")}
           </Button>
         )}
         {isEnvelope && (
           <span className="text-3xs text-muted-foreground">
-            Encrypted envelope detected.
+            {t("importExport.envelopeDetected")}
           </span>
         )}
       </div>
@@ -424,6 +432,7 @@ function ImportPanel({ onImported }: ImportPanelProps) {
 }
 
 function ImportResultPanel({ result }: { result: ImportResult }) {
+  const { t } = useTranslation("featuresConnection");
   const renamedCount = result.renamed.length;
   const skippedCount = result.skipped_groups.length;
   const createdGroupCount = result.created_groups.length;
@@ -433,21 +442,27 @@ function ImportResultPanel({ result }: { result: ImportResult }) {
       <div className="flex items-center gap-2">
         <Check size={12} className="text-success" />
         <span className="font-medium text-foreground">
-          Imported {result.imported.length} connection
-          {result.imported.length === 1 ? "" : "s"}
+          {t("importExport.resultImported", {
+            count: result.imported.length,
+            plural: result.imported.length === 1 ? "" : "s",
+          })}
         </span>
       </div>
       {createdGroupCount > 0 && (
         <p className="text-muted-foreground">
-          Created {createdGroupCount} group
-          {createdGroupCount === 1 ? "" : "s"}.
+          {t("importExport.resultCreatedGroups", {
+            count: createdGroupCount,
+            plural: createdGroupCount === 1 ? "" : "s",
+          })}
         </p>
       )}
       {renamedCount > 0 && (
         <details>
           <summary className="cursor-pointer text-muted-foreground">
-            {renamedCount} name conflict
-            {renamedCount === 1 ? "" : "s"} auto-resolved
+            {t("importExport.resultNameConflicts", {
+              count: renamedCount,
+              plural: renamedCount === 1 ? "" : "s",
+            })}
           </summary>
           <ul className="mt-1 list-disc pl-5 text-secondary-foreground">
             {result.renamed.map((r) => (
@@ -462,8 +477,10 @@ function ImportResultPanel({ result }: { result: ImportResult }) {
       {skippedCount > 0 && (
         <details>
           <summary className="cursor-pointer text-warning">
-            {skippedCount} connection
-            {skippedCount === 1 ? "" : "s"} placed at root (missing group)
+            {t("importExport.resultMissingGroup", {
+              count: skippedCount,
+              plural: skippedCount === 1 ? "" : "s",
+            })}
           </summary>
           <ul className="mt-1 list-disc pl-5 text-secondary-foreground">
             {result.skipped_groups.map((name) => (
@@ -473,9 +490,7 @@ function ImportResultPanel({ result }: { result: ImportResult }) {
         </details>
       )}
       <p className="border-t border-border pt-2 text-muted-foreground">
-        Open each imported connection in the sidebar and re-enter its password.
-        Registered local file analytics sources are not imported; re-register
-        files in a DuckDB session.
+        {t("importExport.resultFooter")}
       </p>
     </div>
   );

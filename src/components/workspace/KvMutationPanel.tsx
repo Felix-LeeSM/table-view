@@ -1,4 +1,5 @@
 import { type ChangeEvent, type Ref, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import {
@@ -92,6 +93,7 @@ export function KvMutationPanel({
   actionIntent = null,
   onMutationSuccess,
 }: KvMutationPanelProps) {
+  const { t } = useTranslation("workspace");
   const [form, setForm] = useState<MutationForm>(() =>
     mutationFormForValue(value),
   );
@@ -114,7 +116,7 @@ export function KvMutationPanel({
     key: value.key,
     type: value.value.type,
   });
-  const unsupported = unsupportedMutationMessage(value, mutationScope);
+  const unsupported = unsupportedMutationMessage(value, mutationScope, t);
   const collectionMutationsEnabled = mutationScope === "redis";
   const fieldClass =
     "rounded border border-border bg-background px-2 py-1 text-3xs outline-none";
@@ -182,9 +184,9 @@ export function KvMutationPanel({
   const previewCommand = (label: string, summary: string, command: string) =>
     preview({ kind: "command", label, summary, command });
 
-  const requireText = (raw: string, label: string) => {
+  const requireText = (raw: string, field: string) => {
     const trimmed = raw.trim();
-    if (!trimmed) preview(null, `${label} is required.`);
+    if (!trimmed) preview(null, t("kvMutation.error.fieldRequired", { field }));
     return trimmed;
   };
 
@@ -206,7 +208,7 @@ export function KvMutationPanel({
       const nextMember = requireText(form.entry, "ZSet member");
       if (!nextMember) return;
       if (!Number.isFinite(Number(form.score))) {
-        preview(null, "ZSet score must be a number.");
+        preview(null, t("kvMutation.error.zsetScoreNotNumber"));
         return;
       }
       previewCommand(
@@ -229,7 +231,7 @@ export function KvMutationPanel({
 
   const previewExact = (kind: "delete" | "persist", confirmKey: string) => {
     if (confirmKey !== value.key) {
-      preview(null, `Type the exact key before previewing ${kind}.`);
+      preview(null, t("kvMutation.error.typeExactBeforePreview", { kind }));
       return;
     }
     preview({
@@ -326,17 +328,19 @@ export function KvMutationPanel({
 
   return (
     <div className="mt-2 space-y-2 rounded border border-border bg-background/60 p-2">
-      <div className="font-medium text-secondary-foreground">Mutation</div>
+      <div className="font-medium text-secondary-foreground">
+        {t("kvMutation.sectionHeader")}
+      </div>
       {value.value.type === "string" && (
         <div className="space-y-1">
           <textarea
             ref={stringValueRef}
-            aria-label="String value"
+            aria-label={t("kvMutation.stringValue")}
             className="h-20 w-full resize-y rounded border border-border bg-background p-2 text-3xs outline-none"
             value={form.text}
             onChange={bind("text")}
           />
-          {action("Preview string set", () =>
+          {action(t("kvMutation.previewStringSet"), () =>
             preview({
               kind: "string",
               label: "String set",
@@ -348,36 +352,64 @@ export function KvMutationPanel({
       )}
       {collectionMutationsEnabled && value.value.type === "hash" && (
         <div className="grid gap-1">
-          {input("Hash field", "field", "field", firstEditInputRef)}
-          {input("Hash value", "entry", "value")}
-          {action("Preview HSET", () => previewCollectionMutation("HSET"))}
+          {input(
+            t("kvMutation.hashField"),
+            "field",
+            "field",
+            firstEditInputRef,
+          )}
+          {input(t("kvMutation.hashValue"), "entry", "value")}
+          {action(t("kvMutation.previewHset"), () =>
+            previewCollectionMutation("HSET"),
+          )}
         </div>
       )}
       {collectionMutationsEnabled && value.value.type === "list" && (
         <div className="grid gap-1">
-          {input("List value", "entry", "list value", firstEditInputRef)}
-          {action("Preview RPUSH", () => previewCollectionMutation("RPUSH"))}
+          {input(
+            t("kvMutation.listValue"),
+            "entry",
+            "list value",
+            firstEditInputRef,
+          )}
+          {action(t("kvMutation.previewRpush"), () =>
+            previewCollectionMutation("RPUSH"),
+          )}
         </div>
       )}
       {collectionMutationsEnabled && value.value.type === "set" && (
         <div className="grid gap-1">
-          {input("Set member", "entry", "set member", firstEditInputRef)}
-          {action("Preview SADD", () => previewCollectionMutation("SADD"))}
+          {input(
+            t("kvMutation.setMember"),
+            "entry",
+            "set member",
+            firstEditInputRef,
+          )}
+          {action(t("kvMutation.previewSadd"), () =>
+            previewCollectionMutation("SADD"),
+          )}
         </div>
       )}
       {collectionMutationsEnabled && value.value.type === "zSet" && (
         <div className="grid gap-1">
-          {input("ZSet score", "score", "score", firstEditInputRef)}
-          {input("ZSet member", "entry")}
-          {action("Preview ZADD", () => previewCollectionMutation("ZADD"))}
+          {input(
+            t("kvMutation.zsetScore"),
+            "score",
+            "score",
+            firstEditInputRef,
+          )}
+          {input(t("kvMutation.zsetMember"), "entry")}
+          {action(t("kvMutation.previewZadd"), () =>
+            previewCollectionMutation("ZADD"),
+          )}
         </div>
       )}
       <div className="grid gap-1 border-t border-border pt-2">
-        {input("Expire seconds", "expire")}
-        {action("Preview expire", () => {
+        {input(t("kvMutation.expireSeconds"), "expire")}
+        {action(t("kvMutation.previewExpire"), () => {
           const seconds = Number(form.expire);
           if (!Number.isInteger(seconds) || seconds <= 0) {
-            preview(null, "Expire seconds must be a positive integer.");
+            preview(null, t("kvMutation.error.expireNotPositive"));
             return;
           }
           preview({
@@ -389,19 +421,25 @@ export function KvMutationPanel({
         })}
       </div>
       <div className="grid gap-1 border-t border-border pt-2">
-        {input("Persist confirm key", "persistKey", "type exact key")}
-        {action("Preview persist", () =>
+        {input(
+          t("kvMutation.persistConfirmKey"),
+          "persistKey",
+          t("kvMutation.typeExactKey"),
+        )}
+        {action(t("kvMutation.previewPersist"), () =>
           previewExact("persist", form.persistKey),
         )}
       </div>
       <div className="grid gap-1 border-t border-border pt-2">
         {input(
-          "Delete confirm key",
+          t("kvMutation.deleteConfirmKey"),
           "deleteKey",
-          "type exact key",
+          t("kvMutation.typeExactKey"),
           deleteConfirmInputRef,
         )}
-        {action("Preview delete", () => previewExact("delete", form.deleteKey))}
+        {action(t("kvMutation.previewDelete"), () =>
+          previewExact("delete", form.deleteKey),
+        )}
       </div>
       {pending && (
         <div role="status" className="text-3xs text-secondary-foreground">
@@ -420,7 +458,9 @@ export function KvMutationPanel({
           disabled={saving}
           onClick={confirmPendingMutation}
         >
-          {saving ? "Applying" : `Confirm ${pending.label}`}
+          {saving
+            ? t("kvMutation.applying")
+            : t("kvMutation.confirmLabel", { label: pending.label })}
         </Button>
       )}
       <ConfirmDestructiveDialog
@@ -481,34 +521,41 @@ function analyzeKvMutationSafety(
 function unsupportedMutationMessage(
   envelope: KvValueEnvelope,
   mutationScope: KvMutationScope,
+  t: (key: string) => string,
 ): string | null {
   const { value } = envelope;
   if (mutationScope === "valkey" && value.type !== "string") {
-    return "Valkey direct mutation controls are only enabled for UTF-8 string keys.";
+    return t("kvMutation.unsupported.valkeyNonString");
   }
   switch (value.type) {
     case "string":
       return value.encoding === "utf8" && value.text !== undefined
         ? null
-        : "Binary string mutation is unsupported in this panel.";
+        : t("kvMutation.unsupported.binaryString");
     case "hash":
+      return value.done && value.nextCursor === "0"
+        ? null
+        : t("kvMutation.unsupported.partialHash");
     case "set":
       return value.done && value.nextCursor === "0"
         ? null
-        : `Partial ${value.type} previews cannot be mutated from this panel.`;
+        : t("kvMutation.unsupported.partialSet");
     case "list":
+      return value.entries.length >= value.total
+        ? null
+        : t("kvMutation.unsupported.partialList");
     case "zSet":
       return value.entries.length >= value.total
         ? null
-        : `Partial ${value.type === "zSet" ? "zset" : "list"} previews cannot be mutated from this panel.`;
+        : t("kvMutation.unsupported.partialZset");
     case "stream":
-      return "Stream value mutation is unsupported in this panel.";
+      return t("kvMutation.unsupported.stream");
     case "json":
-      return "JSON value mutation is unsupported in this panel.";
+      return t("kvMutation.unsupported.json");
     case "missing":
-      return "Missing keys cannot be mutated from this panel.";
+      return t("kvMutation.unsupported.missing");
     case "unsupported":
-      return value.message || "Unsupported Redis key type.";
+      return value.message || t("kvMutation.unsupported.unsupportedKeyType");
   }
 }
 

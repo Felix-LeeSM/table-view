@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { Loader2, Plug } from "lucide-react";
 import {
@@ -41,6 +42,7 @@ export default function ConnectionDialogFooter({
   onCancel,
   onSave,
 }: ConnectionDialogFooterProps) {
+  const { t } = useTranslation("featuresConnection");
   return (
     <>
       {/* Alerts — pinned outside the scroll container so Test result /
@@ -58,7 +60,7 @@ export default function ConnectionDialogFooter({
         slotName="test-feedback"
         state={feedbackState}
         message={feedbackMessage}
-        loadingText="Testing..."
+        loadingText={t("footer.testingText")}
         className="border-t border-border px-4 py-3"
       />
       {error && (
@@ -75,15 +77,19 @@ export default function ConnectionDialogFooter({
         <div className="flex items-center">
           <Button variant="ghost" size="sm" onClick={onTest} disabled={testing}>
             {testing ? <Loader2 className="animate-spin size-3.5" /> : <Plug />}
-            Test Connection
+            {t("footer.testConnection")}
           </Button>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={onCancel}>
-            Cancel
+            {t("footer.cancel")}
           </Button>
           <Button size="sm" onClick={onSave} disabled={saving}>
-            {saving ? "Saving..." : isEditing ? "Update" : "Save"}
+            {saving
+              ? t("footer.saving")
+              : isEditing
+                ? t("footer.update")
+                : t("footer.save")}
           </Button>
         </div>
       </div>

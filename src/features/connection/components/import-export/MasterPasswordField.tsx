@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Eye, EyeOff } from "lucide-react";
 import { Input } from "@components/ui/input";
 import { cn } from "@/lib/utils";
@@ -40,14 +41,18 @@ export default function MasterPasswordField({
   value,
   onChange,
   id,
-  label = "Master password",
+  label,
   autoFocus,
   minLength = 8,
   "aria-describedby": describedByProp,
   disabled,
-  placeholder = "At least 8 characters",
+  placeholder,
   helpText,
 }: MasterPasswordFieldProps) {
+  const { t } = useTranslation("featuresConnection");
+  const resolvedLabel = label ?? t("masterPassword.defaultLabel");
+  const resolvedPlaceholder =
+    placeholder ?? t("masterPassword.defaultPlaceholder");
   const [visible, setVisible] = useState(false);
   const reactId = useId();
   const inputId = id ?? `master-pw-${reactId}`;
@@ -56,7 +61,7 @@ export default function MasterPasswordField({
 
   const tooShort = value.length > 0 && value.length < minLength;
   const errorMessage = tooShort
-    ? `Master password must be at least ${minLength} characters.`
+    ? t("masterPassword.errorTooShort", { minLength })
     : null;
 
   // Compose aria-describedby from caller + internal regions.
@@ -71,7 +76,7 @@ export default function MasterPasswordField({
         htmlFor={inputId}
         className="block text-xs font-medium text-secondary-foreground"
       >
-        {label}
+        {resolvedLabel}
       </label>
       <div className="relative">
         <Input
@@ -83,7 +88,7 @@ export default function MasterPasswordField({
           autoComplete="new-password"
           spellCheck={false}
           disabled={disabled}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           aria-invalid={tooShort || undefined}
           aria-describedby={describedBy}
           className={cn(
@@ -93,7 +98,11 @@ export default function MasterPasswordField({
         />
         <button
           type="button"
-          aria-label={visible ? "Hide master password" : "Show master password"}
+          aria-label={
+            visible
+              ? t("masterPassword.hideAria")
+              : t("masterPassword.showAria")
+          }
           aria-pressed={visible}
           onClick={() => setVisible((v) => !v)}
           disabled={disabled}

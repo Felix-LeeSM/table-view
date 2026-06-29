@@ -10,6 +10,7 @@ import {
   updateMany,
   type CreateMongoIndexRequest,
 } from "@lib/tauri";
+import i18n from "@lib/i18n";
 import { idOnlyFilter } from "@lib/mongo/documentIdentity";
 import type { DocumentRecordHistoryQueryMode } from "@lib/runtime/history/recordHistoryEntry";
 import type { BulkWriteOp, BulkWriteResult } from "@/types/documentMutate";
@@ -113,8 +114,7 @@ export interface CreateMongoWriteDispatchersRequest extends MongoWriteExecutionA
   tabId: string;
 }
 
-const MONGO_QUERY_BULK_WRITE_PARTIAL_COMMIT_WARNING =
-  "MongoDB bulkWrite executes ordered operations but is not transactional in this app. If a later operation fails, earlier operations may already be committed; review the current collection state before retry.";
+// ponytail: module-scope constant removed; now resolved at call time via i18n.t
 
 export function createMongoWriteDispatchers({
   tabId,
@@ -153,7 +153,7 @@ export function createMongoWriteDispatchers({
       const detail = err instanceof Error ? err.message : String(err);
       const message =
         queryMode === "bulkWrite"
-          ? `${MONGO_QUERY_BULK_WRITE_PARTIAL_COMMIT_WARNING} ${detail}`
+          ? `${i18n.t("featuresMisc:mongo.bulkWritePartialCommitWarning")} ${detail}`
           : detail;
       failQuery(tabId, queryId, message);
       recordHistory({

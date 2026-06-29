@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
@@ -85,6 +86,7 @@ export default function DropColumnDialog({
   onClose,
   onColumnDropped,
 }: DropColumnDialogProps) {
+  const { t } = useTranslation("schemaDialogs");
   const [typingConfirm, setTypingConfirm] = useState("");
   const [cascade, setCascade] = useState(false);
   // Preview pane defaults open — auto-debounced fetch fills it as the
@@ -198,7 +200,7 @@ export default function DropColumnDialog({
     onClose();
   };
 
-  const ddlButtonLabel = showDdl ? "Hide DDL" : "Show DDL";
+  const ddlButtonLabel = showDdl ? t("hideDdl") : t("showDdl");
 
   return (
     <>
@@ -215,7 +217,7 @@ export default function DropColumnDialog({
           <div className="rounded-lg bg-secondary shadow-xl">
             <DialogHeader className="border-b border-border px-4 py-3">
               <DialogTitle className="text-sm font-semibold text-foreground">
-                Drop Column
+                {t("dropColumn.title")}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
                 {schemaName}.{tableName}.{columnName}
@@ -224,14 +226,14 @@ export default function DropColumnDialog({
 
             <div className="space-y-3 px-4 py-3">
               <p className="text-xs text-muted-foreground">
-                This action cannot be undone. Type the column name to confirm.
+                {t("dropColumn.warningText")}
               </p>
               <div>
                 <label
                   htmlFor="drop-column-typing-confirm"
                   className="mb-1 block text-xs font-medium text-secondary-foreground"
                 >
-                  Type the column name to confirm
+                  {t("dropColumn.typingConfirmLabel")}
                 </label>
                 <input
                   id="drop-column-typing-confirm"
@@ -239,7 +241,7 @@ export default function DropColumnDialog({
                   value={typingConfirm}
                   onChange={(e) => setTypingConfirm(e.target.value)}
                   placeholder={columnName}
-                  aria-label="Type the column name to confirm"
+                  aria-label={t("dropColumn.typingConfirmAria")}
                   autoFocus
                 />
               </div>
@@ -249,9 +251,9 @@ export default function DropColumnDialog({
                   checked={cascade}
                   onChange={(e) => setCascade(e.target.checked)}
                   className="rounded border-border"
-                  aria-label="CASCADE"
+                  aria-label={t("dropColumn.cascadeAria")}
                 />
-                Drop dependent objects (CASCADE)
+                {t("dropColumn.cascadeLabel")}
               </label>
             </div>
 
@@ -281,7 +283,7 @@ export default function DropColumnDialog({
                   {ddl.previewLoading ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />
-                      Generating preview…
+                      {t("generatingPreview")}
                     </div>
                   ) : ddl.previewError ? (
                     <pre
@@ -296,7 +298,7 @@ export default function DropColumnDialog({
                     </pre>
                   ) : (
                     <span className="text-xs italic text-muted-foreground">
-                      -- Type the column name to see the generated SQL
+                      {t("ddlHintTypeColumnName")}
                     </span>
                   )}
                 </div>
@@ -305,19 +307,19 @@ export default function DropColumnDialog({
 
             <DialogFooter className="border-t border-border px-4 py-3">
               <Button variant="ghost" size="sm" onClick={handleCancel}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 size="sm"
                 variant="destructive"
                 onClick={handleApply}
                 disabled={!canApply}
-                aria-label="Apply"
+                aria-label={t("apply")}
               >
                 {ddl.previewLoading ? (
                   <Loader2 className="animate-spin size-3.5" />
                 ) : null}
-                Apply
+                {t("apply")}
               </Button>
             </DialogFooter>
           </div>

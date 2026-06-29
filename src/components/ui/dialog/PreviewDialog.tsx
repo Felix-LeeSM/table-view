@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -102,8 +103,8 @@ export default function PreviewDialog({
   confirmDisabled = false,
   onConfirm,
   onCancel,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   tone = "default",
   className,
   confirmAriaLabel,
@@ -111,6 +112,9 @@ export default function PreviewDialog({
   copyAriaLabel,
   confirmButton,
 }: PreviewDialogProps) {
+  const { t } = useTranslation("ui");
+  const resolvedConfirmLabel = confirmLabel ?? t("confirm");
+  const resolvedCancelLabel = cancelLabel ?? t("cancel");
   return (
     <Dialog
       open
@@ -166,8 +170,11 @@ export default function PreviewDialog({
               data-testid="sql-preview-commit-error"
             >
               <div className="font-semibold">
-                executed: {commitError.statementIndex}, failed at:{" "}
-                {commitError.statementIndex + 1} of {commitError.statementCount}
+                {t("commitError.summary", {
+                  statementIndex: commitError.statementIndex,
+                  failedAt: commitError.statementIndex + 1,
+                  statementCount: commitError.statementCount,
+                })}
               </div>
               <div className="mt-1 break-words">{commitError.message}</div>
               <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded border border-destructive/30 bg-background/40 p-2 text-xs font-mono">
@@ -185,7 +192,7 @@ export default function PreviewDialog({
               onClick={onCancel}
               disabled={loading}
             >
-              {cancelLabel}
+              {resolvedCancelLabel}
             </Button>
             {confirmButton ? (
               confirmButton
@@ -197,7 +204,7 @@ export default function PreviewDialog({
                 disabled={loading || confirmDisabled}
                 aria-label={confirmAriaLabel}
               >
-                {confirmLabel}
+                {resolvedConfirmLabel}
               </Button>
             )}
           </DialogFooter>

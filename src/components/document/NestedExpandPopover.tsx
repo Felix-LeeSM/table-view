@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronRight, Pencil } from "lucide-react";
 import {
   Popover,
@@ -104,6 +105,7 @@ export default function NestedExpandPopover({
   onCommitEdit,
   pendingByPath,
 }: NestedExpandPopoverProps) {
+  const { t } = useTranslation("document");
   const [open, setOpen] = useState(false);
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [draft, setDraft] = useState<string>("");
@@ -157,15 +159,15 @@ export default function NestedExpandPopover({
 
   const containerLabel =
     expansion.containerKind === "array"
-      ? `array (${expansion.entries.length} items)`
-      : `object (${expansion.entries.length} fields)`;
+      ? t("nestedPopover.containerArray", { count: expansion.entries.length })
+      : t("nestedPopover.containerObject", { count: expansion.entries.length });
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={`Expand nested ${fieldName}`}
+          aria-label={t("nestedPopover.expandAriaLabel", { fieldName })}
           aria-expanded={open}
           className="ml-1 inline-flex shrink-0 items-center justify-center rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
           onClick={(e) => {
@@ -184,7 +186,7 @@ export default function NestedExpandPopover({
       >
         <div
           role="region"
-          aria-label={`Nested fields for ${fieldName}`}
+          aria-label={t("nestedPopover.regionAriaLabel", { fieldName })}
           className="flex flex-col"
         >
           <div className="border-b border-border bg-secondary px-2.5 py-1.5 text-3xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -192,7 +194,7 @@ export default function NestedExpandPopover({
           </div>
           {expansion.entries.length === 0 ? (
             <div className="px-2.5 py-2 text-xs italic text-muted-foreground">
-              empty
+              {t("nestedPopover.empty")}
             </div>
           ) : (
             <ul className="max-h-72 overflow-auto py-1 text-xs">
@@ -232,7 +234,10 @@ export default function NestedExpandPopover({
                               ? pendingValue
                               : entry.value
                           }
-                          ariaLabel={`Editing ${fieldName}.${path}`}
+                          ariaLabel={t("nestedPopover.editingAriaLabel", {
+                            fieldName,
+                            path,
+                          })}
                           onCommit={(wrapped) => commitEdit(wrapped)}
                           onCancel={cancelEdit}
                         />
@@ -240,7 +245,10 @@ export default function NestedExpandPopover({
                         <input
                           type="text"
                           autoFocus
-                          aria-label={`Editing ${fieldName}.${path}`}
+                          aria-label={t("nestedPopover.editingAriaLabel", {
+                            fieldName,
+                            path,
+                          })}
                           className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none ring-1 ring-primary"
                           value={draft}
                           onChange={(e) => setDraft(e.target.value)}
@@ -283,7 +291,10 @@ export default function NestedExpandPopover({
                     {canEdit && !isEditing && (
                       <button
                         type="button"
-                        aria-label={`Edit ${fieldName}.${path}`}
+                        aria-label={t("nestedPopover.editAriaLabel", {
+                          fieldName,
+                          path,
+                        })}
                         className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                         onClick={(e) => {
                           e.stopPropagation();

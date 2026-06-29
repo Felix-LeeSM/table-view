@@ -52,12 +52,12 @@ import type { RdbTreeShape } from "../treeShape";
 // 사용자에게 알리며 종료. UI 는 모든 driver 에 동일하게 노출한다.
 const EXPORT_MODES: ReadonlyArray<{
   include: ExportInclude;
-  label: string;
+  labelKey: string;
   Icon: typeof FileText;
 }> = [
-  { include: "ddl", label: "DDL (CREATE only)", Icon: FileText },
-  { include: "dml", label: "Data (INSERT only)", Icon: Rows3 },
-  { include: "both", label: "Full dump (DDL + data)", Icon: Database },
+  { include: "ddl", labelKey: "ddlTitle", Icon: FileText },
+  { include: "dml", labelKey: "dmlTitle", Icon: Rows3 },
+  { include: "both", labelKey: "fullDumpTitle", Icon: Database },
 ];
 
 /**
@@ -70,6 +70,7 @@ const EXPORT_MODES: ReadonlyArray<{
  */
 
 export interface SchemaTreeRowsContext {
+  t: (key: string, options?: Record<string, unknown>) => string;
   dbType: string | undefined;
   // Sprint 380 — needed by category/item row renderers to choose a
   // 3-way indent class (PG `with-schema` → deepest, MySQL `no-schema`
@@ -149,20 +150,20 @@ export function renderSchemaRow(
       <ContextMenuContent>
         <ContextMenuItem onClick={() => ctx.handleCreateTable(row.schemaName)}>
           <Plus size={14} />
-          Create Table…
+          {ctx.t("createTableMenu")}
         </ContextMenuItem>
         <ContextMenuSub>
           <ContextMenuSubTrigger>
             <Download size={14} />
-            Export Schema…
+            {ctx.t("exportSchemaMenu")}
           </ContextMenuSubTrigger>
           <ContextMenuSubContent>
-            {EXPORT_MODES.map(({ include, label, Icon }) => (
+            {EXPORT_MODES.map(({ include, labelKey, Icon }) => (
               <ContextMenuItem
                 key={include}
                 onClick={() => ctx.handleExportSchema(row.schemaName, include)}
               >
-                <Icon size={14} /> {label}
+                <Icon size={14} /> {ctx.t(labelKey)}
               </ContextMenuItem>
             ))}
           </ContextMenuSubContent>
@@ -171,7 +172,7 @@ export function renderSchemaRow(
           onClick={() => ctx.handleRefreshSchema(row.schemaName)}
         >
           <RefreshCw size={14} />
-          Refresh
+          {ctx.t("refresh")}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -204,7 +205,7 @@ export function renderCategoryRow(
         role="treeitem"
         aria-level={ctx.treeShape === "no-schema" ? 1 : 2}
         aria-expanded={row.isExpanded}
-        aria-label={`${cat.label} in ${row.schemaName}`}
+        aria-label={`${ctx.t(cat.labelKey)} in ${row.schemaName}`}
         aria-selected={row.isSelected}
         onClick={() => ctx.toggleCategory(row.schemaName, cat.key)}
         onKeyDown={(e) => {
@@ -220,7 +221,7 @@ export function renderCategoryRow(
           <ChevronRight size={11} className="shrink-0" />
         )}
         <cat.Icon size={12} className="shrink-0 text-muted-foreground" />
-        <span>{cat.label}</span>
+        <span>{ctx.t(cat.labelKey)}</span>
       </button>
       <div className="ml-auto flex shrink-0 items-center gap-1 pr-2">
         {isTables && (
@@ -231,8 +232,8 @@ export function renderCategoryRow(
               ctx.handleCreateTable(row.schemaName);
             }}
             className="inline-flex h-4 w-4 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label={`Create table in ${row.schemaName}`}
-            title="Create Table"
+            aria-label={ctx.t("createTableInAria", { schema: row.schemaName })}
+            title={ctx.t("createTableTitle")}
           >
             <Plus size={12} />
           </button>
@@ -257,7 +258,7 @@ export function renderSearchRow(
       <input
         type="text"
         className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-2xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-        placeholder="Filter tables..."
+        placeholder={ctx.t("filterTablesPlaceholder")}
         value={row.searchValue}
         onChange={(e) =>
           ctx.setTableSearch((prev) => ({
@@ -265,7 +266,7 @@ export function renderSearchRow(
             [row.schemaName]: e.target.value,
           }))
         }
-        aria-label={`Filter tables in ${row.schemaName}`}
+        aria-label={ctx.t("filterTablesAria", { schema: row.schemaName })}
       />
       {row.searchValue && (
         <Button
@@ -278,7 +279,7 @@ export function renderSearchRow(
               return next;
             })
           }
-          aria-label={`Clear table filter in ${row.schemaName}`}
+          aria-label={ctx.t("clearTableFilterAria", { schema: row.schemaName })}
         >
           <X />
         </Button>
@@ -287,12 +288,15 @@ export function renderSearchRow(
   );
 }
 
-export function renderEmptyRow(row: Extract<VisibleRow, { kind: "empty" }>) {
+export function renderEmptyRow(
+  row: Extract<VisibleRow, { kind: "empty" }>,
+  ctx: SchemaTreeRowsContext,
+) {
   return (
     <div className="px-10 py-1 text-2xs italic text-muted-foreground">
       {row.category.key === "tables" && row.hasActiveSearch
-        ? "No matching tables"
-        : row.category.emptyLabel}
+        ? ctx.t("noMatchingTablesEmpty")
+        : ctx.t(row.category.emptyLabelKey)}
     </div>
   );
 }
@@ -491,12 +495,12 @@ export function renderItemRow(
             <ContextMenuItem
               onClick={() => ctx.handleOpenStructure(item.name, row.schemaName)}
             >
-              <Columns3 size={14} /> Structure
+              <Columns3 size={14} /> {ctx.t("structure")}
             </ContextMenuItem>
             <ContextMenuItem
               onClick={() => ctx.handleTableClick(item.name, row.schemaName)}
             >
-              <Table2 size={14} /> Data
+              <Table2 size={14} /> {ctx.t("data")}
             </ContextMenuItem>
             {/* Sprint 275 — trigger entries removed from the Table row
                 context menu. Trigger CRUD now lives entirely on the
@@ -505,17 +509,17 @@ export function renderItemRow(
                 table-row shortcuts either, so this restores consistency. */}
             <ContextMenuSub>
               <ContextMenuSubTrigger>
-                <Download size={14} /> Export Table…
+                <Download size={14} /> {ctx.t("exportTableMenu")}
               </ContextMenuSubTrigger>
               <ContextMenuSubContent>
-                {EXPORT_MODES.map(({ include, label, Icon }) => (
+                {EXPORT_MODES.map(({ include, labelKey, Icon }) => (
                   <ContextMenuItem
                     key={include}
                     onClick={() =>
                       ctx.handleExportTable(item.name, row.schemaName, include)
                     }
                   >
-                    <Icon size={14} /> {label}
+                    <Icon size={14} /> {ctx.t(labelKey)}
                   </ContextMenuItem>
                 ))}
               </ContextMenuSubContent>
@@ -523,13 +527,13 @@ export function renderItemRow(
             <ContextMenuItem
               onClick={() => ctx.handleStartRename(item.name, row.schemaName)}
             >
-              <Pencil size={14} /> Rename
+              <Pencil size={14} /> {ctx.t("rename")}
             </ContextMenuItem>
             <ContextMenuItem
               danger
               onClick={() => ctx.handleDropTable(item.name, row.schemaName)}
             >
-              <Trash2 size={14} /> Drop
+              <Trash2 size={14} /> {ctx.t("drop")}
             </ContextMenuItem>
           </>
         ) : isView ? (
@@ -539,19 +543,19 @@ export function renderItemRow(
                 ctx.handleOpenViewStructure(item.name, row.schemaName)
               }
             >
-              <Columns3 size={14} /> Structure
+              <Columns3 size={14} /> {ctx.t("structure")}
             </ContextMenuItem>
             <ContextMenuItem
               onClick={() => ctx.handleViewClick(item.name, row.schemaName)}
             >
-              <Table2 size={14} /> Data
+              <Table2 size={14} /> {ctx.t("data")}
             </ContextMenuItem>
           </>
         ) : (
           <ContextMenuItem
             onClick={() => ctx.handleFunctionClick(item.name, row.schemaName)}
           >
-            <Code2 size={14} /> View Source
+            <Code2 size={14} /> {ctx.t("viewSource")}
           </ContextMenuItem>
         )}
       </ContextMenuContent>
@@ -572,7 +576,7 @@ export function renderVisibleRow(
     case "loading":
       return (
         <div className="px-8 py-1 text-xs text-muted-foreground">
-          Loading...
+          {ctx.t("loadingTables")}
         </div>
       );
     case "category":
@@ -580,7 +584,7 @@ export function renderVisibleRow(
     case "search":
       return renderSearchRow(row, ctx);
     case "empty":
-      return renderEmptyRow(row);
+      return renderEmptyRow(row, ctx);
     case "item":
       return renderItemRow(row, ctx);
   }

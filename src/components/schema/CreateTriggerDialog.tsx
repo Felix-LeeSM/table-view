@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
@@ -116,6 +117,7 @@ export default function CreateTriggerDialog({
   onClose,
   onRefresh,
 }: CreateTriggerDialogProps) {
+  const { t } = useTranslation("schemaDialogs");
   const dialogId = useId();
   const [triggerName, setTriggerName] = useState("");
   const [timing, setTiming] = useState<(typeof TIMINGS)[number]>("BEFORE");
@@ -191,11 +193,11 @@ export default function CreateTriggerDialog({
   const eventsArray = useMemo(() => Array.from(events), [events]);
   const insteadOfMultiEventError =
     timing === "INSTEAD OF" && eventsArray.length > 1
-      ? "INSTEAD OF triggers must declare exactly one event"
+      ? t("createTrigger.insteadOfMultiEvent")
       : null;
   const insteadOfStatementError =
     timing === "INSTEAD OF" && orientation === "STATEMENT"
-      ? "INSTEAD OF triggers must use FOR EACH ROW"
+      ? t("createTrigger.insteadOfStatement")
       : null;
 
   const canPreview =
@@ -286,7 +288,7 @@ export default function CreateTriggerDialog({
     onClose();
   };
 
-  const ddlButtonLabel = showDdl ? "Hide DDL" : "Show DDL";
+  const ddlButtonLabel = showDdl ? t("hideDdl") : t("showDdl");
   const functionListId = `${dialogId}-function-list`;
 
   return (
@@ -304,7 +306,7 @@ export default function CreateTriggerDialog({
           <div className="rounded-lg bg-secondary shadow-xl">
             <DialogHeader className="border-b border-border px-4 py-3">
               <DialogTitle className="text-sm font-semibold text-foreground">
-                Create Trigger
+                {t("createTrigger.title")}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
                 {schemaName}.{tableName}
@@ -318,22 +320,22 @@ export default function CreateTriggerDialog({
                   htmlFor={`${dialogId}-name`}
                   className="mb-1 block text-xs font-medium text-secondary-foreground"
                 >
-                  Trigger name
+                  {t("createTrigger.triggerNameLabel")}
                 </label>
                 <input
                   id={`${dialogId}-name`}
                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                   value={triggerName}
                   onChange={(e) => setTriggerName(e.target.value)}
-                  placeholder="trigger_name"
-                  aria-label="Trigger name"
+                  placeholder={t("createTrigger.triggerNamePlaceholder")}
+                  aria-label={t("createTrigger.triggerNameAria")}
                   autoFocus
                 />
                 {triggerNameError && triggerName.length > 0 && (
                   <p
                     className="mt-1 text-xs text-destructive"
                     role="alert"
-                    aria-label="Trigger name validation error"
+                    aria-label={t("createTrigger.triggerNameErrorAria")}
                   >
                     {triggerNameError}
                   </p>
@@ -341,9 +343,12 @@ export default function CreateTriggerDialog({
               </div>
 
               {/* Timing radio group */}
-              <div role="radiogroup" aria-label="Timing">
+              <div
+                role="radiogroup"
+                aria-label={t("createTrigger.timingGroupAria")}
+              >
                 <span className="mb-1 block text-xs font-medium text-secondary-foreground">
-                  Timing
+                  {t("createTrigger.timingLabel")}
                 </span>
                 <div className="flex gap-3">
                   {TIMINGS.map((option) => (
@@ -357,7 +362,9 @@ export default function CreateTriggerDialog({
                         value={option}
                         checked={timing === option}
                         onChange={() => setTiming(option)}
-                        aria-label={`Timing ${option}`}
+                        aria-label={t("createTrigger.timingOptionAria", {
+                          option,
+                        })}
                       />
                       {option}
                     </label>
@@ -366,9 +373,9 @@ export default function CreateTriggerDialog({
               </div>
 
               {/* Events checkbox group */}
-              <div role="group" aria-label="Events">
+              <div role="group" aria-label={t("createTrigger.eventsGroupAria")}>
                 <span className="mb-1 block text-xs font-medium text-secondary-foreground">
-                  Events
+                  {t("createTrigger.eventsLabel")}
                 </span>
                 <div className="flex gap-3">
                   {EVENTS.map((event) => (
@@ -380,7 +387,9 @@ export default function CreateTriggerDialog({
                         type="checkbox"
                         checked={events.has(event)}
                         onChange={() => toggleEvent(event)}
-                        aria-label={`Event ${event}`}
+                        aria-label={t("createTrigger.eventOptionAria", {
+                          event,
+                        })}
                       />
                       {event}
                     </label>
@@ -390,16 +399,16 @@ export default function CreateTriggerDialog({
                   <p
                     className="mt-1 text-xs text-destructive"
                     role="alert"
-                    aria-label="Events validation error"
+                    aria-label={t("createTrigger.eventsErrorAria")}
                   >
-                    Select at least one event
+                    {t("createTrigger.selectAtLeastOneEvent")}
                   </p>
                 )}
                 {insteadOfMultiEventError && (
                   <p
                     className="mt-1 text-xs text-destructive"
                     role="alert"
-                    aria-label="INSTEAD OF multi-event error"
+                    aria-label={t("createTrigger.insteadOfMultiEventAria")}
                   >
                     {insteadOfMultiEventError}
                   </p>
@@ -407,9 +416,12 @@ export default function CreateTriggerDialog({
               </div>
 
               {/* Orientation radio group */}
-              <div role="radiogroup" aria-label="Orientation">
+              <div
+                role="radiogroup"
+                aria-label={t("createTrigger.orientationGroupAria")}
+              >
                 <span className="mb-1 block text-xs font-medium text-secondary-foreground">
-                  For each
+                  {t("createTrigger.orientationLabel")}
                 </span>
                 <div className="flex gap-3">
                   {ORIENTATIONS.map((option) => {
@@ -427,7 +439,9 @@ export default function CreateTriggerDialog({
                           checked={orientation === option}
                           disabled={isDisabled}
                           onChange={() => setOrientation(option)}
-                          aria-label={`Orientation ${option}`}
+                          aria-label={t("createTrigger.orientationOptionAria", {
+                            option,
+                          })}
                         />
                         {option}
                       </label>
@@ -438,7 +452,7 @@ export default function CreateTriggerDialog({
                   <p
                     className="mt-1 text-xs text-destructive"
                     role="alert"
-                    aria-label="INSTEAD OF statement error"
+                    aria-label={t("createTrigger.insteadOfStatementAria")}
                   >
                     {insteadOfStatementError}
                   </p>
@@ -451,23 +465,23 @@ export default function CreateTriggerDialog({
                   htmlFor={`${dialogId}-when`}
                   className="mb-1 block text-xs font-medium text-secondary-foreground"
                 >
-                  WHEN (optional)
+                  {t("createTrigger.whenLabel")}
                 </label>
                 <textarea
                   id={`${dialogId}-when`}
                   className="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground outline-none focus:border-primary"
                   value={whenExpression}
                   onChange={(e) => setWhenExpression(e.target.value)}
-                  placeholder="e.g. NEW.email IS DISTINCT FROM OLD.email"
+                  placeholder={t("createTrigger.whenPlaceholder")}
                   rows={2}
-                  aria-label="WHEN expression"
+                  aria-label={t("createTrigger.whenAria")}
                 />
               </div>
 
               {/* Function picker — schema + name */}
               <div>
                 <span className="mb-1 block text-xs font-medium text-secondary-foreground">
-                  Execute function
+                  {t("createTrigger.executeFunctionLabel")}
                 </span>
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
                   <input
@@ -475,8 +489,8 @@ export default function CreateTriggerDialog({
                     className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                     value={functionSchema}
                     onChange={(e) => setFunctionSchema(e.target.value)}
-                    placeholder="schema"
-                    aria-label="Function schema"
+                    placeholder={t("createTrigger.functionSchemaPlaceholder")}
+                    aria-label={t("createTrigger.functionSchemaAria")}
                   />
                   <span className="text-xs text-muted-foreground">.</span>
                   <input
@@ -499,8 +513,8 @@ export default function CreateTriggerDialog({
                         setFunctionName(match.name);
                       }
                     }}
-                    placeholder="function_name"
-                    aria-label="Function name"
+                    placeholder={t("createTrigger.functionNamePlaceholder")}
+                    aria-label={t("createTrigger.functionNameAria")}
                     list={functionListId}
                   />
                   <datalist id={functionListId}>
@@ -516,7 +530,7 @@ export default function CreateTriggerDialog({
                   <p
                     className="mt-1 text-xs text-destructive"
                     role="alert"
-                    aria-label="Function schema validation error"
+                    aria-label={t("createTrigger.functionSchemaErrorAria")}
                   >
                     {functionSchemaError}
                   </p>
@@ -525,7 +539,7 @@ export default function CreateTriggerDialog({
                   <p
                     className="mt-1 text-xs text-destructive"
                     role="alert"
-                    aria-label="Function name validation error"
+                    aria-label={t("createTrigger.functionNameErrorAria")}
                   >
                     {functionNameError}
                   </p>
@@ -538,15 +552,15 @@ export default function CreateTriggerDialog({
                   htmlFor={`${dialogId}-fn-args`}
                   className="mb-1 block text-xs font-medium text-secondary-foreground"
                 >
-                  Arguments (optional)
+                  {t("createTrigger.argumentsLabel")}
                 </label>
                 <input
                   id={`${dialogId}-fn-args`}
                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                   value={functionArguments}
                   onChange={(e) => setFunctionArguments(e.target.value)}
-                  placeholder="e.g. 'arg1', 'arg2'"
-                  aria-label="Function arguments"
+                  placeholder={t("createTrigger.argumentsPlaceholder")}
+                  aria-label={t("createTrigger.argumentsAria")}
                 />
               </div>
             </div>
@@ -575,7 +589,7 @@ export default function CreateTriggerDialog({
                   {ddl.previewLoading ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />
-                      Generating preview…
+                      {t("generatingPreview")}
                     </div>
                   ) : ddl.previewError ? (
                     <pre
@@ -590,8 +604,7 @@ export default function CreateTriggerDialog({
                     </pre>
                   ) : (
                     <span className="text-xs italic text-muted-foreground">
-                      -- Fill in trigger name + function to see the generated
-                      SQL
+                      {t("ddlHintFillTrigger")}
                     </span>
                   )}
                 </div>
@@ -600,18 +613,18 @@ export default function CreateTriggerDialog({
 
             <DialogFooter className="border-t border-border px-4 py-3">
               <Button variant="ghost" size="sm" onClick={handleCancel}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 size="sm"
                 onClick={handleApply}
                 disabled={!canApply}
-                aria-label="Apply"
+                aria-label={t("createTrigger.applyAria")}
               >
                 {ddl.previewLoading ? (
                   <Loader2 className="animate-spin size-3.5" />
                 ) : null}
-                Apply
+                {t("apply")}
               </Button>
             </DialogFooter>
           </div>

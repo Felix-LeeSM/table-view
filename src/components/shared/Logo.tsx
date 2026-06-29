@@ -1,13 +1,16 @@
+import { useTranslation } from "react-i18next";
+
 interface LogoProps {
   className?: string;
 }
 
 export function LogoWordmark({ className }: LogoProps) {
+  const { t } = useTranslation("shared");
   return (
     <>
       <img
         src="/logo-wordmark.svg"
-        alt="Table View"
+        alt={t("logoAlt")}
         className={`block dark:hidden ${className ?? ""}`.trim()}
         draggable={false}
       />

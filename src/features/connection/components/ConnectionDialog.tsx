@@ -50,6 +50,7 @@
 // ---------------------------------------------------------------------------
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ConnectionConfig, ConnectionDraft } from "../model";
 import {
   DATABASE_DEFAULTS,
@@ -106,6 +107,7 @@ export default function ConnectionDialog({
   connection,
   onClose,
 }: ConnectionDialogProps) {
+  const { t } = useTranslation("featuresConnection");
   const [inputMode, setInputMode] = useState<"form" | "url">("form");
   const [testResult, setTestResult] = useState<TestResultState>({
     status: "idle",
@@ -193,17 +195,17 @@ export default function ConnectionDialog({
     // covered Name; the trim helper centralises the policy.
     const trimmed = trimDraft({ ...form, password: resolvePassword() });
     if (!trimmed.name) {
-      setError("Name is required");
+      setError(t("dialog.errorNameRequired"));
       return;
     }
     // File-backed DBMSes use `database` as the file path; host is irrelevant.
     // The host check applies only to network DBMSes.
     if (!isFileConnection && !trimmed.host) {
-      setError("Host is required");
+      setError(t("dialog.errorHostRequired"));
       return;
     }
     if (isFileConnection && !trimmed.database) {
-      setError("Database file is required");
+      setError(t("dialog.errorDatabaseFileRequired"));
       return;
     }
     // Sprint 345 — non-SQLite DBMSes also require a database name.
@@ -221,8 +223,8 @@ export default function ConnectionDialog({
     if (!isFileConnection && !isMongo && !isSearch && !trimmed.database) {
       setError(
         trimmed.dbType === "oracle"
-          ? "Service name is required"
-          : "Database is required",
+          ? t("dialog.errorServiceNameRequired")
+          : t("dialog.errorDatabaseRequired"),
       );
       return;
     }
@@ -278,18 +280,16 @@ export default function ConnectionDialog({
             id="dialog-title"
             className="text-sm font-semibold text-foreground"
           >
-            {isEditing ? "Edit Connection" : "New Connection"}
+            {isEditing ? t("dialog.titleEdit") : t("dialog.titleNew")}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            {isEditing
-              ? "Edit the connection details"
-              : "Create a new database connection"}
+            {isEditing ? t("dialog.descEdit") : t("dialog.descNew")}
           </DialogDescription>
           <Button
             variant="ghost"
             size="icon-xs"
             onClick={onClose}
-            aria-label="Close dialog"
+            aria-label={t("dialog.closeAria")}
           >
             <X />
           </Button>
@@ -333,9 +333,16 @@ export default function ConnectionDialog({
       </DialogContent>
       {pendingDbTypeChange && (
         <ConfirmDialog
-          title="Replace custom port?"
-          message={`Switching from ${form.dbType} to ${pendingDbTypeChange.to} will reset port ${form.port} → ${DATABASE_DEFAULTS[pendingDbTypeChange.to]}. Continue?`}
-          confirmLabel={`Use default port ${DATABASE_DEFAULTS[pendingDbTypeChange.to]}`}
+          title={t("dialog.replacePortTitle")}
+          message={t("dialog.replacePortMessage", {
+            from: form.dbType,
+            to: pendingDbTypeChange.to,
+            port: form.port,
+            defaultPort: DATABASE_DEFAULTS[pendingDbTypeChange.to],
+          })}
+          confirmLabel={t("dialog.replacePortConfirm", {
+            defaultPort: DATABASE_DEFAULTS[pendingDbTypeChange.to],
+          })}
           onConfirm={handleConfirmDbTypeReplace}
           onCancel={handleCancelDbTypeReplace}
         />

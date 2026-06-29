@@ -18,6 +18,7 @@ import {
   useRef,
   useEffect,
 } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronRight,
   ChevronDown,
@@ -162,6 +163,7 @@ export function DocumentTreePanel({
   onClose,
   forbiddenRootKeys,
 }: DocumentTreePanelProps) {
+  const { t } = useTranslation("document");
   // Sprint 344 Slice A — feed pendingByPath into the tree builder so
   // paths that exist only as pending adds render as ghost nodes
   // alongside `value`'s real children. Empty / undefined pendingByPath
@@ -498,7 +500,7 @@ export function DocumentTreePanel({
 
   return (
     <section
-      aria-label="Document tree"
+      aria-label={t("treePanel.ariaLabel")}
       data-testid="document-tree-panel"
       className="flex flex-col gap-2 bg-secondary/30 px-4 py-3"
     >
@@ -513,7 +515,7 @@ export function DocumentTreePanel({
               data-testid="document-tree-pending-pill"
               className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-3xs text-amber-400"
             >
-              {pendingCount} unsaved edit{pendingCount > 1 ? "s" : ""}
+              {t("treePanel.unsavedEdits", { count: pendingCount })}
             </span>
           )}
         </div>
@@ -523,7 +525,7 @@ export function DocumentTreePanel({
             size="sm"
             data-testid="document-tree-close"
             onClick={onClose}
-            aria-label="Close tree panel"
+            aria-label={t("treePanel.closeAriaLabel")}
           >
             <X size={14} aria-hidden />
           </Button>
@@ -542,14 +544,16 @@ export function DocumentTreePanel({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={
-              searchRegex ? "Regex (e.g. ^Gloss\\w+)" : "Search keys / values…"
+              searchRegex
+                ? t("treePanel.searchPlaceholderRegex")
+                : t("treePanel.searchPlaceholderNormal")
             }
             data-testid="document-tree-search"
             className="w-full rounded-md border border-border bg-background py-1 pl-7 pr-12 text-xs"
           />
           <label
             className="absolute right-1 top-1/2 inline-flex -translate-y-1/2 cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-3xs uppercase tracking-wider text-muted-foreground has-[:checked]:bg-primary has-[:checked]:text-primary-foreground"
-            title="Match by JavaScript regex (case-insensitive)"
+            title={t("treePanel.regexToggleTitle")}
           >
             <input
               type="checkbox"
@@ -566,12 +570,12 @@ export function DocumentTreePanel({
           data-testid="document-tree-stats"
           className="flex flex-wrap gap-1.5 text-3xs"
         >
-          <StatPill label="NODES" value={stats.nodes} />
-          <StatPill label="KEYS" value={stats.keys} />
-          <StatPill label="DEPTH" value={stats.depth} />
-          <StatPill label="OBJ" value={stats.objects} />
-          <StatPill label="ARR" value={stats.arrays} />
-          <StatPill label="MAX" value={stats.maxArray} />
+          <StatPill label={t("treePanel.statNodes")} value={stats.nodes} />
+          <StatPill label={t("treePanel.statKeys")} value={stats.keys} />
+          <StatPill label={t("treePanel.statDepth")} value={stats.depth} />
+          <StatPill label={t("treePanel.statObj")} value={stats.objects} />
+          <StatPill label={t("treePanel.statArr")} value={stats.arrays} />
+          <StatPill label={t("treePanel.statMax")} value={stats.maxArray} />
         </dl>
       </div>
 
@@ -687,7 +691,9 @@ export function DocumentTreePanel({
                     className="inline-flex items-center align-middle text-muted-foreground"
                     data-testid={`tree-twist-${node.path || "__root"}`}
                     aria-expanded={!isCollapsed}
-                    aria-label={`Toggle ${node.label}`}
+                    aria-label={t("treePanel.toggleAriaLabel", {
+                      label: node.label,
+                    })}
                   >
                     {isCollapsed ? (
                       <ChevronRight size={12} aria-hidden />
@@ -760,12 +766,12 @@ export function DocumentTreePanel({
                       <NewBadge />
                     ) : isPendingUnset(pending) ? (
                       <span className="ml-2 text-3xs text-rose-500">
-                        ● will delete
+                        {t("treePanel.willDelete")}
                       </span>
                     ) : (
                       pending !== undefined && (
                         <span className="ml-2 text-3xs text-amber-400">
-                          ● edited
+                          {t("treePanel.edited")}
                         </span>
                       )
                     )}
@@ -780,8 +786,10 @@ export function DocumentTreePanel({
                         <button
                           type="button"
                           data-testid={`tree-delete-${node.path}`}
-                          aria-label={`Delete ${node.path}`}
-                          title="Mark this field for $unset on Save"
+                          aria-label={t("treePanel.deleteFieldAriaLabel", {
+                            path: node.path,
+                          })}
+                          title={t("treePanel.deleteFieldTitle")}
                           onClick={() => onCommitEdit(node.path, UNSET_OP)}
                           className="ml-2 inline-flex items-center align-middle text-muted-foreground transition-colors hover:text-rose-500"
                         >
@@ -831,7 +839,10 @@ export function DocumentTreePanel({
                           <BsonTypeEditor
                             type={parsed.type}
                             initialValue={parsed.ejson}
-                            ariaLabel={`Editing ${node.path} (${parsed.type})`}
+                            ariaLabel={t("treePanel.editingAriaLabel", {
+                              path: node.path,
+                              type: parsed.type,
+                            })}
                             onCommit={(v) => {
                               if (onCommitEdit) onCommitEdit(node.path, v);
                               setEditingPath(null);
@@ -911,9 +922,12 @@ function AddKeyRow({
   keyInputRef: React.RefObject<HTMLInputElement | null>;
   valueInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
+  const { t } = useTranslation("document");
   const indent = (parentDepth + 1) * 16;
   const pathKey = parentPath || "__root";
-  const ariaLabel = `Add key to ${parentPath === "" ? "root" : parentPath}`;
+  const ariaLabel = t("treePanel.addKeyAriaLabel", {
+    target: parentPath === "" ? "root" : parentPath,
+  });
 
   if (!isOpen) {
     return (
@@ -931,7 +945,7 @@ function AddKeyRow({
           className="inline-flex items-center gap-1 rounded border border-dashed border-muted-foreground/40 px-2 py-0 text-3xs text-muted-foreground hover:border-primary hover:text-primary"
         >
           <Plus size={10} aria-hidden />
-          <span>+ key</span>
+          <span>{t("treePanel.addKeyButton")}</span>
         </button>
       </div>
     );
@@ -982,7 +996,9 @@ function AddKeyRow({
           onChange={(e) => onKeyDraftChange(e.target.value)}
           onKeyDown={onKeyKeyDown}
           placeholder="key"
-          aria-label={`${ariaLabel} — key`}
+          aria-label={t("treePanel.addKeyInputAriaLabel", {
+            parent: ariaLabel,
+          })}
           aria-invalid={addError !== null ? "true" : undefined}
           data-testid={`tree-add-key-input-${pathKey}`}
           className="inline-block w-32 rounded border border-primary bg-background px-1 text-foreground"
@@ -995,7 +1011,9 @@ function AddKeyRow({
           onChange={(e) => onValueDraftChange(e.target.value)}
           onKeyDown={onValueKeyDown}
           placeholder="value"
-          aria-label={`${ariaLabel} — value`}
+          aria-label={t("treePanel.addValueInputAriaLabel", {
+            parent: ariaLabel,
+          })}
           data-testid={`tree-add-value-input-${pathKey}`}
           className="inline-block w-40 rounded border border-primary bg-background px-1 text-foreground"
         />
@@ -1046,8 +1064,9 @@ function AddItemRow({
   onCancel: () => void;
   valueInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
+  const { t } = useTranslation("document");
   const indent = (parentDepth + 1) * 16;
-  const ariaLabel = `Add item to ${arrayPath}`;
+  const ariaLabel = t("treePanel.addItemAriaLabel", { arrayPath });
 
   if (!isOpen) {
     return (
@@ -1065,7 +1084,7 @@ function AddItemRow({
           className="inline-flex items-center gap-1 rounded border border-dashed border-muted-foreground/40 px-2 py-0 text-3xs text-muted-foreground hover:border-primary hover:text-primary"
         >
           <Plus size={10} aria-hidden />
-          <span>+ item</span>
+          <span>{t("treePanel.addItemButton")}</span>
         </button>
       </div>
     );
@@ -1109,7 +1128,7 @@ function AddItemRow({
         onChange={(e) => onValueDraftChange(e.target.value)}
         onKeyDown={onValueKeyDown}
         placeholder="value"
-        aria-label={`${ariaLabel} — value`}
+        aria-label={t("treePanel.addItemInputAriaLabel", { parent: ariaLabel })}
         data-testid={`tree-add-item-input-${arrayPath}`}
         className="inline-block w-40 rounded border border-primary bg-background px-1 text-foreground"
       />

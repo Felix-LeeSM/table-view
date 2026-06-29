@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import HomePage from "@/pages/HomePage";
 
 /**
@@ -12,9 +13,10 @@ import HomePage from "@/pages/HomePage";
  * without coupling to the underlying `HomePage` body.
  */
 export default function LauncherPage() {
+  const { t } = useTranslation("pages");
   return (
     <main
-      aria-label="Launcher"
+      aria-label={t("launcher")}
       data-testid="launcher-page"
       className="flex h-full w-full"
     >

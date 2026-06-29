@@ -4,6 +4,7 @@
 // retained for fallback and troubleshooting.
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +47,7 @@ export function ExplainViewer({
   mongoSpec,
   onPlanSettled,
 }: ExplainViewerProps) {
+  const { t } = useTranslation("query");
   const [plan, setPlan] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,13 +103,17 @@ export function ExplainViewer({
 
   return (
     <section
-      aria-label="Explain viewer"
+      aria-label={t("explain.viewerAria")}
       data-paradigm={paradigm}
       data-testid="explain-viewer"
       className="flex flex-col gap-2 p-3"
     >
       <header className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-        <span>Explain ({paradigm === "table" ? "PG" : "Mongo"})</span>
+        <span>
+          {t("explain.header", {
+            paradigm: paradigm === "table" ? "PG" : "Mongo",
+          })}
+        </span>
         <Button
           variant="ghost"
           size="sm"
@@ -120,7 +126,7 @@ export function ExplainViewer({
           ) : (
             <RefreshCw size={12} aria-hidden />
           )}
-          Refresh
+          {t("explain.refresh")}
         </Button>
       </header>
 
@@ -158,6 +164,7 @@ interface PostgresPlanViewProps {
 }
 
 function PostgresPlanView({ plan, rawPlan }: PostgresPlanViewProps) {
+  const { t } = useTranslation("query");
   const root = describePostgresPlanNode(plan.root);
   const timing = describePostgresPlanTiming(plan);
 
@@ -171,7 +178,9 @@ function PostgresPlanView({ plan, rawPlan }: PostgresPlanViewProps) {
         className="border-b border-border bg-background/70 px-3 py-2"
       >
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="font-medium text-foreground">Plan Summary</span>
+          <span className="font-medium text-foreground">
+            {t("explain.planSummary")}
+          </span>
           <span className="text-muted-foreground">{root.title}</span>
           {root.subtitle !== undefined && (
             <span className="text-muted-foreground">{root.subtitle}</span>
@@ -186,7 +195,7 @@ function PostgresPlanView({ plan, rawPlan }: PostgresPlanViewProps) {
 
       <details className="border-t border-border bg-background/60 px-3 py-2">
         <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground">
-          Raw JSON
+          {t("explain.rawJson")}
         </summary>
         <pre
           data-testid="explain-raw-json"

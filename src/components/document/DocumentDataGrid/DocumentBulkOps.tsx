@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { FileEdit, Trash2 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import type { SafeModeGate } from "@hooks/useSafeModeGate";
@@ -24,6 +25,7 @@ export default function DocumentBulkOps({
   safeModeGate,
   fetchData,
 }: DocumentBulkOpsProps) {
+  const { t } = useTranslation("document");
   const bulkOps = useMongoBulkOps({
     connectionId,
     database,
@@ -40,11 +42,11 @@ export default function DocumentBulkOps({
         size="icon-xs"
         className="text-muted-foreground"
         onClick={bulkOps.handleDeleteManyClick}
-        aria-label="Delete matching documents"
+        aria-label={t("bulkOps.deleteAriaLabel")}
         title={
           activeFilterCount > 0
-            ? `Delete documents matching the current filter`
-            : "Delete every document in this collection"
+            ? t("bulkOps.deleteTitleFiltered")
+            : t("bulkOps.deleteTitleAll")
         }
       >
         <Trash2 />
@@ -54,11 +56,11 @@ export default function DocumentBulkOps({
         size="icon-xs"
         className="text-muted-foreground"
         onClick={bulkOps.handleUpdateManyClick}
-        aria-label="Update matching documents"
+        aria-label={t("bulkOps.updateAriaLabel")}
         title={
           activeFilterCount > 0
-            ? `Update documents matching the current filter`
-            : "Update every document in this collection"
+            ? t("bulkOps.updateTitleFiltered")
+            : t("bulkOps.updateTitleAll")
         }
       >
         <FileEdit />

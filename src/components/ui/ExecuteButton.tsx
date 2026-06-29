@@ -26,6 +26,7 @@
  *     a tight footer.
  */
 import { Loader2, Play } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -123,13 +124,14 @@ export default function ExecuteButton({
   className,
   testId,
 }: ExecuteButtonProps) {
+  const { t } = useTranslation("ui");
   const isEnvLabelled =
     environment === "staging" || environment === "production";
   const fullLabel = loading
-    ? "Executing..."
+    ? t("executing")
     : isEnvLabelled && connectionLabel
-      ? `Execute on ${connectionLabel}`
-      : "Execute";
+      ? t("executeOn", { connectionLabel })
+      : t("execute");
   const tokens = pickColorTokens(severity, environment);
 
   return (

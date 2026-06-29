@@ -17,6 +17,7 @@
 // - PK / BLOB / `_id` cells emit a `(read-only)` marker when editing.
 import { useCallback, useMemo, useState } from "react";
 import { Binary } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   Select,
@@ -61,6 +62,7 @@ export function FieldRow({
   editing,
   editState,
 }: FieldRowProps) {
+  const { t } = useTranslation("shared");
   const isNull = value == null;
   const isBool = typeof value === "boolean";
   const isBlob = isBlobColumn(column.data_type) && value != null;
@@ -125,10 +127,10 @@ export function FieldRow({
             size="xs"
             className="bg-muted hover:bg-secondary text-muted-foreground"
             onClick={() => onBlobView(value, column.name)}
-            aria-label={`View BLOB data for ${column.name}`}
+            aria-label={t("fieldRow.viewBlob", { column: column.name })}
           >
             <Binary />
-            <span>(BLOB)</span>
+            <span>{t("fieldRow.blob")}</span>
           </Button>
         ) : isObject || isJsonString ? (
           <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-foreground">
@@ -140,7 +142,7 @@ export function FieldRow({
             value={String(value)}
             rows={3}
             readOnly
-            aria-label={`Value for ${column.name}`}
+            aria-label={t("fieldRow.valueFor", { column: column.name })}
           />
         ) : (
           <span className="font-mono text-foreground">{displayValue}</span>
@@ -154,7 +156,7 @@ export function FieldRow({
             className="ml-2 text-3xs italic text-muted-foreground"
             aria-disabled
           >
-            (read-only)
+            {t("fieldRow.readOnly")}
           </span>
         )}
       </div>
@@ -183,6 +185,7 @@ export function EditableValue({
   isObject,
   isLargeText,
 }: EditableValueProps) {
+  const { t } = useTranslation("shared");
   // Pending edit (if any) wins over the raw cell — so re-entering edit mode
   // shows the user's queued value, not the original.
   const key = editKey(rowIdx, colIdx);
@@ -238,7 +241,7 @@ export function EditableValue({
       >
         <SelectTrigger
           className="h-auto min-h-0 rounded border border-border bg-background px-1 py-0.5 font-mono text-xs text-foreground shadow-none"
-          aria-label={`Edit value for ${column.name}`}
+          aria-label={t("fieldRow.editValueFor", { column: column.name })}
         >
           <SelectValue />
         </SelectTrigger>
@@ -264,7 +267,7 @@ export function EditableValue({
           className="max-h-48 w-full resize-y rounded border border-border bg-background px-1 py-0.5 font-mono text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
           value={draft}
           rows={4}
-          aria-label={`Edit value for ${column.name}`}
+          aria-label={t("fieldRow.editValueFor", { column: column.name })}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
@@ -285,10 +288,10 @@ export function EditableValue({
           <button
             type="button"
             className="text-3xs text-muted-foreground hover:text-foreground hover:underline"
-            aria-label={`Set NULL for ${column.name}`}
+            aria-label={t("fieldRow.setNullFor", { column: column.name })}
             onClick={dispatchSetNull}
           >
-            Set NULL
+            {t("fieldRow.setNull")}
           </button>
         </div>
       </div>
@@ -301,7 +304,7 @@ export function EditableValue({
         type={getInputTypeForColumn(column.data_type)}
         className="flex-1 rounded border border-border bg-background px-1 py-0.5 font-mono text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
         value={draft}
-        aria-label={`Edit value for ${column.name}`}
+        aria-label={t("fieldRow.editValueFor", { column: column.name })}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
@@ -320,10 +323,10 @@ export function EditableValue({
       <button
         type="button"
         className="text-3xs text-muted-foreground hover:text-foreground hover:underline"
-        aria-label={`Set NULL for ${column.name}`}
+        aria-label={t("fieldRow.setNullFor", { column: column.name })}
         onClick={dispatchSetNull}
       >
-        Set NULL
+        {t("fieldRow.setNull")}
       </button>
     </div>
   );

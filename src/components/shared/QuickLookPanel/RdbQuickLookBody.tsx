@@ -13,6 +13,7 @@
 //   `onOpenChange(false)` clears the local state.
 import { useCallback, useMemo, useState } from "react";
 import type { MouseEvent, KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
 import type { TableData } from "@/types/schema";
 import BlobViewerDialog from "@components/datagrid/BlobViewerDialog";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
@@ -49,6 +50,7 @@ export default function RdbQuickLookBody({
   editing,
   onToggleEdit,
 }: RdbQuickLookBodyProps) {
+  const { t } = useTranslation("shared");
   const [blobViewer, setBlobViewer] = useState<{
     data: unknown;
     columnName: string;
@@ -80,11 +82,11 @@ export default function RdbQuickLookBody({
 
   const title = (
     <>
-      Row Details —{" "}
+      {t("rowDetails.heading")}{" "}
       <span className="font-mono text-muted-foreground">{displayTable}</span>
       {selectedRowIds.size > 1 && (
         <span className="ml-2 text-muted-foreground">
-          ({selectedRowIds.size} selected, showing first)
+          {t("rowDetails.multiSelect", { count: selectedRowIds.size })}
         </span>
       )}
     </>

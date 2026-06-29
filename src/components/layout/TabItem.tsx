@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { X, Table2, Code2, Leaf } from "lucide-react";
 import { type Tab, type TableTab } from "@stores/workspaceStore";
 import { Button } from "@components/ui/button";
@@ -38,6 +39,7 @@ export default function TabItem({
   onRequestClose,
   dragHandlers,
 }: TabItemProps) {
+  const { t } = useTranslation("layout");
   const isPreviewTable =
     tab.type === "table" && (tab as TableTab).isPreview === true;
 
@@ -85,8 +87,8 @@ export default function TabItem({
           className="shrink-0 text-muted-foreground"
           aria-label={
             tab.type === "table"
-              ? "MongoDB collection tab"
-              : "MongoDB query tab"
+              ? t("tabItem.mongoCollectionTabAria")
+              : t("tabItem.mongoQueryTabAria")
           }
         />
       )}
@@ -97,9 +99,9 @@ export default function TabItem({
       </span>
       {isDirty && (
         <span
-          aria-label="Unsaved changes"
+          aria-label={t("tabItem.unsavedChanges")}
           data-dirty="true"
-          title="Unsaved changes"
+          title={t("tabItem.unsavedChanges")}
           className="size-1.5 shrink-0 rounded-full bg-primary"
         />
       )}
@@ -107,7 +109,7 @@ export default function TabItem({
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label={`Close ${tab.title}`}
+          aria-label={t("tabItem.closeTabAria", { title: tab.title })}
           // 2026-05-11 — active tab always exposes the close affordance;
           // inactive tabs reveal it on hover/focus so the strip stays
           // visually quiet. Pre-fix the active tab also hid the X

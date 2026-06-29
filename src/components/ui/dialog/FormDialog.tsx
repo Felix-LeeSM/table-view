@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -71,8 +72,8 @@ export default function FormDialog({
   children,
   onSubmit,
   onCancel,
-  submitLabel = "Save",
-  cancelLabel = "Cancel",
+  submitLabel,
+  cancelLabel,
   isSubmitting = false,
   submitDisabled = false,
   feedback,
@@ -80,6 +81,9 @@ export default function FormDialog({
   submitAriaLabel,
   showCloseButton = false,
 }: FormDialogProps) {
+  const { t } = useTranslation("ui");
+  const resolvedSubmitLabel = submitLabel ?? t("save");
+  const resolvedCancelLabel = cancelLabel ?? t("cancel");
   return (
     <Dialog
       open
@@ -124,7 +128,7 @@ export default function FormDialog({
             onClick={onCancel}
             disabled={isSubmitting}
           >
-            {cancelLabel}
+            {resolvedCancelLabel}
           </Button>
           <Button
             variant={tone === "destructive" ? "destructive" : "default"}
@@ -133,7 +137,7 @@ export default function FormDialog({
             disabled={isSubmitting || submitDisabled}
             aria-label={submitAriaLabel}
           >
-            {submitLabel}
+            {resolvedSubmitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Star, Trash2, Globe, Link, X } from "lucide-react";
 import { cn } from "@lib/utils";
 import { useFavoritesStore, type FavoriteScope } from "@stores/favoritesStore";
@@ -18,6 +19,7 @@ export default function FavoritesPanel({
   onLoadSql,
   onClose,
 }: FavoritesPanelProps) {
+  const { t } = useTranslation("query");
   const favorites = useFavoritesStore((s) => s.favorites);
   const removeFavorite = useFavoritesStore((s) => s.removeFavorite);
   const [scope, setScope] = useState<FavoriteScope>("all");
@@ -30,9 +32,9 @@ export default function FavoritesPanel({
   });
 
   const scopeTabs: { value: FavoriteScope; label: string }[] = [
-    { value: "all", label: "All" },
-    { value: "global", label: "Global" },
-    { value: "connection", label: "This Connection" },
+    { value: "all", label: t("favorites.scope.all") },
+    { value: "global", label: t("favorites.scope.global") },
+    { value: "connection", label: t("favorites.scope.connection") },
   ];
 
   return (
@@ -41,14 +43,14 @@ export default function FavoritesPanel({
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-secondary rounded-t-md">
         <div className="flex items-center gap-1.5 text-sm font-medium text-secondary-foreground">
           <Star size={14} className="text-primary" />
-          <span>Favorites</span>
+          <span>{t("favorites.title")}</span>
         </div>
         <Button
           variant="ghost"
           size="icon-xs"
           className="text-muted-foreground hover:text-foreground"
           onClick={onClose}
-          aria-label="Close favorites"
+          aria-label={t("favorites.closeAria")}
         >
           <X />
         </Button>
@@ -66,7 +68,7 @@ export default function FavoritesPanel({
                 : "text-muted-foreground hover:text-foreground",
             )}
             onClick={() => setScope(tab.value)}
-            aria-label={`Filter: ${tab.label}`}
+            aria-label={t("favorites.scope.filterAria", { label: tab.label })}
           >
             {tab.label}
           </button>
@@ -77,7 +79,7 @@ export default function FavoritesPanel({
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            No favorites yet
+            {t("favorites.empty")}
           </div>
         ) : (
           filtered.map((fav) => (
@@ -90,7 +92,7 @@ export default function FavoritesPanel({
                 onLoadSql(fav.sql);
                 onClose();
               }}
-              aria-label={`Load favorite: ${fav.name}`}
+              aria-label={t("favorites.loadAria", { name: fav.name })}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
@@ -127,7 +129,7 @@ export default function FavoritesPanel({
                   e.stopPropagation();
                   removeFavorite(fav.id);
                 }}
-                aria-label={`Delete favorite: ${fav.name}`}
+                aria-label={t("favorites.deleteAria", { name: fav.name })}
               >
                 <Trash2 />
               </Button>

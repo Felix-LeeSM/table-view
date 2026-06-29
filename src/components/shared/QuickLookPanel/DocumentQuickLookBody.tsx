@@ -17,6 +17,7 @@
 //   otherwise the BSON tree stays mounted.
 import { useMemo } from "react";
 import type { MouseEvent, KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
 import type { TableData } from "@/types/schema";
 import BsonTreeViewer from "@components/shared/BsonTreeViewer";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
@@ -55,6 +56,7 @@ export default function DocumentQuickLookBody({
   editing,
   onToggleEdit,
 }: DocumentQuickLookBodyProps) {
+  const { t } = useTranslation("shared");
   // Out-of-range or missing selection → pass `null` so BsonTreeViewer's
   // built-in empty state takes over. This keeps the panel mounted (so the
   // header stays useful) while still surfacing "No document selected".
@@ -91,13 +93,13 @@ export default function DocumentQuickLookBody({
 
   const title = (
     <>
-      Document Details —{" "}
+      {t("documentDetails.heading")}{" "}
       <span className="font-mono text-muted-foreground">
         {displayNamespace}
       </span>
       {selectedRowIds.size > 1 && (
         <span className="ml-2 text-muted-foreground">
-          ({selectedRowIds.size} selected, showing first)
+          {t("documentDetails.multiSelect", { count: selectedRowIds.size })}
         </span>
       )}
     </>

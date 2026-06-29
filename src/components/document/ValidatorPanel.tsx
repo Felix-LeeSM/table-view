@@ -7,6 +7,7 @@
 // 시각적으로 차단한다.
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { safeStringifyCell } from "@/lib/jsonCell";
@@ -80,6 +81,7 @@ export function ValidatorPanel({
   database,
   collection,
 }: ValidatorPanelProps) {
+  const { t } = useTranslation("document");
   const [validatorText, setValidatorText] = useState("");
   const [originalText, setOriginalText] = useState("");
   const [level, setLevel] = useState<MongoValidationLevel>(DEFAULT_LEVEL);
@@ -141,7 +143,9 @@ export function ValidatorPanel({
         parsed = JSON.parse(trimmed) as Record<string, unknown>;
       } catch (e) {
         setSaveError(
-          e instanceof Error ? `Invalid JSON: ${e.message}` : "Invalid JSON",
+          e instanceof Error
+            ? t("validatorPanel.errorInvalidJsonDetail", { message: e.message })
+            : t("validatorPanel.errorInvalidJson"),
         );
         return;
       }
@@ -164,7 +168,7 @@ export function ValidatorPanel({
     } finally {
       setSaving(false);
     }
-  }, [connectionId, database, collection, validatorText, level, action]);
+  }, [connectionId, database, collection, validatorText, level, action, t]);
 
   const handleClear = useCallback(async () => {
     setSaveError(null);
@@ -198,7 +202,7 @@ export function ValidatorPanel({
 
   return (
     <section
-      aria-label="Validator panel"
+      aria-label={t("validatorPanel.ariaLabel")}
       className="flex flex-col gap-2 p-3"
       data-testid="validator-panel"
     >
@@ -209,7 +213,7 @@ export function ValidatorPanel({
         {loading && (
           <span className="flex items-center gap-1 text-3xs">
             <Loader2 className="animate-spin" size={10} aria-hidden />
-            Loading…
+            {t("validatorPanel.loading")}
           </span>
         )}
       </header>
@@ -228,7 +232,7 @@ export function ValidatorPanel({
         <label className="flex flex-col gap-1">
           <span className="font-medium text-muted-foreground">Level</span>
           <select
-            aria-label="Validation level"
+            aria-label={t("validatorPanel.levelAriaLabel")}
             data-testid="validator-level-select"
             className="h-7 rounded-md border border-border bg-background px-2 text-xs"
             value={level}
@@ -245,7 +249,7 @@ export function ValidatorPanel({
         <label className="flex flex-col gap-1">
           <span className="font-medium text-muted-foreground">Action</span>
           <select
-            aria-label="Validation action"
+            aria-label={t("validatorPanel.actionAriaLabel")}
             data-testid="validator-action-select"
             className="h-7 rounded-md border border-border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
             value={action}
@@ -266,13 +270,13 @@ export function ValidatorPanel({
             data-testid="validator-action-disabled-hint"
             className="text-3xs text-muted-foreground"
           >
-            Action has no effect when level is off
+            {t("validatorPanel.actionDisabledHint")}
           </span>
         )}
       </div>
 
       <textarea
-        aria-label="Validator JSON"
+        aria-label={t("validatorPanel.editorAriaLabel")}
         data-testid="validator-panel-editor"
         spellCheck={false}
         value={validatorText}
@@ -299,7 +303,7 @@ export function ValidatorPanel({
           disabled={saving || (originalText === "" && validatorText === "")}
           onClick={handleClear}
         >
-          Clear validator
+          {t("validatorPanel.clearButton")}
         </Button>
         <Button
           size="sm"
@@ -307,7 +311,7 @@ export function ValidatorPanel({
           disabled={saving || !dirty}
           onClick={handleSave}
         >
-          {saving ? "Saving…" : "Save"}
+          {saving ? t("validatorPanel.saving") : t("validatorPanel.save")}
         </Button>
       </div>
     </section>

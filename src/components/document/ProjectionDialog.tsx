@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -54,6 +55,7 @@ export default function ProjectionDialog({
   onApply,
   onClear,
 }: ProjectionDialogProps) {
+  const { t } = useTranslation("document");
   const initialDerived = deriveInitial(initial);
   const [mode, setMode] = useState<"include" | "exclude">(initialDerived.mode);
   const [selected, setSelected] = useState<Set<string>>(
@@ -87,7 +89,7 @@ export default function ProjectionDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Field projection</DialogTitle>
+          <DialogTitle>{t("projectionDialog.title")}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3 py-2">
           <fieldset className="flex gap-4 text-sm">
@@ -97,9 +99,9 @@ export default function ProjectionDialog({
                 name="projection-mode"
                 checked={mode === "include"}
                 onChange={() => setMode("include")}
-                aria-label="Include selected fields"
+                aria-label={t("projectionDialog.includeModeAriaLabel")}
               />
-              Include selected
+              {t("projectionDialog.includeMode")}
             </label>
             <label className="flex items-center gap-1.5">
               <input
@@ -107,9 +109,9 @@ export default function ProjectionDialog({
                 name="projection-mode"
                 checked={mode === "exclude"}
                 onChange={() => setMode("exclude")}
-                aria-label="Exclude selected fields"
+                aria-label={t("projectionDialog.excludeModeAriaLabel")}
               />
-              Exclude selected
+              {t("projectionDialog.excludeMode")}
             </label>
           </fieldset>
           <ul className="flex max-h-72 flex-col gap-1 overflow-auto rounded border border-border p-2">
@@ -130,13 +132,13 @@ export default function ProjectionDialog({
         </div>
         <DialogFooter className="flex justify-between gap-2 sm:justify-between">
           <Button variant="ghost" onClick={onClear}>
-            Clear
+            {t("projectionDialog.clear")}
           </Button>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("projectionDialog.cancel")}
             </Button>
-            <Button onClick={handleApply}>Apply</Button>
+            <Button onClick={handleApply}>{t("projectionDialog.apply")}</Button>
           </div>
         </DialogFooter>
       </DialogContent>

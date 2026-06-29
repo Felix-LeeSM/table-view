@@ -18,11 +18,13 @@
  * 에서는 컴포넌트 정의만 — placement 는 sprint-376 의 UI audit.
  */
 
+import { useTranslation } from "react-i18next";
 import { Power, PowerOff } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { useHistorySettingsStore } from "@stores/historySettingsStore";
 
 export default function HistorySettings() {
+  const { t } = useTranslation("settings");
   const enabled = useHistorySettingsStore((s) => s.queryHistoryEnabled);
   const setEnabled = useHistorySettingsStore((s) => s.setQueryHistoryEnabled);
 
@@ -30,10 +32,12 @@ export default function HistorySettings() {
   // sprint-373 — toggle off 가 "disable" 의 의도임을 명확히. enable/disable
   // 의 정관사 라벨이 button 자체에 살아있어 toggle 양 state 의 label 이
   // 사용자에게 분명.
-  const label = enabled ? "History recording: On" : "History recording: Off";
+  const label = enabled
+    ? t("historySettings.labelOn")
+    : t("historySettings.labelOff");
   const tooltip = enabled
-    ? "Query history is enabled. Click to disable — future queries will not be recorded. Existing rows remain (use Clear to remove)."
-    : "Query history is disabled. Click to enable — future queries will be recorded.";
+    ? t("historySettings.tooltipOn")
+    : t("historySettings.tooltipOff");
 
   return (
     <Button

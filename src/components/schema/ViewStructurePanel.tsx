@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, Copy, Loader2 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { ColumnInfo } from "@/types/schema";
@@ -14,10 +15,7 @@ interface ViewStructurePanelProps {
 
 type ViewSubTab = "columns" | "definition";
 
-const SUB_TABS: { key: ViewSubTab; label: string }[] = [
-  { key: "columns", label: "Columns" },
-  { key: "definition", label: "Definition" },
-];
+// ponytail: SUB_TABS moved inside component so t() is available
 
 export default function ViewStructurePanel({
   connectionId,
@@ -25,6 +23,11 @@ export default function ViewStructurePanel({
   view,
   schema,
 }: ViewStructurePanelProps) {
+  const { t } = useTranslation("schema");
+  const SUB_TABS: { key: ViewSubTab; label: string }[] = [
+    { key: "columns", label: t("columnsTab") },
+    { key: "definition", label: t("definitionTab") },
+  ];
   const [activeSubTab, setActiveSubTab] = useState<ViewSubTab>("columns");
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
   const [definition, setDefinition] = useState<string>("");
@@ -91,7 +94,7 @@ export default function ViewStructurePanel({
             </TabsTrigger>
           ))}
           <span className="ml-auto pr-3 text-3xs uppercase tracking-wider text-muted-foreground">
-            Read-only
+            {t("readOnly")}
           </span>
         </TabsList>
       </Tabs>
@@ -125,10 +128,11 @@ export default function ViewStructurePanel({
 }
 
 function ViewColumnsTable({ columns }: { columns: ColumnInfo[] }) {
+  const { t } = useTranslation("schema");
   if (columns.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center px-3 py-8 text-sm text-muted-foreground">
-        No columns
+        {t("noColumns")}
       </div>
     );
   }
@@ -139,19 +143,19 @@ function ViewColumnsTable({ columns }: { columns: ColumnInfo[] }) {
         <thead className="sticky top-0 bg-secondary">
           <tr className="border-b border-border">
             <th className="border-r border-border px-3 py-1.5 text-left font-medium text-secondary-foreground">
-              Name
+              {t("colName")}
             </th>
             <th className="border-r border-border px-3 py-1.5 text-left font-medium text-secondary-foreground">
-              Type
+              {t("colType")}
             </th>
             <th className="border-r border-border px-3 py-1.5 text-left font-medium text-secondary-foreground">
-              Nullable
+              {t("colNullable")}
             </th>
             <th className="border-r border-border px-3 py-1.5 text-left font-medium text-secondary-foreground">
-              Default
+              {t("colDefault")}
             </th>
             <th className="px-3 py-1.5 text-left font-medium text-secondary-foreground">
-              Comment
+              {t("colComment")}
             </th>
           </tr>
         </thead>
@@ -189,6 +193,7 @@ function ViewColumnsTable({ columns }: { columns: ColumnInfo[] }) {
 }
 
 function ViewDefinition({ sql }: { sql: string }) {
+  const { t } = useTranslation("schema");
   const [copied, setCopied] = useState(false);
 
   const stats = useMemo(
@@ -214,7 +219,7 @@ function ViewDefinition({ sql }: { sql: string }) {
   if (!sql.trim()) {
     return (
       <div className="flex flex-1 items-center justify-center px-3 py-8 text-sm text-muted-foreground">
-        Definition not available
+        {t("definitionNotAvailable")}
       </div>
     );
   }
@@ -230,17 +235,17 @@ function ViewDefinition({ sql }: { sql: string }) {
           variant="outline"
           size="xs"
           onClick={handleCopy}
-          aria-label="Copy view definition"
+          aria-label={t("copyViewDefinitionAria")}
         >
           {copied ? (
             <>
               <Check className="text-success" />
-              <span>Copied</span>
+              <span>{t("copied")}</span>
             </>
           ) : (
             <>
               <Copy />
-              <span>Copy</span>
+              <span>{t("copy")}</span>
             </>
           )}
         </Button>

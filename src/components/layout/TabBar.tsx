@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Table2, Code2 } from "lucide-react";
 import {
   useActiveTabId,
@@ -25,6 +26,7 @@ import { useTabDrag } from "./useTabDrag";
  * `TabItem`; drag state + reorder math lives in `useTabDrag`.
  */
 export default function TabBar() {
+  const { t } = useTranslation("layout");
   const tabs = useCurrentTabs();
   const activeTabId = useActiveTabId();
   const workspaceKey = useCurrentWorkspaceKey();
@@ -81,7 +83,7 @@ export default function TabBar() {
       <div
         ref={scrollRef}
         role="tablist"
-        aria-label="Open connections"
+        aria-label={t("tabBar.openConnectionsAria")}
         className="flex flex-1 overflow-x-auto select-none"
         style={{ scrollbarWidth: "none" }}
       >
@@ -127,9 +129,9 @@ export default function TabBar() {
           `onCancel` aborts the close. */}
       {pendingClose && (
         <ConfirmDialog
-          title="Discard unsaved changes?"
-          message={`"${pendingClose.title}" has unsaved changes. Closing the tab will discard them.`}
-          confirmLabel="Discard and close"
+          title={t("tabBar.discardTitle")}
+          message={t("tabBar.discardMessage", { title: pendingClose.title })}
+          confirmLabel={t("tabBar.discardConfirm")}
           danger
           onConfirm={() => {
             const id = pendingClose.id;

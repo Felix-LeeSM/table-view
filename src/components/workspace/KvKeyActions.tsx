@@ -1,4 +1,5 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import type { KvMutationActionIntent } from "./KvMutationPanel";
 
@@ -13,42 +14,43 @@ export function KvKeyActions({
   selectedMutationReady,
   onMutationAction,
 }: KvKeyActionsProps) {
+  const { t } = useTranslation("workspace");
   return (
     <div
       className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-2"
-      aria-label={`${productLabel} key actions`}
+      aria-label={t("kvKeyActions.containerAria", { productLabel })}
     >
       <Button
         variant="secondary"
         size="xs"
-        aria-label="New key (unsupported)"
-        title="New key creation is not supported in the bounded KV workbench."
+        aria-label={t("kvKeyActions.newKey.aria")}
+        title={t("kvKeyActions.newKey.title")}
         disabled
       >
         <Plus size={12} aria-hidden />
-        New key
+        {t("kvKeyActions.newKey.label")}
       </Button>
       <Button
         variant="secondary"
         size="xs"
-        aria-label="Edit selected key"
-        title="Edit selected key"
+        aria-label={t("kvKeyActions.edit.aria")}
+        title={t("kvKeyActions.edit.title")}
         disabled={!selectedMutationReady}
         onClick={() => onMutationAction("edit")}
       >
         <Pencil size={12} aria-hidden />
-        Edit
+        {t("kvKeyActions.edit.label")}
       </Button>
       <Button
         variant="destructive"
         size="xs"
-        aria-label="Delete selected key"
-        title="Delete selected key"
+        aria-label={t("kvKeyActions.delete.aria")}
+        title={t("kvKeyActions.delete.title")}
         disabled={!selectedMutationReady}
         onClick={() => onMutationAction("delete")}
       >
         <Trash2 size={12} aria-hidden />
-        Delete
+        {t("kvKeyActions.delete.label")}
       </Button>
     </div>
   );

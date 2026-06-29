@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, Info, Loader2, Pencil } from "lucide-react";
 import type {
   QueryResult,
@@ -95,6 +96,7 @@ function formatNonGridCopyText(
 }
 
 function DmlMessage({ result }: { result: QueryResult }) {
+  const { t } = useTranslation("query");
   const qt = result.queryType;
   const rowsAffected =
     typeof qt === "object" && "dml" in qt
@@ -102,16 +104,19 @@ function DmlMessage({ result }: { result: QueryResult }) {
       : result.totalCount;
   return (
     <div className="flex items-center justify-center py-8 text-sm text-secondary-foreground">
-      {rowsAffected.toLocaleString()} row{rowsAffected !== 1 ? "s" : ""}{" "}
-      affected
+      {t("resultGrid.rowsAffected", {
+        count: rowsAffected.toLocaleString(),
+        plural: rowsAffected !== 1 ? "s" : "",
+      })}
     </div>
   );
 }
 
 function DdlMessage() {
+  const { t } = useTranslation("query");
   return (
     <div className="flex items-center justify-center py-8 text-sm text-secondary-foreground">
-      Query executed successfully
+      {t("resultGrid.queryExecutedSuccessfully")}
     </div>
   );
 }
@@ -135,6 +140,7 @@ function SelectResultArea({
   sql?: string;
   onAfterCommit?: () => void;
 }) {
+  const { t } = useTranslation("query");
   const tableColumnsCache = useSchemaStore((s) => s.tableColumnsCache);
   const getTableColumns = useSchemaStore((s) => s.getTableColumns);
   const fileAnalyticsSources = useSchemaStore((s) =>
@@ -274,9 +280,7 @@ function SelectResultArea({
         <div className="flex items-center justify-between gap-2 border-b border-border bg-success/10 px-3 py-0.5 text-xs text-success">
           <span className="flex items-center gap-1.5">
             <Pencil size={12} />
-            <span>
-              Editable — double-click a cell to edit, right-click for delete
-            </span>
+            <span>{t("resultGrid.editableBanner")}</span>
           </span>
           {exportButton}
         </div>
@@ -302,7 +306,7 @@ function SelectResultArea({
           <span className="flex items-center gap-1.5">
             <Info size={12} />
             <span>
-              Read-only —{" "}
+              {t("resultGrid.readonlyBanner")}{" "}
               {editability.editable ? rowEditBlockReason : editability.reason}
             </span>
           </span>
@@ -500,6 +504,7 @@ function CompletedMultiResult({
   database?: string;
   onAfterCommit?: () => void;
 }) {
+  const { t } = useTranslation("query");
   return (
     <Tabs
       defaultValue="stmt-0"
@@ -508,7 +513,7 @@ function CompletedMultiResult({
     >
       <TabsList
         className="shrink-0 gap-0 border-b border-border bg-secondary px-1"
-        aria-label="Statement results"
+        aria-label={t("resultGrid.statementResultsAria")}
       >
         {statements.map((stmt, idx) => {
           const isError = stmt.status === "error";
@@ -526,7 +531,10 @@ function CompletedMultiResult({
               <span className="flex items-center gap-1.5">
                 {isError && <AlertTriangle size={12} aria-hidden="true" />}
                 <span>
-                  Statement {idx + 1} {statementVerb(stmt)}
+                  {t("resultGrid.statementTab", {
+                    n: idx + 1,
+                    verb: statementVerb(stmt),
+                  })}
                 </span>
                 <span
                   className={
@@ -554,9 +562,11 @@ function CompletedMultiResult({
               role="alert"
               className="border-b border-border bg-destructive/10 px-3 py-2 text-sm text-destructive"
             >
-              <div className="font-medium">Statement {idx + 1} failed</div>
+              <div className="font-medium">
+                {t("resultGrid.statementFailed", { n: idx + 1 })}
+              </div>
               <div className="mt-1 whitespace-pre-wrap text-xs">
-                {stmt.error ?? "Unknown error"}
+                {stmt.error ?? t("resultGrid.unknownError")}
               </div>
             </div>
           ) : (
@@ -582,6 +592,7 @@ export default function QueryResultGrid({
   onAfterCommit,
   isDryRun: isDryRunProp,
 }: QueryResultGridProps) {
+  const { t } = useTranslation("query");
   // Running state
   if (queryState.status === "running") {
     return (
@@ -590,7 +601,9 @@ export default function QueryResultGrid({
           className="mb-2 animate-spin text-muted-foreground"
           size={24}
         />
-        <p className="text-sm text-muted-foreground">Executing query...</p>
+        <p className="text-sm text-muted-foreground">
+          {t("resultGrid.executing")}
+        </p>
       </div>
     );
   }
@@ -616,7 +629,7 @@ export default function QueryResultGrid({
         data-testid="query-cancelled-state"
         className="flex flex-1 flex-col items-center justify-center text-sm text-muted-foreground"
       >
-        <p>{queryState.message ?? "Query cancelled"}</p>
+        <p>{queryState.message ?? t("resultGrid.cancelled")}</p>
       </div>
     );
   }
@@ -661,7 +674,7 @@ export default function QueryResultGrid({
             data-testid="dry-run-banner"
             className="border-b border-warning/40 bg-warning/10 px-3 py-1 text-xs text-warning"
           >
-            Dry Run — rolled back. No data was changed.
+            {t("resultGrid.dryRunBanner")}
           </div>
           {body}
         </div>
@@ -677,7 +690,7 @@ export default function QueryResultGrid({
   // Idle state — prompt the user
   return (
     <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
-      <p className="text-sm">Press Cmd+Return to execute the query</p>
+      <p className="text-sm">{t("resultGrid.idlePrompt")}</p>
     </div>
   );
 }
