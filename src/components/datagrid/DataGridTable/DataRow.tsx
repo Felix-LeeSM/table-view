@@ -291,7 +291,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                     </button>
                     <span>{close}</span>
                     {nestedPendingCount > 0 && (
-                      <span className="ml-1 text-3xs text-amber-400">
+                      <span className="ml-1 text-3xs text-warning">
                         ● {nestedPendingCount}
                       </span>
                     )}
