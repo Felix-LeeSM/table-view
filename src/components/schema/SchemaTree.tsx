@@ -29,6 +29,7 @@ import {
 } from "./SchemaTree/treeRows";
 import { SchemaTreeBody } from "./SchemaTree/body";
 import type { SchemaTreeRowsContext } from "./SchemaTree/rows";
+import { useTreeRoving } from "./SchemaTree/useTreeRoving";
 import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import {
   CreateTableDialogSlot,
@@ -188,10 +189,30 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     actions.workspaceKey,
   );
 
+  // WAI-ARIA tree roving-tabindex + arrow-key navigation. The first
+  // focusable row is the default tab stop until the user moves focus, so
+  // the tree is always reachable with a single Tab.
+  const treeRef = useRef<HTMLDivElement>(null);
+  const roving = useTreeRoving(
+    visibleRows,
+    {
+      onToggleSchema: actions.handleExpandSchema,
+      onToggleCategory: (row) =>
+        actions.toggleCategory(row.schemaName, row.category.key),
+    },
+    treeRef,
+  );
+  const firstFocusableKey =
+    visibleRows.find(
+      (r) => r.kind === "schema" || r.kind === "category" || r.kind === "item",
+    )?.key ?? null;
+
   const ctx: SchemaTreeRowsContext = {
     t: (key, options) => t(key, options as Record<string, unknown>),
     dbType,
     treeShape,
+    rovingFocusKey: roving.focusKey ?? firstFocusableKey,
+    onFocusRow: roving.setFocusKey,
     toggleCategory: actions.toggleCategory,
     setSelectedNodeId: actions.setSelectedNodeId,
     setTableSearch: actions.setTableSearch,
@@ -423,10 +444,12 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       </div>
 
       <div
+        ref={treeRef}
         role="tree"
         aria-label={t("schemaTreeAria", {
           name: connectionName || connectionId,
         })}
+        onKeyDown={roving.onKeyDown}
       >
         <SchemaTreeBody
           schemas={actions.schemas}
