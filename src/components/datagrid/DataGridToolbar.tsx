@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import type { SortInfo, TableData } from "@/types/schema";
 import { PARADIGM_VOCABULARY } from "@/lib/strings/paradigm-vocabulary";
 import { Button } from "@components/ui/button";
+import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 import {
   Select,
   SelectContent,
@@ -146,6 +147,10 @@ export default function DataGridToolbar({
   onResetColumnWidths,
 }: DataGridToolbarProps) {
   const { t } = useTranslation("datagrid");
+  // Discard wipes the entire pending entry — including the undo stack — so a
+  // mis-click is unrecoverable. Gate behind a confirm here (the shared toolbar)
+  // so both RDB and Document grids inherit it through `onDiscard`.
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   return (
     <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
       <div className="flex items-center gap-2 text-xs text-secondary-foreground">
@@ -201,7 +206,11 @@ export default function DataGridToolbar({
                   variant="ghost"
                   size="xs"
                   className="bg-destructive/20 text-destructive hover:bg-destructive/30 hover:text-destructive"
-                  onClick={onDiscard}
+                  onClick={() =>
+                    hasPendingChanges
+                      ? setShowDiscardConfirm(true)
+                      : onDiscard()
+                  }
                   aria-label={t("discardAria")}
                   title={t("discardAria")}
                 >
@@ -391,6 +400,19 @@ export default function DataGridToolbar({
           </Select>
         )}
       </div>
+      {showDiscardConfirm && (
+        <ConfirmDialog
+          title={t("discardConfirmTitle")}
+          message={t("discardConfirmDescription")}
+          confirmLabel={t("discardConfirmConfirm")}
+          danger
+          onConfirm={() => {
+            setShowDiscardConfirm(false);
+            onDiscard();
+          }}
+          onCancel={() => setShowDiscardConfirm(false)}
+        />
+      )}
     </div>
   );
 }
