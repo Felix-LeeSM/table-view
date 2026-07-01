@@ -3,20 +3,32 @@ import { useEffect } from "react";
 interface UseRdbDataGridShortcutsParams {
   editingCell: { row: number; col: number } | null;
   canUndo: boolean;
+  /**
+   * Pending/dirty state. Escape only opens the discard confirm when there is
+   * something to discard — with nothing pending it stays a no-op, preserving
+   * the prior behavior (`handleDiscard` was a no-op when nothing was pending).
+   */
+  hasPendingChanges: boolean;
   onToggleFilters: () => void;
   onToggleQuickLook: () => void;
   onCancelEdit: () => void;
-  onDiscard: () => void;
+  /**
+   * Opens the SAME confirm gate as the toolbar's Discard button (PR #1013).
+   * Discarding is unrecoverable, so Escape must confirm first instead of
+   * wiping pending edits immediately.
+   */
+  onRequestDiscard: () => void;
   onUndo: () => void;
 }
 
 export function useRdbDataGridShortcuts({
   editingCell,
   canUndo,
+  hasPendingChanges,
   onToggleFilters,
   onToggleQuickLook,
   onCancelEdit,
-  onDiscard,
+  onRequestDiscard,
   onUndo,
 }: UseRdbDataGridShortcutsParams): void {
   useEffect(() => {
@@ -53,17 +65,21 @@ export function useRdbDataGridShortcuts({
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (editingCell !== null) return;
+      // A dialog already owns Escape (including our own discard-confirm once
+      // open) — don't re-open/stack the gate, let the dialog handle it.
       if (
         document.querySelector('[role="dialog"], [role="alertdialog"]') !== null
       ) {
         return;
       }
+      // Nothing to discard → preserve prior no-op behavior, no confirm popup.
+      if (!hasPendingChanges) return;
       e.preventDefault();
-      onDiscard();
+      onRequestDiscard();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [editingCell, onDiscard]);
+  }, [editingCell, hasPendingChanges, onRequestDiscard]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

@@ -53,6 +53,9 @@ export default function DataGrid({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [showQuickLook, setShowQuickLook] = useState(false);
+  // Shared discard-confirm gate (PR #1013). Owned here so both the toolbar
+  // Discard button and the Escape shortcut open the *same* dialog.
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const resetPage = useCallback(() => setPage(1), []);
 
   const { sorts, setSorts } = useRdbDataGridSorts();
@@ -192,10 +195,11 @@ export default function DataGrid({
   useRdbDataGridShortcuts({
     editingCell: editState.editingCell,
     canUndo: editState.canUndo,
+    hasPendingChanges: editState.hasPendingChanges,
     onToggleFilters: filters.toggleFilters,
     onToggleQuickLook: toggleQuickLook,
     onCancelEdit: editState.cancelEdit,
-    onDiscard: editState.handleDiscard,
+    onRequestDiscard: () => setShowDiscardConfirm(true),
     onUndo: editState.undo,
   });
 
@@ -214,6 +218,8 @@ export default function DataGrid({
         showQuickLook={showQuickLook}
         editState={editState}
         canEditRows={canEditRows}
+        discardConfirmOpen={showDiscardConfirm}
+        onDiscardConfirmOpenChange={setShowDiscardConfirm}
         onSetPage={setPage}
         onSetPageSize={handleSetPageSize}
         onToggleFilters={filters.toggleFilters}

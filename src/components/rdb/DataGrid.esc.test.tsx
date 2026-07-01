@@ -3,9 +3,10 @@
 // `docs/sprints/sprint-250/contract.md`. Date 2026-05-09.
 //
 // Asserted scenarios (component layer):
-// - AC-250-02: Esc on document.body when no dialog is open empties the
-//   four pending slices (pendingEdits / pendingNewRows /
-//   pendingDeletedRowKeys / undoStack) — equivalent to handleDiscard.
+// - AC-250-02 (superseded → gated): Esc on document.body now opens the
+//   shared discard-confirm gate (PR #1013 parity) instead of discarding
+//   immediately; the four pending slices survive until the user confirms
+//   in the dialog. The no-pending case stays a harmless no-op.
 // - AC-250-03: Esc while a `[role="dialog"]` (Radix SQL Preview) is
 //   present is NOT consumed by the grid's window listener — the grid's
 //   pending state survives. The Radix dialog closes via its own native
@@ -20,7 +21,7 @@
 // verbatim.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { screen, fireEvent, act } from "@testing-library/react";
+import { screen, fireEvent, act, within } from "@testing-library/react";
 import type { SortInfo } from "@/types/schema";
 import {
   mockQueryTableData,
@@ -136,7 +137,7 @@ describe("DataGrid — Sprint 250 modal-aware Esc discard (AC-250-02..04)", () =
     resetMockTabStore();
   });
 
-  it("[AC-250-02] Esc on body (no dialog open) discards all pending changes", async () => {
+  it("[AC-250-02→gated] Esc on body opens the discard-confirm gate; pending survives until confirmed", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
@@ -163,9 +164,26 @@ describe("DataGrid — Sprint 250 modal-aware Esc discard (AC-250-02..04)", () =
     expect(screen.getByText(/1 edit/)).toBeInTheDocument();
 
     // Dispatch Esc on the window (focus on body — no dialog is mounted,
-    // no editor is active because blur dismissed it above).
+    // no editor is active because blur dismissed it above). Esc now routes
+    // through the SAME confirm gate as the Discard button (unrecoverable →
+    // confirm first) rather than discarding immediately.
     await act(async () => {
       fireEvent.keyDown(window, { key: "Escape" });
+    });
+
+    // Gate is open; pending state SURVIVES (nothing discarded yet). The open
+    // modal marks the grid `aria-hidden`, so count rows with `hidden: true` —
+    // the added row is still present (5), proving Esc gated instead of the
+    // old immediate discard (which would show no dialog and 4 rows).
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getAllByRole("row", { hidden: true }).length).toBe(5);
+
+    // Confirming in the gate performs the (now-explicit) discard.
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Discard changes" }),
+      );
     });
 
     // All pending state cleared — back to 3 data rows + header, no edit

@@ -88,6 +88,17 @@ export interface DataGridToolbarProps {
   onToggleQuickLook: () => void;
   onCommit: () => void;
   onDiscard: () => void;
+  /**
+   * PR #1013 gated the Discard button behind a confirm dialog because
+   * discarding is unrecoverable. That gate lived as local state here, so
+   * only the button could open it. RDB routes its Escape shortcut through
+   * the *same* gate (data-loss parity with the button) by lifting the
+   * open-state to the parent: pass `discardConfirmOpen` +
+   * `onDiscardConfirmOpenChange` to control it. Omit both (Document grid)
+   * and the toolbar falls back to its own local state — no behavior change.
+   */
+  discardConfirmOpen?: boolean;
+  onDiscardConfirmOpenChange?: (open: boolean) => void;
   onAddRow: () => void;
   onDeleteRow: () => void;
   onDuplicateRow: () => void;
@@ -139,6 +150,8 @@ export default function DataGridToolbar({
   onToggleQuickLook,
   onCommit,
   onDiscard,
+  discardConfirmOpen,
+  onDiscardConfirmOpenChange,
   onAddRow,
   onDeleteRow,
   onDuplicateRow,
@@ -150,7 +163,14 @@ export default function DataGridToolbar({
   // Discard wipes the entire pending entry — including the undo stack — so a
   // mis-click is unrecoverable. Gate behind a confirm here (the shared toolbar)
   // so both RDB and Document grids inherit it through `onDiscard`.
-  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  //
+  // controlled/uncontrolled: when the parent drives the gate (RDB, so its
+  // Escape shortcut opens the same dialog) it passes `discardConfirmOpen` +
+  // `onDiscardConfirmOpenChange`; otherwise (Document) we own the state.
+  const [localDiscardConfirm, setLocalDiscardConfirm] = useState(false);
+  const showDiscardConfirm = discardConfirmOpen ?? localDiscardConfirm;
+  const setShowDiscardConfirm =
+    onDiscardConfirmOpenChange ?? setLocalDiscardConfirm;
   return (
     <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
       <div className="flex items-center gap-2 text-xs text-secondary-foreground">
