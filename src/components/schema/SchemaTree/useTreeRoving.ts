@@ -26,6 +26,12 @@ const KIND_DEPTH: Partial<Record<VisibleRow["kind"], number>> = {
   item: 2,
 };
 
+// A virtualized jump target (Home/End, or an arrow step past the overscan)
+// mounts only after `scrollToIndex` re-renders the window, which can span
+// more than one frame. Retry `.focus()` across a small bounded number of
+// frames so we grab the node once it exists, then give up rather than spin.
+const MAX_FOCUS_FRAMES = 6;
+
 type FocusableRow = VisibleRow & { kind: "schema" | "category" | "item" };
 
 function isFocusable(row: VisibleRow): row is FocusableRow {
@@ -70,6 +76,10 @@ export function useTreeRoving(
   rows: VisibleRow[],
   actions: TreeRovingActions,
   containerRef: React.RefObject<HTMLElement | null>,
+  // Only supplied when the tree is virtualized: brings a row index into the
+  // rendered window so its DOM node exists before we focus it. Omitted on the
+  // eager path (every row is already mounted).
+  scrollToIndex?: (index: number) => void,
 ): TreeRoving {
   const [focusKey, setFocusKeyState] = useState<string | null>(null);
   const focusKeyRef = useRef<string | null>(null);
@@ -80,19 +90,35 @@ export function useTreeRoving(
   rowsRef.current = rows;
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
+  const scrollToIndexRef = useRef(scrollToIndex);
+  scrollToIndexRef.current = scrollToIndex;
 
-  // Keyboard navigation: move the anchor AND imperatively focus the target,
-  // deferred one frame so a freshly-expanded/rendered row is in the DOM.
+  // Keyboard navigation: move the anchor AND imperatively focus the target.
+  // On a virtualized tree a jump target (Home/End) can be scrolled out of the
+  // rendered window, so first ask the virtualizer to bring its index into
+  // view, then focus once the node mounts — retried across a few frames since
+  // scroll → re-render → mount may not finish in a single frame.
   const focusByKey = useCallback(
     (key: string) => {
       setFocusKeyState(key);
       focusKeyRef.current = key;
-      requestAnimationFrame(() => {
+      const scroll = scrollToIndexRef.current;
+      if (scroll) {
+        const idx = rowsRef.current.findIndex((r) => r.key === key);
+        if (idx >= 0) scroll(idx);
+      }
+      let frames = 0;
+      const tryFocus = () => {
         const el = containerRef.current?.querySelector<HTMLElement>(
           `[data-tree-key="${CSS.escape(key)}"]`,
         );
-        el?.focus();
-      });
+        if (el) {
+          el.focus();
+          return;
+        }
+        if (++frames < MAX_FOCUS_FRAMES) requestAnimationFrame(tryFocus);
+      };
+      requestAnimationFrame(tryFocus);
     },
     [containerRef],
   );

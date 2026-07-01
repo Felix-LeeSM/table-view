@@ -201,6 +201,11 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         actions.toggleCategory(row.schemaName, row.category.key),
     },
     treeRef,
+    // Virtualized rows outside the window aren't in the DOM, so a Home/End
+    // jump would focus nothing. Let roving scroll the target into view first.
+    shouldVirtualize
+      ? (index) => rowVirtualizer.scrollToIndex(index)
+      : undefined,
   );
   const firstFocusableKey =
     visibleRows.find(

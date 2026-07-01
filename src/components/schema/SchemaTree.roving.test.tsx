@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  within,
+} from "@testing-library/react";
 import SchemaTree from "./SchemaTree";
-import { __test } from "./SchemaTree/useTreeRoving";
+import {
+  __test,
+  useTreeRoving,
+  type TreeRoving,
+} from "./SchemaTree/useTreeRoving";
 import type { VisibleRow } from "./SchemaTree/treeRows";
 import {
   mockLoadSchemas,
@@ -185,5 +196,58 @@ describe("useTreeRoving.findParent", () => {
     expect(__test.findParent(rows, 2)?.key).toBe("c");
     expect(__test.findParent(rows, 1)?.key).toBe("s");
     expect(__test.findParent(rows, 0)).toBeUndefined();
+  });
+});
+
+// Virtualized trees only mount the windowed rows, so a Home/End jump to a row
+// outside the window would `.focus()` a node that isn't in the DOM. The hook
+// must ask the injected virtualizer to scroll the target's *full-list* index
+// into view before focusing. jsdom won't reliably propagate the programmatic
+// scroll into a new render, so this pins the contract at the hook boundary
+// (scrollToIndex is called with the right index) rather than the pixels.
+describe("useTreeRoving virtualized scroll-into-view", () => {
+  const row = (kind: VisibleRow["kind"], key: string) =>
+    ({ kind, key }) as unknown as VisibleRow;
+  const rows = [row("schema", "s"), row("category", "c"), row("item", "i")];
+  const noopActions = { onToggleSchema: () => {}, onToggleCategory: () => {} };
+
+  type KeydownArg = Parameters<TreeRoving["onKeyDown"]>[0];
+  const keydown = (key: string): KeydownArg =>
+    ({
+      key,
+      target: document.createElement("div"),
+      preventDefault: () => {},
+    }) as unknown as KeydownArg;
+
+  it("End scrolls the last row's index into view before focusing", () => {
+    const container = { current: document.createElement("div") };
+    const scrollToIndex = vi.fn();
+    const { result } = renderHook(() =>
+      useTreeRoving(rows, noopActions, container, scrollToIndex),
+    );
+    act(() => result.current.onKeyDown(keydown("End")));
+    expect(scrollToIndex).toHaveBeenCalledWith(2);
+  });
+
+  it("Home scrolls the first row's index into view", () => {
+    const container = { current: document.createElement("div") };
+    const scrollToIndex = vi.fn();
+    const { result } = renderHook(() =>
+      useTreeRoving(rows, noopActions, container, scrollToIndex),
+    );
+    act(() => result.current.onKeyDown(keydown("End")));
+    scrollToIndex.mockClear();
+    act(() => result.current.onKeyDown(keydown("Home")));
+    expect(scrollToIndex).toHaveBeenCalledWith(0);
+  });
+
+  it("navigates without throwing when no virtualizer callback is supplied", () => {
+    const container = { current: document.createElement("div") };
+    const { result } = renderHook(() =>
+      useTreeRoving(rows, noopActions, container),
+    );
+    expect(() =>
+      act(() => result.current.onKeyDown(keydown("End"))),
+    ).not.toThrow();
   });
 });
