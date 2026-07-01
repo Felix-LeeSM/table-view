@@ -28,6 +28,12 @@ export const en = {
   undoAria: "Undo last pending change",
   undoTitle: "Undo (Cmd+Z) — pending changes only",
 
+  // DataGridToolbar — discard confirmation
+  discardConfirmTitle: "Discard all changes?",
+  discardConfirmDescription:
+    "All pending edits, new rows, and deletions will be discarded. This cannot be undone.",
+  discardConfirmConfirm: "Discard changes",
+
   // Column resize grip (keyboard, WCAG 2.1.1)
   resizeColumnAria: "Resize column",
 
@@ -149,6 +155,12 @@ export const ko = {
   undo: "실행 취소",
   undoAria: "마지막 대기 변경 실행 취소",
   undoTitle: "실행 취소 (Cmd+Z) — 대기 중인 변경사항만",
+
+  // DataGridToolbar — discard confirmation
+  discardConfirmTitle: "모든 변경사항을 취소할까요?",
+  discardConfirmDescription:
+    "대기 중인 편집, 새 행, 삭제가 모두 취소됩니다. 되돌릴 수 없습니다.",
+  discardConfirmConfirm: "변경사항 취소",
 
   // Column resize grip (keyboard, WCAG 2.1.1)
   resizeColumnAria: "열 크기 조절",

@@ -13,7 +13,7 @@
 // the last two cases stay inline (vi.mock-avoidance is intentional).
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { screen, fireEvent, act } from "@testing-library/react";
+import { screen, fireEvent, act, within } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
@@ -587,6 +587,17 @@ describe("DataGrid", () => {
       fireEvent.click(discardBtn);
     });
 
+    // Issue #6: Discard now routes through a confirm dialog (the clear is
+    // unrecoverable — it wipes the undo stack too). Confirm to actually
+    // discard. Scope to the dialog: the toolbar trigger and the confirm
+    // button share the "Discard changes" accessible name.
+    const confirmDialog = screen.getByRole("alertdialog");
+    await act(async () => {
+      fireEvent.click(
+        within(confirmDialog).getByRole("button", { name: "Discard changes" }),
+      );
+    });
+
     // Pending edits should be cleared
     expect(screen.queryByText(/edit/)).not.toBeInTheDocument();
     // Yellow bg should be gone
@@ -737,9 +748,17 @@ describe("DataGrid", () => {
       fireEvent.click(screen.getByLabelText("Delete row"));
     });
 
-    // Discard
+    // Discard — Issue #6: now gated behind a confirm dialog. Click the
+    // toolbar trigger, then confirm inside the dialog (same accessible
+    // name, so scope to the dialog).
     await act(async () => {
       fireEvent.click(screen.getByLabelText("Discard changes"));
+    });
+    const confirmDialog = screen.getByRole("alertdialog");
+    await act(async () => {
+      fireEvent.click(
+        within(confirmDialog).getByRole("button", { name: "Discard changes" }),
+      );
     });
 
     // Should be back to original state - 3 data rows + header

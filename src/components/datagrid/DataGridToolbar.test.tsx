@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import DataGridToolbar, { type DataGridToolbarProps } from "./DataGridToolbar";
 import type { SortInfo, TableData } from "@/types/schema";
 import { DOCUMENT_LABELS } from "@/lib/strings/document";
@@ -363,5 +363,54 @@ describe("DataGridToolbar — Sprint 179 paradigm-aware labels (AC-179-03)", () 
       deleteRowLabel: "Delete document",
       duplicateRowLabel: "Duplicate document",
     });
+  });
+});
+
+// Issue #6 — Discard now routes through a confirm dialog because
+// `handleDiscard` wipes the entire pending entry *including the undo
+// stack*, making a mis-click unrecoverable. The gate lives in the shared
+// `DataGridToolbar` so both RDB and Document grids inherit it. mock scope:
+// only the `onDiscard` callback (no store / hook). The dialog is the real
+// reused `ConfirmDialog` primitive.
+describe("DataGridToolbar — Issue #6 Discard confirmation", () => {
+  it("clicking Discard does NOT call onDiscard immediately — it opens a confirm dialog", () => {
+    const onDiscard = vi.fn();
+    renderToolbar({ hasPendingChanges: true, onDiscard });
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+
+    // The destructive clear must wait for explicit confirmation.
+    expect(onDiscard).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByText("Discard all changes?")).toBeInTheDocument();
+    // Irreversibility is surfaced to the user.
+    expect(screen.getByText(/cannot be undone/i)).toBeInTheDocument();
+  });
+
+  it("confirming the dialog calls onDiscard once", () => {
+    const onDiscard = vi.fn();
+    renderToolbar({ hasPendingChanges: true, onDiscard });
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+    const dialog = screen.getByRole("alertdialog");
+    // The toolbar trigger and the confirm button share the "Discard
+    // changes" name, so scope to the dialog to grab the confirm action.
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Discard changes" }),
+    );
+
+    expect(onDiscard).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancelling the dialog never calls onDiscard and closes the dialog", () => {
+    const onDiscard = vi.fn();
+    renderToolbar({ hasPendingChanges: true, onDiscard });
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(onDiscard).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });
