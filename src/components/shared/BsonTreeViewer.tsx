@@ -238,6 +238,12 @@ function TreeNode({
       aria-level={depth + 1}
       aria-label={t("bson.nodeAria", { keyLabel })}
       className="font-mono text-xs"
+      onKeyDown={handleKeyDown}
+      // ARIA tree: focus + Enter/Space toggle belong on the treeitem
+      // itself, not the inner presentational row. Leaves stay reachable
+      // (`-1`) but out of the Tab order. ponytail: roving tabindex (one
+      // active node) is a follow-up — see PR notes.
+      tabIndex={hasChildren ? 0 : -1}
     >
       <div
         className={cn(
@@ -245,8 +251,6 @@ function TreeNode({
           "hover:bg-muted/60 dark:hover:bg-muted/40",
         )}
         style={indentStyle}
-        onKeyDown={handleKeyDown}
-        tabIndex={hasChildren ? 0 : -1}
       >
         {hasChildren ? (
           <button

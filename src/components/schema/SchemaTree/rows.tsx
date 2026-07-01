@@ -72,6 +72,11 @@ const EXPORT_MODES: ReadonlyArray<{
 export interface SchemaTreeRowsContext {
   t: (key: string, options?: Record<string, unknown>) => string;
   dbType: string | undefined;
+  // Roving tabindex (WAI-ARIA tree): the row whose `key` matches owns
+  // `tabIndex=0`; all others are `-1`. `onFocusRow` keeps mouse focus in
+  // sync so a click moves the roving anchor.
+  rovingFocusKey: string | null;
+  onFocusRow: (key: string) => void;
   // Sprint 380 — needed by category/item row renderers to choose a
   // 3-way indent class (PG `with-schema` → deepest, MySQL `no-schema`
   // → one step less, SQLite `flat` → root level).
@@ -99,6 +104,21 @@ export interface SchemaTreeRowsContext {
   ) => void;
 }
 
+/**
+ * Roving-tabindex props shared by every `treeitem` button. The focused
+ * row (or, before any focus, none) carries `tabIndex=0`; the rest are
+ * `-1`. `data-tree-key` lets the container's keydown handler `.focus()` a
+ * row by key after an arrow move. `onFocus` syncs the roving anchor on a
+ * mouse click / programmatic focus.
+ */
+function rovingProps(ctx: SchemaTreeRowsContext, key: string) {
+  return {
+    "data-tree-key": key,
+    tabIndex: ctx.rovingFocusKey === key ? 0 : -1,
+    onFocus: () => ctx.onFocusRow(key),
+  } as const;
+}
+
 export function renderSchemaRow(
   row: Extract<VisibleRow, { kind: "schema" }>,
   ctx: SchemaTreeRowsContext,
@@ -119,6 +139,7 @@ export function renderSchemaRow(
           aria-expanded={row.isExpanded}
           aria-label={`${row.schemaName} schema`}
           aria-selected={row.isSelected}
+          {...rovingProps(ctx, schemaId)}
           onClick={() => {
             ctx.handleExpandSchema(row.schemaName);
             ctx.setSelectedNodeId(schemaId);
@@ -208,6 +229,7 @@ export function renderCategoryRow(
         aria-expanded={row.isExpanded}
         aria-label={`${ctx.t(cat.labelKey)} in ${row.schemaName}`}
         aria-selected={row.isSelected}
+        {...rovingProps(ctx, row.key)}
         onClick={() => ctx.toggleCategory(row.schemaName, cat.key)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -424,6 +446,7 @@ export function renderItemRow(
         aria-level={ariaLevel}
         aria-label={`${item.name} ${itemLabel}`}
         aria-selected={isHighlighted}
+        {...rovingProps(ctx, row.key)}
         onClick={handleClick}
         onKeyDown={(e) => {
           if (e.key === "Enter") handleClick();
@@ -456,6 +479,7 @@ export function renderItemRow(
           aria-level={ariaLevel}
           aria-label={`${item.name} ${itemLabel}`}
           aria-selected={isHighlighted}
+          {...rovingProps(ctx, row.key)}
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           onKeyDown={(e) => {
