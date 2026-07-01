@@ -16,6 +16,12 @@ import { useCallback, useRef, useState } from "react";
  *
  * 현재 focus cell 을 ref 로 미러링해 keydown handler 가 최신값을 stale closure
  * 없이 읽는다 (useTreeRoving 패턴).
+ *
+ * virtualized grid (RDB, Design-swarm #4 Phase 2): target row 가 virtual window
+ * 밖이면 DOM 에 없어 `.focus()` 가 no-op 이다. `opts.scrollRowIntoView` 가
+ * 주어지면 첫 rAF 에서 cell 을 못 찾을 때 그 콜백으로 row 를 스크롤해 render 시킨
+ * 뒤 몇 프레임 재시도한다. 콜백 미제공 caller (Document grid) 는 cell 이 항상
+ * DOM 에 있어 attempt 0 에서 바로 focus — 기존 단일-프레임 동작 그대로다.
  */
 
 export interface GridRoving {
@@ -29,14 +35,24 @@ export interface GridRoving {
 
 const clamp = (v: number, max: number) => Math.min(Math.max(v, 0), max);
 
+// ponytail: virtualizer 는 scrolled-to row 를 몇 프레임 안에 render 한다. N 프레임
+// 뒤엔 포기해 focus 가 무한 루프 돌지 않게 한다.
+const MAX_FOCUS_FRAMES = 6;
+
 export function useGridRoving(
   rowCount: number,
   colCount: number,
   containerRef: React.RefObject<HTMLElement | null>,
+  opts?: { scrollRowIntoView?: (row: number) => void },
 ): GridRoving {
   const [focusedCell, setFocusedCell] = useState({ row: 0, col: 0 });
   const focusedRef = useRef(focusedCell);
   focusedRef.current = focusedCell;
+
+  // opts 는 매 렌더 새 closure 다. 최신값을 ref 로 미러링해 keydown handler 가
+  // useCallback dep 없이 항상 현재 콜백을 부르게 한다.
+  const scrollRef = useRef(opts?.scrollRowIntoView);
+  scrollRef.current = opts?.scrollRowIntoView;
 
   // rowCount/colCount 가 줄면 focus 가 범위 밖일 수 있다. clamp 해서 정확히
   // 한 cell 만 tab stop 이 되도록 한다 (범위 밖이면 (0,0) 이 tab stop).
@@ -56,6 +72,31 @@ export function useGridRoving(
     focusedRef.current = next;
     setFocusedCell(next);
   }, []);
+
+  // bounded rAF retry: cell 이 DOM 에 있으면 첫 프레임에 focus (Document grid
+  // 는 항상 여기). 첫 프레임에 없으면 row 가 virtual window 밖이므로
+  // scrollRowIntoView 로 스크롤-인 후 몇 프레임 재시도 (RDB virtualized grid).
+  const focusCell = useCallback(
+    (row: number, col: number) => {
+      let attempt = 0;
+      const tryFocus = () => {
+        const el = containerRef.current?.querySelector<HTMLElement>(
+          `[data-grid-row="${row}"][data-grid-col="${col}"]`,
+        );
+        if (el) {
+          el.focus();
+          return;
+        }
+        if (attempt === 0) scrollRef.current?.(row);
+        if (attempt < MAX_FOCUS_FRAMES) {
+          attempt++;
+          requestAnimationFrame(tryFocus);
+        }
+      };
+      requestAnimationFrame(tryFocus);
+    },
+    [containerRef],
+  );
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -92,14 +133,9 @@ export function useGridRoving(
       const next = { row: nextRow, col: nextCol };
       focusedRef.current = next;
       setFocusedCell(next);
-      requestAnimationFrame(() => {
-        const el = containerRef.current?.querySelector<HTMLElement>(
-          `[data-grid-row="${nextRow}"][data-grid-col="${nextCol}"]`,
-        );
-        el?.focus();
-      });
+      focusCell(nextRow, nextCol);
     },
-    [rowCount, colCount, containerRef],
+    [rowCount, colCount, focusCell],
   );
 
   return {
