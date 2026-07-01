@@ -19,6 +19,9 @@ export type {
   UseColumnResizeArgs,
 } from "./DataGridTable/useColumnResize";
 
+export { useGridRoving } from "./useGridRoving";
+export type { GridRoving } from "./useGridRoving";
+
 export {
   applyEditOrClear,
   cellToEditString,
