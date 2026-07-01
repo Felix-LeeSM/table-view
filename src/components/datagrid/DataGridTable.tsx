@@ -35,6 +35,7 @@ import {
 } from "./DataGridTable/contextMenu";
 import HeaderRow from "./DataGridTable/HeaderRow";
 import DataRow, { type DataGridRowContext } from "./DataGridTable/DataRow";
+import { useGridRoving } from "./useGridRoving";
 
 /**
  * RDB grid + inline edit shell. Sprint 258 — `<table>` 폐기, CSS Grid 로
@@ -430,6 +431,23 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
 
     const overlayVisible = useDelayedFlag(loading, 1000);
 
+    // Design-swarm #4 Phase 2 — data-cell roving tabindex + 방향키 2D nav.
+    // 좌표계: row=data row index, col=visual column index. virtualized 일 때
+    // target row 가 window 밖이면 scrollToIndex 로 스크롤-인 후 hook 이 재시도해
+    // focus 한다 (useGridRoving 의 bounded rAF retry).
+    const roving = useGridRoving(
+      data.rows.length,
+      order.length,
+      scrollContainerRef,
+      {
+        scrollRowIntoView: (row) => {
+          if (shouldVirtualize) {
+            rowVirtualizer.scrollToIndex(row, { align: "auto" });
+          }
+        },
+      },
+    );
+
     const rowCtx: DataGridRowContext = useMemo(
       () => ({
         data,
@@ -455,6 +473,8 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         expandedNested,
         onToggleNested: handleToggleNested,
         canEditRows,
+        cellTabIndex: roving.cellTabIndex,
+        onFocusCell: roving.syncFocus,
       }),
       [
         data,
@@ -478,6 +498,8 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         expandedNested,
         handleToggleNested,
         canEditRows,
+        roving.cellTabIndex,
+        roving.syncFocus,
       ],
     );
 
@@ -494,6 +516,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         aria-rowcount={1 + data.rows.length + pendingNewRows.length}
         aria-colcount={colCount}
         style={gridStyle}
+        onKeyDown={roving.onKeyDown}
       >
         <AsyncProgressOverlay
           visible={overlayVisible}

@@ -107,6 +107,14 @@ export interface DataGridRowContext {
    */
   expandedNested?: { rowIdx: number; colIdx: number } | null;
   onToggleNested?: (rowIdx: number, colIdx: number) => void;
+  /**
+   * Design-swarm #4 Phase 2 — data-cell roving tabindex. `cellTabIndex`
+   * 는 정확히 하나의 (row, visualCol) data cell 에만 `0` 을 주고 나머지는
+   * `-1`. `onFocusCell` 은 cell `onFocus` 에서 roving anchor STATE 만 갱신
+   * (`.focus()` 호출 안 함 — focus-steal 방지).
+   */
+  cellTabIndex: (row: number, col: number) => 0 | -1;
+  onFocusCell: (row: number, col: number) => void;
 }
 
 export interface DataRowProps {
@@ -145,6 +153,8 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
     onNavigateToFk,
     expandedNested,
     onToggleNested,
+    cellTabIndex,
+    onFocusCell,
   } = ctx;
 
   const row = data.rows[rowIdx] as unknown[] | undefined;
@@ -229,6 +239,10 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
             role="gridcell"
             aria-colindex={visualIdx + 1}
             data-editing={isEditing ? "true" : undefined}
+            data-grid-row={rowIdx}
+            data-grid-col={visualIdx}
+            tabIndex={cellTabIndex(rowIdx, visualIdx)}
+            onFocus={() => onFocusCell(rowIdx, visualIdx)}
             className={`group/cell flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${alignClass}${
               isEditing
                 ? " bg-primary/10 ring-2 ring-inset ring-primary"
