@@ -85,6 +85,15 @@ describe("themes.css — Sprint 253 token foundation (AC-253-01, AC-253-02)", ()
   it("does not reintroduce amber #f59e0b for --tv-warning", () => {
     expect(themes).not.toMatch(/--tv-warning:\s*#f59e0b/);
   });
+
+  // Dark-mode contrast — deep orange #ea580c ≈ 4.2:1 on dark backgrounds is
+  // borderline for small `text-warning`, so `[data-mode="dark"]` lightens it
+  // to orange-400 #fb923c (same family, ADR 0023 gradient intact, no amber).
+  it("lightens --tv-warning to orange-400 (#fb923c) in dark mode", () => {
+    expect(themes).toMatch(
+      /\[data-mode="dark"\]\s*\{[^}]*--tv-warning:\s*#fb923c/,
+    );
+  });
 });
 
 // Sprint 257 (AC-257-01..04) — Per-theme syntax palette curation. ADR

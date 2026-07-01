@@ -2065,6 +2065,13 @@
   --tv-destructive: #f87171;
   --tv-success: #22c55e;
   --tv-highlight: #facc15;
+  /* Lighten warning for dark backgrounds (orange-600 #ea580c ≈ 4.2:1 on dark
+   * — borderline for small text). orange-400 clears AA in every real usage:
+   * warning is only ever `text-warning` / `border-warning` / `bg-warning/N`
+   * washes, never a solid fill under white text, so lightening only helps.
+   * Stays in the orange family — ADR 0023's amber→orange→red gradient holds
+   * and #f59e0b amber is never reintroduced. */
+  --tv-warning: #fb923c;
 }
 /* ============================================================
  * Table View — syntax tokens · 72 themes × 2 modes × 12 roles
