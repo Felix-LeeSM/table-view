@@ -16,6 +16,8 @@ interface RdbDataGridToolbarProps {
   showQuickLook: boolean;
   editState: DataGridEditState;
   canEditRows: boolean;
+  discardConfirmOpen: boolean;
+  onDiscardConfirmOpenChange: (open: boolean) => void;
   onSetPage: (page: number) => void;
   onSetPageSize: (size: number) => void;
   onToggleFilters: () => void;
@@ -36,6 +38,8 @@ export function RdbDataGridToolbar({
   showQuickLook,
   editState,
   canEditRows,
+  discardConfirmOpen,
+  onDiscardConfirmOpenChange,
   onSetPage,
   onSetPageSize,
   onToggleFilters,
@@ -74,6 +78,8 @@ export function RdbDataGridToolbar({
       onToggleQuickLook={onToggleQuickLook}
       onCommit={editState.handleCommit}
       onDiscard={editState.handleDiscard}
+      discardConfirmOpen={discardConfirmOpen}
+      onDiscardConfirmOpenChange={onDiscardConfirmOpenChange}
       onAddRow={editState.handleAddRow}
       onDeleteRow={editState.handleDeleteRow}
       onDuplicateRow={editState.handleDuplicateRow}

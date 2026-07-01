@@ -413,4 +413,53 @@ describe("DataGridToolbar — Issue #6 Discard confirmation", () => {
     expect(onDiscard).not.toHaveBeenCalled();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
+
+  // Controlled gate — RDB drives `discardConfirmOpen` so its Escape shortcut
+  // opens the *same* dialog. Here we assert the parent-controlled path:
+  // opening via the prop, and confirm/cancel routing back through the
+  // parent's callbacks (identical outcome to the local uncontrolled path).
+  it("renders the gate from `discardConfirmOpen` without a button click", () => {
+    renderToolbar({
+      hasPendingChanges: true,
+      discardConfirmOpen: true,
+      onDiscardConfirmOpenChange: vi.fn(),
+    });
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+
+  it("controlled confirm calls onDiscard and closes via onDiscardConfirmOpenChange(false)", () => {
+    const onDiscard = vi.fn();
+    const onDiscardConfirmOpenChange = vi.fn();
+    renderToolbar({
+      hasPendingChanges: true,
+      discardConfirmOpen: true,
+      onDiscard,
+      onDiscardConfirmOpenChange,
+    });
+
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Discard changes" }),
+    );
+
+    expect(onDiscard).toHaveBeenCalledTimes(1);
+    expect(onDiscardConfirmOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("controlled cancel keeps edits (no onDiscard) and requests close", () => {
+    const onDiscard = vi.fn();
+    const onDiscardConfirmOpenChange = vi.fn();
+    renderToolbar({
+      hasPendingChanges: true,
+      discardConfirmOpen: true,
+      onDiscard,
+      onDiscardConfirmOpenChange,
+    });
+
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(onDiscard).not.toHaveBeenCalled();
+    expect(onDiscardConfirmOpenChange).toHaveBeenCalledWith(false);
+  });
 });
