@@ -144,6 +144,32 @@ describe("SchemaTree roving tabindex", () => {
     expect(schema).toHaveAttribute("tabindex", "0");
     expect(schema).toHaveFocus();
   });
+
+  it("mouse-focusing a row does not steal focus back on the next frame", async () => {
+    // Regression: `onFocus` used to route through the keyboard `focusByKey`,
+    // which scheduled a rAF `.focus()`. After the user clicked a treeitem then
+    // moved to another control (e.g. the query editor), that stale rAF yanked
+    // focus back to the tree and dropped their keystrokes — the mariadb E2E
+    // "SQL Query Editor did not receive the exact query text" failure.
+    const tree = await renderTree();
+    const schema = within(tree).getByRole("treeitem", {
+      name: "public schema",
+    });
+    const external = document.createElement("input");
+    document.body.appendChild(external);
+
+    act(() => {
+      schema.focus(); // fires onFocus → roving anchor sync (state only)
+    });
+    act(() => {
+      external.focus(); // user moves to the editor
+    });
+    await flushRaf(); // a stale rAF must NOT re-focus the tree
+
+    expect(external).toHaveFocus();
+    expect(schema).not.toHaveFocus();
+    external.remove();
+  });
 });
 
 describe("useTreeRoving.findParent", () => {

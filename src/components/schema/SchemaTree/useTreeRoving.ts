@@ -55,7 +55,12 @@ export interface TreeRovingActions {
 export interface TreeRoving {
   /** Key of the row that owns `tabIndex=0`; null until first focusable row. */
   focusKey: string | null;
-  /** Imperative focus setter (e.g. on click) so mouse + keyboard stay in sync. */
+  /**
+   * Sync the roving anchor to a row that JUST received focus (mouse click /
+   * programmatic). State only — it must NOT call `.focus()`, because the row
+   * already has focus; a deferred re-focus would steal focus back from
+   * wherever the user moved next (e.g. the query editor), dropping keystrokes.
+   */
   setFocusKey: (key: string) => void;
   /** `onKeyDown` for the `role="tree"` container. */
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
@@ -76,11 +81,12 @@ export function useTreeRoving(
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
 
+  // Keyboard navigation: move the anchor AND imperatively focus the target,
+  // deferred one frame so a freshly-expanded/rendered row is in the DOM.
   const focusByKey = useCallback(
     (key: string) => {
       setFocusKeyState(key);
       focusKeyRef.current = key;
-      // Defer to next frame so a freshly-expanded row is in the DOM.
       requestAnimationFrame(() => {
         const el = containerRef.current?.querySelector<HTMLElement>(
           `[data-tree-key="${CSS.escape(key)}"]`,
@@ -90,6 +96,15 @@ export function useTreeRoving(
     },
     [containerRef],
   );
+
+  // Mouse / programmatic focus sync: the row already owns focus, so only move
+  // the roving anchor. Deliberately NOT calling `.focus()` here (unlike
+  // `focusByKey`) — a deferred re-focus would yank focus back after the user
+  // moved to another control, which dropped keystrokes in the query editor.
+  const syncFocusKey = useCallback((key: string) => {
+    setFocusKeyState(key);
+    focusKeyRef.current = key;
+  }, []);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -168,7 +183,7 @@ export function useTreeRoving(
     [focusByKey],
   );
 
-  return { focusKey, setFocusKey: focusByKey, onKeyDown };
+  return { focusKey, setFocusKey: syncFocusKey, onKeyDown };
 }
 
 /** First earlier row whose depth is shallower than `rows[idx]`. */
