@@ -243,6 +243,17 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
             data-grid-col={visualIdx}
             tabIndex={cellTabIndex(rowIdx, visualIdx)}
             onFocus={() => onFocusCell(rowIdx, visualIdx)}
+            onKeyDown={(e) => {
+              // Design-swarm #4 Phase 3 — Enter/F2 로 focus 된 cell 편집 진입
+              // (double-click 과 동일 가드/경로). 편집 중엔 editor input 이
+              // focus 를 쥐고 Enter/Escape 를 stopPropagation 하므로 여기 안 옴.
+              if (isEditing) return;
+              if (e.key !== "Enter" && e.key !== "F2") return;
+              if (!canEditRows || isNestedCapable) return;
+              e.preventDefault();
+              e.stopPropagation();
+              onStartEdit(rowIdx, dIdx, editStartValue);
+            }}
             className={`group/cell flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${alignClass}${
               isEditing
                 ? " bg-primary/10 ring-2 ring-inset ring-primary"

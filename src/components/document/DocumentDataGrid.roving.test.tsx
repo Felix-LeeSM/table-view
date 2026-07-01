@@ -180,4 +180,25 @@ describe("DocumentDataGrid roving tabindex (Design-swarm #4 Phase 1)", () => {
     expect(cell(grid, 0, 0)).not.toHaveFocus();
     external.remove();
   });
+
+  // Reason: Phase 3 — Enter 로 focus 된 cell 편집 진입 (double-click 과 동일
+  // 경로 handleStartEditCell). 편집 셀에 data-editing="true" + 값 input 등장. (2026-07-01)
+  it("Enter on a focused cell starts editing", async () => {
+    const grid = await renderGrid();
+    act(() => cell(grid, 0, 1).focus());
+    fireEvent.keyDown(cell(grid, 0, 1), { key: "Enter" });
+    await waitFor(() =>
+      expect(cell(grid, 0, 1)).toHaveAttribute("data-editing", "true"),
+    );
+  });
+
+  // Reason: Phase 3 — F2 도 편집 진입 (스프레드시트 표준 키). (2026-07-01)
+  it("F2 on a focused cell starts editing", async () => {
+    const grid = await renderGrid();
+    act(() => cell(grid, 1, 1).focus());
+    fireEvent.keyDown(cell(grid, 1, 1), { key: "F2" });
+    await waitFor(() =>
+      expect(cell(grid, 1, 1)).toHaveAttribute("data-editing", "true"),
+    );
+  });
 });

@@ -151,6 +151,16 @@ export default function DocumentGridRows({
                     data-grid-col={visualIdx}
                     tabIndex={cellTabIndex(rowIdx, visualIdx)}
                     onFocus={() => onFocusCell(rowIdx, visualIdx)}
+                    onKeyDown={(e) => {
+                      // Design-swarm #4 Phase 3 — Enter/F2 로 focus 된 cell
+                      // 편집 진입 (double-click 과 동일 경로). 편집 중엔 editor
+                      // input 이 Enter/Escape 를 stopPropagation 하므로 안 옴.
+                      if (isEditing) return;
+                      if (e.key !== "Enter" && e.key !== "F2") return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleStartEditCell(rowIdx, colIdx);
+                    }}
                     data-editing={isEditing ? "true" : undefined}
                     className={cn(
                       "flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs",
