@@ -70,7 +70,7 @@ export default function SchemaGraphMigrationImpactSummary({
           <AlertTriangle
             size={12}
             aria-hidden="true"
-            className="mt-0.5 shrink-0 text-amber-600"
+            className="mt-0.5 shrink-0 text-warning"
           />
           <span>{metadataNotice}</span>
         </div>

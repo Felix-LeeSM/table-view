@@ -52,10 +52,10 @@ export interface CreateTableTypeComboboxProps {
    * supplied, each option in the suggestion popover renders a small
    * color dot prefix:
    *   `"base"`     → no dot (default — wrapper omitted entirely)
-   *   `"enum"`     → blue dot   (`text-blue-500`)
-   *   `"domain"`   → green dot  (`text-green-500`)
-   *   `"range"`    → purple dot (`text-purple-500`)
-   *   `"composite"`→ orange dot (`text-orange-500`)
+   *   `"enum"`     → blue dot   (`text-typekind-enum`)
+   *   `"domain"`   → green dot  (`text-typekind-domain`)
+   *   `"range"`    → purple dot (`text-typekind-range`)
+   *   `"composite"`→ orange dot (`text-typekind-composite`)
    *   any other kind → no dot (graceful degrade — never throws)
    *
    * The accessible name (option text content) stays the verbatim type
@@ -78,13 +78,13 @@ export interface CreateTableTypeComboboxProps {
 function colorClassForTypeKind(kind: string | undefined): string | null {
   switch (kind) {
     case "enum":
-      return "text-blue-500";
+      return "text-typekind-enum";
     case "domain":
-      return "text-green-500";
+      return "text-typekind-domain";
     case "range":
-      return "text-purple-500";
+      return "text-typekind-range";
     case "composite":
-      return "text-orange-500";
+      return "text-typekind-composite";
     default:
       return null;
   }
