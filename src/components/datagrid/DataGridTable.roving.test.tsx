@@ -202,4 +202,34 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(cell(2, 1)).toHaveAttribute("tabindex", "-1");
     expect(input).toHaveFocus();
   });
+
+  // Reason: Phase 3 — Enter 로 focus 된 cell 편집 진입 (double-click 과 동일
+  // 경로, onStartEdit(row, dataCol, value)). (2026-07-01)
+  it("Enter on a focused cell starts editing", () => {
+    const onStartEdit = vi.fn();
+    render(<DataGridTable {...makeProps({ onStartEdit })} />);
+    act(() => cell(0, 1).focus());
+    fireEvent.keyDown(cell(0, 1), { key: "Enter" });
+    expect(onStartEdit).toHaveBeenCalledWith(0, 1, "Alice");
+  });
+
+  // Reason: Phase 3 — F2 도 편집 진입 (스프레드시트 표준 키). (2026-07-01)
+  it("F2 on a focused cell starts editing", () => {
+    const onStartEdit = vi.fn();
+    render(<DataGridTable {...makeProps({ onStartEdit })} />);
+    act(() => cell(2, 2).focus());
+    fireEvent.keyDown(cell(2, 2), { key: "F2" });
+    expect(onStartEdit).toHaveBeenCalledWith(2, 2, "carol@example.com");
+  });
+
+  // Reason: Phase 3 — canEditRows=false 면 Enter/F2 편집 진입 안 함. (2026-07-01)
+  it("Enter does not start editing when rows are not editable", () => {
+    const onStartEdit = vi.fn();
+    render(
+      <DataGridTable {...makeProps({ onStartEdit, canEditRows: false })} />,
+    );
+    act(() => cell(0, 1).focus());
+    fireEvent.keyDown(cell(0, 1), { key: "Enter" });
+    expect(onStartEdit).not.toHaveBeenCalled();
+  });
 });
