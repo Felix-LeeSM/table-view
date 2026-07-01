@@ -46,6 +46,8 @@ export default function TabItem({
   return (
     <div
       role="tab"
+      id={`tab-${tab.id}`}
+      aria-controls={`tabpanel-${tab.id}`}
       data-tab-id={tab.id}
       data-preview={isPreviewTable ? "true" : undefined}
       aria-selected={isActive}

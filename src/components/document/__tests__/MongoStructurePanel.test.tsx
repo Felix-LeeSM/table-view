@@ -115,6 +115,34 @@ describe("MongoStructurePanel (Sprint 350 — tracer Indexes/Validator shell)", 
     );
   });
 
+  // a11y: WAI-ARIA tabpanel wiring — Indexes/Validator tab ↔ panel link.
+  it("wires each sub-sub-tab to its panel via aria-controls / aria-labelledby", () => {
+    render(
+      <MongoStructurePanel
+        connectionId="conn-mongo"
+        database="app"
+        collection="users"
+      />,
+    );
+
+    // Indexes is active by default.
+    const indexesTab = screen.getByRole("tab", { name: "Indexes" });
+    const panel = screen.getByRole("tabpanel");
+    expect(indexesTab).toHaveAttribute("id", "tab-mongo-structure-indexes");
+    expect(panel).toHaveAttribute("aria-labelledby", indexesTab.id);
+    expect(indexesTab).toHaveAttribute("aria-controls", panel.id);
+    expect(panel).toContainElement(screen.getByTestId("mongo-indexes-panel"));
+
+    // Switch to Validator — the mounted panel re-labels to the Validator tab.
+    act(() => {
+      fireEvent.click(screen.getByRole("tab", { name: "Validator" }));
+    });
+    const validatorTab = screen.getByRole("tab", { name: "Validator" });
+    const validatorPanel = screen.getByRole("tabpanel");
+    expect(validatorPanel).toHaveAttribute("aria-labelledby", validatorTab.id);
+    expect(validatorTab).toHaveAttribute("aria-controls", validatorPanel.id);
+  });
+
   it("manages roving tabindex so only the active tab is focusable", () => {
     render(
       <MongoStructurePanel

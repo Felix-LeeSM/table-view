@@ -68,6 +68,8 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
           >
             <button
               role="tab"
+              id="tab-mongo-records"
+              aria-controls="tabpanel-mongo-records"
               aria-selected={tab.subView === "records"}
               tabIndex={tab.subView === "records" ? 0 : -1}
               className={`px-4 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
@@ -89,6 +91,8 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
             </button>
             <button
               role="tab"
+              id="tab-mongo-structure"
+              aria-controls="tabpanel-mongo-structure"
               aria-selected={tab.subView === "structure"}
               tabIndex={tab.subView === "structure" ? 0 : -1}
               className={`px-4 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
@@ -111,19 +115,35 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
           </div>
 
           {tab.subView === "records" ? (
-            <DocumentDataGrid
-              connectionId={tab.connectionId}
-              database={database}
-              collection={collection}
-            />
+            <div
+              role="tabpanel"
+              id="tabpanel-mongo-records"
+              aria-labelledby="tab-mongo-records"
+              tabIndex={0}
+              className="flex flex-1 flex-col overflow-hidden"
+            >
+              <DocumentDataGrid
+                connectionId={tab.connectionId}
+                database={database}
+                collection={collection}
+              />
+            </div>
           ) : (
-            <MongoStructurePanel
-              connectionId={tab.connectionId}
-              database={database}
-              collection={collection}
-              active={mongoStructureSubTab}
-              onActiveChange={setMongoStructureSubTab}
-            />
+            <div
+              role="tabpanel"
+              id="tabpanel-mongo-structure"
+              aria-labelledby="tab-mongo-structure"
+              tabIndex={0}
+              className="flex flex-1 flex-col overflow-hidden"
+            >
+              <MongoStructurePanel
+                connectionId={tab.connectionId}
+                database={database}
+                collection={collection}
+                active={mongoStructureSubTab}
+                onActiveChange={setMongoStructureSubTab}
+              />
+            </div>
           )}
         </div>
       );
@@ -146,6 +166,8 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
           >
             <button
               role="tab"
+              id="tab-rdb-records"
+              aria-controls="tabpanel-rdb-records"
               aria-selected={tab.subView === "records"}
               tabIndex={tab.subView === "records" ? 0 : -1}
               className={`px-4 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
@@ -167,6 +189,8 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
             </button>
             <button
               role="tab"
+              id="tab-rdb-structure"
+              aria-controls="tabpanel-rdb-structure"
               aria-selected={tab.subView === "structure"}
               tabIndex={tab.subView === "structure" ? 0 : -1}
               className={`px-4 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
@@ -189,6 +213,8 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
             {paradigm === "rdb" && (
               <button
                 role="tab"
+                id="tab-rdb-erd"
+                aria-controls="tabpanel-rdb-erd"
                 aria-selected={tab.subView === "erd"}
                 tabIndex={tab.subView === "erd" ? 0 : -1}
                 className={`px-4 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
@@ -209,36 +235,47 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
             )}
           </div>
 
-          {/* Content */}
-          {tab.subView === "erd" && paradigm === "rdb" ? (
-            <SchemaErdPanel
-              connectionId={tab.connectionId}
-              database={tab.database ?? ""}
-            />
-          ) : tab.subView === "records" ? (
-            <DataGrid
-              connectionId={tab.connectionId}
-              database={tab.database ?? ""}
-              table={tab.table!}
-              schema={tab.schema!}
-              initialFilters={tab.initialFilters}
-            />
-          ) : tab.objectKind === "view" ? (
-            <ViewStructurePanel
-              connectionId={tab.connectionId}
-              database={tab.database ?? ""}
-              view={tab.table!}
-              schema={tab.schema!}
-            />
-          ) : (
-            <StructurePanel
-              connectionId={tab.connectionId}
-              database={tab.database ?? ""}
-              table={tab.table!}
-              schema={tab.schema!}
-              initialSubTab={tab.initialStructureSubTab}
-            />
-          )}
+          {/* Content — one tabpanel per active subView, wired to the tab of
+              the same name (records / structure / erd). `structure` covers
+              both the view and table branches; both are the Structure tab's
+              panel. */}
+          <div
+            role="tabpanel"
+            id={`tabpanel-rdb-${tab.subView}`}
+            aria-labelledby={`tab-rdb-${tab.subView}`}
+            tabIndex={0}
+            className="flex flex-1 flex-col overflow-hidden"
+          >
+            {tab.subView === "erd" && paradigm === "rdb" ? (
+              <SchemaErdPanel
+                connectionId={tab.connectionId}
+                database={tab.database ?? ""}
+              />
+            ) : tab.subView === "records" ? (
+              <DataGrid
+                connectionId={tab.connectionId}
+                database={tab.database ?? ""}
+                table={tab.table!}
+                schema={tab.schema!}
+                initialFilters={tab.initialFilters}
+              />
+            ) : tab.objectKind === "view" ? (
+              <ViewStructurePanel
+                connectionId={tab.connectionId}
+                database={tab.database ?? ""}
+                view={tab.table!}
+                schema={tab.schema!}
+              />
+            ) : (
+              <StructurePanel
+                connectionId={tab.connectionId}
+                database={tab.database ?? ""}
+                table={tab.table!}
+                schema={tab.schema!}
+                initialSubTab={tab.initialStructureSubTab}
+              />
+            )}
+          </div>
         </div>
       );
     default:
@@ -361,7 +398,21 @@ export default function MainArea() {
     <div className="flex flex-1 flex-col overflow-hidden">
       <WorkspaceToolbar />
       <TabBar />
-      <div className="flex flex-1 overflow-hidden bg-background">
+      <div
+        className="flex flex-1 overflow-hidden bg-background"
+        // Wires the active editor tab (TabItem `id={`tab-${id}`}`) to its
+        // content. Only meaningful while a tab is active; the empty/skeleton
+        // fallback carries no tab so the tabpanel role is applied
+        // conditionally to avoid a panel labelled by a non-existent tab.
+        {...(activeTab
+          ? {
+              role: "tabpanel",
+              id: `tabpanel-${activeTab.id}`,
+              "aria-labelledby": `tab-${activeTab.id}`,
+              tabIndex: 0,
+            }
+          : {})}
+      >
         {activeTab?.type === "table" &&
         (activeTab.table ?? activeTab.collection) &&
         (activeTab.schema ?? activeTab.database) ? (

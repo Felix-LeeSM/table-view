@@ -800,6 +800,66 @@ describe("MainArea", () => {
     });
   });
 
+  // ------------------------------------------------------------------
+  // WAI-ARIA tabpanel wiring (a11y): tab ↔ panel association.
+  // ------------------------------------------------------------------
+  // 작성 이유: 커스텀 tablist 5곳의 tabpanel gap 을 닫는 additive ARIA
+  // 배선. 여기서는 (a) main editor tab (TabItem) 이 MainArea content
+  // panel 과 id 로 연결되는지, (b) RDB Records/Structure 서브탭이 각
+  // panel 과 연결되고 서브탭 전환 시 id 가 갱신되는지 (link 검증) 를 가드.
+  describe("tabpanel ARIA wiring", () => {
+    it("wires the active editor tab to the MainArea content panel", () => {
+      const tab = makeTableTab({ id: "tab-77", subView: "records" });
+      useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+      render(<MainArea />);
+
+      // Active editor tab lives in the TabBar tablist ("Open connections").
+      const tabBar = screen.getByRole("tablist", { name: "Open connections" });
+      const editorTab = tabBar.querySelector('[role="tab"]')!;
+      expect(editorTab.getAttribute("id")).toBe("tab-tab-77");
+
+      const panel = document.getElementById("tabpanel-tab-77")!;
+      expect(panel).toHaveAttribute("role", "tabpanel");
+      expect(panel).toHaveAttribute("aria-labelledby", "tab-tab-77");
+      expect(editorTab.getAttribute("aria-controls")).toBe(panel.id);
+      expect(panel).toHaveAttribute("tabindex", "0");
+    });
+
+    it("wires the RDB Records sub-tab to its panel and re-wires on switch to Structure", () => {
+      const tab = makeTableTab({ subView: "records" });
+      useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+      render(<MainArea />);
+
+      const recordsTab = screen.getByRole("tab", { name: "Records" });
+      const recordsPanel = document.getElementById("tabpanel-rdb-records")!;
+      expect(recordsPanel).toHaveAttribute("role", "tabpanel");
+      expect(recordsPanel).toHaveAttribute("aria-labelledby", recordsTab.id);
+      expect(recordsTab.getAttribute("aria-controls")).toBe(recordsPanel.id);
+      // The mocked DataGrid is the panel's body.
+      expect(recordsPanel).toContainElement(
+        screen.getByTestId("mock-datagrid"),
+      );
+
+      // Switch to Structure — the active panel now points at the Structure tab.
+      act(() => {
+        fireEvent.click(screen.getByRole("tab", { name: "Structure" }));
+      });
+
+      const structureTab = screen.getByRole("tab", { name: "Structure" });
+      const structurePanel = document.getElementById("tabpanel-rdb-structure")!;
+      expect(structurePanel).toHaveAttribute(
+        "aria-labelledby",
+        structureTab.id,
+      );
+      expect(structureTab.getAttribute("aria-controls")).toBe(
+        structurePanel.id,
+      );
+      expect(document.getElementById("tabpanel-rdb-records")).toBeNull();
+    });
+  });
+
   describe("Empty state CTA", () => {
     it("shows New Query button when at least one connection is connected", () => {
       setConnections({
