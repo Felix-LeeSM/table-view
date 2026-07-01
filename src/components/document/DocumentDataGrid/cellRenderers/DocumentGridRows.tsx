@@ -25,6 +25,8 @@ export interface DocumentGridRowsProps {
   rowKeyOf: (rowIdx: number) => string;
   handleStartEditCell: (rowIdx: number, colIdx: number) => void;
   scrollContainerWidth: number;
+  cellTabIndex: (row: number, col: number) => 0 | -1;
+  onFocusCell: (row: number, col: number) => void;
 }
 
 const BSON_TAG = "__bson__:";
@@ -85,6 +87,8 @@ export default function DocumentGridRows({
   rowKeyOf,
   handleStartEditCell,
   scrollContainerWidth,
+  cellTabIndex,
+  onFocusCell,
 }: DocumentGridRowsProps) {
   const { t } = useTranslation("document");
   return (
@@ -143,6 +147,10 @@ export default function DocumentGridRows({
                     key={col.name}
                     role="gridcell"
                     aria-colindex={visualIdx + 1}
+                    data-grid-row={rowIdx}
+                    data-grid-col={visualIdx}
+                    tabIndex={cellTabIndex(rowIdx, visualIdx)}
+                    onFocus={() => onFocusCell(rowIdx, visualIdx)}
                     data-editing={isEditing ? "true" : undefined}
                     className={cn(
                       "flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs",

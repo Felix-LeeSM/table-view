@@ -23,6 +23,7 @@ import {
   editKey,
   useColumnResize,
   useDocumentDataGridEdit,
+  useGridRoving,
 } from "@components/datagrid";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import ProjectionDialog from "@components/document/ProjectionDialog";
@@ -528,6 +529,15 @@ export default function DocumentDataGrid({
     [mqlPreview],
   );
 
+  // WAI-ARIA grid roving tabindex + 방향키 2D nav (data cell 만). container 는
+  // scrollContainerRef 의 role="grid" div. onFocus=state-only / keyboard=focus
+  // split 은 hook 내부 문서 참고.
+  const roving = useGridRoving(
+    data?.rows.length ?? 0,
+    visibleEntries.length,
+    scrollContainerRef,
+  );
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <DocumentGridControls
@@ -579,6 +589,7 @@ export default function DocumentDataGrid({
           role="grid"
           aria-rowcount={1 + data.rows.length}
           aria-colcount={visibleEntries.length}
+          onKeyDown={roving.onKeyDown}
           style={{ "--cols": colsTemplate } as CSSProperties}
         >
           {/* `AsyncProgressOverlay` paints only after `loading` has
@@ -624,6 +635,8 @@ export default function DocumentDataGrid({
             rowKeyOf={rowKeyOf}
             handleStartEditCell={handleStartEditCell}
             scrollContainerWidth={scrollContainerWidth}
+            cellTabIndex={roving.cellTabIndex}
+            onFocusCell={roving.syncFocus}
           />
         </div>
       )}
