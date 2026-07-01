@@ -329,6 +329,8 @@ export default function SearchIndexDetailPanel({
               key={item.value}
               type="button"
               role="tab"
+              id={`tab-search-detail-${item.value}`}
+              aria-controls={`tabpanel-search-detail-${item.value}`}
               aria-selected={active === item.value}
               className={`flex h-8 shrink-0 items-center gap-1.5 border-b-2 px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                 active === item.value
@@ -344,7 +346,13 @@ export default function SearchIndexDetailPanel({
         })}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div
+        role="tabpanel"
+        id={`tabpanel-search-detail-${active}`}
+        aria-labelledby={`tab-search-detail-${active}`}
+        tabIndex={0}
+        className="min-h-0 flex-1 overflow-auto"
+      >
         {active === "overview" ? (
           <OverviewContent
             catalog={catalog}

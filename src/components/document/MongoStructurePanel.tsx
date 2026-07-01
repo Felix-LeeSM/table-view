@@ -90,6 +90,8 @@ export function MongoStructurePanel({
             <button
               key={key}
               role="tab"
+              id={`tab-mongo-structure-${key}`}
+              aria-controls={`tabpanel-mongo-structure-${key}`}
               aria-selected={selected}
               tabIndex={selected ? 0 : -1}
               className={`px-4 py-1.5 text-xs font-medium transition-colors ${
@@ -107,7 +109,13 @@ export function MongoStructurePanel({
         })}
       </div>
 
-      <div className="flex flex-1 flex-col overflow-auto">
+      <div
+        role="tabpanel"
+        id={`tabpanel-mongo-structure-${active}`}
+        aria-labelledby={`tab-mongo-structure-${active}`}
+        tabIndex={0}
+        className="flex flex-1 flex-col overflow-auto"
+      >
         {active === "indexes" ? (
           <MongoIndexesPanel
             connectionId={connectionId}

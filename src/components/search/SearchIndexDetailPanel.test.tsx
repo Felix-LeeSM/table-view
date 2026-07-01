@@ -320,6 +320,33 @@ describe("SearchIndexDetailPanel", () => {
     expect(commandCount("get_search_index_field_stats")).toBe(0);
   });
 
+  // a11y: WAI-ARIA tabpanel wiring — active section tab ↔ its content panel.
+  it("wires the active section tab to its content panel", async () => {
+    render(
+      <SearchIndexDetailPanel
+        connectionId="search-1"
+        index="logs-elastic-2026.05.24"
+      />,
+    );
+
+    await screen.findByText(/Elasticsearch fixture/);
+
+    const overviewTab = screen.getByRole("tab", { selected: true });
+    const panel = screen.getByRole("tabpanel");
+    expect(overviewTab).toHaveAttribute("id", "tab-search-detail-overview");
+    expect(panel).toHaveAttribute("aria-labelledby", overviewTab.id);
+    expect(overviewTab).toHaveAttribute("aria-controls", panel.id);
+
+    // Switch to Mapping — the mounted panel re-labels to the Mapping tab.
+    fireEvent.click(screen.getByRole("tab", { name: /mapping/i }));
+    await screen.findByText("60 fields");
+    const mappingTab = screen.getByRole("tab", { selected: true });
+    const mappingPanel = screen.getByRole("tabpanel");
+    expect(mappingTab).toHaveAttribute("id", "tab-search-detail-mapping");
+    expect(mappingPanel).toHaveAttribute("aria-labelledby", mappingTab.id);
+    expect(mappingTab).toHaveAttribute("aria-controls", mappingPanel.id);
+  });
+
   it("opens a preview-only delete-by-query plan from the index header", async () => {
     installInvokeMock({
       plan_search_delete_by_query: {
