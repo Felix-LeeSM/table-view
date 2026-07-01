@@ -395,7 +395,7 @@ describe("CreateTableTypeCombobox (Sprint 234 — typeKindMap color dots)", () =
     });
     const dot = enumOption.querySelector('[data-testid="type-kind-dot"]');
     expect(dot).not.toBeNull();
-    expect(dot?.getAttribute("class")).toContain("text-blue-500");
+    expect(dot?.getAttribute("class")).toContain("text-typekind-enum");
     // Accessible name stays the verbatim type label (no dot character
     // injected because the span is `aria-hidden`).
     expect(
@@ -424,7 +424,7 @@ describe("CreateTableTypeCombobox (Sprint 234 — typeKindMap color dots)", () =
       domainOpt
         .querySelector('[data-testid="type-kind-dot"]')
         ?.getAttribute("class"),
-    ).toContain("text-green-500");
+    ).toContain("text-typekind-domain");
 
     const rangeOpt = screen.getByRole("option", {
       name: "public.my_range",
@@ -433,7 +433,7 @@ describe("CreateTableTypeCombobox (Sprint 234 — typeKindMap color dots)", () =
       rangeOpt
         .querySelector('[data-testid="type-kind-dot"]')
         ?.getAttribute("class"),
-    ).toContain("text-purple-500");
+    ).toContain("text-typekind-range");
 
     const compOpt = screen.getByRole("option", {
       name: "public.my_comp",
@@ -442,7 +442,7 @@ describe("CreateTableTypeCombobox (Sprint 234 — typeKindMap color dots)", () =
       compOpt
         .querySelector('[data-testid="type-kind-dot"]')
         ?.getAttribute("class"),
-    ).toContain("text-orange-500");
+    ).toContain("text-typekind-composite");
   });
 
   // Sprint 234 AC-234-08 — `base` kind omits the dot (no DOM noise).

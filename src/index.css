@@ -40,6 +40,19 @@
   --color-syntax-keyword: var(--tv-syntax-keyword);
   --color-syntax-string: var(--tv-syntax-string);
   --color-syntax-number: var(--tv-syntax-number);
+  /* Identity colors — intentional value/type-identifying hues that must NOT
+     flatten to neutral theme tokens. Mapped as their own `--color-*` so
+     `text-value-key`, `text-value-leaf`, `text-value-delete`,
+     `text-typekind-*` (and `decoration-`/`hover:` variants) generate. Values
+     live in the theme-agnostic fallback blocks below (light/dark), so themes
+     CAN override them later but stay invariant by default. */
+  --color-value-key: var(--tv-value-key);
+  --color-value-leaf: var(--tv-value-leaf);
+  --color-value-delete: var(--tv-value-delete);
+  --color-typekind-enum: var(--tv-typekind-enum);
+  --color-typekind-domain: var(--tv-typekind-domain);
+  --color-typekind-range: var(--tv-typekind-range);
+  --color-typekind-composite: var(--tv-typekind-composite);
   --radius-sm: calc(var(--tv-radius) - 4px);
   --radius-md: calc(var(--tv-radius) - 2px);
   --radius-lg: var(--tv-radius);
@@ -140,6 +153,19 @@
   --tv-syntax-atom: #be185d;
   --tv-syntax-comment: #64748b;
   --tv-syntax-error: #dc2626;
+  /* Identity colors (theme-invariant fallback). Values = the exact Tailwind
+     palette hexes the inline utilities resolved to before tokenization, so
+     appearance is pixel-identical. --tv-value-key/leaf are the JSON tree's
+     key(sky) / leaf-value(emerald) hues; --tv-value-delete is the rose
+     delete marker (single shade, no dark variant → same in both modes);
+     --tv-typekind-* are the PG type-kind color dots (single shade each). */
+  --tv-value-key: #0369a1; /* sky-700 */
+  --tv-value-leaf: #047857; /* emerald-700 */
+  --tv-value-delete: #f43f5e; /* rose-500 (mode-invariant) */
+  --tv-typekind-enum: #3b82f6; /* blue-500 */
+  --tv-typekind-domain: #22c55e; /* green-500 */
+  --tv-typekind-range: #a855f7; /* purple-500 */
+  --tv-typekind-composite: #f97316; /* orange-500 */
 }
 :where(:root[data-mode="dark"]) {
   /* UI base (slate dark mirror) */
@@ -178,6 +204,16 @@
   --tv-syntax-atom: #f9a8d4;
   --tv-syntax-comment: #64748b;
   --tv-syntax-error: #f87171;
+  /* Identity colors (dark). value-key/leaf use the lighter sky-300/emerald-300
+     the `dark:` utilities resolved to; delete + typekind dots had no `dark:`
+     variant in the source, so they keep their single shade in dark too. */
+  --tv-value-key: #7dd3fc; /* sky-300 */
+  --tv-value-leaf: #6ee7b7; /* emerald-300 */
+  --tv-value-delete: #f43f5e; /* rose-500 (mode-invariant) */
+  --tv-typekind-enum: #3b82f6; /* blue-500 */
+  --tv-typekind-domain: #22c55e; /* green-500 */
+  --tv-typekind-range: #a855f7; /* purple-500 */
+  --tv-typekind-composite: #f97316; /* orange-500 */
 }
 
 body {

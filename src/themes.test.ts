@@ -172,3 +172,30 @@ describe("themes.css — Sprint 257 syntax palette derivation (AC-257-01..04)", 
     expect(PRE_DARK).toHaveLength(3);
   });
 });
+
+// Identity color tokens live in `src/index.css`'s theme-agnostic fallback
+// blocks (not per-theme). One assertion: each resolves (defined + non-empty
+// hex) in the fallback. Per-theme presence is intentionally NOT required —
+// identity colors are theme-invariant by default.
+describe("index.css — identity color token fallback", () => {
+  const indexCss = readFileSync(
+    resolve(process.cwd(), "src/index.css"),
+    "utf-8",
+  );
+  const identityTokens = [
+    "--tv-value-key",
+    "--tv-value-leaf",
+    "--tv-value-delete",
+    "--tv-typekind-enum",
+    "--tv-typekind-domain",
+    "--tv-typekind-range",
+    "--tv-typekind-composite",
+  ];
+  for (const token of identityTokens) {
+    it(`defines ${token} with a non-empty hex in the fallback`, () => {
+      // `\b${token}\b` alone would let `--tv-value-key` match inside
+      // nothing else here, but anchor to a hex value to prove it resolves.
+      expect(indexCss).toMatch(new RegExp(`${token}:\\s*#[0-9a-fA-F]{3,8}`));
+    });
+  }
+});

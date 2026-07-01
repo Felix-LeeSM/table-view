@@ -704,9 +704,7 @@ export function DocumentTreePanel({
                     )}
                   </button>
                 )}
-                <span className="ml-1 text-sky-700 dark:text-sky-300">
-                  {node.label}
-                </span>
+                <span className="ml-1 text-value-key">{node.label}</span>
                 {node.kind === "obj" && (
                   <span className="ml-1 text-muted-foreground">
                     : {"{"}
@@ -740,7 +738,7 @@ export function DocumentTreePanel({
                     {isPendingUnset(pending) ? (
                       <span
                         data-testid={`tree-unset-${node.path}`}
-                        className="ml-1 align-middle text-emerald-700/60 line-through decoration-rose-500 dark:text-emerald-300/50"
+                        className="ml-1 align-middle text-emerald-700/60 line-through decoration-value-delete dark:text-emerald-300/50"
                       >
                         {renderLeafValue(node)}
                       </span>
@@ -749,7 +747,7 @@ export function DocumentTreePanel({
                         type="button"
                         onClick={() => startEdit(node)}
                         data-testid={`tree-leaf-${node.path}`}
-                        className="ml-1 align-middle text-emerald-700 hover:underline dark:text-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                        className="ml-1 align-middle text-value-leaf hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       >
                         {pending !== undefined
                           ? renderPendingText(pending)
@@ -767,7 +765,7 @@ export function DocumentTreePanel({
                     {node.isGhost ? (
                       <NewBadge />
                     ) : isPendingUnset(pending) ? (
-                      <span className="ml-2 text-3xs text-rose-500">
+                      <span className="ml-2 text-3xs text-value-delete">
                         {t("treePanel.willDelete")}
                       </span>
                     ) : (
@@ -793,7 +791,7 @@ export function DocumentTreePanel({
                           })}
                           title={t("treePanel.deleteFieldTitle")}
                           onClick={() => onCommitEdit(node.path, UNSET_OP)}
-                          className="ml-2 inline-flex items-center align-middle text-muted-foreground transition-colors hover:text-rose-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                          className="ml-2 inline-flex items-center align-middle text-muted-foreground transition-colors hover:text-value-delete focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                         >
                           <Trash2 size={12} aria-hidden />
                         </button>
