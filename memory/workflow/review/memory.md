@@ -29,9 +29,10 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
   red/blocking, 모두 8 이상이면 green/pass다.
 - Verdict는 label로 공표한다: green이면 `gh pr edit <N> --add-label
   review:approved --remove-label review:changes-requested`, red면
-  `--add-label review:changes-requested`. label 부착은 reviewer에게 허용된
-  유일한 write이며, `review:approved`는 `review-gate` required check의 pass
-  조건이다 (계정 1개 = GitHub review approval 불가의 label 우회).
+  `--add-label review:changes-requested`. reviewer의 write는 scorecard
+  comment와 verdict label 두 가지가 전부다(그 외 write 금지).
+  `review:approved`는 `review-gate` required check의 pass 조건이다
+  (계정 1개 = GitHub review approval 불가의 label 우회).
 - 결함이 있으면 delivery owner가 수정하고 push한 뒤 review를 다시 요청한다.
 - Merge 판단은 delivery owner 책임이다. Reviewer pack은 판단 input만 제공한다.
 - External reviewer는 사용자가 명시적으로 요청했을 때만 추가한다.

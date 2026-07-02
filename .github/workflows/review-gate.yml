@@ -18,6 +18,7 @@ concurrency:
 jobs:
   review-gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       # 새 commit 이 push 되면 기존 승인은 무효 — stale approval 로 미리뷰 코드가
       # 머지되는 것을 막는다 (dismiss stale approvals 대응)
