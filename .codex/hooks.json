@@ -37,6 +37,17 @@
             "statusMessage": "Running repo post-edit checks"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/pr-create-reminder.sh\"",
+            "timeout": 10,
+            "statusMessage": "PR review reminder"
+          }
+        ]
       }
     ]
   }

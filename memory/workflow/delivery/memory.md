@@ -33,6 +33,9 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
    - pr-reviewer 는 `.agents/skills/pr-review/SKILL.md` 를 적용하고 필요 시
      관점별 read-only `pr-subreviewer` 를 fan-out
    - 출력: PR에 직접 남긴 통합 scorecard comment
+   - **soft backstop**: `gh pr create` 직후 PostToolUse 리마인더 훅
+     (`scripts/hooks/pr-create-reminder.sh`, Claude Code + codex 공유)이 이 단계를
+     상기시킨다 — review 는 자동/무-게이트이고 merge(T6)만 확인 대상. block 아님.
    - **외부 옵션**: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가
 5. **T5 Reflect/Fix** — 결함 발견 시 delivery owner 가 fix commit + push → T4 재시작
 6. **T6 Merge or Blocked report** — 자율 머지 조건:
