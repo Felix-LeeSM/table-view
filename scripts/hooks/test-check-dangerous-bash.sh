@@ -485,6 +485,38 @@ run_case \
   '{"tool_input":{"command":"PGPASSWORD=secret psql -c \"DROP DATABASE app\""}}' \
   'MATCH:BLOCKED|sql_drop'
 
+# Rework (PR #1151 review) — segment scoping + wrapper recognizer.
+# F1: keyword must live in the SAME command segment as the client, so a
+#     destructive keyword in a later ;/&&/|| segment (e.g. a commit message)
+#     must NOT be blocked by an earlier harmless client invocation.
+run_case \
+  "case-1029-7: client segment + commit message in next segment → allow (F1)" \
+  0 \
+  '{"tool_input":{"command":"psql -l && git commit -m \"fix: DROP TABLE guard\""}}' \
+  EMPTY
+
+# F2: standard careless wrappers (sudo/env/command/doas) before the client
+#     must be recognized so real destructive execution still blocks, and so
+#     `env VAR=v psql` is consistent with bare `VAR=v psql`.
+run_case \
+  "case-1029-8: sudo -u postgres psql destructive statement → block (F2)" \
+  1 \
+  '{"tool_input":{"command":"sudo -u postgres psql -c \"DROP TABLE users\""}}' \
+  'MATCH:BLOCKED|sql_drop'
+
+run_case \
+  "case-1029-9: env-wrapper psql destructive statement → block (F2)" \
+  1 \
+  '{"tool_input":{"command":"env PGPASSWORD=x psql -c \"DROP DATABASE app\""}}' \
+  'MATCH:BLOCKED|sql_drop'
+
+# F4: indented / continuation-line client must still block.
+run_case \
+  "case-1029-10: indented psql destructive statement → block (F4)" \
+  1 \
+  '{"tool_input":{"command":"  psql -c \"DROP TABLE x\""}}' \
+  'MATCH:BLOCKED|sql_drop'
+
 echo ""
 echo "==== smoke test summary ===="
 echo "PASS: $PASS_COUNT"
