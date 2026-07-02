@@ -169,8 +169,9 @@ export interface GenerateSqlOptions {
    * of the current `data.rows[rowIdx]`, so a page/sort/refetch reorder can't
    * point the UPDATE/DELETE at a different row that now shares the index.
    *
-   * - `editRowSnapshots` keyed by `String(rowIdx)` (mirrors the page-less
-   *   `pendingEdits` collision domain).
+   * - `editRowSnapshots` keyed by the base CELL key `${rowIdx}-${colIdx}`
+   *   (the same collision domain as `pendingEdits`; nested `:path` edit keys
+   *   look up their base cell key). Value is the full captured row.
    * - `deletedRowSnapshots` keyed by the full delete key `row-${page}-${rowIdx}`.
    *
    * Absent snapshots fall back to `data.rows[rowIdx]` (unchanged behaviour

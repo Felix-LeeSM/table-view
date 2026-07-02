@@ -97,8 +97,6 @@ export function useDataGridEdit({
     setPendingEdits,
     setPendingNewRows,
     setPendingDeletedRowKeys,
-    captureEditRowSnapshot,
-    captureDeletedRowSnapshot,
     clearPendingEntry,
     pushSnapshot,
     undo,
@@ -108,6 +106,9 @@ export function useDataGridEdit({
     database,
     schema,
     table,
+    // Issue #1081 — the pending-state layer auto-captures a row-identity
+    // anchor for every new edit/delete key from the current page's rows.
+    rows: data?.rows,
   });
 
   // Multi-row selection lives in `useDataGridSelection` so the facade
@@ -213,14 +214,9 @@ export function useDataGridEdit({
     const next = applyEditOrClear(pendingEdits, key, editValue, originalValue);
     if (next !== pendingEdits) {
       pushSnapshot();
+      // Issue #1081 — the row-identity anchor is captured inside
+      // `setPendingEdits` (see `useDataGridEditPendingState`).
       setPendingEdits(next);
-      // Issue #1081 — anchor this row's identity while `data` still shows
-      // the page it was edited on. Skip when the edit reverted to original
-      // (`next` dropped the key) — there is no pending edit to anchor.
-      if (next.has(key) && data) {
-        const row = data.rows[editingCell.row] as unknown[] | undefined;
-        if (row) captureEditRowSnapshot(key, row);
-      }
     }
     setEditingCell(null);
     setEditValue("");
@@ -231,7 +227,6 @@ export function useDataGridEdit({
     pendingEdits,
     pushSnapshot,
     setPendingEdits,
-    captureEditRowSnapshot,
     canEditRows,
   ]);
 
@@ -290,13 +285,8 @@ export function useDataGridEdit({
         );
         if (next !== pendingEdits) {
           pushSnapshot();
+          // Issue #1081 — anchor captured inside `setPendingEdits`.
           setPendingEdits(next);
-          // Issue #1081 — anchor the auto-saved row's identity (see
-          // `saveCurrentEdit`).
-          if (next.has(key) && data) {
-            const row = data.rows[editingCell.row] as unknown[] | undefined;
-            if (row) captureEditRowSnapshot(key, row);
-          }
         }
       }
       setEditingCell({ row: rowIdx, col: colIdx });
@@ -313,7 +303,6 @@ export function useDataGridEdit({
       pendingEdits,
       pushSnapshot,
       setPendingEdits,
-      captureEditRowSnapshot,
       canEditRows,
     ],
   );
@@ -356,28 +345,23 @@ export function useDataGridEdit({
     setPendingDeletedRowKeys((prev) => {
       const next = new Set(prev);
       selectedRowIds.forEach((rowIdx) => {
-        const rk = rowKeyFn(rowIdx, page);
-        next.add(rk);
-        // Issue #1081 — anchor the deleted row's identity now, while
-        // `data.rows[rowIdx]` still points at the row the user selected.
-        const row = data?.rows[rowIdx] as unknown[] | undefined;
-        if (row) captureDeletedRowSnapshot(rk, row);
+        next.add(rowKeyFn(rowIdx, page));
       });
       return next;
     });
+    // Issue #1081 — the deleted rows' identity anchors are captured inside
+    // `setPendingDeletedRowKeys` from the current page's rows.
     clearSelection();
     // Promote preview tab on row delete
     if (activeTabId) promoteTab(activeTabId);
   }, [
     selectedRowIds,
     page,
-    data,
     activeTabId,
     promoteTab,
     clearSelection,
     pushSnapshot,
     setPendingDeletedRowKeys,
-    captureDeletedRowSnapshot,
     canEditRows,
   ]);
 
@@ -472,13 +456,9 @@ export function useDataGridEdit({
           editValue,
           originalValue,
         );
+        // Issue #1081 — anchor captured inside `setPendingEdits` before the
+        // synchronous commit reads the snapshot map.
         setPendingEdits(merged);
-        // Issue #1081 — anchor the in-flight cell's row before committing,
-        // so the override map's WHERE resolves from the captured row.
-        if (merged.has(key)) {
-          const row = data.rows[editingCell.row] as unknown[] | undefined;
-          if (row) captureEditRowSnapshot(key, row);
-        }
         const { opened } = handleCommit({ pendingEditsOverride: merged });
         if (opened) {
           setEditingCell(null);
@@ -500,7 +480,6 @@ export function useDataGridEdit({
     handleCommit,
     beginCommitFlash,
     setPendingEdits,
-    captureEditRowSnapshot,
     canEditRows,
   ]);
 

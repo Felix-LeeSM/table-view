@@ -69,8 +69,9 @@ export interface MqlGenerateInput {
    * Issue #1081 — row-identity anchors captured at edit/delete time. When
    * present, the `_id` filter for updateOne/deleteOne is derived from the
    * snapshot instead of the current page's `rows[rowIdx]`, so paginating
-   * away can't retarget the write. Keyed by `String(rowIdx)` (edits) and the
-   * full delete key `row-${page}-${rowIdx}` (deletes).
+   * away can't retarget the write. Keyed by the base CELL key
+   * `${rowIdx}-${colIdx}` (edits; nested `:path` keys resolve their base cell
+   * key) and the full delete key `row-${page}-${rowIdx}` (deletes).
    */
   editRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
   deletedRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;

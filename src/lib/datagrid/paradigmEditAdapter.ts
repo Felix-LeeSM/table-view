@@ -102,9 +102,10 @@ export interface PreviewInput {
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
   /**
-   * Issue #1081 — row-identity anchors keyed by `String(rowIdx)` (edits) and
-   * the full delete key (deletes). The commit builders prefer these over
-   * `data.rows[rowIdx]` so pagination/sort/refetch can't retarget a write.
+   * Issue #1081 — row-identity anchors keyed by the base CELL key
+   * `${rowIdx}-${colIdx}` (edits) and the full delete key (deletes). The
+   * commit builders prefer these over `data.rows[rowIdx]` so
+   * pagination/sort/refetch can't retarget a write.
    */
   pendingEditRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
   pendingDeletedRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;

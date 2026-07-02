@@ -18,6 +18,14 @@ interface UseDataGridEditPendingStateParams {
   database: string;
   schema: string;
   table: string;
+  /**
+   * Issue #1081 — the current page's rows. Used by the `setPendingEdits` /
+   * `setPendingDeletedRowKeys` wrappers to auto-capture a row-identity anchor
+   * for any NEW pending key, so EVERY caller anchors — including the nested
+   * JSON-tree panels that call `setPendingEdits` directly, bypassing
+   * `useDataGridEdit`.
+   */
+  rows?: unknown[][];
 }
 
 export function useDataGridEditPendingState({
@@ -25,11 +33,17 @@ export function useDataGridEditPendingState({
   database,
   schema,
   table,
+  rows,
 }: UseDataGridEditPendingStateParams) {
   const fallbackInstanceKeyRef = useRef<string | null>(null);
   if (fallbackInstanceKeyRef.current === null) {
     fallbackInstanceKeyRef.current = `__instance__::${Math.random().toString(36).slice(2)}::${Date.now()}`;
   }
+
+  // Keep the latest rows in a ref so the memoised setters read the current
+  // page without re-creating on every data change.
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
 
   const storeKey = useMemo(() => {
     if (!connectionId || !database || !schema || !table) {
@@ -61,10 +75,33 @@ export function useDataGridEditPendingState({
         | PendingEdits
         | ((prev: ReadonlyMap<string, string | null>) => PendingEdits),
     ) => {
-      const current = useDataGridEditStore
-        .getState()
-        .getEntry(storeKey).pendingEdits;
-      const value = typeof next === "function" ? next(current) : next;
+      const state = useDataGridEditStore.getState();
+      const prev = state.getEntry(storeKey).pendingEdits;
+      const value = typeof next === "function" ? next(prev) : next;
+      // Issue #1081 — anchor any NEW edit key (top-level `${rowIdx}-${colIdx}`
+      // OR nested `${rowIdx}-${colIdx}:${path}`) to its row's identity, keyed
+      // by the base CELL key. Runs for EVERY setPendingEdits caller, so the
+      // nested tree panels anchor without per-call-site capture. Existing
+      // keys keep their first-edit anchor (matches `pendingEdits`, which is
+      // the sole entry for a given cell key).
+      const rows = rowsRef.current;
+      if (rows) {
+        const snaps = state.getEntry(storeKey).pendingEditRowSnapshots;
+        let nextSnaps: Map<string, ReadonlyArray<unknown>> | null = null;
+        for (const key of value.keys()) {
+          if (prev.has(key)) continue;
+          const baseKey = key.split(":")[0]!;
+          if (snaps.has(baseKey) || nextSnaps?.has(baseKey)) continue;
+          const rowIdx = Number.parseInt(baseKey.split("-")[0]!, 10);
+          const row = rows[rowIdx] as readonly unknown[] | undefined;
+          if (!row) continue;
+          nextSnaps ??= new Map(snaps);
+          nextSnaps.set(baseKey, [...row]);
+        }
+        if (nextSnaps) {
+          storeSetSlice(storeKey, "pendingEditRowSnapshots", nextSnaps);
+        }
+      }
       storeSetSlice(storeKey, "pendingEdits", value);
     },
     [storeKey, storeSetSlice],
@@ -91,10 +128,29 @@ export function useDataGridEditPendingState({
         | PendingDeletedRowKeys
         | ((prev: ReadonlySet<string>) => PendingDeletedRowKeys),
     ) => {
-      const current = useDataGridEditStore
-        .getState()
-        .getEntry(storeKey).pendingDeletedRowKeys;
-      const value = typeof next === "function" ? next(current) : next;
+      const state = useDataGridEditStore.getState();
+      const prev = state.getEntry(storeKey).pendingDeletedRowKeys;
+      const value = typeof next === "function" ? next(prev) : next;
+      // Issue #1081 — anchor any NEW delete key (`row-${page}-${rowIdx}`) to
+      // its row's identity, keyed by the full page-distinct delete key.
+      const rows = rowsRef.current;
+      if (rows) {
+        const snaps = state.getEntry(storeKey).pendingDeletedRowSnapshots;
+        let nextSnaps: Map<string, ReadonlyArray<unknown>> | null = null;
+        for (const delKey of value) {
+          if (prev.has(delKey) || snaps.has(delKey) || nextSnaps?.has(delKey)) {
+            continue;
+          }
+          const rowIdx = Number.parseInt(delKey.split("-")[2]!, 10);
+          const row = rows[rowIdx] as readonly unknown[] | undefined;
+          if (!row) continue;
+          nextSnaps ??= new Map(snaps);
+          nextSnaps.set(delKey, [...row]);
+        }
+        if (nextSnaps) {
+          storeSetSlice(storeKey, "pendingDeletedRowSnapshots", nextSnaps);
+        }
+      }
       storeSetSlice(storeKey, "pendingDeletedRowKeys", value);
     },
     [storeKey, storeSetSlice],
@@ -121,35 +177,6 @@ export function useDataGridEditPendingState({
   const setPendingDeletedRowSnapshots = useCallback(
     (value: Map<string, ReadonlyArray<unknown>>) => {
       storeSetSlice(storeKey, "pendingDeletedRowSnapshots", value);
-    },
-    [storeKey, storeSetSlice],
-  );
-
-  // Issue #1081 — capture a row's cells at edit/delete time. Keyed so the
-  // commit builders (`sqlGenerator` / `mqlGenerator`) can rebuild WHERE /
-  // `_id` from the captured row instead of the current page's rows. The edit
-  // key is the CELL key (`${rowIdx}-${colIdx}`) so it shares `pendingEdits`'s
-  // collision domain (no cross-page cross-column clobber).
-  const captureEditRowSnapshot = useCallback(
-    (cellKey: string, row: readonly unknown[]) => {
-      const current = useDataGridEditStore
-        .getState()
-        .getEntry(storeKey).pendingEditRowSnapshots;
-      const next = new Map(current);
-      next.set(cellKey, [...row]);
-      storeSetSlice(storeKey, "pendingEditRowSnapshots", next);
-    },
-    [storeKey, storeSetSlice],
-  );
-
-  const captureDeletedRowSnapshot = useCallback(
-    (delKey: string, row: readonly unknown[]) => {
-      const current = useDataGridEditStore
-        .getState()
-        .getEntry(storeKey).pendingDeletedRowSnapshots;
-      const next = new Map(current);
-      next.set(delKey, [...row]);
-      storeSetSlice(storeKey, "pendingDeletedRowSnapshots", next);
     },
     [storeKey, storeSetSlice],
   );
@@ -211,8 +238,6 @@ export function useDataGridEditPendingState({
     setPendingEdits,
     setPendingNewRows,
     setPendingDeletedRowKeys,
-    captureEditRowSnapshot,
-    captureDeletedRowSnapshot,
     clearPendingEntry,
     pushSnapshot,
     undo,

@@ -133,6 +133,36 @@ const DOC_PAGE2: TableData = {
   executed_query: "db.users.find({})",
 };
 
+// jsonb column so nested (`:dot.path`) edits route through the structural
+// UPDATE path — this is what the RDB inline JSON tree panel emits.
+const RDB_JSONB_COLUMNS = [col("id", "integer", true), col("meta", "jsonb")];
+
+const RDB_JSONB_PAGE1: TableData = {
+  columns: RDB_JSONB_COLUMNS,
+  rows: [
+    [1, { role: "user" }],
+    [2, { role: "user" }],
+    [3, { role: "guest" }],
+  ],
+  total_count: 6,
+  page: 1,
+  page_size: 3,
+  executed_query: "SELECT * FROM public.users LIMIT 3 OFFSET 0",
+};
+
+const RDB_JSONB_PAGE2: TableData = {
+  columns: RDB_JSONB_COLUMNS,
+  rows: [
+    [40, { role: "x" }],
+    [50, { role: "x" }],
+    [60, { role: "x" }],
+  ],
+  total_count: 6,
+  page: 2,
+  page_size: 3,
+  executed_query: "SELECT * FROM public.users LIMIT 3 OFFSET 3",
+};
+
 function renderRdb(data: TableData, page: number) {
   return renderHook(
     ({ data, page }: { data: TableData; page: number }) =>
@@ -356,6 +386,55 @@ describe("useDataGridEdit — issue #1081 page-change commit targets original ro
       useDataGridEditStore.getState().getEntry(key).pendingEditRowSnapshots
         .size,
     ).toBe(0);
+  });
+
+  // Round-2 Blocking 1 — nested (`:dot.path`) edits are committed by the
+  // JSON-tree panels calling `setPendingEdits` DIRECTLY, bypassing
+  // useDataGridEdit's edit handlers. The anchor must still be captured, else
+  // the nested edit falls back to the current page's row on commit.
+  it("[RDB nested] jsonb dot-path edit on page 1 then commit on page 2 → UPDATE hits page-1 PK", async () => {
+    mockExecuteQueryBatch.mockImplementationOnce((_c, stmts) =>
+      Promise.resolve((stmts as string[]).map(() => ({}))),
+    );
+    const { result, rerender } = renderRdb(RDB_JSONB_PAGE1, 1);
+
+    // page 1: nested edit on row index 2 (id=3), col 1 (meta), path `role`.
+    // Mirrors the RDB inline-tree panel's direct setPendingEdits call.
+    act(() => result.current.setPendingEdits(new Map([["2-1:role", "admin"]])));
+
+    rerender({ data: RDB_JSONB_PAGE2, page: 2 });
+
+    act(() => result.current.handleCommit());
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+
+    const stmts = mockExecuteQueryBatch.mock.calls[0]![1] as string[];
+    const sql = stmts.join("\n");
+    // Must target page-1 (id=3), NOT page-2 index-2 (id=60).
+    expect(sql).toContain("WHERE id = 3;");
+    expect(sql).not.toContain("id = 60");
+  });
+
+  it("[Mongo nested] dot-path edit on page 1 then commit on page 2 → updateOne hits page-1 _id", async () => {
+    const { result, rerender } = renderDoc(DOC_PAGE1, 1);
+
+    // page 1: nested edit on row index 0 (_id=HEX_A), col 1, path `city`.
+    act(() => result.current.setPendingEdits(new Map([["0-1:city", "Paris"]])));
+
+    rerender({ data: DOC_PAGE2, page: 2 });
+
+    act(() => result.current.handleCommit());
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+
+    const ops = mockBulkWriteDocuments.mock.calls[0]![3] as Array<{
+      op: string;
+      filter: { _id: { $oid: string } };
+    }>;
+    // Must target page-1 Ada (_id=HEX_A), NOT page-2 index-0 Linus (HEX_C).
+    expect(ops[0]!.filter._id).toEqual({ $oid: HEX_A });
   });
 
   it("[discard] clears the row-identity snapshots", () => {
