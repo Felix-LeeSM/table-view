@@ -1,7 +1,7 @@
 ---
 title: TDD Evidence
 type: workflow-rule
-updated: 2026-06-12
+updated: 2026-07-03
 task: tdd, delivery, pre-push, sprint
 trigger:
   signal: code-profile sprint, RED commit, TDD-cycle hook
@@ -38,8 +38,9 @@ GREEN 으로 통과시킨다.
 
 - 어떤 테스트 레벨(unit/integration/component)을 쓸지는 작업자가 정한다.
 - sprint contract 는 작업 방식이 아니라 scope/profile 만 선언한다.
-- sprint-build 는 TDD 를 강제 적용하지 않는다. delivery gate evidence 를
-  사전에 확인할 뿐이다.
+- harness sprint 루프는 TDD 를 강제 적용하지 않는다. delivery gate evidence 를
+  사전에 확인할 뿐이다. (sprint-build 는 2026-07-02 폐기 — harness 로 표준화,
+  둘 다 plan→implement→evaluate 루프로 목적 중복.)
 
 ## Push 전 확인
 
