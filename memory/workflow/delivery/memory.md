@@ -1,7 +1,7 @@
 ---
 title: Delivery — commit → push → PR → review → merge 전체 자율
 type: workflow-rule
-updated: 2026-06-12
+updated: 2026-07-02
 task: delivery, commit, push, pr, review, merge
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
@@ -32,15 +32,19 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
    - 정량은 자동 layer (hook / lint / pre-push / scripts/review/run-checks.sh) 가 이미 함
    - pr-reviewer 는 `.agents/skills/pr-review/SKILL.md` 를 적용하고 필요 시
      관점별 read-only `pr-subreviewer` 를 fan-out
-   - 출력: PR에 직접 남긴 통합 scorecard comment
+   - 출력: PR에 직접 남긴 통합 scorecard comment + verdict label
+     (green → `review:approved`, red → `review:changes-requested`;
+     [review](../review/memory.md) 행동 계약)
    - **soft backstop**: `gh pr create` 직후 PostToolUse 리마인더 훅
      (`scripts/hooks/pr-create-reminder.sh`, Claude Code + codex 공유)이 이 단계를
      상기시킨다 — review 는 자동/무-게이트이고 merge(T6)만 확인 대상. block 아님.
    - **외부 옵션**: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가
-5. **T5 Reflect/Fix** — 결함 발견 시 delivery owner 가 fix commit + push → T4 재시작
+5. **T5 Reflect/Fix** — 결함 발견 시 delivery owner 가 fix commit + push → T4 재시작.
+   push(synchronize) 는 `review-gate` 가 `review:approved` 를 자동 해제 — 재리뷰 필수.
 6. **T6 Merge or Blocked report** — 자율 머지 조건:
    - 정성 모든 차원 ≥ 8/10
-   - `gh pr checks` SUCCESS (CI green)
+   - `gh pr checks` SUCCESS (CI green — `review-gate` 는 reviewer 의
+     `review:approved` label 필요, main required check + enforce_admins 라 우회 불가)
    - `gh pr view` 가 mergeable 이고 branch policy block 없음
    - 사용자 명시 거부 없음
      → `gh pr merge --squash --delete-branch` 자율 실행
