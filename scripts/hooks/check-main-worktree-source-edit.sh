@@ -213,8 +213,35 @@ is_patch_payload() {
 	' <<< "$COMMAND"
 }
 
+# Neutralize shell-special chars (<>;&|) that appear INSIDE single/double quotes
+# so the approximate tokenizer never treats quoted human text as operators:
+# commit trailers like "<x@y>", arrows "old -> new", printf formats. Quote chars
+# themselves are preserved (trim_token strips them) and an UNQUOTED redirect
+# target keeps its path (path chars are never masked), so real writes such as
+# `> "src/foo.ts"` stay blocked. Not a full shell parser: backslash escapes are
+# not interpreted and an unbalanced quote masks conservatively to end of input.
+mask_quoted_specials() {
+	# \047 = single quote, \042 = double quote (kept out of the awk program so the
+	# bash single-quoted wrapper stays clean). sq/dq persist across input lines to
+	# track multi-line quoting.
+	awk '
+	{
+		n = length($0); out = ""
+		for (i = 1; i <= n; i++) {
+			c = substr($0, i, 1)
+			if (c == "\047" && dq == 0) { sq = 1 - sq; out = out c; continue }
+			if (c == "\042" && sq == 0) { dq = 1 - dq; out = out c; continue }
+			if ((sq || dq) && index("<>;&|", c) > 0) { out = out "_"; continue }
+			out = out c
+		}
+		print out
+	}
+	' <<< "$1"
+}
+
 paths_from_command_tokens() {
-	local cmd="$1"
+	local cmd
+	cmd="$(mask_quoted_specials "$1")"
 	local old_opts
 	old_opts="$(set +o)"
 	set -f
@@ -239,15 +266,19 @@ paths_from_command_tokens() {
 	}
 
 	for word in "${tokens[@]}"; do
-		word="$(trim_token "$word")"
-		[ -n "$word" ] || continue
-
+		# Detect command separators on the RAW token: trim_token strips a trailing
+		# ';'/',', which would otherwise erase a standalone separator before it can
+		# reset state and leak expect_redir into the next command's first word.
 		case "$word" in
-			"&&" | "||" | "|" | ";")
+			"&&" | "||" | "|" | ";" | ";;")
 				reset_mode
+				expect_redir=0
 				continue
 				;;
 		esac
+
+		word="$(trim_token "$word")"
+		[ -n "$word" ] || continue
 
 		if [ "$expect_redir" = "1" ]; then
 			emit_path "$word"

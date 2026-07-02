@@ -1,0 +1,42 @@
+name: review-gate
+
+# label 기반 merge gate — 계정이 하나라 GitHub review approval 을 쓸 수 없어
+# `review:approved` label 로 우회한다. branch protection 의 required check.
+# 프로토콜 source: memory/workflow/review/memory.md, memory/workflow/delivery/memory.md
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]
+
+permissions:
+  pull-requests: write
+
+concurrency:
+  group: review-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # 새 commit 이 push 되면 기존 승인은 무효 — stale approval 로 미리뷰 코드가
+      # 머지되는 것을 막는다 (dismiss stale approvals 대응)
+      - name: Dismiss stale approval on new commits
+        if: github.event.action == 'synchronize'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh api -X DELETE "repos/${GITHUB_REPOSITORY}/issues/${PR}/labels/review%3Aapproved" || true
+          echo "::error::new commits pushed — review:approved dismissed, re-review required"
+          exit 1
+
+      - name: Require review:approved label
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'review:approved') }}
+        run: |
+          echo "::error::review:approved label missing — pr-reviewer green verdict required before merge"
+          exit 1
+
+      - name: Gate pass
+        run: echo "review:approved present — gate pass"

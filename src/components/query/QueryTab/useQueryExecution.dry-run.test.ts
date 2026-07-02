@@ -132,6 +132,50 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     expect(useQueryHistoryStore.getState().recentVisible).toHaveLength(0);
   });
 
+  // [#1049] kv paradigm → toast.info + rdb dry-run IPC NOT called.
+  // The Dry Run button is hidden off the rdb paradigm, but ⌘⇧⏎ routes
+  // every editor into this handler; the paradigm gate is the single
+  // shared judgment both the button and the shortcut pass through.
+  it("[#1049] kv paradigm → toast.info, rdb dry-run IPC not called", async () => {
+    const tab = seedTab({ paradigm: "kv", sql: "GET foo" });
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleDryRun();
+    });
+
+    expect(executeQueryDryRunMock).not.toHaveBeenCalled();
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]!.variant).toBe("info");
+    expect(toasts[0]!.message).toBe(
+      "Dry-run is only available for SQL databases.",
+    );
+    expect(useQueryHistoryStore.getState().recentVisible).toHaveLength(0);
+  });
+
+  // [#1049] search paradigm → toast.info + rdb dry-run IPC NOT called.
+  it("[#1049] search paradigm → toast.info, rdb dry-run IPC not called", async () => {
+    const tab = seedTab({
+      paradigm: "search",
+      sql: '{"query":{"match_all":{}}}',
+    });
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleDryRun();
+    });
+
+    expect(executeQueryDryRunMock).not.toHaveBeenCalled();
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]!.variant).toBe("info");
+    expect(toasts[0]!.message).toBe(
+      "Dry-run is only available for SQL databases.",
+    );
+    expect(useQueryHistoryStore.getState().recentVisible).toHaveLength(0);
+  });
+
   // [AC-248-E2] running tab → no-op, IPC NOT called.
   it("[AC-248-E2] running queryState → no-op, IPC not called", async () => {
     const tab = seedTab({

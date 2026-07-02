@@ -55,6 +55,52 @@ describe("GlobalQueryLogPanel", () => {
     );
   });
 
+  it("labels each paradigm with its own query language, not SQL", async () => {
+    invokeMock.mockResolvedValueOnce({
+      rows: [
+        row({
+          id: 2,
+          paradigm: "kv",
+          queryMode: "command",
+          source: "raw",
+          sqlRedacted: "GET user:1",
+        }),
+        row({
+          id: 3,
+          paradigm: "search",
+          queryMode: "query",
+          source: "raw",
+          sqlRedacted: '{"query":{"match_all":{}}}',
+        }),
+        row({
+          id: 4,
+          paradigm: "document",
+          queryMode: "find",
+          source: "raw",
+          sqlRedacted: "db.users.find({})",
+        }),
+      ],
+    });
+
+    render(<GlobalQueryLogPanel visible onClose={vi.fn()} />);
+
+    const kvBadge = (
+      await screen.findByTestId("global-log-entry-2")
+    ).querySelector('[data-paradigm="kv"]');
+    const searchBadge = (
+      await screen.findByTestId("global-log-entry-3")
+    ).querySelector('[data-paradigm="search"]');
+    const docBadge = (
+      await screen.findByTestId("global-log-entry-4")
+    ).querySelector('[data-paradigm="document"]');
+
+    expect(kvBadge).toHaveTextContent("Redis command");
+    expect(searchBadge).toHaveTextContent("Search DSL");
+    expect(docBadge).not.toHaveTextContent("SQL");
+    expect(kvBadge).not.toHaveTextContent("SQL");
+    expect(searchBadge).not.toHaveTextContent("SQL");
+  });
+
   it("renders DuckDB file analytics source badges with file name only", async () => {
     invokeMock.mockResolvedValueOnce({
       rows: [

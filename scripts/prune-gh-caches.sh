@@ -35,7 +35,7 @@ echo "  key_prefix=${KEY_PREFIX:-<all>}"
 
 mapfile -t CANDIDATES < <(
   gh api --paginate "repos/${REPO}/actions/caches" \
-    --jq '.actions_caches'
+    --jq '.actions_caches' \
   | jq -c --argjson cutoff "$CUTOFF_EPOCH" --arg prefix "$KEY_PREFIX" --arg min_size "$MIN_SIZE_BYTES" \
     '.[] |
      select(.size_in_bytes >= ($min_size | tonumber)) |
