@@ -134,6 +134,50 @@ fn dbms_specific_unsupported_capability_deltas_are_declared() {
         .has_backend_capability(BackendAdapterCapability::KeyValueMutation));
 }
 
+/// Regression for #1044: the wired SQLite production adapter (`make_adapter`
+/// constructs `SqliteAdapter`) implements bounded structured DDL through
+/// `create_table`, so its profile must declare `RelationalSchemaMutation`.
+/// Binds the capability declaration to the wired implementation so the two
+/// cannot drift (the declaration used to say "no DDL" while the engine did DDL).
+#[tokio::test]
+async fn sqlite_schema_mutation_declaration_matches_wired_create_table() {
+    let profile = get_data_source_profile(&DatabaseType::Sqlite);
+    assert!(
+        profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation),
+        "wired SqliteAdapter implements create_table, so the profile must declare RelationalSchemaMutation"
+    );
+
+    // preview_only returns the DDL text without a live pool, proving the wired
+    // adapter performs schema mutation (returns Ok, not AppError::Unsupported).
+    let adapter = table_view_lib::db::SqliteAdapter::new();
+    let request = table_view_lib::models::CreateTableRequest {
+        connection_id: "sqlite".to_string(),
+        schema: "main".to_string(),
+        name: "capability_1044".to_string(),
+        columns: vec![table_view_lib::models::ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            default_value: None,
+            comment: None,
+            is_identity: false,
+        }],
+        primary_key: Some(vec!["id".to_string()]),
+        preview_only: true,
+        table_comment: None,
+        expected_database: None,
+    };
+    let result = adapter
+        .create_table(&request)
+        .await
+        .expect("wired SQLite adapter implements create_table");
+    assert!(
+        result.sql.contains("CREATE TABLE"),
+        "create_table must emit real DDL, got: {}",
+        result.sql
+    );
+}
+
 #[tokio::test]
 async fn dbms_specific_unsupported_delta_paths_return_explicit_app_errors() {
     let duckdb = DuckdbAdapter::new();
