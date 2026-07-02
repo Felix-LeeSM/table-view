@@ -111,16 +111,32 @@ export function useDataGridEditPendingState({
     [storeKey, storeSetSlice],
   );
 
+  const setPendingEditRowSnapshots = useCallback(
+    (value: Map<string, ReadonlyArray<unknown>>) => {
+      storeSetSlice(storeKey, "pendingEditRowSnapshots", value);
+    },
+    [storeKey, storeSetSlice],
+  );
+
+  const setPendingDeletedRowSnapshots = useCallback(
+    (value: Map<string, ReadonlyArray<unknown>>) => {
+      storeSetSlice(storeKey, "pendingDeletedRowSnapshots", value);
+    },
+    [storeKey, storeSetSlice],
+  );
+
   // Issue #1081 — capture a row's cells at edit/delete time. Keyed so the
   // commit builders (`sqlGenerator` / `mqlGenerator`) can rebuild WHERE /
-  // `_id` from the captured row instead of the current page's rows.
+  // `_id` from the captured row instead of the current page's rows. The edit
+  // key is the CELL key (`${rowIdx}-${colIdx}`) so it shares `pendingEdits`'s
+  // collision domain (no cross-page cross-column clobber).
   const captureEditRowSnapshot = useCallback(
-    (rowIdx: number, row: readonly unknown[]) => {
+    (cellKey: string, row: readonly unknown[]) => {
       const current = useDataGridEditStore
         .getState()
         .getEntry(storeKey).pendingEditRowSnapshots;
       const next = new Map(current);
-      next.set(String(rowIdx), [...row]);
+      next.set(cellKey, [...row]);
       storeSetSlice(storeKey, "pendingEditRowSnapshots", next);
     },
     [storeKey, storeSetSlice],
@@ -148,12 +164,22 @@ export function useDataGridEditPendingState({
         pendingEdits: new Map(pendingEdits),
         pendingNewRows: pendingNewRows.map((row) => [...row]),
         pendingDeletedRowKeys: new Set(pendingDeletedRowKeys),
+        // Issue #1081 — snapshot the anchors so undo restores them too.
+        pendingEditRowSnapshots: new Map(pendingEditRowSnapshots),
+        pendingDeletedRowSnapshots: new Map(pendingDeletedRowSnapshots),
       };
       const next = [...prev, snap];
       if (next.length > UNDO_STACK_MAX) next.shift();
       return next;
     });
-  }, [pendingEdits, pendingNewRows, pendingDeletedRowKeys, setUndoStack]);
+  }, [
+    pendingEdits,
+    pendingNewRows,
+    pendingDeletedRowKeys,
+    pendingEditRowSnapshots,
+    pendingDeletedRowSnapshots,
+    setUndoStack,
+  ]);
 
   const undo = useCallback(() => {
     setUndoStack((prevStack) => {
@@ -162,12 +188,17 @@ export function useDataGridEditPendingState({
       setPendingEdits(new Map(last.pendingEdits));
       setPendingNewRows(last.pendingNewRows.map((row) => [...row]));
       setPendingDeletedRowKeys(new Set(last.pendingDeletedRowKeys));
+      // Issue #1081 — restore the row-identity anchors in lockstep.
+      setPendingEditRowSnapshots(new Map(last.pendingEditRowSnapshots));
+      setPendingDeletedRowSnapshots(new Map(last.pendingDeletedRowSnapshots));
       return prevStack.slice(0, -1);
     });
   }, [
     setPendingEdits,
     setPendingNewRows,
     setPendingDeletedRowKeys,
+    setPendingEditRowSnapshots,
+    setPendingDeletedRowSnapshots,
     setUndoStack,
   ]);
 

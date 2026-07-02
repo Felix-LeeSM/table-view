@@ -219,7 +219,7 @@ export function useDataGridEdit({
       // (`next` dropped the key) — there is no pending edit to anchor.
       if (next.has(key) && data) {
         const row = data.rows[editingCell.row] as unknown[] | undefined;
-        if (row) captureEditRowSnapshot(editingCell.row, row);
+        if (row) captureEditRowSnapshot(key, row);
       }
     }
     setEditingCell(null);
@@ -295,7 +295,7 @@ export function useDataGridEdit({
           // `saveCurrentEdit`).
           if (next.has(key) && data) {
             const row = data.rows[editingCell.row] as unknown[] | undefined;
-            if (row) captureEditRowSnapshot(editingCell.row, row);
+            if (row) captureEditRowSnapshot(key, row);
           }
         }
       }
@@ -477,7 +477,7 @@ export function useDataGridEdit({
         // so the override map's WHERE resolves from the captured row.
         if (merged.has(key)) {
           const row = data.rows[editingCell.row] as unknown[] | undefined;
-          if (row) captureEditRowSnapshot(editingCell.row, row);
+          if (row) captureEditRowSnapshot(key, row);
         }
         const { opened } = handleCommit({ pendingEditsOverride: merged });
         if (opened) {

@@ -44,6 +44,10 @@ export interface EditSnapshot {
   pendingEdits: ReadonlyMap<string, string | null>;
   pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
   pendingDeletedRowKeys: ReadonlySet<string>;
+  // Issue #1081 — undo must restore the row-identity anchors too, else an
+  // orphan snapshot outlives the pending edit/delete it anchored.
+  pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  pendingDeletedRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
 }
 
 export interface PendingEntry {
@@ -57,9 +61,11 @@ export interface PendingEntry {
    * not from whatever `data.rows[rowIdx]` holds after the grid re-orders
    * (pagination, sort change, refetch).
    *
-   * - `pendingEditRowSnapshots` keyed by `String(rowIdx)` — mirrors the
-   *   page-less `pendingEdits` collision domain (same index across pages
-   *   collapses to one entry, staying consistent with `pendingEdits`).
+   * - `pendingEditRowSnapshots` keyed by the CELL key `${rowIdx}-${colIdx}`
+   *   — the SAME collision domain as `pendingEdits`, so a cross-page edit on
+   *   the same visual row index but a different column keeps its own anchor
+   *   instead of clobbering the earlier one (a wrong-row-write path when the
+   *   snapshot was coarser than the edit key).
    * - `pendingDeletedRowSnapshots` keyed by the full delete key
    *   (`row-${page}-${rowIdx}`) — delete keys are page-distinct, so their
    *   snapshots must be too.

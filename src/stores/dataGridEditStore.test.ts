@@ -61,6 +61,8 @@ describe("dataGridEditStore — Sprint 251 in-memory pending-edit lift", () => {
         pendingEdits: new Map(),
         pendingNewRows: [],
         pendingDeletedRowKeys: new Set(),
+        pendingEditRowSnapshots: new Map(),
+        pendingDeletedRowSnapshots: new Map(),
       }),
     ).toThrow(TypeError);
 
@@ -116,6 +118,8 @@ describe("dataGridEditStore — Sprint 251 in-memory pending-edit lift", () => {
       pendingEdits: new Map(),
       pendingNewRows: [],
       pendingDeletedRowKeys: new Set(),
+      pendingEditRowSnapshots: new Map(),
+      pendingDeletedRowSnapshots: new Map(),
     };
 
     useDataGridEditStore.getState().setSlice(KEY_A, "pendingNewRows", newRows);

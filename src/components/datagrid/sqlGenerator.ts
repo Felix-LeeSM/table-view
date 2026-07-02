@@ -325,8 +325,10 @@ export function generateSqlWithKeys(
     const colIdx = parseInt(colStr!, 10);
     const col = data.columns[colIdx];
     if (!col) return;
-    // Issue #1081 — prefer the row-identity snapshot captured at edit time.
-    const row = (options.editRowSnapshots?.get(String(rowIdx)) ??
+    // Issue #1081 — prefer the row-identity snapshot captured at edit time,
+    // keyed by the CELL key so a cross-page edit on the same rowIdx but a
+    // different column resolves its own anchor.
+    const row = (options.editRowSnapshots?.get(cellKey) ??
       data.rows[rowIdx]) as unknown[] | undefined;
     if (!row) return;
 
