@@ -53,13 +53,17 @@ pre-commit:
           --fail-under-regions 73
       glob: "*.rs"
 EOF
-	cat >"$repo/scripts/hooks/pre-push-path-router.sh" <<'EOF'
-run_rust_coverage() {
-  cargo llvm-cov nextest --profile push --lib \
-    --fail-under-lines 80 \
-    --fail-under-functions 75 \
-    --fail-under-regions 80
-}
+	# Rust integration coverage thresholds now live in the CI workflow (promoted
+	# from the pre-push rust route, 2026-07-03). Mirror that source here.
+	mkdir -p "$repo/.github/workflows"
+	cat >"$repo/.github/workflows/ci.yml" <<'EOF'
+      - name: Run integration coverage
+        working-directory: src-tauri
+        run: |
+          cargo llvm-cov nextest --profile push --lib \
+            --fail-under-lines 80 \
+            --fail-under-functions 75 \
+            --fail-under-regions 80
 EOF
 }
 
@@ -92,7 +96,7 @@ write_full_targets() {
     },
     {
       "id": "rust.pre_push.integration",
-      "source": "scripts/hooks/pre-push-path-router.sh",
+      "source": ".github/workflows/ci.yml",
       "metrics": {
         "lines": 80,
         "functions": 75,
@@ -163,7 +167,7 @@ write_lowered_target() {
     },
     {
       "id": "rust.pre_push.integration",
-      "source": "scripts/hooks/pre-push-path-router.sh",
+      "source": ".github/workflows/ci.yml",
       "metrics": {
         "lines": 80,
         "functions": 75,
@@ -203,7 +207,7 @@ write_actual_mismatch_target() {
     },
     {
       "id": "rust.pre_push.integration",
-      "source": "scripts/hooks/pre-push-path-router.sh",
+      "source": ".github/workflows/ci.yml",
       "metrics": {
         "lines": 80,
         "functions": 75,

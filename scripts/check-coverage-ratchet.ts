@@ -118,14 +118,19 @@ function extractPreCommitRustThresholds(): Metrics {
   };
 }
 
-function extractPrePushRustThresholds(): Metrics {
-  const source = readText("scripts/hooks/pre-push-path-router.sh");
+// The Rust integration coverage gate was promoted from the local pre-push
+// rust route to CI `Integration Tests (Docker)` on 2026-07-03 (audit #6), so
+// the thresholds now live in the workflow. The ratchet entry id stays
+// `rust.pre_push.integration` (a stable key: renaming would read as a deleted
+// target against origin/main and fail the ratchet's own anti-deletion guard).
+function extractCiRustThresholds(): Metrics {
+  const source = readText(".github/workflows/ci.yml");
   const match =
     /cargo llvm-cov nextest --profile push[\s\S]*?--fail-under-lines\s+(\d+)[\s\S]*?--fail-under-functions\s+(\d+)[\s\S]*?--fail-under-regions\s+(\d+)/m.exec(
       source,
     );
   if (!match) {
-    throw new Error("missing pre-push Rust coverage thresholds");
+    throw new Error("missing CI Rust integration coverage thresholds");
   }
   return {
     lines: Number(match[1]),
@@ -141,7 +146,7 @@ function actualMetricsFor(id: string): Metrics {
     case "rust.pre_commit.tier1":
       return extractPreCommitRustThresholds();
     case "rust.pre_push.integration":
-      return extractPrePushRustThresholds();
+      return extractCiRustThresholds();
     default:
       throw new Error(`unknown ratchet entry: ${id}`);
   }

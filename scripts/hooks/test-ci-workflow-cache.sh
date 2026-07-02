@@ -80,7 +80,7 @@ pr_body_block="$(sed -n '/^  pr-body:/,/^  frontend:/p' <<<"$workflow_text" | se
 pr_body_only_block="$(sed -n '/^  pr-body:/,/^  doc-size:/p' <<<"$workflow_text" | sed '$d')"
 integration_disk_telemetry_step="$(extract_step_block "$integration_block" "Show disk usage before integration build")"
 integration_disk_cleanup_step="$(extract_step_block "$integration_block" "Free disk headroom before integration build")"
-integration_run_step="$(extract_step_block "$integration_block" "Run integration tests")"
+integration_run_step="$(extract_step_block "$integration_block" "Run integration coverage")"
 
 if [ -z "$pr_body_block" ]; then
 	echo "FAIL: PR body job is missing from $WORKFLOW" >&2
@@ -145,9 +145,9 @@ assert_contains "$integration_block" "cache-bin: false" "integration rust cache"
 assert_contains "$integration_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "integration rust cache"
 assert_order "$integration_block" "- name: Show disk usage before integration build" "- name: Free disk headroom before integration build" "integration disk cleanup after telemetry"
 assert_order "$integration_block" "- name: Free disk headroom before integration build" "- name: Cache Rust artifacts" "integration disk cleanup before cache restore"
-assert_order "$integration_block" "- name: Cache Rust artifacts" "- name: Run integration tests" "integration rust cache before cargo tests"
-assert_order "$integration_block" "- name: Free disk headroom before integration build" "- name: Run integration tests" "integration disk cleanup before cargo tests"
-assert_order "$integration_block" "- name: Free disk headroom before integration build" "run: cargo test --manifest-path src-tauri/Cargo.toml" "integration disk cleanup before cargo command"
+assert_order "$integration_block" "- name: Cache Rust artifacts" "- name: Run integration coverage" "integration rust cache before coverage run"
+assert_order "$integration_block" "- name: Free disk headroom before integration build" "- name: Run integration coverage" "integration disk cleanup before coverage run"
+assert_order "$integration_block" "- name: Free disk headroom before integration build" "cargo llvm-cov nextest --profile push" "integration disk cleanup before coverage command"
 assert_contains "$integration_disk_telemetry_step" "df -h /" "integration disk telemetry step"
 assert_contains "$integration_disk_telemetry_step" "du -sh src-tauri/target" "integration disk telemetry step"
 assert_contains "$integration_disk_telemetry_step" "docker system df" "integration disk telemetry step"
@@ -156,7 +156,22 @@ assert_contains "$integration_disk_cleanup_step" "docker system prune -af" "inte
 assert_contains "$integration_disk_cleanup_step" "/usr/local/lib/android" "integration disk cleanup step"
 assert_contains "$integration_disk_cleanup_step" "/usr/share/dotnet" "integration disk cleanup step"
 assert_contains "$integration_disk_cleanup_step" "/opt/ghc" "integration disk cleanup step"
-assert_contains "$integration_run_step" "run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration" "integration cargo command"
+# Rust integration coverage gate promoted from the pre-push rust route (audit
+# 2026-07-03 #6). The integration-tests job now owns the coverage floor: it
+# installs pinned cargo-llvm-cov + cargo-nextest with the llvm-tools component
+# and runs `cargo llvm-cov nextest --profile push` at the ratchet-locked
+# thresholds (lines 80 / functions 75 / regions 80). The extraction in
+# scripts/check-coverage-ratchet.ts reads these same flags from this workflow.
+assert_contains "$integration_block" "components: llvm-tools-preview" "integration llvm-tools component"
+assert_contains "$integration_block" "uses: taiki-e/install-action@v2" "integration coverage tool installer"
+assert_contains "$integration_block" "tool: cargo-llvm-cov@0.8.7,cargo-nextest@0.9.137" "integration coverage tool pins"
+assert_contains "$integration_run_step" "working-directory: src-tauri" "integration coverage cwd"
+assert_contains "$integration_run_step" "cargo llvm-cov nextest --profile push --lib" "integration coverage command"
+assert_contains "$integration_run_step" "--test redis_integration" "integration coverage keeps redis signal"
+assert_contains "$integration_run_step" "--test mssql_connection_routing" "integration coverage push-profile binary set"
+assert_contains "$integration_run_step" "--fail-under-lines 80" "integration coverage lines threshold"
+assert_contains "$integration_run_step" "--fail-under-functions 75" "integration coverage functions threshold"
+assert_contains "$integration_run_step" "--fail-under-regions 80" "integration coverage regions threshold"
 
 # docs/memory-only skip gate (audit 2026-07-03 #5). The `changes` job classifies
 # the change set; heavy jobs gate on it with a FAIL-CLOSED `if:` — skip only when

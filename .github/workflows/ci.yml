@@ -400,7 +400,10 @@ jobs:
   integration-tests:
     name: Integration Tests (Docker)
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # Raised 40 -> 60: this job now runs instrumented `cargo llvm-cov nextest`
+    # coverage (promoted from pre-push) plus MySQL/MSSQL testcontainers, both
+    # heavier than the former plain `cargo test`.
+    timeout-minutes: 60
     needs: changes
     # Fail-closed: skip heavy job ONLY when `changes` succeeded AND classified
     # the set as docs-only. If `changes` itself failed/was cancelled (infra),
@@ -454,6 +457,17 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.91.0
+          # llvm-tools-preview backs `cargo llvm-cov`'s source-based coverage.
+          components: llvm-tools-preview
+
+      # cargo-llvm-cov + cargo-nextest back the promoted integration coverage
+      # gate below. taiki-e/install-action downloads pinned prebuilt binaries
+      # (versions match the local pre-push toolchain from scripts/setup.sh) and
+      # caches them, so no per-run source build lands on the 40m+ critical path.
+      - name: Install cargo-llvm-cov and cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@0.8.7,cargo-nextest@0.9.137
 
       - name: Show disk usage before integration build
         run: |
@@ -476,7 +490,23 @@ jobs:
           cache-bin: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Run integration tests
+      # Rust integration coverage gate (audit 2026-07-03 #6). Promoted here from
+      # the local pre-push rust route so a required *remote* check — not just the
+      # dev machine's hook — owns the integration coverage floor. Runs the exact
+      # push nextest profile + llvm-cov thresholds (lines 80 / functions 75 /
+      # regions 80), ratchet-locked in scripts/coverage-ratchet-targets.json
+      # (`rust.pre_push.integration`; check-coverage-ratchet.ts reads the
+      # thresholds from this step). This coverage run REPLACES the former plain
+      # `cargo test` step (no reason to run the same tests twice): it adds the
+      # nine push-profile integration binaries + --lib, and keeps
+      # redis_integration — which the plain test ran and the old pre-push
+      # coverage command omitted — so no test signal is lost. PG/Mongo reuse the
+      # GHA services via PGHOST/MONGO_HOST; MySQL/MSSQL/Redis fall back to their
+      # self-owned testcontainers (Docker is present on the runner). Instrumented
+      # build + extra testcontainers cost more wall-clock than the old plain
+      # test — the accepted promotion trade-off (timeout raised 40 -> 60m).
+      - name: Run integration coverage
+        working-directory: src-tauri
         env:
           PGHOST: localhost
           PGPORT: 5432
@@ -485,14 +515,31 @@ jobs:
           PGDATABASE: table_view_test
           MONGO_HOST: localhost
           MONGO_PORT: 27017
-        run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration
+        run: |
+          cargo llvm-cov nextest --profile push --lib \
+            --test storage_integration \
+            --test query_integration \
+            --test schema_integration \
+            --test fixture_loading \
+            --test mongo_integration \
+            --test mysql_integration \
+            --test duckdb_file_analytics \
+            --test mariadb_ddl_preview \
+            --test mssql_connection_routing \
+            --test redis_integration \
+            --summary-only \
+            --fail-under-lines 80 \
+            --fail-under-functions 75 \
+            --fail-under-regions 80
 
   # Runtime E2E smoke lives in .github/workflows/e2e-smoke.yml as a
   # blocking remote check on pull requests and main. This workflow keeps the
   # non-runtime correctness gates.
   #   Blocking: dependency-security (bans/licenses/sources), frontend
   #   (ratchet → wasm:size → lint → test → build), rust-static (fmt + clippy,
-  #   mirrors lefthook), rust unit/storage tests, integration tests.
+  #   mirrors lefthook), rust unit/storage tests, integration coverage
+  #   (`cargo llvm-cov nextest --profile push`, thresholds 80/75/80 — promoted
+  #   from the local pre-push rust route, audit 2026-07-03 #6).
   #   Non-blocking (advisory): doc-size, dependency-advisories (RUSTSEC),
   #   frontend-advisory (docs:links + WCAG contrast).
   # The blocking jobs + dependency-advisories gate on `changes` with a
