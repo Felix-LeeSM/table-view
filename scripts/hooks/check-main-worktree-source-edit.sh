@@ -263,16 +263,25 @@ paths_from_command_tokens() {
 			*">"*)
 				local after_redir="${word##*>}"
 				case "$after_redir" in
-					# FD duplication/close (2>&1, >&2, 2>&-): not a file path.
-					# `>&word` with a non-numeric word IS a file write, so only
-					# skip when `&` is followed by digits or the close marker `-`.
-					\&[0-9]* | \&-)
+					# FD close (2>&-, >&-): not a file path.
+					\&-)
 						continue
 						;;
 					# Bare `>&` — the write target is the next token (`>& file`).
 					\&)
 						expect_redir=1
 						continue
+						;;
+					# `>&N` / `N>&M`: FD duplication only when the word after `&`
+					# is ALL digits. `>&word` with any non-digit char is a real
+					# stdout+stderr file write (bash: `>&word` == `>word 2>&1`),
+					# so fall through to emit_path and keep it blocked (fail-safe).
+					\&*)
+						local fd_dup_target="${after_redir#&}"
+						case "$fd_dup_target" in
+							'' | *[!0-9]*) : ;;
+							*) continue ;;
+						esac
 						;;
 				esac
 				if [ -n "$after_redir" ]; then
