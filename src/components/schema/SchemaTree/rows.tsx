@@ -34,7 +34,10 @@ import {
 import { Button } from "@components/ui/button";
 import type { TableInfo, FunctionInfo } from "@/types/schema";
 import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
-import type { ExportInclude } from "@/hooks/useMigrationExport";
+import {
+  supportsMigrationExport,
+  type ExportInclude,
+} from "@/hooks/useMigrationExport";
 import { cn } from "@lib/utils";
 import {
   nodeIdToString,
@@ -47,9 +50,9 @@ import type { RdbTreeShape } from "../treeShape";
 
 // Sprint 301 — schema / table 컨텍스트 메뉴의 Export sub-menu 가 사용하는
 // 세 가지 export include 모드. DDL / Data (DML) / Full (DDL + Data).
-// Data 와 Full 은 현재 PostgreSQL 만 실제로 동작 — MySQL / SQLite 는
-// stream_table_rows 가 Unsupported 라 useMigrationExport 가 toast 로
-// 사용자에게 알리며 종료. UI 는 모든 driver 에 동일하게 노출한다.
+// #1048 — Export sub-menu 는 `stream_table_rows` 백엔드가 구현된 엔진
+// (PG / MySQL / MariaDB) 에서만 노출한다. SQLite / DuckDB / MSSQL / Oracle
+// 은 DML/Full 을 Unsupported 로 reject 하므로 노출 시 error-on-click.
 const EXPORT_MODES: ReadonlyArray<{
   include: ExportInclude;
   labelKey: string;
@@ -173,22 +176,26 @@ export function renderSchemaRow(
           <Plus size={14} />
           {ctx.t("createTableMenu")}
         </ContextMenuItem>
-        <ContextMenuSub>
-          <ContextMenuSubTrigger>
-            <Download size={14} />
-            {ctx.t("exportSchemaMenu")}
-          </ContextMenuSubTrigger>
-          <ContextMenuSubContent>
-            {EXPORT_MODES.map(({ include, labelKey, Icon }) => (
-              <ContextMenuItem
-                key={include}
-                onClick={() => ctx.handleExportSchema(row.schemaName, include)}
-              >
-                <Icon size={14} /> {ctx.t(labelKey)}
-              </ContextMenuItem>
-            ))}
-          </ContextMenuSubContent>
-        </ContextMenuSub>
+        {supportsMigrationExport(ctx.dbType) && (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Download size={14} />
+              {ctx.t("exportSchemaMenu")}
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              {EXPORT_MODES.map(({ include, labelKey, Icon }) => (
+                <ContextMenuItem
+                  key={include}
+                  onClick={() =>
+                    ctx.handleExportSchema(row.schemaName, include)
+                  }
+                >
+                  <Icon size={14} /> {ctx.t(labelKey)}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
         <ContextMenuItem
           onClick={() => ctx.handleRefreshSchema(row.schemaName)}
         >
@@ -532,23 +539,29 @@ export function renderItemRow(
                 StructurePanel Triggers tab (consolidated single entry
                 point). Column/Index/Constraint surfaces don't carry
                 table-row shortcuts either, so this restores consistency. */}
-            <ContextMenuSub>
-              <ContextMenuSubTrigger>
-                <Download size={14} /> {ctx.t("exportTableMenu")}
-              </ContextMenuSubTrigger>
-              <ContextMenuSubContent>
-                {EXPORT_MODES.map(({ include, labelKey, Icon }) => (
-                  <ContextMenuItem
-                    key={include}
-                    onClick={() =>
-                      ctx.handleExportTable(item.name, row.schemaName, include)
-                    }
-                  >
-                    <Icon size={14} /> {ctx.t(labelKey)}
-                  </ContextMenuItem>
-                ))}
-              </ContextMenuSubContent>
-            </ContextMenuSub>
+            {supportsMigrationExport(ctx.dbType) && (
+              <ContextMenuSub>
+                <ContextMenuSubTrigger>
+                  <Download size={14} /> {ctx.t("exportTableMenu")}
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent>
+                  {EXPORT_MODES.map(({ include, labelKey, Icon }) => (
+                    <ContextMenuItem
+                      key={include}
+                      onClick={() =>
+                        ctx.handleExportTable(
+                          item.name,
+                          row.schemaName,
+                          include,
+                        )
+                      }
+                    >
+                      <Icon size={14} /> {ctx.t(labelKey)}
+                    </ContextMenuItem>
+                  ))}
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            )}
             <ContextMenuItem
               onClick={() => ctx.handleStartRename(item.name, row.schemaName)}
             >

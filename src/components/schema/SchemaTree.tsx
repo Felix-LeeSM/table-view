@@ -13,7 +13,10 @@ import {
 import { useSchemaStore } from "@stores/schemaStore";
 import { useActiveTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useMigrationExport } from "@/hooks/useMigrationExport";
+import {
+  useMigrationExport,
+  supportsMigrationExport,
+} from "@/hooks/useMigrationExport";
 import { useSidebarScrollPersistence } from "@/hooks/useSidebarScrollPersistence";
 import {
   Popover,
@@ -103,13 +106,12 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       s.fileAnalyticsSources[connectionId] ?? EMPTY_FILE_SOURCES,
   );
 
-  // RDB schema-level migration export. Hidden on Mongo/Redis and when
-  // dbType hasn't loaded yet.
-  const isRdbConnection =
-    dbType === "postgresql" ||
-    dbType === "mysql" ||
-    dbType === "mariadb" ||
-    dbType === "sqlite";
+  // RDB schema-level migration export. Surfaced only where the backend
+  // `stream_table_rows` path is implemented (PG / MySQL / MariaDB) — SQLite,
+  // DuckDB, MSSQL and Oracle reject DML/Full dumps as `Unsupported`, so
+  // showing the control there would be an error-on-click (#1048). Also hidden
+  // on Mongo/Redis and before dbType has loaded.
+  const canExportMigration = supportsMigrationExport(dbType);
   const flatCreateTableSchema =
     dbType === "sqlite" ? (actions.schemas[0]?.name ?? null) : null;
   const {
@@ -274,10 +276,11 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             </Button>
           )}
           {/* RDB export Popover — three modes (DDL / DML / Full) ×
-              two scopes (single schema / all schemas). MySQL/SQLite
-              adapters are still placeholders, so the actual export only
-              succeeds on PG today, but the UI surfaces for any rdb. */}
-          {isRdbConnection && actions.schemas.length > 0 && (
+              two scopes (single schema / all schemas). Gated to engines with
+              a real `stream_table_rows` backend (PG / MySQL / MariaDB) via
+              `supportsMigrationExport` so unsupported engines don't surface an
+              error-on-click control (#1048). */}
+          {canExportMigration && actions.schemas.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
                 <Button
