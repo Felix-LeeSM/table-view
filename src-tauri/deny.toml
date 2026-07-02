@@ -76,6 +76,18 @@ ignore = [
   # 또는 rsa 0.10+ 채택 시 즉시 해소. Sprint 278 (sqlx mysql feature 활성화)
   # 이후 본 advisory 가 surfacing 되어 추가.
   "RUSTSEC-2023-0071",
+  # ── Tauri 생태계: plist → quick-xml namespace OOM ─────────────────────
+  # 경로: tauri 2.10.3 (+ tauri-codegen / tauri-plugin) → plist 1.8.0 →
+  # quick-xml 0.38.4. 두 advisory 모두 `NsReader`/`NamespaceResolver::push`
+  # 가 start tag 의 namespace 선언을 무제한 heap 할당하는 OOM (fix: quick-xml
+  # >= 0.41.0). plist 1.8.0 이 quick-xml ^0.38 을 핀해 `cargo update` 로
+  # 해소 불가 — tauri/plist upstream 이 quick-xml 0.41+ 로 이주해야 함.
+  # 실 영향: quick-xml 은 tauri 가 macOS `.plist` (Info.plist / app bundle)
+  # 를 파싱할 때만 쓰이며 신뢰된 로컬 파일 전용 — 원격 untrusted XML 입력
+  # 경로가 아니다. 2026-07-03 검토. tauri 가 plist quick-xml 0.41+ 채택 시
+  # 즉시 제거.
+  "RUSTSEC-2026-0194", # quick-xml namespace duplicate-check OOM
+  "RUSTSEC-2026-0195", # quick-xml NamespaceResolver::push unbounded alloc
 ]
 
 [licenses]
