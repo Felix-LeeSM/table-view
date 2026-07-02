@@ -148,7 +148,7 @@ is_primary_orchestration_path() {
 
 is_linked_worktree_target_path() {
 	case "$1" in
-	worktrees | worktrees/*)
+	worktrees | worktrees/* | .claude/worktrees | .claude/worktrees/*)
 		return 0
 		;;
 	*)

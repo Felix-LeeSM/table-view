@@ -262,6 +262,19 @@ paths_from_command_tokens() {
 				;;
 			*">"*)
 				local after_redir="${word##*>}"
+				case "$after_redir" in
+					# FD duplication/close (2>&1, >&2, 2>&-): not a file path.
+					# `>&word` with a non-numeric word IS a file write, so only
+					# skip when `&` is followed by digits or the close marker `-`.
+					\&[0-9]* | \&-)
+						continue
+						;;
+					# Bare `>&` — the write target is the next token (`>& file`).
+					\&)
+						expect_redir=1
+						continue
+						;;
+				esac
 				if [ -n "$after_redir" ]; then
 					emit_path "$after_redir"
 				else
