@@ -177,6 +177,7 @@ run_case "main: parent traversal back to src blocked" 1 main-path "../${MAIN_ROO
 run_case "main: absolute linked worktree source path allowed" 0 main-path "$LINKED_ROOT/src/App.tsx"
 run_case "main: relative linked worktree source path allowed" 0 main-path "worktrees/linked-fixture/src/App.tsx"
 run_case "main: relative linked worktree normalized source path allowed" 0 main-path "worktrees/linked-fixture/./src/../src/App.tsx"
+run_case "main: .claude/worktrees source path allowed" 0 main-path ".claude/worktrees/hook-parity/src/foo.rs"
 run_case "main: package manifest blocked" 1 main-path "package.json"
 run_case "main: components manifest blocked" 1 main-path "components.json"
 run_case "main: tsconfig blocked" 1 main-path "tsconfig.node.json"
@@ -218,6 +219,10 @@ run_case "main command: perl -pi source blocked" 1 main-command "perl -pi -e 's/
 run_case "main command: dd of source blocked" 1 main-command "dd if=/tmp/a of=src/App.tsx"
 run_case "main command: read-only source mention allowed" 0 main-command "rg App src/App.tsx"
 run_case "main command: external temp source-like path allowed" 0 main-command "printf hi > /tmp/App.tsx"
+run_case "main command: stdout-to-stderr fd dup allowed" 0 main-command "ls src 2>&1"
+run_case "main command: redirect stdout onto stderr fd allowed" 0 main-command "echo x >&2"
+run_case "main command: fd dup piped allowed" 0 main-command "cat src/App.tsx 2>&1 | head"
+run_case "main command: genuine file write still blocked" 1 main-command "cat src/App.tsx > realfile.txt"
 
 doc_patch_input="$(printf '*** Begin Patch\n*** Update File: memory/foo/memory.md\n@@\n-- git mv old path\n+- test/reset/helper wording in docs\n*** End Patch\n')"
 run_case "main command: apply_patch checks patch markers only" 0 main-command "$doc_patch_input"
