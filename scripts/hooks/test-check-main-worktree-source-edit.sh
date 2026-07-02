@@ -236,6 +236,14 @@ run_case "main command: glued redirect fd-prefixed leading write blocked" 1 main
 run_case "main command: glued redirect fd-close leading write blocked" 1 main-command "printf x 2>src/App.tsx>&-"
 run_case "main command: glued redirect multi-digit fd leading write blocked" 1 main-command "printf x >src/App.tsx>&10"
 run_case "main command: glued append redirect leading write blocked" 1 main-command "printf x >>src/App.tsx>&1"
+# Lateral regression (#1164 re-review): only the LEADING glued target was
+# checked, so a glued redirect whose leading target is allowed (memory/*) but
+# whose trailing/middle target is source slipped past. Every write target must
+# be checked, while FD dup/close segments stay skipped.
+run_case "main command: glued redirect allowed-leading source-trailing blocked" 1 main-command "printf x >memory/x.md>src/App.tsx"
+run_case "main command: glued redirect three targets trailing source blocked" 1 main-command "printf x >memory/a.md>memory/b.md>src/App.tsx"
+run_case "main command: glued redirect middle source blocked" 1 main-command "printf x >memory/a.md>src/App.tsx>memory/b.md"
+run_case "main command: glued redirect allowed-only targets allowed" 0 main-command "printf x >memory/a.md>memory/b.md"
 
 doc_patch_input="$(printf '*** Begin Patch\n*** Update File: memory/foo/memory.md\n@@\n-- git mv old path\n+- test/reset/helper wording in docs\n*** End Patch\n')"
 run_case "main command: apply_patch checks patch markers only" 0 main-command "$doc_patch_input"

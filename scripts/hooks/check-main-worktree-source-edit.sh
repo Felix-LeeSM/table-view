@@ -299,18 +299,34 @@ paths_from_command_tokens() {
 					fi
 					continue
 				fi
-				# gt_count >= 2: glued multi-redirect. Emit the leading write
-				# target (first '>' up to the next redirect). Drop a second '>'
-				# left by an append operator (`>>PATH`). Fall back to the raw
-				# tail so it still denies as an unknown target (fail-safe).
-				local first_rest="${word#*>}"
-				first_rest="${first_rest#>}"
-				local leading_write="${first_rest%%>*}"
-				if [ -n "$leading_write" ]; then
-					emit_path "$leading_write"
-				else
-					emit_path "$after_redir"
-				fi
+				# gt_count >= 2: glued multi-redirect. Split the whole word on
+				# '>' and emit EVERY non-empty write target so leading, middle,
+				# and trailing targets are each policy-checked. Emitting only the
+				# leading write let a source trailing/middle target slip past when
+				# the leading target was allowed (#1164 lateral regression).
+				# Empty segments (leading '>' and the extra one from `>>PATH`
+				# append) are skipped. FD dup (`&N`) / close (`&-`) segments are
+				# skipped; a `&word` with a non-digit char is a real
+				# stdout+stderr file write, so emit it (fail-safe).
+				local glued_seg glued_segs=()
+				IFS='>' read -r -a glued_segs <<<"$word"
+				for glued_seg in "${glued_segs[@]}"; do
+					[ -n "$glued_seg" ] || continue
+					case "$glued_seg" in
+						\&- | \&)
+							continue
+							;;
+						\&*)
+							case "${glued_seg#&}" in
+								*[!0-9]*) emit_path "$glued_seg" ;;
+								*) continue ;;
+							esac
+							;;
+						*)
+							emit_path "$glued_seg"
+							;;
+					esac
+				done
 				continue
 				;;
 		esac
