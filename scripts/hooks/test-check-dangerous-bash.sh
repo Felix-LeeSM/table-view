@@ -441,6 +441,82 @@ run_case \
   '{"tool_input":{"command":"git log FETCH_HEAD"}}' \
   EMPTY
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Issue #1029 — SQL DROP/TRUNCATE 키워드 오탐 (이 repo 는 DB 클라이언트)
+# ─────────────────────────────────────────────────────────────────────────────
+# sql_drop / sql_truncate 는 컨텍스트 없는 단어 매치라 소스 검색·커밋 메시지까지
+# 차단했다. DB 클라이언트가 command position 에서 실제 실행될 때만 차단해야 한다.
+#   - ALLOW: 소스 검색(rg/grep), 커밋 메시지 — 키워드가 데이터일 뿐 실행 아님
+#   - BLOCK: psql/sqlite3 등 클라이언트가 파괴적 SQL 을 실제 실행
+
+run_case \
+  "case-1029-1: rg source search for destructive keyword → allow" \
+  0 \
+  '{"tool_input":{"command":"rg \"TRUNCATE\" src/"}}' \
+  EMPTY
+
+run_case \
+  "case-1029-2: git commit message with SQL keyword → allow" \
+  0 \
+  '{"tool_input":{"command":"git commit -m \"fix: DROP TABLE guard\""}}' \
+  EMPTY
+
+run_case \
+  "case-1029-3: grep source search for destructive keyword → allow" \
+  0 \
+  '{"tool_input":{"command":"grep DROP src/completion.rs"}}' \
+  EMPTY
+
+run_case \
+  "case-1029-4: psql -c destructive statement → block" \
+  1 \
+  '{"tool_input":{"command":"psql -c \"DROP TABLE users\""}}' \
+  'MATCH:BLOCKED|sql_drop'
+
+run_case \
+  "case-1029-5: sqlite3 positional destructive statement → block" \
+  1 \
+  '{"tool_input":{"command":"sqlite3 app.db \"TRUNCATE users\""}}' \
+  'MATCH:BLOCKED|sql_truncate'
+
+run_case \
+  "case-1029-6: env-prefixed psql destructive statement → block" \
+  1 \
+  '{"tool_input":{"command":"PGPASSWORD=secret psql -c \"DROP DATABASE app\""}}' \
+  'MATCH:BLOCKED|sql_drop'
+
+# Rework (PR #1151 review) — segment scoping + wrapper recognizer.
+# F1: keyword must live in the SAME command segment as the client, so a
+#     destructive keyword in a later ;/&&/|| segment (e.g. a commit message)
+#     must NOT be blocked by an earlier harmless client invocation.
+run_case \
+  "case-1029-7: client segment + commit message in next segment → allow (F1)" \
+  0 \
+  '{"tool_input":{"command":"psql -l && git commit -m \"fix: DROP TABLE guard\""}}' \
+  EMPTY
+
+# F2: standard careless wrappers (sudo/env/command/doas) before the client
+#     must be recognized so real destructive execution still blocks, and so
+#     `env VAR=v psql` is consistent with bare `VAR=v psql`.
+run_case \
+  "case-1029-8: sudo -u postgres psql destructive statement → block (F2)" \
+  1 \
+  '{"tool_input":{"command":"sudo -u postgres psql -c \"DROP TABLE users\""}}' \
+  'MATCH:BLOCKED|sql_drop'
+
+run_case \
+  "case-1029-9: env-wrapper psql destructive statement → block (F2)" \
+  1 \
+  '{"tool_input":{"command":"env PGPASSWORD=x psql -c \"DROP DATABASE app\""}}' \
+  'MATCH:BLOCKED|sql_drop'
+
+# F4: indented / continuation-line client must still block.
+run_case \
+  "case-1029-10: indented psql destructive statement → block (F4)" \
+  1 \
+  '{"tool_input":{"command":"  psql -c \"DROP TABLE x\""}}' \
+  'MATCH:BLOCKED|sql_drop'
+
 echo ""
 echo "==== smoke test summary ===="
 echo "PASS: $PASS_COUNT"
