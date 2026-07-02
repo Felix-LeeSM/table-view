@@ -241,6 +241,7 @@ run_rust_gates() {
 
 run_hook_gates() {
 	run_step "hook-shell-syntax" bash -n .githooks/pre-push scripts/hooks/*.sh scripts/hooks/lib/*.sh scripts/setup.sh scripts/target-cache.sh scripts/worktree-spawn.sh scripts/worktree-cleanup.sh scripts/worktree-bootstrap-deps.sh scripts/prune-gh-caches.sh
+	run_step "detect-change-scope" bash scripts/hooks/test-detect-change-scope.sh
 	run_step "lefthook-validate" lefthook validate
 	run_step_in "nextest-push-profile-config" src-tauri cargo nextest --no-pager show-config version --profile push
 	run_step "coverage-ratchet-tests" bash scripts/hooks/test-coverage-ratchet.sh
