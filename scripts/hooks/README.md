@@ -45,6 +45,11 @@ Current dispatchers:
 - `check-signed-commits.sh` — pre-push outgoing signed-commit gate.
 - `pre-push-path-router.sh` — path-sensitive pre-push TS/Rust gate router.
 - `post-tool-use.sh` — post-edit formatter/check dispatcher.
+- `pr-create-reminder.sh` — PostToolUse(Bash) soft 넛지: 명령이 `gh pr create` 를
+  포함하면 델리버리 T4(pr-reviewer read-only) 리뷰를 잊지 않도록 additionalContext
+  리마인더만 낸다. block 하지 않음(사용자 결정: hook 강제 대신 soft). Claude Code +
+  codex 공유 — `.claude/settings.json` + `.codex/hooks.json` PostToolUse(Bash) 양쪽이
+  동일 스크립트를 호출한다.
 
 ## Memory / doc size cap thresholds
 
