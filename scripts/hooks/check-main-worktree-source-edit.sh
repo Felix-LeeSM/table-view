@@ -71,6 +71,17 @@ trim_token() {
 	printf '%s\n' "$value"
 }
 
+# Drop single- and double-quoted segments from a raw token, leaving only its
+# UNQUOTED text. Used to decide whether a redirect char is a shell operator
+# (`echo "x">src` — `>` is outside the quotes) or literal data (`grep '>&'` —
+# `>` lives inside the quotes). ponytail: does not decode backslash escapes
+# (`\>`); such a token keeps its `>` and stays classified as a redirect
+# (fail-safe: when unsure, block). Upgrade to a real lexer only if a legitimate
+# backslash-escaped case surfaces.
+unquoted_remainder() {
+	printf '%s' "$1" | sed "s/'[^']*'//g; s/\"[^\"]*\"//g"
+}
+
 normalize_path() {
 	local path="$1"
 	local is_absolute=0
@@ -255,15 +266,16 @@ paths_from_command_tokens() {
 			continue
 		fi
 
-		# A raw token that begins with a quote is a literal string argument (e.g. a
-		# grep pattern like '>&' or "2>&1"), never a shell redirect operator.
-		# trim_token strips the quotes, so classify redirects only for unquoted raw
-		# tokens; otherwise a quoted `>&`/`>` would wrongly consume the next token
-		# as a write target. Quoted redirect TARGETS are still caught via the
-		# expect_redir branch above (the operator token there is unquoted).
-		case "$raw_word" in
-			\"* | \'*) ;;
-			*)
+		# Classify redirects only when the token carries a `>` OUTSIDE any quotes.
+		# bash whitespace-splits `echo "x">src/App.tsx` into ONE token whose `>`
+		# sits after the closing quote — a genuine source write. Stripping the
+		# quoted segments first keeps fully-quoted literals (`grep '>&' src`,
+		# `echo '>' src`) as plain args, while any unquoted `>` (including mixed
+		# tokens like `echo "x">src`) still routes through the write guard.
+		# Quoted redirect TARGETS stay caught via the expect_redir branch above
+		# (the operator token there — `>` — is itself unquoted).
+		case "$(unquoted_remainder "$raw_word")" in
+			*">"*)
 				case "$word" in
 					">" | ">>" | "1>" | "1>>" | "2>" | "2>>" | "&>")
 						expect_redir=1

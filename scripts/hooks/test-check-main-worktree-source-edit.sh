@@ -230,12 +230,18 @@ run_case "main command: bare >& next-token source write blocked" 1 main-command 
 run_case "main command: fd close allowed" 0 main-command "exec 2>&-"
 run_case "main command: 1>&2 fd dup allowed" 0 main-command "somecmd 1>&2"
 run_case "main command: fetch with 2>&1 then read allowed" 0 main-command "git fetch origin main 2>&1 && cat src/App.tsx"
-# Quoted redirect-looking text is a literal argument (e.g. a grep pattern), not
-# a shell operator — trim_token strips the quotes, so the parser must not treat
+# Fully-quoted redirect-looking text is a literal argument (e.g. a grep pattern),
+# not a shell operator — the `>` lives inside the quotes, so it must not consume
 # the following token as a write target.
 run_case "main command: single-quoted >& grep pattern allowed" 0 main-command "grep '>&' src/App.tsx"
 run_case "main command: double-quoted 2>&1 grep pattern allowed" 0 main-command "grep -n \"2>&1\" src/App.tsx"
 run_case "main command: quoted literal redirect echo allowed" 0 main-command "echo '>' src/App.tsx"
+# Mixed tokens: bash whitespace-splits these into a SINGLE token whose `>` sits
+# OUTSIDE the closing quote — a genuine source write that must stay blocked.
+run_case "main command: quoted prefix then unquoted redirect to source blocked" 1 main-command "echo \"x\">src/App.tsx"
+run_case "main command: empty single-quote then redirect to source blocked" 1 main-command "echo ''>src/App.tsx"
+run_case "main command: quoted var then unquoted redirect to source blocked" 1 main-command "echo \"\$v\">src/App.tsx"
+run_case "main command: quoted redirect target to source blocked" 1 main-command "echo x > \"src/App.tsx\""
 
 doc_patch_input="$(printf '*** Begin Patch\n*** Update File: memory/foo/memory.md\n@@\n-- git mv old path\n+- test/reset/helper wording in docs\n*** End Patch\n')"
 run_case "main command: apply_patch checks patch markers only" 0 main-command "$doc_patch_input"
