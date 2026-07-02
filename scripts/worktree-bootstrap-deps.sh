@@ -22,11 +22,11 @@ Examples:
   bash scripts/worktree-bootstrap-deps.sh --full-target worktrees/issue-437
 
 Behavior:
-  - copies node_modules when missing
+  - node_modules: pnpm store hardlink install (no copy; faster and zero extra disk)
   - copies or overlays src-tauri/target from source-root
   - default target copy is pruned: release/tmp/incremental/profraw/profdata removed
   - preserves llvm-cov-target and DuckDB native build outputs
-  - runs pnpm install --frozen-lockfile and cargo fetch when available
+  - runs pnpm install --frozen-lockfile --prefer-offline and cargo fetch when available
 EOF
 }
 
@@ -211,13 +211,12 @@ copy_tauri_target() {
   fi
 }
 
-copy_dir_if_missing "node_modules"
 copy_tauri_target
 
 if [ -f "$TARGET_PATH/package.json" ]; then
   if command -v pnpm >/dev/null 2>&1; then
-    echo "deps: pnpm install --frozen-lockfile" >&2
-    (cd "$TARGET_PATH" && pnpm install --frozen-lockfile)
+    echo "deps: pnpm install --frozen-lockfile --prefer-offline" >&2
+    (cd "$TARGET_PATH" && pnpm install --frozen-lockfile --prefer-offline)
   else
     echo "WARN: pnpm not found; skipped pnpm install" >&2
   fi

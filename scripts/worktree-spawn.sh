@@ -33,8 +33,9 @@ worktree-spawn.sh — multi-agent worktree 생성
   - 없으면 origin/<base-branch> 기반 local branch 신설
   - worktrees/<sanitized>/ 에 worktree 추가 (sanitized = branch 의 / → __)
   - 기본 deps warm-start:
-    - worktree-bootstrap-deps.sh 로 node_modules 와 src-tauri/target 보정
-    - 새 worktree lockfile 기준으로 pnpm install --frozen-lockfile 실행
+    - worktree-bootstrap-deps.sh 로 src-tauri/target 만 복사 보정
+      (node_modules 는 복사 안 함 — pnpm store hardlink 설치가 대신 처리)
+    - 새 worktree lockfile 기준으로 pnpm install --frozen-lockfile --prefer-offline 실행
     - Cargo.lock 기준으로 cargo fetch --manifest-path src-tauri/Cargo.toml 실행
     - src-tauri/target 기본 복사는 release, tmp, incremental,
       coverage raw/profile 만 제외하고 llvm-cov-target 과 DuckDB build
