@@ -1,8 +1,8 @@
 ---
 title: Product 머지 기준
 type: product-rule
-updated: 2026-06-12
-task: ux-review, persistence-reset, merge-gate
+updated: 2026-07-02
+task: ux-review, persistence-reset, merge-gate, safe-mode-severity
 ---
 
 # Product 머지 기준
@@ -42,6 +42,19 @@ task: ux-review, persistence-reset, merge-gate
 State-management reset gate 는
 [engineering/state-management](../engineering/architecture/state-management/memory.md)
 와 함께 적용한다.
+
+## 2. Safe Mode severity 배정 원칙
+
+새 구문/명령/패러다임에 severity tier 를 배정하는 PR 은 다음 축을 따른다 (2026-07-02 결정, issue #1120):
+
+- **danger 는 비가역 데이터 파괴 전용.** confirm 다이얼로그의 무게를 유지한다 — 파괴가 아닌 위험(권한 변경 GRANT/REVOKE 등)은 전 방언/패러다임 **warn 통일**.
+- **parity 축은 구문 형태가 아니라 "영향 범위 × 손실성".** 같은 "upsert" 라도: 행 단위·지정 컬럼(INSERT ON CONFLICT) = info / 행 단위·전체 리셋(REPLACE INTO) = danger / 테이블·컬렉션 단위 덮어쓰기($merge, $out, WHERE-less DML) = danger.
+- Redis 등 backend allowlist 가 실제 안전 경계인 패러다임은 frontend 분류기를 full 동기화하지 않고, backend 의 confirm 요구 집합(`required_confirmation_key`)만 mirror 해 SQL 과 동일한 confirm 다이얼로그로 라우팅한다.
+- 새 tier 배정은 이 축으로 정당화하고 parity 표 테스트(`src/lib/safeModeParity.test.ts`)에 반영한다.
+
+### Why
+
+사용자 원칙 "같은 위험 = 같은 경고" (일관된 UX). tier 가 방언·패러다임별로 다르면 사용자 멘탈 모델이 깨지고, danger 남발은 confirm 피로로 보호 효과를 죽인다.
 
 ## 관련
 

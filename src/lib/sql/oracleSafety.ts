@@ -45,6 +45,9 @@ export const ORACLE_SQL_SAFETY_BOUNDARY = Object.freeze({
       "ALTER TABLE ADD/RENAME as warn-tier schema change",
       "DROP/TRUNCATE/ALTER TABLE DROP as danger-tier destructive",
     ]),
+    admin: Object.freeze([
+      "GRANT/REVOKE as warn-tier permission change (issue #1120 parity — danger reserved for irreversible data destruction)",
+    ]),
   }),
   unsupported: Object.freeze({
     plsql: Object.freeze([
@@ -56,7 +59,7 @@ export const ORACLE_SQL_SAFETY_BOUNDARY = Object.freeze({
     admin: Object.freeze([
       "ALTER SYSTEM/SESSION/DATABASE/USER/ROLE/TABLESPACE/PROFILE",
       "CREATE/DROP USER/ROLE/TABLESPACE/PROFILE/DATABASE LINK/DIRECTORY",
-      "GRANT/REVOKE/AUDIT/NOAUDIT/ANALYZE/FLASHBACK/PURGE",
+      "AUDIT/NOAUDIT/ANALYZE/FLASHBACK/PURGE",
     ]),
   }),
 });
@@ -128,13 +131,16 @@ const UNSUPPORTED_ORACLE_PATTERNS: readonly UnsupportedOraclePattern[] = [
     pattern:
       /^DROP\s+(USER|ROLE|TABLESPACE|PROFILE|(?:PUBLIC\s+)?DATABASE\s+LINK|PLUGGABLE\s+DATABASE|DIRECTORY)\b/,
   },
+  // Issue #1120 — GRANT/REVOKE dropped from this admin block so they fall
+  // through to the shared `analyzeStatement` (permission-change / warn),
+  // matching generic-SQL parity. AUDIT/NOAUDIT remain danger/block.
   {
     slice: "admin",
-    kind: "permission-change",
+    kind: "ddl-other",
     severity: "danger",
     reason:
-      "Oracle privilege/admin statement is outside the static safety boundary",
-    pattern: /^(GRANT|REVOKE|AUDIT|NOAUDIT)\b/,
+      "Oracle AUDIT/NOAUDIT statement is outside the static safety boundary",
+    pattern: /^(AUDIT|NOAUDIT)\b/,
   },
   {
     slice: "admin",
@@ -179,6 +185,11 @@ function supportedSlice(kind: StatementKind): OracleSafetySlice | null {
     kind === "ddl-alter-drop"
   ) {
     return "ddl";
+  }
+  // Issue #1120 — GRANT/REVOKE are warn-tier permission changes, supported
+  // under the shared static boundary (parity with generic SQL).
+  if (kind === "permission-change") {
+    return "admin";
   }
   return null;
 }

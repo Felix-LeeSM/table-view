@@ -4,7 +4,10 @@ import type { SafeModeGate } from "@hooks/useSafeModeGate";
 import type { StatementAnalysis } from "@lib/sql/sqlSafety";
 import type { QueryResult, QueryState } from "@/types/query";
 import type { QueryTab } from "@stores/workspaceStore";
-import { kvCommandConfirmationKey } from "./kvCommandConfirmation";
+import {
+  KV_CONFIRM_COMMANDS,
+  kvCommandConfirmationKey,
+} from "./kvCommandConfirmation";
 
 export interface PendingKvConfirmation {
   command: string;
@@ -43,12 +46,13 @@ export function analyzeKvCommandSafety(command: string): StatementAnalysis {
     .trim()
     .match(/^([A-Za-z]+)/)?.[1]
     ?.toUpperCase();
-  if (verb === "KEYS") {
-    return {
-      kind: "other",
-      severity: "danger",
-      reasons: ["Redis KEYS scans the full keyspace"],
-    };
+  // Issue #1120 — danger routes to the confirm dialog. The confirm-worthy
+  // set is the backend's `required_confirmation_key` commands, mirrored in
+  // `KV_CONFIRM_COMMANDS`. Everything else is info; the backend command
+  // allowlist remains the real safety gate.
+  const reason = verb ? KV_CONFIRM_COMMANDS[verb] : undefined;
+  if (reason) {
+    return { kind: "other", severity: "danger", reasons: [reason] };
   }
   return { kind: "other", severity: "info", reasons: [] };
 }

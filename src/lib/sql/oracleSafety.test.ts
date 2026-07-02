@@ -191,11 +191,29 @@ describe("oracleSafety", () => {
       });
     }
 
-    expect(analyzeOracleStatement("GRANT DBA TO app")).toMatchObject({
+    // AUDIT / NOAUDIT stay admin/danger — only GRANT/REVOKE move to warn.
+    expect(analyzeOracleStatement("AUDIT SELECT ON app.orders")).toMatchObject({
       support: "unsupported",
       slice: "admin",
-      kind: "permission-change",
       severity: "danger",
+    });
+  });
+
+  // Issue #1120 (2026-07-02) — GRANT/REVOKE parity: danger/block →
+  // warn/supported across all dialects. `danger` stays reserved for
+  // irreversible data destruction; a privilege change is warn-tier.
+  it("[AC-1120-oracle] GRANT/REVOKE are warn-tier permission changes (parity with generic SQL)", () => {
+    for (const sql of ["GRANT DBA TO app", "REVOKE SELECT ON t FROM app"]) {
+      expect(analyzeOracleStatement(sql)).toMatchObject({
+        support: "supported",
+        kind: "permission-change",
+        severity: "warn",
+      });
+    }
+    // Parity: warn-tier permission change never gates in production warn mode.
+    const grant = analyzeOracleStatement("GRANT DBA TO app");
+    expect(decideOracleSafeModeAction("warn", "production", grant)).toEqual({
+      action: "allow",
     });
   });
 

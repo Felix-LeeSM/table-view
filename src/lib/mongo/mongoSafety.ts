@@ -18,25 +18,24 @@ import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
  * Sprint 254 (2026-05-09) — read-only pipeline 은 `severity: "info"` (was
  * "safe"). 3-tier union split. ADR 0023 grill Q2-(a).
  *
- * Sprint 383 (2026-05-17) — depth-1 nested detect. `$facet` sub-pipelines
- * and `$lookup.pipeline` arrays are scanned for `$out`/`$merge` at one
- * extra level. Deeper nesting (`$facet > $facet > $out`) still slips
- * through; that needs a cycle detector tracked in a follow-up.
+ * Sprint 383 (2026-05-17) — depth-1 nested detect for `$facet` /
+ * `$lookup.pipeline`.
+ *
+ * Sprint 1120 (2026-07-02, issue #1120 symptom 4) — depth-1 limit lifted.
+ * The nested scan now recurses to any depth (`$facet > $facet > $out`,
+ * `$facet > $lookup.pipeline > $merge`, …) through the shared `scanPipeline`
+ * walk. A depth cap guards pathological nesting — real pipelines are shallow.
  */
+const MAX_PIPELINE_DEPTH = 50;
+
 export function analyzeMongoPipeline(pipeline: unknown[]): StatementAnalysis {
-  for (const stage of pipeline) {
-    if (!isPipelineStage(stage)) continue;
-    const keys = Object.keys(stage);
-    const op = keys[0];
-    if (op === undefined) continue;
-    if (op === "$out") return MONGO_OUT_DANGER;
-    if (op === "$merge") return MONGO_MERGE_DANGER;
-    // Sprint 383 — depth-1 nested scan for $facet / $lookup.pipeline.
-    const nested = scanNestedDestructive(op, stage[op]);
-    if (nested) return nested;
-  }
-  // Sprint 254 — read-only pipeline = INFO.
-  return { kind: "mongo-other", severity: "info", reasons: [] };
+  return (
+    scanPipeline(pipeline, 0) ?? {
+      kind: "mongo-other",
+      severity: "info",
+      reasons: [],
+    }
+  );
 }
 
 const MONGO_OUT_DANGER: StatementAnalysis = {
@@ -51,18 +50,39 @@ const MONGO_MERGE_DANGER: StatementAnalysis = {
   reasons: ["MongoDB $merge (collection upsert)"],
 };
 
-// Sprint 383 — depth-1 nested detector. `$facet` carries a map of named
-// sub-pipelines (`{alpha: [stages]}`); `$lookup` may carry a `pipeline`
-// array. We only inspect immediate child stages — deeper nesting is a
-// known follow-up.
+// Recursively walk a pipeline (and any `$facet` / `$lookup.pipeline` it
+// carries) for the first destructive stage. Returns null for a read-only
+// pipeline. `depth` caps runaway nesting — pipeline data is acyclic JSON so
+// the cap is a DoS backstop, not a correctness bound.
+function scanPipeline(
+  pipeline: readonly unknown[],
+  depth: number,
+): StatementAnalysis | null {
+  if (depth > MAX_PIPELINE_DEPTH) return null;
+  for (const stage of pipeline) {
+    if (!isPipelineStage(stage)) continue;
+    const op = Object.keys(stage)[0];
+    if (op === undefined) continue;
+    if (op === "$out") return MONGO_OUT_DANGER;
+    if (op === "$merge") return MONGO_MERGE_DANGER;
+    const nested = scanNestedDestructive(op, stage[op], depth + 1);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+// `$facet` carries a map of named sub-pipelines (`{alpha: [stages]}`);
+// `$lookup` may carry a `pipeline` array. Both recurse through
+// `scanPipeline` so nesting is detected at any depth.
 function scanNestedDestructive(
   op: string | undefined,
   payload: unknown,
+  depth: number,
 ): StatementAnalysis | null {
   if (op === "$facet" && isPipelineStage(payload)) {
     for (const subPipeline of Object.values(payload)) {
       if (!Array.isArray(subPipeline)) continue;
-      const found = scanTopLevelDestructive(subPipeline);
+      const found = scanPipeline(subPipeline, depth);
       if (found) return found;
     }
     return null;
@@ -70,21 +90,7 @@ function scanNestedDestructive(
   if (op === "$lookup" && isPipelineStage(payload)) {
     const sub = payload["pipeline"];
     if (!Array.isArray(sub)) return null;
-    return scanTopLevelDestructive(sub);
-  }
-  return null;
-}
-
-function scanTopLevelDestructive(
-  pipeline: readonly unknown[],
-): StatementAnalysis | null {
-  for (const stage of pipeline) {
-    if (!isPipelineStage(stage)) continue;
-    const keys = Object.keys(stage);
-    if (keys.length === 0) continue;
-    const op = keys[0];
-    if (op === "$out") return MONGO_OUT_DANGER;
-    if (op === "$merge") return MONGO_MERGE_DANGER;
+    return scanPipeline(sub, depth);
   }
   return null;
 }
