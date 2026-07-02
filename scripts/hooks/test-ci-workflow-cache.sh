@@ -18,6 +18,17 @@ assert_contains() {
 	fi
 }
 
+assert_not_contains() {
+	local text="$1"
+	local needle="$2"
+	local label="$3"
+
+	if grep -Fq -- "$needle" <<<"$text"; then
+		echo "FAIL: $label: unexpected '$needle'" >&2
+		exit 1
+	fi
+}
+
 assert_order() {
 	local text="$1"
 	local first="$2"
@@ -59,12 +70,14 @@ extract_trigger_block() {
 }
 
 pull_request_trigger_block="$(extract_trigger_block "$workflow_text" "pull_request")"
+changes_block="$(sed -n '/^  changes:/,/^  pr-body:/p' <<<"$workflow_text" | sed '$d')"
 frontend_block="$(sed -n '/^  frontend:/,/^  rust:/p' <<<"$workflow_text" | sed '$d')"
 vite_cache_block="$(sed -n '/- name: Cache Vite transform output/,/- name: Install dependencies/p' <<<"$workflow_text" | sed '$d')"
 dependency_security_block="$(sed -n '/^  dependency-security:/,/^  frontend:/p' <<<"$workflow_text" | sed '$d')"
 rust_block="$(sed -n '/^  rust:/,/^  integration-tests:/p' <<<"$workflow_text" | sed '$d')"
 integration_block="$(sed -n '/^  integration-tests:/,/^  # Runtime E2E smoke/p' <<<"$workflow_text" | sed '$d')"
 pr_body_block="$(sed -n '/^  pr-body:/,/^  frontend:/p' <<<"$workflow_text" | sed '$d')"
+pr_body_only_block="$(sed -n '/^  pr-body:/,/^  doc-size:/p' <<<"$workflow_text" | sed '$d')"
 integration_disk_telemetry_step="$(extract_step_block "$integration_block" "Show disk usage before integration build")"
 integration_disk_cleanup_step="$(extract_step_block "$integration_block" "Free disk headroom before integration build")"
 integration_run_step="$(extract_step_block "$integration_block" "Run integration tests")"
@@ -144,5 +157,32 @@ assert_contains "$integration_disk_cleanup_step" "/usr/local/lib/android" "integ
 assert_contains "$integration_disk_cleanup_step" "/usr/share/dotnet" "integration disk cleanup step"
 assert_contains "$integration_disk_cleanup_step" "/opt/ghc" "integration disk cleanup step"
 assert_contains "$integration_run_step" "run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration" "integration cargo command"
+
+# docs/memory-only skip gate (audit 2026-07-03 #5). The `changes` job classifies
+# the change set; heavy jobs gate on it so docs PRs skip ~9m of CI while the
+# required contexts stay satisfied via skipped-job semantics. This must never
+# regress into a workflow-level paths-ignore (would orphan the required checks).
+if [ -z "$changes_block" ]; then
+	echo "FAIL: change-detection 'changes' job is missing from $WORKFLOW" >&2
+	exit 1
+fi
+assert_contains "$changes_block" "name: Detect Change Scope" "changes job"
+assert_contains "$changes_block" "fetch-depth: 0" "changes job needs full history for diff base"
+assert_contains "$changes_block" "code_changed: \${{ steps.detect.outputs.code_changed }}" "changes job output wiring"
+assert_contains "$changes_block" "run: bash scripts/hooks/detect-change-scope.sh" "changes job detection script"
+# Heavy jobs must gate on the change-detection output.
+assert_contains "$frontend_block" "needs: changes" "frontend needs changes"
+assert_contains "$frontend_block" "if: needs.changes.outputs.code_changed == 'true'" "frontend docs-only skip gate"
+assert_contains "$rust_block" "if: needs.changes.outputs.code_changed == 'true'" "rust docs-only skip gate"
+assert_contains "$integration_block" "if: needs.changes.outputs.code_changed == 'true'" "integration docs-only skip gate"
+assert_contains "$dependency_security_block" "if: needs.changes.outputs.code_changed == 'true'" "dependency-security docs-only skip gate"
+# pr-body and doc-size stay unconditional — cheap and meaningful on docs PRs.
+assert_not_contains "$pr_body_only_block" "needs.changes.outputs.code_changed" "pr-body always runs"
+# Guard against the forbidden shortcut: a workflow-level paths-ignore key (not a
+# comment mentioning it) orphans the required checks (expected/missing forever).
+if grep -Eq "^[[:space:]]+paths-ignore:" "$WORKFLOW"; then
+	echo "FAIL: workflow-level paths-ignore orphans the required checks" >&2
+	exit 1
+fi
 
 echo "PASS: CI workflow cache and coverage check"

@@ -15,10 +15,37 @@ env:
   TAURI_DRIVER_VERSION: "2.0.6"
 
 jobs:
+  # Change-detection gate (audit 2026-07-03 #5). docs/memory-only PRs skip the
+  # ~30m runtime matrix. Mirrors ci.yml: job-level `if:` skip (not workflow
+  # paths-ignore) so the required `Runtime Happy Path` context stays satisfied
+  # via skipped-job semantics. workflow_dispatch and any non-PR/push event fall
+  # through to code_changed=true (full run) in detect-change-scope.sh.
+  changes:
+    name: Detect Change Scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code_changed: ${{ steps.detect.outputs.code_changed }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect change scope
+        id: detect
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: bash scripts/hooks/detect-change-scope.sh
+
   e2e-smoke-prepare:
     name: Prepare E2E runtime artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    needs: changes
+    if: needs.changes.outputs.code_changed == 'true'
 
     steps:
       - name: Checkout
@@ -694,12 +721,18 @@ jobs:
   e2e-smoke-required:
     name: Runtime Happy Path
     needs:
+      - changes
       - e2e-smoke
       - e2e-smoke-file-backed
       - e2e-smoke-enterprise-rdbms
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: always()
+    # `always()` keeps this aggregation running so a failed/cancelled matrix job
+    # still fails the required check. The added code_changed guard makes the
+    # WHOLE aggregation skip on docs-only — a skipped required job satisfies the
+    # `Runtime Happy Path` context (GitHub: skipped checks count as successful),
+    # matching the skipped upstream matrix without falsely failing.
+    if: always() && needs.changes.outputs.code_changed == 'true'
 
     steps:
       - name: Require runtime matrix success

@@ -14,7 +14,7 @@ assert_contains() {
 	local needle="$2"
 	local label="$3"
 
-	if ! grep -Fq "$needle" <<<"$text"; then
+	if ! grep -Fq -- "$needle" <<<"$text"; then
 		echo "FAIL: $label: missing '$needle'" >&2
 		exit 1
 	fi
@@ -25,7 +25,7 @@ assert_not_contains() {
 	local needle="$2"
 	local label="$3"
 
-	if grep -Fq "$needle" <<<"$text"; then
+	if grep -Fq -- "$needle" <<<"$text"; then
 		echo "FAIL: $label: unexpected '$needle'" >&2
 		exit 1
 	fi
@@ -94,6 +94,7 @@ assert_matrix_contract() {
 	done <"$TMP_DIR/workflow-matrix.txt"
 }
 
+changes_block="$(sed -n '/^  changes:/,/^  e2e-smoke-prepare:/p' "$WORKFLOW" | sed '$d')"
 prepare_block="$(sed -n '/^  e2e-smoke-prepare:/,/^  e2e-smoke:/p' "$WORKFLOW" | sed '$d')"
 smoke_block="$(sed -n '/^  e2e-smoke:/,/^  e2e-smoke-file-backed:/p' "$WORKFLOW" | sed '$d')"
 file_backed_block="$(sed -n '/^  e2e-smoke-file-backed:/,/^  e2e-smoke-enterprise-rdbms:/p' "$WORKFLOW" | sed '$d')"
@@ -233,5 +234,28 @@ assert_contains "$enterprise_block" "gvenzl/oracle-xe:21-slim-faststart" "enterp
 assert_contains "$enterprise_block" "max-parallel: 1" "enterprise RDBMS smoke promotion"
 assert_contains "$required_block" "Enterprise RDBMS runtime result" "enterprise RDBMS smoke promotion"
 assert_contains "$required_block" "Runtime matrix passed." "enterprise RDBMS smoke promotion"
+
+# docs/memory-only skip gate (audit 2026-07-03 #5). The runtime matrix (~30m)
+# skips on docs PRs. The required `Runtime Happy Path` aggregation must skip too
+# (not fail) so the required context stays satisfied via skipped-job semantics.
+if [ -z "$changes_block" ]; then
+	echo "FAIL: change-detection 'changes' job is missing from $WORKFLOW" >&2
+	exit 1
+fi
+assert_contains "$changes_block" "name: Detect Change Scope" "changes job"
+assert_contains "$changes_block" "fetch-depth: 0" "changes job needs full history for diff base"
+assert_contains "$changes_block" "run: bash scripts/hooks/detect-change-scope.sh" "changes job detection script"
+assert_contains "$prepare_block" "needs: changes" "prepare needs changes"
+assert_contains "$prepare_block" "if: needs.changes.outputs.code_changed == 'true'" "prepare docs-only skip gate"
+# always() keeps failure detection; the code_changed guard skips the whole
+# aggregation on docs-only so the required context is satisfied by skip.
+assert_contains "$required_block" "if: always() && needs.changes.outputs.code_changed == 'true'" "required aggregation docs-only skip gate"
+assert_contains "$required_block" "- changes" "required aggregation needs changes"
+# Guard the forbidden shortcut: a workflow-level paths-ignore key (not a comment
+# mentioning it) would leave the required Runtime Happy Path context
+# expected/missing forever.
+if grep -Eq "^[[:space:]]+paths-ignore:" "$WORKFLOW"; then
+	fail "workflow-level paths-ignore orphans the required Runtime Happy Path check"
+fi
 
 echo "PASS: e2e-smoke workflow cache check"

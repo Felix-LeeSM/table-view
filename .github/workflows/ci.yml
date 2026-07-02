@@ -26,6 +26,37 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # Lightweight change-detection gate (audit 2026-07-03 #5). docs/memory-only
+  # PRs (memory-palace ops make these common) were burning the full ~9m CI. This
+  # job classifies the change set; heavy jobs below gate on its output.
+  # We deliberately do NOT use workflow-level paths-ignore: the branch-protection
+  # ruleset requires Frontend Checks / Rust Unit And Storage Tests / Integration
+  # Tests (Docker) contexts, and a workflow that never runs leaves those
+  # "expected/missing" forever. A job skipped by `if:` still reports a check run
+  # that satisfies the required status check (GitHub docs: skipped checks are
+  # treated as successful), so job-level skip is the safe lever.
+  changes:
+    name: Detect Change Scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code_changed: ${{ steps.detect.outputs.code_changed }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Full history so the PR merge-base (three-dot diff) and the main-push
+          # `before` sha are both reachable for git diff.
+          fetch-depth: 0
+
+      - name: Detect change scope
+        id: detect
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: bash scripts/hooks/detect-change-scope.sh
+
   pr-body:
     name: PR Body Contract
     runs-on: ubuntu-latest
@@ -65,6 +96,8 @@ jobs:
     name: Dependency Security
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: changes
+    if: needs.changes.outputs.code_changed == 'true'
     env:
       CARGO_DENY_VERSION: "0.19.9"
 
@@ -112,6 +145,8 @@ jobs:
     name: Dependency Advisories (non-blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: changes
+    if: needs.changes.outputs.code_changed == 'true'
     # Non-blocking (`continue-on-error`) advisory scan, split out of the
     # blocking gate above. A RUSTSEC advisory is an event about the outside
     # world, not about the code in any given PR, so it must never turn every
@@ -156,6 +191,8 @@ jobs:
     name: Frontend Checks
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    needs: changes
+    if: needs.changes.outputs.code_changed == 'true'
 
     steps:
       - name: Checkout
@@ -212,6 +249,8 @@ jobs:
     name: Frontend Advisory (non-blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: changes
+    if: needs.changes.outputs.code_changed == 'true'
     # docs:links and contrast:check sat on the blocking frontend job's critical
     # path (9m11s bottleneck) but neither gates a merge. Moved here as a
     # non-blocking job (`continue-on-error`) so the frontend gate keeps only
@@ -255,6 +294,8 @@ jobs:
     name: Rust Unit And Storage Tests
     runs-on: macos-latest
     timeout-minutes: 20
+    needs: changes
+    if: needs.changes.outputs.code_changed == 'true'
 
     steps:
       - name: Checkout
@@ -294,6 +335,8 @@ jobs:
     name: Rust Static Analysis
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.code_changed == 'true'
 
     steps:
       - name: Checkout
@@ -337,6 +380,8 @@ jobs:
     name: Integration Tests (Docker)
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    needs: changes
+    if: needs.changes.outputs.code_changed == 'true'
 
     # Sprint 237 P5+ (2026-05-08) — PG/Mongo 둘 다 GHA service container 로
     # 띄우고 환경변수로 endpoint 를 노출. tests/common/mod.rs 의
@@ -425,3 +470,7 @@ jobs:
   #   mirrors lefthook), rust unit/storage tests, integration tests.
   #   Non-blocking (advisory): doc-size, dependency-advisories (RUSTSEC),
   #   frontend-advisory (docs:links + WCAG contrast).
+  # All of these gate on `needs: changes` + code_changed=='true', so
+  # docs/memory/*.md-only changes skip them (required checks stay satisfied via
+  # skipped-job semantics). pr-body and doc-size always run — cheap and
+  # meaningful on docs PRs.
