@@ -143,43 +143,66 @@ jobs:
 
     strategy:
       fail-fast: false
-      max-parallel: 5
+      # Perf (audit 2026-07-03 #7): 15 specs in a single wave. Was 5 → 3 waves
+      # (~14m). Public-repo free runners allow 20 concurrent jobs; this matrix
+      # tops out at 15, leaving headroom for the file-backed (2) + enterprise
+      # (max-parallel 1) jobs that share the concurrency budget.
+      max-parallel: 15
       matrix:
+        # `needs_*` flags scope service containers per spec: an unset flag makes
+        # the corresponding `services.*.image` evaluate to '' below, which the
+        # runner skips (empty image = no container). Conservative: include a
+        # service whenever a spec touches it — omitting one flakes the run, an
+        # extra one only wastes boot time. duckdb (embedded) and opensearch
+        # (started via `docker run` step) need no `services:` container.
         include:
           - spec_key: postgres
             spec: e2e/smoke/postgres.spec.ts
+            needs_postgres: true
           - spec_key: postgres-safe-mode
             spec: e2e/smoke/postgres-safe-mode.spec.ts
+            needs_postgres: true
           - spec_key: postgres-explain
             spec: e2e/smoke/postgres-explain.spec.ts
+            needs_postgres: true
           - spec_key: postgres-extension-completion
             spec: e2e/smoke/postgres-extension-completion.spec.ts
+            needs_postgres: true
           - spec_key: postgres-cancellation
             spec: e2e/smoke/postgres-cancellation.spec.ts
+            needs_postgres: true
           - spec_key: postgres-structure-ddl
             spec: e2e/smoke/postgres-structure-ddl.spec.ts
+            needs_postgres: true
           - spec_key: erd-dense
             spec: e2e/smoke/erd-dense.spec.ts
+            needs_postgres: true
           - spec_key: mysql
             spec: e2e/smoke/mysql.spec.ts
+            needs_mysql: true
           - spec_key: mariadb
             spec: e2e/smoke/mariadb.spec.ts
+            needs_mariadb: true
           - spec_key: duckdb
             spec: e2e/smoke/duckdb.spec.ts
           - spec_key: mongodb
             spec: e2e/smoke/mongodb.spec.ts
+            needs_mongodb: true
           - spec_key: redis
             spec: e2e/smoke/redis.spec.ts
+            needs_redis: true
           - spec_key: valkey
             spec: e2e/smoke/valkey.spec.ts
+            needs_valkey: true
           - spec_key: elasticsearch
             spec: e2e/smoke/elasticsearch.spec.ts
+            needs_elasticsearch: true
           - spec_key: opensearch
             spec: e2e/smoke/opensearch.spec.ts
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: "${{ matrix.needs_postgres && 'postgres:16-alpine' || '' }}"
         env:
           POSTGRES_USER: testuser
           POSTGRES_PASSWORD: testpass
@@ -192,7 +215,7 @@ jobs:
           --health-timeout 3s
           --health-retries 20
       mongodb:
-        image: mongo:7
+        image: "${{ matrix.needs_mongodb && 'mongo:7' || '' }}"
         env:
           MONGO_INITDB_ROOT_USERNAME: testuser
           MONGO_INITDB_ROOT_PASSWORD: testpass
@@ -204,7 +227,7 @@ jobs:
           --health-timeout 5s
           --health-retries 15
       mysql:
-        image: mysql:8.0
+        image: "${{ matrix.needs_mysql && 'mysql:8.0' || '' }}"
         env:
           MYSQL_ROOT_PASSWORD: testroot
           MYSQL_USER: testuser
@@ -219,7 +242,7 @@ jobs:
           --health-retries 20
           --health-start-period 10s
       mariadb:
-        image: mariadb:11
+        image: "${{ matrix.needs_mariadb && 'mariadb:11' || '' }}"
         env:
           MARIADB_ROOT_PASSWORD: testroot
           MARIADB_USER: testuser
@@ -234,7 +257,7 @@ jobs:
           --health-retries 20
           --health-start-period 10s
       redis:
-        image: redis:7-alpine
+        image: "${{ matrix.needs_redis && 'redis:7-alpine' || '' }}"
         ports:
           - 6379:6379
         options: >-
@@ -243,7 +266,7 @@ jobs:
           --health-timeout 3s
           --health-retries 10
       valkey:
-        image: valkey/valkey:8.0-alpine
+        image: "${{ matrix.needs_valkey && 'valkey/valkey:8.0-alpine' || '' }}"
         ports:
           - 16379:6379
         options: >-
@@ -252,7 +275,7 @@ jobs:
           --health-timeout 3s
           --health-retries 10
       elasticsearch:
-        image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+        image: "${{ matrix.needs_elasticsearch && 'docker.elastic.co/elasticsearch/elasticsearch:8.12.2' || '' }}"
         env:
           discovery.type: single-node
           ELASTIC_PASSWORD: TableViewSearch1!
