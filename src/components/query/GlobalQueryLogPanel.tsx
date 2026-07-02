@@ -30,6 +30,7 @@ import { Input } from "@components/ui/input";
 import QuerySyntax from "@components/shared/QuerySyntax";
 import QueryHistorySourceBadge from "@components/shared/QueryHistorySourceBadge";
 import type { QueryHistorySource } from "@stores/queryHistoryStore";
+import { toQueryLanguageLabel } from "@stores/workspaceStore/queryMode";
 import ClearHistoryButton from "@components/settings/ClearHistoryButton";
 import QueryHistoryDetailModal from "./QueryHistoryDetailModal";
 import { cn } from "@lib/utils";
@@ -192,7 +193,7 @@ export default function GlobalQueryLogPanel({
                   className="shrink-0 rounded bg-secondary px-2 py-0.5 font-mono text-secondary-foreground"
                   data-paradigm={row.paradigm}
                 >
-                  {row.paradigm === "document" ? "MQL" : "SQL"}
+                  {toQueryLanguageLabel(row.paradigm)}
                 </span>
                 {row.paradigm === "document" && row.queryMode && (
                   <span
