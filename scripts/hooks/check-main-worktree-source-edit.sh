@@ -222,7 +222,7 @@ paths_from_command_tokens() {
 	local tokens=($cmd)
 	eval "$old_opts"
 
-	local word base expect_redir=0 mode="" last_dest="" sed_inplace=0 perl_inplace=0
+	local word raw_word base expect_redir=0 mode="" last_dest="" sed_inplace=0 perl_inplace=0
 
 	flush_last_dest() {
 		if [ -n "$last_dest" ]; then
@@ -238,8 +238,8 @@ paths_from_command_tokens() {
 		perl_inplace=0
 	}
 
-	for word in "${tokens[@]}"; do
-		word="$(trim_token "$word")"
+	for raw_word in "${tokens[@]}"; do
+		word="$(trim_token "$raw_word")"
 		[ -n "$word" ] || continue
 
 		case "$word" in
@@ -255,41 +255,52 @@ paths_from_command_tokens() {
 			continue
 		fi
 
-		case "$word" in
-			">" | ">>" | "1>" | "1>>" | "2>" | "2>>" | "&>")
-				expect_redir=1
-				continue
-				;;
-			*">"*)
-				local after_redir="${word##*>}"
-				case "$after_redir" in
-					# FD close (2>&-, >&-): not a file path.
-					\&-)
-						continue
-						;;
-					# Bare `>&` — the write target is the next token (`>& file`).
-					\&)
+		# A raw token that begins with a quote is a literal string argument (e.g. a
+		# grep pattern like '>&' or "2>&1"), never a shell redirect operator.
+		# trim_token strips the quotes, so classify redirects only for unquoted raw
+		# tokens; otherwise a quoted `>&`/`>` would wrongly consume the next token
+		# as a write target. Quoted redirect TARGETS are still caught via the
+		# expect_redir branch above (the operator token there is unquoted).
+		case "$raw_word" in
+			\"* | \'*) ;;
+			*)
+				case "$word" in
+					">" | ">>" | "1>" | "1>>" | "2>" | "2>>" | "&>")
 						expect_redir=1
 						continue
 						;;
-					# `>&N` / `N>&M`: FD duplication only when the word after `&`
-					# is ALL digits. `>&word` with any non-digit char is a real
-					# stdout+stderr file write (bash: `>&word` == `>word 2>&1`),
-					# so fall through to emit_path and keep it blocked (fail-safe).
-					\&*)
-						local fd_dup_target="${after_redir#&}"
-						case "$fd_dup_target" in
-							'' | *[!0-9]*) : ;;
-							*) continue ;;
+					*">"*)
+						local after_redir="${word##*>}"
+						case "$after_redir" in
+							# FD close (2>&-, >&-): not a file path.
+							\&-)
+								continue
+								;;
+							# Bare `>&` — the write target is the next token (`>& file`).
+							\&)
+								expect_redir=1
+								continue
+								;;
+							# `>&N` / `N>&M`: FD duplication only when the word after `&`
+							# is ALL digits. `>&word` with any non-digit char is a real
+							# stdout+stderr file write (bash: `>&word` == `>word 2>&1`),
+							# so fall through to emit_path and keep it blocked (fail-safe).
+							\&*)
+								local fd_dup_target="${after_redir#&}"
+								case "$fd_dup_target" in
+									'' | *[!0-9]*) : ;;
+									*) continue ;;
+								esac
+								;;
 						esac
+						if [ -n "$after_redir" ]; then
+							emit_path "$after_redir"
+						else
+							expect_redir=1
+						fi
+						continue
 						;;
 				esac
-				if [ -n "$after_redir" ]; then
-					emit_path "$after_redir"
-				else
-					expect_redir=1
-				fi
-				continue
 				;;
 		esac
 

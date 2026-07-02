@@ -228,6 +228,14 @@ run_case "main command: >&<digit>file genuine write blocked" 1 main-command "ech
 run_case "main command: >&<digit>file to source blocked" 1 main-command "cat src/App.tsx >&1x.sh"
 run_case "main command: bare >& next-token source write blocked" 1 main-command "echo x >& src/App.tsx"
 run_case "main command: fd close allowed" 0 main-command "exec 2>&-"
+run_case "main command: 1>&2 fd dup allowed" 0 main-command "somecmd 1>&2"
+run_case "main command: fetch with 2>&1 then read allowed" 0 main-command "git fetch origin main 2>&1 && cat src/App.tsx"
+# Quoted redirect-looking text is a literal argument (e.g. a grep pattern), not
+# a shell operator — trim_token strips the quotes, so the parser must not treat
+# the following token as a write target.
+run_case "main command: single-quoted >& grep pattern allowed" 0 main-command "grep '>&' src/App.tsx"
+run_case "main command: double-quoted 2>&1 grep pattern allowed" 0 main-command "grep -n \"2>&1\" src/App.tsx"
+run_case "main command: quoted literal redirect echo allowed" 0 main-command "echo '>' src/App.tsx"
 
 doc_patch_input="$(printf '*** Begin Patch\n*** Update File: memory/foo/memory.md\n@@\n-- git mv old path\n+- test/reset/helper wording in docs\n*** End Patch\n')"
 run_case "main command: apply_patch checks patch markers only" 0 main-command "$doc_patch_input"
