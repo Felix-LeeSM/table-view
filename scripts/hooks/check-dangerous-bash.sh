@@ -90,20 +90,12 @@ fi
 #   / no_gpg_sign / gpgsign_false / gpgsign_env_key / githooks_path_override
 #   / git_config_set_hooks_path / githooks_path_env_key / lefthook_env_zero
 #   / lefthook_skip / husky_zero / dd_if / mkfs / dev_write
-# Issue #1029 — sql_drop / sql_truncate 는 컨텍스트 없는 단어 매치라 이 DB
-# 클라이언트 repo 의 일상 명령(소스 검색 `rg "TRUNCATE" src/`, 커밋 메시지
-# `git commit -m "fix: DROP TABLE guard"`)까지 차단했다. 아래 prefix 로 "DB
-# 클라이언트가 command position 에서 실제 실행되는 경우" 로 좁힌다:
-#   (^|[;&|]) + optional env-assignment(들) + client 바이너리 + 공백.
-# rg/grep/git 로 시작하는 명령은 client 가 command position 에 없어 통과한다.
-# ponytail: 순서 의존 (client → SQL). `echo "DROP TABLE x" | psql` 처럼 SQL 이
-#   client 앞에 오는 pipe/heredoc 실행은 놓친다 — hook 은 부주의 방지 layer 라
-#   감수. 필요해지면 SQL-then-client 분기를 추가한다.
-SQL_CLIENT_CONTEXT='(^|[;&|][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(psql|mysql|mariadb|sqlite3|mongosh|mongo|duckdb)[[:space:]]'
+# Note: sql_drop / sql_truncate 는 이 배열이 아니라 check_sql_client_execution
+# 이 세그먼트 단위로 처리한다 (issue #1029 + PR #1151 review). 배열의 다른 패턴은
+# 명령 문자열 전체에 word-match 하지만, DROP/TRUNCATE 는 이 DB 클라이언트 repo 의
+# 소스·커밋 메시지에 정상 등장하므로 그럴 수 없다.
 DANGEROUS_PATTERNS=(
   'rm_destructive::(^|[^a-zA-Z0-9_])rm[[:space:]]+-[rRfF]*[rR][rRfF]*[[:space:]]+(/|~|\*|\.|src|node_modules|target)([[:space:]/]|$)'
-  "sql_drop::${SQL_CLIENT_CONTEXT}.*DROP[[:space:]]+(DATABASE|TABLE)([^a-zA-Z0-9_]|$)"
-  "sql_truncate::${SQL_CLIENT_CONTEXT}.*TRUNCATE([^a-zA-Z0-9_]|$)"
   "base64_shell_pipe::(^|[^a-zA-Z0-9_])base64[[:space:]][^|;&]*(-d|--decode|-D)[^|;&]*[|][[:space:]]*[\"']?([^[:space:]|;&]*/)?[\"']?(bash|sh|zsh)[\"']?([^a-zA-Z0-9_]|$)"
   'eval_cmd_subst::(^|[^a-zA-Z0-9_])eval[[:space:]]+.*\$\('
   'git_push_force::(^|[^a-zA-Z0-9_])git[[:space:]]+push[[:space:]]+.*--force'
@@ -505,6 +497,70 @@ check_dangerous_patterns() {
   done
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Issue #1029 + PR #1151 review — SQL DROP/TRUNCATE 세그먼트 단위 검사.
+# ─────────────────────────────────────────────────────────────────────────────
+# 이 repo 는 DB 클라이언트라 DROP/TRUNCATE 가 소스·커밋 메시지에 정상 등장한다.
+# 명령 문자열 전체 word-match (기존 배열 방식) 는 `rg "TRUNCATE" src/` /
+# `git commit -m "fix: DROP TABLE guard"` 를 오탐 차단했다.
+#
+# 규칙: 명령을 shell 연산자(; & |)로 세그먼트 분할하고, 각 세그먼트에서
+#   1) 앞쪽 env-assignment(VAR=val) 를 건너뛴다.
+#   2) sudo/doas/env/command wrapper 를 만나면 그 뒤 옵션/값을 client 가 나올
+#      때까지 건너뛴다.
+#   3) command position 첫 토큰이 DB client (psql/mysql/...) 인 세그먼트에서만,
+#   4) 같은 세그먼트 안의 파괴적 keyword (DROP DATABASE|TABLE / TRUNCATE) 를
+#      block 한다.
+# 세그먼트 한정이라 `psql -l && git commit -m "...DROP TABLE..."` 는 통과
+# (commit 은 별개 세그먼트). rg/grep/git 로 시작하는 세그먼트는 client 가
+# command position 에 없어 통과한다.
+#
+# ponytail: 부주의 방지 heuristic — 정확한 보안 경계 아님 (스크립트 헤더 참고).
+#   - string literal 안의 keyword (`mysql -e "SELECT 'TRUNCATE'"`) 도 여전히
+#     block — 실제 client exec 에 대한 over-warning 이라 감수.
+#   - wrapper 인식은 best-effort (sudo/doas/env/command 만). time/nice/xargs
+#     등 다른 wrapper, quote 안에 든 ;&| 는 놓칠 수 있음 — heuristic 은 어차피
+#     우회 가능하므로 감수. `mongo`/`mongosh` 는 client list 에 있으나 Mongo 의
+#     `db.x.drop()` 는 이 SQL keyword 로 매치되지 않음 (pre-existing dead cover).
+SQL_CLIENT_BINARIES='psql mysql mariadb sqlite3 mongosh mongo duckdb'
+
+# 세그먼트가 DB client 를 command position 에서 실행하면 exit 0.
+_sql_segment_runs_client() {
+  local -a words
+  IFS=$' \t' read -r -a words <<<"$1"
+  local seen_wrapper=0 w client
+  for w in "${words[@]}"; do
+    for client in $SQL_CLIENT_BINARIES; do
+      [ "$w" = "$client" ] && return 0
+    done
+    [ "$seen_wrapper" -eq 1 ] && continue
+    case "$w" in
+      sudo | doas | env | command) seen_wrapper=1 ;; # wrapper — 뒤 옵션/값 skip
+      *=*) : ;;                                       # leading env-assignment
+      *) return 1 ;;                                  # 첫 실질 토큰이 client 아님
+    esac
+  done
+  return 1
+}
+
+check_sql_client_execution() {
+  # ; & | 를 개행으로 분할 (&& || 는 사이에 빈 세그먼트만 남김 — 무해).
+  local segments seg
+  segments="$(printf '%s' "$CMD" | tr ';&|' '\n')"
+  while IFS= read -r seg; do
+    [ -n "$seg" ] || continue
+    _sql_segment_runs_client "$seg" || continue
+    if printf '%s' "$seg" | grep -qiE '(^|[^a-zA-Z0-9_])DROP[[:space:]]+(DATABASE|TABLE)([^a-zA-Z0-9_]|$)'; then
+      emit_block_message "sql_drop" "DB client executes DROP DATABASE/TABLE in this command segment"
+    fi
+    if printf '%s' "$seg" | grep -qiE '(^|[^a-zA-Z0-9_])TRUNCATE([^a-zA-Z0-9_]|$)'; then
+      emit_block_message "sql_truncate" "DB client executes TRUNCATE in this command segment"
+    fi
+  done <<EOF
+$segments
+EOF
+}
+
 check_warn_patterns() {
   for entry in "${WARN_PATTERNS[@]}"; do
     local id="${entry%%::*}"
@@ -576,6 +632,7 @@ check_git_hooks() {
 }
 
 check_dangerous_patterns
+check_sql_client_execution
 check_warn_patterns
 check_git_hooks
 
