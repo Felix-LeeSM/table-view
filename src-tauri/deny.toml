@@ -76,6 +76,17 @@ ignore = [
   # 또는 rsa 0.10+ 채택 시 즉시 해소. Sprint 278 (sqlx mysql feature 활성화)
   # 이후 본 advisory 가 surfacing 되어 추가.
   "RUSTSEC-2023-0071",
+  # ── plist → quick-xml: XML 파싱 DoS (2건) ────────────────────────────
+  # 경로: tauri 2.10.3 → plist 1.8.0 → quick-xml 0.38.4. plist 가 quick-xml
+  # 을 ^0.38 로 핀해 `cargo update` 로 해소 불가 (semver-호환 patch 없음 —
+  # `cargo update -p quick-xml` 이 0 packages). tauri/plist 업그레이드 필요.
+  # 실 영향: quick-xml 은 plist 를 통해 macOS property-list 파싱에만 쓰인다
+  # (앱 번들 내부 메타데이터). 사용자가 신뢰 불가 XML 을 이 경로로 주입하는
+  # 인터페이스가 없어 두 DoS 모두 트리거 표면이 없다. Dependency security
+  # follow-up 은 docs/contributor-guide/testing-and-quality.md 에서 추적.
+  # plist 가 quick-xml 0.39+ 를 채택하거나 tauri 업그레이드 시 즉시 해소.
+  "RUSTSEC-2026-0194", # quick-xml quadratic runtime (duplicate attribute)
+  "RUSTSEC-2026-0195", # quick-xml unbounded namespace allocation (NsReader)
 ]
 
 [licenses]
