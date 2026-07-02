@@ -39,7 +39,7 @@ describe("kvQueryExecution seam", () => {
     executeKvCommandMock.mockReset();
   });
 
-  it("classifies KEYS as a destructive KV command and leaves bounded commands informational", () => {
+  it("classifies KEYS as a confirm-gated KV command and leaves bounded commands informational", () => {
     expect(analyzeKvCommandSafety("KEYS *")).toMatchObject({
       severity: "danger",
       reasons: ["Redis KEYS scans the full keyspace"],
@@ -81,7 +81,7 @@ describe("kvQueryExecution seam", () => {
     );
   });
 
-  it("routes destructive KV commands to pending confirmation before IPC", async () => {
+  it("routes confirm-gated KV commands to pending confirmation before IPC", async () => {
     const actions = createActions();
 
     await executeKvQuery({
@@ -108,9 +108,12 @@ describe("kvQueryExecution seam", () => {
   });
 
   // Issue #1120 symptom 3 — the frontend classifier now mirrors the backend
-  // `required_confirmation_key` set (KEYS / DEL / PERSIST) so destructive KV
-  // commands surface the same confirm dialog as SQL DROP, instead of the
-  // backend rejecting them with a bare error after a silent frontend pass.
+  // `required_confirmation_key` set (KEYS / DEL / PERSIST) so these
+  // confirm-gated KV commands surface the same confirm dialog as SQL
+  // destructive statements, instead of the backend rejecting them with a bare
+  // error after a silent frontend pass. `danger` here is the confirm lever,
+  // not a destruction verdict — KEYS (scan) and PERSIST (TTL removal) are not
+  // destructive (see memory/product §2 + kvQueryExecution.ts).
   it("[AC-1120-kv] classifies DEL/PERSIST as confirm-requiring danger (backend parity)", () => {
     expect(analyzeKvCommandSafety("DEL session:1")).toMatchObject({
       severity: "danger",

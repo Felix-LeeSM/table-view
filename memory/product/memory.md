@@ -50,7 +50,7 @@ State-management reset gate 는
 - **danger 는 비가역 데이터 파괴 전용.** confirm 다이얼로그의 무게를 유지한다 — 파괴가 아닌 위험(권한 변경 GRANT/REVOKE 등)은 전 방언/패러다임 **warn 통일**.
 - **parity 축은 구문 형태가 아니라 "영향 범위 × 손실성".** 같은 "upsert" 라도: 행 단위·지정 컬럼(INSERT ON CONFLICT) = info / 행 단위·전체 리셋(REPLACE INTO) = danger / 테이블·컬렉션 단위 덮어쓰기($merge, $out, WHERE-less DML) = danger.
 - Redis 등 backend allowlist 가 실제 안전 경계인 패러다임은 frontend 분류기를 full 동기화하지 않고, backend 의 confirm 요구 집합(`required_confirmation_key`)만 mirror 해 SQL 과 동일한 confirm 다이얼로그로 라우팅한다.
-  - **명시적 예외**: KV 경로는 warn→confirm 표면이 없어 `danger` tier 를 confirm 라우팅 레버로 재사용한다. 그래서 KEYS(전수 스캔)·PERSIST(TTL 제거)는 비파괴인데도 `danger` 로 분류된다 — 위 "danger=파괴" 규칙의 축(영향×손실)이 아니라 backend confirm 집합 mirror 결과다. 따라서 impact×손실성 parity 표에는 넣지 않고 `kvQueryExecution.test.ts` 로 고정한다.
+  - **명시적 예외**: KV 경로는 warn→confirm 표면이 없어 `danger` tier 를 confirm 라우팅 레버로 재사용한다. 그래서 KEYS(전수 스캔)·PERSIST(TTL 제거)는 비파괴이고 DEL 도 단일 키(행-지정 = 축상 warn)인데 — 셋 다 영향×손실 축이 아니라 backend confirm 집합 mirror 로 `danger` 를 탄다. 따라서 impact×손실성 parity 표에는 넣지 않고 `kvQueryExecution.test.ts` 로 고정한다.
 - 새 tier 배정은 이 축으로 정당화하고 parity 표 테스트(`src/lib/safeModeParity.test.ts`)에 반영한다.
 
 ### Why
