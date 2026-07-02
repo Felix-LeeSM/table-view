@@ -89,8 +89,8 @@ describe("analyzeMongoPipeline", () => {
   });
 
   // Sprint 383 (2026-05-17) — depth-1 nested $out/$merge detection inside
-  // $facet sub-pipelines and $lookup.pipeline. Deeper nesting (≥2) requires
-  // a cycle detector and remains out-of-scope.
+  // $facet sub-pipelines and $lookup.pipeline. (Deeper nesting is covered by
+  // the AC-1120 cases below since Sprint 1120 lifted the depth-1 limit.)
   it("[AC-383-P1] $facet sub-pipeline contains $out → danger / mongo-out", () => {
     const a = analyzeMongoPipeline([
       { $facet: { alpha: [{ $match: {} }, { $out: "x" }] } },
@@ -135,7 +135,10 @@ describe("analyzeMongoPipeline", () => {
     expect(a.kind).toBe("mongo-merge");
   });
 
-  it("[AC-383-P5] $facet > $facet > $out (depth 2) is NOT detected → info (deferred)", () => {
+  // Sprint 1120 (2026-07-02) — depth-1 limit lifted; nested scan now fully
+  // recurses (issue #1120 symptom 4). Deep `$facet > $facet > $out` and
+  // `$facet > $lookup.pipeline > $merge` no longer slip through.
+  it("[AC-1120-01] $facet > $facet > $out (depth 2) → danger / mongo-out", () => {
     const a = analyzeMongoPipeline([
       {
         $facet: {
@@ -143,7 +146,36 @@ describe("analyzeMongoPipeline", () => {
         },
       },
     ]);
-    expect(a.severity).toBe("info");
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-out");
+  });
+
+  it("[AC-1120-02] $facet > $facet > $facet > $merge (depth 3) → danger / mongo-merge", () => {
+    const a = analyzeMongoPipeline([
+      {
+        $facet: {
+          a: [
+            { $facet: { b: [{ $facet: { c: [{ $merge: { into: "z" } }] } }] } },
+          ],
+        },
+      },
+    ]);
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-merge");
+  });
+
+  it("[AC-1120-03] $facet > $lookup.pipeline > $out (mixed nesting) → danger / mongo-out", () => {
+    const a = analyzeMongoPipeline([
+      {
+        $facet: {
+          alpha: [
+            { $lookup: { from: "s", as: "j", pipeline: [{ $out: "z" }] } },
+          ],
+        },
+      },
+    ]);
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-out");
   });
 
   it("[AC-383-P6] $facet with read-only sub-pipeline → info", () => {

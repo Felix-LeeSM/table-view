@@ -39,7 +39,7 @@ describe("kvQueryExecution seam", () => {
     executeKvCommandMock.mockReset();
   });
 
-  it("classifies KEYS as a destructive KV command and leaves bounded commands informational", () => {
+  it("classifies KEYS as a confirm-gated KV command and leaves bounded commands informational", () => {
     expect(analyzeKvCommandSafety("KEYS *")).toMatchObject({
       severity: "danger",
       reasons: ["Redis KEYS scans the full keyspace"],
@@ -81,7 +81,7 @@ describe("kvQueryExecution seam", () => {
     );
   });
 
-  it("routes destructive KV commands to pending confirmation before IPC", async () => {
+  it("routes confirm-gated KV commands to pending confirmation before IPC", async () => {
     const actions = createActions();
 
     await executeKvQuery({
@@ -104,6 +104,53 @@ describe("kvQueryExecution seam", () => {
       database: 2,
       confirmKey: "*",
       reason: "Redis KEYS scans the full keyspace",
+    });
+  });
+
+  // Issue #1120 symptom 3 — the frontend classifier now mirrors the backend
+  // `required_confirmation_key` set (KEYS / DEL / PERSIST) so these
+  // confirm-gated KV commands surface the same confirm dialog as SQL
+  // destructive statements, instead of the backend rejecting them with a bare
+  // error after a silent frontend pass. `danger` here is the confirm lever,
+  // not a destruction verdict — KEYS (scan) and PERSIST (TTL removal) are not
+  // destructive (see memory/product §2 + kvQueryExecution.ts).
+  it("[AC-1120-kv] classifies DEL/PERSIST as confirm-requiring danger (backend parity)", () => {
+    expect(analyzeKvCommandSafety("DEL session:1")).toMatchObject({
+      severity: "danger",
+      reasons: ["Redis DEL permanently removes the key"],
+    });
+    expect(analyzeKvCommandSafety("PERSIST session:1")).toMatchObject({
+      severity: "danger",
+      reasons: ["Redis PERSIST removes the key's expiry"],
+    });
+    // Bounded writes stay info — the backend command allowlist is the real gate.
+    expect(analyzeKvCommandSafety("SET k v")).toMatchObject({
+      severity: "info",
+    });
+  });
+
+  it("[AC-1120-kv] routes DEL to the confirm dialog with its key (not a backend rejection)", async () => {
+    const actions = createActions();
+
+    await executeKvQuery({
+      tab,
+      sql: "DEL session:1",
+      workspaceDb: "2",
+      canExecuteQuery: true,
+      queryProductLabel: "Redis",
+      decideSafeMode: () => ({
+        action: "confirm",
+        reason: "Redis DEL permanently removes the key",
+      }),
+      ...actions,
+    });
+
+    expect(executeKvCommandMock).not.toHaveBeenCalled();
+    expect(actions.setPendingKvConfirm).toHaveBeenCalledWith({
+      command: "DEL session:1",
+      database: 2,
+      confirmKey: "session:1",
+      reason: "Redis DEL permanently removes the key",
     });
   });
 

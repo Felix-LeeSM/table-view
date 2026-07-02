@@ -4,7 +4,10 @@ import type { SafeModeGate } from "@hooks/useSafeModeGate";
 import type { StatementAnalysis } from "@lib/sql/sqlSafety";
 import type { QueryResult, QueryState } from "@/types/query";
 import type { QueryTab } from "@stores/workspaceStore";
-import { kvCommandConfirmationKey } from "./kvCommandConfirmation";
+import {
+  KV_CONFIRM_COMMANDS,
+  kvCommandConfirmationKey,
+} from "./kvCommandConfirmation";
 
 export interface PendingKvConfirmation {
   command: string;
@@ -43,12 +46,17 @@ export function analyzeKvCommandSafety(command: string): StatementAnalysis {
     .trim()
     .match(/^([A-Za-z]+)/)?.[1]
     ?.toUpperCase();
-  if (verb === "KEYS") {
-    return {
-      kind: "other",
-      severity: "danger",
-      reasons: ["Redis KEYS scans the full keyspace"],
-    };
+  // Issue #1120 — `danger` here is the confirm-dialog lever, NOT an
+  // "irreversible destruction" verdict: the KV path has no warn→confirm
+  // surface, so mirroring the backend's `required_confirmation_key` set
+  // (KEYS pattern-confirm + DEL/PERSIST key-confirm) onto `danger` is what
+  // routes these to the same confirm dialog SQL destructive statements use.
+  // KEYS (scan) and PERSIST (TTL removal) are not destructive; they ride
+  // `danger` only for the confirm gate. Everything else is info; the backend
+  // command allowlist remains the real safety boundary.
+  const reason = verb ? KV_CONFIRM_COMMANDS[verb] : undefined;
+  if (reason) {
+    return { kind: "other", severity: "danger", reasons: [reason] };
   }
   return { kind: "other", severity: "info", reasons: [] };
 }

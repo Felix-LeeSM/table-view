@@ -106,14 +106,20 @@ describe("Valkey smoke", () => {
     });
 
     await step(
-      "keep destructive commands behind exact-key confirmation",
+      "run destructive DEL through the mirrored confirm-key flow",
       async () => {
+        // Issue #1120: the command editor now mirrors the backend
+        // `required_confirmation_key` set, so DEL auto-supplies its target
+        // key and runs like a SQL destructive statement — non-production +
+        // default Safe Mode (off) → allow, no bare backend rejection. The
+        // production/strict confirm-dialog path is unit-tested in
+        // kvQueryExecution.test.ts.
         await setCodeMirrorText("DEL vk:cmd");
         await runQuery();
         await waitForWorkspaceTextAll(
-          ["Confirmation key must exactly match the target key"],
+          ["1 row affected"],
           15000,
-          "Valkey DEL command did not surface exact-key confirmation guard",
+          "Valkey DEL command did not render DML summary after auto-confirming the target key",
         );
 
         await setCodeMirrorText("FLUSHDB");

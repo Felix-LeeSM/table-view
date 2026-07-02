@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-06-18
+generated: 2026-07-02
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -239,6 +239,10 @@ generator: scripts/regenerate-indexes.sh
 ### safe-mode
 
 - [Query Language Architecture](../../memory/engineering/architecture/query-language/memory.md)
+
+### safe-mode-severity
+
+- [Product 머지 기준](../../memory/product/memory.md)
 
 ### spawn-verify
 
