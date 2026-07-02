@@ -1,5 +1,6 @@
 import type { Paradigm } from "@/types/connection";
 import type { QueryLanguageId } from "@/types/dataSource";
+import { getQueryLanguageMetadata } from "@/types/queryLanguage";
 import type {
   DocumentQueryMode,
   HistoryQueryMode,
@@ -62,6 +63,18 @@ export function toWorkspaceQueryLanguage(input: {
   return isQueryLanguageId(input.queryLanguage)
     ? input.queryLanguage
     : undefined;
+}
+
+/**
+ * User-facing query-language label for a paradigm's log/history entry.
+ * Resolves through {@link toWorkspaceQueryLanguage} + the shared
+ * `QUERY_LANGUAGE_REGISTRY` so surfaces never re-hardcode per-paradigm
+ * strings (#1055). The `?? ""` branch is unreachable for the active
+ * paradigms — all four resolve to a registered language id.
+ */
+export function toQueryLanguageLabel(paradigm: Paradigm): string {
+  const id = toWorkspaceQueryLanguage({ paradigm });
+  return id ? getQueryLanguageMetadata(id).label : "";
 }
 
 function isQueryLanguageId(value: unknown): value is QueryLanguageId {

@@ -92,6 +92,8 @@ export function useDataGridEdit({
     pendingEdits,
     pendingNewRows,
     pendingDeletedRowKeys,
+    pendingEditRowSnapshots,
+    pendingDeletedRowSnapshots,
     setPendingEdits,
     setPendingNewRows,
     setPendingDeletedRowKeys,
@@ -104,6 +106,9 @@ export function useDataGridEdit({
     database,
     schema,
     table,
+    // Issue #1081 — the pending-state layer auto-captures a row-identity
+    // anchor for every new edit/delete key from the current page's rows.
+    rows: data?.rows,
   });
 
   // Multi-row selection lives in `useDataGridSelection` so the facade
@@ -165,6 +170,8 @@ export function useDataGridEdit({
     pendingEdits,
     pendingNewRows,
     pendingDeletedRowKeys,
+    pendingEditRowSnapshots,
+    pendingDeletedRowSnapshots,
     canEditRows,
     setPendingEditErrors,
     clearAllPending,
@@ -207,6 +214,8 @@ export function useDataGridEdit({
     const next = applyEditOrClear(pendingEdits, key, editValue, originalValue);
     if (next !== pendingEdits) {
       pushSnapshot();
+      // Issue #1081 — the row-identity anchor is captured inside
+      // `setPendingEdits` (see `useDataGridEditPendingState`).
       setPendingEdits(next);
     }
     setEditingCell(null);
@@ -276,6 +285,7 @@ export function useDataGridEdit({
         );
         if (next !== pendingEdits) {
           pushSnapshot();
+          // Issue #1081 — anchor captured inside `setPendingEdits`.
           setPendingEdits(next);
         }
       }
@@ -335,11 +345,12 @@ export function useDataGridEdit({
     setPendingDeletedRowKeys((prev) => {
       const next = new Set(prev);
       selectedRowIds.forEach((rowIdx) => {
-        const rk = rowKeyFn(rowIdx, page);
-        next.add(rk);
+        next.add(rowKeyFn(rowIdx, page));
       });
       return next;
     });
+    // Issue #1081 — the deleted rows' identity anchors are captured inside
+    // `setPendingDeletedRowKeys` from the current page's rows.
     clearSelection();
     // Promote preview tab on row delete
     if (activeTabId) promoteTab(activeTabId);
@@ -445,6 +456,8 @@ export function useDataGridEdit({
           editValue,
           originalValue,
         );
+        // Issue #1081 — anchor captured inside `setPendingEdits` before the
+        // synchronous commit reads the snapshot map.
         setPendingEdits(merged);
         const { opened } = handleCommit({ pendingEditsOverride: merged });
         if (opened) {

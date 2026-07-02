@@ -55,6 +55,13 @@ export interface UseDataGridPreviewCommitParams {
   pendingEdits: Map<string, string | null>;
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
+  /**
+   * Issue #1081 — row-identity anchors captured at edit/delete time. The
+   * commit builders prefer these over the current page's `data.rows[rowIdx]`
+   * so a page/sort/refetch reorder can't retarget an UPDATE/DELETE.
+   */
+  pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  pendingDeletedRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
   canEditRows?: boolean;
   /**
    * 성공 / discard 등에서 facade 가 보유한 모든 pending state 와
@@ -137,6 +144,8 @@ export function useDataGridPreviewCommit(
     pendingEdits,
     pendingNewRows,
     pendingDeletedRowKeys,
+    pendingEditRowSnapshots,
+    pendingDeletedRowSnapshots,
     canEditRows = true,
     clearAllPending,
     setPendingEditErrors,
@@ -395,6 +404,8 @@ export function useDataGridPreviewCommit(
         pendingEdits: effectivePendingEdits,
         pendingNewRows,
         pendingDeletedRowKeys,
+        pendingEditRowSnapshots,
+        pendingDeletedRowSnapshots,
       });
       // Adapter always reports coerce errors regardless of whether the
       // preview opens — pure-error edits surface inline next to the cell
@@ -411,6 +422,8 @@ export function useDataGridPreviewCommit(
       pendingEdits,
       pendingDeletedRowKeys,
       pendingNewRows,
+      pendingEditRowSnapshots,
+      pendingDeletedRowSnapshots,
       schema,
       table,
       page,
