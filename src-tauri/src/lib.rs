@@ -12,7 +12,12 @@ pub mod storage;
 use commands::connection::AppState;
 use std::sync::OnceLock;
 use std::time::Instant;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
+// `Emitter` (the `.emit()` trait method) is only exercised by the macOS-only
+// menu dispatch fns below; scope the import to macOS so the Linux build's
+// `-D unused-imports` clippy gate stays clean.
+#[cfg(target_os = "macos")]
+use tauri::Emitter;
 use tracing::info;
 
 /// Sprint 175 — process-wide `Instant` captured at the very top of `run()`.
@@ -233,7 +238,10 @@ pub fn run() {
     // `info!` per fire). Both stay permanent — Sprint 1 set the precedent
     // that boot instrumentation persists in production builds so future
     // sprints can re-baseline against the same emission shape.
-    let builder = builder.setup(|app| {
+    // `app` is only read by the macOS-only `install_macos_menu` call below, so
+    // the `not(macos)` build sees an unused param; `_app` keeps it usable where
+    // it is needed while satisfying `-D unused-variables` elsewhere.
+    let builder = builder.setup(|_app| {
         if let Some(t0) = BOOT_T0.get() {
             let delta_ms = t0.elapsed().as_secs_f64() * 1000.0;
             info!(target: "boot", "rust:setup-done delta_ms={:.3}", delta_ms);
@@ -320,7 +328,7 @@ pub fn run() {
         // macOS.
         #[cfg(target_os = "macos")]
         {
-            install_macos_menu(app)?;
+            install_macos_menu(_app)?;
         }
 
         Ok(())
