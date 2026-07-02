@@ -517,6 +517,38 @@ run_case \
   '{"tool_input":{"command":"  psql -c \"DROP TABLE x\""}}' \
   'MATCH:BLOCKED|sql_drop'
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Regression (Refs #1151) — pipe-fed destructive SQL must STILL block.
+# ─────────────────────────────────────────────────────────────────────────────
+# PR #1151 rewrote whole-command word-match into per-segment client detection
+# but split segments on `;`, `&` AND `|`. Splitting on the pipe `|` broke a
+# pipeline into a keyword-only stage + a client-only stage, so neither the
+# "client + keyword in one segment" branch matched → not blocked (post-merge
+# HIGH FN). A pipeline is ONE logical command; the client may be any pipe-stage.
+
+# FN-1: keyword stage piped into a client stage (pure pipe) → block.
+run_case \
+  "case-1151fn-1: echo destructive | psql db → block (pipe-fed)" \
+  1 \
+  '{"tool_input":{"command":"echo \"DROP TABLE users\" | psql db"}}' \
+  'MATCH:BLOCKED|sql_drop'
+
+# FN-2: a quoted `;` inside the piped statement must not fake a segment split
+# (covers the `printf 'TRUNCATE t;' | mysql` class from the report).
+run_case \
+  "case-1151fn-2: printf destructive with quoted ';' | mysql → block (pipe-fed)" \
+  1 \
+  '{"tool_input":{"command":"printf '\''TRUNCATE t;'\'' | mysql"}}' \
+  'MATCH:BLOCKED|sql_truncate'
+
+# Guard: a pipeline with NO DB client in any stage stays allowed — the new
+# per-pipe-stage client scan must not over-block plain searches.
+run_case \
+  "case-1151fn-3: grep destructive | wc -l (no client) → allow" \
+  0 \
+  '{"tool_input":{"command":"grep \"DROP TABLE\" src/schema.sql | wc -l"}}' \
+  EMPTY
+
 echo ""
 echo "==== smoke test summary ===="
 echo "PASS: $PASS_COUNT"

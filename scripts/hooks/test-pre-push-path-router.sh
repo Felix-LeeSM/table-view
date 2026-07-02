@@ -231,6 +231,12 @@ assert_contains "$worktree_spawn_output" "RUN hook-shell-syntax:" "worktree spaw
 assert_not_contains "$worktree_spawn_output" "RUN ts-test:" "worktree spawn"
 assert_not_contains "$worktree_spawn_output" "RUN rust-test-and-coverage:" "worktree spawn"
 
+prune_gh_caches_output="$(run_case prune-gh-caches normal scripts/prune-gh-caches.sh)"
+assert_contains "$prune_gh_caches_output" "route: frontend=0 rust=0 hook=1 memory=0 agent=0" "prune-gh-caches"
+assert_contains "$prune_gh_caches_output" "RUN hook-shell-syntax:" "prune-gh-caches"
+assert_not_contains "$prune_gh_caches_output" "RUN ts-test:" "prune-gh-caches"
+assert_not_contains "$prune_gh_caches_output" "RUN rust-test-and-coverage:" "prune-gh-caches"
+
 target_cache_output="$(run_case target-cache normal scripts/target-cache.sh)"
 assert_contains "$target_cache_output" "route: frontend=0 rust=0 hook=1 memory=0 agent=0" "target cache"
 assert_contains "$target_cache_output" "RUN hook-shell-syntax:" "target cache"

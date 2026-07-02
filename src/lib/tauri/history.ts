@@ -21,6 +21,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import type { Paradigm } from "@/types/connection";
 
 // ---------------------------------------------------------------------------
 // Discriminated union — paradigm + queryMode.
@@ -137,7 +138,12 @@ export interface HistoryListRow {
   id: number;
   connectionId: string;
   tabId?: string | null;
-  paradigm: "rdb" | "document";
+  // Display DTO — carries the full paradigm domain so log/history views can
+  // label kv/search entries correctly instead of collapsing to a 2-value
+  // (rdb/document) worldview. Backend `add_history_entry` still only accepts
+  // rdb/document today; the extra members are forward-compat for when
+  // kv/search recording lands (#1055 / #1053).
+  paradigm: Paradigm;
   queryMode: string;
   database?: string | null;
   collection?: string | null;
