@@ -46,10 +46,14 @@ export function analyzeKvCommandSafety(command: string): StatementAnalysis {
     .trim()
     .match(/^([A-Za-z]+)/)?.[1]
     ?.toUpperCase();
-  // Issue #1120 — danger routes to the confirm dialog. The confirm-worthy
-  // set is the backend's `required_confirmation_key` commands, mirrored in
-  // `KV_CONFIRM_COMMANDS`. Everything else is info; the backend command
-  // allowlist remains the real safety gate.
+  // Issue #1120 — `danger` here is the confirm-dialog lever, NOT an
+  // "irreversible destruction" verdict: the KV path has no warn→confirm
+  // surface, so mirroring the backend's `required_confirmation_key` set
+  // (KEYS pattern-confirm + DEL/PERSIST key-confirm) onto `danger` is what
+  // routes these to the same confirm dialog SQL destructive statements use.
+  // KEYS (scan) and PERSIST (TTL removal) are not destructive; they ride
+  // `danger` only for the confirm gate. Everything else is info; the backend
+  // command allowlist remains the real safety boundary.
   const reason = verb ? KV_CONFIRM_COMMANDS[verb] : undefined;
   if (reason) {
     return { kind: "other", severity: "danger", reasons: [reason] };

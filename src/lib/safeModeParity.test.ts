@@ -21,6 +21,15 @@
 // GRANT/REVOKE is warn everywhere (danger stays reserved for irreversible
 // data destruction).
 //
+// KV (Redis/Valkey) confirm-gated commands (KEYS / DEL / PERSIST) are
+// deliberately EXCLUDED from this table. Their `danger` tier is NOT an
+// impact×loss verdict — a single-key DEL is row-targeted (warn on this
+// axis) and KEYS/PERSIST are not destructive at all. It is a mirror of the
+// backend `required_confirmation_key` set, reusing `danger` as the only
+// confirm-dialog lever (the KV path has no warn→confirm surface). That
+// backend-confirm mirroring is locked in kvQueryExecution.test.ts, which is
+// the correct home for it — the axis parity table stays impact×loss-only.
+//
 // This table is the lock: adding a paradigm or a new destructive syntax
 // means adding its row here. A drifted classifier fails the matching bucket.
 import { describe, expect, it } from "vitest";
@@ -207,16 +216,6 @@ const PARITY_TABLE: ParityBucket[] = [
         paradigm: "mongo-op",
         label: "dropCollection",
         actual: analyzeMongoOperation({ kind: "dropCollection" }).severity,
-      },
-      {
-        paradigm: "kv",
-        label: "DEL (key removal)",
-        actual: kv("DEL session:1"),
-      },
-      {
-        paradigm: "kv",
-        label: "KEYS (full keyspace scan)",
-        actual: kv("KEYS *"),
       },
     ],
   },
