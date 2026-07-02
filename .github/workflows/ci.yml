@@ -97,9 +97,60 @@ jobs:
       - name: Dependency security summary
         run: bash scripts/hooks/cargo-deny-summary.sh
 
-      - name: Run cargo deny
+      # Blocking gate. bans/licenses/sources are properties of *this PR's*
+      # dependency set — a banned crate, disallowed license, or untrusted
+      # source only appears when someone changes dependencies, so failing the
+      # PR is the correct signal. Advisories are decoupled into the
+      # `dependency-advisories` job below: a new RUSTSEC advisory is an external
+      # event independent of the PR (2026-07-02 incident: one new advisory
+      # turned 2 main pushes + 1 unrelated PR red at once).
+      - name: Run cargo deny (bans, licenses, sources)
         working-directory: src-tauri
-        run: cargo deny check --hide-inclusion-graph
+        run: cargo deny check bans licenses sources --hide-inclusion-graph
+
+  dependency-advisories:
+    name: Dependency Advisories (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Non-blocking (`continue-on-error`) advisory scan, split out of the
+    # blocking gate above. A RUSTSEC advisory is an event about the outside
+    # world, not about the code in any given PR, so it must never turn every
+    # open PR and main push red at once (2026-07-02 incident). The signal stays
+    # visible in the Actions log. Auto-filing an issue on failure is a
+    # follow-up, out of scope for this PR.
+    continue-on-error: true
+    env:
+      CARGO_DENY_VERSION: "0.19.9"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+
+      - name: Cache cargo-deny
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-deny
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-deny-${{ runner.os }}-${{ env.CARGO_DENY_VERSION }}
+
+      - name: Install pinned cargo-deny
+        run: |
+          if ! cargo deny --version 2>/dev/null | grep -Fx "cargo-deny ${CARGO_DENY_VERSION}" >/dev/null; then
+            cargo install cargo-deny --version "$CARGO_DENY_VERSION" --locked --force
+          fi
+          cargo deny --version | grep -Fx "cargo-deny ${CARGO_DENY_VERSION}"
+
+      - name: Run cargo deny (advisories)
+        working-directory: src-tauri
+        run: cargo deny check advisories --hide-inclusion-graph
 
   frontend:
     name: Frontend Checks
@@ -151,12 +202,44 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Test
+        run: pnpm test -- --run --coverage --coverage.reporter=text-summary
+
+      - name: Build
+        run: pnpm build
+
+  frontend-advisory:
+    name: Frontend Advisory (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # docs:links and contrast:check sat on the blocking frontend job's critical
+    # path (9m11s bottleneck) but neither gates a merge. Moved here as a
+    # non-blocking job (`continue-on-error`) so the frontend gate keeps only
+    # ratchet → wasm:size → lint → test → build.
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Documentation links (advisory)
         run: pnpm docs:links
         continue-on-error: true
-
-      - name: Test
-        run: pnpm test -- --run --coverage --coverage.reporter=text-summary
 
       # ADR 0031 의 contrast gate 는 advisory 로 강등 (2026-05-17, sprint-384).
       # 72 themes × syntax 12 토큰 = 864 pair 중 다수가 WCAG AA 4.5:1 미달.
@@ -167,9 +250,6 @@ jobs:
       - name: Theme contrast (WCAG AA, advisory)
         run: pnpm contrast:check
         continue-on-error: true
-
-      - name: Build
-        run: pnpm build
 
   rust:
     name: Rust Unit And Storage Tests
@@ -209,6 +289,49 @@ jobs:
         run: cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib
       - name: Run parse_sql_backend integration test
         run: cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend
+
+  rust-static:
+    name: Rust Static Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # clippy --all-features pulls the full Tauri feature graph, which needs
+      # the WebKitGTK/GTK system libraries to compile on Linux. Mirrors the
+      # integration-tests job's apt step.
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+          components: rustfmt, clippy
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # Mirror lefthook.yml pre-commit rust-format / rust-clippy exactly so a
+      # local pre-commit pass and CI agree. lefthook runs only
+      # `cd src-tauri && cargo fmt --check` / `cargo clippy --all-targets
+      # --all-features -- -D warnings`; it does not invoke the sql-parser-core
+      # path crate as a separate command, so CI mirrors just these two.
+      - name: Rustfmt (mirror lefthook rust-format)
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: Clippy (mirror lefthook rust-clippy)
+        working-directory: src-tauri
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
   integration-tests:
     name: Integration Tests (Docker)
@@ -295,6 +418,10 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration
 
   # Runtime E2E smoke lives in .github/workflows/e2e-smoke.yml as a
-  # blocking remote check on pull requests and main. This workflow keeps
-  # the non-runtime correctness gates: lint/test/build plus Rust unit and
-  # integration coverage.
+  # blocking remote check on pull requests and main. This workflow keeps the
+  # non-runtime correctness gates.
+  #   Blocking: dependency-security (bans/licenses/sources), frontend
+  #   (ratchet → wasm:size → lint → test → build), rust-static (fmt + clippy,
+  #   mirrors lefthook), rust unit/storage tests, integration tests.
+  #   Non-blocking (advisory): doc-size, dependency-advisories (RUSTSEC),
+  #   frontend-advisory (docs:links + WCAG contrast).

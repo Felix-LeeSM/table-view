@@ -117,7 +117,12 @@ assert_contains "$dependency_security_block" "key: cargo-deny-\${{ runner.os }}-
 assert_contains "$dependency_security_block" "cargo install cargo-deny --version \"\$CARGO_DENY_VERSION\" --locked --force" "dependency security install"
 assert_contains "$dependency_security_block" "bash scripts/hooks/cargo-deny-summary.sh" "dependency security summary"
 assert_contains "$dependency_security_block" "working-directory: src-tauri" "dependency security cargo deny cwd"
-assert_contains "$dependency_security_block" "run: cargo deny check --hide-inclusion-graph" "dependency security cargo deny"
+# Advisories are decoupled from the blocking gate (2026-07-02 incident): the
+# blocking job only checks bans/licenses/sources, and the non-blocking
+# `dependency-advisories` job owns `cargo deny check advisories`.
+assert_contains "$dependency_security_block" "run: cargo deny check bans licenses sources --hide-inclusion-graph" "dependency security blocking cargo deny"
+assert_contains "$dependency_security_block" "name: Dependency Advisories (non-blocking)" "dependency advisories job present"
+assert_contains "$dependency_security_block" "run: cargo deny check advisories --hide-inclusion-graph" "dependency advisories cargo deny"
 assert_order "$dependency_security_block" "- name: Dependency security summary" "- name: Run cargo deny" "dependency security summary before gate"
 assert_contains "$rust_block" "workspaces: src-tauri -> target" "rust cache"
 assert_contains "$rust_block" "cache-bin: false" "rust cache"
