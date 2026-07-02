@@ -26,7 +26,7 @@ caveman 모드. 작업 시 read:
 - 본문 **9-15줄 cap**. 50줄 넘으면 lazy 위반 — source 로 옮기고 redirect.
 - main read (해당 agent 본인 룰) 는 강제, 조건부 read 만 진짜 lazy.
 - frontmatter `name` / `description` / `tools` / `model` 필수.
-- 각 wrapper 본문 첫 줄에 리터럴 `caveman 모드.` 명시 (agent 파일 간 상속 메커니즘은 없음 — 아래 "caveman/ponytail 주입" 참조).
+- 각 wrapper 본문 첫 줄은 `caveman 모드.` 로 시작 (delivery / security-handoff 는 조건부 변형 `caveman 모드 (단 …)`). agent 파일 간 상속 메커니즘은 없음 — 아래 "caveman/ponytail 주입" 참조.
 
 ## caveman/ponytail 주입 (상속 아님)
 

@@ -229,6 +229,19 @@ run_case "main command: >&<digit>file to source blocked" 1 main-command "cat src
 run_case "main command: bare >& next-token source write blocked" 1 main-command "echo x >& src/App.tsx"
 run_case "main command: fd close allowed" 0 main-command "exec 2>&-"
 
+# issue #1156: quoting / placeholder / separator false positives.
+# These benign commands must NOT be blocked while real writes below still are.
+run_case "main command: fd-dup 2>&1 pipeline with ; chain allowed" 0 main-command 'gh api /repos/o/r 2>&1 | head -30; echo ---; gh label list foo'
+run_case "main command: commit trailer <email> then push allowed" 0 main-command 'git commit -m "msg Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>" && git push'
+run_case "main command: commit trailer <email> then pipe allowed" 0 main-command 'git commit -m "msg <noreply@anthropic.com>" | tail -3'
+run_case "main command: arrow in single quotes allowed" 0 main-command "printf '%s -> %s' old new"
+run_case "main command: arrow and <placeholder> in commit message allowed" 0 main-command 'git commit -m "rename old -> new and drop <name>"'
+run_case "main command: dangling redirect resets at separator" 0 main-command 'echo foo > ; git status'
+# real writes must stay blocked (guards against over-neutralizing quotes).
+run_case "main command: quoted redirect target still blocked" 1 main-command 'echo x > "src/foo.ts"'
+run_case "main command: rm source file blocked" 1 main-command "rm src/gone.ts"
+run_case "main command: rm memory doc allowed" 0 main-command "rm memory/x.md"
+
 doc_patch_input="$(printf '*** Begin Patch\n*** Update File: memory/foo/memory.md\n@@\n-- git mv old path\n+- test/reset/helper wording in docs\n*** End Patch\n')"
 run_case "main command: apply_patch checks patch markers only" 0 main-command "$doc_patch_input"
 mixed_patch_shell_input="$(printf 'printf patch_marker <<EOF\n*** Update File: memory/foo/memory.md\nEOF\nprintf hi > src/App.tsx\n')"

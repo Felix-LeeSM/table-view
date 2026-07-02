@@ -504,24 +504,27 @@ check_dangerous_patterns() {
 # 명령 문자열 전체 word-match (기존 배열 방식) 는 `rg "TRUNCATE" src/` /
 # `git commit -m "fix: DROP TABLE guard"` 를 오탐 차단했다.
 #
-# 규칙: 명령을 shell 연산자(; & |)로 세그먼트 분할하고, 각 세그먼트에서
-#   1) 앞쪽 env-assignment(VAR=val) 를 건너뛴다.
-#   2) sudo/doas/env/command wrapper 를 만나면 그 뒤 옵션/값을 client 가 나올
-#      때까지 건너뛴다.
-#   3) command position 첫 토큰이 DB client (psql/mysql/...) 인 세그먼트에서만,
-#   4) 같은 세그먼트 안의 파괴적 keyword (DROP DATABASE|TABLE / TRUNCATE) 를
+# 규칙: 명령을 shell 문장 구분자(; & && || 개행)로 "문장" 분할한다. 단일 파이프
+# | 는 구분자가 아니다 — 파이프라인은 하나의 논리 명령이다. 각 문장에서
+#   1) 문장을 pipe-stage 로 나눈다.
+#   2) 각 stage 에서 앞쪽 env-assignment(VAR=val) 를 건너뛰고,
+#      sudo/doas/env/command wrapper 뒤 옵션/값을 client 가 나올 때까지 건너뛴다.
+#   3) 어느 pipe-stage 든 command position 첫 토큰이 DB client (psql/mysql/...) 이고,
+#   4) 같은 문장 안에 파괴적 keyword (DROP DATABASE|TABLE / TRUNCATE) 가 있으면
 #      block 한다.
-# 세그먼트 한정이라 `psql -l && git commit -m "...DROP TABLE..."` 는 통과
-# (commit 은 별개 세그먼트). rg/grep/git 로 시작하는 세그먼트는 client 가
-# command position 에 없어 통과한다.
+# 문장 한정이라 `psql -l && git commit -m "...DROP TABLE..."` 는 통과 (commit 은
+# 별개 문장). rg/grep/git 로 시작하는 문장은 client 가 command position 에 없어
+# 통과한다. `echo "DROP TABLE t" | psql db` 는 한 문장(파이프라인)이라 block —
+# PR #1151 이 | 까지 구분자로 삼아 생긴 pipe-fed 미탐 회귀 fix (Refs #1151).
 #
 # ponytail: 부주의 방지 heuristic — 정확한 보안 경계 아님 (스크립트 헤더 참고).
 #   - string literal 안의 keyword (`mysql -e "SELECT 'TRUNCATE'"`) 도 여전히
 #     block — 실제 client exec 에 대한 over-warning 이라 감수.
 #   - wrapper 인식은 best-effort (sudo/doas/env/command 만). time/nice/xargs
-#     등 다른 wrapper, quote 안에 든 ;&| 는 놓칠 수 있음 — heuristic 은 어차피
-#     우회 가능하므로 감수. `mongo`/`mongosh` 는 client list 에 있으나 Mongo 의
-#     `db.x.drop()` 는 이 SQL keyword 로 매치되지 않음 (pre-existing dead cover).
+#     등 다른 wrapper 는 놓칠 수 있음. 문장 분할은 quote 를 인식하나(quoted ; 는
+#     문장을 안 쪼갬), pipe-stage 분할과 heredoc 본문 개행은 미parse — heredoc-fed
+#     SQL 은 알려진 미탐. heuristic 은 어차피 우회 가능하므로 감수. `mongo`/`mongosh`
+#     의 `db.x.drop()` 는 이 SQL keyword 로 매치 안 됨 (pre-existing dead cover).
 SQL_CLIENT_BINARIES='psql mysql mariadb sqlite3 mongosh mongo duckdb'
 
 # 세그먼트가 DB client 를 command position 에서 실행하면 exit 0.
@@ -543,21 +546,65 @@ _sql_segment_runs_client() {
   return 1
 }
 
+# CMD 를 shell "문장" 으로 분할한다. 문장 구분자 — ; & (&& 포함) / || / 개행 —
+# 는 분할하지만 단일 파이프 | 는 분할하지 않는다: 파이프라인은 하나의 논리 명령.
+# (PR #1151 이 | 까지 구분자로 삼아 `echo "DROP TABLE t" | psql db` 같은 pipe-fed
+#  파괴 SQL 이 두 세그먼트로 쪼개져 미탐됨 — Refs #1151.) 따옴표 안의 구분자는
+# literal 로 둔다 — `printf 'TRUNCATE t;' | mysql` 의 quoted ; 가 문장을 쪼개지
+# 않도록. heredoc 본문의 개행은 여전히 read 루프가 문장 경계로 취급 → heredoc-fed
+# SQL 은 알려진 미탐 (본 heuristic 은 quote/heredoc 을 완전히 parse 하지 않음).
+_sql_split_statements() {
+  local s="$1" n=${#1} i c q="" out=""
+  for ((i = 0; i < n; i++)); do
+    c=${s:i:1}
+    if [ -n "$q" ]; then # 따옴표 안 — 닫힐 때까지 그대로 복사
+      out+=$c
+      [ "$c" = "$q" ] && q=""
+      continue
+    fi
+    case $c in
+      \' | \") q=$c; out+=$c ;;
+      ';' | '&') out+=$'\n' ;; # ; & (&& 포함) → 문장 구분자
+      '|')
+        if [ "${s:i+1:1}" = "|" ]; then
+          out+=$'\n'  # || (or) → 문장 구분자
+          i=$((i + 1)) # 두 번째 | 소비 (set -e 안전: 산술 assignment)
+        else
+          out+='|' # 단일 | (pipe) → 유지 (파이프라인 = 한 문장)
+        fi
+        ;;
+      *) out+=$c ;;
+    esac
+  done
+  printf '%s\n' "$out"
+}
+
 check_sql_client_execution() {
-  # ; & | 를 개행으로 분할 (&& || 는 사이에 빈 세그먼트만 남김 — 무해).
-  local segments seg
-  segments="$(printf '%s' "$CMD" | tr ';&|' '\n')"
-  while IFS= read -r seg; do
-    [ -n "$seg" ] || continue
-    _sql_segment_runs_client "$seg" || continue
-    if printf '%s' "$seg" | grep -qiE '(^|[^a-zA-Z0-9_])DROP[[:space:]]+(DATABASE|TABLE)([^a-zA-Z0-9_]|$)'; then
+  local statements stmt stage runs_client
+  statements="$(_sql_split_statements "$CMD")"
+  while IFS= read -r stmt; do
+    [ -n "$stmt" ] || continue
+    # 파이프라인은 한 문장이지만 여러 stage — client 는 어느 stage 든 될 수 있다
+    # (`echo ... | psql`). 각 pipe-stage 의 command position 을 검사한다.
+    runs_client=0
+    while IFS= read -r stage; do
+      [ -n "$stage" ] || continue
+      if _sql_segment_runs_client "$stage"; then
+        runs_client=1
+        break
+      fi
+    done <<PIPES
+$(printf '%s' "$stmt" | tr '|' '\n')
+PIPES
+    [ "$runs_client" -eq 1 ] || continue
+    if printf '%s' "$stmt" | grep -qiE '(^|[^a-zA-Z0-9_])DROP[[:space:]]+(DATABASE|TABLE)([^a-zA-Z0-9_]|$)'; then
       emit_block_message "sql_drop" "DB client executes DROP DATABASE/TABLE in this command segment"
     fi
-    if printf '%s' "$seg" | grep -qiE '(^|[^a-zA-Z0-9_])TRUNCATE([^a-zA-Z0-9_]|$)'; then
+    if printf '%s' "$stmt" | grep -qiE '(^|[^a-zA-Z0-9_])TRUNCATE([^a-zA-Z0-9_]|$)'; then
       emit_block_message "sql_truncate" "DB client executes TRUNCATE in this command segment"
     fi
   done <<EOF
-$segments
+$statements
 EOF
 }
 
