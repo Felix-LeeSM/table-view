@@ -262,32 +262,54 @@ paths_from_command_tokens() {
 				;;
 			*">"*)
 				local after_redir="${word##*>}"
-				case "$after_redir" in
-					# FD close (2>&-, >&-): not a file path.
-					\&-)
-						continue
-						;;
-					# Bare `>&` — the write target is the next token (`>& file`).
-					\&)
+				# Count '>' so the FD dup/close skip below only fires for a
+				# single redirect operator. A glued multi-redirect like
+				# `>PATH>&1` has more than one '>', and its leading `>PATH`
+				# truncates/creates a real file before the trailing dup/close —
+				# skipping it (issue #1150) leaks source writes past the guard.
+				local gt_stripped="${word//>/}"
+				local gt_count=$((${#word} - ${#gt_stripped}))
+				if [ "$gt_count" -eq 1 ]; then
+					case "$after_redir" in
+						# FD close (2>&-, >&-): not a file path.
+						\&-)
+							continue
+							;;
+						# Bare `>&` — the write target is the next token (`>& file`).
+						\&)
+							expect_redir=1
+							continue
+							;;
+						# `>&N` / `N>&M`: FD duplication only when the word after `&`
+						# is ALL digits. `>&word` with any non-digit char is a real
+						# stdout+stderr file write (bash: `>&word` == `>word 2>&1`),
+						# so fall through to emit_path and keep it blocked (fail-safe).
+						\&*)
+							local fd_dup_target="${after_redir#&}"
+							case "$fd_dup_target" in
+								'' | *[!0-9]*) : ;;
+								*) continue ;;
+							esac
+							;;
+					esac
+					if [ -n "$after_redir" ]; then
+						emit_path "$after_redir"
+					else
 						expect_redir=1
-						continue
-						;;
-					# `>&N` / `N>&M`: FD duplication only when the word after `&`
-					# is ALL digits. `>&word` with any non-digit char is a real
-					# stdout+stderr file write (bash: `>&word` == `>word 2>&1`),
-					# so fall through to emit_path and keep it blocked (fail-safe).
-					\&*)
-						local fd_dup_target="${after_redir#&}"
-						case "$fd_dup_target" in
-							'' | *[!0-9]*) : ;;
-							*) continue ;;
-						esac
-						;;
-				esac
-				if [ -n "$after_redir" ]; then
-					emit_path "$after_redir"
+					fi
+					continue
+				fi
+				# gt_count >= 2: glued multi-redirect. Emit the leading write
+				# target (first '>' up to the next redirect). Drop a second '>'
+				# left by an append operator (`>>PATH`). Fall back to the raw
+				# tail so it still denies as an unknown target (fail-safe).
+				local first_rest="${word#*>}"
+				first_rest="${first_rest#>}"
+				local leading_write="${first_rest%%>*}"
+				if [ -n "$leading_write" ]; then
+					emit_path "$leading_write"
 				else
-					expect_redir=1
+					emit_path "$after_redir"
 				fi
 				continue
 				;;

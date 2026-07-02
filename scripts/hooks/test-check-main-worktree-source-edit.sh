@@ -229,6 +229,14 @@ run_case "main command: >&<digit>file to source blocked" 1 main-command "cat src
 run_case "main command: bare >& next-token source write blocked" 1 main-command "echo x >& src/App.tsx"
 run_case "main command: fd close allowed" 0 main-command "exec 2>&-"
 
+# Glued multi-redirect: a leading `>PATH` truncates/creates the file before the
+# trailing FD dup/close, so the write must still be blocked (regression #1150).
+run_case "main command: glued redirect leading write to src blocked" 1 main-command "printf x >src/App.tsx>&1"
+run_case "main command: glued redirect fd-prefixed leading write blocked" 1 main-command "printf x 1>src/App.tsx>&2"
+run_case "main command: glued redirect fd-close leading write blocked" 1 main-command "printf x 2>src/App.tsx>&-"
+run_case "main command: glued redirect multi-digit fd leading write blocked" 1 main-command "printf x >src/App.tsx>&10"
+run_case "main command: glued append redirect leading write blocked" 1 main-command "printf x >>src/App.tsx>&1"
+
 doc_patch_input="$(printf '*** Begin Patch\n*** Update File: memory/foo/memory.md\n@@\n-- git mv old path\n+- test/reset/helper wording in docs\n*** End Patch\n')"
 run_case "main command: apply_patch checks patch markers only" 0 main-command "$doc_patch_input"
 mixed_patch_shell_input="$(printf 'printf patch_marker <<EOF\n*** Update File: memory/foo/memory.md\nEOF\nprintf hi > src/App.tsx\n')"
