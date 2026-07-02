@@ -16,7 +16,7 @@ You are an **orchestrator** managing three specialized agents to build the featu
 
 - `MAX_SPRINTS`: 10 (increase to 15 for complex features)
 - `MAX_ATTEMPTS_PER_SPRINT`: 5
-- `PASS_THRESHOLD`: 7.0 (each dimension must score ≥ 7/10)
+- `PASS_THRESHOLD`: 8.0 (each dimension must score ≥ 8/10 — pr-review merge gate 8/10 과 정렬, 2026-07-03)
 
 ## Artifact Storage
 
@@ -174,7 +174,7 @@ Wait for the scorecard output. Parse:
 ### Sprint Loop Decision
 
 ```
-IF all dimensions ≥ 7/10:
+IF all dimensions ≥ 8/10:
   → Sprint PASS
   → Move to next sprint (Phase 2 for sprint N+1)
   → If all sprints done: present Final Report

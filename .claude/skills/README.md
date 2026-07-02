@@ -18,11 +18,11 @@ Claude Code 는 skill 을 `~/.claude/skills/` (user-global) 과 프로젝트
 - git 은 symlink 를 그대로 저장하므로 fresh clone 에서도 registration 된다.
 - 새 skill 추가 시: `ln -sfn ../../.agents/skills/<name> .claude/skills/<name>`.
 
-## 현재 bridge 목록 (12)
+## 현재 bridge 목록 (11)
 
 `caveman`, `code-simplification`, `diagnose`, `grill-with-memory`, `harness`,
 `improve-codebase-architecture`, `pr-create`, `pr-review`, `remember`,
-`split-memory`, `sprint-build`, `tdd`.
+`split-memory`, `tdd`.
 
 `.agents/skills/*/SKILL.md` 와 1:1. skill 추가/삭제 시 이 브리지도 맞춘다.
 
