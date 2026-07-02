@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import { logger } from "@lib/logger";
+import { toast } from "@lib/runtime/toast";
+import i18n from "@lib/i18n";
 import {
   listFavorites,
   persistFavorites as persistFavoritesRemote,
@@ -35,12 +37,13 @@ export type FavoriteScope = "all" | "global" | "connection";
 // canonical list back via `list_favorites`.
 //
 // The IPC fire-and-forget mirrors the previous LS write semantics — the
-// store mutates synchronously so the UI surface stays optimistic; the
-// IPC log surfaces failures. A reject does NOT roll the store back today
-// because the legacy LS path also could not roll back a write — the
-// invariant the contract preserves is "no user-visible regression vs
-// W2", not "stricter consistency than W2 had". A future sprint may add
-// per-action rollback once event/state-changed lands for favorites.
+// store mutates synchronously so the UI surface stays optimistic. #1092 —
+// SQLite is the single SOT after the W3 cut with no file/LS fallback and
+// no wired boot reconcile, so a swallowed write is lost on the next boot.
+// A reject now surfaces a dev log AND an error toast so the user knows the
+// change did not persist. A reject does NOT roll the store back today
+// (the legacy LS path could not either); per-action rollback waits for a
+// future sprint once event/state-changed lands for favorites.
 
 function toPersistPayload(
   favorites: FavoriteQuery[],
@@ -57,13 +60,15 @@ function toPersistPayload(
 }
 
 function persistFavorites(favorites: FavoriteQuery[]): void {
-  // Fire-and-forget — see module doc for why we keep this pattern. We log
-  // failures so dev console shows the SQLite write error, but the store
-  // mutate has already happened by the time we're here.
+  // Fire-and-forget — see module doc for why we keep this pattern. The store
+  // mutate has already happened; on IPC failure we log for the dev console
+  // and toast the user (#1092 — the write is the SOT, so a silent failure
+  // means the favorite is lost on the next boot).
   void persistFavoritesRemote(toPersistPayload(favorites)).catch(
     (e: unknown) => {
       const message = e instanceof Error ? e.message : String(e ?? "");
       logger.warn(`[favoritesStore] persist_favorites failed: ${message}`);
+      toast.error(i18n.t("feedback:storageWriteFailed"));
     },
   );
 }

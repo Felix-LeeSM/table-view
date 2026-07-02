@@ -11,12 +11,25 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+vi.mock("@lib/runtime/toast", () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+    dismiss: vi.fn(),
+    clear: vi.fn(),
+  },
+}));
+
 import { invoke } from "@tauri-apps/api/core";
+import { toast } from "@lib/runtime/toast";
 import { useFavoritesStore, SYNCED_KEYS } from "./favoritesStore";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const invokeMock = vi.mocked(invoke);
+const toastErrorMock = vi.mocked(toast.error);
 
 describe("favoritesStore", () => {
   beforeEach(() => {
@@ -293,6 +306,19 @@ describe("favoritesStore", () => {
 
       const state = useFavoritesStore.getState();
       expect(state.favorites).toEqual([]);
+    });
+  });
+
+  // Regression (#1092) — a rejected persist_favorites IPC (SQLite write
+  // failure with no file/LS fallback and no wired boot reconcile) must
+  // surface to the user, not be swallowed as a dev-only log.
+  describe("persist failure surfacing (#1092)", () => {
+    it("shows an error toast when persist_favorites rejects", async () => {
+      invokeMock.mockRejectedValueOnce(new Error("disk full"));
+
+      useFavoritesStore.getState().addFavorite("Q", "SELECT 1", null);
+
+      await vi.waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
     });
   });
 

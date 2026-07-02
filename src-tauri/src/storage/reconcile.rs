@@ -60,17 +60,22 @@ pub fn is_force_failure_for_tests() -> bool {
     FORCE_FAILURE_FOR_TESTS.load(Ordering::SeqCst)
 }
 
-/// dual-write helper 가 SQLite write 결과를 본 함수에 넘겨 silent 처리한다.
+/// dual-write helper 가 SQLite mirror write 결과를 본 함수에 넘겨 silent 처리.
 /// `Ok(())` 면 no-op. `Err(_)` 면 dev tracing::warn 로그 + counter 증가.
-/// **함수 자체는 항상 Ok 반환** — dual-write 의 외부 시그니처는 file/LS write
-/// 결과를 따른다.
+///
+/// #1092 (2026-07-02) — 이 삼킴은 **file SOT 가 살아있는 도메인 전용**이다.
+/// W3 이후 SQLite-only 가 된 favorites/mru/settings 는 대체 원본이 없어
+/// 실패를 삼키면 무음 소실이 되므로, 그 커맨드들은 이제 실패를 IPC 경계로
+/// 직접 전파한다. 유일한 현 호출자는 `persist_connections` — connections 는
+/// file `connections.json` 이 read SOT 라 SQLite mirror 실패가 데이터 손실을
+/// 일으키지 않는다 (다음 성공 write 까지 mirror 만 drift).
 pub fn record_sqlite_result(domain: &str, result: Result<(), AppError>) {
     if let Err(e) = result {
         warn!(
             target: "dual_write",
             domain = domain,
             error = %e,
-            "SQLite mirror write failed — file/LS SOT preserved; will reconcile on next boot"
+            "SQLite mirror write failed — file SOT preserved (mirror may drift until next successful write)"
         );
         mismatch_counter::increment();
     }

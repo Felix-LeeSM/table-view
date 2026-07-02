@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import { logger } from "@lib/logger";
+import { toast } from "@lib/runtime/toast";
+import i18n from "@lib/i18n";
 import { clearMru, persistMru, type PersistMruPayload } from "@lib/tauri/mru";
 
 /**
@@ -41,13 +43,15 @@ function toPersistPayload(entries: MruEntry[]): PersistMruPayload[] {
 }
 
 function persistMruList(entries: MruEntry[]): void {
-  // Sprint 370 — fire-and-forget IPC mirror. Same optimistic semantics as
-  // the legacy LS path: store mutates synchronously, IPC failures only
-  // surface in the dev log so the next persist (or next boot's
-  // mismatch metric) heals SQLite truth.
+  // Sprint 370 — fire-and-forget IPC mirror. Store mutates synchronously.
+  // #1092 — SQLite is the SOT with no file/LS fallback and no wired boot
+  // reconcile (the boot mismatch metric is observation-only and does NOT
+  // heal drift), so a failed write is lost on the next boot; surface a dev
+  // log AND an error toast.
   void persistMru(toPersistPayload(entries)).catch((e: unknown) => {
     const message = e instanceof Error ? e.message : String(e ?? "");
     logger.warn(`[mruStore] persist_mru failed: ${message}`);
+    toast.error(i18n.t("feedback:storageWriteFailed"));
   });
 }
 
@@ -56,13 +60,14 @@ function persistMruList(entries: MruEntry[]): void {
  * Truncates the SQLite `mru` table and emits `state-changed
  * { domain:"mru", op:"bulk", entityId:null }` so every window's
  * `RecentConnections` panel converges to empty. Fire-and-forget — store
- * mutation has already happened; an IPC failure surfaces in dev log and
- * is healed by the next mutate or boot reconcile.
+ * mutation has already happened; #1092 — an IPC failure surfaces in the
+ * dev log AND an error toast (no boot reconcile heals it).
  */
 function clearMruRemote(): void {
   void clearMru().catch((e: unknown) => {
     const message = e instanceof Error ? e.message : String(e ?? "");
     logger.warn(`[mruStore] clear_mru failed: ${message}`);
+    toast.error(i18n.t("feedback:storageWriteFailed"));
   });
 }
 

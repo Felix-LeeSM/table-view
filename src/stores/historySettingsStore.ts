@@ -26,6 +26,8 @@
 
 import { create } from "zustand";
 import { logger } from "@lib/logger";
+import { toast } from "@lib/runtime/toast";
+import i18n from "@lib/i18n";
 import { getSetting, persistSettingValue } from "@lib/tauri/settings";
 
 /**
@@ -59,8 +61,9 @@ export const useHistorySettingsStore = create<HistorySettingsState>()(
     queryHistoryRetentionDays: DEFAULT_QUERY_HISTORY_RETENTION_DAYS,
 
     setQueryHistoryEnabled: async (enabled) => {
-      // Optimistic — UI flips immediately. IPC reject 는 next boot 의
-      // snapshot reconcile 이 처리.
+      // Optimistic — UI flips immediately. #1092 — SQLite is the SOT and the
+      // boot snapshot re-reads it, so a failed write reverts the setting on
+      // next boot; surface a dev log + error toast (no boot reconcile exists).
       set({ queryHistoryEnabled: enabled });
       try {
         await persistSettingValue("query_history_enabled", enabled);
@@ -69,6 +72,7 @@ export const useHistorySettingsStore = create<HistorySettingsState>()(
           "[historySettingsStore] setQueryHistoryEnabled persist_setting failed (UI already applied):",
           e instanceof Error ? e.message : e,
         );
+        toast.error(i18n.t("feedback:storageWriteFailed"));
       }
     },
 
@@ -81,6 +85,7 @@ export const useHistorySettingsStore = create<HistorySettingsState>()(
           "[historySettingsStore] setQueryHistoryRetentionDays persist_setting failed (UI already applied):",
           e instanceof Error ? e.message : e,
         );
+        toast.error(i18n.t("feedback:storageWriteFailed"));
       }
     },
   }),

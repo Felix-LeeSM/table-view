@@ -14,7 +14,7 @@
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
 use crate::error::AppError;
-use crate::storage::reconcile::{is_force_failure_for_tests, record_sqlite_result};
+use crate::storage::reconcile::is_force_failure_for_tests;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tauri::State;
@@ -41,20 +41,15 @@ pub async fn persist_favorite_inner(
 ) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;
 
-    // Sprint 370 (Phase 4 W3) — file/LS write 분기 제거. SQLite-only.
-    // 외부 시그니처는 file write 시절의 silent-on-mirror-failure 패턴을
-    // 유지한다 — record_sqlite_result 가 Err 일 때 reconcile 카운터만 증가
-    // 시키고 caller 에는 Ok(()) 를 반환. SQLite 가 SOT 가 된 W3 이후에도
-    // 같은 시그니처를 유지하는 이유: reconcile path 의 호환성 + 호출자
-    // (frontend store) 의 optimistic 업데이트 mental model 보존.
-    let sqlite_result = if is_force_failure_for_tests() {
-        Err(AppError::Storage("forced failure for tests".into()))
-    } else {
-        write_sqlite_mirror(pool, &favorites).await
-    };
-    record_sqlite_result("favorites", sqlite_result);
-
-    Ok(())
+    // Sprint 370 (Phase 4 W3) — file/LS write 분기 제거. SQLite 가 유일한 SOT.
+    // #1092 (2026-07-02) — W3 cut 이후 SQLite 가 SOT 인데도 실패를 삼키고
+    // Ok 를 반환하던 것이 데이터 무음 소실의 근본 원인. file/LS 대체 원본이
+    // 없으므로 (그리고 boot reconcile 이 배선되어 있지 않으므로) write 실패는
+    // 그대로 IPC 경계로 전파해 frontend 가 사용자에게 알리게 한다.
+    if is_force_failure_for_tests() {
+        return Err(AppError::Storage("forced failure for tests".into()));
+    }
+    write_sqlite_mirror(pool, &favorites).await
 }
 
 // ---------------------------------------------------------------------------
@@ -155,7 +150,7 @@ mod tests {
     use super::*;
     use crate::storage::local;
     use crate::storage::meta::{set_legacy_import_state, LegacyImportState};
-    use crate::storage::reconcile::mismatch_counter;
+    use crate::storage::reconcile::{mismatch_counter, set_force_failure_for_tests};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -172,6 +167,38 @@ mod tests {
     fn cleanup() {
         std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
         mismatch_counter::reset();
+        set_force_failure_for_tests(false);
+    }
+
+    // Regression (#1092, 2026-07-02) — before the fix a failing SQLite mirror
+    // write was handed to `record_sqlite_result` and the inner returned
+    // `Ok(())` regardless, so the IPC boundary reported success while the row
+    // never landed and favorites vanished on the next boot. The write result
+    // MUST propagate so the frontend can surface the failure.
+    #[tokio::test]
+    #[serial]
+    async fn persist_favorite_inner_propagates_sqlite_write_failure() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        set_force_failure_for_tests(true);
+        let result = persist_favorite_inner(
+            &pool,
+            vec![PersistFavoriteRequest {
+                id: "fav-fail".into(),
+                name: "n".into(),
+                sql: "SELECT 1".into(),
+                connection_id: None,
+                sort_order: 0,
+                created_at: 1,
+                updated_at: 1,
+            }],
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "SQLite write failure must propagate to the IPC boundary, not be swallowed as Ok"
+        );
+        cleanup();
     }
 
     #[tokio::test]

@@ -14,7 +14,7 @@ use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
 use crate::error::AppError;
 use crate::events::{emit_state_changed, EmitArgs, EventDomain, EventOp, EventVersionRegistry};
-use crate::storage::reconcile::{is_force_failure_for_tests, record_sqlite_result};
+use crate::storage::reconcile::is_force_failure_for_tests;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Runtime, State};
@@ -34,15 +34,12 @@ pub async fn persist_setting_inner(
 ) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;
 
-    // Sprint 370 (Phase 4 W3) — file SOT 분기 제거. SQLite-only.
-    let sqlite_result = if is_force_failure_for_tests() {
-        Err(AppError::Storage("forced failure for tests".into()))
-    } else {
-        write_sqlite_mirror(pool, &req).await
-    };
-    record_sqlite_result("settings", sqlite_result);
-
-    Ok(())
+    // Sprint 370 (Phase 4 W3) — file SOT 분기 제거. SQLite 가 유일한 SOT.
+    // #1092 — write 실패를 삼키지 않고 IPC 경계로 전파한다 (대체 원본 없음).
+    if is_force_failure_for_tests() {
+        return Err(AppError::Storage("forced failure for tests".into()));
+    }
+    write_sqlite_mirror(pool, &req).await
 }
 
 /// Wave 9.5 회귀 7 (2026-05-17) — cross-window 테마/safe_mode broadcast 가
@@ -152,27 +149,16 @@ pub async fn get_setting(
 pub async fn reset_setting_inner(pool: &SqlitePool, key: &str) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;
 
-    let sqlite_result: Result<(), AppError> = if is_force_failure_for_tests() {
-        Err(AppError::Storage("forced failure for tests".into()))
-    } else {
-        sqlx::query("DELETE FROM settings WHERE key = ?")
-            .bind(key)
-            .execute(pool)
-            .await
-            .map(|_| ())
-            .map_err(AppError::from)
-    };
-    // Mirror sibling persist_setting_inner's reconcile bookkeeping —
-    // AppError is not Clone, so re-construct a parallel ok/err signal
-    // for the counter without leaking the original error message.
-    let counter_signal: Result<(), AppError> = match &sqlite_result {
-        Ok(()) => Ok(()),
-        Err(_) => Err(AppError::Storage(
-            "reset_setting sqlite delete failed".into(),
-        )),
-    };
-    record_sqlite_result("settings", counter_signal);
-    sqlite_result
+    // #1092 — delete 실패를 그대로 전파 (이전 counter-only 삼킴 제거).
+    if is_force_failure_for_tests() {
+        return Err(AppError::Storage("forced failure for tests".into()));
+    }
+    sqlx::query("DELETE FROM settings WHERE key = ?")
+        .bind(key)
+        .execute(pool)
+        .await
+        .map(|_| ())
+        .map_err(AppError::from)
 }
 
 /// `reset_setting` 의 wrapper — SQLite delete 후 `setting.reset` emit.
@@ -223,7 +209,7 @@ mod tests {
     use super::*;
     use crate::storage::local;
     use crate::storage::meta::{set_legacy_import_state, LegacyImportState};
-    use crate::storage::reconcile::mismatch_counter;
+    use crate::storage::reconcile::{mismatch_counter, set_force_failure_for_tests};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -240,6 +226,31 @@ mod tests {
     fn cleanup() {
         std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
         mismatch_counter::reset();
+        set_force_failure_for_tests(false);
+    }
+
+    // Regression (#1092, 2026-07-02) — SQLite write failure must propagate to
+    // the IPC boundary instead of being swallowed as `Ok(())`, otherwise the
+    // setting silently reverts on next boot while the UI believed it saved.
+    #[tokio::test]
+    #[serial]
+    async fn persist_setting_inner_propagates_sqlite_write_failure() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        set_force_failure_for_tests(true);
+        let result = persist_setting_inner(
+            &pool,
+            PersistSettingRequest {
+                key: "theme".into(),
+                value_json: r#"{"themeId":"x","mode":"dark"}"#.into(),
+            },
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "SQLite write failure must propagate to the IPC boundary, not be swallowed as Ok"
+        );
+        cleanup();
     }
 
     #[tokio::test]

@@ -35,6 +35,8 @@ import ThemePicker from "@components/theme/ThemePicker";
 import { resetSetting } from "@lib/tauri/settings";
 import { useMruStore } from "@stores/mruStore";
 import { logger } from "@lib/logger";
+import { toast } from "@lib/runtime/toast";
+import i18n from "@lib/i18n";
 import { RotateCcw, Eraser } from "lucide-react";
 
 /**
@@ -78,11 +80,18 @@ export default function HomePage() {
   const toggleRecentCollapsed = useCallback(() => {
     setRecentCollapsed((prev) => {
       const next = !prev;
-      // Best-effort SQLite write. Failure leaves the in-process state
-      // updated (UX uninterrupted) — next mutate retries.
-      void persistSettingValue("home_recent_collapsed", next).catch(() => {
-        /* best-effort; next toggle retries */
-      });
+      // #1092 — SQLite is the SOT with no boot reconcile; surface a failed
+      // write (dev log + toast) instead of swallowing it. The in-process
+      // state stays updated so the UX is uninterrupted.
+      void persistSettingValue("home_recent_collapsed", next).catch(
+        (e: unknown) => {
+          const message = e instanceof Error ? e.message : String(e ?? "");
+          logger.warn(
+            `[HomePage] persist_setting(home_recent_collapsed) failed: ${message}`,
+          );
+          toast.error(i18n.t("feedback:storageWriteFailed"));
+        },
+      );
       return next;
     });
   }, []);
