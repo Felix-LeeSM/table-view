@@ -191,41 +191,6 @@ run_cargo_deny() {
 	)
 }
 
-run_rust_coverage() {
-	if [ "$DRY_RUN" = "1" ]; then
-		echo "RUN rust-test-and-coverage: rustup component check && (cd src-tauri && cargo llvm-cov nextest --profile push --lib --test storage_integration --test query_integration --test schema_integration --test fixture_loading --test mongo_integration --test mysql_integration --test duckdb_file_analytics --test mariadb_ddl_preview --test mssql_connection_routing --summary-only --fail-under-lines 80 --fail-under-functions 75 --fail-under-regions 80)"
-		return 0
-	fi
-
-	if ! rustup component list --installed 2>/dev/null | grep -q '^llvm-tools'; then
-		echo "ERROR: rustup llvm-tools-preview component is missing." >&2
-		echo "       Run 'bash scripts/setup.sh' and retry." >&2
-		exit 1
-	fi
-	if ! command -v cargo-nextest >/dev/null 2>&1; then
-		echo "ERROR: cargo-nextest is missing." >&2
-		echo "       Run 'bash scripts/setup.sh' and retry." >&2
-		exit 1
-	fi
-	(
-		cd src-tauri
-		run_with_heartbeat "rust-test-and-coverage" cargo llvm-cov nextest --profile push --lib \
-			--test storage_integration \
-			--test query_integration \
-			--test schema_integration \
-			--test fixture_loading \
-			--test mongo_integration \
-			--test mysql_integration \
-			--test duckdb_file_analytics \
-			--test mariadb_ddl_preview \
-			--test mssql_connection_routing \
-			--summary-only \
-			--fail-under-lines 80 \
-			--fail-under-functions 75 \
-			--fail-under-regions 80
-	)
-}
-
 run_ts_gates() {
 	run_step "ts-typecheck" npx tsc --noEmit
 	run_step "ts-lint" npm run lint
@@ -233,10 +198,15 @@ run_ts_gates() {
 }
 
 run_rust_gates() {
+	# Fast local Rust gates only. The heavy integration coverage gate
+	# (`cargo llvm-cov nextest --profile push`, thresholds 80/75/80 + the
+	# instrumented build and MySQL/MSSQL/Redis testcontainers) was promoted to
+	# CI `Integration Tests (Docker)` on 2026-07-03 (audit #6) so a required
+	# remote check owns the floor instead of the dev machine's hook. pre-commit
+	# still runs the fast lib-only Tier1 coverage for immediate local feedback.
 	run_step_in "tauri-check" src-tauri cargo check
 	run_cargo_deny
 	run_step_in "cargo-machete" src-tauri cargo machete
-	run_rust_coverage
 }
 
 run_hook_gates() {

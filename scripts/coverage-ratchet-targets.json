@@ -22,7 +22,7 @@
     },
     {
       "id": "rust.pre_push.integration",
-      "source": "scripts/hooks/pre-push-path-router.sh",
+      "source": ".github/workflows/ci.yml",
       "metrics": {
         "lines": 80,
         "functions": 75,

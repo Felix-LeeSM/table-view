@@ -40,10 +40,14 @@ repo-local measurements that beat target warm-start.
 
 ## Rust Test Runner
 
-`pre-push` uses `cargo llvm-cov nextest --profile push` for Rust coverage. The
-nextest config lives at `src-tauri/.config/nextest.toml`. Hook self-checks
-validate that profile with `cargo nextest show-config`, which reads config
-without compiling test binaries.
+The CI `Integration Tests (Docker)` job runs `cargo llvm-cov nextest --profile
+push` for Rust integration coverage (promoted from the local pre-push rust route
+on 2026-07-03, audit #6, so a required remote check owns the floor). The
+pre-push rust route now runs only the fast gates (`cargo check`, `cargo deny`,
+`cargo machete`); `pre-commit` still owns the fast lib-only Tier 1 coverage. The
+nextest config lives at `src-tauri/.config/nextest.toml`. Pre-push hook
+self-checks still validate that profile with `cargo nextest show-config`, which
+reads config without compiling test binaries.
 
 `mysql_integration` runs in a one-thread nextest group because its
 container-backed tests share MySQL state. `serial_test` only serializes inside
@@ -63,9 +67,9 @@ Current repo state has one ignored doctest example and no executable doctests.
 Long `pre-push` steps are wrapped with a heartbeat:
 
 ```text
-[pre-push-route] rust-test-and-coverage start
-[pre-push-route] rust-test-and-coverage running elapsed=15s
-[pre-push-route] rust-test-and-coverage pass duration=74s
+[pre-push-route] ts-test start
+[pre-push-route] ts-test running elapsed=15s
+[pre-push-route] ts-test pass duration=74s
 ```
 
 Successful command output is captured and discarded. Failures print the last 80
@@ -82,7 +86,7 @@ PRE_PUSH_PATH_ROUTER_LOG_TAIL_LINES=120
 
 When a change touches workflow or unknown paths, `pre-push` runs both frontend
 and Rust gates. The default is sequential execution: frontend first, then Rust.
-This avoids local CPU and memory contention where Rust coverage and Vitest run
+This avoids local CPU and memory contention where the Rust gates and Vitest run
 at the same time and cause otherwise unrelated test timeouts.
 
 Opt into the old parallel behavior only for an intentionally quiet machine:

@@ -175,15 +175,18 @@ rust_output="$(run_case rust-only normal src-tauri/src/lib.rs)"
 assert_contains "$rust_output" "route: frontend=0 rust=1" "rust-only"
 assert_contains "$rust_output" "RUN tauri-check:" "rust-only"
 assert_contains "$rust_output" "RUN cargo-deny:" "rust-only"
-assert_contains "$rust_output" "RUN rust-test-and-coverage:" "rust-only"
-assert_contains "$rust_output" "cargo llvm-cov nextest --profile push" "rust-only"
+assert_contains "$rust_output" "RUN cargo-machete:" "rust-only"
+# The heavy integration coverage gate moved to CI (2026-07-03); the rust route
+# must run only the fast gates now.
+assert_not_contains "$rust_output" "rust-test-and-coverage" "rust-only no promoted integration coverage"
+assert_not_contains "$rust_output" "cargo llvm-cov nextest" "rust-only no promoted integration coverage"
 assert_not_contains "$rust_output" "RUN ts-test:" "rust-only"
 
 mixed_output="$(run_case mixed normal src/App.tsx src-tauri/src/lib.rs)"
 assert_contains "$mixed_output" "route: frontend=1 rust=1" "mixed"
 assert_contains "$mixed_output" "RUN parallel: frontend+rust" "mixed"
 assert_contains "$mixed_output" "RUN ts-test:" "mixed"
-assert_contains "$mixed_output" "RUN rust-test-and-coverage:" "mixed"
+assert_contains "$mixed_output" "RUN cargo-machete:" "mixed"
 
 mixed_sequential_output="$(
 	PRE_PUSH_PATH_ROUTER_PARALLEL_GATES=0 run_case mixed-sequential normal src/App.tsx src-tauri/src/lib.rs
@@ -191,7 +194,7 @@ mixed_sequential_output="$(
 assert_contains "$mixed_sequential_output" "route: frontend=1 rust=1" "mixed sequential"
 assert_contains "$mixed_sequential_output" "RUN sequential: frontend then rust" "mixed sequential"
 assert_contains "$mixed_sequential_output" "RUN ts-test:" "mixed sequential"
-assert_contains "$mixed_sequential_output" "RUN rust-test-and-coverage:" "mixed sequential"
+assert_contains "$mixed_sequential_output" "RUN cargo-machete:" "mixed sequential"
 
 mixed_parallel_output="$(
 	PRE_PUSH_PATH_ROUTER_PARALLEL_GATES=1 run_case mixed-parallel normal src/App.tsx src-tauri/src/lib.rs
@@ -199,7 +202,7 @@ mixed_parallel_output="$(
 assert_contains "$mixed_parallel_output" "route: frontend=1 rust=1" "mixed parallel"
 assert_contains "$mixed_parallel_output" "RUN parallel: frontend+rust" "mixed parallel"
 assert_contains "$mixed_parallel_output" "RUN ts-test:" "mixed parallel"
-assert_contains "$mixed_parallel_output" "RUN rust-test-and-coverage:" "mixed parallel"
+assert_contains "$mixed_parallel_output" "RUN cargo-machete:" "mixed parallel"
 
 hook_output="$(run_case hook normal lefthook.yml)"
 assert_contains "$hook_output" "route: frontend=0 rust=0 hook=1 memory=0 agent=0" "hook"
@@ -283,7 +286,7 @@ committed_generated_output="$(
 assert_contains "$committed_generated_output" "route: frontend=1 rust=1" "committed generated inputs"
 assert_contains "$committed_generated_output" "committed_generated=1" "committed generated inputs"
 assert_contains "$committed_generated_output" "RUN ts-test:" "committed generated inputs"
-assert_contains "$committed_generated_output" "RUN rust-test-and-coverage:" "committed generated inputs"
+assert_contains "$committed_generated_output" "RUN cargo-machete:" "committed generated inputs"
 
 committed_generated_wasm_output="$(run_case committed-generated-wasm normal src/lib/sql/wasm/sql_parser_core_bg.wasm)"
 assert_contains "$committed_generated_wasm_output" "route: frontend=1 rust=0" "committed generated wasm"
@@ -315,7 +318,7 @@ assert_not_contains "$ci_workflow_output" "RUN rust-test-and-coverage:" "ci work
 github_meta_output="$(run_case github-meta normal .github/dependabot.yml)"
 assert_contains "$github_meta_output" "route: full" "github meta"
 assert_contains "$github_meta_output" "RUN ts-test:" "github meta"
-assert_contains "$github_meta_output" "RUN rust-test-and-coverage:" "github meta"
+assert_contains "$github_meta_output" "RUN cargo-machete:" "github meta"
 
 claude_agent_output="$(run_case claude-agent normal .claude/settings.json)"
 assert_contains "$claude_agent_output" "route: frontend=0 rust=0 hook=0 memory=0 agent=1" "claude agent"
@@ -343,12 +346,12 @@ assert_not_contains "$memory_output" "RUN rust-test-and-coverage:" "memory"
 unknown_output="$(run_case unknown normal .prettierrc)"
 assert_contains "$unknown_output" "route: full" "unknown"
 assert_contains "$unknown_output" "RUN ts-test:" "unknown"
-assert_contains "$unknown_output" "RUN rust-test-and-coverage:" "unknown"
+assert_contains "$unknown_output" "RUN cargo-machete:" "unknown"
 
 mixed_unknown_source_output="$(run_case mixed-unknown-source normal src/App.tsx .prettierrc)"
 assert_contains "$mixed_unknown_source_output" "route: full" "mixed unknown source"
 assert_contains "$mixed_unknown_source_output" "RUN ts-test:" "mixed unknown source"
-assert_contains "$mixed_unknown_source_output" "RUN rust-test-and-coverage:" "mixed unknown source"
+assert_contains "$mixed_unknown_source_output" "RUN cargo-machete:" "mixed unknown source"
 
 new_branch_output="$(run_case new-branch zero src/App.tsx)"
 assert_contains "$new_branch_output" "route: frontend=1 rust=0" "new branch"

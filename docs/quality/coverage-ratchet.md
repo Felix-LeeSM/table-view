@@ -12,7 +12,13 @@ Current ratchet targets:
 | --- | --- | --- |
 | `frontend.vitest.global` | `vite.config.ts` | statements 85, lines 87, functions 87, branches 78 |
 | `rust.pre_commit.tier1` | `lefthook.yml` | lines 73, functions 70, regions 73 |
-| `rust.pre_push.integration` | `scripts/hooks/pre-push-path-router.sh` | lines 80, functions 75, regions 80 |
+| `rust.pre_push.integration` | `.github/workflows/ci.yml` | lines 80, functions 75, regions 80 |
+
+The `rust.pre_push.integration` id is a stable ratchet key. The gate it locks
+moved from the local pre-push rust route to CI `Integration Tests (Docker)` on
+2026-07-03 (audit #6); the id is kept as-is because renaming it would read as a
+deleted target against `origin/main` and fail the ratchet's own anti-deletion
+guard.
 
 ## Evidence
 
@@ -41,7 +47,7 @@ Do not add aspirational targets that are not checked by a real command.
 | --- | --- |
 | Frontend unit/component code | Vitest global thresholds in `vite.config.ts` |
 | Rust fast Tier 1 coverage | `pre-commit` `cargo llvm-cov --lib` thresholds |
-| Rust integration coverage | `pre-push` `cargo llvm-cov nextest --profile push` thresholds |
+| Rust integration coverage | CI `Integration Tests (Docker)` `cargo llvm-cov nextest --profile push` thresholds |
 | Pure Rust helper examples | Doctests only after examples are executable and non-ignored |
 | New critical modules | Raise the relevant existing target, or add a focused gate first |
 
@@ -68,8 +74,13 @@ GitHub CI fetches `refs/heads/main:refs/remotes/origin/main`, runs the ratchet
 with `COVERAGE_RATCHET_REQUIRE_MAIN=1` in Frontend Checks, then runs frontend
 tests with coverage enabled so `vite.config.ts` thresholds are enforced
 remotely. Missing `origin/main` is a hard CI failure, not bootstrap mode. Rust
-coverage cutoff enforcement remains the local pre-push gate because the push
-profile includes the heavier testcontainer integration lane.
+integration coverage cutoff enforcement is owned by the CI
+`Integration Tests (Docker)` job (promoted from the local pre-push rust route on
+2026-07-03, audit #6): it runs `cargo llvm-cov nextest --profile push` at the
+same 80/75/80 thresholds so a required remote check — not just the dev machine's
+hook — backstops regressions. The pre-push rust route keeps only the fast gates
+(`cargo check`, `cargo deny`, `cargo machete`); `pre-commit` still owns the fast
+lib-only Tier 1 coverage for immediate local feedback.
 
 ## Owner And Triage
 
