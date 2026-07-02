@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 use table_view_lib::commands::connection::AppState;
 use table_view_lib::commands::query::{validate_cancel_inputs, validate_query_inputs};
 use table_view_lib::error::AppError;
-use table_view_lib::models::{DatabaseType, FilterCondition, FilterOperator, QueryType};
+use table_view_lib::models::{
+    DatabaseType, FilterCondition, FilterOperator, QueryResult, QueryType,
+};
 use tokio_util::sync::CancellationToken;
 
 async fn advance_cancel_start_window(duration: Duration) {
@@ -644,6 +646,153 @@ async fn test_select_with_block_comment() {
     assert_eq!(result.columns[0].name, "num");
     assert!(matches!(result.query_type, QueryType::Select));
 
+    adapter.disconnect_pool().await.ok();
+}
+
+// ── #1086 — 서버측 단일 실행 회귀 가드 ────────────────────────────────────
+// 작성: 2026-07-03. PG Select 경로가 (1) 메타데이터용 원쿼리 실행 + (2)
+// row_to_json wrap 실행으로 같은 statement 를 서버에서 2회 적용하던 버그.
+// 부수효과(nextval / data-modifying CTE)가 2배 적용되거나 wrap 이 거부돼
+// "커밋 후 에러" 가 났다. Fix: describe(실행 X) + wrap 1회 / SHOW·EXPLAIN·
+// data-modifying WITH 는 wrap 없는 단일 실행. 사용자가 본 증상(nextval 이
+// 2, WITH 가 에러, SHOW 가 syntax error)을 그대로 assertion 으로 박는다.
+
+/// ADR 0026 — bigint 컬럼은 JSON string 토큰으로 wire 인코딩된다.
+fn read_i64(r: &QueryResult) -> i64 {
+    r.rows[0][0]
+        .as_str()
+        .expect("bigint must be wire-encoded as string")
+        .parse()
+        .expect("must parse as i64")
+}
+
+/// nextval 은 서버에서 정확히 1회만 증가해야 한다. 이중 실행이면 첫 SELECT
+/// 가 2, 두 번째가 4 를 돌려주고 sequence last_value 가 4 가 된다.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_select_nextval_executes_exactly_once() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let seq = format!("test_seq_once_{ts}");
+
+    adapter
+        .execute_query(&format!("CREATE SEQUENCE {seq}"), None)
+        .await
+        .expect("CREATE SEQUENCE should succeed");
+
+    let first = adapter
+        .execute_query(&format!("SELECT nextval('{seq}') AS v"), None)
+        .await
+        .expect("first nextval should succeed");
+    assert_eq!(
+        read_i64(&first),
+        1,
+        "double execution would make the first nextval return 2"
+    );
+
+    let second = adapter
+        .execute_query(&format!("SELECT nextval('{seq}') AS v"), None)
+        .await
+        .expect("second nextval should succeed");
+    assert_eq!(
+        read_i64(&second),
+        2,
+        "double execution would make the second nextval return 4"
+    );
+
+    // Server-side counter must reflect exactly two increments.
+    let last = adapter
+        .execute_query(&format!("SELECT last_value FROM {seq}"), None)
+        .await
+        .expect("last_value read should succeed");
+    assert_eq!(
+        read_i64(&last),
+        2,
+        "sequence advanced more than twice → statement executed multiple times"
+    );
+
+    adapter
+        .execute_query(&format!("DROP SEQUENCE {seq}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+/// SHOW 은 wrap 없이 단일 행을 돌려줘야 한다. 이전에는 2차 wrap 실행이 항상
+/// syntax error 를 냈다.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_show_returns_row_without_wrap_error() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let result = adapter
+        .execute_query("SHOW server_version", None)
+        .await
+        .expect("SHOW should succeed (was a wrap syntax error before #1086)");
+    assert_eq!(result.rows.len(), 1, "SHOW server_version returns one row");
+    assert!(matches!(result.query_type, QueryType::Select));
+    assert!(
+        result.rows[0][0].as_str().is_some(),
+        "server_version cell should be a text value"
+    );
+    adapter.disconnect_pool().await.ok();
+}
+
+/// data-modifying CTE 는 서버에서 정확히 1회 실행돼야 한다 — RETURNING 행을
+/// 돌려주고 테이블에 정확히 1행만 남긴다. 이전에는 1차 실행이 INSERT·커밋
+/// 하고 2차 wrap 이 에러 → 사용자는 에러만 보는데 INSERT 는 이미 적용됨.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_data_modifying_with_executes_once() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_dml_cte_{ts}");
+    adapter
+        .execute_query(&format!("CREATE TABLE {table} (a INT)"), None)
+        .await
+        .expect("CREATE TABLE should succeed");
+
+    let result = adapter
+        .execute_query(
+            &format!(
+                "WITH ins AS (INSERT INTO {table}(a) VALUES (1) RETURNING a) SELECT a FROM ins"
+            ),
+            None,
+        )
+        .await
+        .expect("data-modifying WITH should succeed (was error-after-commit before #1086)");
+    assert_eq!(result.rows.len(), 1, "RETURNING should yield one row");
+    assert_eq!(result.rows[0][0].as_i64(), Some(1));
+
+    // Exactly one row inserted — a wrap re-execution or a retry would double it.
+    let count = adapter
+        .execute_query(&format!("SELECT COUNT(*) AS n FROM {table}"), None)
+        .await
+        .expect("count");
+    assert_eq!(
+        read_i64(&count),
+        1,
+        "data-modifying CTE must apply exactly once"
+    );
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
     adapter.disconnect_pool().await.ok();
 }
 
