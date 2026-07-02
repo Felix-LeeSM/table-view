@@ -229,6 +229,29 @@ run_case "main command: >&<digit>file to source blocked" 1 main-command "cat src
 run_case "main command: bare >& next-token source write blocked" 1 main-command "echo x >& src/App.tsx"
 run_case "main command: fd close allowed" 0 main-command "exec 2>&-"
 
+# Glued multi-redirect: a leading `>PATH` truncates/creates the file before the
+# trailing FD dup/close, so the write must still be blocked (regression #1150).
+run_case "main command: glued redirect leading write to src blocked" 1 main-command "printf x >src/App.tsx>&1"
+run_case "main command: glued redirect fd-prefixed leading write blocked" 1 main-command "printf x 1>src/App.tsx>&2"
+run_case "main command: glued redirect fd-close leading write blocked" 1 main-command "printf x 2>src/App.tsx>&-"
+run_case "main command: glued redirect multi-digit fd leading write blocked" 1 main-command "printf x >src/App.tsx>&10"
+run_case "main command: glued append redirect leading write blocked" 1 main-command "printf x >>src/App.tsx>&1"
+# Lateral regression (#1164 re-review): only the LEADING glued target was
+# checked, so a glued redirect whose leading target is allowed (memory/*) but
+# whose trailing/middle target is source slipped past. Every write target must
+# be checked, while FD dup/close segments stay skipped.
+run_case "main command: glued redirect allowed-leading source-trailing blocked" 1 main-command "printf x >memory/x.md>src/App.tsx"
+run_case "main command: glued redirect three targets trailing source blocked" 1 main-command "printf x >memory/a.md>memory/b.md>src/App.tsx"
+run_case "main command: glued redirect middle source blocked" 1 main-command "printf x >memory/a.md>src/App.tsx>memory/b.md"
+run_case "main command: glued redirect allowed-only targets allowed" 0 main-command "printf x >memory/a.md>memory/b.md"
+# 3rd re-review (#1164): the glued split's index-0 segment is the text BEFORE the
+# first `>` (an fd number like `1`/`2`, never a write target). Emitting it as a
+# path resolved to `<root>/1` and over-blocked an allowed-only fd-prefixed
+# redirect. Index-0 is skipped so this stays allowed, while a trailing source
+# target (below) is still denied.
+run_case "main command: glued redirect fd-prefixed allowed-only allowed" 0 main-command "printf x 1>memory/a.md>&2"
+run_case "main command: glued redirect allowed-leading external-temp source-trailing blocked" 1 main-command "printf x >/tmp/ok>src/App.tsx"
+
 # issue #1156: quoting / placeholder / separator false positives.
 # These benign commands must NOT be blocked while real writes below still are.
 run_case "main command: fd-dup 2>&1 pipeline with ; chain allowed" 0 main-command 'gh api /repos/o/r 2>&1 | head -30; echo ---; gh label list foo'

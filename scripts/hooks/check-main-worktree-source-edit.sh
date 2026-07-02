@@ -293,33 +293,75 @@ paths_from_command_tokens() {
 				;;
 			*">"*)
 				local after_redir="${word##*>}"
-				case "$after_redir" in
-					# FD close (2>&-, >&-): not a file path.
-					\&-)
-						continue
-						;;
-					# Bare `>&` — the write target is the next token (`>& file`).
-					\&)
+				# Count '>' so the FD dup/close skip below only fires for a
+				# single redirect operator. A glued multi-redirect like
+				# `>PATH>&1` has more than one '>', and its leading `>PATH`
+				# truncates/creates a real file before the trailing dup/close —
+				# skipping it (issue #1150) leaks source writes past the guard.
+				local gt_stripped="${word//>/}"
+				local gt_count=$((${#word} - ${#gt_stripped}))
+				if [ "$gt_count" -eq 1 ]; then
+					case "$after_redir" in
+						# FD close (2>&-, >&-): not a file path.
+						\&-)
+							continue
+							;;
+						# Bare `>&` — the write target is the next token (`>& file`).
+						\&)
+							expect_redir=1
+							continue
+							;;
+						# `>&N` / `N>&M`: FD duplication only when the word after `&`
+						# is ALL digits. `>&word` with any non-digit char is a real
+						# stdout+stderr file write (bash: `>&word` == `>word 2>&1`),
+						# so fall through to emit_path and keep it blocked (fail-safe).
+						\&*)
+							local fd_dup_target="${after_redir#&}"
+							case "$fd_dup_target" in
+								'' | *[!0-9]*) : ;;
+								*) continue ;;
+							esac
+							;;
+					esac
+					if [ -n "$after_redir" ]; then
+						emit_path "$after_redir"
+					else
 						expect_redir=1
-						continue
-						;;
-					# `>&N` / `N>&M`: FD duplication only when the word after `&`
-					# is ALL digits. `>&word` with any non-digit char is a real
-					# stdout+stderr file write (bash: `>&word` == `>word 2>&1`),
-					# so fall through to emit_path and keep it blocked (fail-safe).
-					\&*)
-						local fd_dup_target="${after_redir#&}"
-						case "$fd_dup_target" in
-							'' | *[!0-9]*) : ;;
-							*) continue ;;
-						esac
-						;;
-				esac
-				if [ -n "$after_redir" ]; then
-					emit_path "$after_redir"
-				else
-					expect_redir=1
+					fi
+					continue
 				fi
+				# gt_count >= 2: glued multi-redirect. Split the whole word on
+				# '>' and emit EVERY non-empty write target so leading, middle,
+				# and trailing targets are each policy-checked. Emitting only the
+				# leading write let a source trailing/middle target slip past when
+				# the leading target was allowed (#1164 lateral regression).
+				# Index 0 is the text BEFORE the first '>' — an fd number
+				# (`1>`, `2>`) or command residue, never a write target — so it
+				# is skipped (`[@]:1`); emitting it resolved fd `1` to `<root>/1`
+				# and over-blocked an allowed-only fd-prefixed redirect (#1164
+				# 3rd re-review). Empty segments (the extra one from `>>PATH`
+				# append) are skipped. FD dup (`&N`) / close (`&-`) segments are
+				# skipped; a `&word` with a non-digit char is a real
+				# stdout+stderr file write, so emit it (fail-safe).
+				local glued_seg glued_segs=()
+				IFS='>' read -r -a glued_segs <<<"$word"
+				for glued_seg in "${glued_segs[@]:1}"; do
+					[ -n "$glued_seg" ] || continue
+					case "$glued_seg" in
+						\&- | \&)
+							continue
+							;;
+						\&*)
+							case "${glued_seg#&}" in
+								*[!0-9]*) emit_path "$glued_seg" ;;
+								*) continue ;;
+							esac
+							;;
+						*)
+							emit_path "$glued_seg"
+							;;
+					esac
+				done
 				continue
 				;;
 		esac
