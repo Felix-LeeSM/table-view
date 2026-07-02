@@ -44,6 +44,10 @@ export interface EditSnapshot {
   pendingEdits: ReadonlyMap<string, string | null>;
   pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
   pendingDeletedRowKeys: ReadonlySet<string>;
+  // Issue #1081 — undo must restore the row-identity anchors too, else an
+  // orphan snapshot outlives the pending edit/delete it anchored.
+  pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  pendingDeletedRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
 }
 
 export interface PendingEntry {
@@ -51,6 +55,25 @@ export interface PendingEntry {
   pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
   pendingDeletedRowKeys: ReadonlySet<string>;
   undoStack: ReadonlyArray<EditSnapshot>;
+  /**
+   * Issue #1081 — row-identity anchors captured at edit/delete time so a
+   * commit builds its WHERE / `_id` from the row the user actually touched,
+   * not from whatever `data.rows[rowIdx]` holds after the grid re-orders
+   * (pagination, sort change, refetch).
+   *
+   * - `pendingEditRowSnapshots` keyed by the CELL key `${rowIdx}-${colIdx}`
+   *   — the SAME collision domain as `pendingEdits`, so a cross-page edit on
+   *   the same visual row index but a different column keeps its own anchor
+   *   instead of clobbering the earlier one (a wrong-row-write path when the
+   *   snapshot was coarser than the edit key).
+   * - `pendingDeletedRowSnapshots` keyed by the full delete key
+   *   (`row-${page}-${rowIdx}`) — delete keys are page-distinct, so their
+   *   snapshots must be too.
+   *
+   * Values are shallow copies of the row's cells.
+   */
+  pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  pendingDeletedRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
 }
 
 type MutablePendingEntry = {
@@ -58,6 +81,8 @@ type MutablePendingEntry = {
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
   undoStack: EditSnapshot[];
+  pendingEditRowSnapshots: Map<string, ReadonlyArray<unknown>>;
+  pendingDeletedRowSnapshots: Map<string, ReadonlyArray<unknown>>;
 };
 
 /**
@@ -107,6 +132,12 @@ export const EMPTY_ENTRY: PendingEntry = Object.freeze({
     "EMPTY_ENTRY.pendingDeletedRowKeys",
   ),
   undoStack: Object.freeze([]) as ReadonlyArray<EditSnapshot>,
+  pendingEditRowSnapshots: readonlyEmptyMap<string, ReadonlyArray<unknown>>(
+    "EMPTY_ENTRY.pendingEditRowSnapshots",
+  ),
+  pendingDeletedRowSnapshots: readonlyEmptyMap<string, ReadonlyArray<unknown>>(
+    "EMPTY_ENTRY.pendingDeletedRowSnapshots",
+  ),
 });
 
 export interface DataGridEditStore {
@@ -163,6 +194,8 @@ function freshEntry(): MutablePendingEntry {
     pendingNewRows: [],
     pendingDeletedRowKeys: new Set(),
     undoStack: [],
+    pendingEditRowSnapshots: new Map(),
+    pendingDeletedRowSnapshots: new Map(),
   };
 }
 

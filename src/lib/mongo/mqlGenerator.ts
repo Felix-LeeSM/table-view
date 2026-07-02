@@ -65,6 +65,16 @@ export interface MqlGenerateInput {
    *  keys rather than positional column cells because the collection has no
    *  enforced schema. */
   pendingNewRows: Record<string, unknown>[];
+  /**
+   * Issue #1081 — row-identity anchors captured at edit/delete time. When
+   * present, the `_id` filter for updateOne/deleteOne is derived from the
+   * snapshot instead of the current page's `rows[rowIdx]`, so paginating
+   * away can't retarget the write. Keyed by the base CELL key
+   * `${rowIdx}-${colIdx}` (edits; nested `:path` keys resolve their base cell
+   * key) and the full delete key `row-${page}-${rowIdx}` (deletes).
+   */
+  editRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  deletedRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
 }
 
 /** A single MQL command ready to dispatch to the Tauri wrappers. */
@@ -232,7 +242,7 @@ function parseDeleteKey(key: string): number | null {
  *  semantics. Values are passed through unchanged so sentinel strings stay
  *  detectable downstream. */
 function rowToRecord(
-  row: unknown[],
+  row: readonly unknown[],
   columns: MqlGridColumn[],
 ): Record<string, unknown> {
   const record: Record<string, unknown> = {};
@@ -251,6 +261,8 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
     pendingEdits,
     pendingDeletedRowKeys,
     pendingNewRows,
+    editRowSnapshots,
+    deletedRowSnapshots,
   } = input;
 
   const errors: MqlGenerationError[] = [];
@@ -262,33 +274,51 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
   const deleteCommands: MqlCommand[] = [];
 
   // ── Update path ─────────────────────────────────────────────────────────
-  // Group pending edits by rowIdx so each row produces at most one updateOne
-  // (matches MongoDB's "one `$set` per patch" policy). The grouping map
-  // preserves insertion order of (row, col) so the patch preview is
-  // deterministic across runs with the same pending state.
+  // Issue #1081 — group pending edits by the row-identity ANCHOR captured at
+  // edit time (keyed by the cell key `${rowIdx}-${colIdx}`), falling back to
+  // the current page's row. Grouping by the resolved `_id` — NOT the visual
+  // rowIdx — means a cross-page edit on the same row index but a different
+  // column emits its own updateOne against its own document, instead of
+  // merging two documents' fields into one wrong-`_id` patch.
   // Sprint 322 — Slice F.2: `column` 은 dot-path 가 포함된 patch
   // field path (예: `meta.verified`). top-level edit 는 path === null
   // → bare column name. nested edit (path !== null) 는 sentinel-edit
   // guard 와 `_id`-in-patch guard 의 대상이 아님 (sentinel column
   // 자체는 read-only 지만, 그 안의 1-depth scalar 는 dot-notation
   // `$set` 으로 update 가능).
-  const editsByRow = new Map<
-    number,
-    Array<{ column: string; value: unknown; nested: boolean }>
-  >();
+  interface DocEditGroup {
+    rowIdx: number;
+    row: readonly unknown[] | undefined;
+    cells: Array<{ column: string; value: unknown; nested: boolean }>;
+  }
+  const editsByDoc = new Map<string, DocEditGroup>();
   pendingEdits.forEach((value, key) => {
     const parsed = parseEditKey(key);
     if (parsed === null) return;
     const [rowIdx, colIdx, path] = parsed;
     const col = columns[colIdx];
     if (!col) return;
-    const fieldPath = path !== null ? `${col.name}.${path}` : col.name;
-    const existing = editsByRow.get(rowIdx);
-    const entry = { column: fieldPath, value, nested: path !== null };
-    if (existing) {
-      existing.push(entry);
+    const baseKey = `${rowIdx}-${colIdx}`;
+    const anchorRow = editRowSnapshots?.get(baseKey) ?? rows[rowIdx];
+    // Group key: the resolved `_id` keeps all cells of one document in a
+    // single updateOne. When the anchor has no derivable `_id` we key by
+    // rowIdx so the missing-id error still fires once per row.
+    let groupKey: string;
+    if (!anchorRow) {
+      groupKey = `__norow-${rowIdx}`;
     } else {
-      editsByRow.set(rowIdx, [entry]);
+      const anchorId = documentIdFromRow(rowToRecord(anchorRow, columns));
+      groupKey = anchorId
+        ? `id:${formatDocumentIdForMql(anchorId)}`
+        : `__noid-${rowIdx}`;
+    }
+    const fieldPath = path !== null ? `${col.name}.${path}` : col.name;
+    const entry = { column: fieldPath, value, nested: path !== null };
+    const existing = editsByDoc.get(groupKey);
+    if (existing) {
+      existing.cells.push(entry);
+    } else {
+      editsByDoc.set(groupKey, { rowIdx, row: anchorRow, cells: [entry] });
     }
   });
 
@@ -296,7 +326,7 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
   // BSON wrapper 는 caller (DocumentDataGrid) 가 `__bson__:` prefix 의
   // 직렬화 string 으로 보관. 여기서 prefix detect 시 parse 해서 wrapper
   // 객체로 복원 → mongosh literal (`ObjectId("...")`) 로 출력된다.
-  editsByRow.forEach((cells) => {
+  editsByDoc.forEach(({ cells }) => {
     for (const cell of cells) {
       if (
         typeof cell.value === "string" &&
@@ -313,8 +343,7 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
       }
     }
   });
-  editsByRow.forEach((cells, rowIdx) => {
-    const row = rows[rowIdx];
+  editsByDoc.forEach(({ rowIdx, row, cells }) => {
     if (!row) {
       errors.push({ kind: "missing-id", rowIdx });
       return;
@@ -406,7 +435,8 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
   pendingDeletedRowKeys.forEach((delKey) => {
     const rowIdx = parseDeleteKey(delKey);
     if (rowIdx === null) return;
-    const row = rows[rowIdx];
+    // Issue #1081 — anchor the `_id` filter to the row captured at delete time.
+    const row = deletedRowSnapshots?.get(delKey) ?? rows[rowIdx];
     if (!row) {
       errors.push({ kind: "missing-id", rowIdx });
       return;

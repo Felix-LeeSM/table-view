@@ -164,6 +164,10 @@ export type EditSnapshot = {
   pendingEdits: ReadonlyMap<string, string | null>;
   pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
   pendingDeletedRowKeys: ReadonlySet<string>;
+  // Issue #1081 — row-identity anchors, restored on undo alongside the
+  // three diff slices. Must mirror `dataGridEditStore.EditSnapshot`.
+  pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  pendingDeletedRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
 };
 
 export const UNDO_STACK_MAX = 50;
