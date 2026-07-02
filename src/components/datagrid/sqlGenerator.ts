@@ -163,6 +163,21 @@ export interface GenerateSqlOptions {
    */
   dialect?: SqlDialect;
   allowRowWrites?: boolean;
+  /**
+   * Issue #1081 — row-identity anchors captured at edit/delete time. When a
+   * pending entry has a snapshot, the WHERE clause is built from it instead
+   * of the current `data.rows[rowIdx]`, so a page/sort/refetch reorder can't
+   * point the UPDATE/DELETE at a different row that now shares the index.
+   *
+   * - `editRowSnapshots` keyed by `String(rowIdx)` (mirrors the page-less
+   *   `pendingEdits` collision domain).
+   * - `deletedRowSnapshots` keyed by the full delete key `row-${page}-${rowIdx}`.
+   *
+   * Absent snapshots fall back to `data.rows[rowIdx]` (unchanged behaviour
+   * for callers that don't anchor, e.g. structure editors).
+   */
+  editRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  deletedRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
 }
 
 /**
@@ -310,7 +325,9 @@ export function generateSqlWithKeys(
     const colIdx = parseInt(colStr!, 10);
     const col = data.columns[colIdx];
     if (!col) return;
-    const row = data.rows[rowIdx] as unknown[] | undefined;
+    // Issue #1081 — prefer the row-identity snapshot captured at edit time.
+    const row = (options.editRowSnapshots?.get(String(rowIdx)) ??
+      data.rows[rowIdx]) as unknown[] | undefined;
     if (!row) return;
 
     const topLevel = entries.find((e) => e.path === null);
@@ -467,7 +484,10 @@ export function generateSqlWithKeys(
   pendingDeletedRowKeys.forEach((delKey) => {
     const parts = delKey.split("-");
     const rowIdx = parseInt(parts[2]!, 10);
-    const row = data.rows[rowIdx] as unknown[];
+    // Issue #1081 — prefer the snapshot captured when the row was marked for
+    // deletion; the delete key carries a page but `data.rows` may not.
+    const row = (options.deletedRowSnapshots?.get(delKey) ??
+      data.rows[rowIdx]) as unknown[] | undefined;
     if (!row) return;
 
     const whereClause = buildWhereClause(row, data.columns, pkCols, dialect);

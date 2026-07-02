@@ -101,6 +101,13 @@ export interface PreviewInput {
   pendingEdits: Map<string, string | null>;
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
+  /**
+   * Issue #1081 — row-identity anchors keyed by `String(rowIdx)` (edits) and
+   * the full delete key (deletes). The commit builders prefer these over
+   * `data.rows[rowIdx]` so pagination/sort/refetch can't retarget a write.
+   */
+  pendingEditRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  pendingDeletedRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
 }
 
 export interface ParadigmEditAdapter {
@@ -262,6 +269,9 @@ export function rdbEditAdapter(deps: RdbAdapterDeps): ParadigmEditAdapter {
           // postgresql inside the generator for Sprint 343/344 callers.
           dialect: deps.dialect,
           allowRowWrites: deps.canEditRows ?? true,
+          // Issue #1081 — row-identity anchors for the WHERE clause.
+          editRowSnapshots: input.pendingEditRowSnapshots,
+          deletedRowSnapshots: input.pendingDeletedRowSnapshots,
         },
       );
       if (statements.length === 0) {
@@ -323,6 +333,9 @@ export function documentEditAdapter(
         pendingEdits: input.pendingEdits,
         pendingDeletedRowKeys: input.pendingDeletedRowKeys,
         pendingNewRows: insertRecords,
+        // Issue #1081 — row-identity anchors for the `_id` filter.
+        editRowSnapshots: input.pendingEditRowSnapshots,
+        deletedRowSnapshots: input.pendingDeletedRowSnapshots,
       });
       if (mqlPreview.commands.length === 0) {
         return { session: null, coerceErrors: new Map() };

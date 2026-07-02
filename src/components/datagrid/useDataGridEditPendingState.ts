@@ -47,6 +47,10 @@ export function useDataGridEditPendingState({
   const pendingDeletedRowKeys =
     entry.pendingDeletedRowKeys as PendingDeletedRowKeys;
   const undoStack = entry.undoStack as UndoStack;
+  // Issue #1081 — row-identity anchors so a page/sort/refetch reorder can't
+  // point a pending edit/delete at the wrong row on commit.
+  const pendingEditRowSnapshots = entry.pendingEditRowSnapshots;
+  const pendingDeletedRowSnapshots = entry.pendingDeletedRowSnapshots;
 
   const storeSetSlice = useDataGridEditStore((s) => s.setSlice);
   const storeClearEntry = useDataGridEditStore((s) => s.clearEntry);
@@ -107,6 +111,33 @@ export function useDataGridEditPendingState({
     [storeKey, storeSetSlice],
   );
 
+  // Issue #1081 — capture a row's cells at edit/delete time. Keyed so the
+  // commit builders (`sqlGenerator` / `mqlGenerator`) can rebuild WHERE /
+  // `_id` from the captured row instead of the current page's rows.
+  const captureEditRowSnapshot = useCallback(
+    (rowIdx: number, row: readonly unknown[]) => {
+      const current = useDataGridEditStore
+        .getState()
+        .getEntry(storeKey).pendingEditRowSnapshots;
+      const next = new Map(current);
+      next.set(String(rowIdx), [...row]);
+      storeSetSlice(storeKey, "pendingEditRowSnapshots", next);
+    },
+    [storeKey, storeSetSlice],
+  );
+
+  const captureDeletedRowSnapshot = useCallback(
+    (delKey: string, row: readonly unknown[]) => {
+      const current = useDataGridEditStore
+        .getState()
+        .getEntry(storeKey).pendingDeletedRowSnapshots;
+      const next = new Map(current);
+      next.set(delKey, [...row]);
+      storeSetSlice(storeKey, "pendingDeletedRowSnapshots", next);
+    },
+    [storeKey, storeSetSlice],
+  );
+
   const clearPendingEntry = useCallback(() => {
     storeClearEntry(storeKey);
   }, [storeKey, storeClearEntry]);
@@ -144,9 +175,13 @@ export function useDataGridEditPendingState({
     pendingEdits,
     pendingNewRows,
     pendingDeletedRowKeys,
+    pendingEditRowSnapshots,
+    pendingDeletedRowSnapshots,
     setPendingEdits,
     setPendingNewRows,
     setPendingDeletedRowKeys,
+    captureEditRowSnapshot,
+    captureDeletedRowSnapshot,
     clearPendingEntry,
     pushSnapshot,
     undo,

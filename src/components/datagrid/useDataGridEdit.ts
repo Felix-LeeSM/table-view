@@ -92,9 +92,13 @@ export function useDataGridEdit({
     pendingEdits,
     pendingNewRows,
     pendingDeletedRowKeys,
+    pendingEditRowSnapshots,
+    pendingDeletedRowSnapshots,
     setPendingEdits,
     setPendingNewRows,
     setPendingDeletedRowKeys,
+    captureEditRowSnapshot,
+    captureDeletedRowSnapshot,
     clearPendingEntry,
     pushSnapshot,
     undo,
@@ -165,6 +169,8 @@ export function useDataGridEdit({
     pendingEdits,
     pendingNewRows,
     pendingDeletedRowKeys,
+    pendingEditRowSnapshots,
+    pendingDeletedRowSnapshots,
     canEditRows,
     setPendingEditErrors,
     clearAllPending,
@@ -208,6 +214,13 @@ export function useDataGridEdit({
     if (next !== pendingEdits) {
       pushSnapshot();
       setPendingEdits(next);
+      // Issue #1081 — anchor this row's identity while `data` still shows
+      // the page it was edited on. Skip when the edit reverted to original
+      // (`next` dropped the key) — there is no pending edit to anchor.
+      if (next.has(key) && data) {
+        const row = data.rows[editingCell.row] as unknown[] | undefined;
+        if (row) captureEditRowSnapshot(editingCell.row, row);
+      }
     }
     setEditingCell(null);
     setEditValue("");
@@ -218,6 +231,7 @@ export function useDataGridEdit({
     pendingEdits,
     pushSnapshot,
     setPendingEdits,
+    captureEditRowSnapshot,
     canEditRows,
   ]);
 
@@ -277,6 +291,12 @@ export function useDataGridEdit({
         if (next !== pendingEdits) {
           pushSnapshot();
           setPendingEdits(next);
+          // Issue #1081 — anchor the auto-saved row's identity (see
+          // `saveCurrentEdit`).
+          if (next.has(key) && data) {
+            const row = data.rows[editingCell.row] as unknown[] | undefined;
+            if (row) captureEditRowSnapshot(editingCell.row, row);
+          }
         }
       }
       setEditingCell({ row: rowIdx, col: colIdx });
@@ -293,6 +313,7 @@ export function useDataGridEdit({
       pendingEdits,
       pushSnapshot,
       setPendingEdits,
+      captureEditRowSnapshot,
       canEditRows,
     ],
   );
@@ -337,6 +358,10 @@ export function useDataGridEdit({
       selectedRowIds.forEach((rowIdx) => {
         const rk = rowKeyFn(rowIdx, page);
         next.add(rk);
+        // Issue #1081 — anchor the deleted row's identity now, while
+        // `data.rows[rowIdx]` still points at the row the user selected.
+        const row = data?.rows[rowIdx] as unknown[] | undefined;
+        if (row) captureDeletedRowSnapshot(rk, row);
       });
       return next;
     });
@@ -346,11 +371,13 @@ export function useDataGridEdit({
   }, [
     selectedRowIds,
     page,
+    data,
     activeTabId,
     promoteTab,
     clearSelection,
     pushSnapshot,
     setPendingDeletedRowKeys,
+    captureDeletedRowSnapshot,
     canEditRows,
   ]);
 
@@ -446,6 +473,12 @@ export function useDataGridEdit({
           originalValue,
         );
         setPendingEdits(merged);
+        // Issue #1081 — anchor the in-flight cell's row before committing,
+        // so the override map's WHERE resolves from the captured row.
+        if (merged.has(key)) {
+          const row = data.rows[editingCell.row] as unknown[] | undefined;
+          if (row) captureEditRowSnapshot(editingCell.row, row);
+        }
         const { opened } = handleCommit({ pendingEditsOverride: merged });
         if (opened) {
           setEditingCell(null);
@@ -467,6 +500,7 @@ export function useDataGridEdit({
     handleCommit,
     beginCommitFlash,
     setPendingEdits,
+    captureEditRowSnapshot,
     canEditRows,
   ]);
 

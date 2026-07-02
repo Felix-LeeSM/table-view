@@ -51,6 +51,23 @@ export interface PendingEntry {
   pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
   pendingDeletedRowKeys: ReadonlySet<string>;
   undoStack: ReadonlyArray<EditSnapshot>;
+  /**
+   * Issue #1081 — row-identity anchors captured at edit/delete time so a
+   * commit builds its WHERE / `_id` from the row the user actually touched,
+   * not from whatever `data.rows[rowIdx]` holds after the grid re-orders
+   * (pagination, sort change, refetch).
+   *
+   * - `pendingEditRowSnapshots` keyed by `String(rowIdx)` — mirrors the
+   *   page-less `pendingEdits` collision domain (same index across pages
+   *   collapses to one entry, staying consistent with `pendingEdits`).
+   * - `pendingDeletedRowSnapshots` keyed by the full delete key
+   *   (`row-${page}-${rowIdx}`) — delete keys are page-distinct, so their
+   *   snapshots must be too.
+   *
+   * Values are shallow copies of the row's cells.
+   */
+  pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  pendingDeletedRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
 }
 
 type MutablePendingEntry = {
@@ -58,6 +75,8 @@ type MutablePendingEntry = {
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
   undoStack: EditSnapshot[];
+  pendingEditRowSnapshots: Map<string, ReadonlyArray<unknown>>;
+  pendingDeletedRowSnapshots: Map<string, ReadonlyArray<unknown>>;
 };
 
 /**
@@ -107,6 +126,12 @@ export const EMPTY_ENTRY: PendingEntry = Object.freeze({
     "EMPTY_ENTRY.pendingDeletedRowKeys",
   ),
   undoStack: Object.freeze([]) as ReadonlyArray<EditSnapshot>,
+  pendingEditRowSnapshots: readonlyEmptyMap<string, ReadonlyArray<unknown>>(
+    "EMPTY_ENTRY.pendingEditRowSnapshots",
+  ),
+  pendingDeletedRowSnapshots: readonlyEmptyMap<string, ReadonlyArray<unknown>>(
+    "EMPTY_ENTRY.pendingDeletedRowSnapshots",
+  ),
 });
 
 export interface DataGridEditStore {
@@ -163,6 +188,8 @@ function freshEntry(): MutablePendingEntry {
     pendingNewRows: [],
     pendingDeletedRowKeys: new Set(),
     undoStack: [],
+    pendingEditRowSnapshots: new Map(),
+    pendingDeletedRowSnapshots: new Map(),
   };
 }
 

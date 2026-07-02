@@ -65,6 +65,15 @@ export interface MqlGenerateInput {
    *  keys rather than positional column cells because the collection has no
    *  enforced schema. */
   pendingNewRows: Record<string, unknown>[];
+  /**
+   * Issue #1081 — row-identity anchors captured at edit/delete time. When
+   * present, the `_id` filter for updateOne/deleteOne is derived from the
+   * snapshot instead of the current page's `rows[rowIdx]`, so paginating
+   * away can't retarget the write. Keyed by `String(rowIdx)` (edits) and the
+   * full delete key `row-${page}-${rowIdx}` (deletes).
+   */
+  editRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  deletedRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
 }
 
 /** A single MQL command ready to dispatch to the Tauri wrappers. */
@@ -232,7 +241,7 @@ function parseDeleteKey(key: string): number | null {
  *  semantics. Values are passed through unchanged so sentinel strings stay
  *  detectable downstream. */
 function rowToRecord(
-  row: unknown[],
+  row: readonly unknown[],
   columns: MqlGridColumn[],
 ): Record<string, unknown> {
   const record: Record<string, unknown> = {};
@@ -251,6 +260,8 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
     pendingEdits,
     pendingDeletedRowKeys,
     pendingNewRows,
+    editRowSnapshots,
+    deletedRowSnapshots,
   } = input;
 
   const errors: MqlGenerationError[] = [];
@@ -314,7 +325,8 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
     }
   });
   editsByRow.forEach((cells, rowIdx) => {
-    const row = rows[rowIdx];
+    // Issue #1081 — anchor the `_id` filter to the row captured at edit time.
+    const row = editRowSnapshots?.get(String(rowIdx)) ?? rows[rowIdx];
     if (!row) {
       errors.push({ kind: "missing-id", rowIdx });
       return;
@@ -406,7 +418,8 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
   pendingDeletedRowKeys.forEach((delKey) => {
     const rowIdx = parseDeleteKey(delKey);
     if (rowIdx === null) return;
-    const row = rows[rowIdx];
+    // Issue #1081 — anchor the `_id` filter to the row captured at delete time.
+    const row = deletedRowSnapshots?.get(delKey) ?? rows[rowIdx];
     if (!row) {
       errors.push({ kind: "missing-id", rowIdx });
       return;
