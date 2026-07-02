@@ -14,7 +14,7 @@ is_docs_path() {
 
 is_hook_path() {
 	case "$1" in
-	.gitignore | lefthook.yml | .githooks/* | scripts/hooks/* | scripts/setup.sh | scripts/target-cache.sh | scripts/worktree-spawn.sh | scripts/worktree-cleanup.sh | scripts/worktree-bootstrap-deps.sh | scripts/check-coverage-ratchet.ts | scripts/coverage-ratchet-targets.json | src-tauri/.config/nextest.toml)
+	.gitignore | lefthook.yml | .githooks/* | scripts/hooks/* | scripts/setup.sh | scripts/target-cache.sh | scripts/worktree-spawn.sh | scripts/worktree-cleanup.sh | scripts/worktree-bootstrap-deps.sh | scripts/prune-gh-caches.sh | scripts/check-coverage-ratchet.ts | scripts/coverage-ratchet-targets.json | src-tauri/.config/nextest.toml)
 		return 0
 		;;
 	*)
