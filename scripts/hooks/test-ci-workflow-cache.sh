@@ -159,9 +159,11 @@ assert_contains "$integration_disk_cleanup_step" "/opt/ghc" "integration disk cl
 assert_contains "$integration_run_step" "run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration" "integration cargo command"
 
 # docs/memory-only skip gate (audit 2026-07-03 #5). The `changes` job classifies
-# the change set; heavy jobs gate on it so docs PRs skip ~9m of CI while the
-# required contexts stay satisfied via skipped-job semantics. This must never
-# regress into a workflow-level paths-ignore (would orphan the required checks).
+# the change set; heavy jobs gate on it with a FAIL-CLOSED `if:` — skip only when
+# `changes` succeeded AND said docs-only, so a broken detector runs full instead
+# of letting a skip satisfy a required check. Never regress into a workflow-level
+# paths-ignore (would orphan the required checks).
+frontend_advisory_block="$(sed -n '/^  frontend-advisory:/,/^  rust:/p' <<<"$workflow_text" | sed '$d')"
 if [ -z "$changes_block" ]; then
 	echo "FAIL: change-detection 'changes' job is missing from $WORKFLOW" >&2
 	exit 1
@@ -170,14 +172,16 @@ assert_contains "$changes_block" "name: Detect Change Scope" "changes job"
 assert_contains "$changes_block" "fetch-depth: 0" "changes job needs full history for diff base"
 assert_contains "$changes_block" "code_changed: \${{ steps.detect.outputs.code_changed }}" "changes job output wiring"
 assert_contains "$changes_block" "run: bash scripts/hooks/detect-change-scope.sh" "changes job detection script"
-# Heavy jobs must gate on the change-detection output.
+# Heavy jobs must gate on the change-detection output, fail-closed.
 assert_contains "$frontend_block" "needs: changes" "frontend needs changes"
-assert_contains "$frontend_block" "if: needs.changes.outputs.code_changed == 'true'" "frontend docs-only skip gate"
-assert_contains "$rust_block" "if: needs.changes.outputs.code_changed == 'true'" "rust docs-only skip gate"
-assert_contains "$integration_block" "if: needs.changes.outputs.code_changed == 'true'" "integration docs-only skip gate"
-assert_contains "$dependency_security_block" "if: needs.changes.outputs.code_changed == 'true'" "dependency-security docs-only skip gate"
-# pr-body and doc-size stay unconditional — cheap and meaningful on docs PRs.
+assert_contains "$frontend_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "frontend docs-only skip gate"
+assert_contains "$rust_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "rust docs-only skip gate"
+assert_contains "$integration_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "integration docs-only skip gate"
+assert_contains "$dependency_security_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "dependency-security docs-only skip gate"
+# pr-body, doc-size, and frontend-advisory stay unconditional — cheap, and
+# docs:links (frontend-advisory) is most meaningful on docs-only PRs.
 assert_not_contains "$pr_body_only_block" "needs.changes.outputs.code_changed" "pr-body always runs"
+assert_not_contains "$frontend_advisory_block" "needs: changes" "frontend-advisory always runs (docs:links matters on docs PRs)"
 # Guard against the forbidden shortcut: a workflow-level paths-ignore key (not a
 # comment mentioning it) orphans the required checks (expected/missing forever).
 if grep -Eq "^[[:space:]]+paths-ignore:" "$WORKFLOW"; then

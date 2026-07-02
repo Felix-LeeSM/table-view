@@ -97,7 +97,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: changes
-    if: needs.changes.outputs.code_changed == 'true'
+    # Fail-closed: skip heavy job ONLY when `changes` succeeded AND classified
+    # the set as docs-only. If `changes` itself failed/was cancelled (infra),
+    # its outputs are empty and result != 'success', so this runs full — a
+    # detection failure must never let unverified code satisfy a required check.
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')
     env:
       CARGO_DENY_VERSION: "0.19.9"
 
@@ -146,7 +150,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: changes
-    if: needs.changes.outputs.code_changed == 'true'
+    # Fail-closed: skip heavy job ONLY when `changes` succeeded AND classified
+    # the set as docs-only. If `changes` itself failed/was cancelled (infra),
+    # its outputs are empty and result != 'success', so this runs full — a
+    # detection failure must never let unverified code satisfy a required check.
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')
     # Non-blocking (`continue-on-error`) advisory scan, split out of the
     # blocking gate above. A RUSTSEC advisory is an event about the outside
     # world, not about the code in any given PR, so it must never turn every
@@ -192,7 +200,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: changes
-    if: needs.changes.outputs.code_changed == 'true'
+    # Fail-closed: skip heavy job ONLY when `changes` succeeded AND classified
+    # the set as docs-only. If `changes` itself failed/was cancelled (infra),
+    # its outputs are empty and result != 'success', so this runs full — a
+    # detection failure must never let unverified code satisfy a required check.
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')
 
     steps:
       - name: Checkout
@@ -249,8 +261,9 @@ jobs:
     name: Frontend Advisory (non-blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: changes
-    if: needs.changes.outputs.code_changed == 'true'
+    # Intentionally NOT change-gated: docs:links is most useful on docs-only
+    # PRs, so this job always runs. Non-blocking (continue-on-error) means the
+    # extra pnpm install cost never gates a merge.
     # docs:links and contrast:check sat on the blocking frontend job's critical
     # path (9m11s bottleneck) but neither gates a merge. Moved here as a
     # non-blocking job (`continue-on-error`) so the frontend gate keeps only
@@ -295,7 +308,11 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 20
     needs: changes
-    if: needs.changes.outputs.code_changed == 'true'
+    # Fail-closed: skip heavy job ONLY when `changes` succeeded AND classified
+    # the set as docs-only. If `changes` itself failed/was cancelled (infra),
+    # its outputs are empty and result != 'success', so this runs full — a
+    # detection failure must never let unverified code satisfy a required check.
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')
 
     steps:
       - name: Checkout
@@ -336,7 +353,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: changes
-    if: needs.changes.outputs.code_changed == 'true'
+    # Fail-closed: skip heavy job ONLY when `changes` succeeded AND classified
+    # the set as docs-only. If `changes` itself failed/was cancelled (infra),
+    # its outputs are empty and result != 'success', so this runs full — a
+    # detection failure must never let unverified code satisfy a required check.
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')
 
     steps:
       - name: Checkout
@@ -381,7 +402,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     needs: changes
-    if: needs.changes.outputs.code_changed == 'true'
+    # Fail-closed: skip heavy job ONLY when `changes` succeeded AND classified
+    # the set as docs-only. If `changes` itself failed/was cancelled (infra),
+    # its outputs are empty and result != 'success', so this runs full — a
+    # detection failure must never let unverified code satisfy a required check.
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')
 
     # Sprint 237 P5+ (2026-05-08) — PG/Mongo 둘 다 GHA service container 로
     # 띄우고 환경변수로 endpoint 를 노출. tests/common/mod.rs 의
@@ -470,7 +495,9 @@ jobs:
   #   mirrors lefthook), rust unit/storage tests, integration tests.
   #   Non-blocking (advisory): doc-size, dependency-advisories (RUSTSEC),
   #   frontend-advisory (docs:links + WCAG contrast).
-  # All of these gate on `needs: changes` + code_changed=='true', so
-  # docs/memory/*.md-only changes skip them (required checks stay satisfied via
-  # skipped-job semantics). pr-body and doc-size always run — cheap and
-  # meaningful on docs PRs.
+  # The blocking jobs + dependency-advisories gate on `changes` with a
+  # fail-closed `if:` (skip only when `changes` succeeded AND said docs-only;
+  # any detection failure runs full), so docs/memory/*.md-only changes skip them
+  # while a broken detector never satisfies a required check by skip. pr-body,
+  # doc-size, and frontend-advisory always run (cheap / docs:links matters most
+  # on docs PRs).

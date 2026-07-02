@@ -246,10 +246,12 @@ assert_contains "$changes_block" "name: Detect Change Scope" "changes job"
 assert_contains "$changes_block" "fetch-depth: 0" "changes job needs full history for diff base"
 assert_contains "$changes_block" "run: bash scripts/hooks/detect-change-scope.sh" "changes job detection script"
 assert_contains "$prepare_block" "needs: changes" "prepare needs changes"
-assert_contains "$prepare_block" "if: needs.changes.outputs.code_changed == 'true'" "prepare docs-only skip gate"
-# always() keeps failure detection; the code_changed guard skips the whole
-# aggregation on docs-only so the required context is satisfied by skip.
-assert_contains "$required_block" "if: always() && needs.changes.outputs.code_changed == 'true'" "required aggregation docs-only skip gate"
+# Fail-closed: skip prepare only when `changes` succeeded AND said docs-only; a
+# detection failure builds the runtime binary anyway.
+assert_contains "$prepare_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "prepare docs-only skip gate"
+# always() keeps failure detection; skip the whole aggregation only on a
+# successful docs-only verdict, and grade the matrix when detection failed.
+assert_contains "$required_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "required aggregation docs-only skip gate"
 assert_contains "$required_block" "- changes" "required aggregation needs changes"
 # Guard the forbidden shortcut: a workflow-level paths-ignore key (not a comment
 # mentioning it) would leave the required Runtime Happy Path context

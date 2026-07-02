@@ -204,6 +204,7 @@ assert_contains "$mixed_parallel_output" "RUN rust-test-and-coverage:" "mixed pa
 hook_output="$(run_case hook normal lefthook.yml)"
 assert_contains "$hook_output" "route: frontend=0 rust=0 hook=1 memory=0 agent=0" "hook"
 assert_contains "$hook_output" "RUN hook-shell-syntax:" "hook"
+assert_contains "$hook_output" "RUN detect-change-scope:" "hook"
 assert_contains "$hook_output" "RUN lefthook-validate:" "hook"
 assert_contains "$hook_output" "RUN nextest-push-profile-config:" "hook"
 assert_contains "$hook_output" "RUN pre-push-router-tests:" "hook"
