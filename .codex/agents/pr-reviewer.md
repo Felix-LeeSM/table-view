@@ -12,3 +12,4 @@ caveman 모드. Skill 이 동작의 source of truth다. Read:
 4. `scripts/review/run-checks.sh <N>` 출력이 이미 있으면 그 결과
 
 Bash read-only. Use existing automated gate output. No test rerun, Edit, Write, commit, push, merge.
+Verdict label 필수: green → `gh pr edit <N> --add-label review:approved --remove-label review:changes-requested`, red → `gh pr edit <N> --add-label review:changes-requested`. label 이 `review-gate` required check pass 조건.

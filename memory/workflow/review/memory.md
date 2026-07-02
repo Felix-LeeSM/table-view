@@ -1,7 +1,7 @@
 ---
 title: PR Review Behavior
 type: workflow-rule
-updated: 2026-06-01
+updated: 2026-07-02
 task: review, pr-reviewer, delivery
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / delivery T4
@@ -27,13 +27,22 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
   통합 scorecard와 action items를 repo-relative evidence로 comment한다.
 - Review verdict는 `8/10` 기준이다. 적용 차원 중 하나라도 8 미만이면
   red/blocking, 모두 8 이상이면 green/pass다.
+- Verdict는 label로 공표한다: green이면 `gh pr edit <N> --add-label
+  review:approved --remove-label review:changes-requested`, red면
+  `--add-label review:changes-requested`. reviewer의 write는 scorecard
+  comment와 verdict label 두 가지가 전부다(그 외 write 금지).
+  `review:approved`는 `review-gate` required check의 pass 조건이다
+  (계정 1개 = GitHub review approval 불가의 label 우회).
 - 결함이 있으면 delivery owner가 수정하고 push한 뒤 review를 다시 요청한다.
 - Merge 판단은 delivery owner 책임이다. Reviewer pack은 판단 input만 제공한다.
 - External reviewer는 사용자가 명시적으로 요청했을 때만 추가한다.
 
 ## Merge 전 요구
 
-- 자동 gate와 CI가 green이어야 한다.
+- 자동 gate와 CI가 green이어야 한다. `review-gate` check는
+  `review:approved` label이 있어야 pass — branch protection required check +
+  enforce_admins라 우회 불가. 새 commit push 시 label이 자동 해제되므로
+  fix 후에는 재리뷰가 필수다.
 - 적용된 정성 차원이 통과해야 한다.
 - PR이 mergeable이고 branch policy block이 없어야 한다.
 - 사용자 명시 거부가 없어야 한다.
