@@ -323,7 +323,8 @@ fn validate_ciphertexts_decrypt(data_dir: &Path, key: &[u8]) -> Result<(), AppEr
 }
 
 /// 디스크에 ciphertext 가 있고 key 가 사라진 fatal 케이스 판정. AC-356-09.
-fn data_has_password_ciphertext(data_dir: &Path) -> Result<bool, AppError> {
+/// `crypto::get_or_create_key` (#1093 orphan guard) 도 같은 신호를 재사용한다.
+pub(crate) fn data_has_password_ciphertext(data_dir: &Path) -> Result<bool, AppError> {
     let conn_path = data_dir.join("connections.json");
     if !conn_path.exists() {
         return Ok(false);
