@@ -90,10 +90,20 @@ fi
 #   / no_gpg_sign / gpgsign_false / gpgsign_env_key / githooks_path_override
 #   / git_config_set_hooks_path / githooks_path_env_key / lefthook_env_zero
 #   / lefthook_skip / husky_zero / dd_if / mkfs / dev_write
+# Issue #1029 — sql_drop / sql_truncate 는 컨텍스트 없는 단어 매치라 이 DB
+# 클라이언트 repo 의 일상 명령(소스 검색 `rg "TRUNCATE" src/`, 커밋 메시지
+# `git commit -m "fix: DROP TABLE guard"`)까지 차단했다. 아래 prefix 로 "DB
+# 클라이언트가 command position 에서 실제 실행되는 경우" 로 좁힌다:
+#   (^|[;&|]) + optional env-assignment(들) + client 바이너리 + 공백.
+# rg/grep/git 로 시작하는 명령은 client 가 command position 에 없어 통과한다.
+# ponytail: 순서 의존 (client → SQL). `echo "DROP TABLE x" | psql` 처럼 SQL 이
+#   client 앞에 오는 pipe/heredoc 실행은 놓친다 — hook 은 부주의 방지 layer 라
+#   감수. 필요해지면 SQL-then-client 분기를 추가한다.
+SQL_CLIENT_CONTEXT='(^|[;&|][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(psql|mysql|mariadb|sqlite3|mongosh|mongo|duckdb)[[:space:]]'
 DANGEROUS_PATTERNS=(
   'rm_destructive::(^|[^a-zA-Z0-9_])rm[[:space:]]+-[rRfF]*[rR][rRfF]*[[:space:]]+(/|~|\*|\.|src|node_modules|target)([[:space:]/]|$)'
-  'sql_drop::(^|[^a-zA-Z0-9_])DROP[[:space:]]+(DATABASE|TABLE)([^a-zA-Z0-9_]|$)'
-  'sql_truncate::(^|[^a-zA-Z0-9_])TRUNCATE([^a-zA-Z0-9_]|$)'
+  "sql_drop::${SQL_CLIENT_CONTEXT}.*DROP[[:space:]]+(DATABASE|TABLE)([^a-zA-Z0-9_]|$)"
+  "sql_truncate::${SQL_CLIENT_CONTEXT}.*TRUNCATE([^a-zA-Z0-9_]|$)"
   "base64_shell_pipe::(^|[^a-zA-Z0-9_])base64[[:space:]][^|;&]*(-d|--decode|-D)[^|;&]*[|][[:space:]]*[\"']?([^[:space:]|;&]*/)?[\"']?(bash|sh|zsh)[\"']?([^a-zA-Z0-9_]|$)"
   'eval_cmd_subst::(^|[^a-zA-Z0-9_])eval[[:space:]]+.*\$\('
   'git_push_force::(^|[^a-zA-Z0-9_])git[[:space:]]+push[[:space:]]+.*--force'
