@@ -50,24 +50,33 @@ check_path() {
 	local rel="${raw#$ROOT/}"
 	local base="${rel##*/}"
 
+	# .env-family local secrets: read AND edit blocked for every tool (Read,
+	# Grep, Edit, ...) so no dedicated read tool can dump secret contents.
+	# Suffix coverage mirrors check-dangerous-bash.sh — any `.env.*` (e.g.
+	# .env.production) is a secret; `.env.example` is the tracked template.
 	case "$base" in
-		.env | .env.local | .env.*.local)
+		.env.example) ;;
+		.env | .env.*)
 			echo "BLOCKED: Reading or editing local env files is not allowed. Use .env.example for documented defaults." >&2
 			exit 1
 			;;
 	esac
 
 	case "$rel" in
-		.claude/settings.local.json)
-			echo "BLOCKED: Editing local settings is not allowed." >&2
-			exit 1
-			;;
 		docs/archives/decisions/*/memory.md)
 			echo "WARNING: ADR 본문은 작성 순간 동결입니다. 결정을 뒤집으려면 새 ADR을 추가하세요." >&2
 			;;
 	esac
 
 	if is_write_path_tool; then
+		# settings.local.json edits are blocked so an agent can't rewrite its own
+		# permission gate; Read stays allowed for self-diagnosis (issue #1026).
+		case "$rel" in
+			.claude/settings.local.json)
+				echo "BLOCKED: Editing local settings is not allowed." >&2
+				exit 1
+				;;
+		esac
 		run_main_worktree_source_check "$raw"
 	fi
 }
