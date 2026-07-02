@@ -73,5 +73,50 @@ assert_deny \
 	"{\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$ROOT/.env\"}}" \
 	'.hookSpecificOutput.decision.behavior == "deny"'
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Brain-matcher parity (issue #1028)
+# ─────────────────────────────────────────────────────────────────────────────
+# 정책 목표는 "write tools + Read" 열거가 아니라 "secret 내용을 반환할 수 있는
+# 모든 tool 을 PreToolUse gate 에 태운다" 이다. matcher 가 brain 별로 drift 하면
+# dedicated read tool (예: Claude Grep) 로 .env 읽기가 hook 을 우회한다.
+# 아래는 각 brain 의 PreToolUse matcher 가 그 brain 의 secret-returning tool 집합을
+# 전부 포함하는지 검사한다.
+#   - Claude: Read Grep Edit Write MultiEdit Bash (Grep 은 dedicated read tool).
+#   - Codex : Bash Edit Write apply_patch (전용 Read/Grep tool 없음 — 파일 읽기는
+#             shell/Bash 로 라우팅되어 Bash matcher + check-dangerous-bash 로 커버).
+assert_matcher_covers() {
+	local label="$1" file="$2" jq_path="$3"
+	shift 3
+	local matcher missing=""
+	matcher="$(jq -r "$jq_path // empty" "$file" 2>/dev/null)"
+	if [ -z "$matcher" ]; then
+		no "$label" "matcher not found at $jq_path in $file"
+		return
+	fi
+	local tool
+	for tool in "$@"; do
+		if ! printf '%s' "$matcher" | grep -qE "(^|\|)${tool}(\||$)"; then
+			missing="$missing $tool"
+		fi
+	done
+	if [ -z "$missing" ]; then
+		ok "$label"
+	else
+		no "$label" "matcher='$matcher' missing:$missing"
+	fi
+}
+
+assert_matcher_covers \
+	"parity: Claude PreToolUse matcher covers all secret-returning tools" \
+	"$ROOT/.claude/settings.json" \
+	'.hooks.PreToolUse[0].matcher' \
+	Read Grep Edit Write MultiEdit Bash
+
+assert_matcher_covers \
+	"parity: Codex PreToolUse matcher covers all secret-returning tools" \
+	"$ROOT/.codex/hooks.json" \
+	'.hooks.PreToolUse[0].matcher' \
+	Bash Edit Write apply_patch
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
