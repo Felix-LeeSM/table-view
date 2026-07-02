@@ -243,9 +243,11 @@ pub fn run() {
         // 4 dual-write domains (connections / favorites / mru / settings)
         // between file/LS SOT and SQLite mirror. The result is logged
         // (info on match, warn on drift) and the `mismatch_metric::counter`
-        // atomic is bumped on drift. User-visible impact is zero — the
-        // metric is observation-only, and the reconcile path
-        // (`storage::reconcile`) handles recovery on the next boot.
+        // atomic is bumped on drift. The metric is observation-only; it does
+        // NOT itself recover drift. (#1092 — the `storage::reconcile` path is
+        // not wired at boot and would replay stale/absent file SOT for the
+        // SQLite-only domains; those persist_* commands now propagate write
+        // failures to the IPC boundary instead of relying on reconcile.)
         //
         // Spawned as a detached task so a slow metric computation cannot
         // block the launcher's first paint. Best-effort: pool init failure

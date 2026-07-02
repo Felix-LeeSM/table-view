@@ -11,6 +11,8 @@ import {
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import { logger } from "@lib/logger";
+import { toast } from "@lib/runtime/toast";
+import i18n from "@lib/i18n";
 import { getSetting, persistSettingValue } from "@lib/tauri/settings";
 
 interface ThemeStoreState {
@@ -21,12 +23,16 @@ interface ThemeStoreState {
   // Wave 9.5 회귀 6 / 7 (2026-05-17) — optimistic UI. sprint-368 의
   // backend-first contract (IPC 응답 후 store mutate) 는 backend reject /
   // dev rebuild miss 시 사용자가 click 후 silent stuck — "테마 선택이 안 됨"
-  // 으로 보임. theme/safeMode 같은 user preference 는 강한 일관성 불필요;
-  // 사용자가 보는 즉각적 시각 변화 (DOM data-theme) 가 우선이고 SQLite truth 는
-  // 다음 boot 의 reconcile path 가 회복. 액션은 (1) 먼저 store mutate (즉시
-  // subscriber → DOM/LS/cross-window broadcast), (2) 그 다음 fire-and-forget
-  // 으로 `persist_setting` IPC. IPC reject 는 logger.warn 만 — re-throw 안
-  // 함 (사용자에게는 이미 시각적으로 적용됨).
+  // 으로 보임. theme 같은 user preference 는 강한 일관성 불필요; 사용자가 보는
+  // 즉각적 시각 변화 (DOM data-theme) 가 우선. 액션은 (1) 먼저 store mutate
+  // (즉시 subscriber → DOM/LS FOUC 캐시/cross-window broadcast), (2) 그 다음
+  // fire-and-forget 으로 `persist_setting` IPC.
+  //
+  // #1092 — 이전 주석은 IPC reject 를 "다음 boot 의 reconcile path 가 회복"
+  // 한다고 했으나 그 reconcile 은 배선된 적이 없다. SQLite write 가 실패하면
+  // boot snapshot 이 stale SQLite 값으로 LS FOUC 캐시를 덮어 사용자 선택이
+  // 소실될 수 있으므로, IPC reject 는 logger.warn + error toast 로 표면화한다
+  // (store 는 re-throw 하지 않는다 — UI 는 이미 시각 적용됨).
   setTheme: (themeId: ThemeId) => Promise<void>;
   setMode: (mode: ThemeMode) => Promise<void>;
   setState: (state: ThemeState) => Promise<void>;
@@ -74,9 +80,10 @@ export const useThemeStore = create<ThemeStoreState>((set, get) => ({
       await persistThemeSetting({ themeId, mode });
     } catch (e) {
       logger.warn(
-        "[themeStore] setTheme persist_setting failed (UI already applied; next-boot reconcile path will recover):",
+        "[themeStore] setTheme persist_setting failed (UI already applied):",
         e instanceof Error ? e.message : e,
       );
+      toast.error(i18n.t("feedback:storageWriteFailed"));
     }
   },
 
@@ -91,6 +98,7 @@ export const useThemeStore = create<ThemeStoreState>((set, get) => ({
         "[themeStore] setMode persist_setting failed (UI already applied):",
         e instanceof Error ? e.message : e,
       );
+      toast.error(i18n.t("feedback:storageWriteFailed"));
     }
   },
 
@@ -104,6 +112,7 @@ export const useThemeStore = create<ThemeStoreState>((set, get) => ({
         "[themeStore] setState persist_setting failed (UI already applied):",
         e instanceof Error ? e.message : e,
       );
+      toast.error(i18n.t("feedback:storageWriteFailed"));
     }
   },
 
