@@ -7,7 +7,9 @@
 //! `pg_cast_type`) co-located here since query-path is the sole consumer.
 
 use sqlx::Column;
+use sqlx::Executor;
 use sqlx::Row;
+use sqlx::TypeInfo;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
@@ -175,6 +177,115 @@ fn pg_cast_type(data_type: &str) -> Option<&'static str> {
     }
 }
 
+/// #1086 — heuristic: does a top-level `WITH …` statement contain a
+/// data-modifying CTE (`INSERT`/`UPDATE`/`DELETE`/`MERGE`)? Such statements
+/// cannot be wrapped in `SELECT row_to_json(q) FROM (<query>) q` — PostgreSQL
+/// rejects a data-modifying statement inside a subquery — so they must run
+/// un-wrapped, exactly once.
+///
+/// Word-boundary token match on the *uppercased* SQL. Deliberately liberal:
+/// a real data-modifying CTE always spells the keyword as a standalone token
+/// (`… AS ( INSERT …`), so it is never missed. A false positive (the keyword
+/// inside a string literal or an oddly-named identifier) only downgrades that
+/// query to the per-cell path, which still returns correct rows — never a
+/// double execution.
+fn with_is_data_modifying(upper_sql: &str) -> bool {
+    upper_sql
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .any(|tok| matches!(tok, "INSERT" | "UPDATE" | "DELETE" | "MERGE"))
+}
+
+/// Minimal lowercase hex encoder for the `bytea` path — avoids pulling the
+/// `hex` crate for a handful of export cells (mirrors `db/mysql/queries.rs`).
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        out.push(HEX[(*b >> 4) as usize] as char);
+        out.push(HEX[(*b & 0x0f) as usize] as char);
+    }
+    out
+}
+
+/// #1086 — decode the `idx`-th cell of a PG row into `serde_json::Value`
+/// WITHOUT the `row_to_json` wrapper. Used only for the un-wrappable Select
+/// paths (`SHOW` / `EXPLAIN` / data-modifying `WITH`); plain `SELECT` and
+/// read-only `WITH` still route through `row_to_json` for full arbitrary-type
+/// coverage. `bigint`/`numeric` are emitted as JSON strings to match the
+/// wrapped path's ADR 0026 wire format. Exotic types (arrays, composites,
+/// ranges) fall back to their text form or `Null` — acceptable for these rare
+/// paths, which previously errored entirely.
+fn pg_cell_to_json(row: &sqlx::postgres::PgRow, idx: usize) -> serde_json::Value {
+    use serde_json::Value;
+    let type_name = row.column(idx).type_info().name().to_ascii_uppercase();
+
+    macro_rules! try_decode {
+        ($t:ty, $f:expr) => {
+            if let Ok(Some(v)) = row.try_get::<Option<$t>, _>(idx) {
+                return ($f)(v);
+            }
+        };
+    }
+
+    match type_name.as_str() {
+        "BOOL" => try_decode!(bool, Value::Bool),
+        "INT2" => try_decode!(i16, |v: i16| Value::Number(v.into())),
+        "INT4" => try_decode!(i32, |v: i32| Value::Number(v.into())),
+        // ADR 0026 — bigint as string to preserve precision past 2^53-1.
+        "INT8" => try_decode!(i64, |v: i64| Value::String(v.to_string())),
+        "FLOAT4" => try_decode!(f32, |v: f32| serde_json::Number::from_f64(v as f64)
+            .map(Value::Number)
+            .unwrap_or(Value::Null)),
+        "FLOAT8" => try_decode!(f64, |v: f64| serde_json::Number::from_f64(v)
+            .map(Value::Number)
+            .unwrap_or(Value::Null)),
+        // ADR 0026 — arbitrary-precision decimal as string.
+        "NUMERIC" => try_decode!(sqlx::types::BigDecimal, |v: sqlx::types::BigDecimal| {
+            Value::String(v.to_string())
+        }),
+        "UUID" => try_decode!(sqlx::types::Uuid, |v: sqlx::types::Uuid| Value::String(
+            v.to_string()
+        )),
+        "JSON" | "JSONB" => try_decode!(Value, |v| v),
+        // Match row_to_json's bytea representation: `\x<hex>`.
+        "BYTEA" => try_decode!(Vec<u8>, |v: Vec<u8>| Value::String(format!(
+            "\\x{}",
+            hex_encode(&v)
+        ))),
+        "TIMESTAMP" => try_decode!(
+            sqlx::types::chrono::NaiveDateTime,
+            |v: sqlx::types::chrono::NaiveDateTime| Value::String(
+                v.format("%Y-%m-%d %H:%M:%S%.f").to_string()
+            )
+        ),
+        "TIMESTAMPTZ" => try_decode!(
+            sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>,
+            |v: sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>| Value::String(
+                v.to_rfc3339()
+            )
+        ),
+        "DATE" => try_decode!(
+            sqlx::types::chrono::NaiveDate,
+            |v: sqlx::types::chrono::NaiveDate| Value::String(v.to_string())
+        ),
+        "TIME" => try_decode!(
+            sqlx::types::chrono::NaiveTime,
+            |v: sqlx::types::chrono::NaiveTime| Value::String(v.to_string())
+        ),
+        // TEXT / VARCHAR / BPCHAR / NAME / CHAR and everything else: text.
+        _ => try_decode!(String, Value::String),
+    }
+
+    // Final fallbacks for anything the typed path above could not decode.
+    if let Ok(Some(v)) = row.try_get::<Option<String>, _>(idx) {
+        return Value::String(v);
+    }
+    if let Ok(Some(v)) = row.try_get::<Option<Value>, _>(idx) {
+        return v;
+    }
+    Value::Null
+}
+
 impl PostgresAdapter {
     pub async fn execute(&self, query: &str) -> Result<(), AppError> {
         let pool = self.active_pool().await?;
@@ -235,60 +346,113 @@ impl PostgresAdapter {
         // Execute query based on type
         let result = match query_type {
             QueryType::Select => {
+                // #1086 — the statement must be applied on the server exactly
+                // ONCE. `SHOW` / `EXPLAIN` and data-modifying `WITH`
+                // (INSERT/UPDATE/DELETE/MERGE inside a CTE) cannot be wrapped
+                // in `SELECT row_to_json(q) FROM (…) q` (PG rejects a utility
+                // statement or a data-modifying CTE inside a subquery), so
+                // they run un-wrapped via a single fetch + per-cell decode.
+                // Everything else keeps the row_to_json wrapper for full
+                // arbitrary-type coverage, but sources its column metadata
+                // from `describe` (Parse/Describe — NO execution) instead of a
+                // throw-away first run. The previous code executed the raw
+                // query for metadata AND the wrapper for data, doubling
+                // `nextval()` and breaking side-effecting SELECTs.
+                let wrappable = trimmed_query.starts_with("SELECT")
+                    || (trimmed_query.starts_with("WITH")
+                        && !with_is_data_modifying(&trimmed_query));
+
                 let query_future = async {
-                    // First, get column metadata from a dry-run (LIMIT 0) or the actual query
-                    let rows = sqlx::query(query).fetch_all(&pool).await?;
-
-                    // Extract column metadata from rows when available
-                    let columns: Vec<QueryColumn> = if let Some(first_row) = rows.first() {
-                        first_row
-                            .columns()
-                            .iter()
-                            .map(|col| {
-                                let data_type = col.type_info().to_string();
-                                let category = map_pg_data_type(&data_type);
-                                QueryColumn {
-                                    name: col.name().to_string(),
-                                    data_type,
-                                    category,
-                                }
-                            })
-                            .collect()
-                    } else {
-                        // For empty results, we cannot determine columns from the row data.
-                        // Return empty columns — the frontend handles this gracefully.
-                        Vec::new()
-                    };
-
-                    // Use row_to_json via PostgreSQL to convert rows to proper JSON values.
-                    // Direct try_get::<serde_json::Value> only works for json/jsonb columns,
-                    // so we wrap the query in a subquery and use row_to_json().
-                    let wrapped_sql = format!("SELECT row_to_json(q)::text FROM ({}) q", query);
-                    let json_rows_raw = sqlx::query_scalar::<_, String>(&wrapped_sql)
-                        .fetch_all(&pool)
-                        .await?;
-
-                    let json_rows: Vec<Vec<serde_json::Value>> = json_rows_raw
-                        .iter()
-                        .map(|json_str| {
-                            let obj: serde_json::Map<String, serde_json::Value> =
-                                serde_json::from_str(json_str).unwrap_or_default();
-                            columns
+                    let (columns, json_rows): (Vec<QueryColumn>, Vec<Vec<serde_json::Value>>) =
+                        if wrappable {
+                            // Column metadata WITHOUT executing the statement.
+                            let described = pool.describe(query).await?;
+                            let columns: Vec<QueryColumn> = described
+                                .columns()
                                 .iter()
                                 .map(|col| {
-                                    let raw = obj
-                                        .get(&col.name)
-                                        .cloned()
-                                        .unwrap_or(serde_json::Value::Null);
-                                    // Sprint 261 (ADR 0026) — bigint /
-                                    // numeric cells are pre-stringified so
-                                    // native JSON.parse on the JS side
-                                    // preserves digit-for-digit precision.
-                                    stringify_numeric_if_precision_sensitive(raw, &col.data_type)
+                                    let data_type = col.type_info().to_string();
+                                    let category = map_pg_data_type(&data_type);
+                                    QueryColumn {
+                                        name: col.name().to_string(),
+                                        data_type,
+                                        category,
+                                    }
                                 })
-                                .collect()
-                        })
-                        .collect();
+                                .collect();
+
+                            // Single execution. row_to_json coerces every PG
+                            // type to JSON and applies side effects once.
+                            // Direct try_get::<serde_json::Value> only works
+                            // for json/jsonb columns, so the wrapper handles
+                            // the rest.
+                            let wrapped_sql =
+                                format!("SELECT row_to_json(q)::text FROM ({}) q", query);
+                            let json_rows_raw = sqlx::query_scalar::<_, String>(&wrapped_sql)
+                                .fetch_all(&pool)
+                                .await?;
+
+                            let json_rows: Vec<Vec<serde_json::Value>> = json_rows_raw
+                                .iter()
+                                .map(|json_str| {
+                                    let obj: serde_json::Map<String, serde_json::Value> =
+                                        serde_json::from_str(json_str).unwrap_or_default();
+                                    columns
+                                        .iter()
+                                        .map(|col| {
+                                            let raw = obj
+                                                .get(&col.name)
+                                                .cloned()
+                                                .unwrap_or(serde_json::Value::Null);
+                                            // Sprint 261 (ADR 0026) — bigint /
+                                            // numeric cells are pre-stringified
+                                            // so native JSON.parse on the JS
+                                            // side preserves digit-for-digit
+                                            // precision.
+                                            stringify_numeric_if_precision_sensitive(
+                                                raw,
+                                                &col.data_type,
+                                            )
+                                        })
+                                        .collect()
+                                })
+                                .collect();
+
+                            (columns, json_rows)
+                        } else {
+                            // Un-wrappable: SHOW / EXPLAIN / data-modifying
+                            // WITH. Single execution; columns and values
+                            // decoded per-cell straight from the returned rows
+                            // (bigint/numeric emitted as strings to match the
+                            // wrapped path's ADR 0026 wire format).
+                            let rows = sqlx::query(query).fetch_all(&pool).await?;
+                            let columns: Vec<QueryColumn> = if let Some(first_row) = rows.first() {
+                                first_row
+                                    .columns()
+                                    .iter()
+                                    .map(|col| {
+                                        let data_type = col.type_info().to_string();
+                                        let category = map_pg_data_type(&data_type);
+                                        QueryColumn {
+                                            name: col.name().to_string(),
+                                            data_type,
+                                            category,
+                                        }
+                                    })
+                                    .collect()
+                            } else {
+                                Vec::new()
+                            };
+                            let json_rows: Vec<Vec<serde_json::Value>> = rows
+                                .iter()
+                                .map(|row| {
+                                    (0..row.columns().len())
+                                        .map(|idx| pg_cell_to_json(row, idx))
+                                        .collect()
+                                })
+                                .collect();
+                            (columns, json_rows)
+                        };
 
                     let total_count = json_rows.len() as i64;
                     let execution_time_ms = start.elapsed().as_millis() as u64;
@@ -1401,5 +1565,49 @@ mod tests {
 
         let out = stringify_numeric_if_precision_sensitive(n(123), "");
         assert_eq!(out, n(123));
+    }
+
+    // ── #1086 — data-modifying WITH classifier ───────────────────────────
+    // 작성: 2026-07-03. `with_is_data_modifying` 는 wrap(row_to_json) 경로와
+    // per-cell 경로를 가르는 분류기. false negative (data-modifying WITH 를
+    // 못 잡음) 는 wrap 재실행 → 커밋 후 에러 / 이중 INSERT 를 되살리므로
+    // 회귀 가드가 필수다. 입력은 uppercased stripped SQL.
+
+    #[test]
+    fn with_is_data_modifying_detects_dml_ctes() {
+        for sql in &[
+            "WITH INS AS (INSERT INTO T(A) VALUES (1) RETURNING A) SELECT A FROM INS",
+            "WITH U AS (UPDATE T SET A = 1 RETURNING *) SELECT * FROM U",
+            "WITH D AS (DELETE FROM T WHERE A = 1 RETURNING *) SELECT * FROM D",
+            "WITH M AS (MERGE INTO T USING S ON T.A = S.A RETURNING *) SELECT * FROM M",
+        ] {
+            assert!(
+                with_is_data_modifying(sql),
+                "should flag data-modifying CTE: {sql}"
+            );
+        }
+    }
+
+    #[test]
+    fn with_is_data_modifying_ignores_read_only_with() {
+        // Plain read-only WITH must stay on the wrap path. Keywords that only
+        // appear as substrings of identifiers (UPDATED_AT, INSERTS) must not
+        // trip the word-boundary token match.
+        for sql in &[
+            "WITH C AS (SELECT * FROM T) SELECT * FROM C",
+            "WITH RECENT AS (SELECT UPDATED_AT FROM T) SELECT * FROM RECENT",
+            "WITH INSERTS AS (SELECT COUNT(*) FROM LOG) SELECT * FROM INSERTS",
+        ] {
+            assert!(
+                !with_is_data_modifying(sql),
+                "read-only WITH must not be flagged: {sql}"
+            );
+        }
+    }
+
+    #[test]
+    fn hex_encode_lower_two_chars_per_byte() {
+        assert_eq!(hex_encode(&[0x00, 0xff, 0xab]), "00ffab");
+        assert_eq!(hex_encode(&[]), "");
     }
 }
