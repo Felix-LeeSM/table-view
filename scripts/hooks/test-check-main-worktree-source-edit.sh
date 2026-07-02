@@ -265,6 +265,17 @@ run_case "main command: quoted redirect target still blocked" 1 main-command 'ec
 run_case "main command: rm source file blocked" 1 main-command "rm src/gone.ts"
 run_case "main command: rm memory doc allowed" 0 main-command "rm memory/x.md"
 
+# Ported from superseded PR #1168 (quoted-literal redirect regressions): #1168
+# was closed as fully covered by #1159's mask_quoted_specials fix (10/10
+# verified), but its regression cases were never merged. This guard is a
+# hot spot with repeated parallel fixes, so keep the cases as an insurance
+# policy against the same false-positive/regression shapes recurring.
+run_case "main command: quoted redirect-literal grep single-quoted allowed" 0 main-command "grep '>&' src/App.tsx"
+run_case "main command: quoted redirect-literal grep double-quoted fd-dup allowed" 0 main-command 'grep -n "2>&1" src/App.tsx'
+run_case "main command: quoted segment glued unquoted redirect to source blocked" 1 main-command 'echo "x">src/App.tsx'
+run_case "main command: empty quoted segment glued unquoted redirect to source blocked" 1 main-command "echo ''>src/App.tsx"
+run_case "main command: quoted variable glued unquoted redirect to source blocked" 1 main-command 'echo "$v">src/App.tsx'
+
 doc_patch_input="$(printf '*** Begin Patch\n*** Update File: memory/foo/memory.md\n@@\n-- git mv old path\n+- test/reset/helper wording in docs\n*** End Patch\n')"
 run_case "main command: apply_patch checks patch markers only" 0 main-command "$doc_patch_input"
 mixed_patch_shell_input="$(printf 'printf patch_marker <<EOF\n*** Update File: memory/foo/memory.md\nEOF\nprintf hi > src/App.tsx\n')"
