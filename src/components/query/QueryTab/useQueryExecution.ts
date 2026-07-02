@@ -486,8 +486,19 @@ export function useQueryExecution({
   ]);
 
   const handleDryRun = useCallback(async () => {
-    if (tab.paradigm === "document") {
-      toast.info("Dry-run is not supported for MongoDB.");
+    // #1049 — Dry-run is rdb-only: it wraps the statement in a
+    // transaction that is unconditionally rolled back, which has no
+    // kv/search/document equivalent. The Toolbar hides the button off the
+    // rdb paradigm, but ⌘⇧⏎ routes every editor into this handler, so this
+    // paradigm gate is the single shared judgment both the button and the
+    // shortcut pass through. Gating on `document` alone let kv/search fall
+    // through to the rdb dry-run IPC.
+    if (tab.paradigm !== "rdb") {
+      toast.info(
+        tab.paradigm === "document"
+          ? "Dry-run is not supported for MongoDB."
+          : "Dry-run is only available for SQL databases.",
+      );
       return;
     }
 
