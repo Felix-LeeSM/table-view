@@ -304,13 +304,17 @@ paths_from_command_tokens() {
 				# and trailing targets are each policy-checked. Emitting only the
 				# leading write let a source trailing/middle target slip past when
 				# the leading target was allowed (#1164 lateral regression).
-				# Empty segments (leading '>' and the extra one from `>>PATH`
+				# Index 0 is the text BEFORE the first '>' — an fd number
+				# (`1>`, `2>`) or command residue, never a write target — so it
+				# is skipped (`[@]:1`); emitting it resolved fd `1` to `<root>/1`
+				# and over-blocked an allowed-only fd-prefixed redirect (#1164
+				# 3rd re-review). Empty segments (the extra one from `>>PATH`
 				# append) are skipped. FD dup (`&N`) / close (`&-`) segments are
 				# skipped; a `&word` with a non-digit char is a real
 				# stdout+stderr file write, so emit it (fail-safe).
 				local glued_seg glued_segs=()
 				IFS='>' read -r -a glued_segs <<<"$word"
-				for glued_seg in "${glued_segs[@]}"; do
+				for glued_seg in "${glued_segs[@]:1}"; do
 					[ -n "$glued_seg" ] || continue
 					case "$glued_seg" in
 						\&- | \&)

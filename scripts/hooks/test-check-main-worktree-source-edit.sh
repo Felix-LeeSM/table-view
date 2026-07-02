@@ -244,6 +244,13 @@ run_case "main command: glued redirect allowed-leading source-trailing blocked" 
 run_case "main command: glued redirect three targets trailing source blocked" 1 main-command "printf x >memory/a.md>memory/b.md>src/App.tsx"
 run_case "main command: glued redirect middle source blocked" 1 main-command "printf x >memory/a.md>src/App.tsx>memory/b.md"
 run_case "main command: glued redirect allowed-only targets allowed" 0 main-command "printf x >memory/a.md>memory/b.md"
+# 3rd re-review (#1164): the glued split's index-0 segment is the text BEFORE the
+# first `>` (an fd number like `1`/`2`, never a write target). Emitting it as a
+# path resolved to `<root>/1` and over-blocked an allowed-only fd-prefixed
+# redirect. Index-0 is skipped so this stays allowed, while a trailing source
+# target (below) is still denied.
+run_case "main command: glued redirect fd-prefixed allowed-only allowed" 0 main-command "printf x 1>memory/a.md>&2"
+run_case "main command: glued redirect allowed-leading external-temp source-trailing blocked" 1 main-command "printf x >/tmp/ok>src/App.tsx"
 
 doc_patch_input="$(printf '*** Begin Patch\n*** Update File: memory/foo/memory.md\n@@\n-- git mv old path\n+- test/reset/helper wording in docs\n*** End Patch\n')"
 run_case "main command: apply_patch checks patch markers only" 0 main-command "$doc_patch_input"
