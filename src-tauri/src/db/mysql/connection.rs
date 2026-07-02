@@ -9,13 +9,14 @@
 //! string 의 `/database` 부분 교체), sub-pool 별로 자체 pool 식별이 유지돼
 //! 다른 DB 의 long-running query 가 active DB 의 fairness 를 안 깬다.
 
-use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
+use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions, MySqlSslMode};
 use sqlx::MySqlPool;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;
 
+use crate::db::tls::{resolve_tls_decision, TlsDecision};
 use crate::error::AppError;
 use crate::models::ConnectionConfig;
 
@@ -84,18 +85,29 @@ impl MysqlAdapter {
 
     /// `MySqlConnectOptions` 를 builder 로 안전 조합 — string interpolation
     /// 회피로 injection 차단.
-    fn connect_options(config: &ConnectionConfig) -> MySqlConnectOptions {
-        MySqlConnectOptions::new()
+    ///
+    /// Issue #1062 — `tls_enabled` / `trust_server_certificate` 를
+    /// `MySqlSslMode` 로 결선. TLS 를 켠 operator 가 sqlx 기본
+    /// `ssl-mode=PREFERRED` 로 조용히 평문 downgrade 되지 않도록 한다.
+    /// 결선 불가 조합 (`resolve_tls_decision`) 은 조용히 무시하지 않고 거부 —
+    /// fallible signature 가 pool 을 여는 모든 caller 로 전파된다.
+    fn connect_options(config: &ConnectionConfig) -> Result<MySqlConnectOptions, AppError> {
+        let options = MySqlConnectOptions::new()
             .host(&config.host)
             .port(config.port)
             .username(&config.user)
             .password(&config.password)
-            .database(&config.database)
+            .database(&config.database);
+        Ok(match resolve_tls_decision(config)? {
+            TlsDecision::Default => options,
+            TlsDecision::RequireSkipVerify => options.ssl_mode(MySqlSslMode::Required),
+            TlsDecision::RequireVerifyFull => options.ssl_mode(MySqlSslMode::VerifyIdentity),
+        })
     }
 
     /// 5s timeout 의 one-shot probe. PG `test` 패턴 답습.
     pub async fn test(config: &ConnectionConfig) -> Result<(), AppError> {
-        let options = Self::connect_options(config);
+        let options = Self::connect_options(config)?;
         let pool = MySqlPoolOptions::new()
             .max_connections(1)
             .acquire_timeout(std::time::Duration::from_secs(5))
@@ -115,7 +127,7 @@ impl MysqlAdapter {
     }
 
     pub async fn connect_pool(&self, config: &ConnectionConfig) -> Result<(), AppError> {
-        let options = Self::connect_options(config);
+        let options = Self::connect_options(config)?;
         let timeout_secs = config
             .connection_timeout
             .unwrap_or(MYSQL_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS);
@@ -217,7 +229,7 @@ impl MysqlAdapter {
             SwitchPath::Miss(boxed_config) => {
                 let mut config = *boxed_config;
                 config.database = db_name.to_string();
-                let options = Self::connect_options(&config);
+                let options = Self::connect_options(&config)?;
                 let timeout_secs = config
                     .connection_timeout
                     .unwrap_or(MYSQL_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS);
@@ -321,7 +333,7 @@ impl MysqlAdapter {
                 .ok_or_else(|| AppError::Connection("Not connected — cannot issue cancel".into()))?
         };
 
-        let options = Self::connect_options(&config);
+        let options = Self::connect_options(&config)?;
         let cancel_pool = MySqlPoolOptions::new()
             .max_connections(1)
             .acquire_timeout(std::time::Duration::from_secs(5))
@@ -491,12 +503,60 @@ mod tests {
     #[test]
     fn connect_options_builder_reflects_config() {
         let config = sample_config();
-        let opts = MysqlAdapter::connect_options(&config);
+        let opts = MysqlAdapter::connect_options(&config).unwrap();
         let opts_str = format!("{opts:?}");
         assert!(
             opts_str.contains("localhost") || opts_str.contains("3306"),
             "Options should reflect the config parameters: {opts_str}"
         );
+    }
+
+    // Issue #1062 — regression guard for the silent TLS downgrade. Before the
+    // fix, `connect_options` never set `ssl_mode`, so `tls_enabled = Some(true)`
+    // fell back to sqlx's default `Preferred` ("encrypt if possible, else
+    // plaintext"). These lock the mapping in.
+
+    #[test]
+    fn connect_options_default_when_tls_unset_preserves_preferred() {
+        let config = sample_config();
+        let opts = MysqlAdapter::connect_options(&config).unwrap();
+        assert!(
+            matches!(opts.get_ssl_mode(), MySqlSslMode::Preferred),
+            "tls_enabled unset must leave the default Preferred ssl_mode"
+        );
+    }
+
+    #[test]
+    fn connect_options_tls_with_trust_maps_to_required() {
+        let mut config = sample_config();
+        config.tls_enabled = Some(true);
+        config.trust_server_certificate = Some(true);
+        let opts = MysqlAdapter::connect_options(&config).unwrap();
+        assert!(
+            matches!(opts.get_ssl_mode(), MySqlSslMode::Required),
+            "tls_enabled + trust must force encryption without cert verification"
+        );
+    }
+
+    #[test]
+    fn connect_options_tls_without_trust_maps_to_verify_identity() {
+        let mut config = sample_config();
+        config.tls_enabled = Some(true);
+        config.trust_server_certificate = Some(false);
+        let opts = MysqlAdapter::connect_options(&config).unwrap();
+        assert!(
+            matches!(opts.get_ssl_mode(), MySqlSslMode::VerifyIdentity),
+            "tls_enabled without trust must verify CA + host identity"
+        );
+    }
+
+    #[test]
+    fn connect_options_tls_without_trust_decision_is_rejected() {
+        let mut config = sample_config();
+        config.tls_enabled = Some(true);
+        config.trust_server_certificate = None;
+        let err = MysqlAdapter::connect_options(&config).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
     }
 
     #[test]

@@ -38,6 +38,7 @@ pub(crate) mod search_http;
 pub(crate) mod search_live_destructive;
 pub(crate) mod search_live_query;
 pub mod sqlite;
+pub(crate) mod tls;
 pub mod traits;
 pub mod types;
 
