@@ -272,14 +272,29 @@ function normalizeWorkspaceTabParadigm(value: unknown): Paradigm {
 
 function normalizeWorkspaceState(value: unknown): unknown {
   if (!isRecord(value)) return value;
+  // #1091 — the backend `read_workspaces` reconstitutes only
+  // { activeTabId, tabs, sidebar: { expanded }, closedTabHistory }. dirtyTabIds
+  // is a window-local marker that is intentionally never persisted, and
+  // selectedNode/scrollTop are dehydrated to defaults. Backfill them here so
+  // the hydrated cell is a complete `WorkspaceState` — otherwise consumers like
+  // `App.tsx`'s `useConnectionHasDirtyTabs` read `ws.dirtyTabIds.length` on the
+  // partial shape, throw, and unmount the whole workspace window on reopen.
+  const sidebar = isRecord(value.sidebar) ? value.sidebar : {};
   return {
     ...value,
     tabs: Array.isArray(value.tabs)
       ? value.tabs.map(normalizeWorkspaceTab)
-      : value.tabs,
+      : [],
     closedTabHistory: Array.isArray(value.closedTabHistory)
       ? value.closedTabHistory.map(normalizeWorkspaceTab)
-      : value.closedTabHistory,
+      : [],
+    dirtyTabIds: Array.isArray(value.dirtyTabIds) ? value.dirtyTabIds : [],
+    sidebar: {
+      selectedNode:
+        typeof sidebar.selectedNode === "string" ? sidebar.selectedNode : null,
+      expanded: Array.isArray(sidebar.expanded) ? sidebar.expanded : [],
+      scrollTop: typeof sidebar.scrollTop === "number" ? sidebar.scrollTop : 0,
+    },
   };
 }
 

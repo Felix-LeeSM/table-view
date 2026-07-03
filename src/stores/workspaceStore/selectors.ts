@@ -121,7 +121,10 @@ export function useConnectionHasDirtyTabs(connId: string | null): boolean {
     if (!connId) return false;
     const dbs = state.workspaces[connId];
     if (!dbs) return false;
-    return Object.values(dbs).some((ws) => ws.dirtyTabIds.length > 0);
+    // `?? 0` mirrors the `?? EMPTY_STRINGS` guard above — a hydrated workspace
+    // may omit the window-local dirtyTabIds marker (#1091), and reading
+    // `.length` on undefined would unmount the workspace window.
+    return Object.values(dbs).some((ws) => (ws.dirtyTabIds?.length ?? 0) > 0);
   });
   const pendingEditDirty = useDataGridEditStore((state) => {
     if (!connId) return false;
