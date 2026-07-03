@@ -19,13 +19,24 @@ vi.mock("lucide-react", () => ({
   Eye: () => <span data-testid="icon-view" />,
   Code2: () => <span data-testid="icon-function" />,
   Terminal: () => <span data-testid="icon-procedure" />,
+  Folder: () => <span data-testid="icon-schema" />,
 }));
 
-function makeConn(id: string, name: string): ConnectionConfig {
+// The window's sidebar connection scopes schema results. Control it per test.
+let mockSidebarConnId: string | null = null;
+vi.mock("@hooks/useCurrentWindowConnectionId", () => ({
+  useCurrentWindowConnectionId: () => mockSidebarConnId,
+}));
+
+function makeConn(
+  id: string,
+  name: string,
+  dbType: ConnectionConfig["dbType"] = "postgresql",
+): ConnectionConfig {
   return {
     id,
     name,
-    dbType: "postgresql",
+    dbType,
     host: "localhost",
     port: 5432,
     user: "postgres",
@@ -61,6 +72,7 @@ function setupStores(opts: {
   connections?: ConnectionConfig[];
   active?: string[];
   activeDb?: string;
+  schemas?: Record<string, { name: string }[]>;
   tables?: Record<string, { name: string; schema: string }[]>;
   views?: Record<string, { name: string; schema: string }[]>;
   functions?: Record<
@@ -77,12 +89,17 @@ function setupStores(opts: {
       ? { type: "connected", activeDb: db }
       : { type: "disconnected" };
   }
+  // `schemas` is nested `(connId, db) → SchemaInfo[]`.
+  const schemas: Record<string, Record<string, { name: string }[]>> = {};
+  for (const [connId, list] of Object.entries(opts.schemas ?? {})) {
+    schemas[connId] = { [db]: list };
+  }
   useConnectionStore.setState({
     connections: conns,
     activeStatuses: statuses,
   });
   useSchemaStore.setState({
-    schemas: {},
+    schemas,
     tables: expandFlat(
       Object.fromEntries(
         Object.entries(opts.tables ?? {}).map(([k, v]) => [
@@ -124,6 +141,7 @@ function setupStores(opts: {
 describe("QuickOpen", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSidebarConnId = null;
     useSchemaStore.setState({
       schemas: {},
       tables: {},
@@ -238,6 +256,162 @@ describe("QuickOpen", () => {
     expect(screen.getAllByRole("option")).toHaveLength(1);
     // Only the c1/public/users row (Prod connection)
     expect(screen.getByText("Prod")).toBeInTheDocument();
+  });
+
+  it("surfaces schemas as first-class results and reveals on select (with-schema)", async () => {
+    mockSidebarConnId = "c1"; // this window's sidebar renders c1
+    const reveal = vi.fn();
+    window.addEventListener("reveal-schema", reveal);
+
+    setupStores({
+      connections: [makeConn("c1", "Prod")], // postgresql → with-schema
+      active: ["c1"],
+      schemas: { c1: [{ name: "sales" }, { name: "public" }] },
+      tables: { "c1:sales": [{ name: "orders", schema: "sales" }] },
+    });
+
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+
+    const input = screen.getByPlaceholderText(/search tables/i);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "sales" } });
+    });
+
+    // Exact schema-name match ranks above the table whose schema is "sales".
+    const options = screen.getAllByRole("option");
+    expect(options[0]).toHaveTextContent("sales");
+
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+
+    expect(reveal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: { connectionId: "c1", schema: "sales" },
+      }),
+    );
+    window.removeEventListener("reveal-schema", reveal);
+  });
+
+  it("scopes schema results to this window's sidebar connection only", async () => {
+    mockSidebarConnId = "c1"; // sidebar renders c1; c2 is a different window
+    setupStores({
+      connections: [makeConn("c1", "Prod"), makeConn("c2", "Dev")],
+      active: ["c1", "c2"],
+      schemas: { c1: [{ name: "sales" }], c2: [{ name: "sales" }] },
+    });
+
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+
+    const input = screen.getByPlaceholderText(/search tables/i);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "sales" } });
+    });
+
+    // Both connections have a "sales" schema, but only c1's is revealable in
+    // this window, so exactly one schema result appears — the c1 one.
+    const options = screen.getAllByRole("option");
+    expect(options).toHaveLength(1);
+    expect(options[0]).toHaveTextContent("Prod");
+  });
+
+  it("does not surface schema results for flat (SQLite) connections", async () => {
+    mockSidebarConnId = "s1"; // sidebar renders s1, so scope is satisfied
+    setupStores({
+      connections: [makeConn("s1", "Local", "sqlite")], // flat
+      active: ["s1"],
+      schemas: { s1: [{ name: "main" }] },
+      tables: { "s1:main": [{ name: "orders", schema: "main" }] },
+    });
+
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+
+    // Even as the sidebar connection, a flat tree has no focusable schema row —
+    // the shape guard (not the scope) excludes it. Only the table is a result.
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    expect(screen.getByText("orders")).toBeInTheDocument();
+  });
+
+  it("degrades `.` queries to plain matching on flat connections", async () => {
+    setupStores({
+      connections: [makeConn("s1", "Local", "sqlite")], // flat
+      active: ["s1"],
+      tables: { "s1:main": [{ name: "orders", schema: "main" }] },
+    });
+
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+
+    const input = screen.getByPlaceholderText(/search tables/i);
+    // "main.ord" must NOT schema-scope on a flat shape — it degrades to a plain
+    // literal match, which nothing contains, so the list is empty (not an error).
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "main.ord" } });
+    });
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+
+    // A dotless query still finds the table by name.
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "ord" } });
+    });
+    expect(screen.getByText("orders")).toBeInTheDocument();
+  });
+
+  it("does not surface schema results for no-schema (MySQL) connections", async () => {
+    mockSidebarConnId = "m1"; // sidebar renders m1, so scope is satisfied
+    setupStores({
+      connections: [makeConn("m1", "MyApp", "mysql")], // no-schema
+      active: ["m1"],
+      schemas: { m1: [{ name: "appdb" }] },
+      tables: { "m1:appdb": [{ name: "orders", schema: "appdb" }] },
+    });
+
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+
+    // MySQL conflates schema with database and renders no focusable schema row,
+    // so "appdb" is not offered as a first-class result — only the table is.
+    expect(screen.queryByTestId("icon-schema")).toBeNull();
+    expect(screen.getByText("orders")).toBeInTheDocument();
+  });
+
+  it("scopes `.` to the database grouping on no-schema (MySQL) connections", async () => {
+    setupStores({
+      connections: [makeConn("m1", "MyApp", "mysql")], // no-schema
+      active: ["m1"],
+      tables: { "m1:appdb": [{ name: "orders", schema: "appdb" }] },
+    });
+
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+
+    const input = screen.getByPlaceholderText(/search tables/i);
+    // no-schema still schema-scopes `.` — the grouping is the database name.
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "appdb.ord" } });
+    });
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    expect(screen.getByText("orders")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "other.ord" } });
+    });
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
 
   it("Escape closes the modal", () => {

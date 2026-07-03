@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X, Table2, Eye, Code2, Terminal } from "lucide-react";
+import { Search, X, Table2, Eye, Code2, Terminal, Folder } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
@@ -11,10 +11,13 @@ import {
 } from "@components/ui/dialog";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { resolveRdbTreeShape } from "@components/schema/treeShape";
+import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
+import { rankQuickOpen, type RankableFields } from "./quickOpenRanking";
 
-type QuickOpenItemKind = "table" | "view" | "function" | "procedure";
+type QuickOpenItemKind = "schema" | "table" | "view" | "function" | "procedure";
 
-interface QuickOpenItem {
+interface QuickOpenItem extends RankableFields {
   kind: QuickOpenItemKind;
   name: string;
   schema: string;
@@ -25,6 +28,7 @@ interface QuickOpenItem {
 }
 
 const KIND_ICON: Record<QuickOpenItemKind, typeof Table2> = {
+  schema: Folder,
   table: Table2,
   view: Eye,
   function: Code2,
@@ -39,17 +43,25 @@ export default function QuickOpen() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const KIND_LABEL: Record<QuickOpenItemKind, string> = {
+    schema: t("quickOpen.kindSchema"),
     table: t("quickOpen.kindTable"),
     view: t("quickOpen.kindView"),
     function: t("quickOpen.kindFunction"),
     procedure: t("quickOpen.kindProcedure"),
   };
 
+  const schemas = useSchemaStore((s) => s.schemas);
   const tables = useSchemaStore((s) => s.tables);
   const views = useSchemaStore((s) => s.views);
   const functions = useSchemaStore((s) => s.functions);
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
+  // The connection whose SchemaTree this window's sidebar renders. Schema
+  // results are scoped to it because reveal (expand + scroll) only lands on the
+  // *mounted* tree — offering another window's schema would be an invisible
+  // no-op. `null` outside a workspace window (launcher / jsdom) → no schema
+  // results, matching the sidebar showing no tree there.
+  const sidebarConnId = useCurrentWindowConnectionId();
 
   // Build the searchable inventory from every connected schema's cached objects.
   // Sprint 263 — schemaStore is now `(connId, db, schema)` nested. QuickOpen
@@ -64,6 +76,36 @@ export default function QuickOpen() {
       const db = status.activeDb;
       if (!db) continue;
 
+      // Shape drives cross-DBMS behavior: `flat` (SQLite/DuckDB) has no schema
+      // layer, so `.`-queries degrade to plain matching and no schema results
+      // are offered. `with-schema` (PG) has a focusable schema row to reveal;
+      // `no-schema` (MySQL) scopes `.` to its database but has no schema row.
+      const shape = resolveRdbTreeShape(conn.dbType);
+      const hasSchema = shape !== "flat";
+      // Precompute the connection name once; per-object lowercasing happens
+      // below so ranking never re-lowercases on every keystroke.
+      const connLower = conn.name.toLowerCase();
+
+      // Schemas are first-class results only for the connection this window's
+      // sidebar actually renders (`with-schema` + the mounted tree), so a
+      // selected schema always reveals visibly instead of no-op'ing.
+      if (shape === "with-schema" && conn.id === sidebarConnId) {
+        for (const s of schemas[conn.id]?.[db] ?? []) {
+          const nameLower = s.name.toLowerCase();
+          result.push({
+            kind: "schema",
+            name: s.name,
+            schema: s.name,
+            connectionId: conn.id,
+            connectionName: conn.name,
+            nameLower,
+            schemaLower: nameLower,
+            connLower,
+            hasSchema,
+          });
+        }
+      }
+
       const tablesBySchema = tables[conn.id]?.[db] ?? {};
       for (const list of Object.values(tablesBySchema)) {
         for (const t of list) {
@@ -73,6 +115,10 @@ export default function QuickOpen() {
             schema: t.schema,
             connectionId: conn.id,
             connectionName: conn.name,
+            nameLower: t.name.toLowerCase(),
+            schemaLower: t.schema.toLowerCase(),
+            connLower,
+            hasSchema,
           });
         }
       }
@@ -86,6 +132,10 @@ export default function QuickOpen() {
             schema: v.schema,
             connectionId: conn.id,
             connectionName: conn.name,
+            nameLower: v.name.toLowerCase(),
+            schemaLower: v.schema.toLowerCase(),
+            connLower,
+            hasSchema,
           });
         }
       }
@@ -102,12 +152,24 @@ export default function QuickOpen() {
             connectionId: conn.id,
             connectionName: conn.name,
             source: f.source,
+            nameLower: f.name.toLowerCase(),
+            schemaLower: f.schema.toLowerCase(),
+            connLower,
+            hasSchema,
           });
         }
       }
     }
     return result;
-  }, [tables, views, functions, connections, activeStatuses]);
+  }, [
+    schemas,
+    tables,
+    views,
+    functions,
+    connections,
+    activeStatuses,
+    sidebarConnId,
+  ]);
 
   useEffect(() => {
     const handler = () => {
@@ -122,17 +184,9 @@ export default function QuickOpen() {
     return () => window.removeEventListener("quick-open", handler);
   }, []);
 
-  // Fuzzy-ish filter: match against "connection.schema.name" and individual parts.
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) => {
-      const haystack =
-        `${item.connectionName} ${item.schema} ${item.name}`.toLowerCase();
-      // every whitespace-separated token must appear
-      return q.split(/\s+/).every((tok) => haystack.includes(tok));
-    });
-  }, [items, search]);
+  // Deterministic ranking + subsequence fuzzy + `schema.name` scoping. Empty
+  // query returns the inventory unchanged. See quickOpenRanking.ts.
+  const filtered = useMemo(() => rankQuickOpen(items, search), [items, search]);
 
   const handleClose = () => {
     setIsOpen(false);
@@ -140,7 +194,16 @@ export default function QuickOpen() {
   };
 
   const handleSelect = (item: QuickOpenItem) => {
-    if (item.kind === "function" || item.kind === "procedure") {
+    if (item.kind === "schema") {
+      // Reveal the schema in the sidebar tree (expand + focus/scroll). The
+      // mounted SchemaTree for this connection consumes the event; see
+      // SchemaTree.tsx's `reveal-schema` listener.
+      window.dispatchEvent(
+        new CustomEvent("reveal-schema", {
+          detail: { connectionId: item.connectionId, schema: item.schema },
+        }),
+      );
+    } else if (item.kind === "function" || item.kind === "procedure") {
       // Open in a new query tab with the function source pre-filled
       window.dispatchEvent(
         new CustomEvent("quickopen-function", {
@@ -262,7 +325,11 @@ export default function QuickOpen() {
                     aria-label={kindLabel}
                   />
                   <span className="text-foreground">{item.name}</span>
-                  <span className="text-muted-foreground">· {item.schema}</span>
+                  {item.kind !== "schema" && (
+                    <span className="text-muted-foreground">
+                      · {item.schema}
+                    </span>
+                  )}
                   <span className="ml-auto truncate text-xs text-muted-foreground">
                     {item.connectionName}
                   </span>
