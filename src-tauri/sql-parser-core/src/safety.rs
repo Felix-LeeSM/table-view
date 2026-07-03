@@ -20,6 +20,14 @@
 //!   - `UPDATE` without a `WHERE` clause
 //!   - `REPLACE …` (MySQL/MariaDB destructive upsert — issue #1115)
 //!   - `RESTORE …` (SQL Server — may overwrite a database)
+//!   - data-modifying CTE — `WITH x AS (DELETE/UPDATE … no WHERE) SELECT …`
+//!     (mirrors the frontend `analyzeDmlCte`; the parser rejects the CTE
+//!     body so this rides the keyword fallback)
+//!
+//! `DROP FUNCTION` / `PROCEDURE` / `ROLE` / `EXTENSION` / `MATERIALIZED VIEW`
+//! are intentionally NOT danger — the frontend classifies them as
+//! `ddl-other` (warn, no confirm dialog), so gating them would permanently
+//! reject legitimate DDL.
 //!
 //! Documented divergence from the frontend: the frontend's *dynamic*
 //! WARN→danger escalation (dry-run showing 100+ affected rows) is a runtime
@@ -138,6 +146,16 @@ fn classify_by_keyword(stmt: &str) -> Severity {
     let upper = normalized.to_uppercase();
     let upper = upper.trim_start();
 
+    // Data-modifying CTE (mirror frontend `analyzeDmlCte`). The parser rejects
+    // a WITH whose CTE body is UPDATE/DELETE/INSERT (CTE bodies are SELECT-only
+    // in-grammar), so a `WITH x AS (DELETE FROM t) SELECT …` reaches this
+    // fallback. The wrapped statement's tier decides — a WHERE-less DELETE /
+    // UPDATE inside a CTE is danger even though the outer form is a SELECT.
+    if starts_with_keyword(upper, "WITH") {
+        if let Some(severity) = classify_dml_cte(upper) {
+            return severity;
+        }
+    }
     // REPLACE … (MySQL/MariaDB destructive upsert, issue #1115). `REPLACE`
     // as the leading keyword only — `CREATE OR REPLACE …` and
     // `SELECT REPLACE(col, …)` do not start with it.
@@ -151,11 +169,7 @@ fn classify_by_keyword(stmt: &str) -> Severity {
         return Severity::Danger;
     }
     if starts_with_keyword(upper, "DROP") {
-        // Mirror the frontend regex danger objects; other DROP objects
-        // (FUNCTION / ROLE / …) are not in the frontend danger set, but a
-        // bare `DROP` fallback is still destructive by intent, so gate any
-        // leading DROP the AST could not parse.
-        return Severity::Danger;
+        return drop_keyword_severity(upper);
     }
     if starts_with_keyword(upper, "DELETE") && !has_where(upper) {
         return Severity::Danger;
@@ -175,6 +189,101 @@ fn classify_by_keyword(stmt: &str) -> Severity {
         }
     }
     Severity::Info
+}
+
+/// Severity of a leading `DROP` the AST could not parse. Mirrors the frontend
+/// split: `DROP TABLE|DATABASE|SCHEMA|INDEX|VIEW|TRIGGER` is danger
+/// (`sqlSafety.ts:656`); every other object (`FUNCTION` / `PROCEDURE` / `ROLE`
+/// / `EXTENSION` / `MATERIALIZED VIEW` / …) is `ddl-other` warn
+/// (`sqlSafety.ts:759`), which the Safe Mode matrix never gates — hard-gating
+/// them would permanently reject legitimate DDL (issue #1112 review B2).
+fn drop_keyword_severity(upper: &str) -> Severity {
+    let after = upper.strip_prefix("DROP").unwrap_or(upper).trim_start();
+    match first_word(after).as_str() {
+        "TABLE" | "DATABASE" | "SCHEMA" | "INDEX" | "VIEW" | "TRIGGER" => Severity::Danger,
+        _ => Severity::Warn,
+    }
+}
+
+/// Classify a `WITH …` statement by its first CTE body — a native port of the
+/// frontend `analyzeDmlCte` (`sqlSafety.ts`). Returns `None` when the first
+/// CTE body is not a write op (the caller then treats the WITH as a read),
+/// matching the frontend's "only the first CTE, worst is the caller's job"
+/// contract (issue #1112 review B1).
+fn classify_dml_cte(upper: &str) -> Option<Severity> {
+    let open = find_cte_body_open_paren(upper)?;
+    let body = balanced_paren_slice(upper, open)?;
+    // Strip the enclosing parens; `body` is `(…)`, both ASCII.
+    let inner = body[1..body.len() - 1].trim();
+    match first_word(inner).as_str() {
+        // WHERE presence decides bounded (warn) vs unbounded (danger), exactly
+        // like the top-level DELETE/UPDATE branches.
+        "DELETE" | "UPDATE" => Some(if has_where(inner) {
+            Severity::Warn
+        } else {
+            Severity::Danger
+        }),
+        "INSERT" => Some(Severity::Info),
+        _ => None,
+    }
+}
+
+/// Byte index of the `(` that opens the first `AS ( … )` CTE body. Mirrors the
+/// frontend regex `AS\s*\(` anchor — the CTE's optional column list `(a, b)`
+/// sits before `AS`, so the first `AS (` is the body opener.
+fn find_cte_body_open_paren(upper: &str) -> Option<usize> {
+    let bytes = upper.as_bytes();
+    let mut i = 0;
+    while i + 2 <= bytes.len() {
+        let is_as_word = &bytes[i..i + 2] == b"AS"
+            && (i == 0 || !is_word_byte(bytes[i - 1]))
+            && (i + 2 >= bytes.len() || !is_word_byte(bytes[i + 2]));
+        if is_as_word {
+            let mut j = i + 2;
+            while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            if bytes.get(j) == Some(&b'(') {
+                return Some(j);
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Slice from the `(` at `open` through its matching `)` (inclusive). Simple
+/// depth counter, mirroring the frontend `extractBalanced`. `(` / `)` are
+/// ASCII and UTF-8 self-synchronising, so byte indexing stays on boundaries.
+fn balanced_paren_slice(upper: &str, open: usize) -> Option<String> {
+    let bytes = upper.as_bytes();
+    if bytes.get(open) != Some(&b'(') {
+        return None;
+    }
+    let mut depth = 0i32;
+    let mut i = open;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(upper[open..=i].to_string());
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Leading identifier word (`[A-Za-z0-9_]+`) of a trimmed string, upper-cased
+/// input assumed. Empty when the string does not start with a word char.
+fn first_word(s: &str) -> String {
+    s.chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect()
 }
 
 /// True when `keyword` is the leading token of `upper` (already
@@ -523,5 +632,83 @@ mod tests {
     fn empty_and_whitespace_are_info() {
         assert_eq!(classify(""), Severity::Info);
         assert_eq!(classify("   \n  "), Severity::Info);
+    }
+
+    // ----------------------------------------------------------------------
+    // Parity mirror — these cases are ported verbatim from the frontend
+    // classifier test suite (`src/lib/sql/sqlSafety.test.ts`). They lock the
+    // backend danger set to the frontend so a change on one side that drifts
+    // the other trips a test. If the frontend cases move, mirror them here.
+    // ----------------------------------------------------------------------
+
+    #[test]
+    fn data_modifying_cte_parity() {
+        // Mirror sqlSafety.test.ts AC-254-04a..e / AC-403-01b. A WITH whose
+        // first CTE body modifies data inherits that statement's tier — the
+        // parser rejects the CTE (SELECT-only bodies), so this rides the
+        // keyword fallback. WHERE-less DELETE/UPDATE inside a CTE is danger.
+        // AC-254-04a — UPDATE WHERE → warn (bounded).
+        assert_eq!(
+            classify(
+                "WITH x AS (UPDATE users SET active = false WHERE id = 1 RETURNING id) SELECT * FROM x"
+            ),
+            Severity::Warn
+        );
+        // AC-254-04b — DELETE WHERE → warn (bounded).
+        assert_eq!(
+            classify("WITH x AS (DELETE FROM users WHERE id = 1 RETURNING id) SELECT * FROM x"),
+            Severity::Warn
+        );
+        // AC-254-04c — DELETE without WHERE → danger (B1 security hole).
+        assert_eq!(
+            classify("WITH x AS (DELETE FROM users RETURNING id) SELECT * FROM x"),
+            Severity::Danger
+        );
+        // UPDATE without WHERE inside a CTE → danger.
+        assert!(is_danger(
+            "WITH x AS (UPDATE users SET active = false RETURNING id) SELECT * FROM x"
+        ));
+        // AC-403-01b — INSERT CTE → info.
+        assert_eq!(
+            classify("WITH x AS (INSERT INTO users (id) VALUES (1) RETURNING id) SELECT * FROM x"),
+            Severity::Info
+        );
+        // AC-254-04e — pure read CTE → info (regression).
+        assert_eq!(
+            classify("WITH x AS (SELECT 1 AS n) SELECT n FROM x"),
+            Severity::Info
+        );
+        // RECURSIVE + column-list forms still detect the modifying body.
+        assert!(is_danger(
+            "WITH RECURSIVE x (id) AS (DELETE FROM users RETURNING id) SELECT * FROM x"
+        ));
+    }
+
+    #[test]
+    fn drop_object_parity_danger_vs_warn() {
+        // Mirror sqlSafety.ts:656 (danger objects) vs :759 (`ddl-other`
+        // warn). B2: only these object kinds are danger.
+        for danger in [
+            "DROP TABLE users",
+            "DROP DATABASE app",
+            "DROP SCHEMA s",
+            "DROP INDEX i",
+            "DROP VIEW v",
+            "DROP TRIGGER t ON users",
+        ] {
+            assert_eq!(classify(danger), Severity::Danger, "{danger}");
+        }
+        // DROP FUNCTION / PROCEDURE / ROLE / EXTENSION / MATERIALIZED VIEW are
+        // `ddl-other` warn on the frontend (no confirm dialog) — gating them
+        // hard-rejects legitimate DDL (B2 regression).
+        for allowed in [
+            "DROP FUNCTION f()",
+            "DROP PROCEDURE p",
+            "DROP ROLE r",
+            "DROP EXTENSION postgis",
+            "DROP MATERIALIZED VIEW mv",
+        ] {
+            assert!(!is_danger(allowed), "{allowed} must not be gated");
+        }
     }
 }
