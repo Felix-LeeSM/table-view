@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { getAllTabsForConnection } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { SearchCatalogSummary } from "@/types/search";
 import SearchSidebar from "./SearchSidebar";
 
@@ -169,6 +170,23 @@ describe("SearchSidebar roving tabindex", () => {
       name: /open search query for idx-a/i,
     });
     expect(queryButton).toHaveAttribute("tabindex", "-1");
+  });
+
+  it("opens the query editor from the keyboard via Shift+Enter (WCAG 2.1.1)", async () => {
+    const tree = await renderTree();
+    const idxA = within(tree).getByRole("treeitem", { name: /idx-a/i });
+    act(() => idxA.focus());
+
+    fireEvent.keyDown(idxA, { key: "Enter", shiftKey: true });
+
+    const queryTabs = getAllTabsForConnection("search-1").filter(
+      (tab) => tab.type === "query",
+    );
+    expect(queryTabs).toHaveLength(1);
+    expect(queryTabs[0]).toMatchObject({
+      type: "query",
+      searchTarget: { kind: "index", name: "idx-a" },
+    });
   });
 
   it("exposes aria-setsize/aria-posinset per section", async () => {

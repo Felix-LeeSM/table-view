@@ -134,6 +134,19 @@ describe("useTreeRoving keymap", () => {
     expect(result.current.focusKey).toBe("b");
   });
 
+  it("re-anchors to the first surviving row when the anchor is filtered out", () => {
+    const c = container();
+    const { result, rerender } = renderHook(
+      ({ rows }: { rows: TreeRovingRow[] }) => useTreeRoving(rows, () => {}, c),
+      { initialProps: { rows: [row("a", 0, null), row("b", 0, null)] } },
+    );
+    act(() => result.current.setFocusKey("b"));
+    expect(result.current.focusKey).toBe("b");
+    // "b" disappears (filter/collapse) — the single tab stop must not be lost.
+    rerender({ rows: [row("a", 0, null)] });
+    expect(result.current.focusKey).toBe("a");
+  });
+
   it("scrollToIndex receives the full-list index before focusing", () => {
     const rows = [
       row("a", 0, null),

@@ -79,8 +79,24 @@ export function useTreeRoving(
   scrollToIndex?: (index: number) => void,
 ): TreeRoving {
   const [focusKey, setFocusKeyState] = useState<string | null>(null);
+
+  // The anchored key can vanish from the visible list (a filter hides it, a
+  // collapse drops it). A non-null-but-absent anchor would leave NO row with
+  // `tabIndex=0`, so the whole tree falls out of the tab order — re-anchor to
+  // the first surviving focusable row so exactly one tab stop always exists.
+  // (Null stays null: the initial "nothing focused yet" state, where callers
+  // render the first row as the default tab stop.) Fixing this in the hook
+  // resolves every tree at once. ponytail: first-surviving, not nearest-by-
+  // old-index — tracking the removed row's prior position is a larger change
+  // than the tab-stop-loss bug warrants.
+  const focusableKeys = rows.filter((r) => r.focusable).map((r) => r.key);
+  const effectiveFocusKey =
+    focusKey === null || focusableKeys.includes(focusKey)
+      ? focusKey
+      : (focusableKeys[0] ?? null);
+
   const focusKeyRef = useRef<string | null>(null);
-  focusKeyRef.current = focusKey;
+  focusKeyRef.current = effectiveFocusKey;
 
   // Stable refs so the keydown handler doesn't need rows/callbacks in deps.
   const rowsRef = useRef(rows);
@@ -200,5 +216,5 @@ export function useTreeRoving(
     [focusByKey],
   );
 
-  return { focusKey, setFocusKey: syncFocusKey, onKeyDown };
+  return { focusKey: effectiveFocusKey, setFocusKey: syncFocusKey, onKeyDown };
 }

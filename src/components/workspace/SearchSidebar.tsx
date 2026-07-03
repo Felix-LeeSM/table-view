@@ -380,6 +380,15 @@ function CatalogRow({
       onDoubleClick={() => onSelect(entry, true)}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
+        // Secondary action (open query editor) is keyboard-reachable via
+        // Shift+Enter — mirrors the data grid's Shift+Enter variant and keeps
+        // the inline query button operable without tab order (WCAG 2.1.1).
+        if (event.key === "Enter" && event.shiftKey) {
+          if (!canQueryTarget(entry)) return;
+          event.preventDefault();
+          onOpenQuery(entry);
+          return;
+        }
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
         onSelect(entry);
