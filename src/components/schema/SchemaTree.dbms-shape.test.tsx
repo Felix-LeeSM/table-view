@@ -178,13 +178,13 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // Sprint 144 (AC-145-1) — PG: every schema auto-expands on first paint
+  // #1217 — PG: only the FIRST schema seeds expanded (supersedes AC-145-1).
   // ─────────────────────────────────────────────────────────────────────
-  it("PG auto-expands every schema returned by the catalog on first paint (AC-145-1)", async () => {
-    // The 2026-04-27 user feedback complained that connecting to a PG
-    // database with multiple custom schemas required clicking every
-    // chevron individually before any tables appeared. The unified-view
-    // contract (Q4=B) wants every schema visible at once.
+  it("PG seeds only the first schema expanded on first paint (#1217 supersedes AC-145-1)", async () => {
+    // #1217 reversed the sprint-144 "expand every schema" seed: a
+    // connection with hundreds of schemas × tables produced a ~9,000-row
+    // wall. The product rule now seeds only the first schema open; the rest
+    // stay collapsed (but still carry a table-count badge for overview).
     useConnectionStore.setState({
       connections: [makeConnection("pg-multi", "postgresql")],
     });
@@ -211,16 +211,21 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
       render(<SchemaTree connectionId="pg-multi" />);
     });
 
-    for (const name of ["public", "analytics", "audit"]) {
+    expect(screen.getByLabelText("public schema")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    for (const name of ["analytics", "audit"]) {
       expect(screen.getByLabelText(`${name} schema`)).toHaveAttribute(
         "aria-expanded",
-        "true",
+        "false",
       );
     }
-    // Every table row is reachable without a single click.
+    // The first schema's tables are reachable without a click; the
+    // collapsed schemas' tables are not rendered.
     expect(screen.getByLabelText("users table")).toBeInTheDocument();
-    expect(screen.getByLabelText("events table")).toBeInTheDocument();
-    expect(screen.getByLabelText("trail table")).toBeInTheDocument();
+    expect(screen.queryByLabelText("events table")).toBeNull();
+    expect(screen.queryByLabelText("trail table")).toBeNull();
   });
 
   it("PG schema auto-expand remains togglable via click (collapse → expand) (AC-145-1)", async () => {

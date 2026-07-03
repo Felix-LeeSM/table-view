@@ -469,7 +469,9 @@ describe("SchemaTree — expand", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    expect(screen.getByText("3")).toBeInTheDocument();
+    // #1217 added a schema-node table-count badge, so "3" now appears twice:
+    // once on the `public` schema row and once on the Tables category row.
+    expect(screen.getAllByText("3")).toHaveLength(2);
   });
 
   it("does not show count badge when there are zero tables", async () => {
@@ -571,11 +573,10 @@ describe("SchemaTree — expand", () => {
     expect(schemaButton).toHaveAttribute("aria-expanded", "true");
   });
 
-  // AC-EXPAND-02 (sprint 144 update): pre-S144 only the schema matching the
-  // active tab was auto-expanded; S144 (AC-145-1) extended auto-expand to
-  // ALL schemas on first paint, so this test now verifies the new
-  // contract — every schema is expanded regardless of active tab.
-  it("auto-expands ALL schemas on mount regardless of active tab (sprint 144)", async () => {
+  // AC-EXPAND-02 (#1217 update): S144 (AC-145-1) expanded ALL schemas on
+  // first paint; #1217 supersedes that with the "first schema only" seed.
+  // The active-tab schema still auto-expands on top of the seed.
+  it("seeds only the first schema on mount; other schemas stay collapsed (#1217)", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }, { name: "analytics" }] },
       tables: {
@@ -586,9 +587,8 @@ describe("SchemaTree — expand", () => {
       },
     });
 
-    // Set active tab to public.users — pre-S144 this would have been the
-    // only signal expanding `public`. Post-S144, both schemas expand
-    // unconditionally.
+    // Set active tab to public.users — this expands `public`, which is
+    // also the first (seeded) schema. `analytics` stays collapsed.
     useWorkspaceStore.setState(
       seedWorkspace(
         [
@@ -611,14 +611,14 @@ describe("SchemaTree — expand", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // BOTH schemas must be expanded on first paint.
+    // First (and active-tab) schema expanded; the rest collapsed.
     expect(screen.getByLabelText("public schema")).toHaveAttribute(
       "aria-expanded",
       "true",
     );
     expect(screen.getByLabelText("analytics schema")).toHaveAttribute(
       "aria-expanded",
-      "true",
+      "false",
     );
   });
 

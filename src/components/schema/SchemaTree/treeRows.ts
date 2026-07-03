@@ -194,6 +194,11 @@ export type VisibleRow =
       isExpanded: boolean;
       isLoadingTables: boolean;
       isSelected: boolean;
+      // #1217 — count of tables currently in view for this schema (the
+      // full count normally, or the filtered count during a global
+      // filter). Rendered as a badge so a collapsed schema still gives an
+      // at-a-glance overview.
+      tableCount: number;
     }
   | {
       kind: "loading";
@@ -248,6 +253,13 @@ export interface BuildVisibleRowsArgs {
   activeSchema: string | null;
   activeTable: string | null;
   tableSearch: Record<string, string>;
+  // #1217 — when the top-level global filter is active the caller has
+  // already narrowed `schemas` / `tables` / `views` / `functions` to the
+  // matches and forced the matching schemas expanded. This flag tells the
+  // builder to (a) skip the per-schema search input, (b) hide categories
+  // with no matches, and (c) force the surviving categories open so the
+  // matches are visible — filter visibility overrides the collapse rule.
+  globalFilterActive?: boolean;
 }
 
 /**
@@ -269,6 +281,7 @@ export function getVisibleRows({
   activeSchema,
   activeTable,
   tableSearch,
+  globalFilterActive = false,
 }: BuildVisibleRowsArgs): VisibleRow[] {
   const rows: VisibleRow[] = [];
 
@@ -289,6 +302,7 @@ export function getVisibleRows({
       isExpanded,
       isLoadingTables,
       isSelected: selectedNodeId === schemaId,
+      tableCount: schemaTables.length,
     });
 
     if (!isExpanded) return;
@@ -304,7 +318,6 @@ export function getVisibleRows({
 
     for (const cat of CATEGORIES) {
       const expanded = expandedCategories[schema.name] ?? DEFAULT_EXPANDED;
-      const catExpanded = expanded.has(cat.key);
       const categoryId = nodeIdToString({
         type: "category",
         schema: schema.name,
@@ -353,6 +366,11 @@ export function getVisibleRows({
           : unfilteredItems
         : unfilteredItems;
 
+      // #1217 — during a global filter, drop categories with no matches and
+      // force the surviving ones open so the matches are always visible.
+      if (globalFilterActive && items.length === 0) continue;
+      const catExpanded = globalFilterActive ? true : expanded.has(cat.key);
+
       rows.push({
         kind: "category",
         key: categoryId,
@@ -365,7 +383,7 @@ export function getVisibleRows({
 
       if (!catExpanded) continue;
 
-      if (isTableCat && unfilteredItems.length > 0) {
+      if (isTableCat && unfilteredItems.length > 0 && !globalFilterActive) {
         rows.push({
           kind: "search",
           key: `search:${schema.name}`,
@@ -441,4 +459,79 @@ export function getVisibleRows({
   });
 
   return rows;
+}
+
+export interface FilteredTree {
+  schemas: ReadonlyArray<{ name: string }>;
+  tables: Record<string, TableInfo[]>;
+  views: Record<string, ViewInfo[]>;
+  functions: Record<string, FunctionInfo[]>;
+  // Schema names that survived the filter and should be force-expanded.
+  // `null` when no filter is active (caller keeps its own expansion state).
+  matchedSchemaNames: Set<string> | null;
+}
+
+interface FilterTreeInput {
+  schemas: ReadonlyArray<{ name: string }>;
+  tables: Record<string, TableInfo[]>;
+  views: Record<string, ViewInfo[]>;
+  functions: Record<string, FunctionInfo[]>;
+}
+
+/**
+ * #1217 — global sidebar filter. Narrows the tree to schemas / objects whose
+ * name contains `query` (case-insensitive). A schema is kept when its own
+ * name matches (then all of its objects are shown) or when any of its
+ * tables / views / functions match (then only the matching objects are
+ * shown). `keepEmptySchemas` keeps a shape's single implicit schema even
+ * when nothing matches, so no-schema (MySQL) / flat (SQLite) trees render a
+ * "no matches" placeholder instead of a blank pane.
+ *
+ * When `query` is blank the inputs are returned by reference (no filtering,
+ * `matchedSchemaNames = null`) so the caller's memoisation is undisturbed.
+ */
+export function applyGlobalFilter(
+  query: string,
+  keepEmptySchemas: boolean,
+  input: FilterTreeInput,
+): FilteredTree {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    return {
+      schemas: input.schemas,
+      tables: input.tables,
+      views: input.views,
+      functions: input.functions,
+      matchedSchemaNames: null,
+    };
+  }
+
+  const matched = new Set<string>();
+  const tables: Record<string, TableInfo[]> = {};
+  const views: Record<string, ViewInfo[]> = {};
+  const functions: Record<string, FunctionInfo[]> = {};
+  const schemas: { name: string }[] = [];
+  const byName = (item: { name: string }) =>
+    item.name.toLowerCase().includes(q);
+
+  for (const schema of input.schemas) {
+    const name = schema.name;
+    const schemaNameMatch = name.toLowerCase().includes(q);
+    const allTables = input.tables[name] ?? [];
+    const allViews = input.views[name] ?? [];
+    const allFunctions = input.functions[name] ?? [];
+    const t = schemaNameMatch ? allTables : allTables.filter(byName);
+    const v = schemaNameMatch ? allViews : allViews.filter(byName);
+    const f = schemaNameMatch ? allFunctions : allFunctions.filter(byName);
+    const hasMatch =
+      schemaNameMatch || t.length > 0 || v.length > 0 || f.length > 0;
+    if (!hasMatch && !keepEmptySchemas) continue;
+    matched.add(name);
+    schemas.push(schema);
+    tables[name] = t;
+    views[name] = v;
+    functions[name] = f;
+  }
+
+  return { schemas, tables, views, functions, matchedSchemaNames: matched };
 }

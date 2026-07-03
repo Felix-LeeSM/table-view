@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -9,6 +9,8 @@ import {
   FileText,
   Rows3,
   Plus,
+  Search,
+  X,
 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useActiveTab } from "@stores/workspaceStore";
@@ -26,6 +28,7 @@ import {
 import { Button } from "@components/ui/button";
 import { resolveRdbTreeShape, type RdbTreeShape } from "./treeShape";
 import {
+  applyGlobalFilter,
   getVisibleRows,
   nodeIdToString,
   ROW_HEIGHT_ESTIMATE,
@@ -151,22 +154,52 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   // 중복 효과를 두면 user 의 collapse 가 매 store 업데이트마다 다시 덮이는
   // 회귀가 발생.
 
+  // #1217 — top-level global filter. `applyGlobalFilter` narrows schemas +
+  // objects to the matches (or returns the inputs by reference when the box
+  // is empty). No-schema (MySQL) / flat (SQLite) keep their single implicit
+  // schema so an empty match still shows a placeholder rather than a blank
+  // pane. The matching schemas are force-expanded (filter visibility beats
+  // the collapse rule); non-`with-schema` shapes are always expanded anyway.
+  const globalFilterActive = actions.globalFilter.trim().length > 0;
+  const filtered = useMemo(
+    () =>
+      applyGlobalFilter(actions.globalFilter, treeShape !== "with-schema", {
+        schemas: actions.schemas,
+        tables,
+        views,
+        functions,
+      }),
+    [
+      actions.globalFilter,
+      treeShape,
+      actions.schemas,
+      tables,
+      views,
+      functions,
+    ],
+  );
+  const effectiveExpandedSchemas =
+    globalFilterActive && filtered.matchedSchemaNames
+      ? filtered.matchedSchemaNames
+      : actions.expandedSchemas;
+
   // The flat visible-rows list is computed unconditionally — a single
   // walk over already-derived state — so the threshold check is one
   // comparison and the virtualized/eager branches index the same data.
   const visibleRows = getVisibleRows({
-    schemas: actions.schemas,
-    expandedSchemas: actions.expandedSchemas,
+    schemas: filtered.schemas,
+    expandedSchemas: effectiveExpandedSchemas,
     expandedCategories: actions.expandedCategories,
     loadingTables: actions.loadingTables,
-    tables,
-    views,
-    functions,
+    tables: filtered.tables,
+    views: filtered.views,
+    functions: filtered.functions,
     connectionId,
     selectedNodeId: actions.selectedNodeId,
     activeSchema: activeSchema ?? null,
     activeTable: activeTable ?? null,
     tableSearch: actions.tableSearch,
+    globalFilterActive,
   });
 
   // Only `with-schema` fans out far enough to need virtualization
@@ -247,6 +280,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     t: (key, options) => t(key, options as Record<string, unknown>),
     dbType,
     treeShape,
+    globalFilterActive,
     rovingFocusKey: roving.focusKey ?? firstFocusableKey,
     onFocusRow: roving.setFocusKey,
     toggleCategory: actions.toggleCategory,
@@ -482,6 +516,35 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         </div>
       </div>
 
+      {/* #1217 — top-level global filter. Lives outside `role="tree"` (like
+          the Pinned/Recent sections) so its input never enters the tree's
+          roving-tabindex model (#1129). Matches across every schema and
+          object; matching schemas auto-expand so the collapse-by-default
+          rule is overridden while filtering. */}
+      {actions.schemas.length > 0 && (
+        <div className="flex items-center gap-1 px-3 py-1">
+          <Search size={12} className="shrink-0 text-muted-foreground" />
+          <input
+            type="text"
+            className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-2xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            placeholder={t("filterAllPlaceholder")}
+            value={actions.globalFilter}
+            onChange={(e) => actions.setGlobalFilter(e.target.value)}
+            aria-label={t("filterAllAria")}
+          />
+          {actions.globalFilter && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => actions.setGlobalFilter("")}
+              aria-label={t("clearFilterAllAria")}
+            >
+              <X />
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* #1218 — Pinned + Recent table sections. Rendered above the tree and
           outside `role="tree"` so their native <button> rows stay
           keyboard-reachable without touching the tree's roving-tabindex
@@ -505,13 +568,13 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         onKeyDown={roving.onKeyDown}
       >
         <SchemaTreeBody
-          schemas={actions.schemas}
+          schemas={filtered.schemas}
           treeShape={treeShape}
-          expandedSchemas={actions.expandedSchemas}
+          expandedSchemas={effectiveExpandedSchemas}
           loadingTables={actions.loadingTables}
-          tables={tables}
-          views={views}
-          functions={functions}
+          tables={filtered.tables}
+          views={filtered.views}
+          functions={filtered.functions}
           fileAnalyticsSources={fileAnalyticsSources}
           connectionId={connectionId}
           selectedNodeId={actions.selectedNodeId}
@@ -523,6 +586,11 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           rowVirtualizer={rowVirtualizer}
           ctx={ctx}
         />
+        {globalFilterActive && filtered.schemas.length === 0 && (
+          <div className="px-3 py-2 text-2xs italic text-muted-foreground">
+            {t("noFilterMatches")}
+          </div>
+        )}
       </div>
 
       {/* Sprint 235 — Phase 27 Rename / Drop modal slots replacing the
