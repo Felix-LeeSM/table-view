@@ -173,7 +173,13 @@ function isQueryCancellationMessage(message: string): boolean {
     normalized.includes("operation cancelled") ||
     normalized.includes("operation canceled") ||
     normalized.includes("canceling statement due to user request") ||
-    normalized.includes("cancelling statement due to user request")
+    normalized.includes("cancelling statement due to user request") ||
+    // Issue #1230 (PR #1241 review) — MySQL/MariaDB surface a native KILL
+    // QUERY as ER_QUERY_INTERRUPTED (1317). Backend `finalize_cancelled`
+    // normally rewrites this to "Query cancelled", but keep a frontend
+    // backstop so an interrupt reaching here still lands on cancelled and no
+    // DBMS-specific asymmetry survives.
+    normalized.includes("query execution was interrupted")
   );
 }
 
