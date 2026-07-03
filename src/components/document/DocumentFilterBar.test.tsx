@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { EditorView } from "@codemirror/view";
+import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
 import DocumentFilterBar, {
   type DocumentFilterBarProps,
 } from "./DocumentFilterBar";
+import { expectUndoRevertsEdit } from "../query/__tests__/editorHistoryHelpers";
 
 function renderBar(overrides: Partial<DocumentFilterBarProps> = {}) {
   const props: DocumentFilterBarProps = {
@@ -31,6 +32,14 @@ function setRawText(text: string) {
       changes: { from: 0, to: view.state.doc.length, insert: text },
     });
   });
+}
+
+function getKeymapBindings(view: EditorView): KeyBinding[] {
+  const bindings: KeyBinding[] = [];
+  for (const set of view.state.facet(keymap)) {
+    if (Array.isArray(set)) bindings.push(...set);
+  }
+  return bindings;
 }
 
 describe("DocumentFilterBar", () => {
@@ -86,6 +95,17 @@ describe("DocumentFilterBar", () => {
 
     // First field is "age" with default operator "$eq"; "Ada" stays a string.
     expect(onApply).toHaveBeenCalledWith({ age: { $eq: "Ada" } });
+  });
+
+  // #1247 — Raw MQL editor was assembled without history() + historyKeymap,
+  // so Cmd+Z did nothing (inconsistent with the query editors fixed in #1225).
+  it("reverts a Raw MQL edit via undo and binds Mod-z (#1247)", () => {
+    renderBar();
+    fireEvent.click(screen.getByRole("radio", { name: "Raw MQL" }));
+
+    const view = getRawEditorView();
+    expect(getKeymapBindings(view).some((b) => b.key === "Mod-z")).toBe(true);
+    expectUndoRevertsEdit(view);
   });
 
   it("renders the Raw MQL CodeMirror editor with role=textbox", () => {

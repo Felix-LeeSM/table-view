@@ -9,6 +9,7 @@ import AddDocumentModal, {
   type AddDocumentModalProps,
 } from "./AddDocumentModal";
 import { useDocumentStore } from "@/test-utils/documentStore";
+import { expectUndoRevertsEdit } from "../query/__tests__/editorHistoryHelpers";
 
 function getEditorContainer(): HTMLElement {
   return screen.getByLabelText("Document JSON");
@@ -164,6 +165,16 @@ describe("AddDocumentModal", () => {
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith({ name: "Grace" });
+  });
+
+  // #1247 — the modal editor was assembled without history() + historyKeymap,
+  // so Cmd+Z did nothing (inconsistent with the query editors fixed in #1225).
+  it("reverts an edit via undo and binds Mod-z (#1247)", () => {
+    renderModal();
+
+    const view = getEditorView();
+    expect(getKeymapBindings(view).some((b) => b.key === "Mod-z")).toBe(true);
+    expectUndoRevertsEdit(view);
   });
 
   // Sprint 121 — CodeMirror migration
