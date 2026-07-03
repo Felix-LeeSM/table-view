@@ -524,7 +524,11 @@ export async function executeRdbQuery({
   }
 
   if (statements.length === 1) {
-    await runRdbSingle(sql, fileAnalyticsHistory);
+    // Issue #1223 — dispatch the comment-stripped `statements[0]`, not the raw
+    // editor `sql`. Re-injecting `sql` here bypassed the #1118 comment-only
+    // filter, so a trailing `;`-plus-comment tail reached the driver as a
+    // second statement and failed with a syntax error.
+    await runRdbSingle(statements[0]!, fileAnalyticsHistory);
     return;
   }
   await runRdbBatch(statements, sql);
