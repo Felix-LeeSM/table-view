@@ -191,9 +191,26 @@ describe("SchemaTree scroll clipping (#1222)", () => {
     // jsdom doesn't reflow, so set scrollTop directly then dispatch the
     // event the virtualizer listens for.
     container.scrollTop = 520;
-    await act(async () => {
-      container.dispatchEvent(new Event("scroll"));
-    });
+    // #1197/#1238 — the scroll event arms @tanstack/virtual-core's
+    // isScrolling-reset debounce (a 150ms `setTimeout`,
+    // `isScrollingResetDelay`). unmount cleanup only detaches the scroll
+    // listener; it does NOT clear this pending timer. Left pending it fires
+    // after jsdom teardown and crashes the whole vitest run with an
+    // unhandled `ReferenceError: window is not defined`. Fake timers flush
+    // it deterministically here, while the window still exists — the same
+    // pattern as SchemaTree.workspace-state.test.tsx (a real-timer wait is
+    // slower and races the debounce under a loaded CI event loop).
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        container.dispatchEvent(new Event("scroll"));
+      });
+      act(() => {
+        vi.runOnlyPendingTimers();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
 
     // Scrolled 520px, but the 260px header means the list itself is only
     // 260px in. With `scrollMargin` the window is computed from the list
@@ -202,13 +219,6 @@ describe("SchemaTree scroll clipping (#1222)", () => {
     // 520px deep and drops table_0000 far above the window.
     expect(screen.getByLabelText("table_0000 table")).toBeInTheDocument();
 
-    // #1238 — the virtualizer's scroll handler schedules a 150ms debounce
-    // (`isScrollingResetDelay`) via setTimeout. Flush it while the tree is
-    // still mounted so it can't fire after the jsdom window is torn down
-    // ("window is not defined").
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    });
     unmount();
   });
 });
