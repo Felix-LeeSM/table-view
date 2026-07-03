@@ -151,7 +151,8 @@ export default function HeaderRow({
                     : "descending"
                   : "none"
               }
-              className="relative flex cursor-pointer flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
+              tabIndex={0}
+              className="relative flex cursor-pointer flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-ring"
               onMouseDown={(e) => {
                 sortMouseStartRef.current = { x: e.clientX, y: e.clientY };
               }}
@@ -162,6 +163,16 @@ export default function HeaderRow({
                   sortMouseStartRef.current = null;
                   if (dx > 4 || dy > 4) return;
                 }
+                if (editingCell) onSaveCurrentEdit();
+                onSort(col.name, e.shiftKey);
+              }}
+              onKeyDown={(e) => {
+                // issue #1130 AC3 — 정렬 헤더 키보드 도달. Enter/Space 로 정렬,
+                // Shift 는 shift+click 과 동일하게 multi-sort append. 내부 resize
+                // separator / context menu item 에서 버블한 키는 무시(자기 셀만).
+                if (e.target !== e.currentTarget) return;
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
                 if (editingCell) onSaveCurrentEdit();
                 onSort(col.name, e.shiftKey);
               }}
