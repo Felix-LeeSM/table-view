@@ -1,10 +1,11 @@
-// Purpose: HeaderRow 정렬 헤더 키보드 도달 가드 (issue #1130 AC3). columnheader
-// 는 focusable(tabindex=0) 이어야 하고 Enter/Space 로 onSort 를 부른다 (Shift 는
-// multi-sort append). aria-sort 노출도 회귀 가드. HeaderRow 는 RDB + Document
-// 그리드 공유(DataGridHeaderRow)라 한 곳 고치면 둘 다 커버. (2026-07-03)
+// Purpose: HeaderRow 정렬 헤더 키보드 도달 가드 (issue #1130 AC3). 헤더행은
+// 단일 roving tab stop(첫 columnheader tabindex 0, 나머지 -1)이고 ArrowLeft/
+// Right 로 이동, Enter/Space 로 onSort 를 부른다 (Shift 는 multi-sort append).
+// aria-sort 노출도 회귀 가드. HeaderRow 는 RDB + Document 그리드 공유
+// (DataGridHeaderRow)라 한 곳 고치면 둘 다 커버. (2026-07-03)
 
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import HeaderRow from "./HeaderRow";
 import type { SortInfo, TableData } from "@/types/schema";
 
@@ -44,12 +45,44 @@ function makeProps(over: Record<string, unknown> = {}) {
 }
 
 describe("HeaderRow keyboard sort (issue #1130 AC3)", () => {
-  it("columnheader is focusable (tabindex 0)", () => {
+  it("header exposes a single roving tab stop (first columnheader)", () => {
     render(<HeaderRow {...makeProps()} />);
     const headers = screen.getAllByRole("columnheader");
-    for (const h of headers) {
-      expect(h).toHaveAttribute("tabindex", "0");
-    }
+    expect(headers[0]).toHaveAttribute("tabindex", "0");
+    expect(headers[1]).toHaveAttribute("tabindex", "-1");
+    const stops = headers.filter((h) => h.getAttribute("tabindex") === "0");
+    expect(stops).toHaveLength(1);
+  });
+
+  it("ArrowRight moves the header roving tab stop + focus", () => {
+    render(<HeaderRow {...makeProps()} />);
+    const headers = screen.getAllByRole("columnheader");
+    act(() => headers[0]!.focus());
+    fireEvent.keyDown(headers[0]!, { key: "ArrowRight" });
+    expect(headers[1]).toHaveAttribute("tabindex", "0");
+    expect(headers[0]).toHaveAttribute("tabindex", "-1");
+    expect(headers[1]).toHaveFocus();
+  });
+
+  it("ArrowLeft/Home/End move within the header row (clamped)", () => {
+    render(<HeaderRow {...makeProps()} />);
+    const headers = screen.getAllByRole("columnheader");
+    act(() => headers[0]!.focus());
+
+    // End -> last column.
+    fireEvent.keyDown(headers[0]!, { key: "End" });
+    expect(headers[1]).toHaveAttribute("tabindex", "0");
+    expect(headers[1]).toHaveFocus();
+
+    // Home -> first column.
+    fireEvent.keyDown(headers[1]!, { key: "Home" });
+    expect(headers[0]).toHaveAttribute("tabindex", "0");
+    expect(headers[0]).toHaveFocus();
+
+    // ArrowLeft at the first column clamps (no wrap).
+    fireEvent.keyDown(headers[0]!, { key: "ArrowLeft" });
+    expect(headers[0]).toHaveAttribute("tabindex", "0");
+    expect(headers[0]).toHaveFocus();
   });
 
   it("Enter on a focused columnheader triggers onSort", () => {
