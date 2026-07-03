@@ -257,14 +257,24 @@ async fn fetch_remaining_select_rows(
         result.cursor_id = next.cursor_id;
     }
 
-    // Truncated if we hold more than the cap, or stopped with the cursor still
-    // open. Trim to exactly the cap so the wire payload is bounded.
-    let truncated = result.rows.len() > row_cap || result.has_more_rows;
-    if result.rows.len() > row_cap {
-        result.rows.truncate(row_cap);
-    }
-
+    let truncated = apply_oracle_row_cap(&mut result.rows, result.has_more_rows, row_cap);
     Ok((result, truncated))
+}
+
+/// Issue #1231 — decide truncation and trim the last (transient over-cap)
+/// batch to exactly `row_cap`. Pure so the off-by-one at the cap boundary is
+/// unit-tested without a live Oracle. Truncated iff we hold more than the cap
+/// OR the cursor is still open (a stopped-early scan).
+fn apply_oracle_row_cap(
+    rows: &mut Vec<oracle_rs::Row>,
+    has_more_rows: bool,
+    row_cap: usize,
+) -> bool {
+    let truncated = rows.len() > row_cap || has_more_rows;
+    if rows.len() > row_cap {
+        rows.truncate(row_cap);
+    }
+    truncated
 }
 
 fn ensure_select_fully_fetched(result: &OracleQueryResult) -> Result<(), AppError> {
@@ -692,6 +702,52 @@ mod tests {
             Err(AppError::Unsupported(message))
                 if message.contains("unfetched rows")
         ));
+    }
+
+    // Issue #1231 — when the fetch stopped at the cap the cursor still reports
+    // `has_more_rows`, and that must NOT trip the fully-fetched guard. The
+    // sibling test above locks the guard-ACTIVE path (truncated=false + more
+    // rows → Err); this locks the guard-SKIP path.
+    #[test]
+    fn select_result_normalization_skips_guard_when_truncated_1231() {
+        let result = OracleQueryResult {
+            columns: vec![OracleColumnInfo::new("ID", OracleType::Number)],
+            rows: vec![Row::new(vec![Value::Integer(1)])],
+            rows_affected: 0,
+            has_more_rows: true,
+            cursor_id: 7,
+        };
+
+        let normalized = normalize_select_result(result, 7, true)
+            .expect("truncated result must skip the fully-fetched guard");
+        assert!(normalized.truncated, "truncated flag must propagate");
+        assert_eq!(normalized.total_count, 1);
+    }
+
+    // Issue #1231 — cap boundary / off-by-one on the transient over-cap batch.
+    #[test]
+    fn apply_oracle_row_cap_trims_and_flags_boundaries_1231() {
+        let row = || Row::new(vec![Value::Integer(1)]);
+
+        // Over cap, cursor closed → trim to cap, truncated.
+        let mut rows: Vec<Row> = (0..5).map(|_| row()).collect();
+        assert!(apply_oracle_row_cap(&mut rows, false, 2));
+        assert_eq!(rows.len(), 2, "must trim to exactly the cap");
+
+        // Exactly cap, cursor closed → no trim, not truncated.
+        let mut rows: Vec<Row> = (0..2).map(|_| row()).collect();
+        assert!(!apply_oracle_row_cap(&mut rows, false, 2));
+        assert_eq!(rows.len(), 2);
+
+        // At cap but cursor still open → truncated (a stopped-early scan).
+        let mut rows: Vec<Row> = (0..2).map(|_| row()).collect();
+        assert!(apply_oracle_row_cap(&mut rows, true, 2));
+        assert_eq!(rows.len(), 2);
+
+        // Under cap, cursor closed → untouched, not truncated.
+        let mut rows: Vec<Row> = (0..3).map(|_| row()).collect();
+        assert!(!apply_oracle_row_cap(&mut rows, false, 10));
+        assert_eq!(rows.len(), 3);
     }
 
     #[test]

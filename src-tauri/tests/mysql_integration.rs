@@ -148,6 +148,42 @@ async fn test_mysql_select_query_returns_columns_and_rows() {
     adapter.disconnect_pool().await.ok();
 }
 
+/// Issue #1231 — MySQL mirror of the PG row-cap boundary test. Explicit cap
+/// arg (no global), 3-row UNION, silent-skip without a live MySQL.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_row_cap_truncates_select_1231() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let sql = "SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3";
+
+    let capped = adapter
+        .execute_query(sql, None, 2)
+        .await
+        .expect("capped SELECT should succeed");
+    assert_eq!(capped.rows.len(), 2, "row cap must bound fetched rows");
+    assert!(capped.truncated, "truncated must be set at the cap");
+    assert_eq!(capped.total_count, 2);
+
+    let full = adapter
+        .execute_query(sql, None, 10)
+        .await
+        .expect("uncapped SELECT should succeed");
+    assert_eq!(full.rows.len(), 3);
+    assert!(!full.truncated, "under-cap results must not be truncated");
+
+    let boundary = adapter
+        .execute_query(sql, None, 3)
+        .await
+        .expect("boundary SELECT should succeed");
+    assert_eq!(boundary.rows.len(), 3);
+    assert!(!boundary.truncated, "cap == row count must not truncate");
+
+    adapter.disconnect_pool().await.ok();
+}
+
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_call_procedure_returns_result_rows() {

@@ -22,9 +22,12 @@ pub const MAX_ROW_CAP: usize = 1_000_000;
 
 // ponytail: process-global with a benign race — the `execute_query` command
 // stores the freshly-read persisted value right before dispatch, and each
-// adapter reads it once at fetch start. Windows share one process, so a
-// mid-flight cap change only affects the *next* query, which is acceptable
-// for a display ceiling. Per-query threading would churn the whole
+// adapter reads it once at fetch start. All windows/queries share this one
+// cell, so a cap change (or a concurrent query that just published a
+// different value) can affect an in-flight query's fetch loop, not only the
+// next one. That is bounded and harmless for a display ceiling: every writer
+// stores a value validated into [MIN, MAX], and a query reads a cap at least
+// as fresh as its own dispatch. Per-query threading would churn the whole
 // `execute_sql` trait surface for no correctness gain here.
 static ROW_CAP: AtomicUsize = AtomicUsize::new(DEFAULT_ROW_CAP);
 

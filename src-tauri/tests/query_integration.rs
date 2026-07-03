@@ -48,6 +48,47 @@ async fn test_select_query_returns_columns_and_rows() {
     adapter.disconnect_pool().await.ok();
 }
 
+/// Issue #1231 — the row cap must stop the fetch at exactly `cap` rows and
+/// flag `truncated`. Uses the explicit cap arg (not the global) so it cannot
+/// leak into any sibling test. A 3-row UNION is dialect-agnostic and needs no
+/// table lifecycle. Silent-skips when no live Postgres is up.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_row_cap_truncates_select_1231() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let sql = "SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3";
+
+    // cap below the row count → exactly cap rows, truncated.
+    let capped = adapter
+        .execute_query(sql, None, 2)
+        .await
+        .expect("capped SELECT should succeed");
+    assert_eq!(capped.rows.len(), 2, "row cap must bound fetched rows");
+    assert!(capped.truncated, "truncated must be set at the cap");
+    assert_eq!(capped.total_count, 2);
+
+    // cap above the row count → all rows, not truncated.
+    let full = adapter
+        .execute_query(sql, None, 10)
+        .await
+        .expect("uncapped SELECT should succeed");
+    assert_eq!(full.rows.len(), 3);
+    assert!(!full.truncated, "under-cap results must not be truncated");
+
+    // exactly at the row count → no (cap+1)th row, so not truncated.
+    let boundary = adapter
+        .execute_query(sql, None, 3)
+        .await
+        .expect("boundary SELECT should succeed");
+    assert_eq!(boundary.rows.len(), 3);
+    assert!(!boundary.truncated, "cap == row count must not truncate");
+
+    adapter.disconnect_pool().await.ok();
+}
+
 /// Integration test for DML query execution
 #[tokio::test]
 #[serial_test::serial]

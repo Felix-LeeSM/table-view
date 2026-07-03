@@ -74,7 +74,11 @@ smoke or measurement gates:
   memory. When a result is capped the grid shows a truncation banner and the
   row count reflects the returned (capped) rows, not the true total. Add an
   explicit `LIMIT`/`TOP`/`FETCH` clause for precise control, or raise the cap.
-  Write (rows-affected) and EXPLAIN results are not subject to the cap.
+  Oracle fetches in ~100-row batches, so it may transiently buffer up to one
+  batch beyond the cap before trimming to exactly the cap. Write (rows-affected)
+  results and the dedicated Explain plan viewer are not capped; a raw `EXPLAIN`
+  typed into the editor streams through the cap like any other SELECT (its plan
+  output is well under the default).
 
 ## Related
 
