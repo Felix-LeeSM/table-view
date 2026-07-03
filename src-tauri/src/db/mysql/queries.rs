@@ -436,7 +436,12 @@ impl MysqlAdapter {
             }
         };
 
-        result
+        // Issue #1230 (PR #1241 review) — a native KILL QUERY can end the
+        // statement as ER_QUERY_INTERRUPTED (1317) or a spurious SLEEP success
+        // before the token branch above wins the select!; converge onto the
+        // canonical cancelled error when the token has fired so mysql reaches
+        // the same frontend cancelled-state as PG.
+        crate::db::traits::finalize_cancelled(result, cancel_token)
     }
 
     /// Paged table 데이터. PG `query_table_data` 와 동일 contract — filters /

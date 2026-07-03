@@ -122,18 +122,16 @@ pub struct TestConnectionRequest {
 
 /// Sprint 359 — per-tab connection affinity record.
 ///
-/// Lives in `AppState.tab_affinity` under `(connection_id, tab_id)` so the
-/// same `tab_id` opened against two distinct connections never collides
-/// (codex 7차 #4). Stores the **native server-side identifier** used by
-/// `cancel_query_native`:
+/// Lives in `AppState.tab_affinity` under `(connection_id, tab_id)`, keyed so
+/// the same `tab_id` opened against two distinct connections never collides
+/// (codex 7차 #4). Stores a native server-side identifier
+/// (`pg_backend_pid()` / `CONNECTION_ID()`).
 ///
-/// * PostgreSQL → `pg_backend_pid()` (i32 surfaced as i64).
-/// * MySQL      → `CONNECTION_ID()` thread id (u64 → i64 fits).
-/// * MongoDB    → opid (server-assigned) discovered at execute time.
-///
-/// Boot value is `None` for every tab (Q5.6 lazy) — we materialise the
-/// record only after the first `executeQuery(tab_id, …)` round-trip
-/// records a real server pid.
+/// NOTE (Issue #1230): the native-cancel path does NOT read this record — the
+/// pid the frontend passes to `cancel_query_native` comes from
+/// `AppState.query_server_pids` (recorded per `query_id` by `execute_query`).
+/// This affinity map is sprint-359 scaffolding kept for the future
+/// tab-scoped ROLLBACK hand-off; `bind_tab_affinity_inner` has no caller yet.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TabAffinity {
     pub server_pid: i64,

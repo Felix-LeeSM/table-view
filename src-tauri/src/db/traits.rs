@@ -30,6 +30,31 @@ use super::types::{
     FindBody, NamespaceInfo, NamespaceLabel, RdbQueryResult,
 };
 
+/// Issue #1230 (PR #1241 review) — converge any post-cancel outcome onto the
+/// canonical cancelled error so every DBMS reaches the same frontend
+/// cancelled-state.
+///
+/// A native cancel (`pg_cancel_backend` / `KILL QUERY`) aborts the statement
+/// on the server, which the executor's `tokio::select!` can observe as the
+/// query future resolving *first* — before the cooperative-token branch wins.
+/// That resolution is dialect-specific and NOT uniformly "cancelled": MySQL
+/// surfaces `ER_QUERY_INTERRUPTED` (1317, message "Query execution was
+/// interrupted") or even a spurious success (`SELECT SLEEP(n)` returns 1 when
+/// interrupted), whereas PostgreSQL surfaces `57014` whose message the
+/// frontend already maps to cancelled. When the cooperative token HAS fired
+/// (the frontend always fires it on Cancel), we treat the run as cancelled
+/// regardless of the raced outcome, killing the mysql/pg asymmetry the e2e
+/// caught.
+pub(crate) fn finalize_cancelled<T>(
+    result: Result<T, AppError>,
+    cancel_token: Option<&CancellationToken>,
+) -> Result<T, AppError> {
+    if cancel_token.is_some_and(CancellationToken::is_cancelled) {
+        return Err(AppError::Database("Query cancelled".into()));
+    }
+    result
+}
+
 // ── Lifecycle trait ───────────────────────────────────────────────────────
 
 /// Connection lifecycle contract shared by every adapter paradigm.
@@ -46,7 +71,8 @@ pub trait DbAdapter: Send + Sync {
     /// statement.
     ///
     /// `server_pid` is the server-side identifier captured at executeQuery
-    /// time and stored in `AppState.tab_affinity`:
+    /// time and recorded in `AppState.query_server_pids` (Issue #1230), which
+    /// the frontend resolves via `get_query_server_pid` and passes back here:
     ///
     /// * PostgreSQL → `pg_backend_pid()` (i32 surfaced as i64).
     /// * MySQL      → `CONNECTION_ID()` thread id (u64 → i64 fits).
@@ -1270,5 +1296,57 @@ pub trait SearchAdapter: DbAdapter {
                 "Delete-by-query safety planning is not wired for this adapter".into(),
             ))
         })
+    }
+}
+
+#[cfg(test)]
+mod finalize_cancelled_tests {
+    //! 작성 이유 (2026-07-03, PR #1241 review): native cancel 이 mysql 쿼리를
+    //! ER_QUERY_INTERRUPTED(1317) 또는 SLEEP 의 spurious 성공으로 끝내도,
+    //! 취소 요청(token fired)이면 cancelled 로 수렴해야 한다는 계약을 고정.
+    //! fix 전에는 이 수렴 로직이 없어 mysql 만 error/completed 로 새어
+    //! e2e(query-cancelled-state)가 실패했다.
+    use super::*;
+
+    #[test]
+    fn cancelled_token_converges_interrupt_error_to_cancelled() {
+        let token = CancellationToken::new();
+        token.cancel();
+        let interrupted: Result<i32, AppError> = Err(AppError::Database(
+            "error returned from database: Query execution was interrupted".into(),
+        ));
+        match finalize_cancelled(interrupted, Some(&token)) {
+            Err(AppError::Database(msg)) => assert!(msg.contains("Query cancelled")),
+            other => panic!("expected cancelled, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cancelled_token_converges_spurious_success_to_cancelled() {
+        // MySQL `SELECT SLEEP(20)` returns Ok(1) when KILL QUERY interrupts it;
+        // a cancel request must still land on cancelled, not completed.
+        let token = CancellationToken::new();
+        token.cancel();
+        assert!(matches!(
+            finalize_cancelled(Ok::<i32, AppError>(1), Some(&token)),
+            Err(AppError::Database(_))
+        ));
+    }
+
+    #[test]
+    fn live_token_passes_result_through() {
+        let token = CancellationToken::new();
+        assert!(matches!(
+            finalize_cancelled(Ok::<i32, AppError>(7), Some(&token)),
+            Ok(7)
+        ));
+    }
+
+    #[test]
+    fn absent_token_passes_result_through() {
+        assert!(matches!(
+            finalize_cancelled(Ok::<i32, AppError>(7), None),
+            Ok(7)
+        ));
     }
 }

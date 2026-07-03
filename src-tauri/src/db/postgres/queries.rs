@@ -579,7 +579,11 @@ impl PostgresAdapter {
             }
         };
 
-        result
+        // Issue #1230 (PR #1241 review) — when the token has fired, converge
+        // the native-cancel-raced outcome (PG 57014, or any dialect variance)
+        // onto the canonical cancelled error. Symmetric with the MySQL path so
+        // no DBMS-specific asymmetry remains.
+        crate::db::traits::finalize_cancelled(result, cancel_token)
     }
 
     /// Sprint 183 — execute a list of statements inside a single

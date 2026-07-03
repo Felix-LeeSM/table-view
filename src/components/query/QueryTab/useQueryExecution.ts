@@ -445,13 +445,30 @@ export function useQueryExecution({
     if (tab.queryState.status === "running") {
       if (!canCancelQuery) return;
       const { queryId } = tab.queryState;
-      // Issue #1230 — for native-cancel DBMS, fire the server-side abort
-      // (pg_cancel_backend / KILL QUERY) FIRST so a long JOIN / `pg_sleep`
-      // that the cooperative token can't reach still stops. The pid is read
-      // live from the store (it is recorded after this closure captured
-      // `tab`). Then always fire the cooperative token too — double-firing is
-      // harmless (once the server kills the backend, the token is a no-op),
-      // and it covers the race where the pid hasn't arrived yet.
+      // Issue #1230 (PR #1241 review) — fire the cooperative token FIRST. It
+      // flips the backend CancellationToken, which the executor's
+      // `tokio::select!` observes immediately and returns the canonical
+      // "Query cancelled" → the frontend cancelled-state. Firing native first
+      // let a fast `KILL QUERY` end the statement as ER_QUERY_INTERRUPTED (or
+      // a spurious SLEEP success) before the token branch won the select!, so
+      // mysql/mariadb never reached cancelled-state (PG only slipped through
+      // because 57014 maps to a cancelled message). backend `finalize_cancelled`
+      // now also converges any raced outcome, but ordering keeps the common
+      // path race-free.
+      try {
+        await cancelQuery(queryId);
+      } catch (err) {
+        // Most cancel failures are benign races: the query finished between
+        // the user clicking Cancel and the IPC dispatch (backend returns
+        // NotFound for an unregistered token). Surface via dev logger so a
+        // genuine IPC/backend regression isn't silent — store-side
+        // stale-response guards already handle state transition.
+        logger.warn("cancelQuery failed (likely already completed):", err);
+      }
+      // Then native: tear down the actual server-side backend so a long query
+      // (pg_sleep, big JOIN) doesn't keep consuming server resources after the
+      // client gave up. The pid is read live from the store (recorded after
+      // this closure captured `tab`).
       if (canNativeCancel) {
         const serverPid = readRunningServerPid(
           tab.connectionId,
@@ -468,16 +485,6 @@ export function useQueryExecution({
             );
           }
         }
-      }
-      try {
-        await cancelQuery(queryId);
-      } catch (err) {
-        // Most cancel failures are benign races: the query finished between
-        // the user clicking Cancel and the IPC dispatch (backend returns
-        // NotFound for an unregistered token). Surface via dev logger so a
-        // genuine IPC/backend regression isn't silent — store-side
-        // stale-response guards already handle state transition.
-        logger.warn("cancelQuery failed (likely already completed):", err);
       }
       return;
     }
