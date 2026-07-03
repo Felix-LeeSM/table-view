@@ -161,6 +161,35 @@ const KEYWORDS = new Set<string>([
 ]);
 
 /**
+ * If `sql[start]` opens a PostgreSQL dollar-quoted string (`$$…$$` or
+ * `$tag$…$tag$`), return the index just past its closing delimiter — or
+ * `sql.length` when the quote is unterminated (opaque through EOF). Return
+ * `null` when `start` is not a dollar-quote opening, so a positional
+ * parameter (`$1`) or a lone `$` keeps its ordinary tokenization.
+ *
+ * The tag follows unquoted-identifier rules (leading letter/underscore, then
+ * letters/digits/underscores, no `$`), which is exactly what tells a `$tag$`
+ * opening apart from a `$1` parameter. Dollar-quotes do not nest: the body
+ * runs verbatim to the next occurrence of the *same* delimiter, so any inner
+ * `'`, `--`, block comment, `;`, or differently-tagged `$…$` is literal text.
+ *
+ * Shared by `tokenizeSql` and `splitSqlStatements` (sqlUtils.ts) so the tricky
+ * tag-matching / positional-parameter rules have a single source of truth.
+ */
+export function scanDollarQuoteEnd(sql: string, start: number): number | null {
+  if (sql[start] !== "$") return null;
+  let j = start + 1;
+  if (j < sql.length && /[A-Za-z_]/.test(sql[j]!)) {
+    j++;
+    while (j < sql.length && /[A-Za-z0-9_]/.test(sql[j]!)) j++;
+  }
+  if (sql[j] !== "$") return null;
+  const delim = sql.slice(start, j + 1);
+  const close = sql.indexOf(delim, j + 1);
+  return close === -1 ? sql.length : close + delim.length;
+}
+
+/**
  * Tokenize a SQL source string into a flat list of tokens suitable for
  * rendering inline. The tokenizer is deliberately simple — it recognises
  * enough structure for history/favourite previews (keywords, strings,
@@ -217,6 +246,18 @@ export function tokenizeSql(sql: string): SqlToken[] {
       tokens.push({ kind: "identifier", text: sql.slice(i, j) });
       i = j;
       continue;
+    }
+
+    // PostgreSQL dollar-quoted string ($$…$$ / $tag$…$tag$). A non-opening
+    // `$` (positional param $1, lone $) returns null and falls through to the
+    // punct branch below.
+    if (ch === "$") {
+      const end = scanDollarQuoteEnd(sql, i);
+      if (end !== null) {
+        tokens.push({ kind: "string", text: sql.slice(i, end) });
+        i = end;
+        continue;
+      }
     }
 
     if (ch >= "0" && ch <= "9") {
