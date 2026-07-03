@@ -217,14 +217,24 @@ export default function QuickOpen() {
   useEffect(() => {
     if (sidebarConnId === null) return;
     let unlisten: UnlistenFn | undefined;
+    // #1261 — `listen()` is async; a Back navigation can tear the window down
+    // before it resolves. Without this guard the cleanup runs while `unlisten`
+    // is still undefined, leaking a live intent listener onto a destroyed
+    // webview (the `no such window` e2e crash). If teardown already happened,
+    // unlisten the moment the pending listen resolves.
+    let cancelled = false;
     void subscribeIntents(sidebarConnId)
       .then((fn) => {
-        unlisten = fn;
+        if (cancelled) fn();
+        else unlisten = fn;
       })
       .catch(() => {
         // Tauri runtime unavailable (jsdom) — no cross-window delivery to wire.
       });
-    return () => unlisten?.();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, [sidebarConnId]);
 
   // Deterministic ranking + subsequence fuzzy + `schema.name` scoping. Empty
