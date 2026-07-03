@@ -85,7 +85,10 @@ normalize_path() {
 
 	read -r -a parts <<< "$path"
 
-	for part in "${parts[@]}"; do
+	# Bash 3.2 (macOS) + set -u: expanding an empty "${parts[@]}" is an unbound
+	# variable error (issue #1242). Same guard idiom as the normalized[@] loop
+	# below.
+	for part in ${parts[@]+"${parts[@]}"}; do
 		case "$part" in
 			"" | ".")
 				continue
@@ -239,15 +242,124 @@ mask_quoted_specials() {
 	' <<< "$1"
 }
 
+# Strip heredoc BODIES (the data between an opener line and its closing
+# delimiter) before tokenizing. Heredoc bodies are literal data — SQL, markdown,
+# gh issue/PR text — not commands, and their words (e.g. "truncate", "move")
+# otherwise trip the write-verb tokenizer and block whole orchestration commands
+# (issue #1251, case 2). The opener LINE is kept so a real redirect on it
+# (`cat > src/x <<EOF`) is still checked.
+#
+# Opener detection is QUOTE-AWARE: a `<<` that sits inside a single/double quote
+# (e.g. the text of `--body "a << b"`) is NOT an opener. Without this the
+# quoted `<<` was mistaken for a heredoc start and every following line up to
+# EOF was dropped as "body", so a real write on the next line slipped past the
+# guard unchecked (issue #1251 review, blocker B1). Quote parity is carried
+# across command lines but NOT across heredoc bodies (bodies are data), so a
+# body's unbalanced quote can never mask a later command line either.
+#
+# KNOWN LIMITATION: a heredoc body fed to an interpreter (`bash <<EOF ... EOF`,
+# `sh <<'EOF' ... EOF`) is stripped like any other body, so a non-recursive
+# write inside it (plain rm/rm -f/mv/cp/tee/sed -i/redirect) is not inspected by
+# this hook. This is a best-effort careless-write layer, not a security boundary;
+# `rm -rf`/dd/force-push/SQL DROP remain covered by check-dangerous-bash.sh.
+# Tracking: issue #1260.
+#
+# Not a full parser: one heredoc per opener line; delimiter must be a bare word
+# (optionally quoted, `<<-` dashed); backslash escapes are not interpreted.
+strip_heredoc_bodies() {
+	local out="" line delim="" in_h=0 dash=0 probe
+	local q="[\"']?" # optional single/double quote around the delimiter word
+	local hd_after="^(-?)[[:space:]]*${q}([A-Za-z_][A-Za-z0-9_]*)"
+	local sq=0 dq=0 n i c rest
+	while IFS= read -r line || [ -n "$line" ]; do
+		if [ "$in_h" -eq 1 ]; then
+			probe="$line"
+			# `<<-` permits a tab-indented closing delimiter.
+			[ "$dash" -eq 1 ] && probe="${probe#"${probe%%[!$'\t']*}"}"
+			[ "$probe" = "$delim" ] && in_h=0
+			continue # drop body lines and the closing delimiter line
+		fi
+		out+="$line"$'\n'
+		# Walk the command line tracking quote parity; treat only an UNQUOTED
+		# `<<WORD` as a heredoc opener.
+		n=${#line}
+		i=0
+		while [ "$i" -lt "$n" ]; do
+			c=${line:i:1}
+			if [ "$sq" -eq 1 ]; then
+				[ "$c" = "'" ] && sq=0
+				i=$((i + 1))
+				continue
+			fi
+			if [ "$dq" -eq 1 ]; then
+				[ "$c" = '"' ] && dq=0
+				i=$((i + 1))
+				continue
+			fi
+			case $c in
+				"'") sq=1 ;;
+				'"') dq=1 ;;
+				'<')
+					if [ "${line:i+1:1}" = "<" ]; then
+						rest=${line:i+2}
+						if [[ $rest =~ $hd_after ]]; then
+							dash=0
+							[ -n "${BASH_REMATCH[1]}" ] && dash=1
+							delim="${BASH_REMATCH[2]}"
+							in_h=1
+							break # first opener on the line wins
+						fi
+						i=$((i + 2)) # `<<` but no delimiter word (e.g. `<<<`)
+						continue
+					fi
+					;;
+			esac
+			i=$((i + 1))
+		done
+	done <<<"$1"
+	printf '%s' "$out"
+}
+
+# Split a (heredoc-stripped, quote-masked) command into tokens on UNQUOTED
+# whitespace, keeping a quoted span as a SINGLE token. Plain word splitting
+# shatters `--body 'we truncate the old table'` into verb-shaped fragments
+# ("truncate") that flip write-mode and block the command (issue #1251, case 1).
+# Quote chars are preserved (trim_token strips them downstream); operators inside
+# quotes were already neutralized by mask_quoted_specials, so an UNQUOTED redirect
+# operator still splits normally and a quoted redirect target (`> "src/x"`) stays
+# one checkable token — real writes remain blocked.
+tokenize_quote_aware() {
+	awk '
+	{
+		n = length($0)
+		for (i = 1; i <= n; i++) {
+			c = substr($0, i, 1)
+			if (c == "\047" && dq == 0) { sq = 1 - sq; tok = tok c; has = 1; continue }
+			if (c == "\042" && sq == 0) { dq = 1 - dq; tok = tok c; has = 1; continue }
+			if (sq == 0 && dq == 0 && (c == " " || c == "\t")) {
+				if (has) { print tok; tok = ""; has = 0 }
+				continue
+			}
+			tok = tok c; has = 1
+		}
+		if (sq == 0 && dq == 0) {
+			if (has) { print tok; tok = ""; has = 0 }
+		} else {
+			tok = tok " " # unclosed quote spans the newline: join with a space
+		}
+	}
+	END { if (has) print tok }
+	' <<<"$1"
+}
+
 paths_from_command_tokens() {
 	local cmd
-	cmd="$(mask_quoted_specials "$1")"
-	local old_opts
-	old_opts="$(set +o)"
-	set -f
-	# shellcheck disable=SC2206
-	local tokens=($cmd)
-	eval "$old_opts"
+	cmd="$(mask_quoted_specials "$(strip_heredoc_bodies "$1")")"
+
+	local tokens=() tok
+	while IFS= read -r tok; do
+		tokens+=("$tok")
+	done < <(tokenize_quote_aware "$cmd")
 
 	local word base expect_redir=0 mode="" last_dest="" sed_inplace=0 perl_inplace=0
 
@@ -265,7 +377,11 @@ paths_from_command_tokens() {
 		perl_inplace=0
 	}
 
-	for word in "${tokens[@]}"; do
+	# Bash 3.2 (macOS) + set -u: empty "${tokens[@]}" (whitespace-only command)
+	# is an unbound variable error that silently aborts the tokenizer inside the
+	# process-substitution subshell, letting writes through unchecked (issue
+	# #1242). Guard the expansion.
+	for word in ${tokens[@]+"${tokens[@]}"}; do
 		# Detect command separators on the RAW token: trim_token strips a trailing
 		# ';'/',', which would otherwise erase a standalone separator before it can
 		# reset state and leak expect_redir into the next command's first word.
@@ -484,7 +600,9 @@ if [ -n "$COMMAND" ]; then
 		check_path "$path"
 	done < <({ paths_from_patch_markers; paths_from_command_tokens "$COMMAND"; } | sort -u)
 else
-	for path in "${PATH_ARGS[@]}"; do
+	# Bash 3.2 (macOS) + set -u: an empty "${PATH_ARGS[@]}" (hook run with no path
+	# args) is an unbound variable error that crashes the guard (issue #1242).
+	for path in ${PATH_ARGS[@]+"${PATH_ARGS[@]}"}; do
 		check_path "$path"
 	done
 fi

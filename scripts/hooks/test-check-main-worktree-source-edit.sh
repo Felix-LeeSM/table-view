@@ -276,6 +276,47 @@ run_case "main command: quoted segment glued unquoted redirect to source blocked
 run_case "main command: empty quoted segment glued unquoted redirect to source blocked" 1 main-command "echo ''>src/App.tsx"
 run_case "main command: quoted variable glued unquoted redirect to source blocked" 1 main-command 'echo "$v">src/App.tsx'
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Issue #1251 — natural-language file-op verbs in gh comment/issue bodies and
+# heredoc bodies were mis-parsed as write commands and blocked whole
+# orchestration commands. The fix keeps quoted spans as one opaque token
+# (quote-aware tokenizer) and strips heredoc BODIES before tokenizing, while
+# every real write (redirect / rm / mv / tee / sed -i / heredoc-fed redirect)
+# stays blocked.
+# ALLOW: file-op verbs living in body TEXT are data, not commands.
+run_case "main command: gh pr comment inline body with file-op verbs allowed (#1251)" 0 main-command "gh pr comment 1245 --body 'we truncate old rows, mv files, and rm stale entries'"
+run_case "main command: gh pr comment --body-file path allowed (#1251)" 0 main-command "gh pr comment 1245 --body-file /tmp/scorecard.md"
+issue_heredoc_input="$(printf 'cat > /tmp/body.md <<EOF\ntruncate move and rm the old data\nEOF\ngh issue create --title t --body-file /tmp/body.md\n')"
+run_case "main command: heredoc temp-file write + gh issue create allowed (#1251)" 0 main-command "$issue_heredoc_input"
+# BLOCK (protection preserved): a real write must still be caught even next to
+# a text body flag or a stripped heredoc body.
+run_case "main command: body flag then real redirect to source still blocked (#1251)" 1 main-command "gh pr comment 1245 --body 'note' > src/App.tsx"
+heredoc_src_redirect_input="$(printf 'cat > src/App.tsx <<EOF\nsome body data\nEOF\n')"
+run_case "main command: heredoc opener redirect to source still blocked (#1251)" 1 main-command "$heredoc_src_redirect_input"
+
+# #1251 review blocker B1 — a `<<` INSIDE a quoted body value must not be
+# mistaken for a heredoc opener. It used to drop every following line as "body",
+# so a real write on the next line slipped past the guard unchecked.
+b1_quoted_heredoc_rm="$(printf 'gh pr comment 1 --body "a << b"\nrm src/App.tsx')"
+run_case "main command: quoted << in body then next-line rm still blocked (#1251 B1)" 1 main-command "$b1_quoted_heredoc_rm"
+b1_quoted_heredoc_redir="$(printf 'gh issue create --body "see << below"\necho x > src/App.tsx')"
+run_case "main command: quoted << in body then next-line redirect still blocked (#1251 B1)" 1 main-command "$b1_quoted_heredoc_redir"
+# A single-line review comment/body carrying `<<`, `>` and file-op verbs as prose
+# must pass (the everyday scorecard-posting case the guard was breaking).
+run_case "main command: single-line review body with << and > glyphs allowed (#1251 B1)" 0 main-command "gh pr comment 1 --body 'see foo << bar and x > y, truncate/mv/rm mentioned'"
+# An unbalanced quote inside a real heredoc body must not carry into and mask a
+# later command line's redirect (regression guard for the quote-parity carry).
+b1_body_apostrophe="$(printf "cat > /tmp/x.md <<EOF\nit's data\nEOF\necho x > src/App.tsx")"
+run_case "main command: heredoc body apostrophe does not mask next-line write (#1251 B1)" 1 main-command "$b1_body_apostrophe"
+# `<<<` is a here-string, not a heredoc; it must not swallow following lines.
+b1_herestring="$(printf 'grep foo <<<BAR\nrm src/App.tsx')"
+run_case "main command: here-string <<< does not swallow next-line write (#1251 B1)" 1 main-command "$b1_herestring"
+
+# Issue #1242 — Bash 3.2 (macOS) + set -u empty-array crash. Running the hook in
+# path mode with NO path args expanded an empty "${PATH_ARGS[@]}" (unbound
+# variable), crashing the guard (exit 1). It must now no-op cleanly (exit 0).
+run_case "main path: no path args does not crash (#1242)" 0 main-path
+
 doc_patch_input="$(printf '*** Begin Patch\n*** Update File: memory/foo/memory.md\n@@\n-- git mv old path\n+- test/reset/helper wording in docs\n*** End Patch\n')"
 run_case "main command: apply_patch checks patch markers only" 0 main-command "$doc_patch_input"
 mixed_patch_shell_input="$(printf 'printf patch_marker <<EOF\n*** Update File: memory/foo/memory.md\nEOF\nprintf hi > src/App.tsx\n')"

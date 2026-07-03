@@ -532,7 +532,12 @@ _sql_segment_runs_client() {
   local -a words
   IFS=$' \t' read -r -a words <<<"$1"
   local seen_wrapper=0 w client
-  for w in "${words[@]}"; do
+  # macOS ships Bash 3.2 where `"${words[@]}"` on an EMPTY array trips
+  # `set -u` (words[@]: unbound variable) and crashes the whole hook, blocking
+  # the legitimate command (issue #1242). A whitespace-only pipe-stage — e.g.
+  # the trailing stage of `foo | ` — reads into an empty array, so guard the
+  # expansion with the `${arr[@]+...}` idiom (expand only when set).
+  for w in ${words[@]+"${words[@]}"}; do
     for client in $SQL_CLIENT_BINARIES; do
       [ "$w" = "$client" ] && return 0
     done
