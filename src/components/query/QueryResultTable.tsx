@@ -7,7 +7,11 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import Decimal from "decimal.js";
-import { CellDetailDialog, useColumnResize } from "@components/datagrid";
+import {
+  CellDetailDialog,
+  useColumnResize,
+  useGridRoving,
+} from "@components/datagrid";
 import { getDefaultRem } from "@/lib/columnCategory";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { safeStringifyCell } from "@lib/jsonCell";
@@ -65,6 +69,30 @@ export function QueryResultTable({ result }: { result: QueryResult }) {
     onCommitWidth: setWidth,
   });
 
+  // issue #1130 — read-only 결과도 role="grid" 를 유지하되 셀 키보드 nav 를
+  // 배선한다. AC4 는 role="table" 강등을 허용하나, (1) 같은 router 뒤의
+  // EditableQueryResultGrid 와의 일관성, (2) 강등 시 double-click(마우스) 전용이
+  // 되는 cell-detail 을 Enter/F2 로 키보드 개방, (3) e2e grid-text 헬퍼가 read-
+  // only 결과의 role="grid" 를 기대하는 회귀 회피를 위해 grid 를 유지한다.
+  // 가상화 없음(모든 row 렌더)이라 scrollRowIntoView 불필요.
+  const openCellDetail = useCallback(
+    (rowIdx: number, cellIdx: number) => {
+      const col = result.columns[cellIdx];
+      if (!col) return;
+      setCellDetail({
+        data: result.rows[rowIdx]?.[cellIdx],
+        columnName: col.name,
+        dataType: col.dataType,
+      });
+    },
+    [result.columns, result.rows],
+  );
+  const roving = useGridRoving(
+    result.rows.length,
+    result.columns.length,
+    scrollContainerRef,
+  );
+
   return (
     <div
       ref={scrollContainerRef}
@@ -73,6 +101,7 @@ export function QueryResultTable({ result }: { result: QueryResult }) {
       aria-rowcount={1 + result.rows.length}
       aria-colcount={result.columns.length}
       style={{ "--cols": colsTemplate } as CSSProperties}
+      onKeyDown={roving.onKeyDown}
     >
       <div
         role="rowgroup"
@@ -126,23 +155,26 @@ export function QueryResultTable({ result }: { result: QueryResult }) {
             }}
           >
             {row.map((cell, cellIdx) => {
-              const col = result.columns[cellIdx];
               return (
                 <div
                   key={cellIdx}
                   role="gridcell"
                   aria-colindex={cellIdx + 1}
+                  data-grid-row={rowIdx}
+                  data-grid-col={cellIdx}
+                  tabIndex={roving.cellTabIndex(rowIdx, cellIdx)}
+                  onFocus={() => roving.syncFocus(rowIdx, cellIdx)}
                   className="flex min-w-0 cursor-pointer items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground"
                   title={`${formatCell(cell)}\n\n(double-click to expand)`}
-                  onDoubleClick={() => {
-                    if (col) {
-                      setCellDetail({
-                        data: cell,
-                        columnName: col.name,
-                        dataType: col.dataType,
-                      });
-                    }
+                  onKeyDown={(e) => {
+                    // issue #1130 — Enter/F2 로 focus 된 cell 의 detail 열기
+                    // (double-click 의 키보드 등가물). 읽기 전용이라 편집은 없음.
+                    if (e.key !== "Enter" && e.key !== "F2") return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openCellDetail(rowIdx, cellIdx);
                   }}
+                  onDoubleClick={() => openCellDetail(rowIdx, cellIdx)}
                 >
                   {cell == null ? (
                     <span className="italic text-muted-foreground">NULL</span>
