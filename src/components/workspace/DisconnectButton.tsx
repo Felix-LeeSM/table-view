@@ -3,7 +3,9 @@ import { Loader2, Unplug } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useConnectionHasDirtyTabs } from "@stores/workspaceStore";
 import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
+import { useDiscardConfirm } from "@/hooks/useDiscardConfirm";
 import { toast } from "@lib/runtime/toast";
 
 /**
@@ -37,6 +39,10 @@ export default function DisconnectButton({
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const { disconnect: disconnectFromDatabase } = useConnectionLifecycle();
   const connections = useConnectionStore((s) => s.connections);
+  // #1101 — disconnect wipes this connection's tabs + pending grid edits via
+  // the store cleanup watcher, so guard it behind the shared discard confirm.
+  const hasDirtyTabs = useConnectionHasDirtyTabs(focusedConnId);
+  const { guard: confirmDiscard, dialog: discardDialog } = useDiscardConfirm();
 
   const [busy, setBusy] = useState(false);
 
@@ -52,11 +58,10 @@ export default function DisconnectButton({
     ? t("disconnect.tooltip", { name: focusedConn.name })
     : t("disconnect.tooltipNoConn");
 
-  const handleClick = async () => {
-    if (!focusedConnId || !isConnected) return;
+  const runDisconnect = async (connId: string) => {
     setBusy(true);
     try {
-      await disconnectFromDatabase(focusedConnId);
+      await disconnectFromDatabase(connId);
     } catch (e) {
       // The store propagates the Tauri rejection so callers can react;
       // the toast here is the user-facing surface. The button re-enables
@@ -74,23 +79,31 @@ export default function DisconnectButton({
     }
   };
 
+  const handleClick = () => {
+    if (!focusedConnId || !isConnected) return;
+    confirmDiscard(hasDirtyTabs, () => void runDisconnect(focusedConnId));
+  };
+
   return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      type="button"
-      aria-label={busy ? t("disconnect.disconnecting") : resolvedAriaLabel}
-      title={tooltip}
-      data-busy={busy ? "true" : "false"}
-      disabled={disabled}
-      onClick={handleClick}
-      className="text-muted-foreground hover:text-destructive disabled:opacity-40"
-    >
-      {busy ? (
-        <Loader2 className="animate-spin" aria-hidden="true" />
-      ) : (
-        <Unplug aria-hidden="true" />
-      )}
-    </Button>
+    <>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        type="button"
+        aria-label={busy ? t("disconnect.disconnecting") : resolvedAriaLabel}
+        title={tooltip}
+        data-busy={busy ? "true" : "false"}
+        disabled={disabled}
+        onClick={handleClick}
+        className="text-muted-foreground hover:text-destructive disabled:opacity-40"
+      >
+        {busy ? (
+          <Loader2 className="animate-spin" aria-hidden="true" />
+        ) : (
+          <Unplug aria-hidden="true" />
+        )}
+      </Button>
+      {discardDialog}
+    </>
   );
 }

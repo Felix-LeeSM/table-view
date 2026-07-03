@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
+import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
 
 export interface OracleFormFieldsProps {
   draft: ConnectionDraft;
@@ -12,6 +13,7 @@ export interface OracleFormFieldsProps {
   setClearPassword: (value: boolean) => void;
   inputClass: string;
   labelClass: string;
+  invalidField?: ConnFieldKey | null;
 }
 
 export default function OracleFormFields({
@@ -25,6 +27,7 @@ export default function OracleFormFields({
   setClearPassword,
   inputClass,
   labelClass,
+  invalidField,
 }: OracleFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
   return (
@@ -40,6 +43,7 @@ export default function OracleFormFields({
             value={draft.host}
             onChange={(e) => onChange({ host: e.target.value })}
             placeholder="localhost"
+            {...fieldValidationProps("host", true, invalidField)}
           />
         </div>
         <div className="w-24">
@@ -128,6 +132,7 @@ export default function OracleFormFields({
           value={draft.database}
           onChange={(e) => onChange({ database: e.target.value })}
           placeholder="FREEPDB1"
+          {...fieldValidationProps("database", true, invalidField)}
         />
       </div>
     </>

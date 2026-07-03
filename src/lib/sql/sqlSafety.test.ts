@@ -358,6 +358,56 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   });
 
   // -------------------------------------------------------------------------
+  // Issue #1115 (2026-07-03) — MySQL/MariaDB `REPLACE INTO` is a destructive
+  // upsert (DELETE conflicting row, then INSERT). It was absent from both the
+  // gate regex alternation and the per-keyword branches, so it fell through
+  // to the `{ kind: "other", severity: "info" }` fail-open default and ran
+  // with no dialog in any mode. Per the 2026-07-02 user decision ("구문 that
+  // can silently lose existing data is always confirm"), REPLACE classifies
+  // as `danger`. The Rust `sql-parser-core` returns `unsupported-statement`
+  // for REPLACE (sql-parser-core/src/lib.rs:158), so the AST path cannot
+  // classify it — the regex branch is the source of truth here.
+  // -------------------------------------------------------------------------
+  describe("Issue #1115 — REPLACE INTO destructive upsert → danger", () => {
+    it("[AC-1115-01] REPLACE INTO … VALUES → danger", () => {
+      const a = analyzeStatement(
+        "REPLACE INTO users (id, name) VALUES (1, 'a')",
+      );
+      expect(a.kind).toBe("dml-replace");
+      expect(a.severity).toBe("danger");
+      expect(isDangerous(a)).toBe(true);
+    });
+
+    it("[AC-1115-02] REPLACE INTO … SET (MySQL dialect) → danger", () => {
+      const a = analyzeStatement("REPLACE INTO users SET id = 1, name = 'a'");
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-1115-03] REPLACE INTO … SELECT → danger", () => {
+      const a = analyzeStatement("REPLACE INTO archive SELECT * FROM users");
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-1115-04] REPLACE … SET without INTO (INTO is optional in MySQL) → danger", () => {
+      const a = analyzeStatement("REPLACE users SET id = 1");
+      expect(a.severity).toBe("danger");
+    });
+
+    // ── false-positive guards ────────────────────────────────────────────
+    it("[AC-1115-05] CREATE OR REPLACE VIEW → still ddl-create / info (REPLACE not first keyword)", () => {
+      const a = analyzeStatement("CREATE OR REPLACE VIEW v AS SELECT a FROM t");
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-1115-06] SELECT REPLACE(col,…) function call → still select / info", () => {
+      const a = analyzeStatement("SELECT REPLACE(name, 'a', 'b') FROM users");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Sprint 255 (2026-05-09) — `isInfoStatement` 휴리스틱은 raw editor 의 WARN
   // dialog mount 직전에 INFO (read-only / metadata) statement 을 식별해
   // dialog skip → 직접 IPC 로 우회하는 분기를 위해 신설. INFO corpus =

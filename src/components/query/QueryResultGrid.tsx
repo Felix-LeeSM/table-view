@@ -37,6 +37,9 @@ export interface QueryResultGridProps {
   database?: string;
   /** SQL of the executed query — used to detect a single-table SELECT. */
   sql?: string;
+  /** Owning query tab id — Issue #1102, scopes the editable-result pending
+   *  store and drives `setTabDirty`. */
+  tabId?: string;
   /** Called after a raw-result edit is committed so the parent can refresh. */
   onAfterCommit?: () => void;
   /**
@@ -133,12 +136,14 @@ function SelectResultArea({
   connectionId,
   database,
   sql,
+  tabId,
   onAfterCommit,
 }: {
   result: QueryResult;
   connectionId?: string;
   database?: string;
   sql?: string;
+  tabId?: string;
   onAfterCommit?: () => void;
 }) {
   const { t } = useTranslation("query");
@@ -299,6 +304,7 @@ function SelectResultArea({
             pkColumns: editability.pkColumns,
             resultColumnNames: editability.resultToColumnName,
           }}
+          tabId={tabId}
           onAfterCommit={onAfterCommit}
         />
       </>
@@ -338,12 +344,14 @@ function CompletedSingleResult({
   connectionId,
   database,
   sql,
+  tabId,
   onAfterCommit,
 }: {
   result: QueryResult;
   connectionId?: string;
   database?: string;
   sql?: string;
+  tabId?: string;
   onAfterCommit?: () => void;
 }) {
   // Sprint 312 (Phase 28 Slice A6, 2026-05-14) — `resultKind` discriminator
@@ -458,6 +466,7 @@ function CompletedSingleResult({
           connectionId={connectionId}
           database={database}
           sql={sql}
+          tabId={tabId}
           onAfterCommit={onAfterCommit}
         />
       )}
@@ -503,11 +512,13 @@ function CompletedMultiResult({
   statements,
   connectionId,
   database,
+  tabId,
   onAfterCommit,
 }: {
   statements: QueryStatementResult[];
   connectionId?: string;
   database?: string;
+  tabId?: string;
   onAfterCommit?: () => void;
 }) {
   const { t } = useTranslation("query");
@@ -581,6 +592,7 @@ function CompletedMultiResult({
               connectionId={connectionId}
               database={database}
               sql={stmt.sql}
+              tabId={tabId}
               onAfterCommit={onAfterCommit}
             />
           )}
@@ -595,6 +607,7 @@ export default function QueryResultGrid({
   connectionId,
   database,
   sql,
+  tabId,
   onAfterCommit,
   isDryRun: isDryRunProp,
 }: QueryResultGridProps) {
@@ -657,6 +670,7 @@ export default function QueryResultGrid({
           statements={queryState.statements}
           connectionId={connectionId}
           database={database}
+          tabId={tabId}
           onAfterCommit={onAfterCommit}
         />
       ) : (
@@ -665,6 +679,7 @@ export default function QueryResultGrid({
           connectionId={connectionId}
           database={database}
           sql={sql}
+          tabId={tabId}
           onAfterCommit={onAfterCommit}
         />
       );

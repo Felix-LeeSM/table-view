@@ -29,11 +29,12 @@ describe("safeModeStore", () => {
     invokeMock.mockReset();
     invokeMock.mockResolvedValue(undefined);
     localStorage.removeItem(SAFE_MODE_STORAGE_KEY);
-    useSafeModeStore.setState({ mode: "strict" });
+    // #1113 — 실효 기본값을 warn 으로 정정 (backend snapshot default 와 통일).
+    useSafeModeStore.setState({ mode: "warn" });
   });
 
-  it('[AC-185-02a] default mode is "strict"', () => {
-    expect(useSafeModeStore.getState().mode).toBe("strict");
+  it('[AC-185-02a] default mode is "warn" (#1113)', () => {
+    expect(useSafeModeStore.getState().mode).toBe("warn");
   });
 
   it("[AC-185-02b] setMode updates mode", async () => {
@@ -44,15 +45,16 @@ describe("safeModeStore", () => {
   });
 
   it("[AC-185-02c] toggle is reversible — full cycle returns to start", async () => {
-    expect(useSafeModeStore.getState().mode).toBe("strict");
+    // Cycle order 는 불변 (strict → warn → off → strict); 기본값 앵커만 warn.
+    expect(useSafeModeStore.getState().mode).toBe("warn");
     await useSafeModeStore.getState().toggle();
     await useSafeModeStore.getState().toggle();
     await useSafeModeStore.getState().toggle();
-    expect(useSafeModeStore.getState().mode).toBe("strict");
+    expect(useSafeModeStore.getState().mode).toBe("warn");
   });
 
   it("[AC-186-01a] toggle: strict → warn", async () => {
-    expect(useSafeModeStore.getState().mode).toBe("strict");
+    useSafeModeStore.setState({ mode: "strict" });
     await useSafeModeStore.getState().toggle();
     expect(useSafeModeStore.getState().mode).toBe("warn");
   });

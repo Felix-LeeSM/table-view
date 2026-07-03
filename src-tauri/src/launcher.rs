@@ -12,7 +12,7 @@
 //! is superseded by ADR 0012 in Sprint 155 once the full lifecycle is live.
 
 use crate::error::AppError;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 /// Look the window up by label and produce a typed `AppError::NotFound`
 /// when it is missing — the frontend can map that to a toast.
@@ -230,10 +230,9 @@ pub async fn app_exit<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError> {
 ///     failed hide is strictly worse than the launcher staying visible
 ///     for the user to retry.
 ///
-/// Workspace windows (`workspace-{conn_id}`) are explicitly NOT touched.
-/// Their lifecycle is owned by their own `close-requested` handlers (out
-/// of scope for this sprint; tracked separately by the contract's "Out
-/// of Scope: Workspace window 의 close 정책").
+/// Workspace windows (`workspace-{conn_id}`) are explicitly NOT touched
+/// here. Their close policy is owned by `emit_workspace_close_request`
+/// below (#1101) — the launcher-close handler stays launcher-only.
 pub fn handle_launcher_close_request<R: Runtime>(app: &AppHandle<R>) -> Result<(), AppError> {
     let Some(launcher) = app.get_webview_window("launcher") else {
         // Silent no-op: launcher already gone, nothing to hide.
@@ -249,6 +248,27 @@ pub fn handle_launcher_close_request<R: Runtime>(app: &AppHandle<R>) -> Result<(
         );
     }
     Ok(())
+}
+
+/// #1101 — workspace close-request delegation. The frontend tracks unsaved
+/// changes (`dirtyTabIds`, pending grid edits) in window-local state the
+/// backend can't see. So instead of destroying a workspace window when the
+/// OS/menu asks to close it, `lib.rs` `on_window_event` intercepts the
+/// close (`api.prevent_close()`) and calls this to emit
+/// `window:close-requested` to that window. The window's JS then runs the
+/// discard confirmation and only invokes `workspace_close` (real destroy)
+/// once the user confirms.
+///
+/// Targeted with `emit_to(label, ...)` — a bare `emit()` broadcasts to all
+/// windows, which would close every open workspace when the user clicks one
+/// window's X. Generic over `Emitter` so both the `on_window_event`
+/// `&Window` and a test `&WebviewWindow` satisfy it.
+pub fn emit_workspace_close_request<R, E>(emitter: &E, label: &str) -> tauri::Result<()>
+where
+    R: Runtime,
+    E: Emitter<R>,
+{
+    emitter.emit_to(label, "window:close-requested", ())
 }
 
 /// Wave 9.5 회귀 1 (2026-05-16) — workspace 윈도우 destroyed safety net.
@@ -464,6 +484,33 @@ mod tests {
             result.is_ok(),
             "missing launcher must not propagate as error (silent no-op), got {:?}",
             result.err()
+        );
+    }
+
+    /// #1101 — the workspace close-request path must delegate to the
+    /// frontend, NOT destroy the window. Before the fix the native close
+    /// paths (`win.destroy()`) discarded unsaved changes with no
+    /// confirmation. This locks: emitting the close-request signal succeeds
+    /// and leaves the workspace window alive so JS can run the discard
+    /// guard and decide whether to invoke `workspace_close`.
+    #[test]
+    fn ac_1101_workspace_close_request_delegates_without_destroying() {
+        let app = make_app_with_windows();
+        let win = app
+            .get_webview_window("workspace")
+            .expect("workspace window present");
+
+        let result = emit_workspace_close_request(&win, win.label());
+        assert!(
+            result.is_ok(),
+            "emit_workspace_close_request must succeed, got {:?}",
+            result.err()
+        );
+
+        assert!(
+            app.get_webview_window("workspace").is_some(),
+            "workspace window must NOT be destroyed by the close-request \
+             emit — the frontend discard guard owns that decision (#1101)"
         );
     }
 

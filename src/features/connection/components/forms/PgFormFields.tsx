@@ -13,6 +13,7 @@
  */
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
+import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
 
 export interface PgFormFieldsProps {
   draft: ConnectionDraft;
@@ -25,6 +26,7 @@ export interface PgFormFieldsProps {
   setClearPassword: (value: boolean) => void;
   inputClass: string;
   labelClass: string;
+  invalidField?: ConnFieldKey | null;
   userPlaceholder?: string;
   databasePlaceholder?: string;
 }
@@ -40,6 +42,7 @@ export default function PgFormFields({
   setClearPassword,
   inputClass,
   labelClass,
+  invalidField,
   userPlaceholder = "postgres",
   databasePlaceholder = "postgres",
 }: PgFormFieldsProps) {
@@ -58,6 +61,7 @@ export default function PgFormFields({
             value={draft.host}
             onChange={(e) => onChange({ host: e.target.value })}
             placeholder="localhost"
+            {...fieldValidationProps("host", true, invalidField)}
           />
         </div>
         <div className="w-24">
@@ -149,6 +153,7 @@ export default function PgFormFields({
           value={draft.database}
           onChange={(e) => onChange({ database: e.target.value })}
           placeholder={databasePlaceholder}
+          {...fieldValidationProps("database", true, invalidField)}
         />
       </div>
     </>

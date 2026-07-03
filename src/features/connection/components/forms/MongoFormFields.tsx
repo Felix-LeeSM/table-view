@@ -12,6 +12,7 @@
  */
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
+import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
 
 export interface MongoFormFieldsProps {
   draft: ConnectionDraft;
@@ -24,6 +25,7 @@ export interface MongoFormFieldsProps {
   setClearPassword: (value: boolean) => void;
   inputClass: string;
   labelClass: string;
+  invalidField?: ConnFieldKey | null;
 }
 
 export default function MongoFormFields({
@@ -37,6 +39,7 @@ export default function MongoFormFields({
   setClearPassword,
   inputClass,
   labelClass,
+  invalidField,
 }: MongoFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
   return (
@@ -53,6 +56,7 @@ export default function MongoFormFields({
             value={draft.host}
             onChange={(e) => onChange({ host: e.target.value })}
             placeholder="localhost"
+            {...fieldValidationProps("host", true, invalidField)}
           />
         </div>
         <div className="w-24">

@@ -74,6 +74,7 @@ import { useConnectionDraftForm } from "./ConnectionDialog/useConnectionDraftFor
 import { useConnectionUrlImport } from "./ConnectionDialog/useConnectionUrlImport";
 import ConnectionDialogBody from "./ConnectionDialog/ConnectionDialogBody";
 import ConnectionDialogFooter from "./ConnectionDialog/ConnectionDialogFooter";
+import type { ConnFieldKey } from "./forms/fieldValidation";
 
 // Sprint 213 — re-export the (relocated) `sanitizeMessage` helper so
 // external callers keep using `import { sanitizeMessage } from
@@ -115,6 +116,9 @@ export default function ConnectionDialog({
   const testing = testResult.status === "pending";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Issue #1135 — which field the last failed save flagged, so the offending
+  // input can carry `aria-invalid` + `aria-describedby` and receive focus.
+  const [invalidField, setInvalidField] = useState<ConnFieldKey | null>(null);
 
   const draftForm = useConnectionDraftForm(connection);
   const {
@@ -188,6 +192,29 @@ export default function ConnectionDialog({
     }
   };
 
+  // Issue #1135 — move focus to the first invalid field. The inputs live 2-3
+  // levels down across 8 DBMS form components and all carry stable ids, so
+  // reading the id here is far less code than threading a ref through every
+  // form. ponytail: focus by stable id; upgrade to refs only if a form drops
+  // its stable id.
+  const focusInvalidField = (field: ConnFieldKey) => {
+    const id =
+      field === "name"
+        ? "conn-name"
+        : field === "host"
+          ? "conn-host"
+          : isFileConnection
+            ? "conn-sqlite-path"
+            : "conn-database";
+    document.getElementById(id)?.focus();
+  };
+
+  const failValidation = (field: ConnFieldKey, message: string) => {
+    setError(message);
+    setInvalidField(field);
+    focusInvalidField(field);
+  };
+
   const handleSave = async () => {
     // Sprint 178: validate against trimmed values so a user typing only
     // whitespace into Name/Host gets the same "required" error they'd
@@ -195,17 +222,17 @@ export default function ConnectionDialog({
     // covered Name; the trim helper centralises the policy.
     const trimmed = trimDraft({ ...form, password: resolvePassword() });
     if (!trimmed.name) {
-      setError(t("dialog.errorNameRequired"));
+      failValidation("name", t("dialog.errorNameRequired"));
       return;
     }
     // File-backed DBMSes use `database` as the file path; host is irrelevant.
     // The host check applies only to network DBMSes.
     if (!isFileConnection && !trimmed.host) {
-      setError(t("dialog.errorHostRequired"));
+      failValidation("host", t("dialog.errorHostRequired"));
       return;
     }
     if (isFileConnection && !trimmed.database) {
-      setError(t("dialog.errorDatabaseFileRequired"));
+      failValidation("database", t("dialog.errorDatabaseFileRequired"));
       return;
     }
     // Sprint 345 — non-SQLite DBMSes also require a database name.
@@ -221,7 +248,8 @@ export default function ConnectionDialog({
     // (`db.runCommand({...})`) target the admin DB context regardless of
     // any pre-bound default. RDB connections still require it.
     if (!isFileConnection && !isMongo && !isSearch && !trimmed.database) {
-      setError(
+      failValidation(
+        "database",
         trimmed.dbType === "oracle"
           ? t("dialog.errorServiceNameRequired")
           : t("dialog.errorDatabaseRequired"),
@@ -230,12 +258,16 @@ export default function ConnectionDialog({
     }
     const unsupportedMessage = getMssqlConnectionUnsupportedMessage(trimmed);
     if (unsupportedMessage) {
+      // Not a single-field error (auth-method combo) — MssqlFormFields renders
+      // its own inline alert; clear any prior field flag.
       setError(unsupportedMessage);
+      setInvalidField(null);
       return;
     }
 
     setSaving(true);
     setError(null);
+    setInvalidField(null);
     try {
       // Sprint 178 (AC-178-02): outgoing payload uses trimmed values.
       // Password (resolvePassword()) is set on the trimmed copy
@@ -260,6 +292,20 @@ export default function ConnectionDialog({
   const handleParseAndContinue = () => {
     if (urlImport.parseAndApply()) {
       setInputMode("form");
+    }
+  };
+
+  // Issue #1135 — Enter now submits the form (parity with GroupDialog). The
+  // hidden submit button below makes implicit submission work with multiple
+  // inputs; visible buttons stay `type="button"` so their click semantics are
+  // unchanged. `noValidate` keeps our custom banner/focus in charge instead of
+  // native constraint bubbles.
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputMode === "url") {
+      handleParseAndContinue();
+    } else {
+      void handleSave();
     }
   };
 
@@ -295,41 +341,59 @@ export default function ConnectionDialog({
           </Button>
         </DialogHeader>
 
-        <ConnectionDialogBody
-          isEditing={isEditing}
-          inputMode={inputMode}
-          setInputMode={setInputMode}
-          urlValue={urlImport.urlValue}
-          setUrlValue={urlImport.setUrlValue}
-          urlError={urlImport.urlError}
-          setUrlError={urlImport.setUrlError}
-          onParseAndContinue={handleParseAndContinue}
-          form={form}
-          setForm={setForm}
-          handleDbTypeChange={handleDbTypeChange}
-          handleHostPaste={urlImport.handleHostPaste}
-          handleHostBlur={urlImport.handleHostBlur}
-          detectedScheme={urlImport.detectedScheme}
-          passwordInput={passwordInput}
-          setPasswordInput={setPasswordInput}
-          hadPassword={hadPassword}
-          clearPassword={clearPassword}
-          setClearPassword={setClearPassword}
-          inputClass={inputClass}
-          labelClass={labelClass}
-        />
+        {/* Issue #1135 — real <form> so Enter submits (parity with the other
+            dialogs). `noValidate` defers to our custom validation banner + focus
+            instead of native constraint bubbles. */}
+        <form onSubmit={handleFormSubmit} noValidate>
+          <ConnectionDialogBody
+            isEditing={isEditing}
+            inputMode={inputMode}
+            setInputMode={setInputMode}
+            urlValue={urlImport.urlValue}
+            setUrlValue={urlImport.setUrlValue}
+            urlError={urlImport.urlError}
+            setUrlError={urlImport.setUrlError}
+            onParseAndContinue={handleParseAndContinue}
+            form={form}
+            setForm={setForm}
+            handleDbTypeChange={handleDbTypeChange}
+            handleHostPaste={urlImport.handleHostPaste}
+            handleHostBlur={urlImport.handleHostBlur}
+            detectedScheme={urlImport.detectedScheme}
+            passwordInput={passwordInput}
+            setPasswordInput={setPasswordInput}
+            hadPassword={hadPassword}
+            clearPassword={clearPassword}
+            setClearPassword={setClearPassword}
+            inputClass={inputClass}
+            labelClass={labelClass}
+            invalidField={invalidField}
+          />
 
-        <ConnectionDialogFooter
-          feedbackState={feedbackState}
-          feedbackMessage={feedbackMessage}
-          error={error}
-          testing={testing}
-          saving={saving}
-          isEditing={isEditing}
-          onTest={handleTest}
-          onCancel={onClose}
-          onSave={handleSave}
-        />
+          <ConnectionDialogFooter
+            feedbackState={feedbackState}
+            feedbackMessage={feedbackMessage}
+            error={error}
+            testing={testing}
+            saving={saving}
+            isEditing={isEditing}
+            onTest={handleTest}
+            onCancel={onClose}
+            onSave={handleSave}
+          />
+
+          {/* Hidden submit target — enables Enter-to-submit with multiple
+              inputs without changing any visible button's click behaviour.
+              No text (would duplicate the footer Save button); aria-hidden +
+              tabIndex -1 keep it out of the a11y tree and tab order. */}
+          <button
+            type="submit"
+            aria-label={isEditing ? t("footer.update") : t("footer.save")}
+            aria-hidden="true"
+            tabIndex={-1}
+            className="sr-only"
+          />
+        </form>
       </DialogContent>
       {pendingDbTypeChange && (
         <ConfirmDialog

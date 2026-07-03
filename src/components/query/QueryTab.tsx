@@ -13,6 +13,9 @@ import {
   buildSqlCompletionContext,
   useMongoAutocomplete,
 } from "@features/completion";
+import { parseMongoshExpression } from "@features/query";
+import type { ExplainMongoFindArgs } from "@/lib/api/explain";
+import { toast } from "@lib/runtime/toast";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useRedisKeySuggestions } from "@hooks/useRedisKeySuggestions";
 import { useSearchAutocomplete } from "@hooks/useSearchAutocomplete";
@@ -60,6 +63,28 @@ import { resolveSafeModeEnvironment } from "@hooks/useSafeModeGate";
 
 interface QueryTabProps {
   tab: QueryTab;
+}
+
+// #1041 — Mongo explain is backed by `runCommand({explain:{find,filter}})`,
+// so it only applies to a `db.<coll>.find(<filter>)` statement. Parse the
+// frozen mongosh text into the `{database, collection, filter}` spec the
+// ExplainViewer document branch expects; aggregate / write / admin
+// statements have no find spec and return `null`.
+function deriveMongoExplainSpec(
+  sql: string,
+  database: string | undefined,
+): ExplainMongoFindArgs | null {
+  const parsed = parseMongoshExpression(sql);
+  if (parsed.kind !== "success" || parsed.method !== "find") return null;
+  const filter = parsed.args[0];
+  return {
+    database: database ?? "",
+    collection: parsed.collection,
+    filter:
+      filter !== null && typeof filter === "object" && !Array.isArray(filter)
+        ? (filter as Record<string, unknown>)
+        : {},
+  };
 }
 
 export default function QueryTab({ tab }: QueryTabProps) {
@@ -282,8 +307,23 @@ export default function QueryTab({ tab }: QueryTabProps) {
     indexNames: mongoIndexNames,
   });
   const isDocument = tab.paradigm === "document";
+  // #1041 — Explain visibility follows the `capabilities.query.explain`
+  // contract instead of a hardcoded dbType. ExplainViewer only renders rdb
+  // (table) and document plans, so paradigms it can't display stay excluded
+  // even if a future source flips the flag. Today PG (rdb) and Mongo
+  // (document) are the only sources declaring the flag, and both have a
+  // backend `explain_query`.
   const canExplainQuery =
-    tab.paradigm === "rdb" && connection?.dbType === "postgresql";
+    (tab.paradigm === "rdb" || tab.paradigm === "document") &&
+    !!connection &&
+    getDataSourceProfile(connection.dbType).capabilities.query.explain;
+  const explainMongoSpec = useMemo(
+    () =>
+      isDocument && explainSql
+        ? deriveMongoExplainSpec(explainSql, tab.database)
+        : null,
+    [isDocument, explainSql, tab.database],
+  );
 
   const favorites = useQueryFavorites({ tab });
   const {
@@ -326,8 +366,21 @@ export default function QueryTab({ tab }: QueryTabProps) {
     if (!sql || tab.queryState.status === "running" || !canExplainQuery) {
       return;
     }
+    // #1041 — Mongo explain is find-only (see `deriveMongoExplainSpec`).
+    // Mirror the dry-run toast pattern so a non-find statement fails loudly
+    // instead of leaving the result area blank.
+    if (isDocument && !deriveMongoExplainSpec(sql, tab.database)) {
+      toast.info("Explain is only available for find() queries in MongoDB.");
+      return;
+    }
     setExplainSql(sql);
-  }, [canExplainQuery, tab.queryState.status, tab.sql]);
+  }, [
+    canExplainQuery,
+    isDocument,
+    tab.database,
+    tab.queryState.status,
+    tab.sql,
+  ]);
 
   const handleExplainSettled = useCallback(
     (result: {
@@ -341,8 +394,15 @@ export default function QueryTab({ tab }: QueryTabProps) {
         connectionId: tab.connectionId,
         database: tab.database,
         tabId: tab.id,
-        paradigm: "rdb",
-        queryMode: "sql",
+        // #1041 — record the explain under the tab's own paradigm so Mongo
+        // explains aren't logged as rdb/sql.
+        ...(isDocument
+          ? {
+              paradigm: "document" as const,
+              queryMode: "find" as const,
+              collection: tab.collection,
+            }
+          : { paradigm: "rdb" as const, queryMode: "sql" as const }),
         source: "explain",
         sql: explainSql,
         status: result.status,
@@ -351,7 +411,14 @@ export default function QueryTab({ tab }: QueryTabProps) {
         duration: result.durationMs,
       });
     },
-    [explainSql, tab.connectionId, tab.database, tab.id],
+    [
+      explainSql,
+      isDocument,
+      tab.collection,
+      tab.connectionId,
+      tab.database,
+      tab.id,
+    ],
   );
   const explainExpectedDatabase = useMemo(
     () => tab.database ?? resolveActiveDb(tab.connectionId),
@@ -490,7 +557,14 @@ export default function QueryTab({ tab }: QueryTabProps) {
       {/* Result area — flex column so QueryResultGrid's flex-1 children fill
           the remaining height and the inner table can actually scroll. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {explainSql && canExplainQuery ? (
+        {explainSql && canExplainQuery && isDocument && explainMongoSpec ? (
+          <ExplainViewer
+            connectionId={tab.connectionId}
+            paradigm="document"
+            mongoSpec={explainMongoSpec}
+            onPlanSettled={handleExplainSettled}
+          />
+        ) : explainSql && canExplainQuery && !isDocument ? (
           <ExplainViewer
             connectionId={tab.connectionId}
             paradigm="table"
@@ -506,6 +580,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
             connectionId={tab.connectionId}
             database={tab.database}
             sql={tab.sql}
+            tabId={tab.id}
             onAfterCommit={handleExecuteAndShowResults}
             // Sprint 248 (ADR 0022 Phase 4) — surface the dry-run flag so
             // the result grid renders the rolled-back banner. Derived

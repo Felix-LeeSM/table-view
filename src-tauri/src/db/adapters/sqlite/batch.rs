@@ -76,6 +76,16 @@ impl SqliteAdapter {
                 match exec_result {
                     Ok(result) => {
                         let rows_affected = result.rows_affected();
+                        // Issue #1079 — commit path only; dry-run reports N-row
+                        // impact as a preview rather than an error.
+                        if matches!(mode, BatchMode::Commit) {
+                            if let Err(err) =
+                                crate::db::enforce_single_row_effect(idx, total, rows_affected)
+                            {
+                                let _ = tx.rollback().await;
+                                return Err(err);
+                            }
+                        }
                         results.push(QueryResult {
                             columns: Vec::new(),
                             rows: Vec::new(),

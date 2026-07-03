@@ -14,6 +14,7 @@
  */
 import { useTranslation } from "react-i18next";
 import { DATABASE_TYPE_LABELS, type ConnectionDraft } from "../../model";
+import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
 
 export interface RedisFormFieldsProps {
   draft: ConnectionDraft;
@@ -26,6 +27,7 @@ export interface RedisFormFieldsProps {
   setClearPassword: (value: boolean) => void;
   inputClass: string;
   labelClass: string;
+  invalidField?: ConnFieldKey | null;
 }
 
 const REDIS_DB_MIN = 0;
@@ -51,6 +53,7 @@ export default function RedisFormFields({
   setClearPassword,
   inputClass,
   labelClass,
+  invalidField,
 }: RedisFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
   const productLabel = DATABASE_TYPE_LABELS[draft.dbType];
@@ -69,6 +72,7 @@ export default function RedisFormFields({
             value={draft.host}
             onChange={(e) => onChange({ host: e.target.value })}
             placeholder="localhost"
+            {...fieldValidationProps("host", true, invalidField)}
           />
         </div>
         <div className="w-24">
@@ -163,6 +167,7 @@ export default function RedisFormFields({
           value={draft.database}
           onChange={(e) => onChange({ database: clampDbIndex(e.target.value) })}
           aria-label={`${productLabel} database index (0-15)`}
+          {...fieldValidationProps("database", true, invalidField)}
         />
         <p className="mt-1 text-2xs text-muted-foreground">
           {t("form.redisDbIndexHint", { productLabel })}

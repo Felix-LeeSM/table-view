@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
+import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
 
 export interface SearchFormFieldsProps {
   draft: ConnectionDraft;
@@ -12,6 +13,7 @@ export interface SearchFormFieldsProps {
   setClearPassword: (value: boolean) => void;
   inputClass: string;
   labelClass: string;
+  invalidField?: ConnFieldKey | null;
 }
 
 export default function SearchFormFields({
@@ -25,6 +27,7 @@ export default function SearchFormFields({
   setClearPassword,
   inputClass,
   labelClass,
+  invalidField,
 }: SearchFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
   return (
@@ -40,6 +43,7 @@ export default function SearchFormFields({
             value={draft.host}
             onChange={(e) => onChange({ host: e.target.value })}
             placeholder="localhost"
+            {...fieldValidationProps("host", true, invalidField)}
           />
         </div>
         <div className="w-24">

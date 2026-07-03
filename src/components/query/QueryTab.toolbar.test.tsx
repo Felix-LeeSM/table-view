@@ -391,4 +391,93 @@ describe("QueryTab — toolbar", () => {
       "db1",
     );
   });
+
+  // ── #1041: Explain gated by `capabilities.query.explain`, not a
+  // hardcoded dbType — MongoDB explain path is no longer dead. ──
+
+  it("[#1041] renders MongoDB Explain and wires explainMongoFind with the parsed find spec", async () => {
+    mockExplainMongoFind.mockResolvedValueOnce({
+      queryPlanner: { winningPlan: { stage: "COLLSCAN" } },
+    });
+    useHistorySettingsStore.setState({ queryHistoryEnabled: false });
+    const tab = makeQueryTab({
+      connectionId: "conn-mongo",
+      paradigm: "document",
+      queryMode: "find",
+      database: "table_view_test",
+      collection: "users",
+      sql: 'db.users.find({ status: "active" })',
+    });
+    useConnectionStore.setState({
+      connections: [
+        makeConn({
+          id: "conn-mongo",
+          dbType: "mongodb",
+          paradigm: "document",
+        }),
+      ],
+    });
+    render(<QueryTab tab={tab} />);
+
+    const explainBtn = screen.getByRole("button", { name: /explain query/i });
+    expect(explainBtn).not.toBeDisabled();
+
+    await act(async () => {
+      explainBtn.click();
+    });
+
+    // Document plan renders through the ExplainViewer's Mongo branch.
+    expect(await screen.findByTestId("explain-viewer")).toHaveAttribute(
+      "data-paradigm",
+      "document",
+    );
+    expect(mockExplainMongoFind).toHaveBeenCalledWith("conn-mongo", {
+      database: "table_view_test",
+      collection: "users",
+      filter: { status: "active" },
+    });
+    expect(mockExplainRdbQuery).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("mock-result")).not.toBeInTheDocument();
+  });
+
+  it("[#1041] does not run Explain for a non-find MongoDB statement", async () => {
+    useHistorySettingsStore.setState({ queryHistoryEnabled: false });
+    const tab = makeQueryTab({
+      connectionId: "conn-mongo",
+      paradigm: "document",
+      queryMode: "aggregate",
+      database: "table_view_test",
+      collection: "users",
+      sql: "db.users.aggregate([{ $match: { status: 1 } }])",
+    });
+    useConnectionStore.setState({
+      connections: [
+        makeConn({
+          id: "conn-mongo",
+          dbType: "mongodb",
+          paradigm: "document",
+        }),
+      ],
+    });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByRole("button", { name: /explain query/i }).click();
+    });
+
+    expect(mockExplainMongoFind).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("explain-viewer")).not.toBeInTheDocument();
+  });
+
+  it("[#1041] hides Explain for a dbType whose capability declares explain=false", () => {
+    const tab = makeQueryTab({ connectionId: "mysql-conn" });
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "mysql-conn", dbType: "mysql" })],
+    });
+    render(<QueryTab tab={tab} />);
+
+    expect(
+      screen.queryByRole("button", { name: /explain query/i }),
+    ).not.toBeInTheDocument();
+  });
 });
