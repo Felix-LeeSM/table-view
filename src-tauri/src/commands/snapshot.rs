@@ -459,9 +459,21 @@ async fn read_safe_mode(
             .await
             .map_err(|e| AppError::Storage(format!("read safe_mode: {}", e)))?;
     match row {
-        Some((json,)) => Ok(serde_json::from_str(&json).unwrap_or_default()),
+        Some((json,)) => Ok(parse_safe_mode_value(&json)),
         None => Ok(SafeModeStore::default()),
     }
+}
+
+/// Boot 읽기 하위 호환 (#1190). frontend `persistSettingValue("safe_mode", mode)`
+/// 는 bare JSON string(`"warn"`)을 저장하지만, 과거/이론적 object wire
+/// (`{"mode":"warn"}`)도 흡수해야 한다. bare string 을 먼저 시도하고
+/// (`SafeMode` 는 `#[serde(other)]` 로 미인식 값을 warn 으로 흡수), 실패하면
+/// object 로 파싱한다. 둘 다 실패하면 `warn` fallback — #1113 enum 정책과 일관.
+fn parse_safe_mode_value(json: &str) -> SafeModeStore {
+    if let Ok(mode) = serde_json::from_str::<SafeMode>(json) {
+        return SafeModeStore { mode };
+    }
+    serde_json::from_str::<SafeModeStore>(json).unwrap_or_default()
 }
 
 // ---------------------------------------------------------------------------
@@ -553,6 +565,31 @@ mod tests {
         for m in [SafeMode::Off, SafeMode::Warn, SafeMode::Strict] {
             let s = serde_json::to_string(&m).unwrap();
             assert_eq!(serde_json::from_str::<SafeMode>(&s).unwrap(), m);
+        }
+    }
+
+    #[test]
+    fn parse_safe_mode_value_accepts_bare_string_and_legacy_object() {
+        // #1190 — boot read 하위 호환. frontend 는 bare string 을 저장하고,
+        // legacy/이론적 object wire 도 흡수. 미인식 값은 warn fallback.
+        for (raw, expected) in [
+            // frontend 실제 저장 shape — bare JSON string.
+            (r#""off""#, SafeMode::Off),
+            (r#""warn""#, SafeMode::Warn),
+            (r#""strict""#, SafeMode::Strict),
+            // legacy object wire.
+            (r#"{"mode":"off"}"#, SafeMode::Off),
+            (r#"{"mode":"strict"}"#, SafeMode::Strict),
+            // 미인식 bare / object / 완전 malformed → warn fallback.
+            (r#""garbage""#, SafeMode::Warn),
+            (r#"{"mode":"on"}"#, SafeMode::Warn),
+            (r#"not json"#, SafeMode::Warn),
+        ] {
+            assert_eq!(
+                parse_safe_mode_value(raw).mode,
+                expected,
+                "parse_safe_mode_value({raw})"
+            );
         }
     }
 
@@ -852,14 +889,12 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn inner_bare_string_safe_mode_ignored_by_boot_read() {
-        // #1190 characterization — frontend `persistSettingValue("safe_mode", mode)`
-        // 는 bare JSON string(`"off"`)을 value_json 에 저장하지만 `read_safe_mode`
-        // 는 object(`{"mode":...}`) 를 기대해 역직렬화 실패 → `.unwrap_or_default()`.
-        // 따라서 boot snapshot 은 영속된 값을 무시하고 항상 default(warn)를 노출한다.
-        // 위 시나리오 3개는 전부 object shape 를 seed 해 이 버그를 놓쳤다 (리뷰 blind
-        // spot). #1113 의 "실효 기본값 = SafeModeStore::default()" 전제를 코드로 잠근다.
-        // #1190 fix 시 이 assertion 이 뒤집힌다 (그때는 영속된 off 를 존중).
+    async fn inner_bare_string_safe_mode_respected_by_boot_read() {
+        // #1190 regression — frontend `persistSettingValue("safe_mode", mode)`
+        // 는 bare JSON string(`"off"`)을 value_json 에 저장한다. boot read 는
+        // bare string 과 legacy object(`{"mode":...}`) 를 둘 다 흡수해야 하며,
+        // 영속된 off 가 재시작 후에도 존중돼야 한다 (round-trip). 이 assertion 은
+        // #1190 fix 이전엔 실패했다 (그때는 default(warn)로 fallback 했다).
         let (_dir, pool) = pool_setup().await;
         sqlx::query("INSERT INTO settings(key, value_json, updated_at) VALUES (?, ?, ?)")
             .bind("safe_mode")
@@ -872,8 +907,8 @@ mod tests {
             .await
             .unwrap();
         match &snap.stores.safe_mode {
-            // 영속값 off 가 무시되고 default(warn)로 fallback (#1190 witness).
-            StoreSlot::Ok(s) => assert_eq!(s.mode, SafeMode::Warn),
+            // 영속된 bare string off 가 boot snapshot 에서 존중된다 (#1190 fix).
+            StoreSlot::Ok(s) => assert_eq!(s.mode, SafeMode::Off),
             StoreSlot::Err { error } => panic!("safe_mode must read OK, got error={}", error),
         }
         pool_cleanup();
