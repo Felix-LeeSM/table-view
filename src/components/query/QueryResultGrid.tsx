@@ -10,6 +10,7 @@ import type {
 import {
   analyzeResultEditability,
   parseSingleTableSelect,
+  resolveDefaultSchema,
 } from "@lib/sql/queryAnalyzer";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -151,11 +152,16 @@ function SelectResultArea({
       ? s.connections.find((candidate) => candidate.id === connectionId)
       : undefined,
   );
-  const defaultSchema = connection?.dbType === "sqlite" ? "main" : "public";
+  const defaultSchema = resolveDefaultSchema(
+    connection?.dbType,
+    database ?? "",
+    connection?.user ?? "",
+  );
   const isDocumentResult = result.resultUnit === "document";
   // Identify the source table once per SQL so we can fetch + look up its
-  // primary-key metadata. Resolution falls back to "public" because that's
-  // the default schema in PostgreSQL.
+  // primary-key metadata. An unqualified table resolves to the DBMS default
+  // schema (resolveDefaultSchema) so PK lookup matches the cached columns —
+  // "public" is only correct for PostgreSQL (issue #1066).
   const parsed = useMemo(() => {
     if (isDocumentResult) return null;
     if (!sql) return null;

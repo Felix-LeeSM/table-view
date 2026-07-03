@@ -1160,6 +1160,125 @@ async fn write_text_file_export_inner_invalid_path_cleans_up_and_propagates_io_e
     assert!(res.is_err());
 }
 
+// ── Issue #1094 regression: atomic write + path guard ────────────────
+//
+// 작성 이유 (2026-07-03): export 가 `File::create(target)` 로 기존 파일을
+// 즉시 truncate 하고 실패/취소 시 그 경로를 remove_file → 원본 파괴. 아울러
+// 렌더러 지정 target_path 에 경로 검증이 없어 XSS 시 내부 state DB overwrite
+// 가능. temp+rename atomic write + is_absolute/reject_internal_app_state_path
+// 가드로 fix. 아래 3 test 는 fix 전 RED.
+
+use serial_test::serial;
+
+// [#1094] 기존 파일 위로 export 하다 취소되면 원본이 truncate 되지 않고
+// 그대로 남아야 한다 (atomic 교체). temp 잔여물도 남지 않는다.
+#[test]
+fn write_export_cancel_preserves_existing_file() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("report.csv");
+    std::fs::write(&path, b"ORIGINAL IMPORTANT DATA").unwrap();
+
+    let token = CancellationToken::new();
+    token.cancel();
+    let err = write_export(
+        ExportFormat::Csv,
+        &path,
+        &["i".into()],
+        &[vec![json!(1)]],
+        &table_ctx(),
+        Some(&token),
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("cancelled"), "err: {err}");
+
+    // 원본 무손상.
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "ORIGINAL IMPORTANT DATA"
+    );
+    // temp 잔여물 없음 — dir 에는 report.csv 하나만.
+    let leftovers: Vec<String> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n != "report.csv")
+        .collect();
+    assert!(leftovers.is_empty(), "temp leftovers: {leftovers:?}");
+}
+
+// [#1094] target_path 가 상대경로 / 내부 app state DB 면 Validation 거부.
+#[test]
+#[serial]
+fn write_export_rejects_relative_and_internal_state_paths() {
+    let dir = TempDir::new().unwrap();
+    std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+
+    // 상대경로 거부.
+    let rel = std::path::Path::new("relative.csv");
+    let err = write_export(
+        ExportFormat::Csv,
+        rel,
+        &["i".into()],
+        &[vec![json!(1)]],
+        &table_ctx(),
+        None,
+    )
+    .unwrap_err();
+    assert!(matches!(err, AppError::Validation(_)), "err: {err}");
+
+    // 내부 state DB 경로 거부.
+    let state_db = crate::storage::local::db_path().unwrap();
+    let err = write_export(
+        ExportFormat::Csv,
+        &state_db,
+        &["i".into()],
+        &[vec![json!(1)]],
+        &table_ctx(),
+        None,
+    )
+    .unwrap_err();
+    assert!(matches!(err, AppError::Validation(_)), "err: {err}");
+    assert!(
+        !state_db.exists(),
+        "guard must reject before creating state.db"
+    );
+
+    std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+}
+
+// [#1094] schema dump 실패 시에도 기존 target 은 무손상 (async atomic path).
+#[tokio::test]
+async fn run_schema_dump_failure_preserves_existing_target() {
+    let state = AppState::new();
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("dump.sql");
+    std::fs::write(&path, b"ORIGINAL DUMP").unwrap();
+
+    // Dml + 존재하지 않는 connection → Database err (file create 이후 지점).
+    let res = super::run_schema_dump(
+        &state,
+        "no-such-conn",
+        &path,
+        "",
+        "",
+        &[dump_table("public", "t", vec!["id"])],
+        &dump_opts(ExportInclude::Dml, 100),
+        None,
+    )
+    .await;
+    assert!(res.is_err());
+
+    // 원본 무손상 + temp 잔여물 없음.
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "ORIGINAL DUMP");
+    let leftovers: Vec<String> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n != "dump.sql")
+        .collect();
+    assert!(leftovers.is_empty(), "temp leftovers: {leftovers:?}");
+}
+
 // [AC-192-05] ExportInclude serde lowercase wire — frontend `"ddl"`
 // 등이 정확히 enum variant 로 매칭.
 #[test]

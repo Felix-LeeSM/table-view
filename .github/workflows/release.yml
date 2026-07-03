@@ -93,12 +93,20 @@ jobs:
 
       # Rust target dir caches across runs of the same matrix leg. Keyed on
       # OS+target so each platform keeps an isolated target tree.
+      # restore-only (`save-if: false`, matches platform-smoke-canary.yml):
+      # release runs fire on tag refs, and GitHub cache scope lets a tag run
+      # restore only its own ref + the default branch — never a *prior* tag's
+      # cache. So a save here can never be reused by a future release and just
+      # burns quota (audit 2026-07-03: v0.3.1/v0.3.2 tags held 3.5GB of dead
+      # cache toward the 10GB cap). Restore-only still lets a re-run of the
+      # *same* tag reuse the default-branch cache.
       - name: Cache cargo target
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
           key: ${{ matrix.target }}
           shared-key: release
+          save-if: false
 
       - name: Install pnpm deps
         run: pnpm install --frozen-lockfile

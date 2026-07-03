@@ -520,4 +520,158 @@ describe("QueryResultGrid", () => {
       null,
     );
   });
+
+  // Purpose: lock the QueryResultGrid → resolveDefaultSchema wiring so an
+  // unqualified single-table SELECT resolves to each DBMS's real default
+  // schema, not PostgreSQL "public". The 6 analyzer unit tests call the
+  // resolver directly, so reverting the QueryResultGrid.tsx connection→resolver
+  // wiring leaves them green — these component tests fail instead. A
+  // schema-aware getTableColumns mock only yields PK metadata for the
+  // *expected* schema, so a mis-resolved schema drops the result to read-only.
+  // Issue #1066 (bug, area:frontend, P1).
+  describe("per-DBMS default-schema wiring (#1066)", () => {
+    const PK_COLUMNS = [
+      {
+        name: "id",
+        dataType: "integer",
+        category: "unknown",
+        nullable: false,
+        default_value: null,
+        is_primary_key: true,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+      {
+        name: "name",
+        dataType: "text",
+        category: "unknown",
+        nullable: true,
+        default_value: null,
+        is_primary_key: false,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+    ];
+
+    // getTableColumns is invoked as (connId, table, schema, db); hand back PK
+    // metadata only when the resolver produced `expectedSchema`, so a wrong
+    // default schema yields an empty column set → not editable.
+    function mockColumnsForSchema(expectedSchema: string) {
+      setupTauriMock({
+        getTableColumns: vi.fn(
+          async (_connId: string, _table: string, schema: string) =>
+            schema === expectedSchema ? PK_COLUMNS : [],
+        ),
+      });
+    }
+
+    function seedRdbConnection(
+      id: string,
+      dbType: "mssql" | "oracle" | "mysql",
+      database: string,
+      user: string,
+    ) {
+      useConnectionStore.setState({
+        connections: [
+          {
+            id,
+            name: id,
+            dbType,
+            host: "localhost",
+            port: 1433,
+            user,
+            database,
+            groupId: null,
+            color: null,
+            hasPassword: false,
+            paradigm: "rdb",
+          },
+        ],
+      });
+    }
+
+    // Reason: bug #1066 — mssql's default schema is "dbo"; the pre-fix ternary
+    // resolved every non-sqlite engine to "public" so PK lookup missed the
+    // cached "dbo" columns and edit judgment flipped (2026-07-03).
+    it("resolves an unqualified mssql SELECT to dbo and enables editing", async () => {
+      mockColumnsForSchema("dbo");
+      seedRdbConnection("conn-mssql", "mssql", "master", "sa");
+      render(
+        <QueryResultGrid
+          queryState={{ status: "completed", result: SELECT_RESULT }}
+          connectionId="conn-mssql"
+          database="master"
+          sql="SELECT id, name FROM mytable"
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByText(/Editable/)).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/Read-only/)).not.toBeInTheDocument();
+    });
+
+    // Reason: bug #1066 — Oracle's default schema is the connecting user, stored
+    // upper-case in the catalog; the connection user must be upper-cased before
+    // matching the cached schema (2026-07-03).
+    it("resolves an unqualified oracle SELECT to the upper-cased connecting user", async () => {
+      mockColumnsForSchema("SYSTEM");
+      seedRdbConnection("conn-oracle", "oracle", "FREEPDB1", "system");
+      render(
+        <QueryResultGrid
+          queryState={{ status: "completed", result: SELECT_RESULT }}
+          connectionId="conn-oracle"
+          database="FREEPDB1"
+          sql="SELECT id, name FROM mytable"
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByText(/Editable/)).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/Read-only/)).not.toBeInTheDocument();
+    });
+
+    // Reason: bug #1066 fail-safe — MySQL schema == database; with no active
+    // database the schema is unknown, so the result must stay read-only rather
+    // than risk a false-positive edit against the wrong table (2026-07-03).
+    it("keeps a mysql result read-only when no active database is selected", async () => {
+      mockColumnsForSchema("shop");
+      seedRdbConnection("conn-mysql", "mysql", "", "root");
+      render(
+        <QueryResultGrid
+          queryState={{ status: "completed", result: SELECT_RESULT }}
+          connectionId="conn-mysql"
+          database=""
+          sql="SELECT id, name FROM mytable"
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByText(/Read-only/)).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/Editable/)).not.toBeInTheDocument();
+    });
+
+    // Reason: bug #1066 fail-safe — a quoted, case-sensitive Oracle username
+    // ("MyUser") does not fold to upper-case in the catalog, so the resolver's
+    // "MYUSER" misses. That mismatch must degrade to read-only (no false edit),
+    // not silently edit a phantom schema (2026-07-03).
+    it("keeps an oracle result read-only when the quoted username case mismatches", async () => {
+      // Real catalog schema is the quoted "MyUser"; resolver yields "MYUSER".
+      mockColumnsForSchema("MyUser");
+      seedRdbConnection("conn-oracle-q", "oracle", "ORCLPDB", "MyUser");
+      render(
+        <QueryResultGrid
+          queryState={{ status: "completed", result: SELECT_RESULT }}
+          connectionId="conn-oracle-q"
+          database="ORCLPDB"
+          sql="SELECT id, name FROM mytable"
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByText(/Read-only/)).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/Editable/)).not.toBeInTheDocument();
+    });
+  });
 });
