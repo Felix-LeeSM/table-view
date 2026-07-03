@@ -124,17 +124,26 @@ impl Default for ThemeStore {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SafeModeStore {
-    /// `"off" | "on"` (또는 SafeMode 의 다른 sentinel).
-    pub mode: String,
+/// Safe Mode 3-tier. Wire value = lowercase variant (`"off"` / `"warn"` /
+/// `"strict"`). `#[serde(other)]` 로 미인식/legacy 값(구 `"on"` 등)은
+/// `Warn` 으로 역직렬화 fallback — 이슈 #1113 기결정 기본값(warn)과 일치.
+/// Default 도 `Warn` (신규 설치의 실효 기본값).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SafeMode {
+    Off,
+    Strict,
+    // `#[serde(other)]` 는 마지막 variant 필수. Warn 이 fallback 겸 기본값.
+    #[default]
+    #[serde(other)]
+    Warn,
 }
 
-impl Default for SafeModeStore {
-    fn default() -> Self {
-        Self { mode: "off".into() }
-    }
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SafeModeStore {
+    /// 3-tier `off` / `warn` / `strict`. 미인식 값은 `warn` fallback (#1113).
+    pub mode: SafeMode,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -486,7 +495,7 @@ mod tests {
     //!
     //! 시나리오:
     //!   - Default values 의 wire shape (theme = `"slate"` / `"system"`,
-    //!     safe_mode = `"off"`, runtime/workspaces empty)
+    //!     safe_mode = `"warn"`, runtime/workspaces empty)
     //!   - StoreSlot::Ok / Err 의 `#[serde(untagged)]` round-trip
     //!   - WORKSPACE_LABEL_PREFIX strip 로직 (launcher → None, workspace-X → Some("X"))
     //!   - SNAPSHOT_VERSION 단조 증가
@@ -513,11 +522,38 @@ mod tests {
     }
 
     #[test]
-    fn safe_mode_store_default_is_off() {
+    fn safe_mode_store_default_is_warn() {
+        // 이슈 #1113 — 신규 설치의 실효 기본값. 기존 default 는 "off" 였고
+        // (frontend hydration 전 snapshot 이 이 default 를 실효값으로 노출),
+        // 이 때문에 non-prod 에서 DROP / WHERE-less DELETE 가 무가드 실행됐다.
         let s = SafeModeStore::default();
-        assert_eq!(s.mode, "off");
+        assert_eq!(s.mode, SafeMode::Warn);
         let json = serde_json::to_value(&s).unwrap();
-        assert_eq!(json["mode"], "off");
+        assert_eq!(json["mode"], "warn");
+    }
+
+    #[test]
+    fn safe_mode_deserializes_variants_and_falls_back_to_warn() {
+        // 하위 호환 lock (#1113) — 기존 SQLite 에 영속된 3-tier 문자열은
+        // 그대로 역직렬화되고, 미인식/legacy 값(구 "on" 등)은 `warn` 으로
+        // fallback 한다. `SafeModeStore` 는 object wire (`{"mode":"..."}`)
+        // 이므로 struct 레벨과 bare-enum 레벨 둘 다 확인.
+        for (raw, expected) in [
+            (r#"{"mode":"off"}"#, SafeMode::Off),
+            (r#"{"mode":"warn"}"#, SafeMode::Warn),
+            (r#"{"mode":"strict"}"#, SafeMode::Strict),
+            // legacy / 미인식 → warn fallback.
+            (r#"{"mode":"on"}"#, SafeMode::Warn),
+            (r#"{"mode":"garbage"}"#, SafeMode::Warn),
+        ] {
+            let store: SafeModeStore = serde_json::from_str(raw).unwrap();
+            assert_eq!(store.mode, expected, "store deserialize of {raw}");
+        }
+        // Round-trip: 유효 variant 는 serialize → deserialize 항등.
+        for m in [SafeMode::Off, SafeMode::Warn, SafeMode::Strict] {
+            let s = serde_json::to_string(&m).unwrap();
+            assert_eq!(serde_json::from_str::<SafeMode>(&s).unwrap(), m);
+        }
     }
 
     #[test]
@@ -756,7 +792,8 @@ mod tests {
             StoreSlot::Err { error } => panic!("theme must read OK, got error={}", error),
         }
         match &snap.stores.safe_mode {
-            StoreSlot::Ok(s) => assert_eq!(s.mode, "on"),
+            // seeded value "on" 은 3-tier 이전 legacy sentinel — warn fallback (#1113).
+            StoreSlot::Ok(s) => assert_eq!(s.mode, SafeMode::Warn),
             StoreSlot::Err { error } => panic!("safe_mode must read OK, got error={}", error),
         }
         pool_cleanup();
