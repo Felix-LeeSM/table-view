@@ -12,6 +12,7 @@
 import type { ColumnInfo } from "@/types/schema";
 import type { QueryColumn } from "@/types/query";
 import type { DatabaseType } from "@/types/connection";
+import { tokenizeSql } from "./sqlTokenize";
 
 export interface SingleTableSelectInfo {
   schema: string | null;
@@ -60,20 +61,21 @@ export function resolveDefaultSchema(
   }
 }
 
-/** Strip leading SQL comments and whitespace, mirroring backend behaviour. */
-function stripLeadingComments(sql: string): string {
-  let s = sql.trimStart();
-  while (true) {
-    if (s.startsWith("--")) {
-      const idx = s.indexOf("\n");
-      s = idx >= 0 ? s.slice(idx + 1).trimStart() : "";
-    } else if (s.startsWith("/*")) {
-      const idx = s.indexOf("*/");
-      s = idx >= 0 ? s.slice(idx + 2).trimStart() : "";
-    } else {
-      return s;
-    }
-  }
+/**
+ * Strip ALL SQL comments (leading, trailing, inline) while preserving string
+ * and quoted-identifier literals verbatim. Reuses the literal-aware tokenizer
+ * so a `--` / block-comment sequence *inside* a string (e.g.
+ * `WHERE note = '-- x'`) is NOT mistaken for a comment — a naive regex strip
+ * would delete past it and could hide a disqualifying keyword (JOIN / UNION),
+ * flipping a genuinely multi-source query to falsely-editable (data-integrity
+ * risk). Each comment becomes a single space so two identifiers separated only
+ * by a block comment can't fuse into one token (keeping JOIN word-bounded).
+ * Issue #1226.
+ */
+function stripComments(sql: string): string {
+  return tokenizeSql(sql)
+    .map((t) => (t.kind === "comment" ? " " : t.text))
+    .join("");
 }
 
 /** Drop a trailing `;` (and any whitespace following it). */
@@ -116,7 +118,7 @@ function unquote(id: string): string {
 export function parseSingleTableSelect(
   sql: string,
 ): SingleTableSelectInfo | null {
-  const stripped = stripTrailingTerminator(stripLeadingComments(sql));
+  const stripped = stripTrailingTerminator(stripComments(sql).trim());
   if (!stripped) return null;
 
   // Must start with SELECT (no WITH / VALUES / EXPLAIN, etc.)

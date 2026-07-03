@@ -35,7 +35,10 @@ export interface QueryResultGridProps {
   /** Database (schemaStore cache key dimension) — required when
    *  `connectionId` is supplied for editable-result lookups. */
   database?: string;
-  /** SQL of the executed query — used to detect a single-table SELECT. */
+  /** SQL of the executed query (a snapshot pinned by the parent at run time,
+   *  NOT the live editor text) — used to detect a single-table SELECT.
+   *  Multi-statement results use each statement's own executed `stmt.sql`.
+   *  Issue #1226. */
   sql?: string;
   /** Owning query tab id — Issue #1102, scopes the editable-result pending
    *  store and drives `setTabDirty`. */
