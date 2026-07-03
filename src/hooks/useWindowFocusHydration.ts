@@ -1,6 +1,4 @@
 import { useEffect } from "react";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useWorkspaceStore } from "@stores/workspaceStore";
 import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnectionSession";
 
 /**
@@ -14,34 +12,24 @@ import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnect
  *     the workspace update session storage but the launcher may miss the
  *     IPC bridge event while hidden.
  *
- * Calling `hydrateFromSession()` is idempotent — it reads from localStorage
- * and patches the store only when data exists. Zustand skips re-renders when
- * the patched values are referentially equal to the current state.
+ * Calling `hydrateConnectionSession()` is idempotent — it reads from
+ * localStorage and patches only `connectionStore` (focusedConnId +
+ * activeStatuses) when data exists. Zustand skips re-renders when the patched
+ * values are referentially equal to the current state.
  *
- * When the workspace hydrates a different `focusedConnId` (e.g. the user
- * switched from PG to Mongo on the launcher while the workspace was hidden),
- * stale tabs from the previous connection are cleared. Without this, the
- * Sidebar's active-tab effect would override `focusedConnId` back to the
- * old connection, showing the wrong paradigm.
+ * This hook never touches `workspaceStore`. Under the sprint-361 per-connection
+ * window model each `workspace-{connId}` window owns only its own tabs, so a
+ * focus event that hydrates a *different* `focusedConnId` (the launcher moved
+ * focus elsewhere while this window was hidden) must not clear anything —
+ * doing so wiped this window's own tabs (#1098). Workspace teardown belongs to
+ * disconnect/remove (`cleanupConnectionFrontendState`), not focus hydration.
  */
 export function useWindowFocusHydration(): void {
   useEffect(() => {
-    const hydrate = () => {
-      const prevConnId = useConnectionStore.getState().focusedConnId;
-      hydrateConnectionSession();
-      const newConnId = useConnectionStore.getState().focusedConnId;
-
-      if (newConnId && newConnId !== prevConnId) {
-        const { workspaces } = useWorkspaceStore.getState();
-        const staleConnIds = Object.keys(workspaces).filter(
-          (cid) => cid !== newConnId,
-        );
-        const clear = useWorkspaceStore.getState().clearForConnection;
-        for (const cid of staleConnIds) {
-          clear(cid);
-        }
-      }
-    };
+    // Distinct closure per mount: addEventListener dedupes identical
+    // (type, listener) pairs, so registering the shared entrypoint directly
+    // would collapse two hook instances into a single listener.
+    const hydrate = () => hydrateConnectionSession();
     hydrate();
     window.addEventListener("focus", hydrate);
     return () => window.removeEventListener("focus", hydrate);
