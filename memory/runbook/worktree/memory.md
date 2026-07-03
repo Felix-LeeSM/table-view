@@ -69,9 +69,10 @@ bash scripts/worktree-cleanup.sh --prune
 ## 의존성 warm-start
 
 기본 spawn 은 `scripts/worktree-bootstrap-deps.sh` 를 호출해 새 worktree 의
-의존성을 보정한다. 복사는 빠른 시작용이고, 새 worktree lockfile 기준
-`pnpm install --frozen-lockfile` 와 `cargo fetch --manifest-path
-src-tauri/Cargo.toml` 가 최종 보정이다.
+의존성을 보정한다. node_modules 는 복사하지 않고 새 worktree lockfile 기준
+`pnpm install --frozen-lockfile --prefer-offline` 로 설치한다 — pnpm store
+hardlink 라 물리 디스크 추가 없이 rsync 복사보다 빠르다. `cargo fetch
+--manifest-path src-tauri/Cargo.toml` 가 Rust 의존성을 보정한다.
 
 `src-tauri/target/` warm-start 의 목적은 pre-push Rust/coverage 산출물 재사용이다.
 기본은 volatile output 을 제외한 pruned copy 이며, 전체 복사는 `--full-target`
