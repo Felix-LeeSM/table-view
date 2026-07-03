@@ -62,6 +62,33 @@ describe("SchemaTree — lazy schema load (#1219)", () => {
     expect(mockLoadTables).toHaveBeenCalledWith("conn1", "db1", "s2");
   });
 
+  // ── AC3 — 시스템 스키마가 raw count 를 부풀려도 소규모면 eager (PR #1263 회귀) ─
+  it("small DB with system schemas: user-schema count keeps it eager, all schemas visible", async () => {
+    // DuckDB-shaped: `main`/`temp` (system) + 4 user schemas. Raw length 6
+    // must not tip the DB lazy — the threshold counts only user schemas (4).
+    setSchemaStoreState({
+      schemas: {
+        conn1: [
+          { name: "main" },
+          { name: "temp" },
+          { name: "catalog" },
+          { name: "core" },
+          { name: "sales" },
+          { name: "support" },
+        ],
+      },
+      tables: {},
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // eager: every schema's tables load at mount, incl. the user's `core`.
+    expect(mockLoadTables).toHaveBeenCalledWith("conn1", "db1", "core");
+    expect(mockLoadTables).toHaveBeenCalledWith("conn1", "db1", "support");
+  });
+
   // ── AC4 — 재접속: persist 된 펼친 스키마만 내용 로드, 접힌 건 안 가져옴 ────
   it("reconnect: persisted expanded schema loads its tables; collapsed ones stay unfetched", async () => {
     setSchemaStoreState({ schemas: { conn1: manySchemas(6) }, tables: {} });

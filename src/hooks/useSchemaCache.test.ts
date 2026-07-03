@@ -198,6 +198,33 @@ describe("useSchemaCache", () => {
     expect(listSchemaColumns).toHaveBeenCalledWith("conn1", "s0", "db1");
   });
 
+  it("[AC-1219-4] eager threshold counts user schemas only, ignoring system schemas", async () => {
+    // Regression from PR #1263 round 1: the backend `list_namespaces` returns
+    // system schemas (DuckDB `main` / `temp`) alongside the 4 user schemas, so
+    // the raw list length (6) tipped a small DB into the lazy path and the
+    // first-schema seed hid `core.*`. The threshold must count only user
+    // schemas so this small DB stays eager (AC-3) and every user schema loads.
+    const tauri = await import("@lib/tauri");
+    const listSchemas = tauri.listSchemas as ReturnType<typeof vi.fn>;
+    const listTables = tauri.listTables as ReturnType<typeof vi.fn>;
+    listSchemas.mockResolvedValue([
+      { name: "main" },
+      { name: "temp" },
+      { name: "catalog" },
+      { name: "core" },
+      { name: "sales" },
+      { name: "support" },
+    ]);
+
+    const { result } = renderHook(() => useSchemaCache("conn1", "db1"));
+    await waitFor(() => expect(result.current.schemas.length).toBe(6));
+
+    await waitFor(() => {
+      expect(listTables).toHaveBeenCalledWith("conn1", "core", "db1");
+      expect(listTables).toHaveBeenCalledWith("conn1", "support", "db1");
+    });
+  });
+
   it("[AC-191-02-4] backend listSchemas rejection records store error (current contract)", async () => {
     // Sprint 191 finding — `useSchemaStore.loadSchemas` swallows tauri
     // rejections internally and writes `String(e)` to the store's `error`
