@@ -13,11 +13,16 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { toast } from "@lib/runtime/toast";
 import { persistWorkspaces, type WorkspacesShape } from "./persistence";
 import type { WorkspaceState } from "./types";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("@lib/runtime/toast", () => ({
+  toast: { error: vi.fn() },
 }));
 
 function ws(overrides: Partial<WorkspaceState> = {}): WorkspaceState {
@@ -39,7 +44,9 @@ function firstReq(): Record<string, unknown> {
 
 describe("persistWorkspaces — persist_workspace IPC (#1091)", () => {
   beforeEach(() => {
-    vi.mocked(invoke).mockClear();
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    vi.mocked(toast.error).mockClear();
   });
 
   it("ships each (connId, db) workspace to persist_workspace with the Rust request shape", () => {
@@ -131,5 +138,22 @@ describe("persistWorkspaces — persist_workspace IPC (#1091)", () => {
       queryState: unknown;
     }[];
     expect(tabs[0]!.queryState).toEqual({ status: "idle" });
+  });
+
+  // #1092 / #1091 — SQLite is the SOT with no boot reconcile, so a rejected
+  // write is lost on the next restart (the exact silent loss #1091 fixes). A
+  // failure must reach the user, and a multi-workspace failure surfaces ONE
+  // toast per flush, not one per workspace.
+  it("surfaces a single storageWriteFailed toast when persist_workspace rejects", async () => {
+    vi.mocked(invoke).mockRejectedValue(new Error("disk full"));
+    persistWorkspaces({ conn1: { dbA: ws(), dbB: ws() } });
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+  });
+
+  it("stays silent when every persist_workspace write resolves", async () => {
+    persistWorkspaces({ conn1: { dbA: ws(), dbB: ws() } });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });

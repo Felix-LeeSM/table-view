@@ -16,6 +16,8 @@
  *     downstream consumers can drop guards.
  */
 import { logger } from "@lib/logger";
+import { toast } from "@lib/runtime/toast";
+import i18n from "@lib/i18n";
 import {
   persistWorkspace,
   type PersistWorkspaceRequest,
@@ -117,25 +119,35 @@ export function persistWorkspaces(workspaces: WorkspacesShape): void {
   // debounce already coalesces bursts, so this per-workspace loop is bounded
   // by the number of open workspaces (typically 1–3) — no dirty-diff bookkeeping.
   const dehydrated = dehydrateAll(workspaces);
+  const pending: Promise<void>[] = [];
   for (const connId of Object.keys(dehydrated)) {
     const byDb = dehydrated[connId];
     if (!byDb) continue;
     for (const db of Object.keys(byDb)) {
       const ws = byDb[db];
       if (!ws) continue;
-      // Fire-and-forget mirror (matches mru/favorites). ponytail: log-only, no
-      // toast — persist fires on every debounced keystroke and the boot
-      // legacy-import guard rejects the early hydrate write-back on a fresh
-      // install, so a toast would false-alarm on normal cold boot. A deduped
-      // user-facing error surface is the follow-up if real write failures show up.
-      void persistWorkspace(toPersistRequest(connId, db, ws)).catch(
-        (e: unknown) => {
-          const message = e instanceof Error ? e.message : String(e ?? "");
-          logger.warn(`[workspaceStore] persist_workspace failed: ${message}`);
-        },
-      );
+      pending.push(persistWorkspace(toPersistRequest(connId, db, ws)));
     }
   }
+  if (pending.length === 0) return;
+  // Fire-and-forget mirror of the mru/favorites contract (#1092): SQLite is
+  // the single SOT with no boot reconcile, so a swallowed write is lost on the
+  // next restart — the exact silent-loss #1091 fixes. Surface a dev log + one
+  // `storageWriteFailed` toast, deduped to a single toast per debounced flush
+  // so a multi-workspace failure never stacks N toasts.
+  void Promise.allSettled(pending).then((results) => {
+    const failed = results.filter(
+      (r): r is PromiseRejectedResult => r.status === "rejected",
+    );
+    if (failed.length === 0) return;
+    const reason = failed[0]!.reason;
+    const message =
+      reason instanceof Error ? reason.message : String(reason ?? "");
+    logger.warn(
+      `[workspaceStore] persist_workspace failed (${failed.length}): ${message}`,
+    );
+    toast.error(i18n.t("feedback:storageWriteFailed"));
+  });
 }
 
 export function debouncePersistWorkspaces(workspaces: WorkspacesShape): void {

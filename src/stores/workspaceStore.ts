@@ -80,12 +80,13 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
       ...createQuerySlice(workspaceSet, workspaceGet),
       ...createSidebarSlice(workspaceSet),
       hydrateWorkspacesFromSnapshot: (workspaces) => {
-        // #1091 — seed tab/query counters from the restored ids BEFORE any
-        // subsequent addTab, so a fresh id can never collide with a persisted
-        // one (a collision duplicates React keys and makes removeTab's
-        // id-filter drop both same-id tabs). The real boot path is this
-        // snapshot hydrate — the counter seed used to live only in the dead
-        // `loadPersistedWorkspaces` localStorage action.
+        // #1091 — seed tab/query counters from the restored open-tab ids
+        // BEFORE any subsequent addTab, so a fresh id can never collide with a
+        // live tab (a collision duplicates React keys and makes removeTab's
+        // id-filter drop both same-id tabs). seedCountersFromWorkspaces walks
+        // `ws.tabs`; closedTabHistory ids are not live so they can't collide.
+        // The real boot path is this snapshot hydrate — the counter seed used
+        // to live only in the dead `loadPersistedWorkspaces` localStorage action.
         seedCountersFromWorkspaces(workspaces);
         workspaceSet({ workspaces });
       },
