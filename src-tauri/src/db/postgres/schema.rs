@@ -69,6 +69,26 @@ pub(crate) const LIST_EXTENSIONS_SQL: &str = "SELECT e.extname AS name,
   JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
  ORDER BY e.extname";
 
+/// #1229 — canonical SQL emitted by `PostgresAdapter::list_schemas`.
+///
+/// Excludes the three fixed system schemas AND the per-backend internal
+/// temp namespaces PostgreSQL materializes on `CREATE TEMP TABLE`
+/// (`pg_temp_<N>` / `pg_toast_temp_<N>`). Those `pg_namespace` rows persist
+/// after the owning session ends, so without the pattern filter they leak
+/// into the sidebar (user report 2026-07-03).
+///
+/// The `_` in the LIKE pattern is a wildcard, so both patterns escape it
+/// (`ESCAPE '\'`, matching the [`LIST_TYPES_SQL`] convention) to match a
+/// literal underscore — this keeps the filter scoped to the temp namespaces
+/// and never over-blocks. PostgreSQL reserves the `pg_` prefix for system
+/// schemas so a user-defined `pg_*` schema cannot exist, but the escaped,
+/// temp-specific patterns (never a blanket `pg\_%`) are defensive regardless.
+pub(crate) const LIST_SCHEMAS_SQL: &str = "SELECT schema_name FROM information_schema.schemata \
+     WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast') \
+       AND schema_name NOT LIKE 'pg\\_temp\\_%' ESCAPE '\\' \
+       AND schema_name NOT LIKE 'pg\\_toast\\_temp\\_%' ESCAPE '\\' \
+     ORDER BY schema_name";
+
 /// Serialize a foreign-key reference into the canonical
 /// `<schema>.<table>(<column>)` string consumed by the frontend
 /// (`parseFkReference` in `DataGridTable.tsx`).
@@ -199,14 +219,10 @@ impl PostgresAdapter {
     pub async fn list_schemas(&self) -> Result<Vec<SchemaInfo>, AppError> {
         let pool = self.active_pool().await?;
 
-        let rows = sqlx::query_as::<_, (String,)>(
-            "SELECT schema_name FROM information_schema.schemata \
-             WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast') \
-             ORDER BY schema_name",
-        )
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| AppError::Connection(e.to_string()))?;
+        let rows = sqlx::query_as::<_, (String,)>(LIST_SCHEMAS_SQL)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
 
         Ok(rows
             .into_iter()
@@ -1784,6 +1800,42 @@ mod tests {
         assert!(LIST_EXTENSIONS_SQL.contains("pg_catalog.pg_namespace n"));
         assert!(LIST_EXTENSIONS_SQL.contains("obj_description(e.oid, 'pg_extension')"));
         assert!(LIST_EXTENSIONS_SQL.contains("ORDER BY e.extname"));
+    }
+
+    // ── #1229 — list_schemas must not leak internal temp namespaces ────
+    //
+    // 작성 이유 (2026-07-03, 사용자 직접 리포트): `CREATE TEMP TABLE` 이
+    // backend 슬롯별로 `pg_temp_<N>` / `pg_toast_temp_<N>` 스키마를
+    // 만들고, 그 pg_namespace 항목은 세션 종료 후에도 잔존한다. 기존
+    // 필터는 정확 매칭 3개(`pg_catalog`/`information_schema`/`pg_toast`)뿐
+    // 이라 temp 패턴이 사이드바로 샜다. Docker 통합 테스트
+    // (`schema_integration.rs::test_list_schemas_excludes_temp_namespaces`)
+    // 는 실 DB 로 회귀를 가드하지만 docker 없는 CI/로컬에서는 silent-skip
+    // 되므로, 필터 SQL 자체를 byte-level 로 고정하는 docker-free 가드를
+    // 여기 둔다.
+    #[test]
+    fn list_schemas_sql_excludes_temp_and_toast_temp_namespaces() {
+        // 정확 매칭 3개는 유지.
+        assert!(
+            LIST_SCHEMAS_SQL.contains("NOT IN ('pg_catalog', 'information_schema', 'pg_toast')"),
+            "fixed system-schema exclusions must remain"
+        );
+        // temp 패턴 두 개를 escaped underscore 로 제외 — `_` 가 LIKE
+        // 와일드카드라 `ESCAPE '\'` 로 리터럴 언더스코어 매칭.
+        assert!(
+            LIST_SCHEMAS_SQL.contains("schema_name NOT LIKE 'pg\\_temp\\_%' ESCAPE '\\'"),
+            "pg_temp_N namespaces must be filtered with an escaped LIKE"
+        );
+        assert!(
+            LIST_SCHEMAS_SQL.contains("schema_name NOT LIKE 'pg\\_toast\\_temp\\_%' ESCAPE '\\'"),
+            "pg_toast_temp_N namespaces must be filtered with an escaped LIKE"
+        );
+        // 과차단 금지: blanket `pg_%` 는 사용자 스키마(이론상 `pg_*`)까지
+        // 지우므로 절대 쓰지 않는다.
+        assert!(
+            !LIST_SCHEMAS_SQL.contains("LIKE 'pg\\_%'"),
+            "must not blanket-exclude all pg_-prefixed schemas"
+        );
     }
 
     #[tokio::test]
