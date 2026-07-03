@@ -120,6 +120,26 @@ describe("sqlSafety.analyzeStatement — PostgreSQL and MSSQL boundary contracts
       expect(a.kind).toBe("ddl-create");
       expect(a.severity).toBe("info");
     });
+
+    it("classifies DO with an inner DROP as routine-call / warn, not danger", () => {
+      // Immediate-execution path (Sprint 485). Pre-fix the inner `; DROP …;`
+      // split into a standalone fragment and escalated the whole DO block to
+      // danger; the dollar-quote-aware splitter keeps it a single warn-tier
+      // routine call.
+      const a = analyzeStatement(
+        "DO $$ BEGIN PERFORM 1; DROP TABLE tmp; END $$",
+      );
+      expect(a.kind).toBe("routine-call");
+      expect(a.severity).toBe("warn");
+    });
+
+    it("still flags a genuine top-level DROP as ddl-drop / danger", () => {
+      // Contrast guard: the downgrade above must not blunt a real top-level
+      // destructive statement — the danger tier is preserved.
+      const a = analyzeStatement("DROP TABLE tmp");
+      expect(a.kind).toBe("ddl-drop");
+      expect(a.severity).toBe("danger");
+    });
   });
 
   describe("Sprint 486 — PostgreSQL extension tolerance Safe Mode (AC-486-X)", () => {
