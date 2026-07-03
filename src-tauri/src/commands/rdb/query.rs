@@ -91,15 +91,17 @@ async fn execute_query_inner(
     let cancel_handle = register_cancel_token(state, Some(query_id)).await;
     let child_token = cancel_handle.as_ref().map(|(_, t)| t.clone());
 
-    // Execute the query through the enum dispatch. We hold the
-    // `active_connections` lock for the duration of the query — the same
-    // shape used by every other RDB command post Sprint 64 — which is safe
-    // because PostgresAdapter's inherent `execute_query` drives the query
-    // through an internal pool guarded by its own `Arc<Mutex<…>>`.
+    // Execute the query through the enum dispatch. Issue #1087 — resolve the
+    // adapter via `active_adapter` (short lock + `Arc` clone) and drop the
+    // `active_connections` guard *before* awaiting the query, so a long query
+    // no longer serialises every other command or blocks `cancel_query_native`.
+    // The cloned `Arc` keeps the adapter alive for the whole call, and
+    // PostgresAdapter drives execution through its own internal
+    // `Arc<Mutex<…>>` pool.
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         if let Err(err) = validate_mysql_scripting_boundary(sql, &active.kind()) {
             release_cancel_token(state, &cancel_handle).await;
@@ -107,13 +109,17 @@ async fn execute_query_inner(
         }
         let adapter = active.as_rdb()?;
         // Sprint 266 — opt-in db-mismatch guard. When the caller passes
-        // `expected_database` we sample the adapter's current db inside
-        // the same lock acquisition and refuse the execute if the backend
-        // pool has been swapped out from under us (e.g. concurrent
+        // `expected_database` we sample the adapter's current db on the
+        // resolved handle and refuse the execute if the backend pool has
+        // been swapped out from under us (e.g. concurrent
         // `switch_active_db` from DbSwitcher). PG's sub-pool model
         // already routes by db, but MySQL/SQLite carry stateful `USE` /
         // `ATTACH` semantics — this guard is the cheapest correctness
-        // floor without rewriting every RDB command signature.
+        // floor without rewriting every RDB command signature. Issue #1087
+        // — probe + dispatch now share the same `Arc` handle rather than the
+        // global lock; they are serialised against a concurrent same-
+        // connection `switch_active_db` by the adapter's own pool lock, not
+        // by `active_connections`.
         if let Some(expected) = expected_database {
             let actual = adapter.current_database().await?.unwrap_or_default();
             if actual != expected {
@@ -201,9 +207,9 @@ async fn execute_query_batch_inner(
     let child_token = cancel_handle.as_ref().map(|(_, t)| t.clone());
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         if let Err(err) = validate_mysql_scripting_boundary_batch(statements, &active.kind()) {
             release_cancel_token(state, &cancel_handle).await;
@@ -296,9 +302,9 @@ async fn execute_query_dry_run_inner(
     let child_token = cancel_handle.as_ref().map(|(_, t)| t.clone());
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         if let Err(err) = validate_mysql_scripting_boundary_batch(statements, &active.kind()) {
             release_cancel_token(state, &cancel_handle).await;
@@ -438,9 +444,9 @@ async fn query_table_data_inner(
     let cancel_handle = register_cancel_token(state, query_id).await;
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         let adapter = active.as_rdb()?;
         // Sprint 271b — opt-in db-mismatch guard. Byte-equivalent to the
@@ -501,9 +507,9 @@ async fn count_null_rows_inner(
     validate_identifier(table, "Table name")?;
     validate_identifier(column, "Column name")?;
 
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_rdb()?;
     // Sprint 271c — opt-in DbMismatch guard. Shared
@@ -560,9 +566,9 @@ async fn explain_rdb_query_inner(
     if sql.trim().is_empty() {
         return Err(AppError::Validation("SQL must not be empty".into()));
     }
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_rdb()?;
     ensure_expected_db(adapter, expected_database).await?;
@@ -821,6 +827,85 @@ mod tests {
         let _ = execute_query_inner(&state, "c", "SELECT 1", "qid-eq", None).await;
         let tokens = state.query_tokens.lock().await;
         assert!(!tokens.contains_key("qid-eq"));
+    }
+
+    // ── Issue #1087 — lock-scope regression ──────────────────────────────
+    //
+    // 작성 이유: 이전엔 execute_query 가 `active_connections` 락을 쿼리 await
+    // 내내 잡아, 같은/다른 연결의 모든 커맨드와 `cancel_query_native` 가 그
+    // 락 뒤에서 직렬화됐다 (native cancel 은 정의상 무력). 연결 "c" 의 장기
+    // 쿼리를 in-flight 로 park 시켜 두고, (a) 연결 "d" 의 쿼리와 (b) 연결 "c"
+    // 의 native cancel 이 락을 기다리지 않고 완료됨을 동결한다. Fix 이전엔
+    // (a)/(b) 가 5s timeout 으로 fail (RED).
+    #[tokio::test]
+    async fn long_query_does_not_serialize_other_commands_or_native_cancel_1087() {
+        use crate::commands::cancel_query::cancel_query_native_inner;
+        use std::sync::Arc;
+        use tokio::sync::Notify;
+        use tokio::time::{timeout, Duration};
+
+        fn empty_result() -> RdbQueryResult {
+            RdbQueryResult {
+                columns: Vec::new(),
+                rows: Vec::new(),
+                total_count: 0,
+                execution_time_ms: 0,
+                query_type: QueryType::Select,
+            }
+        }
+
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+
+        let mut blocking = StubRdbAdapter {
+            execute_sql_gate: Some((entered.clone(), release.clone())),
+            ..StubRdbAdapter::default()
+        };
+        blocking.execute_sql_fn = Some(Box::new(|_| Ok(empty_result())));
+
+        let mut fast = StubRdbAdapter::default();
+        fast.execute_sql_fn = Some(Box::new(|_| Ok(empty_result())));
+
+        let state = Arc::new(state_with("c", ActiveAdapter::Rdb(Box::new(blocking))).await);
+        {
+            let mut conns = state.active_connections.lock().await;
+            conns.insert("d".into(), Arc::new(ActiveAdapter::Rdb(Box::new(fast))));
+        }
+
+        // 연결 "c" 장기 쿼리 spawn — execute_sql 안에서 release 를 기다리며 park.
+        let long_state = Arc::clone(&state);
+        let long = tokio::spawn(async move {
+            execute_query_inner(&long_state, "c", "SELECT pg_sleep(60)", "q-long", None).await
+        });
+
+        // 쿼리가 실제 execute_sql 진입 (락 통과) 할 때까지 대기.
+        entered.notified().await;
+
+        // (a) 다른 연결 "d" 의 쿼리가 락 대기 없이 완료.
+        let other = timeout(
+            Duration::from_secs(5),
+            execute_query_inner(&state, "d", "SELECT 1", "q-d", None),
+        )
+        .await;
+        assert!(
+            matches!(other, Ok(Ok(_))),
+            "connection B command serialized behind connection A's long query (#1087): {other:?}"
+        );
+
+        // (b) native cancel 이 락 대기 없이 발행 (성공/실패 무관, 블록만 안 되면 됨).
+        let cancel = timeout(
+            Duration::from_secs(5),
+            cancel_query_native_inner(&state, "c", 1234),
+        )
+        .await;
+        assert!(
+            cancel.is_ok(),
+            "native cancel blocked on active_connections lock held by the long query (#1087)"
+        );
+
+        // 장기 쿼리 release 후 정리.
+        release.notify_one();
+        let _ = long.await;
     }
 
     // ── Sprint 266 — expected_database 가드 ──────────────────────────────

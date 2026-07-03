@@ -21,6 +21,8 @@
 //! `cfg(test)` 게이트만 적용 (이 모듈 자체는 production 에 컴파일되지 않음).
 
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
 use super::traits::{DbAdapter, DocumentAdapter, RdbAdapter, SearchAdapter};
@@ -93,6 +95,12 @@ pub(crate) struct StubRdbAdapter {
     pub current_database_fn: Option<FnZero<Option<String>>>,
     pub switch_database_fn: Option<FnOne<str, ()>>,
     pub execute_sql_fn: Option<FnOne<str, RdbQueryResult>>,
+    /// Issue #1087 — optional `execute_sql` barrier `(entered, release)`. When
+    /// set, `execute_sql` signals `entered` when it starts and then awaits
+    /// `release` before returning, letting a concurrency test hold one query
+    /// "in flight" while asserting other commands are not serialised behind it
+    /// on the `active_connections` lock.
+    pub execute_sql_gate: Option<(Arc<Notify>, Arc<Notify>)>,
     pub execute_sql_batch_fn:
         Option<Box<dyn Fn(&[String]) -> Result<Vec<RdbQueryResult>, AppError> + Send + Sync>>,
     /// Sprint 247 — `dry_run_sql_batch` override. `None` falls back to the
@@ -178,6 +186,7 @@ impl Default for StubRdbAdapter {
             current_database_fn: None,
             switch_database_fn: None,
             execute_sql_fn: None,
+            execute_sql_gate: None,
             execute_sql_batch_fn: None,
             dry_run_sql_batch_fn: None,
             query_table_data_fn: None,
@@ -274,7 +283,14 @@ impl RdbAdapter for StubRdbAdapter {
             || Err(AppError::Unsupported("stub default execute_sql".into())),
             |f| f(sql),
         );
-        Box::pin(async move { r })
+        let gate = self.execute_sql_gate.clone();
+        Box::pin(async move {
+            if let Some((entered, release)) = gate {
+                entered.notify_one();
+                release.notified().await;
+            }
+            r
+        })
     }
     fn execute_sql_batch<'a>(
         &'a self,

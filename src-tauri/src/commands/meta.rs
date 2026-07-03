@@ -37,12 +37,12 @@ pub async fn list_databases(
     state: tauri::State<'_, AppState>,
     connection_id: String,
 ) -> Result<Vec<DatabaseInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&connection_id)
+    let active = state
+        .active_adapter(&connection_id)
+        .await
         .ok_or_else(|| not_connected(&connection_id))?;
 
-    let databases = match active {
+    let databases = match active.as_ref() {
         ActiveAdapter::Rdb(adapter) => adapter
             .list_databases()
             .await?
@@ -92,12 +92,12 @@ pub async fn switch_active_db(
     db_name: String,
 ) -> Result<(), AppError> {
     let kv_database = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(&connection_id)
+        let active = state
+            .active_adapter(&connection_id)
+            .await
             .ok_or_else(|| not_connected(&connection_id))?;
 
-        match active {
+        match active.as_ref() {
             ActiveAdapter::Rdb(adapter) => {
                 adapter.switch_database(&db_name).await?;
                 None
@@ -154,12 +154,12 @@ pub async fn verify_active_db(
     state: tauri::State<'_, AppState>,
     connection_id: String,
 ) -> Result<String, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&connection_id)
+    let active = state
+        .active_adapter(&connection_id)
+        .await
         .ok_or_else(|| not_connected(&connection_id))?;
 
-    match active {
+    match active.as_ref() {
         ActiveAdapter::Rdb(adapter) => Ok(adapter.current_database().await?.unwrap_or_default()),
         ActiveAdapter::Document(adapter) => {
             Ok(adapter.current_database().await?.unwrap_or_default())
@@ -186,11 +186,11 @@ async fn list_server_activity_inner(
     state: &AppState,
     connection_id: &str,
 ) -> Result<Vec<ServerActivityRow>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
-    match active {
+    match active.as_ref() {
         ActiveAdapter::Rdb(adapter) => adapter.list_server_activity().await,
         ActiveAdapter::Document(adapter) => adapter.current_op().await,
         ActiveAdapter::Search(_) => Err(AppError::Unsupported(
@@ -217,11 +217,11 @@ async fn kill_server_activity_inner(
     connection_id: &str,
     id: i64,
 ) -> Result<(), AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
-    match active {
+    match active.as_ref() {
         ActiveAdapter::Rdb(adapter) => adapter.kill_session(id).await,
         ActiveAdapter::Document(adapter) => adapter.kill_op(id).await,
         ActiveAdapter::Search(_) => Err(AppError::Unsupported(
@@ -250,9 +250,9 @@ async fn collection_stats_rdb_inner(
     schema: &str,
     table: &str,
 ) -> Result<crate::models::CollectionStatsRow, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active.as_rdb()?.collection_stats(schema, table).await
 }
@@ -274,9 +274,9 @@ async fn collection_stats_mongo_inner(
     database: &str,
     collection: &str,
 ) -> Result<crate::models::CollectionStatsRow, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
@@ -299,11 +299,11 @@ async fn server_info_inner(
     state: &AppState,
     connection_id: &str,
 ) -> Result<crate::models::ServerInfoRow, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
-    match active {
+    match active.as_ref() {
         ActiveAdapter::Rdb(adapter) => adapter.server_info().await,
         ActiveAdapter::Document(adapter) => adapter.server_info().await,
         ActiveAdapter::Search(_) => Err(AppError::Unsupported(
@@ -330,12 +330,12 @@ async fn slow_queries_inner(
     connection_id: &str,
     limit: i64,
 ) -> Result<Vec<crate::models::SlowQueryRow>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     let cap = limit.clamp(1, 500);
-    match active {
+    match active.as_ref() {
         ActiveAdapter::Rdb(adapter) => adapter.slow_queries(cap).await,
         ActiveAdapter::Document(adapter) => adapter.slow_queries(cap).await,
         ActiveAdapter::Search(_) => Err(AppError::Unsupported(
@@ -381,11 +381,13 @@ mod tests {
     use crate::db::{KvDatabaseInfo, NamespaceInfo};
     use std::collections::HashMap;
 
-    type ConnMap = HashMap<String, ActiveAdapter>;
+    // Issue #1087 — mirror production: `active_connections` now stores
+    // `Arc<ActiveAdapter>`, so the dispatch-mirror map does too.
+    type ConnMap = HashMap<String, std::sync::Arc<ActiveAdapter>>;
 
     fn map_with(id: &str, active: ActiveAdapter) -> ConnMap {
         let mut m = HashMap::new();
-        m.insert(id.to_string(), active);
+        m.insert(id.to_string(), std::sync::Arc::new(active));
         m
     }
     fn rdb_default() -> ActiveAdapter {
@@ -410,7 +412,7 @@ mod tests {
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        let databases = match active {
+        let databases = match active.as_ref() {
             ActiveAdapter::Rdb(a) => a
                 .list_databases()
                 .await?
@@ -442,7 +444,7 @@ mod tests {
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        match active {
+        match active.as_ref() {
             ActiveAdapter::Rdb(a) => a.switch_database(db_name).await,
             ActiveAdapter::Document(a) => a.switch_database(db_name).await,
             ActiveAdapter::Search(_) => Err(AppError::Unsupported(
@@ -462,7 +464,7 @@ mod tests {
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        match active {
+        match active.as_ref() {
             ActiveAdapter::Rdb(a) => a.list_server_activity().await,
             ActiveAdapter::Document(a) => a.current_op().await,
             ActiveAdapter::Search(_) => Err(AppError::Unsupported(
@@ -482,7 +484,7 @@ mod tests {
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        match active {
+        match active.as_ref() {
             ActiveAdapter::Rdb(a) => a.kill_session(id).await,
             ActiveAdapter::Document(a) => a.kill_op(id).await,
             ActiveAdapter::Search(_) => Err(AppError::Unsupported(
@@ -501,7 +503,7 @@ mod tests {
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        match active {
+        match active.as_ref() {
             ActiveAdapter::Rdb(a) => Ok(a.current_database().await?.unwrap_or_default()),
             ActiveAdapter::Document(a) => Ok(a.current_database().await?.unwrap_or_default()),
             ActiveAdapter::Search(_) => Err(AppError::Unsupported(
@@ -979,7 +981,7 @@ mod tests {
             .active_connections
             .lock()
             .await
-            .insert(id.to_string(), active);
+            .insert(id.to_string(), std::sync::Arc::new(active));
         state
     }
 
@@ -1055,7 +1057,7 @@ mod tests {
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        match active {
+        match active.as_ref() {
             ActiveAdapter::Rdb(a) => a.server_info().await,
             ActiveAdapter::Document(a) => a.server_info().await,
             ActiveAdapter::Search(_) => Err(AppError::Unsupported(
@@ -1140,7 +1142,7 @@ mod tests {
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
         let cap = limit.clamp(1, 500);
-        match active {
+        match active.as_ref() {
             ActiveAdapter::Rdb(a) => a.slow_queries(cap).await,
             ActiveAdapter::Document(a) => a.slow_queries(cap).await,
             ActiveAdapter::Search(_) => Err(AppError::Unsupported(

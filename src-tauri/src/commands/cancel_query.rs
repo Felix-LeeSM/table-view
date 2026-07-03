@@ -93,8 +93,11 @@ pub async fn cancel_query_native_inner(
             message: "Connection ID cannot be empty".into(),
         });
     }
-    let connections = state.active_connections.lock().await;
-    let active = connections.get(connection_id).ok_or_else(|| {
+    // Issue #1087 — resolve the adapter through the short-lock `Arc` clone so
+    // native cancel is never queued behind the long-running query it is meant
+    // to abort (the query no longer holds `active_connections` across its
+    // await).
+    let active = state.active_adapter(connection_id).await.ok_or_else(|| {
         let msg = not_connected(connection_id).to_string();
         let fallback = CancelError::NetworkError {
             message: msg.clone(),

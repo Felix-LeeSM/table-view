@@ -4,6 +4,8 @@
 //! word 동일 본체로 분산돼 있던 것을 통합. `cfg(test)` 로만 컴파일되며
 //! `pub(crate)` 노출 — production 빌드에는 영향 없음.
 
+use std::sync::Arc;
+
 use crate::commands::connection::AppState;
 use crate::db::testing::{StubDocumentAdapter, StubRdbAdapter};
 use crate::db::ActiveAdapter;
@@ -14,7 +16,7 @@ pub(crate) async fn state_with(id: &str, active: ActiveAdapter) -> AppState {
     let state = AppState::new();
     {
         let mut conns = state.active_connections.lock().await;
-        conns.insert(id.to_string(), active);
+        conns.insert(id.to_string(), Arc::new(active));
     }
     state
 }

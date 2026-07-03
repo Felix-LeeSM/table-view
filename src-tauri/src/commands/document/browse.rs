@@ -71,9 +71,9 @@ async fn list_mongo_databases_inner(
     state: &AppState,
     connection_id: &str,
 ) -> Result<Vec<DatabaseInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     let namespaces = active.as_document()?.list_databases().await?;
     Ok(namespaces
@@ -103,9 +103,9 @@ async fn list_mongo_collections_inner(
     let cancel_handle = register_cancel_token(state, query_id).await;
 
     let result: Result<Vec<DocumentCollectionInfo>, AppError> = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_document()?
@@ -149,9 +149,9 @@ async fn infer_collection_fields_inner(
     let size = sample_size.unwrap_or(100) as usize;
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_document()?
@@ -198,9 +198,9 @@ async fn list_mongo_indexes_inner(
     database: &str,
     collection: &str,
 ) -> Result<Vec<IndexInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
@@ -242,9 +242,9 @@ async fn create_mongo_index_inner(
         ));
     }
 
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
@@ -292,9 +292,9 @@ async fn drop_mongo_index_inner(
             "The _id_ index cannot be dropped".into(),
         ));
     }
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_document()?;
     require_safety_confirmation(safety_confirmed, "drop_mongo_index")?;
@@ -333,9 +333,9 @@ async fn get_mongo_validator_inner(
     database: &str,
     collection: &str,
 ) -> Result<CollectionValidatorRead, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
@@ -398,9 +398,9 @@ async fn set_mongo_validator_inner(
     validate_level(validation_level.as_deref())?;
     validate_action(validation_action.as_deref())?;
 
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
@@ -451,9 +451,9 @@ async fn create_collection_inner(
     collection: &str,
     options: Option<serde_json::Value>,
 ) -> Result<(), AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
@@ -489,9 +489,9 @@ async fn rename_collection_inner(
     from: &str,
     to: &str,
 ) -> Result<(), AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
@@ -519,9 +519,9 @@ async fn drop_mongo_database_inner(
     name: &str,
     safety_confirmed: bool,
 ) -> Result<(), AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_document()?;
     require_safety_confirmation(safety_confirmed, "drop_mongo_database")?;

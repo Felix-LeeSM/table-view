@@ -18,6 +18,7 @@
 //! sub-module's `#[cfg(test)] mod tests` reuses.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use serde::Deserialize;
 use tokio::sync::Mutex;
@@ -146,7 +147,13 @@ pub struct AppState {
     /// search, or kv adapters. Command handlers dispatch through
     /// `ActiveAdapter::as_rdb()?` / `as_document()?` / … to regain a typed
     /// reference.
-    pub active_connections: Mutex<HashMap<String, ActiveAdapter>>,
+    ///
+    /// Issue #1087 — the value is an `Arc` so a command can clone the handle
+    /// under a short lock and release the guard **before** awaiting the
+    /// adapter. Holding the lock across a long-running query previously
+    /// serialised every other command (and `cancel_query_native`) on every
+    /// connection behind it. Resolve through [`AppState::active_adapter`].
+    pub active_connections: Mutex<HashMap<String, Arc<ActiveAdapter>>>,
     pub connection_status: Mutex<HashMap<String, ConnectionStatus>>,
     pub keep_alive_handles: Mutex<HashMap<String, JoinHandle<()>>>,
     pub query_tokens: Mutex<HashMap<String, CancellationToken>>,
@@ -178,6 +185,24 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Resolve the active adapter for `connection_id`, cloning the `Arc` and
+    /// releasing the `active_connections` lock immediately.
+    ///
+    /// Issue #1087 — every command must resolve its adapter through this
+    /// helper (lookup + `Arc` clone) instead of holding the map guard across
+    /// the ensuing `.await`. Holding it kept a long-running query on one
+    /// connection from being cancelled and serialised every command on every
+    /// other connection behind it. The returned `Arc` keeps the adapter alive
+    /// for the duration of the call even if a concurrent `disconnect` removes
+    /// the map entry.
+    pub async fn active_adapter(&self, connection_id: &str) -> Option<Arc<ActiveAdapter>> {
+        self.active_connections
+            .lock()
+            .await
+            .get(connection_id)
+            .cloned()
+    }
+
     pub fn new() -> Self {
         Self {
             active_connections: Mutex::new(HashMap::new()),

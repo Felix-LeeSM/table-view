@@ -425,11 +425,12 @@ async fn run_schema_dump(
     }
 
     if include_dml && !tables.is_empty() {
-        // active_connections lock 은 dump 가 끝날 때까지 held — 다른
-        // command 가 같은 connection 을 쓰면 await 으로 대기. 1차 trade-off.
-        // 미래 개선: ActiveAdapter 를 Arc 화하면 lock 일찍 풀고 stream 가능.
-        let connections = state.active_connections.lock().await;
-        let adapter = connections.get(connection_id).ok_or_else(|| {
+        // Issue #1087 — clone the adapter `Arc` under a short lock and drop
+        // the guard before the dump. The `Arc` keeps the adapter alive for
+        // the whole stream, but `active_connections` is free the instant the
+        // dump starts, so other commands on this (or any) connection are no
+        // longer serialised behind the export.
+        let adapter = state.active_adapter(connection_id).await.ok_or_else(|| {
             AppError::Database(format!(
                 "Connection {} not found in active_connections",
                 connection_id

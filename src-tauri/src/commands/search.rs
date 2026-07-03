@@ -11,9 +11,9 @@ async fn list_search_catalog_summary_inner(
     state: &AppState,
     connection_id: &str,
 ) -> Result<SearchCatalogSummary, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active.as_search()?.catalog_summary().await
 }
@@ -31,9 +31,9 @@ async fn get_search_index_mapping_inner(
     connection_id: &str,
     index: &str,
 ) -> Result<SearchIndexMapping, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active.as_search()?.get_index_mapping(index).await
 }
@@ -52,9 +52,9 @@ async fn get_search_index_settings_inner(
     connection_id: &str,
     index: &str,
 ) -> Result<SearchIndexSettings, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active.as_search()?.get_index_settings(index).await
 }
@@ -72,9 +72,9 @@ async fn list_search_index_templates_inner(
     state: &AppState,
     connection_id: &str,
 ) -> Result<Vec<SearchIndexTemplateInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active.as_search()?.list_index_templates().await
 }
@@ -93,9 +93,9 @@ async fn sample_search_documents_inner(
     index: &str,
     limit: Option<u64>,
 ) -> Result<SearchResultEnvelope, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_search()?
@@ -118,9 +118,9 @@ async fn get_search_index_field_stats_inner(
     connection_id: &str,
     index: &str,
 ) -> Result<SearchFieldStatsEnvelope, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active.as_search()?.get_index_field_stats(index).await
 }
@@ -142,9 +142,9 @@ async fn execute_search_query_inner(
 ) -> Result<SearchResultEnvelope, AppError> {
     let cancel_handle = register_cancel_token(state, query_id).await;
     let result = async {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_search()?
@@ -171,9 +171,9 @@ async fn plan_search_delete_by_query_inner(
     connection_id: &str,
     request: SearchDeleteByQueryRequest,
 ) -> Result<SearchDestructiveOperationPlan, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active.as_search()?.plan_delete_by_query(&request).await
 }
@@ -207,11 +207,10 @@ mod tests {
 
     async fn state_with_search_adapter(adapter: impl SearchAdapter + 'static) -> AppState {
         let state = AppState::new();
-        state
-            .active_connections
-            .lock()
-            .await
-            .insert("search".into(), ActiveAdapter::Search(Box::new(adapter)));
+        state.active_connections.lock().await.insert(
+            "search".into(),
+            std::sync::Arc::new(ActiveAdapter::Search(Box::new(adapter))),
+        );
         state
     }
 
@@ -282,9 +281,9 @@ mod tests {
         let state = AppState::new();
         state.active_connections.lock().await.insert(
             "search".into(),
-            ActiveAdapter::Search(Box::new(SummaryOnlySearchAdapter {
+            Arc::new(ActiveAdapter::Search(Box::new(SummaryOnlySearchAdapter {
                 deep_fetches: Arc::clone(&deep_fetches),
-            })),
+            }))),
         );
 
         let summary = list_search_catalog_summary_inner(&state, "search")

@@ -670,7 +670,9 @@ async fn run_schema_dump_dml_rejects_non_rdb_paradigm_with_unsupported() {
         let mut active = state.active_connections.lock().await;
         active.insert(
             "doc-conn".into(),
-            ActiveAdapter::Document(Box::new(StubDocumentAdapter::default())),
+            std::sync::Arc::new(ActiveAdapter::Document(Box::new(
+                StubDocumentAdapter::default(),
+            ))),
         );
     }
     let dir = TempDir::new().unwrap();
@@ -701,7 +703,7 @@ async fn run_schema_dump_skips_tables_with_empty_column_names() {
         let mut active = state.active_connections.lock().await;
         active.insert(
             "rdb-conn".into(),
-            ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default())),
+            std::sync::Arc::new(ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))),
         );
     }
     let dir = TempDir::new().unwrap();
@@ -732,7 +734,7 @@ async fn run_schema_dump_short_circuits_when_pre_cancelled() {
         let mut active = state.active_connections.lock().await;
         active.insert(
             "rdb-conn".into(),
-            ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default())),
+            std::sync::Arc::new(ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))),
         );
     }
     let token = CancellationToken::new();
@@ -985,7 +987,10 @@ async fn run_schema_dump_writes_insert_lines_for_streamed_rows() {
     let state = AppState::new();
     {
         let mut active = state.active_connections.lock().await;
-        active.insert("rdb-conn".into(), ActiveAdapter::Rdb(Box::new(stub)));
+        active.insert(
+            "rdb-conn".into(),
+            std::sync::Arc::new(ActiveAdapter::Rdb(Box::new(stub))),
+        );
     }
 
     let dir = TempDir::new().unwrap();
