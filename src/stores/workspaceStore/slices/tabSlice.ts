@@ -9,13 +9,18 @@ import {
   type WorkspaceSet,
 } from "../shared";
 
-// dataGridEditStore purge is a one-way lifecycle write at `removeTab` /
-// `clearForConnection`, matching the pre-split workspaceStore contract.
+// dataGridEditStore / rawQueryGridEditStore purge is a one-way lifecycle
+// write at `removeTab` / `clearForConnection`, matching the pre-split
+// workspaceStore contract.
 /* eslint-disable no-restricted-imports */
 import {
   entryKey as makeDataGridEditKey,
   useDataGridEditStore,
 } from "../../dataGridEditStore";
+import {
+  rawEntryKey as makeRawQueryGridEditKey,
+  useRawQueryGridEditStore,
+} from "../../rawQueryGridEditStore";
 /* eslint-enable no-restricted-imports */
 
 type TabSlice = Pick<
@@ -163,6 +168,16 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
             useDataGridEditStore.getState().purgeKey(key);
           }
         }
+      }
+
+      // Issue #1102 — a query tab's raw-result grid parks its pending edits
+      // in `rawQueryGridEditStore` under `(connectionId, tabId)`. The key is
+      // tab-exclusive (tab ids are unique), so purge unconditionally on close
+      // — mirrors the table grid's cross-mount cleanup contract.
+      if (closingTab.type === "query") {
+        useRawQueryGridEditStore
+          .getState()
+          .purgeKey(makeRawQueryGridEditKey(closingTab.connectionId, tabId));
       }
     },
 

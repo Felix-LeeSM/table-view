@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cellToEditString, editKey } from "@components/datagrid";
 import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { executeQueryBatch } from "@lib/tauri";
@@ -6,6 +6,15 @@ import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { toast } from "@lib/runtime/toast";
+import {
+  useRawQueryGridEditStore,
+  rawEntryKey,
+  EMPTY_RAW_ENTRY,
+} from "@stores/rawQueryGridEditStore";
+import {
+  useCurrentWorkspaceKey,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
 import type { QueryResult } from "@/types/query";
 
 /**
@@ -35,6 +44,13 @@ export interface UseRawQueryGridEditOptions {
   result: QueryResult;
   connectionId: string;
   plan: RawEditPlan;
+  /**
+   * Issue #1102 — owning query tab id. Scopes the cross-mount pending store
+   * to `(connectionId, tabId)` and drives `setTabDirty`. Optional: when
+   * absent (no stable tab identity, e.g. isolated component tests) the hook
+   * falls back to a per-mount key and skips the dirty wiring.
+   */
+  tabId?: string;
   /** Called after a successful commit so the parent can re-run the query. */
   onAfterCommit?: () => void;
 }
@@ -80,6 +96,7 @@ export function useRawQueryGridEdit({
   result,
   connectionId,
   plan,
+  tabId,
   onAfterCommit,
 }: UseRawQueryGridEditOptions): UseRawQueryGridEditResult {
   const [editingCell, setEditingCell] = useState<{
@@ -87,12 +104,56 @@ export function useRawQueryGridEdit({
     col: number;
   } | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [pendingEdits, setPendingEdits] = useState<Map<string, string>>(
-    new Map(),
+
+  // Issue #1102 — the two pending diff slices live in the cross-mount store
+  // so a tab switch (which unmounts this grid) no longer discards them. The
+  // next mount on the same `(connectionId, tabId)` key re-binds. `editingCell`
+  // / `editValue` stay component-local input state — resetting them on remount
+  // is desirable, matching `useDataGridEdit`.
+  const fallbackKeyRef = useRef<string | null>(null);
+  if (fallbackKeyRef.current === null) {
+    fallbackKeyRef.current = `__raw_instance__::${Math.random().toString(36).slice(2)}::${Date.now()}`;
+  }
+  const storeKey =
+    connectionId && tabId
+      ? rawEntryKey(connectionId, tabId)
+      : fallbackKeyRef.current;
+
+  const entry =
+    useRawQueryGridEditStore((s) => s.entries.get(storeKey)) ?? EMPTY_RAW_ENTRY;
+  // Cast readonly store slices to the mutable public surface. Consumers only
+  // read (`has` / `get` / `size`); every writer below allocates a fresh
+  // Map / Set, so the store's containers are never mutated in place.
+  const pendingEdits = entry.pendingEdits as Map<string, string>;
+  const pendingDeletedRowKeys = entry.pendingDeletedRowKeys as Set<string>;
+
+  const storeSetSlice = useRawQueryGridEditStore((s) => s.setSlice);
+  const purgeStoreKey = useRawQueryGridEditStore((s) => s.purgeKey);
+
+  const setPendingEdits = useCallback(
+    (
+      next:
+        | Map<string, string>
+        | ((prev: Map<string, string>) => Map<string, string>),
+    ) => {
+      const prev = useRawQueryGridEditStore.getState().getEntry(storeKey)
+        .pendingEdits as Map<string, string>;
+      const value = typeof next === "function" ? next(prev) : next;
+      storeSetSlice(storeKey, "pendingEdits", value);
+    },
+    [storeKey, storeSetSlice],
   );
-  const [pendingDeletedRowKeys, setPendingDeletedRowKeys] = useState<
-    Set<string>
-  >(new Set());
+
+  const setPendingDeletedRowKeys = useCallback(
+    (next: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+      const prev = useRawQueryGridEditStore.getState().getEntry(storeKey)
+        .pendingDeletedRowKeys as Set<string>;
+      const value = typeof next === "function" ? next(prev) : next;
+      storeSetSlice(storeKey, "pendingDeletedRowKeys", value);
+    },
+    [storeKey, storeSetSlice],
+  );
+
   const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
   const [executing, setExecuting] = useState(false);
   const [executeError, setExecuteError] = useState<string | null>(null);
@@ -116,6 +177,26 @@ export function useRawQueryGridEdit({
 
   const hasPendingChanges =
     pendingEdits.size > 0 || pendingDeletedRowKeys.size > 0;
+
+  // Issue #1102 — publish dirty state to the workspace store so TabBar
+  // renders the dot and the close-on-dirty guard (#1101) fires. Symmetric
+  // with `useDataGridEdit`: register on pending change, clear on unmount so
+  // a stale marker can't outlive the grid (the next mount re-derives it from
+  // the surviving store entry).
+  const workspaceKey = useCurrentWorkspaceKey();
+  const setTabDirtyAction = useWorkspaceStore((s) => s.setTabDirty);
+  useEffect(() => {
+    if (!tabId || !workspaceKey) return;
+    setTabDirtyAction(
+      workspaceKey.connId,
+      workspaceKey.db,
+      tabId,
+      hasPendingChanges,
+    );
+    return () => {
+      setTabDirtyAction(workspaceKey.connId, workspaceKey.db, tabId, false);
+    };
+  }, [tabId, workspaceKey, hasPendingChanges, setTabDirtyAction]);
 
   const persistInflightEdit = useCallback(
     (prev: Map<string, string>): Map<string, string> => {
@@ -148,7 +229,7 @@ export function useRawQueryGridEdit({
       setEditingCell({ row: rowIdx, col: colIdx });
       setEditValue(pending ?? cellToEditString(cell));
     },
-    [noPk, pendingEdits, persistInflightEdit, result.rows],
+    [noPk, pendingEdits, persistInflightEdit, result.rows, setPendingEdits],
   );
 
   const cancelEdit = useCallback(() => {
@@ -160,15 +241,18 @@ export function useRawQueryGridEdit({
     setPendingEdits(persistInflightEdit);
     setEditingCell(null);
     setEditValue("");
-  }, [persistInflightEdit]);
+  }, [persistInflightEdit, setPendingEdits]);
 
-  const deleteRow = useCallback((rowIdx: number) => {
-    setPendingDeletedRowKeys((prev) => {
-      const next = new Set(prev);
-      next.add(rowKeyFn(rowIdx));
-      return next;
-    });
-  }, []);
+  const deleteRow = useCallback(
+    (rowIdx: number) => {
+      setPendingDeletedRowKeys((prev) => {
+        const next = new Set(prev);
+        next.add(rowKeyFn(rowIdx));
+        return next;
+      });
+    },
+    [setPendingDeletedRowKeys],
+  );
 
   const handleCommit = useCallback(() => {
     // Fold the in-flight edit (if any) into pendingEdits before previewing.
@@ -190,34 +274,42 @@ export function useRawQueryGridEdit({
     plan,
     result.rows,
     persistInflightEdit,
+    setPendingEdits,
   ]);
 
-  const handleRevertEdit = useCallback((key: string) => {
-    setPendingEdits((prev) => {
-      if (!prev.has(key)) return prev;
-      const next = new Map(prev);
-      next.delete(key);
-      return next;
-    });
-  }, []);
+  const handleRevertEdit = useCallback(
+    (key: string) => {
+      setPendingEdits((prev) => {
+        if (!prev.has(key)) return prev;
+        const next = new Map(prev);
+        next.delete(key);
+        return next;
+      });
+    },
+    [setPendingEdits],
+  );
 
-  const handleRevertDelete = useCallback((rowKey: string) => {
-    setPendingDeletedRowKeys((prev) => {
-      if (!prev.has(rowKey)) return prev;
-      const next = new Set(prev);
-      next.delete(rowKey);
-      return next;
-    });
-  }, []);
+  const handleRevertDelete = useCallback(
+    (rowKey: string) => {
+      setPendingDeletedRowKeys((prev) => {
+        if (!prev.has(rowKey)) return prev;
+        const next = new Set(prev);
+        next.delete(rowKey);
+        return next;
+      });
+    },
+    [setPendingDeletedRowKeys],
+  );
 
   const handleDiscard = useCallback(() => {
-    setPendingEdits(new Map());
-    setPendingDeletedRowKeys(new Set());
+    // Purge both pending slices in one store write (clears dirty via the
+    // effect above); local editor / preview state resets alongside.
+    purgeStoreKey(storeKey);
     setEditingCell(null);
     setEditValue("");
     setSqlPreview(null);
     setExecuteError(null);
-  }, []);
+  }, [purgeStoreKey, storeKey]);
 
   const dismissPreview = useCallback(() => {
     setSqlPreview(null);
@@ -235,8 +327,8 @@ export function useRawQueryGridEdit({
       try {
         await executeQueryBatch(connectionId, sqls, `raw-edit-${Date.now()}`);
         setSqlPreview(null);
-        setPendingEdits(new Map());
-        setPendingDeletedRowKeys(new Set());
+        // Commit succeeded — clear both pending slices (drops dirty).
+        purgeStoreKey(storeKey);
         onAfterCommit?.();
         recordHistoryEntry({
           sql: joinedSql,
@@ -265,7 +357,7 @@ export function useRawQueryGridEdit({
         setExecuting(false);
       }
     },
-    [connectionId, onAfterCommit],
+    [connectionId, onAfterCommit, purgeStoreKey, storeKey],
   );
 
   const handleExecute = useCallback(async () => {

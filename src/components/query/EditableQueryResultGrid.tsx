@@ -43,6 +43,11 @@ export interface EditableQueryResultGridProps {
   result: QueryResult;
   connectionId: string;
   plan: RawEditPlan;
+  /**
+   * Issue #1102 — owning query tab id. Scopes the cross-mount pending store
+   * and drives `setTabDirty`. Optional so isolated grid tests can omit it.
+   */
+  tabId?: string;
   /** Called after a successful commit so the parent can re-run the query. */
   onAfterCommit?: () => void;
 }
@@ -74,6 +79,7 @@ export default function EditableQueryResultGrid({
   result,
   connectionId,
   plan,
+  tabId,
   onAfterCommit,
 }: EditableQueryResultGridProps) {
   const { t } = useTranslation("query");
@@ -81,6 +87,7 @@ export default function EditableQueryResultGrid({
     result,
     connectionId,
     plan,
+    tabId,
     onAfterCommit,
   });
 
