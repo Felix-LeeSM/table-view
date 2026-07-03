@@ -14,14 +14,14 @@ on:
           - "true"
           - "false"
       maxAgeDays:
-        description: "Delete caches not accessed for at least this many days"
+        description: "Delete caches not accessed for at least this many days (backstop below GitHub's own 7-day eviction)"
         required: false
-        default: "30"
+        default: "7"
         type: string
       minSizeGb:
-        description: "Delete only caches larger than this size in GiB"
+        description: "Delete only caches larger than this size in GiB (0 = every size)"
         required: false
-        default: "1"
+        default: "0"
         type: string
 
 permissions:
@@ -41,7 +41,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PRUNE_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dryRun || 'false' }}
-          PRUNE_MAX_AGE_DAYS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.maxAgeDays || '30' }}
-          PRUNE_MIN_SIZE_GB: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.minSizeGb || '1' }}
+          PRUNE_MAX_AGE_DAYS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.maxAgeDays || '7' }}
+          PRUNE_MIN_SIZE_GB: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.minSizeGb || '0' }}
         run: |
           bash scripts/prune-gh-caches.sh

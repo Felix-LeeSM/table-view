@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseSingleTableSelect,
   analyzeResultEditability,
+  resolveDefaultSchema,
 } from "./queryAnalyzer";
 import type { ColumnInfo } from "@/types/schema";
 import type { QueryColumn } from "@/types/query";
@@ -204,6 +205,75 @@ describe("analyzeResultEditability", () => {
     expect(result.editable).toBe(false);
     if (!result.editable) {
       expect(result.reason).toMatch(/loading/i);
+    }
+  });
+});
+
+// Purpose: default-schema resolution for editable single-table SELECTs must
+// follow each DBMS convention, not assume PostgreSQL "public" — issue #1066.
+describe("resolveDefaultSchema", () => {
+  // Reason: bug #1066 — mssql defaulted to "public" so `SELECT * FROM mytable`
+  // never matched the cached "dbo" columns, breaking edit judgment (2026-07-03).
+  it("maps mssql to dbo", () => {
+    expect(resolveDefaultSchema("mssql", "master", "sa")).toBe("dbo");
+  });
+
+  // Reason: bug #1066 — Oracle's default schema is the connecting user, stored
+  // upper-case in the catalog (2026-07-03).
+  it("maps oracle to the upper-cased connecting user", () => {
+    expect(resolveDefaultSchema("oracle", "FREEPDB1", "system")).toBe("SYSTEM");
+  });
+
+  // Reason: bug #1066 — MySQL/MariaDB have no schema layer; schema == database,
+  // so an unqualified table lives in the active database (2026-07-03).
+  it("maps mysql and mariadb to the active database", () => {
+    expect(resolveDefaultSchema("mysql", "shop", "root")).toBe("shop");
+    expect(resolveDefaultSchema("mariadb", "shop", "root")).toBe("shop");
+  });
+
+  // Reason: pre-#1066 behavior for pg/sqlite/duckdb must be preserved (2026-07-03).
+  it("keeps postgresql on public and sqlite/duckdb on main", () => {
+    expect(resolveDefaultSchema("postgresql", "postgres", "postgres")).toBe(
+      "public",
+    );
+    expect(resolveDefaultSchema("sqlite", "", "")).toBe("main");
+    expect(resolveDefaultSchema("duckdb", "", "")).toBe("main");
+  });
+});
+
+// Purpose: end-to-end regression — an unqualified single-table SELECT on
+// mssql/oracle must resolve to the DBMS default schema in the edit plan, so the
+// result grid matches cached PK metadata instead of a phantom "public" table.
+// Issue #1066 (bug, area:frontend, P1).
+describe("analyzeResultEditability — per-DBMS default schema (#1066)", () => {
+  const TABLE_COLS = [col("id", "integer", true), col("name", "text")];
+
+  // Reason: bug #1066 — before the fix this returned schema "public",
+  // producing a wrong editability match on SQL Server (2026-07-03).
+  it("resolves an unqualified mssql table to dbo", () => {
+    const result = analyzeResultEditability(
+      "SELECT id, name FROM mytable",
+      [qcol("id"), qcol("name")],
+      TABLE_COLS,
+      resolveDefaultSchema("mssql", "master", "sa"),
+    );
+    expect(result.editable).toBe(true);
+    if (result.editable) {
+      expect(result.schema).toBe("dbo");
+    }
+  });
+
+  // Reason: bug #1066 — Oracle default schema = connecting user (2026-07-03).
+  it("resolves an unqualified oracle table to the connecting user", () => {
+    const result = analyzeResultEditability(
+      "SELECT id, name FROM mytable",
+      [qcol("id"), qcol("name")],
+      TABLE_COLS,
+      resolveDefaultSchema("oracle", "FREEPDB1", "system"),
+    );
+    expect(result.editable).toBe(true);
+    if (result.editable) {
+      expect(result.schema).toBe("SYSTEM");
     }
   });
 });

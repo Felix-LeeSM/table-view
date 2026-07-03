@@ -72,9 +72,10 @@ extract_trigger_block() {
 pull_request_trigger_block="$(extract_trigger_block "$workflow_text" "pull_request")"
 changes_block="$(sed -n '/^  changes:/,/^  pr-body:/p' <<<"$workflow_text" | sed '$d')"
 frontend_block="$(sed -n '/^  frontend:/,/^  rust:/p' <<<"$workflow_text" | sed '$d')"
-vite_cache_block="$(sed -n '/- name: Cache Vite transform output/,/- name: Install dependencies/p' <<<"$workflow_text" | sed '$d')"
 dependency_security_block="$(sed -n '/^  dependency-security:/,/^  frontend:/p' <<<"$workflow_text" | sed '$d')"
-rust_block="$(sed -n '/^  rust:/,/^  integration-tests:/p' <<<"$workflow_text" | sed '$d')"
+# rust job only (up to rust-static:), so the sql-parser-core cache assertions
+# below target the Rust Unit And Storage Tests job, not the rust-static job.
+rust_block="$(sed -n '/^  rust:/,/^  rust-static:/p' <<<"$workflow_text" | sed '$d')"
 integration_block="$(sed -n '/^  integration-tests:/,/^  # Runtime E2E smoke/p' <<<"$workflow_text" | sed '$d')"
 pr_body_block="$(sed -n '/^  pr-body:/,/^  frontend:/p' <<<"$workflow_text" | sed '$d')"
 pr_body_only_block="$(sed -n '/^  pr-body:/,/^  doc-size:/p' <<<"$workflow_text" | sed '$d')"
@@ -94,10 +95,6 @@ if [ -z "$frontend_block" ]; then
 	echo "FAIL: frontend job is missing from $WORKFLOW" >&2
 	exit 1
 fi
-if [ -z "$vite_cache_block" ]; then
-	echo "FAIL: Vite cache step is missing from $WORKFLOW" >&2
-	exit 1
-fi
 if [ -z "$dependency_security_block" ]; then
 	echo "FAIL: dependency security job is missing from $WORKFLOW" >&2
 	exit 1
@@ -111,10 +108,12 @@ assert_order "$pr_body_block" "- name: Test PR body checker" "- name: Validate P
 assert_contains "$pull_request_trigger_block" "types: [opened, edited, reopened, synchronize]" "pull_request trigger events"
 assert_contains "$frontend_block" "cache: pnpm" "frontend pnpm cache"
 assert_contains "$frontend_block" "cache-dependency-path: pnpm-lock.yaml" "frontend pnpm cache"
-assert_contains "$vite_cache_block" "path: node_modules/.vite" "vite cache"
-assert_contains "$vite_cache_block" "key: vite-\${{ runner.os }}-\${{ hashFiles(" "vite cache key"
-assert_contains "$vite_cache_block" "restore-keys: |" "vite cache restore"
-assert_contains "$vite_cache_block" "vite-\${{ runner.os }}-" "vite cache restore"
+# The Vite transform cache step was removed (audit 2026-07-03): node_modules/.vite
+# was a no-op cache — all stored entries were <1MB empty archives because there is
+# no vite cacheDir and `vite build` keeps no persistent transform cache. Guard
+# against reintroduction.
+assert_not_contains "$frontend_block" "Cache Vite transform output" "vite cache step removed"
+assert_not_contains "$frontend_block" "node_modules/.vite" "vite cache path removed"
 assert_contains "$frontend_block" "run: git fetch --no-tags --prune --depth=1 origin refs/heads/main:refs/remotes/origin/main" "frontend coverage ratchet base fetch"
 assert_contains "$frontend_block" "COVERAGE_RATCHET_REQUIRE_MAIN: \"1\"" "frontend coverage ratchet require main"
 assert_contains "$frontend_block" "run: pnpm exec tsx scripts/check-coverage-ratchet.ts" "frontend coverage ratchet"
@@ -137,7 +136,12 @@ assert_contains "$dependency_security_block" "run: cargo deny check bans license
 assert_contains "$dependency_security_block" "name: Dependency Advisories (non-blocking)" "dependency advisories job present"
 assert_contains "$dependency_security_block" "run: cargo deny check advisories --hide-inclusion-graph" "dependency advisories cargo deny"
 assert_order "$dependency_security_block" "- name: Dependency security summary" "- name: Run cargo deny" "dependency security summary before gate"
-assert_contains "$rust_block" "workspaces: src-tauri -> target" "rust cache"
+# rust job caches both src-tauri and the sql-parser-core path crate's own target
+# (audit 2026-07-03): the standalone `--manifest-path src-tauri/sql-parser-core`
+# test compiles into a separate target dir that `src-tauri -> target` never cached,
+# so it recompiled every run.
+assert_contains "$rust_block" "src-tauri -> target" "rust cache src-tauri workspace"
+assert_contains "$rust_block" "src-tauri/sql-parser-core -> target" "rust cache sql-parser-core workspace"
 assert_contains "$rust_block" "cache-bin: false" "rust cache"
 assert_contains "$rust_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "rust cache"
 assert_contains "$integration_block" "workspaces: src-tauri -> target" "integration rust cache"

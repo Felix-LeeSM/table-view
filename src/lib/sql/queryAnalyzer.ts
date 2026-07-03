@@ -11,10 +11,53 @@
 
 import type { ColumnInfo } from "@/types/schema";
 import type { QueryColumn } from "@/types/query";
+import type { DatabaseType } from "@/types/connection";
 
 export interface SingleTableSelectInfo {
   schema: string | null;
   table: string;
+}
+
+/**
+ * The schema an unqualified single-table SELECT resolves to, per DBMS. Used to
+ * map a result row back to its source table's cached PK metadata (keyed by
+ * schema) and to fill the edit plan's `schema` field. The wrong default makes
+ * `SELECT * FROM mytable` match a phantom table, breaking edit judgment.
+ *
+ * - postgresql → "public" (search_path default).
+ * - sqlite / duckdb → "main" (their sole attached schema).
+ * - mssql → "dbo" (SQL Server's default schema).
+ * - mysql / mariadb → the active `database`: they have no schema layer, so
+ *   `schema === database` and an unqualified table lives in the current DB.
+ * - oracle → the connecting `user`, upper-cased: Oracle's default schema is the
+ *   session user and the catalog stores owners upper-case (unquoted idents fold
+ *   to upper).
+ *
+ * ponytail: a quoted/case-sensitive Oracle username, or a mysql call with no
+ * active database, mismatches and the result stays read-only — safe (no
+ * false-positive edit). The connection's `user`/`database` are the only signals
+ * available without a backend current-schema probe, which the fix deems
+ * over-engineering (issue #1066).
+ */
+export function resolveDefaultSchema(
+  dbType: DatabaseType | undefined,
+  database: string,
+  user: string,
+): string {
+  switch (dbType) {
+    case "sqlite":
+    case "duckdb":
+      return "main";
+    case "mssql":
+      return "dbo";
+    case "mysql":
+    case "mariadb":
+      return database;
+    case "oracle":
+      return user.toUpperCase();
+    default:
+      return "public";
+  }
 }
 
 /** Strip leading SQL comments and whitespace, mirroring backend behaviour. */

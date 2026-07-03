@@ -236,6 +236,27 @@ export function paradigmOf(dbType: DatabaseType): Paradigm {
   }
 }
 
+/**
+ * DBMS forms that render a TLS/encryption toggle (`MssqlFormFields`,
+ * `MongoFormFields`, `RedisFormFields` for redis+valkey, `SearchFormFields`
+ * for elasticsearch+opensearch). Every other type has no TLS control in the
+ * connection form, so `tlsEnabled` must not be carried onto — or persisted for
+ * — those drafts: doing so can silently create the `tls_enabled=true,
+ * trust=None` combination that the backend now hard-rejects (issue #1062).
+ */
+export const TLS_TOGGLE_DATABASE_TYPES: readonly DatabaseType[] = [
+  "mssql",
+  "mongodb",
+  "redis",
+  "valkey",
+  "elasticsearch",
+  "opensearch",
+];
+
+export function exposesTlsToggle(dbType: DatabaseType): boolean {
+  return TLS_TOGGLE_DATABASE_TYPES.includes(dbType);
+}
+
 export type FileConnectionDatabaseType = Extract<
   DatabaseType,
   "sqlite" | "duckdb"
@@ -277,6 +298,30 @@ export function createEmptyDraft(): ConnectionDraft {
   };
 }
 
+/**
+ * Resolve the `tlsEnabled` value the edit form should start from.
+ *
+ * - MSSQL defaults an unset toggle to `true` (encrypt-by-default UX).
+ * - Other TLS-toggle forms (mongo/redis/valkey/search) carry the stored
+ *   value verbatim — it is genuinely user-settable there.
+ * - No-TLS-toggle types (pg/mysql/mariadb/oracle/sqlite/duckdb) have no TLS
+ *   control, so a stored `tls_enabled=true` with no explicit trust decision
+ *   is the invalid #1062 reject residue (only creatable by the pre-fix
+ *   MSSQL→RDB carryover bug). Drop it to `null` so opening + saving the
+ *   connection heals the stored entry. A valid explicit-trust combo
+ *   (`trust=true|false`, rare hand-authored JSON) is preserved unchanged.
+ */
+function resolveDraftTlsEnabled(
+  conn: ConnectionConfig,
+): boolean | null | undefined {
+  if (conn.dbType === "mssql") return conn.tlsEnabled ?? true;
+  if (exposesTlsToggle(conn.dbType)) return conn.tlsEnabled;
+  if (conn.tlsEnabled === true && conn.trustServerCertificate == null) {
+    return null;
+  }
+  return conn.tlsEnabled;
+}
+
 /** Derive a draft from an existing connection. Password starts as `null`
  * (meaning "do not change") so the dialog UX can leave the field empty
  * without clearing the stored password on save. */
@@ -298,8 +343,7 @@ export function draftFromConnection(conn: ConnectionConfig): ConnectionDraft {
     paradigm: conn.paradigm,
     authSource: conn.authSource,
     replicaSet: conn.replicaSet,
-    tlsEnabled:
-      conn.dbType === "mssql" ? (conn.tlsEnabled ?? true) : conn.tlsEnabled,
+    tlsEnabled: resolveDraftTlsEnabled(conn),
     trustServerCertificate: conn.trustServerCertificate,
     password: null,
   };
