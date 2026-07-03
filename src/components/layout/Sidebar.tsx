@@ -175,7 +175,7 @@ export default function Sidebar() {
   const expandedCount = useMemo(() => {
     if (!focusedConnId) return 0;
     const db = resolveActiveDb(focusedConnId);
-    return workspacesById[focusedConnId]?.[db]?.sidebar.expanded.length ?? 0;
+    return workspacesById[focusedConnId]?.[db]?.sidebar.expanded?.length ?? 0;
   }, [focusedConnId, workspacesById]);
   const focusedDbType = useMemo(() => {
     if (!focusedConnId) return null;

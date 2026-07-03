@@ -214,7 +214,8 @@ export const en = {
   filterAllAria: "Filter all schemas and objects",
   clearFilterAllAria: "Clear filter",
   noFilterMatches: "No matching objects",
-  schemaTableCountAria: "{{count}} tables",
+  schemaTableCountAria_one: "{{count}} table",
+  schemaTableCountAria_other: "{{count}} tables",
 
   // treeRows categories / row count
   rowCountUnknown: "Exact row count not yet fetched",
@@ -458,7 +459,8 @@ export const ko = {
   filterAllAria: "모든 스키마 및 객체 필터",
   clearFilterAllAria: "필터 지우기",
   noFilterMatches: "일치하는 객체 없음",
-  schemaTableCountAria: "테이블 {{count}}개",
+  schemaTableCountAria_one: "테이블 {{count}}개",
+  schemaTableCountAria_other: "테이블 {{count}}개",
 
   // treeRows categories / row count
   rowCountUnknown: "정확한 행 수를 아직 가져오지 않음",

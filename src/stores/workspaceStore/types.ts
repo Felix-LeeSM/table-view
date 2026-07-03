@@ -112,7 +112,11 @@ export type Tab = TableTab | QueryTab;
 
 export type SidebarState = {
   selectedNode: string | null;
-  expanded: string[];
+  // #1217 — `null` means "never seeded" (fresh in-memory cell); an array
+  // (including `[]`) means the sidebar has been seeded or the user set it.
+  // The SchemaTree first-schema seed only fires while this is `null`, so a
+  // user who collapses everything (`[]`) is not re-seeded on restart.
+  expanded: string[] | null;
   scrollTop: number;
 };
 

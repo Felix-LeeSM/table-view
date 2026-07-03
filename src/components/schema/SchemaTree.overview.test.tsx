@@ -9,6 +9,10 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import SchemaTree from "./SchemaTree";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import {
+  dehydrate,
+  migrateLoadedWorkspaces,
+} from "@stores/workspaceStore/persistence";
 import type { ConnectionConfig, DatabaseType } from "@/types/connection";
 import {
   setSchemaStoreState,
@@ -101,6 +105,64 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
       "aria-expanded",
       "true",
     );
+  });
+
+  // ── AC1 — 전부 접음 → 재시작(dehydrate/rehydrate) → 여전히 접힘 ──────────
+  // seed 가드가 "한 번도 seed 안 됨(null)" 과 "사용자가 전부 접음([])" 을
+  // 구분하는지 — persisted `[]` 가 재-seed 로 덮이면 안 된다.
+  it("does not re-seed after the user collapses every schema, dehydrate/rehydrate round-trip", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }, { name: "analytics" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+        "conn1:analytics": [
+          { name: "events", schema: "analytics", row_count: null },
+        ],
+      },
+    });
+
+    const view = await act(async () =>
+      render(<SchemaTree connectionId="conn1" />),
+    );
+    // fresh seed → 첫 스키마(public)만 펼침.
+    expect(
+      useWorkspaceStore.getState().workspaces.conn1?.db1?.sidebar.expanded,
+    ).toEqual(["public"]);
+
+    // 사용자가 유일하게 펼친 스키마를 접음 → expanded === [].
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("public schema"));
+    });
+    expect(
+      useWorkspaceStore.getState().workspaces.conn1!.db1!.sidebar.expanded,
+    ).toEqual([]);
+
+    // 앱 재시작 시뮬레이션: dehydrate → JSON round-trip → migrate(fresh
+    // rehydrate). `[]` 가 array 로 살아남아야 (null 로 강등되면 재-seed 됨).
+    const ws = useWorkspaceStore.getState().workspaces.conn1!.db1!;
+    const raw = JSON.parse(JSON.stringify({ conn1: { db1: dehydrate(ws) } }));
+    const rehydrated = migrateLoadedWorkspaces(raw);
+    expect(rehydrated.conn1!.db1!.sidebar.expanded).toEqual([]);
+    await act(async () => {
+      view.unmount();
+    });
+    useWorkspaceStore.setState({ workspaces: rehydrated });
+
+    // 새 세션(새 컴포넌트 인스턴스, 새 session ref) — 재-seed 하면 안 됨.
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+    expect(screen.getByLabelText("public schema")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(screen.getByLabelText("analytics schema")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(
+      useWorkspaceStore.getState().workspaces.conn1!.db1!.sidebar.expanded,
+    ).toEqual([]);
   });
 
   // ── AC2 — 테이블 수 배지 (접힌 상태에서도 조망) ─────────────────────────
@@ -210,5 +272,66 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
     expect(screen.getByLabelText("todos table")).toBeInTheDocument();
     expect(screen.getByLabelText("todo_tags table")).toBeInTheDocument();
     expect(screen.queryByLabelText("settings table")).not.toBeInTheDocument();
+  });
+
+  // ── AC3 — 필터가 function 도 매칭 (views/functions 포함 계약) ────────────
+  it("global filter matches functions and auto-expands the Functions category", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "orders", schema: "public", row_count: null }],
+      },
+      functions: {
+        "conn1:public": [
+          {
+            name: "calc_user_total",
+            schema: "public",
+            arguments: null,
+            returnType: "numeric",
+            language: "plpgsql",
+            source: "BEGIN END",
+            kind: "function",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const filter = screen.getByLabelText("Filter all schemas and objects");
+    await act(async () => {
+      fireEvent.change(filter, { target: { value: "user" } });
+    });
+
+    // Functions 카테고리는 기본 접힘이지만 매치로 강제 펼침 → 함수 row 보임.
+    expect(
+      screen.getByLabelText("calc_user_total function"),
+    ).toBeInTheDocument();
+    // 비매치 table 은 숨김.
+    expect(screen.queryByLabelText("orders table")).not.toBeInTheDocument();
+  });
+
+  // ── AC4 — 매치 없을 때 placeholder (blank pane 방지) ─────────────────────
+  it("shows a no-matches placeholder when the filter matches nothing", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "orders", schema: "public", row_count: null }],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const filter = screen.getByLabelText("Filter all schemas and objects");
+    await act(async () => {
+      fireEvent.change(filter, { target: { value: "zzz_nonexistent" } });
+    });
+
+    expect(screen.getByText("No matching objects")).toBeInTheDocument();
+    expect(screen.queryByLabelText("orders table")).not.toBeInTheDocument();
   });
 });

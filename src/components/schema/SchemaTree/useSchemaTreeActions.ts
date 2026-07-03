@@ -230,9 +230,11 @@ export function useSchemaTreeActions({
   // rule for long collapsible lists). Two guards keep it non-destructive:
   //   - session-scoped ref: one seed per `(connId, db)` per component
   //     instance, so a user collapse isn't re-seeded mid-session (AC-262-05).
-  //   - persisted-state check: skip entirely when the workspace already
-  //     carries an expansion set (rehydrated from persistence or user-set),
-  //     so a returning user's layout is respected rather than overwritten.
+  //   - `expanded === null` check: `null` marks a genuinely never-seeded
+  //     sidebar; an array — including a user-emptied `[]` — means "already
+  //     seeded / user-set", so we never re-seed it. This is what lets a user
+  //     collapse everything, restart, and keep it collapsed (the persisted
+  //     `[]` rehydrates as an array, not `null`).
   const seededKeysRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!workspaceKey) return;
@@ -240,11 +242,13 @@ export function useSchemaTreeActions({
     const keyStr = `${workspaceKey.connId}:${workspaceKey.db}`;
     if (seededKeysRef.current.has(keyStr)) return;
     seededKeysRef.current.add(keyStr);
-    const persisted =
+    // `undefined` (no cell yet) or `null` (fresh cell) → never seeded → seed.
+    // A real array (even `[]`, a user who collapsed all) → respect it.
+    const expanded =
       useWorkspaceStore.getState().workspaces[workspaceKey.connId]?.[
         workspaceKey.db
-      ]?.sidebar.expanded ?? [];
-    if (persisted.length > 0) return;
+      ]?.sidebar.expanded;
+    if (expanded != null) return;
     setExpandedStore(workspaceKey.connId, workspaceKey.db, [schemas[0]!.name]);
   }, [workspaceKey, schemas, setExpandedStore]);
 

@@ -521,6 +521,52 @@ describe("SchemaTree virtualization (sprint-115)", () => {
     expect(screen.queryByLabelText("table_0500 table")).not.toBeInTheDocument();
   });
 
+  // ---------------------------------------------------------------------
+  // AC-07 (#1217) — the top-level global filter narrows the visible set and
+  // the result STILL flows through the virtualized path when it stays past
+  // the 200-row threshold. This is the filter × virtualization combination
+  // the per-schema search (AC-06) never exercised (it always collapsed
+  // below the threshold).
+  // ---------------------------------------------------------------------
+  it("AC-07 — global filter narrows a 500-table schema and stays virtualized", async () => {
+    const tables = [
+      ...Array.from({ length: 250 }, (_, i) => ({
+        name: `keep_${String(i).padStart(3, "0")}`,
+        schema: "public",
+        row_count: null,
+      })),
+      ...Array.from({ length: 250 }, (_, i) => ({
+        name: `drop_${String(i).padStart(3, "0")}`,
+        schema: "public",
+        row_count: null,
+      })),
+    ];
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": tables },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // Filter to the 250 `keep_*` tables. visibleRows = schema(1) +
+    // Tables category(1) + 250 items = 252 > 200, so the list stays
+    // virtualized and only a viewport-sized window materialises.
+    const filter = screen.getByLabelText("Filter all schemas and objects");
+    await act(async () => {
+      fireEvent.change(filter, { target: { value: "keep_" } });
+    });
+
+    const keepRows = screen.getAllByLabelText(/^keep_\d+ table$/);
+    expect(keepRows.length).toBeGreaterThan(0);
+    // Windowed, not all 250 → proves the virtualizer is still driving.
+    expect(keepRows.length).toBeLessThanOrEqual(100);
+    // Non-matching rows are gone across the whole (windowed) dataset.
+    expect(screen.queryByLabelText("drop_000 table")).toBeNull();
+    expect(screen.queryByLabelText("drop_249 table")).toBeNull();
+  });
+
   // Document the assumed row height so a future contributor changing
   // `ROW_HEIGHT_ESTIMATE` knows to revisit these test thresholds.
   void ROW_HEIGHT_ESTIMATE;
