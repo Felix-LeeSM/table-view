@@ -10,6 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
+import {
+  CONNECTION_ERROR_ID,
+  fieldValidationProps,
+  type ConnFieldKey,
+} from "./fieldValidation";
 
 export interface MssqlFormFieldsProps {
   draft: ConnectionDraft;
@@ -22,6 +27,7 @@ export interface MssqlFormFieldsProps {
   setClearPassword: (value: boolean) => void;
   inputClass: string;
   labelClass: string;
+  invalidField?: ConnFieldKey | null;
 }
 
 export default function MssqlFormFields({
@@ -35,9 +41,20 @@ export default function MssqlFormFields({
   setClearPassword,
   inputClass,
   labelClass,
+  invalidField,
 }: MssqlFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
   const unsupportedMessage = getMssqlConnectionUnsupportedMessage(draft);
+  // Host can be flagged by two independent regions (save-required banner +
+  // the inline auth-combo alert); merge both into aria-describedby.
+  const hostValidation = fieldValidationProps("host", true, invalidField);
+  const hostDescribedBy =
+    [
+      invalidField === "host" ? CONNECTION_ERROR_ID : null,
+      unsupportedMessage ? "mssql-auth-error" : null,
+    ]
+      .filter(Boolean)
+      .join(" ") || undefined;
 
   return (
     <>
@@ -52,9 +69,13 @@ export default function MssqlFormFields({
             value={draft.host}
             onChange={(e) => onChange({ host: e.target.value })}
             placeholder="localhost"
-            aria-describedby={
-              unsupportedMessage ? "mssql-auth-error" : undefined
+            {...hostValidation}
+            aria-invalid={
+              hostValidation["aria-invalid"] || unsupportedMessage
+                ? true
+                : undefined
             }
+            aria-describedby={hostDescribedBy}
           />
         </div>
         <div className="w-24">
@@ -165,6 +186,7 @@ export default function MssqlFormFields({
           value={draft.database}
           onChange={(e) => onChange({ database: e.target.value })}
           placeholder="master"
+          {...fieldValidationProps("database", true, invalidField)}
         />
       </div>
 

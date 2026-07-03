@@ -9,6 +9,7 @@
  */
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
+import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
 
 export interface MysqlFormFieldsProps {
   draft: ConnectionDraft;
@@ -21,6 +22,7 @@ export interface MysqlFormFieldsProps {
   setClearPassword: (value: boolean) => void;
   inputClass: string;
   labelClass: string;
+  invalidField?: ConnFieldKey | null;
 }
 
 export default function MysqlFormFields({
@@ -34,6 +36,7 @@ export default function MysqlFormFields({
   setClearPassword,
   inputClass,
   labelClass,
+  invalidField,
 }: MysqlFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
   return (
@@ -50,6 +53,7 @@ export default function MysqlFormFields({
             value={draft.host}
             onChange={(e) => onChange({ host: e.target.value })}
             placeholder="localhost"
+            {...fieldValidationProps("host", true, invalidField)}
           />
         </div>
         <div className="w-24">
@@ -141,6 +145,7 @@ export default function MysqlFormFields({
           value={draft.database}
           onChange={(e) => onChange({ database: e.target.value })}
           placeholder="myapp"
+          {...fieldValidationProps("database", true, invalidField)}
         />
       </div>
     </>

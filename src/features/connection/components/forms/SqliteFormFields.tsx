@@ -11,6 +11,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { Database, FolderOpen, LockKeyhole } from "lucide-react";
 import { createSqliteDatabaseFile } from "@/lib/tauri/connection";
 import type { ConnectionDraft } from "../../model";
+import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
 
 export interface SqliteFormFieldsProps {
   draft: ConnectionDraft;
@@ -18,6 +19,7 @@ export interface SqliteFormFieldsProps {
   filePickerEnabled: boolean;
   inputClass: string;
   labelClass: string;
+  invalidField?: ConnFieldKey | null;
   databaseLabel?: string;
   defaultPath?: string;
   fileExtensions?: string[];
@@ -30,6 +32,7 @@ export default function SqliteFormFields({
   filePickerEnabled,
   inputClass,
   labelClass,
+  invalidField,
   databaseLabel = "SQLite",
   defaultPath = "database.sqlite",
   fileExtensions = ["sqlite", "sqlite3", "db"],
@@ -92,6 +95,7 @@ export default function SqliteFormFields({
           onChange={(e) => onChange({ database: e.target.value })}
           placeholder={`/absolute/path/to/${defaultPath}`}
           aria-label="Database file"
+          {...fieldValidationProps("database", true, invalidField)}
         />
         {filePickerEnabled && (
           <>

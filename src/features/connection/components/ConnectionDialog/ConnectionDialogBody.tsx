@@ -31,6 +31,10 @@ import SqliteFormFields from "../forms/SqliteFormFields";
 import MongoFormFields from "../forms/MongoFormFields";
 import RedisFormFields from "../forms/RedisFormFields";
 import SearchFormFields from "../forms/SearchFormFields";
+import {
+  fieldValidationProps,
+  type ConnFieldKey,
+} from "../forms/fieldValidation";
 
 // Sprint-112: Radix `<SelectItem>` cannot have an empty value, so we use
 // sentinel string `__none__` to represent the "None" environment option.
@@ -63,6 +67,8 @@ export interface ConnectionDialogBodyProps {
   setClearPassword: React.Dispatch<React.SetStateAction<boolean>>;
   inputClass: string;
   labelClass: string;
+  /** Issue #1135 — field flagged by the last failed save, or `null`. */
+  invalidField: ConnFieldKey | null;
 }
 
 /**
@@ -98,6 +104,7 @@ export default function ConnectionDialogBody({
   setClearPassword,
   inputClass,
   labelClass,
+  invalidField,
 }: ConnectionDialogBodyProps) {
   const { t } = useTranslation("featuresConnection");
   /**
@@ -115,6 +122,7 @@ export default function ConnectionDialogBody({
       setClearPassword,
       inputClass,
       labelClass,
+      invalidField,
     };
     const onChange = (patch: Partial<ConnectionDraft>) =>
       setForm((f) => ({ ...f, ...patch }));
@@ -205,6 +213,7 @@ export default function ConnectionDialogBody({
                 )}
                 inputClass={inputClass}
                 labelClass={labelClass}
+                invalidField={invalidField}
               />
             );
           case "duckdb":
@@ -218,6 +227,7 @@ export default function ConnectionDialogBody({
                 )}
                 inputClass={inputClass}
                 labelClass={labelClass}
+                invalidField={invalidField}
                 databaseLabel="DuckDB"
                 defaultPath="database.duckdb"
                 fileExtensions={["duckdb"]}
@@ -306,7 +316,12 @@ export default function ConnectionDialogBody({
               {urlError}
             </div>
           )}
-          <Button className="w-full" size="sm" onClick={onParseAndContinue}>
+          <Button
+            type="button"
+            className="w-full"
+            size="sm"
+            onClick={onParseAndContinue}
+          >
             {t("body.parseAndContinue")}
           </Button>
         </div>
@@ -337,6 +352,7 @@ export default function ConnectionDialogBody({
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder={t("body.placeholderName")}
               autoFocus
+              {...fieldValidationProps("name", true, invalidField)}
             />
           </div>
 
