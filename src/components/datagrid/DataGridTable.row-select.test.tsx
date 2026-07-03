@@ -4,7 +4,7 @@
 // aria-selected 를 노출하므로 RDB 를 맞춰 일관성 확보. (2026-07-03)
 
 import { describe, it, expect, vi } from "vitest";
-import { render, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import DataGridTable from "./DataGridTable";
 import type { TableData } from "@/types/schema";
 
@@ -100,5 +100,49 @@ describe("DataGridTable row selection a11y (issue #1130 AC2)", () => {
     act(() => cell(1, 1).focus());
     fireEvent.keyDown(cell(1, 1), { key: " ", ctrlKey: true });
     expect(onSelectRow).toHaveBeenCalledWith(1, true, false);
+  });
+
+  // issue #1130 (N1) — Space/Enter on a native control inside the cell must
+  // not be hijacked by the cell keymap (target !== currentTarget guard).
+  it("Space on an inner nested-toggle button does not select the row", () => {
+    const onSelectRow = vi.fn();
+    const data: TableData = {
+      columns: [
+        {
+          name: "id",
+          data_type: "integer",
+          nullable: false,
+          default_value: null,
+          is_primary_key: true,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+        {
+          name: "meta",
+          data_type: "jsonb",
+          nullable: true,
+          default_value: null,
+          is_primary_key: false,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+      ],
+      rows: [[1, { a: 1 }]],
+      total_count: 1,
+      page: 1,
+      page_size: 100,
+      executed_query: "SELECT * FROM public.t",
+    };
+    render(
+      <DataGridTable
+        {...makeProps({ data, columnOrder: [0, 1], onSelectRow })}
+      />,
+    );
+    const toggle = screen.getByTestId("rdb-nested-toggle-0-1");
+    act(() => toggle.focus());
+    fireEvent.keyDown(toggle, { key: " " });
+    expect(onSelectRow).not.toHaveBeenCalled();
   });
 });

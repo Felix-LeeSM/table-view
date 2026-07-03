@@ -245,6 +245,11 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
             tabIndex={cellTabIndex(rowIdx, visualIdx)}
             onFocus={() => onFocusCell(rowIdx, visualIdx)}
             onKeyDown={(e) => {
+              // issue #1130 (N1) — cell 내부 native 컨트롤(nested toggle / FK /
+              // BLOB 버튼) focus 시 Space/Enter 를 셀 키맵이 가로채지 않도록
+              // 자기 셀 focus 일 때만 동작. HeaderRow 와 동일 가드. 편집 중엔
+              // editor input 이 target 이라 이 가드에서 먼저 bail.
+              if (e.target !== e.currentTarget) return;
               // Design-swarm #4 Phase 3 — Enter/F2 로 focus 된 cell 편집 진입
               // (double-click 과 동일 가드/경로). 편집 중엔 editor input 이
               // focus 를 쥐고 Enter/Escape 를 stopPropagation 하므로 여기 안 옴.
