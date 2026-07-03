@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { EditorView, keymap } from "@codemirror/view";
-import type { KeyBinding } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
 import { json as jsonLanguage } from "@codemirror/lang-json";
@@ -9,7 +8,10 @@ import AddDocumentModal, {
   type AddDocumentModalProps,
 } from "./AddDocumentModal";
 import { useDocumentStore } from "@/test-utils/documentStore";
-import { expectUndoRevertsEdit } from "../query/__tests__/editorHistoryHelpers";
+import {
+  expectUndoRevertsEdit,
+  getKeymapBindings,
+} from "../query/__tests__/editorHistoryHelpers";
 
 function getEditorContainer(): HTMLElement {
   return screen.getByLabelText("Document JSON");
@@ -39,16 +41,6 @@ function setDocumentText(value: string) {
       },
     });
   });
-}
-
-function getKeymapBindings(view: EditorView): KeyBinding[] {
-  const bindings: KeyBinding[] = [];
-  for (const set of view.state.facet(keymap)) {
-    if (Array.isArray(set)) {
-      for (const binding of set) bindings.push(binding);
-    }
-  }
-  return bindings;
 }
 
 function renderModal(overrides: Partial<AddDocumentModalProps> = {}) {
@@ -172,9 +164,8 @@ describe("AddDocumentModal", () => {
   it("reverts an edit via undo and binds Mod-z (#1247)", () => {
     renderModal();
 
-    const view = getEditorView();
-    expect(getKeymapBindings(view).some((b) => b.key === "Mod-z")).toBe(true);
-    expectUndoRevertsEdit(view);
+    // #1248 — `expectUndoRevertsEdit` now asserts the Mod-z binding itself.
+    expectUndoRevertsEdit(getEditorView());
   });
 
   // Sprint 121 — CodeMirror migration

@@ -32,6 +32,7 @@ import {
   type MqlCondition,
   type MqlOperator,
 } from "@lib/mongo/mqlFilterBuilder";
+import { syncEditorDocument } from "../query/editorDocumentSync";
 
 /**
  * Mongo collection filter bar. Mirrors the RDB `FilterBar` UX but emits
@@ -568,16 +569,14 @@ function RawMqlEditor({
   }, [mongoExtensions, buildLangExtension]);
 
   // Sync external `value` (e.g. Structured → Raw prefill) into the editor
-  // without losing focus. Only dispatch when the docs actually differ to
-  // avoid an infinite loop with the updateListener above.
+  // without losing focus. `syncEditorDocument` is passive: it skips the
+  // dispatch when the docs already match (no updateListener loop) and marks
+  // the mirror `addToHistory: false` so the prefill never pollutes the undo
+  // stack (#1248).
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    const current = view.state.doc.toString();
-    if (current === value) return;
-    view.dispatch({
-      changes: { from: 0, to: current.length, insert: value },
-    });
+    syncEditorDocument(view, value);
   }, [value]);
 
   return (

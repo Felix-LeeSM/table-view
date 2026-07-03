@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import DocumentFilterBar, {
   type DocumentFilterBarProps,
 } from "./DocumentFilterBar";
@@ -32,14 +32,6 @@ function setRawText(text: string) {
       changes: { from: 0, to: view.state.doc.length, insert: text },
     });
   });
-}
-
-function getKeymapBindings(view: EditorView): KeyBinding[] {
-  const bindings: KeyBinding[] = [];
-  for (const set of view.state.facet(keymap)) {
-    if (Array.isArray(set)) bindings.push(...set);
-  }
-  return bindings;
 }
 
 describe("DocumentFilterBar", () => {
@@ -103,9 +95,8 @@ describe("DocumentFilterBar", () => {
     renderBar();
     fireEvent.click(screen.getByRole("radio", { name: "Raw MQL" }));
 
-    const view = getRawEditorView();
-    expect(getKeymapBindings(view).some((b) => b.key === "Mod-z")).toBe(true);
-    expectUndoRevertsEdit(view);
+    // #1248 — `expectUndoRevertsEdit` now asserts the Mod-z binding itself.
+    expectUndoRevertsEdit(getRawEditorView());
   });
 
   it("renders the Raw MQL CodeMirror editor with role=textbox", () => {

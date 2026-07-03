@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, act } from "@testing-library/react";
-import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import RedisCommandEditor from "./RedisCommandEditor";
-import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
+import {
+  expectUndoRevertsEdit,
+  getKeymapBindings,
+} from "./__tests__/editorHistoryHelpers";
 
 function getEditorView(): EditorView {
   const container = screen.getByLabelText("Redis Command Editor");
@@ -10,14 +13,6 @@ function getEditorView(): EditorView {
   const view = EditorView.findFromDOM(cmEditor);
   if (!view) throw new Error("EditorView not found");
   return view;
-}
-
-function getKeymapBindings(view: EditorView): KeyBinding[] {
-  const bindings: KeyBinding[] = [];
-  for (const set of view.state.facet(keymap)) {
-    if (Array.isArray(set)) bindings.push(...set);
-  }
-  return bindings;
 }
 
 describe("RedisCommandEditor", () => {

@@ -40,6 +40,19 @@ export interface QueryEvents {
   handleFormat: () => void;
 }
 
+/**
+ * User-initiated whole-doc replacement (format / uglify). Dispatched on the
+ * EditorView so it lands on the undo stack — standard editor UX. This is the
+ * deliberate counterpart to the passive `syncEditorDocument` mirror, which
+ * suppresses history. The editor's updateListener propagates the change back
+ * into the store, so no direct `updateQuerySql` call is needed here (#1248).
+ */
+function replaceEditorDoc(view: EditorView, next: string): void {
+  view.dispatch({
+    changes: { from: 0, to: view.state.doc.length, insert: next },
+  });
+}
+
 export function useQueryEvents({
   tab,
   updateQuerySql,
@@ -103,8 +116,11 @@ export function useQueryEvents({
         }
       }
 
+      // Whole-doc format is user-initiated → dispatch on the editor so Cmd+Z
+      // reverts it. Fall back to the store only when no editor is mounted.
       const formatted = formatSql(tab.sql);
-      updateQuerySql(tab.id, formatted);
+      if (view) replaceEditorDoc(view, formatted);
+      else updateQuerySql(tab.id, formatted);
     };
     window.addEventListener("format-sql", handler);
     return () => window.removeEventListener("format-sql", handler);
@@ -129,8 +145,11 @@ export function useQueryEvents({
       const activeTabId = focusedConnId.find((id) => id === tab.id) ?? null;
       if (activeTabId !== tab.id) return;
       if (!tab.sql.trim()) return;
+      // Uglify is user-initiated → dispatch on the editor so Cmd+Z reverts it.
       const uglified = uglifySql(tab.sql);
-      updateQuerySql(tab.id, uglified);
+      const view = editorRef.current;
+      if (view) replaceEditorDoc(view, uglified);
+      else updateQuerySql(tab.id, uglified);
     };
     window.addEventListener("uglify-sql", handler);
     return () => window.removeEventListener("uglify-sql", handler);
@@ -153,8 +172,11 @@ export function useQueryEvents({
       }
     }
 
+    // Whole-doc format is user-initiated → dispatch on the editor so Cmd+Z
+    // reverts it. Fall back to the store only when no editor is mounted.
     const formatted = formatSql(tab.sql);
-    updateQuerySql(tab.id, formatted);
+    if (view) replaceEditorDoc(view, formatted);
+    else updateQuerySql(tab.id, formatted);
   }, [tab.id, tab.sql, updateQuerySql]);
 
   return { editorRef, handleFormat };

@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useState } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { ensureSyntaxTree, language } from "@codemirror/language";
 import { undo } from "@codemirror/commands";
 import { MySQL, PostgreSQL, SQLite } from "@codemirror/lang-sql";
-import type { KeyBinding } from "@codemirror/view";
 import SqlQueryEditor from "./SqlQueryEditor";
-import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
+import {
+  expectUndoRevertsEdit,
+  getKeymapBindings,
+} from "./__tests__/editorHistoryHelpers";
 
 /**
  * Sprint 139 — SqlQueryEditor unit tests.
@@ -30,17 +32,6 @@ function getEditorView(): EditorView {
   const view = EditorView.findFromDOM(cmEditor);
   if (!view) throw new Error("EditorView not found");
   return view;
-}
-
-function getKeymapBindings(view: EditorView): KeyBinding[] {
-  const bindings: KeyBinding[] = [];
-  const facetValues = view.state.facet(keymap);
-  for (const set of facetValues) {
-    if (Array.isArray(set)) {
-      for (const binding of set) bindings.push(binding);
-    }
-  }
-  return bindings;
 }
 
 function collectKeywords(view: EditorView): Set<string> {
