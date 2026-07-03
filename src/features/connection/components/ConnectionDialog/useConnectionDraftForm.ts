@@ -9,6 +9,7 @@ import {
   draftFromConnection,
   DATABASE_DEFAULTS,
   DATABASE_DEFAULT_FIELDS,
+  exposesTlsToggle,
   paradigmOf,
 } from "../../model";
 
@@ -126,8 +127,18 @@ export function useConnectionDraftForm(
         user: defaults.user,
         database: defaults.database,
         readOnly: false,
+        // #1062 — MSSQL forces encryption on; other TLS-toggle forms
+        // (mongo/redis/valkey/search) may carry the prior value. Types with
+        // no TLS toggle (pg/mysql/mariadb/oracle/sqlite/duckdb) must reset to
+        // null, otherwise a carried-over `tlsEnabled=true` produces the
+        // `tls_enabled=true, trust=None` combo the backend hard-rejects with
+        // no in-form way to recover.
         tlsEnabled:
-          dbType === "mssql" ? true : dbType === "oracle" ? null : f.tlsEnabled,
+          dbType === "mssql"
+            ? true
+            : exposesTlsToggle(dbType)
+              ? f.tlsEnabled
+              : null,
         trustServerCertificate: dbType === "mssql" ? true : null,
         paradigm: paradigmOf(dbType),
       };

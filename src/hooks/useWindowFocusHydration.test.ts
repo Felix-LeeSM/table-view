@@ -277,15 +277,17 @@ describe("useWindowFocusHydration", () => {
     unmount2();
   });
 
-  // -- Connection switch: stale tab cleanup --
+  // -- Connection switch: this window's tabs survive focus hydration (#1098) --
 
-  // Reason: switching connections (PG → Mongo) from the launcher writes the new
-  // focusedConnId to session storage, but the workspace's tab store is a
-  // separate Zustand instance that never received clearTabsForConnection.
-  // Without cleanup the Sidebar's active-tab effect overrides focusedConnId
-  // back to the old connection, showing the wrong paradigm.  (2026-04-29)
-  it("clears stale tabs when focusedConnId changes to a different connection on hydration", () => {
-    // Pre-condition: workspace has a PG tab active
+  // Reason: sprint-361 gives every connection its own `workspace-{connId}`
+  // window, so a workspace window only ever holds its own connection's tabs.
+  // When the launcher moves focus to connection B while this workspace-A
+  // window is hidden, a focus event hydrates `focusedConnId = B`. The old
+  // pre-361 wipe would then treat A as "stale" and clear A's own tabs — the
+  // #1098 data-loss bug. Focus hydration must never destroy this window's
+  // workspace; teardown belongs to disconnect/remove (cleanup.ts).
+  it("keeps this window's tabs when focusedConnId hydrates to a different connection (#1098)", () => {
+    // Pre-condition: workspace-A window has a PG tab active
     useWorkspaceStore.setState(
       seedWorkspace(
         [
@@ -309,23 +311,30 @@ describe("useWindowFocusHydration", () => {
       ),
     );
 
-    // Hydrate to a different connection (MongoDB)
+    // Launcher switched focus to a different connection (MongoDB) while this
+    // workspace-A window was hidden. conn-pg stays connected in the shared
+    // activeStatuses pool — only focusedConnId moved — so the connectionStore
+    // teardown subscription must NOT fire for conn-pg. The only thing that
+    // could wipe A here is the removed focus-hydration block.
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: "conn-mongo",
-      activeStatuses: { "conn-mongo": { type: "connected" } },
+      activeStatuses: {
+        "conn-pg": { type: "connected" },
+        "conn-mongo": { type: "connected" },
+      },
       hasFocusedConnId: true,
       hasActiveStatuses: true,
     });
 
     renderHook(() => useWindowFocusHydration());
 
-    // The PG tab should have been cleared
+    // A's own PG tab must survive — no focus-driven wipe.
     const wsAfter = useWorkspaceStore.getState().workspaces;
     const tabs = Object.values(wsAfter).flatMap((byDb) =>
       Object.values(byDb).flatMap((ws) => ws.tabs),
     );
-    expect(tabs.find((t) => t.connectionId === "conn-pg")).toBeUndefined();
-    // focusedConnId must stay as Mongo, not overridden back to PG
+    expect(tabs.find((t) => t.connectionId === "conn-pg")).toBeDefined();
+    // focusedConnId reflects the hydrated session value.
     expect(useConnectionStore.getState().focusedConnId).toBe("conn-mongo");
   });
 
@@ -368,8 +377,11 @@ describe("useWindowFocusHydration", () => {
     expect(getTestWorkspace("conn-pg").tabs[0]!.connectionId).toBe("conn-pg");
   });
 
-  // Reason: focus events that change the connection should also clean up.
-  it("clears stale tabs when focusedConnId changes on a subsequent focus event", () => {
+  // Reason: a subsequent focus event that hydrates a different focusedConnId
+  // must also leave this window's tabs intact (#1098). This is the exact
+  // regression path: workspace-A stays open, the launcher switches focus to B,
+  // A regains focus and hydrates focusedConnId=B — A's tabs must not vanish.
+  it("keeps this window's tabs when focusedConnId changes on a subsequent focus event (#1098)", () => {
     // First hydration: PG
     useConnectionStore.setState({ focusedConnId: "conn-pg" });
     useWorkspaceStore.setState(
@@ -405,10 +417,15 @@ describe("useWindowFocusHydration", () => {
     const { unmount } = renderHook(() => useWindowFocusHydration());
     expect(getTestWorkspace("conn-pg", "db1").tabs).toHaveLength(1);
 
-    // Now the launcher switches to Mongo while workspace is hidden
+    // Now the launcher switches focus to Mongo while this workspace-A window
+    // is hidden. conn-pg is still connected in activeStatuses (focus moved,
+    // connection did not drop), so no teardown subscription fires for it.
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: "conn-mongo",
-      activeStatuses: { "conn-mongo": { type: "connected" } },
+      activeStatuses: {
+        "conn-pg": { type: "connected" },
+        "conn-mongo": { type: "connected" },
+      },
       hasFocusedConnId: true,
       hasActiveStatuses: true,
     });
@@ -417,8 +434,8 @@ describe("useWindowFocusHydration", () => {
       window.dispatchEvent(new Event("focus"));
     });
 
-    // PG tabs gone (workspace slot cleared), focusedConnId is Mongo
-    expect(getTestWorkspace("conn-pg", "db1").tabs).toHaveLength(0);
+    // A's PG tab survives the focus hydration; focusedConnId is Mongo.
+    expect(getTestWorkspace("conn-pg", "db1").tabs).toHaveLength(1);
     expect(useConnectionStore.getState().focusedConnId).toBe("conn-mongo");
 
     unmount();
