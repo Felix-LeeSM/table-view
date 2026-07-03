@@ -7,7 +7,7 @@
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -131,12 +131,11 @@ async fn export_grid_rows_inner(
     release_cancel_token(state, &cancel_handle).await;
 
     if let Err(ref e) = result {
+        // Issue #1094 — no target cleanup here. `write_export` writes to a
+        // temp sibling and only renames on success, so a failed/cancelled
+        // export leaves the original `target_path` untouched (removing it
+        // here would destroy a pre-existing file the user still has).
         warn!(error = %e, "export_grid_rows failed");
-        // Best-effort: remove a partial file if one was created. We do
-        // this for both Io errors and cancellation so the user is never
-        // left with a half-written export. Ignore the remove error since
-        // the file may not exist yet.
-        let _ = std::fs::remove_file(&target_path);
     }
 
     result
@@ -147,12 +146,16 @@ async fn export_grid_rows_inner(
 /// token fires mid-write.
 pub fn write_export(
     format: ExportFormat,
-    target_path: &std::path::Path,
+    target_path: &Path,
     headers: &[String],
     rows: &[Vec<JsonValue>],
     context: &ExportContext,
     cancel: Option<&CancellationToken>,
 ) -> Result<ExportSummary, AppError> {
+    // Issue #1094 — reject relative / internal-state target paths before any
+    // filesystem work.
+    crate::storage::local::validate_export_target_path(target_path)?;
+
     // Pre-flight: SQL format requires a single-table source. Reject
     // before opening the file so no partial artifact is created.
     if matches!(format, ExportFormat::Sql) {
@@ -165,22 +168,70 @@ pub fn write_export(
         ));
     }
 
-    let file = File::create(target_path).map_err(AppError::from)?;
-    let mut writer = BufWriter::new(file);
-
-    let bytes_written = match format {
-        ExportFormat::Csv => write_csv(&mut writer, headers, rows, cancel)?,
-        ExportFormat::Tsv => write_tsv(&mut writer, headers, rows, cancel)?,
-        ExportFormat::Sql => write_sql_insert(&mut writer, headers, rows, context, cancel)?,
-        ExportFormat::Json => write_json_array(&mut writer, headers, rows, cancel)?,
-    };
-
-    writer.flush().map_err(AppError::from)?;
+    let bytes_written = atomic_write(target_path, |writer| match format {
+        ExportFormat::Csv => write_csv(writer, headers, rows, cancel),
+        ExportFormat::Tsv => write_tsv(writer, headers, rows, cancel),
+        ExportFormat::Sql => write_sql_insert(writer, headers, rows, context, cancel),
+        ExportFormat::Json => write_json_array(writer, headers, rows, cancel),
+    })?;
 
     Ok(ExportSummary {
         rows_written: rows.len() as u64,
         bytes_written,
     })
+}
+
+/// Issue #1094 — atomic file replace. Writes the body to a temp sibling in the
+/// **same directory** as `target` (rename is only atomic within one
+/// filesystem), fsyncs, then renames over `target`. On any failure — including
+/// a cancellation mid-write — the temp file is removed and `target` is left
+/// untouched, so a failed export can never destroy a pre-existing file. Mirrors
+/// `storage::local_files::save_json_atomic`.
+fn atomic_write<F>(target: &Path, write_body: F) -> Result<u64, AppError>
+where
+    F: FnOnce(&mut BufWriter<File>) -> Result<u64, AppError>,
+{
+    let temp_path = temp_sibling_path(target)?;
+
+    let write_result = (|| {
+        let file = File::create(&temp_path).map_err(AppError::from)?;
+        let mut writer = BufWriter::new(file);
+        let bytes = write_body(&mut writer)?;
+        writer.flush().map_err(AppError::from)?;
+        writer.get_ref().sync_all().map_err(AppError::from)?;
+        Ok(bytes)
+    })();
+
+    match write_result {
+        Ok(bytes) => match std::fs::rename(&temp_path, target) {
+            Ok(()) => Ok(bytes),
+            Err(e) => {
+                let _ = std::fs::remove_file(&temp_path);
+                Err(AppError::from(e))
+            }
+        },
+        Err(e) => {
+            let _ = std::fs::remove_file(&temp_path);
+            Err(e)
+        }
+    }
+}
+
+/// A unique temp path in the same directory as `target` (pid + nanos, matching
+/// `save_json_atomic`). Same-dir placement keeps the final `rename` atomic.
+fn temp_sibling_path(target: &Path) -> Result<PathBuf, AppError> {
+    let parent = target
+        .parent()
+        .ok_or_else(|| AppError::Validation("Export target path has no parent directory".into()))?;
+    let file_name = target
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("export");
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    Ok(parent.join(format!("{file_name}.tmp.{}.{}", std::process::id(), nanos)))
 }
 
 // =============================================== text file (Sprint 192)
@@ -228,10 +279,10 @@ async fn write_text_file_export_inner(
     };
 
     if let Err(ref e) = result {
+        // Issue #1094 — `write_text_file` writes to a temp sibling and only
+        // renames on success, so no target cleanup is needed (and removing
+        // it would destroy a pre-existing file).
         warn!(error = %e, "write_text_file_export failed");
-        // Best-effort partial-file cleanup; ignore remove error since the
-        // file may not have been created yet.
-        let _ = std::fs::remove_file(&target_path);
     }
 
     result
@@ -239,19 +290,18 @@ async fn write_text_file_export_inner(
 
 /// Synchronous core. Pulled out so unit tests can drive it without a
 /// Tauri AppState — symmetrical to `write_export`.
-pub fn write_text_file(
-    target_path: &std::path::Path,
-    content: &str,
-) -> Result<ExportSummary, AppError> {
-    let file = File::create(target_path).map_err(AppError::from)?;
-    let mut writer = BufWriter::new(file);
-    writer
-        .write_all(content.as_bytes())
-        .map_err(AppError::from)?;
-    writer.flush().map_err(AppError::from)?;
+pub fn write_text_file(target_path: &Path, content: &str) -> Result<ExportSummary, AppError> {
+    // Issue #1094 — same path guard + atomic replace as `write_export`.
+    crate::storage::local::validate_export_target_path(target_path)?;
+    let bytes_written = atomic_write(target_path, |writer| {
+        writer
+            .write_all(content.as_bytes())
+            .map_err(AppError::from)?;
+        Ok(content.len() as u64)
+    })?;
     Ok(ExportSummary {
         rows_written: 0,
-        bytes_written: content.len() as u64,
+        bytes_written,
     })
 }
 
@@ -374,10 +424,10 @@ async fn export_schema_dump_inner(
     // 3. token cleanup — Sprint 237 P5+ 공통 헬퍼.
     release_cancel_token(state, &cancel_handle).await;
 
-    // 4. cleanup partial file on error.
+    // 4. Issue #1094 — `run_schema_dump` writes to a temp sibling and only
+    //    renames on success, so no target cleanup is needed here.
     if let Err(ref e) = result {
         warn!(error = %e, "export_schema_dump failed");
-        let _ = std::fs::remove_file(&target_path);
     }
 
     result
@@ -387,7 +437,58 @@ async fn export_schema_dump_inner(
 async fn run_schema_dump(
     state: &AppState,
     connection_id: &str,
-    target_path: &std::path::Path,
+    target_path: &Path,
+    ddl_header: &str,
+    ddl_footer: &str,
+    tables: &[ExportDumpTable],
+    options: &ExportSchemaDumpOptions,
+    cancel: Option<&CancellationToken>,
+) -> Result<ExportSummary, AppError> {
+    // Issue #1094 — validate the untrusted target and reject a 0 batch before
+    // touching the filesystem.
+    crate::storage::local::validate_export_target_path(target_path)?;
+    if options.batch_size == 0 {
+        return Err(AppError::Validation(
+            "export_schema_dump: batch_size must be > 0".into(),
+        ));
+    }
+
+    // Issue #1094 — stream the dump into a temp sibling and rename over the
+    // target only once the whole dump succeeds. A failed/cancelled dump leaves
+    // any pre-existing file untouched; only the temp file is removed.
+    let temp_path = temp_sibling_path(target_path)?;
+    let result = stream_schema_dump(
+        state,
+        connection_id,
+        &temp_path,
+        ddl_header,
+        ddl_footer,
+        tables,
+        options,
+        cancel,
+    )
+    .await;
+
+    match result {
+        Ok(summary) => match tokio::fs::rename(&temp_path, target_path).await {
+            Ok(()) => Ok(summary),
+            Err(e) => {
+                let _ = tokio::fs::remove_file(&temp_path).await;
+                Err(AppError::from(e))
+            }
+        },
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            Err(e)
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn stream_schema_dump(
+    state: &AppState,
+    connection_id: &str,
+    write_path: &Path,
     ddl_header: &str,
     ddl_footer: &str,
     tables: &[ExportDumpTable],
@@ -396,13 +497,7 @@ async fn run_schema_dump(
 ) -> Result<ExportSummary, AppError> {
     use tokio::io::AsyncWriteExt;
 
-    if options.batch_size == 0 {
-        return Err(AppError::Validation(
-            "export_schema_dump: batch_size must be > 0".into(),
-        ));
-    }
-
-    let file = tokio::fs::File::create(target_path)
+    let file = tokio::fs::File::create(write_path)
         .await
         .map_err(AppError::from)?;
     let mut writer = tokio::io::BufWriter::new(file);
@@ -532,6 +627,8 @@ async fn run_schema_dump(
     }
 
     writer.flush().await.map_err(AppError::from)?;
+    // fsync the temp file before the caller renames it into place (Issue #1094).
+    writer.get_ref().sync_all().await.map_err(AppError::from)?;
 
     Ok(ExportSummary {
         rows_written,

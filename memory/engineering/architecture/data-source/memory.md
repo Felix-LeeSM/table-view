@@ -38,12 +38,10 @@ interface DataSourceProfile {
 runtime support claim 이 아니다. Connection dialog/runtime 노출은
 `capabilities.connection.test` 로 gate 한다.
 
-TS/Rust strict profile parity 는 `tests/fixtures/data-source-profile-parity.report.json`
-을 SOT 로 두고 `src/types/dataSourceProfileParity.test.ts` 와
-`src-tauri/tests/data_source_profile_parity.rs` 가 검증한다. TS `capabilities` 와
-Rust `adapter_contract` 는 runtime/support posture 이며 strict parity field 가 아니다.
-Runtime/support posture 는 `src/types/adapterConformance.ts`, Rust profile contract
-tests, and `docs/contributor-guide/testing-and-quality.md` evidence rows 가 소유한다.
+TS/Rust strict profile parity 는 `tests/fixtures/data-source-profile-parity.report.json` 을 SOT 로 `src/types/dataSourceProfileParity.test.ts` + `src-tauri/tests/data_source_profile_parity.rs` 가 검증한다.
+TS `capabilities`/Rust `adapter_contract` 는 strict parity field 가 아닌 runtime/support posture 이며 소유는 `src/types/adapterConformance.ts` + Rust profile contract tests + `docs/contributor-guide/testing-and-quality.md` 다.
+Rust `adapter_contract.capabilities` 선언의 SOT 는 `make_adapter` 가 wiring 하는 production adapter 다 (dormant full adapter 아님):
+SQLite 는 wired `SqliteAdapter.create_table` 구현 → `RelationalSchemaMutation` 선언, Oracle 은 wired `OracleRuntimeAdapter` DDL Unsupported → 미선언 (full `OracleAdapter` 승격 #1072).
 
 `DatabaseType` 은 identity 다. Workbench 선택과 UI affordance 는
 `DataParadigm` + capability 를 본다. Backend adapter, dialect, file connection
