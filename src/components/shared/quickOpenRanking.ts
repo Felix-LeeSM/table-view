@@ -20,6 +20,14 @@ export interface RankableFields {
   nameLower: string;
   schemaLower: string;
   connLower: string;
+  /**
+   * Whether the item's DBMS exposes a real schema layer. `with-schema` (PG)
+   * and `no-schema` (MySQL, where the grouping is the database) are both
+   * `true`; `flat` (SQLite/DuckDB) is `false`. Drives whether a `.`-token is
+   * schema-qualified or degrades to a plain full-string match. Defaults to
+   * `true` when omitted so schema-scoping stays the norm.
+   */
+  hasSchema?: boolean;
 }
 
 /**

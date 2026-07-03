@@ -96,6 +96,42 @@ describe("rankQuickOpen — schema-qualified `.` syntax", () => {
   });
 });
 
+describe("scoreItem — treeShape degradation of the `.` token", () => {
+  const withSchema: RankableFields = {
+    nameLower: "orders",
+    schemaLower: "sales",
+    connLower: "prod",
+    hasSchema: true,
+  };
+  const flat: RankableFields = {
+    nameLower: "orders",
+    schemaLower: "main",
+    connLower: "prod",
+    hasSchema: false,
+  };
+
+  it("scopes `.` to the schema field when the shape has a schema layer", () => {
+    // with-schema (PG) and no-schema (MySQL: schemaLower holds the database)
+    // both share this path — prefix scopes schema, suffix scopes name.
+    expect(scoreItem(withSchema, "sales.ord")).toBeGreaterThan(0);
+    expect(scoreItem(withSchema, "hr.ord")).toBe(0); // wrong schema prefix
+  });
+
+  it("degrades `.` to a plain full-string match on a flat shape", () => {
+    // A flat item has no schema layer, so `main.ord` is NOT schema-scoped —
+    // it is matched literally (dot and all), which no field contains, so the
+    // result is empty rather than an error.
+    expect(scoreItem(flat, "main.ord")).toBe(0);
+    // A dotless query still matches by name on the same flat item.
+    expect(scoreItem(flat, "ord")).toBeGreaterThan(0);
+  });
+
+  it("shares one tier ladder across shapes for plain tokens", () => {
+    // Same name → same plain-token score regardless of shape.
+    expect(scoreItem(flat, "orders")).toBe(scoreItem(withSchema, "orders"));
+  });
+});
+
 describe("rankQuickOpen — ordering & tiebreak", () => {
   const items: RankableFields[] = [
     { nameLower: "zebra", schemaLower: "public", connLower: "prod" },
