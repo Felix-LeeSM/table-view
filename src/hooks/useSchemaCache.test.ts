@@ -140,6 +140,91 @@ describe("useSchemaCache", () => {
     expect(listTables).not.toHaveBeenCalled();
   });
 
+  it("[AC-1219-1] mount above the eager threshold loads the schema list only (lazy)", async () => {
+    // #1219 — a DB with many schemas must not fan out into a per-schema
+    // loadTables / prefetch loop at mount (the N+1 first-paint bottleneck).
+    const tauri = await import("@lib/tauri");
+    const listSchemas = tauri.listSchemas as ReturnType<typeof vi.fn>;
+    const listTables = tauri.listTables as ReturnType<typeof vi.fn>;
+    const listSchemaColumns = tauri.listSchemaColumns as ReturnType<
+      typeof vi.fn
+    >;
+    listSchemas.mockResolvedValue(
+      Array.from({ length: 6 }, (_, i) => ({ name: `s${i}` })),
+    );
+
+    const { result } = renderHook(() => useSchemaCache("conn1", "db1"));
+    await waitFor(() => expect(result.current.schemas.length).toBe(6));
+
+    expect(listTables).not.toHaveBeenCalled();
+    expect(listSchemaColumns).not.toHaveBeenCalled();
+  });
+
+  it("[AC-1219-2] mount at or below the eager threshold loads every schema's tables", async () => {
+    const tauri = await import("@lib/tauri");
+    const listSchemas = tauri.listSchemas as ReturnType<typeof vi.fn>;
+    const listTables = tauri.listTables as ReturnType<typeof vi.fn>;
+    listSchemas.mockResolvedValue([{ name: "public" }, { name: "analytics" }]);
+
+    const { result } = renderHook(() => useSchemaCache("conn1", "db1"));
+    await waitFor(() => expect(result.current.schemas.length).toBe(2));
+
+    await waitFor(() => {
+      expect(listTables).toHaveBeenCalledWith("conn1", "public", "db1");
+      expect(listTables).toHaveBeenCalledWith("conn1", "analytics", "db1");
+    });
+  });
+
+  it("[AC-1219-3] expandSchema prefetches columns so autocomplete keeps working", async () => {
+    // In the lazy path columns are not prefetched at mount; expanding a
+    // schema must pull them so the SQL autocomplete catalog is populated.
+    const tauri = await import("@lib/tauri");
+    const listSchemas = tauri.listSchemas as ReturnType<typeof vi.fn>;
+    const listSchemaColumns = tauri.listSchemaColumns as ReturnType<
+      typeof vi.fn
+    >;
+    listSchemas.mockResolvedValue(
+      Array.from({ length: 6 }, (_, i) => ({ name: `s${i}` })),
+    );
+
+    const { result } = renderHook(() => useSchemaCache("conn1", "db1"));
+    await waitFor(() => expect(result.current.schemas.length).toBe(6));
+    expect(listSchemaColumns).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.expandSchema("s0");
+    });
+
+    expect(listSchemaColumns).toHaveBeenCalledWith("conn1", "s0", "db1");
+  });
+
+  it("[AC-1219-4] eager threshold counts user schemas only, ignoring system schemas", async () => {
+    // Regression from PR #1263 round 1: the backend `list_namespaces` returns
+    // system schemas (DuckDB `main` / `temp`) alongside the 4 user schemas, so
+    // the raw list length (6) tipped a small DB into the lazy path and the
+    // first-schema seed hid `core.*`. The threshold must count only user
+    // schemas so this small DB stays eager (AC-3) and every user schema loads.
+    const tauri = await import("@lib/tauri");
+    const listSchemas = tauri.listSchemas as ReturnType<typeof vi.fn>;
+    const listTables = tauri.listTables as ReturnType<typeof vi.fn>;
+    listSchemas.mockResolvedValue([
+      { name: "main" },
+      { name: "temp" },
+      { name: "catalog" },
+      { name: "core" },
+      { name: "sales" },
+      { name: "support" },
+    ]);
+
+    const { result } = renderHook(() => useSchemaCache("conn1", "db1"));
+    await waitFor(() => expect(result.current.schemas.length).toBe(6));
+
+    await waitFor(() => {
+      expect(listTables).toHaveBeenCalledWith("conn1", "core", "db1");
+      expect(listTables).toHaveBeenCalledWith("conn1", "support", "db1");
+    });
+  });
+
   it("[AC-191-02-4] backend listSchemas rejection records store error (current contract)", async () => {
     // Sprint 191 finding — `useSchemaStore.loadSchemas` swallows tauri
     // rejections internally and writes `String(e)` to the store's `error`

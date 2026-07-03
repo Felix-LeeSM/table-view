@@ -11,7 +11,7 @@ import {
   useTableActivityStore,
   tableActivityKey,
 } from "@stores/tableActivityStore";
-import { useSchemaCache } from "@/hooks/useSchemaCache";
+import { shouldEagerLoadSchemas, useSchemaCache } from "@/hooks/useSchemaCache";
 import {
   useMigrationExport,
   type ExportInclude,
@@ -252,6 +252,22 @@ export function useSchemaTreeActions({
     setExpandedStore(workspaceKey.connId, workspaceKey.db, [schemas[0]!.name]);
   }, [workspaceKey, schemas, setExpandedStore]);
 
+  // #1219 — in the lazy path (wide catalog) the mount effect loads only the
+  // schema list; expanded schemas must still show content. Reconcile by
+  // loading each expanded schema — the first-schema seed above (fresh
+  // workspace) and any persisted `SidebarState.expanded` (reconnect). Reuses
+  // `loadExpandedSchema`, whose cache guards make already-loaded schemas a
+  // no-op, so collapsed schemas stay unfetched (AC-1/AC-4). Skipped in eager
+  // mode where the mount effect already loaded everything.
+  useEffect(() => {
+    if (shouldEagerLoadSchemas(schemas, autoLoadAuxiliaryCatalog)) {
+      return;
+    }
+    for (const name of expandedSchemas) {
+      void loadExpandedSchema(name);
+    }
+  }, [schemas, autoLoadAuxiliaryCatalog, expandedSchemas, loadExpandedSchema]);
+
   const [expandedCategories, setExpandedCategories] = useState<
     Record<string, Set<CategoryKey>>
   >({});
@@ -285,9 +301,21 @@ export function useSchemaTreeActions({
       }
       newExpanded.add(schemaName);
       setExpandedSchemas(newExpanded);
-      void loadExpandedSchema(schemaName);
+      // #1219 — in the lazy path the reconciliation effect (keyed on the
+      // expanded set) fires this load when the set changes, so calling it
+      // here too would double-fire the IPC before the cache populates. Eager
+      // mode has no reconciliation effect, so load directly there.
+      if (shouldEagerLoadSchemas(schemas, autoLoadAuxiliaryCatalog)) {
+        void loadExpandedSchema(schemaName);
+      }
     },
-    [expandedSchemas, loadExpandedSchema, setExpandedSchemas],
+    [
+      autoLoadAuxiliaryCatalog,
+      expandedSchemas,
+      loadExpandedSchema,
+      schemas,
+      setExpandedSchemas,
+    ],
   );
 
   const handleRefresh = refreshConnection;
