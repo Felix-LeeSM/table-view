@@ -6,16 +6,20 @@
  *     The fossil key remains for the boot-time legacy LS import path (see
  *     `import_legacy_localstorage`). All write sites have moved to the
  *     SQLite-only `persist_workspace` IPC (codex 6차 #5).
- *   - `persistWorkspaces` retains its dehydration responsibilities but no
- *     longer touches localStorage. Callers continue to invoke it from the
- *     same hooks; the IPC bridge will land in sprint-365 (consumer hook-up).
- *   - `debouncePersistWorkspaces` is preserved so the call sites do not need
- *     to be rewritten in this sprint; the underlying body is a no-op-equivalent
- *     for LS but still honors the 200ms coalescing window for the future IPC.
+ *   - `persistWorkspaces` dehydrates every `(connId, db)` cell and UPSERTs it
+ *     through the `persist_workspace` IPC (#1091, sprint-365). It no longer
+ *     touches localStorage; callers continue to invoke it from the same hooks.
+ *   - `debouncePersistWorkspaces` honors the 200ms coalescing window so a burst
+ *     of edits (e.g. typing in a query tab) collapses into one IPC flush.
  *   - `migrateLoadedWorkspaces` rehydration step: collapses in-flight
  *     `QueryTab.queryState` to idle and backfills `sidebar` defaults so
  *     downstream consumers can drop guards.
  */
+import { logger } from "@lib/logger";
+import {
+  persistWorkspace,
+  type PersistWorkspaceRequest,
+} from "@lib/tauri/workspaces";
 import type { Paradigm } from "@/types/connection";
 import type { Tab, WorkspaceQueryMode, WorkspaceState } from "./types";
 import {
@@ -89,17 +93,49 @@ function dehydrateAll(workspaces: WorkspacesShape): WorkspacesShape {
   return out;
 }
 
+function toPersistRequest(
+  connectionId: string,
+  dbName: string,
+  ws: WorkspaceState,
+): PersistWorkspaceRequest {
+  return {
+    connectionId,
+    dbName,
+    activeTabId: ws.activeTabId,
+    tabsJson: JSON.stringify(ws.tabs),
+    sidebarExpandedJson: JSON.stringify(ws.sidebar.expanded),
+    closedTabsJson: JSON.stringify(ws.closedTabHistory),
+  };
+}
+
 export function persistWorkspaces(workspaces: WorkspacesShape): void {
   if (typeof window === "undefined") return;
-  // Sprint 358 (Phase 1 W1) — workspaces 는 codex 6차 #5 결정에 따라
-  // SQLite-only. file/LS write 사이트 제거. backend `persist_workspace` IPC
-  // 가 SQLite UPSERT 를 담당한다 (consumer hook-up 은 sprint-365).
-  //
-  // 본 함수는 dehydration 작업을 보존하기 위해 호출 사이트와 시그너처를 유지.
-  // 향후 IPC 연결 sprint 가 본 함수 body 안에서 `invoke("persist_workspace", ...)`
-  // 호출만 추가하면 된다. **write 가 LS 로 가지 않는다는 invariant 는 본 sprint
-  // 에서 잠긴 것** — `persistence.no-ls-write.test.ts` 가 회귀 가드.
-  void dehydrateAll(workspaces);
+  // Sprint 358 (Phase 1 W1) — workspaces 는 codex 6차 #5 결정에 따라 SQLite-only.
+  // #1091 (sprint-365) — dehydrate every `(connId, db)` cell and UPSERT it
+  // through the `persist_workspace` IPC. sprint-358 left this a no-op
+  // (`void dehydrateAll`) so a restart lost every tab / SQL. The 200ms
+  // debounce already coalesces bursts, so this per-workspace loop is bounded
+  // by the number of open workspaces (typically 1–3) — no dirty-diff bookkeeping.
+  const dehydrated = dehydrateAll(workspaces);
+  for (const connId of Object.keys(dehydrated)) {
+    const byDb = dehydrated[connId];
+    if (!byDb) continue;
+    for (const db of Object.keys(byDb)) {
+      const ws = byDb[db];
+      if (!ws) continue;
+      // Fire-and-forget mirror (matches mru/favorites). ponytail: log-only, no
+      // toast — persist fires on every debounced keystroke and the boot
+      // legacy-import guard rejects the early hydrate write-back on a fresh
+      // install, so a toast would false-alarm on normal cold boot. A deduped
+      // user-facing error surface is the follow-up if real write failures show up.
+      void persistWorkspace(toPersistRequest(connId, db, ws)).catch(
+        (e: unknown) => {
+          const message = e instanceof Error ? e.message : String(e ?? "");
+          logger.warn(`[workspaceStore] persist_workspace failed: ${message}`);
+        },
+      );
+    }
+  }
 }
 
 export function debouncePersistWorkspaces(workspaces: WorkspacesShape): void {

@@ -765,6 +765,57 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    async fn persisted_workspace_round_trips_through_snapshot() {
+        // #1091 shape guard — a `persist_workspace` UPSERT must read back
+        // through `get_initial_app_state` into the exact `WorkspaceState`
+        // shape the frontend store hydrates. Guards the #1190-class
+        // camelCase / snake_case + string-vs-object drift at the boundary.
+        use crate::commands::persist_workspace::{
+            persist_workspace_inner, PersistWorkspaceRequest,
+        };
+        use crate::storage::meta::{set_legacy_import_state, LegacyImportState};
+
+        let (_dir, pool) = pool_setup().await;
+        set_legacy_import_state(&pool, LegacyImportState::Done)
+            .await
+            .unwrap();
+
+        persist_workspace_inner(
+            &pool,
+            PersistWorkspaceRequest {
+                connection_id: "conn-A".into(),
+                db_name: "dbA".into(),
+                active_tab_id: Some("tab-2".into()),
+                tabs_json: r#"[{"type":"table","id":"tab-1","table":"users"}]"#.into(),
+                sidebar_expanded_json: r#"["public"]"#.into(),
+                closed_tabs_json: r#"[{"type":"query","id":"query-1"}]"#.into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let snap = get_initial_app_state_inner(&pool, "workspace-conn-A", &HashMap::new())
+            .await
+            .unwrap();
+        let StoreSlot::Ok(ws) = &snap.stores.workspaces else {
+            panic!("workspaces slot must be Ok");
+        };
+        let cell = &ws.by_connection_id["conn-A"]["dbA"];
+        assert_eq!(cell["activeTabId"], json!("tab-2"));
+        assert_eq!(
+            cell["tabs"],
+            json!([{"type":"table","id":"tab-1","table":"users"}])
+        );
+        assert_eq!(cell["sidebar"]["expanded"], json!(["public"]));
+        assert_eq!(
+            cell["closedTabHistory"],
+            json!([{"type":"query","id":"query-1"}])
+        );
+        pool_cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn inner_reads_seeded_settings_for_theme_and_safe_mode() {
         let (_dir, pool) = pool_setup().await;
         sqlx::query("INSERT INTO settings(key, value_json, updated_at) VALUES (?, ?, ?)")
