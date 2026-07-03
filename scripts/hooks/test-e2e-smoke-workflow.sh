@@ -156,7 +156,10 @@ fi
 
 assert_contains "$prepare_block" "workspaces: src-tauri -> target" "prepare rust cache"
 assert_contains "$prepare_block" "shared-key: e2e-smoke-linux" "prepare rust cache"
-assert_contains "$prepare_block" "cache-on-failure: true" "prepare rust cache"
+# cache-on-failure removed (audit 2026-07-03): main cancels in-flight runs every
+# merge wave, so saving a partial target on a failed/cancelled run froze a broken
+# snapshot until the lockfile changed. Guard against reintroduction.
+assert_not_contains "$prepare_block" "cache-on-failure: true" "prepare rust cache no cache-on-failure"
 assert_contains "$prepare_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "prepare rust cache"
 assert_contains "$prepare_block" "df -h /" "prepare disk telemetry"
 assert_contains "$prepare_block" "du -sh src-tauri/target" "prepare disk telemetry"

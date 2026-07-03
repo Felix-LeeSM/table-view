@@ -13,14 +13,20 @@ on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
 
-# Always cancel in-flight runs on the same branch when a newer commit
-# arrives — the previous run's result is stale the moment a new commit
-# lands, both on PR branches and on `main`. We trade "permanent green
-# tip-of-main signal" for "fast feedback on the latest commit"; the
-# latest commit's run is what actually represents the state of `main`.
+# Cancel policy differs by event (audit 2026-07-03):
+# - pull_request: cancel in-flight runs when a newer commit arrives — the old
+#   run is stale the moment a new commit lands, and fast feedback wins.
+# - push to main: do NOT cancel. Let the running post-merge run finish; GitHub
+#   keeps at most one running + one pending per group and replaces the pending
+#   one, so a burst of N merges converges to first-run + last-run = 2 runs.
+#   Cancelling on main could leave zero main runs ever completing during a merge
+#   wave, which (a) forfeits the rust-cache main save (only main writes the
+#   shared cache) and (b) opens a post-merge verification gap — the background
+#   condition behind the 3-week-frozen partial e2e cache. Cost: the tip-of-main
+#   signal lags by up to one run.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -222,18 +228,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: Cache Vite transform output
-        uses: actions/cache@v4
-        with:
-          path: node_modules/.vite
-          # Key on config + lockfile only; src 파일 해시는 거의 매 커밋
-          # 변경되어 cache miss 가 거의 100% 였음 (audit m6, 2026-05-05).
-          # restore-keys 로 부분 일치도 허용 → 전혀 다른 src 변경에서도
-          # cache reuse 가능.
-          key: vite-${{ runner.os }}-${{ hashFiles('vite.config.ts', 'tsconfig.json', 'package.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            vite-${{ runner.os }}-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -326,7 +320,14 @@ jobs:
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          # sql-parser-core is a path crate (not a workspace member), so the
+          # standalone `--manifest-path src-tauri/sql-parser-core/Cargo.toml`
+          # test below compiles into its OWN target dir. Caching only
+          # `src-tauri -> target` left it uncached, recompiling every run
+          # (audit 2026-07-03). List its target as a second workspace.
+          workspaces: |
+            src-tauri -> target
+            src-tauri/sql-parser-core -> target
           cache-bin: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
