@@ -50,6 +50,9 @@ FOUC critical 이 아니므로 SQLite truth 를 우선한다.
   Native window close 는 backend 가 destroy 하지 않고 `on_window_event` 에서
   `prevent_close` 후 `window:close-requested` 를 그 창에 `emit_to` → JS 가 dirty 검사
   + 확인 → `workspace_close` 로만 실제 destroy. 새 close 진입점도 이 게이트를 탄다.
+  연결/창 단위 dirty 판정 (`useConnectionHasDirtyTabs`) 은 `dirtyTabIds` 만으로
+  부족하다 — 그 marker 는 active(mounted) 탭에만 살고 unmount 시 해제되므로 (#1204),
+  `dataGridEditStore` 의 non-empty pending entry (`${connId}::` prefix) 를 OR 한다.
 - `closedTabHistory` 는 cap 을 두고 query result payload 를 dehydrate 한다.
 - Query history 처럼 검색/filter/retention 이 필요한 durable log 는 SQLite 로 둔다.
 

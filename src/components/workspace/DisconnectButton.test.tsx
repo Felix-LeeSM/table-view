@@ -10,6 +10,7 @@ import DisconnectButton from "./DisconnectButton";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useToastStore } from "@stores/toastStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { useDataGridEditStore, entryKey } from "@stores/dataGridEditStore";
 import { emptyWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
@@ -58,6 +59,23 @@ function seedDirtyConnection(connId: string): void {
       [connId]: { db1: { ...emptyWorkspace(), dirtyTabIds: ["t1"] } },
     },
   });
+}
+
+/**
+ * Seed a pending grid edit in `dataGridEditStore` for `connId` WITHOUT a
+ * corresponding `dirtyTabIds` entry — this is the inactive-tab case
+ * (#1204): a tab with unsaved grid edits that isn't the mounted active
+ * tab, so its `dirtyTabIds` marker was released on unmount but the pending
+ * edit lives on in the store.
+ */
+function seedInactivePendingEdit(connId: string): void {
+  useDataGridEditStore
+    .getState()
+    .setSlice(
+      entryKey(connId, "db1", "public", "users"),
+      "pendingEdits",
+      new Map([["0-0", "edited"]]),
+    );
 }
 
 describe("DisconnectButton", () => {
@@ -218,6 +236,31 @@ describe("DisconnectButton", () => {
       disconnectImpl: spy,
     });
     seedDirtyConnection("c1");
+    render(<DisconnectButton />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    });
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Discard and close" }),
+    ).toBeInTheDocument();
+  });
+
+  // #1204 — an inactive tab's pending grid edit is not in `dirtyTabIds`
+  // (the marker clears on unmount) but still lives in `dataGridEditStore`.
+  // Disconnect wipes it, so the guard must also see connection-wide pending
+  // edits, not just the active tab's dirty marker.
+  it("confirms before disconnect when only an INACTIVE tab has a pending grid edit (#1204)", async () => {
+    const spy = vi.fn(() => Promise.resolve());
+    setStore({
+      connections: [makeConnection("c1")],
+      statuses: { c1: { type: "connected" } },
+      focusedConnId: "c1",
+      disconnectImpl: spy,
+    });
+    seedInactivePendingEdit("c1"); // no dirtyTabIds entry
     render(<DisconnectButton />);
 
     await act(async () => {

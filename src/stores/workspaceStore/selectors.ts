@@ -8,6 +8,7 @@ import type { Tab, WorkspaceState } from "./types";
 /* eslint-disable no-restricted-imports */
 import { useConnectionStore } from "../connectionStore";
 import { useWorkspaceStore } from "../workspaceStore";
+import { useDataGridEditStore } from "../dataGridEditStore";
 /* eslint-enable no-restricted-imports */
 
 export type WorkspaceKey = { connId: string; db: string };
@@ -100,18 +101,44 @@ export function useDirtyTabIds(): readonly string[] {
 }
 
 /**
- * #1101 — does `connId` have any dirty (unsaved) tab across ALL of its
- * `(connId, db)` sub-workspaces? Close paths that tear down a whole
- * connection/window (native window close, disconnect) need connection-wide
- * dirtiness, not just the active db's `dirtyTabIds`.
+ * #1101 — does `connId` have any unsaved change that a whole-connection /
+ * whole-window close would discard? Two sources, OR'd:
+ *
+ * 1. `workspaceStore.dirtyTabIds` — but that marker only exists while the
+ *    tab is the mounted active tab; `useDataGridEdit` clears it on unmount
+ *    (#1204). So it alone misses inactive dirty tabs.
+ * 2. `dataGridEditStore` pending entries — the durable window-local buffer
+ *    that survives tab unmount, keyed `${connId}::${db}::${schema}::${table}`.
+ *    An entry counts only when it holds real pending content (edits / new
+ *    rows / deletes), matching `useDataGridEdit`'s own dirty predicate.
+ *
+ * ponytail: raw-query grid edits aren't reachable here yet — they live in
+ * `useRawQueryGridEdit`'s component-local state (no store). #1102 promotes
+ * them to `dirtyTabIds`, after which source 1 covers them too.
  */
 export function useConnectionHasDirtyTabs(connId: string | null): boolean {
-  return useWorkspaceStore((state) => {
+  const tabMarkerDirty = useWorkspaceStore((state) => {
     if (!connId) return false;
     const dbs = state.workspaces[connId];
     if (!dbs) return false;
     return Object.values(dbs).some((ws) => ws.dirtyTabIds.length > 0);
   });
+  const pendingEditDirty = useDataGridEditStore((state) => {
+    if (!connId) return false;
+    const prefix = `${connId}::`;
+    for (const [key, entry] of state.entries) {
+      if (!key.startsWith(prefix)) continue;
+      if (
+        entry.pendingEdits.size > 0 ||
+        entry.pendingNewRows.length > 0 ||
+        entry.pendingDeletedRowKeys.size > 0
+      ) {
+        return true;
+      }
+    }
+    return false;
+  });
+  return tabMarkerDirty || pendingEditDirty;
 }
 
 export function useClosedTabHistory(): readonly Tab[] {
