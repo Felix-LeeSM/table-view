@@ -5,6 +5,7 @@ import {
   DialogFeedback,
   type DialogFeedbackState,
 } from "@components/ui/dialog";
+import { CONNECTION_ERROR_ID } from "../forms/fieldValidation";
 
 export interface ConnectionDialogFooterProps {
   feedbackState: DialogFeedbackState;
@@ -65,6 +66,7 @@ export default function ConnectionDialogFooter({
       />
       {error && (
         <div
+          id={CONNECTION_ERROR_ID}
           role="alert"
           className="border-t border-border bg-destructive/10 px-4 py-3 text-sm text-destructive duration-200 animate-in fade-in slide-in-from-top-1"
         >
@@ -72,19 +74,26 @@ export default function ConnectionDialogFooter({
         </div>
       )}
 
-      {/* Footer */}
+      {/* Footer — Issue #1135: explicit `type="button"` so none of these
+          trigger the surrounding <form>'s submit; Save keeps its onClick. */}
       <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3">
         <div className="flex items-center">
-          <Button variant="ghost" size="sm" onClick={onTest} disabled={testing}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onTest}
+            disabled={testing}
+          >
             {testing ? <Loader2 className="animate-spin size-3.5" /> : <Plug />}
             {t("footer.testConnection")}
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onCancel}>
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
             {t("footer.cancel")}
           </Button>
-          <Button size="sm" onClick={onSave} disabled={saving}>
+          <Button type="button" size="sm" onClick={onSave} disabled={saving}>
             {saving
               ? t("footer.saving")
               : isEditing
