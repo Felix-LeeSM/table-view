@@ -22,6 +22,10 @@ pub mod query;
 pub mod rdb;
 pub mod registry;
 pub mod release_tab_connection;
+// Issue #1112 (2026-07-03) — RDB Safe Mode backend gate. Re-reads the
+// persisted Safe Mode + connection environment and refuses destructive
+// statements that carry no confirmation proof (IPC chokepoint).
+pub mod safe_mode;
 pub mod search;
 pub mod single_instance;
 pub mod snapshot;

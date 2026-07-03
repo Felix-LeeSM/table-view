@@ -178,7 +178,25 @@ pub async fn execute_query(
     sql: String,
     query_id: String,
     expected_database: Option<String>,
+    // Issue #1112 — set by the frontend only after its Safe Mode confirm
+    // dialog is satisfied. `None` / `false` = unconfirmed; the backend gate
+    // rejects a destructive statement in a confirm-required context.
+    safety_confirmed: Option<bool>,
 ) -> Result<QueryResult, AppError> {
+    // Issue #1112 — Safe Mode backend gate (chokepoint). Classify cheaply
+    // first (pure, reuses `sql-parser-core`); only a destructive statement
+    // pays the settings/environment SQLite read. Runs before dispatch, using
+    // the backend's own store, so a frontend hydration race or a direct IPC
+    // bypass can't run destructive SQL unconfirmed.
+    if sql_parser_core::safety::is_danger(&sql) {
+        let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+        crate::commands::safe_mode::enforce_rdb_danger(
+            &pool,
+            &connection_id,
+            safety_confirmed.unwrap_or(false),
+        )
+        .await?;
+    }
     execute_query_inner(
         state.inner(),
         &connection_id,
@@ -273,7 +291,25 @@ pub async fn execute_query_batch(
     statements: Vec<String>,
     query_id: String,
     expected_database: Option<String>,
+    // Issue #1112 — see `execute_query`.
+    safety_confirmed: Option<bool>,
 ) -> Result<Vec<QueryResult>, AppError> {
+    // Issue #1112 — Safe Mode backend gate (batch). Worst tier wins: a
+    // single destructive statement anywhere in the atomic batch requires
+    // confirmation for the whole batch. Non-destructive batches never touch
+    // the settings store.
+    if statements
+        .iter()
+        .any(|sql| sql_parser_core::safety::is_danger(sql))
+    {
+        let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+        crate::commands::safe_mode::enforce_rdb_danger(
+            &pool,
+            &connection_id,
+            safety_confirmed.unwrap_or(false),
+        )
+        .await?;
+    }
     execute_query_batch_inner(
         state.inner(),
         &connection_id,
