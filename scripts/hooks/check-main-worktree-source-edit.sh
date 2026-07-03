@@ -247,12 +247,30 @@ mask_quoted_specials() {
 # gh issue/PR text — not commands, and their words (e.g. "truncate", "move")
 # otherwise trip the write-verb tokenizer and block whole orchestration commands
 # (issue #1251, case 2). The opener LINE is kept so a real redirect on it
-# (`cat > src/x <<EOF`) is still checked. Not a full parser: one heredoc per
-# opener line; delimiter must be a bare word (optionally quoted, `<<-` dashed).
+# (`cat > src/x <<EOF`) is still checked.
+#
+# Opener detection is QUOTE-AWARE: a `<<` that sits inside a single/double quote
+# (e.g. the text of `--body "a << b"`) is NOT an opener. Without this the
+# quoted `<<` was mistaken for a heredoc start and every following line up to
+# EOF was dropped as "body", so a real write on the next line slipped past the
+# guard unchecked (issue #1251 review, blocker B1). Quote parity is carried
+# across command lines but NOT across heredoc bodies (bodies are data), so a
+# body's unbalanced quote can never mask a later command line either.
+#
+# KNOWN LIMITATION: a heredoc body fed to an interpreter (`bash <<EOF ... EOF`,
+# `sh <<'EOF' ... EOF`) is stripped like any other body, so a non-recursive
+# write inside it (plain rm/rm -f/mv/cp/tee/sed -i/redirect) is not inspected by
+# this hook. This is a best-effort careless-write layer, not a security boundary;
+# `rm -rf`/dd/force-push/SQL DROP remain covered by check-dangerous-bash.sh.
+# Tracking: issue #1260.
+#
+# Not a full parser: one heredoc per opener line; delimiter must be a bare word
+# (optionally quoted, `<<-` dashed); backslash escapes are not interpreted.
 strip_heredoc_bodies() {
 	local out="" line delim="" in_h=0 dash=0 probe
 	local q="[\"']?" # optional single/double quote around the delimiter word
-	local hd_re="<<(-?)[[:space:]]*${q}([A-Za-z_][A-Za-z0-9_]*)"
+	local hd_after="^(-?)[[:space:]]*${q}([A-Za-z_][A-Za-z0-9_]*)"
+	local sq=0 dq=0 n i c rest
 	while IFS= read -r line || [ -n "$line" ]; do
 		if [ "$in_h" -eq 1 ]; then
 			probe="$line"
@@ -262,12 +280,42 @@ strip_heredoc_bodies() {
 			continue # drop body lines and the closing delimiter line
 		fi
 		out+="$line"$'\n'
-		if [[ "$line" =~ $hd_re ]]; then
-			dash=0
-			[ -n "${BASH_REMATCH[1]}" ] && dash=1
-			delim="${BASH_REMATCH[2]}"
-			in_h=1
-		fi
+		# Walk the command line tracking quote parity; treat only an UNQUOTED
+		# `<<WORD` as a heredoc opener.
+		n=${#line}
+		i=0
+		while [ "$i" -lt "$n" ]; do
+			c=${line:i:1}
+			if [ "$sq" -eq 1 ]; then
+				[ "$c" = "'" ] && sq=0
+				i=$((i + 1))
+				continue
+			fi
+			if [ "$dq" -eq 1 ]; then
+				[ "$c" = '"' ] && dq=0
+				i=$((i + 1))
+				continue
+			fi
+			case $c in
+				"'") sq=1 ;;
+				'"') dq=1 ;;
+				'<')
+					if [ "${line:i+1:1}" = "<" ]; then
+						rest=${line:i+2}
+						if [[ $rest =~ $hd_after ]]; then
+							dash=0
+							[ -n "${BASH_REMATCH[1]}" ] && dash=1
+							delim="${BASH_REMATCH[2]}"
+							in_h=1
+							break # first opener on the line wins
+						fi
+						i=$((i + 2)) # `<<` but no delimiter word (e.g. `<<<`)
+						continue
+					fi
+					;;
+			esac
+			i=$((i + 1))
+		done
 	done <<<"$1"
 	printf '%s' "$out"
 }

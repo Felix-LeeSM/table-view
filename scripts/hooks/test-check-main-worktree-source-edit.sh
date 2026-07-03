@@ -294,6 +294,24 @@ run_case "main command: body flag then real redirect to source still blocked (#1
 heredoc_src_redirect_input="$(printf 'cat > src/App.tsx <<EOF\nsome body data\nEOF\n')"
 run_case "main command: heredoc opener redirect to source still blocked (#1251)" 1 main-command "$heredoc_src_redirect_input"
 
+# #1251 review blocker B1 — a `<<` INSIDE a quoted body value must not be
+# mistaken for a heredoc opener. It used to drop every following line as "body",
+# so a real write on the next line slipped past the guard unchecked.
+b1_quoted_heredoc_rm="$(printf 'gh pr comment 1 --body "a << b"\nrm src/App.tsx')"
+run_case "main command: quoted << in body then next-line rm still blocked (#1251 B1)" 1 main-command "$b1_quoted_heredoc_rm"
+b1_quoted_heredoc_redir="$(printf 'gh issue create --body "see << below"\necho x > src/App.tsx')"
+run_case "main command: quoted << in body then next-line redirect still blocked (#1251 B1)" 1 main-command "$b1_quoted_heredoc_redir"
+# A single-line review comment/body carrying `<<`, `>` and file-op verbs as prose
+# must pass (the everyday scorecard-posting case the guard was breaking).
+run_case "main command: single-line review body with << and > glyphs allowed (#1251 B1)" 0 main-command "gh pr comment 1 --body 'see foo << bar and x > y, truncate/mv/rm mentioned'"
+# An unbalanced quote inside a real heredoc body must not carry into and mask a
+# later command line's redirect (regression guard for the quote-parity carry).
+b1_body_apostrophe="$(printf "cat > /tmp/x.md <<EOF\nit's data\nEOF\necho x > src/App.tsx")"
+run_case "main command: heredoc body apostrophe does not mask next-line write (#1251 B1)" 1 main-command "$b1_body_apostrophe"
+# `<<<` is a here-string, not a heredoc; it must not swallow following lines.
+b1_herestring="$(printf 'grep foo <<<BAR\nrm src/App.tsx')"
+run_case "main command: here-string <<< does not swallow next-line write (#1251 B1)" 1 main-command "$b1_herestring"
+
 # Issue #1242 — Bash 3.2 (macOS) + set -u empty-array crash. Running the hook in
 # path mode with NO path args expanded an empty "${PATH_ARGS[@]}" (unbound
 # variable), crashing the guard (exit 1). It must now no-op cleanly (exit 0).
