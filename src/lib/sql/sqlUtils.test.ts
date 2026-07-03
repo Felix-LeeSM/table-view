@@ -187,21 +187,53 @@ describe("splitSqlStatements — #1223 comment & literal edge cases", () => {
     expect(splitSqlStatements(";;")).toEqual([]);
   });
 
-  // KNOWN LIMITATION (#1223 follow-up): splitSqlStatements is not
-  // dollar-quote aware, so a PG `$$ ... ; ... $$` routine body is mis-split
-  // on its inner semicolons. Out of scope for the #1223 trailing-comment
-  // fix (adding `$$` support also changes the sqlSafety classifier that
-  // shares this splitter). Pinned here so the follow-up has a baseline.
-  it("mis-splits a PG dollar-quoted body (documented limitation)", () => {
+  // Issue #1234 — splitSqlStatements is now PG dollar-quote aware. The
+  // `$$ … ; … $$` / `$tag$ … $tag$` routine body is opaque, so inner
+  // semicolons/comments/quotes never split the statement. (Flips the #1223
+  // KNOWN LIMITATION baseline that pinned the old mis-split behaviour.)
+  it("keeps a PG $$…$$ routine body as a single statement", () => {
     expect(
       splitSqlStatements(
         "CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END; $$ LANGUAGE plpgsql",
       ),
     ).toEqual([
-      "CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1",
-      "END",
-      "$$ LANGUAGE plpgsql",
+      "CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END; $$ LANGUAGE plpgsql",
     ]);
+  });
+
+  it("keeps a $tag$…$tag$ body intact and still splits the trailing statement", () => {
+    expect(
+      splitSqlStatements(
+        "CREATE FUNCTION g() RETURNS void AS $body$ BEGIN DELETE FROM t; END $body$ LANGUAGE plpgsql; SELECT 2",
+      ),
+    ).toEqual([
+      "CREATE FUNCTION g() RETURNS void AS $body$ BEGIN DELETE FROM t; END $body$ LANGUAGE plpgsql",
+      "SELECT 2",
+    ]);
+  });
+
+  it("closes only on the matching tag — a differently-tagged $…$ inside is literal", () => {
+    expect(
+      splitSqlStatements("DO $$ a := $x$ inner ; text $x$ ; b := 1; $$;"),
+    ).toEqual(["DO $$ a := $x$ inner ; text $x$ ; b := 1; $$"]);
+  });
+
+  it("does not treat a positional parameter ($1) as a dollar-quote opening", () => {
+    expect(
+      splitSqlStatements("SELECT * FROM t WHERE id = $1; SELECT $2"),
+    ).toEqual(["SELECT * FROM t WHERE id = $1", "SELECT $2"]);
+  });
+
+  it("treats an unterminated dollar-quote as opaque through end of input", () => {
+    expect(splitSqlStatements("CREATE FUNCTION h() AS $$ BEGIN; oops")).toEqual(
+      ["CREATE FUNCTION h() AS $$ BEGIN; oops"],
+    );
+  });
+
+  it("ignores quotes and comments inside a dollar-quoted body", () => {
+    expect(
+      splitSqlStatements("DO $$ x := 'a;b'; -- c;\n /* d;e */ y := 1; $$"),
+    ).toEqual(["DO $$ x := 'a;b'; -- c;\n /* d;e */ y := 1; $$"]);
   });
 });
 

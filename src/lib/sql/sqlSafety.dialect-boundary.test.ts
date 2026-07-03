@@ -107,6 +107,21 @@ describe("sqlSafety.analyzeStatement — PostgreSQL and MSSQL boundary contracts
     });
   });
 
+  describe("Issue #1234 — dollar-quote body no longer over-warns the splitter", () => {
+    // A destructive keyword *inside* a $$…$$ routine body must not leak out as
+    // its own split fragment: the top-level statement is CREATE FUNCTION, so it
+    // classifies as ddl-create / info — not the DROP's danger tier. Before the
+    // dollar-quote-aware splitter, the inner `; DROP TABLE tmp;` split into a
+    // standalone fragment that mis-classified the whole batch as danger.
+    it("classifies CREATE FUNCTION with an inner DROP as ddl-create / info", () => {
+      const a = analyzeStatement(
+        "CREATE FUNCTION cleanup() RETURNS void AS $$ BEGIN PERFORM 1; DROP TABLE tmp; END $$ LANGUAGE plpgsql",
+      );
+      expect(a.kind).toBe("ddl-create");
+      expect(a.severity).toBe("info");
+    });
+  });
+
   describe("Sprint 486 — PostgreSQL extension tolerance Safe Mode (AC-486-X)", () => {
     usePreloadedSqlAst();
 
