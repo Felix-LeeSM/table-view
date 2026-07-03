@@ -124,7 +124,9 @@ fn dbms_specific_unsupported_capability_deltas_are_declared() {
     assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
     assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
-    assert!(!get_data_source_profile(&DatabaseType::Sqlite)
+    // SQLite's wired adapter implements create_table, so it declares schema
+    // mutation; DuckDB's wired create_table stays Unsupported, so it does not (#1044).
+    assert!(get_data_source_profile(&DatabaseType::Sqlite)
         .has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
     assert!(!get_data_source_profile(&DatabaseType::Duckdb)
         .has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
