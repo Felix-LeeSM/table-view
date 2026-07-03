@@ -506,6 +506,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
             connectionId={tab.connectionId}
             database={tab.database}
             sql={tab.sql}
+            tabId={tab.id}
             onAfterCommit={handleExecuteAndShowResults}
             // Sprint 248 (ADR 0022 Phase 4) — surface the dry-run flag so
             // the result grid renders the rolled-back banner. Derived

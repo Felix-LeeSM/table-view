@@ -1,4 +1,5 @@
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { useRawQueryGridEditStore } from "@stores/rawQueryGridEditStore";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { useDocumentQueryStore } from "@stores/documentQueryStore";
 import { useSchemaStore } from "@stores/schemaStore";
@@ -23,4 +24,7 @@ export function cleanupConnectionFrontendState(connectionId: string): void {
   getOptionalState(useDocumentQueryStore)?.clearConnection?.(connectionId);
   getOptionalState(useWorkspaceStore)?.clearForConnection?.(connectionId);
   getOptionalState(useDataGridEditStore)?.purgeForConnection?.(connectionId);
+  getOptionalState(useRawQueryGridEditStore)?.purgeForConnection?.(
+    connectionId,
+  );
 }
