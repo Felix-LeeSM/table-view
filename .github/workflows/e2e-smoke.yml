@@ -119,7 +119,11 @@ jobs:
           workspaces: src-tauri -> target
           cache-workspace-crates: false
           cache-bin: false
-          cache-on-failure: true
+          # No cache-on-failure (audit 2026-07-03): main cancels in-flight runs
+          # every merge wave, so failed/cancelled runs saving a partial target
+          # would freeze a broken snapshot until the lockfile changes (observed:
+          # a 178MB entry from 2026-06-10 stuck ~3 weeks, forcing full 579-crate
+          # recompiles despite "cache hit"). Default = save only on success.
           shared-key: e2e-smoke-linux
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
