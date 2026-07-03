@@ -207,6 +207,30 @@ pub fn run() {
                     );
                 }
             }
+            tauri::WindowEvent::CloseRequested { api, .. }
+                if window.label().starts_with("workspace-") || window.label() == "workspace" =>
+            {
+                // #1101 — unsaved-changes guard. Don't let the OS destroy a
+                // workspace window outright (that silently discarded pending
+                // grid edits / uncommitted SQL). Prevent the close and hand
+                // the decision to the window's JS, which checks dirty tabs
+                // and either confirms-then-destroys (`workspace_close`) or
+                // aborts. The macOS menu Cmd+W routes here too via
+                // `win.close()`. Mirrors the launcher intercept above.
+                api.prevent_close();
+                if let Err(e) =
+                    launcher::emit_workspace_close_request(window, window.label())
+                {
+                    // Emit failed — destroy so the user isn't trapped in an
+                    // un-closeable window (worse than losing the guard once).
+                    tracing::warn!(
+                        target: "window",
+                        "window:close-requested emit failed (label={}): {e}; destroying to avoid trapping the user",
+                        window.label()
+                    );
+                    let _ = window.destroy();
+                }
+            }
             _ => {}
         }
     });
@@ -600,10 +624,15 @@ async fn handle_menu_close_focused<R: tauri::Runtime>(handle: tauri::AppHandle<R
     };
 
     if label.starts_with("workspace-") || label == "workspace" {
-        if let Err(e) = win.destroy() {
-            tracing::warn!(target: "menu", "Cmd+W workspace.destroy failed (label={label}): {e}");
+        // #1101 — route through the close-requested lifecycle (`close()`,
+        // NOT `destroy()`) so the workspace `CloseRequested` intercept in
+        // `on_window_event` runs the unsaved-changes guard before anything
+        // is destroyed. `destroy()` would skip that intercept and discard
+        // pending edits.
+        if let Err(e) = win.close() {
+            tracing::warn!(target: "menu", "Cmd+W workspace.close failed (label={label}): {e}");
         } else {
-            tracing::info!(target: "menu", "Cmd+W destroyed workspace label={label}");
+            tracing::info!(target: "menu", "Cmd+W requested close for workspace label={label}");
         }
     } else if label == "launcher" {
         if let Err(e) = win.hide() {
