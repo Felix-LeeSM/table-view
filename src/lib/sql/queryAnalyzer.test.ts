@@ -127,6 +127,84 @@ describe("parseSingleTableSelect", () => {
       parseSingleTableSelect("SELECT * FROM users NATURAL JOIN orders"),
     ).toBeNull();
   });
+
+  // Purpose: comment-aware editability — a JOIN/UNION that lives inside a
+  // SQL comment must NOT disqualify a single-table SELECT. The pre-fix
+  // analyser only stripped LEADING comments, so a trailing/inline `-- JOIN`
+  // or `/* UNION */` matched the raw JOIN/UNION regex and flipped the result
+  // to read-only. User report (2026-07-03), issue #1226.
+  describe("comment-processed keywords (#1226)", () => {
+    // Reason: issue #1226 symptom #2 — a trailing line comment naming JOIN
+    // must be ignored, keeping the query editable (2026-07-03).
+    it("treats a trailing -- line comment with JOIN as single-table", () => {
+      expect(
+        parseSingleTableSelect("SELECT * FROM users -- JOIN orders o\n"),
+      ).toEqual({ schema: null, table: "users" });
+    });
+
+    // Reason: issue #1226 — a standalone comment line naming JOIN after the
+    // FROM clause is still a comment, not a real join (2026-07-03).
+    it("treats a following comment line with JOIN as single-table", () => {
+      expect(
+        parseSingleTableSelect(
+          "SELECT id FROM public.users\n-- JOIN orders o ON u.id = o.uid",
+        ),
+      ).toEqual({ schema: "public", table: "users" });
+    });
+
+    // Reason: issue #1226 — block comments naming JOIN must be ignored, and
+    // stripping one must not fuse the neighbouring identifiers (2026-07-03).
+    it("treats a /* JOIN */ block comment as single-table", () => {
+      expect(
+        parseSingleTableSelect("SELECT * FROM users /* JOIN orders */"),
+      ).toEqual({ schema: null, table: "users" });
+      expect(
+        parseSingleTableSelect("SELECT * FROM users/**/WHERE id > 0"),
+      ).toEqual({ schema: null, table: "users" });
+    });
+
+    // Reason: issue #1226 — a commented-out UNION must not disqualify the
+    // query (the set-operation check ran on the comment-inclusive text too)
+    // (2026-07-03).
+    it("treats a commented-out UNION as single-table", () => {
+      expect(
+        parseSingleTableSelect(
+          "SELECT * FROM users\n-- UNION SELECT * FROM admins",
+        ),
+      ).toEqual({ schema: null, table: "users" });
+    });
+
+    // Reason: issue #1226 — a real block-comment-separated JOIN (comments act
+    // as whitespace in SQL) must STILL be read-only; comment removal must not
+    // fuse `users`+`JOIN` into an unmatched `usersJOIN` (2026-07-03).
+    it("still returns null for a real JOIN separated only by a block comment", () => {
+      expect(
+        parseSingleTableSelect("SELECT * FROM users/**/JOIN orders o ON 1=1"),
+      ).toBeNull();
+    });
+
+    // Reason: issue #1226 safety — comment stripping must be literal-aware.
+    // A naive regex strip would treat the `--` inside the string literal as a
+    // comment start and delete the trailing `UNION SELECT ...`, flipping a
+    // genuinely multi-source query to falsely-editable (data-integrity risk)
+    // (2026-07-03).
+    it("keeps a UNION read-only even when a string literal contains --", () => {
+      expect(
+        parseSingleTableSelect(
+          "SELECT * FROM users WHERE note = '-- ' UNION SELECT * FROM admins",
+        ),
+      ).toBeNull();
+    });
+
+    // Reason: issue #1226 — a JOIN token inside a WHERE string literal is not
+    // a join; baseline confirms it stays editable and the fix preserves it
+    // (the literal sits past the WHERE boundary) (2026-07-03).
+    it("treats a WHERE string literal containing JOIN as single-table", () => {
+      expect(
+        parseSingleTableSelect("SELECT * FROM users WHERE note = 'JOIN'"),
+      ).toEqual({ schema: null, table: "users" });
+    });
+  });
 });
 
 describe("analyzeResultEditability", () => {
