@@ -20,45 +20,25 @@ interface ColumnLike {
   data_type?: string;
 }
 
-// Declared types whose backend wire cells are precision-sensitive 64-bit
-// integers, emitted as string tokens and promoted to BigInt here.
-// - PG: bigint / int8 / bigserial (int2/int4/smallint/integer stay Number).
-// - MySQL: BIGINT (lowercased) — INT/SMALLINT/etc. are ≤32-bit, wired as Number.
-// - SQLite (issue #1082): every INTEGER-affinity declared type. sqlx reports
-//   the storage class "integer" for free-form queries, but table preview
-//   reports the PRAGMA declared type (int/bigint/smallint/tinyint/mediumint/
-//   int2/int4/int8), so all variants are mapped.
-// - Mongo: Int64 (schema sniffer reports "int64").
-// Listing the small-integer aliases here is safe: wrapNumericCells only
-// promotes string cells, and MySQL/PG small integers arrive as Number, so
-// they are skipped. Exact matches (not substring) avoid catching PG "point"
-// / "int4range" and preserve the no-op fast path for other columns.
-const BIGINT_TYPES = new Set([
-  "bigint",
-  "int8",
-  "bigserial",
-  "integer",
-  "int",
-  "smallint",
-  "tinyint",
-  "mediumint",
-  "int2",
-  "int4",
-  "int64",
-]);
-
 function wrapperFor(dataType: string): Wrapper {
   const lower = dataType.toLowerCase();
-  if (BIGINT_TYPES.has(lower)) {
+  // Decimal first — PG numeric/decimal and Mongo Decimal128 all carry
+  // "decimal"/"numeric" in their reported type. Checking before the integer
+  // rule keeps them out of the "int" substring match.
+  if (lower.includes("decimal") || lower.includes("numeric")) {
+    return "decimal";
+  }
+  // 64-bit-capable integers, wired as string tokens by the backend and
+  // promoted to BigInt. Uses SQLite's own affinity rule (a declared type
+  // containing "INT" has INTEGER affinity) to cover every variant in one
+  // check: SQLite exotic decltypes (UNSIGNED BIG INT / INT2 / INT8 / …), PG
+  // bigint/int8/bigserial, MySQL "BIGINT" and "BIGINT UNSIGNED", and Mongo
+  // Int64. wrapNumericCells only promotes string cells, so:
+  // - PG/MySQL small integers arrive as Number and are skipped (no regression);
+  // - string types that merely contain "int" (PG "point", "int4range") make
+  //   BigInt() throw and fall back to the raw string — harmless.
+  if (lower.includes("int") || lower === "bigserial") {
     return "bigint";
-  }
-  if (lower.includes("numeric") || lower.includes("decimal")) {
-    return "decimal";
-  }
-  // Mongo flatten_cell emits Decimal128 as string; the schema sniffer reports
-  // the `data_type` string "Decimal128" — match it explicitly.
-  if (lower === "decimal128") {
-    return "decimal";
   }
   return "passthrough";
 }

@@ -175,6 +175,33 @@ describe("wrapNumericCells (Sprint 261 / ADR 0026)", () => {
     expect(cellAt(wrapped, 0, 0)).toBe(9223372036854775807n);
   });
 
+  it("wraps MySQL BIGINT UNSIGNED and SQLite exotic integer decltypes as BigInt (issue #1082 review)", () => {
+    // MySQL reports unsigned as "BIGINT UNSIGNED" (sqlx column.rs L180);
+    // SQLite affinity accepts any declared type containing "INT" — e.g.
+    // "UNSIGNED BIG INT" / "INT8" / "INT2". All must promote.
+    const result = {
+      columns: [
+        col("a", "BIGINT UNSIGNED"),
+        col("b", "UNSIGNED BIG INT"),
+        col("c", "INT8"),
+        col("d", "int2"),
+      ],
+      rows: [
+        [
+          "18446744073709551615",
+          "9223372036854775807",
+          "9007199254740993",
+          "42",
+        ],
+      ],
+    };
+    const wrapped = wrapNumericCells(result);
+    expect(cellAt(wrapped, 0, 0)).toBe(18446744073709551615n);
+    expect(cellAt(wrapped, 0, 1)).toBe(9223372036854775807n);
+    expect(cellAt(wrapped, 0, 2)).toBe(9007199254740993n);
+    expect(cellAt(wrapped, 0, 3)).toBe(42n);
+  });
+
   it("leaves small-integer number cells untouched on int-family columns (issue #1082)", () => {
     // MySQL/PG INT·SMALLINT 등은 ≤32bit 라 백엔드가 raw Number 로 보낸다.
     // wrapperFor 가 int-family 를 bigint 후보로 분류하더라도 실제 승격은 string

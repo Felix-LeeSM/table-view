@@ -2809,6 +2809,57 @@ async fn test_mysql_query_table_data_bigint_value_is_string_wire() {
     adapter.disconnect_pool().await.ok();
 }
 
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_query_table_data_bigint_unsigned_value_is_string_wire() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_wire_bigint_unsigned_{ts}");
+
+    adapter
+        .execute_query(
+            &format!("CREATE TABLE {table} (id BIGINT UNSIGNED PRIMARY KEY)"),
+            None,
+        )
+        .await
+        .expect("CREATE TABLE");
+    // u64::MAX = 18446744073709551615 (> i64::MAX, far above 2^53). sqlx-mysql
+    // reports the column as "BIGINT UNSIGNED", which the wildcard arm used to
+    // drop to a failed String decode -> Null (value loss). The u64 decode path
+    // must produce a digit-preserving string token (ADR 0026 / issue #1082).
+    adapter
+        .execute_query(
+            &format!("INSERT INTO {table} (id) VALUES (18446744073709551615)"),
+            None,
+        )
+        .await
+        .expect("INSERT");
+
+    let data = adapter
+        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, None, None, None)
+        .await
+        .expect("query_table_data");
+    assert_eq!(data.rows.len(), 1);
+    let cell = &data.rows[0][0];
+    assert!(
+        cell.is_string(),
+        "MySQL bigint unsigned cell must be JSON string (ADR 0026 / issue #1082), got: {cell:?}"
+    );
+    assert_eq!(cell.as_str(), Some("18446744073709551615"));
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
 // Sprint 296 follow-up (2026-05-14) — sqlx `bigdecimal` feature 활성화 +
 // queries.rs decode 경로가 `BigDecimal::to_string()` 으로 변환 → ADR 0026
 // 와 동일한 wire format (JSON string). 정밀-민감 DECIMAL 컬럼의 frontend
