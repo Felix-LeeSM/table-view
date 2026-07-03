@@ -86,3 +86,10 @@ keyring = { version = "3", default-features = false, features = ["windows-native
 
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
+
+[profile.dev]
+# llvm-cov source-based coverage 는 DWARF 가 필요 없다 (coverage mapping 은 별도
+# 섹션). CI 러너/로컬 worktree 의 계측 빌드가 duckdb 정적 링크 × debuginfo 로
+# 디스크를 고갈시키던 것을 막는다. panic 위치는 debuginfo 없이도 유지된다.
+# 디버거 세션이 필요하면 일회성 오버라이드: CARGO_PROFILE_DEV_DEBUG=2 cargo build
+debug = 0
