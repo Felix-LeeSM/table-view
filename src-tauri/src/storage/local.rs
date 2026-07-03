@@ -82,6 +82,29 @@ pub fn reject_internal_app_state_path(path: &Path) -> Result<(), AppError> {
     Ok(())
 }
 
+/// 인자 경로가 내부 app 데이터 디렉토리(`app_data_dir()`) 안으로 resolve 되면
+/// 거부. `reject_internal_app_state_path` 가 `state.db` 단일 파일만 막는 것과
+/// 달리, 이 가드는 디렉토리 전체를 confinement 한다 — `connections.json`(암호화
+/// 비밀번호 blob) / `.key` / `state.db` 등 지원 확장자를 가진 앱 내부 state 가
+/// DuckDB file analytics source 로 등록돼 exfil 되는 것을 막는다 (Issue #1106).
+/// normalized (`..`·`.` 정리) 와 canonical (symlink 해소) 두 방식으로 디렉토리
+/// 포함 여부를 비교한다 — 호출자는 canonicalize 후 경로를 넘기는 것을 권장.
+pub fn reject_internal_app_data_path(path: &Path) -> Result<(), AppError> {
+    let data_dir = app_data_dir()?;
+    let normalized_within =
+        normalize_absolute_path(path).starts_with(normalize_absolute_path(&data_dir));
+    let canonical_within = matches!(
+        (std::fs::canonicalize(path), std::fs::canonicalize(&data_dir)),
+        (Ok(candidate), Ok(dir)) if candidate.starts_with(&dir)
+    );
+    if normalized_within || canonical_within {
+        return Err(AppError::Validation(
+            "Local file path cannot target the internal app data directory".into(),
+        ));
+    }
+    Ok(())
+}
+
 fn normalize_absolute_path(path: &Path) -> PathBuf {
     let mut normalized = PathBuf::new();
     for component in path.components() {

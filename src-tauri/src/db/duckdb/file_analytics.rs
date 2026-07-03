@@ -227,6 +227,10 @@ fn validate_local_file_source(path: &str) -> Result<ValidatedFileSource, AppErro
 
     let canonical_path = fs::canonicalize(path_ref)
         .map_err(|_| AppError::Validation("Local file does not exist or cannot be read".into()))?;
+    // Confine reads out of the app's own state directory: `connections.json`
+    // and friends pass the `.json` allowlist otherwise (#1106). Checked on the
+    // canonical path so a symlink cannot smuggle the target back in.
+    crate::storage::local::reject_internal_app_data_path(&canonical_path)?;
     let canonical_path = canonical_path
         .to_str()
         .ok_or_else(|| AppError::Validation("Local file path must be valid UTF-8".into()))?

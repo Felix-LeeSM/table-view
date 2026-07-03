@@ -1,5 +1,6 @@
 use std::fs;
 
+use serial_test::serial;
 use table_view_lib::db::{DbAdapter, DuckdbAdapter, RdbAdapter};
 use table_view_lib::error::AppError;
 use table_view_lib::models::{ConnectionConfig, DatabaseType, FileAnalyticsSourceKind};
@@ -54,6 +55,35 @@ fn write_parquet(path: &std::path::Path) {
         path.to_string_lossy().replace('\'', "''")
     );
     conn.execute(&sql, []).unwrap();
+}
+
+// Issue #1106 — a supported extension (`.json`) inside the app's own data
+// directory (e.g. `connections.json`, which holds encrypted password blobs)
+// must be rejected as a file analytics source. Extension/size gating alone lets
+// a compromised renderer register and exfiltrate internal app state.
+#[tokio::test]
+#[serial]
+async fn duckdb_file_analytics_rejects_internal_app_state_path() {
+    let state_dir = TempDir::new().unwrap();
+    std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", state_dir.path());
+
+    let (_fixture_dir, adapter) = connected_fixture().await;
+    let connections_json = state_dir.path().join("connections.json");
+    fs::write(&connections_json, r#"{"connections":[],"groups":[]}"#).unwrap();
+
+    let rejected = adapter
+        .register_file_analytics_source(connections_json.to_str().unwrap())
+        .await;
+
+    std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+
+    match rejected {
+        Err(AppError::Validation(message)) => assert!(
+            message.contains("internal app data"),
+            "unexpected validation message: {message}"
+        ),
+        other => panic!("Expected internal app data validation error, got: {other:?}"),
+    }
 }
 
 #[tokio::test]
