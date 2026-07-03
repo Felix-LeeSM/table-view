@@ -55,6 +55,7 @@ export {
   useActiveTab,
   useActiveTabId,
   useClosedTabHistory,
+  useConnectionHasDirtyTabs,
   useCurrentTabs,
   useCurrentWorkspace,
   useCurrentWorkspaceKey,

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import WorkspacePage from "./pages/WorkspacePage";
 import QuickOpen from "./components/shared/QuickOpen";
@@ -9,10 +9,14 @@ import { useConnectionStore } from "@features/connection";
 import {
   resolveActiveDb,
   useActiveTabId,
+  useConnectionHasDirtyTabs,
   useCurrentTabs,
   useCurrentWorkspaceKey,
+  useDirtyTabIds,
   useWorkspaceStore,
 } from "./stores/workspaceStore";
+import { useCurrentWindowConnectionId } from "./hooks/useCurrentWindowConnectionId";
+import { useDiscardConfirm } from "./hooks/useDiscardConfirm";
 import { useFavoritesStore } from "./stores/favoritesStore";
 import { useMruStore } from "./stores/mruStore";
 import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
@@ -51,6 +55,18 @@ export default function App() {
   const themeMode = useThemeStore((s) => s.mode);
   const setThemeMode = useThemeStore((s) => s.setMode);
 
+  // #1101 — unsaved-changes ("dirty tab") guard shared across the close
+  // paths App owns: Cmd+W (JS fallback) and the native window-close signal.
+  const dirtyTabIds = useDirtyTabIds();
+  const currentConnId = useCurrentWindowConnectionId();
+  const windowHasDirtyTabs = useConnectionHasDirtyTabs(currentConnId);
+  const { guard: confirmDiscard, dialog: discardDialog } = useDiscardConfirm();
+  // Keep the latest dirty snapshot in a ref so the one-shot native-close
+  // listener reads fresh state without re-registering on every edit (a
+  // re-register gap could drop the OS close event).
+  const windowHasDirtyRef = useRef(windowHasDirtyTabs);
+  windowHasDirtyRef.current = windowHasDirtyTabs;
+
   useEffect(() => {
     loadConnections();
     loadGroups();
@@ -81,7 +97,11 @@ export default function App() {
       if (!(e.metaKey || e.ctrlKey) || e.key !== "w") return;
       e.preventDefault();
       if (activeTabId && workspaceKey) {
-        removeTab(workspaceKey.connId, workspaceKey.db, activeTabId);
+        // #1101 — a dirty tab closes only after the discard confirmation
+        // (same gate as the TabBar X button); clean tabs close immediately.
+        confirmDiscard(dirtyTabIds.includes(activeTabId), () =>
+          removeTab(workspaceKey.connId, workspaceKey.db, activeTabId),
+        );
         return;
       }
       // 빈 워크스페이스 — backend `workspace_close` 가 caller webview 의
@@ -89,12 +109,38 @@ export default function App() {
       // 노출된 command 의 caller 가 launcher 라는 점만 보고 destroy — launcher
       // hide 시맨틱은 native menu 가 처리하므로 webview keydown 으로 도달할
       // 경로는 사실상 workspace 만 (launcher 의 Cmd+W 는 NSMenu 가 먼저
-      // 가로채 hide 분기로 간다).
+      // 가로채 hide 분기로 간다). 탭이 없으므로 dirty 검사 불필요.
       void destroyCurrentWindow();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTabId, workspaceKey, removeTab]);
+  }, [activeTabId, workspaceKey, removeTab, dirtyTabIds, confirmDiscard]);
+
+  // #1101 — native close paths (workspace window X button + macOS menu
+  // Cmd+W) can't read the frontend's window-local dirty state. The backend
+  // intercepts the OS-level close (`api.prevent_close()` in lib.rs
+  // `on_window_event`) and emits `window:close-requested` to this window
+  // instead of destroying it; the menu Cmd+W routes through the same
+  // intercept via `win.close()`. Here we run the shared discard
+  // confirmation over the whole window's dirty tabs, then destroy on
+  // confirm (`destroyCurrentWindow` → backend `workspace_close`).
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    void (async () => {
+      const fn = await listen("window:close-requested", () => {
+        confirmDiscard(windowHasDirtyRef.current, () => {
+          void destroyCurrentWindow();
+        });
+      });
+      if (cancelled) fn();
+      else unlisten = fn;
+    })();
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
+    };
+  }, [confirmDiscard]);
 
   // Cmd+T / Ctrl+T — new query tab
   useEffect(() => {
@@ -477,6 +523,8 @@ export default function App() {
         <QuickOpen />
         <ShortcutCheatsheet />
         <QueryLog />
+        {/* #1101 — discard confirmation for Cmd+W / native window close. */}
+        {discardDialog}
         {/* Mounted at the App root, NOT inside a Radix dialog portal — a
             toast surfaced from inside a modal must survive the modal
             being closed. */}

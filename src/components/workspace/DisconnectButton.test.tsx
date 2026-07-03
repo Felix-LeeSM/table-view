@@ -9,6 +9,9 @@ import {
 import DisconnectButton from "./DisconnectButton";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useToastStore } from "@stores/toastStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { useDataGridEditStore, entryKey } from "@stores/dataGridEditStore";
+import { emptyWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
 function makeConnection(
@@ -50,10 +53,36 @@ function setStore(opts: {
   });
 }
 
+function seedDirtyConnection(connId: string): void {
+  useWorkspaceStore.setState({
+    workspaces: {
+      [connId]: { db1: { ...emptyWorkspace(), dirtyTabIds: ["t1"] } },
+    },
+  });
+}
+
+/**
+ * Seed a pending grid edit in `dataGridEditStore` for `connId` WITHOUT a
+ * corresponding `dirtyTabIds` entry — this is the inactive-tab case
+ * (#1204): a tab with unsaved grid edits that isn't the mounted active
+ * tab, so its `dirtyTabIds` marker was released on unmount but the pending
+ * edit lives on in the store.
+ */
+function seedInactivePendingEdit(connId: string): void {
+  useDataGridEditStore
+    .getState()
+    .setSlice(
+      entryKey(connId, "db1", "public", "users"),
+      "pendingEdits",
+      new Map([["0-0", "edited"]]),
+    );
+}
+
 describe("DisconnectButton", () => {
   beforeEach(() => {
     setStore({});
     useToastStore.getState().clear();
+    useWorkspaceStore.setState({ workspaces: {} });
   });
 
   it("exposes an aria-label of 'Disconnect' (AC-S134-05)", () => {
@@ -192,6 +221,79 @@ describe("DisconnectButton", () => {
         screen.getByRole("button", { name: "Disconnect" }),
       ).toBeInTheDocument();
     });
+  });
+
+  // #1101 — disconnect wipes the connection's tabs + pending grid edits
+  // (via the store cleanup watcher). When the connection has unsaved
+  // changes the click must route through the same discard confirmation as
+  // the TabBar close button before tearing the adapter pool down.
+  it("does not disconnect a connection with unsaved changes without confirmation (#1101)", async () => {
+    const spy = vi.fn(() => Promise.resolve());
+    setStore({
+      connections: [makeConnection("c1")],
+      statuses: { c1: { type: "connected" } },
+      focusedConnId: "c1",
+      disconnectImpl: spy,
+    });
+    seedDirtyConnection("c1");
+    render(<DisconnectButton />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    });
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Discard and close" }),
+    ).toBeInTheDocument();
+  });
+
+  // #1204 — an inactive tab's pending grid edit is not in `dirtyTabIds`
+  // (the marker clears on unmount) but still lives in `dataGridEditStore`.
+  // Disconnect wipes it, so the guard must also see connection-wide pending
+  // edits, not just the active tab's dirty marker.
+  it("confirms before disconnect when only an INACTIVE tab has a pending grid edit (#1204)", async () => {
+    const spy = vi.fn(() => Promise.resolve());
+    setStore({
+      connections: [makeConnection("c1")],
+      statuses: { c1: { type: "connected" } },
+      focusedConnId: "c1",
+      disconnectImpl: spy,
+    });
+    seedInactivePendingEdit("c1"); // no dirtyTabIds entry
+    render(<DisconnectButton />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    });
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Discard and close" }),
+    ).toBeInTheDocument();
+  });
+
+  it("disconnects after the user confirms discarding unsaved changes (#1101)", async () => {
+    const spy = vi.fn(() => Promise.resolve());
+    setStore({
+      connections: [makeConnection("c1")],
+      statuses: { c1: { type: "connected" } },
+      focusedConnId: "c1",
+      disconnectImpl: spy,
+    });
+    seedDirtyConnection("c1");
+    render(<DisconnectButton />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Discard and close" }),
+      );
+    });
+
+    expect(spy).toHaveBeenCalledWith("c1");
   });
 
   it("renders a tooltip mentioning the focused connection's name", () => {

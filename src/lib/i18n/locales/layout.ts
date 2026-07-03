@@ -44,6 +44,8 @@ export const en = {
     discardTitle: "Discard unsaved changes?",
     discardMessage:
       '"{{title}}" has unsaved changes. Closing the tab will discard them.',
+    discardGenericMessage:
+      "There are unsaved changes. Continuing will discard them.",
     discardConfirm: "Discard and close",
   },
   tabItem: {
@@ -93,6 +95,8 @@ export const ko = {
     discardTitle: "저장하지 않은 변경사항을 버리겠습니까?",
     discardMessage:
       '"{{title}}"에 저장하지 않은 변경사항이 있습니다. 탭을 닫으면 삭제됩니다.',
+    discardGenericMessage:
+      "저장하지 않은 변경사항이 있습니다. 계속하면 삭제됩니다.",
     discardConfirm: "버리고 닫기",
   },
   tabItem: {
