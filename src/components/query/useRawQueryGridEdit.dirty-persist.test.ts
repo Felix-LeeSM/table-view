@@ -98,4 +98,18 @@ describe("useRawQueryGridEdit — Issue #1204 dirty marker survives unmount", ()
     // Regression: the marker must NOT be cleared by unmount.
     expect(currentDirty()).toContain("tab-1");
   });
+
+  it("clears the marker when the pending diff empties (discard, self-heal)", () => {
+    const hook = renderEditHook("tab-1");
+    act(() => hook.result.current.startEdit(0, 1));
+    act(() => hook.result.current.setEditValue("Alicia"));
+    act(() => hook.result.current.saveCurrentEdit());
+    expect(currentDirty()).toContain("tab-1");
+
+    // Discard empties the store entry — the still-mounted effect must flip
+    // the marker back off, so removing the unmount cleanup did not strand a
+    // stale-true marker.
+    act(() => hook.result.current.handleDiscard());
+    expect(currentDirty()).not.toContain("tab-1");
+  });
 });
