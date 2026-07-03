@@ -44,6 +44,8 @@ describe("DDL Tauri wrappers", () => {
         previewOnly: false,
         expectedDatabase: "app",
       },
+      // Issue #1112 — compat drop is a confirmed commit.
+      safetyConfirmed: true,
     });
 
     await renameTable("conn-1", "users", "public", "customers", "app");
@@ -141,7 +143,8 @@ describe("DDL Tauri wrappers", () => {
     expect(invokeMock.mock.calls).toEqual([
       ["create_table_plan", { request: plan }],
       ["create_trigger", { request: createTriggerRequest }],
-      ["drop_trigger", { request: dropTriggerRequest }],
+      // Issue #1112 — bare `dropTrigger` (no confirm arg) defaults false.
+      ["drop_trigger", { request: dropTriggerRequest, safetyConfirmed: false }],
     ]);
   });
 
@@ -185,7 +188,11 @@ describe("DDL Tauri wrappers", () => {
 
     expect(invokeMock.mock.calls).toEqual([
       ["create_rdb_database", { connectionId: "conn-1", name: "analytics" }],
-      ["drop_rdb_database", { connectionId: "conn-1", name: "analytics" }],
+      // Issue #1112 — DROP DATABASE forwards the confirmation proof.
+      [
+        "drop_rdb_database",
+        { connectionId: "conn-1", name: "analytics", safetyConfirmed: true },
+      ],
     ]);
   });
 });

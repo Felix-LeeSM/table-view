@@ -368,6 +368,8 @@ describe("StructurePanel", () => {
     // alterTable should have been called without preview_only (or preview_only: false)
     expect(tauri.alterTable).toHaveBeenCalledWith(
       expect.objectContaining({ preview_only: false }),
+      // Issue #1112 — commit forwards the Safe Mode confirmation proof.
+      true,
     );
 
     // Modal should be closed

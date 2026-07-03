@@ -43,6 +43,7 @@ describe("RDBMS query Tauri wrappers", () => {
       sql: "select id from users",
       queryId: "q-1",
       expectedDatabase: "app",
+      safetyConfirmed: false,
     });
     expect(envelope).toEqual({
       kind: "tabular",
@@ -75,6 +76,7 @@ describe("RDBMS query Tauri wrappers", () => {
       sql: "select 1",
       queryId: "q-2",
       expectedDatabase: null,
+      safetyConfirmed: false,
     });
   });
 

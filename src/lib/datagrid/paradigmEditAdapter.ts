@@ -152,6 +152,7 @@ export interface RdbAdapterDeps {
     sqls: string[],
     correlationId: string,
     expectedDatabase?: string,
+    safetyConfirmed?: boolean,
   ) => Promise<unknown>;
   history: HistoryRecorder;
   canEditRows?: boolean;
@@ -213,6 +214,10 @@ async function executeRdbBatch(
       sqls,
       `edit-${Date.now()}`,
       deps.expectedDatabase,
+      // Issue #1112 — the datagrid commit runs only after the user reviews
+      // and confirms the SQL preview dialog; forward the confirmation proof
+      // so the backend Safe Mode gate accepts any destructive statement.
+      true,
     );
     toast.success(i18n.t("datagrid:commitFlow.committed", { count }));
     deps.history.recordSuccess({

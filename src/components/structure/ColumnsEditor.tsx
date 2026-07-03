@@ -529,7 +529,10 @@ export default function ColumnsEditor({
     await ddl.loadPreview(
       () => tauri.alterTable(buildAlterRequest(true)),
       () => async () => {
-        await tauri.alterTable(buildAlterRequest(false));
+        // Issue #1112 — commit runs only after the Safe Mode gate + preview
+        // confirmation; forward the proof so a DROP COLUMN in a confirm-
+        // required context is accepted.
+        await tauri.alterTable(buildAlterRequest(false), true);
         setShowSqlModal(false);
         setPendingChanges([]);
         setDroppedColumns(new Set());

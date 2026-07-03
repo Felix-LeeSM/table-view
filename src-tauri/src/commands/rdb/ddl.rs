@@ -20,7 +20,7 @@
 use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{
-    AddColumnRequest, AddConstraintRequest, AlterTableRequest, CreateIndexRequest,
+    AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, CreateIndexRequest,
     CreateTablePlanRequest, CreateTableRequest, CreateTriggerRequest, DropColumnRequest,
     DropConstraintRequest, DropIndexRequest, DropTableRequest, DropTriggerRequest,
     RenameTableRequest, SchemaChangeResult,
@@ -32,6 +32,33 @@ use dispatch::{run_database_change, run_schema_change, DatabaseCommand};
 
 #[cfg(test)]
 use super::not_connected;
+
+/// Issue #1112 — Safe Mode backend gate for structured DDL commands.
+///
+/// Destructive DDL (`drop_table` / `drop_column` / `alter_table … DROP` /
+/// `drop_rdb_database` / …) is destructive by command identity — no SQL
+/// parsing needed. Preview calls (`preview_only == true`) never execute, so
+/// they are exempt. The `safety_confirmed` flag is a separate command
+/// argument (NOT a request-struct field) so the wire `*Request` shapes stay
+/// byte-equivalent; the frontend sets it `true` only after its confirm
+/// dialog is satisfied.
+async fn gate_destructive_ddl(
+    connection_id: &str,
+    is_destructive: bool,
+    preview_only: bool,
+    safety_confirmed: Option<bool>,
+) -> Result<(), AppError> {
+    if preview_only || !is_destructive {
+        return Ok(());
+    }
+    let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+    crate::commands::safe_mode::enforce_rdb_danger(
+        &pool,
+        connection_id,
+        safety_confirmed.unwrap_or(false),
+    )
+    .await
+}
 
 async fn drop_table_inner(
     state: &AppState,
@@ -49,7 +76,15 @@ async fn drop_table_inner(
 pub async fn drop_table(
     state: tauri::State<'_, AppState>,
     request: DropTableRequest,
+    safety_confirmed: Option<bool>,
 ) -> Result<SchemaChangeResult, AppError> {
+    gate_destructive_ddl(
+        &request.connection_id,
+        true,
+        request.preview_only,
+        safety_confirmed,
+    )
+    .await?;
     drop_table_inner(state.inner(), &request).await
 }
 
@@ -81,7 +116,22 @@ async fn alter_table_inner(
 pub async fn alter_table(
     state: tauri::State<'_, AppState>,
     request: AlterTableRequest,
+    safety_confirmed: Option<bool>,
 ) -> Result<SchemaChangeResult, AppError> {
+    // Destructive only when a change drops a column (data loss). Additive
+    // ALTERs (ADD / MODIFY) are not gated, mirroring the frontend
+    // `ddl-alter-add` (warn) vs `ddl-alter-drop` (danger) split.
+    let destructive = request
+        .changes
+        .iter()
+        .any(|change| matches!(change, ColumnChange::Drop { .. }));
+    gate_destructive_ddl(
+        &request.connection_id,
+        destructive,
+        request.preview_only,
+        safety_confirmed,
+    )
+    .await?;
     alter_table_inner(state.inner(), &request).await
 }
 
@@ -116,7 +166,15 @@ async fn drop_column_inner(
 pub async fn drop_column(
     state: tauri::State<'_, AppState>,
     request: DropColumnRequest,
+    safety_confirmed: Option<bool>,
 ) -> Result<SchemaChangeResult, AppError> {
+    gate_destructive_ddl(
+        &request.connection_id,
+        true,
+        request.preview_only,
+        safety_confirmed,
+    )
+    .await?;
     drop_column_inner(state.inner(), &request).await
 }
 
@@ -179,7 +237,15 @@ async fn drop_index_inner(
 pub async fn drop_index(
     state: tauri::State<'_, AppState>,
     request: DropIndexRequest,
+    safety_confirmed: Option<bool>,
 ) -> Result<SchemaChangeResult, AppError> {
+    gate_destructive_ddl(
+        &request.connection_id,
+        true,
+        request.preview_only,
+        safety_confirmed,
+    )
+    .await?;
     drop_index_inner(state.inner(), &request).await
 }
 
@@ -209,7 +275,15 @@ async fn drop_constraint_inner(
 pub async fn drop_constraint(
     state: tauri::State<'_, AppState>,
     request: DropConstraintRequest,
+    safety_confirmed: Option<bool>,
 ) -> Result<SchemaChangeResult, AppError> {
+    gate_destructive_ddl(
+        &request.connection_id,
+        true,
+        request.preview_only,
+        safety_confirmed,
+    )
+    .await?;
     drop_constraint_inner(state.inner(), &request).await
 }
 
@@ -253,7 +327,15 @@ async fn drop_trigger_inner(
 pub async fn drop_trigger(
     state: tauri::State<'_, AppState>,
     request: DropTriggerRequest,
+    safety_confirmed: Option<bool>,
 ) -> Result<SchemaChangeResult, AppError> {
+    gate_destructive_ddl(
+        &request.connection_id,
+        true,
+        request.preview_only,
+        safety_confirmed,
+    )
+    .await?;
     drop_trigger_inner(state.inner(), &request).await
 }
 
@@ -291,7 +373,11 @@ pub async fn drop_rdb_database(
     state: tauri::State<'_, AppState>,
     connection_id: String,
     name: String,
+    safety_confirmed: Option<bool>,
 ) -> Result<(), AppError> {
+    // `DROP DATABASE` always executes (no preview mode) and is unconditionally
+    // destructive.
+    gate_destructive_ddl(&connection_id, true, false, safety_confirmed).await?;
     drop_rdb_database_inner(state.inner(), &connection_id, &name).await
 }
 

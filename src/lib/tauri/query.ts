@@ -50,14 +50,29 @@ export async function queryTableData(
 // dispatch; mismatch surfaces as a typed `AppError::DbMismatch` envelope
 // whose `message` preserves `"Database mismatch: expected 'X', backend
 // pool has 'Y'"`. Omitting it preserves the pre-Sprint-266 fast-path.
+// Issue #1112 — `safetyConfirmed` is the Safe Mode confirmation proof. The
+// backend re-classifies the SQL and, for a destructive statement in a
+// confirm-required context (production, or non-production + strict), rejects
+// the request unless this flag is `true`. Callers pass `true` ONLY after the
+// user has satisfied the confirm dialog; the normal (non-destructive, or
+// matrix-allowed) path omits it. The backend independently re-reads Safe
+// Mode + the connection environment, so a frontend hydration race or a
+// direct IPC bypass cannot run destructive SQL unconfirmed.
 export async function executeQuery(
   connectionId: string,
   sql: string,
   queryId: string,
   expectedDatabase?: string,
+  safetyConfirmed?: boolean,
 ): Promise<QueryResult> {
   return requireCompatibleQueryResult(
-    await executeQueryEnvelope(connectionId, sql, queryId, expectedDatabase),
+    await executeQueryEnvelope(
+      connectionId,
+      sql,
+      queryId,
+      expectedDatabase,
+      safetyConfirmed,
+    ),
   );
 }
 
@@ -66,12 +81,14 @@ export async function executeQueryEnvelope(
   sql: string,
   queryId: string,
   expectedDatabase?: string,
+  safetyConfirmed?: boolean,
 ): Promise<TabularResultEnvelope> {
   const result = await invoke<unknown>("execute_query", {
     connectionId,
     sql,
     queryId,
     expectedDatabase: expectedDatabase ?? null,
+    safetyConfirmed: safetyConfirmed ?? false,
   });
   return createTabularResultEnvelope(normalizeTabularQueryResult(result));
 }
@@ -89,12 +106,14 @@ export async function executeQueryBatch(
   statements: string[],
   queryId: string,
   expectedDatabase?: string,
+  safetyConfirmed?: boolean,
 ): Promise<QueryResult[]> {
   const envelopes = await executeQueryBatchEnvelopes(
     connectionId,
     statements,
     queryId,
     expectedDatabase,
+    safetyConfirmed,
   );
   return envelopes.map(requireCompatibleQueryResult);
 }
@@ -104,12 +123,16 @@ export async function executeQueryBatchEnvelopes(
   statements: string[],
   queryId: string,
   expectedDatabase?: string,
+  // Issue #1112 — see `executeQuery`. A single destructive statement anywhere
+  // in the atomic batch makes the whole batch confirm-gated.
+  safetyConfirmed?: boolean,
 ): Promise<TabularResultEnvelope[]> {
   const results = await invoke<unknown[]>("execute_query_batch", {
     connectionId,
     statements,
     queryId,
     expectedDatabase: expectedDatabase ?? null,
+    safetyConfirmed: safetyConfirmed ?? false,
   });
   return results.map((result) =>
     createTabularResultEnvelope(normalizeTabularQueryResult(result)),

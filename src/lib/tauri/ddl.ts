@@ -45,10 +45,19 @@ import type {
  * Sprint 271c — `request.expectedDatabase` triggers the backend
  * DbMismatch guard.
  */
+// Issue #1112 — `safetyConfirmed` is the Safe Mode confirmation proof. The
+// backend gate is skipped for `previewOnly: true` calls (they never execute);
+// commit calls (`previewOnly: false`) must pass `true` after the user's
+// confirm dialog so a destructive DDL in a confirm-required context (prod, or
+// non-prod + strict) is accepted. A direct IPC bypass omits it → rejected.
 export async function dropTableRequest(
   request: DropTableRequest,
+  safetyConfirmed?: boolean,
 ): Promise<SchemaChangeResult> {
-  return invoke<SchemaChangeResult>("drop_table", { request });
+  return invoke<SchemaChangeResult>("drop_table", {
+    request,
+    safetyConfirmed: safetyConfirmed ?? false,
+  });
 }
 
 /**
@@ -78,14 +87,19 @@ export async function dropTable(
   schema: string,
   expectedDatabase?: string,
 ): Promise<void> {
-  await dropTableRequest({
-    connectionId,
-    schema,
-    table,
-    cascade: false,
-    previewOnly: false,
-    expectedDatabase,
-  });
+  await dropTableRequest(
+    {
+      connectionId,
+      schema,
+      table,
+      cascade: false,
+      previewOnly: false,
+      expectedDatabase,
+    },
+    // Commit-only compat wrapper — the caller's context menu / dialog is the
+    // confirmation surface (issue #1112).
+    true,
+  );
 }
 
 /**
@@ -113,10 +127,17 @@ export async function renameTable(
 /**
  * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
  */
+// Issue #1112 — `alterTable` is destructive only when a change drops a column;
+// the backend gates that case. Commit callers (`previewOnly: false`) pass
+// `safetyConfirmed: true`. See `dropTableRequest`.
 export async function alterTable(
   request: AlterTableRequest,
+  safetyConfirmed?: boolean,
 ): Promise<SchemaChangeResult> {
-  return invoke<SchemaChangeResult>("alter_table", { request });
+  return invoke<SchemaChangeResult>("alter_table", {
+    request,
+    safetyConfirmed: safetyConfirmed ?? false,
+  });
 }
 
 /**
@@ -147,10 +168,16 @@ export async function addColumnRequest(
  *
  * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
  */
+// Issue #1112 — commit callers pass `safetyConfirmed: true`. See
+// `dropTableRequest`.
 export async function dropColumnRequest(
   request: DropColumnRequest,
+  safetyConfirmed?: boolean,
 ): Promise<SchemaChangeResult> {
-  return invoke<SchemaChangeResult>("drop_column", { request });
+  return invoke<SchemaChangeResult>("drop_column", {
+    request,
+    safetyConfirmed: safetyConfirmed ?? false,
+  });
 }
 
 /**
@@ -189,10 +216,16 @@ export async function createIndex(
 /**
  * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
  */
+// Issue #1112 — commit callers pass `safetyConfirmed: true`. See
+// `dropTableRequest`.
 export async function dropIndex(
   request: DropIndexRequest,
+  safetyConfirmed?: boolean,
 ): Promise<SchemaChangeResult> {
-  return invoke<SchemaChangeResult>("drop_index", { request });
+  return invoke<SchemaChangeResult>("drop_index", {
+    request,
+    safetyConfirmed: safetyConfirmed ?? false,
+  });
 }
 
 /**
@@ -207,10 +240,16 @@ export async function addConstraint(
 /**
  * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
  */
+// Issue #1112 — commit callers pass `safetyConfirmed: true`. See
+// `dropTableRequest`.
 export async function dropConstraint(
   request: DropConstraintRequest,
+  safetyConfirmed?: boolean,
 ): Promise<SchemaChangeResult> {
-  return invoke<SchemaChangeResult>("drop_constraint", { request });
+  return invoke<SchemaChangeResult>("drop_constraint", {
+    request,
+    safetyConfirmed: safetyConfirmed ?? false,
+  });
 }
 
 /**
@@ -242,10 +281,16 @@ export async function createTrigger(
  *
  * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
  */
+// Issue #1112 — commit callers pass `safetyConfirmed: true`. See
+// `dropTableRequest`.
 export async function dropTrigger(
   request: DropTriggerRequest,
+  safetyConfirmed?: boolean,
 ): Promise<SchemaChangeResult> {
-  return invoke<SchemaChangeResult>("drop_trigger", { request });
+  return invoke<SchemaChangeResult>("drop_trigger", {
+    request,
+    safetyConfirmed: safetyConfirmed ?? false,
+  });
 }
 
 /**
@@ -301,5 +346,11 @@ export async function dropRdbDatabase(
   connectionId: string,
   name: string,
 ): Promise<void> {
-  return invoke<void>("drop_rdb_database", { connectionId, name });
+  // Issue #1112 — `DROP DATABASE` is unconditionally destructive and reached
+  // only through the `DbLifecycleDialog` confirm flow; forward the proof.
+  return invoke<void>("drop_rdb_database", {
+    connectionId,
+    name,
+    safetyConfirmed: true,
+  });
 }

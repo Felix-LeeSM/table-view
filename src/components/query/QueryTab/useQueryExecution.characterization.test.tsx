@@ -283,6 +283,7 @@ describe("useQueryExecution — issue #737 characterization matrix", () => {
       sql,
       expect.stringMatching(/^query-1-/),
       "db1",
+      undefined,
     );
     const completed = getQueryTab();
     if (completed.queryState.status !== "completed") {

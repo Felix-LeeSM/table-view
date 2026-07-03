@@ -302,6 +302,8 @@ describe("StructurePanel", () => {
     // dropIndex should have been called with preview_only=false
     expect(tauri.dropIndex).toHaveBeenCalledWith(
       expect.objectContaining({ preview_only: false }),
+      // Issue #1112 — commit forwards the Safe Mode confirmation proof.
+      true,
     );
 
     // Modal should close
