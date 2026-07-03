@@ -4,7 +4,7 @@ import { Loader2, Plus } from "lucide-react";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { json as jsonLanguage } from "@codemirror/lang-json";
-import { defaultKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import {
   syntaxHighlighting,
   defaultHighlightStyle,
@@ -146,6 +146,9 @@ export default function AddDocumentModal({
         lineNumbers(),
         indentOnInput(),
         bracketMatching(),
+        // #1247 — undo/redo history so Cmd+Z reverts edits (incl. paste),
+        // matching the query editors fixed in #1225.
+        history(),
         langCompartment.current.of(buildLangExtension(mongoExtensions)),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         keymap.of([
@@ -164,6 +167,8 @@ export default function AddDocumentModal({
             },
           },
           ...defaultKeymap,
+          // #1247 — Mod-z / Mod-y undo/redo (defaultKeymap omits these).
+          ...historyKeymap,
         ]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
