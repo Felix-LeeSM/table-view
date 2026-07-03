@@ -11,6 +11,10 @@ import {
   Timer,
 } from "lucide-react";
 import { Button } from "@components/ui/button";
+import {
+  useTreeRoving,
+  type TreeRovingRow,
+} from "@components/shared/tree/useTreeRoving";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { currentKvDatabase, getKvValue, scanKvKeys } from "@lib/tauri/kv";
@@ -222,6 +226,19 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     });
   };
 
+  // WAI-ARIA tree roving over the flat key list — one tab stop, arrow-key nav.
+  // Single level, so every row is a leaf (no expand/collapse) and toggle is a
+  // no-op. Not virtualized, so no scroll-into-view callback.
+  const treeRef = useRef<HTMLDivElement>(null);
+  const rovingRows: TreeRovingRow[] = keys.map((item) => ({
+    key: item.key,
+    depth: 0,
+    expanded: null,
+    focusable: true,
+  }));
+  const roving = useTreeRoving(rovingRows, () => {}, treeRef);
+  const activeKey = roving.focusKey ?? keys[0]?.key ?? null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col text-xs">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
@@ -302,17 +319,25 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div
+          ref={treeRef}
           role="tree"
           aria-label={t("kvSidebar.keysAria", { productLabel })}
           className="py-1"
+          onKeyDown={roving.onKeyDown}
         >
-          {keys.map((item) => (
+          {keys.map((item, index) => (
             <button
               key={item.key}
               type="button"
               role="treeitem"
+              aria-level={1}
               aria-selected={selectedKey === item.key}
+              aria-setsize={keys.length}
+              aria-posinset={index + 1}
               data-selected={selectedKey === item.key || undefined}
+              data-tree-key={item.key}
+              tabIndex={activeKey === item.key ? 0 : -1}
+              onFocus={() => roving.setFocusKey(item.key)}
               className="grid min-h-8 w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2 px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground data-[selected]:bg-accent data-[selected]:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               onClick={() => void loadValue(item.key)}
             >

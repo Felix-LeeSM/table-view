@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Boxes,
@@ -9,6 +9,10 @@ import {
   Search,
 } from "lucide-react";
 import { Button } from "@components/ui/button";
+import {
+  useTreeRoving,
+  type TreeRovingRow,
+} from "@components/shared/tree/useTreeRoving";
 import { Checkbox } from "@components/ui/checkbox";
 import { Skeleton } from "@components/ui/skeleton";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -138,6 +142,64 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
     [addQueryTab, connectionId, markConnectionUsed, setActiveDb],
   );
 
+  // Flatten the three catalog sections into a single visible-order list. Each
+  // section stays a `role="group"` for screen readers, but roving navigation
+  // spans all of them so Arrow Up/Down cross section boundaries (#1129).
+  const sections = useMemo(
+    () => [
+      {
+        key: "indexes",
+        title: t("search.section.indexes"),
+        empty: t("search.empty.indexes"),
+        entries: visible.indexes.map(
+          (item): CatalogEntry => ({
+            kind: "index",
+            id: `index:${item.name}`,
+            item,
+          }),
+        ),
+      },
+      {
+        key: "aliases",
+        title: t("search.section.aliases"),
+        empty: t("search.empty.aliases"),
+        entries: visible.aliases.map(
+          (item): CatalogEntry => ({
+            kind: "alias",
+            id: `alias:${item.name}:${item.index}`,
+            item,
+          }),
+        ),
+      },
+      {
+        key: "dataStreams",
+        title: t("search.section.dataStreams"),
+        empty: t("search.empty.dataStreams"),
+        entries: visible.dataStreams.map(
+          (item): CatalogEntry => ({
+            kind: "dataStream",
+            id: `dataStream:${item.name}`,
+            item,
+          }),
+        ),
+      },
+    ],
+    [visible, t],
+  );
+
+  const treeRef = useRef<HTMLDivElement>(null);
+  const rovingRows: TreeRovingRow[] = sections.flatMap((section) =>
+    section.entries.map((entry) => ({
+      key: entry.id,
+      depth: 0,
+      expanded: null,
+      focusable: true,
+    })),
+  );
+  // Every catalog row is a leaf, so there is nothing to expand/collapse.
+  const roving = useTreeRoving(rovingRows, () => {}, treeRef);
+  const activeKey = roving.focusKey ?? rovingRows[0]?.key ?? null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col text-xs">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
@@ -211,60 +273,33 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
           <SearchCatalogSkeleton />
         ) : (
           <div
+            ref={treeRef}
             role="tree"
             aria-label={t("search.catalogAria", { productLabel })}
             className="py-1"
+            onKeyDown={roving.onKeyDown}
           >
-            <CatalogSection
-              title={t("search.section.indexes")}
-              empty={t("search.empty.indexes")}
-            >
-              {visible.indexes.map((item) => (
-                <CatalogRow
-                  key={item.name}
-                  entry={{ kind: "index", id: `index:${item.name}`, item }}
-                  selectedId={selectedId}
-                  onSelect={openIndex}
-                  onOpenQuery={openSearchQuery}
-                />
-              ))}
-            </CatalogSection>
-            <CatalogSection
-              title={t("search.section.aliases")}
-              empty={t("search.empty.aliases")}
-            >
-              {visible.aliases.map((item) => (
-                <CatalogRow
-                  key={`${item.name}:${item.index}`}
-                  entry={{
-                    kind: "alias",
-                    id: `alias:${item.name}:${item.index}`,
-                    item,
-                  }}
-                  selectedId={selectedId}
-                  onSelect={openIndex}
-                  onOpenQuery={openSearchQuery}
-                />
-              ))}
-            </CatalogSection>
-            <CatalogSection
-              title={t("search.section.dataStreams")}
-              empty={t("search.empty.dataStreams")}
-            >
-              {visible.dataStreams.map((item) => (
-                <CatalogRow
-                  key={item.name}
-                  entry={{
-                    kind: "dataStream",
-                    id: `dataStream:${item.name}`,
-                    item,
-                  }}
-                  selectedId={selectedId}
-                  onSelect={openIndex}
-                  onOpenQuery={openSearchQuery}
-                />
-              ))}
-            </CatalogSection>
+            {sections.map((section) => (
+              <CatalogSection
+                key={section.key}
+                title={section.title}
+                empty={section.empty}
+              >
+                {section.entries.map((entry, index) => (
+                  <CatalogRow
+                    key={entry.id}
+                    entry={entry}
+                    selectedId={selectedId}
+                    onSelect={openIndex}
+                    onOpenQuery={openSearchQuery}
+                    tabIndex={activeKey === entry.id ? 0 : -1}
+                    onFocus={() => roving.setFocusKey(entry.id)}
+                    posInSet={index + 1}
+                    setSize={section.entries.length}
+                  />
+                ))}
+              </CatalogSection>
+            ))}
           </div>
         )}
       </div>
@@ -282,7 +317,11 @@ function CatalogSection({
   children: React.ReactNode[];
 }) {
   return (
-    <section className="border-b border-border last:border-b-0">
+    <section
+      role="group"
+      aria-label={title}
+      className="border-b border-border last:border-b-0"
+    >
       <div className="px-3 pt-2 pb-1 text-3xs font-medium tracking-normal text-muted-foreground uppercase">
         {title}
       </div>
@@ -302,11 +341,20 @@ function CatalogRow({
   selectedId,
   onSelect,
   onOpenQuery,
+  tabIndex,
+  onFocus,
+  posInSet,
+  setSize,
 }: {
   entry: CatalogEntry;
   selectedId: string | null;
   onSelect: (entry: CatalogEntry, permanent?: boolean) => void;
   onOpenQuery: (entry: CatalogEntry) => void;
+  // WAI-ARIA tree roving (#1129) — the tree container owns the single tab stop.
+  tabIndex: number;
+  onFocus: () => void;
+  posInSet: number;
+  setSize: number;
 }) {
   const { t } = useTranslation("workspace");
   const selected = selectedId === entry.id;
@@ -319,31 +367,37 @@ function CatalogRow({
   return (
     <div
       role="treeitem"
+      aria-level={1}
       aria-selected={selected}
+      aria-setsize={setSize}
+      aria-posinset={posInSet}
       data-selected={selected || undefined}
-      tabIndex={0}
+      data-tree-key={entry.id}
+      tabIndex={tabIndex}
+      onFocus={onFocus}
       className="grid min-h-9 w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2 px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground data-[selected]:bg-accent data-[selected]:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       onClick={() => onSelect(entry)}
       onDoubleClick={() => onSelect(entry, true)}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
+        // Secondary action (open query editor) is keyboard-reachable via
+        // Shift+Enter — mirrors the data grid's Shift+Enter variant and keeps
+        // the inline query button operable without tab order (WCAG 2.1.1).
+        if (event.key === "Enter" && event.shiftKey) {
+          if (!canQueryTarget(entry)) return;
+          event.preventDefault();
+          onOpenQuery(entry);
+          return;
+        }
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
         onSelect(entry);
       }}
     >
-      <button
-        type="button"
-        className="flex min-w-0 items-center gap-2 text-left"
-        onClick={(event) => {
-          event.stopPropagation();
-          onSelect(entry);
-        }}
-        onDoubleClick={(event) => {
-          event.stopPropagation();
-          onSelect(entry, true);
-        }}
-      >
+      {/* APG (#1129): the primary select/open action lives on the treeitem
+          itself, so the title is presentational — no longer a nested <button>
+          competing for the tab order. */}
+      <div className="flex min-w-0 items-center gap-2">
         <Icon
           size={12}
           className="shrink-0 text-muted-foreground"
@@ -357,7 +411,7 @@ function CatalogRow({
             {entrySubtitle(entry)}
           </div>
         </div>
-      </button>
+      </div>
       <div className="flex shrink-0 items-center gap-1.5 text-3xs text-muted-foreground">
         {entryBadges(entry).map((badge) => (
           <span key={badge} className="rounded bg-muted px-1.5 py-0.5">
@@ -365,9 +419,12 @@ function CatalogRow({
           </span>
         ))}
         {canQueryTarget(entry) ? (
+          // Secondary action stays mouse-operable but out of the tab order so
+          // the treeitem is the single tab stop (WAI-ARIA tree pattern).
           <Button
             variant="ghost"
             size="icon-xs"
+            tabIndex={-1}
             aria-label={t("search.openQueryAria", { name: entryTitle(entry) })}
             title={t("search.openQueryTitle", { name: entryTitle(entry) })}
             onClick={(event) => {
