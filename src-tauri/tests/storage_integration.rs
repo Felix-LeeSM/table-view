@@ -20,6 +20,14 @@ fn load_storage() -> Result<StorageData, AppError> {
 
 /// Set up a temp directory as the test data dir and return the TempDir
 /// (must be kept alive for the duration of the test).
+///
+/// Isolation note (#1240, #1246): the TempDir is per-test, but
+/// `TABLE_VIEW_TEST_DATA_DIR` is a *process-global* env var. Under the CI
+/// `cargo test --test storage_integration` lane (in-process, multi-threaded)
+/// two parallel tests would clobber each other's data dir, so the `#[serial]`
+/// on every test in this binary is load-bearing, not vestigial. Under
+/// `cargo nextest` each test is its own process with a private env, which
+/// makes `serial` a harmless no-op there.
 fn setup_test_dir() -> TempDir {
     let tmp = TempDir::new().unwrap();
     std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", tmp.path());

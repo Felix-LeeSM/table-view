@@ -527,9 +527,11 @@ async fn test_mongo_adapter_aggregate_group_count() {
 //
 // Each test uses its own collection name under `table_view_test` so the
 // read-path fixtures above remain untouched and parallel-safe collection
-// access is explicit. `#[serial_test::serial]` serialises with the other
-// tests in this binary to avoid any shared-state races around the single
-// test MongoDB container.
+// access is explicit. Per #1240, `#[serial_test::serial]` is an in-process
+// lock and does NOT serialise across `cargo nextest` processes (the CI lane),
+// so it cannot guard the shared MongoDB container cross-process — the unique
+// per-test collection name above is what provides that isolation. `serial` is
+// kept only as an in-process ordering guard for local `cargo test` runs.
 
 /// Seed a single document into the per-test collection and return the
 /// driver-assigned `_id` as a `Bson`. Drops the collection first so

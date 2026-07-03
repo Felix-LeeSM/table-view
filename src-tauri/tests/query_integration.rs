@@ -1,3 +1,17 @@
+//! PostgreSQL query-path integration tests.
+//!
+//! Isolation note (#1240, #1246): CI runs these via `cargo llvm-cov nextest`,
+//! which executes each test in its OWN process. `#[serial_test::serial]` is an
+//! in-process lock and therefore does NOT serialise tests across nextest
+//! processes. Cross-process isolation here comes from each test owning a fresh
+//! `PostgresAdapter` pool (`setup_adapter` builds a new pool per call) plus a
+//! unique relation name (`{prefix}_{ts}`), so parallel processes never touch
+//! the same table/sequence — the #1246 audit found no shared-resource
+//! conflicts (the only literals are session-local `TEMP` tables and
+//! never-created names in error/validation paths). `serial` is retained purely
+//! as an in-process guard for local `cargo test` runs (one process, one shared
+//! PG container); it is a no-op under the nextest CI lane.
+
 mod common;
 
 use std::time::{Duration, Instant};

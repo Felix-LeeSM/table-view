@@ -20,6 +20,17 @@ slow-timeout = { period = "60s", terminate-after = 4 }
 filter = 'binary(=mysql_integration)'
 test-group = 'mysql-integration'
 
+# #1240 — mongo_integration serialises at the process level like
+# mysql_integration. `#[serial_test::serial]` is an in-process lock and does
+# NOT serialise across nextest's per-process execution, so parallel mongo test
+# processes churned the shared mongod catalog (concurrent create/drop of
+# per-test collections in `table_view_test`) and tripped QueryPlanKilled(175)
+# "collection dropped" mid-aggregation even after per-test unique collection
+# names (#1244). max-threads=1 removes the cross-process concurrency.
+[[profile.push.overrides]]
+filter = 'binary(=mongo_integration)'
+test-group = 'mongo-integration'
+
 [profile.ci]
 inherits = "push"
 status-level = "all"
@@ -27,3 +38,4 @@ final-status-level = "slow"
 
 [test-groups]
 mysql-integration = { max-threads = 1 }
+mongo-integration = { max-threads = 1 }
