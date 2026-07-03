@@ -173,6 +173,31 @@ async fn execute_query_batch_rolls_back_when_statement_matches_multiple_rows() {
 }
 
 #[tokio::test]
+async fn execute_query_batch_rolls_back_when_statement_matches_no_rows() {
+    // Issue #1079 (recommendation #3, sibling of #1080) — a WHERE that matches
+    // zero rows (row already gone, or a NULL column in the all-column
+    // fallback) is also a one-row-contract violation: the intended edit did
+    // not apply. It must roll back with a 0-row cause hint that does NOT blame
+    // a missing primary key.
+    let (_dir, adapter) = connected_adapter().await;
+    let statements = vec!["DELETE FROM logs WHERE id = 999 AND msg = 'absent'".to_string()];
+
+    let result = adapter.execute_query_batch(&statements, None).await;
+
+    match result {
+        Err(AppError::Database(message)) => assert!(
+            message.contains("statement 1 of 1 failed")
+                && message.contains("affected 0")
+                && !message.contains("add a primary key"),
+            "unexpected error message: {message}"
+        ),
+        other => panic!("Expected zero-row guard rollback, got: {:?}", other),
+    }
+    // Nothing removed — the two seeded rows survive.
+    assert_eq!(scalar_count(&adapter, "SELECT COUNT(*) FROM logs").await, 2);
+}
+
+#[tokio::test]
 async fn execute_query_batch_rejects_read_only_sqlite_writes_clearly() {
     let (_dir, adapter) = connected_read_only_adapter().await;
     let statements = vec!["UPDATE users SET name = 'Ada Readonly' WHERE id = 1".to_string()];

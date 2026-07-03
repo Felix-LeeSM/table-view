@@ -644,9 +644,12 @@ async fn test_mysql_execute_query_batch_commits_all_statements() {
         .await
         .expect("CREATE TABLE");
 
+    // Issue #1079 — the commit batch now enforces one row per statement (the
+    // grid-commit contract; new rows emit one single-row INSERT each). Exercise
+    // multi-statement atomicity with single-row INSERTs.
     let stmts = vec![
-        format!("INSERT INTO {table} VALUES (1), (2)"),
-        format!("INSERT INTO {table} VALUES (3)"),
+        format!("INSERT INTO {table} VALUES (1)"),
+        format!("INSERT INTO {table} VALUES (2)"),
     ];
     let results = adapter
         .execute_query_batch(&stmts, None)
@@ -654,10 +657,10 @@ async fn test_mysql_execute_query_batch_commits_all_statements() {
         .expect("batch should commit");
 
     assert_eq!(results.len(), 2);
-    assert_eq!(results[0].total_count, 2);
+    assert_eq!(results[0].total_count, 1);
     assert_eq!(results[1].total_count, 1);
     match results[0].query_type {
-        QueryType::Dml { rows_affected } => assert_eq!(rows_affected, 2),
+        QueryType::Dml { rows_affected } => assert_eq!(rows_affected, 1),
         _ => panic!("expected Dml"),
     }
 
@@ -670,7 +673,7 @@ async fn test_mysql_execute_query_batch_commits_all_statements() {
     let n: i64 = count.rows[0][0]
         .as_i64()
         .expect("COUNT(*) returns i64 number wire-encoded");
-    assert_eq!(n, 3);
+    assert_eq!(n, 2);
 
     adapter
         .execute_query(&format!("DROP TABLE {table}"), None)
@@ -728,6 +731,74 @@ async fn test_mysql_execute_query_batch_rolls_back_on_mid_failure() {
         .as_i64()
         .expect("COUNT(*) returns i64 number wire-encoded");
     assert_eq!(n, 0, "rollback must leave the table empty");
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+/// Issue #1079 — MySQL reports *changed* (not matched) rows for UPDATE, so it
+/// is the sharp edge for the one-row guard. A PK-less table with two identical
+/// rows + a one-row UPDATE that rewrites both must roll the whole commit batch
+/// back (rows_affected == 2), leaving both rows at their original value.
+/// Symmetric with the SQLite multi-row rollback regression.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_execute_query_batch_rolls_back_when_update_changes_multiple_rows() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_batch_multi_row_{ts}");
+
+    adapter
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT, msg TEXT) ENGINE=InnoDB"),
+            None,
+        )
+        .await
+        .expect("CREATE TABLE");
+    adapter
+        .execute_query(
+            &format!("INSERT INTO {table} VALUES (1, 'a'), (1, 'a')"),
+            None,
+        )
+        .await
+        .expect("INSERT duplicates");
+
+    // Rewrites 'a' -> 'b' on both duplicate rows: MySQL's changed-rows count is
+    // 2, which still trips the guard.
+    let stmts = vec![format!(
+        "UPDATE {table} SET msg = 'b' WHERE id = 1 AND msg = 'a'"
+    )];
+    let err = adapter
+        .execute_query_batch(&stmts, None)
+        .await
+        .expect_err("multi-row change must roll back");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("statement 1 of 1 failed") && msg.contains("affected 2"),
+        "expected single-row guard rollback, got: {msg}"
+    );
+
+    // Rolled back — both rows keep their original value, none became 'b'.
+    let count = adapter
+        .execute_query(
+            &format!("SELECT COUNT(*) AS n FROM {table} WHERE msg = 'a'"),
+            None,
+        )
+        .await
+        .expect("count");
+    let n: i64 = count.rows[0][0]
+        .as_i64()
+        .expect("COUNT(*) returns i64 number wire-encoded");
+    assert_eq!(n, 2, "rollback must leave both rows unchanged");
 
     adapter
         .execute_query(&format!("DROP TABLE {table}"), None)

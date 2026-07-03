@@ -96,13 +96,20 @@ pub(crate) fn enforce_single_row_effect(
     if rows_affected == 1 {
         return Ok(());
     }
+    // Split the cause hint: 0 rows means the target vanished/changed (a primary
+    // key would not have helped), N rows means it was not uniquely identified.
+    let cause = if rows_affected == 0 {
+        "the target row no longer matches — it may have been changed or removed since it was loaded"
+    } else {
+        "row is not uniquely identifiable — add a primary key or unique constraint"
+    };
     Err(crate::error::AppError::Database(format!(
         "statement {} of {} failed: expected to affect exactly 1 row but affected {}; \
-         transaction rolled back (row is not uniquely identifiable — add a primary key \
-         or unique constraint)",
+         transaction rolled back ({})",
         statement_index + 1,
         total,
-        rows_affected
+        rows_affected,
+        cause
     )))
 }
 
@@ -121,19 +128,27 @@ mod single_row_guard_tests {
         // 0-row (vanished row / NULL match) and N-row (duplicate mass write)
         // both violate the one-row contract. The message keeps the
         // `statement K of N failed:` prefix (1-based) so the commit banner
-        // routes the failure back to the right preview line.
-        for (idx, total, affected, marker) in [
-            (1usize, 2usize, 0u64, "affected 0"),
-            (2, 3, 4, "affected 4"),
+        // routes the failure back to the right preview line, and the cause
+        // hint splits: 0-row must NOT claim a primary key would have helped.
+        for (idx, total, affected, count_marker, cause_marker) in [
+            (1usize, 2usize, 0u64, "affected 0", "no longer matches"),
+            (2, 3, 4, "affected 4", "not uniquely identifiable"),
         ] {
             match enforce_single_row_effect(idx, total, affected) {
                 Err(AppError::Database(msg)) => {
                     assert!(msg.contains(&format!("statement {} of {} failed", idx + 1, total)));
-                    assert!(msg.contains(marker), "message missing count: {msg}");
+                    assert!(msg.contains(count_marker), "message missing count: {msg}");
+                    assert!(msg.contains(cause_marker), "wrong cause hint: {msg}");
                 }
                 other => panic!("expected rollback error, got {other:?}"),
             }
         }
+        // 0-row must not misattribute the cause to a missing key.
+        let zero = enforce_single_row_effect(0, 1, 0).unwrap_err().to_string();
+        assert!(
+            !zero.contains("add a primary key"),
+            "0-row cause misleads: {zero}"
+        );
     }
 }
 
