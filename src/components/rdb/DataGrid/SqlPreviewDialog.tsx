@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
@@ -37,6 +37,13 @@ export function SqlPreviewDialog({
   const { t } = useTranslation("rdb");
   const open = !!editState.sqlPreview;
   const armed = useDelayedFlag(open, EXECUTE_ARM_DELAY_MS);
+  const executeRef = useRef<HTMLButtonElement>(null);
+  // Move focus onto Execute once it arms so the muscle-memory Enter confirms
+  // via the button's native activation — a reflexive Enter during the arm
+  // window (Execute disabled) lands on Cancel/Close, never the commit.
+  useEffect(() => {
+    if (armed) executeRef.current?.focus();
+  }, [armed]);
   // Guards against a second Enter/click re-firing the commit while the
   // first execution is still in flight (#1141 double-execution).
   const [executing, setExecuting] = useState(false);
@@ -144,6 +151,7 @@ export function SqlPreviewDialog({
               onClick={runExecute}
               ariaLabel={t("sqlPreviewDialog.executeAria")}
               autoFocus
+              ref={executeRef}
             />
           </DialogFooter>
         </div>

@@ -149,4 +149,37 @@ describe("DbLifecycleDialog (Sprint 335 — Slice M live wire)", () => {
     });
     expect(onClose).toHaveBeenCalled();
   });
+
+  // #1141 — the destructive DROP path shares role="alertdialog" + Cancel
+  // focus with the other destructive confirms; CREATE stays a plain dialog.
+  it("[#1141] drop mode uses role=alertdialog and focuses Cancel", () => {
+    render(
+      <DbLifecycleDialog
+        open
+        mode="drop"
+        connectionId="conn-pg"
+        database="analytics"
+        paradigm="table"
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /close database lifecycle dialog/i }),
+    ).toHaveFocus();
+  });
+
+  it("[#1141] create mode stays a plain dialog (non-destructive)", () => {
+    render(
+      <DbLifecycleDialog
+        open
+        mode="create"
+        connectionId="conn-pg"
+        paradigm="table"
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
 });

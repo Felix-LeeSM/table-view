@@ -151,8 +151,9 @@ describe("ConfirmDestructiveDialog", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("[AC-246-D6][#1111] Enter is absorbed during the arm window, then confirms exactly once", async () => {
+  it("[AC-246-D6][#1111] after arming, focus moves to Confirm and Enter confirms exactly once", async () => {
     const onConfirm = vi.fn();
+    const user = userEvent.setup();
     render(
       <ConfirmDestructiveDialog
         open={true}
@@ -166,22 +167,47 @@ describe("ConfirmDestructiveDialog", () => {
         onCancel={vi.fn()}
       />,
     );
-    // The dialog's content listens on the AlertDialogContent root. A
-    // reflexive Enter fired right after the dialog opens is swallowed so a
-    // DROP/TRUNCATE can't be confirmed before the user reads it (#1111).
+    // No dialog-wide Enter handler anymore (#1141): a stray keyDown on the
+    // dialog root must not confirm.
     const dialog = screen.getByRole("alertdialog");
     fireEvent.keyDown(dialog, { key: "Enter" });
     expect(onConfirm).not.toHaveBeenCalled();
-    // After the arm window the muscle-memory Enter-to-confirm still works.
-    await waitFor(
-      () =>
-        expect(
-          screen.getByRole("button", { name: "Confirm" }),
-        ).not.toBeDisabled(),
-      { timeout: 500 },
-    );
-    fireEvent.keyDown(dialog, { key: "Enter" });
+    // After the arm window focus is handed to Confirm so the muscle-memory
+    // Enter lands on it and confirms via the button's native activation.
+    const confirm = screen.getByTestId("confirm-destructive-confirm");
+    await waitFor(() => expect(confirm).not.toBeDisabled(), { timeout: 500 });
+    expect(confirm).toHaveFocus();
+    await user.keyboard("{Enter}");
     expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("[#1141] Enter while Cancel is focused cancels and never confirms", async () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ConfirmDestructiveDialog
+        open={true}
+        reason={REASON}
+        sqlPreview={SQL}
+        environment="production"
+        connectionId="c"
+        statements={[]}
+        paradigm="rdb"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    const confirm = screen.getByTestId("confirm-destructive-confirm");
+    await waitFor(() => expect(confirm).not.toBeDisabled(), { timeout: 500 });
+    // Move focus to Cancel — where Radix parks it during the arm window
+    // (Confirm disabled) and where a Tab would land it. A dialog-wide Enter
+    // handler would wrongly confirm here; the button's native Enter cancels.
+    const cancel = screen.getByTestId("confirm-destructive-cancel");
+    cancel.focus();
+    await user.keyboard("{Enter}");
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
   it("[AC-246-D7] dry-run preview section is rendered (Phase 3 mounts <DryRunPreview>)", () => {

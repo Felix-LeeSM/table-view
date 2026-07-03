@@ -83,6 +83,19 @@ describe("SqlPreviewDialog — reflexive Enter / double-execution guards", () =>
     expect(editState.handleExecuteCommit).toHaveBeenCalledTimes(1);
   });
 
+  it("[#1111] arming moves focus onto Execute so the muscle-memory Enter confirms", () => {
+    vi.useFakeTimers();
+    const editState = makeEditState();
+    renderDialog(editState);
+
+    const execute = screen.getByTestId("execute-button");
+    expect(execute).not.toHaveFocus();
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(execute).toHaveFocus();
+  });
+
   it("[#1141c] a second click while a commit is in flight is ignored", () => {
     vi.useFakeTimers();
     // Never-resolving promise keeps the executing state latched.

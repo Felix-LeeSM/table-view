@@ -1,7 +1,7 @@
 ---
 title: Frontend guidance
 type: convention
-updated: 2026-06-11
+updated: 2026-07-03
 surface: src/**/*.ts, src/**/*.tsx, src/**/*.css
 task: frontend, ui, react-impl
 trigger:
@@ -41,11 +41,15 @@ backend contract 를 통해서만 다룬다.
   feedback slot, alert role, toast hookup 같은 테스트된 invariant 를 깨지 않는다.
   preset/layout source-order 강제 규칙은 retired 상태다.
 - 파괴적 confirm (DROP/TRUNCATE/삭제 등) 은 `ConfirmDestructiveDialog` 또는
-  `AlertDialog` 프리셋 (`role="alertdialog"`) 로 통일한다. primary(Confirm/Execute)
-  버튼은 open 후 150ms `disabled` 로 arm (`useDelayedFlag`) 해 반사적 Enter 를
-  흡수하고, Cancel/Esc 는 항상 즉시 동작한다. dialog 전역 `Enter=confirm` 핸들러로
-  Cancel focus 에서도 실행되게 만들지 않는다. 실행 중엔 loading/disabled+aria-busy
-  로 이중 실행을 막는다. (#1111 결정 / #1141 안전)
+  `AlertDialog` 프리셋 (`role="alertdialog"`) 로 통일한다. 150ms arm 은
+  `ConfirmDestructiveDialog` 와 RDB `SqlPreviewDialog` 2곳에만 적용:
+  primary(Confirm/Execute) 를 open 후 150ms `disabled` 로 arm (`useDelayedFlag`)
+  해 반사적 Enter 를 흡수하고, arm 완료 시 primary 로 `ref` focus 를 옮긴다.
+  Enter=confirm 은 **focus 된 버튼의 native activation 에만** 맡기고 dialog 전역
+  `onKeyDown` 으로 잡지 않는다 (전역 핸들러는 Cancel focus 에서도 파괴를 실행함).
+  Cancel/Esc 는 항상 즉시. 실행 중엔 loading/disabled+aria-busy 로 이중 실행을
+  막는다. `ConnectionItem` 삭제 / `DbLifecycleDialog` DROP 은 role/focus 통일만
+  (arm 미적용). (#1111 결정 / #1141 안전)
 
 ## Contract 경계
 

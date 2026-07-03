@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlertDialog,
@@ -15,9 +16,10 @@ import DryRunPreview from "./DryRunPreview";
 // Issue #1111 (decision 2026-07-02) — the Confirm button stays disabled for
 // a short window after the dialog opens so a reflexive Enter/click (fired
 // right after the Cmd+Enter that triggered the dialog) is absorbed instead
-// of confirming a DROP/TRUNCATE before the user reads it. autoFocus stays on
-// Confirm; Cancel/Esc remain live throughout. Overrides #1141's
-// "initial focus = Cancel" per the explicit user decision.
+// of confirming a DROP/TRUNCATE before the user reads it. When it arms, focus
+// moves onto Confirm so the muscle-memory Enter still confirms — but Enter is
+// only ever the focused button's native activation, never a dialog-wide
+// handler (which would fire even with focus on Cancel). Cancel/Esc stay live.
 const CONFIRM_ARM_DELAY_MS = 150;
 
 /**
@@ -100,6 +102,13 @@ export default function ConfirmDestructiveDialog({
   const { t } = useTranslation("workspace");
   // Armed only after the dialog has been open for CONFIRM_ARM_DELAY_MS.
   const armed = useDelayedFlag(open, CONFIRM_ARM_DELAY_MS);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  // Once armed, move focus onto Confirm. During the arm window Confirm is
+  // disabled so Radix parks focus elsewhere (Cancel/content); this hands it
+  // back so the muscle-memory Enter lands on Confirm, not Cancel.
+  useEffect(() => {
+    if (armed) confirmRef.current?.focus();
+  }, [armed]);
   const isProduction = environment === "production";
   const title = isProduction
     ? t("confirmDestructive.titleProduction")
@@ -122,21 +131,13 @@ export default function ConfirmDestructiveDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={(o) => !o && onCancel()}>
-      <AlertDialogContent
-        className="w-[28rem]"
-        tone="destructive"
-        // Enter on the dialog itself submits — matches the keystroke that
-        // the prior type-to-confirm input listened on, so users who
-        // muscle-memory'd Enter still get the confirm-on-Enter affordance.
-        // During the arm window (#1111) Enter is absorbed (preventDefault
-        // without confirming) so a reflexive keystroke can't fire the
-        // destructive action before the user reads the dialog.
-        onKeyDown={(e) => {
-          if (e.key !== "Enter") return;
-          e.preventDefault();
-          if (armed) onConfirm();
-        }}
-      >
+      <AlertDialogContent className="w-[28rem]" tone="destructive">
+        {/*
+          No dialog-wide Enter handler (#1141): it fired onConfirm even when
+          focus was on Cancel. Enter now only confirms via the Confirm
+          button's native activation once it arms and receives focus; Cancel
+          focus + Enter cancels, never confirms.
+        */}
         <AlertDialogHeader
           className={
             isProduction ? "-mx-6 -mt-6 rounded-t-lg px-6 py-3" : undefined
@@ -195,6 +196,7 @@ export default function ConfirmDestructiveDialog({
             onClick={onConfirm}
             ariaLabel={t("confirmDestructive.confirmAria")}
             autoFocus
+            ref={confirmRef}
             testId="confirm-destructive-confirm"
           />
         </AlertDialogFooter>
