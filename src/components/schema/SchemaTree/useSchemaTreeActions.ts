@@ -260,18 +260,13 @@ export function useSchemaTreeActions({
   // no-op, so collapsed schemas stay unfetched (AC-1/AC-4). Skipped in eager
   // mode where the mount effect already loaded everything.
   useEffect(() => {
-    if (shouldEagerLoadSchemas(schemas.length, autoLoadAuxiliaryCatalog)) {
+    if (shouldEagerLoadSchemas(schemas, autoLoadAuxiliaryCatalog)) {
       return;
     }
     for (const name of expandedSchemas) {
       void loadExpandedSchema(name);
     }
-  }, [
-    schemas.length,
-    autoLoadAuxiliaryCatalog,
-    expandedSchemas,
-    loadExpandedSchema,
-  ]);
+  }, [schemas, autoLoadAuxiliaryCatalog, expandedSchemas, loadExpandedSchema]);
 
   const [expandedCategories, setExpandedCategories] = useState<
     Record<string, Set<CategoryKey>>
@@ -310,7 +305,7 @@ export function useSchemaTreeActions({
       // expanded set) fires this load when the set changes, so calling it
       // here too would double-fire the IPC before the cache populates. Eager
       // mode has no reconciliation effect, so load directly there.
-      if (shouldEagerLoadSchemas(schemas.length, autoLoadAuxiliaryCatalog)) {
+      if (shouldEagerLoadSchemas(schemas, autoLoadAuxiliaryCatalog)) {
         void loadExpandedSchema(schemaName);
       }
     },
@@ -318,7 +313,7 @@ export function useSchemaTreeActions({
       autoLoadAuxiliaryCatalog,
       expandedSchemas,
       loadExpandedSchema,
-      schemas.length,
+      schemas,
       setExpandedSchemas,
     ],
   );

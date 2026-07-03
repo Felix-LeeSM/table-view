@@ -47,16 +47,50 @@ const EMPTY_SCHEMAS: SchemaInfo[] = [];
 export const EAGER_SCHEMA_LOAD_THRESHOLD = 5;
 
 /**
+ * #1219 (PR #1263 fix) — the eager threshold must count *user* schemas, not the
+ * raw `list_namespaces` payload. Backends surface system schemas alongside user
+ * ones (DuckDB `main`/`temp`/`system`, PG `pg_catalog`/`information_schema`/
+ * `pg_toast`), which are still displayed in the tree (DuckDB `main` holds user
+ * tables — filtering it out backend-side would hide them). Excluding them from
+ * the *count only* keeps a small DB eager (AC-3) without changing what shows.
+ * Name-based and dbType-agnostic on purpose: any stray match only nudges the
+ * count down, so the error is always toward eager — harmless for a small DB and
+ * negligible against a wide catalog. `main` is also SQLite's sole (implicit)
+ * schema, so excluding it just yields 0 there — still eager, still correct.
+ */
+const SYSTEM_SCHEMA_NAMES: ReadonlySet<string> = new Set([
+  "information_schema",
+  "pg_catalog",
+  "pg_toast",
+  "main",
+  "temp",
+  "system",
+]);
+
+export function countUserSchemas(
+  schemas: ReadonlyArray<{ name: string }>,
+): number {
+  let count = 0;
+  for (const s of schemas) {
+    if (!SYSTEM_SCHEMA_NAMES.has(s.name.toLowerCase())) count += 1;
+  }
+  return count;
+}
+
+/**
  * No-schema (MySQL/MariaDB) / MSSQL / Oracle hide the schema row, so they have
  * no lazy `expandSchema` entry point — they must eager-load regardless of the
  * threshold (`autoLoadAuxiliaryCatalog`). In practice these carry a single
  * implicit schema, so the eager cost is trivial anyway.
  */
 export function shouldEagerLoadSchemas(
-  schemaCount: number,
+  schemas: ReadonlyArray<{ name: string }>,
   autoLoadAuxiliaryCatalog: boolean,
 ): boolean {
-  return autoLoadAuxiliaryCatalog || schemaCount <= EAGER_SCHEMA_LOAD_THRESHOLD;
+  return (
+    autoLoadAuxiliaryCatalog ||
+    countUserSchemas(schemas) <= EAGER_SCHEMA_LOAD_THRESHOLD
+  );
 }
 
 function logSchemaError(label: string, err: unknown): void {
@@ -145,9 +179,7 @@ export function useSchemaCache(
         // #1219 — wide catalogs skip the eager per-schema fan-out; their
         // expanded schemas (seed + persisted set) are loaded lazily via
         // `expandSchema`, driven by the tree's reconciliation effect.
-        if (
-          !shouldEagerLoadSchemas(schemaList.length, autoLoadAuxiliaryCatalog)
-        )
+        if (!shouldEagerLoadSchemas(schemaList, autoLoadAuxiliaryCatalog))
           return;
         for (const s of schemaList) {
           if (!state.tables[connectionId]?.[db]?.[s.name]) {
