@@ -525,7 +525,7 @@ export function analyzeStatement(
   // table; SHOW / SET / COMMENT classify as info-tier metadata-like
   // reads/writes.
   if (
-    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|CALL|DO|UPDATE|DELETE|MERGE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT|EXEC|EXECUTE|USE|BACKUP|RESTORE|DBCC|DENY|GO)\b/.test(
+    /^(CREATE|DROP|TRUNCATE|ALTER|INSERT|REPLACE|CALL|DO|UPDATE|DELETE|MERGE|SELECT|WITH|GRANT|REVOKE|EXPLAIN|SHOW|SET|COPY|COMMENT|EXEC|EXECUTE|USE|BACKUP|RESTORE|DBCC|DENY|GO)\b/.test(
       upper,
     )
   ) {
@@ -539,6 +539,22 @@ export function analyzeStatement(
       // to the legacy regex path so the existing classification stays
       // in effect — graceful degrade.
     }
+  }
+
+  // Issue #1115 — MySQL/MariaDB `REPLACE [INTO] …` is a destructive upsert:
+  // a conflicting row is DELETEd and re-INSERTed, so existing column data is
+  // silently lost. `sql-parser-core` returns `unsupported-statement` for
+  // REPLACE (it never reaches the AST mapper above), so this regex branch is
+  // the sole classifier. The `^REPLACE\b` anchor covers every dialect variant
+  // (VALUES / SET / SELECT, with or without the optional INTO) while leaving
+  // `CREATE OR REPLACE …` and `SELECT REPLACE(col, …)` untouched — in both the
+  // leading keyword is not REPLACE.
+  if (/^REPLACE\b/.test(upper)) {
+    return {
+      kind: "dml-replace",
+      severity: "danger",
+      reasons: ["REPLACE — 기존 행 덮어쓰기 (충돌 행 DELETE 후 INSERT)"],
+    };
   }
 
   if (/^DELETE\s+FROM\b/.test(upper)) {
