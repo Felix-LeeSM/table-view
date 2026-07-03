@@ -34,7 +34,11 @@ pub(crate) fn validate_search_target(raw_target: &str) -> Result<(), AppError> {
     }
 
     let lower = target.to_ascii_lowercase();
-    if target.contains('/')
+    // `.` / `..` are RFC 3986 unreserved dot-segments: they survive percent-encoding
+    // and reqwest's Url::parse normalizes `/../_mapping` -> `/_mapping`, reaching the
+    // whole cluster. Reject them like any other raw path (#1107).
+    if matches!(target, "." | "..")
+        || target.contains('/')
         || target.contains('\\')
         || target.contains('?')
         || target.contains('#')
@@ -634,6 +638,8 @@ mod tests {
         for target in [
             "_cat",
             "_plugins",
+            ".",
+            "..",
             "logs-opensearch-2026.05.24/_bulk",
             "logs-opensearch-2026.05.24/_delete_by_query",
             "logs-opensearch-2026.05.24?pretty=true",

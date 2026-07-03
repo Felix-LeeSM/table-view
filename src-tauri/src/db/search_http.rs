@@ -816,7 +816,13 @@ fn parse_data_streams(payload: &Value, label: &str) -> Result<Vec<SearchDataStre
 }
 
 fn parse_mapping_response(index: &str, payload: &Value) -> Result<SearchIndexMapping, AppError> {
-    let entry = index_entry(index, payload).unwrap_or(payload);
+    // Defense-in-depth: never silently hand back the whole payload when the index
+    // key is absent — a malformed/broadened response must surface as an error (#1107).
+    let entry = index_entry(index, payload).ok_or_else(|| {
+        AppError::Connection(format!(
+            "Search mapping response did not include index '{index}'"
+        ))
+    })?;
     let mapping = entry.get("mappings").unwrap_or(entry);
     let mut fields = Vec::new();
     if let Some(properties) = mapping.get("properties").and_then(Value::as_object) {
@@ -830,7 +836,11 @@ fn parse_mapping_response(index: &str, payload: &Value) -> Result<SearchIndexMap
 }
 
 fn parse_settings_response(index: &str, payload: &Value) -> Result<SearchIndexSettings, AppError> {
-    let entry = index_entry(index, payload).unwrap_or(payload);
+    let entry = index_entry(index, payload).ok_or_else(|| {
+        AppError::Connection(format!(
+            "Search settings response did not include index '{index}'"
+        ))
+    })?;
     let settings = entry.get("settings").unwrap_or(entry);
     Ok(SearchIndexSettings {
         index: index.into(),
@@ -1164,9 +1174,14 @@ mod tests {
             "/%ED%95%9C%EA%B8%80/_settings"
         );
         // The allowlist still rejects the dangerous classes before any encoding.
+        // `.` / `..` are RFC 3986 unreserved, so they survive percent-encoding and
+        // reqwest's Url::parse normalizes `/../_mapping` -> `/_mapping` (whole-cluster
+        // dump); they must be rejected up front (#1107 review).
         for bad in [
             "*",
             "_all",
+            ".",
+            "..",
             "../_cluster/settings",
             "logs?pretty=true",
             "logs%2f_search",
@@ -1187,7 +1202,7 @@ mod tests {
         // validate_search_target allowlist the live search() path already enforces.
         // wildcard dump / `../_cluster` admin reach / `?` query-param injection.
         let conn = test_connection();
-        for target in ["*", "../_cluster/settings", "logs?pretty=true"] {
+        for target in ["*", ".", "..", "../_cluster/settings", "logs?pretty=true"] {
             assert!(
                 matches!(
                     conn.get_index_mapping(target).await,

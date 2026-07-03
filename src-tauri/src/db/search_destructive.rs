@@ -94,7 +94,10 @@ pub(crate) fn target_pattern_matches(pattern: &str, value: &str) -> bool {
 
 fn validate_delete_by_query_target(target: &str) -> Result<(), AppError> {
     let lower = target.to_ascii_lowercase();
-    if target.contains('/')
+    // Parity with validate_search_target: `.` / `..` normalize to a bare `/` path
+    // on the cluster, so reject them here too (#1107 review).
+    if matches!(target, "." | "..")
+        || target.contains('/')
         || target.contains('\\')
         || target.contains('?')
         || target.contains('#')
@@ -163,4 +166,24 @@ fn wildcard_match(pattern: &[u8], value: &[u8]) -> bool {
         p += 1;
     }
     p == pattern.len()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn delete_by_query_target_rejects_dot_segments() {
+        // #1107 parity with validate_search_target: `.` / `..` normalize to a bare
+        // cluster path and must be rejected before dispatch.
+        for target in [".", ".."] {
+            assert!(
+                matches!(
+                    validate_delete_by_query_target(target),
+                    Err(AppError::Validation(_))
+                ),
+                "delete-by-query should reject {target}"
+            );
+        }
+    }
 }
