@@ -69,6 +69,28 @@ describe("ShortcutCheatsheet", () => {
     expect(screen.getByText("Keyboard shortcuts")).toBeInTheDocument();
   });
 
+  // Reason: #1224 — RAW query 창에서 Cmd+/ 로 주석 토글하면 CodeMirror 가
+  // preventDefault 만 하고 stopPropagation 안 해 keydown 이 document 까지
+  // 버블 → 단축키 도움말도 같이 열리는 사용자 보고 (2026-07-03). Cmd+/ 분기도
+  // editable(contentEditable = CodeMirror `.cm-content`) 가드로 억제해야 함.
+  it("ignores Cmd+/ when focus is inside a contentEditable editor (#1224)", () => {
+    const editor = document.createElement("div");
+    editor.className = "cm-content";
+    // jsdom 은 contenteditable 속성으로 isContentEditable 을 계산하지 않으므로
+    // production code 가 읽는 프로퍼티를 직접 노출 (isEditableTarget 테스트와 동일 패턴).
+    Object.defineProperty(editor, "isContentEditable", {
+      configurable: true,
+      get: () => true,
+    });
+    document.body.appendChild(editor);
+
+    fireGlobalKey("/", { metaKey: true }, editor);
+
+    expect(screen.queryByText("Keyboard shortcuts")).toBeNull();
+
+    document.body.removeChild(editor);
+  });
+
   it("renders every group label when the search box is empty", () => {
     fireGlobalKey("?");
 

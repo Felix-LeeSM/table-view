@@ -13,6 +13,7 @@ import { EditorState } from "@codemirror/state";
 import { json as jsonLanguage } from "@codemirror/lang-json";
 import type { KeyBinding } from "@codemirror/view";
 import MongoQueryEditor from "./MongoQueryEditor";
+import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
 import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
@@ -238,6 +239,20 @@ describe("MongoQueryEditor (Sprint 139)", () => {
     }
     expect(localOnDryRun).toHaveBeenCalled();
     expect(localOnExecute).not.toHaveBeenCalled();
+  });
+
+  // Reason: #1225 — 전 쿼리 에디터 history() 미장착으로 Cmd+Z undo 불가
+  // 사용자 보고 (2026-07-03).
+  it("reverts an edit via undo (history extension installed) (#1225)", () => {
+    render(
+      <MongoQueryEditor
+        sql="{}"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+        mongoExtensions={[]}
+      />,
+    );
+    expectUndoRevertsEdit(getEditorView("MongoDB Query Editor"));
   });
 
   it("preserves cursor position across external query text sync", () => {

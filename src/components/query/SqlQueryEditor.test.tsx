@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useState } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { EditorView, keymap } from "@codemirror/view";
 import { ensureSyntaxTree, language } from "@codemirror/language";
+import { undo } from "@codemirror/commands";
 import { MySQL, PostgreSQL, SQLite } from "@codemirror/lang-sql";
 import type { KeyBinding } from "@codemirror/view";
 import SqlQueryEditor from "./SqlQueryEditor";
+import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
 
 /**
  * Sprint 139 — SqlQueryEditor unit tests.
@@ -247,6 +250,57 @@ describe("SqlQueryEditor (Sprint 139)", () => {
     // Mod-Enter regression guard — Cmd-Shift-Enter must NOT also fire
     // the Run path.
     expect(localOnExecute).not.toHaveBeenCalled();
+  });
+
+  // Reason: #1225 — RAW query 창에서 Cmd+V 붙여넣기 후 Cmd+Z undo 불가 사용자
+  // 보고 (2026-07-03). 근본 원인은 history() extension 미장착 (paste 특정 아님).
+  it("reverts an edit via undo (history extension installed) (#1225)", () => {
+    render(
+      <SqlQueryEditor
+        sql="SELECT 1"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+    expectUndoRevertsEdit(getEditorView());
+  });
+
+  // Reason: #1225 AC — undo 가 editorDocumentSync(controlled prop mirror)와
+  // 무한 루프/충돌 없이 동작해야 한다. undo 가 doc 을 되돌리면 onChange 로
+  // 부모 sql 이 갱신되고 sync 효과가 다시 dispatch 할 수 있는데,
+  // syncEditorDocument 의 equality 가드가 재-dispatch 를 막아 loop 이 없음을
+  // 고정 (2026-07-03).
+  it("undo reverts under controlled sql without a sync-dispatch loop (#1225)", () => {
+    const changes: string[] = [];
+    function Controlled() {
+      const [sql, setSql] = useState("SELECT 1");
+      return (
+        <SqlQueryEditor
+          sql={sql}
+          onSqlChange={(next) => {
+            changes.push(next);
+            setSql(next);
+          }}
+          onExecute={vi.fn()}
+        />
+      );
+    }
+    render(<Controlled />);
+    const view = getEditorView();
+
+    act(() => {
+      view.dispatch({
+        changes: { from: view.state.doc.length, insert: " AS x" },
+      });
+    });
+    expect(getEditorView().state.doc.toString()).toBe("SELECT 1 AS x");
+
+    act(() => {
+      undo(getEditorView());
+    });
+    expect(getEditorView().state.doc.toString()).toBe("SELECT 1");
+    // No runaway sync loop — exactly one onChange per real doc mutation.
+    expect(changes).toEqual(["SELECT 1 AS x", "SELECT 1"]);
   });
 
   // External sql prop syncs into editor.
