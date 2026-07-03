@@ -17,6 +17,7 @@ import {
   formatSearchUiError,
   type SearchUiError,
 } from "@lib/search/searchUiError";
+import { DriverErrorHint } from "@components/errors/DriverErrorHint";
 import { getDeleteByQueryPreviewTargetError } from "@lib/search/searchTargetPolicy";
 import type { SearchDestructiveOperationPlan } from "@/types/search";
 
@@ -266,6 +267,7 @@ function PlanFeedback({ state }: { state: PlanState }) {
         className="space-y-1 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
       >
         <p className="font-medium">{state.error.label}</p>
+        <DriverErrorHint hint={state.error.hint ?? null} showTitle={false} />
         <p>{state.error.detail}</p>
       </div>
     );

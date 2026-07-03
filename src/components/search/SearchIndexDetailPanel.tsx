@@ -15,6 +15,7 @@ import {
   formatSearchUiError,
   type SearchUiError,
 } from "@lib/search/searchUiError";
+import { DriverErrorHint } from "@components/errors/DriverErrorHint";
 import {
   getSearchIndexFieldStats,
   getSearchIndexMapping,
@@ -672,6 +673,11 @@ function ErrorBlock({ message }: { message: SearchUiError }) {
   return (
     <div role="alert" className="border-b border-border p-3 text-destructive">
       <div className="font-medium">{message.label}</div>
+      <DriverErrorHint
+        hint={message.hint ?? null}
+        showTitle={false}
+        className="mt-1"
+      />
       <p className="mt-1 whitespace-pre-wrap text-xs">{message.detail}</p>
     </div>
   );
