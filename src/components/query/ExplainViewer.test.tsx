@@ -53,7 +53,7 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
     render(
       <ExplainViewer
         connectionId="conn-pg"
-        paradigm="table"
+        dbType="postgresql"
         rdbSql="SELECT 1"
         expectedDatabase="app"
       />,
@@ -76,12 +76,31 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
     );
   });
 
+  // #1053 regression — a non-PG rdb connection must show its own display
+  // name in the header, never masquerade as "PG". The header interpolates
+  // the dbType profile label (`DATABASE_TYPE_LABELS`), not a hardcoded
+  // 2-engine string.
+  it("labels a MySQL connection as MySQL, not PG", async () => {
+    explainRdbMock.mockResolvedValueOnce({ ok: 1, plan: "custom" });
+    render(
+      <ExplainViewer
+        connectionId="conn-mysql"
+        dbType="mysql"
+        rdbSql="SELECT 1"
+      />,
+    );
+    await screen.findByTestId("explain-plan");
+    const header = screen.getByTestId("explain-viewer").querySelector("header");
+    expect(header).toHaveTextContent("Explain (MySQL)");
+    expect(header).not.toHaveTextContent(/\bPG\b/);
+  });
+
   it("dispatches Mongo explain with the spec on paradigm=document", async () => {
     explainMongoMock.mockResolvedValueOnce({ ok: 1, winningPlan: {} });
     render(
       <ExplainViewer
         connectionId="conn-m"
-        paradigm="document"
+        dbType="mongodb"
         mongoSpec={{
           database: "mydb",
           collection: "mycoll",
@@ -108,7 +127,7 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
     render(
       <ExplainViewer
         connectionId="conn-pg"
-        paradigm="table"
+        dbType="postgresql"
         rdbSql="SELECT 1"
       />,
     );
@@ -125,7 +144,7 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
     render(
       <ExplainViewer
         connectionId="conn-pg"
-        paradigm="table"
+        dbType="postgresql"
         rdbSql="SELECT FROM"
         onPlanSettled={onPlanSettled}
       />,
@@ -151,7 +170,7 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
     render(
       <ExplainViewer
         connectionId="conn-pg"
-        paradigm="table"
+        dbType="postgresql"
         rdbSql="SELECT 1"
         onPlanSettled={onPlanSettled}
       />,
@@ -173,7 +192,7 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
     render(
       <ExplainViewer
         connectionId="conn-pg"
-        paradigm="table"
+        dbType="postgresql"
         rdbSql="SELECT 1"
       />,
     );

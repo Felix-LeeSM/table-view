@@ -21,10 +21,12 @@ import {
   type ExplainMongoFindArgs,
 } from "@/lib/api/explain";
 import { safeStringifyCell } from "@/lib/jsonCell";
+import { paradigmOf, type DatabaseType } from "@/types/connection";
 
 export interface ExplainViewerProps {
   connectionId: string;
-  paradigm: "table" | "document";
+  /** Source engine — the paradigm branch and display label derive from it. */
+  dbType: DatabaseType;
   /** RDB only — the SQL to explain. */
   rdbSql?: string;
   /** RDB only — workspace database expected by the caller. */
@@ -41,13 +43,14 @@ export interface ExplainViewerProps {
 
 export function ExplainViewer({
   connectionId,
-  paradigm,
+  dbType,
   rdbSql,
   expectedDatabase,
   mongoSpec,
   onPlanSettled,
 }: ExplainViewerProps) {
   const { t } = useTranslation("query");
+  const paradigm = paradigmOf(dbType);
   const [plan, setPlan] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,8 +101,12 @@ export function ExplainViewer({
     void refresh();
   }, [refresh]);
 
+  // The tree view only understands PostgreSQL's `EXPLAIN (FORMAT JSON)`
+  // shape. Other rdb engines (mysql/mssql/oracle) fall through to the raw
+  // JSON view because `extractPostgresExplainPlan` returns null for any
+  // non-PG payload — no engine is claimed that isn't actually parsed.
   const postgresPlan =
-    paradigm === "table" ? extractPostgresExplainPlan(plan) : null;
+    paradigm === "rdb" ? extractPostgresExplainPlan(plan) : null;
 
   return (
     <section
@@ -111,7 +118,7 @@ export function ExplainViewer({
       <header className="flex items-center justify-between text-xs font-medium text-muted-foreground">
         <span>
           {t("explain.header", {
-            paradigm: paradigm === "table" ? "PG" : "Mongo",
+            paradigm: paradigm === "rdb" ? "PG" : "Mongo",
           })}
         </span>
         <Button
