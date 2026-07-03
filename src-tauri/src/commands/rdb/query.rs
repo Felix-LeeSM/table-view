@@ -110,16 +110,18 @@ async fn execute_query_inner(
         let adapter = active.as_rdb()?;
         // Sprint 266 — opt-in db-mismatch guard. When the caller passes
         // `expected_database` we sample the adapter's current db on the
-        // resolved handle and refuse the execute if the backend pool has
-        // been swapped out from under us (e.g. concurrent
-        // `switch_active_db` from DbSwitcher). PG's sub-pool model
-        // already routes by db, but MySQL/SQLite carry stateful `USE` /
-        // `ATTACH` semantics — this guard is the cheapest correctness
-        // floor without rewriting every RDB command signature. Issue #1087
-        // — probe + dispatch now share the same `Arc` handle rather than the
-        // global lock; they are serialised against a concurrent same-
-        // connection `switch_active_db` by the adapter's own pool lock, not
-        // by `active_connections`.
+        // resolved handle and refuse the execute if it does not match (e.g. a
+        // concurrent `switch_active_db` from DbSwitcher moved the backend
+        // pool). PG's sub-pool model already routes by db, but MySQL/SQLite
+        // carry stateful `USE` / `ATTACH` semantics — this is a best-effort
+        // correctness floor, not a hard guarantee. Issue #1087 — probe and
+        // dispatch are two separate awaits on the shared `Arc` handle and are
+        // NO LONGER serialised against a concurrent same-connection
+        // `switch_active_db` by the global lock, so a switch landing between
+        // the probe and the dispatch is a narrow TOCTOU the guard cannot
+        // catch (recorded in docs/product/known-limitations.md). Restoring
+        // true atomicity would need an adapter-level checked-execute API,
+        // out of #1087 scope.
         if let Some(expected) = expected_database {
             let actual = adapter.current_database().await?.unwrap_or_default();
             if actual != expected {
