@@ -45,6 +45,11 @@ FOUC critical 이 아니므로 SQLite truth 를 우선한다.
 - Query tab 의 SQL text 는 사용자 작업물이므로 persist 할 수 있다.
 - `dirtyTabIds` 는 `dataGridEditStore.pendingEdits` 에서 파생되는 window-local signal
   이다. Boot persisted marker 로 남기지 않는다.
+- Window-local pending edit 를 폐기하는 모든 close 경로 (tab X, Cmd+W, native window
+  X/menu, disconnect) 는 하나의 discard 확인 (`ConfirmDialog`) 을 거친다 (#1101).
+  Native window close 는 backend 가 destroy 하지 않고 `on_window_event` 에서
+  `prevent_close` 후 `window:close-requested` 를 그 창에 `emit_to` → JS 가 dirty 검사
+  + 확인 → `workspace_close` 로만 실제 destroy. 새 close 진입점도 이 게이트를 탄다.
 - `closedTabHistory` 는 cap 을 두고 query result payload 를 dehydrate 한다.
 - Query history 처럼 검색/filter/retention 이 필요한 durable log 는 SQLite 로 둔다.
 

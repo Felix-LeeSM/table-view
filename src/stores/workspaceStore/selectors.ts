@@ -99,6 +99,21 @@ export function useDirtyTabIds(): readonly string[] {
   return ws?.dirtyTabIds ?? EMPTY_STRINGS;
 }
 
+/**
+ * #1101 — does `connId` have any dirty (unsaved) tab across ALL of its
+ * `(connId, db)` sub-workspaces? Close paths that tear down a whole
+ * connection/window (native window close, disconnect) need connection-wide
+ * dirtiness, not just the active db's `dirtyTabIds`.
+ */
+export function useConnectionHasDirtyTabs(connId: string | null): boolean {
+  return useWorkspaceStore((state) => {
+    if (!connId) return false;
+    const dbs = state.workspaces[connId];
+    if (!dbs) return false;
+    return Object.values(dbs).some((ws) => ws.dirtyTabIds.length > 0);
+  });
+}
+
 export function useClosedTabHistory(): readonly Tab[] {
   const ws = useCurrentWorkspace();
   return ws?.closedTabHistory ?? EMPTY_TABS;
