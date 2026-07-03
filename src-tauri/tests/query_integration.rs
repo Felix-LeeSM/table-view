@@ -991,6 +991,103 @@ async fn test_data_modifying_with_executes_once() {
     adapter.disconnect_pool().await.ok();
 }
 
+/// #1175 — per-cell 경로(data-modifying WITH)의 timestamp/timestamptz
+/// 직렬화가 wrap 경로(plain SELECT → `row_to_json`)와 문자 단위로 동일해야
+/// 한다. PR #1172 이전엔 per-cell TIMESTAMP 가 공백 구분자(`... 10:30:00`)를
+/// 써서 같은 컬럼이 실행 경로에 따라 다른 형식으로 나왔다. wrap 출력 자체를
+/// 기준값으로 잡고 per-cell 출력이 같은지 비교한다.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_per_cell_timestamp_matches_wrap_path_1175() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    // Fractional (.5) + non-UTC input for timestamptz exercises both the
+    // `T` separator and the trailing-zero / offset handling.
+    let ts_lit = "2024-01-15 10:30:00.5";
+    let tstz_lit = "2024-01-15 10:30:00.5+05:30";
+
+    // wrap path: plain SELECT routes through `row_to_json(q)::text`.
+    let wrap = adapter
+        .execute_query(
+            &format!("SELECT '{ts_lit}'::timestamp AS ts, '{tstz_lit}'::timestamptz AS tstz"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("wrap SELECT should succeed");
+    let wrap_ts = wrap.rows[0][0]
+        .as_str()
+        .expect("wrap ts is text")
+        .to_string();
+    let wrap_tstz = wrap.rows[0][1]
+        .as_str()
+        .expect("wrap tstz is text")
+        .to_string();
+
+    // per-cell path: data-modifying WITH runs un-wrapped via pg_cell_to_json.
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_ts_fmt_{ts}");
+    adapter
+        .execute_query(
+            &format!("CREATE TABLE {table} (ts TIMESTAMP, tstz TIMESTAMPTZ)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("CREATE TABLE should succeed");
+
+    let per_cell = adapter
+        .execute_query(
+            &format!(
+                "WITH ins AS (INSERT INTO {table}(ts, tstz) \
+                 VALUES ('{ts_lit}', '{tstz_lit}') RETURNING ts, tstz) \
+                 SELECT ts, tstz FROM ins"
+            ),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("per-cell data-modifying WITH should succeed");
+    let cell_ts = per_cell.rows[0][0]
+        .as_str()
+        .expect("per-cell ts is text")
+        .to_string();
+    let cell_tstz = per_cell.rows[0][1]
+        .as_str()
+        .expect("per-cell tstz is text")
+        .to_string();
+
+    assert_eq!(
+        cell_ts, wrap_ts,
+        "per-cell TIMESTAMP must match wrap path exactly"
+    );
+    assert_eq!(
+        cell_tstz, wrap_tstz,
+        "per-cell TIMESTAMPTZ must match wrap path exactly (incl. offset)"
+    );
+    // Pin the ISO-8601 `T` separator so a future regression that reintroduces
+    // the space separator fails even if both paths drift together.
+    assert!(
+        cell_ts.contains('T') && !cell_ts.contains(' '),
+        "timestamp must use the ISO-8601 T separator, got {cell_ts}"
+    );
+
+    adapter
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
 // ── execute_query_batch 통합 시나리오 ──────────────────────────────────────
 // 작성: 2026-05-08, Sprint 237 P5 후속 커버리지 보강.
 // 단위 테스트는 empty / validation 경로만 가지고 있고 실제 BEGIN/COMMIT/

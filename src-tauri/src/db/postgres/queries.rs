@@ -208,6 +208,50 @@ fn hex_encode(bytes: &[u8]) -> String {
     out
 }
 
+/// #1175 — render a PG `timestamp`/`timestamptz` value with the SAME lexical
+/// shape the wrap path (`row_to_json(q)::text`) produces, so the same column
+/// serializes identically regardless of execution path. PG's JSON output is
+/// ISO-8601: a `T` date/time separator and fractional seconds with trailing
+/// zeros trimmed (`.5`, not `.500`); `timestamptz` additionally carries the
+/// session UTC offset (`+00:00`). The previous per-cell code used a space
+/// separator for `timestamp` and `to_rfc3339()` for `timestamptz` — the former
+/// diverged on the separator, and both diverged on fractional padding, because
+/// chrono's `%.f` / `to_rfc3339()` pad to 3/6/9 digits instead of trimming.
+///
+/// `offset` is the caller-supplied trailing offset token (`""` for a naive
+/// `timestamp`, `"+00:00"` for a UTC `timestamptz`).
+fn pg_datetime_to_iso(
+    date_time: impl std::fmt::Display,
+    subsec_nanos: u32,
+    offset: &str,
+) -> String {
+    // Trim trailing zeros to match PG's text/JSON rendering (`.500` -> `.5`).
+    let frac = if subsec_nanos == 0 {
+        String::new()
+    } else {
+        format!(".{}", format!("{subsec_nanos:09}").trim_end_matches('0'))
+    };
+    format!("{date_time}{frac}{offset}")
+}
+
+fn pg_timestamp_to_iso(v: sqlx::types::chrono::NaiveDateTime) -> String {
+    // `and_utc().timestamp_subsec_nanos()` are inherent methods — no `Timelike`
+    // trait import needed (chrono is only pulled in transitively via sqlx).
+    pg_datetime_to_iso(
+        v.format("%Y-%m-%dT%H:%M:%S"),
+        v.and_utc().timestamp_subsec_nanos(),
+        "",
+    )
+}
+
+fn pg_timestamptz_to_iso(v: sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>) -> String {
+    pg_datetime_to_iso(
+        v.format("%Y-%m-%dT%H:%M:%S"),
+        v.timestamp_subsec_nanos(),
+        "+00:00",
+    )
+}
+
 /// #1086 — decode the `idx`-th cell of a PG row into `serde_json::Value`
 /// WITHOUT the `row_to_json` wrapper. Used only for the un-wrappable Select
 /// paths (`SHOW` / `EXPLAIN` / data-modifying `WITH`); plain `SELECT` and
@@ -255,14 +299,12 @@ fn pg_cell_to_json(row: &sqlx::postgres::PgRow, idx: usize) -> serde_json::Value
         ))),
         "TIMESTAMP" => try_decode!(
             sqlx::types::chrono::NaiveDateTime,
-            |v: sqlx::types::chrono::NaiveDateTime| Value::String(
-                v.format("%Y-%m-%d %H:%M:%S%.f").to_string()
-            )
+            |v: sqlx::types::chrono::NaiveDateTime| Value::String(pg_timestamp_to_iso(v))
         ),
         "TIMESTAMPTZ" => try_decode!(
             sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>,
             |v: sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>| Value::String(
-                v.to_rfc3339()
+                pg_timestamptz_to_iso(v)
             )
         ),
         "DATE" => try_decode!(
@@ -1672,5 +1714,55 @@ mod tests {
     fn hex_encode_lower_two_chars_per_byte() {
         assert_eq!(hex_encode(&[0x00, 0xff, 0xab]), "00ffab");
         assert_eq!(hex_encode(&[]), "");
+    }
+
+    // ── #1175 — per-cell timestamp format matches the wrap path ───────────
+    // 작성: 2026-07-03. per-cell 경로(SHOW/EXPLAIN/data-modifying WITH)의
+    // timestamp/timestamptz 직렬화가 wrap 경로(`row_to_json(q)::text`)와
+    // 같은 ISO-8601 `T` 구분자 형식이어야 한다. PG JSON 출력 규칙:
+    //  - `timestamp`  → `2024-01-15T10:30:00`, fractional 은 trailing-zero
+    //    trim (`.5`, `.123456`), offset 없음.
+    //  - `timestamptz`→ 위 + session UTC offset `+00:00`.
+    // 실측 동치성은 query_integration.rs 의 wrap↔per-cell 비교 테스트가
+    // 담당하고, 여기서는 형식 문자열을 결정론적으로 고정한다.
+
+    use sqlx::types::chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+
+    fn ndt(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32, nano: u32) -> NaiveDateTime {
+        NaiveDate::from_ymd_opt(y, mo, d)
+            .unwrap()
+            .and_hms_nano_opt(h, mi, s, nano)
+            .unwrap()
+    }
+
+    #[test]
+    fn pg_timestamp_iso_uses_t_separator_no_offset() {
+        // Whole second: no fractional part, `T` separator, no offset.
+        assert_eq!(
+            pg_timestamp_to_iso(ndt(2024, 1, 15, 10, 30, 0, 0)),
+            "2024-01-15T10:30:00"
+        );
+        // Fractional trailing zeros trimmed (matches PG JSON output).
+        assert_eq!(
+            pg_timestamp_to_iso(ndt(2024, 1, 15, 10, 30, 0, 500_000_000)),
+            "2024-01-15T10:30:00.5"
+        );
+        assert_eq!(
+            pg_timestamp_to_iso(ndt(2024, 1, 15, 10, 30, 0, 123_456_000)),
+            "2024-01-15T10:30:00.123456"
+        );
+    }
+
+    #[test]
+    fn pg_timestamptz_iso_uses_t_separator_and_utc_offset() {
+        let dt: DateTime<Utc> =
+            DateTime::from_naive_utc_and_offset(ndt(2024, 1, 15, 10, 30, 0, 0), Utc);
+        assert_eq!(pg_timestamptz_to_iso(dt), "2024-01-15T10:30:00+00:00");
+
+        // Fractional trailing zeros trimmed (regression vs `to_rfc3339()`,
+        // which would emit `.500+00:00`).
+        let dt: DateTime<Utc> =
+            DateTime::from_naive_utc_and_offset(ndt(2024, 1, 15, 10, 30, 0, 500_000_000), Utc);
+        assert_eq!(pg_timestamptz_to_iso(dt), "2024-01-15T10:30:00.5+00:00");
     }
 }
