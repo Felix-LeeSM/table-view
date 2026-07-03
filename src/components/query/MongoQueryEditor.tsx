@@ -9,7 +9,7 @@ import {
   placeholder,
 } from "@codemirror/view";
 import { json as jsonLanguage } from "@codemirror/lang-json";
-import { defaultKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import {
   syntaxHighlighting,
   defaultHighlightStyle,
@@ -108,6 +108,8 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
           // mongosh expressions (`db.<collection>.<method>(...)`) so they
           // are not staring at a blank pane wondering what syntax to type.
           placeholder("db.collection.find({})"),
+          // #1225 — undo/redo history so Cmd+Z reverts edits (incl. paste).
+          history(),
           langCompartment.current.of(buildJsonLang(mongoExtensionsRef.current)),
           syntaxHighlighting(viewTableHighlightStyle),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -139,6 +141,8 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
               },
             },
             ...defaultKeymap,
+            // #1225 — Mod-z / Mod-y undo/redo (defaultKeymap omits these).
+            ...historyKeymap,
           ]),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {

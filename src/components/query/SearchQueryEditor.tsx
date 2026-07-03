@@ -9,7 +9,7 @@ import {
   placeholder,
 } from "@codemirror/view";
 import { json as jsonLanguage } from "@codemirror/lang-json";
-import { defaultKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import {
   bracketMatching,
   defaultHighlightStyle,
@@ -62,6 +62,8 @@ const SearchQueryEditor = forwardRef<EditorView | null, SearchQueryEditorProps>(
           highlightActiveLine(),
           indentOnInput(),
           bracketMatching(),
+          // #1225 — undo/redo history so Cmd+Z reverts edits (incl. paste).
+          history(),
           placeholder(
             '{ "query": { "match_all": {} }, "size": 10, "track_total_hits": true }',
           ),
@@ -84,6 +86,8 @@ const SearchQueryEditor = forwardRef<EditorView | null, SearchQueryEditorProps>(
               run: (view) => acceptCompletion(view),
             },
             ...defaultKeymap,
+            // #1225 — Mod-z / Mod-y undo/redo (defaultKeymap omits these).
+            ...historyKeymap,
           ]),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;

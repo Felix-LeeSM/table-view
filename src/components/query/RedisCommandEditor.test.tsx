@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, act } from "@testing-library/react";
 import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
 import RedisCommandEditor from "./RedisCommandEditor";
+import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
 
 function getEditorView(): EditorView {
   const container = screen.getByLabelText("Redis Command Editor");
@@ -101,6 +102,19 @@ describe("RedisCommandEditor", () => {
     expect(getEditorView().state.selection.main.head).toBe(
       cursorAfterDeletedChar - 1,
     );
+  });
+
+  // Reason: #1225 — 전 쿼리 에디터 history() 미장착으로 Cmd+Z undo 불가
+  // 사용자 보고 (2026-07-03).
+  it("reverts an edit via undo (history extension installed) (#1225)", () => {
+    render(
+      <RedisCommandEditor
+        sql="GET k"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+    expectUndoRevertsEdit(getEditorView());
   });
 
   it("binds Mod-Enter to execute and Cmd-Shift-Enter to unsupported dry-run", () => {

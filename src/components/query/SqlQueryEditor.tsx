@@ -13,7 +13,7 @@ import {
   type SQLDialect,
   type SQLNamespace,
 } from "@codemirror/lang-sql";
-import { defaultKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import {
   syntaxHighlighting,
   defaultHighlightStyle,
@@ -143,6 +143,8 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
           highlightActiveLine(),
           indentOnInput(),
           bracketMatching(),
+          // #1225 — undo/redo history so Cmd+Z reverts edits (incl. paste).
+          history(),
           langCompartment.current.of(
             buildSqlLang(
               dialectRef.current,
@@ -185,6 +187,10 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
               },
             },
             ...defaultKeymap,
+            // #1225 — Mod-z / Mod-y undo/redo (defaultKeymap omits these).
+            // Keys are disjoint from the custom bindings above, so ordering
+            // after defaultKeymap is safe.
+            ...historyKeymap,
           ]),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
