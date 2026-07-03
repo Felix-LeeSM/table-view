@@ -36,9 +36,12 @@ use crate::error::AppError;
 
 /// Sprint 271 — shared mismatch probe. Issue #1087 — the caller now holds a
 /// resolved `Arc<ActiveAdapter>` handle (via `AppState::active_adapter`)
-/// rather than the `active_connections` lock, so the sample and the eventual
-/// trait invocation see the same adapter instance. Returns `Ok(())` when the
-/// guard is satisfied (or opted out via `None`), otherwise
+/// rather than the `active_connections` lock. The probe and the eventual
+/// trait invocation target the same adapter instance but are separate awaits:
+/// a concurrent same-connection `switch_active_db` landing between them is a
+/// narrow TOCTOU this best-effort guard cannot catch (recorded in
+/// docs/product/known-limitations.md). Returns `Ok(())` when the guard is
+/// satisfied (or opted out via `None`), otherwise
 /// `AppError::DbMismatch { expected, actual }` — byte-equivalent to the
 /// Sprint 266 reference probe at
 /// `src-tauri/src/commands/rdb/query.rs:83–92`.
