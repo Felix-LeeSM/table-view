@@ -301,6 +301,13 @@ describe("MainArea", () => {
     ).toBeInTheDocument();
   });
 
+  // #1134 — the primary work surface must be a <main> landmark so screen
+  // readers can jump straight to the content column.
+  it("exposes the primary work surface as a <main> landmark (a11y #1134)", () => {
+    render(<MainArea />);
+    expect(screen.getByRole("main")).toBeInTheDocument();
+  });
+
   // ------------------------------------------------------------------
   // Sprint 270 — first-paint skeleton (AC-270-02, post-hydrate parity)
   // ------------------------------------------------------------------

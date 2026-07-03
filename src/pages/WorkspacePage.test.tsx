@@ -240,4 +240,22 @@ describe("WorkspacePage", () => {
 
     expect(spy).toHaveBeenCalledTimes(1);
   });
+
+  // --- #1134: landmark + heading a11y (Sidebar/MainArea are mocked here, so
+  // the <nav> + <h1> asserted below come from WorkspacePage's own shell) ---
+
+  it("exposes the sidebar column as a <nav> landmark (a11y #1134)", () => {
+    render(<WorkspacePage />);
+    expect(screen.getByRole("navigation")).toBeInTheDocument();
+  });
+
+  it("renders a top-level <h1> heading for the workspace (a11y #1134)", () => {
+    render(<WorkspacePage />);
+    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+  });
+
+  it("moves focus to the workspace heading on mount (a11y #1134)", () => {
+    render(<WorkspacePage />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
+  });
 });

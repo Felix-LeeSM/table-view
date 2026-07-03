@@ -71,6 +71,13 @@ export default function HomePage() {
   // launcher picks up disconnects/state changes made in the workspace.
   useWindowFocusHydration();
 
+  // #1134 — move focus to the "Connections" landmark heading when the
+  // launcher window mounts so screen-reader users land on the page name.
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
@@ -204,12 +211,14 @@ export default function HomePage() {
           SidebarModeToggle ToggleGroup is intentionally absent here; Home is
           a single-mode screen. */}
       <div className="flex items-center justify-between border-b border-border py-1 pl-3 pr-1">
-        <span
+        <h1
+          ref={headingRef}
+          tabIndex={-1}
           data-testid="home-header"
-          className="block truncate text-xs font-semibold text-foreground"
+          className="block truncate text-xs font-semibold text-foreground focus:outline-none"
         >
           {t("connections")}
-        </span>
+        </h1>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"

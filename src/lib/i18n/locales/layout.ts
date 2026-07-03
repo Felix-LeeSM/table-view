@@ -8,6 +8,7 @@
 export const en = {
   mainArea: {
     mongoCollectionViewAria: "Mongo collection view",
+    mainLandmarkAria: "Workspace content",
     records: "Records",
     structure: "Structure",
     tableViewAria: "Table view",
@@ -56,6 +57,7 @@ export const en = {
 export const ko = {
   mainArea: {
     mongoCollectionViewAria: "Mongo 컬렉션 뷰",
+    mainLandmarkAria: "워크스페이스 콘텐츠",
     records: "레코드",
     structure: "구조",
     tableViewAria: "테이블 뷰",

@@ -8,6 +8,7 @@ export const en = {
   title: {
     launcher: "Table View",
     workspace: "Table View — Workspace",
+    workspaceNamed: "{{name}} — Table View",
   },
 } as const;
 
@@ -15,5 +16,6 @@ export const ko = {
   title: {
     launcher: "Table View",
     workspace: "Table View — 워크스페이스",
+    workspaceNamed: "{{name}} — Table View",
   },
 } as const;

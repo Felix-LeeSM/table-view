@@ -21,6 +21,8 @@ export const en = {
   backToConnections: "Back to connections",
   workspaceThemeAria: "Workspace theme: {{name}} ({{mode}})",
   changeTheme: "Change theme",
+  workspaceSidebarAria: "Workspace sidebar",
+  workspaceHeading: "Workspace",
 } as const;
 
 export const ko = {
@@ -39,4 +41,6 @@ export const ko = {
   backToConnections: "연결 목록으로 돌아가기",
   workspaceThemeAria: "워크스페이스 테마: {{name}} ({{mode}})",
   changeTheme: "테마 변경",
+  workspaceSidebarAria: "워크스페이스 사이드바",
+  workspaceHeading: "워크스페이스",
 } as const;

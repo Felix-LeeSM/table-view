@@ -100,9 +100,28 @@ vi.mock("@features/workspace", () => ({
 import { getCurrentWindowLabel } from "@lib/window-label";
 import { listen } from "@tauri-apps/api/event";
 import AppRouter from "@/AppRouter";
+import { useConnectionStore } from "@stores/connectionStore";
+import type { ConnectionConfig } from "@/types/connection";
 
 const mockedGetLabel = getCurrentWindowLabel as Mock;
 const mockedListen = listen as Mock;
+
+function makeConnection(id: string, name: string): ConnectionConfig {
+  return {
+    id,
+    name,
+    dbType: "postgresql",
+    host: "localhost",
+    port: 5432,
+    user: "postgres",
+    hasPassword: false,
+    database: "test",
+    groupId: null,
+    color: null,
+    environment: null,
+    paradigm: "rdb",
+  };
+}
 
 describe("AC-150-*: window-label-driven boot routing", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
@@ -115,6 +134,7 @@ describe("AC-150-*: window-label-driven boot routing", () => {
   afterEach(() => {
     cleanup();
     warnSpy.mockRestore();
+    useConnectionStore.setState({ connections: [] });
   });
 
   it("AC-150-04a: label='launcher' mounts the LauncherPage shell", () => {
@@ -159,6 +179,19 @@ describe("AC-150-*: window-label-driven boot routing", () => {
     render(<AppRouter />);
 
     expect(document.title).toBe("Table View — Workspace");
+  });
+
+  // #1134 — the workspace title reflects the connection name so multiple
+  // per-connection windows are distinguishable in dock/alt-tab.
+  it("AC-1134: workspace title reflects the connection name when the store has it", () => {
+    mockedGetLabel.mockReturnValue("workspace-conn-1");
+    useConnectionStore.setState({
+      connections: [makeConnection("conn-1", "Prod DB")],
+    });
+
+    render(<AppRouter />);
+
+    expect(document.title).toContain("Prod DB");
   });
 
   it("AC-150-04c: unknown label falls back to launcher AND logs a warning", () => {

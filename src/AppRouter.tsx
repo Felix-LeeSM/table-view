@@ -78,6 +78,20 @@ export default function AppRouter() {
   const isWorkspaceLabel =
     typeof label === "string" && parseWorkspaceLabel(label) !== null;
 
+  // #1134 — reflect the workspace window's connection name in the title so
+  // per-connection windows are distinguishable in the dock / alt-tab. Falls
+  // back to the generic workspace title until the connection store hydrates
+  // (or when the name is unavailable). `document.title` is owned solely here
+  // (WorkspacePage/LauncherPage don't set it) to avoid a parent/child effect
+  // race.
+  const workspaceConnId =
+    typeof label === "string" ? parseWorkspaceLabel(label) : null;
+  const connectionName = useConnectionStore((s) =>
+    workspaceConnId
+      ? (s.connections.find((c) => c.id === workspaceConnId)?.name ?? null)
+      : null,
+  );
+
   // Keep `document.title` in sync with the Tauri window decoration
   // title. webdriver's `getTitle()` reports `document.title` (the
   // webview's HTML `<title>`), NOT the OS window title from
@@ -86,10 +100,14 @@ export default function AppRouter() {
   // `switchToWorkspaceWindow` couldn't distinguish them. Aligning the two
   // titles also fixes the dock/taskbar/alt-tab labels in prod.
   useEffect(() => {
-    document.title = isWorkspaceLabel
-      ? t("title.workspace")
-      : t("title.launcher");
-  }, [isWorkspaceLabel, t]);
+    if (!isWorkspaceLabel) {
+      document.title = t("title.launcher");
+    } else {
+      document.title = connectionName
+        ? t("title.workspaceNamed", { name: connectionName })
+        : t("title.workspace");
+    }
+  }, [isWorkspaceLabel, connectionName, t]);
 
   // Resolve the route up front so the JSX has a single, exhaustive branch.
   // We intentionally accept `string | null` — `getCurrentWindowLabel()`
