@@ -11,17 +11,19 @@ import {
   listServerActivity,
   type ServerActivityRow,
 } from "@/lib/api/serverActivity";
+import { DATABASE_TYPE_LABELS, paradigmOf, type DatabaseType } from "../model";
 
 export interface ServerActivityPanelProps {
   connectionId: string;
-  paradigm: "table" | "document";
+  dbType: DatabaseType;
 }
 
 export function ServerActivityPanel({
   connectionId,
-  paradigm,
+  dbType,
 }: ServerActivityPanelProps) {
   const { t } = useTranslation("featuresConnection");
+  const paradigm = paradigmOf(dbType);
   const [rows, setRows] = useState<ServerActivityRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,10 +71,7 @@ export function ServerActivityPanel({
       <header className="flex items-center justify-between text-xs font-medium text-muted-foreground">
         <span>
           {t("serverActivity.header", {
-            paradigm:
-              paradigm === "table"
-                ? t("serverActivity.paradigmTable")
-                : t("serverActivity.paradigmDocument"),
+            paradigm: DATABASE_TYPE_LABELS[dbType],
           })}
         </span>
         <Button

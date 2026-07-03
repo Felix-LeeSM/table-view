@@ -200,8 +200,7 @@ export const en = {
   // ── SlowQueryPanel ────────────────────────────────────────────────────────
   slowQuery: {
     panelAria: "Slow queries",
-    headerPg: "Slow queries — pg_stat_statements",
-    headerMongo: "Slow queries — system.profile",
+    header: "Slow queries — {{db}}",
     refresh: "Refresh",
     emptyMongo:
       "system.profile is empty. Enable Mongo profiling with db.setProfilingLevel(level, slowms).",
@@ -411,8 +410,7 @@ export const ko = {
 
   slowQuery: {
     panelAria: "느린 쿼리",
-    headerPg: "느린 쿼리 — pg_stat_statements",
-    headerMongo: "느린 쿼리 — system.profile",
+    header: "느린 쿼리 — {{db}}",
     refresh: "새로고침",
     emptyMongo:
       "system.profile이 비어 있습니다. db.setProfilingLevel(level, slowms)으로 Mongo 프로파일링을 활성화하세요.",

@@ -37,7 +37,7 @@ describe("DbLifecycleDialog (Sprint 335 — Slice M live wire)", () => {
         open={false}
         mode="create"
         connectionId="conn-pg"
-        paradigm="table"
+        dbType="postgresql"
         onClose={vi.fn()}
       />,
     );
@@ -54,7 +54,7 @@ describe("DbLifecycleDialog (Sprint 335 — Slice M live wire)", () => {
         open
         mode="create"
         connectionId="conn-pg"
-        paradigm="table"
+        dbType="postgresql"
         onClose={onClose}
       />,
     );
@@ -84,7 +84,7 @@ describe("DbLifecycleDialog (Sprint 335 — Slice M live wire)", () => {
         mode="drop"
         connectionId="conn-pg"
         database="analytics"
-        paradigm="table"
+        dbType="postgresql"
         onClose={onClose}
       />,
     );
@@ -106,7 +106,7 @@ describe("DbLifecycleDialog (Sprint 335 — Slice M live wire)", () => {
         open
         mode="create"
         connectionId="conn-mongo"
-        paradigm="document"
+        dbType="mongodb"
         onClose={onClose}
       />,
     );
@@ -133,7 +133,7 @@ describe("DbLifecycleDialog (Sprint 335 — Slice M live wire)", () => {
         mode="drop"
         connectionId="conn-mongo"
         database="staging"
-        paradigm="document"
+        dbType="mongodb"
         onClose={onClose}
       />,
     );
@@ -159,7 +159,7 @@ describe("DbLifecycleDialog (Sprint 335 — Slice M live wire)", () => {
         mode="drop"
         connectionId="conn-pg"
         database="analytics"
-        paradigm="table"
+        dbType="postgresql"
         onClose={vi.fn()}
       />,
     );
@@ -175,7 +175,7 @@ describe("DbLifecycleDialog (Sprint 335 — Slice M live wire)", () => {
         open
         mode="create"
         connectionId="conn-pg"
-        paradigm="table"
+        dbType="postgresql"
         onClose={vi.fn()}
       />,
     );

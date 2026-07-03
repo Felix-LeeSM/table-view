@@ -21,7 +21,11 @@ import {
   type ExplainMongoFindArgs,
 } from "@/lib/api/explain";
 import { safeStringifyCell } from "@/lib/jsonCell";
-import { paradigmOf, type DatabaseType } from "@/types/connection";
+import {
+  DATABASE_TYPE_LABELS,
+  paradigmOf,
+  type DatabaseType,
+} from "@/types/connection";
 
 export interface ExplainViewerProps {
   connectionId: string;
@@ -117,9 +121,7 @@ export function ExplainViewer({
     >
       <header className="flex items-center justify-between text-xs font-medium text-muted-foreground">
         <span>
-          {t("explain.header", {
-            paradigm: paradigm === "rdb" ? "PG" : "Mongo",
-          })}
+          {t("explain.header", { paradigm: DATABASE_TYPE_LABELS[dbType] })}
         </span>
         <Button
           variant="ghost"

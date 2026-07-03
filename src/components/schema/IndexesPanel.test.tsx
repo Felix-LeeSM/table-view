@@ -54,7 +54,7 @@ describe("IndexesPanel (Sprint 332 — Slice J live wire)", () => {
         connectionId="conn-mongo"
         database="app"
         collection="users"
-        paradigm="document"
+        dbType="mongodb"
       />,
     );
 
@@ -83,7 +83,7 @@ describe("IndexesPanel (Sprint 332 — Slice J live wire)", () => {
         connectionId="conn-mongo"
         database="app"
         collection="empty_coll"
-        paradigm="document"
+        dbType="mongodb"
       />,
     );
 
@@ -100,7 +100,7 @@ describe("IndexesPanel (Sprint 332 — Slice J live wire)", () => {
         connectionId="conn-mongo"
         database="app"
         collection="users"
-        paradigm="document"
+        dbType="mongodb"
       />,
     );
 
@@ -115,7 +115,7 @@ describe("IndexesPanel (Sprint 332 — Slice J live wire)", () => {
         connectionId="conn-mongo"
         database=""
         collection=""
-        paradigm="document"
+        dbType="mongodb"
       />,
     );
     expect(listMongoIndexesMock).not.toHaveBeenCalled();
@@ -127,7 +127,7 @@ describe("IndexesPanel (Sprint 332 — Slice J live wire)", () => {
         connectionId="conn-pg"
         database="public"
         collection="users"
-        paradigm="table"
+        dbType="postgresql"
       />,
     );
     expect(screen.getByTestId("indexes-panel-placeholder")).toBeInTheDocument();

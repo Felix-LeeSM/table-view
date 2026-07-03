@@ -111,6 +111,7 @@ export const en = {
     dropContentsTable: "table and row",
     dropContentsDocument: "collection",
     errorNameRequired: "Database name is required.",
+    errorUnsupported: "Database lifecycle is not available for {{db}}.",
     cancel: "Cancel",
     working: "Working…",
     ok: "OK",
@@ -201,8 +202,6 @@ export const en = {
   serverActivity: {
     ariaSection: "Server activity",
     header: "Server activity ({{paradigm}})",
-    paradigmTable: "PG",
-    paradigmDocument: "Mongo",
     refresh: "Refresh",
     empty: "No active sessions.",
     ariaGrid: "Server activity grid",
@@ -220,8 +219,6 @@ export const en = {
   serverInfo: {
     ariaSection: "Server info",
     header: "Server — {{paradigm}}",
-    paradigmTable: "PG",
-    paradigmDocument: "Mongo",
     refresh: "Refresh",
     rowVersion: "Version",
     rowHost: "Host",
@@ -409,6 +406,7 @@ export const ko = {
     dropContentsTable: "테이블과 행",
     dropContentsDocument: "컬렉션",
     errorNameRequired: "데이터베이스 이름은 필수입니다.",
+    errorUnsupported: "{{db}}에는 데이터베이스 수명주기 작업이 없습니다.",
     cancel: "취소",
     working: "처리 중…",
     ok: "확인",
@@ -492,8 +490,6 @@ export const ko = {
   serverActivity: {
     ariaSection: "서버 활동",
     header: "서버 활동 ({{paradigm}})",
-    paradigmTable: "PG",
-    paradigmDocument: "Mongo",
     refresh: "새로 고침",
     empty: "활성 세션이 없습니다.",
     ariaGrid: "서버 활동 그리드",
@@ -510,8 +506,6 @@ export const ko = {
   serverInfo: {
     ariaSection: "서버 정보",
     header: "서버 — {{paradigm}}",
-    paradigmTable: "PG",
-    paradigmDocument: "Mongo",
     refresh: "새로 고침",
     rowVersion: "버전",
     rowHost: "호스트",

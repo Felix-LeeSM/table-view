@@ -12,21 +12,27 @@ import {
   type CollectionStatsRow,
 } from "@/lib/api/collectionStats";
 import { safeStringifyCell } from "@/lib/jsonCell";
+import {
+  DATABASE_TYPE_LABELS,
+  paradigmOf,
+  type DatabaseType,
+} from "@/types/connection";
 
 export interface CollectionStatsPanelProps {
   connectionId: string;
   database: string;
   collection: string;
-  paradigm: "table" | "document";
+  dbType: DatabaseType;
 }
 
 export function CollectionStatsPanel({
   connectionId,
   database,
   collection,
-  paradigm,
+  dbType,
 }: CollectionStatsPanelProps) {
   const { t } = useTranslation("document");
+  const paradigm = paradigmOf(dbType);
   const [stats, setStats] = useState<CollectionStatsRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
@@ -59,8 +65,7 @@ export function CollectionStatsPanel({
     >
       <header className="flex items-center justify-between text-xs font-medium text-muted-foreground">
         <span>
-          Stats — {database}.{collection}{" "}
-          {paradigm === "table" ? "(PG)" : "(Mongo)"}
+          Stats — {database}.{collection} ({DATABASE_TYPE_LABELS[dbType]})
         </span>
         <Button
           variant="ghost"

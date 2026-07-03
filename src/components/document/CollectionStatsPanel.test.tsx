@@ -54,7 +54,7 @@ describe("CollectionStatsPanel (Sprint 338 U3 live wire)", () => {
         connectionId="conn-pg"
         database="public"
         collection="users"
-        paradigm="table"
+        dbType="postgresql"
       />,
     );
     expect(screen.getByTestId("collection-stats-panel")).toBeInTheDocument();
@@ -76,7 +76,7 @@ describe("CollectionStatsPanel (Sprint 338 U3 live wire)", () => {
         connectionId="conn-m"
         database="app"
         collection="users"
-        paradigm="document"
+        dbType="mongodb"
       />,
     );
     expect(mongoMock).not.toHaveBeenCalled();
@@ -96,7 +96,7 @@ describe("CollectionStatsPanel (Sprint 338 U3 live wire)", () => {
         connectionId="conn-pg"
         database="public"
         collection="users"
-        paradigm="table"
+        dbType="postgresql"
       />,
     );
     expect(rdbMock).not.toHaveBeenCalled();
@@ -114,7 +114,7 @@ describe("CollectionStatsPanel (Sprint 338 U3 live wire)", () => {
         connectionId="conn-pg"
         database="public"
         collection="users"
-        paradigm="table"
+        dbType="postgresql"
       />,
     );
     expect(rdbMock).not.toHaveBeenCalled();

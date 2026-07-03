@@ -43,7 +43,7 @@ describe("SlowQueryPanel (Sprint 340 U5 live wire)", () => {
 
   it("renders RDB slow query table after slow_queries resolves", async () => {
     sqMock.mockResolvedValueOnce(pgStub);
-    render(<SlowQueryPanel connectionId="conn-pg" paradigm="table" />);
+    render(<SlowQueryPanel connectionId="conn-pg" dbType="postgresql" />);
     await waitFor(() =>
       expect(screen.getByTestId("slow-query-table")).toBeInTheDocument(),
     );
@@ -56,7 +56,7 @@ describe("SlowQueryPanel (Sprint 340 U5 live wire)", () => {
 
   it("renders Mongo profile rows with extras drawer", async () => {
     sqMock.mockResolvedValueOnce(mongoStub);
-    render(<SlowQueryPanel connectionId="conn-m" paradigm="document" />);
+    render(<SlowQueryPanel connectionId="conn-m" dbType="mongodb" />);
     await waitFor(() =>
       expect(screen.getByTestId("slow-query-table")).toBeInTheDocument(),
     );
@@ -69,7 +69,7 @@ describe("SlowQueryPanel (Sprint 340 U5 live wire)", () => {
 
   it("renders empty state when no rows returned (Mongo profiling off)", async () => {
     sqMock.mockResolvedValueOnce([]);
-    render(<SlowQueryPanel connectionId="conn-m" paradigm="document" />);
+    render(<SlowQueryPanel connectionId="conn-m" dbType="mongodb" />);
     await waitFor(() =>
       expect(screen.getByTestId("slow-query-empty")).toBeInTheDocument(),
     );
@@ -80,7 +80,7 @@ describe("SlowQueryPanel (Sprint 340 U5 live wire)", () => {
     sqMock.mockRejectedValueOnce(
       new Error("pg_stat_statements extension not enabled."),
     );
-    render(<SlowQueryPanel connectionId="conn-pg" paradigm="table" />);
+    render(<SlowQueryPanel connectionId="conn-pg" dbType="postgresql" />);
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/pg_stat_statements/);
     expect(screen.queryByTestId("slow-query-table")).toBeNull();
@@ -89,7 +89,7 @@ describe("SlowQueryPanel (Sprint 340 U5 live wire)", () => {
   it("re-fetches when Refresh is clicked", async () => {
     sqMock.mockResolvedValue(pgStub);
     const user = userEvent.setup();
-    render(<SlowQueryPanel connectionId="conn-pg" paradigm="table" />);
+    render(<SlowQueryPanel connectionId="conn-pg" dbType="postgresql" />);
     await waitFor(() => expect(sqMock).toHaveBeenCalledTimes(1));
     await user.click(screen.getByTestId("slow-query-refresh"));
     await waitFor(() => expect(sqMock).toHaveBeenCalledTimes(2));

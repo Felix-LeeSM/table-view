@@ -36,7 +36,7 @@ describe("ServerActivityPanel (Sprint 336 — U1 live wire)", () => {
       },
     ]);
 
-    render(<ServerActivityPanel connectionId="conn-pg" paradigm="table" />);
+    render(<ServerActivityPanel connectionId="conn-pg" dbType="postgresql" />);
 
     await waitFor(() => {
       expect(listServerActivityMock).toHaveBeenCalledWith("conn-pg");
@@ -50,7 +50,7 @@ describe("ServerActivityPanel (Sprint 336 — U1 live wire)", () => {
   it("renders the empty state when no sessions are active", async () => {
     listServerActivityMock.mockResolvedValueOnce([]);
 
-    render(<ServerActivityPanel connectionId="conn-pg" paradigm="table" />);
+    render(<ServerActivityPanel connectionId="conn-pg" dbType="postgresql" />);
 
     expect(
       await screen.findByTestId("server-activity-empty"),
@@ -74,7 +74,7 @@ describe("ServerActivityPanel (Sprint 336 — U1 live wire)", () => {
     killServerActivityMock.mockResolvedValueOnce(undefined);
     const user = userEvent.setup();
 
-    render(<ServerActivityPanel connectionId="conn-pg" paradigm="table" />);
+    render(<ServerActivityPanel connectionId="conn-pg" dbType="postgresql" />);
 
     await user.click(await screen.findByTestId("server-activity-kill-42"));
 
@@ -91,7 +91,7 @@ describe("ServerActivityPanel (Sprint 336 — U1 live wire)", () => {
     listServerActivityMock.mockResolvedValue([]);
     const user = userEvent.setup();
 
-    render(<ServerActivityPanel connectionId="conn-pg" paradigm="table" />);
+    render(<ServerActivityPanel connectionId="conn-pg" dbType="postgresql" />);
     await waitFor(() => {
       expect(listServerActivityMock).toHaveBeenCalledTimes(1);
     });
@@ -108,7 +108,7 @@ describe("ServerActivityPanel (Sprint 336 — U1 live wire)", () => {
       new Error("permission denied"),
     );
 
-    render(<ServerActivityPanel connectionId="conn-pg" paradigm="table" />);
+    render(<ServerActivityPanel connectionId="conn-pg" dbType="postgresql" />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /permission denied/i,

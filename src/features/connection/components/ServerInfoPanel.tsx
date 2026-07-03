@@ -10,17 +10,19 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { serverInfo, type ServerInfoRow } from "@/lib/api/serverInfo";
 import { safeStringifyCell } from "@/lib/jsonCell";
+import { DATABASE_TYPE_LABELS, paradigmOf, type DatabaseType } from "../model";
 
 export interface ServerInfoPanelProps {
   connectionId: string;
-  paradigm: "table" | "document";
+  dbType: DatabaseType;
 }
 
 export function ServerInfoPanel({
   connectionId,
-  paradigm,
+  dbType,
 }: ServerInfoPanelProps) {
   const { t } = useTranslation("featuresConnection");
+  const paradigm = paradigmOf(dbType);
   const [info, setInfo] = useState<ServerInfoRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,12 +53,7 @@ export function ServerInfoPanel({
     >
       <header className="flex items-center justify-between text-xs font-medium text-muted-foreground">
         <span>
-          {t("serverInfo.header", {
-            paradigm:
-              paradigm === "table"
-                ? t("serverInfo.paradigmTable")
-                : t("serverInfo.paradigmDocument"),
-          })}
+          {t("serverInfo.header", { paradigm: DATABASE_TYPE_LABELS[dbType] })}
         </span>
         <Button
           variant="ghost"
