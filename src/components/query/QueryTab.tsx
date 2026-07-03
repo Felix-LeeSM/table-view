@@ -557,17 +557,21 @@ export default function QueryTab({ tab }: QueryTabProps) {
       {/* Result area — flex column so QueryResultGrid's flex-1 children fill
           the remaining height and the inner table can actually scroll. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {explainSql && canExplainQuery && isDocument && explainMongoSpec ? (
+        {connection &&
+        explainSql &&
+        canExplainQuery &&
+        isDocument &&
+        explainMongoSpec ? (
           <ExplainViewer
             connectionId={tab.connectionId}
-            paradigm="document"
+            dbType={connection.dbType}
             mongoSpec={explainMongoSpec}
             onPlanSettled={handleExplainSettled}
           />
-        ) : explainSql && canExplainQuery && !isDocument ? (
+        ) : connection && explainSql && canExplainQuery && !isDocument ? (
           <ExplainViewer
             connectionId={tab.connectionId}
-            paradigm="table"
+            dbType={connection.dbType}
             rdbSql={explainSql}
             expectedDatabase={explainExpectedDatabase ?? undefined}
             onPlanSettled={handleExplainSettled}

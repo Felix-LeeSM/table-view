@@ -11,21 +11,23 @@ import { Loader2 } from "lucide-react";
 import { BackendPendingPlaceholder } from "@/components/shared/BackendPendingPlaceholder";
 import { listMongoIndexes } from "@/lib/tauri";
 import type { IndexInfo } from "@/types/schema";
+import { paradigmOf, type DatabaseType } from "@/types/connection";
 
 export interface IndexesPanelProps {
   connectionId: string;
   database: string;
   collection: string;
-  paradigm: "table" | "document";
+  dbType: DatabaseType;
 }
 
 export function IndexesPanel({
   connectionId,
   database,
   collection,
-  paradigm,
+  dbType,
 }: IndexesPanelProps) {
   const { t } = useTranslation("schema");
+  const paradigm = paradigmOf(dbType);
   const [indexes, setIndexes] = useState<IndexInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

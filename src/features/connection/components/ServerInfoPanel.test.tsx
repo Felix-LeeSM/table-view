@@ -42,7 +42,7 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
 
   it("renders RDB server identity grid after server_info resolves", async () => {
     infoMock.mockResolvedValueOnce(pgStub);
-    render(<ServerInfoPanel connectionId="conn-pg" paradigm="table" />);
+    render(<ServerInfoPanel connectionId="conn-pg" dbType="postgresql" />);
     expect(screen.getByTestId("server-info-panel")).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByTestId("server-info-grid")).toBeInTheDocument(),
@@ -56,7 +56,7 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
 
   it("renders Mongo identity grid with extras", async () => {
     infoMock.mockResolvedValueOnce(mongoStub);
-    render(<ServerInfoPanel connectionId="conn-m" paradigm="document" />);
+    render(<ServerInfoPanel connectionId="conn-m" dbType="mongodb" />);
     await waitFor(() =>
       expect(screen.getByTestId("server-info-grid")).toBeInTheDocument(),
     );
@@ -67,7 +67,7 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
 
   it("renders error alert when fetch rejects", async () => {
     infoMock.mockRejectedValueOnce(new Error("admin command denied"));
-    render(<ServerInfoPanel connectionId="conn-pg" paradigm="table" />);
+    render(<ServerInfoPanel connectionId="conn-pg" dbType="postgresql" />);
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/admin command denied/);
     expect(screen.queryByTestId("server-info-grid")).toBeNull();
@@ -76,7 +76,7 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
   it("re-fetches when Refresh is clicked", async () => {
     infoMock.mockResolvedValue(pgStub);
     const user = userEvent.setup();
-    render(<ServerInfoPanel connectionId="conn-pg" paradigm="table" />);
+    render(<ServerInfoPanel connectionId="conn-pg" dbType="postgresql" />);
     await waitFor(() => expect(infoMock).toHaveBeenCalledTimes(1));
     await user.click(screen.getByTestId("server-info-refresh"));
     await waitFor(() => expect(infoMock).toHaveBeenCalledTimes(2));

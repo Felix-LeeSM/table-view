@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { createRdbDatabase, dropRdbDatabase } from "@/lib/tauri/ddl";
 import { dropMongoDatabase } from "@/lib/tauri";
+import { DATABASE_TYPE_LABELS, paradigmOf, type DatabaseType } from "../model";
 
 export type DbLifecycleMode = "create" | "drop";
 
@@ -15,7 +16,7 @@ export interface DbLifecycleDialogProps {
   mode: DbLifecycleMode;
   connectionId: string;
   database?: string;
-  paradigm: "table" | "document";
+  dbType: DatabaseType;
   onClose: () => void;
   onSuccess?: () => void;
 }
@@ -25,11 +26,12 @@ export function DbLifecycleDialog({
   mode,
   connectionId,
   database,
-  paradigm,
+  dbType,
   onClose,
   onSuccess,
 }: DbLifecycleDialogProps) {
   const { t } = useTranslation("featuresConnection");
+  const paradigm = paradigmOf(dbType);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +47,11 @@ export function DbLifecycleDialog({
   }, [open, mode, database]);
 
   const isMongoLazyCreate = paradigm === "document" && mode === "create";
+  // Only rdb (CREATE/DROP DATABASE) and document (Mongo DROP) have a
+  // database-lifecycle surface. kv/search paradigms have no such operation,
+  // so the dialog refuses them explicitly instead of silently routing a
+  // redis/search connection into the Mongo drop path (#1053).
+  const isLifecycleSupported = paradigm === "rdb" || paradigm === "document";
 
   const handleSave = useCallback(async () => {
     if (isMongoLazyCreate) {
@@ -52,6 +59,12 @@ export function DbLifecycleDialog({
       return;
     }
     setError(null);
+    if (!isLifecycleSupported) {
+      setError(
+        t("lifecycle.errorUnsupported", { db: DATABASE_TYPE_LABELS[dbType] }),
+      );
+      return;
+    }
     const target = mode === "drop" ? (database ?? name) : name;
     if (target.trim() === "") {
       setError(t("lifecycle.errorNameRequired"));
@@ -59,7 +72,7 @@ export function DbLifecycleDialog({
     }
     setSaving(true);
     try {
-      if (paradigm === "table") {
+      if (paradigm === "rdb") {
         if (mode === "create") {
           await createRdbDatabase(connectionId, target.trim());
         } else {
@@ -77,7 +90,9 @@ export function DbLifecycleDialog({
     }
   }, [
     isMongoLazyCreate,
+    isLifecycleSupported,
     paradigm,
+    dbType,
     mode,
     connectionId,
     database,
@@ -131,7 +146,7 @@ export function DbLifecycleDialog({
           {t("lifecycle.dropWarning", {
             target: database ?? name,
             contents:
-              paradigm === "table"
+              paradigm === "rdb"
                 ? t("lifecycle.dropContentsTable")
                 : t("lifecycle.dropContentsDocument"),
           })}

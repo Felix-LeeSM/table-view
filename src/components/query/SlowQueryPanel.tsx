@@ -10,19 +10,22 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { slowQueries, type SlowQueryRow } from "@/lib/api/slowQueries";
 import { safeStringifyCell } from "@/lib/jsonCell";
+import {
+  DATABASE_TYPE_LABELS,
+  paradigmOf,
+  type DatabaseType,
+} from "@/types/connection";
 
 export interface SlowQueryPanelProps {
   connectionId: string;
-  paradigm: "table" | "document";
+  dbType: DatabaseType;
 }
 
 const DEFAULT_LIMIT = 25;
 
-export function SlowQueryPanel({
-  connectionId,
-  paradigm,
-}: SlowQueryPanelProps) {
+export function SlowQueryPanel({ connectionId, dbType }: SlowQueryPanelProps) {
   const { t } = useTranslation("query");
+  const paradigm = paradigmOf(dbType);
   const [rows, setRows] = useState<SlowQueryRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,9 +56,7 @@ export function SlowQueryPanel({
     >
       <header className="flex items-center justify-between text-xs font-medium text-muted-foreground">
         <span>
-          {paradigm === "table"
-            ? t("slowQuery.headerPg")
-            : t("slowQuery.headerMongo")}
+          {t("slowQuery.header", { db: DATABASE_TYPE_LABELS[dbType] })}
         </span>
         <Button
           variant="ghost"
