@@ -822,7 +822,11 @@ export async function clickDialogAction(ariaLabel: string, timeout = 10000) {
                 (candidate) =>
                   candidate.getAttribute("aria-label") === label &&
                   isVisible(candidate) &&
-                  candidate.getAttribute("aria-disabled") !== "true",
+                  candidate.getAttribute("aria-disabled") !== "true" &&
+                  // Issue #1111 — destructive confirm buttons are natively
+                  // `disabled` for a 150ms arm window; wait for them to arm
+                  // so the follow-up click isn't a no-op.
+                  !(candidate as HTMLButtonElement).disabled,
               );
               if (button) return button;
             }
