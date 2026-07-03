@@ -112,6 +112,24 @@ export interface StatementAnalysisOptions {
 }
 
 import { parseSqlPreloaded, type SqlParseResult } from "./sqlAst";
+import { splitSqlStatements } from "./sqlUtils";
+
+const SEVERITY_RANK: Record<Severity, number> = {
+  info: 0,
+  warn: 1,
+  danger: 2,
+};
+
+/**
+ * Issue #1118 — worst-severity selection for multi-statement input. Returns
+ * the analysis with the highest severity tier (danger > warn > info); ties
+ * keep the earliest statement so its `kind` / `reasons` surface unchanged.
+ */
+function worstAnalysis(analyses: StatementAnalysis[]): StatementAnalysis {
+  return analyses.reduce((worst, cur) =>
+    SEVERITY_RANK[cur.severity] > SEVERITY_RANK[worst.severity] ? cur : worst,
+  );
+}
 
 const LINE_COMMENT_RE = /--[^\n\r]*/g;
 const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
@@ -425,6 +443,19 @@ function extractBalanced(s: string, idx: number): string | null {
   return null;
 }
 
+/**
+ * Classify a SQL statement for Safe Mode.
+ *
+ * Contract: this is a **single-statement** classifier — it branches on the
+ * leading keyword, so `"SELECT 1; DROP TABLE x"` would otherwise read as a
+ * benign `SELECT`. Historically the safety invariant ("split a batch, analyze
+ * each") lived only in caller convention (see `rdbQueryExecution` →
+ * `splitSqlStatements`). Issue #1118 makes the classifier self-defending: if a
+ * joined batch reaches here, it is split with the literal/comment-aware
+ * `splitSqlStatements` and the worst-severity classification is returned, so a
+ * trailing destructive statement can never pass as `info`. Callers that
+ * already split (passing one statement) hit the fast path unchanged.
+ */
 export function analyzeStatement(
   sql: string,
   options?: StatementAnalysisOptions,
@@ -456,6 +487,17 @@ export function analyzeStatement(
       severity: "warn",
       reasons: ["T-SQL procedural scripting unsupported in Safe Mode"],
     };
+  }
+
+  // Issue #1118 — multi-statement defense. Placed after the MSSQL
+  // batch-separator / procedural early-returns so single-blob T-SQL bodies
+  // (BEGIN … END; with internal semicolons) stay intact. A genuinely joined
+  // batch is split with the literal/comment-aware splitter and each statement
+  // is re-analyzed; the worst severity wins. Single-statement input (length
+  // <= 1) skips this and takes the fast path below unchanged.
+  const parts = splitSqlStatements(sql);
+  if (parts.length > 1) {
+    return worstAnalysis(parts.map((part) => analyzeStatement(part, options)));
   }
 
   // Sprint 391 — DDL destructive (DROP / TRUNCATE / ALTER … DROP) is

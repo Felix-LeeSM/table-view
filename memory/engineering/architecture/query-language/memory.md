@@ -50,6 +50,10 @@ claim 하지 않는다.
   않는다.
 - Arbitrary MongoDB JavaScript shell execution 은 금지한다. Whitelisted `db...`
   expression 만 parse 해서 typed IPC command 로 dispatch 한다.
+- 신규 SQL 실행 경로는 배치를 `splitSqlStatements` (리터럴/주석-aware) 로 분할한
+  뒤 statement 별 `analyzeStatement` 를 돌린다. naive `.split(";")` 금지 —
+  literal/comment 내 세미콜론 오분할 (issue #1118). `analyzeStatement` 자체도
+  다중 구문 입력을 방어적으로 분할해 worst-severity 를 반환한다.
 
 ## Completion Architecture
 
