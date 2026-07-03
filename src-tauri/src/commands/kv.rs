@@ -12,9 +12,9 @@ async fn list_kv_databases_inner(
     state: &AppState,
     connection_id: &str,
 ) -> Result<Vec<KvDatabaseInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active.as_kv()?.list_databases().await
 }
@@ -28,9 +28,9 @@ pub async fn list_kv_databases(
 }
 
 async fn current_kv_database_inner(state: &AppState, connection_id: &str) -> Result<u16, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     Ok(active.as_kv()?.current_database().await?.unwrap_or(0))
 }
@@ -49,9 +49,9 @@ async fn switch_kv_database_inner(
     database: u16,
 ) -> Result<u16, AppError> {
     {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active.as_kv()?.switch_database(database).await?;
     }
@@ -84,9 +84,9 @@ async fn scan_kv_keys_inner(
 ) -> Result<KvKeyScanPage, AppError> {
     let cancel_handle = register_cancel_token(state, query_id).await;
     let result = async {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_kv()?
@@ -116,9 +116,9 @@ async fn get_kv_value_inner(
 ) -> Result<KvValueEnvelope, AppError> {
     let cancel_handle = register_cancel_token(state, query_id).await;
     let result = async {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_kv()?
@@ -148,9 +148,9 @@ async fn execute_kv_command_inner(
 ) -> Result<RdbQueryResult, AppError> {
     let cancel_handle = register_cancel_token(state, query_id).await;
     let result = async {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_kv()?
@@ -177,9 +177,9 @@ async fn set_kv_string_value_inner(
     connection_id: &str,
     request: KvSetStringRequest,
 ) -> Result<KvMutationResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active.as_kv()?.set_string(request).await
 }
@@ -198,9 +198,9 @@ async fn delete_kv_key_inner(
     connection_id: &str,
     request: KvDeleteRequest,
 ) -> Result<KvMutationResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active.as_kv()?.delete_key(request).await
 }
@@ -219,9 +219,9 @@ async fn update_kv_ttl_inner(
     connection_id: &str,
     request: KvTtlUpdateRequest,
 ) -> Result<KvMutationResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active.as_kv()?.update_ttl(request).await
 }
@@ -243,9 +243,9 @@ async fn read_kv_stream_inner(
 ) -> Result<KvStreamReadResult, AppError> {
     let cancel_handle = register_cancel_token(state, query_id).await;
     let result = async {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_kv()?
@@ -278,10 +278,10 @@ mod tests {
         let state = AppState::new();
         state.active_connections.lock().await.insert(
             "kv".into(),
-            ActiveAdapter::Kv(Box::new(StubKvAdapter {
+            std::sync::Arc::new(ActiveAdapter::Kv(Box::new(StubKvAdapter {
                 kind_value: DatabaseType::Redis,
                 ..Default::default()
-            })),
+            }))),
         );
         state
     }

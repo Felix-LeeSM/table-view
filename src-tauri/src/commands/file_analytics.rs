@@ -37,9 +37,9 @@ pub(crate) async fn register_file_analytics_source_inner(
         "Registering DuckDB file analytics source"
     );
     validate_connection_id(connection_id)?;
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     ensure_duckdb(active.kind())?;
     active.as_rdb()?.register_file_analytics_source(path).await
@@ -57,9 +57,9 @@ pub(crate) async fn preview_file_analytics_source_inner(
         "Previewing DuckDB file analytics source"
     );
     validate_connection_id(connection_id)?;
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     ensure_duckdb(active.kind())?;
     active
@@ -77,9 +77,9 @@ pub(crate) async fn list_file_analytics_source_metadata_inner(
         "Listing DuckDB file analytics source metadata"
     );
     validate_connection_id(connection_id)?;
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     ensure_duckdb(active.kind())?;
     active.as_rdb()?.list_file_analytics_source_metadata().await
@@ -94,9 +94,9 @@ pub(crate) async fn clear_file_analytics_sources_inner(
         "Clearing DuckDB file analytics sources"
     );
     validate_connection_id(connection_id)?;
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     ensure_duckdb(active.kind())?;
     active.as_rdb()?.clear_file_analytics_sources().await
@@ -115,9 +115,9 @@ pub(crate) async fn execute_file_analytics_query_inner(
         "Executing DuckDB file analytics query"
     );
     validate_connection_id(connection_id)?;
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     ensure_duckdb(active.kind())?;
     active
@@ -258,7 +258,7 @@ mod tests {
         let state = AppState::default();
         state.active_connections.lock().await.insert(
             "postgres".into(),
-            ActiveAdapter::Rdb(Box::new(PostgresAdapter::new())),
+            std::sync::Arc::new(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
         );
 
         assert_duckdb_required(
@@ -286,11 +286,10 @@ mod tests {
             .connect(&duckdb_config(db_path.to_str().unwrap()))
             .await
             .unwrap();
-        state
-            .active_connections
-            .lock()
-            .await
-            .insert("duckdb".into(), ActiveAdapter::Rdb(Box::new(adapter)));
+        state.active_connections.lock().await.insert(
+            "duckdb".into(),
+            std::sync::Arc::new(ActiveAdapter::Rdb(Box::new(adapter))),
+        );
         let csv_path = dir.path().join("users.csv");
         fs::write(&csv_path, "id,name\n1,Ada\n2,Grace\n").unwrap();
 

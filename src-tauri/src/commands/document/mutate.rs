@@ -89,9 +89,9 @@ async fn insert_document_inner(
     collection: &str,
     document: bson::Document,
 ) -> Result<DocumentId, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
@@ -132,9 +132,9 @@ async fn update_document_inner(
     document_id: DocumentId,
     patch: bson::Document,
 ) -> Result<(), AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
@@ -176,9 +176,9 @@ async fn delete_document_inner(
     collection: &str,
     document_id: DocumentId,
 ) -> Result<(), AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
@@ -218,9 +218,9 @@ async fn delete_many_inner(
     filter: bson::Document,
     safety_confirmed: bool,
 ) -> Result<u64, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_document()?;
     require_safety_confirmation(safety_confirmed, "delete_many")?;
@@ -263,9 +263,9 @@ async fn update_many_inner(
     patch: bson::Document,
     safety_confirmed: bool,
 ) -> Result<u64, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_document()?;
     require_safety_confirmation(safety_confirmed, "update_many")?;
@@ -306,9 +306,9 @@ async fn drop_collection_inner(
     collection: &str,
     safety_confirmed: bool,
 ) -> Result<(), AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_document()?;
     require_safety_confirmation(safety_confirmed, "drop_collection")?;
@@ -349,9 +349,9 @@ async fn insert_many_documents_inner(
     collection: &str,
     documents: Vec<bson::Document>,
 ) -> Result<Vec<DocumentId>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
@@ -390,9 +390,9 @@ async fn bulk_write_documents_inner(
     operations: Vec<BulkWriteOp>,
     safety_confirmed: bool,
 ) -> Result<BulkWriteResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     validate_bulk_write_identity(&operations)?;
     if bulk_write_requires_safety(&operations) {

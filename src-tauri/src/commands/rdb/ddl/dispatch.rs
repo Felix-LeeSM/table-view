@@ -31,9 +31,9 @@ pub(super) async fn run_schema_change<R>(
 where
     R: DdlSchemaChangeRequest + ?Sized,
 {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(request.connection_id())
+    let active = state
+        .active_adapter(request.connection_id())
+        .await
         .ok_or_else(|| not_connected(request.connection_id()))?;
     let adapter = active.as_rdb()?;
     ensure_expected_db(adapter, request.expected_database()).await?;
@@ -46,9 +46,9 @@ pub(super) async fn run_database_change(
     name: &str,
     command: DatabaseCommand,
 ) -> Result<(), AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_rdb()?;
 

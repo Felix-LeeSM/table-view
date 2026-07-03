@@ -36,9 +36,9 @@ async fn find_documents_inner(
     let cancel_handle = register_cancel_token(state, query_id).await;
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_document()?
@@ -92,9 +92,9 @@ async fn aggregate_documents_inner(
     let cancel_handle = register_cancel_token(state, query_id).await;
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_document()?
@@ -164,9 +164,9 @@ async fn find_one_document_inner(
     let cancel_handle = register_cancel_token(state, query_id).await;
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_document()?
@@ -219,9 +219,9 @@ async fn count_documents_inner(
     let cancel_handle = register_cancel_token(state, query_id).await;
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_document()?
@@ -273,9 +273,9 @@ async fn estimated_document_count_inner(
     let cancel_handle = register_cancel_token(state, query_id).await;
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_document()?
@@ -326,9 +326,9 @@ async fn distinct_documents_inner(
     let cancel_handle = register_cancel_token(state, query_id).await;
 
     let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(connection_id)
+        let active = state
+            .active_adapter(connection_id)
+            .await
             .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_document()?
@@ -386,9 +386,9 @@ async fn explain_mongo_find_inner(
             "Collection name must not be empty".into(),
         ));
     }
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
@@ -504,9 +504,9 @@ async fn run_mongo_command_inner(
     safety_confirmed: bool,
 ) -> Result<serde_json::Value, AppError> {
     let command = extjson_to_bson_document(command)?;
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(connection_id)
+    let active = state
+        .active_adapter(connection_id)
+        .await
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_document()?;
     require_run_command_safety(&command, safety_confirmed)?;

@@ -10,6 +10,8 @@
 //!     `session::keep_alive_loop` so background ping + auto-reconnect runs
 //!     for every active connection.
 
+use std::sync::Arc;
+
 use super::session::keep_alive_loop;
 use super::{make_adapter, AppState, SaveConnectionRequest, TestConnectionRequest};
 use crate::db::mongodb::MongoAdapter;
@@ -195,7 +197,7 @@ pub async fn connect(
 
     {
         let mut connections = state.active_connections.lock().await;
-        connections.insert(id.clone(), adapter);
+        connections.insert(id.clone(), Arc::new(adapter));
     }
     {
         // Sprint 364 — pool ready, transition to Connected. `active_db` is

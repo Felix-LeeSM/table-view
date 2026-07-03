@@ -6,6 +6,7 @@
 //!   - `keep_alive_loop` background task driven by `connect`.
 //!   - `StatusChangeEvent` IPC payload.
 
+use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -109,10 +110,12 @@ pub(super) async fn keep_alive_loop(
         tokio::time::sleep(Duration::from_secs(interval_secs)).await;
 
         // Ping check — dispatch through the paradigm-neutral lifecycle trait.
+        // Issue #1087 — clone the adapter `Arc` under a short lock so the ping
+        // await does not hold `active_connections` (which would block queries
+        // and cancels on this connection).
         let ping_ok = {
             let state = app.state::<AppState>();
-            let connections = state.active_connections.lock().await;
-            match connections.get(&conn_id) {
+            match state.active_adapter(&conn_id).await {
                 Some(adapter) => adapter.lifecycle().ping().await.is_ok(),
                 None => return, // Adapter removed — task should stop
             }
@@ -175,7 +178,7 @@ pub(super) async fn keep_alive_loop(
                 let state = app.state::<AppState>();
                 {
                     let mut connections = state.active_connections.lock().await;
-                    connections.insert(conn_id.clone(), new_adapter);
+                    connections.insert(conn_id.clone(), Arc::new(new_adapter));
                 }
                 // Sprint 364 — reconnect 도 connect 와 동일하게 active_db 를
                 // config.database 로 seed. 빈 문자열일 때만 None.
