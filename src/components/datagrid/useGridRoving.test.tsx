@@ -112,6 +112,71 @@ describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
     container.remove();
   });
 
+  // Reason: PageDown 은 한 페이지(PAGE_ROWS=10) 아래로 점프한다. AC1 의
+  // Page 키 요구. row 0..12 가 DOM 에 있는 non-virtualized 경로에서 row 10 으로
+  // focus + tabIndex 이동. (issue #1130)
+  it("PageDown jumps down one page (PAGE_ROWS) of rows", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const cells: HTMLElement[] = [];
+    for (let r = 0; r <= 12; r++) {
+      const c = makeCell(r, 0);
+      cells.push(c);
+      container.append(c);
+    }
+    const containerRef = createRef<HTMLElement>();
+    (containerRef as { current: HTMLElement }).current = container;
+
+    const { result } = renderHook(() => useGridRoving(50, 1, containerRef));
+
+    cells[0]!.focus();
+    act(() => result.current.syncFocus(0, 0));
+    act(() => {
+      result.current.onKeyDown({
+        key: "PageDown",
+        target: cells[0],
+        preventDefault: vi.fn(),
+      } as unknown as React.KeyboardEvent);
+    });
+    await flushRaf();
+
+    expect(result.current.cellTabIndex(10, 0)).toBe(0);
+    expect(cells[10]).toHaveFocus();
+    container.remove();
+  });
+
+  // Reason: PageUp 은 한 페이지 위로 점프하며 top 에서 clamp (no wrap). (issue #1130)
+  it("PageUp jumps up one page and clamps at row 0", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const cells: HTMLElement[] = [];
+    for (let r = 0; r <= 12; r++) {
+      const c = makeCell(r, 0);
+      cells.push(c);
+      container.append(c);
+    }
+    const containerRef = createRef<HTMLElement>();
+    (containerRef as { current: HTMLElement }).current = container;
+
+    const { result } = renderHook(() => useGridRoving(50, 1, containerRef));
+
+    cells[5]!.focus();
+    act(() => result.current.syncFocus(5, 0));
+    act(() => {
+      result.current.onKeyDown({
+        key: "PageUp",
+        target: cells[5],
+        preventDefault: vi.fn(),
+      } as unknown as React.KeyboardEvent);
+    });
+    await flushRaf();
+
+    // 5 - 10 → clamp 0.
+    expect(result.current.cellTabIndex(0, 0)).toBe(0);
+    expect(cells[0]).toHaveFocus();
+    container.remove();
+  });
+
   // Reason: ArrowUp at row 0 은 clamp (no wrap), (0,0) 이 tab stop 유지. (2026-07-01)
   it("ArrowUp at row 0 clamps and keeps (0,0) the tab stop", async () => {
     const container = document.createElement("div");
