@@ -549,6 +549,27 @@ run_case \
   '{"tool_input":{"command":"grep \"DROP TABLE\" src/schema.sql | wc -l"}}' \
   EMPTY
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Issue #1242 — empty-array crash on bash 3.2 (macOS) + set -u.
+# ─────────────────────────────────────────────────────────────────────────────
+# A pipe-stage that is whitespace-only (e.g. the trailing stage of `foo | `, or
+# the segment produced by a `\`-newline line-continuation) reads into an EMPTY
+# `words` array. Under macOS Bash 3.2, expanding `"${words[@]}"` on an empty
+# array is an unbound-variable error that killed the hook (exit 1 + stderr),
+# blocking the legitimate command. The command is harmless so it must ALLOW with
+# no stderr — proving the guard no longer crashes.
+run_case \
+  "case-1242-1: trailing empty pipe-stage → allow, no crash" \
+  0 \
+  '{"tool_input":{"command":"echo a | "}}' \
+  EMPTY
+
+run_case \
+  "case-1242-2: compound chain with trailing empty pipe-stage → allow, no crash" \
+  0 \
+  '{"tool_input":{"command":"git status && cat foo | "}}' \
+  EMPTY
+
 echo ""
 echo "==== smoke test summary ===="
 echo "PASS: $PASS_COUNT"
