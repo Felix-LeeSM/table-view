@@ -14,12 +14,16 @@ import type { SchemaInfo } from "@/types/schema";
  * 전달 — DB-aware 한 데이터 경로의 단일 source.
  *
  * 책임:
- * - mount 시 자동 `loadSchemas` + 모든 schema 의 `loadTables` /
- *   `prefetchSchemaColumns`. `(connId, db)` 별로 1회만.
+ * - mount 시 자동 `loadSchemas`. `(connId, db)` 별로 1회만.
+ * - #1219 — schema 수가 `EAGER_SCHEMA_LOAD_THRESHOLD` 이하면 mount 시 모든
+ *   schema 의 `loadTables` / `prefetchSchemaColumns` 를 즉시 발사(소규모 DB
+ *   체감 유지). 초과하면 그 루프를 건너뛰고, 펼쳐진 schema 만 `expandSchema`
+ *   로 lazy load (SchemaTree 의 reconciliation 효과가 구동).
  * - no-schema workbench(MySQL/MariaDB) 호출처는 mount 시 views/functions 도
- *   같이 로드한다. schema row 가 숨겨져 lazy expand 진입점이 없기 때문.
+ *   같이 로드한다. schema row 가 숨겨져 lazy expand 진입점이 없기 때문
+ *   (`autoLoadAuxiliaryCatalog` = 항상 eager).
  * - schema 한 개 단위 lazy expand (`expandSchema`) — 캐시 미존재 시에만
- *   load.
+ *   tables/views/functions + columns(prefetch) load.
  * - 전체 / 단일 schema refresh (`refreshConnection`, `refreshSchema`).
  * - silent failure 를 toast.error + dev console 로 일원화.
  *
@@ -31,6 +35,29 @@ import type { SchemaInfo } from "@/types/schema";
  */
 
 const EMPTY_SCHEMAS: SchemaInfo[] = [];
+
+/**
+ * #1219 — at or below this many schemas the mount-time eager per-schema loop
+ * (loadTables + prefetchSchemaColumns per schema = N+1 IPC) is cheap enough
+ * that loading everything up front keeps small DBs feeling instant (AC-3).
+ * Above it the loop dominates first paint on wide catalogs, so those DBs load
+ * only the expanded schemas (the first-schema seed + any persisted
+ * `SidebarState.expanded`) lazily through `expandSchema`.
+ */
+export const EAGER_SCHEMA_LOAD_THRESHOLD = 5;
+
+/**
+ * No-schema (MySQL/MariaDB) / MSSQL / Oracle hide the schema row, so they have
+ * no lazy `expandSchema` entry point — they must eager-load regardless of the
+ * threshold (`autoLoadAuxiliaryCatalog`). In practice these carry a single
+ * implicit schema, so the eager cost is trivial anyway.
+ */
+export function shouldEagerLoadSchemas(
+  schemaCount: number,
+  autoLoadAuxiliaryCatalog: boolean,
+): boolean {
+  return autoLoadAuxiliaryCatalog || schemaCount <= EAGER_SCHEMA_LOAD_THRESHOLD;
+}
 
 function logSchemaError(label: string, err: unknown): void {
   logger.error(`[useSchemaCache] ${label}:`, err);
@@ -115,6 +142,13 @@ export function useSchemaCache(
       .then(() => {
         const state = useSchemaStore.getState();
         const schemaList = state.schemas[connectionId]?.[db] ?? [];
+        // #1219 — wide catalogs skip the eager per-schema fan-out; their
+        // expanded schemas (seed + persisted set) are loaded lazily via
+        // `expandSchema`, driven by the tree's reconciliation effect.
+        if (
+          !shouldEagerLoadSchemas(schemaList.length, autoLoadAuxiliaryCatalog)
+        )
+          return;
         for (const s of schemaList) {
           if (!state.tables[connectionId]?.[db]?.[s.name]) {
             loadTables(connectionId, db, s.name).catch((err) => {
@@ -284,8 +318,24 @@ export function useSchemaCache(
           logSchemaError(`loadFunctions (expand ${schemaName})`, err);
         });
       }
+      // #1219 — in the lazy path columns are not prefetched at mount, so an
+      // expanded schema must pull its columns here to keep the SQL
+      // autocomplete catalog populated (AC-2 no-regression). Best-effort,
+      // guarded by cache presence so a toggle doesn't re-fetch. The eager
+      // path already filled this slot at mount, so it's a no-op there.
+      const columnsDbSlot = state.tableColumnsCache[connectionId]?.[db];
+      if (!columnsDbSlot?.[schemaName]) {
+        void prefetchSchemaColumns(connectionId, db, schemaName);
+      }
     },
-    [connectionId, db, loadTables, loadViews, loadFunctions],
+    [
+      connectionId,
+      db,
+      loadTables,
+      loadViews,
+      loadFunctions,
+      prefetchSchemaColumns,
+    ],
   );
 
   return {
