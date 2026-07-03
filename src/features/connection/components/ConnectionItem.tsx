@@ -340,6 +340,9 @@ export default function ConnectionItem({
         <div className="flex w-full items-start gap-2 px-3 py-0">
           <span className="shrink-0 w-2" />
           <div className="min-w-0 flex-1 text-destructive">
+            {/* NOTE: title+hint 마크업은 @components/errors/DriverErrorHint 와
+                의도적으로 동일 형태다. feature import 경계 룰로 `@components/**` 를
+                import 할 수 없어 inline 복제한다 — 한쪽 변경 시 다른 쪽도 맞춰라. */}
             {errorHint && (
               <>
                 <div className="text-xs font-medium">

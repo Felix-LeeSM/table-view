@@ -93,17 +93,25 @@ const PATTERNS: ReadonlyArray<
       "connection refused", // pg/mysql/mssql/redis/mongo (+ "(os error 61/111)")
       "actively refused", // windows
       "econnrefused", // node / generic
-      "os error 61", // macOS ECONNREFUSED (bare IO error)
-      "os error 111", // linux ECONNREFUSED (bare IO error)
+      // bare IO error. os error 코드는 플랫폼 의존이지만 메시지는 유저 머신에서
+      // 생성돼 그 머신의 매핑을 따른다. 61=macOS ECONNREFUSED(linux 는 ENODATA),
+      // 111=linux ECONNREFUSED — 교차 플랫폼 오탐 여지는 실무상 없음.
+      "os error 61",
+      "os error 111",
     ],
   ],
   [
+    // 연결-phase 타임아웃만. bare "timeout"/"timed out" 는 쿼리-phase 타임아웃
+    // (mysql Lock wait timeout / pg statement timeout / ES request timeout)까지
+    // 물어 "네트워크 점검" 힌트로 오분류하므로 연결 단계 마커만 남긴다 (#1227).
     "timeout",
     [
-      "timed out", // "connection timed out" / "operation timed out"
-      "timeout", // "server selection timeout" / "Search timeout error"
-      "os error 60", // macOS ETIMEDOUT (bare IO error)
-      "os error 110", // linux ETIMEDOUT (bare IO error)
+      "connection timed out", // TCP connect ETIMEDOUT (보통 "(os error 60/110)" 동반)
+      "server selection timeout", // mongo — 연결 단계(서버 못 찾음)
+      // bare IO error. 60=macOS ETIMEDOUT, 110=linux ETIMEDOUT (플랫폼 의존,
+      // 위 refused 주석과 동일 근거로 유저 머신 매핑을 따른다).
+      "os error 60",
+      "os error 110",
     ],
   ],
 ];

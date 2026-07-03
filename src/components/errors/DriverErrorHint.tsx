@@ -6,8 +6,12 @@
  * `hint` 가 null(미분류)이면 아무것도 렌더하지 않아 어느 에러 표면에도 안전하게
  * 끼워 넣을 수 있다 (fail-open).
  *
- * 연결(ConnectionItem)·쿼리(QueryResultGrid)·search(searchUiError 표면들)가
- * 재사용한다. 새 에러 UI 컨테이너를 만들지 않고 기존 alert 안에 삽입한다.
+ * 쿼리(QueryResultGrid)·search(searchUiError 표면들)가 재사용한다. 새 에러 UI
+ * 컨테이너를 만들지 않고 기존 alert 안에 삽입한다.
+ *
+ * NOTE: ConnectionItem 은 feature import 경계 룰로 `@components/**` 를 import 할 수
+ * 없어 title+hint 마크업을 inline 복제한다 — 마크업 변경 시
+ * `src/features/connection/components/ConnectionItem.tsx` 의 error detail 블록도 맞춰라.
  */
 
 import { useTranslation } from "react-i18next";
