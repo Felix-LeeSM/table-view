@@ -156,6 +156,18 @@ export default function DocumentGridRows({
                       // 편집 진입 (double-click 과 동일 경로). 편집 중엔 editor
                       // input 이 Enter/Escape 를 stopPropagation 하므로 안 옴.
                       if (isEditing) return;
+                      // issue #1130 AC2 — Space 로 행 선택 (onClick 과 동일
+                      // modifier 시맨틱). preventDefault 로 page scroll 억제.
+                      if (e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        editState.handleSelectRow(
+                          rowIdx,
+                          e.metaKey || e.ctrlKey,
+                          e.shiftKey,
+                        );
+                        return;
+                      }
                       if (e.key !== "Enter" && e.key !== "F2") return;
                       e.preventDefault();
                       e.stopPropagation();
