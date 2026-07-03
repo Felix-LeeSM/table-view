@@ -9,8 +9,25 @@ import {
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { getDataSourceProfile } from "@/types/dataSource";
 import { DATABASE_TYPE_LABELS } from "@/types/connection";
+import type { DatabaseType } from "@/types/connection";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { RdbHistoryOverrides } from "./rdbQueryExecution";
+
+/**
+ * Issue #1230 — DBMS whose adapter implements native (server-side) cancel,
+ * i.e. `execute_query` captures a server pid the Cancel button can pass to
+ * `cancelQueryNative` (pg `pg_cancel_backend` / mysql `KILL QUERY`). Every
+ * other cancel-capable DBMS keeps only the cooperative token.
+ *
+ * Derived from `dbType` rather than a new capability field: it is a 3-value
+ * check the adapter side already fixes (`execute_sql_tracked` overrides), and
+ * expanding the capability contract across ~13 profiles buys nothing here.
+ */
+export function supportsNativeCancel(
+  dbType: DatabaseType | null | undefined,
+): boolean {
+  return dbType === "postgresql" || dbType === "mysql" || dbType === "mariadb";
+}
 
 /**
  * `useQueryContext` — `useQueryExecution` 의 "context substrate" 추출
@@ -36,6 +53,8 @@ export function useQueryContext(tab: QueryTab) {
   const canCancelQuery = dbType
     ? getDataSourceProfile(dbType).capabilities.query.cancel
     : true;
+  // Issue #1230 — does this DBMS have a native server-side cancel path?
+  const canNativeCancel = supportsNativeCancel(dbType);
   const canExecuteQuery = dbType
     ? getDataSourceProfile(dbType).capabilities.query.query
     : true;
@@ -63,6 +82,21 @@ export function useQueryContext(tab: QueryTab) {
       updateQueryStateAction(wsConnId, workspaceDb, tabId, state);
     },
     [updateQueryStateAction, wsConnId, workspaceDb],
+  );
+  const setRunningQueryServerPidAction = useWorkspaceStore(
+    (s) => s.setRunningQueryServerPid,
+  );
+  const setRunningQueryServerPid = useCallback(
+    (tabId: string, queryId: string, serverPid: number) => {
+      setRunningQueryServerPidAction(
+        wsConnId,
+        workspaceDb,
+        tabId,
+        queryId,
+        serverPid,
+      );
+    },
+    [setRunningQueryServerPidAction, wsConnId, workspaceDb],
   );
   const completeQuery = useCallback(
     (
@@ -193,9 +227,11 @@ export function useQueryContext(tab: QueryTab) {
     workspaceDb,
     dbType,
     canCancelQuery,
+    canNativeCancel,
     canExecuteQuery,
     queryProductLabel,
     updateQueryState,
+    setRunningQueryServerPid,
     completeQuery,
     completeSearchQuery,
     failQuery,

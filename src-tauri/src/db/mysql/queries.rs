@@ -245,6 +245,20 @@ impl MysqlAdapter {
         query: &str,
         cancel_token: Option<&CancellationToken>,
     ) -> Result<QueryResult, AppError> {
+        self.execute_query_tracked(query, cancel_token, None).await
+    }
+
+    /// Issue #1230 — `execute_query` variant that pins one pooled connection
+    /// and, when `pid_tx` is `Some`, sends its `CONNECTION_ID()` thread id
+    /// before the statement runs so `KILL QUERY <id>` can abort a long query.
+    /// The statement runs on that SAME connection. `None` keeps the pooled
+    /// fast-path used by batch / schema callers.
+    pub async fn execute_query_tracked(
+        &self,
+        query: &str,
+        cancel_token: Option<&CancellationToken>,
+        pid_tx: Option<tokio::sync::oneshot::Sender<i64>>,
+    ) -> Result<QueryResult, AppError> {
         let start = std::time::Instant::now();
 
         let query = strip_trailing_terminator(query);
@@ -277,13 +291,29 @@ impl MysqlAdapter {
             QueryType::Ddl
         };
 
+        // Pin ONE connection so the reported thread id is the backend that
+        // runs this statement (a separate pool acquire could pick another).
         let pool = self.active_pool().await?;
+        let mut conn = pool
+            .acquire()
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
+        if let Some(pid_tx) = pid_tx {
+            // Best-effort: probe failure skips native cancel; the cooperative
+            // token still applies (pid_tx drops → Err on rx).
+            if let Ok(thread_id) = sqlx::query_scalar::<_, u64>("SELECT CONNECTION_ID()")
+                .fetch_one(&mut *conn)
+                .await
+            {
+                let _ = pid_tx.send(thread_id as i64);
+            }
+        }
 
         let result = match query_type {
             QueryType::Select => {
                 let query_future = async {
                     let rows = sqlx::query(query)
-                        .fetch_all(&pool)
+                        .fetch_all(&mut *conn)
                         .await
                         .map_err(|e| AppError::Database(e.to_string()))?;
 
@@ -340,7 +370,7 @@ impl MysqlAdapter {
             QueryType::Dml { .. } => {
                 let query_future = async {
                     let result = sqlx::query(query)
-                        .execute(&pool)
+                        .execute(&mut *conn)
                         .await
                         .map_err(|e| AppError::Database(e.to_string()))?;
                     let rows_affected = result.rows_affected();
@@ -367,7 +397,7 @@ impl MysqlAdapter {
             QueryType::Ddl => {
                 let query_future = async {
                     sqlx::query(query)
-                        .execute(&pool)
+                        .execute(&mut *conn)
                         .await
                         .map_err(|e| AppError::Database(e.to_string()))?;
                     let execution_time_ms = start.elapsed().as_millis() as u64;

@@ -164,6 +164,17 @@ impl RdbAdapter for PostgresAdapter {
         Box::pin(async move { self.execute_query(sql, cancel).await })
     }
 
+    /// Issue #1230 — capture `pg_backend_pid()` on the executing connection
+    /// so the frontend can fire `pg_cancel_backend` against a long query.
+    fn execute_sql_tracked<'a>(
+        &'a self,
+        sql: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+        pid_tx: tokio::sync::oneshot::Sender<i64>,
+    ) -> Pin<Box<dyn Future<Output = Result<RdbQueryResult, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.execute_query_tracked(sql, cancel, Some(pid_tx)).await })
+    }
+
     fn execute_sql_batch<'a>(
         &'a self,
         statements: &'a [String],

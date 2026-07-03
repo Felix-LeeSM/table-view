@@ -113,6 +113,56 @@ async fn pg_cancel_query_terminates_pg_sleep_within_budget() {
     let _ = adapter.disconnect_pool().await;
 }
 
+/// Issue #1230 — end-to-end: `execute_query_tracked` must report the backend
+/// pid of the connection running the statement, and cancelling THAT pid must
+/// abort the in-flight `pg_sleep`. This proves the wired path (tracked pid →
+/// `get_query_server_pid` → `cancel_query_native`) can stop a long query the
+/// cooperative token can't touch.
+#[tokio::test]
+#[serial_test::serial]
+async fn pg_execute_query_tracked_pid_enables_native_cancel() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => {
+            println!("SKIP: PG container unavailable — cancel_pg requires testcontainers");
+            return;
+        }
+    };
+
+    let (tx, rx) = tokio::sync::oneshot::channel::<i64>();
+    let runner = {
+        let adapter = adapter.clone();
+        tokio::spawn(async move {
+            adapter
+                .execute_query_tracked("SELECT pg_sleep(60)", None, Some(tx))
+                .await
+        })
+    };
+
+    // The pid must surface long before the 60s sleep completes — it is sent
+    // the moment the connection is pinned, ahead of the slow statement.
+    let pid = tokio::time::timeout(Duration::from_secs(10), rx)
+        .await
+        .expect("pid channel resolves within 10s")
+        .expect("tracked pid was sent");
+
+    adapter
+        .cancel_query_native(pid)
+        .await
+        .expect("native cancel with the tracked pid succeeds");
+
+    let result = tokio::time::timeout(Duration::from_secs(10), runner)
+        .await
+        .expect("runner join within budget")
+        .expect("runner task did not panic");
+    assert!(
+        result.is_err(),
+        "pg_sleep(60) must Err after native cancel via the tracked pid, got Ok"
+    );
+
+    let _ = adapter.disconnect_pool().await;
+}
+
 #[tokio::test]
 #[serial_test::serial]
 async fn pg_cancel_unknown_pid_surfaces_permission_or_completion() {

@@ -310,6 +310,21 @@ impl PostgresAdapter {
         query: &str,
         cancel_token: Option<&CancellationToken>,
     ) -> Result<QueryResult, AppError> {
+        self.execute_query_tracked(query, cancel_token, None).await
+    }
+
+    /// Issue #1230 — `execute_query` variant that pins one pooled connection
+    /// and, when `pid_tx` is `Some`, sends its `pg_backend_pid()` before the
+    /// statement runs. The whole statement then executes on that SAME
+    /// connection, so the reported pid is the backend `pg_cancel_backend`
+    /// must target to abort a long-running query. `None` preserves the
+    /// pre-#1230 pooled fast-path used by batch / schema callers.
+    pub async fn execute_query_tracked(
+        &self,
+        query: &str,
+        cancel_token: Option<&CancellationToken>,
+        pid_tx: Option<tokio::sync::oneshot::Sender<i64>>,
+    ) -> Result<QueryResult, AppError> {
         let start = std::time::Instant::now();
 
         // Strip a trailing `;` so it does not break the row_to_json wrapping
@@ -340,8 +355,24 @@ impl PostgresAdapter {
             QueryType::Ddl
         };
 
-        // Clone pool reference and release lock immediately
+        // Clone pool reference and release lock immediately, then pin ONE
+        // connection so the pid we report (below) is the backend that runs
+        // this statement — a separate pool acquire could pick another one.
         let pool = self.active_pool().await?;
+        let mut conn = pool
+            .acquire()
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
+        if let Some(pid_tx) = pid_tx {
+            // Best-effort: on probe failure we simply skip native cancel and
+            // fall back to the cooperative token (pid_tx drops → Err on rx).
+            if let Ok(pid) = sqlx::query_scalar::<_, i32>("SELECT pg_backend_pid()")
+                .fetch_one(&mut *conn)
+                .await
+            {
+                let _ = pid_tx.send(pid as i64);
+            }
+        }
 
         // Execute query based on type
         let result = match query_type {
@@ -366,7 +397,7 @@ impl PostgresAdapter {
                     let (columns, json_rows): (Vec<QueryColumn>, Vec<Vec<serde_json::Value>>) =
                         if wrappable {
                             // Column metadata WITHOUT executing the statement.
-                            let described = pool.describe(query).await?;
+                            let described = (&mut *conn).describe(query).await?;
                             let columns: Vec<QueryColumn> = described
                                 .columns()
                                 .iter()
@@ -389,7 +420,7 @@ impl PostgresAdapter {
                             let wrapped_sql =
                                 format!("SELECT row_to_json(q)::text FROM ({}) q", query);
                             let json_rows_raw = sqlx::query_scalar::<_, String>(&wrapped_sql)
-                                .fetch_all(&pool)
+                                .fetch_all(&mut *conn)
                                 .await?;
 
                             let json_rows: Vec<Vec<serde_json::Value>> = json_rows_raw
@@ -425,7 +456,7 @@ impl PostgresAdapter {
                             // decoded per-cell straight from the returned rows
                             // (bigint/numeric emitted as strings to match the
                             // wrapped path's ADR 0026 wire format).
-                            let rows = sqlx::query(query).fetch_all(&pool).await?;
+                            let rows = sqlx::query(query).fetch_all(&mut *conn).await?;
                             let columns: Vec<QueryColumn> = if let Some(first_row) = rows.first() {
                                 first_row
                                     .columns()
@@ -480,7 +511,7 @@ impl PostgresAdapter {
             }
             QueryType::Dml { .. } => {
                 let query_future = async {
-                    let result = sqlx::query(query).execute(&pool).await?;
+                    let result = sqlx::query(query).execute(&mut *conn).await?;
                     let rows_affected = result.rows_affected();
                     let execution_time_ms = start.elapsed().as_millis() as u64;
 
@@ -506,7 +537,7 @@ impl PostgresAdapter {
             }
             QueryType::Ddl => {
                 let query_future = async {
-                    sqlx::query(query).execute(&pool).await?;
+                    sqlx::query(query).execute(&mut *conn).await?;
                     let execution_time_ms = start.elapsed().as_millis() as u64;
 
                     Ok::<QueryResult, AppError>(QueryResult {

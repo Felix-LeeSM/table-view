@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import FavoritesPanel from "../FavoritesPanel";
 import TabDbChip from "./TabDbChip";
+import { supportsNativeCancel } from "./useQueryContext";
+import { useConnectionStore } from "@stores/connectionStore";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { QueryFavoritesState } from "./useQueryFavorites";
 import {
@@ -99,6 +101,16 @@ export default function QueryTabToolbar({
   //     allowing typos through the AST parser).
   // The actual dispatch gate stays in `useQueryExecution` — Toolbar only
   // controls the disabled state + tooltip.
+  // Issue #1230 — reflect the native (server-side) cancel capability in the
+  // Stop button tooltip. Derived from the tab's connection so no new prop
+  // threads through the parent; `supportsNativeCancel(undefined)` is a safe
+  // `false` when the connection isn't resolvable.
+  const cancelDbType = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === tab.connectionId)?.dbType,
+  );
+  const cancelTitle = supportsNativeCancel(cancelDbType)
+    ? "Stop query — cancels the running statement on the server"
+    : "Stop query";
   const isDocumentTab = isDocument;
   const mongoStatementKind = isDocumentTab
     ? classifyMongoStatement(tab.sql)
@@ -131,6 +143,7 @@ export default function QueryTabToolbar({
           size="xs"
           onClick={onExecute}
           aria-label={t("toolbar.cancelQueryAria")}
+          title={cancelTitle}
         >
           <Square className="text-destructive" />
           <Loader2 className="animate-spin" />

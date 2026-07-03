@@ -211,6 +211,16 @@ export interface WorkspaceStoreState {
     tabId: string,
     state: QueryState,
   ) => void;
+  // Issue #1230 — attach the native server pid to a running query so the
+  // Cancel button can fire `cancelQueryNative`. No-op unless the tab is still
+  // running the same `queryId`.
+  setRunningQueryServerPid: (
+    connId: string,
+    db: string,
+    tabId: string,
+    queryId: string,
+    serverPid: number,
+  ) => void;
   setQueryTabDatabase: (
     connId: string,
     db: string,

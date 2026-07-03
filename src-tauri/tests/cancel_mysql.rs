@@ -84,6 +84,55 @@ async fn mysql_cancel_query_terminates_sleep_within_budget() {
     let _ = adapter.disconnect_pool().await;
 }
 
+/// Issue #1230 — end-to-end: `execute_query_tracked` reports the executing
+/// connection's thread id, and `KILL QUERY <id>` against it aborts the
+/// in-flight `SLEEP(60)` well within budget. MySQL may surface the aborted
+/// SLEEP as Ok(1) or Err(1317), so we assert on the timing (the query stops
+/// long before its 60s sleep) rather than the outcome class.
+#[tokio::test]
+#[serial_test::serial]
+async fn mysql_execute_query_tracked_pid_enables_native_cancel() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => {
+            println!("SKIP: MySQL container unavailable");
+            return;
+        }
+    };
+
+    let (tx, rx) = tokio::sync::oneshot::channel::<i64>();
+    let runner = {
+        let adapter = adapter.clone();
+        tokio::spawn(async move {
+            adapter
+                .execute_query_tracked("SELECT SLEEP(60)", None, Some(tx))
+                .await
+        })
+    };
+
+    let thread_id = tokio::time::timeout(Duration::from_secs(10), rx)
+        .await
+        .expect("thread id channel resolves within 10s")
+        .expect("tracked thread id was sent");
+
+    adapter
+        .cancel_query_native(thread_id)
+        .await
+        .expect("native cancel with the tracked thread id succeeds");
+
+    let join_start = Instant::now();
+    let _ = tokio::time::timeout(Duration::from_secs(10), runner)
+        .await
+        .expect("runner join within budget")
+        .expect("runner task did not panic");
+    assert!(
+        join_start.elapsed() < Duration::from_secs(10),
+        "SLEEP(60) must abort well within budget after native cancel via tracked pid"
+    );
+
+    let _ = adapter.disconnect_pool().await;
+}
+
 #[tokio::test]
 #[serial_test::serial]
 async fn mysql_cancel_unknown_thread_id_errs() {

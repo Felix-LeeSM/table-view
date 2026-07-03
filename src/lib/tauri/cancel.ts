@@ -97,6 +97,17 @@ export async function cancelQueryNative(
   }
 }
 
+/// Issue #1230 — resolve the native server pid the backend captured for a
+/// running query (keyed by the same `queryId` passed to `executeQuery`).
+/// Returns the pid while the query is in flight, or `null` when the query
+/// captured no pid (adapter without native cancel) or already finished. The
+/// Cancel button feeds the pid to `cancelQueryNative`.
+export async function getQueryServerPid(
+  queryId: string,
+): Promise<number | null> {
+  return invoke<number | null>("get_query_server_pid", { queryId });
+}
+
 /// Tab-close hook: drop the affinity record + (future) ROLLBACK any
 /// in-flight transaction. Idempotent — silent no-op when the tab never
 /// recorded a server pid (Q5.6 lazy: idle tab).

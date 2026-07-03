@@ -154,6 +154,30 @@ pub trait RdbAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>>;
 
+    /// Issue #1230 — like `execute_sql`, but the adapter pins ONE connection
+    /// and sends that connection's native server pid through `pid_tx` before
+    /// the (possibly long) statement runs, so native cancel can abort it.
+    ///
+    /// The pid MUST be captured on the *same* connection the statement runs
+    /// on. sqlx pools hand out any idle connection, so a separate probe would
+    /// return a different backend's pid and `pg_cancel_backend` / `KILL QUERY`
+    /// would target the wrong session. Adapters with native cancel (PG, MySQL)
+    /// override this and acquire the connection once.
+    ///
+    /// The default drops `pid_tx` (the `oneshot::Receiver` resolves to `Err`,
+    /// so the caller records no pid) and runs the ordinary pooled path — the
+    /// frontend then keeps cooperative-token cancel for adapters without a
+    /// native path (SQLite / DuckDB / MSSQL / Oracle).
+    fn execute_sql_tracked<'a>(
+        &'a self,
+        sql: &'a str,
+        cancel: Option<&'a CancellationToken>,
+        pid_tx: tokio::sync::oneshot::Sender<i64>,
+    ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
+        drop(pid_tx);
+        self.execute_sql(sql, cancel)
+    }
+
     /// Execute statements inside one transaction. A failure on statement K
     /// rolls back statements 1..K-1. Adapters that have not wired
     /// transactional commit inherit `Unsupported`.
