@@ -271,7 +271,13 @@ export interface QueryStatementResult {
  */
 export type QueryState =
   | { status: "idle" }
-  | { status: "running"; queryId: string }
+  // Issue #1230 — `serverPid` is the native backend identifier
+  // (pg `pg_backend_pid()` / mysql `CONNECTION_ID()`) captured on the
+  // executing connection. It is populated asynchronously (a beat after the
+  // query starts) only for native-cancel DBMS, so it stays optional; the
+  // Cancel button reads it to fire `cancelQueryNative` and abort long
+  // server-side queries the cooperative token can't touch.
+  | { status: "running"; queryId: string; serverPid?: number }
   | { status: "cancelled"; message?: string }
   | {
       status: "completed";
