@@ -1,10 +1,14 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
 import { cn } from "@lib/utils";
+import {
+  useTreeRoving,
+  type TreeRovingRow,
+} from "@components/shared/tree/useTreeRoving";
 import { useDocumentDatabaseTreeData } from "./DocumentDatabaseTree/useDocumentDatabaseTreeData";
 import { useDocumentDatabaseDrop } from "./DocumentDatabaseTree/useDocumentDatabaseDrop";
 import { CollectionRow, DatabaseRow } from "./DocumentDatabaseTree/rows";
@@ -109,11 +113,76 @@ export default function DocumentDatabaseTree({
     filteredDatabases,
   } = tree;
 
+  // Flatten the two-level tree into the render/roving model once: each visible
+  // database plus, when expanded, the collections that survive the filter.
+  const visibleTree = filteredDatabases.map((db) => {
+    const isExpanded = expandedDbs.has(db.name);
+    const isLoading = loadingDbs.has(db.name);
+    const allCollections = collectionsByDb[db.name] ?? [];
+    const collectionError = collectionErrors[db.name];
+    // If the query matched the DB name, show every collection. If it only
+    // matched some collection names, narrow the list to those.
+    const dbNameMatches =
+      !isFiltering || db.name.toLowerCase().includes(lowerQuery);
+    const collections =
+      isFiltering && !dbNameMatches
+        ? allCollections.filter((c) =>
+            c.name.toLowerCase().includes(lowerQuery),
+          )
+        : allCollections;
+    return {
+      db,
+      isExpanded,
+      isLoading,
+      allCollections,
+      collectionError,
+      collections,
+    };
+  });
+
+  // WAI-ARIA tree roving — one tab stop, arrow-key nav. Non-virtualized, so no
+  // scroll-into-view callback. ArrowRight/Left on a database toggles it.
+  const treeRef = useRef<HTMLDivElement>(null);
+  const rovingRows: TreeRovingRow[] = [];
+  for (const entry of visibleTree) {
+    rovingRows.push({
+      key: `db:${entry.db.name}`,
+      depth: 0,
+      expanded: entry.isExpanded,
+      focusable: true,
+    });
+    if (entry.isExpanded) {
+      for (const coll of entry.collections) {
+        rovingRows.push({
+          key: `coll:${entry.db.name}:${coll.name}`,
+          depth: 1,
+          expanded: null,
+          focusable: true,
+        });
+      }
+    }
+  }
+  const roving = useTreeRoving(
+    rovingRows,
+    (key) => {
+      // Only database rows expand/collapse; the key encodes the db name.
+      if (key.startsWith("db:")) {
+        const name = key.slice("db:".length);
+        setSelectedNodeId(`db:${name}`);
+        handleExpandDb(name);
+      }
+    },
+    treeRef,
+  );
+  const activeKey = roving.focusKey ?? rovingRows[0]?.key ?? null;
+
   return (
     <div
+      ref={treeRef}
       className="flex flex-col select-none"
       role="tree"
       aria-label={t("databasesHeader")}
+      onKeyDown={roving.onKeyDown}
     >
       <div className="flex items-center justify-between px-3 py-1">
         <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -193,22 +262,12 @@ export default function DocumentDatabaseTree({
           </div>
         )}
 
-      {filteredDatabases.map((db) => {
-        const isExpanded = expandedDbs.has(db.name);
-        const isLoading = loadingDbs.has(db.name);
-        const allCollections = collectionsByDb[db.name] ?? [];
-        const collectionError = collectionErrors[db.name];
-        // If the query matched the DB name, show every collection. If it
-        // only matched some collection names, narrow the list to those.
-        const dbNameMatches =
-          !isFiltering || db.name.toLowerCase().includes(lowerQuery);
-        const collections =
-          isFiltering && !dbNameMatches
-            ? allCollections.filter((c) =>
-                c.name.toLowerCase().includes(lowerQuery),
-              )
-            : allCollections;
+      {visibleTree.map((entry, dbIndex) => {
+        const { db, isExpanded, isLoading, allCollections, collectionError } =
+          entry;
+        const collections = entry.collections;
         const dbNodeId = `db:${db.name}`;
+        const dbTreeKey = dbNodeId;
         const isDbSelected = selectedNodeId === dbNodeId;
 
         return (
@@ -223,10 +282,15 @@ export default function DocumentDatabaseTree({
                 handleExpandDb(db.name);
               }}
               onNewQueryHere={() => handleNewQueryHere(db.name)}
+              treeKey={dbTreeKey}
+              tabIndex={activeKey === dbTreeKey ? 0 : -1}
+              onFocus={() => roving.setFocusKey(dbTreeKey)}
+              posInSet={dbIndex + 1}
+              setSize={visibleTree.length}
             />
 
             {isExpanded && (
-              <div>
+              <div role="group">
                 {collectionError && (
                   <div
                     className="mx-8 my-1 rounded border border-destructive/30 bg-destructive/5 px-2 py-1 text-2xs text-destructive"
@@ -250,7 +314,7 @@ export default function DocumentDatabaseTree({
                       : t("noCollections")}
                   </div>
                 ) : collections.length > 0 ? (
-                  collections.map((coll) => {
+                  collections.map((coll, collIndex) => {
                     const collNodeId = `coll:${db.name}:${coll.name}`;
                     return (
                       <CollectionRow
@@ -266,6 +330,11 @@ export default function DocumentDatabaseTree({
                         onRequestDrop={() =>
                           drop.requestDrop(db.name, coll.name)
                         }
+                        treeKey={collNodeId}
+                        tabIndex={activeKey === collNodeId ? 0 : -1}
+                        onFocus={() => roving.setFocusKey(collNodeId)}
+                        posInSet={collIndex + 1}
+                        setSize={collections.length}
                       />
                     );
                   })

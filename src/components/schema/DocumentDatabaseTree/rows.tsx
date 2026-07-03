@@ -37,6 +37,12 @@ export interface DatabaseRowProps {
   // popover (Sprint 329) 가 가리키는 그 액션. 클릭한 row 의 database 로
   // prefilled mongosh query tab 을 생성한다.
   onNewQueryHere: () => void;
+  // WAI-ARIA tree roving (#1129) — the container manages a single tab stop.
+  treeKey: string;
+  tabIndex: number;
+  onFocus: () => void;
+  posInSet: number;
+  setSize: number;
 }
 
 export function DatabaseRow({
@@ -46,6 +52,11 @@ export function DatabaseRow({
   isSelected,
   onToggle,
   onNewQueryHere,
+  treeKey,
+  tabIndex,
+  onFocus,
+  posInSet,
+  setSize,
 }: DatabaseRowProps) {
   const { t } = useTranslation("schema");
   // Sprint 346 — admin/config/local 은 사용자가 평소 안 건드림. italic +
@@ -67,8 +78,13 @@ export function DatabaseRow({
           aria-level={1}
           aria-selected={isSelected}
           aria-expanded={isExpanded}
+          aria-setsize={setSize}
+          aria-posinset={posInSet}
           aria-label={t("databaseRowAria", { name: db.name })}
           data-system-db={isSystem ? "true" : undefined}
+          data-tree-key={treeKey}
+          tabIndex={tabIndex}
+          onFocus={onFocus}
           onClick={onToggle}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
@@ -104,6 +120,12 @@ export interface CollectionRowProps {
   onOpen: () => void;
   onDoubleOpen: () => void;
   onRequestDrop: () => void;
+  // WAI-ARIA tree roving (#1129).
+  treeKey: string;
+  tabIndex: number;
+  onFocus: () => void;
+  posInSet: number;
+  setSize: number;
 }
 
 export function CollectionRow({
@@ -113,6 +135,11 @@ export function CollectionRow({
   onOpen,
   onDoubleOpen,
   onRequestDrop,
+  treeKey,
+  tabIndex,
+  onFocus,
+  posInSet,
+  setSize,
 }: CollectionRowProps) {
   const { t } = useTranslation("schema");
   const hasOptions = Object.keys(collection.options).length > 0;
@@ -133,7 +160,12 @@ export function CollectionRow({
           role="treeitem"
           aria-level={2}
           aria-selected={isSelected}
+          aria-setsize={setSize}
+          aria-posinset={posInSet}
           aria-label={t("collectionRowAria", { name: collection.name })}
+          data-tree-key={treeKey}
+          tabIndex={tabIndex}
+          onFocus={onFocus}
           // Single-click opens a preview tab; double-click promotes it to a
           // persistent tab. Same model as the relational tree.
           onClick={() => {
