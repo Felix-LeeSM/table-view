@@ -80,6 +80,37 @@ describe("rdbQueryExecution seam", () => {
       }),
     );
   });
+
+  // Issue #1230 (PR #1241 review) — a MySQL native KILL QUERY surfaces as
+  // ER_QUERY_INTERRUPTED (1317). Even if it reaches the frontend un-normalized
+  // (backend backstop), it must land on cancelled, not failed — DBMS parity.
+  it("routes a MySQL ER_QUERY_INTERRUPTED error to cancellation, not failure", async () => {
+    executeQueryMock.mockRejectedValueOnce(
+      new Error(
+        "error returned from database: Query execution was interrupted",
+      ),
+    );
+    const actions = createSingleActions();
+
+    await executeRdbSingleStatement({
+      tab,
+      stmt: "SELECT SLEEP(20)",
+      workspaceDb: "app",
+      findLiveIdleTab: vi.fn(),
+      runRdbSingleRef: { current: null },
+      ...actions,
+    });
+
+    expect(actions.cancelRunningQuery).toHaveBeenCalledWith(
+      "query-rdb",
+      expect.stringMatching(/^query-rdb-/),
+      "Query cancelled",
+    );
+    expect(actions.failQuery).not.toHaveBeenCalled();
+    expect(actions.recordHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ sql: "SELECT SLEEP(20)", status: "cancelled" }),
+    );
+  });
 });
 
 // Purpose: #1223 regression — the single-statement dispatch path must send the

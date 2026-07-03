@@ -248,6 +248,23 @@ impl MysqlAdapter {
         // streaming rationale.
         row_cap: usize,
     ) -> Result<QueryResult, AppError> {
+        self.execute_query_tracked(query, cancel_token, row_cap, None)
+            .await
+    }
+
+    /// Issue #1230 — `execute_query` variant that pins ONE pooled connection
+    /// and, when `pid_tx` is `Some`, sends its `CONNECTION_ID()` thread id
+    /// before the statement runs so `KILL QUERY <id>` can abort a long query.
+    /// The statement (streaming row-cap fetch included) runs on that SAME
+    /// connection. `None` keeps the pooled fast-path used by batch / schema
+    /// callers; the #1231 streaming row-cap semantics are unchanged.
+    pub async fn execute_query_tracked(
+        &self,
+        query: &str,
+        cancel_token: Option<&CancellationToken>,
+        row_cap: usize,
+        pid_tx: Option<tokio::sync::oneshot::Sender<i64>>,
+    ) -> Result<QueryResult, AppError> {
         let start = std::time::Instant::now();
 
         let query = strip_trailing_terminator(query);
@@ -280,14 +297,30 @@ impl MysqlAdapter {
             QueryType::Ddl
         };
 
+        // Pin ONE connection so the reported thread id is the backend that
+        // runs this statement (a separate pool acquire could pick another).
         let pool = self.active_pool().await?;
+        let mut conn = pool
+            .acquire()
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
+        if let Some(pid_tx) = pid_tx {
+            // Best-effort: probe failure skips native cancel; the cooperative
+            // token still applies (pid_tx drops → Err on rx).
+            if let Ok(thread_id) = sqlx::query_scalar::<_, u64>("SELECT CONNECTION_ID()")
+                .fetch_one(&mut *conn)
+                .await
+            {
+                let _ = pid_tx.send(thread_id as i64);
+            }
+        }
 
         let result = match query_type {
             QueryType::Select => {
                 let query_future = async {
                     // Issue #1231 — stream + cap so a no-LIMIT result cannot
                     // buffer the whole table into the Rust Vec.
-                    let mut stream = sqlx::query(query).fetch(&pool);
+                    let mut stream = sqlx::query(query).fetch(&mut *conn);
                     let mut columns: Vec<QueryColumn> = Vec::new();
                     let mut json_rows: Vec<Vec<serde_json::Value>> = Vec::new();
                     let mut truncated = false;
@@ -349,7 +382,7 @@ impl MysqlAdapter {
             QueryType::Dml { .. } => {
                 let query_future = async {
                     let result = sqlx::query(query)
-                        .execute(&pool)
+                        .execute(&mut *conn)
                         .await
                         .map_err(|e| AppError::Database(e.to_string()))?;
                     let rows_affected = result.rows_affected();
@@ -377,7 +410,7 @@ impl MysqlAdapter {
             QueryType::Ddl => {
                 let query_future = async {
                     sqlx::query(query)
-                        .execute(&pool)
+                        .execute(&mut *conn)
                         .await
                         .map_err(|e| AppError::Database(e.to_string()))?;
                     let execution_time_ms = start.elapsed().as_millis() as u64;
@@ -403,7 +436,12 @@ impl MysqlAdapter {
             }
         };
 
-        result
+        // Issue #1230 (PR #1241 review) — a native KILL QUERY can end the
+        // statement as ER_QUERY_INTERRUPTED (1317) or a spurious SLEEP success
+        // before the token branch above wins the select!; converge onto the
+        // canonical cancelled error when the token has fired so mysql reaches
+        // the same frontend cancelled-state as PG.
+        crate::db::traits::finalize_cancelled(result, cancel_token)
     }
 
     /// Paged table 데이터. PG `query_table_data` 와 동일 contract — filters /

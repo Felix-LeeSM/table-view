@@ -122,18 +122,16 @@ pub struct TestConnectionRequest {
 
 /// Sprint 359 — per-tab connection affinity record.
 ///
-/// Lives in `AppState.tab_affinity` under `(connection_id, tab_id)` so the
-/// same `tab_id` opened against two distinct connections never collides
-/// (codex 7차 #4). Stores the **native server-side identifier** used by
-/// `cancel_query_native`:
+/// Lives in `AppState.tab_affinity` under `(connection_id, tab_id)`, keyed so
+/// the same `tab_id` opened against two distinct connections never collides
+/// (codex 7차 #4). Stores a native server-side identifier
+/// (`pg_backend_pid()` / `CONNECTION_ID()`).
 ///
-/// * PostgreSQL → `pg_backend_pid()` (i32 surfaced as i64).
-/// * MySQL      → `CONNECTION_ID()` thread id (u64 → i64 fits).
-/// * MongoDB    → opid (server-assigned) discovered at execute time.
-///
-/// Boot value is `None` for every tab (Q5.6 lazy) — we materialise the
-/// record only after the first `executeQuery(tab_id, …)` round-trip
-/// records a real server pid.
+/// NOTE (Issue #1230): the native-cancel path does NOT read this record — the
+/// pid the frontend passes to `cancel_query_native` comes from
+/// `AppState.query_server_pids` (recorded per `query_id` by `execute_query`).
+/// This affinity map is sprint-359 scaffolding kept for the future
+/// tab-scoped ROLLBACK hand-off; `bind_tab_affinity_inner` has no caller yet.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TabAffinity {
     pub server_pid: i64,
@@ -168,6 +166,18 @@ pub struct AppState {
     /// Keyed by `(connection_id, tab_id)` so the same tab id can coexist
     /// across two different connections (codex 7차 #4 — connection scope).
     pub tab_affinity: Mutex<HashMap<(String, String), TabAffinity>>,
+    /// Issue #1230 — per-query server pid for native cancel.
+    ///
+    /// `execute_query` records the executing backend's server-side pid
+    /// (pg `pg_backend_pid()` / mysql `CONNECTION_ID()`) here, keyed by the
+    /// caller's unique `query_id`, as soon as the query pins a connection —
+    /// i.e. while a long query is still running. The frontend fetches it via
+    /// `get_query_server_pid(query_id)` and passes it to
+    /// `cancel_query_native`, which finally makes the pre-built
+    /// `pg_cancel_backend` / `KILL QUERY` path reachable for long queries
+    /// (`pg_sleep`, big JOINs) the cooperative token can't abort. The entry
+    /// is removed when the query finishes, so only in-flight queries appear.
+    pub query_server_pids: Mutex<HashMap<String, i64>>,
     /// Sprint 359 (Q5.4) — per-connection **introspection pool** selector.
     ///
     /// Sidebar / autocomplete / prefetch borrow idle slots from this map
@@ -210,6 +220,7 @@ impl AppState {
             keep_alive_handles: Mutex::new(HashMap::new()),
             query_tokens: Mutex::new(HashMap::new()),
             tab_affinity: Mutex::new(HashMap::new()),
+            query_server_pids: Mutex::new(HashMap::new()),
             introspection_pools: Mutex::new(HashMap::new()),
             session_id: uuid::Uuid::new_v4().to_string(),
         }

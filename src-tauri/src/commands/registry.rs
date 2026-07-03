@@ -77,6 +77,7 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         commands::rdb::query::execute_query_batch,
         commands::rdb::query::execute_query_dry_run,
         commands::rdb::query::cancel_query,
+        commands::rdb::query::get_query_server_pid,
         commands::file_analytics::duckdb_register_file_analytics_source,
         commands::file_analytics::duckdb_preview_file_analytics_source,
         commands::file_analytics::duckdb_list_file_analytics_source_metadata,

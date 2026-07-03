@@ -26,3 +26,9 @@ export * from "./window";
 // The `export * from "./query"` line above already re-exports it
 // transitively; this line is the canonical, symbol-by-name landing.
 export { executeQueryDryRun } from "./query";
+
+// Issue #1230 — native query cancel wiring. Only the two IPC wrappers the
+// query-cancel path uses are surfaced through the barrel (so the test mock
+// intercepts them); `parseCancelError` / `releaseTabConnection` stay
+// module-local imports.
+export { cancelQueryNative, getQueryServerPid } from "./cancel";

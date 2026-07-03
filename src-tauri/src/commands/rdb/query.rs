@@ -132,10 +132,33 @@ async fn execute_query_inner(
                 });
             }
         }
-        adapter.execute_sql(sql, child_token.as_ref()).await
+        // Issue #1230 — run through the pid-tracked path so native cancel
+        // (pg_cancel_backend / KILL QUERY) can reach a long-running query.
+        // The adapter sends its server pid through `pid_tx` the moment it
+        // pins a connection; we record it under `query_id` so
+        // `get_query_server_pid` can hand it to the frontend while the query
+        // is still running. Adapters without native cancel drop the sender,
+        // so `pid_rx` resolves to `Err` and nothing is recorded (the frontend
+        // then keeps cooperative-token cancel).
+        let (pid_tx, pid_rx) = tokio::sync::oneshot::channel();
+        let query_fut = adapter.execute_sql_tracked(sql, child_token.as_ref(), pid_tx);
+        let record_fut = async {
+            if let Ok(pid) = pid_rx.await {
+                state
+                    .query_server_pids
+                    .lock()
+                    .await
+                    .insert(query_id.to_string(), pid);
+            }
+        };
+        let (result, ()) = tokio::join!(query_fut, record_fut);
+        result
     };
 
     release_cancel_token(state, &cancel_handle).await;
+    // Issue #1230 — the query is no longer in flight; drop its pid record so a
+    // late cancel for this (unique) query_id can't target a stale backend.
+    state.query_server_pids.lock().await.remove(query_id);
 
     // Log execution time
     if let Ok(ref result) = result {
@@ -464,6 +487,34 @@ pub async fn cancel_query(
     query_id: String,
 ) -> Result<String, AppError> {
     cancel_query_inner(state.inner(), &query_id).await
+}
+
+/// Issue #1230 — resolve the native server pid the frontend passes to
+/// `cancel_query_native` for a running query. `execute_query` records the pid
+/// a few milliseconds after the query pins a connection, and this IPC may
+/// arrive first, so we poll briefly. Returns `None` when the query never
+/// captured a pid (adapter without native cancel) or already finished (a fast
+/// query that needs no cancel).
+async fn get_query_server_pid_inner(state: &AppState, query_id: &str) -> Option<i64> {
+    // ponytail: naive bounded poll (≤1s in 20ms steps). The pid lands within a
+    // couple ms of executeQuery reaching the backend; a Notify handshake would
+    // be more code for no user-visible gain.
+    for _ in 0..50 {
+        if let Some(pid) = state.query_server_pids.lock().await.get(query_id).copied() {
+            return Some(pid);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    None
+}
+
+/// IPC — see [`get_query_server_pid_inner`].
+#[tauri::command]
+pub async fn get_query_server_pid(
+    state: State<'_, AppState>,
+    query_id: String,
+) -> Result<Option<i64>, AppError> {
+    Ok(get_query_server_pid_inner(state.inner(), &query_id).await)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -870,6 +921,38 @@ mod tests {
         let _ = execute_query_inner(&state, "c", "SELECT 1", "qid-eq", None).await;
         let tokens = state.query_tokens.lock().await;
         assert!(!tokens.contains_key("qid-eq"));
+    }
+
+    // ── Issue #1230 — native cancel pid capture ──────────────────────────
+
+    #[tokio::test]
+    async fn execute_query_records_no_pid_for_non_native_adapter() {
+        // Adapters without native cancel inherit the default
+        // `execute_sql_tracked`, which drops the pid channel. So after a
+        // normal run the pid registry must stay empty — the frontend then
+        // keeps cooperative-token cancel for these DBMS.
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))).await;
+        let _ = execute_query_inner(&state, "c", "SELECT 1", "qid-nopid", None).await;
+        assert!(
+            state.query_server_pids.lock().await.is_empty(),
+            "non-native adapter must not record a server pid"
+        );
+    }
+
+    #[tokio::test]
+    async fn get_query_server_pid_inner_returns_recorded_pid() {
+        // The frontend fetch resolves the pid `execute_query` recorded for a
+        // still-running query.
+        let state = AppState::new();
+        state
+            .query_server_pids
+            .lock()
+            .await
+            .insert("qid-live".to_string(), 4242);
+        assert_eq!(
+            super::get_query_server_pid_inner(&state, "qid-live").await,
+            Some(4242)
+        );
     }
 
     // ── Issue #1087 — lock-scope regression ──────────────────────────────
